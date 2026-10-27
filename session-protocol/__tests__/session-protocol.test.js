@@ -34,7 +34,7 @@ import {
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 test("Session artifact and Turn commit metadata have one canonical protocol shape", () => {
-  assert.equal(SESSION_ARTIFACT_SCHEMA_VERSION, 16);
+  assert.equal(SESSION_ARTIFACT_SCHEMA_VERSION, 17);
   assert.deepEqual(
     normalizeTurnCommitMetadata({
       action: " SEND ",
@@ -327,18 +327,19 @@ test("attachment binding event requires the bound canonical user message", () =>
       messageUid: "sm_1",
       userMessageId: "m1",
       role: "user",
+      content: "hello",
       sessionId: "s1",
       dialogProcessId: "d1",
       turnScopeId: "t1",
       attachments: [{ attachmentId: "a1", sessionId: "s1" }],
     },
   };
-  assert.deepEqual(validateTurnAttachmentsBoundEventData(valid), { ok: true, errors: [] });
+  assert.deepEqual(validateTurnAttachmentsBoundEventData(valid), { valid: true, errors: [] });
   assert.equal(
     validateTurnAttachmentsBoundEventData({
       ...valid,
       userMessage: { ...valid.userMessage, attachments: [] },
-    }).ok,
+    }).valid,
     false,
   );
 });

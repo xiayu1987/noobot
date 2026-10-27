@@ -63,10 +63,7 @@ export const PROTOCOL_CONTRACTS = Object.freeze([
         "owns canonical system/history/incremental composition",
         /export\s+function\s+buildCanonicalMessageBlocks\b/,
       ],
-      [
-        "owns current-turn history exclusion",
-        /export\s+function\s+filterCurrentTurnMessagesFromHistory\b/,
-      ],
+      ["owns current-turn history exclusion", /function\s+filterCurrentTurnMessagesFromHistory\b/],
     ],
   },
   {

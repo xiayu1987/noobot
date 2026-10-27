@@ -8,6 +8,12 @@ import { trackOverlayPromise } from "./useOverlayHistory.js";
 
 const dismissMessageBox = () => ElMessageBox.close?.();
 
+const OVERLAY_DISMISSAL_REASONS = new Set(["cancel", "close"]);
+
+export function isOverlayDismissal(reason) {
+  return OVERLAY_DISMISSAL_REASONS.has(reason);
+}
+
 export const overlayMessageBox = Object.freeze({
   confirm: (...args) => trackOverlayPromise(ElMessageBox.confirm(...args), dismissMessageBox),
   prompt: (...args) => trackOverlayPromise(ElMessageBox.prompt(...args), dismissMessageBox),

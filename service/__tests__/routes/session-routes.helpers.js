@@ -6,7 +6,10 @@
 import express from "express";
 export { express };
 export default express;
+
 import { registerSessionRoutes as registerSessionRoutesImpl } from "../../routes/session-routes.js";
+
+export const TEST_MESSAGE_TS = "2026-01-01T00:00:00.000Z";
 
 const testPluginHost = Object.freeze({
   getPluginDiagnostics: async () => ({

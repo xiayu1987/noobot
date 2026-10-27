@@ -15,6 +15,7 @@ import {
   FrontendRunState,
 } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
+import { NO_ATTACHMENT_EDITS } from "../../../helpers/resendEdits.js";
 
 describe("useChatEngine.resend replacement turn state", () => {
   it("ignores a stopped assistant returned with the fresh replacement turn", async () => {
@@ -66,7 +67,7 @@ describe("useChatEngine.resend replacement turn state", () => {
     activeSession.value.rawMessages = [...activeSession.value.messages];
 
     await expect(
-      engine.resendMonotonicMessage(stoppedAssistant, "edited first resend"),
+      engine.resendMonotonicMessage(stoppedAssistant, "edited first resend", NO_ATTACHMENT_EDITS),
     ).resolves.toBe(true);
 
     expect(stream).toHaveBeenCalledTimes(1);

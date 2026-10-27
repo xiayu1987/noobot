@@ -16,6 +16,7 @@ import {
   applySessionMessageFacts,
   createTestSessionRequiredFields,
 } from "../helpers/session-message-facts.js";
+import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
 const now = () => "2026-07-10T00:00:00.000Z";
 
@@ -62,8 +63,10 @@ test("message-local lifecycle fields cannot become authoritative terminal facts"
       messages: [
         {
           messageUid: "sm_noncanonical_terminal_user",
+          ts: TEST_MESSAGE_TS,
           sessionId: "s1",
           role: "user",
+          messageOrigin: "natural",
           content: "noncanonical",
           turnScopeId: "t1",
           state: "user_stopped",
@@ -94,6 +97,7 @@ test("summary projects only the authoritative lifecycle snapshot", () => {
       messages: [
         {
           messageUid: "sm_lifecycle_assistant",
+          ts: TEST_MESSAGE_TS,
           sessionId: "s-lifecycle",
           role: "assistant",
           presentationMessageId: "pm_fx1",
@@ -197,6 +201,7 @@ test("synthetic placeholders cannot enter persistence or summary", () => {
       messages: [
         {
           messageUid: "sm_placeholder_assistant",
+          ts: TEST_MESSAGE_TS,
           sessionId: "s-placeholder",
           role: "assistant",
           presentationMessageId: "pm_fx2",

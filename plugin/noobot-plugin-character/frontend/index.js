@@ -87,12 +87,12 @@ export async function activate(ctx = {}) {
   contribute(points.SESSION_ARTIFACT_PANEL, {
     id: "character-session-artifacts",
     resolveTitle: () => translate("character.animationArtifact"),
-    when: ({ sessionId } = {}) => {
+    when: ({ sessionId }) => {
       const projectedSessionId = animationRuntimeState.sessionId;
       const artifactCount = animationRuntimeState.cards.length;
-      return Boolean(sessionId && projectedSessionId === sessionId && artifactCount > 0);
+      return projectedSessionId === sessionId && artifactCount > 0;
     },
-    resolveProps: ({ sessionId } = {}) => ({ sessionId }),
+    resolveProps: ({ sessionId }) => ({ sessionId }),
   });
   contribute(points.COMPOSER_MORE_ACTIONS, {
     id: "character-more-actions",

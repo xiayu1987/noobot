@@ -210,6 +210,7 @@ test("buildContextMessageBlocks resume keeps tool pairing, single user_meta and 
       }),
       { messageBlocks: { system: [], history, incremental: [] } },
     ),
+    { currentUserMessage: createPersistedCurrentUserMessage("current") },
   );
   const all = blocks.messages;
   assert.equal(all.find((message) => message?.type === "ai")?.tool_calls?.[0]?.id, toolCallId);
@@ -218,7 +219,10 @@ test("buildContextMessageBlocks resume keeps tool pairing, single user_meta and 
   const metaPayloads = all
     .filter((message) => message?.additional_kwargs?.noobotInternalMessageType === "user_meta")
     .map((message) => JSON.parse(String(message.content).match(/\{[\s\S]*\}/)?.[0] || "{}"));
-  assert.equal(metaPayloads.length, 1);
+  assert.deepEqual(
+    metaPayloads.map((payload) => payload.dialogProcessId),
+    [realDialogProcessId, "dlg-current"],
+  );
   assert.equal(metaPayloads[0].dialogProcessId, realDialogProcessId);
   assert.equal(metaPayloads[0].turnScopeId, realTurnScopeId);
   assert.equal(

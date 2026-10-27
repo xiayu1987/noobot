@@ -6,8 +6,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { Linter } from "eslint";
-import * as espree from "espree";
-import vueParser, { parse as parseVue } from "vue-eslint-parser";
+import vueParser from "vue-eslint-parser";
 import {
   EXEMPTION_KINDS,
   addHit,
@@ -17,6 +16,7 @@ import {
   runCheckWhenMain,
 } from "./quality/check-protocol.mjs";
 import { isBrowserCallback } from "./quality/browser-callbacks.mjs";
+import { SKIP_SUBTREE, parseSource, snippet, walk } from "./quality/source-ast.mjs";
 import {
   getFirstPartyCodeFiles,
   isFirstPartyProductionPath,
@@ -32,8 +32,6 @@ const CONDITION_PARENTS = new Set([
   "ForStatement",
 ]);
 const CONSTANT_TABLE_NAME = /^[A-Z][A-Z0-9_]*$/;
-const SKIPPED_KEYS = new Set(["parent", "loc", "range", "tokens", "comments", "templateBody"]);
-const SKIP_SUBTREE = Symbol("skip-subtree");
 
 export const CHECK = defineCheck({
   id: "fallback-chain",
@@ -110,10 +108,10 @@ export const CHECK = defineCheck({
     },
   ],
   baseline: {
-    fallbackChain: 382,
-    inlineTrim: 69,
+    fallbackChain: 363,
+    inlineTrim: 67,
     typeCheck: 0,
-    rawTypeof: 535,
+    rawTypeof: 511,
     textShadow: 0,
     exemptions: 9,
   },
@@ -193,26 +191,6 @@ function isConditionPosition(node, parent) {
   if (parent.type === "ConditionalExpression") return parent.test === node;
   if (parent.type === "UnaryExpression") return parent.operator === "!";
   return parent.type === "LogicalExpression" && parent.operator === "&&";
-}
-
-function walk(node, parent, visitor) {
-  if (!node || typeof node.type !== "string") return;
-  if (visitor(node, parent) === SKIP_SUBTREE) return;
-  for (const [key, value] of Object.entries(node)) {
-    if (SKIPPED_KEYS.has(key)) continue;
-    if (Array.isArray(value)) value.forEach((child) => walk(child, node, visitor));
-    else if (value && typeof value.type === "string") walk(value, node, visitor);
-  }
-}
-
-function snippet(source, node) {
-  return { line: node.loc.start.line, code: source.slice(...node.range).replace(/\s+/g, " ") };
-}
-
-function parseSource(source, filename) {
-  const options = { ecmaVersion: "latest", sourceType: "module", loc: true, range: true };
-  if (filename.endsWith(".vue")) return parseVue(source, options);
-  return espree.parse(source, { ...options, ecmaFeatures: { jsx: filename.endsWith(".jsx") } });
 }
 
 export function findFallbackChains(source, filename, usage) {

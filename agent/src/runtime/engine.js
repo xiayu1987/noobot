@@ -143,7 +143,7 @@ export async function commitAuthoritativeFinalResult({ result, runtime }) {
 
 export async function runAgentTurn({ agentContext, currentUserMessage, errorLogger = null }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
-  const userMessage = String(currentUserMessage?.content || "");
+  const userMessage = currentUserMessage.content;
   const startedAtMs = Date.now();
   const startedAt = new Date(startedAtMs).toISOString();
   await runAgentRuntimeHook({

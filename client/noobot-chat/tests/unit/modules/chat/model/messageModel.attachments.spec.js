@@ -11,6 +11,7 @@ describe("messageModel attachment normalization", () => {
     const viewMessage = buildViewMessage(
       {
         role: "user",
+        content: "",
         sessionId: "session-a",
         attachments: [
           {
@@ -66,6 +67,7 @@ describe("messageModel attachment normalization", () => {
     const viewMessage = buildViewMessage(
       {
         role: "assistant",
+        content: "",
         sessionId: "session-a",
         dialogProcessId: "dp-a",
         turnScopeId: "turn-a",

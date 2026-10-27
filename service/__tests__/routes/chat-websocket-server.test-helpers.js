@@ -31,6 +31,7 @@ import {
   createTurnRunCommand,
   createTurnSnapshotCommand,
   createTurnStopCommand,
+  getAgentCommandIdentityKeys,
 } from "@noobot/agent-transport-protocol";
 import {
   assertTurnAcceptanceUserMessage,
@@ -76,12 +77,21 @@ export function createProtocolTestCommand(payload = {}) {
   const commandType = text(payload?.commandType).toLowerCase();
   const config = payload?.config && typeof payload.config === "object" ? payload.config : {};
   const turnScopeId = text(payload?.turnScopeId);
-  const identity = {
-    sessionId: text(payload?.sessionId) || "s1",
+  const identitySource = {
+    sessionId: text(payload?.sessionId),
     parentSessionId: text(payload?.parentSessionId),
     dialogProcessId: text(payload?.dialogProcessId),
     parentDialogProcessId: text(payload?.parentDialogProcessId),
     turnScopeId,
+  };
+  const identityFor = (type) => {
+    const keys = getAgentCommandIdentityKeys(type);
+    for (const [key, value] of Object.entries(identitySource)) {
+      if (value && !keys.includes(key)) {
+        throw new TypeError(`protocol test command ${type} does not carry identity.${key}`);
+      }
+    }
+    return Object.fromEntries(keys.map((key) => [key, identitySource[key]]));
   };
   const commandId = text(payload?.commandId);
   const derivesCommandId =
@@ -94,14 +104,14 @@ export function createProtocolTestCommand(payload = {}) {
   }
   if (action === "stop") {
     return createTurnStopCommand({
-      identity,
+      identity: identityFor(AGENT_COMMAND.STOP),
       concurrency: { expectedTurnRevision: payload?.expectedRevision ?? 1 },
       stop: { executionId: payload?.executionId },
     });
   }
   if (action === "interaction_response") {
     return createInteractionResponseCommand({
-      identity,
+      identity: identityFor(AGENT_COMMAND.INTERACTION_RESPONSE),
       interaction: { requestId: payload?.requestId, response: payload?.response },
     });
   }
@@ -109,21 +119,21 @@ export function createProtocolTestCommand(payload = {}) {
     return createExecutionQueryCommand({
       commandType,
       commandId,
-      identity,
+      identity: identityFor(commandType),
       query: { executionId: payload?.executionId, rootExecutionId: payload?.rootExecutionId },
     });
   }
   if (commandType === AGENT_COMMAND.TURN_SNAPSHOT_GET) {
     return createTurnSnapshotCommand({
       commandId,
-      identity,
+      identity: identityFor(commandType),
       options: { knownSequence: payload?.knownSequence, terminalLimit: payload?.terminalLimit },
     });
   }
   if (commandType === AGENT_COMMAND.FINALIZE) {
     return createTurnFinalizeCommand({
       commandId,
-      identity,
+      identity: identityFor(commandType),
       options: { terminalLimit: payload?.terminalLimit },
     });
   }
@@ -139,10 +149,7 @@ export function createProtocolTestCommand(payload = {}) {
   if (!turnScopeId) throw new TypeError("protocol test run command requires turnScopeId");
   return createTurnRunCommand({
     commandType: resolvedRunCommandType,
-    identity:
-      resolvedRunCommandType === AGENT_COMMAND.RESEND
-        ? identity
-        : { ...identity, dialogProcessId: "" },
+    identity: identityFor(resolvedRunCommandType),
     session: { createIfAbsent: payload?.createIfAbsent === true },
     input: { message: payload?.message || "test message", attachments: payload?.attachments || [] },
     preferences: {

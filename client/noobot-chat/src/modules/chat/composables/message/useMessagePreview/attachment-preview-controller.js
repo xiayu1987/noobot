@@ -7,6 +7,7 @@ import {
   buildParsedResultPreviewItem,
   resolveAttachmentAccessMeta,
   resolveParsedResultAccessMeta,
+  resolveParsedResultRelation,
 } from "../../../../../infrastructure/api/attachments/attachmentAccess.js";
 import {
   isAudioPreviewMime,
@@ -57,7 +58,7 @@ export function createAttachmentPreviewController({
   }
 
   async function openParsedResultPreview(attachmentItem = {}) {
-    const parsedItem = buildParsedResultPreviewItem(attachmentItem, accessOptions());
+    const parsedItem = buildParsedResultPreviewItem(attachmentItem);
     if (!parsedItem) return;
     await openResolvedAttachmentPreview({
       ...parsedItem,
@@ -66,7 +67,7 @@ export function createAttachmentPreviewController({
   }
 
   async function openAttachmentPreview(attachmentItem = {}) {
-    if (isOfficeAttachmentWithParsedResult(attachmentItem, accessOptions())) {
+    if (isOfficeAttachmentWithParsedResult(attachmentItem)) {
       await openParsedResultPreview(attachmentItem);
       return;
     }
@@ -76,15 +77,13 @@ export function createAttachmentPreviewController({
   function canPreviewAttachment(attachmentItem = {}) {
     const descriptor = createAttachmentDescriptor(attachmentItem, isImageMime);
     if (descriptor.overLimit) return false;
-    if (descriptor.officeLike)
-      return Boolean(resolveParsedResultAccessMeta(attachmentItem, accessOptions()));
+    if (descriptor.officeLike) return Boolean(resolveParsedResultRelation(attachmentItem));
     return Boolean(descriptor.previewType);
   }
 
   function canPreviewParsedResult(attachmentItem = {}) {
-    const parsedMeta = resolveParsedResultAccessMeta(attachmentItem, accessOptions());
-    if (!parsedMeta) return false;
-    const parsedItem = buildParsedResultPreviewItem(attachmentItem, accessOptions());
+    const parsedItem = buildParsedResultPreviewItem(attachmentItem);
+    if (!parsedItem) return false;
     return !createAttachmentDescriptor(parsedItem, isImageMime).overLimit;
   }
 
@@ -163,11 +162,11 @@ async function fetchPreview(url, attachmentService, translate) {
   throw new Error(translate("message.previewFailedHttp", { status: response?.status || 500 }));
 }
 
-function isOfficeAttachmentWithParsedResult(attachmentItem, accessOptions) {
+function isOfficeAttachmentWithParsedResult(attachmentItem) {
   const mimeType = text(attachmentItem?.mimeType);
   const name = text(attachmentItem?.name);
   return (
     (isOfficeMime(mimeType) || isOfficeFile(name)) &&
-    Boolean(resolveParsedResultAccessMeta(attachmentItem, accessOptions))
+    Boolean(resolveParsedResultRelation(attachmentItem))
   );
 }

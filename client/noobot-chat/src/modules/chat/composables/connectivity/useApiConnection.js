@@ -6,6 +6,7 @@
 import { computed, ref, watch } from "vue";
 import { connectApi } from "../../../../infrastructure/api/chat/chatApi.js";
 import { useLocale } from "../../../../shared/i18n/useLocale.js";
+import { API_REQUEST_ERROR_CODE, ApiRequestError } from "@noobot/shared/request-error";
 import { normalizeClientModelOptions } from "@noobot/agent-config-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
@@ -202,15 +203,24 @@ export function useApiConnection({ userId, onConnected = async () => {}, notify 
 
   async function authFetch(url, options = {}) {
     const requestApiKey = String(apiKey.value || "");
-    const runFetch = () =>
-      fetch(url, {
-        ...options,
-        headers: {
-          ...(options.headers || {}),
-          ...(apiKey.value ? { "x-api-key": apiKey.value } : {}),
-          ...(text(locale.value) ? { "x-noobot-locale": text(locale.value) } : {}),
-        },
-      });
+    const runFetch = async () => {
+      try {
+        return await fetch(url, {
+          ...options,
+          headers: {
+            ...(options.headers || {}),
+            ...(apiKey.value ? { "x-api-key": apiKey.value } : {}),
+            ...(text(locale.value) ? { "x-noobot-locale": text(locale.value) } : {}),
+          },
+        });
+      } catch (error) {
+        throw new ApiRequestError(translate("infra.networkRequestFailed"), {
+          code: API_REQUEST_ERROR_CODE.NETWORK,
+          status: null,
+          cause: error,
+        });
+      }
+    };
     const res = await fetchWithAdmissionRetry(runFetch);
     if (res.status !== 401) return res;
     const refreshed =

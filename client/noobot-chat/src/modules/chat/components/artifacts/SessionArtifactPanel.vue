@@ -6,15 +6,16 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { Box } from "@element-plus/icons-vue";
-import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
+import {
+  EXTENSION_POINTS,
+  createSessionArtifactPanelContext,
+} from "@noobot/plugin-protocol/frontend";
 import ExtensionOutlet from "../../../../extensions/components/ExtensionOutlet.vue";
 import { resolveExtensionPoint } from "../../../../extensions/extension-registry.js";
 import { useLocale } from "../../../../shared/i18n/useLocale.js";
-import { text } from "@noobot/shared/value";
 
 const props = defineProps({
-  activeSession: { type: Object, default: () => ({}) },
-  connected: { type: Boolean, default: false },
+  sessionId: { type: String, required: true },
 });
 const { translate } = useLocale();
 const expanded = ref(true);
@@ -23,16 +24,13 @@ const committedSize = ref({ width: 0, height: 0 });
 const isResizing = ref(false);
 const resizeRevision = ref(0);
 let resizeSession = null;
-const context = computed(() => ({
-  connected: props.connected === true,
-  sessionId: text(props.activeSession?.sessionId),
-  session: props.activeSession || {},
-  sessionDocs: Array.isArray(props.activeSession?.sessionDocs)
-    ? props.activeSession.sessionDocs
-    : [],
-  panelResizing: isResizing.value,
-  panelResizeRevision: resizeRevision.value,
-}));
+const context = computed(() =>
+  createSessionArtifactPanelContext({
+    sessionId: props.sessionId,
+    panelResizing: isResizing.value,
+    panelResizeRevision: resizeRevision.value,
+  }),
+);
 const contributions = computed(() =>
   resolveExtensionPoint(EXTENSION_POINTS.SESSION_ARTIFACT_PANEL, context.value),
 );

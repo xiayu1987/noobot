@@ -5,6 +5,13 @@
  */
 import { decodeExecutionReport } from "@noobot/session-protocol/execution-report";
 import { isPlainObject, text, isFunction } from "@noobot/shared/value";
+import {
+  API_REQUEST_ERROR_CODE,
+  ApiRequestError,
+  isApiRequestError,
+  isApiRequestNotFound,
+  readApiResponseEnvelope,
+} from "@noobot/shared/request-error";
 import { projectSessionMetadata } from "./workflowUnifiedSessionDetail.js";
 
 function requireSessionMethod(props, method) {
@@ -71,27 +78,6 @@ async function requestExecutionSessionDetail(context) {
   }
 }
 
-async function readRejectedResponseText(context, response) {
-  try {
-    return String(await response.clone().text()).slice(0, 1000);
-  } catch (error) {
-    logExecutionDetail(context, "errorBodyUnreadable", {
-      errorType: String(error?.name || "Error"),
-    });
-    return "";
-  }
-}
-
-async function requireAcceptedExecutionResponse(context, response) {
-  if (response.ok) return response;
-  const responseText = await readRejectedResponseText(context, response);
-  const httpStatus = Number(response?.status || 0);
-  logExecutionDetail(context, "responseRejected", { httpStatus, responseText });
-  throw new Error(
-    `${context.translate("workflow.readNodeSessionFailed")} (${httpStatus || "network"})`,
-  );
-}
-
 function executionDetailPayloadDiagnostics(payload = {}) {
   const workflowSession = isPlainObject(payload.workflowSession) ? payload.workflowSession : {};
   const sessionSummary = isPlainObject(workflowSession.sessionSummary)
@@ -105,13 +91,20 @@ function executionDetailPayloadDiagnostics(payload = {}) {
   };
 }
 
-async function parseExecutionDetailPayload(context, response) {
-  const payload = await response.json();
-  logExecutionDetail(context, "payloadParsed", executionDetailPayloadDiagnostics(payload));
-  if (!payload?.ok) {
-    throw new Error(String(payload?.error || context.translate("workflow.readNodeSessionFailed")));
+async function readExecutionDetailPayload(context, response) {
+  try {
+    const payload = await readApiResponseEnvelope(response);
+    logExecutionDetail(context, "payloadParsed", executionDetailPayloadDiagnostics(payload));
+    return payload;
+  } catch (error) {
+    if (isApiRequestError(error)) {
+      logExecutionDetail(context, "responseRejected", {
+        httpStatus: error.status,
+        serverErrorCode: error.serverErrorCode,
+      });
+    }
+    throw error;
   }
-  return payload;
 }
 
 function requireWorkflowSession(payload) {
@@ -214,8 +207,7 @@ export async function fetchExecutionSessionDetail({
     traceId,
   });
   const response = await requestExecutionSessionDetail(context);
-  await requireAcceptedExecutionResponse(context, response);
-  const payload = await parseExecutionDetailPayload(context, response);
+  const payload = await readExecutionDetailPayload(context, response);
   return normalizeExecutionDetail(context, payload);
 }
 
@@ -227,15 +219,6 @@ function requireTurnTarget(translate, values) {
     throw new Error(translate("workflow.nodeSessionMissing"));
   }
   return normalized;
-}
-
-async function readWorkflowRoutePayload(response, translate) {
-  if (!response.ok) throw new Error(translate("workflow.readNodeSessionFailed"));
-  const payload = await response.json();
-  if (!payload?.ok) {
-    throw new Error(String(payload?.error || translate("workflow.readNodeSessionFailed")));
-  }
-  return payload;
 }
 
 export async function fetchWorkflowNodeThinkingDetail({
@@ -266,9 +249,12 @@ export async function fetchWorkflowNodeThinkingDetail({
     dialogProcessId: target.dialogProcessId,
     turnScopeId: target.turnScopeId,
   });
-  const payload = await readWorkflowRoutePayload(response, translate);
-  if (!payload.exists) {
-    throw new Error(String(payload.error || translate("workflow.readNodeSessionFailed")));
+  const payload = await readApiResponseEnvelope(response);
+  if (payload.exists !== true) {
+    throw new ApiRequestError(translate("workflow.readNodeSessionFailed"), {
+      code: API_REQUEST_ERROR_CODE.NOT_FOUND,
+      status: response.status,
+    });
   }
   return payload;
 }
@@ -296,7 +282,12 @@ export async function fetchWorkflowNodeExecutionReport({
     routeDialogProcessId: target.routeDialogProcessId,
     dialogProcessId: target.dialogProcessId,
   });
-  if (response.status === 404) return null;
-  const payload = await readWorkflowRoutePayload(response, translate);
+  let payload;
+  try {
+    payload = await readApiResponseEnvelope(response);
+  } catch (error) {
+    if (isApiRequestNotFound(error)) return null;
+    throw error;
+  }
   return decodeExecutionReport(payload.report);
 }

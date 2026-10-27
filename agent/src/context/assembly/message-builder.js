@@ -4,7 +4,4 @@
  * SPDX-License-Identifier: MIT
  */
 export { buildHumanMessagesForUser } from "./message-builder/user-meta.js";
-export {
-  buildContextMessageBlocks,
-  buildContextMessages,
-} from "./message-builder/context-blocks.js";
+export { buildContextMessageBlocks } from "./message-builder/context-blocks.js";

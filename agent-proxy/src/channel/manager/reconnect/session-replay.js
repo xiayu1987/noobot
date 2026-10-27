@@ -7,9 +7,11 @@ import { randomUUID } from "node:crypto";
 import { config } from "../../../shared/config.js";
 import { createReplayBatch } from "@noobot/event-protocol";
 import {
+  AGENT_COMMAND,
   createTurnFinalizeCommand,
   createTurnSnapshotCommand,
   readKnownLifecycleSequence,
+  selectAgentCommandIdentity,
 } from "@noobot/agent-transport-protocol";
 import { isActionableTurnRecovery } from "@noobot/session-protocol";
 import { TURN_SNAPSHOT_TERMINAL_LIMIT } from "@noobot/session-protocol/turn-lifecycle";
@@ -76,7 +78,7 @@ async function settleFlaggedRecovery(manager, request, socket, snapshotResult) {
     channel,
     createTurnFinalizeCommand({
       commandId,
-      identity: { sessionId },
+      identity: selectAgentCommandIdentity(AGENT_COMMAND.FINALIZE, channel.identity),
       options: { terminalLimit: TURN_SNAPSHOT_TERMINAL_LIMIT.DEFAULT },
     }),
   );
@@ -103,7 +105,7 @@ function startSnapshotRequest(manager, socket, sessionId, channels, knownSequenc
   const snapshotPromise = createSnapshotPromise(manager, channel, commandId, socket);
   const command = createTurnSnapshotCommand({
     commandId,
-    identity: { sessionId },
+    identity: selectAgentCommandIdentity(AGENT_COMMAND.TURN_SNAPSHOT_GET, channel.identity),
     options: { knownSequence, terminalLimit: TURN_SNAPSHOT_TERMINAL_LIMIT.DEFAULT },
   });
   const forwarded = manager.forwardToUpstream(channel, command);

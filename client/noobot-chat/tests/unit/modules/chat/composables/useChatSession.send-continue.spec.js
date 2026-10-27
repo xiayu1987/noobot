@@ -174,7 +174,12 @@ describe("useChatSession send/continue actions", () => {
 
   it("keeps a newer draft when an earlier user interjection is accepted", async () => {
     const store = useChatStore();
-    store.sessions = [createSessionFixture({ id: "s-interject-new-draft" })];
+    store.sessions = [
+      createSessionFixture({
+        id: "s-interject-new-draft",
+        sessionId: "s-interject-new-draft",
+      }),
+    ];
     store.activeSessionId = "s-interject-new-draft";
     store.input = "first interjection";
     lifecycle(store.turnRuntimeRegistry, {

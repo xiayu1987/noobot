@@ -101,8 +101,6 @@ test("message handler sends a failed receipt for a rejected command with valid e
       identity: {
         sessionId: "session-1",
         parentSessionId: "",
-        dialogProcessId: "",
-        parentDialogProcessId: "",
         turnScopeId: "",
       },
       unexpected: true,

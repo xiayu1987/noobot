@@ -36,18 +36,15 @@ describe("sessionIdentity", () => {
     expect(findSessionByAnyId(sessions, "missing")).toBeNull();
   });
 
-  it("confirmSessionIdentity persists an unchanged preallocated identity", () => {
+  it("confirmSessionIdentity clears the local flag of a matching identity", () => {
     const session = { sessionId: "session-1", isLocal: true };
-    const result = confirmSessionIdentity({
+    confirmSessionIdentity({
       sessionItem: session,
       sessionId: "session-1",
-      activeSessionId: "session-1",
     });
 
     expect(session.sessionId).toBe("session-1");
     expect(session.isLocal).toBe(false);
-    expect(result.changed).toBe(false);
-    expect(result.nextActiveSessionId).toBe("session-1");
   });
 
   it("confirmSessionIdentity rejects a different identity", () => {
@@ -55,8 +52,16 @@ describe("sessionIdentity", () => {
       confirmSessionIdentity({
         sessionItem: { sessionId: "session-1", isLocal: true },
         sessionId: "session-2",
-        activeSessionId: "session-1",
       }),
     ).toThrow("session identity mismatch");
+  });
+
+  it("confirmSessionIdentity requires a sessionItem and a sessionId", () => {
+    expect(() => confirmSessionIdentity({ sessionId: "session-1" })).toThrow(
+      "confirmSessionIdentity requires sessionItem",
+    );
+    expect(() =>
+      confirmSessionIdentity({ sessionItem: { sessionId: "session-1" }, sessionId: "  " }),
+    ).toThrow("confirmSessionIdentity requires sessionId");
   });
 });

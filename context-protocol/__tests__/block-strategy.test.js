@@ -18,6 +18,17 @@ function record(role, content, facts = {}) {
 
 const HISTORY_ROUND = { dialogProcessId: "history-dialog", turnScopeId: "history-turn" };
 const SNAPSHOT_ROUND = { dialogProcessId: "snapshot-dialog", turnScopeId: "snapshot-turn" };
+const EMPTY_BLOCKS = { systemMessages: [], historyMessages: [], incrementalMessages: [] };
+const HISTORY_LIMIT = Number.POSITIVE_INFINITY;
+
+function currentRecord(content = "current", facts = {}) {
+  return record("user", content, {
+    messageUid: "sm_current",
+    dialogProcessId: "current-dialog",
+    turnScopeId: "current-turn",
+    ...facts,
+  });
+}
 
 test("canonical blocks preserve main system history incremental composition", () => {
   const result = buildCanonicalMessageBlocks({
@@ -27,12 +38,8 @@ test("canonical blocks preserve main system history incremental composition", ()
       ctx("assistant", "history-answer", { messageUid: "sm_answer", ...HISTORY_ROUND }),
     ],
     incrementalMessages: [],
-    currentUserMessage: record("user", "current", {
-      messageUid: "sm_current",
-      dialogProcessId: "current-dialog",
-      turnScopeId: "current-turn",
-    }),
-    historyExclusionIdentity: { dialogProcessId: "current-dialog", turnScopeId: "current-turn" },
+    currentUserMessage: currentRecord(),
+    historyLimit: HISTORY_LIMIT,
   });
 
   assert.deepEqual(
@@ -52,11 +59,14 @@ test("canonical blocks preserve main system history incremental composition", ()
 
 test("history rounds group by each message's own dialog identity", () => {
   const result = buildCanonicalMessageBlocks({
+    ...EMPTY_BLOCKS,
     historyMessages: [
       ctx("user", "task", { messageUid: "sm_task", ...SNAPSHOT_ROUND }),
       ctx("assistant", "tool call", { messageUid: "sm_call", ...SNAPSHOT_ROUND }),
       ctx("tool", "tool result", { messageUid: "sm_result", ...SNAPSHOT_ROUND }),
     ],
+    currentUserMessage: currentRecord(),
+    historyLimit: HISTORY_LIMIT,
   });
 
   assert.deepEqual(
@@ -65,23 +75,29 @@ test("history rounds group by each message's own dialog identity", () => {
   );
 });
 
-test("current history exclusion uses explicit runtime identity instead of fallback identity", () => {
+test("current history exclusion uses the current message round identity", () => {
   const result = buildCanonicalMessageBlocks({
+    ...EMPTY_BLOCKS,
     historyMessages: [
-      ctx("user", "snapshot", { messageUid: "sm_snapshot", ...SNAPSHOT_ROUND }),
-      ctx("assistant", "answer", { messageUid: "sm_snapshot_answer", ...SNAPSHOT_ROUND }),
+      ctx("user", "history", { messageUid: "sm_history", ...HISTORY_ROUND }),
+      ctx("user", "current earlier copy", {
+        messageUid: "sm_current_copy",
+        dialogProcessId: "current-dialog",
+        turnScopeId: "current-turn",
+      }),
+      ctx("assistant", "current partial", {
+        messageUid: "sm_partial",
+        dialogProcessId: "current-dialog",
+        turnScopeId: "current-turn",
+      }),
     ],
-    currentUserMessage: record("user", "continue", {
-      messageUid: "sm_continue",
-      dialogProcessId: "snapshot-dialog",
-      turnScopeId: "current-turn",
-    }),
-    historyExclusionIdentity: { dialogProcessId: "current-dialog", turnScopeId: "current-turn" },
+    currentUserMessage: currentRecord("continue"),
+    historyLimit: HISTORY_LIMIT,
   });
 
   assert.deepEqual(
     result.history.map((message) => message.content),
-    ["snapshot", "answer"],
+    ["history"],
   );
   assert.deepEqual(
     result.incremental.map((message) => message.content),
@@ -91,16 +107,25 @@ test("current history exclusion uses explicit runtime identity instead of fallba
 
 test("current message protocol rejects text without persisted identity", () => {
   assert.throws(
-    () => buildCanonicalMessageBlocks({ currentUserMessage: "current" }),
+    () => buildCanonicalMessageBlocks({ ...EMPTY_BLOCKS, currentUserMessage: null }),
     /canonical persisted message entity/,
   );
   assert.throws(
-    () => buildCanonicalMessageBlocks({ currentUserMessage: record("user", "current") }),
+    () => buildCanonicalMessageBlocks({ ...EMPTY_BLOCKS, currentUserMessage: "current" }),
+    /canonical persisted message entity/,
+  );
+  assert.throws(
+    () =>
+      buildCanonicalMessageBlocks({
+        ...EMPTY_BLOCKS,
+        currentUserMessage: record("user", "current"),
+      }),
     /requires messageUid/,
   );
   assert.throws(
     () =>
       buildCanonicalMessageBlocks({
+        ...EMPTY_BLOCKS,
         currentUserMessage: record("user", "", { messageUid: "sm_current" }),
       }),
     /requires persisted content/,
@@ -108,6 +133,7 @@ test("current message protocol rejects text without persisted identity", () => {
   assert.throws(
     () =>
       buildCanonicalMessageBlocks({
+        ...EMPTY_BLOCKS,
         currentUserMessage: record("user", "current", {
           messageUid: "sm_current",
           dialogProcessId: "dialog-current",

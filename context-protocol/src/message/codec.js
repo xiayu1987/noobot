@@ -5,6 +5,7 @@
  */
 import { text, isObjectLike } from "@noobot/shared/value";
 import { createContextMessageId } from "@noobot/session-protocol/message-identity";
+import { MESSAGE_ORIGIN } from "@noobot/session-protocol";
 
 export const CONTEXT_MESSAGE_ROLE = Object.freeze({
   SYSTEM: "system",
@@ -236,8 +237,8 @@ export function resolveContextMessageDialogProcessId(message = {}) {
   return readContextMessageField(message, "dialogProcessId");
 }
 
-export function resolveContextMessageOrigin(message = {}) {
-  return readContextMessageField(message, "messageOrigin").toLowerCase();
+export function resolveContextMessageOrigin(message) {
+  return readContextMessageValue(message, "messageOrigin");
 }
 
 export function resolveContextMessageTurnScopeId(message = {}) {
@@ -282,7 +283,7 @@ export function markContextMessageSummarized(message = {}) {
 export function resolveContextMessageFlags(message = {}) {
   return {
     summarized: resolveContextMessageSummarized(message),
-    naturalUser: resolveContextMessageOrigin(message) === "natural",
+    naturalUser: resolveContextMessageOrigin(message) === MESSAGE_ORIGIN.NATURAL,
     injected: readContextMessageFlag(message, "injectedMessage"),
     plugin: readContextMessageFlag(message, "pluginMessage"),
   };

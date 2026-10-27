@@ -20,8 +20,8 @@ function failResend(context, restoredInputValue) {
     applyRunStateEvent,
     input,
   } = context;
-  if (operation) messageOperationStore?.completeOperation(operation.opId);
-  applyRunStateEvent?.({
+  messageOperationStore.completeOperation(operation.opId);
+  applyRunStateEvent({
     type: SESSION_RUN_EVENT.LOCAL_RESEND_FAILED,
     sessionId,
     turnScopeId: resendTurnScopeId,
@@ -39,7 +39,7 @@ function logResendFailure(context, { error, replacementCommitted }) {
     replacementCommitted,
     errorType: String(error?.name || "Error"),
     errorMessage: String(error?.message || error || "").slice(0, 240),
-    messages: (activeSession?.value?.messages || []).map(summarizeStateMachineMessage),
+    messages: activeSession.value.messages.map(summarizeStateMachineMessage),
   }));
 }
 
@@ -63,7 +63,7 @@ export async function executeResendReplacement(context) {
     if (projection.outcome === RESEND_PROJECTION_OUTCOME.REJECTED) {
       return failResend(context, text);
     }
-    if (operation && messageOperationStore?.getOperation(operation.opId)) {
+    if (messageOperationStore.getOperation(operation.opId)) {
       messageOperationStore.completeOperation(operation.opId);
     }
     return true;

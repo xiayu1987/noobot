@@ -5,6 +5,7 @@
  */
 import { postOpenVSCodeServerApi } from "../../infrastructure/api/chat/chatApi.js";
 import { shouldOpenOpenVSCodeInCurrentTab as shouldOpenOpenVSCodeInCurrentTabState } from "../runtime/appShellEventHandlers.js";
+import { requireFunctionDependencies } from "@noobot/shared/value";
 
 export function useOpenVSCodeAction({
   userId,
@@ -14,27 +15,33 @@ export function useOpenVSCodeAction({
   ensureConnected,
   authFetch,
   notify,
-  translate = (key) => key,
-} = {}) {
+  translate,
+}) {
+  requireFunctionDependencies("useOpenVSCodeAction", {
+    ensureConnected,
+    authFetch,
+    notify,
+    translate,
+  });
   function shouldOpenOpenVSCodeInCurrentTab() {
     const userAgent = typeof navigator === "undefined" ? "" : String(navigator.userAgent || "");
     return shouldOpenOpenVSCodeInCurrentTabState({
-      isMobile: Boolean(isMobile?.value),
+      isMobile: Boolean(isMobile.value),
       userAgent,
     });
   }
 
   async function openOpenVSCode() {
-    if (!ensureConnected?.()) return;
-    if (!canUseIDE?.value && !isSuperAdmin?.value) {
-      notify?.({ type: "warning", message: translate("infra.ideAccessDenied") });
+    if (!ensureConnected()) return;
+    if (!canUseIDE.value && !isSuperAdmin.value) {
+      notify({ type: "warning", message: translate("infra.ideAccessDenied") });
       return;
     }
     const openInCurrentTab = shouldOpenOpenVSCodeInCurrentTab();
     const popupWindow = openInCurrentTab ? null : window.open("about:blank", "_blank");
     try {
       if (popupWindow) popupWindow.opener = null;
-      const res = await postOpenVSCodeServerApi({ userId: userId?.value }, { fetcher: authFetch });
+      const res = await postOpenVSCodeServerApi({ userId: userId.value }, { fetcher: authFetch });
       const data = await res.json();
       if (!res.ok || !data.ok || !data.url) {
         throw new Error(data.error || translate("infra.openVSCodeFailed"));
@@ -51,7 +58,7 @@ export function useOpenVSCodeAction({
       }
     } catch (error) {
       if (popupWindow && !popupWindow.closed) popupWindow.close();
-      notify?.({ type: "error", message: error.message || translate("infra.openVSCodeFailed") });
+      notify({ type: "error", message: error.message || translate("infra.openVSCodeFailed") });
     }
   }
 

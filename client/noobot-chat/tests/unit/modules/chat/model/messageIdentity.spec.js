@@ -32,7 +32,10 @@ describe("messageIdentity", () => {
     expect(getMessageRole({ lc_id: ["langchain_core", "messages", "human", "HumanMessage"] })).toBe(
       "",
     );
-    expect(getMessageContentIdentity({ lc_kwargs: { content: "x" } })).toBe("");
+    expect(() => getMessageContentIdentity({ lc_kwargs: { content: "x" } })).toThrow(
+      "message_content_not_string",
+    );
+    expect(getMessageContentIdentity({ content: " x " })).toBe("x");
   });
 
   it("keys workflow-node turn scopes by their single canonical encoding", () => {

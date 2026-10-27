@@ -200,7 +200,6 @@ export function createFixture({ activeId = "s-1", currentRun = null } = {}) {
   const runtimeView = computed(() =>
     selectSessionTurnRuntime(turnRuntimeRegistry.value, activeSessionId.value),
   );
-  const interactionSubmitting = ref(true);
   const pendingInteractionRequest = ref(null);
 
   const clearPendingInteraction = vi.fn();
@@ -242,7 +241,6 @@ export function createFixture({ activeId = "s-1", currentRun = null } = {}) {
   const api = useReconnectReplay({
     sessions,
     activeSession,
-    interactionSubmitting,
     chatList,
     findMessageByViewKey,
     findMessagesByPresentationId: messageView.findMessagesByPresentationId,
@@ -250,7 +248,6 @@ export function createFixture({ activeId = "s-1", currentRun = null } = {}) {
     makeViewMessage: messageView.makeViewMessage,
     clearPendingInteraction,
     setPendingInteractionRequest,
-    isInteractionRequestHandled: vi.fn(() => false),
     sessionLogWebSocketClient: { log: vi.fn() },
     turnRuntimeRegistry,
     applyWorkflowRuntimeEvent,
@@ -275,7 +272,6 @@ export function createFixture({ activeId = "s-1", currentRun = null } = {}) {
       activeTurnRuntime: computed(() => {
         return selectCurrentTurnRuntime(turnRuntimeRegistry.value, activeSessionId.value);
       }),
-      interactionSubmitting,
       pendingInteractionRequest,
     },
     mocks: {

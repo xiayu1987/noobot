@@ -20,6 +20,7 @@ import { readSessionArtifact } from "../../src/session/session-artifact-store.js
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 import { applySessionMessageFacts } from "../helpers/session-message-facts.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
 async function withTempWorkspace(fn) {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-session-boundary-"));
@@ -55,8 +56,10 @@ test("renameSession should persist custom title to full, display summary and ses
     session.messages = [
       {
         messageUid: "sm_rename_user",
+        ts: TEST_MESSAGE_TS,
         sessionId: "A",
         role: "user",
+        messageOrigin: "natural",
         content: "old generated title",
         dialogProcessId: "dialog-rename",
         turnScopeId: "turn-rename",

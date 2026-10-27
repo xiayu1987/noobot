@@ -23,8 +23,7 @@ function createRuntime() {
     messageOrigin: "natural",
   });
   const runtime = {
-    currentUserMessageUid: "sm_user_1",
-    currentUserMessageOrigin: "natural",
+    currentUserMessage: { messageUid: "sm_user_1", role: "user", messageOrigin: "natural" },
     activeMessageContext: createModelContext({
       messageBlocks: { system: [], history: [], incremental: [source] },
     }),
@@ -87,7 +86,7 @@ test("user_meta backwrite keeps the record pending when the session rejects it",
 
 test("user_meta backwrite requires the current natural user message", () => {
   const { runtime } = createRuntime();
-  runtime.currentUserMessageOrigin = "injected";
+  runtime.currentUserMessage = { ...runtime.currentUserMessage, messageOrigin: "internal" };
   assert.throws(
     () => queueUserMetaBackwrite(runtime, { attachmentRef: "attach://a1", result }),
     /requires the current natural user message/,

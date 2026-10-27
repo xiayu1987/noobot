@@ -227,6 +227,7 @@ describe("committed user Turn routing", () => {
             messageUid: "sm_1",
             userMessageId: "missing-user",
             role: "user",
+            content: "hello",
             sessionId: "session-1",
             dialogProcessId: "dialog-1",
             turnScopeId: "client-turn:1",

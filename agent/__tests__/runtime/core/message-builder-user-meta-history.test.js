@@ -119,6 +119,7 @@ test("terminal history reaches the model as canonical user/meta/injection/explan
       sessionId: "s-current",
       messages: { history },
     }),
+    { currentUserMessage: createPersistedCurrentUserMessage("current") },
   );
 
   assert.deepEqual(
@@ -179,6 +180,7 @@ test("buildContextMessageBlocks builds user_meta with source info for historical
         ]),
       },
     }),
+    { currentUserMessage: createPersistedCurrentUserMessage("current") },
   );
 
   assert.equal(blocks.history.length, 3);
@@ -215,6 +217,7 @@ test("historical user content and metadata remain distinct canonical projections
         ]),
       },
     }),
+    { currentUserMessage: createPersistedCurrentUserMessage("current") },
   );
 
   const context = createModelContext({
@@ -255,6 +258,7 @@ test("persisted history keeps messageUid as its canonical model context identity
         history: [persistedHistory],
       },
     }),
+    { currentUserMessage: createPersistedCurrentUserMessage("current") },
   );
   const context = createModelContext({
     messageBlocks: {
@@ -278,6 +282,7 @@ test("buildContextMessageBlocks does not infer frontend user metadata from round
         ]),
       },
     }),
+    { currentUserMessage: createPersistedCurrentUserMessage("current") },
   );
 
   assert.equal(blocks.history.length, 2);

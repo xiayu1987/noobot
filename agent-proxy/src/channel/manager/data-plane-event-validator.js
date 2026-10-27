@@ -4,34 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  usesExactAgentTransportPayload,
-  validateAgentTransportPayload,
+  hasAgentTransportNonEnvelopePayloadContract,
+  validateAgentTransportNonEnvelopePayload,
 } from "@noobot/agent-transport-protocol";
 import { validateProtocolEvent } from "@noobot/event-protocol";
-import {
-  TURN_ATTACHMENTS_BOUND_WIRE_EVENT,
-  validateTurnAttachmentsBoundEventData,
-} from "@noobot/session-protocol/turn-attachment-bind";
-import {
-  TURN_COMMITTED_WIRE_EVENT,
-  validateTurnCommittedEventData,
-} from "@noobot/session-protocol/turn-commit";
 import { text } from "@noobot/shared/value";
-
-const SESSION_RECEIPT_VALIDATORS = new Map([
-  [TURN_COMMITTED_WIRE_EVENT, validateTurnCommittedEventData],
-  [TURN_ATTACHMENTS_BOUND_WIRE_EVENT, validateTurnAttachmentsBoundEventData],
-]);
 
 export function validateDataPlaneEvent(eventName, data) {
   const normalizedEventName = text(eventName);
-  if (usesExactAgentTransportPayload(normalizedEventName)) {
-    return validateAgentTransportPayload(normalizedEventName, data);
-  }
-  const sessionReceiptValidator = SESSION_RECEIPT_VALIDATORS.get(normalizedEventName);
-  if (sessionReceiptValidator) {
-    const validation = sessionReceiptValidator(data);
-    return { valid: validation.ok, errors: validation.errors };
+  if (hasAgentTransportNonEnvelopePayloadContract(normalizedEventName)) {
+    return validateAgentTransportNonEnvelopePayload(normalizedEventName, data);
   }
   const validation = validateProtocolEvent(data);
   if (!validation.valid) return validation;

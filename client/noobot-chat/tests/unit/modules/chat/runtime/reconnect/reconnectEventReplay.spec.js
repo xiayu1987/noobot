@@ -372,7 +372,7 @@ describe("applyReconnectEventReplay", () => {
     const consumeReplayCacheForSession = vi.fn(async () => {});
     const applyReconnectMessagesToActiveSession = vi.fn(async () => {});
 
-    await applyReconnectEventReplay({
+    const result = await applyReconnectEventReplay({
       event: "message",
       data: { dialogProcessId: "dp-1", text: "tool running" },
       replayCache,
@@ -382,8 +382,37 @@ describe("applyReconnectEventReplay", () => {
       applyReconnectMessagesToActiveSession,
     });
 
+    expect(result).toEqual({
+      applied: false,
+      reason: "unsupported_replay_event",
+      errors: ["unregistered_non_envelope_event"],
+    });
     expect(consumeReplayCacheForSession).not.toHaveBeenCalled();
     expect(applyReconnectMessagesToActiveSession).not.toHaveBeenCalled();
     expect(replayCache).toEqual({});
   });
+
+  it.each(["done", "user_stopped", "error"])(
+    "rejects retired non-envelope terminal event %s explicitly",
+    async (event) => {
+      const applyTurnLifecycleEnvelope = vi.fn();
+      const result = await applyReconnectEventReplay({
+        event,
+        data: { sessionId: "s-1", turnScopeId: "turn-1", seq: 2 },
+        replayCache: {},
+        isDeletedTurn: vi.fn(() => false),
+        isCurrentActiveSession: vi.fn(() => true),
+        consumeReplayCacheForSession: vi.fn(),
+        applyReconnectMessagesToActiveSession: vi.fn(),
+        applyTurnLifecycleEnvelope,
+      });
+
+      expect(result).toEqual({
+        applied: false,
+        reason: "unsupported_replay_event",
+        errors: ["unregistered_non_envelope_event"],
+      });
+      expect(applyTurnLifecycleEnvelope).not.toHaveBeenCalled();
+    },
+  );
 });

@@ -14,7 +14,9 @@ import {
   AGENT_CHANNEL_STATE,
   AGENT_CHANNEL_STATE_SCOPE,
   createAgentChannelState,
+  ROOT_PARENT_SESSION_ID,
 } from "@noobot/agent-transport-protocol";
+import { createTurnLifecycleEventEnvelope } from "@noobot/event-protocol";
 import { useChatEngine } from "../../../../../src/modules/chat/composables/useChatEngine.js";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { SESSION_RUN_EVENT } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
@@ -30,6 +32,7 @@ import { projectTurnRuntimeToMessages } from "../../../../../src/modules/chat/ru
 import { text } from "@noobot/shared/value";
 import { createSessionMessageView } from "../../../../../src/modules/chat/runtime/session/messageView.js";
 import { terminalStatusFixture } from "./terminalStatusFixture.js";
+import { jsonResponse, rejectUnexpectedRequest } from "../../../helpers/jsonResponse.js";
 
 const terminalResolutionFromUrl = (
   url,
@@ -84,6 +87,7 @@ vi.mock("../../../../../src/shared/i18n/useLocale", () => ({
 
 export const makeSession = (id, overrides = {}) => ({
   sessionId: id,
+  parentSessionId: ROOT_PARENT_SESSION_ID,
   aggregateVersion: 0,
   title: "chat.newSession",
   loaded: false,
@@ -258,7 +262,7 @@ export const createHarness = ({
     summaryPolicy: ref({}),
     selectedPlugins: ref([]),
     isImageMime: () => false,
-    scrollBottom: vi.fn(),
+    navigateToLastMessage: vi.fn(),
     activeSession,
     activeSessionId,
     turnRuntimeRegistry,
@@ -289,7 +293,7 @@ export const createHarness = ({
     }),
     clearPendingInteractionIfObsolete: vi.fn(),
     setPendingInteractionRequest: vi.fn(),
-    submitInteractionResponse: vi.fn(),
+    onConversationState: vi.fn(),
     chatWebSocketClient: {
       stream: stream
         ? vi.fn(async (payload, onEvent) => {
@@ -302,25 +306,31 @@ export const createHarness = ({
           })
         : vi.fn(),
       requestStop: vi.fn(),
+      cancelStreamForTurn: vi.fn(),
       clearLastReceivedSeqMap: vi.fn(),
       dispose: vi.fn(),
     },
     sessionLogWebSocketClient: { log: vi.fn() },
+    deleteSessionMessagesFromApi: vi.fn(rejectUnexpectedRequest),
+    replaceSessionTurnApi: vi.fn(rejectUnexpectedRequest),
+    monotonicActionStopTimeoutMs: 20,
+    monotonicActionStopPollIntervalMs: 5,
     removeWorkflowOwnersForReplacedTurns: vi.fn(() => ({
       removedWorkflowRunIds: [],
       removedSessionIds: [],
     })),
     ensureConnected: vi.fn(() => true),
     notify: vi.fn(),
-    terminalResolutionFetcher: vi.fn(async (url) => ({
-      ok: true,
-      json: async () =>
-        terminalResolutionFromUrl(url, terminalResolutionState, {
+    authFetch: vi.fn(async (url) =>
+      jsonResponse({
+        ok: true,
+        ...terminalResolutionFromUrl(url, terminalResolutionState, {
           revision: terminalResolutionRevision,
           sequence: terminalResolutionSequence,
           turnTiming: terminalResolutionTurnTiming,
         }),
-    })),
+      }),
+    ),
   };
 
   const resolvedDeps = { ...defaultDeps, ...deps };
@@ -439,6 +449,11 @@ export const serverTurnSource = (payload, dialogProcessId) => ({
   dialogProcessId,
 });
 
+const lifecycleEvent = (fields) =>
+  createTurnLifecycleEventEnvelope(createTurnLifecycleEnvelope(fields), {
+    producer: { type: "test", id: "use-chat-engine-harness" },
+  });
+
 export const emitAuthorityProcessing = (onEvent, source) => {
   const {
     sessionId,
@@ -450,7 +465,7 @@ export const emitAuthorityProcessing = (onEvent, source) => {
   } = source;
   const emit = (data) => onEvent({ event: StreamEventEnum.TURN_LIFECYCLE, data });
   emit(
-    createTurnLifecycleEnvelope({
+    lifecycleEvent({
       eventType: "turn.action_accepted",
       eventId: `accepted:${sessionId}:${turnScopeId}`,
       commandId,
@@ -470,7 +485,7 @@ export const emitAuthorityProcessing = (onEvent, source) => {
     }),
   );
   emit(
-    createTurnLifecycleEnvelope({
+    lifecycleEvent({
       eventType: "turn.processing_started",
       eventId: `processing:${sessionId}:${turnScopeId}`,
       commandId,
@@ -502,7 +517,7 @@ export const emitAuthorityCompletionRequested = (onEvent, source) => {
   } = source;
   onEvent({
     event: StreamEventEnum.TURN_LIFECYCLE,
-    data: createTurnLifecycleEnvelope({
+    data: lifecycleEvent({
       eventType: "turn.processing_completed",
       eventId: `completion-requested:${sessionId}:${turnScopeId}`,
       commandId,
@@ -538,7 +553,7 @@ export const emitAuthorityTerminal = (onEvent, source) => {
   } = source;
   onEvent({
     event: StreamEventEnum.TURN_LIFECYCLE,
-    data: createTurnLifecycleEnvelope({
+    data: lifecycleEvent({
       eventType:
         state === "stop_completed"
           ? "turn.stop_completed"

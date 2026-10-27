@@ -18,13 +18,7 @@ useProvisionedRuntimeEventsWorkspace([OWNER]);
 
 function responseCommand(sessionId, turnScopeId, requestId, response) {
   return createInteractionResponseCommand({
-    identity: {
-      sessionId,
-      parentSessionId: "",
-      dialogProcessId: `dialog-${turnScopeId}`,
-      parentDialogProcessId: "",
-      turnScopeId,
-    },
+    identity: { sessionId, dialogProcessId: `dialog-${turnScopeId}`, turnScopeId },
     interaction: { requestId, response },
   });
 }

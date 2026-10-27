@@ -13,6 +13,7 @@ describe("drawerPanelsState", () => {
     const thinkingDetailsVisible = { value: true };
     const configParamsVisible = { value: false };
     const handleWorkspaceReset = vi.fn();
+    const fetcher = vi.fn();
     const components = {
       WorkspacePanel: { name: "WorkspacePanel" },
       UserSettingsPanel: { name: "UserSettingsPanel" },
@@ -28,7 +29,7 @@ describe("drawerPanelsState", () => {
       configParamsVisible,
       ...components,
       userId: "u1",
-      apiKey: "api-key",
+      fetcher,
       connected: true,
       isSuperAdmin: true,
       thinkingDetailsMessageItem: { id: "m1" },
@@ -50,18 +51,19 @@ describe("drawerPanelsState", () => {
       component: components.WorkspacePanel,
       props: {
         userId: "u1",
-        apiKey: "api-key",
+        fetcher,
         connected: true,
         active: true,
         isSuperAdmin: true,
       },
     });
-    expect(panels[0].onWorkspaceReset).toBe(handleWorkspaceReset);
+    expect(panels[0].listeners["workspace-reset"]).toBe(handleWorkspaceReset);
+    expect(panels.slice(1).map((panel) => panel.listeners)).toEqual([{}, {}, {}]);
     expect(panels[1]).toMatchObject({
       model: userSettingsVisible,
       title: "t:common.userSettings",
       component: components.UserSettingsPanel,
-      props: { apiKey: "api-key", connected: true, active: false },
+      props: { fetcher, connected: true, active: false },
     });
     expect(panels[2]).toMatchObject({
       model: thinkingDetailsVisible,
@@ -81,42 +83,10 @@ describe("drawerPanelsState", () => {
       props: {
         userId: "u1",
         isSuperAdmin: true,
-        apiKey: "api-key",
+        fetcher,
         connected: true,
         active: false,
       },
     });
-  });
-
-  it("uses safe translation and thinking defaults for partial input", () => {
-    const panels = buildAppShellDrawerPanels();
-
-    expect(panels).toHaveLength(4);
-    expect(panels[0].title).toBe("common.workspace");
-    expect(panels[2].title).toBe("message.thinkingDetails");
-    expect(panels[2].props).toEqual({
-      messageItem: {},
-      allMessages: [],
-      runtime: null,
-      variant: "details",
-      userId: undefined,
-    });
-    expect(panels[3].props.active).toBe(false);
-  });
-
-  it("forwards the thinking count through the default translated title path", () => {
-    const translate = vi.fn((key, params = {}) => `${key}:${params.count}`);
-    const panels = buildAppShellDrawerPanels({
-      translate,
-      thinkingDetailsMessageItem: {
-        turnScopeId: "turn-1",
-        toolTimeline: [
-          { key: "call:1", call: { eventId: "call-1" }, resultEvent: { eventId: "result-1" } },
-        ],
-      },
-    });
-
-    expect(panels[2].title).toBe("message.thinkingDetails:2");
-    expect(translate).toHaveBeenCalledWith("message.thinkingDetails", { count: 2 });
   });
 });

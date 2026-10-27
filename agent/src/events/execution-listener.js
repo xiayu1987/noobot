@@ -130,7 +130,7 @@ export function createExecutionEventListener({
   });
 
   const forwardUpstream = ({ event, data, ts, route: deliveryRoute }) => {
-    const transportData = projectExecutionTransportPayload({ event, data, route: deliveryRoute });
+    const transportData = projectExecutionTransportPayload({ data, route: deliveryRoute });
     const diagnostic = summarizeDelivery(event, transportData, deliveryRoute);
     const shouldDiagnose = Boolean(diagnostic.eventId || diagnostic.presentationMessageId);
     const enqueuedAt = deliveryTiming ? performance.now() : 0;

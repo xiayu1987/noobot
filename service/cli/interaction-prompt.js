@@ -15,8 +15,7 @@ export const INTERACTION_UNAVAILABLE = Object.freeze({
 
 export function classifyInteractionRequest(request = {}, { allowInteraction = false } = {}) {
   const lifecycle = clean(request.lifecycle).toLowerCase() || "pending";
-  const ackMode = clean(request.ackMode).toLowerCase() || "manual";
-  if (lifecycle !== "pending" || ackMode !== "manual") return { kind: "ignore" };
+  if (lifecycle !== "pending") return { kind: "ignore" };
   if (request.requireEncryption === true) {
     return { kind: "unavailable", reason: INTERACTION_UNAVAILABLE.ENCRYPTION_REQUIRED };
   }

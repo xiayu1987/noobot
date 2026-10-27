@@ -9,7 +9,7 @@ import {
   assistantMessage,
   emitChannelState,
 } from "../helpers/useChatEngineHarness.js";
-import { StreamEventEnum, RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
+import { StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import {
   createEventEnvelope,
   EVENT_FAMILY,
@@ -17,6 +17,29 @@ import {
   getEventFamily,
 } from "@noobot/event-protocol";
 import { AGENT_COMMAND } from "@noobot/agent-transport-protocol";
+
+const SEND_REQUEST = Object.freeze({ commandType: AGENT_COMMAND.SEND });
+
+const interactionEnvelope = ({ sessionId, turnScopeId, ...payload }) =>
+  createEventEnvelope({
+    family: EVENT_FAMILY.INTERACTION_REQUEST,
+    schemaVersion: getEventFamily(EVENT_FAMILY.INTERACTION_REQUEST).schemaVersion,
+    identity: {
+      eventId: `${payload.requestId}-event`,
+      eventType: StreamEventEnum.INTERACTION_REQUEST,
+      sessionId,
+      turnScopeId,
+    },
+    causality: {},
+    ordering: {
+      domain: INTERACTION_SEQUENCE_DOMAIN,
+      scopeId: payload.requestId,
+      sequence: 1,
+    },
+    producer: { type: "test", id: "interaction-stop-spec" },
+    occurredAt: "2026-09-19T00:00:00.000Z",
+    payload,
+  });
 
 describe("useChatEngine.interaction-stop: interaction", () => {
   it("interaction_request is the only event that restores a pending interaction", async () => {
@@ -34,13 +57,13 @@ describe("useChatEngine.interaction-stop: interaction", () => {
       });
       onEvent({
         event: StreamEventEnum.INTERACTION_REQUEST,
-        data: { ...pendingInteraction, turnScopeId: payload.identity.turnScopeId },
+        data: interactionEnvelope({
+          ...pendingInteraction,
+          turnScopeId: payload.identity.turnScopeId,
+        }),
+        channelSessionId: payload.identity.sessionId,
       });
       emitChannelState(onEvent, "local-int", "dp-int", "user_stopped", { seq: 3 });
-      onEvent({
-        event: StreamEventEnum.USER_STOPPED,
-        data: { sessionId: "local-int", dialogProcessId: "dp-int" },
-      });
     });
     const { engine, interactionSubmitting } = createHarness({
       sessionId: "local-int",
@@ -48,7 +71,7 @@ describe("useChatEngine.interaction-stop: interaction", () => {
       deps: { setPendingInteractionRequest },
     });
 
-    await engine.send();
+    await engine.send(SEND_REQUEST);
 
     expect(setPendingInteractionRequest).toHaveBeenCalledTimes(1);
     expect(setPendingInteractionRequest.mock.calls[0][0]).toMatchObject(pendingInteraction);
@@ -95,7 +118,7 @@ describe("useChatEngine.interaction-stop: interaction", () => {
       deps: { setPendingInteractionRequest },
     });
 
-    await engine.send();
+    await engine.send(SEND_REQUEST);
 
     expect(setPendingInteractionRequest).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -115,14 +138,15 @@ describe("useChatEngine.interaction-stop: interaction", () => {
       });
       onEvent({
         event: StreamEventEnum.INTERACTION_REQUEST,
-        data: {
+        data: interactionEnvelope({
           requestId: "req-int-send",
           sessionId: "local-int-send",
           dialogProcessId: "dp-int-send",
           turnScopeId: "turn-int-send",
           interactionType: "confirm",
           content: "confirm?",
-        },
+        }),
+        channelSessionId: "local-int-send",
       });
       emitChannelState(onEvent, "local-int-send", "dp-int-send", "sending", { seq: 2 });
       emitChannelState(onEvent, "local-int-send", "dp-int-send", "sending", {
@@ -137,7 +161,7 @@ describe("useChatEngine.interaction-stop: interaction", () => {
       deps: { clearPendingInteractionIfObsolete },
     });
 
-    await engine.send();
+    await engine.send(SEND_REQUEST);
 
     expect(clearPendingInteractionIfObsolete).toHaveBeenCalledTimes(1);
     expect(clearPendingInteractionIfObsolete).toHaveBeenCalledWith({
@@ -159,7 +183,7 @@ describe("useChatEngine.interaction-stop: interaction", () => {
       deps: { notify },
     });
 
-    await engine.send();
+    await engine.send(SEND_REQUEST);
 
     const assistant = assistantMessage(activeSession);
     expect(sending.value).toBe(true);
@@ -181,55 +205,6 @@ describe("useChatEngine.interaction-stop: interaction", () => {
     vi.useRealTimers();
   });
 
-  it("interaction_request with lifecycle=resolved & ackMode=auto should auto ack and not enter pending", async () => {
-    const setPendingInteractionRequest = vi.fn();
-    const submitInteractionResponse = vi.fn();
-    const stream = vi.fn(async (payload, onEvent) => {
-      onEvent({
-        event: StreamEventEnum.INTERACTION_REQUEST,
-        data: {
-          sessionId: "local-auto-resolved",
-          turnScopeId: payload.identity.turnScopeId,
-          dialogProcessId: "dp-auto",
-          requestId: "req-auto",
-          interactionType: "post_action_notice",
-          lifecycle: "resolved",
-          ackMode: "auto",
-          content: "done",
-        },
-      });
-      onEvent({
-        event: StreamEventEnum.DONE,
-        data: {
-          sessionId: "local-auto-resolved",
-          dialogProcessId: "dp-auto",
-          messages: [
-            { role: RoleEnum.USER, content: "hello" },
-            { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-auto", content: "ok" },
-          ],
-        },
-      });
-    });
-    const { engine } = createHarness({
-      sessionId: "local-auto-resolved",
-      stream,
-      deps: {
-        connectorTypeSet: new Set(["email"]),
-        setPendingInteractionRequest,
-        submitInteractionResponse,
-      },
-    });
-
-    await engine.send();
-
-    expect(setPendingInteractionRequest).not.toHaveBeenCalled();
-    expect(submitInteractionResponse).toHaveBeenCalledTimes(1);
-    expect(submitInteractionResponse.mock.calls[0][0]).toMatchObject({
-      confirmed: true,
-      response: "post_action_notice_ack",
-    });
-  });
-
   it("failed interaction lifecycle clears the pending modal after timeout", async () => {
     const clearPendingInteraction = vi.fn();
     const setPendingInteractionRequest = vi.fn();
@@ -245,7 +220,11 @@ describe("useChatEngine.interaction-stop: interaction", () => {
     const stream = vi.fn(async (payload, onEvent) => {
       onEvent({
         event: StreamEventEnum.INTERACTION_REQUEST,
-        data: { ...failedRequest, turnScopeId: payload.identity.turnScopeId },
+        data: interactionEnvelope({
+          ...failedRequest,
+          turnScopeId: payload.identity.turnScopeId,
+        }),
+        channelSessionId: payload.identity.sessionId,
       });
     });
     const { engine } = createHarness({
@@ -254,7 +233,7 @@ describe("useChatEngine.interaction-stop: interaction", () => {
       deps: { clearPendingInteraction, setPendingInteractionRequest },
     });
 
-    await engine.send();
+    await engine.send(SEND_REQUEST);
 
     expect(clearPendingInteraction).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -263,5 +242,37 @@ describe("useChatEngine.interaction-stop: interaction", () => {
       }),
     );
     expect(setPendingInteractionRequest).not.toHaveBeenCalled();
+  });
+
+  it("channel_state without an active session is reported as not applied and skips state handling", async () => {
+    const onConversationState = vi.fn();
+    const clearPendingInteractionIfObsolete = vi.fn();
+    let activeSessionIdRef = null;
+    const stream = vi.fn(async (_payload, onEvent) => {
+      activeSessionIdRef.value = "session-not-in-list";
+      emitChannelState(onEvent, "local-no-active", "dp-no-active", "sending", {
+        sourceEvent: AGENT_COMMAND.INTERACTION_RESPONSE,
+        requestId: "req-no-active",
+        seq: 2,
+      });
+    });
+    const harness = createHarness({
+      sessionId: "local-no-active",
+      stream,
+      deps: { onConversationState, clearPendingInteractionIfObsolete },
+    });
+    activeSessionIdRef = harness.activeSessionId;
+
+    await harness.engine.send(SEND_REQUEST);
+
+    expect(harness.activeSession.value).toBeNull();
+    expect(onConversationState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "stream",
+        sessionId: "local-no-active",
+        applied: false,
+      }),
+    );
+    expect(clearPendingInteractionIfObsolete).not.toHaveBeenCalled();
   });
 });

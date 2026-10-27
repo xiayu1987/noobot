@@ -98,6 +98,7 @@
     "check:complexity-baseline": "node ./scripts/check-complexity-baseline.mjs",
     "check:fallback-chain-baseline": "node ./scripts/check-fallback-chain-baseline.mjs",
     "check:unused-parameters-baseline": "node ./scripts/check-unused-parameters-baseline.mjs",
+    "check:injected-dependency-defaults": "node ./scripts/check-injected-dependency-defaults.mjs",
     "check:file-effective-lines": "node ./scripts/check-file-effective-lines.mjs",
     "check:code-security": "eslint . --quiet",
     "check:source-cycles": "node ./scripts/check-source-cycles.mjs",

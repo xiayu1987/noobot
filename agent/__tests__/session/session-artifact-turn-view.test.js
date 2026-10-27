@@ -18,6 +18,7 @@ import {
 import { registerSessionMessageFacts } from "../../src/session/entities/session-message-facts.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 import { withTemp, writeSessionArtifact } from "./session-artifact-store-v2.test-helpers.js";
+import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
 const now = () => "2026-10-19T00:00:00.000Z";
 
@@ -25,13 +26,16 @@ const baseMessages = [
   {
     sessionId: "s",
     messageUid: "sm_a_u",
+    ts: TEST_MESSAGE_TS,
     role: "user",
+    messageOrigin: "natural",
     content: "a",
     turnScopeId: "a",
     dialogProcessId: "dp1",
   },
   {
     messageUid: "sm_a_a",
+    ts: TEST_MESSAGE_TS,
     sessionId: "s",
     role: "assistant",
     presentationMessageId: "pm_fx1",
@@ -42,7 +46,9 @@ const baseMessages = [
   {
     sessionId: "s",
     messageUid: "sm_b_u",
+    ts: TEST_MESSAGE_TS,
     role: "user",
+    messageOrigin: "natural",
     content: "b",
     turnScopeId: "b",
     dialogProcessId: "dp1",
@@ -50,7 +56,9 @@ const baseMessages = [
   {
     sessionId: "s",
     messageUid: "sm_c_u",
+    ts: TEST_MESSAGE_TS,
     role: "user",
+    messageOrigin: "natural",
     content: "c",
     turnScopeId: "c",
     dialogProcessId: "dp2",
@@ -59,6 +67,7 @@ const baseMessages = [
 
 const appended = {
   messageUid: "sm_a_tool",
+  ts: TEST_MESSAGE_TS,
   sessionId: "s",
   role: "tool",
   presentationMessageId: "pm_fx2",
@@ -135,8 +144,10 @@ test("consecutive turn view appends keep later views scoped and the session comp
       const view = await readSessionTurnView({ sessionDir: root, turnScopeIds: [turnScopeId] });
       const message = {
         messageUid: `sm_${turnScopeId}_u`,
+        ts: TEST_MESSAGE_TS,
         sessionId: "s",
         role: "user",
+        messageOrigin: "natural",
         content: turnScopeId,
         turnScopeId,
         dialogProcessId: `dp_${turnScopeId}`,

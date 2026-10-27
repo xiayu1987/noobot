@@ -17,6 +17,7 @@ import {
   applySessionMessageFacts,
   createTestSessionRequiredFields,
 } from "../helpers/session-message-facts.js";
+import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
 test("thinking detail message carries its session identity without duplicating scoped messages", () => {
   const payload = buildThinkingDetailPayload(
@@ -28,6 +29,7 @@ test("thinking detail message carries its session identity without duplicating s
           rawMessages: [
             {
               messageUid: "final-assistant-source",
+              ts: TEST_MESSAGE_TS,
               role: "assistant",
               presentationMessageId: "pm_turn_detail",
               modelMessageId: "mm_session_thinking_detail__1",
@@ -37,6 +39,7 @@ test("thinking detail message carries its session identity without duplicating s
             },
             {
               messageUid: "guidance-source",
+              ts: TEST_MESSAGE_TS,
               role: "assistant",
               presentationMessageId: "pm_turn_detail",
               modelMessageId: "mm_session_thinking_detail__2",
@@ -61,7 +64,7 @@ test("thinking detail message carries its session identity without duplicating s
       contentKind: "injected_message",
       sourceMessageUid: "guidance-source",
       text: "guidance",
-      timestamp: "",
+      timestamp: TEST_MESSAGE_TS,
       sequence: 2,
       sessionId: "",
       dialogProcessId: "",
@@ -82,6 +85,7 @@ test("thinking detail projects only activity facts, not assistant tool-call cont
           rawMessages: [
             {
               messageUid: "assistant-tool-source",
+              ts: TEST_MESSAGE_TS,
               modelMessageId: "presentation-content",
               role: "assistant",
               type: "tool_call",
@@ -102,6 +106,7 @@ test("thinking detail projects only activity facts, not assistant tool-call cont
             },
             {
               messageUid: "control-source",
+              ts: TEST_MESSAGE_TS,
               role: "user",
               type: "context_control",
               turnScopeId: "content-turn",
@@ -111,6 +116,7 @@ test("thinking detail projects only activity facts, not assistant tool-call cont
             },
             {
               messageUid: "final-source",
+              ts: TEST_MESSAGE_TS,
               role: "assistant",
               presentationMessageId: "presentation-content",
               modelMessageId: "mm_session_thinking_detail__3",
@@ -143,6 +149,7 @@ test("thinking detail projects the complete turn timeline onto the final assista
           rawMessages: [
             {
               messageUid: "sm-tool-call-message",
+              ts: TEST_MESSAGE_TS,
               role: "assistant",
               presentationMessageId: "final-assistant",
               modelMessageId: "mm_session_thinking_detail__4",
@@ -154,6 +161,7 @@ test("thinking detail projects the complete turn timeline onto the final assista
             },
             {
               messageUid: "sm-tool-result-message",
+              ts: TEST_MESSAGE_TS,
               role: "tool",
               presentationMessageId: "final-assistant",
               type: "tool_result",
@@ -164,6 +172,7 @@ test("thinking detail projects the complete turn timeline onto the final assista
             },
             {
               messageUid: "sm-final-assistant",
+              ts: TEST_MESSAGE_TS,
               role: "assistant",
               presentationMessageId: "final-assistant",
               modelMessageId: "mm_session_thinking_detail__5",
@@ -233,6 +242,7 @@ test("stopped turn detail uses the persisted presentation identity without a fin
           rawMessages: [
             {
               messageUid: "sm-tool-call-message",
+              ts: TEST_MESSAGE_TS,
               role: "assistant",
               modelMessageId: "mm_session_thinking_detail__7",
               type: "tool_call",
@@ -346,6 +356,7 @@ test("session summary does not copy large tool payloads retained by thinking det
   const messages = [
     {
       messageUid: "sm-final-assistant",
+      ts: TEST_MESSAGE_TS,
       role: "assistant",
       presentationMessageId: "pm_fx10",
       modelMessageId: "mm_session_thinking_detail__8",
@@ -398,6 +409,7 @@ test("thinking detail storage lookup reads exactly one canonical Turn journal", 
         messages: [
           {
             messageUid: "sm-one",
+            ts: TEST_MESSAGE_TS,
             sessionId: "scoped-session",
             role: "assistant",
             presentationMessageId: "pm_fx11",
@@ -410,6 +422,7 @@ test("thinking detail storage lookup reads exactly one canonical Turn journal", 
           },
           {
             messageUid: "sm-two",
+            ts: TEST_MESSAGE_TS,
             sessionId: "scoped-session",
             role: "assistant",
             presentationMessageId: "pm_fx12",

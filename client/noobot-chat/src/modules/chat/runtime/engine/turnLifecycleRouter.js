@@ -5,25 +5,13 @@
  */
 import { StreamEventEnum } from "../../model/chatConstants.js";
 import { applyLatestSessionAggregateVersion } from "./sessionAggregateVersionManager.js";
-import {
-  TURN_COMMITTED_WIRE_EVENT,
-  validateTurnCommittedEventData,
-} from "@noobot/session-protocol/turn-commit";
-import {
-  TURN_ATTACHMENTS_BOUND_WIRE_EVENT,
-  validateTurnAttachmentsBoundEventData,
-} from "@noobot/session-protocol/turn-attachment-bind";
+import { TURN_COMMITTED_WIRE_EVENT } from "@noobot/session-protocol/turn-commit";
+import { TURN_ATTACHMENTS_BOUND_WIRE_EVENT } from "@noobot/session-protocol/turn-attachment-bind";
 import { isTerminalTurnEvent } from "@noobot/session-protocol/turn-lifecycle";
 
-const TURN_USER_MESSAGE_EVENTS = Object.freeze({
-  [TURN_COMMITTED_WIRE_EVENT]: {
-    validate: validateTurnCommittedEventData,
-    logPrefix: "frontend.turnCommit",
-  },
-  [TURN_ATTACHMENTS_BOUND_WIRE_EVENT]: {
-    validate: validateTurnAttachmentsBoundEventData,
-    logPrefix: "frontend.turnAttachmentsBound",
-  },
+const TURN_USER_MESSAGE_LOG_PREFIX = Object.freeze({
+  [TURN_COMMITTED_WIRE_EVENT]: "frontend.turnCommit",
+  [TURN_ATTACHMENTS_BOUND_WIRE_EVENT]: "frontend.turnAttachmentsBound",
 });
 
 function rejectedByException(error) {
@@ -101,7 +89,7 @@ export function routeForeignTurnLifecycleEvent(event, data, context) {
 }
 
 export function routeCurrentTurnLifecycleEvent(event, data, context) {
-  const { applyTurnLifecycleEnvelope, logSessionEvent, sessionId } = context;
+  const { applyTurnLifecycleEnvelope, logSessionEvent } = context;
   if (event === StreamEventEnum.TURN_LIFECYCLE) {
     const terminalLifecycle = isTerminalTurnEvent(data.eventType);
     const logReduction = (reduction) => {
@@ -136,28 +124,15 @@ export function routeCurrentTurnLifecycleEvent(event, data, context) {
     );
     return true;
   }
-  const userMessageEvent = TURN_USER_MESSAGE_EVENTS[event];
-  if (!userMessageEvent) return false;
-  const validation = userMessageEvent.validate(data);
-  if (!validation.ok) {
-    logSessionEvent({
-      category: "state",
-      level: "warn",
-      event: `${userMessageEvent.logPrefix}.userMessageRejected`,
-      sessionId,
-      data: { applied: false, reason: "protocol_invalid", errors: validation.errors },
-    });
-    return true;
-  }
+  const logPrefix = TURN_USER_MESSAGE_LOG_PREFIX[event];
+  if (!logPrefix) return false;
   const { userMessage } = data;
   const reason = applyCommittedUserMessage(data, context);
   const applied = reason === "applied";
   logSessionEvent({
     category: applied ? "message" : "state",
     level: applied ? "info" : "warn",
-    event: applied
-      ? `${userMessageEvent.logPrefix}.userMessageApplied`
-      : `${userMessageEvent.logPrefix}.userMessageRejected`,
+    event: applied ? `${logPrefix}.userMessageApplied` : `${logPrefix}.userMessageRejected`,
     sessionId: data.sessionId,
     dialogProcessId: data.dialogProcessId,
     turnScopeId: data.turnScopeId,

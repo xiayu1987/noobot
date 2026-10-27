@@ -8,7 +8,8 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { createTurnSnapshotCommand } from "@noobot/agent-transport-protocol";
+import { AGENT_COMMAND, createTurnSnapshotCommand } from "@noobot/agent-transport-protocol";
+import { rootCommandIdentity } from "../shared/command-identity.js";
 import { TURN_SNAPSHOT_TERMINAL_LIMIT } from "@noobot/session-protocol/turn-lifecycle";
 import { writeAgentTransportDebugEvent } from "../../src/runtime-events/agent-transport-debug-runtime-events.js";
 import { createChannelKey, parseChannelKey } from "../../src/shared/utils.js";
@@ -25,7 +26,10 @@ test("reconnect snapshot forward event takes identity from channel key without s
   const channel = { key, identity: parseChannelKey(key) };
   const command = createTurnSnapshotCommand({
     commandId: "proxy-snapshot:child-session:test",
-    identity: { sessionId: "child-session" },
+    identity: rootCommandIdentity(AGENT_COMMAND.TURN_SNAPSHOT_GET, {
+      sessionId: "child-session",
+      parentSessionId: "root-session",
+    }),
     options: { knownSequence: 0, terminalLimit: TURN_SNAPSHOT_TERMINAL_LIMIT.DEFAULT },
   });
 
@@ -55,7 +59,7 @@ test("socket command takes userId from the connection identity snapshot", async 
   process.env.NOOBOT_WORKSPACE_ROOT = workspaceRoot;
   const command = createTurnSnapshotCommand({
     commandId: "proxy-snapshot:socket-session:test",
-    identity: { sessionId: "socket-session" },
+    identity: rootCommandIdentity(AGENT_COMMAND.TURN_SNAPSHOT_GET, { sessionId: "socket-session" }),
     options: { knownSequence: 0, terminalLimit: TURN_SNAPSHOT_TERMINAL_LIMIT.DEFAULT },
   });
 
@@ -81,7 +85,7 @@ test("socket command takes userId from the connection identity snapshot", async 
 test("debug event attribution requires exactly one of socket or channel", () => {
   const command = createTurnSnapshotCommand({
     commandId: "proxy-snapshot:any:test",
-    identity: { sessionId: "any-session" },
+    identity: rootCommandIdentity(AGENT_COMMAND.TURN_SNAPSHOT_GET, { sessionId: "any-session" }),
     options: { knownSequence: 0, terminalLimit: TURN_SNAPSHOT_TERMINAL_LIMIT.DEFAULT },
   });
   const key = createChannelKey({ userId: "user-a", sessionId: "any-session" });

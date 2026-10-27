@@ -20,7 +20,6 @@ import {
   resolveContextMessageKey,
 } from "@noobot/context-protocol/message/codec";
 import { emitContextIdentityDebug } from "../../../observability/context-identity-debug.js";
-import { text } from "@noobot/shared/value";
 
 function buildSystemContextMessage(source) {
   if (typeof source === "string") {
@@ -50,7 +49,7 @@ function buildSystemContextMessage(source) {
   });
 }
 
-export function buildContextMessageBlocks(agentContext, { currentUserMessage = null } = {}) {
+export function buildContextMessageBlocks(agentContext, { currentUserMessage }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const context = getAgentContextEnvelope(agentContext);
   const {
@@ -59,15 +58,13 @@ export function buildContextMessageBlocks(agentContext, { currentUserMessage = n
     incremental: restoredIncrementalMessages,
   } = context.modelContext.messageBlocks;
 
-  const currentCanonicalId = text(currentUserMessage?.messageUid);
+  const currentCanonicalId = currentUserMessage.messageUid;
   emitContextIdentityDebug(runtime?.eventListener, "contextBuildInput", {
     currentCanonicalId,
     systemCount: systemMessages.length,
     historyCount: historyMessages.length,
     restoredIncrementalCount: restoredIncrementalMessages.length,
-    attachmentCount: Array.isArray(currentUserMessage?.attachments)
-      ? currentUserMessage.attachments.length
-      : 0,
+    attachmentCount: currentUserMessage.attachments.length,
   });
   const resolvedMainBlocks = buildCanonicalMessageBlocks({
     systemMessages: systemMessages.map(buildSystemContextMessage),
@@ -78,7 +75,6 @@ export function buildContextMessageBlocks(agentContext, { currentUserMessage = n
   });
   emitContextIdentityDebug(runtime?.eventListener, "canonicalBlocksResolved", {
     currentCanonicalId,
-    currentMessagePresent: Boolean(currentCanonicalId),
     currentAlreadyInIncremental: restoredIncrementalMessages.some(
       (message) => resolveContextMessageKey(message) === currentCanonicalId,
     ),
@@ -97,9 +93,10 @@ export function buildContextMessageBlocks(agentContext, { currentUserMessage = n
     runtime,
   });
   const projectedIds = incremental.map(resolveContextMessageKey);
-  const userMetaId = currentCanonicalId
-    ? composeContextProjectionKey(CONTEXT_MESSAGE_PROJECTION_TYPE.USER_META, currentCanonicalId)
-    : "";
+  const userMetaId = composeContextProjectionKey(
+    CONTEXT_MESSAGE_PROJECTION_TYPE.USER_META,
+    currentCanonicalId,
+  );
   emitContextIdentityDebug(runtime?.eventListener, "modelProjectionBuilt", {
     sourceMessageUid: currentCanonicalId,
     contentProjectionFound: projectedIds.includes(currentCanonicalId),
@@ -113,10 +110,4 @@ export function buildContextMessageBlocks(agentContext, { currentUserMessage = n
     incremental,
     messages: [...system, ...history, ...incremental],
   };
-}
-
-export function buildContextMessages(agentContext, { currentUserMessage = null } = {}) {
-  return buildContextMessageBlocks(agentContext, {
-    currentUserMessage,
-  }).messages;
 }

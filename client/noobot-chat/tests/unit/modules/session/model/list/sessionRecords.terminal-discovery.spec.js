@@ -9,6 +9,7 @@ import {
   mergeExistingSessionState,
   reconcileSessionObject,
 } from "../../../../../../src/modules/session/model/list/sessionRecords.js";
+import { ROOT_PARENT_SESSION_ID } from "@noobot/agent-transport-protocol";
 
 const helpers = {
   sessionTitleFromMessages: (messages, fallback = "") =>
@@ -19,6 +20,7 @@ const helpers = {
 function summaryWithTerminalSnapshot(overrides = {}) {
   return {
     sessionId: "s-refresh",
+    parentSessionId: ROOT_PARENT_SESSION_ID,
     caller: "user",
     createdAt: "2026-07-10T00:00:00.000Z",
     updatedAt: "2026-07-10T00:01:00.000Z",
@@ -29,6 +31,7 @@ function summaryWithTerminalSnapshot(overrides = {}) {
       recovery: "none",
       sessionId: "s-refresh",
       sequence: 2,
+      unchanged: false,
       activeTurnScopeId: "",
       activeTurn: null,
       recentTerminalTurns: [
@@ -56,7 +59,12 @@ describe("sessionRecords terminal discovery metadata", () => {
 
   it("uses neutral discovery defaults when a summary omits the fields", () => {
     const mapped = mapSummaryToSession(
-      { sessionId: "s-empty", caller: "user", messages: [] },
+      {
+        sessionId: "s-empty",
+        parentSessionId: ROOT_PARENT_SESSION_ID,
+        caller: "user",
+        messages: [],
+      },
       helpers,
     );
     expect(mapped.turnLifecycleSnapshot).toBeNull();
@@ -65,7 +73,12 @@ describe("sessionRecords terminal discovery metadata", () => {
   it("prefers fresh discovery metadata and retains existing metadata for a partial summary", () => {
     const discovered = mapSummaryToSession(summaryWithTerminalSnapshot(), helpers);
     const partial = mapSummaryToSession(
-      { sessionId: "s-refresh", caller: "user", messages: [] },
+      {
+        sessionId: "s-refresh",
+        parentSessionId: ROOT_PARENT_SESSION_ID,
+        caller: "user",
+        messages: [],
+      },
       helpers,
     );
 
@@ -85,7 +98,12 @@ describe("sessionRecords terminal discovery metadata", () => {
   it("keeps terminal discovery metadata during in-place reconciliation", () => {
     const mapped = mapSummaryToSession(summaryWithTerminalSnapshot(), helpers);
     const existing = mapSummaryToSession(
-      { sessionId: "s-refresh", caller: "user", messages: [] },
+      {
+        sessionId: "s-refresh",
+        parentSessionId: ROOT_PARENT_SESSION_ID,
+        caller: "user",
+        messages: [],
+      },
       helpers,
     );
     const reconciled = reconcileSessionObject(mapped, existing, helpers);

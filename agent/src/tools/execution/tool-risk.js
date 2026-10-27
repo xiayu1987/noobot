@@ -132,7 +132,6 @@ export async function confirmToolOperation({
     requireEncryption: false,
     toolName,
     lifecycle: "pending",
-    ackMode: "manual",
     resolvedBy: "",
   });
   if (result?.confirmed !== true) {

@@ -256,6 +256,7 @@ export function validateTurnLifecycleSnapshot(snapshot = {}) {
   if (!clean(snapshot.sessionId)) errors.push("missing_session_id");
   if (!Number.isInteger(Number(snapshot.sequence)) || Number(snapshot.sequence) < 0)
     errors.push("invalid_sequence");
+  if (typeof snapshot.unchanged !== "boolean") errors.push("invalid_snapshot_unchanged");
   if (!isTurnRecoveryAction(snapshot.recovery)) errors.push("invalid_snapshot_recovery");
   else if (isActionableTurnRecovery(snapshot.recovery) && !snapshot.activeTurn)
     errors.push("recovery_without_active_turn");

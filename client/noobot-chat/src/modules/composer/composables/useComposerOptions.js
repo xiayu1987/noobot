@@ -8,19 +8,12 @@ import { text } from "@noobot/shared/value";
 
 export function useComposerOptions(props, emit, translate) {
   const selectedConnectorNames = computed(() => {
-    const selectedIds = new Set(
-      Array.isArray(props?.connectorPanelState?.selectedConnectorIds)
-        ? props.connectorPanelState.selectedConnectorIds
-        : [],
-    );
-    return (
-      Array.isArray(props?.connectorPanelState?.connectors)
-        ? props.connectorPanelState.connectors
-        : []
-    )
-      .filter((item) => selectedIds.has(item?.connectorId))
-      .map((item) => text(item?.name))
-      .filter(Boolean);
+    const panelState = props.connectorPanelState;
+    if (panelState === null) return [];
+    const selectedIds = new Set(panelState.selectedConnectorIds);
+    return panelState.connectors
+      .filter((item) => selectedIds.has(item.connectorId))
+      .map((item) => item.name);
   });
 
   const attachmentCount = computed(() => (props.uploadFiles || []).length);

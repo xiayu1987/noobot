@@ -11,6 +11,8 @@ import {
   AGENT_CHANNEL_STATE_SCOPE,
   AGENT_COMMAND_RECEIPT_OUTCOME,
   AGENT_TRANSPORT_EVENT,
+  AGENT_TRANSPORT_NON_ENVELOPE_EVENT_KIND,
+  classifyAgentTransportNonEnvelopeEvent,
   createAgentCommandReceipt,
   createAgentCommandRejection,
   validateAgentCommandRejection,
@@ -22,7 +24,8 @@ import {
   createAgentDirectFrame,
   parseAgentTransportFrame,
   validateAgentChannelState,
-  usesExactAgentTransportPayload,
+  hasAgentTransportNonEnvelopePayloadContract,
+  validateAgentTransportNonEnvelopePayload,
   isInFlightAgentChannelState,
   isTerminalAgentChannelState,
 } from "../src/events.js";
@@ -45,11 +48,65 @@ test("every channel state belongs to exactly one of terminal or in-flight", () =
   }
 });
 
-test("transport protocol declares events whose payload cannot be enriched", () => {
-  assert.equal(usesExactAgentTransportPayload(AGENT_TRANSPORT_EVENT.ERROR), true);
-  assert.equal(usesExactAgentTransportPayload(AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT), true);
-  assert.equal(usesExactAgentTransportPayload(AGENT_TRANSPORT_EVENT.CHANNEL_STATE), true);
-  assert.equal(usesExactAgentTransportPayload("message_event"), false);
+test("non-envelope events are classified by the protocol and unregistered names are not", () => {
+  const kind = AGENT_TRANSPORT_NON_ENVELOPE_EVENT_KIND;
+  for (const eventName of [
+    AGENT_TRANSPORT_EVENT.ERROR,
+    AGENT_TRANSPORT_EVENT.CHANNEL_ERROR,
+    AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
+    AGENT_TRANSPORT_EVENT.COMMAND_REJECTED,
+    AGENT_TRANSPORT_EVENT.CHANNEL_STATE,
+  ]) {
+    assert.equal(classifyAgentTransportNonEnvelopeEvent(eventName), kind.EXACT_PAYLOAD, eventName);
+  }
+  for (const eventName of [
+    AGENT_TRANSPORT_EVENT.READY,
+    AGENT_TRANSPORT_EVENT.RECONNECT_DATA,
+    AGENT_TRANSPORT_EVENT.RECONNECT_COMPLETE,
+  ]) {
+    assert.equal(classifyAgentTransportNonEnvelopeEvent(eventName), kind.DIRECT_CONTROL, eventName);
+  }
+  for (const eventName of ["turn_committed", "turn_attachments_bound"]) {
+    assert.equal(
+      classifyAgentTransportNonEnvelopeEvent(eventName),
+      kind.SESSION_RECEIPT,
+      eventName,
+    );
+  }
+  for (const eventName of [
+    "message_event",
+    "attachment_lifecycle",
+    "",
+    " channel_state",
+    undefined,
+  ]) {
+    assert.equal(classifyAgentTransportNonEnvelopeEvent(eventName), "", String(eventName));
+  }
+});
+
+test("non-envelope payload contract covers exact payloads and session receipts only", () => {
+  for (const eventName of ["turn_committed", "turn_attachments_bound"]) {
+    const validation = validateAgentTransportNonEnvelopePayload(eventName, {});
+    assert.equal(validation.valid, false, eventName);
+    assert.ok(validation.errors.includes("session_id_missing"), eventName);
+  }
+  assert.equal(
+    validateAgentTransportNonEnvelopePayload(AGENT_TRANSPORT_EVENT.ERROR, {}).valid,
+    false,
+  );
+  assert.equal(hasAgentTransportNonEnvelopePayloadContract("turn_committed"), true);
+  assert.equal(
+    hasAgentTransportNonEnvelopePayloadContract(AGENT_TRANSPORT_EVENT.CHANNEL_STATE),
+    true,
+  );
+  for (const eventName of [AGENT_TRANSPORT_EVENT.READY, "message_event", "done"]) {
+    assert.equal(hasAgentTransportNonEnvelopePayloadContract(eventName), false, eventName);
+    assert.throws(
+      () => validateAgentTransportNonEnvelopePayload(eventName, {}),
+      /no non-envelope payload contract/,
+      eventName,
+    );
+  }
 });
 
 test("channel frame keeps routing identity separate from authoritative data", () => {

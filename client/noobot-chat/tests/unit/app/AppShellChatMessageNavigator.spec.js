@@ -74,7 +74,7 @@ describe("AppShell chat message navigator", () => {
       panelActionsSource.indexOf("function handleDrawerModelUpdate"),
     );
     expect(moreHandler).not.toContain("closeAllDrawers?.()");
-    expect(moreHandler).toContain("closeMobileSidebar?.()");
+    expect(moreHandler).toContain("closeMobileSidebar()");
   });
 
   it("opens the mobile drawer through a real mounted trigger click", async () => {
@@ -106,6 +106,7 @@ describe("AppShell chat message navigator", () => {
               loadingSessions: false,
               sessions: [],
               activeSessionId: "",
+              activeSession: null,
               turnRuntimeRegistry: createTurnRuntimeRegistryState(),
               chatMessageNavItems: [{ id: "message-1", title: "Message 1" }],
               shouldRenderMessageInChat: () => true,
@@ -202,19 +203,21 @@ describe("AppShell chat message navigator", () => {
   });
 
   it("builds navigator items from active session messages and delegates selection to the message list", () => {
-    expect(chatMessageNavigatorPanelSource).toContain("const chatMessageNavItems = computed(() =>");
+    expect(chatMessageNavigatorPanelSource).toContain(
+      "const chatMessageNavItems = computed(() => {",
+    );
+    expect(chatMessageNavigatorPanelSource).toContain("if (session === null) return [];");
     expect(chatMessageNavigatorPanelSource).toContain("buildChatMessageNavItems({");
     expect(chatMessageNavigatorPanelSource).toContain("selectTurnPresentations({");
-    expect(chatMessageNavigatorPanelSource).toContain("messages: presentationMessages.value");
-    expect(chatMessageNavigatorPanelSource).toContain(
-      "getMessageAnchorId: messageListPanelRef?.value?.getMessageAnchorId",
-    );
+    expect(chatMessageNavigatorPanelSource).not.toContain("getMessageAnchorId");
     expect(chatMessageNavItemsStateSource).toContain("export function buildChatMessageNavItems({");
     expect(chatMessageNavItemsStateSource).toContain("shouldRenderMessageInChat");
     expect(chatMessageNavItemsStateSource).toContain(
-      "getMessageAnchorId(messageItem, messageIndex)",
+      "id: getMessageAnchorId(messageItem, messageIndex)",
     );
-    expect(chatMessageNavItemsStateSource).toContain("content.slice(0, 28)");
+    expect(chatMessageNavItemsStateSource).toContain(
+      "content.slice(0, LENGTH_THRESHOLDS.clientPreview.chatMessageNavChars)",
+    );
     expect(chatMessageNavItemsStateSource).toContain(
       'title: `${messageIndex + 1}. ${roleLabel}${content ? `：${content}` : ""}`',
     );
@@ -223,24 +226,24 @@ describe("AppShell chat message navigator", () => {
     );
     expect(chatMessageNavigatorComponentSource).not.toContain(':title="item.title"');
     expect(chatMessageNavigatorPanelSource).toContain(
-      "function handleSelectChatMessageNavItem(item = {})",
+      "function handleSelectChatMessageNavItem(item)",
     );
     expect(chatMessageNavigatorPanelSource).toContain("selectChatMessageNavigatorItem({");
+    expect(chatMessageNavigatorStateSource).toContain("const anchor = item.id;");
     expect(chatMessageNavigatorStateSource).toContain(
-      "function normalizeChatMessageNavigatorAnchor(item = {})",
+      "const messageListPanel = readMountedMessageListPanel(messageListPanelRef);",
     );
-    expect(chatMessageNavigatorStateSource).toContain("return text(item?.id);");
     expect(chatMessageNavigatorStateSource).toContain(
-      "messageListPanelRef.value?.scrollToMessageAnchor?.(anchor)",
+      "messageListPanel.scrollToMessageAnchor(anchor);",
     );
   });
 
   it("navigates to the last message through navigator selection instead of direct bottom scroll", () => {
     expect(chatMessageNavigatorPanelSource).toContain("function navigateToLastMessage()");
+    expect(chatMessageNavigatorPanelSource).toContain("if (!items.length) return;");
     expect(chatMessageNavigatorPanelSource).toContain(
-      "const lastItem = items[items.length - 1] || null;",
+      "handleSelectChatMessageNavItem(items[items.length - 1]);",
     );
-    expect(chatMessageNavigatorPanelSource).toContain("handleSelectChatMessageNavItem(lastItem);");
     expect(chatMessageNavigatorComponentSource).toContain(
       "function syncCurrentNavigatorItemIntoView()",
     );
@@ -281,7 +284,7 @@ describe("AppShell chat message navigator", () => {
     expect(useChatEngineSource).toContain("if (turnTerminalNavigatedKeys.has(key)) return;");
     expect(useChatEngineSource).not.toContain("locateDoneMessage");
     expect(sessionDetailApplySource).toContain(
-      "if (options.navigateToLastMessage === true) navigateToLastMessage?.();",
+      "if (options.navigateToLastMessage === true) navigateToLastMessage();",
     );
     expect(batchReplaySource).not.toContain("navigateToLastMessage");
   });
@@ -295,10 +298,10 @@ describe("AppShell chat message navigator", () => {
     expect(chatMessageNavigatorPanelSource).toContain("messageListPanelRef,");
     expect(chatMessageScrollSyncSource).toContain("function syncCurrentMessageAnchorId()");
     expect(chatMessageScrollSyncSource).toContain(
-      'querySelectorAll?.("[data-chat-message-anchor]")',
+      'wrapRef.querySelectorAll("[data-chat-message-anchor]")',
     );
     expect(chatMessageScrollSyncSource).toContain(
-      "const nextAnchorId = getAnchorId(currentAnchor);",
+      "const nextAnchorId = currentAnchor.dataset.chatMessageAnchor;",
     );
     expect(chatMessageScrollSyncSource).toContain(
       "if (shouldKeepNavigatorScrollLock(wrapRef, nextAnchorId)) return;",
@@ -306,9 +309,12 @@ describe("AppShell chat message navigator", () => {
     expect(chatMessageScrollSyncSource).toContain("currentMessageAnchorId.value = nextAnchorId;");
     expect(chatMessageScrollSyncSource).toContain("function bindChatMessageScrollSync()");
     expect(chatMessageScrollSyncSource).toContain(
-      'wrapRef.addEventListener?.("scroll", syncCurrentMessageAnchorId, { passive: true })',
+      'wrapRef.addEventListener("scroll", syncCurrentMessageAnchorId, { passive: true })',
     );
     expect(chatMessageScrollSyncSource).toContain("function unbindChatMessageScrollSync()");
+    expect(chatMessageScrollSyncSource).toContain(
+      'wrapRef.removeEventListener("scroll", syncCurrentMessageAnchorId)',
+    );
     expect(chatMessageNavigatorPanelSource).toContain("nextTick(bindChatMessageScrollSync)");
     expect(appShellSource).toContain("unbindChatMessageScrollSync();");
   });

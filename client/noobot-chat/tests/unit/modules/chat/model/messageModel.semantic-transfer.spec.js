@@ -44,6 +44,7 @@ describe("messageModel attachments and semantic transfer", () => {
     const message = buildViewMessage(
       {
         role: "user",
+        content: "",
         sessionId: "session-1",
         attachments: [
           {

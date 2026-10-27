@@ -7,6 +7,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { normalizeMessageEntity, normalizeTaskEntity } from "../../src/session/entities.js";
 import { resolveDefaultModelSpec, resolveSkillModelSpec } from "../../src/models/resolver/index.js";
+import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
 function createBaseGlobalConfig(overrides = {}) {
   return {
@@ -89,9 +90,10 @@ describe("8. 综合集成测试", () => {
         sessionId: "s_fixture",
         messageUid: "sm_integration_user",
         role: "user",
+        messageOrigin: "natural",
         content: "test",
         type: "text",
-        ts: Date.now(),
+        ts: TEST_MESSAGE_TS,
       };
       const normalizedMsg = normalizeMessageEntity(rawMsg);
 

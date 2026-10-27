@@ -105,8 +105,8 @@ test("deleteFromMessage replays a committed receipt without deleting again", asy
   const h = harness({
     aggregateVersion: 2,
     messages: [
-      { role: "user", content: "keep", turnScopeId: "keep" },
-      { role: "user", content: "delete", turnScopeId: "delete" },
+      { role: "user", messageOrigin: "natural", content: "keep", turnScopeId: "keep" },
+      { role: "user", messageOrigin: "natural", content: "delete", turnScopeId: "delete" },
     ],
   });
   const input = {
@@ -131,7 +131,15 @@ test("deleteFromMessage replays a committed receipt without deleting again", asy
 test("replaceTurn replays a committed receipt after the original anchor is gone", async () => {
   const h = harness({
     aggregateVersion: 4,
-    messages: [{ sessionId: "s1", role: "user", content: "old", turnScopeId: "old" }],
+    messages: [
+      {
+        sessionId: "s1",
+        role: "user",
+        messageOrigin: "natural",
+        content: "old",
+        turnScopeId: "old",
+      },
+    ],
   });
   const input = {
     userId: "u1",
@@ -161,7 +169,15 @@ test("replaceTurn replays a committed receipt after the original anchor is gone"
 
 test("replaceTurn idempotency keys reject reuse with a different request", async () => {
   const replace = harness({
-    messages: [{ sessionId: "s1", role: "user", content: "old", turnScopeId: "old" }],
+    messages: [
+      {
+        sessionId: "s1",
+        role: "user",
+        messageOrigin: "natural",
+        content: "old",
+        turnScopeId: "old",
+      },
+    ],
   });
   await replace.service.replaceTurn({
     userId: "u1",
@@ -187,7 +203,14 @@ test("replaceTurn idempotency keys reject reuse with a different request", async
 test("user_meta parsed results attach only to an existing user source message", async () => {
   const h = harness({
     messages: [
-      { messageUid: "sm_u", role: "user", content: "q", turnScopeId: "t", dialogProcessId: "dp" },
+      {
+        messageUid: "sm_u",
+        role: "user",
+        messageOrigin: "natural",
+        content: "q",
+        turnScopeId: "t",
+        dialogProcessId: "dp",
+      },
       {
         messageUid: "sm_a",
         role: "assistant",

@@ -33,106 +33,6 @@ afterEach(() => {
 });
 
 describe("useReconnectReplay", () => {
-  it("does not let a live DONE snapshot replace a canonical assistant by weak turn identity", async () => {
-    const { api, refs } = createFixture();
-    const placeholder = {
-      role: RoleEnum.ASSISTANT,
-      type: "message",
-      sessionId: "s-1",
-      dialogProcessId: "dp-workflow-final",
-      turnScopeId: "turn-workflow-final",
-      content: "",
-      pending: true,
-      thinkingExpanded: true,
-    };
-    refs.activeSession.value.messages = [
-      {
-        role: RoleEnum.USER,
-        content: "run workflow",
-        sessionId: "s-1",
-        dialogProcessId: "dp-workflow-final",
-        turnScopeId: "turn-workflow-final",
-      },
-      placeholder,
-    ];
-
-    await api.applyReconnectEvent(StreamEventEnum.DONE, {
-      sessionId: "s-1",
-      dialogProcessId: "dp-workflow-final",
-      turnScopeId: "turn-workflow-final",
-      seq: 85,
-      messages: [
-        {
-          role: RoleEnum.USER,
-          content: "run workflow",
-          sessionId: "s-1",
-          dialogProcessId: "dp-workflow-final",
-          turnScopeId: "turn-workflow-final",
-        },
-        {
-          role: RoleEnum.ASSISTANT,
-          type: "workflow",
-          content: "workflow finalized",
-          sessionId: "s-1",
-          dialogProcessId: "dp-workflow-final",
-          turnScopeId: "turn-workflow-final",
-          pluginMessage: true,
-          pluginMeta: {
-            source: "workflow-plugin",
-            kind: "workflow",
-            phase: "planning",
-            payload: { workflowRunId: "workflow-final" },
-          },
-        },
-      ],
-    });
-
-    expect(refs.activeSession.value.messages).toHaveLength(2);
-    expect(refs.activeSession.value.messages[1]).toMatchObject({
-      content: "",
-      pending: true,
-      thinkingExpanded: true,
-    });
-  });
-
-  it("does not let data-plane completion replace the Authority lifecycle", async () => {
-    const { api, refs, mocks } = createFixture();
-    refs.activeSession.value.messages = [
-      {
-        role: RoleEnum.USER,
-        content: "run workflow",
-        sessionId: "s-1",
-        dialogProcessId: "dp-terminal-order",
-        turnScopeId: "turn-terminal-order",
-      },
-    ];
-    await api.applyReconnectEvent(StreamEventEnum.TURN_LIFECYCLE, {
-      eventType: "turn.completed",
-      sessionId: "s-1",
-      dialogProcessId: "dp-terminal-order",
-      turnScopeId: "turn-terminal-order",
-      seq: 91,
-      sequence: 2,
-    });
-    await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
-      sessionId: "s-1",
-      dialogProcessId: "dp-terminal-order",
-      turnScopeId: "turn-terminal-order",
-      state: AGENT_CHANNEL_STATE.COMPLETED,
-      seq: 93,
-    });
-    await api.applyReconnectEvent(StreamEventEnum.DONE, {
-      sessionId: "s-1",
-      dialogProcessId: "dp-terminal-order",
-      turnScopeId: "turn-terminal-order",
-      seq: 93,
-      messages: [refs.activeSession.value.messages[0]],
-    });
-
-    expect(refs.activeSession.value.messages).toHaveLength(1);
-    expect(mocks.chatList.fetchSessionDetail).not.toHaveBeenCalled();
-  });
-
   it("routes a live child canonical event through the same sub-session reducer as reconnect replay", async () => {
     const { api, mocks } = createFixture();
     const messageEvent = createAuthoritativeMessageEnvelope("tool_call_start", {
@@ -231,20 +131,6 @@ describe("useReconnectReplay", () => {
     );
     expect(assistant?.content).toBe("AB");
     expect(assistant?.pending).toBe(true);
-  });
-
-  it("EV-01c: replay in-flight DELTA does not restore sending without channel_state", async () => {
-    const { api, refs } = createFixture();
-    refs.activeSession.value.messages = [{ role: RoleEnum.USER, content: "q" }];
-
-    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
-      sessionId: "s-1",
-      dialogProcessId: "dp-sending",
-      seq: 1,
-      text: "A",
-    });
-
-    expect(refs.sending.value).toBe(false);
   });
 
   it("EV-01d: channel_state sending is transport-only", async () => {
@@ -414,7 +300,7 @@ describe("useReconnectReplay", () => {
     });
     const reconnectControl = createReconnectControl({
       requestId: "reconnect-s-1",
-      identity: { sessionId: "s-1", parentSessionId: "", parentDialogProcessId: "" },
+      identity: { sessionId: "s-1", parentSessionId: "" },
       knownLifecycleSequenceMap: {},
     });
     await api.applyReconnectData(
@@ -455,7 +341,6 @@ describe("useReconnectReplay", () => {
 
   it("EV-03: INTERACTION_REQUEST sets pending interaction without terminal cleanup", async () => {
     const { api, refs, mocks } = createFixture();
-    refs.interactionSubmitting.value = false;
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
       { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-int", content: "", pending: true },
@@ -466,11 +351,12 @@ describe("useReconnectReplay", () => {
       requestId: "req-1",
       interactionType: "confirm",
     });
-    await api.applyReconnectEvent(INTERACTION_EVENT_TYPE.REQUEST, interaction);
+    await api.applyReconnectEvent(INTERACTION_EVENT_TYPE.REQUEST, interaction, {
+      channelSessionId: "s-1",
+    });
 
     expect(mocks.setPendingInteractionRequest).toHaveBeenCalledTimes(1);
     expect(mocks.clearPendingInteraction).not.toHaveBeenCalled();
-    expect(refs.interactionSubmitting.value).toBe(false);
   });
 
   it("EV-03b: non-interaction replay event does not clear interaction without channel_state", async () => {
@@ -485,30 +371,27 @@ describe("useReconnectReplay", () => {
       requestId: "req-2",
       interactionType: "confirm",
     });
-    await api.applyReconnectEvent(INTERACTION_EVENT_TYPE.REQUEST, interaction);
-    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
-      sessionId: "s-1",
-      dialogProcessId: "dp-int2",
-      seq: 2,
-      text: "resume",
+    await api.applyReconnectEvent(INTERACTION_EVENT_TYPE.REQUEST, interaction, {
+      channelSessionId: "s-1",
     });
 
     expect(mocks.setPendingInteractionRequest).toHaveBeenCalledTimes(1);
     expect(mocks.clearPendingInteraction).not.toHaveBeenCalled();
   });
 
-  it("EV-03b2: auto-resolved interaction replay does not enter pending", async () => {
+  it("EV-03b2: terminal interaction replay clears pending instead of entering it", async () => {
     const { api, mocks } = createFixture();
 
     const interaction = createInteractionEnvelope({
       dialogProcessId: "dp-int2-auto",
       requestId: "req-2-auto",
       interactionType: "post_action_notice",
-      lifecycle: "resolved",
-      ackMode: "auto",
-      resolvedBy: "auto",
+      lifecycle: "failed",
+      resolvedBy: "system",
     });
-    await api.applyReconnectEvent(INTERACTION_EVENT_TYPE.REQUEST, interaction);
+    await api.applyReconnectEvent(INTERACTION_EVENT_TYPE.REQUEST, interaction, {
+      channelSessionId: "s-1",
+    });
 
     expect(mocks.setPendingInteractionRequest).not.toHaveBeenCalled();
     expect(mocks.clearPendingInteraction).toHaveBeenCalled();
@@ -530,8 +413,7 @@ describe("useReconnectReplay", () => {
   });
 
   it("EV-03d: channel_state interaction_pending has no pending-interaction side effects", async () => {
-    const { api, refs, mocks } = createFixture();
-    refs.interactionSubmitting.value = false;
+    const { api, mocks } = createFixture();
 
     await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
       sessionId: "s-1",
@@ -547,7 +429,6 @@ describe("useReconnectReplay", () => {
       },
     });
 
-    expect(refs.interactionSubmitting.value).toBe(false);
     expect(mocks.setPendingInteractionRequest).not.toHaveBeenCalled();
   });
 

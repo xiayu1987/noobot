@@ -28,7 +28,7 @@ import { text } from "@noobot/shared/value";
 const props = defineProps({
   ...sharedSidebarProps,
   composerActionState: { type: Object, default: () => ({}) },
-  activeSession: { type: Object, default: () => ({}) },
+  activeSession: { type: [Object, null], required: true },
   title: { type: String, default: "" },
   isSuperAdmin: { type: Boolean, default: false },
   canUseIDE: { type: Boolean, default: false },
@@ -113,7 +113,7 @@ const emit = defineEmits([
 ]);
 
 const composerRef = ref();
-const messageListPanelRef = ref();
+const messageListPanelRef = ref(null);
 const featurePanelVisible = ref(false);
 const featurePanelContext = computed(() => ({
   connected: props.connected === true,
@@ -245,8 +245,7 @@ defineExpose({
         <ChatMessageListPanel
           ref="messageListPanelRef"
           :loading-session-detail="loadingSessionDetail"
-          :active-session="activeSession || {}"
-          :connected="connected"
+          :active-session="activeSession"
           :should-render-message-in-chat="shouldRenderMessageInChat"
           :user-id="userId"
           :render-markdown="renderMarkdown"
@@ -478,12 +477,14 @@ defineExpose({
           :model-value="input"
           :more-panel-visible="composerMorePanelVisible"
           :upload-files="uploadFiles"
-          :connector-panel-state="activeSession?.connectorPanelState || {}"
+          :connector-panel-state="activeSession === null ? null : activeSession.connectorPanelState"
           :sending="sending"
           :composer-action-state="composerActionState"
           :can-stop="canStop"
           :connected="connected"
-          :session-ready="activeSession?.loaded === true && !loadingSessionDetail"
+          :session-ready="
+            activeSession !== null && activeSession.loaded === true && !loadingSessionDetail
+          "
           :allow-user-interaction="allowUserInteraction"
           :safe-confirm="safeConfirm"
           :safe-confirm-level="safeConfirmLevel"

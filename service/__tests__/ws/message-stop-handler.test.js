@@ -5,7 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createTurnStopCommand } from "@noobot/agent-transport-protocol";
+import { createTurnStopCommand, ROOT_PARENT_SESSION_ID } from "@noobot/agent-transport-protocol";
 import { resolveUserStopPayload, TURN_EVENT } from "@noobot/session-protocol";
 import { createConnectionState } from "../../ws/chat-websocket/connection-state.js";
 import { createMessageStopHandler } from "../../ws/chat-websocket/message-stop-handler.js";
@@ -33,7 +33,11 @@ function createStopHarness() {
 
 function stopCommand(turnScopeId) {
   return createTurnStopCommand({
-    identity: { sessionId: "session-stop", turnScopeId },
+    identity: {
+      sessionId: "session-stop",
+      parentSessionId: ROOT_PARENT_SESSION_ID,
+      turnScopeId,
+    },
     concurrency: { expectedTurnRevision: 1 },
     stop: {},
   });

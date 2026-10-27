@@ -7,7 +7,6 @@
 import { computed, ref, watch } from "vue";
 import ChatMessageItem from "../message/ChatMessageItem.vue";
 import { useChatStore } from "../../stores/useChatStore.js";
-import { selectTurnPresentations } from "../../runtime/engine/turnPresentation.js";
 import {
   isWorkflowDiagnosticsEnabled,
   logWorkflowDiagnostics,
@@ -19,22 +18,21 @@ import {
   summarizeStateMachineMessage,
 } from "../../../debug/loggers/stateMachineLogger.js";
 import { useLocale } from "../../../../shared/i18n/useLocale.js";
-import {
-  getMessageSessionId,
-  getMessageTurnScopeId,
-  getMessageRole,
-  getMessageTurnScopeKey,
-} from "../../model/messageIdentity.js";
+import { getMessageRole, getMessageTurnScopeKey } from "../../model/messageIdentity.js";
+import { getMessageAnchorId, getMessageRenderKey } from "../../model/messageAnchor.js";
 import { sharedMessageRenderProps } from "../../model/messageItemProps.js";
 import SessionArtifactPanel from "../artifacts/SessionArtifactPanel.vue";
-import { text } from "@noobot/shared/value";
+import { isCanonicalText } from "@noobot/shared/value";
+import {
+  EMPTY_TURN_PRESENTATIONS,
+  selectTurnPresentations,
+} from "../../runtime/engine/turnPresentation.js";
 
 defineEmits(["open-thinking-details"]);
 
 const props = defineProps({
   loadingSessionDetail: { type: Boolean, default: false },
-  activeSession: { type: Object, default: () => ({}) },
-  connected: { type: Boolean, default: false },
+  activeSession: { type: [Object, null], required: true },
   shouldRenderMessageInChat: { type: Function, required: true },
   ...sharedMessageRenderProps,
   emptyLogoSrc: { type: String, default: "" },
@@ -43,19 +41,28 @@ const props = defineProps({
 const listRef = ref(null);
 const { translate } = useLocale();
 const chatStore = useChatStore();
-const presentedMessages = computed(() => {
-  return selectTurnPresentations({
-    activeSession: props.activeSession,
-    workflowRegistry: chatStore.workflowNodeStateRegistry,
-    turnRuntimeRegistry: chatStore.turnRuntimeRegistry,
-  });
-});
+const presentedMessages = computed(() =>
+  props.activeSession === null
+    ? EMPTY_TURN_PRESENTATIONS
+    : selectTurnPresentations({
+        activeSession: props.activeSession,
+        workflowRegistry: chatStore.workflowNodeStateRegistry,
+        turnRuntimeRegistry: chatStore.turnRuntimeRegistry,
+      }),
+);
+function summarizeActiveSessionSource() {
+  return props.activeSession === null
+    ? { sessionId: "", sourceMessageCount: 0 }
+    : {
+        sessionId: props.activeSession.sessionId,
+        sourceMessageCount: props.activeSession.messages.length,
+      };
+}
 const presentationDiagnosticsSignature = computed(() =>
   !isWorkflowDiagnosticsEnabled()
     ? "disabled"
     : [
-        String(props.activeSession?.sessionId || ""),
-        Array.isArray(props.activeSession?.messages) ? props.activeSession.messages.length : 0,
+        ...Object.values(summarizeActiveSessionSource()),
         presentedMessages.value.length,
         Number(chatStore.workflowNodeStateRegistry?.version || 0),
         Number(chatStore.subSessionMessageRegistryVersion || 0),
@@ -65,10 +72,7 @@ watch(
   presentationDiagnosticsSignature,
   () => {
     logWorkflowDiagnostics("frontend.workflowRender.turnPresentationsSelected", () => ({
-      sessionId: String(props.activeSession?.sessionId || ""),
-      sourceMessageCount: Array.isArray(props.activeSession?.messages)
-        ? props.activeSession.messages.length
-        : 0,
+      ...summarizeActiveSessionSource(),
       presentationMessageCount: presentedMessages.value.length,
       workflowPresentations: summarizeWorkflowMessages(presentedMessages.value),
     }));
@@ -77,7 +81,7 @@ watch(
 );
 const messageItemSharedProps = computed(() => ({
   allMessages: presentedMessages.value,
-  sessionDocs: props.activeSession?.sessionDocs || [],
+  sessionDocs: props.activeSession === null ? [] : props.activeSession.sessionDocs,
   userId: props.userId,
   renderMarkdown: props.renderMarkdown,
   formatTime: props.formatTime,
@@ -108,21 +112,7 @@ function isCurrentTurnMessage(messageItem = {}) {
 }
 
 function getWrapRef() {
-  return listRef.value?.wrapRef || null;
-}
-
-function getMessageRenderKey(messageItem = {}, messageIndex = 0) {
-  const stableIndex = Number.isFinite(Number(messageIndex)) ? Number(messageIndex) : 0;
-  const role = getMessageRole(messageItem);
-  const turnScopeId = getMessageTurnScopeId(messageItem);
-  const sessionId = getMessageSessionId(messageItem);
-  const turnScopeKey = turnScopeId ? `${sessionId || "active"}::${turnScopeId}` : "";
-  const taskId = text(messageItem?.taskId);
-  const toolCallId = text(messageItem?.tool_call_id);
-  const stablePrimaryId = turnScopeKey || taskId || toolCallId || String(stableIndex);
-  return [role, stablePrimaryId, stableIndex]
-    .map((item) => String(item ?? "").replaceAll("|", "/"))
-    .join("|");
+  return listRef.value.wrapRef;
 }
 
 const renderedMessages = computed(() =>
@@ -149,10 +139,7 @@ watch(
   renderDiagnosticsSignature,
   (signature) => {
     logStateMachineDebug("stateMachine.presentation.renderList.committed", () => ({
-      sessionId: String(props.activeSession?.sessionId || ""),
-      sourceMessageCount: Array.isArray(props.activeSession?.messages)
-        ? props.activeSession.messages.length
-        : 0,
+      ...summarizeActiveSessionSource(),
       presentationMessageCount: presentedMessages.value.length,
       renderedMessageCount: renderedMessages.value.length,
       messages: JSON.parse(signature),
@@ -161,28 +148,19 @@ watch(
   { immediate: true, flush: "post" },
 );
 
-function getMessageAnchorId(messageItem = {}, messageIndex = 0) {
-  return `chat-message-${getMessageRenderKey(messageItem, messageIndex).replace(
-    /[^a-zA-Z0-9_-]/g,
-    "-",
-  )}`;
-}
-
-function scrollToMessageAnchor(anchorId = "") {
+function scrollToMessageAnchor(anchorId) {
+  if (!isCanonicalText(anchorId)) throw new TypeError("scrollToMessageAnchor requires anchorId");
   const wrapRef = getWrapRef();
-  const id = text(anchorId);
-  if (!wrapRef || !id) return false;
-  const target = wrapRef.querySelector?.(`#${CSS.escape(id)}`);
+  const target = wrapRef.querySelector(`#${CSS.escape(anchorId)}`);
   if (!target) return false;
   const offset = 16;
   const nextTop = target.offsetTop - offset;
-  wrapRef.scrollTo?.({ top: Math.max(0, nextTop), behavior: "smooth" });
+  wrapRef.scrollTo({ top: Math.max(0, nextTop), behavior: "smooth" });
   return true;
 }
 
 defineExpose({
   getWrapRef,
-  getMessageAnchorId,
   scrollToMessageAnchor,
 });
 </script>
@@ -224,7 +202,7 @@ defineExpose({
         </template>
       </div>
     </el-scrollbar>
-    <SessionArtifactPanel :active-session="activeSession" :connected="connected" />
+    <SessionArtifactPanel v-if="activeSession !== null" :session-id="activeSession.sessionId" />
   </div>
 </template>
 

@@ -797,12 +797,11 @@ test("keeps a Session service failure distinct from pending", async () => {
           userId: "user-1",
           workflowSessionService: {
             getThinkingDetail: async () => null,
-            getDetail: async () => ({
-              ok: true,
-              async json() {
-                return { ok: false, exists: false, error: "permission denied" };
-              },
-            }),
+            getDetail: async () =>
+              new Response(JSON.stringify({ ok: false, error: "permission denied" }), {
+                status: 403,
+                headers: { "content-type": "application/json" },
+              }),
           },
         },
         translate: (key) => key,
@@ -811,6 +810,12 @@ test("keeps a Session service failure distinct from pending", async () => {
         traceId: "trace-1",
         dialogProcessId: "workflow-node-a",
       }),
-    /permission denied/,
+    (error) => {
+      assert.equal(error.name, "ApiRequestError");
+      assert.equal(error.code, "http");
+      assert.equal(error.status, 403);
+      assert.equal(error.message, "permission denied");
+      return true;
+    },
   );
 });

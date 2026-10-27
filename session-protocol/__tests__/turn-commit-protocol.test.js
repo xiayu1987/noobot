@@ -21,6 +21,7 @@ function createCommit(overrides = {}) {
       messageUid: "sm_1",
       userMessageId: "frontend-user-1",
       role: "user",
+      content: "hello",
       sessionId: "session-1",
       dialogProcessId: "dialog-1",
       turnScopeId: "turn-1",
@@ -32,7 +33,7 @@ function createCommit(overrides = {}) {
 
 test("turn_committed accepts one canonical persisted user message", () => {
   const commit = createCommit();
-  assert.equal(validateTurnCommittedEventData(commit).ok, true);
+  assert.equal(validateTurnCommittedEventData(commit).valid, true);
   assert.equal(assertTurnCommittedEventData(commit), commit);
 });
 
@@ -48,7 +49,7 @@ test("turn_committed rejects attachments owned by the binding command", () => {
       },
     }),
   );
-  assert.equal(validation.ok, false);
+  assert.equal(validation.valid, false);
   assert.deepEqual(validation.errors, [
     "user_message_attachments_forbidden",
     "attachment_id_missing",

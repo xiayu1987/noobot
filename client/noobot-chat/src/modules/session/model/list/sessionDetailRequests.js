@@ -6,16 +6,17 @@
 import { nowMs } from "../../../chat/model/timeFields.js";
 import { findSessionByAnyId as findSessionByAnyIdInList } from "../../../chat/model/sessionIdentity.js";
 import { normalizeSessionId } from "./sessionIdentity.js";
-import {
-  thinkingDetailService,
-  THINKING_DETAIL_NOT_FOUND,
-  THINKING_DETAIL_REQUEST_FAILED,
-} from "../../../../infrastructure/api/thinking/thinkingDetailService.js";
+import { thinkingDetailService } from "../../../../infrastructure/api/thinking/thinkingDetailService.js";
 import {
   logWorkflowDiagnostics,
   summarizeWorkflowMessages,
 } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
 import { text } from "@noobot/shared/value";
+import {
+  API_REQUEST_ERROR_CODE,
+  ApiRequestError,
+  readApiResponseEnvelope,
+} from "@noobot/shared/request-error";
 
 const RECENT_SESSION_DETAIL_REUSE_MS = 2000;
 
@@ -93,26 +94,14 @@ export function createSessionDetailRequests({
     return { action: "fetch", state, source };
   }
 
-  async function requestSessionDetailData(
-    requestFactory,
-    {
-      requireExists = true,
-      missingMessage = translate("chat.sessionNotFound"),
-      failedMessageFromPayload = true,
-    } = {},
-  ) {
-    const res = await requestFactory();
-    if (!res.ok) throw new Error(translate("chat.getSessionFailed", { status: res.status }));
-    const data = await res.json();
-    if (!data.ok) {
-      throw new Error(
-        failedMessageFromPayload
-          ? data.error || translate("chat.getSessionFailed", { status: res.status })
-          : translate("chat.getSessionFailed", { status: res.status }),
-      );
-    }
-    if (requireExists && !data.exists) {
-      throw new Error(data.error || missingMessage);
+  async function requestSessionDetailData(requestFactory, { requireExists }) {
+    const response = await requestFactory();
+    const data = await readApiResponseEnvelope(response);
+    if (requireExists && data.exists !== true) {
+      throw new ApiRequestError(translate("chat.sessionNotFound"), {
+        code: API_REQUEST_ERROR_CODE.NOT_FOUND,
+        status: response.status,
+      });
     }
     return data;
   }
@@ -149,9 +138,7 @@ export function createSessionDetailRequests({
             { userId: userId.value, sessionId: normalizedSessionId || sessionId },
             { fetcher: authFetch },
           ),
-        {
-          requireExists: options.requireExists !== false,
-        },
+        { requireExists: options.requireExists !== false },
       );
       if (!data?.exists && options.requireExists === false) return null;
       const { sessionDocs, responseMessages } = collectSessionResponseDetails(data);
@@ -194,24 +181,12 @@ export function createSessionDetailRequests({
     if (!normalizedDialogProcessId && !normalizedTurnScopeId) {
       throw new Error("dialogProcessId or turnScopeId is required");
     }
-    try {
-      return await thinkingDetailService.getDetail({
-        userId: userId.value,
-        sessionId: normalizedSessionId || sessionId,
-        dialogProcessId: normalizedDialogProcessId,
-        turnScopeId: normalizedTurnScopeId,
-      });
-    } catch (error) {
-      if (error?.code === THINKING_DETAIL_REQUEST_FAILED) {
-        throw new Error(translate("chat.getSessionFailed", { status: error.status }));
-      }
-      if (error?.code === THINKING_DETAIL_NOT_FOUND && !error.serverMessage) {
-        const missing = new Error(translate("chat.sessionNotFound"));
-        missing.code = THINKING_DETAIL_NOT_FOUND;
-        throw missing;
-      }
-      throw error;
-    }
+    return thinkingDetailService.getDetail({
+      userId: userId.value,
+      sessionId: normalizedSessionId || sessionId,
+      dialogProcessId: normalizedDialogProcessId,
+      turnScopeId: normalizedTurnScopeId,
+    });
   }
 
   return {

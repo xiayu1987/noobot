@@ -31,6 +31,7 @@ describe("session message view", () => {
           turnScopeId: "turn-1",
           content: "question",
           attachments: [],
+          ts: "2026-01-01T00:00:00.000Z",
         },
         assistantMessage: {
           presentationMessageId: "assistant-1",

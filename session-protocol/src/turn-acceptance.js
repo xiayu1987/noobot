@@ -8,6 +8,7 @@ import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { TURN_EVENT } from "./lifecycle/turn-event.js";
 import { TURN_ACTION } from "./lifecycle/turn-action.js";
 import { acceptedMessageIdentityFieldsFor } from "./identity/message-identity-schema.js";
+import { isMessageOrigin } from "./message-entity-contract.js";
 
 const ACCEPTED_USER_IDENTITY_FIELDS = acceptedMessageIdentityFieldsFor("user");
 
@@ -43,10 +44,7 @@ export function validateTurnAcceptanceUserMessage(event = {}) {
       if (!text(input[field])) errors.push(`accepted_user_${field}_required`);
     }
     if (!text(event.turnScopeId)) errors.push("accepted_user_message_turn_scope_required");
-    const messageOrigin = text(input.messageOrigin).toLowerCase();
-    if (!["natural", "internal"].includes(messageOrigin)) {
-      errors.push("accepted_message_origin_required");
-    }
+    if (!isMessageOrigin(input.messageOrigin)) errors.push("accepted_message_origin_required");
   }
   return {
     valid: errors.length === 0,
@@ -59,7 +57,7 @@ export function validateTurnAcceptanceUserMessage(event = {}) {
               ACCEPTED_USER_IDENTITY_FIELDS.map((field) => [field, text(input[field])]),
             ),
             parentDialogProcessId: text(input.parentDialogProcessId),
-            messageOrigin: text(input.messageOrigin).toLowerCase(),
+            messageOrigin: input.messageOrigin,
           }
         : null,
     errors,

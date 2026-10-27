@@ -25,11 +25,13 @@ import {
   createAgentCommandReceipt,
   createAgentTransportError,
   createExecutionQueryCommand,
+  ROOT_PARENT_SESSION_ID,
 } from "@noobot/agent-transport-protocol";
 import { canonicalMessageEvent } from "../../modules/chat/helpers/messageEventFixture.js";
 import {
   MockWebSocket,
   emitReconnectComplete,
+  rootCommandIdentity,
   setupWebSocketTestHooks,
   streamCommand,
   turnLifecycleProtocolEvent,
@@ -71,7 +73,10 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     const bootstrapSocket = MockWebSocket.instances[0];
 
     const reconnectPromise = client.reconnect({
-      identity: { sessionId: "s-1", parentSessionId: "", parentDialogProcessId: "" },
+      identity: {
+        sessionId: "s-1",
+        parentSessionId: ROOT_PARENT_SESSION_ID,
+      },
       knownLifecycleSequenceMap: { "s-1": 12 },
       onReconnectData: vi.fn(),
     });
@@ -91,7 +96,10 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     const onReconnectData = vi.fn();
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const reconnectPromise = client.reconnect({
-      identity: { sessionId: "s-live-replay", parentSessionId: "", parentDialogProcessId: "" },
+      identity: {
+        sessionId: "s-live-replay",
+        parentSessionId: ROOT_PARENT_SESSION_ID,
+      },
       knownLifecycleSequenceMap: {},
       onReconnectData,
     });
@@ -136,7 +144,10 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
   it("rejects a failed reconnect transaction without closing the shared transport", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const reconnectPromise = client.reconnect({
-      identity: { sessionId: "s-failed-reconnect", parentSessionId: "", parentDialogProcessId: "" },
+      identity: {
+        sessionId: "s-failed-reconnect",
+        parentSessionId: ROOT_PARENT_SESSION_ID,
+      },
       knownLifecycleSequenceMap: {},
     });
     const socket = MockWebSocket.instances[0];
@@ -162,7 +173,10 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     const onReconnectData = vi.fn();
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const reconnectPromise = client.reconnect({
-      identity: { sessionId: "root-session", parentSessionId: "", parentDialogProcessId: "" },
+      identity: {
+        sessionId: "root-session",
+        parentSessionId: ROOT_PARENT_SESSION_ID,
+      },
       knownLifecycleSequenceMap: {},
       onReconnectData,
     });
@@ -202,7 +216,10 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
   it("does not use an inner message-event sequence as the reconnect transport cursor", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const reconnectPromise = client.reconnect({
-      identity: { sessionId: "root-session", parentSessionId: "", parentDialogProcessId: "" },
+      identity: {
+        sessionId: "root-session",
+        parentSessionId: ROOT_PARENT_SESSION_ID,
+      },
       knownLifecycleSequenceMap: {},
       onReconnectData: vi.fn(),
     });
@@ -245,7 +262,10 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     const socket = MockWebSocket.instances[0];
     const streamRequestId = JSON.parse(socket.sent[0]).commandId;
     const reconnectPromise = client.reconnect({
-      identity: { sessionId: "s-live-owner", parentSessionId: "", parentDialogProcessId: "" },
+      identity: {
+        sessionId: "s-live-owner",
+        parentSessionId: ROOT_PARENT_SESSION_ID,
+      },
       knownLifecycleSequenceMap: {},
       onReconnectData,
     });
@@ -275,17 +295,14 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const onStreamEvent = vi.fn();
     const onReconnectData = vi.fn();
-    const streamPromise = client.stream(
-      {
-        commandType: "turn.resend",
-        commandId: "turn-overlap",
-        identity: { sessionId: "s-overlap", turnScopeId: "turn-overlap" },
-      },
-      onStreamEvent,
-    );
+    const overlapCommand = streamCommand({ sessionId: "s-overlap", turnScopeId: "turn-overlap" });
+    const streamPromise = client.stream(overlapCommand, onStreamEvent);
     const socket = MockWebSocket.instances[0];
     const reconnectPromise = client.reconnect({
-      identity: { sessionId: "s-overlap", parentSessionId: "", parentDialogProcessId: "" },
+      identity: {
+        sessionId: "s-overlap",
+        parentSessionId: ROOT_PARENT_SESSION_ID,
+      },
       knownLifecycleSequenceMap: {},
       onReconnectData,
     });
@@ -295,9 +312,9 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
       createTurnLifecycleEnvelope({
         eventType: TURN_EVENT.ACTION_ACCEPTED,
         eventId: "lifecycle-overlap-1",
-        commandId: "turn-overlap",
+        commandId: overlapCommand.commandId,
         sessionId: "s-overlap",
-        parentSessionId: "",
+        parentSessionId: ROOT_PARENT_SESSION_ID,
         turnScopeId: "turn-overlap",
         presentationMessageId: "presentation-overlap",
         dialogProcessId: "dp-overlap",
@@ -335,7 +352,7 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     await reconnectPromise;
     expect(onStreamEvent).toHaveBeenCalledTimes(2);
 
-    emitCompletedCommand(socket, "turn-overlap", "s-overlap", "turn-overlap");
+    emitCompletedCommand(socket, overlapCommand.commandId, "s-overlap", "turn-overlap");
     await streamPromise;
   });
 
@@ -350,7 +367,10 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     const streamRequestId = JSON.parse(socket.sent[0]).commandId;
 
     const reconnectPromise = client.reconnect({
-      identity: { sessionId: "s-1", parentSessionId: "", parentDialogProcessId: "" },
+      identity: {
+        sessionId: "s-1",
+        parentSessionId: ROOT_PARENT_SESSION_ID,
+      },
       knownLifecycleSequenceMap: {},
     });
     expect(MockWebSocket.instances).toHaveLength(1);
@@ -382,7 +402,10 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     streamSocket.readyState = MockWebSocket.CLOSING;
 
     const reconnectPromise = client.reconnect({
-      identity: { sessionId: "s-1", parentSessionId: "", parentDialogProcessId: "" },
+      identity: {
+        sessionId: "s-1",
+        parentSessionId: ROOT_PARENT_SESSION_ID,
+      },
       knownLifecycleSequenceMap: {},
       onReconnectData: vi.fn(),
     });
@@ -421,7 +444,10 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     const streamRequestId = JSON.parse(firstSocket.sent[0]).commandId;
     firstSocket.readyState = MockWebSocket.CLOSING;
     const reconnectPromise = client.reconnect({
-      identity: { sessionId: "s-1", parentSessionId: "", parentDialogProcessId: "" },
+      identity: {
+        sessionId: "s-1",
+        parentSessionId: ROOT_PARENT_SESSION_ID,
+      },
       knownLifecycleSequenceMap: {},
     });
     const replacementSocket = MockWebSocket.instances[1];
@@ -446,7 +472,10 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     const streamRequestId = JSON.parse(firstSocket.sent[0]).commandId;
     firstSocket.readyState = MockWebSocket.CLOSING;
     const reconnectPromise = client.reconnect({
-      identity: { sessionId: "s-1", parentSessionId: "", parentDialogProcessId: "" },
+      identity: {
+        sessionId: "s-1",
+        parentSessionId: ROOT_PARENT_SESSION_ID,
+      },
       knownLifecycleSequenceMap: {},
     });
     const replacementSocket = MockWebSocket.instances[1];
@@ -459,7 +488,7 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
       createExecutionQueryCommand({
         commandType: EXECUTION_QUERY_COMMAND.SNAPSHOT_GET,
         commandId: "snapshot-after-reconnect",
-        identity: { sessionId: "s-1" },
+        identity: rootCommandIdentity(AGENT_COMMAND.EXECUTION_SNAPSHOT_GET, { sessionId: "s-1" }),
         query: { executionId, rootExecutionId: "" },
       }),
       { expectedEvents: [EXECUTION_SNAPSHOT_WIRE_EVENT] },
@@ -498,7 +527,10 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
       resolveWebSocketUrl: () => "ws://test",
     });
     const reconnectPromise = client.reconnect({
-      identity: { sessionId: "s-1", parentSessionId: "", parentDialogProcessId: "" },
+      identity: {
+        sessionId: "s-1",
+        parentSessionId: ROOT_PARENT_SESSION_ID,
+      },
       knownLifecycleSequenceMap: {},
       onReconnectData,
     });

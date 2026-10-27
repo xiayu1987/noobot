@@ -230,6 +230,7 @@ test("turn presentation atomically declares canonical user and assistant entitie
       turnScopeId: "turn-1",
       content: "question",
       attachments: [],
+      ts: "2026-01-01T00:00:00.000Z",
     },
     assistantMessage: {
       presentationMessageId: "presentation-1",
@@ -248,8 +249,29 @@ test("turn presentation atomically declares canonical user and assistant entitie
   });
 
   assert.deepEqual(validateMessageEventPayload(committed), { valid: true, errors: [] });
-  assert.deepEqual(projectTurnPresentation(committed), presentation);
-  assert.deepEqual(validateProtocolEvent(envelope(committed)).valid, true);
+  const committedEnvelope = envelope(committed);
+  assert.deepEqual(validateProtocolEvent(committedEnvelope).valid, true);
+  assert.deepEqual(projectTurnPresentation(committedEnvelope), {
+    userMessage: presentation.userMessage,
+    assistantMessage: { ...presentation.assistantMessage, ts: committedEnvelope.occurredAt },
+  });
+  assert.throws(
+    () => projectTurnPresentation(envelope(payload({ eventType: MESSAGE_EVENT_TYPE.LLM_DELTA }))),
+    /requires turn_presentation_committed/,
+  );
+  const { ts: _userTs, ...userWithoutTs } = presentation.userMessage;
+  const { attachments: _assistantAttachments, ...assistantWithoutAttachments } =
+    presentation.assistantMessage;
+  assert.deepEqual(
+    validateMessageEventPayload({
+      ...committed,
+      presentation: {
+        userMessage: userWithoutTs,
+        assistantMessage: { ...assistantWithoutAttachments, ts: "2026-01-01T00:00:00.000Z" },
+      },
+    }).errors,
+    ["missing_user_ts", "invalid_assistant_attachments", "noncanonical_assistant_ts"],
+  );
   assert.deepEqual(
     validateProtocolEvent(
       envelope({

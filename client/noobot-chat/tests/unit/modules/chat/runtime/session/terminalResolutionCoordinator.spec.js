@@ -19,6 +19,11 @@ import {
   selectSessionTurnRuntime,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { terminalStatusFixture } from "../../helpers/terminalStatusFixture.js";
+import { jsonResponse } from "../../../../helpers/jsonResponse.js";
+
+function serveTerminal(source) {
+  return async (url) => jsonResponse({ ok: true, ...(await source(url)) });
+}
 
 function response({
   resolved = true,
@@ -37,7 +42,7 @@ function response({
     resolved,
     retryable,
     reason: resolved ? "" : "terminal_materialization_not_ready",
-    retryAfterMs: 0,
+    retryAfterMs: retryable ? 250 : 0,
     aggregateVersion: 1,
     turn: { revision, sequence, completionCommitId, summaryVersion },
   };
@@ -60,7 +65,7 @@ describe("terminalResolutionCoordinator", () => {
     }));
     const coordinator = createTerminalResolutionCoordinator({
       userId: "u-1",
-      fetcher,
+      fetcher: serveTerminal(fetcher),
       applyTurnTerminalResolution: () => ({
         applied: true,
         turn: { state: "frontend_completed", terminal: "completed" },
@@ -90,7 +95,7 @@ describe("terminalResolutionCoordinator", () => {
     const apply = vi.fn(() => ({ applied: true }));
     const coordinator = createTerminalResolutionCoordinator({
       userId: ref("u-1"),
-      fetcher,
+      fetcher: serveTerminal(fetcher),
       applyTurnTerminalResolution: apply,
     });
     const event = {
@@ -115,7 +120,7 @@ describe("terminalResolutionCoordinator", () => {
     const apply = vi.fn();
     const coordinator = createTerminalResolutionCoordinator({
       userId: "u-1",
-      fetcher,
+      fetcher: serveTerminal(fetcher),
       applyTurnTerminalResolution: apply,
       maxRetries: 0,
     });
@@ -132,7 +137,7 @@ describe("terminalResolutionCoordinator", () => {
     const fetcher = vi.fn(async () => response());
     const coordinator = createTerminalResolutionCoordinator({
       userId: "u-1",
-      fetcher,
+      fetcher: serveTerminal(fetcher),
       applyTurnTerminalResolution: () => ({ applied: true }),
     });
     const persistenceScope = {
@@ -160,7 +165,7 @@ describe("terminalResolutionCoordinator", () => {
     const apply = vi.fn(() => ({ applied: true }));
     const coordinator = createTerminalResolutionCoordinator({
       userId: "u-1",
-      fetcher,
+      fetcher: serveTerminal(fetcher),
       applyTurnTerminalResolution: apply,
     });
 
@@ -195,7 +200,7 @@ describe("terminalResolutionCoordinator", () => {
       .mockReturnValueOnce({ applied: true });
     const coordinator = createTerminalResolutionCoordinator({
       userId: "u-1",
-      fetcher,
+      fetcher: serveTerminal(fetcher),
       applyTurnTerminalResolution: apply,
     });
 
@@ -221,7 +226,7 @@ describe("terminalResolutionCoordinator", () => {
     const apply = vi.fn(() => ({ applied: true }));
     const coordinator = createTerminalResolutionCoordinator({
       userId: "u-1",
-      fetcher,
+      fetcher: serveTerminal(fetcher),
       applyTurnTerminalResolution: apply,
     });
 
@@ -240,7 +245,7 @@ describe("terminalResolutionCoordinator", () => {
     const apply = vi.fn().mockReturnValue({ applied: false, reason: "terminal_commit_rejected" });
     const coordinator = createTerminalResolutionCoordinator({
       userId: "u-1",
-      fetcher,
+      fetcher: serveTerminal(fetcher),
       applyTurnTerminalResolution: apply,
     });
 
@@ -261,7 +266,7 @@ describe("terminalResolutionCoordinator", () => {
     const apply = vi.fn(() => ({ applied: true }));
     const coordinator = createTerminalResolutionCoordinator({
       userId: "u-1",
-      fetcher,
+      fetcher: serveTerminal(fetcher),
       applyTurnTerminalResolution: apply,
     });
 
@@ -278,7 +283,7 @@ describe("terminalResolutionCoordinator", () => {
     const apply = vi.fn(() => ({ applied: true }));
     const coordinator = createTerminalResolutionCoordinator({
       userId: "u-1",
-      fetcher,
+      fetcher: serveTerminal(fetcher),
       applyTurnTerminalResolution: apply,
     });
 
@@ -375,7 +380,7 @@ describe("terminalResolutionCoordinator", () => {
     );
     const coordinator = createTerminalResolutionCoordinator({
       userId: "u-1",
-      fetcher,
+      fetcher: serveTerminal(fetcher),
       applyTurnTerminalResolution: apply,
     });
 
@@ -395,7 +400,7 @@ describe("terminalResolutionCoordinator", () => {
     const fetcher = vi.fn(async () => response());
     const coordinator = createTerminalResolutionCoordinator({
       userId: "u-1",
-      fetcher,
+      fetcher: serveTerminal(fetcher),
       applyTurnTerminalResolution: () => ({ applied: true }),
     });
     await Promise.all([
@@ -413,7 +418,7 @@ describe("terminalResolutionCoordinator", () => {
       .mockResolvedValueOnce(response({ completionCommitId: "commit-b" }));
     const coordinator = createTerminalResolutionCoordinator({
       userId: "u-1",
-      fetcher,
+      fetcher: serveTerminal(fetcher),
       applyTurnTerminalResolution: () => ({ applied: true }),
     });
 
@@ -436,9 +441,11 @@ describe("terminalResolutionCoordinator", () => {
     vi.useFakeTimers();
     try {
       const fetcher = vi.fn(async () => response({ resolved: false, retryable: true }));
+      const apply = vi.fn();
       const coordinator = createTerminalResolutionCoordinator({
         userId: "u-1",
-        fetcher,
+        fetcher: serveTerminal(fetcher),
+        applyTurnTerminalResolution: apply,
         maxRetries: 1,
       });
       const first = coordinator.resolve("s-1", "t-1", { revision: 2, sequence: 3 });
@@ -457,6 +464,7 @@ describe("terminalResolutionCoordinator", () => {
       await vi.runAllTimersAsync();
       await forced;
       expect(fetcher).toHaveBeenCalledTimes(4);
+      expect(apply).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }
@@ -470,7 +478,7 @@ describe("terminalResolutionCoordinator", () => {
     }));
     const coordinator = createTerminalResolutionCoordinator({
       userId: "u-1",
-      fetcher,
+      fetcher: serveTerminal(fetcher),
       applyTurnTerminalResolution: apply,
     });
 
@@ -487,20 +495,25 @@ describe("terminalResolutionCoordinator", () => {
   });
 
   it("opens a cooldown after a 429 instead of retrying duplicate notifications", async () => {
-    const headers = { get: (name) => (name === "retry-after" ? "2" : null) };
-    const fetcher = vi.fn(async () => ({
-      ok: false,
-      status: 429,
-      headers,
-      json: async () => ({ ok: false, error: "Too Many Requests" }),
-    }));
-    const coordinator = createTerminalResolutionCoordinator({ userId: "u-1", fetcher });
+    const fetcher = vi.fn(async () =>
+      jsonResponse(
+        { ok: false, error: "Too Many Requests" },
+        { status: 429, headers: { "retry-after": "2" } },
+      ),
+    );
+    const apply = vi.fn();
+    const coordinator = createTerminalResolutionCoordinator({
+      userId: "u-1",
+      fetcher,
+      applyTurnTerminalResolution: apply,
+    });
 
     const first = await coordinator.resolve("s-1", "t-1");
     const second = await coordinator.resolve("s-1", "t-1");
     expect(first.reason).toBe("terminal_resolution_rate_limited");
     expect(second).toBe(first);
     expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(apply).not.toHaveBeenCalled();
   });
 
   it("queries a historical Turn from stable identity without current-Turn state", async () => {
@@ -508,7 +521,7 @@ describe("terminalResolutionCoordinator", () => {
     const apply = vi.fn(() => ({ applied: true }));
     const coordinator = createTerminalResolutionCoordinator({
       userId: "u-1",
-      fetcher,
+      fetcher: serveTerminal(fetcher),
       applyTurnTerminalResolution: apply,
     });
 
@@ -524,7 +537,7 @@ describe("terminalResolutionCoordinator", () => {
     const apply = vi.fn(() => ({ applied: true }));
     const coordinator = createTerminalResolutionCoordinator({
       userId: "u-1",
-      fetcher,
+      fetcher: serveTerminal(fetcher),
       applyTurnTerminalResolution: apply,
     });
 

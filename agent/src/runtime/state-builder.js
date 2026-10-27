@@ -34,7 +34,6 @@ import {
 } from "@noobot/context-protocol/message/codec";
 import { requireRuntimeModelHost } from "./model-port-host.js";
 import { applyActiveModelSpec } from "../models/runtime/model-manager.js";
-import { text } from "@noobot/shared/value";
 
 function resolveLoopConfig(resolvers, runConfig) {
   return {
@@ -167,7 +166,7 @@ function emitAgentStateDiagnostics({
   currentUserMessage,
   modelContext,
 }) {
-  const sourceMessageUid = text(currentUserMessage.messageUid);
+  const sourceMessageUid = currentUserMessage.messageUid;
   const userMetaId = sourceMessageUid
     ? composeContextProjectionKey(CONTEXT_MESSAGE_PROJECTION_TYPE.USER_META, sourceMessageUid)
     : "";

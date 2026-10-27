@@ -106,7 +106,7 @@ export function normalizeSessionEntity(
   }
   assertSessionAggregateShape(session);
   const context = resolveSessionNormalizationContext(session, { now });
-  const normalizedMessages = normalizeMessagesEntity(session.messages, now);
+  const normalizedMessages = normalizeMessagesEntity(session.messages);
   if ("turnSummaryCheckpoints" in session) {
     assertTurnSummaryCheckpoints(session.turnSummaryCheckpoints);
   }

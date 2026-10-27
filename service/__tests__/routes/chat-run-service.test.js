@@ -5,7 +5,11 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { AGENT_COMMAND, createTurnRunCommand } from "@noobot/agent-transport-protocol";
+import {
+  AGENT_COMMAND,
+  createTurnRunCommand,
+  ROOT_PARENT_SESSION_ID,
+} from "@noobot/agent-transport-protocol";
 import {
   createChatRunService,
   resolveAuthoritativeConnectorSelection,
@@ -25,6 +29,7 @@ function createCommand(overrides = {}) {
     commandType: overrides.commandType || AGENT_COMMAND.SEND,
     identity: {
       sessionId: "session-1",
+      parentSessionId: ROOT_PARENT_SESSION_ID,
       ...(overrides.commandType === AGENT_COMMAND.RESEND
         ? { dialogProcessId: "dialog-resend" }
         : {}),

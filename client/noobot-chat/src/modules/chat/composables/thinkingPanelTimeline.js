@@ -48,6 +48,7 @@ import {
   selectThinkingDetailContentTimeline,
 } from "@noobot/event-protocol/thinking-detail-content";
 import { text } from "@noobot/shared/value";
+import { isApiRequestError } from "@noobot/shared/request-error";
 import { thinkingDetailService } from "../../../infrastructure/api/thinking/thinkingDetailService.js";
 
 export function useThinkingTimeline(
@@ -442,12 +443,13 @@ export function useThinkingTimeline(
           detail: summarizeThinkingMessage(detail?.messageItem || {}),
         }));
       } catch (error) {
+        if (!isApiRequestError(error)) throw error;
         logThinkingReplayDebug("frontend.thinkingReplay.detailRequestFailed", () => ({
           ...thinkingReplayScope(messageItem),
           key,
           identity,
-          errorName: String(error?.name || ""),
-          errorMessage: String(error?.message || error || ""),
+          errorCode: error.code,
+          errorMessage: error.message,
         }));
       } finally {
         if (thinkingDetailLoadingKey.value === key) {

@@ -70,6 +70,7 @@ describe("detailMessages", () => {
         messages: [
           {
             role: RoleEnum.ASSISTANT,
+            content: "",
             dialogProcessId: "child-dp",
             parentDialogProcessId: "root-dp",
             turnScopeId: "turn-child",
@@ -157,6 +158,7 @@ describe("detailMessages", () => {
       rootMessages: [
         {
           role: RoleEnum.ASSISTANT,
+          content: "",
           dialogProcessId: "root-dp",
           turnScopeId: "client-turn:root",
         },
@@ -167,6 +169,7 @@ describe("detailMessages", () => {
           messages: [
             {
               role: RoleEnum.ASSISTANT,
+              content: "",
               dialogProcessId: "root-dp",
               turnScopeId: "client-turn:root",
             },
@@ -179,6 +182,7 @@ describe("detailMessages", () => {
               role: RoleEnum.ASSISTANT,
               dialogProcessId: "child-dp",
               parentDialogProcessId: "root-dp",
+              content: "",
               transferEnvelopes: [
                 {
                   protocol: "noobot.semantic-transfer",

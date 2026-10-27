@@ -22,13 +22,12 @@ import { initializeDownstreamSocketState } from "../../src/websocket/downstream-
 export function reconnectControl({
   sessionId = "",
   parentSessionId = "",
-  parentDialogProcessId = "",
   requestId = "reconnect-test",
   knownLifecycleSequenceMap = {},
 } = {}) {
   return createReconnectControl({
     requestId,
-    identity: { sessionId, parentSessionId, parentDialogProcessId },
+    identity: { sessionId, parentSessionId },
     knownLifecycleSequenceMap,
   });
 }

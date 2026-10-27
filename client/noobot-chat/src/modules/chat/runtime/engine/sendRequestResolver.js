@@ -3,98 +3,87 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeTrimmedString } from "./utils.js";
+import { AGENT_COMMAND } from "@noobot/agent-transport-protocol";
+import { isCanonicalText } from "@noobot/shared/value";
 import {
   createPresentationMessageId,
   createUserMessageId,
 } from "@noobot/session-protocol/message-identity";
-import { createTurnScopeId, hasActiveTurnInFlight } from "./sendFlowSupport.js";
+import { createTurnScopeId } from "./sendFlowSupport.js";
 
-function normalizeSendContent(options, { input }) {
-  const explicitMessageText =
-    typeof options?.messageText === "string" ? options.messageText.trim() : "";
-  const explicitAttachmentFiles = Array.isArray(options?.attachmentFiles)
-    ? options.attachmentFiles
-    : null;
-  const explicitTransportAttachments = Array.isArray(options?.transportAttachments)
-    ? options.transportAttachments
-    : null;
+function requireCanonicalText(field, value) {
+  if (!isCanonicalText(value)) throw new TypeError(`invalid_send_request_${field}`);
+  return value;
+}
+
+function resolveTurnMessageText(authoredText, translate) {
   return {
-    explicitMessageText,
-    explicitAttachmentFiles,
-    explicitUserAttachments: Array.isArray(options?.userAttachments)
-      ? options.userAttachments
-      : null,
-    explicitTransportAttachments,
-    hasExplicitAttachments: Boolean(
-      explicitAttachmentFiles?.length || explicitTransportAttachments?.length,
-    ),
-    hasTextToSend: Boolean(explicitMessageText || input.value.trim()),
+    authoredText,
+    messageText: authoredText.length > 0 ? authoredText : translate("chat.uploadHint"),
   };
 }
 
-function normalizeSendControls(options) {
+function resolveComposerRequest(request, { input, uploadFiles, translate }) {
+  const authoredText = input.value.trim();
+  const attachmentFiles = [...uploadFiles.value];
+  const base = {
+    commandType: request.commandType,
+    userMessageId: createUserMessageId(),
+    presentationMessageId: createPresentationMessageId(),
+    ...resolveTurnMessageText(authoredText, translate),
+    attachmentFiles,
+  };
+  if (request.commandType === AGENT_COMMAND.SEND) {
+    if (!authoredText && attachmentFiles.length === 0) return null;
+    return { ...base, turnScopeId: createTurnScopeId() };
+  }
   return {
-    continueFromUserStopped: options?.continueFromUserStopped === true,
-    composerRequestStarted: options?.composerRequestStarted === true,
-    allowDuringResend: options?.allowDuringResend === true,
-    reuseExistingUserTurn: options?.reuseExistingUserTurn === true,
-    resumeDialogProcessId: normalizeTrimmedString(options?.resumeDialogProcessId),
-    resumeTurnScopeId: normalizeTrimmedString(options?.resumeTurnScopeId),
-    dialogProcessId: normalizeTrimmedString(options?.dialogProcessId),
-    requestedTurnScopeId: normalizeTrimmedString(options?.turnScopeId),
-    requestedUserMessageId: normalizeTrimmedString(options?.userMessageId),
-    requestedPresentationMessageId: normalizeTrimmedString(options?.presentationMessageId),
+    ...base,
+    turnScopeId: requireCanonicalText("turn_scope_id", request.turnScopeId),
+    continuation: {
+      dialogProcessId: requireCanonicalText(
+        "continuation_dialog_process_id",
+        request.continuation.dialogProcessId,
+      ),
+      turnScopeId: requireCanonicalText(
+        "continuation_turn_scope_id",
+        request.continuation.turnScopeId,
+      ),
+    },
   };
 }
 
-function normalizeSendOptions(options, deps) {
-  return { ...normalizeSendContent(options, deps), ...normalizeSendControls(options) };
-}
-
-function isBlockedByInFlightTurn(normalized, { activeSession, turnRuntimeRegistry }) {
-  const currentSessionInFlight = hasActiveTurnInFlight({ activeSession, turnRuntimeRegistry });
-  return (
-    (currentSessionInFlight &&
-      !normalized.composerRequestStarted &&
-      !normalized.allowDuringResend &&
-      !normalized.continueFromUserStopped) ||
-    !activeSession.value
+function resolveResendRequest(request, { activeSession, translate }) {
+  const userMessageId = requireCanonicalText("user_message_id", request.userMessageId);
+  if (typeof request.messageText !== "string")
+    throw new TypeError("invalid_send_request_message_text");
+  if (!Array.isArray(request.attachments)) throw new TypeError("invalid_send_request_attachments");
+  const existingUserMessage = activeSession.value.messages.find(
+    (message) => message.userMessageId === userMessageId,
   );
+  if (!existingUserMessage) return null;
+  return {
+    commandType: AGENT_COMMAND.RESEND,
+    turnScopeId: requireCanonicalText("turn_scope_id", request.turnScopeId),
+    userMessageId,
+    presentationMessageId: createPresentationMessageId(),
+    dialogProcessId: requireCanonicalText("dialog_process_id", request.dialogProcessId),
+    ...resolveTurnMessageText(request.messageText.trim(), translate),
+    attachments: request.attachments,
+  };
 }
 
-function hasNothingToSend(normalized, { uploadFiles }) {
-  return (
-    !normalized.continueFromUserStopped &&
-    !normalized.hasTextToSend &&
-    uploadFiles.value.length === 0 &&
-    !normalized.hasExplicitAttachments
-  );
-}
+const SEND_REQUEST_RESOLVERS = Object.freeze({
+  [AGENT_COMMAND.SEND]: resolveComposerRequest,
+  [AGENT_COMMAND.CONTINUE]: resolveComposerRequest,
+  [AGENT_COMMAND.RESEND]: resolveResendRequest,
+});
 
-function isUnresolvableUserTurnReuse(normalized, { activeSession }) {
-  if (!normalized.reuseExistingUserTurn) return false;
-  const existingUserMessage = (activeSession.value?.messages || []).find(
-    (message) =>
-      normalizeTrimmedString(message?.userMessageId) === normalized.requestedUserMessageId,
-  );
-  return !normalized.requestedUserMessageId || !existingUserMessage;
-}
-
-export function resolveSendRequest(options, deps) {
-  const normalized = normalizeSendOptions(options, deps);
+export function resolveSendRequest(request, deps) {
+  const resolveRequest = SEND_REQUEST_RESOLVERS[request.commandType];
+  if (!resolveRequest) throw new TypeError("invalid_send_request_command_type");
   if (!deps.ensureConnected()) return null;
-  if (isBlockedByInFlightTurn(normalized, deps)) return null;
-  if (hasNothingToSend(normalized, deps)) return null;
-  if (isUnresolvableUserTurnReuse(normalized, deps)) return null;
-
-  const turnScopeId = normalized.requestedTurnScopeId || createTurnScopeId();
-  return {
-    ...normalized,
-    turnScopeId,
-    userMessageId: normalized.requestedUserMessageId || createUserMessageId(),
-    presentationMessageId:
-      normalized.requestedPresentationMessageId || createPresentationMessageId(),
-    sessionId: deps.activeSession.value.sessionId,
-  };
+  if (!deps.activeSession.value) return null;
+  const resolved = resolveRequest(request, deps);
+  return resolved ? { ...resolved, sessionId: deps.activeSession.value.sessionId } : null;
 }

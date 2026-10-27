@@ -23,9 +23,9 @@ export function getThinkingDetailsTitle(messageItem = {}, translate) {
   return translate("message.thinkingDetails", { count: getThinkingDetailsCount(messageItem) });
 }
 
-export function resolveFallbackThinkingDetailsPayload(activeSession = {}) {
-  const messages = activeSession?.messages || [];
-  const messageItem = [...messages]
+export function resolveFallbackThinkingDetailsPayload(activeSession) {
+  if (activeSession === null) return { messageItem: null };
+  const messageItem = [...activeSession.messages]
     .reverse()
     .find(
       (item = {}) =>

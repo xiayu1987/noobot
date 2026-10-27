@@ -46,26 +46,20 @@ export function findSubSessionMessageIndex(messages, viewKey) {
   return messages.findIndex((message = {}) => resolveMessageViewKey(message) === viewKey);
 }
 
-export function materializeTurnPresentationMessages({ messages, turnPresentation, occurredAt }) {
-  for (const source of [turnPresentation?.userMessage, turnPresentation?.assistantMessage]) {
-    if (!source) continue;
+export function materializeTurnPresentationMessages({ messages, turnPresentation }) {
+  for (const source of [turnPresentation.userMessage, turnPresentation.assistantMessage]) {
     const sourceIndex = findSubSessionMessageIndex(messages, resolveMessageViewKey(source));
-    const materialized = {
-      ...source,
-      createdAt: source.ts || occurredAt,
-    };
-    if (sourceIndex >= 0) messages[sourceIndex] = { ...messages[sourceIndex], ...materialized };
-    else messages.push({ ...materialized, messageEventState: createMessageEventState() });
+    if (sourceIndex >= 0) messages[sourceIndex] = { ...messages[sourceIndex], ...source };
+    else messages.push({ ...source, messageEventState: createMessageEventState() });
   }
 }
 
 export function applySubSessionMessageIdentity({ targetMessage, envelope }) {
-  const { identity, payload, occurredAt } = envelope;
+  const { identity, payload } = envelope;
   targetMessage.parentSessionId = payload.parentSessionId;
   targetMessage.dialogProcessId = payload.dialogProcessId;
   targetMessage.turnScopeId = identity.turnScopeId;
   targetMessage.presentationMessageId = payload.presentationMessageId;
-  targetMessage.createdAt ||= occurredAt;
 }
 
 export function applySubSessionMessageOrdering({ targetMessage, envelope }) {

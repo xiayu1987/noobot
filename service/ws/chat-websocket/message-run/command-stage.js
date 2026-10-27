@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { AGENT_COMMAND } from "@noobot/agent-transport-protocol";
+import { AGENT_COMMAND, ROOT_PARENT_DIALOG_PROCESS_ID } from "@noobot/agent-transport-protocol";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
@@ -16,6 +16,7 @@ import {
   TURN_PHASE,
   createTurnAcceptanceReceipt,
   createTurnLifecycleCommandId,
+  MESSAGE_ORIGIN,
 } from "@noobot/session-protocol";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import {
@@ -135,8 +136,8 @@ function createActionEvent(command, run, executionIntent, startedAt) {
           userMessage: {
             content: run.message,
             userMessageId: run.normalizedRunConfig.userMessageId,
-            parentDialogProcessId: run.parentDialogProcessId,
-            messageOrigin: "natural",
+            parentDialogProcessId: ROOT_PARENT_DIALOG_PROCESS_ID,
+            messageOrigin: MESSAGE_ORIGIN.NATURAL,
           },
         }
       : {}),

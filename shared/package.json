@@ -23,6 +23,7 @@
     "./value": "./value.js",
     "./secure-identity": "./secure-identity.js",
     "./session-caller": "./session-caller.js",
+    "./request-error": "./request-error.js",
     "./package.json": "./package.json"
   }
 }

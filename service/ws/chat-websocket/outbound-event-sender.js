@@ -8,8 +8,11 @@ import { isTransientMessageEvent } from "@noobot/event-protocol/message-event";
 import { RUNTIME_EVENT_CATEGORIES } from "@noobot/runtime-events";
 import { STREAM_DELTA_DEBUG_TYPE } from "@noobot/shared/runtime-events-config";
 import { isSessionLogDebugTypeEnabled } from "@noobot/runtime-events/session-log-protocol";
-import { ATTACHMENT_LIFECYCLE_WIRE_EVENT } from "@noobot/attachment-protocol";
-import { usesExactAgentTransportPayload } from "@noobot/agent-transport-protocol";
+import {
+  classifyAgentTransportNonEnvelopeEvent,
+  hasAgentTransportNonEnvelopePayloadContract,
+  validateAgentTransportNonEnvelopePayload,
+} from "@noobot/agent-transport-protocol";
 import { isTerminalTurnEvent, TURN_LIFECYCLE_WIRE_EVENT } from "@noobot/session-protocol";
 import { recordServiceWebSocketSendFailure } from "./runtime-events.js";
 import { text } from "@noobot/shared/value";
@@ -24,8 +27,26 @@ function getProtocolEnvelope(data) {
   return asEventProtocolEnvelope(data);
 }
 
-function validateOutboundProtocolEnvelope(protocolEnvelope, eventName, logConnection) {
-  if (!protocolEnvelope) return true;
+function validateNonEnvelopeContract(nonEnvelopeKind, eventName, data) {
+  if (!nonEnvelopeKind) return { valid: false, errors: ["unregistered_non_envelope_event"] };
+  if (!hasAgentTransportNonEnvelopePayloadContract(eventName)) return { valid: true, errors: [] };
+  return validateAgentTransportNonEnvelopePayload(eventName, data);
+}
+
+function validateOutboundNonEnvelopePayload(eventName, data, logConnection) {
+  const nonEnvelopeKind = classifyAgentTransportNonEnvelopeEvent(eventName);
+  const validation = validateNonEnvelopeContract(nonEnvelopeKind, eventName, data);
+  if (validation.valid) return true;
+  logConnection("service.websocket.nonEnvelopeEventRejected", {
+    eventName,
+    nonEnvelopeKind,
+    errors: validation.errors,
+  });
+  return false;
+}
+
+function validateOutboundPayload(protocolEnvelope, eventName, data, logConnection) {
+  if (!protocolEnvelope) return validateOutboundNonEnvelopePayload(eventName, data, logConnection);
   const validation = validateProtocolEvent(protocolEnvelope);
   if (!validation.valid) {
     logConnection("service.authorityOutbox.eventRejected", {
@@ -115,28 +136,11 @@ function logRejectedTransport({
   }
 }
 
-function enrichTransportData(eventName, data, protocolEnvelope, sequence) {
-  if (
-    protocolEnvelope ||
-    eventName === ATTACHMENT_LIFECYCLE_WIRE_EVENT ||
-    usesExactAgentTransportPayload(eventName)
-  ) {
-    return data;
-  }
-  return {
-    ...(data && typeof data === "object" ? data : {}),
-    seq: sequence,
-    dialogProcessId: text(data?.dialogProcessId),
-    sessionId: text(data?.sessionId),
-    turnScopeId: text(data?.turnScopeId),
-  };
-}
-
 function logSuccessfulTransport({
   logConnection,
   eventName,
   eventType,
-  enrichedData,
+  payload,
   sequence,
   readyState,
   transportDiagnostic,
@@ -150,9 +154,9 @@ function logSuccessfulTransport({
       eventName,
       eventType,
       seq: sequence,
-      sessionId: enrichedData.sessionId,
-      dialogProcessId: enrichedData.dialogProcessId,
-      turnScopeId: enrichedData.turnScopeId,
+      sessionId: payload.sessionId,
+      dialogProcessId: payload.dialogProcessId,
+      turnScopeId: payload.turnScopeId,
     });
   }
   if (authorityEnvelope) {
@@ -169,25 +173,25 @@ function logSuccessfulTransport({
   }
   if (terminalLifecycle) {
     logConnection("service.authorityOutbox.terminalSent", {
-      eventId: enrichedData.eventId,
+      eventId: payload.eventId,
       eventType,
-      lifecycleSequence: Number(enrichedData.sequence || 0),
+      lifecycleSequence: Number(payload.sequence || 0),
       transportSequence: sequence,
-      sessionId: enrichedData.sessionId,
-      parentSessionId: enrichedData.parentSessionId,
-      dialogProcessId: enrichedData.dialogProcessId,
-      turnScopeId: enrichedData.turnScopeId,
+      sessionId: payload.sessionId,
+      parentSessionId: payload.parentSessionId,
+      dialogProcessId: payload.dialogProcessId,
+      turnScopeId: payload.turnScopeId,
     });
   }
 }
 
-function recordSendFailure({ state, eventName, enrichedData, error }) {
+function recordSendFailure({ state, eventName, payload, error }) {
   void recordServiceWebSocketSendFailure({
     eventName: text(eventName),
     userId: state.currentRunMeta?.userId || "",
-    dialogProcessId: enrichedData.dialogProcessId,
-    sessionId: enrichedData.sessionId,
-    turnScopeId: enrichedData.turnScopeId,
+    dialogProcessId: payload.dialogProcessId,
+    sessionId: payload.sessionId,
+    turnScopeId: payload.turnScopeId,
     error,
   });
 }
@@ -242,9 +246,9 @@ function sendPacket(context, packet, eventContext) {
 export function createOutboundEventSender({ webSocket, state, logConnection }) {
   let sequence = 0;
   const deliveryTimingEnabled = isSessionLogDebugTypeEnabled("delivery-timing");
-  return function sendEvent(eventName, data = {}, transportContext = {}) {
+  return function sendEvent(eventName, data, transportContext = {}) {
     const protocolEnvelope = getProtocolEnvelope(data);
-    if (!validateOutboundProtocolEnvelope(protocolEnvelope, eventName, logConnection)) return false;
+    if (!validateOutboundPayload(protocolEnvelope, eventName, data, logConnection)) return false;
     const eventType = resolveEventType(protocolEnvelope, data);
     const transportDiagnostic = createTransportDiagnostic({
       protocolEnvelope,
@@ -271,11 +275,10 @@ export function createOutboundEventSender({ webSocket, state, logConnection }) {
       return false;
     }
     sequence += 1;
-    const enrichedData = enrichTransportData(eventName, data, protocolEnvelope, sequence);
     const eventContext = {
       eventName,
       eventType,
-      enrichedData,
+      payload: data,
       sequence,
       transportDiagnostic,
       ...classification,
@@ -283,7 +286,7 @@ export function createOutboundEventSender({ webSocket, state, logConnection }) {
     try {
       return sendPacket(
         { webSocket, state, logConnection, deliveryTimingEnabled },
-        JSON.stringify({ event: eventName, data: enrichedData }),
+        JSON.stringify({ event: eventName, data }),
         eventContext,
       );
     } catch (error) {

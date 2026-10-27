@@ -7,12 +7,15 @@ import { createSecureId } from "@noobot/shared/secure-identity";
 import { SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
 import { selectSessionRuntimeBucket } from "../run-state-machine/turnRuntimeRegistry.js";
 import { logStateMachineDebug } from "../../../debug/loggers/stateMachineLogger.js";
-import { createTurnInterjectionCommand } from "@noobot/agent-transport-protocol";
+import { AGENT_COMMAND, createTurnInterjectionCommand } from "@noobot/agent-transport-protocol";
+import { createTurnScopeId } from "../engine/sendFlowSupport.js";
+import { buildAgentCommandIdentity } from "../engine/commandIdentity.js";
 import { text } from "@noobot/shared/value";
 
 export function createComposerActions({
   composerActionState,
   input,
+  activeSession,
   turnRuntimeRegistry,
   resolveActiveSessionIdentity,
   resolveActiveTurn,
@@ -24,22 +27,18 @@ export function createComposerActions({
   notify,
   translate,
 }) {
-  function createTurnScopeId() {
-    return createSecureId("client-turn");
-  }
-
   async function sendInterjection(currentTurn) {
     const message = text(input.value);
     if (!message) return false;
     const command = createTurnInterjectionCommand({
       commandId: createSecureId("command"),
-      identity: {
-        sessionId: currentTurn.sessionId,
-        parentSessionId: currentTurn.parentSessionId,
-        dialogProcessId: currentTurn.dialogProcessId,
-        parentDialogProcessId: currentTurn.parentDialogProcessId,
-        turnScopeId: currentTurn.turnScopeId,
-      },
+      identity: buildAgentCommandIdentity(AGENT_COMMAND.INTERJECT, {
+        channel: activeSession.value,
+        turn: {
+          dialogProcessId: currentTurn.dialogProcessId,
+          turnScopeId: currentTurn.turnScopeId,
+        },
+      }),
       interaction: { message },
     });
     try {
@@ -47,15 +46,14 @@ export function createComposerActions({
       if (text(input.value) === message) input.value = "";
       return true;
     } catch (error) {
-      notify?.({ type: "error", message: error?.message || translate("chat.interjectionFailed") });
+      notify({ type: "error", message: error?.message || translate("chat.interjectionFailed") });
       return false;
     }
   }
 
-  async function sendWithComposerActionState(...args) {
+  async function sendWithComposerActionState() {
     const sessionRuntimeIdValue = resolveActiveSessionIdentity();
-    const connectorStateTask = waitForSessionConnectorState?.(sessionRuntimeIdValue);
-    if (connectorStateTask) await connectorStateTask;
+    await waitForSessionConnectorState(sessionRuntimeIdValue);
     const currentTurn = resolveActiveTurn();
     if (composerActionState.value.canInterject === true) {
       return sendInterjection(currentTurn);
@@ -86,12 +84,7 @@ export function createComposerActions({
         })),
     }));
     if (currentTurn?.terminal === "user_stopped" && !isContinueFromUserStopped) {
-      notify?.({
-        type: "warning",
-        message:
-          translate("chat.sessionStateOutOfSync") ||
-          "Session state is out of sync. Refresh and try again.",
-      });
+      notify({ type: "warning", message: translate("chat.sessionStateOutOfSync") });
       return false;
     }
     const composerEventType = isContinueFromUserStopped
@@ -116,21 +109,18 @@ export function createComposerActions({
         : { type: composerEventType, continuationSource: null, source: "use_chat_session" },
     );
     try {
-      const [options = {}, ...restArgs] = args;
-      const sendOptions = isContinueFromUserStopped
-        ? {
-            ...(options && typeof options === "object" ? options : {}),
-            composerRequestStarted: true,
-            continueFromUserStopped: true,
-            turnScopeId: continuingTurnScopeId,
-            resumeDialogProcessId,
-            resumeTurnScopeId,
-          }
-        : {
-            ...(options && typeof options === "object" ? options : {}),
-            composerRequestStarted: true,
-          };
-      return await send(sendOptions, ...restArgs);
+      return await send(
+        isContinueFromUserStopped
+          ? {
+              commandType: AGENT_COMMAND.CONTINUE,
+              turnScopeId: continuingTurnScopeId,
+              continuation: {
+                dialogProcessId: resumeDialogProcessId,
+                turnScopeId: resumeTurnScopeId,
+              },
+            }
+          : { commandType: AGENT_COMMAND.SEND },
+      );
     } finally {
       submitTurnRuntimeEvent({
         type: composerSettledEventType,

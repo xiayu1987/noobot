@@ -9,7 +9,8 @@ import {
   dedupeAttachmentsByIdentity,
   projectAttachmentIdentity,
 } from "@noobot/attachment-protocol";
-import { text, isPlainObject } from "@noobot/shared/value";
+import { isPlainObject } from "@noobot/shared/value";
+import { draftAttachmentDisplayKey } from "../../../../infrastructure/api/attachments/attachmentAccess.js";
 
 function normalizeAttachmentMeta(attachment = {}) {
   if (!isPlainObject(attachment)) return null;
@@ -19,11 +20,11 @@ function normalizeAttachmentMeta(attachment = {}) {
   return out;
 }
 
-function resolveClientAttachmentId(attachment = {}) {
-  return normalizeTrimmedString(attachment?.clientAttachmentId || attachment?.draftAttachmentId);
+function resolveClientAttachmentId(attachment) {
+  return normalizeTrimmedString(attachment.clientAttachmentId);
 }
 
-export function toPendingDisplayAttachment(attachment = {}) {
+export function toPendingDisplayAttachment(attachment) {
   const meta = normalizeAttachmentMeta(attachment);
   if (!meta) return null;
   delete meta.contentBase64;
@@ -36,21 +37,13 @@ function dedupeAttachmentMetas(attachments = []) {
   );
 }
 
-function draftAttachmentIdentityKey(attachment = {}) {
-  const clientAttachmentId = resolveClientAttachmentId(attachment);
-  if (!clientAttachmentId) {
-    throw new TypeError("draft attachment missing clientAttachmentId");
-  }
-  return `draft:${clientAttachmentId}`;
-}
-
 export function dedupeDraftAttachmentMetas(attachments = []) {
   const seen = new Set();
   const out = [];
   for (const attachment of Array.isArray(attachments) ? attachments : []) {
     const meta = normalizeAttachmentMeta(attachment);
     if (!meta) continue;
-    const key = draftAttachmentIdentityKey(meta);
+    const key = draftAttachmentDisplayKey(meta);
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(meta);
@@ -77,20 +70,11 @@ export function enrichPersistedAttachmentsWithDraftMetadata(
   });
 }
 
-export function resolveKeptAttachments(userTargetMessage = {}, options = {}) {
-  const removedAttachmentKeys = new Set(
-    (Array.isArray(options?.removedAttachmentKeys) ? options.removedAttachmentKeys : [])
-      .map((key) => text(key))
-      .filter(Boolean),
-  );
-  const authoritativeAttachments = dedupeAttachmentMetas(
-    userTargetMessage?.attachments || [],
-  ).filter(
+export function resolveKeptAttachments(userTargetMessage, options) {
+  const removedAttachmentKeys = new Set(options.removedAttachmentKeys);
+  const authoritativeAttachments = dedupeAttachmentMetas(userTargetMessage.attachments).filter(
     (attachment) =>
       !removedAttachmentKeys.has(attachmentIdentityKey(projectAttachmentIdentity(attachment))),
   );
-  return dedupeAttachmentMetas([
-    ...authoritativeAttachments,
-    ...(Array.isArray(options?.attachments) ? options.attachments : []),
-  ]);
+  return dedupeAttachmentMetas([...authoritativeAttachments, ...options.attachments]);
 }

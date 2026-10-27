@@ -135,12 +135,12 @@ export function createMessageStopHandler({
   };
 
   const handleStop = async (command) => {
-    const identity = command.identity;
+    const { identity } = command;
     const target = {
       userId: canonicalRunOwnerId,
-      turnScopeId: String(identity.turnScopeId).trim(),
-      sessionId: String(identity.sessionId).trim(),
-      stopCommandId: String(command.commandId).trim(),
+      turnScopeId: identity.turnScopeId,
+      sessionId: identity.sessionId,
+      stopCommandId: command.commandId,
     };
     const accepted = await commitStopAccepted(command, target);
     if (rejectedCommit(command, accepted)) return;

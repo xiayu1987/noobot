@@ -22,6 +22,7 @@ import {
   applySessionMessageFacts,
   createTestSessionRequiredFields,
 } from "../helpers/session-message-facts.js";
+import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
 test("session display summary materializes the active Turn presentation in the zero-event window", () => {
   const summary = buildSessionDisplaySummary({
@@ -34,6 +35,7 @@ test("session display summary materializes the active Turn presentation in the z
         type: "message",
         content: "resend request",
         messageUid: "sm-active-user",
+        ts: TEST_MESSAGE_TS,
         userMessageId: "sm-active-user",
         messageOrigin: "natural",
         turnScopeId: "turn-active",
@@ -94,6 +96,7 @@ test("session display summary materializes stopped Turn details on its stable pr
     messages: [
       {
         role: "user",
+        messageOrigin: "natural",
         type: "message",
         content: "run tools",
         userMessageId: "stopped-user",
@@ -168,7 +171,9 @@ test("full and summary Session Detail expose the same canonical active Turn mess
         {
           userMessageId: "user-active-full",
           messageUid: "user-active-full",
+          ts: TEST_MESSAGE_TS,
           role: "user",
+          messageOrigin: "natural",
           type: "message",
           content: "resend request",
           turnScopeId: "turn-active-full",

@@ -7,6 +7,7 @@ import {
   assertCanonicalAssistantPresentation,
   canonicalAssistantPresentationIdentity,
   normalizeDialogProcessId,
+  pickMessageOriginField,
   resolveSessionMessageRecordDialogProcessId,
 } from "@noobot/session-protocol";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
@@ -50,48 +51,45 @@ function buildTurnEntity(service, session, resolvedParentSessionId, input) {
   const contextPolicy = resolveToolContextPolicy(input);
   const chatPresentation =
     typeof input.chatPresentation === "boolean" ? input.chatPresentation : undefined;
-  return normalizeMessageEntity(
-    {
-      role: input.role,
-      messageUid: input.messageUid || "",
-      ...optionalStringField("modelMessageId", input.modelMessageId),
-      ...optionalStringField("userMessageId", input.userMessageId),
-      ...optionalStringField("presentationMessageId", input.presentationMessageId),
-      ...(chatPresentation === undefined ? {} : { chatPresentation }),
-      content: input.content,
-      type: input.type || "",
-      userName: resolveUserName(input),
-      sessionId: input.sessionId,
-      parentSessionId: normalizedString(resolvedParentSessionId),
-      dialogProcessId: normalizeDialogProcessId(input.dialogProcessId || ""),
-      parentDialogProcessId: input.parentDialogProcessId || "",
-      turnScopeId: normalizedString(input.turnScopeId),
-      ...task,
-      modelAlias: normalizedString(input.modelAlias),
-      modelName: normalizedString(input.modelName),
-      ...(contextPolicy ? { contextPolicy } : {}),
-      summarized: input.summarized === true,
-      rawModelContent: input.rawModelContent ?? null,
-      modelAdditionalKwargs: input.modelAdditionalKwargs ?? null,
-      modelResponseMetadata: input.modelResponseMetadata ?? null,
-      ...optionalArrayField("activityTimeline", input.activityTimeline),
-      ...optionalArrayField("toolTimeline", input.toolTimeline),
-      injectedMessage: input.injectedMessage === true,
-      noobotInternalMessageType: normalizedString(input.noobotInternalMessageType),
-      injectedBy: normalizedString(input.injectedBy),
-      injectedMessageType: normalizedString(input.injectedMessageType),
-      relayCorrelationId: normalizedString(input.relayCorrelationId),
-      ...(input.interjectionSequence === undefined
-        ? {}
-        : { interjectionSequence: input.interjectionSequence }),
-      messageOrigin: text(input.messageOrigin).toLowerCase(),
-      pluginMessage: input.pluginMessage === true,
-      pluginMeta: resolvePluginMeta(input.pluginMeta),
-      transferEnvelopes: Array.isArray(input.transferEnvelopes) ? input.transferEnvelopes : [],
-      ts: normalizedString(input.ts) || service.now(),
-    },
-    service.now,
-  );
+  return normalizeMessageEntity({
+    role: input.role,
+    messageUid: input.messageUid || "",
+    ...optionalStringField("modelMessageId", input.modelMessageId),
+    ...optionalStringField("userMessageId", input.userMessageId),
+    ...optionalStringField("presentationMessageId", input.presentationMessageId),
+    ...(chatPresentation === undefined ? {} : { chatPresentation }),
+    content: input.content,
+    type: input.type || "",
+    userName: resolveUserName(input),
+    sessionId: input.sessionId,
+    parentSessionId: normalizedString(resolvedParentSessionId),
+    dialogProcessId: normalizeDialogProcessId(input.dialogProcessId || ""),
+    parentDialogProcessId: input.parentDialogProcessId || "",
+    turnScopeId: normalizedString(input.turnScopeId),
+    ...task,
+    modelAlias: normalizedString(input.modelAlias),
+    modelName: normalizedString(input.modelName),
+    ...(contextPolicy ? { contextPolicy } : {}),
+    summarized: input.summarized === true,
+    rawModelContent: input.rawModelContent ?? null,
+    modelAdditionalKwargs: input.modelAdditionalKwargs ?? null,
+    modelResponseMetadata: input.modelResponseMetadata ?? null,
+    ...optionalArrayField("activityTimeline", input.activityTimeline),
+    ...optionalArrayField("toolTimeline", input.toolTimeline),
+    injectedMessage: input.injectedMessage === true,
+    noobotInternalMessageType: normalizedString(input.noobotInternalMessageType),
+    injectedBy: normalizedString(input.injectedBy),
+    injectedMessageType: normalizedString(input.injectedMessageType),
+    relayCorrelationId: normalizedString(input.relayCorrelationId),
+    ...(input.interjectionSequence === undefined
+      ? {}
+      : { interjectionSequence: input.interjectionSequence }),
+    ...pickMessageOriginField(input),
+    pluginMessage: input.pluginMessage === true,
+    pluginMeta: resolvePluginMeta(input.pluginMeta),
+    transferEnvelopes: Array.isArray(input.transferEnvelopes) ? input.transferEnvelopes : [],
+    ts: input.ts === undefined ? service.now() : input.ts,
+  });
 }
 
 function applyToolFields(turn, input) {
@@ -149,21 +147,18 @@ function assertMessageIdentityMatch(identity, existing = null) {
   }
 }
 
-function mergeExistingTurn(service, existing, turn) {
-  return normalizeMessageEntity(
-    {
-      ...existing,
-      ...turn,
-      messageUid: existing.messageUid,
-      ts: existing.ts || turn.ts,
-    },
-    service.now,
-  );
+function mergeExistingTurn(existing, turn) {
+  return normalizeMessageEntity({
+    ...existing,
+    ...turn,
+    messageUid: existing.messageUid,
+    ts: existing.ts,
+  });
 }
 
-function persistTurn(service, messages, turn) {
+function persistTurn(messages, turn) {
   const identity = findPersistedTurnByMessageUid(messages, turn);
-  const existing = identity.existingIndex >= 0 ? messages[identity.existingIndex] || {} : null;
+  const existing = identity.existingIndex >= 0 ? messages[identity.existingIndex] : null;
   assertMessageIdentityMatch(identity, existing);
   const incomingPresentation = canonicalAssistantPresentationIdentity(turn);
   if (incomingPresentation) {
@@ -176,14 +171,11 @@ function persistTurn(service, messages, turn) {
     }
   }
   if (existing) {
-    const persisted = mergeExistingTurn(service, existing, turn);
+    const persisted = mergeExistingTurn(existing, turn);
     messages[identity.existingIndex] = persisted;
     return persisted;
   }
-  const persisted = normalizeMessageEntity(
-    { ...turn, messageUid: identity.messageUid },
-    service.now,
-  );
+  const persisted = normalizeMessageEntity({ ...turn, messageUid: identity.messageUid });
   messages.push(persisted);
   return persisted;
 }
@@ -196,7 +188,7 @@ export function upsertTurnInSession(service, session, resolvedParentSessionId, i
   const turn = buildTurnEntity(service, session, resolvedParentSessionId, input);
   applyToolFields(turn, input);
   applyAttachments(turn, input);
-  const persistedTurn = persistTurn(service, session.messages, turn);
+  const persistedTurn = persistTurn(session.messages, turn);
   registerSessionMessageFacts(session, persistedTurn);
   updateSessionMetadata(service, session);
   return persistedTurn;

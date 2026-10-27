@@ -22,6 +22,7 @@ import {
   registerPendingCommand,
 } from "./channel-manager.state-consistency.test-helpers.js";
 import { PENDING_COMMAND_KIND } from "../../src/channel/command-registry.js";
+import { rootCommandIdentity } from "../shared/command-identity.js";
 import {
   authoritativeLifecycle,
   authoritativeSnapshot,
@@ -132,6 +133,7 @@ test("upstream accepts the canonical Session attachment-binding receipt", () => 
       role: "user",
       messageUid: "message-uid-attachment-binding",
       userMessageId: "message-attachment-binding",
+      content: "hello",
       sessionId,
       dialogProcessId,
       turnScopeId,
@@ -252,6 +254,10 @@ test("upstream snapshot responses resolve and release the reconnect command", as
         commandId: "snapshot-command-1",
         sessionId: "session-snapshot-response",
         sequence: 2,
+        activeTurnScopeId: "",
+        activeTurn: null,
+        recovery: "none",
+        unchanged: false,
       }),
     }),
   );
@@ -262,6 +268,10 @@ test("upstream snapshot responses resolve and release the reconnect command", as
       commandId: "snapshot-command-1",
       sessionId: "session-snapshot-response",
       sequence: 2,
+      activeTurnScopeId: "",
+      activeTurn: null,
+      recovery: "none",
+      unchanged: false,
     }),
   });
   assert.equal(countPendingCommands(manager, channel, PENDING_COMMAND_KIND.TURN_SNAPSHOT), 0);
@@ -495,11 +505,10 @@ test("forwarded stop does not synthesize stopping before Service confirms it", (
   const forwarded = manager.forwardToUpstream(
     channel,
     createTurnStopCommand({
-      identity: {
+      identity: rootCommandIdentity(AGENT_COMMAND.STOP, {
         sessionId: "session-stop",
-        dialogProcessId: "dp-stop",
         turnScopeId: "turn-stop",
-      },
+      }),
       concurrency: { expectedTurnRevision: 1 },
       stop: {},
     }),
@@ -552,10 +561,10 @@ test("forwardToUpstream reports a closed upstream without throwing", () => {
       manager.forwardToUpstream(
         channel,
         createTurnStopCommand({
-          identity: {
+          identity: rootCommandIdentity(AGENT_COMMAND.STOP, {
             sessionId: "session-closed-upstream",
             turnScopeId: "turn-closed-upstream",
-          },
+          }),
           concurrency: { expectedTurnRevision: 1 },
           stop: {},
         }),

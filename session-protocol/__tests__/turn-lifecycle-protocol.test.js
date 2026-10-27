@@ -263,6 +263,11 @@ test("snapshot recovery is an explicit read-side assessment bound to the active 
     validateTurnLifecycleSnapshot({ ...idle, recovery: TURN_RECOVERY_ACTION.FINALIZE }).errors,
     ["recovery_without_active_turn"],
   );
+  for (const unchanged of [undefined, null, 0, "false"]) {
+    assert.deepEqual(validateTurnLifecycleSnapshot({ ...idle, unchanged }).errors, [
+      "invalid_snapshot_unchanged",
+    ]);
+  }
 });
 
 test("active Turn snapshot requires its authoritative start time", () => {

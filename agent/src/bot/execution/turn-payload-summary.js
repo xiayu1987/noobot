@@ -6,6 +6,7 @@
 
 import { isPlainObject } from "@noobot/shared/value";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { pickMessageOriginField } from "@noobot/session-protocol";
 
 const SESSION_TURN_FULL_CONTENT_PREVIEW_CHARS =
   LENGTH_THRESHOLDS.display.sessionSummaryArrayItemChars;
@@ -88,7 +89,7 @@ export function summarizeSessionTurnPayload(fullTurnPayload = {}) {
     injectedMessage: fullTurnPayload.injectedMessage === true,
     injectedBy: fullTurnPayload.injectedBy || "",
     injectedMessageType: fullTurnPayload.injectedMessageType || "",
-    messageOrigin: fullTurnPayload.messageOrigin || "",
+    ...pickMessageOriginField(fullTurnPayload),
     pluginMessage: fullTurnPayload.pluginMessage === true,
     pluginMeta: summarizeObject(fullTurnPayload.pluginMeta),
     isMonotonic: fullTurnPayload.isMonotonic === true,

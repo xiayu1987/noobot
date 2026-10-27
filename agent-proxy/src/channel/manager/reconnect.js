@@ -42,7 +42,6 @@ async function provisionReconnectChannel(manager, socket, session) {
     userId,
     sessionId: session.sessionId,
     parentSessionId: session.parentSessionId,
-    parentDialogProcessId: session.parentDialogProcessId,
   });
   const channel = manager.ensureChannel(channelKey, { sessionId: session.sessionId, userId });
   manager.connectUpstreamChannel(channel, socket.__agentProxyApiKey, socket.__agentProxyLocale, {
@@ -104,7 +103,6 @@ class ReconnectMethods {
       reconnectChannelKeys = await provisionReconnectChannel(this, socket, {
         sessionId: currentSessionId,
         parentSessionId: identity.parentSessionId,
-        parentDialogProcessId: identity.parentDialogProcessId,
       });
     }
     void writeAgentProxyRouteLifecycleEvent({

@@ -8,6 +8,15 @@ export function isFunction(value) {
   return typeof value === "function";
 }
 
+export function requireFunctionDependencies(owner, dependencies) {
+  const missing = Object.entries(dependencies)
+    .filter(([, value]) => !isFunction(value))
+    .map(([name]) => name);
+  if (missing.length) {
+    throw new TypeError(`${owner} requires function dependencies: ${missing.join(", ")}`);
+  }
+}
+
 export function isObjectLike(value) {
   return value !== null && typeof value === "object";
 }

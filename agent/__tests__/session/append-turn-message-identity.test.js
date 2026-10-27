@@ -188,6 +188,7 @@ test("appendTurns persists the canonical internal control message type", async (
       {
         messageUid: "sm_control",
         role: "user",
+        injectedMessage: true,
         type: "context_control",
         chatPresentation: false,
         content: "checkpoint",
@@ -392,7 +393,7 @@ test("appendTurns rejects a turn without messageUid", async () => {
     appendTurns.call(service, {
       userId: "u1",
       sessionId: "s1",
-      turns: [{ role: "user", content: "hello" }],
+      turns: [{ role: "user", messageOrigin: "natural", content: "hello" }],
     }),
     (error) =>
       error.code === "SESSION_MESSAGE_IDENTITY_INVALID" &&

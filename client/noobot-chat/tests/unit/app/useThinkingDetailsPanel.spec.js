@@ -19,18 +19,28 @@ function deferred() {
 }
 
 function createPanel(fetchThinkingDetail = vi.fn(), activeSession = ref({ messages: [] })) {
-  return useThinkingDetailsPanel({
+  const dependencies = {
+    notify: vi.fn(),
+    closeAllDrawers: vi.fn(),
+    closeMobileSidebar: vi.fn(),
+    closeComposerMorePanel: vi.fn(),
+    pushPseudoRoute: vi.fn(),
+  };
+  const panel = useThinkingDetailsPanel({
     activeSession,
     activeSessionId: ref("session-1"),
     fetchThinkingDetail,
     translate: (key) => key,
     thinkingDetailsPanel: "thinking-details",
+    ...dependencies,
   });
+  return Object.assign(panel, { dependencies });
 }
 
 const workflowMessage = buildViewMessage(
   {
     role: "assistant",
+    content: "",
     presentationMessageId: "workflow-presentation",
     dialogProcessId: "workflow-node",
     turnScopeId: "workflow-turn",
@@ -41,6 +51,7 @@ const workflowMessage = buildViewMessage(
 const normalMessage = buildViewMessage(
   {
     role: "assistant",
+    content: "",
     presentationMessageId: "normal-presentation",
     dialogProcessId: "normal-message",
     turnScopeId: "normal-turn",
@@ -110,6 +121,27 @@ describe("useThinkingDetailsPanel request isolation", () => {
 
     expect(panel.thinkingDetailsVisible.value).toBe(false);
     expect(panel.thinkingDetailsMessageItem.value).toBe(null);
+  });
+
+  it("closes drawers and pushes the pseudo route when opening the panel", async () => {
+    const fetcher = vi.fn(async () => detailFor(normalMessage));
+    const panel = createPanel(fetcher);
+
+    await panel.openThinkingDetailsPanel({ messageItem: normalMessage });
+
+    expect(panel.dependencies.closeAllDrawers).toHaveBeenCalledTimes(1);
+    expect(panel.dependencies.closeMobileSidebar).toHaveBeenCalledTimes(1);
+    expect(panel.dependencies.closeComposerMorePanel).toHaveBeenCalledTimes(1);
+    expect(panel.dependencies.pushPseudoRoute).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not push a pseudo route when pushRoute is false", async () => {
+    const fetcher = vi.fn(async () => detailFor(normalMessage));
+    const panel = createPanel(fetcher);
+
+    await panel.openThinkingDetailsPanel({ messageItem: normalMessage, pushRoute: false });
+
+    expect(panel.dependencies.pushPseudoRoute).not.toHaveBeenCalled();
   });
 
   it("reuses a cached completed detail when the authoritative revision is unchanged", async () => {
@@ -190,6 +222,7 @@ describe("useThinkingDetailsPanel request isolation", () => {
   it("binds the drawer to the active canonical turn instead of a stale click payload", async () => {
     const staleSummary = {
       role: "assistant",
+      content: "",
       presentationMessageId: "presentation-1",
       sessionId: "session-1",
       dialogProcessId: "process-1",
@@ -274,6 +307,7 @@ describe("useThinkingDetailsPanel request isolation", () => {
     const summaryMessage = buildViewMessage(
       {
         role: "assistant",
+        content: "",
         presentationMessageId: "presentation-complete",
         sessionId: "session-1",
         dialogProcessId: "process-complete",
@@ -338,6 +372,7 @@ describe("useThinkingDetailsPanel request isolation", () => {
     const canonicalMessage = buildViewMessage(
       {
         role: "assistant",
+        content: "",
         presentationMessageId: "presentation-canonical",
         sessionId: "session-1",
         dialogProcessId: "process-shared",
@@ -348,6 +383,7 @@ describe("useThinkingDetailsPanel request isolation", () => {
     );
     const clickedMessage = {
       role: "assistant",
+      content: "",
       presentationMessageId: "presentation-clicked",
       sessionId: "session-1",
       dialogProcessId: "process-shared",

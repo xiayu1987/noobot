@@ -23,6 +23,7 @@ import {
 } from "../../runtime/workflowUnifiedSessionDetail.js";
 import { resolveWorkflowDialogProcessId } from "../../utils/workflowDialogProcessId.js";
 import { text } from "@noobot/shared/value";
+import { isApiRequestError } from "@noobot/shared/request-error";
 
 function isCurrentRequest(nodeViewTransaction, viewTicket, targetSessionId, detail) {
   if (!nodeViewTransaction.accepts(viewTicket)) return false;
@@ -169,7 +170,7 @@ async function loadMaterializedSession(context, prepared, opening, identity) {
 }
 
 function recordOpenFailure(context, prepared, opening, identity, error) {
-  const { props, refs, nodeViewTransaction, translate } = context;
+  const { props, refs, nodeViewTransaction } = context;
   props.logWorkflowDiagnostics("frontend.workflowNodeDetail.openFailed", {
     traceId: prepared.traceId,
     rootSessionId: prepared.route.rootSessionId,
@@ -179,15 +180,14 @@ function recordOpenFailure(context, prepared, opening, identity, error) {
     transactionAccepted: nodeViewTransaction.accepts(opening.viewTicket),
     transactionPhase: text(nodeViewTransaction.state.phase),
     transactionOwnerKey: text(nodeViewTransaction.state.ownerKey),
-    errorName: String(error?.name || "Error"),
-    errorMessage: String(error?.message || error || ""),
+    errorCode: error.code,
+    errorStatus: error.status,
+    errorMessage: error.message,
     clickedIdentity: summarizeWorkflowNodeIdentity(prepared.nodeItem),
     canonicalIdentity: summarizeWorkflowNodeIdentity(prepared.canonicalNodeItem),
   });
   if (!nodeViewTransaction.accepts(opening.viewTicket)) return;
-  refs.viewerError.value = String(
-    error?.message || error || translate("workflow.readNodeSessionFailed"),
-  );
+  refs.viewerError.value = error.message;
   refs.viewerState.value = "failed";
 }
 
@@ -209,6 +209,7 @@ async function openNewProtocolSession(context, prepared, opening) {
     if (identity.sessionIdHint) await loadMaterializedSession(context, prepared, opening, identity);
     else if (nodeViewTransaction.accepts(opening.viewTicket)) refs.viewerState.value = "pending";
   } catch (error) {
+    if (!isApiRequestError(error)) throw error;
     recordOpenFailure(context, prepared, opening, identity, error);
   } finally {
     if (nodeViewTransaction.activate(opening.viewTicket)) {

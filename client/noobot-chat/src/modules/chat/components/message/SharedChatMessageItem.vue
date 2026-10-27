@@ -11,7 +11,7 @@ import { useMessagePreview } from "../../composables/message/useMessagePreview.j
 import { useMessageFiles } from "../../composables/message/useMessageFiles.js";
 import {
   resolveAttachmentDisplayKey,
-  resolveParsedResultAccessMeta,
+  resolveParsedResultRelation,
 } from "../../../../infrastructure/api/attachments/attachmentAccess.js";
 import { buildAttachmentRefIndex } from "../../composables/message/attachmentInlineRefPlugin.js";
 import { useMessageMeta } from "../../composables/message/useMessageMeta.js";
@@ -234,8 +234,7 @@ watch(
   () =>
     displayedAttachments.value.map((attachment) => ({
       attachmentId: text(attachment?.attachmentId),
-      parsedResultTargetIdentity:
-        resolveParsedResultAccessMeta(attachment)?.relation?.targetIdentity || null,
+      parsedResultTargetIdentity: resolveParsedResultRelation(attachment)?.targetIdentity || null,
     })),
   (attachments) => {
     logWorkflowDiagnostics("frontend.workflowRender.attachmentCardsProjected", {

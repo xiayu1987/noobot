@@ -64,7 +64,6 @@ function createRunMeta(context, command, run) {
     runOwnerId: context.canonicalRunOwnerId,
     sessionId: text(run.sessionId),
     parentSessionId: text(run.parentSessionId),
-    parentDialogProcessId: text(run.parentDialogProcessId),
     dialogProcessId: text(run.dialogProcessId),
     turnScopeId: text(run.turnScopeId),
     presentationMessageId: text(run.normalizedRunConfig.presentationMessageId),

@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { ref, watch } from "vue";
+import { isRef, ref, watch } from "vue";
 import {
   buildThinkingDetailsRoute,
   getThinkingDetailsTitle as getThinkingDetailsTitleState,
@@ -28,7 +28,8 @@ import { selectActivityTimelineLogs } from "../../modules/chat/runtime/engine/ac
 import { selectThinkingDetailContentTimeline } from "@noobot/event-protocol/thinking-detail-content";
 import { logThinkingReplayDebug } from "../../modules/debug/loggers/thinkingReplayDebugLogger.js";
 import { logStateMachineDebug } from "../../modules/debug/loggers/stateMachineLogger.js";
-import { isFunction, text } from "@noobot/shared/value";
+import { isFunction, requireFunctionDependencies, text } from "@noobot/shared/value";
+import { isApiRequestError, isApiRequestNotFound } from "@noobot/shared/request-error";
 
 function hasCanonicalTimeline(messageItem = {}) {
   return (
@@ -88,6 +89,10 @@ function timelineRevision(messageItem = {}) {
   ].join(":");
 }
 
+function describeThinkingDetailFailure(error, translate) {
+  return isApiRequestNotFound(error) ? translate("chat.thinkingDetailNotFound") : error.message;
+}
+
 export function useThinkingDetailsPanel({
   activeSession,
   activeSessionId,
@@ -99,7 +104,19 @@ export function useThinkingDetailsPanel({
   closeComposerMorePanel,
   pushPseudoRoute,
   thinkingDetailsPanel,
-} = {}) {
+}) {
+  requireFunctionDependencies("useThinkingDetailsPanel", {
+    fetchThinkingDetail,
+    notify,
+    translate,
+    closeAllDrawers,
+    closeMobileSidebar,
+    closeComposerMorePanel,
+    pushPseudoRoute,
+  });
+  if (!isRef(activeSession) || !isRef(activeSessionId)) {
+    throw new TypeError("useThinkingDetailsPanel requires activeSession and activeSessionId refs");
+  }
   const thinkingDetailsVisible = ref(false);
   const thinkingDetailsMessageItem = ref(null);
   const thinkingDetailsAllMessages = ref([]);
@@ -108,7 +125,7 @@ export function useThinkingDetailsPanel({
   let detailWatchSkipKey = "";
 
   function resolveFallbackThinkingDetailsPayload() {
-    return resolveFallbackThinkingDetailsPayloadState(activeSession?.value);
+    return resolveFallbackThinkingDetailsPayloadState(activeSession.value);
   }
 
   function closeThinkingDetailsPanel() {
@@ -145,15 +162,16 @@ export function useThinkingDetailsPanel({
   }
 
   function findActiveCanonicalMessage(messageItem = {}) {
+    const session = activeSession.value;
+    if (session === null) return null;
     return (
-      (activeSession?.value?.messages || []).find((candidate = {}) =>
-        isSameThinkingTurn(messageItem, candidate),
-      ) || null
+      session.messages.find((candidate = {}) => isSameThinkingTurn(messageItem, candidate)) || null
     );
   }
 
   function getLiveSessionMessages() {
-    return Array.isArray(activeSession?.value?.messages) ? activeSession.value.messages : [];
+    const session = activeSession.value;
+    return session === null ? [] : session.messages;
   }
 
   function buildDetailWatchKey() {
@@ -185,7 +203,7 @@ export function useThinkingDetailsPanel({
       : fetchThinkingDetail;
     const openRequestVersion = ++detailRequestVersion;
     logThinkingPanelState("frontend.thinkingReplay.detailPanelOpenResolved", () => ({
-      sessionId: activeSessionId?.value,
+      sessionId: activeSessionId.value,
       payload: summarizeThinkingTimeline(payloadMessageItem),
       active: summarizeThinkingTimeline(activeMessageItem || {}),
       selectedSource: activeMessageItem ? "active-session" : "payload",
@@ -204,15 +222,15 @@ export function useThinkingDetailsPanel({
         ? cachedCandidate
         : null;
     const initialDetailMessage = cachedThinkingDetail?.messageItem || initialMessageItem;
-    closeAllDrawers?.();
-    closeMobileSidebar?.();
-    closeComposerMorePanel?.();
+    closeAllDrawers();
+    closeMobileSidebar();
+    closeComposerMorePanel();
     thinkingDetailsMessageItem.value = initialDetailMessage;
     thinkingDetailsAllMessages.value = usesLiveSession ? getLiveSessionMessages() : [];
     thinkingDetailsVisible.value = true;
     detailWatchSkipKey = buildDetailWatchKey();
     if (payload?.pushRoute !== false) {
-      pushPseudoRoute?.(buildThinkingDetailsRoute(activeSessionId?.value, thinkingDetailsPanel));
+      pushPseudoRoute(buildThinkingDetailsRoute(activeSessionId.value, thinkingDetailsPanel));
     }
     let loadedThinkingDetail = null;
     if (needsFullDetail) {
@@ -220,17 +238,15 @@ export function useThinkingDetailsPanel({
         loadedThinkingDetail = await fetchThinkingDetailForMessage(initialMessageItem);
         if (openRequestVersion !== detailRequestVersion) return;
         logThinkingPanelState("frontend.thinkingReplay.detailPanelRequestCommitted", () => ({
-          sessionId: activeSessionId?.value,
+          sessionId: activeSessionId.value,
           requested: summarizeThinkingTimeline(initialMessageItem),
           detail: summarizeThinkingTimeline(loadedThinkingDetail?.messageItem || {}),
           injectedMessageCount: Number(loadedThinkingDetail?.counts?.injectedMessageCount || 0),
         }));
       } catch (error) {
+        if (!isApiRequestError(error)) throw error;
         if (openRequestVersion !== detailRequestVersion) return;
-        notify?.({
-          type: "warning",
-          message: error?.message || translate?.("chat.loadSessionDetailFailed"),
-        });
+        notify({ type: "warning", message: describeThinkingDetailFailure(error, translate) });
         return;
       }
       if (!loadedThinkingDetail?.messageItem) return;
@@ -257,7 +273,7 @@ export function useThinkingDetailsPanel({
       thinkingDetailsMessageItem.value = sourceMessage;
       thinkingDetailsAllMessages.value = getLiveSessionMessages();
       logThinkingPanelState("frontend.thinkingReplay.detailPanelCanonicalSynchronized", () => ({
-        sessionId: activeSessionId?.value,
+        sessionId: activeSessionId.value,
         source: summarizeThinkingTimeline(sourceMessage),
         liveAllMessageCount: thinkingDetailsAllMessages.value.length,
         liveInjectedMessageCount: thinkingDetailsAllMessages.value.filter(
@@ -280,16 +296,14 @@ export function useThinkingDetailsPanel({
       thinkingDetailsMessageItem.value = detail.messageItem || currentMessage;
       thinkingDetailsAllMessages.value = [];
     } catch (error) {
+      if (!isApiRequestError(error)) throw error;
       logThinkingPanelState("frontend.thinkingReplay.detailRefreshFailed", () => ({
-        sessionId: activeSessionId?.value,
+        sessionId: activeSessionId.value,
         dialogProcessId,
         turnScopeId,
-        error: String(error?.message || error || ""),
+        error: error.message,
       }));
-      notify?.({
-        type: "warning",
-        message: error?.message || translate?.("chat.loadSessionDetailFailed"),
-      });
+      notify({ type: "warning", message: describeThinkingDetailFailure(error, translate) });
     }
   });
 

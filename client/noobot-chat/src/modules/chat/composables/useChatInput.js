@@ -3,27 +3,24 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createSecureId } from "@noobot/shared/secure-identity";
 import { storeToRefs } from "pinia";
 import { useChatStore } from "../stores/useChatStore.js";
 import {
   resolveRawAttachmentFile,
   serializeAttachments,
 } from "../runtime/engine/attachmentSerialization.js";
-import { text } from "@noobot/shared/value";
+import { createClientAttachmentId } from "../model/message-actions/attachmentFormat.js";
+import { requireFunctionDependencies, text } from "@noobot/shared/value";
 
-export function useChatInput({ isImageMime, clearUploadSelection = () => {} }) {
+export function useChatInput({ isImageMime, clearUploadSelection }) {
+  requireFunctionDependencies("useChatInput", { isImageMime, clearUploadSelection });
   const chatStore = useChatStore();
   const { input, uploadFiles } = storeToRefs(chatStore);
-
-  function createDraftAttachmentId() {
-    return createSecureId("draft-attachment");
-  }
 
   function createUploadEntry(rawFile) {
     const mimeType = rawFile.type || "application/octet-stream";
     return {
-      draftAttachmentId: createDraftAttachmentId(),
+      clientAttachmentId: createClientAttachmentId(),
       raw: rawFile,
       name: rawFile.name,
       mimeType,
@@ -69,16 +66,17 @@ export function useChatInput({ isImageMime, clearUploadSelection = () => {} }) {
     clearUploadSelection();
   }
 
-  function removeUpload(draftAttachmentId = "") {
-    const normalizedId = text(draftAttachmentId);
-    if (!normalizedId) return;
+  function removeUpload(clientAttachmentId) {
+    if (!clientAttachmentId) {
+      throw new TypeError("removeUpload requires clientAttachmentId");
+    }
     const removedFile = uploadFiles.value.find(
-      (fileItem) => fileItem?.draftAttachmentId === normalizedId,
+      (fileItem) => fileItem.clientAttachmentId === clientAttachmentId,
     );
     if (!removedFile) return;
     revokePreviewUrls([removedFile]);
     uploadFiles.value = uploadFiles.value.filter(
-      (fileItem) => fileItem?.draftAttachmentId !== normalizedId,
+      (fileItem) => fileItem.clientAttachmentId !== clientAttachmentId,
     );
   }
 

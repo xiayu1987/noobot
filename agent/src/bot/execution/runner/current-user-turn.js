@@ -12,7 +12,6 @@ import {
   deriveAttachmentBindCommandId,
 } from "@noobot/session-protocol";
 import { summarizeDebugAttachments } from "@noobot/shared/debug-projection";
-import { text } from "@noobot/shared/value";
 
 function emitPreparedTurnDebug({
   eventListener,
@@ -54,12 +53,10 @@ function emitCurrentUserIdentityDebug({
     resolvedRunConfig?.reuseExistingUserTurn === true ? "reusedTurnResolved" : "turnCommitted",
     {
       messageUid: persistedMessageUid,
-      role: text(currentUserMessage?.role),
-      messageOrigin: text(currentUserMessage?.messageOrigin).toLowerCase(),
-      contentLength: String(currentUserMessage?.content || "").length,
-      attachmentCount: Array.isArray(currentUserMessage?.attachments)
-        ? currentUserMessage.attachments.length
-        : 0,
+      role: currentUserMessage.role,
+      messageOrigin: currentUserMessage.messageOrigin,
+      contentLength: currentUserMessage.content.length,
+      attachmentCount: currentUserMessage.attachments.length,
       ...(reusedTurnResult ? { asserted: reusedTurnResult?.asserted === true } : {}),
       ...(committedTurnResult ? { deduplicated: committedTurnResult?.deduplicated === true } : {}),
     },
@@ -133,16 +130,16 @@ export async function prepareCurrentUserTurn({
     ...(!precommittedUserTurn ? { attachments: canonicalAttachments } : {}),
     persistenceScope,
   });
-  currentUserMessage = reusedTurnResult?.userMessage;
+  currentUserMessage = reusedTurnResult.userMessage;
   if (precommittedUserTurn) {
-    if (text(currentUserMessage?.messageUid) !== acceptanceReceipt.messageUid) {
+    if (currentUserMessage.messageUid !== acceptanceReceipt.messageUid) {
       throw new TypeError("accepted Turn message identity does not match Session authority");
     }
     committedTurnResult = {
-      session: reusedTurnResult?.session,
+      session: reusedTurnResult.session,
       sessionId,
       userMessage: currentUserMessage,
-      attachments: currentUserMessage?.attachments || [],
+      attachments: currentUserMessage.attachments,
       aggregateVersion: acceptanceReceipt.aggregateVersion,
       deduplicated: true,
     };
@@ -166,17 +163,17 @@ export async function prepareCurrentUserTurn({
       userId,
       sessionId,
       turnScopeId,
-      messageUid: text(currentUserMessage?.messageUid),
+      messageUid: currentUserMessage.messageUid,
       attachments: canonicalAttachments,
       expectedAggregateVersion: committedTurnResult?.aggregateVersion,
       commandId: deriveAttachmentBindCommandId(turnScopeId),
       persistenceScope,
     });
-    currentUserMessage = attachmentBinding?.userMessage;
+    currentUserMessage = attachmentBinding.userMessage;
     committedTurnResult = {
       ...committedTurnResult,
-      aggregateVersion: attachmentBinding?.aggregateVersion,
-      attachments: attachmentBinding?.attachments || [],
+      aggregateVersion: attachmentBinding.aggregateVersion,
+      attachments: attachmentBinding.attachments,
       userMessage: currentUserMessage,
     };
     emitEvent(
@@ -184,14 +181,14 @@ export async function prepareCurrentUserTurn({
       AGENT_RUN_EVENT.TURN_ATTACHMENTS_BOUND,
       assertTurnAttachmentsBoundEventData({
         sessionId,
-        aggregateVersion: attachmentBinding?.aggregateVersion,
+        aggregateVersion: attachmentBinding.aggregateVersion,
         dialogProcessId,
         turnScopeId,
         userMessage: currentUserMessage,
       }),
     );
   }
-  const persistedMessageUid = text(currentUserMessage?.messageUid);
+  const persistedMessageUid = currentUserMessage.messageUid;
   if (!persistedMessageUid) {
     throw new Error(
       "persisted current user message identity is required before Context construction",

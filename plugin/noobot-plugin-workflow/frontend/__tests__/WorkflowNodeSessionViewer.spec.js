@@ -673,6 +673,12 @@ describe("workflow node session view ownership", () => {
         json: async () => ({
           ok: true,
           workflowSession: {
+            aggregateVersion: 1,
+            snapshotEnvelope: snapshotEnvelope(
+              "session-registry-live",
+              sessionDocs["session-registry-live"].messages,
+              "workflow-node:session-registry-live",
+            ),
             sessionSummary: { ...sessionDocs["session-registry-live"], turnTimings: [] },
             executionLogs: [],
           },

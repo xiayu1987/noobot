@@ -14,11 +14,17 @@ import {
   createTurnStopCommand,
   parseAgentCommand,
 } from "../src/index.js";
+import {
+  INTERACTION_IDENTITY,
+  ROOT_COMMAND_IDENTITY,
+  ROOT_TURN_START_IDENTITY,
+} from "./helpers/command-identity.js";
 
 test("turn interjection binds text to the active Turn and dialog identity", () => {
   const command = createTurnInterjectionCommand({
     commandId: "interject:1",
     identity: {
+      ...ROOT_COMMAND_IDENTITY,
       sessionId: "session-1",
       dialogProcessId: "dialog-1",
       turnScopeId: "turn-1",
@@ -40,7 +46,7 @@ test("turn interjection binds text to the active Turn and dialog identity", () =
 test("turn send command has one canonical location for transport fields", () => {
   const command = createTurnRunCommand({
     commandType: AGENT_COMMAND.SEND,
-    identity: { sessionId: "session-1", turnScopeId: "turn-1" },
+    identity: { ...ROOT_TURN_START_IDENTITY, sessionId: "session-1", turnScopeId: "turn-1" },
     input: { message: "hello", attachments: [] },
     preferences: { streaming: true, selectedPlugins: ["planning"] },
     presentation: { userMessageId: "user-1", presentationMessageId: "assistant-1" },
@@ -65,7 +71,7 @@ test("turn send command has one canonical location for transport fields", () => 
 
 test("session provision intent is explicit and only valid for turn.send", () => {
   const runInput = {
-    identity: { sessionId: "session-new", turnScopeId: "turn-new" },
+    identity: { ...ROOT_TURN_START_IDENTITY, sessionId: "session-new", turnScopeId: "turn-new" },
     input: { message: "hello", attachments: [] },
     preferences: {},
     presentation: { userMessageId: "user-1", presentationMessageId: "assistant-1" },
@@ -90,6 +96,7 @@ test("turn resend requires the dialog identity committed by session replacement"
   const resend = createTurnRunCommand({
     commandType: AGENT_COMMAND.RESEND,
     identity: {
+      ...ROOT_COMMAND_IDENTITY,
       sessionId: "session-1",
       dialogProcessId: "dialog-resend",
       turnScopeId: "turn-resend",
@@ -110,6 +117,7 @@ test("send and continue reject client-supplied dialog identity allocated at acce
     const input = {
       commandType,
       identity: {
+        ...ROOT_TURN_START_IDENTITY,
         sessionId: "session-1",
         dialogProcessId: "dialog-client",
         turnScopeId: `turn-${commandType}`,
@@ -121,41 +129,52 @@ test("send and continue reject client-supplied dialog identity allocated at acce
       session: { createIfAbsent: false },
       continuation: { dialogProcessId: "dialog-stopped", turnScopeId: "turn-stopped" },
     };
-    assert.throws(() => createTurnRunCommand(input), /unexpected_dialog_process_id/);
-    const command = createTurnRunCommand({
-      ...input,
-      identity: { ...input.identity, dialogProcessId: "" },
-    });
-    assert.equal(parseAgentCommand(command).identity.dialogProcessId, "");
+    assert.throws(() => createTurnRunCommand(input), /unknown_identity_field:dialogProcessId/);
+    const { dialogProcessId: _clientDialogProcessId, ...identity } = input.identity;
+    const command = createTurnRunCommand({ ...input, identity });
+    assert.equal(Object.hasOwn(parseAgentCommand(command).identity, "dialogProcessId"), false);
+    assert.throws(
+      () =>
+        parseAgentCommand({
+          ...command,
+          identity: { ...command.identity, dialogProcessId: "dialog-client" },
+        }),
+      /unknown_identity_field:dialogProcessId/,
+    );
   }
 });
 
-test("command identity always carries every field as a trimmed string", () => {
+test("command identity requires every field as an explicit trimmed string", () => {
   assert.throws(
     () =>
       createTurnStopCommand({
-        identity: { sessionId: " session-1 ", turnScopeId: "turn-1" },
+        identity: { ...ROOT_TURN_START_IDENTITY, sessionId: " session-1 ", turnScopeId: "turn-1" },
         concurrency: { expectedTurnRevision: 1 },
         stop: {},
       }),
     /invalid_identity_field:sessionId/,
   );
   const command = createTurnStopCommand({
-    identity: { sessionId: "session-1", turnScopeId: "turn-1" },
+    identity: { ...ROOT_TURN_START_IDENTITY, sessionId: "session-1", turnScopeId: "turn-1" },
     concurrency: { expectedTurnRevision: 1 },
     stop: {},
   });
   assert.deepEqual(command.identity, {
     sessionId: "session-1",
     parentSessionId: "",
-    dialogProcessId: "",
-    parentDialogProcessId: "",
     turnScopeId: "turn-1",
   });
+  for (const field of Object.keys(ROOT_TURN_START_IDENTITY)) {
+    const identity = { ...command.identity };
+    delete identity[field];
+    assert.throws(
+      () => createTurnStopCommand({ identity, concurrency: { expectedTurnRevision: 1 }, stop: {} }),
+      new RegExp(`identity_field_required:${field}`),
+    );
+  }
   for (const [field, value] of [
     ["parentSessionId", undefined],
     ["parentSessionId", " parent "],
-    ["parentDialogProcessId", 1],
   ]) {
     const invalid = { ...command, identity: { ...command.identity, [field]: value } };
     if (value === undefined) delete invalid.identity[field];
@@ -166,7 +185,11 @@ test("command identity always carries every field as a trimmed string", () => {
 test("run commands require presentation identity for both user and assistant messages", () => {
   const command = createTurnRunCommand({
     commandType: AGENT_COMMAND.SEND,
-    identity: { sessionId: "session-1", turnScopeId: "turn-presentation" },
+    identity: {
+      ...ROOT_TURN_START_IDENTITY,
+      sessionId: "session-1",
+      turnScopeId: "turn-presentation",
+    },
     input: { message: "hello", attachments: [] },
     preferences: {},
     presentation: { userMessageId: "user-1", presentationMessageId: "assistant-1" },
@@ -182,7 +205,7 @@ test("run commands require presentation identity for both user and assistant mes
 test("run concurrency separates turn revision from session version", () => {
   const command = createTurnRunCommand({
     commandType: AGENT_COMMAND.SEND,
-    identity: { sessionId: "session-1", turnScopeId: "turn-1" },
+    identity: { ...ROOT_TURN_START_IDENTITY, sessionId: "session-1", turnScopeId: "turn-1" },
     input: { message: "hello", attachments: [] },
     preferences: {},
     presentation: { userMessageId: "user-1", presentationMessageId: "assistant-1" },
@@ -199,7 +222,7 @@ test("run concurrency separates turn revision from session version", () => {
 
 test("turn stop requires the current positive authoritative turn revision", () => {
   const command = createTurnStopCommand({
-    identity: { sessionId: "session-1", turnScopeId: "turn-1" },
+    identity: { ...ROOT_TURN_START_IDENTITY, sessionId: "session-1", turnScopeId: "turn-1" },
     concurrency: { expectedTurnRevision: 2 },
     stop: {},
   });
@@ -209,7 +232,7 @@ test("turn stop requires the current positive authoritative turn revision", () =
   assert.throws(
     () =>
       createTurnStopCommand({
-        identity: { sessionId: "session-1", turnScopeId: "turn-1" },
+        identity: { ...ROOT_TURN_START_IDENTITY, sessionId: "session-1", turnScopeId: "turn-1" },
         concurrency: {},
         stop: {},
       }),
@@ -223,7 +246,7 @@ test("turn stop rejects payload beyond the execution target", () => {
   assert.throws(
     () =>
       createTurnStopCommand({
-        identity: { sessionId: "session-1", turnScopeId: "turn-1" },
+        identity: { ...ROOT_TURN_START_IDENTITY, sessionId: "session-1", turnScopeId: "turn-1" },
         concurrency: { expectedTurnRevision: 1 },
         stop: { partialAssistant: { content: "" } },
       }),
@@ -233,7 +256,7 @@ test("turn stop rejects payload beyond the execution target", () => {
 
 test("turn stop only targets an execution and never carries client output", () => {
   const input = {
-    identity: { sessionId: "session-1", turnScopeId: "turn-1" },
+    identity: { ...ROOT_TURN_START_IDENTITY, sessionId: "session-1", turnScopeId: "turn-1" },
     concurrency: { expectedTurnRevision: 1 },
   };
   const command = createTurnStopCommand({ ...input, stop: { executionId: " exec-1 " } });
@@ -261,7 +284,7 @@ test("protocol rejects legacy and unknown top-level fields", () => {
   );
 
   const command = createInteractionResponseCommand({
-    identity: { sessionId: "session-1" },
+    identity: { ...INTERACTION_IDENTITY, sessionId: "session-1" },
     interaction: { requestId: "request-1", response: { accepted: true } },
   });
   command.config = {};
@@ -271,7 +294,7 @@ test("protocol rejects legacy and unknown top-level fields", () => {
 test("protocol rejects ambiguous boolean strings", () => {
   const command = createTurnRunCommand({
     commandType: AGENT_COMMAND.SEND,
-    identity: { sessionId: "session-1", turnScopeId: "turn-1" },
+    identity: { ...ROOT_TURN_START_IDENTITY, sessionId: "session-1", turnScopeId: "turn-1" },
     input: { message: "hello", attachments: [] },
     preferences: {},
     presentation: { userMessageId: "user-1", presentationMessageId: "assistant-1" },
@@ -287,7 +310,11 @@ test("protocol rejects ambiguous boolean strings", () => {
 test("run preferences preserve an explicit disabled safety confirmation", () => {
   const command = createTurnRunCommand({
     commandType: AGENT_COMMAND.SEND,
-    identity: { sessionId: "session-1", turnScopeId: "turn-no-confirm" },
+    identity: {
+      ...ROOT_TURN_START_IDENTITY,
+      sessionId: "session-1",
+      turnScopeId: "turn-no-confirm",
+    },
     input: { message: "hello", attachments: [] },
     preferences: { safeConfirm: false },
     presentation: { userMessageId: "user-1", presentationMessageId: "assistant-1" },
@@ -301,7 +328,11 @@ test("run preferences preserve an explicit disabled safety confirmation", () => 
 test("run preferences carry safeConfirmLevel and reject invalid levels", () => {
   const command = createTurnRunCommand({
     commandType: AGENT_COMMAND.SEND,
-    identity: { sessionId: "session-1", turnScopeId: "turn-confirm-level" },
+    identity: {
+      ...ROOT_TURN_START_IDENTITY,
+      sessionId: "session-1",
+      turnScopeId: "turn-confirm-level",
+    },
     input: { message: "hello", attachments: [] },
     preferences: { safeConfirmLevel: "HIGH" },
     presentation: { userMessageId: "user-1", presentationMessageId: "assistant-1" },
@@ -320,6 +351,7 @@ test("runConfig preference contract requires every execution preference explicit
     allowUserInteraction: true,
     safeConfirm: true,
     sanitizeOutput: false,
+    streaming: false,
     frontendThresholdsEnabled: false,
     safeConfirmLevel: "medium",
     selectedPlugins: [],
@@ -341,7 +373,11 @@ test("runConfig preference contract requires every execution preference explicit
 test("run transport carries connector selection only as new Session creation state", () => {
   const command = createTurnRunCommand({
     commandType: AGENT_COMMAND.SEND,
-    identity: { sessionId: "session-1", turnScopeId: "turn-connectors" },
+    identity: {
+      ...ROOT_TURN_START_IDENTITY,
+      sessionId: "session-1",
+      turnScopeId: "turn-connectors",
+    },
     input: { message: "hello", attachments: [] },
     preferences: { selectedConnectorIds: ["con_untrusted_request"] },
     presentation: { userMessageId: "user-1", presentationMessageId: "assistant-1" },
@@ -359,7 +395,7 @@ test("run transport carries connector selection only as new Session creation sta
 test("run summary and task-check policy has one strict per-run transport shape", () => {
   const command = createTurnRunCommand({
     commandType: AGENT_COMMAND.SEND,
-    identity: { sessionId: "session-1", turnScopeId: "turn-summary" },
+    identity: { ...ROOT_TURN_START_IDENTITY, sessionId: "session-1", turnScopeId: "turn-summary" },
     input: { message: "summarize after one loop", attachments: [] },
     preferences: {
       frontendThresholdsEnabled: true,
@@ -392,7 +428,7 @@ test("run summary and task-check policy has one strict per-run transport shape",
 test("protocol rejects unknown nested fields and irrelevant command sections", () => {
   const command = createTurnRunCommand({
     commandType: AGENT_COMMAND.SEND,
-    identity: { sessionId: "session-1", turnScopeId: "turn-1" },
+    identity: { ...ROOT_TURN_START_IDENTITY, sessionId: "session-1", turnScopeId: "turn-1" },
     input: { message: "hello", attachments: [] },
     preferences: {},
     presentation: { userMessageId: "user-1", presentationMessageId: "assistant-1" },
@@ -412,7 +448,7 @@ test("continue requires an explicit continuation source", () => {
     () =>
       createTurnRunCommand({
         commandType: AGENT_COMMAND.CONTINUE,
-        identity: { sessionId: "session-1", turnScopeId: "turn-2" },
+        identity: { ...ROOT_TURN_START_IDENTITY, sessionId: "session-1", turnScopeId: "turn-2" },
         input: { message: "continue", attachments: [] },
         preferences: {},
         presentation: { userMessageId: "user-1", presentationMessageId: "assistant-1" },
@@ -426,7 +462,7 @@ test("continue requires an explicit continuation source", () => {
 test("turn-scoped command ids are derived by the protocol and cannot be supplied", () => {
   const input = {
     commandType: AGENT_COMMAND.SEND,
-    identity: { sessionId: "session-1", turnScopeId: "turn-derived" },
+    identity: { ...ROOT_TURN_START_IDENTITY, sessionId: "session-1", turnScopeId: "turn-derived" },
     input: { message: "hello", attachments: [] },
     preferences: {},
     presentation: { userMessageId: "user-1", presentationMessageId: "assistant-1" },
@@ -440,7 +476,11 @@ test("turn-scoped command ids are derived by the protocol and cannot be supplied
   assert.equal(command.commandId, "turn-derived");
   assert.equal(
     createTurnStopCommand({
-      identity: { sessionId: "session-1", turnScopeId: "turn-derived" },
+      identity: {
+        ...ROOT_TURN_START_IDENTITY,
+        sessionId: "session-1",
+        turnScopeId: "turn-derived",
+      },
       concurrency: { expectedTurnRevision: 1 },
       stop: {},
     }).commandId,
@@ -448,7 +488,7 @@ test("turn-scoped command ids are derived by the protocol and cannot be supplied
   );
   assert.equal(
     createInteractionResponseCommand({
-      identity: { sessionId: "session-1" },
+      identity: { ...INTERACTION_IDENTITY, sessionId: "session-1" },
       interaction: { requestId: "request-1", response: {} },
     }).commandId,
     "interaction:request-1",

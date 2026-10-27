@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { isPlainObject, text } from "@noobot/shared/value";
+import { CHANNEL_IDENTITY_KEYS } from "./constants.js";
 
 export const RECONNECT_CONTROL_ACTION = "reconnect";
 export const RECONNECT_CONTROL_PROTOCOL_VERSION = 1;
@@ -15,7 +16,7 @@ const TOP_LEVEL_KEYS = new Set([
   "identity",
   "knownLifecycleSequenceMap",
 ]);
-const IDENTITY_KEYS = new Set(["sessionId", "parentSessionId", "parentDialogProcessId"]);
+const IDENTITY_KEYS = new Set(CHANNEL_IDENTITY_KEYS);
 
 export function createReconnectControl({ requestId, identity, knownLifecycleSequenceMap }) {
   return parseReconnectControl({
@@ -45,7 +46,7 @@ function validateReconnectIdentity(identity, errors) {
       errors.push(`invalid_identity_field:${key}`);
     }
   }
-  if (!identity.sessionId && (identity.parentSessionId || identity.parentDialogProcessId)) {
+  if (!identity.sessionId && identity.parentSessionId) {
     errors.push("parent_identity_requires_session_id");
   }
 }

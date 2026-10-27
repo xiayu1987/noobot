@@ -30,7 +30,6 @@ function createApplySessionDetailHarness({ sessionId = "s-apply-mode", messages 
     messages,
     rawMessages: [],
   };
-  const activeSessionId = ref(sessionId);
   const sessions = ref([activeSession]);
   const turnRuntimeRegistry = ref(createTurnRuntimeRegistryState());
   const chatStore = createTurnRuntimeStoreActions(turnRuntimeRegistry, {
@@ -39,12 +38,10 @@ function createApplySessionDetailHarness({ sessionId = "s-apply-mode", messages 
   });
   const { applySessionDetail } = createSessionDetailApplicator({
     sessions,
-    activeSessionId,
     makeViewMessage: (message) => ({ ...message }),
     sessionTitleFromMessages: () => "title",
-    applyCompletedToolLogsToMessages: vi.fn(),
-    scrollBottom: vi.fn(),
-    isSameSessionIdentity: (a, b) => String(a) === String(b),
+    navigateToLastMessage: vi.fn(),
+    onSessionDetailApplied: vi.fn(),
     turnRuntimeRegistry,
     chatStore,
   });
@@ -158,17 +155,14 @@ describe("useChatEngine.session-detail", () => {
       messages: [],
       rawMessages: [],
     };
-    const activeSessionId = ref("s-renamed");
     const sessions = ref([activeSession]);
     const { applySessionDetail } = createSessionDetailApplicator({
       sessions,
-      activeSessionId,
       ...createTurnRuntimeStore(),
       makeViewMessage: (message) => ({ ...message }),
       sessionTitleFromMessages,
-      applyCompletedToolLogsToMessages: vi.fn(),
-      scrollBottom: vi.fn(),
-      isSameSessionIdentity: (a, b) => String(a) === String(b),
+      navigateToLastMessage: vi.fn(),
+      onSessionDetailApplied: vi.fn(),
     });
 
     applySessionDetail({
@@ -209,17 +203,14 @@ describe("useChatEngine.session-detail", () => {
       ],
       rawMessages: [],
     };
-    const activeSessionId = ref("s-apply-version");
     const sessions = ref([activeSession]);
     const { applySessionDetail } = createSessionDetailApplicator({
       sessions,
-      activeSessionId,
       ...createTurnRuntimeStore(),
       makeViewMessage: (message) => ({ ...message }),
       sessionTitleFromMessages: () => "title",
-      applyCompletedToolLogsToMessages: vi.fn(),
-      scrollBottom: vi.fn(),
-      isSameSessionIdentity: (a, b) => String(a) === String(b),
+      navigateToLastMessage: vi.fn(),
+      onSessionDetailApplied: vi.fn(),
     });
 
     applySessionDetail({
@@ -291,7 +282,6 @@ describe("useChatEngine.session-detail", () => {
         },
       ],
     };
-    const activeSessionId = ref("s-apply-same-scope-stopped");
     const sessions = ref([activeSession]);
     const registry = createTurnRuntimeRegistryState();
     applyTurnRuntimeEvent(registry, {
@@ -360,14 +350,12 @@ describe("useChatEngine.session-detail", () => {
     });
     const { applySessionDetail } = createSessionDetailApplicator({
       sessions,
-      activeSessionId,
       turnRuntimeRegistry,
       chatStore,
       makeViewMessage: (message) => ({ ...message }),
       sessionTitleFromMessages: () => "title",
-      applyCompletedToolLogsToMessages: vi.fn(),
-      scrollBottom: vi.fn(),
-      isSameSessionIdentity: (a, b) => String(a) === String(b),
+      navigateToLastMessage: vi.fn(),
+      onSessionDetailApplied: vi.fn(),
     });
 
     applySessionDetail({
@@ -440,17 +428,14 @@ describe("useChatEngine.session-detail", () => {
         },
       ],
     };
-    const activeSessionId = ref("s-apply-same-scope-completed");
     const sessions = ref([activeSession]);
     const { applySessionDetail } = createSessionDetailApplicator({
       sessions,
-      activeSessionId,
       ...createTurnRuntimeStore(),
       makeViewMessage: (message) => ({ ...message }),
       sessionTitleFromMessages: () => "title",
-      applyCompletedToolLogsToMessages: vi.fn(),
-      scrollBottom: vi.fn(),
-      isSameSessionIdentity: (a, b) => String(a) === String(b),
+      navigateToLastMessage: vi.fn(),
+      onSessionDetailApplied: vi.fn(),
     });
 
     applySessionDetail({

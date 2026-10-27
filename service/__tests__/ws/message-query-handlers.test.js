@@ -44,7 +44,6 @@ function command(overrides = {}) {
       sessionId: "session-q",
       parentSessionId: "parent-q",
       dialogProcessId: "d",
-      parentDialogProcessId: "",
       turnScopeId: "",
     },
     options: { terminalLimit: 3, knownSequence: 7 },

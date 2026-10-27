@@ -7,7 +7,11 @@ import { resolveTurnTerminalStateApi } from "../../../infrastructure/api/chat/ch
 import { isTerminalTurnEvent } from "@noobot/session-protocol";
 import { SESSION_RUN_EVENT } from "./run-state-machine/constants.js";
 import { terminalResolutionMetadata } from "./terminalResolutionMetadata.js";
-import { text as clean } from "@noobot/shared/value";
+import { text as clean, requireFunctionDependencies } from "@noobot/shared/value";
+import { isApiRequestError } from "@noobot/shared/request-error";
+
+const HTTP_TOO_MANY_REQUESTS = 429;
+const TERMINAL_RESOLUTION_FAILURE_COOLDOWN_MS = 1000;
 
 function keyOf(userId, sessionId, turnScopeId) {
   return `${clean(valueOf(userId))}::${clean(sessionId)}::${clean(turnScopeId)}`;
@@ -81,6 +85,10 @@ export function createTerminalResolutionCoordinator({
   onUnresolved = () => {},
   onTrace = () => {},
 } = {}) {
+  requireFunctionDependencies("createTerminalResolutionCoordinator", {
+    fetcher,
+    applyTurnTerminalResolution,
+  });
   const entries = new Map();
   let requestSequence = 0;
   let disposed = false;
@@ -123,10 +131,7 @@ export function createTerminalResolutionCoordinator({
     if (!entry.resolvedResult || comparison === null || comparison > 0) return null;
     const cached = entry.resolvedResult;
     if (cached.applied !== true && cached.retryable === true && entry.resolvedResponse) {
-      const reapplied = applyTurnTerminalResolution?.(entry.resolvedResponse) || {
-        applied: false,
-        reason: "resolution_apply_unavailable",
-      };
+      const reapplied = applyTurnTerminalResolution(entry.resolvedResponse);
       entry.resolvedResult = reapplied;
       return Promise.resolve(reapplied);
     }
@@ -257,10 +262,7 @@ export function createTerminalResolutionCoordinator({
     };
 
     const settleResolvedResponse = (response) => {
-      const result = applyTurnTerminalResolution?.(response) || {
-        applied: false,
-        reason: "resolution_apply_unavailable",
-      };
+      const result = applyTurnTerminalResolution(response);
       traceApplyResult(result);
       if (generation !== entry.generation) return result;
       entry.resolvedVersion = versionOf(response.turn);
@@ -276,7 +278,7 @@ export function createTerminalResolutionCoordinator({
     };
 
     const scheduleRetry = (response) => {
-      const delay = Math.max(0, Number(response.retryAfterMs || 250));
+      const delay = response.retryAfterMs;
       trace("stateMachine.terminal.retry", { ...identity, retry: retry + 1, delayMs: delay });
       let timerId;
       const retryPromise = new Promise((resolveRetry) => {
@@ -314,9 +316,12 @@ export function createTerminalResolutionCoordinator({
     };
 
     const settleFetchError = (error) => {
-      const status = Number(error?.status || error?.response?.status || 0);
-      const rateLimited = status === 429;
-      const retryAfterMs = Math.max(250, Number(error?.retryAfterMs || 0));
+      if (!isApiRequestError(error)) throw error;
+      const status = error.status;
+      const rateLimited = status === HTTP_TOO_MANY_REQUESTS;
+      const retryAfterMs = rateLimited
+        ? error.retryAfterMs
+        : TERMINAL_RESOLUTION_FAILURE_COOLDOWN_MS;
       const result = {
         applied: false,
         reason: rateLimited ? "terminal_resolution_rate_limited" : "terminal_resolution_failed",
@@ -331,7 +336,7 @@ export function createTerminalResolutionCoordinator({
         retryAfterMs,
       });
       if (generation === entry.generation) {
-        entry.cooldownUntil = Date.now() + (rateLimited ? retryAfterMs : 1000);
+        entry.cooldownUntil = Date.now() + retryAfterMs;
         entry.cooldownResult = result;
       }
       return result;
@@ -351,8 +356,7 @@ export function createTerminalResolutionCoordinator({
           { fetcher },
         ),
       )
-      .then(settleResponse)
-      .catch(settleFetchError)
+      .then(settleResponse, settleFetchError)
       .finally(() => {
         if (entry.inFlight === request) entry.inFlight = null;
       });

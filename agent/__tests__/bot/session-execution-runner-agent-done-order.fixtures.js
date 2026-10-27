@@ -30,7 +30,7 @@ import {
   MESSAGE_EVENT_WIRE_EVENT,
 } from "@noobot/event-protocol/message-event";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
-import { createTestSessionRunPayload } from "../helpers/session-run-payload.js";
+import { TEST_MESSAGE_TS, createTestSessionRunPayload } from "../helpers/session-run-payload.js";
 import { createAgentTurnResult } from "@noobot/agent-transport-protocol/agent-turn-result";
 
 export function createRunner({
@@ -178,6 +178,7 @@ export function createRunner({
       turnScopeId,
       messageOrigin: "natural",
       attachments: [],
+      ts: TEST_MESSAGE_TS,
     });
     return runner.runSession(
       createTestSessionRunPayload({

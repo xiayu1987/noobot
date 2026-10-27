@@ -32,9 +32,7 @@ export function createScopedAuthenticatedHttpService({ routePatterns = [] } = {}
   const allowedRoutes = routePatterns.map(compileRoutePattern).filter(Boolean);
   return Object.freeze({
     request(url = "", options = {}) {
-      if (!isFunction(authenticatedFetcher)) {
-        throw new Error("authenticated HTTP service is unavailable");
-      }
+      const fetcher = requireAuthenticatedFetcher();
       const parsed = new URL(String(url || ""), window.location.origin);
       const method = text(options?.method).toUpperCase();
       if (
@@ -47,13 +45,19 @@ export function createScopedAuthenticatedHttpService({ routePatterns = [] } = {}
           `authenticated HTTP route is not allowed: ${method || "<missing>"} ${parsed.pathname}`,
         );
       }
-      return authenticatedFetcher(`${parsed.pathname}${parsed.search}`, { ...options, method });
+      return fetcher(`${parsed.pathname}${parsed.search}`, { ...options, method });
     },
   });
 }
 
-export const authenticatedHttpService = Object.freeze({
-  configure({ fetcher = null } = {}) {
-    authenticatedFetcher = typeof fetcher === "function" ? fetcher : null;
-  },
-});
+export function configureAuthenticatedFetcher(fetcher) {
+  if (!isFunction(fetcher)) throw new Error("authenticated fetcher must be a function");
+  authenticatedFetcher = fetcher;
+}
+
+export function requireAuthenticatedFetcher() {
+  if (!isFunction(authenticatedFetcher)) {
+    throw new Error("authenticated HTTP service is unavailable");
+  }
+  return authenticatedFetcher;
+}

@@ -31,8 +31,8 @@ export const useChatStore = defineStore("chat", () => {
   const pendingInteractionRequest = ref(null);
   const pendingInteractionRequests = ref([]);
   const interactionSubmitting = ref(false);
-  const activeSession = computed(() =>
-    sessions.value.find((item) => item.sessionId === activeSessionId.value),
+  const activeSession = computed(
+    () => sessions.value.find((item) => item.sessionId === activeSessionId.value) ?? null,
   );
   let subSessions = null;
   function closePendingInteractionsForTerminalTurn(turn = {}) {

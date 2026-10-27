@@ -35,9 +35,9 @@ export function useChatList({
   navigateToLastMessage,
   refreshSessionConnectorsAsync,
   clearUploads,
-  notify = () => {},
-  onSessionDetailApplied = null,
-} = {}) {
+  notify,
+  onSessionDetailApplied,
+}) {
   const { translate } = useLocale();
   const { isSameSessionIdentity } = createSessionIdentityHelpers({ sessions });
 
@@ -59,13 +59,11 @@ export function useChatList({
 
   const { applySessionDetail } = createSessionDetailApplicator({
     sessions,
-    activeSessionId,
     turnRuntimeRegistry,
     chatStore,
     makeViewMessage,
     sessionTitleFromMessages,
     navigateToLastMessage,
-    isSameSessionIdentity,
     onSessionDetailApplied,
   });
 

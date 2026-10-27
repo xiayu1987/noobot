@@ -18,6 +18,10 @@ export const TURN_TERMINAL_RESOLVED_EVENT = "turn.terminal_resolved";
 const TERMINAL_STATE_VALUES = new Set(TURN_TERMINAL_STATES);
 const FAILED_TERMINAL_STATES = new Set(TURN_FAILED_STATES);
 
+function isPositiveInteger(value) {
+  return Number.isInteger(value) && value > 0;
+}
+
 export function createTurnTerminalResolution({
   commandId = "",
   sessionId = "",
@@ -25,11 +29,16 @@ export function createTurnTerminalResolution({
   resolved = false,
   retryable = false,
   reason = "",
-  retryAfterMs = 0,
+  retryAfterMs,
   turn = null,
   aggregateVersion = null,
   generatedAt = new Date().toISOString(),
 } = {}) {
+  if (retryable === true ? !isPositiveInteger(retryAfterMs) : retryAfterMs !== undefined) {
+    throw new TypeError(
+      "terminal resolution retryAfterMs must be a positive integer only when retryable",
+    );
+  }
   return {
     protocolVersion: TURN_TERMINAL_RESOLUTION_PROTOCOL_VERSION,
     eventType: TURN_TERMINAL_RESOLVED_EVENT,
@@ -39,7 +48,7 @@ export function createTurnTerminalResolution({
     resolved: resolved === true,
     retryable: retryable === true,
     reason: clean(reason),
-    retryAfterMs: Math.max(0, Number(retryAfterMs || 0)),
+    retryAfterMs: retryable === true ? retryAfterMs : 0,
     aggregateVersion: aggregateVersion == null ? null : Number(aggregateVersion),
     turn: turn ? snapshotTurn(turn) : null,
     generatedAt: clean(generatedAt),
@@ -55,6 +64,12 @@ export function validateTurnTerminalResolution(response = {}) {
   errors.push(...collectRequiredFieldErrors(response.commandId, "missing_command_id"));
   errors.push(...collectRequiredFieldErrors(response.sessionId, "missing_session_id"));
   errors.push(...collectRequiredFieldErrors(response.turnScopeId, "missing_turn_scope_id"));
+  if (
+    response.retryable === true
+      ? !isPositiveInteger(response.retryAfterMs)
+      : response.retryAfterMs !== 0
+  )
+    errors.push("invalid_retry_after_ms");
   if (response.resolved === true) {
     const turn = response.turn || {};
     const terminalStatus = turn.terminalStatus;

@@ -3,10 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { mergeAttachments } from "../../model/dialogProcessChain.js";
 import { text } from "@noobot/shared/value";
 
-export function createAssistantMessageHelpers({ translate, makeViewAttachments }) {
+export function createAssistantMessageHelpers({ translate }) {
   function applyAssistantFailureState(targetAssistantMessage, errorMessage = "") {
     if (!targetAssistantMessage) return;
     targetAssistantMessage.error = text(errorMessage);
@@ -17,19 +16,7 @@ export function createAssistantMessageHelpers({ translate, makeViewAttachments }
     }
   }
 
-  function mergeAssistantAttachments(targetAssistantMessage, attachments = []) {
-    if (!targetAssistantMessage || !Array.isArray(attachments) || !attachments.length) {
-      return;
-    }
-    const normalizedAttachments = makeViewAttachments(attachments);
-    targetAssistantMessage.attachments = mergeAttachments(
-      Array.isArray(targetAssistantMessage.attachments) ? targetAssistantMessage.attachments : [],
-      normalizedAttachments,
-    );
-  }
-
   return {
     applyAssistantFailureState,
-    mergeAssistantAttachments,
   };
 }

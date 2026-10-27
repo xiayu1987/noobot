@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { resolveParsedResultAccessMeta } from "../../../../../infrastructure/api/attachments/attachmentAccess.js";
 import {
   MARKDOWN_EXTS,
   IMAGE_EXTS,
@@ -121,8 +120,4 @@ export function isOfficeMime(mimeType = "") {
     mime.includes("opendocument") ||
     mime.includes("rtf")
   );
-}
-
-export function hasParsedResult(attachmentItem = {}) {
-  return Boolean(resolveParsedResultAccessMeta(attachmentItem));
 }

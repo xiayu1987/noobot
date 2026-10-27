@@ -4,12 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
+import { AGENT_COMMAND, ROOT_PARENT_SESSION_ID } from "@noobot/agent-transport-protocol";
 import {
   createHarness,
   assistantMessage,
   emitChannelState,
 } from "../helpers/useChatEngineHarness.js";
-import { StreamEventEnum, RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
+import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { FrontendRunState } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { createSessionListActions } from "../../../../../src/modules/session/model/list/sessionListActions.js";
 import {
@@ -27,6 +28,9 @@ import {
   selectTurnRuntimeByScope,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { SESSION_RUN_EVENT } from "../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
+import { jsonResponse } from "../../../helpers/jsonResponse.js";
+
+const SEND_REQUEST = Object.freeze({ commandType: AGENT_COMMAND.SEND });
 
 describe("useChatEngine.interaction-stop: terminal", () => {
   it("commits a child terminal notification from the authoritative terminal turn", async () => {
@@ -36,16 +40,15 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     const thinkingStartedAt = "2026-08-19T10:00:00.000Z";
     const thinkingFinishedAt = "2026-08-19T10:00:17.500Z";
     let releaseTerminalResolution;
-    const terminalResolutionFetcher = vi.fn(async () => ({
-      ok: true,
-      json: async () =>
+    const terminalResolutionFetcher = vi.fn(
+      () =>
         new Promise((resolve) => {
-          releaseTerminalResolution = resolve;
+          releaseTerminalResolution = (payload) => resolve(jsonResponse({ ok: true, ...payload }));
         }),
-    }));
+    );
     const { engine, turnRuntimeRegistry } = createHarness({
       sessionId: parentSessionId,
-      deps: { terminalResolutionFetcher },
+      deps: { authFetch: terminalResolutionFetcher },
     });
     const identity = {
       sessionId,
@@ -139,16 +142,15 @@ describe("useChatEngine.interaction-stop: terminal", () => {
       capabilities: { actionLocked: false, canStop: false },
     };
     let releaseResponse;
-    const terminalResolutionFetcher = vi.fn(async () => ({
-      ok: true,
-      json: async () =>
+    const terminalResolutionFetcher = vi.fn(
+      () =>
         new Promise((resolve) => {
-          releaseResponse = resolve;
+          releaseResponse = (payload) => resolve(jsonResponse({ ok: true, ...payload }));
         }),
-    }));
+    );
     const { engine, turnRuntimeRegistry, sessions } = createHarness({
       sessionId,
-      deps: { terminalResolutionFetcher },
+      deps: { authFetch: terminalResolutionFetcher },
     });
 
     const first = engine.resolveTurnTerminalState(sessionId, turnScopeId, terminalTurn);
@@ -206,9 +208,8 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     const localSessionId = "local-refresh-session";
     const sessionId = "3801ff60-0a8d-4dd8-903f-139febe37254";
     const turnScopeId = "client-turn:mryihoqc:3qrncu3i";
-    const terminalResolutionFetcher = vi.fn(async () => ({
-      ok: true,
-      json: async () => ({
+    const terminalResolutionFetcher = vi.fn(async () =>
+      jsonResponse({
         ok: true,
         protocolVersion: 2,
         eventType: "turn.terminal_resolved",
@@ -217,6 +218,8 @@ describe("useChatEngine.interaction-stop: terminal", () => {
         turnScopeId,
         resolved: true,
         retryable: false,
+        reason: "",
+        retryAfterMs: 0,
         aggregateVersion: 1,
         turn: {
           sessionId,
@@ -229,10 +232,10 @@ describe("useChatEngine.interaction-stop: terminal", () => {
           capabilities: { actionLocked: false, canStop: false },
         },
       }),
-    }));
+    );
     const { engine, activeSessionId, sessions, turnRuntimeRegistry } = createHarness({
       sessionId: localSessionId,
-      deps: { terminalResolutionFetcher },
+      deps: { authFetch: terminalResolutionFetcher },
     });
     sessions.value[0].isLocal = true;
     sessions.value[0].messages = [{ turnScopeId }];
@@ -264,9 +267,8 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     const sessionId = "backend-refresh-e2e";
     const localSessionId = sessionId;
     const turnScopeId = "client-turn:refresh-e2e";
-    const terminalResolutionFetcher = vi.fn(async () => ({
-      ok: true,
-      json: async () => ({
+    const terminalResolutionFetcher = vi.fn(async () =>
+      jsonResponse({
         ok: true,
         protocolVersion: 2,
         eventType: "turn.terminal_resolved",
@@ -275,6 +277,8 @@ describe("useChatEngine.interaction-stop: terminal", () => {
         turnScopeId,
         resolved: true,
         retryable: false,
+        reason: "",
+        retryAfterMs: 0,
         aggregateVersion: 1,
         turn: {
           sessionId,
@@ -287,10 +291,10 @@ describe("useChatEngine.interaction-stop: terminal", () => {
           capabilities: { actionLocked: false, canStop: false },
         },
       }),
-    }));
+    );
     const harness = createHarness({
       sessionId: localSessionId,
-      deps: { terminalResolutionFetcher },
+      deps: { authFetch: terminalResolutionFetcher },
     });
     harness.sessions.value[0].isLocal = true;
     harness.sessions.value[0].messages = [{ role: RoleEnum.ASSISTANT, turnScopeId, pending: true }];
@@ -312,13 +316,13 @@ describe("useChatEngine.interaction-stop: terminal", () => {
       userId: { value: "u-1" },
       authFetch: vi.fn(),
       ensureConnected: vi.fn(() => true),
-      getSessionsApi: vi.fn(async () => ({
-        ok: true,
-        json: async () => ({
+      getSessionsApi: vi.fn(async () =>
+        jsonResponse({
           ok: true,
           sessions: [
             {
               sessionId,
+              parentSessionId: ROOT_PARENT_SESSION_ID,
               caller: RoleEnum.USER,
               updatedAt: "2026-07-24T05:42:15.485Z",
               turnLifecycleSnapshot: {
@@ -330,7 +334,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
             },
           ],
         }),
-      })),
+      ),
       deleteSessionApi: vi.fn(),
       renameSessionApi: vi.fn(),
       createConnectorPanelState: vi.fn(() => ({})),
@@ -339,6 +343,8 @@ describe("useChatEngine.interaction-stop: terminal", () => {
       applySessionDetail: vi.fn(),
       createLocalSession: vi.fn(),
       refreshSessionConnectorsAsync: vi.fn(),
+      navigateToLastMessage: vi.fn(),
+      onSessionDetailApplied: vi.fn(),
       translate: (key) => key,
       notify: vi.fn(),
     });
@@ -375,17 +381,13 @@ describe("useChatEngine.interaction-stop: terminal", () => {
       emitChannelState(onEvent, "local-flight", "dp-flight", "stopping");
       emitChannelState(onEvent, "local-flight", "dp-flight", "reconnecting");
       emitChannelState(onEvent, "local-flight", "dp-flight", "user_stopped");
-      onEvent({
-        event: StreamEventEnum.USER_STOPPED,
-        data: { sessionId: "local-flight", dialogProcessId: "dp-flight" },
-      });
     });
     const { engine, activeSession, turnRuntimeRegistry } = createHarness({
       sessionId: "local-flight",
       stream,
     });
 
-    await engine.send();
+    await engine.send(SEND_REQUEST);
 
     const assistant = assistantMessage(activeSession);
     expect(assistant).not.toHaveProperty("terminalOutcome");
@@ -402,7 +404,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
       stream,
     });
 
-    await engine.send();
+    await engine.send(SEND_REQUEST);
 
     expect(selectSessionTurnRuntime(turnRuntimeRegistry.value, "local-stopping")).toMatchObject({
       sending: true,
@@ -430,7 +432,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
       },
     });
 
-    await engine.send();
+    await engine.send(SEND_REQUEST);
 
     const assistant = assistantMessage(activeSession);
     expect(assistant?.terminalOutcome).not.toBe("generated");
@@ -444,17 +446,6 @@ describe("useChatEngine.interaction-stop: terminal", () => {
   it("does not project a backend terminal onto an unreconciled local Session", async () => {
     const stream = vi.fn(async (_payload, onEvent) => {
       emitChannelState(onEvent, "backend-x", "dp-x", "completed", { seq: 2 });
-      onEvent({
-        event: StreamEventEnum.DONE,
-        data: {
-          sessionId: "backend-x",
-          dialogProcessId: "dp-x",
-          messages: [
-            { role: RoleEnum.USER, content: "hello" },
-            { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-x", content: "ok" },
-          ],
-        },
-      });
     });
     const { engine, activeSession, sending, deps } = createHarness({
       sessionId: "local-x",
@@ -466,9 +457,9 @@ describe("useChatEngine.interaction-stop: terminal", () => {
       },
     });
 
-    await engine.send();
+    await engine.send(SEND_REQUEST);
 
-    expect(deps.terminalResolutionFetcher).toHaveBeenCalledTimes(0);
+    expect(deps.authFetch).toHaveBeenCalledTimes(0);
     expect(sending.value).toBe(true);
     const assistant = assistantMessage(activeSession);
     expect(assistant).not.toHaveProperty("pending");
@@ -482,6 +473,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
       sessions: [
         {
           sessionId: "local-state-only",
+          parentSessionId: ROOT_PARENT_SESSION_ID,
           messages: [
             { role: RoleEnum.USER, content: "hello" },
             {
@@ -511,7 +503,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
       },
     });
 
-    await expect(engine.send()).resolves.toBe(true);
+    await expect(engine.send(SEND_REQUEST)).resolves.toBe(true);
 
     const assistant = assistantMessage(activeSession);
     expect(sending.value).toBe(true);
@@ -520,14 +512,13 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     expect(applySessionDetail).not.toHaveBeenCalled();
   });
 
-  it("consumes stream ERROR as data-plane content without resolving the Turn", async () => {
+  it("projects a stream rejection as assistant error without resolving the Turn", async () => {
     const errorData = {
       error: "invalid tool input",
       sessionId: "s-error",
       dialogProcessId: "dp-error",
     };
-    const stream = vi.fn(async (_payload, onEvent) => {
-      onEvent({ event: StreamEventEnum.ERROR, data: errorData });
+    const stream = vi.fn(async () => {
       const error = new Error(errorData.error);
       error.data = errorData;
       throw error;
@@ -540,7 +531,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
       deps: { fetchSessionDetail, applySessionDetail },
     });
 
-    await expect(engine.send()).resolves.toBe(false);
+    await expect(engine.send(SEND_REQUEST)).resolves.toBe(false);
 
     const botMessage = assistantMessage(activeSession);
     expect(botMessage.dialogProcessId).not.toBe("dp-error");

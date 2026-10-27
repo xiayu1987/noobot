@@ -40,8 +40,8 @@ function onClearUploads() {
   emit("clear-uploads");
 }
 
-function onRemoveUpload(draftAttachmentId) {
-  emit("remove-upload", draftAttachmentId);
+function onRemoveUpload(clientAttachmentId) {
+  emit("remove-upload", clientAttachmentId);
 }
 
 defineExpose({
@@ -70,7 +70,7 @@ defineExpose({
       <div
         class="attachment-pill noobot-flat-chip"
         v-for="uploadFile in uploadFiles"
-        :key="uploadFile.draftAttachmentId"
+        :key="uploadFile.clientAttachmentId"
       >
         <span class="attachment-name" :title="uploadFile.name">{{ uploadFile.name }}</span>
         <button
@@ -78,7 +78,7 @@ defineExpose({
           class="attachment-remove-btn noobot-icon-button noobot-flat-icon-btn"
           :title="translate('composer.removeAttachment', { name: uploadFile.name || '' })"
           :aria-label="translate('composer.removeAttachment', { name: uploadFile.name || '' })"
-          @click.stop="onRemoveUpload(uploadFile.draftAttachmentId)"
+          @click.stop="onRemoveUpload(uploadFile.clientAttachmentId)"
         >
           <el-icon><Close /></el-icon>
         </button>

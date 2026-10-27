@@ -20,7 +20,8 @@ import {
   sessionRuntimeId,
 } from "../../../chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { clearSessionTurnUiStates } from "../../../chat/runtime/engine/turnUiStore.js";
-import { text } from "@noobot/shared/value";
+import { requireFunctionDependencies, text } from "@noobot/shared/value";
+import { isApiRequestError, readApiResponseEnvelope } from "@noobot/shared/request-error";
 
 export function createSessionListActions({
   sessions,
@@ -41,10 +42,27 @@ export function createSessionListActions({
   createLocalSession,
   refreshSessionConnectorsAsync,
   navigateToLastMessage,
-  onSessionDetailApplied = null,
+  onSessionDetailApplied,
   translate,
-  notify = () => {},
-} = {}) {
+  notify,
+}) {
+  requireFunctionDependencies("createSessionListActions", {
+    ensureConnected,
+    getSessionsApi,
+    deleteSessionApi,
+    renameSessionApi,
+    createConnectorPanelState,
+    sessionTitleFromMessages,
+    fetchSessionDetail,
+    applySessionDetail,
+    createLocalSession,
+    refreshSessionConnectorsAsync,
+    navigateToLastMessage,
+    onSessionDetailApplied,
+    translate,
+    notify,
+  });
+
   async function selectSession(sessionId, options = {}) {
     const {
       force = false,
@@ -68,11 +86,11 @@ export function createSessionListActions({
     activeSessionId.value = targetPrimaryId;
     if (target.isLocal) {
       refreshSessionConnectorsAsync(targetPrimaryId);
-      if (shouldNavigateToLastMessage) navigateToLastMessage?.();
+      if (shouldNavigateToLastMessage) navigateToLastMessage();
       return;
     }
     if (target.loaded && !force) {
-      onSessionDetailApplied?.({
+      onSessionDetailApplied({
         detail: {
           sessionId: target.sessionId || targetPrimaryId,
           sessions: target.sessionDocs || [],
@@ -83,33 +101,174 @@ export function createSessionListActions({
         normalizedDetailMessages: Array.isArray(target.messages) ? target.messages : [],
       });
       refreshSessionConnectorsAsync(targetPrimaryId);
-      if (shouldNavigateToLastMessage) navigateToLastMessage?.();
+      if (shouldNavigateToLastMessage) navigateToLastMessage();
       return;
     }
 
     if (!silent) loadingSessionDetail.value = true;
+    let detail;
     try {
-      const detailSessionId = text(target.sessionId || sessionId);
-      const detail = await fetchSessionDetail(detailSessionId, {
+      detail = await fetchSessionDetail(text(target.sessionId || sessionId), {
         source: "selectSession",
         force,
         requireFresh,
         allowLoadedSnapshot: true,
       });
-      if (detail) {
-        applySessionDetail(detail, {
-          navigateToLastMessage: shouldNavigateToLastMessage,
-        });
-      }
-      refreshSessionConnectorsAsync(targetPrimaryId);
     } catch (error) {
-      notify({
-        type: "error",
-        message: error.message || translate("chat.loadSessionDetailFailed"),
-      });
+      if (!isApiRequestError(error)) throw error;
+      notify({ type: "error", message: error.message });
+      return;
     } finally {
       if (!silent) loadingSessionDetail.value = false;
     }
+    if (detail) {
+      applySessionDetail(detail, {
+        navigateToLastMessage: shouldNavigateToLastMessage,
+      });
+    }
+    refreshSessionConnectorsAsync(targetPrimaryId);
+  }
+
+  function reportSessionListRequestFailure(error) {
+    notify({ type: "error", message: error.message });
+    if (!sessions.value.length) createLocalSession();
+    return false;
+  }
+
+  async function requestSessionListData() {
+    try {
+      return {
+        status: "loaded",
+        data: await readApiResponseEnvelope(
+          await getSessionsApi({ userId: userId.value }, { fetcher: authFetch }),
+        ),
+      };
+    } catch (error) {
+      if (!isApiRequestError(error)) throw error;
+      return { status: "failed", failure: reportSessionListRequestFailure(error) };
+    }
+  }
+
+  function buildNextSessionList({ data, existingSessionsById }) {
+    const persistedSessionIds = new Set();
+    const nextSessions = data.sessions
+      .filter((sessionItem) => sessionItem.caller === RoleEnum.USER)
+      .sort(
+        (leftSession, rightSession) =>
+          parseTimeMs(rightSession.updatedAt) - parseTimeMs(leftSession.updatedAt),
+      )
+      .map((sessionItem) => {
+        const mappedSession = mapSummaryToSession(sessionItem, {
+          sessionTitleFromMessages,
+          createConnectorPanelState,
+        });
+        persistedSessionIds.add(mappedSession.sessionId);
+        return reconcileSessionObject(
+          mappedSession,
+          existingSessionsById.get(mappedSession.sessionId),
+          {
+            sessionTitleFromMessages,
+          },
+        );
+      });
+    const retainedLocalSessions = sessions.value.filter(
+      (session) => session.isLocal === true && !persistedSessionIds.has(session.sessionId),
+    );
+    return { nextSessions: [...nextSessions, ...retainedLocalSessions], persistedSessionIds };
+  }
+
+  function revokeReplacedSessionPreviews(existingSessionsById) {
+    for (const session of sessions.value) {
+      const existingSession = existingSessionsById.get(session.sessionId);
+      if (existingSession && existingSession.messages === session.messages) continue;
+      revokeMessagePreviewUrls(session.messages);
+    }
+  }
+
+  async function resolveRequestedSessionDetail(requestedSessionId, nextSessions) {
+    if (!requestedSessionId || findSessionByAnyIdInList(nextSessions, requestedSessionId)) {
+      return { status: "skipped" };
+    }
+    let detail;
+    try {
+      detail = await fetchSessionDetail(requestedSessionId, {
+        source: "explicitSessionRoute",
+        requireFresh: true,
+        requireExists: false,
+      });
+    } catch (error) {
+      if (!isApiRequestError(error)) throw error;
+      return { status: "failed", failure: reportSessionListRequestFailure(error) };
+    }
+    if (!detail) {
+      return { status: "missing" };
+    }
+    const resolvedSessionId = text(detail.sessionId) || requestedSessionId;
+    const requestedSessionDoc = detail.sessions.find(
+      (doc) => text(doc.sessionId) === resolvedSessionId,
+    );
+    if (!requestedSessionDoc) {
+      throw new TypeError("requested_session_document_missing");
+    }
+    return { status: "loaded", detail, resolvedSessionId, requestedSessionDoc };
+  }
+
+  function insertRequestedSession(requestedSessionDoc, persistedSessionIds) {
+    const requestedSession = mapSummaryToSession(requestedSessionDoc, {
+      sessionTitleFromMessages,
+      createConnectorPanelState,
+    });
+    sessions.value.unshift(requestedSession);
+    persistedSessionIds.add(requestedSession.sessionId);
+  }
+
+  async function loadSessionList(
+    preferredActiveId,
+    { silent, shouldNavigateToLastMessage, forceCurrentSessionRerender },
+  ) {
+    const prevActiveId = String(preferredActiveId || activeSessionId.value || "");
+    const requestedSessionId = text(preferredActiveId);
+
+    const listResult = await requestSessionListData();
+    if (listResult.status === "failed") return listResult.failure;
+
+    const existingSessionsById = buildSessionIdentityMap(sessions.value);
+    const { nextSessions, persistedSessionIds } = buildNextSessionList({
+      data: listResult.data,
+      existingSessionsById,
+    });
+    sessions.value.splice(0, sessions.value.length, ...nextSessions);
+    revokeReplacedSessionPreviews(existingSessionsById);
+
+    const requestedResult = await resolveRequestedSessionDetail(requestedSessionId, nextSessions);
+    if (requestedResult.status === "failed") return requestedResult.failure;
+
+    if (requestedResult.status === "loaded") {
+      insertRequestedSession(requestedResult.requestedSessionDoc, persistedSessionIds);
+    }
+    if (!sessions.value.length) {
+      createLocalSession();
+      return true;
+    }
+    if (requestedResult.status === "loaded") {
+      activeSessionId.value = requestedResult.resolvedSessionId;
+      applySessionDetail(requestedResult.detail, {
+        navigateToLastMessage: shouldNavigateToLastMessage,
+      });
+      refreshSessionConnectorsAsync(requestedResult.resolvedSessionId);
+      return true;
+    }
+
+    const retainedPrimaryId = findSessionByAnyIdInList(sessions.value, prevActiveId)
+      ? resolveSessionPrimaryIdInList(sessions.value, prevActiveId)
+      : "";
+    await selectSession(retainedPrimaryId || sessions.value[0].sessionId, {
+      force: forceCurrentSessionRerender,
+      silent,
+      navigateToLastMessage: shouldNavigateToLastMessage,
+      requireFresh: forceCurrentSessionRerender,
+    });
+    return true;
   }
 
   async function fetchSessions(preferredActiveId = "", options = {}) {
@@ -121,108 +280,11 @@ export function createSessionListActions({
     if (!ensureConnected()) return false;
     if (!silent) loadingSessions.value = true;
     try {
-      const prevActiveId = String(preferredActiveId || activeSessionId.value || "");
-      const res = await getSessionsApi({ userId: userId.value }, { fetcher: authFetch });
-      if (!res.ok) throw new Error(translate("chat.getSessionsHttpFailed", { status: res.status }));
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.error || translate("chat.getSessionsFailed"));
-
-      const existingSessionsById = buildSessionIdentityMap(sessions.value);
-      const persistedSessionIds = new Set();
-      const requestedSessionId = text(preferredActiveId);
-      let requestedSessionDetail = null;
-      const nextSessions = (data.sessions || [])
-        .filter((sessionItem) => String(sessionItem?.caller || "") === RoleEnum.USER)
-        .sort(
-          (leftSession, rightSession) =>
-            parseTimeMs(rightSession.updatedAt) - parseTimeMs(leftSession.updatedAt),
-        )
-        .map((sessionItem) => {
-          const mappedSession = mapSummaryToSession(sessionItem, {
-            sessionTitleFromMessages,
-            createConnectorPanelState,
-          });
-          persistedSessionIds.add(mappedSession.sessionId);
-          const existing = existingSessionsById.get(mappedSession.sessionId);
-          return reconcileSessionObject(mappedSession, existing, { sessionTitleFromMessages });
-        });
-      nextSessions.push(
-        ...sessions.value.filter(
-          (session) =>
-            session?.isLocal === true && !persistedSessionIds.has(String(session.sessionId || "")),
-        ),
-      );
-
-      sessions.value.splice(0, sessions.value.length, ...nextSessions);
-
-      for (const session of sessions.value) {
-        const existingSession = existingSessionsById.get(String(session?.sessionId || ""));
-        if (existingSession && existingSession.messages === session.messages) continue;
-        revokeMessagePreviewUrls(session.messages || []);
-      }
-
-      if (requestedSessionId && !findSessionByAnyIdInList(nextSessions, requestedSessionId)) {
-        requestedSessionDetail = await fetchSessionDetail(requestedSessionId, {
-          source: "explicitSessionRoute",
-          requireFresh: true,
-          requireExists: false,
-        });
-      }
-      if (requestedSessionDetail) {
-        const requestedSessionDoc =
-          (Array.isArray(requestedSessionDetail?.sessions)
-            ? requestedSessionDetail.sessions
-            : []
-          ).find((doc) => text(doc?.sessionId) === requestedSessionId) ||
-          requestedSessionDetail?.sessions?.[0] ||
-          {};
-        const resolvedRequestedSessionId = String(
-          requestedSessionDetail?.sessionId || requestedSessionId,
-        ).trim();
-        const requestedSession = mapSummaryToSession(
-          {
-            ...requestedSessionDoc,
-            sessionId: resolvedRequestedSessionId,
-            caller: requestedSessionDoc.caller || RoleEnum.USER,
-          },
-          { sessionTitleFromMessages, createConnectorPanelState },
-        );
-        sessions.value.unshift(requestedSession);
-        persistedSessionIds.add(resolvedRequestedSessionId);
-      }
-
-      if (!sessions.value.length) {
-        createLocalSession();
-        return true;
-      }
-      if (requestedSessionDetail) {
-        const resolvedRequestedSessionId = String(
-          requestedSessionDetail.sessionId || requestedSessionId,
-        ).trim();
-        activeSessionId.value = resolvedRequestedSessionId;
-        applySessionDetail(requestedSessionDetail, {
-          navigateToLastMessage: shouldNavigateToLastMessage,
-        });
-        refreshSessionConnectorsAsync(resolvedRequestedSessionId);
-        return true;
-      }
-      const keepActive = Boolean(
-        prevActiveId && findSessionByAnyIdInList(sessions.value, prevActiveId),
-      );
-      const nextId = keepActive
-        ? resolveSessionPrimaryIdInList(sessions.value, prevActiveId)
-        : sessions.value[0].sessionId;
-      await selectSession(nextId, {
-        force: forceCurrentSessionRerender,
+      return await loadSessionList(preferredActiveId, {
         silent,
-        navigateToLastMessage: shouldNavigateToLastMessage,
-        requireFresh: forceCurrentSessionRerender,
+        shouldNavigateToLastMessage,
+        forceCurrentSessionRerender,
       });
-      return true;
-    } catch (error) {
-      notify({ type: "error", message: error.message || translate("chat.loadSessionsFailed") });
-      if (!sessions.value.length) createLocalSession();
-      return false;
     } finally {
       if (!silent) loadingSessions.value = false;
     }
@@ -252,14 +314,12 @@ export function createSessionListActions({
     }
     if (!ensureConnected()) return false;
     const resolvedSessionId = String(targetSession.sessionId || targetSessionId).trim();
-    const res = await renameSessionApi(
-      { userId: userId.value, sessionId: resolvedSessionId, title: normalizedTitle },
-      { fetcher: authFetch },
+    await readApiResponseEnvelope(
+      await renameSessionApi(
+        { userId: userId.value, sessionId: resolvedSessionId, title: normalizedTitle },
+        { fetcher: authFetch },
+      ),
     );
-    const data = await res.json();
-    if (!res.ok || !data.ok) {
-      throw new Error(data.error || translate("common.renameSessionFailed"));
-    }
     await fetchSessions(targetSessionId);
     return true;
   }
@@ -294,14 +354,12 @@ export function createSessionListActions({
     const fallbackNextSessionId = isDeletingActive
       ? String(sessions.value[index + 1]?.sessionId || sessions.value[index - 1]?.sessionId || "")
       : String(activeSessionId.value || "");
-    const res = await deleteSessionApi(
-      { userId: userId.value, sessionId: targetSessionId },
-      { fetcher: authFetch },
+    await readApiResponseEnvelope(
+      await deleteSessionApi(
+        { userId: userId.value, sessionId: targetSessionId },
+        { fetcher: authFetch },
+      ),
     );
-    const data = await res.json();
-    if (!res.ok || !data.ok) {
-      throw new Error(data.error || translate("chat.deleteSessionFailed"));
-    }
 
     removeSessionRuntime(turnRuntimeRegistry.value, runtimeSessionId);
     clearSessionTurnUiStates(runtimeSessionId);

@@ -9,6 +9,7 @@ import BaseMarkdownContent from "../../../../../../src/shared/ui/BaseMarkdownCon
 import { useMarkdownRenderer } from "../../../../../../src/modules/chat/composables/message/useMarkdownRenderer.js";
 import { createFileDownloadController } from "../../../../../../src/modules/chat/composables/message/useMessagePreview/file-download-controller.js";
 import { attachmentService } from "../../../../../../src/infrastructure/api/attachments/attachmentService.js";
+import { configureAuthenticatedFetcher } from "../../../../../../src/infrastructure/http/authenticatedHttpService.js";
 
 vi.mock("../../../../../../src/shared/utils/mermaid-renderer.js", () => ({
   renderMermaidInElement: vi.fn(),
@@ -35,7 +36,6 @@ describe("message workspace file links", () => {
   });
   afterEach(() => {
     wrappers.splice(0).forEach((wrapper) => wrapper.unmount());
-    attachmentService.configure();
     vi.restoreAllMocks();
   });
 
@@ -49,7 +49,7 @@ describe("message workspace file links", () => {
         headers: new Headers({ "content-disposition": `attachment; filename="${name}"` }),
         blob: async () => blob,
       }));
-      attachmentService.configure({ fetcher });
+      configureAuthenticatedFetcher(fetcher);
       const notify = vi.fn();
       const { onDownloadWorkspacePath } = createFileDownloadController({
         userId: "admin",
@@ -84,7 +84,7 @@ describe("message workspace file links", () => {
     "rejects workspace links outside the declared workspace before requesting a file",
     async (path) => {
       const fetcher = vi.fn();
-      attachmentService.configure({ fetcher });
+      configureAuthenticatedFetcher(fetcher);
       const notify = vi.fn();
       const { onDownloadWorkspacePath } = createFileDownloadController({
         userId: "alice",

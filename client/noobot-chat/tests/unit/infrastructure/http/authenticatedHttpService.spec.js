@@ -5,7 +5,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  authenticatedHttpService,
+  configureAuthenticatedFetcher,
   createScopedAuthenticatedHttpService,
 } from "../../../../src/infrastructure/http/authenticatedHttpService.js";
 
@@ -14,7 +14,7 @@ describe("scoped authenticated HTTP service", () => {
 
   beforeEach(() => {
     fetcher.mockReset();
-    authenticatedHttpService.configure({ fetcher });
+    configureAuthenticatedFetcher(fetcher);
   });
 
   it("allows a declared same-origin GET route and preserves query parameters", async () => {
@@ -69,9 +69,11 @@ describe("scoped authenticated HTTP service", () => {
     );
   });
 
-  it("fails closed when the host fetcher is unavailable", () => {
-    authenticatedHttpService.configure({ fetcher: null });
-    const service = createScopedAuthenticatedHttpService({
+  it("fails closed when the host fetcher is unavailable", async () => {
+    vi.resetModules();
+    const unconfigured =
+      await import("../../../../src/infrastructure/http/authenticatedHttpService.js");
+    const service = unconfigured.createScopedAuthenticatedHttpService({
       routePatterns: [
         {
           method: "GET",
@@ -83,6 +85,12 @@ describe("scoped authenticated HTTP service", () => {
     expect(() =>
       service.request("/api/internal/session/admin/s/thinking-detail", { method: "GET" }),
     ).toThrow("authenticated HTTP service is unavailable");
+  });
+
+  it("rejects configuration without a fetcher function", () => {
+    expect(() => configureAuthenticatedFetcher(null)).toThrow(
+      "authenticated fetcher must be a function",
+    );
   });
 
   it("authorizes each declared method independently", async () => {

@@ -70,7 +70,8 @@ function createFakeTransport(script, signalSource) {
 }
 
 test("run command passes the shared protocol validation for send and continue", () => {
-  const identity = createCliTurnIdentity();
+  assert.throws(() => createCliTurnIdentity({ sessionId: "" }), /cli_session_id_required/);
+  const identity = createCliTurnIdentity({ sessionId: "session-new" });
   assert.match(identity.turnScopeId, /^cli-turn:/);
   const send = buildRunCommand({
     invocation: parseCliArgs(["hello"]),
@@ -133,7 +134,6 @@ test("tracker ignores activity deltas which belong to the activity timeline", ()
 
 test("interaction classification and response shapes", () => {
   assert.equal(classifyInteractionRequest({ lifecycle: "resolved" }).kind, "ignore");
-  assert.equal(classifyInteractionRequest({ ackMode: "auto" }).kind, "ignore");
   assert.equal(classifyInteractionRequest({}, { allowInteraction: false }).kind, "unavailable");
   assert.equal(
     classifyInteractionRequest({ requireEncryption: true }, { allowInteraction: true }).reason,
@@ -177,7 +177,7 @@ test("text renderer streams deltas and stream-json passes packets verbatim", () 
 async function runScripted(script, options = {}) {
   const signalSource = new EventEmitter();
   const transport = createFakeTransport(script, signalSource);
-  const identity = createCliTurnIdentity();
+  const identity = createCliTurnIdentity({ sessionId: "session-cli" });
   const command = buildRunCommand({
     invocation: parseCliArgs(["hello"]),
     identity,
@@ -225,7 +225,7 @@ test("Ctrl-C after acceptance sends turn.stop with the latest revision", async (
   const run = await promise;
   const stop = transport.sent.find((item) => item.commandType === AGENT_COMMAND.STOP);
   assert.equal(stop.concurrency.expectedTurnRevision, 2);
-  assert.equal(stop.identity.dialogProcessId, "dp-1");
+  assert.equal(Object.hasOwn(stop.identity, "dialogProcessId"), false);
   assert.equal(stop.stop.executionId, "ex-1");
   assert.equal(run.exitCode, CLI_EXIT_CODE.STOPPED);
 });
@@ -266,7 +266,6 @@ test("interaction is answered with interaction.response; unavailable stops with 
         requestId: "r1",
         dialogProcessId: "dp-1",
         lifecycle: "pending",
-        ackMode: "manual",
       },
     },
   };

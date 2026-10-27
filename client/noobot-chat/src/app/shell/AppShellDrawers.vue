@@ -48,12 +48,7 @@ function handleMobileNavigatorClose() {
     destroy-on-close
     class="workspace-drawer noobot-side-drawer"
   >
-    <component
-      :is="drawer.component"
-      v-bind="drawer.props"
-      @workspace-reset="drawer.onWorkspaceReset?.()"
-      @changed="drawer.onConnectorRegistryChanged?.()"
-    />
+    <component :is="drawer.component" v-bind="drawer.props" v-on="drawer.listeners" />
   </el-drawer>
 
   <el-drawer

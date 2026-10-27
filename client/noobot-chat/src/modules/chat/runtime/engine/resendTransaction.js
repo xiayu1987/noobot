@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createSecureId } from "@noobot/shared/secure-identity";
 import { normalizeTrimmedString } from "./utils.js";
 import { SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
 import {
@@ -14,7 +13,8 @@ import { createSessionAggregateVersionManager } from "./sessionAggregateVersionM
 import { prepareResendTransaction } from "./resendPreparation.js";
 import { executeResendReplacement } from "./resendExecution.js";
 import { createReplaceTurnRequester } from "./resendTurnRequest.js";
-import { text } from "@noobot/shared/value";
+import { requireFunctionDependencies, text } from "@noobot/shared/value";
+import { createTurnScopeId } from "./sendFlowSupport.js";
 
 export { resolveKeptAttachments } from "./resendAttachments.js";
 
@@ -31,13 +31,9 @@ function operationSeed({ sessionId, turnScopeId }) {
   };
 }
 
-function ownsMessageOperation(messageOperationStore, operation = null) {
-  if (!operation || typeof messageOperationStore?.getActiveOperation !== "function") return true;
-  return messageOperationStore.getActiveOperation(operation.sessionId)?.opId === operation.opId;
-}
-
-function createTurnScopeId() {
-  return createSecureId("client-turn");
+function ownsMessageOperation(messageOperationStore, operation) {
+  const activeOperation = messageOperationStore.getActiveOperation(operation.sessionId);
+  return activeOperation !== null && activeOperation.opId === operation.opId;
 }
 
 export function createResendMessageTransaction({
@@ -57,12 +53,23 @@ export function createResendMessageTransaction({
   turnRuntimeRegistry,
   removeWorkflowOwnersForReplacedTurns,
 }) {
+  requireFunctionDependencies("createResendMessageTransaction", {
+    applyRunStateEvent,
+    applySessionDetail,
+    authFetch,
+    buildMonotonicMessageAnchor,
+    prepareMonotonicMessageAction,
+    replaceSessionTurnApi,
+    resolveMonotonicUserTarget,
+    send,
+    removeWorkflowOwnersForReplacedTurns,
+  });
   const sessionAggregateVersionManager = createSessionAggregateVersionManager({
     activeSession,
     log: (event, payload) =>
       logResendDebug(`resend.${event}`, () => ({
         ...payload,
-        messages: summarizeDebugMessages(activeSession?.value?.messages),
+        messages: summarizeDebugMessages(activeSession.value.messages),
       })),
   });
   const requestReplaceTurn = createReplaceTurnRequester({
@@ -72,28 +79,28 @@ export function createResendMessageTransaction({
     userId,
   });
 
-  async function resendMonotonicMessage(targetMessage = {}, editedContent = "", options = {}) {
+  async function resendMonotonicMessage(targetMessage, editedContent, options) {
     const normalizedText = text(editedContent);
     if (!normalizedText) return false;
 
-    const userTargetMessage = resolveMonotonicUserTarget?.(targetMessage);
+    const userTargetMessage = resolveMonotonicUserTarget(targetMessage);
     if (!userTargetMessage) return false;
-    const originalSession = activeSession?.value;
-    const originalInputValue = input?.value;
+    const originalSession = activeSession.value;
+    const originalInputValue = input.value;
     const sessionId = resolveSessionId(activeSessionId);
-    const resendTurnScopeId = normalizeTrimmedString(options?.turnScopeId) || createTurnScopeId();
-    const operation = messageOperationStore?.registerOperation(
+    const resendTurnScopeId = createTurnScopeId();
+    const operation = messageOperationStore.registerOperation(
       operationSeed({
         sessionId,
         turnScopeId: resendTurnScopeId,
       }),
     );
-    if (!normalizeTrimmedString(operation?.opId)) {
+    if (!normalizeTrimmedString(operation.opId)) {
       throw new TypeError("resend command registration failed: missing_command_id");
     }
     const operationGuard = {
       owns: () => ownsMessageOperation(messageOperationStore, operation),
-      complete: () => messageOperationStore?.completeOperation(operation.opId),
+      complete: () => messageOperationStore.completeOperation(operation.opId),
     };
     let preparation;
     try {
@@ -103,7 +110,6 @@ export function createResendMessageTransaction({
         options,
         originalSession,
         prepareMonotonicMessageAction,
-        replaceSessionTurnApi,
         resendTurnScopeId,
         sessionId,
         userTargetMessage,
@@ -118,13 +124,13 @@ export function createResendMessageTransaction({
     }
     if (preparation.aborted) return false;
     const { anchor, finalAttachments, oldTurnScopeId, pendingDisplayAttachments } = preparation;
-    applyRunStateEvent?.({
+    applyRunStateEvent({
       type: SESSION_RUN_EVENT.LOCAL_RESEND_STARTED,
       sessionId,
       turnScopeId: resendTurnScopeId,
       source: "resend_transaction",
     });
-    applyRunStateEvent?.({
+    applyRunStateEvent({
       type: SESSION_RUN_EVENT.LOCAL_RESEND_REPLACING_TURN,
       sessionId,
       turnScopeId: resendTurnScopeId,
@@ -158,7 +164,7 @@ export function createResendMessageTransaction({
           text: normalizedText,
           resendTurnScopeId,
           expectedAggregateVersion,
-          commandId: operation?.opId || "",
+          commandId: operation.opId,
           attempt,
           attachments: finalAttachments,
         }),

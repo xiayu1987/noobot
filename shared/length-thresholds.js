@@ -103,6 +103,7 @@ export const LENGTH_THRESHOLDS = deepFreeze({
 
   clientPreview: {
     nonImageMaxBytes: LENGTH_TIERS.bytes.clientNonImagePreview,
+    chatMessageNavChars: 28,
   },
 
   desktopLogging: {

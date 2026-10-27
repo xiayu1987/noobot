@@ -8,11 +8,16 @@ import { createChatWebSocketClient } from "../../../../src/infrastructure/websoc
 import {
   MockWebSocket,
   emitCommandReceipt,
+  rootCommandIdentity,
   setupWebSocketTestHooks,
   streamCommand,
   turnLifecycleProtocolEvent,
 } from "./chatWebSocketClientTestFixtures.js";
-import { createTurnStopCommand } from "@noobot/agent-transport-protocol";
+import {
+  AGENT_COMMAND,
+  ROOT_PARENT_SESSION_ID,
+  createTurnStopCommand,
+} from "@noobot/agent-transport-protocol";
 import {
   createTurnLifecycleEnvelope,
   TURN_EVENT,
@@ -20,15 +25,10 @@ import {
   TURN_STATE,
 } from "@noobot/session-protocol";
 
-function stopCommand({
-  sessionId = "s-1",
-  dialogProcessId = "main-dp",
-  turnScopeId = "main-turn",
-  expectedTurnRevision = 2,
-} = {}) {
+function stopCommand({ turnScopeId }) {
   return createTurnStopCommand({
-    identity: { sessionId, dialogProcessId, turnScopeId },
-    concurrency: { expectedTurnRevision },
+    identity: rootCommandIdentity(AGENT_COMMAND.STOP, { sessionId: "s-1", turnScopeId }),
+    concurrency: { expectedTurnRevision: 2 },
   });
 }
 
@@ -48,7 +48,7 @@ describe("chatWebSocketClient stop transport", () => {
       resolved = true;
     });
 
-    const command = stopCommand();
+    const command = stopCommand({ turnScopeId: "main-turn" });
     const stopPromise = client.requestStop(command);
     expect(JSON.parse(socket.sent.at(-1))).toEqual(command);
 
@@ -64,7 +64,7 @@ describe("chatWebSocketClient stop transport", () => {
           eventId: "stop-accepted:main-turn",
           commandId: "stop:main-turn",
           sessionId: "s-1",
-          parentSessionId: "",
+          parentSessionId: ROOT_PARENT_SESSION_ID,
           dialogProcessId: "main-dp",
           turnScopeId: "main-turn",
           presentationMessageId: "assistant:main-turn",
@@ -108,14 +108,9 @@ describe("chatWebSocketClient stop transport", () => {
 
     const firstCommand = stopCommand({ turnScopeId: "turn-1" });
     const first = client.requestStop(firstCommand);
-    await expect(
-      client.requestStop(
-        stopCommand({
-          commandId: "stop:turn-1",
-          turnScopeId: "turn-1",
-        }),
-      ),
-    ).rejects.toThrow("commandId request already pending");
+    await expect(client.requestStop(stopCommand({ turnScopeId: "turn-1" }))).rejects.toThrow(
+      "commandId request already pending",
+    );
 
     const stopMessages = socket.sent.map((item) => JSON.parse(item));
     expect(stopMessages).toHaveLength(1);
@@ -129,7 +124,7 @@ describe("chatWebSocketClient stop transport", () => {
           eventId: "stop-accepted:turn-1",
           commandId: "stop:turn-1",
           sessionId: "s-1",
-          parentSessionId: "",
+          parentSessionId: ROOT_PARENT_SESSION_ID,
           dialogProcessId: "main-dp",
           turnScopeId: "turn-1",
           presentationMessageId: "assistant:turn-1",

@@ -6,6 +6,7 @@
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 export const TEST_ACCEPTED_DIALOG_PROCESS_ID = "dp1";
+export const TEST_MESSAGE_TS = "2026-01-01T00:00:00.000Z";
 
 const REQUIRED_TEST_RUN_FIELDS = Object.freeze(["userId", "sessionId", "message", "turnScopeId"]);
 

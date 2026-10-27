@@ -5,7 +5,10 @@
 -->
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
-import { overlayMessageBox } from "../../../shared/composables/overlayMessageBox.js";
+import {
+  isOverlayDismissal,
+  overlayMessageBox,
+} from "../../../shared/composables/overlayMessageBox.js";
 import { ChatDotRound, Delete, EditPen } from "@element-plus/icons-vue";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 import { selectSessionTurnRuntime } from "../../chat/runtime/run-state-machine/turnRuntimeRegistry.js";
@@ -152,9 +155,7 @@ async function promptRenameSession(sessionItem = {}) {
     );
     emit("rename-session", { sessionId: sessionItem.sessionId, title: text(value) });
   } catch (error) {
-    if (error !== "cancel" && error !== "close") {
-      console.warn("[noobot:session] rename dialog failed", error);
-    }
+    if (!isOverlayDismissal(error)) throw error;
   }
 }
 

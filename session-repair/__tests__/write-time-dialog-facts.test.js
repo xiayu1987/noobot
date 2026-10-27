@@ -67,6 +67,7 @@ test("migrates v11 dialog order and summary receipts into write-time facts", () 
       {
         messageUid: "u2",
         role: "user",
+        content: "second question",
         dialogProcessId: "d2",
         turnScopeId: "t2",
         ts: "2026-01-01T00:01:00.000Z",

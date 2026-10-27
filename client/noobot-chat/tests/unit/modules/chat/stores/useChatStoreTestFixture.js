@@ -82,6 +82,7 @@ export function commitPresentation(store, identity = {}) {
           turnScopeId,
           content: identity.userContent || "question",
           attachments: [],
+          ts: "2026-01-01T00:00:00.000Z",
         },
         assistantMessage: {
           presentationMessageId,

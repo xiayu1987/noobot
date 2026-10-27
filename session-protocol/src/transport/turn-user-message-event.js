@@ -14,7 +14,7 @@ const ACCEPTED_USER_IDENTITY_FIELDS = acceptedMessageIdentityFieldsFor("user");
 
 function validateTurnUserMessageEventData(data, { attachmentMode }) {
   const errors = [];
-  if (!isPlainObject(data)) return { ok: false, errors: ["event_data_invalid"] };
+  if (!isPlainObject(data)) return { valid: false, errors: ["event_data_invalid"] };
   const { sessionId, dialogProcessId, turnScopeId, aggregateVersion, userMessage } = data;
 
   if (!isCanonicalText(sessionId)) errors.push("session_id_missing");
@@ -25,9 +25,10 @@ function validateTurnUserMessageEventData(data, { attachmentMode }) {
   }
   if (!isPlainObject(userMessage)) {
     errors.push("user_message_missing");
-    return { ok: false, errors };
+    return { valid: false, errors };
   }
   if (userMessage.role !== "user") errors.push("user_message_role_invalid");
+  if (typeof userMessage.content !== "string") errors.push("user_message_content_invalid");
   if (!isCanonicalText(userMessage[MESSAGE_IDENTITY_FIELD.SESSION]))
     errors.push("user_message_uid_missing");
   for (const field of ACCEPTED_USER_IDENTITY_FIELDS) {
@@ -45,7 +46,7 @@ function validateTurnUserMessageEventData(data, { attachmentMode }) {
   const hasAttachments = Object.hasOwn(userMessage, "attachments");
   if (hasAttachments && !Array.isArray(userMessage.attachments)) {
     errors.push("user_message_attachments_invalid");
-    return { ok: false, errors };
+    return { valid: false, errors };
   }
   const attachmentList = hasAttachments ? userMessage.attachments : [];
   if (attachmentMode === "forbidden" && attachmentList.length > 0) {
@@ -62,14 +63,14 @@ function validateTurnUserMessageEventData(data, { attachmentMode }) {
     if (!isCanonicalText(attachment.attachmentId)) errors.push("attachment_id_missing");
     if (attachment.sessionId !== sessionId) errors.push("attachment_session_mismatch");
   }
-  return { ok: errors.length === 0, errors };
+  return { valid: errors.length === 0, errors };
 }
 
 export function createTurnUserMessageEventProtocol({ wireEvent, attachmentMode, errorCode }) {
   const validate = (data) => validateTurnUserMessageEventData(data, { attachmentMode });
   const assert = (data) => {
     const validation = validate(data);
-    if (validation.ok) return data;
+    if (validation.valid) return data;
     const error = new TypeError(`invalid ${wireEvent} event: ${validation.errors.join(",")}`);
     error.code = errorCode;
     error.validationErrors = validation.errors;

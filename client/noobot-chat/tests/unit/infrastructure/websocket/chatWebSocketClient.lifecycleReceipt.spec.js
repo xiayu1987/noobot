@@ -13,6 +13,7 @@ import {
   streamCommand,
   turnLifecycleProtocolEvent,
 } from "./chatWebSocketClientTestFixtures.js";
+import { ROOT_PARENT_SESSION_ID } from "@noobot/agent-transport-protocol";
 import {
   createTurnLifecycleEnvelope,
   TURN_EVENT,
@@ -31,7 +32,7 @@ function lifecycle(eventId = "event-receipt") {
     eventId,
     commandId: "command-receipt",
     ...IDENTITY,
-    parentSessionId: "",
+    parentSessionId: ROOT_PARENT_SESSION_ID,
     presentationMessageId: "assistant-receipt",
     dialogProcessId: "dialog-receipt",
     revision: 2,

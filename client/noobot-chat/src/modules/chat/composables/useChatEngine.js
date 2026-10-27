@@ -16,7 +16,6 @@ import {
   summarizeStateMachineEvent,
   summarizeStateMachineTurn,
 } from "../../debug/loggers/stateMachineLogger.js";
-import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import {
   projectTurnRuntimeView,
   selectSessionRuntimeBucket,
@@ -26,12 +25,7 @@ import { SESSION_RUN_EVENT } from "../runtime/run-state-machine/constants.js";
 import { createTerminalResolutionCoordinator } from "../runtime/terminalResolutionCoordinator.js";
 import { logTerminalResolutionDebug } from "../../debug/loggers/terminalResolutionDebugLogger.js";
 import { applyLatestSessionAggregateVersion } from "../runtime/engine/sessionAggregateVersionManager.js";
-import { text, isObjectLike } from "@noobot/shared/value";
-
-const DEFAULT_MONOTONIC_ACTION_STOP_TIMEOUT_MS =
-  TIME_THRESHOLDS.client.monotonicActionStopTimeoutMs;
-const DEFAULT_MONOTONIC_ACTION_STOP_POLL_INTERVAL_MS =
-  TIME_THRESHOLDS.client.monotonicActionStopPollIntervalMs;
+import { text, isObjectLike, requireFunctionDependencies } from "@noobot/shared/value";
 
 export function useChatEngine({
   userId,
@@ -76,7 +70,6 @@ export function useChatEngine({
   clearPendingInteraction,
   clearPendingInteractionIfObsolete,
   setPendingInteractionRequest,
-  submitInteractionResponse,
   onConversationState,
   chatWebSocketClient,
   sessionLogWebSocketClient,
@@ -84,18 +77,24 @@ export function useChatEngine({
   reduceSubSessionMessageEvent,
   removeWorkflowOwnersForReplacedTurns,
   ensureConnected,
-  notify = () => {},
-  terminalResolutionFetcher,
-  monotonicActionStopTimeoutMs = DEFAULT_MONOTONIC_ACTION_STOP_TIMEOUT_MS,
-  monotonicActionStopPollIntervalMs = DEFAULT_MONOTONIC_ACTION_STOP_POLL_INTERVAL_MS,
-} = {}) {
+  notify,
+  monotonicActionStopTimeoutMs,
+  monotonicActionStopPollIntervalMs,
+}) {
+  requireFunctionDependencies("useChatEngine", {
+    navigateToLastMessage,
+    notify,
+    onConversationState,
+    applyTurnRuntimeEvent,
+    logSession: sessionLogWebSocketClient.log,
+  });
   const { translate, locale } = useLocale();
   const turnTerminalNavigatedKeys = new Set();
   const navigateToLastMessageOnTurnTerminalOnce = (sessionId, turnScopeId) => {
     const key = `${sessionId}::${turnScopeId}`;
     if (turnTerminalNavigatedKeys.has(key)) return;
     turnTerminalNavigatedKeys.add(key);
-    navigateToLastMessage?.();
+    navigateToLastMessage();
   };
   const applyAuthoritativeTerminalResolution = (response) => {
     const sessionId = text(response?.sessionId);
@@ -165,7 +164,7 @@ export function useChatEngine({
   };
   const terminalResolutionCoordinator = createTerminalResolutionCoordinator({
     userId,
-    fetcher: terminalResolutionFetcher || authFetch,
+    fetcher: authFetch,
     applyTurnTerminalResolution: applyAuthoritativeTerminalResolution,
     onDiscovery: (details = {}) =>
       logTerminalResolutionDebug("frontend.terminalResolution.discovery", details),
@@ -191,7 +190,7 @@ export function useChatEngine({
   const logSessionStateEvent = (event, name, data) => {
     const sessionId = text(event?.sessionId);
     if (!sessionId) return false;
-    return sessionLogWebSocketClient?.log?.({
+    return sessionLogWebSocketClient.log({
       scope: "session",
       category: "state",
       event: name,
@@ -216,7 +215,7 @@ export function useChatEngine({
       before: summarizeStateMachineTurn(beforeTurn, before),
       activeSessionId: activeSessionId.value,
     }));
-    const turnResult = applyTurnRuntimeEvent?.(event);
+    const turnResult = applyTurnRuntimeEvent(event);
     const runtime = projectTurnRuntimeView(turnResult?.canonicalSessionId, turnResult?.turn);
     logStateMachineDebug("stateMachine.reducer.decision", () => ({
       ...eventSummary,
@@ -256,27 +255,21 @@ export function useChatEngine({
     });
     return turnResult;
   };
-  const { applyAssistantFailureState, mergeAssistantAttachments } = createAssistantMessageHelpers({
+  const { applyAssistantFailureState } = createAssistantMessageHelpers({
     translate,
-    makeViewAttachments,
   });
 
-  const {
-    applyConversationState,
-    clearMissingInteractionPayloadTimer,
-    disposeConversationState,
-    tryAutoResolveInteraction,
-  } = createChatEngineConversationState({
-    activeSession,
-    interactionSubmitting,
-    pendingInteractionRequest,
-    clearPendingInteraction,
-    clearPendingInteractionIfObsolete,
-    submitInteractionResponse,
-    onConversationState,
-    notify,
-    translate,
-  });
+  const { applyConversationState, clearMissingInteractionPayloadTimer, disposeConversationState } =
+    createChatEngineConversationState({
+      activeSession,
+      interactionSubmitting,
+      pendingInteractionRequest,
+      clearPendingInteraction,
+      clearPendingInteractionIfObsolete,
+      onConversationState,
+      notify,
+      translate,
+    });
 
   function stopSending() {
     return stopActiveTurn({
@@ -316,7 +309,6 @@ export function useChatEngine({
     upsertCanonicalAssistantMessage,
     makeViewMessage,
     makeViewAttachments,
-    mergeAssistantAttachments,
   };
   const senderInteractionDeps = {
     pendingInteractionRequest,
@@ -324,7 +316,6 @@ export function useChatEngine({
     clearPendingInteraction,
     clearMissingInteractionPayloadTimer,
     setPendingInteractionRequest,
-    tryAutoResolveInteraction,
   };
   const senderComposerDeps = {
     allowUserInteraction,

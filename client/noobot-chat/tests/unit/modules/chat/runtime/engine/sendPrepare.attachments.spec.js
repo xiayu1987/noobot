@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
+import { AGENT_COMMAND } from "@noobot/agent-transport-protocol";
 import { prepareChatSend } from "../../../../../../src/modules/chat/runtime/engine/sendPrepare.js";
 import { resolveMessageViewKey } from "@noobot/event-protocol/message-event";
 import { RoleEnum } from "../../../../../../src/modules/chat/model/chatConstants.js";
@@ -40,33 +41,67 @@ function createPrepareHarness({ existingMessages = [] } = {}) {
   });
   return {
     input: { value: "" },
-    uploadFiles: { value: [] },
     activeSession,
     appendMessage,
     upsertCanonicalAssistantMessage,
     appended,
     translate: vi.fn((key) => key),
-    scrollBottom: vi.fn(),
+    navigateToLastMessage: vi.fn(),
     isImageMime: vi.fn(() => false),
   };
 }
 
+function resendRequest(overrides) {
+  return {
+    commandType: AGENT_COMMAND.RESEND,
+    sessionId: "session-a",
+    dialogProcessId: "dialog-resend",
+    presentationMessageId: "msg-assistant-resend",
+    ...overrides,
+  };
+}
+
 describe("prepareChatSend attachment architecture", () => {
+  it("renders the resolved message text and keeps the default title for attachment-only input", () => {
+    const harness = createPrepareHarness();
+    harness.activeSession.value.title = "chat.newSession";
+    const result = prepareChatSend({
+      ...harness,
+      request: {
+        commandType: AGENT_COMMAND.SEND,
+        sessionId: "session-a",
+        turnScopeId: "client-turn:upload-only",
+        userMessageId: "msg-user-upload-only",
+        presentationMessageId: "msg-assistant-upload-only",
+        authoredText: "",
+        messageText: "chat.uploadHint",
+        attachmentFiles: [],
+      },
+    });
+    expect(result.userMessage.content).toBe("chat.uploadHint");
+    expect(harness.activeSession.value.title).toBe("chat.newSession");
+  });
+
   it("keeps the draft client identity on the live user-message attachment", () => {
     const harness = createPrepareHarness();
     const uploadEntry = {
-      draftAttachmentId: "draft-current",
+      clientAttachmentId: "draft-current",
       raw: { name: "current.docx", type: "application/docx", size: 456 },
       name: "current.docx",
       mimeType: "application/docx",
       size: 456,
     };
-    harness.uploadFiles.value = [uploadEntry];
-
     const result = prepareChatSend({
       ...harness,
-      messageText: "parse current attachment",
-      turnScopeId: "client-turn:current",
+      request: {
+        commandType: AGENT_COMMAND.SEND,
+        sessionId: "session-a",
+        turnScopeId: "client-turn:current",
+        userMessageId: "msg-user-current",
+        presentationMessageId: "msg-assistant-current",
+        messageText: "parse current attachment",
+        attachmentFiles: [uploadEntry],
+      },
     });
 
     expect(result.userMessage.attachments).toEqual([
@@ -78,7 +113,7 @@ describe("prepareChatSend attachment architecture", () => {
     ]);
   });
 
-  it("uses incoming canonical attachments as authority when reusing a user turn", () => {
+  it("uses the resend request attachments as authority for the reused user turn", () => {
     const richAttachment = {
       attachmentId: "att-rich",
       attachmentSource: "test",
@@ -95,6 +130,7 @@ describe("prepareChatSend attachment architecture", () => {
     const userMessage = {
       role: RoleEnum.USER,
       content: "old",
+      userMessageId: "msg-user-reuse",
       turnScopeId: "client-turn:reuse",
       attachments: [richAttachment],
     };
@@ -102,19 +138,21 @@ describe("prepareChatSend attachment architecture", () => {
 
     prepareChatSend({
       ...harness,
-      messageText: "edited",
-      turnScopeId: "client-turn:reuse",
-      reuseExistingUserTurn: true,
-      userAttachments: [
-        {
-          attachmentId: "att-rich",
-          sessionId: "session-a",
-          attachmentSource: "test",
-          name: "report.docx",
-          mimeType: richAttachment.mimeType,
-          size: 123,
-        },
-      ],
+      request: resendRequest({
+        userMessageId: "msg-user-reuse",
+        turnScopeId: "client-turn:reuse",
+        messageText: "edited",
+        attachments: [
+          {
+            attachmentId: "att-rich",
+            sessionId: "session-a",
+            attachmentSource: "test",
+            name: "report.docx",
+            mimeType: richAttachment.mimeType,
+            size: 123,
+          },
+        ],
+      }),
     });
 
     expect(userMessage.attachments).toEqual([
@@ -129,10 +167,11 @@ describe("prepareChatSend attachment architecture", () => {
     ]);
   });
 
-  it("treats explicit empty userAttachments as delete-all instead of restoring old attachments", () => {
+  it("replaces the reused user turn attachments with an empty resend attachment list", () => {
     const userMessage = {
       role: RoleEnum.USER,
       content: "old",
+      userMessageId: "msg-user-delete",
       turnScopeId: "client-turn:delete",
       attachments: [
         {
@@ -147,10 +186,12 @@ describe("prepareChatSend attachment architecture", () => {
 
     prepareChatSend({
       ...harness,
-      messageText: "edited without attachments",
-      turnScopeId: "client-turn:delete",
-      reuseExistingUserTurn: true,
-      userAttachments: [],
+      request: resendRequest({
+        userMessageId: "msg-user-delete",
+        turnScopeId: "client-turn:delete",
+        messageText: "edited without attachments",
+        attachments: [],
+      }),
     });
 
     expect(userMessage.attachments).toEqual([]);

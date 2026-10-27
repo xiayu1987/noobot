@@ -9,6 +9,7 @@ import path from "node:path";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import {
+  MESSAGE_ORIGIN,
   MESSAGE_REMOVED_FIELD_NAME,
   SESSION_ARTIFACT_SCHEMA_VERSION,
   SESSION_ERROR_CODE,
@@ -36,6 +37,7 @@ import {
   readJson,
   readJournalLines,
 } from "./session/scoped-session-repositories.fixtures.js";
+import { TEST_MESSAGE_TS } from "./helpers/session-run-payload.js";
 
 const SESSION_ID = "s-v9";
 const LEGACY_MESSAGE_ID = MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID;
@@ -63,7 +65,7 @@ async function saveCanonicalSession(sessionRepo) {
       sessionId: SESSION_ID,
       aggregateVersion: 0,
       messages: [
-        message("m1", "user", {}),
+        message("m1", "user", { messageOrigin: MESSAGE_ORIGIN.NATURAL }),
         message("m2", "assistant", { modelMessageId: "mm_m2", presentationMessageId: "pm_1" }),
       ],
     }),
@@ -422,7 +424,7 @@ async function saveCheckpointedSession(sessionRepo, sessionId) {
     messageUid,
     role: messageUid === "m1" ? "user" : "assistant",
     ...(messageUid === "m1"
-      ? {}
+      ? { messageOrigin: MESSAGE_ORIGIN.NATURAL }
       : { modelMessageId: `mm_${messageUid}`, presentationMessageId: "pm_active" }),
     content: messageUid,
     dialogProcessId: "dialog-active",
@@ -542,6 +544,7 @@ async function saveCompletedTurnWithRejectedBatch(sessionRepo, sessionId) {
   const turn = { sessionId, dialogProcessId: "dialog-done", turnScopeId: "done" };
   const assistant = (messageUid, extra) => ({
     messageUid,
+    ts: TEST_MESSAGE_TS,
     role: "assistant",
     modelMessageId: `mm_${messageUid}`,
     presentationMessageId: "pm_done",
@@ -557,10 +560,19 @@ async function saveCompletedTurnWithRejectedBatch(sessionRepo, sessionId) {
     });
 
   const canonical = projectTurnCompletionMessages([
-    { messageUid: "m1", role: "user", userMessageId: "um_done", content: "go", ...turn },
+    {
+      messageUid: "m1",
+      ts: TEST_MESSAGE_TS,
+      role: "user",
+      messageOrigin: "natural",
+      userMessageId: "um_done",
+      content: "go",
+      ...turn,
+    },
     toolCall("m2", "call-ok", "read_file"),
     {
       messageUid: "m3",
+      ts: TEST_MESSAGE_TS,
       role: "tool",
       type: "tool_result",
       presentationMessageId: "pm_done",

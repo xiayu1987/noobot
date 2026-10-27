@@ -28,7 +28,7 @@ import {
 } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
 import { applyLatestSessionAggregateVersion } from "../../../chat/runtime/engine/sessionAggregateVersionManager.js";
 import { isTurnRuntimeDeleted } from "../../../chat/runtime/run-state-machine/turnRuntimeRegistry.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, requireFunctionDependencies, text } from "@noobot/shared/value";
 
 function requireAvailableTurnTimings(sessionDoc) {
   if (sessionDoc.availability === "unavailable") return null;
@@ -42,14 +42,23 @@ function requireAvailableTurnTimings(sessionDoc) {
 
 export function createSessionDetailApplicator({
   sessions,
-  activeSessionId,
   turnRuntimeRegistry,
   chatStore,
   makeViewMessage,
   sessionTitleFromMessages,
   navigateToLastMessage,
-  onSessionDetailApplied = null,
-} = {}) {
+  onSessionDetailApplied,
+}) {
+  if (!isPlainObject(chatStore)) {
+    throw new TypeError("createSessionDetailApplicator requires chatStore");
+  }
+  requireFunctionDependencies("createSessionDetailApplicator", {
+    applyTurnTimingSnapshot: chatStore.applyTurnTimingSnapshot,
+    makeViewMessage,
+    sessionTitleFromMessages,
+    navigateToLastMessage,
+    onSessionDetailApplied,
+  });
   function pruneMessagesFromConfirmedDeletes(messages = [], sessionId = "") {
     const source = Array.isArray(messages) ? messages : [];
     const index = source.findIndex((messageItem) =>
@@ -85,12 +94,10 @@ export function createSessionDetailApplicator({
     }));
     const detailSessionId = text(detail.sessionId);
     sessionItem.loaded = true;
-    const confirmationResult = confirmSessionIdentity({
+    confirmSessionIdentity({
       sessionItem,
       sessionId: detailSessionId,
-      activeSessionId: activeSessionId.value,
     });
-    activeSessionId.value = confirmationResult.nextActiveSessionId;
     const sessionDocs = Array.isArray(detail.sessions) ? detail.sessions : [];
     sessionItem.sessionDocs = sessionDocs;
     const mainSessionDoc =
@@ -203,7 +210,7 @@ export function createSessionDetailApplicator({
         .filter((item) => getMessageRole(item) === RoleEnum.ASSISTANT)
         .map(summarizeToolProjection),
     }));
-    onSessionDetailApplied?.({
+    onSessionDetailApplied({
       detail,
       sessionItem,
       mainSessionDoc,
@@ -218,7 +225,7 @@ export function createSessionDetailApplicator({
         sessionItem.messages,
         sessionItem.title || detail.sessionId.slice(0, 8),
       );
-    if (options.navigateToLastMessage === true) navigateToLastMessage?.();
+    if (options.navigateToLastMessage === true) navigateToLastMessage();
   }
 
   return { applySessionDetail };

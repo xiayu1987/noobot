@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
-import { text } from "@noobot/shared/value";
+import { isObjectLike, requireFunctionDependencies, text } from "@noobot/shared/value";
 
 function hasValue(value) {
   return value !== undefined && value !== null && value !== "";
@@ -18,7 +18,11 @@ function numericValue(value) {
 }
 
 function getCurrentSessionAggregateVersion(activeSession) {
-  return activeSession.value?.aggregateVersion;
+  const session = activeSession.value;
+  if (!isObjectLike(session)) {
+    throw new TypeError("aggregate version requires an active session");
+  }
+  return session.aggregateVersion;
 }
 
 function isSessionAggregateVersionConflict(result, payload) {
@@ -42,26 +46,29 @@ export function isNewerSessionAggregateVersion(nextVersion, currentVersion) {
   return nextVersion !== currentVersion;
 }
 
-export function applyLatestSessionAggregateVersion(session, source = {}) {
-  if (!session || !source) return false;
+export function applyLatestSessionAggregateVersion(session, source) {
+  if (!isObjectLike(session) || !isObjectLike(source)) {
+    throw new TypeError("applyLatestSessionAggregateVersion requires a session and a source");
+  }
   if (!isNewerSessionAggregateVersion(source.aggregateVersion, session.aggregateVersion))
     return false;
   session.aggregateVersion = source.aggregateVersion;
   return true;
 }
 
-export function createSessionAggregateVersionManager({ activeSession, log = null } = {}) {
+export function createSessionAggregateVersionManager({ activeSession, log = null }) {
+  if (!isObjectLike(activeSession) || !("value" in activeSession)) {
+    throw new TypeError("createSessionAggregateVersionManager requires an activeSession ref");
+  }
   function getVersion() {
     return getCurrentSessionAggregateVersion(activeSession);
   }
 
-  function applyConflictVersion({
-    sessionId,
-    previousVersion,
-    conflict = {},
-    logContext = {},
-  } = {}) {
-    const currentVersion = conflict?.currentVersion;
+  function applyConflictVersion({ sessionId, previousVersion, conflict = {}, logContext = {} }) {
+    if (!isObjectLike(conflict)) {
+      throw new TypeError("applyConflictVersion requires a conflict payload");
+    }
+    const currentVersion = conflict.currentVersion;
     const changed = applyLatestSessionAggregateVersion(activeSession.value, {
       aggregateVersion: currentVersion,
     });
@@ -79,8 +86,8 @@ export function createSessionAggregateVersionManager({ activeSession, log = null
     mutate,
     shouldRetry = true,
     conflictOptions = {},
-  } = {}) {
-    if (typeof mutate !== "function") return null;
+  }) {
+    requireFunctionDependencies("runAggregateVersionedMutation", { mutate });
     let attempt = 1;
     let expectedAggregateVersion = getVersion();
     let response = await mutate({ expectedAggregateVersion, attempt });
@@ -105,8 +112,8 @@ export function createSessionAggregateVersionManager({ activeSession, log = null
     return { ...response, expectedAggregateVersion, attempt };
   }
 
-  async function runAggregateVersionedStream({ buildPayload, stream, conflictOptions = {} } = {}) {
-    if (typeof buildPayload !== "function" || typeof stream !== "function") return null;
+  async function runAggregateVersionedStream({ buildPayload, stream, conflictOptions = {} }) {
+    requireFunctionDependencies("runAggregateVersionedStream", { buildPayload, stream });
     let attempt = 1;
     let expectedAggregateVersion = getVersion();
     let payload = buildPayload({ expectedAggregateVersion, attempt });

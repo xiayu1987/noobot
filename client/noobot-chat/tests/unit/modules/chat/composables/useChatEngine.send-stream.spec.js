@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { AGENT_COMMAND } from "@noobot/agent-transport-protocol";
 import { setTransportDiagnosticsLogSink } from "../../../../../src/modules/debug/loggers/transportDiagnosticsLogger.js";
 import {
   createHarness,
   assistantMessage,
-  activateRuntimeTurn,
   emitChannelState,
   emitAuthorityProcessing,
   serverTurnSource,
@@ -23,6 +23,8 @@ import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model
 import { selectToolTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
 import { selectTurnMessageRuntime } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { createAuthoritativeMessageEnvelope } from "../helpers/useReconnectReplayHelper.js";
+
+const SEND_REQUEST = Object.freeze({ commandType: AGENT_COMMAND.SEND });
 
 function channelDelivery(transportEvent) {
   return { ...transportEvent, channelSessionId: transportEvent.data.identity.sessionId };
@@ -41,7 +43,7 @@ describe("useChatEngine.send-stream", () => {
       stream,
     });
 
-    await engine.send();
+    await engine.send(SEND_REQUEST);
 
     const userMessage = activeSession.value.messages.find(
       (message) => message.role === RoleEnum.USER,
@@ -71,7 +73,7 @@ describe("useChatEngine.send-stream", () => {
     activeSession.value.aggregateVersion = 7;
     activeSession.value.revision = 6;
 
-    await engine.send();
+    await engine.send(SEND_REQUEST);
 
     expect(capturedPayload.concurrency.expectedTurnRevision).toBe(0);
     expect(capturedPayload.concurrency.expectedAggregateVersion).toBe(7);
@@ -92,7 +94,7 @@ describe("useChatEngine.send-stream", () => {
       deps: { fetchSessionDetail, applySessionDetail },
     });
 
-    await expect(engine.send()).resolves.toBe(true);
+    await expect(engine.send(SEND_REQUEST)).resolves.toBe(true);
 
     expect(stream).toHaveBeenCalledTimes(2);
     expect(
@@ -130,7 +132,7 @@ describe("useChatEngine.send-stream", () => {
       stream,
     });
 
-    await engine.send();
+    await engine.send(SEND_REQUEST);
 
     const assistant = assistantMessage(activeSession);
     const runtime = selectTurnMessageRuntime(turnRuntimeRegistry.value, {
@@ -170,7 +172,7 @@ describe("useChatEngine.send-stream", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-08-18T13:54:25.940Z"));
     try {
-      await engine.send();
+      await engine.send(SEND_REQUEST);
     } finally {
       vi.useRealTimers();
     }
@@ -206,7 +208,7 @@ describe("useChatEngine.send-stream", () => {
       stream,
     });
 
-    await engine.send();
+    await engine.send(SEND_REQUEST);
 
     const assistant = assistantMessage(activeSession);
     const runtime = selectTurnMessageRuntime(turnRuntimeRegistry.value, {
@@ -237,17 +239,15 @@ describe("useChatEngine.send-stream", () => {
       stream,
     });
 
-    await engine.send();
+    await engine.send(SEND_REQUEST);
 
     const assistant = assistantMessage(activeSession);
     expect(capturedPayload).toEqual(
       expect.objectContaining({
         identity: {
           sessionId: "local-client-turn",
-          dialogProcessId: "",
           turnScopeId: expect.stringMatching(/^client-turn:/),
           parentSessionId: "",
-          parentDialogProcessId: "",
         },
       }),
     );
@@ -264,37 +264,6 @@ describe("useChatEngine.send-stream", () => {
     expect(canStop.value).toBe(true);
   });
 
-  it("send rejects when the current session already has an in-flight Registry turn", async () => {
-    const stream = vi.fn(async () => {});
-    const { engine, activeSession, turnRuntimeRegistry, appendMessage } = createHarness({
-      sessionId: "local-send-state-mismatch",
-      stream,
-    });
-    activeSession.value.messages = [
-      { role: RoleEnum.USER, content: "old", turnScopeId: "turn-old" },
-      {
-        role: RoleEnum.ASSISTANT,
-        content: "stopped",
-        pending: false,
-        terminalOutcome: "stopped",
-        turnScopeId: "turn-old",
-        channelState: { state: "user_stopped", turnScopeId: "turn-old" },
-      },
-    ];
-    activeSession.value.rawMessages = [...activeSession.value.messages];
-    activateRuntimeTurn({
-      turnRuntimeRegistry,
-      sessionId: "local-send-state-mismatch",
-      turnScopeId: "turn-missing",
-      dialogProcessId: "dp-turn-missing",
-    });
-
-    await expect(engine.send()).resolves.toBe(false);
-
-    expect(stream).not.toHaveBeenCalled();
-    expect(appendMessage).not.toHaveBeenCalled();
-  });
-
   it("ignores another session in-flight run state while sending and finalizing the active session", async () => {
     const stream = vi.fn(async (payload, onEvent) => {
       onEvent({
@@ -306,21 +275,6 @@ describe("useChatEngine.send-stream", () => {
           type: "tool_call",
           category: "tool",
           text: "running tool",
-        },
-      });
-      onEvent({
-        event: StreamEventEnum.DONE,
-        data: {
-          sessionId: "s-active-send",
-          dialogProcessId: "dp-active-send",
-          messages: [
-            { role: RoleEnum.USER, content: "hello" },
-            {
-              role: RoleEnum.ASSISTANT,
-              dialogProcessId: "dp-active-send",
-              content: "done",
-            },
-          ],
         },
       });
       emitAuthorityProcessing(onEvent, {
@@ -347,7 +301,7 @@ describe("useChatEngine.send-stream", () => {
         applySessionDetail,
       },
     });
-    const result = await engine.send();
+    const result = await engine.send(SEND_REQUEST);
 
     const assistant = assistantMessage(activeSession);
     expect(result).toBe(true);
@@ -375,21 +329,6 @@ describe("useChatEngine.send-stream", () => {
           text: "thinking without frontend turn scope",
         },
       });
-      onEvent({
-        event: StreamEventEnum.DONE,
-        data: {
-          sessionId: "s-missing-turn",
-          dialogProcessId: "dp-missing-turn",
-          messages: [
-            { role: RoleEnum.USER, content: "hello" },
-            {
-              role: RoleEnum.ASSISTANT,
-              dialogProcessId: "dp-missing-turn",
-              content: "final without frontend turn scope",
-            },
-          ],
-        },
-      });
       emitAuthorityProcessing(onEvent, {
         sessionId: "s-missing-turn",
         turnScopeId: payload.identity.turnScopeId,
@@ -415,7 +354,7 @@ describe("useChatEngine.send-stream", () => {
       },
     });
 
-    const result = await engine.send();
+    const result = await engine.send(SEND_REQUEST);
 
     const assistant = assistantMessage(activeSession);
     expect(result).toBe(true);
@@ -427,20 +366,9 @@ describe("useChatEngine.send-stream", () => {
     expect(activeTurnRuntime.value.turnScopeId).toBeTruthy();
   });
 
-  it("DONE stays locked until the authoritative terminal response succeeds", async () => {
+  it("stream end without an authoritative terminal keeps the Turn locked", async () => {
     let releaseStream;
-    const stream = vi.fn(async (_payload, onEvent) => {
-      onEvent({
-        event: StreamEventEnum.DONE,
-        data: {
-          sessionId: "local-done-open",
-          dialogProcessId: "dp-done-open",
-          messages: [
-            { role: RoleEnum.USER, content: "hello" },
-            { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-done-open", content: "final answer" },
-          ],
-        },
-      });
+    const stream = vi.fn(async () => {
       await new Promise((resolve) => {
         releaseStream = resolve;
       });
@@ -455,7 +383,7 @@ describe("useChatEngine.send-stream", () => {
       },
     });
 
-    const sendPromise = engine.send();
+    const sendPromise = engine.send(SEND_REQUEST);
     await Promise.resolve();
 
     const assistant = assistantMessage(activeSession);
@@ -470,12 +398,8 @@ describe("useChatEngine.send-stream", () => {
     expect(sending.value).toBe(true);
   });
 
-  it("DONE projects the resolved Turn without promoting Session identity", async () => {
+  it("authoritative terminal projects the resolved Turn without promoting Session identity", async () => {
     const stream = vi.fn(async (payload, onEvent) => {
-      onEvent({
-        event: StreamEventEnum.DELTA,
-        data: { dialogProcessId: "dp-new", text: "partial " },
-      });
       onEvent(
         channelDelivery(
           createAuthoritativeMessageEnvelope("authoritative_final_content", {
@@ -494,30 +418,6 @@ describe("useChatEngine.send-stream", () => {
           }),
         ),
       );
-      onEvent({
-        event: StreamEventEnum.DONE,
-        data: {
-          sessionId: "backend-1",
-          dialogProcessId: "dp-new",
-          messages: [
-            { role: RoleEnum.USER, content: "old q" },
-            { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-old", content: "old answer" },
-            { role: RoleEnum.USER, content: "hello" },
-            {
-              role: RoleEnum.ASSISTANT,
-              presentationMessageId: payload.presentation.presentationMessageId,
-              dialogProcessId: "dp-new",
-              turnScopeId: payload.identity.turnScopeId,
-              content: "final answer",
-              modelAlias: "alias-a",
-              modelName: "model-a",
-              modelRuns: [{ runId: "r1" }],
-              attachments: [{ name: "f1" }],
-              tool_calls: [{ id: "tc1" }],
-            },
-          ],
-        },
-      });
       emitAuthorityProcessing(onEvent, serverTurnSource(payload, "dp-new"));
       emitAuthorityTerminal(onEvent, serverTurnSource(payload, "dp-new"));
     });
@@ -537,7 +437,7 @@ describe("useChatEngine.send-stream", () => {
       debug: (_debugType, factory) => diagnostics.push(factory()) > 0,
     });
 
-    await engine.send();
+    await engine.send(SEND_REQUEST);
 
     const reductionLog = diagnostics.find(
       (entry) => entry?.event === "frontend.messageEvent.reduced",
@@ -589,10 +489,6 @@ describe("useChatEngine.send-stream", () => {
         },
       });
       onEvent({
-        event: StreamEventEnum.DELTA,
-        data: { sessionId: "local-time", dialogProcessId: "dp-time", text: "partial" },
-      });
-      onEvent({
         event: StreamEventEnum.CHANNEL_STATE,
         data: {
           sessionId: "local-time",
@@ -603,10 +499,6 @@ describe("useChatEngine.send-stream", () => {
           updatedAt: finishedAt,
           updatedAtMs: Date.parse(finishedAt),
         },
-      });
-      onEvent({
-        event: StreamEventEnum.DONE,
-        data: { sessionId: "local-time", dialogProcessId: "dp-time" },
       });
       emitAuthorityProcessing(onEvent, serverTurnSource(payload, "dp-time"));
     });
@@ -621,7 +513,7 @@ describe("useChatEngine.send-stream", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(messageStartedAt));
     try {
-      await engine.send();
+      await engine.send(SEND_REQUEST);
     } finally {
       vi.useRealTimers();
     }
@@ -648,21 +540,6 @@ describe("useChatEngine.send-stream", () => {
 
   it("frontend completion detail apply clears pending and keeps normalized attachments on current assistant", async () => {
     const stream = vi.fn(async (payload, onEvent) => {
-      onEvent({
-        event: StreamEventEnum.DONE,
-        data: {
-          sessionId: "local-frontend-complete",
-          dialogProcessId: "dp-frontend-complete",
-          messages: [
-            { role: RoleEnum.USER, content: "hello" },
-            {
-              role: RoleEnum.ASSISTANT,
-              dialogProcessId: "dp-frontend-complete",
-              content: "overlay answer",
-            },
-          ],
-        },
-      });
       emitAuthorityProcessing(onEvent, serverTurnSource(payload, "dp-frontend-complete"));
       emitAuthorityTerminal(onEvent, serverTurnSource(payload, "dp-frontend-complete"));
     });
@@ -685,7 +562,7 @@ describe("useChatEngine.send-stream", () => {
       },
     });
 
-    await engine.send();
+    await engine.send(SEND_REQUEST);
 
     await vi.waitFor(() => expect(sending.value).toBe(false));
     const assistant = assistantMessage(activeSession);
@@ -752,7 +629,7 @@ describe("useChatEngine.send-stream", () => {
       },
     });
 
-    await engine.send();
+    await engine.send(SEND_REQUEST);
 
     const assistant = assistantMessage(activeSession);
     expect(applySessionDetail).not.toHaveBeenCalled();
@@ -767,15 +644,7 @@ describe("useChatEngine.send-stream", () => {
   it("authoritative stop terminal drives the Turn while channel_state remains transport-only", async () => {
     const stream = vi.fn(async (payload, onEvent) => {
       emitChannelState(onEvent, "local-2", "dp-state", "sending");
-      onEvent({
-        event: StreamEventEnum.DELTA,
-        data: { sessionId: "local-2", dialogProcessId: "dp-state", text: "partial" },
-      });
       emitChannelState(onEvent, "local-2", "dp-state", "user_stopped");
-      onEvent({
-        event: StreamEventEnum.USER_STOPPED,
-        data: { sessionId: "local-2", dialogProcessId: "dp-state" },
-      });
       emitAuthorityProcessing(onEvent, serverTurnSource(payload, "dp-state"));
       emitAuthorityTerminal(onEvent, {
         ...serverTurnSource(payload, "dp-state"),
@@ -789,7 +658,7 @@ describe("useChatEngine.send-stream", () => {
       terminalResolutionState: "stop_completed",
     });
 
-    await engine.send();
+    await engine.send(SEND_REQUEST);
 
     await vi.waitFor(() => expect(sending.value).toBe(false));
     expect(activeTurnRuntime.value).toMatchObject({
@@ -822,10 +691,6 @@ describe("useChatEngine.send-stream", () => {
       emitChannelState(onEvent, "local-stop-refresh", "dp-stop-refresh", "user_stopped", {
         seq: 2,
       });
-      onEvent({
-        event: StreamEventEnum.USER_STOPPED,
-        data: { sessionId: "local-stop-refresh", dialogProcessId: "dp-stop-refresh" },
-      });
       emitAuthorityProcessing(onEvent, serverTurnSource(payload, "dp-stop-refresh"));
       emitAuthorityTerminal(onEvent, {
         ...serverTurnSource(payload, "dp-stop-refresh"),
@@ -842,7 +707,7 @@ describe("useChatEngine.send-stream", () => {
       },
     });
 
-    await engine.send();
+    await engine.send(SEND_REQUEST);
 
     expect(fetchSessionDetail).not.toHaveBeenCalled();
     expect(applySessionDetail).not.toHaveBeenCalled();

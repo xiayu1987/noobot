@@ -4,23 +4,20 @@
  * SPDX-License-Identifier: MIT
  */
 import { decodeExecutionReport } from "@noobot/session-protocol/execution-report";
+import { isApiRequestNotFound } from "@noobot/shared/request-error";
 import { getSessionExecutionReportApi } from "../chat/chatApi.js";
-
-let authenticatedFetcher = null;
+import { requireAuthenticatedFetcher } from "../../http/authenticatedHttpService.js";
 
 export const executionReportService = Object.freeze({
-  configure({ fetcher = null } = {}) {
-    authenticatedFetcher = typeof fetcher === "function" ? fetcher : null;
-  },
-  async getReport({ userId = "", sessionId = "", dialogProcessId = "" } = {}) {
+  async getReport({ userId, sessionId, dialogProcessId }) {
     let payload;
     try {
       payload = await getSessionExecutionReportApi(
         { userId, sessionId, dialogProcessId },
-        authenticatedFetcher ? { fetcher: authenticatedFetcher } : {},
+        { fetcher: requireAuthenticatedFetcher() },
       );
     } catch (error) {
-      if (error?.status === 404) return null;
+      if (isApiRequestNotFound(error)) return null;
       throw error;
     }
     return decodeExecutionReport(payload.report);

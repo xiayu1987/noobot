@@ -5,7 +5,24 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { firstText, isFunction, isObjectLike, isPlainObject, text } from "../value.js";
+import {
+  firstText,
+  isFunction,
+  isObjectLike,
+  isPlainObject,
+  requireFunctionDependencies,
+  text,
+} from "../value.js";
+
+test("requireFunctionDependencies names every missing function dependency", () => {
+  assert.doesNotThrow(() =>
+    requireFunctionDependencies("owner", { a: () => {}, b: async () => {} }),
+  );
+  assert.throws(
+    () => requireFunctionDependencies("owner", { a: () => {}, b: undefined, c: null, d: "x" }),
+    { name: "TypeError", message: "owner requires function dependencies: b, c, d" },
+  );
+});
 
 test("isFunction accepts functions and classes only", () => {
   for (const value of [() => {}, function named() {}, async () => {}, class Sample {}]) {

@@ -22,7 +22,6 @@ import {
   putWorkspaceFileApi,
 } from "../../../infrastructure/api/chat/chatApi.js";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
-import { createApiKeyFetch } from "../../../shared/network/apiKeyFetch.js";
 import { saveFileBlob } from "../../../infrastructure/downloads/fileDownloadService.js";
 import { parseContentDisposition } from "../../chat/composables/message/useMessagePreview/path-utils.js";
 import {
@@ -35,7 +34,7 @@ import { text } from "@noobot/shared/value";
 
 const props = defineProps({
   userId: { type: String, default: "" },
-  apiKey: { type: String, default: "" },
+  fetcher: { type: Function, required: true },
   connected: { type: Boolean, default: false },
   active: { type: Boolean, default: false },
   isSuperAdmin: { type: Boolean, default: false },
@@ -97,7 +96,6 @@ const editorActions = computed(() => [
     disabled: !activePath.value || !isTextFile.value,
   },
 ]);
-const { authFetch } = createApiKeyFetch(() => props.apiKey);
 const systemParamTreeData = computed(() => toParamTreeData(systemParamCatalog.value));
 const userParamTreeData = computed(() => toParamTreeData(userParamCatalog.value));
 
@@ -111,10 +109,10 @@ function toParamTreeData(list = []) {
 }
 
 async function loadTree() {
-  if (!props.connected || !props.userId || !props.apiKey) return;
+  if (!props.connected || !props.userId) return;
   loadingTree.value = true;
   try {
-    const res = await getWorkspaceTreeApi({ userId: props.userId }, { fetcher: authFetch });
+    const res = await getWorkspaceTreeApi({ userId: props.userId }, { fetcher: props.fetcher });
     const data = await res.json();
     if (!res.ok || !data.ok)
       throw new Error(data.error || translate("settings.loadingWorkspaceFailed"));
@@ -127,10 +125,10 @@ async function loadTree() {
 }
 
 async function loadAllWorkspaceTree() {
-  if (!props.connected || !props.apiKey || !props.isSuperAdmin) return;
+  if (!props.connected || !props.isSuperAdmin) return;
   loadingAllTree.value = true;
   try {
-    const res = await getWorkspaceAllTreeApi({ fetcher: authFetch });
+    const res = await getWorkspaceAllTreeApi({ fetcher: props.fetcher });
     const data = await res.json();
     if (!res.ok || !data.ok)
       throw new Error(data.error || translate("settings.loadingAllWorkspaceFailed"));
@@ -143,14 +141,14 @@ async function loadAllWorkspaceTree() {
 }
 
 async function loadParamCatalog(scope = "system") {
-  if (!props.connected || !props.apiKey) return;
+  if (!props.connected) return;
   const normalizedScope = text(scope).toLowerCase() === "user" ? "user" : "system";
   if (normalizedScope === "system") loadingSystemParamCatalog.value = true;
   else loadingUserParamCatalog.value = true;
   try {
     const res = await getConfigParamCatalogApi({
       scope: normalizedScope,
-      fetcher: authFetch,
+      fetcher: props.fetcher,
     });
     const data = await res.json();
     if (!res.ok || !data.ok)
@@ -183,7 +181,7 @@ async function reloadActiveFile() {
 }
 
 async function openFile(node, source = "user") {
-  if (!props.connected || !node || !props.userId || !props.apiKey) return;
+  if (!props.connected || !node || !props.userId) return;
   const normalizedSource = source === "all" ? "all" : "user";
   const nodePath = text(node.path);
   if (!nodePath) return;
@@ -200,10 +198,10 @@ async function openFile(node, source = "user") {
   try {
     const res =
       normalizedSource === "all"
-        ? await getWorkspaceAllFileApi({ path: nodePath }, { fetcher: authFetch })
+        ? await getWorkspaceAllFileApi({ path: nodePath }, { fetcher: props.fetcher })
         : await getWorkspaceFileApi(
             { userId: props.userId, path: nodePath },
-            { fetcher: authFetch },
+            { fetcher: props.fetcher },
           );
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.readFileFailed"));
@@ -220,8 +218,7 @@ async function openFile(node, source = "user") {
 }
 
 async function saveFile() {
-  if (!props.connected || !activePath.value || !props.userId || !props.apiKey || !isTextFile.value)
-    return;
+  if (!props.connected || !activePath.value || !props.userId || !isTextFile.value) return;
   saving.value = true;
   try {
     const res =
@@ -231,7 +228,7 @@ async function saveFile() {
               path: activePath.value,
               content: content.value,
             },
-            { fetcher: authFetch },
+            { fetcher: props.fetcher },
           )
         : await putWorkspaceFileApi(
             {
@@ -239,7 +236,7 @@ async function saveFile() {
               path: activePath.value,
               content: content.value,
             },
-            { fetcher: authFetch },
+            { fetcher: props.fetcher },
           );
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.saveFileFailed"));
@@ -253,14 +250,14 @@ async function saveFile() {
 }
 
 async function downloadFile() {
-  if (!props.connected || !activePath.value || !props.userId || !props.apiKey) return;
+  if (!props.connected || !activePath.value || !props.userId) return;
   try {
     const response =
       activePathSource.value === "all"
-        ? await downloadWorkspaceAllFileApi({ path: activePath.value }, { fetcher: authFetch })
+        ? await downloadWorkspaceAllFileApi({ path: activePath.value }, { fetcher: props.fetcher })
         : await downloadWorkspaceFileApi(
             { userId: props.userId, path: activePath.value },
-            { fetcher: authFetch },
+            { fetcher: props.fetcher },
           );
     if (!response?.ok) {
       let errorText = translate("settings.readFileFailed");
@@ -286,7 +283,7 @@ async function downloadFile() {
 }
 
 async function resetWorkspace() {
-  if (!props.connected || !props.userId || !props.apiKey) return;
+  if (!props.connected || !props.userId) return;
   openResetDialog("user");
 }
 
@@ -295,7 +292,7 @@ async function doResetWorkspace(sections = []) {
   try {
     const res = await postResetWorkspaceApi(
       { userId: props.userId, sections },
-      { fetcher: authFetch },
+      { fetcher: props.fetcher },
     );
     const data = await res.json();
     if (!res.ok || !data.ok)
@@ -316,10 +313,10 @@ async function doResetWorkspace(sections = []) {
 }
 
 async function syncWorkspace() {
-  if (!props.connected || !props.userId || !props.apiKey) return;
+  if (!props.connected || !props.userId) return;
   syncing.value = true;
   try {
-    const res = await postSyncWorkspaceApi({ userId: props.userId }, { fetcher: authFetch });
+    const res = await postSyncWorkspaceApi({ userId: props.userId }, { fetcher: props.fetcher });
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.syncConfigFailed"));
     await refreshAll();
@@ -333,10 +330,10 @@ async function syncWorkspace() {
 }
 
 async function syncAllWorkspace() {
-  if (!props.connected || !props.apiKey || !props.isSuperAdmin) return;
+  if (!props.connected || !props.isSuperAdmin) return;
   syncingAll.value = true;
   try {
-    const res = await postSyncAllWorkspaceApi({ fetcher: authFetch });
+    const res = await postSyncAllWorkspaceApi({ fetcher: props.fetcher });
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.syncAllFailed"));
     await refreshAll();
@@ -355,14 +352,14 @@ async function syncAllWorkspace() {
 }
 
 async function resetAllWorkspace() {
-  if (!props.connected || !props.apiKey || !props.isSuperAdmin) return;
+  if (!props.connected || !props.isSuperAdmin) return;
   openResetDialog("all");
 }
 
 async function doResetAllWorkspace(sections = []) {
   resettingAll.value = true;
   try {
-    const res = await postResetAllWorkspaceApi({ sections }, { fetcher: authFetch });
+    const res = await postResetAllWorkspaceApi({ sections }, { fetcher: props.fetcher });
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.resetAllFailed"));
     activePath.value = "";
@@ -458,13 +455,6 @@ watch(
   () => props.userId,
   () => {
     if (props.active) refreshAll();
-  },
-);
-
-watch(
-  () => props.apiKey,
-  () => {
-    if (props.active && props.connected) refreshAll();
   },
 );
 

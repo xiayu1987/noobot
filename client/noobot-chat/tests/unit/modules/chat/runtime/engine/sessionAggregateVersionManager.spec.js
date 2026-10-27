@@ -89,4 +89,39 @@ describe("sessionAggregateVersionManager stream protocol", () => {
     ).rejects.toBe(streamError);
     expect(stream).toHaveBeenCalledTimes(1);
   });
+
+  it("rejects construction without an activeSession ref", () => {
+    expect(() => createSessionAggregateVersionManager({ activeSession: null })).toThrow(
+      /activeSession ref/,
+    );
+    expect(() => createSessionAggregateVersionManager({ activeSession: {} })).toThrow(
+      /activeSession ref/,
+    );
+  });
+
+  it("rejects a versioned mutation without a mutate function", async () => {
+    const manager = createSessionAggregateVersionManager({
+      activeSession: ref({ sessionId: "s1", aggregateVersion: 2 }),
+    });
+
+    await expect(manager.runAggregateVersionedMutation({})).rejects.toThrow(/mutate/);
+  });
+
+  it("rejects a versioned stream without buildPayload and stream functions", async () => {
+    const manager = createSessionAggregateVersionManager({
+      activeSession: ref({ sessionId: "s1", aggregateVersion: 2 }),
+    });
+
+    await expect(manager.runAggregateVersionedStream({})).rejects.toThrow(/buildPayload, stream/);
+  });
+
+  it("rejects a versioned mutation when there is no active session", async () => {
+    const mutate = vi.fn();
+    const manager = createSessionAggregateVersionManager({ activeSession: ref(null) });
+
+    await expect(manager.runAggregateVersionedMutation({ mutate })).rejects.toThrow(
+      /requires an active session/,
+    );
+    expect(mutate).not.toHaveBeenCalled();
+  });
 });

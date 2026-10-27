@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export function resolveRawAttachmentFile(fileItem) {
   if (!fileItem) return null;
   if (fileItem.raw) return fileItem.raw;
@@ -29,15 +31,17 @@ async function attachmentFileToBase64(file) {
   });
 }
 
-export async function serializeAttachments(files = []) {
+export async function serializeAttachments(files) {
   const output = [];
-  for (const fileItem of Array.isArray(files) ? files : []) {
+  for (const fileItem of files) {
     const rawFile = resolveRawAttachmentFile(fileItem);
     if (!rawFile) continue;
+    const clientAttachmentId = text(fileItem.clientAttachmentId);
+    if (!clientAttachmentId) {
+      throw new TypeError("serializeAttachments requires clientAttachmentId");
+    }
     output.push({
-      ...(fileItem.clientAttachmentId || fileItem.draftAttachmentId
-        ? { clientAttachmentId: String(fileItem.clientAttachmentId || fileItem.draftAttachmentId) }
-        : {}),
+      clientAttachmentId,
       name: fileItem.name || rawFile.name || "attachment",
       mimeType: fileItem.mimeType || rawFile.type || "application/octet-stream",
       contentBase64: await attachmentFileToBase64(rawFile),

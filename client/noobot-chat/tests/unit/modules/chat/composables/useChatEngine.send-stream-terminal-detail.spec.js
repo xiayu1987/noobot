@@ -5,9 +5,11 @@
  */
 import { ref } from "vue";
 import { describe, expect, it, vi } from "vitest";
+import { AGENT_COMMAND } from "@noobot/agent-transport-protocol";
 import { createHarness, emitChannelState } from "../helpers/useChatEngineHarness.js";
 import { createSessionDetailApplicator } from "../../../../../src/modules/session/model/list/sessionDetailApply.js";
-import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
+import { createTurnRuntimeStoreActions } from "../../../../../src/modules/chat/stores/chatStoreTurnRuntime.js";
+import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 
 describe("useChatEngine.send-stream terminal detail", () => {
   it("preserves a fresh replacement turn instead of applying a stale stopped snapshot", async () => {
@@ -37,25 +39,20 @@ describe("useChatEngine.send-stream terminal detail", () => {
       emitChannelState(onEvent, "local-stop-detail-preserve", "dp-new", "user_stopped", {
         turnScopeId: payload.identity.turnScopeId,
       });
-      onEvent({
-        event: StreamEventEnum.USER_STOPPED,
-        data: {
-          sessionId: "local-stop-detail-preserve",
-          dialogProcessId: "dp-new",
-          turnScopeId: payload.identity.turnScopeId,
-        },
-      });
     });
     const harness = createHarness({ sessionId: "local-stop-detail-preserve", stream });
     const sessions = ref([harness.activeSession.value]);
     const { applySessionDetail } = createSessionDetailApplicator({
       sessions,
-      activeSessionId: harness.activeSessionId,
+      turnRuntimeRegistry: harness.turnRuntimeRegistry,
+      chatStore: createTurnRuntimeStoreActions(harness.turnRuntimeRegistry, {
+        onTurnCommitted: vi.fn(() => null),
+        onTurnEvaluated: vi.fn(),
+      }),
       makeViewMessage: (message) => ({ ...message }),
       sessionTitleFromMessages: () => "title",
-      applyCompletedToolLogsToMessages: vi.fn(),
-      scrollBottom: vi.fn(),
-      isSameSessionIdentity: (a, b) => String(a) === String(b),
+      navigateToLastMessage: vi.fn(),
+      onSessionDetailApplied: vi.fn(),
     });
     harness.deps.fetchSessionDetail = fetchSessionDetail;
     harness.deps.applySessionDetail = applySessionDetail;
@@ -71,11 +68,12 @@ describe("useChatEngine.send-stream terminal detail", () => {
     ];
 
     await harness.engine.send({
-      content: "edited question",
-      turnScopeId: "client-turn:fresh",
-      dialogProcessId: "dialog:client-turn:fresh",
-      reuseExistingUserTurn: true,
+      commandType: AGENT_COMMAND.RESEND,
       userMessageId: "msg-user-fresh",
+      dialogProcessId: "dialog:client-turn:fresh",
+      turnScopeId: "client-turn:fresh",
+      messageText: "edited question",
+      attachments: [],
     });
 
     const messages = harness.activeSession.value.messages;

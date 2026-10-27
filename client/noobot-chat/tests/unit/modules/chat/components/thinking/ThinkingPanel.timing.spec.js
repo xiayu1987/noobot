@@ -29,6 +29,7 @@ function runtime(overrides = {}) {
 function thinkingMessage(overrides = {}) {
   return {
     role: "assistant",
+    content: "",
     sessionId: "session-1",
     turnScopeId: "turn-1",
     activityTimeline: [canonicalActivityFact({ eventId: "thinking-1", text: "thinking" })],

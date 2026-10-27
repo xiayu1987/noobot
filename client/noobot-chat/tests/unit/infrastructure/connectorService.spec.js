@@ -6,11 +6,9 @@
 import { ref } from "vue";
 import { describe, expect, it, vi } from "vitest";
 import { createConnectorService } from "../../../src/infrastructure/api/connectors/connectorService.js";
+import { jsonResponse } from "../helpers/jsonResponse.js";
 
-const okResponse = (payload) => ({
-  ok: true,
-  json: async () => ({ ok: true, ...payload }),
-});
+const okResponse = (payload) => jsonResponse({ ok: true, ...payload });
 
 describe("connectorService", () => {
   it("hydrates public connectors and the root Session selection", async () => {
@@ -31,6 +29,7 @@ describe("connectorService", () => {
       }),
     );
     const service = createConnectorService({
+      listUserConnectorsApi: vi.fn(),
       ensureConnected: () => true,
       getSessionConnectorsApi,
       putSessionConnectorSelectionApi: vi.fn(),
@@ -67,6 +66,7 @@ describe("connectorService", () => {
       connectorPanelState: { rootSessionId: "root-1", connectors: [] },
     };
     const service = createConnectorService({
+      listUserConnectorsApi: vi.fn(),
       ensureConnected: () => true,
       getSessionConnectorsApi: vi.fn(),
       putSessionConnectorSelectionApi,
@@ -98,6 +98,7 @@ describe("connectorService", () => {
       connectorPanelState: { connectors: [{ connectorId: "con_db" }] },
     };
     const service = createConnectorService({
+      listUserConnectorsApi: vi.fn(),
       ensureConnected: () => true,
       getSessionConnectorsApi: vi.fn(),
       putSessionConnectorSelectionApi,
@@ -182,6 +183,7 @@ describe("connectorService", () => {
       connectorPanelState: { connectors: [{ connectorId: "con_db" }] },
     };
     const service = createConnectorService({
+      listUserConnectorsApi: vi.fn(),
       ensureConnected: () => true,
       getSessionConnectorsApi: vi.fn(),
       putSessionConnectorSelectionApi,
@@ -223,6 +225,7 @@ describe("connectorService", () => {
       connectorPanelState: { connectors: [{ connectorId: "con_db" }] },
     };
     const service = createConnectorService({
+      listUserConnectorsApi: vi.fn(),
       ensureConnected: () => true,
       getSessionConnectorsApi,
       putSessionConnectorSelectionApi,

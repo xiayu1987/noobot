@@ -16,7 +16,7 @@ import { getMessageAttachments as resolveRenderableMessageAttachments } from "..
 import { SESSION_RUN_MESSAGE_RUNTIME_MARK } from "../../runtime/sessionRunStateMachine.js";
 import { logStateMachineDebug } from "../../../debug/loggers/stateMachineLogger.js";
 import { logWorkflowDiagnostics } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
-import { resolveParsedResultAccessMeta } from "../../../../infrastructure/api/attachments/attachmentAccess.js";
+import { resolveParsedResultRelation } from "../../../../infrastructure/api/attachments/attachmentAccess.js";
 import { isPlainObject, text } from "@noobot/shared/value";
 
 function getMessageAttachments(messageItem = {}) {
@@ -145,11 +145,10 @@ export function useMessageFiles({ getMessageItem = () => ({}), getAllMessages = 
       role: getMessageRole(messageItem),
       attachments: result.map((attachment) => ({
         attachmentId: text(attachment?.attachmentId),
-        clientAttachmentId: text(attachment?.clientAttachmentId || attachment?.draftAttachmentId),
+        clientAttachmentId: text(attachment?.clientAttachmentId),
         sessionId: text(attachment?.sessionId),
         attachmentSource: text(attachment?.attachmentSource),
-        parsedResultTargetIdentity:
-          resolveParsedResultAccessMeta(attachment)?.relation?.targetIdentity || null,
+        parsedResultTargetIdentity: resolveParsedResultRelation(attachment)?.targetIdentity || null,
       })),
     }));
     logDisplayedAttachmentsSummary({

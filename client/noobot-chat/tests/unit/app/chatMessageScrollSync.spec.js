@@ -10,15 +10,14 @@ import {
   lockChatMessageScrollSyncToAnchor,
 } from "../../../src/app/runtime/chatMessageScrollSync.js";
 
-function createAnchor({ top, anchorId = "", id = "" }) {
+function createAnchor({ top, anchorId }) {
   return {
     offsetTop: top,
-    id,
     dataset: { chatMessageAnchor: anchorId },
   };
 }
 
-function createWrapRef(anchors = [], scrollTop = 0) {
+function createWrapRef(anchors, scrollTop) {
   return {
     scrollTop,
     querySelectorAll: vi.fn(() => anchors),
@@ -43,12 +42,12 @@ describe("chat message scroll sync", () => {
     expect(currentMessageAnchorId.value).toBe("");
   });
 
-  it("highlights the latest anchor above the scroll threshold and falls back to element id", () => {
+  it("highlights the latest anchor above the scroll threshold", () => {
     const currentMessageAnchorId = { value: "" };
     const wrapRef = createWrapRef(
       [
         createAnchor({ top: 0, anchorId: "message-1" }),
-        createAnchor({ top: 84, id: "message-2" }),
+        createAnchor({ top: 84, anchorId: "message-2" }),
         createAnchor({ top: 200, anchorId: "message-3" }),
       ],
       72,
@@ -175,5 +174,16 @@ describe("chat message scroll sync", () => {
       scrollSync.syncCurrentMessageAnchorId,
     );
     expect(wrapRef.__noobotChatNavScrollSyncBound).toBeUndefined();
+  });
+
+  it("does nothing while the message list panel is not mounted", () => {
+    const currentMessageAnchorId = { value: "keep-anchor" };
+    const messageListPanelRef = { value: null };
+    const scrollSync = createChatMessageScrollSync({ currentMessageAnchorId, messageListPanelRef });
+
+    expect(() => scrollSync.bindChatMessageScrollSync()).not.toThrow();
+    expect(() => scrollSync.syncCurrentMessageAnchorId()).not.toThrow();
+    expect(() => scrollSync.unbindChatMessageScrollSync()).not.toThrow();
+    expect(currentMessageAnchorId.value).toBe("keep-anchor");
   });
 });

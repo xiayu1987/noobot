@@ -9,6 +9,8 @@ import { useChatList } from "../../../../../src/modules/chat/composables/useChat
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { createTurnRuntimeRegistryState } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { createTurnRuntimeStoreActions } from "../../../../../src/modules/chat/stores/chatStoreTurnRuntime.js";
+import { rejectUnexpectedRequest } from "../../../helpers/jsonResponse.js";
+import { ROOT_PARENT_SESSION_ID } from "@noobot/agent-transport-protocol";
 
 vi.mock("../../../../../src/shared/i18n/useLocale", () => ({
   useLocale: () => ({
@@ -26,8 +28,9 @@ function createUseChatListFixture(overrides = {}) {
   const loadingSessionDetail = ref(false);
   const sending = ref(false);
   const notify = vi.fn();
-  const scrollBottom = vi.fn();
+  const navigateToLastMessage = vi.fn();
   const refreshSessionConnectorsAsync = vi.fn();
+  const authFetch = vi.fn(rejectUnexpectedRequest);
 
   const getSessionsApi = overrides.getSessionsApi || vi.fn();
   const getSessionDetailApi = overrides.getSessionDetailApi || vi.fn();
@@ -43,7 +46,7 @@ function createUseChatListFixture(overrides = {}) {
     userId,
     connected,
     ensureConnected,
-    authFetch: null,
+    authFetch,
     sessions,
     activeSessionId,
     loadingSessions,
@@ -57,8 +60,10 @@ function createUseChatListFixture(overrides = {}) {
     getSessionsApi,
     getSessionDetailApi,
     deleteSessionApi: vi.fn(),
+    renameSessionApi: vi.fn(),
+    navigateToLastMessage,
+    onSessionDetailApplied: vi.fn(),
     makeViewMessage: (message) => ({ ...message }),
-    scrollBottom,
     refreshSessionConnectorsAsync,
     clearUploads: vi.fn(),
     notify,
@@ -74,10 +79,11 @@ function createUseChatListFixture(overrides = {}) {
       sending,
     },
     mocks: {
+      authFetch,
       getSessionsApi,
       getSessionDetailApi,
       notify,
-      scrollBottom,
+      navigateToLastMessage,
       refreshSessionConnectorsAsync,
     },
   };
@@ -149,6 +155,7 @@ describe("useChatList", () => {
         sessions: [
           {
             sessionId: "backend-1",
+            parentSessionId: ROOT_PARENT_SESSION_ID,
             caller: RoleEnum.USER,
             createdAt: "2026-05-14T00:00:00.000Z",
             updatedAt: "2026-05-14T00:01:00.000Z",
@@ -163,7 +170,9 @@ describe("useChatList", () => {
         ok: true,
         exists: true,
         sessionId: "backend-1",
-        sessions: [{ sessionId: "backend-1", messages: [] }],
+        sessions: [
+          { sessionId: "backend-1", parentSessionId: ROOT_PARENT_SESSION_ID, messages: [] },
+        ],
       }),
     });
 
@@ -187,6 +196,7 @@ describe("useChatList", () => {
         sessions: [
           {
             sessionId: "backend-2",
+            parentSessionId: ROOT_PARENT_SESSION_ID,
             caller: RoleEnum.USER,
             createdAt: "2026-05-14T00:00:00.000Z",
             updatedAt: "2026-05-14T00:01:00.000Z",
@@ -203,7 +213,14 @@ describe("useChatList", () => {
           ok: true,
           exists: true,
           sessionId: "backend-2",
-          sessions: [{ sessionId: "backend-2", messages: [] }],
+          sessions: [
+            {
+              sessionId: "backend-2",
+              parentSessionId: ROOT_PARENT_SESSION_ID,
+              turnTimings: [],
+              messages: [],
+            },
+          ],
         }),
       })),
     });
@@ -229,6 +246,7 @@ describe("useChatList", () => {
           sessions: [
             {
               sessionId: "session-from-route",
+              parentSessionId: ROOT_PARENT_SESSION_ID,
               turnTimings: [],
               caller: RoleEnum.USER,
               messages: [
@@ -275,7 +293,15 @@ describe("useChatList", () => {
               ok: true,
               exists: true,
               sessionId,
-              sessions: [{ sessionId, caller: RoleEnum.USER, messages: [], turnTimings: [] }],
+              sessions: [
+                {
+                  sessionId,
+                  parentSessionId: ROOT_PARENT_SESSION_ID,
+                  caller: RoleEnum.USER,
+                  messages: [],
+                  turnTimings: [],
+                },
+              ],
             },
     }));
     const fixture = createUseChatListFixture({
@@ -286,6 +312,7 @@ describe("useChatList", () => {
           sessions: [
             {
               sessionId: "persisted-session",
+              parentSessionId: ROOT_PARENT_SESSION_ID,
               caller: RoleEnum.USER,
               updatedAt: "2026-08-05T00:00:00.000Z",
             },
@@ -308,7 +335,7 @@ describe("useChatList", () => {
     expect(fixture.mocks.notify).not.toHaveBeenCalled();
     expect(getSessionDetailApi).toHaveBeenCalledWith(
       { userId: "u-1", sessionId: "missing-session" },
-      { fetcher: null },
+      { fetcher: fixture.mocks.authFetch },
     );
   });
 
@@ -322,6 +349,7 @@ describe("useChatList", () => {
           sessions: [
             {
               sessionId: "backend-refresh",
+              parentSessionId: ROOT_PARENT_SESSION_ID,
               caller: RoleEnum.USER,
               createdAt: "2026-05-14T00:00:00.000Z",
               updatedAt: "2026-05-14T00:03:00.000Z",
@@ -339,6 +367,7 @@ describe("useChatList", () => {
           sessions: [
             {
               sessionId: "backend-refresh",
+              parentSessionId: ROOT_PARENT_SESSION_ID,
               turnTimings: [],
               currentTaskId: "",
               createdAt: "2026-05-14T00:00:00.000Z",
@@ -397,7 +426,9 @@ describe("useChatList", () => {
         ok: true,
         exists: true,
         sessionId: "backend-cache",
-        sessions: [{ sessionId: "backend-cache", messages: [] }],
+        sessions: [
+          { sessionId: "backend-cache", parentSessionId: ROOT_PARENT_SESSION_ID, messages: [] },
+        ],
       }),
     }));
     const { api } = createUseChatListFixture({ getSessionDetailApi });
@@ -421,7 +452,13 @@ describe("useChatList", () => {
                 ok: true,
                 exists: true,
                 sessionId: "backend-pending",
-                sessions: [{ sessionId: "backend-pending", messages: [] }],
+                sessions: [
+                  {
+                    sessionId: "backend-pending",
+                    parentSessionId: ROOT_PARENT_SESSION_ID,
+                    messages: [],
+                  },
+                ],
               }),
             });
         }),
@@ -495,6 +532,7 @@ describe("useChatList", () => {
       sessions: [
         {
           sessionId: "reload-backend",
+          parentSessionId: ROOT_PARENT_SESSION_ID,
           turnTimings: [],
           currentTaskId: "",
           createdAt: "2026-05-14T00:00:00.000Z",
@@ -520,7 +558,7 @@ describe("useChatList", () => {
     expect(session.loaded).toBe(true);
     expect(session.messages).toHaveLength(2);
     expect(session.title).toBe("restored question");
-    expect(mocks.scrollBottom).not.toHaveBeenCalled();
+    expect(mocks.navigateToLastMessage).not.toHaveBeenCalled();
   });
 
   it("selectSession allows switching while another session is sending", async () => {

@@ -11,6 +11,10 @@ import {
 
 export const AGENT_TRANSPORT_PROTOCOL_VERSION = 2;
 
+export const ROOT_PARENT_SESSION_ID = "";
+export const ROOT_PARENT_DIALOG_PROCESS_ID = "";
+export const CHANNEL_IDENTITY_KEYS = Object.freeze(["sessionId", "parentSessionId"]);
+
 export const AGENT_COMMAND = Object.freeze({
   SEND: TURN_COMMAND.SEND,
   RESEND: TURN_COMMAND.RESEND,

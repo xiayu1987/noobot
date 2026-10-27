@@ -51,6 +51,7 @@ describe("reconnect authoritative message event replay", () => {
           turnScopeId: "turn-1",
           content: "question",
           attachments: [],
+          ts: "2026-01-01T00:00:00.000Z",
         },
         assistantMessage: {
           presentationMessageId: "assistant-1",
@@ -326,6 +327,7 @@ describe("reconnect authoritative message event replay", () => {
       buildViewMessage(
         {
           role: "assistant",
+          content: "",
           sessionId: "session-1",
           presentationMessageId: "message-1",
           turnScopeId: "turn-1",
@@ -369,6 +371,7 @@ describe("reconnect authoritative message event replay", () => {
     const targetMessage = buildViewMessage(
       {
         role: "assistant",
+        content: "",
         presentationMessageId: "message-1",
         turnScopeId: "turn-stopped",
       },
@@ -388,6 +391,7 @@ describe("reconnect authoritative message event replay", () => {
     const ordered = buildViewMessage(
       {
         role: "assistant",
+        content: "",
         presentationMessageId: "message-1",
         turnScopeId: "turn-1",
       },
@@ -396,6 +400,7 @@ describe("reconnect authoritative message event replay", () => {
     const reordered = buildViewMessage(
       {
         role: "assistant",
+        content: "",
         presentationMessageId: "message-1",
         turnScopeId: "turn-1",
       },
@@ -442,6 +447,7 @@ describe("reconnect authoritative message event replay", () => {
     const continuation = buildViewMessage(
       {
         role: "assistant",
+        content: "",
         sessionId: "session-1",
         presentationMessageId: "message-1",
         turnScopeId: "turn-1",
@@ -470,6 +476,7 @@ describe("reconnect authoritative message event replay", () => {
   it("projects canonical delta and tool facts once", () => {
     const targetMessage = buildViewMessage(
       {
+        content: "",
         sessionId: "session-1",
         presentationMessageId: "message-1",
         turnScopeId: "turn-1",

@@ -30,7 +30,6 @@ export function summarizeAgentTransportCommand(rawCommand, extra = {}) {
     sessionId: clean(identity.sessionId),
     parentSessionId: clean(identity.parentSessionId),
     dialogProcessId: clean(identity.dialogProcessId),
-    parentDialogProcessId: clean(identity.parentDialogProcessId),
     turnScopeId: clean(identity.turnScopeId),
     topLevelFields: Object.keys(command).sort(),
     messageLength: typeof command.input?.message === "string" ? command.input.message.length : 0,

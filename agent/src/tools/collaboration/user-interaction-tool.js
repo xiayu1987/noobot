@@ -246,7 +246,6 @@ export function createUserInteractionTool({ agentContext }) {
         toolName: TOOL_NAME.USER_INTERACTION,
         timeoutMs: Number.isInteger(timeoutMs) && timeoutMs > 0 ? timeoutMs : undefined,
         lifecycle: "pending",
-        ackMode: "manual",
         resolvedBy: "",
       });
 

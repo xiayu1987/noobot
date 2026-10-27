@@ -14,6 +14,7 @@ import { ChannelManager } from "../../src/channel/channel-manager.js";
 import { createChannelKey } from "../../src/shared/utils.js";
 import { FakeUpstreamWebSocket } from "../channel/channel-manager.state-consistency.test-helpers.js";
 import { CommandRegistry, PENDING_COMMAND_KIND } from "../../src/channel/command-registry.js";
+import { rootCommandIdentity } from "../shared/command-identity.js";
 import {
   AGENT_COMMAND,
   AGENT_TRANSPORT_EVENT,
@@ -40,7 +41,7 @@ function runCommand({
 } = {}) {
   return createTurnRunCommand({
     commandType,
-    identity: { sessionId, turnScopeId },
+    identity: rootCommandIdentity(commandType, { sessionId, turnScopeId }),
     input: { message: "continue", attachments: [] },
     preferences: {},
     presentation: {
@@ -54,7 +55,7 @@ function runCommand({
 
 function stopCommand({ sessionId = "session-1", turnScopeId = "turn-1" } = {}) {
   return createTurnStopCommand({
-    identity: { sessionId, dialogProcessId: "dialog-1", turnScopeId },
+    identity: rootCommandIdentity(AGENT_COMMAND.STOP, { sessionId, turnScopeId }),
     concurrency: { expectedTurnRevision: 1 },
     stop: {},
   });
@@ -63,7 +64,11 @@ function stopCommand({ sessionId = "session-1", turnScopeId = "turn-1" } = {}) {
 function interjectionCommand({ sessionId = "session-1", turnScopeId = "turn-1" } = {}) {
   return createTurnInterjectionCommand({
     commandId: `interject:${turnScopeId}`,
-    identity: { sessionId, dialogProcessId: "dialog-1", turnScopeId },
+    identity: rootCommandIdentity(AGENT_COMMAND.INTERJECT, {
+      sessionId,
+      dialogProcessId: "dialog-1",
+      turnScopeId,
+    }),
     interaction: { message: "apply this constraint" },
   });
 }
@@ -172,7 +177,7 @@ test("ws router forwards execution queries by authoritative commandType", () => 
   const payload = createExecutionQueryCommand({
     commandType: AGENT_COMMAND.EXECUTION_TREE_GET,
     commandId: "execution-query-1",
-    identity: { sessionId: "session-1" },
+    identity: rootCommandIdentity(AGENT_COMMAND.EXECUTION_TREE_GET, { sessionId: "session-1" }),
     query: { executionId: "", rootExecutionId: "workflow-root" },
   });
 
@@ -271,7 +276,7 @@ test("ws router reports reconnect transaction failure without closing the shared
     JSON.stringify(
       createReconnectControl({
         requestId: "reconnect-1",
-        identity: { sessionId: "s-reconnect", parentSessionId: "", parentDialogProcessId: "" },
+        identity: { sessionId: "s-reconnect", parentSessionId: "" },
         knownLifecycleSequenceMap: {},
       }),
     ),

@@ -4,12 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { TEST_MESSAGE_TS } from "../../helpers/session-run-payload.js";
+
 export function createPersistedCurrentUserMessage(content, overrides = {}) {
   return {
     messageUid: "sm_current_user_fixture",
     role: "user",
     type: "message",
-    content: String(content || ""),
+    content,
     userName: "u1",
     sessionId: "s1",
     parentSessionId: "",
@@ -18,6 +20,7 @@ export function createPersistedCurrentUserMessage(content, overrides = {}) {
     turnScopeId: "turn-current",
     messageOrigin: "natural",
     attachments: [],
+    ts: TEST_MESSAGE_TS,
     ...overrides,
   };
 }

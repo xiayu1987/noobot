@@ -36,7 +36,7 @@ export function resolveMessageEventTrace(eventName = "", data = {}, transportSeq
 }
 
 const CHANNEL_KEY_SEPARATOR = "::";
-const CHANNEL_KEY_FIELDS = ["userId", "sessionId", "parentSessionId", "parentDialogProcessId"];
+const CHANNEL_KEY_FIELDS = ["userId", "sessionId", "parentSessionId"];
 const CHANNEL_KEY_REQUIRED_FIELDS = ["userId", "sessionId"];
 
 function assertChannelKeyIdentity(identity, source) {

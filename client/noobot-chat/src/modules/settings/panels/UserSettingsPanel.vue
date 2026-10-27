@@ -16,7 +16,6 @@ import {
   putTemplateFileApi,
 } from "../../../infrastructure/api/chat/chatApi.js";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
-import { createApiKeyFetch } from "../../../shared/network/apiKeyFetch.js";
 import {
   SettingsActionGroup,
   SettingsJsonListEditorLayout,
@@ -28,7 +27,7 @@ import {
 import { text } from "@noobot/shared/value";
 
 const props = defineProps({
-  apiKey: { type: String, default: "" },
+  fetcher: { type: Function, required: true },
   connected: { type: Boolean, default: false },
   active: { type: Boolean, default: false },
 });
@@ -76,7 +75,6 @@ const templateEditorActions = computed(() => [
     disabled: !templateActivePath.value || !templateIsTextFile.value,
   },
 ]);
-const { authFetch } = createApiKeyFetch(() => props.apiKey);
 
 function normalizeUsers(list = []) {
   return (Array.isArray(list) ? list : [])
@@ -130,10 +128,10 @@ const usersJsonText = computed({
 });
 
 async function loadUsers() {
-  if (!props.connected || !props.apiKey) return;
+  if (!props.connected) return;
   loading.value = true;
   try {
-    const res = await getRegularUsersApi({ fetcher: authFetch });
+    const res = await getRegularUsersApi({ fetcher: props.fetcher });
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.loadUsersFailed"));
     users.value = normalizeUsers(data.users || []);
@@ -147,10 +145,10 @@ async function loadUsers() {
 }
 
 async function loadTemplateTree() {
-  if (!props.connected || !props.apiKey) return;
+  if (!props.connected) return;
   templateLoadingTree.value = true;
   try {
-    const res = await getTemplateTreeApi({ fetcher: authFetch });
+    const res = await getTemplateTreeApi({ fetcher: props.fetcher });
     const data = await res.json();
     if (!res.ok || !data.ok)
       throw new Error(data.error || translate("settings.loadTemplateDirFailed"));
@@ -163,10 +161,10 @@ async function loadTemplateTree() {
 }
 
 async function openTemplateFile(node) {
-  if (!props.connected || !props.apiKey || !node || node.type !== "file") return;
+  if (!props.connected || !node || node.type !== "file") return;
   templateLoadingFile.value = true;
   try {
-    const res = await getTemplateFileApi({ path: node.path }, { fetcher: authFetch });
+    const res = await getTemplateFileApi({ path: node.path }, { fetcher: props.fetcher });
     const data = await res.json();
     if (!res.ok || !data.ok)
       throw new Error(data.error || translate("settings.readTemplateFileFailed"));
@@ -181,13 +179,13 @@ async function openTemplateFile(node) {
 }
 
 async function saveTemplateFile() {
-  if (!props.connected || !props.apiKey || !templateActivePath.value) return;
+  if (!props.connected || !templateActivePath.value) return;
   if (!templateIsTextFile.value) return;
   templateSaving.value = true;
   try {
     const res = await putTemplateFileApi(
       { path: templateActivePath.value, content: templateContent.value },
-      { fetcher: authFetch },
+      { fetcher: props.fetcher },
     );
     const data = await res.json();
     if (!res.ok || !data.ok)
@@ -300,14 +298,14 @@ function validateUsers(list = []) {
 }
 
 async function saveUsers() {
-  if (!props.connected || !props.apiKey) return;
+  if (!props.connected) return;
   saving.value = true;
   try {
     if (!syncUsersFromJsonDraft()) {
       throw new Error(translate("settings.fixJsonError"));
     }
     const payloadUsers = validateUsers(users.value);
-    const res = await putRegularUsersApi({ users: payloadUsers }, { fetcher: authFetch });
+    const res = await putRegularUsersApi({ users: payloadUsers }, { fetcher: props.fetcher });
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.saveUsersFailed"));
     users.value = normalizeUsers(data.users || payloadUsers);
@@ -329,15 +327,6 @@ watch(
     if (activeTab.value === "template") loadTemplateTree();
   },
   { immediate: true },
-);
-
-watch(
-  () => props.apiKey,
-  () => {
-    if (!props.active || !props.connected) return;
-    if (activeTab.value === "users") loadUsers();
-    if (activeTab.value === "template") loadTemplateTree();
-  },
 );
 
 watch(

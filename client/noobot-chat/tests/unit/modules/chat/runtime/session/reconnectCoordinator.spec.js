@@ -5,7 +5,11 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
-import { createReconnectControl, createReconnectData } from "@noobot/agent-transport-protocol";
+import {
+  ROOT_PARENT_SESSION_ID,
+  createReconnectControl,
+  createReconnectData,
+} from "@noobot/agent-transport-protocol";
 import { createExecutionQueryEnvelope } from "@noobot/event-protocol/execution-query";
 import { deriveAgentExecutionId } from "@noobot/session-protocol/execution-lifecycle";
 import { createReconnectCoordinator } from "../../../../../../src/modules/chat/runtime/session/reconnectCoordinator.js";
@@ -17,27 +21,12 @@ import { applyExecutionProjection } from "../../../../../../src/modules/chat/run
 import { StreamEventEnum } from "../../../../../../src/modules/chat/model/chatConstants.js";
 
 describe("createReconnectCoordinator", () => {
-  it("does not reconnect a local Session without a backend identity", async () => {
-    const chatWebSocketClient = { reconnect: vi.fn() };
-    const coordinator = createReconnectCoordinator({
-      activeSession: ref({ id: "local-1", sessionId: "", isLocal: true, messages: [] }),
-      turnRuntimeRegistry: ref(createTurnRuntimeRegistryState()),
-      chatWebSocketClient,
-      reconnectReplay: {},
-      resolveActiveTurn: () => null,
-    });
-
-    await expect(coordinator.handleReconnect()).resolves.toBe(false);
-    expect(chatWebSocketClient.reconnect).not.toHaveBeenCalled();
-  });
-
   it("declares the active child session parent identity on reconnect", async () => {
     const chatWebSocketClient = { reconnect: vi.fn(async () => {}) };
     const coordinator = createReconnectCoordinator({
       activeSession: ref({
         sessionId: "child-1",
         parentSessionId: "parent-1",
-        parentDialogProcessId: "parent-dp-1",
         messages: [],
       }),
       turnRuntimeRegistry: ref(createTurnRuntimeRegistryState()),
@@ -56,7 +45,6 @@ describe("createReconnectCoordinator", () => {
       identity: {
         sessionId: "child-1",
         parentSessionId: "parent-1",
-        parentDialogProcessId: "parent-dp-1",
       },
     });
     expect("userId" in request).toBe(false);
@@ -83,7 +71,7 @@ describe("createReconnectCoordinator", () => {
         });
         const control = createReconnectControl({
           requestId: "reconnect-s-1",
-          identity: { sessionId: "s-1", parentSessionId: "", parentDialogProcessId: "" },
+          identity: { sessionId: "s-1", parentSessionId: "" },
           knownLifecycleSequenceMap: {},
         });
         onReconnectData({
@@ -165,7 +153,11 @@ describe("createReconnectCoordinator", () => {
       }),
     };
     const coordinator = createReconnectCoordinator({
-      activeSession: ref({ sessionId: "s-1", messages: [] }),
+      activeSession: ref({
+        sessionId: "s-1",
+        parentSessionId: ROOT_PARENT_SESSION_ID,
+        messages: [],
+      }),
       turnRuntimeRegistry: ref(registry),
       chatWebSocketClient,
       reconnectReplay,
@@ -183,5 +175,63 @@ describe("createReconnectCoordinator", () => {
       StreamEventEnum.EXECUTION_TREE,
       StreamEventEnum.EXECUTION_SNAPSHOT,
     ]);
+  });
+
+  it("reports a failed direct execution restore to the user and the session log", async () => {
+    const registry = createTurnRuntimeRegistryState();
+    registry.sessions["s-1"] = {
+      activeTurnScopeId: "turn-1",
+      turns: { "turn-1": { sessionId: "s-1", turnScopeId: "turn-1", state: "processing" } },
+    };
+    const executionId = deriveAgentExecutionId({ turnScopeId: "turn-1" });
+    expect(
+      applyExecutionProjection(registry, {
+        executionId,
+        executionKind: "agent",
+        rootExecutionId: executionId,
+        sessionId: "s-1",
+        turnScopeId: "turn-1",
+        revision: 1,
+        sequence: 1,
+        state: "processing",
+      }).applied,
+    ).toBe(true);
+    const logSessionSystemEvent = vi.fn();
+    const notify = vi.fn();
+    const coordinator = createReconnectCoordinator({
+      activeSession: ref({
+        sessionId: "s-1",
+        parentSessionId: ROOT_PARENT_SESSION_ID,
+        messages: [],
+      }),
+      turnRuntimeRegistry: ref(registry),
+      chatWebSocketClient: {
+        reconnect: vi.fn(async () => {}),
+        requestJson: vi.fn(async () => {
+          throw new Error("query rejected");
+        }),
+      },
+      reconnectReplay: {
+        applyReconnectData: vi.fn(),
+        applyReconnectEvent: vi.fn(async () => ({ applied: true })),
+      },
+      resolveActiveTurn: () => selectTurnRuntimeByScope(registry, "s-1", "turn-1"),
+      logSessionSystemEvent,
+      notify,
+      translate: (key) => key,
+    });
+
+    await coordinator.handleReconnect();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(logSessionSystemEvent).toHaveBeenCalledWith("reconnect.execution_restore_failed", {
+      executionId,
+      rootExecutionId: executionId,
+      error: "query rejected",
+    });
+    expect(notify).toHaveBeenCalledWith({
+      type: "warning",
+      message: "infra.reconnectExecutionRestoreFailed",
+    });
   });
 });

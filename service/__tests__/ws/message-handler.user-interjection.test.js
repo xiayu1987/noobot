@@ -86,7 +86,6 @@ function createFixture() {
         sessionId: handle.sessionId,
         parentSessionId: "",
         dialogProcessId: handle.dialogProcessId,
-        parentDialogProcessId: "",
         turnScopeId: handle.turnScopeId,
       },
       interaction: { message },

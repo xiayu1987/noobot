@@ -17,16 +17,27 @@ import {
   reconnectControl,
 } from "./channel-manager.state-consistency.test-helpers.js";
 import { TURN_EVENT } from "@noobot/session-protocol";
-import { createInteractionResponseCommand } from "@noobot/agent-transport-protocol";
+import { AGENT_COMMAND, createInteractionResponseCommand } from "@noobot/agent-transport-protocol";
+import { rootCommandIdentity } from "../shared/command-identity.js";
 import { INTERACTION_EVENT_TYPE } from "@noobot/event-protocol";
 import { authoritativeLifecycle } from "./channel-manager.state-consistency.reconnect.fixtures.js";
 
 const hasPendingRequest = (replayBatch, requestId) =>
   replayBatch?.pendingInteractions?.some((item) => item?.payload?.requestId === requestId) === true;
 
-function interactionResponse({ sessionId, requestId, response = { confirmed: true } }) {
+function interactionResponse({
+  sessionId,
+  dialogProcessId,
+  turnScopeId,
+  requestId,
+  response = { confirmed: true },
+}) {
   return createInteractionResponseCommand({
-    identity: { sessionId },
+    identity: rootCommandIdentity(AGENT_COMMAND.INTERACTION_RESPONSE, {
+      sessionId,
+      dialogProcessId,
+      turnScopeId,
+    }),
     interaction: { requestId, response },
   });
 }
@@ -88,6 +99,8 @@ test("interaction_request resolved by one client should be consistent across all
     channel,
     interactionResponse({
       sessionId: "session-1",
+      dialogProcessId: "dp-1",
+      turnScopeId: "turn-1",
       requestId: "req-1",
     }),
   );
@@ -252,6 +265,8 @@ test("resolving one concurrent interaction atomically publishes the remaining pe
     channel,
     interactionResponse({
       sessionId: "session-concurrent",
+      dialogProcessId: "dp-concurrent",
+      turnScopeId: "turn-concurrent",
       requestId: "req-a",
     }),
   );
@@ -517,7 +532,12 @@ test("interaction_response should resolve channel by pending requestId", () => {
 
   const resolvedChannel = manager.resolveChannelFromSocketMessage(
     createMockSocket({ apiKey: "api-key-2", userId: "user-1" }),
-    interactionResponse({ sessionId: "session-resolve", requestId: "req-resolve" }),
+    interactionResponse({
+      sessionId: "session-resolve",
+      dialogProcessId: "dp-resolve",
+      turnScopeId: "turn-resolve",
+      requestId: "req-resolve",
+    }),
   );
 
   assert.equal(resolvedChannel, channel);

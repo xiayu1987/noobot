@@ -160,7 +160,6 @@ test("chat-websocket-server: refreshed websocket rebinds active run tool increme
       userId: "u1",
       sessionId: "s-refresh",
       message: "run",
-      dialogProcessId: "dp-refresh",
       turnScopeId: "turn-refresh",
     };
     const oldWs = new WebSocket(url, { headers: { authorization: "Bearer test-key" } });

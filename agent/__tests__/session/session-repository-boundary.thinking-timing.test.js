@@ -14,6 +14,7 @@ import { readSessionArtifact } from "../../src/session/session-artifact-store.js
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 import { applySessionMessageFacts } from "../helpers/session-message-facts.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
 async function withTempWorkspace(fn) {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-session-boundary-"));
@@ -49,14 +50,17 @@ test("session save keeps thinking timing out of messages and projects finish fro
     session.messages = [
       {
         messageUid: "sm_thinking_user",
+        ts: TEST_MESSAGE_TS,
         sessionId: "S",
         role: "user",
+        messageOrigin: "natural",
         content: "hello",
         turnScopeId: "turn-1",
         dialogProcessId: "dp-1",
       },
       {
         messageUid: "sm_thinking_assistant_1",
+        ts: TEST_MESSAGE_TS,
         sessionId: "S",
         role: "assistant",
         presentationMessageId: "pm_fx1",
@@ -67,6 +71,7 @@ test("session save keeps thinking timing out of messages and projects finish fro
       },
       {
         messageUid: "sm_thinking_assistant_2",
+        ts: TEST_MESSAGE_TS,
         sessionId: "S",
         role: "assistant",
         presentationMessageId: "pm_fx2",
@@ -147,14 +152,17 @@ test("session save keeps the model loop round on persisted turn timings", async 
     session.messages = [
       {
         messageUid: "sm_round_user",
+        ts: TEST_MESSAGE_TS,
         sessionId: "S",
         role: "user",
+        messageOrigin: "natural",
         content: "hello",
         turnScopeId: "turn-1",
         dialogProcessId: "dp-1",
       },
       {
         messageUid: "sm_round_assistant",
+        ts: TEST_MESSAGE_TS,
         sessionId: "S",
         role: "assistant",
         presentationMessageId: "pm_fx3",

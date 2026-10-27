@@ -10,7 +10,10 @@ import {
   applyTurnRuntimeEvent,
   createTurnRuntimeRegistryState,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { API_REQUEST_ERROR_CODE, ApiRequestError } from "@noobot/shared/request-error";
 import { SESSION_RUN_EVENT } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
+import { jsonResponse } from "../../../../helpers/jsonResponse.js";
+import { ROOT_PARENT_SESSION_ID } from "@noobot/agent-transport-protocol";
 
 function ref(value) {
   return { value };
@@ -26,23 +29,21 @@ function createHarness(overrides = {}) {
     },
   ]);
   const notify = vi.fn();
-  const renameSessionApi = vi
-    .fn()
-    .mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
-  const getSessionsApi = vi.fn().mockResolvedValue({
-    ok: true,
-    json: async () => ({
+  const renameSessionApi = vi.fn().mockResolvedValue(jsonResponse({ ok: true }));
+  const getSessionsApi = vi.fn().mockResolvedValue(
+    jsonResponse({
       ok: true,
       sessions: [
         {
           sessionId: "s1",
+          parentSessionId: ROOT_PARENT_SESSION_ID,
           title: "New title",
           caller: "user",
           updatedAt: "2026-01-01T00:00:00.000Z",
         },
       ],
     }),
-  });
+  );
   const fetchSessionDetail = vi.fn().mockResolvedValue(null);
   const actions = createSessionListActions({
     sessions,
@@ -62,6 +63,8 @@ function createHarness(overrides = {}) {
     applySessionDetail: vi.fn(),
     createLocalSession: vi.fn(),
     refreshSessionConnectorsAsync: vi.fn(),
+    navigateToLastMessage: vi.fn(),
+    onSessionDetailApplied: vi.fn(),
     translate: (key) => key,
     notify,
     ...overrides,
@@ -90,13 +93,13 @@ describe("createSessionListActions.fetchSessions identity reconciliation", () =>
       source: "test",
     });
     const turnRuntimeRegistry = ref(registry);
-    const getSessionsApi = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    const getSessionsApi = vi.fn().mockResolvedValue(
+      jsonResponse({
         ok: true,
         sessions: [
           {
             sessionId: "session-1",
+            parentSessionId: ROOT_PARENT_SESSION_ID,
             caller: "user",
             updatedAt: "2026-01-01T00:00:00.000Z",
             turnLifecycleSnapshot: {
@@ -106,7 +109,7 @@ describe("createSessionListActions.fetchSessions identity reconciliation", () =>
           },
         ],
       }),
-    });
+    );
     const { actions } = createHarness({
       sessions,
       activeSessionId,
@@ -143,6 +146,49 @@ describe("createSessionListActions unavailable sessions", () => {
     expect(activeSessionId.value).toBe("");
     expect(fetchSessionDetail).not.toHaveBeenCalled();
     expect(notify).toHaveBeenCalledWith({ type: "warning", message: "legacy protocol" });
+  });
+});
+
+describe("createSessionListActions.selectSession error classification", () => {
+  function remoteSessions() {
+    return ref([
+      { sessionId: "s1", parentSessionId: ROOT_PARENT_SESSION_ID, caller: "user", messages: [] },
+      { sessionId: "s2", parentSessionId: ROOT_PARENT_SESSION_ID, caller: "user", messages: [] },
+    ]);
+  }
+
+  it("notifies request failures without applying a detail", async () => {
+    const applySessionDetail = vi.fn();
+    const fetchSessionDetail = vi.fn().mockRejectedValue(
+      new ApiRequestError("detail unavailable", {
+        code: API_REQUEST_ERROR_CODE.HTTP,
+        status: 503,
+      }),
+    );
+    const { actions, notify } = createHarness({
+      sessions: remoteSessions(),
+      fetchSessionDetail,
+      applySessionDetail,
+    });
+
+    await actions.selectSession("s2");
+
+    expect(notify).toHaveBeenCalledWith({ type: "error", message: "detail unavailable" });
+    expect(applySessionDetail).not.toHaveBeenCalled();
+  });
+
+  it("propagates contract errors raised while applying the detail", async () => {
+    const contractError = new TypeError("requires turnTimings array");
+    const { actions, notify } = createHarness({
+      sessions: remoteSessions(),
+      fetchSessionDetail: vi.fn().mockResolvedValue({ sessionId: "s2" }),
+      applySessionDetail: vi.fn(() => {
+        throw contractError;
+      }),
+    });
+
+    await expect(actions.selectSession("s2")).rejects.toBe(contractError);
+    expect(notify).not.toHaveBeenCalled();
   });
 });
 
@@ -242,24 +288,21 @@ describe("createSessionListActions.deleteSession", () => {
       source: "test",
     });
     const turnRuntimeRegistry = ref(registry);
-    const deleteSessionApi = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ ok: true }),
-    });
-    const getSessionsApi = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    const deleteSessionApi = vi.fn().mockResolvedValue(jsonResponse({ ok: true }));
+    const getSessionsApi = vi.fn().mockResolvedValue(
+      jsonResponse({
         ok: true,
         sessions: [
           {
             sessionId: "s-active",
+            parentSessionId: ROOT_PARENT_SESSION_ID,
             title: "Active",
             caller: "user",
             updatedAt: "2026-01-01T00:01:00.000Z",
           },
         ],
       }),
-    });
+    );
     const fetchSessionDetail = vi.fn();
     const applySessionDetail = vi.fn();
     const { actions } = createHarness({
@@ -284,5 +327,46 @@ describe("createSessionListActions.deleteSession", () => {
     expect(sessions.value[0]).toBe(activeSession);
     expect(sessions.value[0].messages[0]).toBe(activeMessage);
     expect(turnRuntimeRegistry.value.sessions["s-active"]?.activeTurnScopeId).toBe("turn-active");
+  });
+});
+
+describe("createSessionListActions requested session detail", () => {
+  const remoteSessions = () =>
+    ref([
+      { sessionId: "s1", parentSessionId: ROOT_PARENT_SESSION_ID, caller: "user", messages: [] },
+    ]);
+
+  it("keeps the authoritative list when the requested session does not exist", async () => {
+    const sessions = remoteSessions();
+    const fetchSessionDetail = vi.fn().mockResolvedValue(null);
+    const { actions, notify } = createHarness({ sessions, fetchSessionDetail });
+
+    await expect(actions.fetchSessions("s-missing", { silent: true })).resolves.toBe(true);
+
+    expect(fetchSessionDetail).toHaveBeenCalledWith(
+      "s-missing",
+      expect.objectContaining({ source: "explicitSessionRoute", requireExists: false }),
+    );
+    expect(notify).not.toHaveBeenCalled();
+    expect(sessions.value.map((session) => session.sessionId)).toEqual(["s1"]);
+  });
+
+  it("rejects instead of substituting a branch session when the requested document is absent", async () => {
+    const sessions = remoteSessions();
+    const fetchSessionDetail = vi.fn().mockResolvedValue({
+      sessionId: "s-missing",
+      exists: true,
+      sessions: [
+        { sessionId: "s-child", parentSessionId: "s-missing", caller: "assistant", messages: [] },
+      ],
+    });
+    const { actions, notify } = createHarness({ sessions, fetchSessionDetail });
+
+    await expect(actions.fetchSessions("s-missing", { silent: true })).rejects.toThrow(
+      "requested_session_document_missing",
+    );
+
+    expect(notify).not.toHaveBeenCalled();
+    expect(sessions.value.map((session) => session.sessionId)).toEqual(["s1"]);
   });
 });

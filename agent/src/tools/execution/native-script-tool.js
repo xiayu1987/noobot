@@ -315,7 +315,6 @@ function createNativeScriptIpcHandlers({
         requireEncryption: false,
         toolName: TOOL_NAME.EXECUTE_NATIVE_SCRIPT,
         lifecycle: "pending",
-        ackMode: "manual",
         resolvedBy: "",
       });
       if (isPlainObject(result)) {

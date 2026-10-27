@@ -9,23 +9,16 @@ import { Connection } from "@element-plus/icons-vue";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 
 const props = defineProps({
-  connectorPanelState: { type: Object, default: () => ({}) },
+  connectorPanelState: { type: Object, required: true },
   embedded: { type: Boolean, default: false },
 });
 const emit = defineEmits(["selection-change"]);
 const { translate } = useLocale();
 
 const connectedConnectors = computed(() =>
-  (Array.isArray(props.connectorPanelState?.connectors)
-    ? props.connectorPanelState.connectors
-    : []
-  ).filter((item) => item?.status === "connected"),
+  props.connectorPanelState.connectors.filter((item) => item.status === "connected"),
 );
-const selectedConnectorIds = computed(() =>
-  Array.isArray(props.connectorPanelState?.selectedConnectorIds)
-    ? props.connectorPanelState.selectedConnectorIds
-    : [],
-);
+const selectedConnectorIds = computed(() => props.connectorPanelState.selectedConnectorIds);
 </script>
 
 <template>

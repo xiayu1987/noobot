@@ -83,6 +83,7 @@ test("lifecycle replay gap waits for the authoritative snapshot before reconnect
         turnScopeId: "t1",
         presentationMessageId: "message-1",
         dialogProcessId: "dialog-t1",
+        continuedByTurnScopeId: "",
         revision: 3,
         sequence: 3,
         state: "processing",
@@ -103,6 +104,8 @@ test("lifecycle replay gap waits for the authoritative snapshot before reconnect
           committedAt: "2026-08-02T10:00:00.000Z",
         },
       ],
+      recovery: "none",
+      unchanged: false,
     }),
   });
   await reconnectPromise;
@@ -212,12 +215,15 @@ test("reconnect buffers live events until after the authoritative baseline", asy
         turnScopeId: "turn-reconnect-live-buffer",
         presentationMessageId: "message-reconnect-live-buffer",
         dialogProcessId: "dialog-reconnect-live-buffer",
+        continuedByTurnScopeId: "",
         revision: 3,
         sequence: 3,
         state: "processing",
         startedAt: "2026-08-17T00:00:00.000Z",
       },
       recentTerminalTurns: [],
+      recovery: "none",
+      unchanged: false,
     }),
   });
   await reconnectPromise;
@@ -413,6 +419,7 @@ test("a superseded reconnect transaction cannot publish its stale baseline", asy
         turnScopeId: "turn-reconnect-superseded",
         presentationMessageId: "presentation-superseded-gap-3",
         dialogProcessId: "dialog-superseded-gap-3",
+        continuedByTurnScopeId: "",
         revision: 3,
         sequence: 3,
         state: "processing",
@@ -420,6 +427,8 @@ test("a superseded reconnect transaction cannot publish its stale baseline", asy
       },
       recentTerminalTurns: [],
       replacedTurns: [],
+      recovery: "none",
+      unchanged: false,
     }),
   });
   await currentReconnect;
@@ -480,6 +489,7 @@ function processingOrphan(sessionId) {
     turnScopeId: ORPHAN_TURN_SCOPE_ID,
     presentationMessageId: "message-orphan",
     dialogProcessId: "dialog-orphan",
+    continuedByTurnScopeId: "",
     revision: 3,
     sequence: 3,
     state: "processing",
@@ -503,6 +513,7 @@ test("an orphan-flagged snapshot is settled once via turn.finalize and the settl
       sessionId,
       sequence: 3,
       recovery: "orphan",
+      unchanged: false,
       activeTurnScopeId: ORPHAN_TURN_SCOPE_ID,
       activeTurn: processingOrphan(sessionId),
     }),
@@ -523,7 +534,9 @@ test("an orphan-flagged snapshot is settled once via turn.finalize and the settl
       sessionId,
       sequence: 4,
       recovery: "none",
+      unchanged: false,
       activeTurn: null,
+      activeTurnScopeId: "",
     }),
   );
   await reconnectPromise;
@@ -550,6 +563,7 @@ test("a failed recovery finalize keeps the original authoritative snapshot and c
       sessionId,
       sequence: 3,
       recovery: "orphan",
+      unchanged: false,
       activeTurnScopeId: ORPHAN_TURN_SCOPE_ID,
       activeTurn: processingOrphan(sessionId),
     }),
@@ -592,6 +606,7 @@ test("cancelling reconnect during recovery finalize clears both pending command 
       sessionId,
       sequence: 3,
       recovery: "orphan",
+      unchanged: false,
       activeTurnScopeId: ORPHAN_TURN_SCOPE_ID,
       activeTurn: processingOrphan(sessionId),
     }),
@@ -635,7 +650,9 @@ test("cancelling reconnect during recovery finalize clears both pending command 
       sessionId,
       sequence: 3,
       recovery: "none",
+      unchanged: false,
       activeTurn: null,
+      activeTurnScopeId: "",
     }),
   );
   await superseding;

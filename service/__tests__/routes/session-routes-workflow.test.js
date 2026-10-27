@@ -20,7 +20,11 @@ import { buildExecutionReport } from "@noobot/session-protocol/execution-report"
 import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { summarizeExecutionLogs } from "noobot-agent/tracking";
-import express, { registerSessionRoutes, withTestServer } from "./session-routes.helpers.js";
+import express, {
+  TEST_MESSAGE_TS,
+  registerSessionRoutes,
+  withTestServer,
+} from "./session-routes.helpers.js";
 
 async function writeScopedSessionDir({ sessionDir, sessionPayload, taskPayload, metadata = null }) {
   await writeSessionArtifact({ sessionDir, sessionPayload });
@@ -96,6 +100,7 @@ test("session-routes: workflow session returns summary and execution jsonl from 
         {
           sessionId: "node-s",
           messageUid: "workflow-message-1",
+          ts: TEST_MESSAGE_TS,
           modelMessageId: "workflow-model-message-1",
           presentationMessageId: "pm_wf_node_1",
           role: "assistant",
@@ -211,6 +216,7 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
       messages: [
         {
           messageUid: "a1",
+          ts: TEST_MESSAGE_TS,
           modelMessageId: "model-a1",
           presentationMessageId: "pm_node_turn",
           role: "assistant",
@@ -237,6 +243,7 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
         },
         {
           messageUid: "i1",
+          ts: TEST_MESSAGE_TS,
           role: "system",
           sessionId: "node-s",
           dialogProcessId: "dp-1",
@@ -247,6 +254,7 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
         },
         {
           messageUid: "t1",
+          ts: TEST_MESSAGE_TS,
           modelMessageId: "model-t1",
           presentationMessageId: "pm_node_turn",
           role: "assistant",
@@ -258,6 +266,7 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
         },
         {
           messageUid: "t2",
+          ts: TEST_MESSAGE_TS,
           role: "tool",
           presentationMessageId: "pm_node_turn",
           type: "tool_result",
@@ -268,6 +277,7 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
         },
         {
           messageUid: "other",
+          ts: TEST_MESSAGE_TS,
           modelMessageId: "model-other",
           presentationMessageId: "pm_other_turn",
           role: "assistant",

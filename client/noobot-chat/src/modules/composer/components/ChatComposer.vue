@@ -34,7 +34,7 @@ const props = defineProps({
   availablePlugins: { type: Array, default: () => [] },
   selectedPlugins: { type: Array, default: () => [] },
   interactionActive: { type: Boolean, default: false },
-  connectorPanelState: { type: Object, default: () => ({}) },
+  connectorPanelState: { type: [Object, null], required: true },
   morePanelVisible: { type: Boolean, default: null },
 });
 
@@ -230,15 +230,15 @@ function onInputChange(value) {
 }
 
 function clearUploadSelection() {
-  attachmentToolbarRef.value?.clearUploadSelection?.();
+  attachmentToolbarRef.value.clearUploadSelection();
 }
 
 function onClearUploads() {
   emit("clear-uploads");
 }
 
-function onRemoveUpload(draftAttachmentId) {
-  emit("remove-upload", draftAttachmentId);
+function onRemoveUpload(clientAttachmentId) {
+  emit("remove-upload", clientAttachmentId);
 }
 
 function onSend() {
@@ -270,8 +270,8 @@ function onStreamOutputChange(value) {
   emit("update:streamOutput", Boolean(value));
 }
 
-function onConnectorSelectionChange(selectedConnectorIds = []) {
-  emit("connector-selected", Array.isArray(selectedConnectorIds) ? selectedConnectorIds : []);
+function onConnectorSelectionChange(selectedConnectorIds) {
+  emit("connector-selected", selectedConnectorIds);
 }
 function updatePluginModelConfig(pluginId = "", next = {}) {
   emit("update:pluginModelConfig", {
@@ -330,6 +330,7 @@ defineExpose({
 
             <div class="more-panel-content">
               <ConnectorSelectorPanel
+                v-if="connectorPanelState !== null"
                 embedded
                 :connector-panel-state="connectorPanelState"
                 @selection-change="onConnectorSelectionChange"

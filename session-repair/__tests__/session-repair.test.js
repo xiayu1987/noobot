@@ -125,11 +125,13 @@ function multimodalParseMigrationSession(envelope = historicalMultimodalParseEnv
       {
         messageUid: "assistant-1",
         role: "assistant",
+        content: "",
         transferEnvelopes: [structuredClone(envelope)],
       },
       {
         messageUid: "tool-1",
         role: "tool",
+        content: "parsed",
         toolName: "multimodal_parse",
         tool_call_id: "call-1",
         transferEnvelopes: [structuredClone(envelope)],
@@ -160,9 +162,15 @@ test("migrates the legacy message id field into role identity fields", () => {
     sessionId: "session-1",
     aggregateVersion: 3,
     messages: [
-      { messageUid: "u1", id: "m1", role: "user" },
-      { messageUid: "u2", id: "m2", [LEGACY_MESSAGE_ID]: "m2", role: "assistant" },
-      { messageUid: "u3", [LEGACY_MESSAGE_ID]: "m3", role: "assistant" },
+      { messageUid: "u1", id: "m1", role: "user", content: "question" },
+      {
+        messageUid: "u2",
+        id: "m2",
+        [LEGACY_MESSAGE_ID]: "m2",
+        role: "assistant",
+        content: "answer",
+      },
+      { messageUid: "u3", [LEGACY_MESSAGE_ID]: "m3", role: "assistant", content: "answer" },
     ],
   });
   const result = migrateSessionDocument(source);
@@ -209,6 +217,7 @@ test("runs every message migration step even after an earlier step changed the m
         id: "m1",
         [LEGACY_MESSAGE_ID]: "m1",
         role: "user",
+        content: "question",
         turnCommit: {
           action: "send",
           commandId: "command-1",

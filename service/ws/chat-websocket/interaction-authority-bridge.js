@@ -17,14 +17,8 @@ export function createInteractionAuthorityBridge({ resolveBot, dispatchAuthority
     if (!validation.valid)
       throw new TypeError(`invalid interaction request: ${validation.errors.join(",")}`);
     const { session } = resolveBot();
-    const { sessionId, turnScopeId, requestId } = payload;
-    const domainPayload = {
-      ...payload,
-      sessionId: undefined,
-      turnScopeId: undefined,
-    };
-    delete domainPayload.sessionId;
-    delete domainPayload.turnScopeId;
+    const { sessionId, turnScopeId, ...domainPayload } = payload;
+    const { requestId } = domainPayload;
     const committed = await session.commitAuthorityEvent({
       userId,
       sessionId,

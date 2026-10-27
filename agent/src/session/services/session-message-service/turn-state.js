@@ -129,35 +129,32 @@ function materializeAcceptedUserMessage({
   if (!input) return null;
   const existing = findTurnScopeUserMessage(session, event.turnScopeId);
   if (existing) return existing;
-  const userMessage = normalizeMessageEntity(
-    {
-      messageUid: createMessageUid(),
-      userMessageId: input.userMessageId,
-      role: "user",
-      type: "message",
-      content: input.content,
-      userName: String(userId),
-      sessionId,
-      parentSessionId,
-      dialogProcessId: turn.dialogProcessId,
-      parentDialogProcessId: input.parentDialogProcessId,
-      turnScopeId: text(event.turnScopeId),
-      messageOrigin: text(input.messageOrigin).toLowerCase(),
-      attachments: [],
-      turnCommit: {
-        action: requireTurnCommitAction(event.action),
-        commandId: text(event.causationId),
-        ...(event.continuationSource
-          ? {
-              resumeDialogProcessId: text(event.continuationSource.dialogProcessId),
-              resumeTurnScopeId: text(event.continuationSource.turnScopeId),
-            }
-          : {}),
-      },
-      ts: nowValue,
+  const userMessage = normalizeMessageEntity({
+    messageUid: createMessageUid(),
+    userMessageId: input.userMessageId,
+    role: "user",
+    type: "message",
+    content: input.content,
+    userName: String(userId),
+    sessionId,
+    parentSessionId,
+    dialogProcessId: turn.dialogProcessId,
+    parentDialogProcessId: input.parentDialogProcessId,
+    turnScopeId: text(event.turnScopeId),
+    messageOrigin: input.messageOrigin,
+    attachments: [],
+    turnCommit: {
+      action: requireTurnCommitAction(event.action),
+      commandId: text(event.causationId),
+      ...(event.continuationSource
+        ? {
+            resumeDialogProcessId: text(event.continuationSource.dialogProcessId),
+            resumeTurnScopeId: text(event.continuationSource.turnScopeId),
+          }
+        : {}),
     },
-    () => nowValue,
-  );
+    ts: nowValue,
+  });
   session.messages = [...session.messages, userMessage];
   registerSessionMessageFacts(session, userMessage);
   return userMessage;

@@ -22,72 +22,83 @@ const sessionMessages = (ctx) =>
 const debugMessages = (ctx) => summarizeDebugMessages(ctx.activeSession.value?.messages);
 const errorText = (error) => String(error?.message || error || "");
 
-function logBegin(ctx, { reuseExistingUserTurn, allowDuringResend, hasText, uploadCount }) {
+function requestAttachmentSummary(request) {
+  return summarizeDebugAttachments(
+    request.commandType === AGENT_COMMAND.RESEND ? request.attachments : request.attachmentFiles,
+  );
+}
+
+function logBegin(ctx, { request }) {
+  const data = {
+    commandType: request.commandType,
+    hasText: Boolean(request.messageText),
+    attachmentCount:
+      request.commandType === AGENT_COMMAND.RESEND
+        ? request.attachments.length
+        : request.attachmentFiles.length,
+  };
   ctx.logSessionEvent({
     category: "message",
     event: "send.begin",
     sessionId: ctx.sessionId,
     turnScopeId: ctx.turnScopeId,
-    data: { reuseExistingUserTurn, allowDuringResend, hasText, uploadCount },
+    data,
   });
   logResendDebug("send.begin", () => ({
     sessionId: ctx.sessionId,
     turnScopeId: ctx.turnScopeId,
-    reuseExistingUserTurn,
-    allowDuringResend,
+    ...data,
     ...ctx.runtimeView(),
     messages: debugMessages(ctx),
   }));
 }
 
-function logPrepareAfter(ctx, params) {
+function logPrepareAfter(ctx, { request, userMessage, botMessage }) {
   logStateMachineDebug("stateMachine.send.presentationCreated", () => ({
     sessionId: ctx.sessionId,
     turnScopeId: ctx.turnScopeId,
-    reuseExistingUserTurn: params.reuseExistingUserTurn,
-    requestedUserMessageId: params.userMessageId,
-    requestedPresentationMessageId: params.presentationMessageId,
-    userMessage: summarizeStateMachineMessage(params.userMessage),
-    assistantMessage: summarizeStateMachineMessage(params.botMessage),
+    commandType: request.commandType,
+    requestedUserMessageId: request.userMessageId,
+    requestedPresentationMessageId: request.presentationMessageId,
+    userMessage: summarizeStateMachineMessage(userMessage),
+    assistantMessage: summarizeStateMachineMessage(botMessage),
     messages: sessionMessages(ctx).map(summarizeStateMachineMessage),
   }));
   logResendDebug("send.prepare.after", () => ({
     sessionId: ctx.sessionId,
     turnScopeId: ctx.turnScopeId,
-    explicitUserAttachments: summarizeDebugAttachments(params.explicitUserAttachments),
-    explicitTransportAttachments: summarizeDebugAttachments(params.explicitTransportAttachments),
-    filesToSend: summarizeDebugAttachments(params.filesToSend),
-    botMessage: summarizeDebugMessage(params.botMessage),
+    commandType: request.commandType,
+    requestAttachments: requestAttachmentSummary(request),
+    botMessage: summarizeDebugMessage(botMessage),
     messages: debugMessages(ctx),
   }));
 }
 
-function logStreamBefore(ctx, params) {
-  const { payload, attachments } = params;
-  const isResend = payload?.commandType === AGENT_COMMAND.RESEND;
+function logStreamBefore(
+  ctx,
+  { request, requestedTextStreaming, attachments, payload, botMessage },
+) {
   ctx.logSessionEvent({
     category: "transport",
     event: "stream.start",
     sessionId: ctx.sessionId,
     turnScopeId: ctx.turnScopeId,
     data: {
-      requestedTextStreaming: params.requestedTextStreaming,
+      requestedTextStreaming,
       attachmentCount: attachments.length,
-      reuseExistingUserTurn: isResend,
+      commandType: request.commandType,
     },
   });
   logResendDebug("send.stream.before", () => ({
     sessionId: ctx.sessionId,
     turnScopeId: ctx.turnScopeId,
-    payloadTurnScopeId: payload?.identity?.turnScopeId,
-    reuseExistingUserTurn: isResend,
-    explicitUserAttachments: summarizeDebugAttachments(params.explicitUserAttachments),
-    explicitTransportAttachments: summarizeDebugAttachments(params.explicitTransportAttachments),
-    filesToSend: summarizeDebugAttachments(params.filesToSend),
+    payloadTurnScopeId: payload.identity.turnScopeId,
+    commandType: request.commandType,
+    requestAttachments: requestAttachmentSummary(request),
     attachments: summarizeDebugAttachments(attachments),
-    payloadAttachments: summarizeDebugAttachments(payload?.input?.attachments),
-    botMessage: summarizeDebugMessage(params.botMessage),
-    botThinkingStartedAt: params.botMessage?.thinkingStartedAt || "",
+    payloadAttachments: summarizeDebugAttachments(payload.input.attachments),
+    botMessage: summarizeDebugMessage(botMessage),
+    botThinkingStartedAt: botMessage.thinkingStartedAt,
   }));
 }
 

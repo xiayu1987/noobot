@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   ATTACHMENT_EVENT_TYPE,
   ATTACHMENT_LIFECYCLE,
@@ -59,6 +59,7 @@ describe("chatEngine streamHandlers transport boundary", () => {
       data: parsedEvent(),
       activeSession: { value: { messages: [userMessage] } },
       makeViewAttachments,
+      logSessionEvent: vi.fn(),
     });
     expect(userMessage.attachments[0].attachmentLifecycle.status).toBe(ATTACHMENT_LIFECYCLE.PARSED);
     expect(userMessage.attachments[0].relations).toEqual([relation]);
@@ -73,6 +74,7 @@ describe("chatEngine streamHandlers transport boundary", () => {
       data: parsedEvent(),
       activeSession: { value: { messages: [userMessage] } },
       makeViewAttachments,
+      logSessionEvent: vi.fn(),
     });
     expect(userMessage.attachments[0].relations).toEqual([relation]);
   });
@@ -86,6 +88,7 @@ describe("chatEngine streamHandlers transport boundary", () => {
       data: parsedEvent(),
       activeSession: { value: { messages: [userMessage] } },
       makeViewAttachments,
+      logSessionEvent: vi.fn(),
     });
     expect(userMessage.attachments[0]).toEqual({
       clientAttachmentId: "draft-attachment:1",
@@ -107,6 +110,7 @@ describe("chatEngine streamHandlers transport boundary", () => {
       buildViewMessage(message, { sessionId: "session-1", userId: "user-1" });
     const userMessage = makeViewMessage({
       role: "user",
+      content: "",
       sessionId: "session-1",
       attachments: [
         {
@@ -121,6 +125,7 @@ describe("chatEngine streamHandlers transport boundary", () => {
       data: parsedEvent(),
       activeSession: { value: { messages: [userMessage] } },
       makeViewAttachments,
+      logSessionEvent: vi.fn(),
     });
 
     expect(userMessage.attachments[0]).toMatchObject({

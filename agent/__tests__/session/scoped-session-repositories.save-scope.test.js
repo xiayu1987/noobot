@@ -16,6 +16,7 @@ import {
   createTestSessionRequiredFields,
 } from "../helpers/session-message-facts.js";
 import { buildHarness, readJson } from "./scoped-session-repositories.fixtures.js";
+import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
 const treeContext = (sessionRepo, sessionId) => ({
   persistenceContext: sessionRepo.treePersistenceContext("alice", sessionId),
@@ -28,14 +29,17 @@ test("concurrent repository saves allocate monotonic Turn journals without cross
     const sessionId = "concurrent-turn-journals";
     const keep = {
       messageUid: "keep-message",
+      ts: TEST_MESSAGE_TS,
       sessionId,
       role: "user",
+      messageOrigin: "natural",
       content: "keep",
       dialogProcessId: "dialog-keep",
       turnScopeId: "turn-keep",
     };
     const replaced = {
       messageUid: "replaced-message",
+      ts: TEST_MESSAGE_TS,
       sessionId,
       role: "assistant",
       presentationMessageId: "pm_replaced",
@@ -58,6 +62,7 @@ test("concurrent repository saves allocate monotonic Turn journals without cross
 
     const replacement = (suffix) => ({
       messageUid: `replacement-${suffix}`,
+      ts: TEST_MESSAGE_TS,
       sessionId,
       role: "assistant",
       presentationMessageId: `pm_${suffix}`,

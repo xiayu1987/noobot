@@ -286,6 +286,9 @@ test("interaction request requires stable identity and a complete payload", () =
   );
   assert.equal(validateInteractionRequestPayload({ ...base, timeoutMs: 0 }).valid, false);
   assert.equal(validateInteractionRequestPayload({ ...base, timeoutMs: 1000 }).valid, true);
+  assert.deepEqual(validateInteractionRequestPayload({ ...base, ackMode: "manual" }).errors, [
+    "retired_interaction_ack_mode",
+  ]);
 });
 
 test("interaction payload validators return the registry {valid, errors} shape", () => {

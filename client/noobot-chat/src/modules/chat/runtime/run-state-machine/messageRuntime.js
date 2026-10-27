@@ -40,7 +40,7 @@ export function isFinalizedAssistantMessage(messageItem) {
   );
 }
 
-function terminalSnapshotOwnsMessage(stateSnapshot = {}, messageItem = {}, activeSession = {}) {
+function terminalSnapshotOwnsMessage(stateSnapshot = {}, messageItem = {}, activeSession) {
   if (getMessageRole(messageItem) !== "assistant") return false;
   if (!isRunStateForActiveSession(stateSnapshot, activeSession)) return false;
   const runTurnScopeId = trim(stateSnapshot?.turnScopeId);
@@ -48,22 +48,24 @@ function terminalSnapshotOwnsMessage(stateSnapshot = {}, messageItem = {}, activ
   return Boolean(runTurnScopeId && messageTurnScopeId && runTurnScopeId === messageTurnScopeId);
 }
 
-function isRunStateForActiveSession(stateSnapshot = {}, activeSession = {}) {
+function isRunStateForActiveSession(stateSnapshot = {}, activeSession) {
   const stateSessionId = trim(stateSnapshot?.sessionId);
   if (!stateSessionId) return true;
-  const activeSessionId = trim(activeSession?.sessionId);
-  return !activeSessionId || activeSessionId === stateSessionId;
+  return trim(activeSession.sessionId) === stateSessionId;
 }
 
-function getLatestAssistantMessage(activeSession = {}) {
-  const messages = Array.isArray(activeSession?.messages) ? activeSession.messages : [];
-  return [...messages].reverse().find((item = {}) => getMessageRole(item) === "assistant") || null;
+function getLatestAssistantMessage(activeSession) {
+  return (
+    [...activeSession.messages]
+      .reverse()
+      .find((item = {}) => getMessageRole(item) === "assistant") || null
+  );
 }
 
 export function resolveSessionRunStateForMessage({
   stateSnapshot = createInitialSessionRunState(),
   messageItem = {},
-  activeSession = {},
+  activeSession,
 } = {}) {
   const normalizedState = normalizeState(stateSnapshot?.state);
   if (!isInFlightSessionRunState(normalizedState)) return null;
@@ -203,7 +205,7 @@ function buildStoppedMessageRuntimePatch({
   };
 }
 
-function isObsoletePendingAssistantMessage(messageItem = {}, activeSession = {}) {
+function isObsoletePendingAssistantMessage(messageItem = {}, activeSession) {
   if (!messageItem || getMessageRole(messageItem) !== "assistant") return false;
   if (messageItem.pending !== true) return false;
   const latestAssistant = getLatestAssistantMessage(activeSession);
@@ -216,7 +218,7 @@ function isObsoletePendingAssistantMessage(messageItem = {}, activeSession = {})
 export function resolveSessionRunMessageRuntimePatch({
   stateSnapshot = createInitialSessionRunState(),
   messageItem = {},
-  activeSession = {},
+  activeSession,
 } = {}) {
   const stateBelongsToActiveSession = isRunStateForActiveSession(stateSnapshot, activeSession);
   const terminalOwnsMessage = terminalSnapshotOwnsMessage(

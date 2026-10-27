@@ -5,6 +5,7 @@
  */
 import { resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { randomUUID } from "node:crypto";
 import { CliUsageError } from "./cli-args.js";
 
 const STARTUP_CONTEXT_ARG = "--startup-context";
@@ -45,7 +46,9 @@ export async function resolveSessionTarget({ bot, userId, invocation }) {
       createSession: false,
     };
   }
-  if (!invocation.sessionId) return { sessionId: "", aggregateVersion: 0, createSession: true };
+  if (!invocation.sessionId) {
+    return { sessionId: randomUUID(), aggregateVersion: 0, createSession: true };
+  }
   return {
     sessionId: invocation.sessionId,
     aggregateVersion: await readAggregateVersion({ bot, userId, sessionId: invocation.sessionId }),

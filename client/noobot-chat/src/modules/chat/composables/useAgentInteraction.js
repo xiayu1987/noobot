@@ -7,7 +7,11 @@ import { storeToRefs } from "pinia";
 import { watch } from "vue";
 import { useChatStore } from "../stores/useChatStore.js";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
-import { createInteractionResponseCommand } from "@noobot/agent-transport-protocol";
+import {
+  AGENT_COMMAND,
+  createInteractionResponseCommand,
+  selectAgentCommandIdentity,
+} from "@noobot/agent-transport-protocol";
 import { logThinkingReplayDebug } from "../../debug/loggers/thinkingReplayDebugLogger.js";
 import { text, isObjectLike } from "@noobot/shared/value";
 
@@ -21,56 +25,20 @@ export function useAgentInteraction({ encryptPayloadBySessionId, sendJson } = {}
     activeSessionId,
   } = storeToRefs(chatStore);
   const handledInteractionRequestIds = new Set();
-  const handledInteractionRequestSignatures = new Set();
 
-  function normalizeRequestId(requestId = "") {
-    return text(requestId);
+  function requestIdOf(requestOrId) {
+    return isObjectLike(requestOrId) ? requestOrId.requestId : requestOrId;
   }
 
-  function buildInteractionRequestSignature(request = {}) {
-    if (!isObjectLike(request)) return "";
-    return [
-      request?.sessionId,
-      request?.dialogProcessId,
-      request?.interactionType,
-      request?.toolName,
-      request?.connectorType,
-      request?.connectorName,
-      request?.content,
-    ]
-      .map((item) => text(item))
-      .join("|");
+  function markInteractionRequestHandled(request) {
+    handledInteractionRequestIds.add(request.requestId);
   }
 
-  function hasUsableSignature(signature = "") {
-    return Boolean(String(signature || "").replaceAll("|", ""));
-  }
-
-  function getInteractionRequestKey(request = {}) {
-    if (!isObjectLike(request)) return "";
-    const normalizedRequestId = normalizeRequestId(request?.requestId || "");
-    if (normalizedRequestId) return `id:${normalizedRequestId}`;
-    const signature = buildInteractionRequestSignature(request);
-    return hasUsableSignature(signature) ? `sig:${signature}` : "";
-  }
-
-  function findPendingInteractionIndex(requestOrId = "") {
-    const normalizedRequestId =
-      requestOrId && typeof requestOrId === "object"
-        ? normalizeRequestId(requestOrId?.requestId || "")
-        : normalizeRequestId(requestOrId || "");
-    const targetSignature =
-      requestOrId && typeof requestOrId === "object"
-        ? buildInteractionRequestSignature(requestOrId)
-        : "";
-    return pendingInteractionRequests.value.findIndex((requestItem) => {
-      if (!isObjectLike(requestItem)) return false;
-      const requestItemId = normalizeRequestId(requestItem?.requestId || "");
-      if (normalizedRequestId && requestItemId === normalizedRequestId) return true;
-      if (normalizedRequestId) return false;
-      if (!hasUsableSignature(targetSignature)) return false;
-      return buildInteractionRequestSignature(requestItem) === targetSignature;
-    });
+  function findPendingInteractionIndex(requestOrId) {
+    const requestId = requestIdOf(requestOrId);
+    return pendingInteractionRequests.value.findIndex(
+      (requestItem) => requestItem.requestId === requestId,
+    );
   }
 
   function syncCurrentPendingInteraction() {
@@ -107,46 +75,12 @@ export function useAgentInteraction({ encryptPayloadBySessionId, sendJson } = {}
     return pendingInteractionRequests.value.length !== beforeLength;
   }
 
-  function markInteractionRequestHandled(requestOrId = "") {
-    if (isObjectLike(requestOrId)) {
-      const normalizedRequestId = normalizeRequestId(requestOrId?.requestId || "");
-      if (normalizedRequestId) handledInteractionRequestIds.add(normalizedRequestId);
-      const signature = buildInteractionRequestSignature(requestOrId);
-      if (hasUsableSignature(signature)) {
-        handledInteractionRequestSignatures.add(signature);
-      }
-      return;
-    }
-    const normalizedRequestId = normalizeRequestId(requestOrId);
-    if (normalizedRequestId) handledInteractionRequestIds.add(normalizedRequestId);
-  }
-
-  function isInteractionRequestHandled(requestOrId = "") {
-    if (isObjectLike(requestOrId)) {
-      const normalizedRequestId = normalizeRequestId(requestOrId?.requestId || "");
-      if (normalizedRequestId && handledInteractionRequestIds.has(normalizedRequestId)) return true;
-      if (normalizedRequestId) return false;
-      const signature = buildInteractionRequestSignature(requestOrId);
-      return Boolean(
-        hasUsableSignature(signature) && handledInteractionRequestSignatures.has(signature),
-      );
-    }
-    const normalizedRequestId = normalizeRequestId(requestOrId);
-    return Boolean(normalizedRequestId && handledInteractionRequestIds.has(normalizedRequestId));
-  }
-
   function clearPendingInteraction(requestOrId = null) {
     if (requestOrId) {
-      const removed = removePendingInteraction((requestItem) => {
-        if (!isObjectLike(requestItem)) return false;
-        if (isObjectLike(requestOrId)) {
-          return (
-            findPendingInteractionIndex(requestOrId) >= 0 &&
-            getInteractionRequestKey(requestItem) === getInteractionRequestKey(requestOrId)
-          );
-        }
-        return normalizeRequestId(requestItem?.requestId || "") === normalizeRequestId(requestOrId);
-      });
+      const requestId = requestIdOf(requestOrId);
+      const removed = removePendingInteraction(
+        (requestItem) => requestItem.requestId === requestId,
+      );
       if (!removed) syncCurrentPendingInteraction();
       return removed;
     }
@@ -165,11 +99,10 @@ export function useAgentInteraction({ encryptPayloadBySessionId, sendJson } = {}
     const normalizedSessionId = text(sessionId);
     const normalizedDialogProcessId = text(dialogProcessId);
     const normalizedTurnScopeId = text(turnScopeId);
-    const normalizedRequestId = normalizeRequestId(requestId || "");
+    const normalizedRequestId = text(requestId);
     const removed = removePendingInteraction((requestItem) => {
       if (!isObjectLike(requestItem)) return false;
-      const pendingRequestId = normalizeRequestId(requestItem?.requestId || "");
-      if (normalizedRequestId) return pendingRequestId === normalizedRequestId;
+      if (normalizedRequestId) return requestItem.requestId === normalizedRequestId;
       const pendingSessionId = text(requestItem?.sessionId);
       const pendingDialogProcessId = text(requestItem?.dialogProcessId);
       const pendingTurnScopeId = text(requestItem?.turnScopeId);
@@ -201,13 +134,13 @@ export function useAgentInteraction({ encryptPayloadBySessionId, sendJson } = {}
       clearPendingInteraction();
       return;
     }
-    if (isInteractionRequestHandled(request)) return;
+    if (handledInteractionRequestIds.has(request.requestId)) return;
     logThinkingReplayDebug("frontend.interaction.requestMaterialization", {
       sessionId: text(request?.sessionId),
       channelSessionId: text(request?.channelSessionId),
       dialogProcessId: text(request?.dialogProcessId),
       turnScopeId: text(request?.turnScopeId),
-      requestId: normalizeRequestId(request?.requestId),
+      requestId: request.requestId,
       source: "authoritative-replay-or-stream",
     });
     const existingIndex = findPendingInteractionIndex(request);
@@ -243,11 +176,7 @@ export function useAgentInteraction({ encryptPayloadBySessionId, sendJson } = {}
     try {
       sendJson(
         createInteractionResponseCommand({
-          identity: {
-            sessionId,
-            dialogProcessId: request?.dialogProcessId,
-            turnScopeId: request?.turnScopeId,
-          },
+          identity: selectAgentCommandIdentity(AGENT_COMMAND.INTERACTION_RESPONSE, request),
           interaction: { requestId: request.requestId, response: responsePayload },
         }),
       );
@@ -270,7 +199,5 @@ export function useAgentInteraction({ encryptPayloadBySessionId, sendJson } = {}
     clearPendingInteractionIfObsolete,
     setPendingInteractionRequest,
     submitInteractionResponse,
-    markInteractionRequestHandled,
-    isInteractionRequestHandled,
   };
 }

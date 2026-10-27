@@ -24,18 +24,20 @@ import {
   selectTurnRuntimeByScope,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { createTurnTerminalResolution } from "@noobot/session-protocol";
-import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
+import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { settleStoppedTurn } from "./useChatEngine.resend-stopped-state.test-helpers.js";
 import { terminalStatusFixture } from "../helpers/terminalStatusFixture.js";
+import { NO_ATTACHMENT_EDITS } from "../../../helpers/resendEdits.js";
+import { jsonResponse } from "../../../helpers/jsonResponse.js";
 
 describe("useChatEngine.resend stopped state", () => {
   it("edit-resends immediately after stop without requiring a session refresh", async () => {
     const sessionId = "local-resend-immediate-after-stop";
     const stoppedTurnScopeId = "turn-immediate-stop";
-    const terminalResolutionFetcher = vi.fn(async () => ({
-      ok: true,
-      json: async () =>
-        createTurnTerminalResolution({
+    const terminalResolutionFetcher = vi.fn(async () =>
+      jsonResponse({
+        ok: true,
+        ...createTurnTerminalResolution({
           commandId: "resolve-immediate-stop",
           sessionId,
           turnScopeId: stoppedTurnScopeId,
@@ -59,7 +61,8 @@ describe("useChatEngine.resend stopped state", () => {
             capabilities: { actionLocked: false, canStop: false },
           },
         }),
-    }));
+      }),
+    );
     const stream = vi.fn(async () => {});
     const replaceSessionTurnApi = vi.fn(
       async ({ turnScopeId, newContent, commandId, anchor, expectedAggregateVersion }) => {
@@ -88,7 +91,7 @@ describe("useChatEngine.resend stopped state", () => {
     const { engine, activeSession, turnRuntimeRegistry, deps } = createHarness({
       sessionId,
       stream,
-      deps: { replaceSessionTurnApi, applySessionDetail, terminalResolutionFetcher },
+      deps: { replaceSessionTurnApi, applySessionDetail, authFetch: terminalResolutionFetcher },
     });
     activeSession.value.aggregateVersion = 11;
     const stoppedUser = {
@@ -130,7 +133,11 @@ describe("useChatEngine.resend stopped state", () => {
     expect(activeSession.value.aggregateVersion).toBe(12);
 
     await expect(
-      engine.resendMonotonicMessage(stoppedAssistant, "edited without refresh"),
+      engine.resendMonotonicMessage(
+        stoppedAssistant,
+        "edited without refresh",
+        NO_ATTACHMENT_EDITS,
+      ),
     ).resolves.toBe(true);
 
     expect(deps.chatWebSocketClient.requestStop).not.toHaveBeenCalled();
@@ -182,7 +189,7 @@ describe("useChatEngine.resend stopped state", () => {
     activeSession.value.rawMessages = [staleStoppedUser, staleStoppedAssistant];
 
     await expect(
-      engine.resendMonotonicMessage(staleStoppedAssistant, "edited again"),
+      engine.resendMonotonicMessage(staleStoppedAssistant, "edited again", NO_ATTACHMENT_EDITS),
     ).resolves.toBe(false);
 
     expect(stream).not.toHaveBeenCalled();
@@ -237,9 +244,9 @@ describe("useChatEngine.resend stopped state", () => {
     activeSession.value.messages = [stoppedUser, stoppedAssistant];
     activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
 
-    await expect(engine.resendMonotonicMessage(stoppedAssistant, "second resend")).resolves.toBe(
-      true,
-    );
+    await expect(
+      engine.resendMonotonicMessage(stoppedAssistant, "second resend", NO_ATTACHMENT_EDITS),
+    ).resolves.toBe(true);
 
     const [replacementUser, placeholder] = activeSession.value.messages;
     expect(replacementUser).toEqual(
@@ -280,19 +287,6 @@ describe("useChatEngine.resend stopped state", () => {
         ...serverTurnSource(payload, dialogProcessId),
         sessionId,
         dialogProcessId,
-      });
-      onEvent({
-        event: StreamEventEnum.USER_STOPPED,
-        data: {
-          sessionId,
-          dialogProcessId,
-          turnScopeId: payload.identity.turnScopeId,
-          turnStatus: {
-            status: "user_stopped",
-            dialogProcessId,
-            turnScopeId: payload.identity.turnScopeId,
-          },
-        },
       });
       emitAuthorityTerminal(onEvent, {
         sessionId,
@@ -365,33 +359,32 @@ describe("useChatEngine.resend stopped state", () => {
       );
       const revision = terminalResolutionCount + 2;
       const completionCommitId = `commit:${sessionId}:${turnScopeId}:${revision}`;
-      return {
+      return jsonResponse({
         ok: true,
-        json: async () =>
-          createTurnTerminalResolution({
-            commandId: `resolve:${turnScopeId}:${revision}`,
+        ...createTurnTerminalResolution({
+          commandId: `resolve:${turnScopeId}:${revision}`,
+          sessionId,
+          turnScopeId,
+          resolved: true,
+          aggregateVersion: terminalResolutionCount,
+          turn: {
+            continuedByTurnScopeId: "",
             sessionId,
             turnScopeId,
-            resolved: true,
-            aggregateVersion: terminalResolutionCount,
-            turn: {
-              continuedByTurnScopeId: "",
-              sessionId,
+            dialogProcessId: `dp-${turnScopeId}`,
+            state: "stop_completed",
+            phase: "stop",
+            revision,
+            sequence: revision,
+            completionCommitId,
+            summaryVersion: revision,
+            terminalStatus: terminalStatusFixture("stop_completed", {
               turnScopeId,
               dialogProcessId: `dp-${turnScopeId}`,
-              state: "stop_completed",
-              phase: "stop",
-              revision,
-              sequence: revision,
-              completionCommitId,
-              summaryVersion: revision,
-              terminalStatus: terminalStatusFixture("stop_completed", {
-                turnScopeId,
-                dialogProcessId: `dp-${turnScopeId}`,
-              }),
-            },
-          }),
-      };
+            }),
+          },
+        }),
+      });
     });
     const { engine, activeSession, turnRuntimeRegistry } = createHarness({
       sessionId,
@@ -400,7 +393,7 @@ describe("useChatEngine.resend stopped state", () => {
         replaceSessionTurnApi,
         fetchSessionDetail,
         applySessionDetail,
-        terminalResolutionFetcher,
+        authFetch: terminalResolutionFetcher,
       },
     });
     activeSession.value.messages = [
@@ -421,14 +414,18 @@ describe("useChatEngine.resend stopped state", () => {
     activeSession.value.rawMessages = [...activeSession.value.messages];
 
     await expect(
-      engine.resendMonotonicMessage(activeSession.value.messages[1], "first edit"),
+      engine.resendMonotonicMessage(
+        activeSession.value.messages[1],
+        "first edit",
+        NO_ATTACHMENT_EDITS,
+      ),
     ).resolves.toBe(true);
     const firstStoppedAssistant = activeSession.value.messages.find(
       (message) => message.role === RoleEnum.ASSISTANT,
     );
-    await expect(engine.resendMonotonicMessage(firstStoppedAssistant, "second edit")).resolves.toBe(
-      true,
-    );
+    await expect(
+      engine.resendMonotonicMessage(firstStoppedAssistant, "second edit", NO_ATTACHMENT_EDITS),
+    ).resolves.toBe(true);
     const secondReplaceScope = replaceSessionTurnApi.mock.calls[1][0].turnScopeId;
 
     expect(stream).toHaveBeenCalledTimes(2);
@@ -508,7 +505,7 @@ describe("useChatEngine.resend stopped state", () => {
     activeSession.value.rawMessages = [...activeSession.value.messages];
 
     await expect(
-      engine.resendMonotonicMessage(activeSession.value.messages[1], "second"),
+      engine.resendMonotonicMessage(activeSession.value.messages[1], "second", NO_ATTACHMENT_EDITS),
     ).resolves.toBe(true);
     const firstReplacementUser = activeSession.value.messages[0];
     const firstReplacementAssistant = activeSession.value.messages[1];
@@ -528,9 +525,9 @@ describe("useChatEngine.resend stopped state", () => {
       turnScopeId: firstTurnScopeId,
       dialogProcessId: "dp-server",
     });
-    await expect(engine.resendMonotonicMessage(firstReplacementAssistant, "third")).resolves.toBe(
-      true,
-    );
+    await expect(
+      engine.resendMonotonicMessage(firstReplacementAssistant, "third", NO_ATTACHMENT_EDITS),
+    ).resolves.toBe(true);
 
     const [secondReplacementUser, secondPlaceholder] = activeSession.value.messages;
     expect(secondReplacementUser.turnScopeId).toMatch(/^client-turn:/);
@@ -648,7 +645,7 @@ describe("useChatEngine.resend stopped state", () => {
     activeSession.value.rawMessages = [...activeSession.value.messages];
 
     await expect(
-      engine.resendMonotonicMessage(activeSession.value.messages[1], "second"),
+      engine.resendMonotonicMessage(activeSession.value.messages[1], "second", NO_ATTACHMENT_EDITS),
     ).resolves.toBe(true);
     const firstAssistant = activeSession.value.messages.find(
       (message) =>
@@ -666,7 +663,9 @@ describe("useChatEngine.resend stopped state", () => {
       dialogProcessId: "dp-server",
     });
 
-    await expect(engine.resendMonotonicMessage(firstAssistant, "third")).resolves.toBe(true);
+    await expect(
+      engine.resendMonotonicMessage(firstAssistant, "third", NO_ATTACHMENT_EDITS),
+    ).resolves.toBe(true);
 
     const freshPlaceholder = [...activeSession.value.messages]
       .reverse()
@@ -737,7 +736,9 @@ describe("useChatEngine.resend stopped state", () => {
     };
     activeSession.value.messages = [stoppedUser, stoppedAssistant];
     activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
-    await expect(engine.resendMonotonicMessage(stoppedAssistant, "retry")).resolves.toBe(true);
+    await expect(
+      engine.resendMonotonicMessage(stoppedAssistant, "retry", NO_ATTACHMENT_EDITS),
+    ).resolves.toBe(true);
 
     expect(replaceSessionTurnApi).toHaveBeenCalledTimes(1);
     expect(stream).toHaveBeenCalledTimes(1);
@@ -794,9 +795,9 @@ describe("useChatEngine.resend stopped state", () => {
     activeSession.value.messages = [oldUser, staleStoppedAssistant];
     activeSession.value.rawMessages = [oldUser, staleStoppedAssistant];
 
-    await expect(engine.resendMonotonicMessage(staleStoppedAssistant, "new attempt")).resolves.toBe(
-      true,
-    );
+    await expect(
+      engine.resendMonotonicMessage(staleStoppedAssistant, "new attempt", NO_ATTACHMENT_EDITS),
+    ).resolves.toBe(true);
 
     const replacementUser = activeSession.value.messages.find(
       (message) => message.role === RoleEnum.USER,

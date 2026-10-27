@@ -17,7 +17,7 @@ import {
 
 const control = createReconnectControl({
   requestId: "reconnect-1",
-  identity: { sessionId: "child-1", parentSessionId: "root-1", parentDialogProcessId: "dp-1" },
+  identity: { sessionId: "child-1", parentSessionId: "root-1" },
   knownLifecycleSequenceMap: {},
 });
 const session = { sessionId: "child-1", replayBatch: { events: [] } };

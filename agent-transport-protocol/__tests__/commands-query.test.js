@@ -12,10 +12,12 @@ import {
   createTurnInterjectionCommand,
   createTurnSnapshotCommand,
   parseAgentCommand,
+  selectAgentCommandIdentity,
 } from "../src/index.js";
+import { ROOT_CHANNEL_IDENTITY, ROOT_COMMAND_IDENTITY } from "./helpers/command-identity.js";
 import { TURN_SNAPSHOT_TERMINAL_LIMIT } from "@noobot/session-protocol/turn-lifecycle";
 
-const identity = { sessionId: "session-1" };
+const identity = { ...ROOT_CHANNEL_IDENTITY, sessionId: "session-1" };
 
 test("snapshot command carries explicit known sequence and terminal limit", () => {
   const command = createTurnSnapshotCommand({
@@ -81,7 +83,12 @@ test("command builders reject missing command id and empty interjection at const
     () =>
       createTurnInterjectionCommand({
         commandId: "",
-        identity: { sessionId: "session-1", dialogProcessId: "dialog-1", turnScopeId: "turn-1" },
+        identity: {
+          ...ROOT_COMMAND_IDENTITY,
+          sessionId: "session-1",
+          dialogProcessId: "dialog-1",
+          turnScopeId: "turn-1",
+        },
         interaction: { message: "hi" },
       }),
     /missing_command_id/,
@@ -90,9 +97,32 @@ test("command builders reject missing command id and empty interjection at const
     () =>
       createTurnInterjectionCommand({
         commandId: "command-1",
-        identity: { sessionId: "session-1", dialogProcessId: "dialog-1", turnScopeId: "turn-1" },
+        identity: {
+          ...ROOT_COMMAND_IDENTITY,
+          sessionId: "session-1",
+          dialogProcessId: "dialog-1",
+          turnScopeId: "turn-1",
+        },
         interaction: { message: "" },
       }),
     /missing_interjection_message/,
+  );
+});
+
+test("selectAgentCommandIdentity keeps only the command identity keys of the source", () => {
+  const source = { ...identity, userId: "user-1", dialogProcessId: "dp-1" };
+  assert.deepEqual(selectAgentCommandIdentity(AGENT_COMMAND.TURN_SNAPSHOT_GET, source), identity);
+});
+
+test("selected identity with a missing key is rejected by the command factory", () => {
+  const { parentSessionId: _omitted, ...partial } = identity;
+  assert.throws(
+    () =>
+      createTurnSnapshotCommand({
+        commandId: "snapshot-1",
+        identity: selectAgentCommandIdentity(AGENT_COMMAND.TURN_SNAPSHOT_GET, partial),
+        options: { knownSequence: 0, terminalLimit: TURN_SNAPSHOT_TERMINAL_LIMIT.DEFAULT },
+      }),
+    /identity_field_required:parentSessionId/,
   );
 });

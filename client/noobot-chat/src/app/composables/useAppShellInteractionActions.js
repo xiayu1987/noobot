@@ -7,13 +7,15 @@ import {
   submitInteractionCancel,
   submitInteractionConfirm,
 } from "../runtime/appShellEventHandlers.js";
+import { requireFunctionDependencies } from "@noobot/shared/value";
 
-export function useAppShellInteractionActions({
-  submitInteractionResponse,
-  notify,
-  translate = (key) => key,
-} = {}) {
-  function handleInteractionConfirm(payload = {}) {
+export function useAppShellInteractionActions({ submitInteractionResponse, notify, translate }) {
+  requireFunctionDependencies("useAppShellInteractionActions", {
+    submitInteractionResponse,
+    notify,
+    translate,
+  });
+  function handleInteractionConfirm(payload) {
     submitInteractionConfirm({
       payload,
       submitInteractionResponse,

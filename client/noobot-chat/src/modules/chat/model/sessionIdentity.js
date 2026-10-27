@@ -40,17 +40,14 @@ function resolveSessionPrimaryId(sessionItems = [], sessionId = "") {
   return normalizeSessionId(targetSession?.sessionId || sessionId);
 }
 
-function confirmSessionIdentity({ sessionItem, sessionId = "", activeSessionId = "" } = {}) {
+function confirmSessionIdentity({ sessionItem, sessionId }) {
+  if (!sessionItem) throw new TypeError("confirmSessionIdentity requires sessionItem");
   const normalizedSessionId = normalizeSessionId(sessionId);
-  if (!sessionItem || !normalizedSessionId) {
-    return { changed: false, nextActiveSessionId: activeSessionId };
-  }
-
+  if (!normalizedSessionId) throw new TypeError("confirmSessionIdentity requires sessionId");
   if (sessionItem.sessionId !== normalizedSessionId) {
     throw new Error("session identity mismatch");
   }
   sessionItem.isLocal = false;
-  return { changed: false, nextActiveSessionId: activeSessionId };
 }
 
 export {

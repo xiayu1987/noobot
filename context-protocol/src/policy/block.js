@@ -20,7 +20,6 @@ import {
   extractContextTaskSummary,
   recoverContextTaskSummaryToolResult,
 } from "../task/summary-context.js";
-import { text } from "@noobot/shared/value";
 
 function messageTurnScopeId(message = {}) {
   return readContextMessageField(message, "turnScopeId");
@@ -49,25 +48,14 @@ export function normalizeUnpairedTaskSummaryToolResults(messages = []) {
   });
 }
 
-export function filterCurrentTurnMessagesFromHistory(
-  messages = [],
-  { currentTurnScopeId = "", currentDialogProcessId = "" } = {},
-) {
-  const turnScopeId = text(currentTurnScopeId);
-  const dialogProcessId = text(currentDialogProcessId);
-  const source = Array.isArray(messages) ? messages : [];
-  if (!turnScopeId && !dialogProcessId) return source;
+function filterCurrentTurnMessagesFromHistory(source, { turnScopeId, dialogProcessId }) {
   const blockedTurns = new Set();
   const blockedDialogs = new Set();
   for (const message of source) {
     if (resolveContextMessageRole(message) !== "user") continue;
     const messageTurn = messageTurnScopeId(message);
     const messageDialog = resolveContextMessageDialogProcessId(message);
-    if (
-      !(turnScopeId && messageTurn === turnScopeId) &&
-      !(dialogProcessId && messageDialog === dialogProcessId)
-    )
-      continue;
+    if (messageTurn !== turnScopeId && messageDialog !== dialogProcessId) continue;
     if (messageTurn) blockedTurns.add(messageTurn);
     if (messageDialog) blockedDialogs.add(messageDialog);
   }
@@ -83,59 +71,47 @@ export function filterCurrentTurnMessagesFromHistory(
 }
 
 export function buildCanonicalMessageBlocks({
-  systemMessages = [],
-  historyMessages = [],
-  incrementalMessages = [],
-  currentUserMessage = null,
-  historyExclusionIdentity = null,
-  historyLimit = Number.POSITIVE_INFINITY,
+  systemMessages,
+  historyMessages,
+  incrementalMessages,
+  currentUserMessage,
+  historyLimit,
   policyOptions = {},
-} = {}) {
+}) {
   if (
-    currentUserMessage !== null &&
-    (typeof currentUserMessage !== "object" || Array.isArray(currentUserMessage))
+    !currentUserMessage ||
+    typeof currentUserMessage !== "object" ||
+    Array.isArray(currentUserMessage)
   ) {
     throw new TypeError("currentUserMessage must be a canonical persisted message entity");
   }
 
-  const current = currentUserMessage
-    ? projectSessionRecordToContextMessage(currentUserMessage)
-    : null;
-  const content = text(current?.content);
-  const currentMessageId = current ? resolveContextMessageKey(current) : "";
-  if (current && !content) {
+  const current = projectSessionRecordToContextMessage(currentUserMessage);
+  const content = current.content;
+  const currentMessageId = resolveContextMessageKey(current);
+  if (typeof content !== "string" || !content) {
     throw new Error("currentUserMessage requires persisted content");
   }
   const identity = {
-    dialogProcessId: resolveContextMessageDialogProcessId(current || {}),
-    turnScopeId: messageTurnScopeId(current || {}),
+    dialogProcessId: resolveContextMessageDialogProcessId(current),
+    turnScopeId: messageTurnScopeId(current),
   };
   if (
-    current &&
-    (resolveContextMessageRole(current) !== "user" ||
-      !identity.dialogProcessId ||
-      !identity.turnScopeId)
+    resolveContextMessageRole(current) !== "user" ||
+    !identity.dialogProcessId ||
+    !identity.turnScopeId
   ) {
     throw new Error("currentUserMessage requires canonical user round identity");
   }
-  const exclusionIdentity =
-    historyExclusionIdentity && typeof historyExclusionIdentity === "object"
-      ? historyExclusionIdentity
-      : identity;
   const normalizedHistory = normalizeUnpairedTaskSummaryToolResults(historyMessages);
-  const history = content
-    ? filterCurrentTurnMessagesFromHistory(normalizedHistory, {
-        currentTurnScopeId: text(exclusionIdentity?.turnScopeId),
-        currentDialogProcessId: text(exclusionIdentity?.dialogProcessId),
-      })
-    : normalizedHistory;
-  const incremental = [...(Array.isArray(incrementalMessages) ? incrementalMessages : [])];
+  const history = filterCurrentTurnMessagesFromHistory(normalizedHistory, identity);
+  const incremental = [...incrementalMessages];
   const currentExists = incremental.some(
     (message) =>
       resolveContextMessageRole(message) === "user" &&
       resolveContextMessageKey(message) === currentMessageId,
   );
-  if (content && !currentExists) {
+  if (!currentExists) {
     incremental.push(current);
   }
   return resolveModelFinalMessages({

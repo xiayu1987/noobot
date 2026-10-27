@@ -3,6 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isApiRequestError } from "@noobot/shared/request-error";
+import { requireFunctionDependencies } from "@noobot/shared/value";
 
 export function useAppShellSessionActions({
   activeSessionId,
@@ -13,57 +15,47 @@ export function useAppShellSessionActions({
   refreshSessionConnectorsAsync,
   updateSessionSelectedConnectors,
   notify,
-  translate = (key) => key,
-} = {}) {
-  async function handleDeleteSession(sessionId) {
+  translate,
+}) {
+  requireFunctionDependencies("useAppShellSessionActions", {
+    confirmDeleteSession,
+    deleteSession,
+    renameSession,
+    fetchSessions,
+    refreshSessionConnectorsAsync,
+    updateSessionSelectedConnectors,
+    notify,
+    translate,
+  });
+
+  async function notifyRequestFailure(operation) {
     try {
-      await confirmDeleteSession?.();
-    } catch {
-      return;
-    }
-    try {
-      const deleted = await deleteSession?.(sessionId);
-      if (deleted) {
-        notify?.({ type: "success", message: translate("common.deleteSessionSuccess") });
-      }
+      return await operation();
     } catch (error) {
-      notify?.({
-        type: "error",
-        message: error.message || translate("common.deleteSessionFailed"),
-      });
+      if (!isApiRequestError(error)) throw error;
+      notify({ type: "error", message: error.message });
+      return false;
     }
   }
 
-  async function handleRenameSession({ sessionId = "", title = "" } = {}) {
-    try {
-      const renamed = await renameSession?.(sessionId, title);
-      if (renamed) {
-        notify?.({ type: "success", message: translate("common.renameSessionSuccess") });
-      }
-    } catch (error) {
-      notify?.({
-        type: "error",
-        message: error.message || translate("common.renameSessionFailed"),
-      });
-    }
+  async function handleDeleteSession(sessionId) {
+    if (!(await confirmDeleteSession())) return;
+    const deleted = await notifyRequestFailure(() => deleteSession(sessionId));
+    if (deleted) notify({ type: "success", message: translate("common.deleteSessionSuccess") });
+  }
+
+  async function handleRenameSession({ sessionId, title }) {
+    const renamed = await notifyRequestFailure(() => renameSession(sessionId, title));
+    if (renamed) notify({ type: "success", message: translate("common.renameSessionSuccess") });
   }
 
   async function handleWorkspaceReset() {
-    await fetchSessions?.();
-    if (activeSessionId?.value) {
-      refreshSessionConnectorsAsync?.(activeSessionId.value);
-    }
+    await fetchSessions();
+    if (activeSessionId.value) refreshSessionConnectorsAsync(activeSessionId.value);
   }
 
-  async function onConnectorSelected(selectedConnectorIds = []) {
-    try {
-      await updateSessionSelectedConnectors?.(selectedConnectorIds);
-    } catch (error) {
-      notify?.({
-        type: "error",
-        message: error.message || translate("common.updateConnectorFailed"),
-      });
-    }
+  async function onConnectorSelected(selectedConnectorIds) {
+    await notifyRequestFailure(() => updateSessionSelectedConnectors(selectedConnectorIds));
   }
 
   return {

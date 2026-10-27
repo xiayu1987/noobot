@@ -54,7 +54,6 @@ test("reconnect provisions a child session channel with the start_or_join key", 
     reconnectControl({
       sessionId: "child-1",
       parentSessionId: "parent-1",
-      parentDialogProcessId: "parent-dp-1",
     }),
   );
 
@@ -62,12 +61,10 @@ test("reconnect provisions a child session channel with the start_or_join key", 
     userId: "user-1",
     sessionId: "child-1",
     parentSessionId: "parent-1",
-    parentDialogProcessId: "parent-dp-1",
   });
   assert.deepEqual(Array.from(manager.channelStore.keys()), [expectedKey]);
   const { identity } = manager.channelStore.get(expectedKey);
   assert.equal(identity.parentSessionId, "parent-1");
-  assert.equal(identity.parentDialogProcessId, "parent-dp-1");
 });
 
 test("reconnect should not replay resolved interaction_request", () => {

@@ -18,6 +18,7 @@ import {
 } from "../message/codec.js";
 import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "../message/internal-types.js";
 import { text } from "@noobot/shared/value";
+import { MESSAGE_ORIGIN } from "@noobot/session-protocol";
 
 const TERMINAL_HISTORY_STATUS = Object.freeze({
   USER_STOPPED: "user_stopped",
@@ -60,7 +61,7 @@ function normalizeTerminalStatus(status = {}) {
 function isOriginalUserMessage(message = {}) {
   return (
     resolveContextMessageRole(message) === "user" &&
-    resolveContextMessageOrigin(message) === "natural" &&
+    resolveContextMessageOrigin(message) === MESSAGE_ORIGIN.NATURAL &&
     !resolveContextMessageFlags(message).injected
   );
 }
@@ -96,7 +97,6 @@ function buildTerminalExplanation(status = {}) {
       dialogProcessId: status.dialogProcessId,
       parentDialogProcessId: status.parentDialogProcessId || undefined,
       turnScopeId: status.turnScopeId,
-      messageOrigin: "internal",
       noobotInternalMessageType: CONTEXT_INTERNAL_MESSAGE_TYPE.TERMINAL_HISTORY_EXPLANATION,
       terminalHistoryProjection: true,
       terminalHistoryExplanation: true,

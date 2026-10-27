@@ -6,23 +6,13 @@
 import { buildChatPayload } from "./payload.js";
 
 export function createTurnPayloadBuilder({ preferences, request, turn }) {
-  const { continueFromUserStopped } = request;
-  return ({ expectedAggregateVersion } = {}) =>
+  return ({ expectedAggregateVersion }) =>
     buildChatPayload({
       ...preferences,
+      request,
       activeSession: turn.activeSession,
-      message: turn.text,
-      expectedAggregateVersion,
       attachments: turn.attachments,
       requestedTextStreaming: turn.requestedTextStreaming,
-      dialogProcessId: request.dialogProcessId,
-      turnScopeId: request.turnScopeId,
-      userMessageId: request.userMessageId,
-      presentationMessageId: request.presentationMessageId,
-      continueFromStopped: continueFromUserStopped,
-      resumeDialogProcessId: continueFromUserStopped ? request.resumeDialogProcessId : "",
-      resumeTurnScopeId: continueFromUserStopped ? request.resumeTurnScopeId : "",
-      uploadHint: turn.uploadHint,
-      reuseExistingUserTurn: request.reuseExistingUserTurn,
+      expectedAggregateVersion,
     });
 }

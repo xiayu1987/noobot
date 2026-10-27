@@ -5,6 +5,7 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  createSendStreamEventHandler,
   logRuntimeRouteCompleted,
   logStreamEvent,
 } from "../../../../../../src/modules/chat/runtime/engine/sendStreamEventRouter.js";
@@ -83,4 +84,29 @@ describe("stream event log routing", () => {
     ]);
     expect(logSessionEvent.mock.calls.some(([record]) => record.level === "warn")).toBe(false);
   });
+
+  it.each(["done", "user_stopped", "error"])(
+    "rejects retired non-envelope live event %s with an explicit transport warning",
+    (event) => {
+      const logSessionEvent = vi.fn();
+      const applyTurnLifecycleEnvelope = vi.fn();
+      const handle = createSendStreamEventHandler({
+        logSessionEvent,
+        applyTurnLifecycleEnvelope,
+        sessionId: "s-1",
+        turnScopeId: "turn-1",
+      });
+
+      expect(handle({ event, data: { sessionId: "s-1", turnScopeId: "turn-1" } })).toBeUndefined();
+      expect(logSessionEvent).toHaveBeenCalledTimes(1);
+      expect(logSessionEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          level: "warn",
+          event: "frontend.transport.protocolEnvelopeRejected",
+          data: { channelEvent: event, errors: ["unregistered_non_envelope_event"] },
+        }),
+      );
+      expect(applyTurnLifecycleEnvelope).not.toHaveBeenCalled();
+    },
+  );
 });

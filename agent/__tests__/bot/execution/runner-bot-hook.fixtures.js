@@ -24,6 +24,7 @@ import { createAcceptedRunIdentity } from "../../helpers/accepted-run-identity.j
 import { createTestSessionRequiredFields } from "../../helpers/session-message-facts.js";
 import {
   TEST_ACCEPTED_DIALOG_PROCESS_ID,
+  TEST_MESSAGE_TS,
   createTestSessionRunPayload,
 } from "../../helpers/session-run-payload.js";
 import { createAgentTurnResult } from "@noobot/agent-transport-protocol/agent-turn-result";
@@ -96,6 +97,7 @@ export function persistedUserMessage({
     turnScopeId,
     messageOrigin: "natural",
     attachments,
+    ts: TEST_MESSAGE_TS,
   };
 }
 
@@ -153,6 +155,7 @@ export function createRunner({
       turnScopeId,
       messageOrigin: "natural",
       attachments: [],
+      ts: TEST_MESSAGE_TS,
     };
     acceptedUserMessages.set(turnScopeId, userMessage);
     return createTestSessionRunPayload({

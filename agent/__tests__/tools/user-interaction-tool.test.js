@@ -28,7 +28,7 @@ function toolAgentContext(runtime, identity = {}) {
   };
 }
 
-test("user_interaction: should forward lifecycle/ackMode defaults to bridge", async () => {
+test("user_interaction: should forward pending lifecycle to bridge", async () => {
   const calls = [];
   const tools = createUserInteractionTool({
     agentContext: toolAgentContext({
@@ -81,7 +81,7 @@ test("user_interaction: should forward lifecycle/ackMode defaults to bridge", as
   assert.equal(result.ok, true);
   assert.equal(calls.length, 1);
   assert.equal(String(calls[0]?.lifecycle || ""), "pending");
-  assert.equal(String(calls[0]?.ackMode || ""), "manual");
+  assert.equal(Object.hasOwn(calls[0], "ackMode"), false);
   assert.equal(String(calls[0]?.resolvedBy || ""), "");
   assert.equal(String(calls[0]?.interactionId || ""), "call-stable-1");
   assert.deepEqual(calls[0]?.authority, {

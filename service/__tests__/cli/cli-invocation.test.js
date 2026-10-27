@@ -117,11 +117,16 @@ test("session target: new, -c latest, -r existing", async () => {
       getSessionDisplayData: async () => ({ sessions: [{ sessionId: "s1", aggregateVersion: 4 }] }),
     },
   };
-  assert.deepEqual(await resolveSessionTarget({ bot, userId: "u", invocation: {} }), {
-    sessionId: "",
-    aggregateVersion: 0,
-    createSession: true,
-  });
+  const created = await resolveSessionTarget({ bot, userId: "u", invocation: {} });
+  assert.match(created.sessionId, /^[0-9a-f-]{36}$/);
+  assert.deepEqual(
+    { ...created, sessionId: "" },
+    {
+      sessionId: "",
+      aggregateVersion: 0,
+      createSession: true,
+    },
+  );
   assert.deepEqual(
     await resolveSessionTarget({ bot, userId: "u", invocation: { continueLatest: true } }),
     { sessionId: "s2", aggregateVersion: 7, createSession: false },

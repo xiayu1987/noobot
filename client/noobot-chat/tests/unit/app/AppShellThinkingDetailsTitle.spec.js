@@ -42,7 +42,9 @@ describe("AppShell thinking details drawer title", () => {
     expect(appShellSource).toContain(
       "thinkingDetailsMessageItem: thinkingDetailsMessageItem.value || {}",
     );
-    expect(drawerPanelsStateSource).toContain("title: resolveThinkingTitle(messageItem)");
+    expect(drawerPanelsStateSource).toContain(
+      "title: getThinkingDetailsTitle(thinkingDetailsMessageItem)",
+    );
     expect(appShellSource).not.toContain('title: translate("message.thinkingDetails")');
   });
 });

@@ -195,6 +195,7 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
         {
           messageUid: "sm_node_task",
           role: "user",
+          messageOrigin: "internal",
           content: "node task",
           dialogProcessId: turnIdentity.dialogProcessId,
           turnScopeId: turnIdentity.turnScopeId,

@@ -131,7 +131,7 @@ function createAttachmentDownloadController({ userId, attachmentService, transla
       );
     },
     async onDownloadParsedResult(item = {}) {
-      const parsedItem = buildParsedResultPreviewItem(item, options());
+      const parsedItem = buildParsedResultPreviewItem(item);
       await downloadFromUrl(
         resolveParsedResultAccessMeta(item, options())?.url || "",
         parsedItem?.name || translate("message.parsedResultDefaultName"),

@@ -22,6 +22,7 @@ import {
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 import { applySessionMessageFacts } from "../helpers/session-message-facts.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
 test("session display summary should keep chat view lightweight and rebuild stale files", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
@@ -96,7 +97,9 @@ test("session display summary should keep chat view lightweight and rebuild stal
         {
           userMessageId: "u1",
           messageUid: "sm-u1",
+          ts: TEST_MESSAGE_TS,
           role: "user",
+          messageOrigin: "natural",
           turnScopeId: "turn-scope-u1",
           dialogProcessId: "dp-u1",
           content: longUserContent,
@@ -250,6 +253,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
         {
           userMessageId: "u2",
           role: "user",
+          messageOrigin: "natural",
           type: "message",
           dialogProcessId: "dp-tool-only",
           content: "run tool only thinking details",
@@ -282,6 +286,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
           presentationMessageId: "pm_fx5",
           modelMessageId: "mm_session_repository_bound_2",
           type: "tool_call",
+          content: "",
           dialogProcessId: "dp-tool-only",
           tool_calls: [
             { id: "call-tool-only", function: { name: "search", arguments: { q: "demo" } } },

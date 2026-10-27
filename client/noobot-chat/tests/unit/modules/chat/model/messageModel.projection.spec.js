@@ -39,14 +39,17 @@ describe("messageModel projections", () => {
 
   it("keeps turn UI state out of message projections", () => {
     expect(
-      buildViewMessage({ role: "assistant", pending: true }, { sessionId: "session-1" }),
+      buildViewMessage(
+        { role: "assistant", content: "", pending: true },
+        { sessionId: "session-1" },
+      ),
     ).not.toHaveProperty("thinkingOpenNames");
-    expect(buildViewMessage({ role: "assistant" }, { sessionId: "session-1" })).not.toHaveProperty(
-      "expandedToolDetailKeys",
-    );
-    expect(buildViewMessage({ role: "user" }, { sessionId: "session-1" })).not.toHaveProperty(
-      "thinkingOpenNames",
-    );
+    expect(
+      buildViewMessage({ role: "assistant", content: "" }, { sessionId: "session-1" }),
+    ).not.toHaveProperty("expandedToolDetailKeys");
+    expect(
+      buildViewMessage({ role: "user", content: "" }, { sessionId: "session-1" }),
+    ).not.toHaveProperty("thinkingOpenNames");
   });
 
   it("finds the last user-visible message and skips harness injected relay messages", () => {

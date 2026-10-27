@@ -35,7 +35,7 @@ import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { createAcceptedRunIdentity } from "../helpers/accepted-run-identity.js";
 import { createCanonicalMessageEventSessionManager } from "../helpers/canonical-message-event-session-manager.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
-import { createTestSessionRunPayload } from "../helpers/session-run-payload.js";
+import { TEST_MESSAGE_TS, createTestSessionRunPayload } from "../helpers/session-run-payload.js";
 
 function createWorkspaceService(baseDir) {
   return {
@@ -386,6 +386,7 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
         turnScopeId: payload.turnScopeId,
         messageOrigin: "natural",
         attachments: [],
+        ts: TEST_MESSAGE_TS,
       };
       persistedTurns.push(userMessage);
       return { userMessage };

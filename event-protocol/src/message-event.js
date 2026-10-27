@@ -108,16 +108,16 @@ function validatePresentationMessage(message, expectedRole, value) {
   if (!text(message.sessionId)) errors.push(`missing_${expectedRole}_session_id`);
   if (!text(message.turnScopeId)) errors.push(`missing_${expectedRole}_turn_scope_id`);
   if (typeof message.content !== "string") errors.push(`invalid_${expectedRole}_content`);
-  if (message.attachments !== undefined && !Array.isArray(message.attachments)) {
-    errors.push(`invalid_${expectedRole}_attachments`);
-  }
+  if (!Array.isArray(message.attachments)) errors.push(`invalid_${expectedRole}_attachments`);
   if (expectedRole === "assistant") {
     if (text(message.presentationMessageId) !== text(value.presentationMessageId)) {
       errors.push("assistant_presentation_id_mismatch");
     }
+    if (Object.hasOwn(message, "ts")) errors.push("noncanonical_assistant_ts");
   } else {
     if (!text(message.messageUid)) errors.push("missing_user_message_uid");
     if (!text(message.userMessageId)) errors.push("missing_user_message_id");
+    if (!isCanonicalText(message.ts)) errors.push("missing_user_ts");
   }
   for (const [alias, code] of Object.entries(PRESENTATION_IDENTITY_ALIASES)) {
     if (Object.hasOwn(message, alias)) errors.push(`noncanonical_${expectedRole}_${code}`);
@@ -275,17 +275,15 @@ export function validateMessageEventPayload(value) {
   return Object.freeze({ valid: errors.length === 0, errors: Object.freeze(errors) });
 }
 
-export function projectTurnPresentation(event = {}) {
-  if (text(event?.eventType) !== MESSAGE_EVENT_TYPE.TURN_PRESENTATION_COMMITTED) {
-    return null;
+export function projectTurnPresentation(envelope) {
+  const { payload, occurredAt } = envelope;
+  if (payload.eventType !== MESSAGE_EVENT_TYPE.TURN_PRESENTATION_COMMITTED) {
+    throw new TypeError("projectTurnPresentation requires turn_presentation_committed");
   }
-  const presentation = event?.presentation;
-  if (!isPlainObject(presentation)) {
-    return null;
-  }
+  const { userMessage, assistantMessage } = payload.presentation;
   return Object.freeze({
-    userMessage: Object.freeze({ ...presentation.userMessage }),
-    assistantMessage: Object.freeze({ ...presentation.assistantMessage }),
+    userMessage: Object.freeze({ ...userMessage }),
+    assistantMessage: Object.freeze({ ...assistantMessage, ts: occurredAt }),
   });
 }
 

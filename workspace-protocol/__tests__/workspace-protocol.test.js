@@ -189,6 +189,7 @@ test("layout upgrades run every step above the installed version and end at the 
       "session-turn-terminal-description-v12",
       "session-message-error-text-v13",
       "session-turn-timing-lifecycle-start-v14",
+      "session-message-entity-contract-v15",
     ],
   );
   assert.deepEqual(
@@ -205,6 +206,7 @@ test("layout upgrades run every step above the installed version and end at the 
       "session-turn-terminal-description-v12",
       "session-message-error-text-v13",
       "session-turn-timing-lifecycle-start-v14",
+      "session-message-entity-contract-v15",
     ],
   );
   assert.deepEqual(planWorkspaceLayoutUpgrades({ installedVersion: WORKSPACE_LAYOUT_VERSION }), []);

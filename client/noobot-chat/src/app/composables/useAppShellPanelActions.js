@@ -5,7 +5,7 @@
  */
 import { PSEUDO_PANEL } from "./useAppShellPseudoRoute.js";
 import { updateDrawerModelVisibility } from "../runtime/appShellEventHandlers.js";
-import { text } from "@noobot/shared/value";
+import { requireFunctionDependencies, text } from "@noobot/shared/value";
 
 export function useAppShellPanelActions({
   userId,
@@ -14,9 +14,10 @@ export function useAppShellPanelActions({
   isMobile,
   mobileSidebarOpen,
   composerMorePanelVisible,
+  closeComposerMorePanel,
   ensureConnected,
   notify,
-  translate = (key) => key,
+  translate,
   toggleSidebar,
   closeMobileSidebar,
   openWorkspaceRaw,
@@ -26,91 +27,102 @@ export function useAppShellPanelActions({
   pushPanelPseudoRoute,
   pushPanelVisibilityPseudoRoute,
   pushClosePseudoPanelRoute,
-} = {}) {
-  function closeComposerMorePanel() {
-    if (composerMorePanelVisible) composerMorePanelVisible.value = false;
-  }
+}) {
+  requireFunctionDependencies("useAppShellPanelActions", {
+    closeComposerMorePanel,
+    ensureConnected,
+    notify,
+    translate,
+    toggleSidebar,
+    closeMobileSidebar,
+    openWorkspaceRaw,
+    openConnectorsRaw,
+    openUserSettingsRaw,
+    openConfigParamsRaw,
+    pushPanelPseudoRoute,
+    pushPanelVisibilityPseudoRoute,
+    pushClosePseudoPanelRoute,
+  });
 
   function openWorkspace() {
-    if (!ensureConnected?.()) return;
-    if (!userId?.value?.trim()) {
-      notify?.({ type: "warning", message: translate("common.userIdRequired") });
+    if (!ensureConnected()) return;
+    if (!userId.value.trim()) {
+      notify({ type: "warning", message: translate("common.userIdRequired") });
       return;
     }
     closeComposerMorePanel();
-    openWorkspaceRaw?.();
-    pushPanelPseudoRoute?.(PSEUDO_PANEL.WORKSPACE);
+    openWorkspaceRaw();
+    pushPanelPseudoRoute(PSEUDO_PANEL.WORKSPACE);
   }
 
   function openConnectors() {
-    if (!ensureConnected?.()) return;
-    if (!userId?.value?.trim()) {
-      notify?.({ type: "warning", message: translate("common.userIdRequired") });
+    if (!ensureConnected()) return;
+    if (!userId.value.trim()) {
+      notify({ type: "warning", message: translate("common.userIdRequired") });
       return;
     }
     closeComposerMorePanel();
-    openConnectorsRaw?.();
-    pushPanelPseudoRoute?.(PSEUDO_PANEL.CONNECTORS);
+    openConnectorsRaw();
+    pushPanelPseudoRoute(PSEUDO_PANEL.CONNECTORS);
   }
 
   async function openUserSettings() {
-    if (!ensureConnected?.()) return;
-    if (!isSuperAdmin?.value) {
-      const currentRole = text(apiRole?.value) || "user";
-      notify?.({
+    if (!ensureConnected()) return;
+    if (!isSuperAdmin.value) {
+      const currentRole = text(apiRole.value) || "user";
+      notify({
         type: "warning",
         message: `${translate("common.superAdminOnly")} (role=${currentRole})`,
       });
       return;
     }
     closeComposerMorePanel();
-    openUserSettingsRaw?.();
-    pushPanelPseudoRoute?.(PSEUDO_PANEL.USER_SETTINGS);
+    openUserSettingsRaw();
+    pushPanelPseudoRoute(PSEUDO_PANEL.USER_SETTINGS);
   }
 
   function openConfigParams() {
-    if (!ensureConnected?.()) return;
+    if (!ensureConnected()) return;
     closeComposerMorePanel();
-    openConfigParamsRaw?.();
-    pushPanelPseudoRoute?.(PSEUDO_PANEL.CONFIG_PARAMS);
+    openConfigParamsRaw();
+    pushPanelPseudoRoute(PSEUDO_PANEL.CONFIG_PARAMS);
   }
 
   function handleToggleSidebar() {
-    toggleSidebar?.();
-    if (isMobile?.value) {
-      if (mobileSidebarOpen?.value) closeComposerMorePanel();
-      pushPanelVisibilityPseudoRoute?.({
-        visible: mobileSidebarOpen?.value,
+    toggleSidebar();
+    if (isMobile.value) {
+      if (mobileSidebarOpen.value) closeComposerMorePanel();
+      pushPanelVisibilityPseudoRoute({
+        visible: mobileSidebarOpen.value,
         panel: PSEUDO_PANEL.SIDEBAR,
       });
     }
   }
 
   function handleCloseMobileSidebar() {
-    closeMobileSidebar?.();
-    pushClosePseudoPanelRoute?.();
+    closeMobileSidebar();
+    pushClosePseudoPanelRoute();
   }
 
   function handleComposerMorePanelVisibleUpdate(value) {
     const nextVisible = Boolean(value);
-    if (composerMorePanelVisible?.value === nextVisible) return;
+    if (composerMorePanelVisible.value === nextVisible) return;
     if (nextVisible) {
-      closeMobileSidebar?.();
+      closeMobileSidebar();
     }
-    if (composerMorePanelVisible) composerMorePanelVisible.value = nextVisible;
-    pushPanelVisibilityPseudoRoute?.({
+    composerMorePanelVisible.value = nextVisible;
+    pushPanelVisibilityPseudoRoute({
       visible: nextVisible,
       panel: PSEUDO_PANEL.COMPOSER,
     });
   }
 
-  function handleDrawerModelUpdate(drawer = {}, value = false) {
+  function handleDrawerModelUpdate(drawer, value) {
     const { closed } = updateDrawerModelVisibility({ drawer, value });
-    if (closed) pushClosePseudoPanelRoute?.();
+    if (closed) pushClosePseudoPanelRoute();
   }
 
   return {
-    closeComposerMorePanel,
     openWorkspace,
     openConnectors,
     openUserSettings,

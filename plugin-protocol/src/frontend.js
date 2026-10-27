@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isFunction, isPlainObject } from "@noobot/shared/value";
+import { isCanonicalText, isFunction, isPlainObject } from "@noobot/shared/value";
 
 export const EXTENSION_POINTS = Object.freeze({
   MESSAGE_CARD_PRE: "message.card.pre",
@@ -88,6 +88,36 @@ export const MESSAGE_CARD_HOST_STATE_VERSION = "subSessionMessageRegistryVersion
 export const HOST_CAPABILITY_ERROR_CODE = Object.freeze({
   MISSING: "PLUGIN_HOST_CAPABILITY_MISSING",
 });
+
+export const EXTENSION_CONTEXT_ERROR_CODE = Object.freeze({
+  INVALID: "PLUGIN_EXTENSION_CONTEXT_INVALID",
+});
+
+export const SESSION_ARTIFACT_PANEL_CONTEXT_FIELDS = Object.freeze([
+  "sessionId",
+  "panelResizing",
+  "panelResizeRevision",
+]);
+
+function invalidExtensionContext(point, field) {
+  return Object.assign(new TypeError(`${point} context invalid: ${field}`), {
+    code: EXTENSION_CONTEXT_ERROR_CODE.INVALID,
+  });
+}
+
+export function createSessionArtifactPanelContext({
+  sessionId,
+  panelResizing,
+  panelResizeRevision,
+}) {
+  const point = EXTENSION_POINTS.SESSION_ARTIFACT_PANEL;
+  if (!isCanonicalText(sessionId)) throw invalidExtensionContext(point, "sessionId");
+  if (typeof panelResizing !== "boolean") throw invalidExtensionContext(point, "panelResizing");
+  if (!Number.isInteger(panelResizeRevision) || panelResizeRevision < 0) {
+    throw invalidExtensionContext(point, "panelResizeRevision");
+  }
+  return Object.freeze({ sessionId, panelResizing, panelResizeRevision });
+}
 
 function missingHostCapability(name) {
   return Object.assign(new TypeError(`message card host capability missing: ${name}`), {

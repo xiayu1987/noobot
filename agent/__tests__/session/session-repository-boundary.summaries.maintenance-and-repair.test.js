@@ -23,6 +23,7 @@ import {
 } from "./session-repository-boundary.summaries.fixtures.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 import { applySessionMessageFacts } from "../helpers/session-message-facts.js";
+import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
 test("session summaries should be maintained and rebuilt for list API", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
@@ -56,7 +57,7 @@ test("session summaries should be maintained and rebuilt for list API", async ()
     sessionB.messages = canonicalMessages(
       [
         { role: "system", content: "ignored" },
-        { role: "user", content: "1234567890123456789012345" },
+        { role: "user", messageOrigin: "natural", content: "1234567890123456789012345" },
         { role: "assistant", content: "done", attachmentMetas: [{ id: "big" }] },
       ],
       "B",
@@ -451,8 +452,10 @@ test("deleting one session does not invalidate another session display summary",
     kept.messages = [
       {
         messageUid: "sm-kept-user",
+        ts: TEST_MESSAGE_TS,
         sessionId: "kept",
         role: "user",
+        messageOrigin: "natural",
         content: "keep me",
         turnScopeId: "turn-kept",
         dialogProcessId: "dialog-kept",

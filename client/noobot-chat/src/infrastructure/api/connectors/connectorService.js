@@ -5,17 +5,24 @@
  */
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { createConnectorPanelState } from "../../../modules/session/model/sessionModel.js";
-import { text } from "@noobot/shared/value";
+import { requireFunctionDependencies, text } from "@noobot/shared/value";
+import { readApiResponseEnvelope } from "@noobot/shared/request-error";
 
 export function createConnectorService({
-  ensureConnected = () => false,
+  ensureConnected,
   listUserConnectorsApi,
   getSessionConnectorsApi,
   putSessionConnectorSelectionApi,
   userId,
   authFetch,
-  translateText = (key = "") => String(key || ""),
-} = {}) {
+}) {
+  requireFunctionDependencies("createConnectorService", {
+    ensureConnected,
+    listUserConnectorsApi,
+    getSessionConnectorsApi,
+    putSessionConnectorSelectionApi,
+    authFetch,
+  });
   const sessionTasks = new Map();
 
   function applyPersistedSessionConnectorPayload(sessionItem, payload = {}) {
@@ -62,10 +69,7 @@ export function createConnectorService({
               { userId: userId?.value, sessionId: normalizedSessionId },
               { fetcher: authFetch },
             );
-      const payload = await response.json();
-      if (!response.ok || payload?.ok !== true) {
-        throw new Error(payload?.error || translateText("infra.connectorStatusFetchFailed"));
-      }
+      const payload = await readApiResponseEnvelope(response);
       if (sessionItem.isLocal === true) applyLocalConnectorCatalog(sessionItem, payload);
       else applyPersistedSessionConnectorPayload(sessionItem, payload);
     });
@@ -77,11 +81,7 @@ export function createConnectorService({
     return refreshSessionConnectors(options);
   }
 
-  async function updateSessionSelectedConnectors({
-    activeSession,
-    selectedConnectorIds = [],
-  } = {}) {
-    if (!activeSession?.sessionId) return false;
+  async function updateSessionSelectedConnectors({ activeSession, selectedConnectorIds }) {
     const normalizedIds = normalizeSelectedConnectorIds(selectedConnectorIds);
     if (activeSession.isLocal === true) {
       activeSession.connectorPanelState = createConnectorPanelState({
@@ -101,10 +101,7 @@ export function createConnectorService({
         },
         { fetcher: authFetch },
       );
-      const payload = await response.json();
-      if (!response.ok || payload?.ok !== true) {
-        throw new Error(payload?.error || translateText("common.updateConnectorFailed"));
-      }
+      const payload = await readApiResponseEnvelope(response);
       activeSession.connectorPanelState = createConnectorPanelState({
         ...activeSession.connectorPanelState,
         selectedConnectorIds: payload.selectedConnectorIds,

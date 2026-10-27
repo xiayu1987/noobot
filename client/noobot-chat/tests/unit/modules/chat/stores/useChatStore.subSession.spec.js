@@ -56,6 +56,7 @@ function commitPresentation(store, identity = {}) {
           turnScopeId,
           content: "question",
           attachments: [],
+          ts: "2026-01-01T00:00:00.000Z",
         },
         assistantMessage: {
           presentationMessageId,
@@ -275,6 +276,9 @@ describe("sub-session realtime message projection", () => {
       eventType: "turn.terminal_resolved",
       commandId: "resolve-child-terminal",
       resolved: true,
+      retryable: false,
+      reason: "",
+      retryAfterMs: 0,
       aggregateVersion: 1,
       sessionId: identity.sessionId,
       turnScopeId: identity.turnScopeId,

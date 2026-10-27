@@ -111,6 +111,7 @@ function mountComposer(props = {}) {
       sending: false,
       connected: true,
       sessionReady: true,
+      connectorPanelState: null,
       ...props,
     },
     global: globalMountOptions,
@@ -283,12 +284,12 @@ describe("ChatComposer interactions", () => {
         function onClearUploads() {
           ownerClearUploads();
           uploadFiles.value = [];
-          composerRef.value?.clearUploadSelection?.();
+          composerRef.value.clearUploadSelection();
         }
         return { composerRef, uploadFiles, onAppendUploads, onClearUploads };
       },
       template:
-        '<ChatComposer ref="composerRef" :connected="true" :session-ready="true" :upload-files="uploadFiles" @append-uploads="onAppendUploads" @clear-uploads="onClearUploads" />',
+        '<ChatComposer ref="composerRef" :connected="true" :session-ready="true" :connector-panel-state="null" :upload-files="uploadFiles" @append-uploads="onAppendUploads" @clear-uploads="onClearUploads" />',
     });
 
     const wrapper = mount(OwnerHarness, {
@@ -530,5 +531,23 @@ describe("ChatComposer interactions", () => {
     expect(tagText).not.toContain("harness");
     expect(tagText).toContain("brief.pdf");
     expect(tagText).toContain("screenshot.png");
+  });
+
+  it("renders the connector panel only when a connector panel state exists", () => {
+    const empty = mountComposer({ connectorPanelState: null });
+    expect(empty.find(".connector-selector-stub").exists()).toBe(false);
+    const wrapper = mountComposer({
+      connectorPanelState: { selectedConnectorIds: [], connectors: [] },
+    });
+    expect(wrapper.find(".connector-selector-stub").exists()).toBe(true);
+  });
+
+  it("forwards the connector panel selection unchanged", () => {
+    const wrapper = mountComposer({
+      connectorPanelState: { selectedConnectorIds: [], connectors: [] },
+    });
+    const panel = wrapper.findComponent({ name: "ConnectorSelectorPanel" });
+    panel.vm.$emit("selection-change", ["con_db"]);
+    expect(wrapper.emitted("connector-selected")).toEqual([[["con_db"]]]);
   });
 });

@@ -7,9 +7,9 @@ import {
   getWorkspaceFileMutationDiffApi,
   getWorkspaceFileMutationFileApi,
 } from "../chat/chatApi.js";
+import { requireAuthenticatedFetcher } from "../../http/authenticatedHttpService.js";
 import { saveFileBlob } from "../../downloads/fileDownloadService.js";
 
-let authenticatedFetcher = null;
 async function getMutationFile({
   userId = "",
   sessionId = "",
@@ -18,7 +18,7 @@ async function getMutationFile({
 } = {}) {
   const response = await getWorkspaceFileMutationFileApi(
     { userId, sessionId, sessionScope, mutationId },
-    authenticatedFetcher ? { fetcher: authenticatedFetcher } : {},
+    { fetcher: requireAuthenticatedFetcher() },
   );
   if (!response?.ok) throw new Error(`failed to load file: ${response?.status || 500}`);
   const data = await response.json();
@@ -26,16 +26,13 @@ async function getMutationFile({
   return data;
 }
 export const fileMutationPreviewService = Object.freeze({
-  configure({ fetcher = null } = {}) {
-    authenticatedFetcher = typeof fetcher === "function" ? fetcher : null;
-  },
   async getFile({ userId = "", sessionId = "", sessionScope = null, mutationId = "" } = {}) {
     return getMutationFile({ userId, sessionId, sessionScope, mutationId });
   },
   async getDiff({ userId = "", sessionId = "", sessionScope = null, mutationId = "" } = {}) {
     const response = await getWorkspaceFileMutationDiffApi(
       { userId, sessionId, sessionScope, mutationId },
-      authenticatedFetcher ? { fetcher: authenticatedFetcher } : {},
+      { fetcher: requireAuthenticatedFetcher() },
     );
     if (!response?.ok) throw new Error(`failed to load file diff: ${response?.status || 500}`);
     const data = await response.json();

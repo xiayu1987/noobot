@@ -72,10 +72,10 @@ function logCommitRejected(context, { result, payload, expectedAggregateVersion 
     statusText: result?.statusText,
     anchor,
     expectedAggregateVersion,
-    commandId: operation?.opId || "",
+    commandId: operation.opId,
     payload,
     target: summarizeDebugMessage(userTargetMessage),
-    messages: summarizeDebugMessages(activeSession?.value?.messages),
+    messages: summarizeDebugMessages(activeSession.value.messages),
   }));
 }
 
@@ -97,7 +97,7 @@ export async function commitResendTurnReplacement(context) {
     mutate: ({ expectedAggregateVersion, attempt }) =>
       requestReplaceTurn({ expectedAggregateVersion, attempt }),
   });
-  const { result, payload, expectedAggregateVersion } = mutationResult || {};
+  const { result, payload, expectedAggregateVersion } = mutationResult;
   logResendDebug("resend.replaceTurn.result", () => ({
     sessionId,
     turnScopeId: resendTurnScopeId,
@@ -132,12 +132,10 @@ export async function commitResendTurnReplacement(context) {
     turnRuntimeRegistry,
     removeWorkflowOwnersForReplacedTurns,
   });
-  if (operation) {
-    messageOperationStore?.updateOperation(operation.opId, {
-      status: "materializing",
-      turnReplacement,
-    });
-  }
+  messageOperationStore.updateOperation(operation.opId, {
+    status: "materializing",
+    turnReplacement,
+  });
   return {
     outcome: RESEND_COMMIT_OUTCOME.COMMITTED,
     turnReplacement,

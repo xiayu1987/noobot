@@ -24,6 +24,7 @@ import {
 } from "./session-repository-boundary.summaries.fixtures.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 import { applySessionMessageFacts } from "../helpers/session-message-facts.js";
+import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
 test("session save refreshes the display projection with live activity timeline", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
@@ -49,6 +50,7 @@ test("session save refreshes the display projection with live activity timeline"
           role: "assistant",
           modelMessageId: "mm_session_repository_bound_1",
           type: "tool_call",
+          content: "",
           chatPresentation: false,
           presentationMessageId: "presentation-live",
           turnScopeId: "turn-live",
@@ -122,7 +124,7 @@ test("session save leaves the display summary to the revision-checked projection
       persistenceContext: repository.treePersistenceContext(userId, "single-summary-write"),
     });
     session.messages = canonicalMessages(
-      [{ role: "user", content: "one durable update" }],
+      [{ role: "user", messageOrigin: "natural", content: "one durable update" }],
       "single-summary-write",
       "single_write",
     );
@@ -162,6 +164,7 @@ test("summary checkpoint receipts survive turn-journal persistence with historic
     session.messages = [
       {
         messageUid: "sm_historical",
+        ts: TEST_MESSAGE_TS,
         sessionId,
         role: "assistant",
         modelMessageId: "mm_historical",
@@ -172,8 +175,10 @@ test("summary checkpoint receipts survive turn-journal persistence with historic
       },
       {
         messageUid: "sm_current",
+        ts: TEST_MESSAGE_TS,
         sessionId,
         role: "user",
+        messageOrigin: "natural",
         content: "current request",
         dialogProcessId: "dialog-current",
         turnScopeId: "turn-current",
@@ -283,12 +288,12 @@ test("concurrent saves for different sessions preserve every sessions summary en
       }),
     ]);
     sessionA.messages = canonicalMessages(
-      [{ role: "user", content: "updated A" }],
+      [{ role: "user", messageOrigin: "natural", content: "updated A" }],
       "A",
       "concurrent_a",
     );
     sessionB.messages = canonicalMessages(
-      [{ role: "user", content: "updated B" }],
+      [{ role: "user", messageOrigin: "natural", content: "updated B" }],
       "B",
       "concurrent_b",
     );

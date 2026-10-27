@@ -19,6 +19,7 @@ import {
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { settleStoppedTurn } from "./useChatEngine.resend-stopped-state.test-helpers.js";
+import { NO_ATTACHMENT_EDITS } from "../../../helpers/resendEdits.js";
 
 describe("useChatEngine.delete", () => {
   it("cascadeDeleteMessagesFrom resolves assistant target to user message and removes the user turn", () => {
@@ -181,9 +182,9 @@ describe("useChatEngine.delete", () => {
     });
     deps.chatWebSocketClient.requestStop.mockReturnValue(true);
 
-    await expect(engine.resendMonotonicMessage(target, "edited question")).rejects.toThrow(
-      "chat.monotonicActionStopTimeout",
-    );
+    await expect(
+      engine.resendMonotonicMessage(target, "edited question", NO_ATTACHMENT_EDITS),
+    ).rejects.toThrow("chat.monotonicActionStopTimeout");
 
     expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledTimes(1);
     expect(stream).not.toHaveBeenCalled();
@@ -378,9 +379,7 @@ describe("useChatEngine.delete", () => {
       source: "test",
     });
 
-    await expect(
-      engine.deleteMonotonicMessage(target, { timeoutMs: 20, pollIntervalMs: 5 }),
-    ).resolves.toBe(true);
+    await expect(engine.deleteMonotonicMessage(target)).resolves.toBe(true);
 
     expect(deps.chatWebSocketClient.requestStop).not.toHaveBeenCalled();
     expect(sending.value).toBe(false);
@@ -412,7 +411,9 @@ describe("useChatEngine.delete", () => {
     activeSession.value.rawMessages = [first, target];
     input.value = "draft before resend";
 
-    await expect(engine.resendMonotonicMessage(target, "edited retry text")).resolves.toBe(false);
+    await expect(
+      engine.resendMonotonicMessage(target, "edited retry text", NO_ATTACHMENT_EDITS),
+    ).resolves.toBe(false);
 
     expect(stream).not.toHaveBeenCalled();
     expect(activeSession.value.messages).toEqual([first, target]);
@@ -447,10 +448,7 @@ describe("useChatEngine.delete", () => {
       dialogProcessId: "dp-turn-delete-fail",
     });
     deps.chatWebSocketClient.requestStop.mockReturnValue(true);
-    const actionPromise = engine.deleteMonotonicMessage(target, {
-      timeoutMs: 20,
-      pollIntervalMs: 5,
-    });
+    const actionPromise = engine.deleteMonotonicMessage(target);
     const rejectionExpectation = expect(actionPromise).rejects.toThrow(
       "chat.monotonicActionStopTimeout",
     );
@@ -490,10 +488,7 @@ describe("useChatEngine.delete", () => {
       dialogProcessId: "dp-turn-resend-fail",
     });
     deps.chatWebSocketClient.requestStop.mockReturnValue(true);
-    const actionPromise = engine.resendMonotonicMessage(target, "edited", {
-      timeoutMs: 20,
-      pollIntervalMs: 5,
-    });
+    const actionPromise = engine.resendMonotonicMessage(target, "edited", NO_ATTACHMENT_EDITS);
     const rejectionExpectation = expect(actionPromise).rejects.toThrow(
       "chat.monotonicActionStopTimeout",
     );

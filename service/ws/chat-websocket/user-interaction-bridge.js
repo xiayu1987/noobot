@@ -138,7 +138,6 @@ function createInteractionPayload(input, authority, requestId, effectiveTimeoutM
     connectorType: text(input.connectorType),
     interactionType: text(input.interactionType),
     lifecycle: text(input.lifecycle).toLowerCase() || "pending",
-    ackMode: text(input.ackMode).toLowerCase() || "manual",
     resolvedBy: text(input.resolvedBy).toLowerCase(),
     notification: isPlainObject(input.notification) ? input.notification : {},
     timeoutMs: effectiveTimeoutMs,

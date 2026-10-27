@@ -9,20 +9,15 @@ import {
   getHostFileApi,
   getWorkspaceFileApi,
 } from "../chat/chatApi.js";
-
-let authenticatedFetcher = null;
+import { requireAuthenticatedFetcher } from "../../http/authenticatedHttpService.js";
 
 function fetcherOptions() {
-  return authenticatedFetcher ? { fetcher: authenticatedFetcher } : {};
+  return { fetcher: requireAuthenticatedFetcher() };
 }
 
 export const attachmentService = Object.freeze({
-  configure({ fetcher = null } = {}) {
-    authenticatedFetcher = typeof fetcher === "function" ? fetcher : null;
-  },
   fetchUrl(url, options = {}) {
-    const runFetch = authenticatedFetcher || fetch;
-    return runFetch(url, options);
+    return requireAuthenticatedFetcher()(url, options);
   },
   getWorkspaceFile(params = {}) {
     return getWorkspaceFileApi(params, fetcherOptions());

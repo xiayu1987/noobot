@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
 
 const getSessionThinkingDetailApi = vi.fn();
@@ -11,17 +11,18 @@ vi.mock("../../../../../../src/infrastructure/api/chat/chatApi.js", () => ({
   getSessionThinkingDetailApi: (...args) => getSessionThinkingDetailApi(...args),
 }));
 
+const { configureAuthenticatedFetcher } =
+  await import("../../../../../../src/infrastructure/http/authenticatedHttpService.js");
 const { createSessionDetailRequests } =
   await import("../../../../../../src/modules/session/model/list/sessionDetailRequests.js");
 const { __resetThinkingDetailCacheForTests, loadThinkingDetail } =
   await import("../../../../../../src/modules/chat/model/thinkingDetailCache.js");
 
-function response(payload, { ok = true, status = 200 } = {}) {
-  return {
-    ok,
+function response(payload, { status = 200 } = {}) {
+  return new Response(JSON.stringify(payload), {
     status,
-    json: vi.fn(async () => payload),
-  };
+    headers: { "content-type": "application/json" },
+  });
 }
 
 function createRequests() {
@@ -37,6 +38,10 @@ function createRequests() {
 }
 
 describe("sessionDetailRequests thinking detail", () => {
+  beforeEach(() => {
+    configureAuthenticatedFetcher(vi.fn());
+  });
+
   afterEach(() => {
     __resetThinkingDetailCacheForTests();
     getSessionThinkingDetailApi.mockReset();
@@ -87,33 +92,29 @@ describe("sessionDetailRequests thinking detail", () => {
     expect(detail).toEqual(detailPayload);
   });
 
-  it("translates HTTP failures from the shared thinking detail service", async () => {
-    getSessionThinkingDetailApi.mockResolvedValue(response({}, { ok: false, status: 503 }));
+  it("passes the server failure envelope through unchanged", async () => {
+    getSessionThinkingDetailApi.mockResolvedValue(
+      response({ ok: false, error: "denied" }, { status: 503 }),
+    );
     const { fetchThinkingDetail } = createRequests();
 
-    await expect(fetchThinkingDetail({ sessionId: "s1", turnScopeId: "t1" })).rejects.toThrow(
-      'chat.getSessionFailed:{"status":503}',
+    const error = await fetchThinkingDetail({ sessionId: "s1", turnScopeId: "t1" }).catch(
+      (caught) => caught,
     );
+    expect(error.code).toBe("http");
+    expect(error.status).toBe(503);
+    expect(error.message).toBe("denied");
   });
 
-  it("passes through server payload errors", async () => {
-    getSessionThinkingDetailApi.mockResolvedValue(response({ ok: false, error: "denied" }));
-    const { fetchThinkingDetail } = createRequests();
-
-    await expect(fetchThinkingDetail({ sessionId: "s1", turnScopeId: "t1" })).rejects.toThrow(
-      "denied",
-    );
-  });
-
-  it("keeps the missing-detail code with a localized message", async () => {
+  it("keeps the missing-detail code from the thinking detail service", async () => {
     getSessionThinkingDetailApi.mockResolvedValue(response({ ok: true, exists: false }));
     const { fetchThinkingDetail } = createRequests();
 
     const error = await fetchThinkingDetail({ sessionId: "s1", turnScopeId: "t1" }).catch(
       (caught) => caught,
     );
-    expect(error.message).toBe("chat.sessionNotFound");
-    expect(error.code).toBe("thinking_detail_not_found");
+    expect(error.message).toBe("thinking detail not found");
+    expect(error.code).toBe("not_found");
   });
 
   it("requires a dialog process or turn scope identity", async () => {

@@ -17,6 +17,7 @@ import {
 import { isTerminalTurnState, projectTurnTiming } from "@noobot/session-protocol";
 import { normalizeTurnLifecycleEntity } from "../domain/turn-lifecycle-entity.js";
 import { text as clean, isObjectLike } from "@noobot/shared/value";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 function selectLifecycleActiveTurn(lifecycle) {
   return lifecycle.turns[lifecycle.activeTurnScopeId] ?? null;
@@ -75,8 +76,8 @@ export function resolveAuthoritativeTurnTerminal({
   sessionId = "",
   turnScopeId = "",
   aggregateVersion = null,
-  retryAfterMs = 250,
 } = {}) {
+  const retryAfterMs = TIME_THRESHOLDS.agent.terminalResolutionRetryDelayMs;
   const normalizedCommandId = clean(commandId);
   const normalizedSessionId = clean(sessionId);
   const normalizedTurnScopeId = clean(turnScopeId);

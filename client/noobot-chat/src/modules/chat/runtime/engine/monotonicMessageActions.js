@@ -30,8 +30,17 @@ import {
   turnRuntimeDisplayState,
 } from "../run-state-machine/turnRuntimeRegistry.js";
 import { clearTurnUiState } from "./turnUiStore.js";
+import {
+  isUserMessage,
+  resolveMonotonicUserTarget as resolveUserTargetInMessages,
+} from "../../model/message-actions/monotonicMessageActionRules.js";
 import { logMessageMutationDiagnostics } from "../../../debug/loggers/messageMutationDiagnosticsLogger.js";
-import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
+import {
+  isPlainObject,
+  isObjectLike,
+  requireFunctionDependencies,
+  text,
+} from "@noobot/shared/value";
 
 const delay = (ms) =>
   new Promise((resolve) => {
@@ -39,7 +48,7 @@ const delay = (ms) =>
   });
 
 function summarizeDeleteMessages(messages = []) {
-  return (Array.isArray(messages) ? messages : []).map((message = {}, index) => ({
+  return messages.map((message, index) => ({
     index,
     role: normalizeTrimmedString(getMessageRole(message)),
     type: normalizeTrimmedString(message?.type),
@@ -54,12 +63,8 @@ function summarizeDeleteMessages(messages = []) {
   }));
 }
 
-function isUserMessage(message = {}) {
-  return getMessageRole(message).toLowerCase() === "user";
-}
-
 function syncSessionMessageSummary(session) {
-  const messages = Array.isArray(session?.messages) ? session.messages : [];
+  const { messages } = session;
   session.messageCount = messages.length;
   session.lastMessage = findVisibleLastMessage(messages);
   session.updatedAt = nowIso();
@@ -118,6 +123,26 @@ export function createMonotonicMessageActions({
   removeWorkflowOwnersForReplacedTurns,
   invalidateTerminalResolution,
 }) {
+  requireFunctionDependencies("createMonotonicMessageActions", {
+    clearPendingInteraction,
+    cancelStreamForTurn: chatWebSocketClient.cancelStreamForTurn,
+    deleteSessionMessagesFromApi,
+    notify,
+    stopSending,
+    translate,
+    applySessionDetail,
+    applyRunStateEvent,
+    invalidateTerminalResolution,
+    getActiveOperation: messageOperationStore.getActiveOperation,
+    registerOperation: messageOperationStore.registerOperation,
+    updateOperation: messageOperationStore.updateOperation,
+    completeOperation: messageOperationStore.completeOperation,
+  });
+  if (!(monotonicActionStopTimeoutMs >= 0) || !(monotonicActionStopPollIntervalMs >= 1)) {
+    throw new TypeError(
+      "createMonotonicMessageActions requires monotonicActionStopTimeoutMs >= 0 and monotonicActionStopPollIntervalMs >= 1",
+    );
+  }
   function activeTurnRuntime() {
     const sessionId = normalizeTrimmedString(activeSessionId.value);
     return selectCurrentTurnRuntime(turnRuntimeRegistry.value, sessionId);
@@ -127,24 +152,19 @@ export function createMonotonicMessageActions({
     return isStageStatusStepState(turnRuntimeDisplayState(activeTurnRuntime()));
   }
 
-  async function waitForSendingSettled({
-    timeoutMs = monotonicActionStopTimeoutMs,
-    pollIntervalMs = monotonicActionStopPollIntervalMs,
-  } = {}) {
+  async function waitForSendingSettled() {
     if (!isActiveTurnInFlight()) return true;
     const startedAt = nowMs();
-    const normalizedTimeoutMs = Math.max(0, Number(timeoutMs) || 0);
-    const normalizedPollIntervalMs = Math.max(1, Number(pollIntervalMs) || 1);
     while (isActiveTurnInFlight()) {
-      if (nowMs() - startedAt >= normalizedTimeoutMs) {
+      if (nowMs() - startedAt >= monotonicActionStopTimeoutMs) {
         return false;
       }
-      await delay(normalizedPollIntervalMs);
+      await delay(monotonicActionStopPollIntervalMs);
     }
     return true;
   }
 
-  async function prepareMonotonicMessageAction({ timeoutMs, pollIntervalMs } = {}) {
+  async function prepareMonotonicMessageAction() {
     const rejectStopPrecondition = () => {
       const message = translate("chat.monotonicActionStopTimeout");
       notify({ type: "warning", message });
@@ -160,7 +180,7 @@ export function createMonotonicMessageActions({
       return false;
     if (!isActiveTurnInFlight()) return true;
     stopSending();
-    const settled = await waitForSendingSettled({ timeoutMs, pollIntervalMs });
+    const settled = await waitForSendingSettled();
     if (!settled) {
       rejectStopPrecondition();
     }
@@ -168,47 +188,31 @@ export function createMonotonicMessageActions({
     return true;
   }
 
-  function resolveMonotonicUserTarget(targetMessage = {}) {
-    const messages = Array.isArray(activeSession.value?.messages)
-      ? activeSession.value.messages
-      : [];
+  function resolveMonotonicUserTarget(targetMessage) {
     if (!isObjectLike(targetMessage)) return null;
     if (isUserMessage(targetMessage)) return targetMessage;
 
-    const directIndex = findMessageIdentityIndex(targetMessage, messages);
-    if (directIndex >= 0 && isUserMessage(messages[directIndex])) {
-      return messages[directIndex];
-    }
-
-    const targetTurnScopeId = getMessageTurnScopeId(targetMessage);
-    if (!targetTurnScopeId) return null;
-    return (
-      messages.find(
-        (message) => isUserMessage(message) && getMessageTurnScopeId(message) === targetTurnScopeId,
-      ) || null
-    );
+    const session = activeSession.value;
+    if (!session) return null;
+    return resolveUserTargetInMessages(targetMessage, session.messages);
   }
 
-  function findMessageCascadeStartIndex(targetMessage = {}) {
-    const messages = Array.isArray(activeSession.value?.messages)
-      ? activeSession.value.messages
-      : [];
+  function findMessageCascadeStartIndex(targetMessage, messages) {
     if (!isUserMessage(targetMessage)) return -1;
     return findMessageIdentityIndex(targetMessage, messages);
   }
 
-  function cascadeDeleteMessagesFrom(targetMessage = {}) {
+  function cascadeDeleteMessagesFrom(targetMessage) {
     const session = activeSession.value;
-    if (!session) return false;
-    const userTargetMessage = resolveMonotonicUserTarget(targetMessage);
+    const { messages } = session;
+    const userTargetMessage = resolveUserTargetInMessages(targetMessage, messages);
     if (!userTargetMessage) return false;
-    const startIndex = findMessageCascadeStartIndex(userTargetMessage);
+    const startIndex = findMessageCascadeStartIndex(userTargetMessage, messages);
     if (startIndex < 0) return false;
-    const messages = Array.isArray(session.messages) ? session.messages : [];
     const removedMessages = messages.slice(startIndex);
     const sessionId = sessionRuntimeId(session);
     for (const removedMessage of removedMessages) {
-      chatWebSocketClient?.cancelStreamForTurn?.({
+      chatWebSocketClient.cancelStreamForTurn({
         sessionId,
         turnScopeId: getMessageTurnScopeId(removedMessage),
         dialogProcessId: getMessageDialogProcessId(removedMessage),
@@ -217,27 +221,27 @@ export function createMonotonicMessageActions({
     session.messages = messages.slice(0, startIndex);
     const removedTurnScopeIds = new Set(removedMessages.map(getMessageTurnScopeId).filter(Boolean));
     removedTurnScopeIds.forEach((turnScopeId) => {
-      invalidateTerminalResolution?.(sessionId, turnScopeId);
+      invalidateTerminalResolution(sessionId, turnScopeId);
       removeTurnRuntime(turnRuntimeRegistry.value, turnScopeId, { sessionId });
       clearTurnUiState({ sessionId, turnScopeId });
     });
     syncSessionMessageSummary(session);
-    clearPendingInteraction?.();
+    clearPendingInteraction();
     return true;
   }
 
-  async function deleteMonotonicMessage(targetMessage = {}, options = {}) {
+  async function deleteMonotonicMessage(targetMessage) {
     const userTargetMessage = resolveMonotonicUserTarget(targetMessage);
     if (!userTargetMessage) return false;
-    const initialSessionId = normalizeTrimmedString(
-      activeSession.value?.sessionId || activeSessionId.value,
-    );
+    const startSession = activeSession.value;
+    if (!startSession) return false;
+    const initialSessionId = normalizeTrimmedString(activeSessionId.value);
     const initialTurnScopeId = getMessageTurnScopeId(userTargetMessage);
     const anchor = buildMessageAnchor(userTargetMessage);
     if (!initialSessionId || !initialTurnScopeId || !Object.keys(anchor).length) return false;
     const deleteCommandId = `delete:${initialSessionId}:${initialTurnScopeId}`;
-    const supersededOperation = messageOperationStore?.getActiveOperation?.(initialSessionId);
-    const deleteOperation = messageOperationStore?.registerOperation?.({
+    const supersededOperation = messageOperationStore.getActiveOperation(initialSessionId);
+    const deleteOperation = messageOperationStore.registerOperation({
       type: "delete",
       opId: deleteCommandId,
       sessionId: initialSessionId,
@@ -248,7 +252,7 @@ export function createMonotonicMessageActions({
       supersededOperation?.type === "resend" &&
       normalizeTrimmedString(supersededOperation.turnScopeId)
     ) {
-      applyRunStateEvent?.({
+      applyRunStateEvent({
         type: SESSION_RUN_EVENT.LOCAL_RESEND_FAILED,
         sessionId: initialSessionId,
         turnScopeId: supersededOperation.turnScopeId,
@@ -261,19 +265,16 @@ export function createMonotonicMessageActions({
       turnScopeId: initialTurnScopeId,
       target: summarizeDeleteMessages([targetMessage])[0] || null,
       resolvedUserTarget: summarizeDeleteMessages([userTargetMessage])[0] || null,
-      messagesBefore: summarizeDeleteMessages(activeSession.value?.messages),
+      messagesBefore: summarizeDeleteMessages(startSession.messages),
     }));
     try {
-      const prepared = await prepareMonotonicMessageAction({
-        ...options,
-        targetMessage: userTargetMessage,
-        originalTargetMessage: targetMessage,
-      });
+      const prepared = await prepareMonotonicMessageAction();
       if (prepared === false) return false;
-      const sessionId = normalizeTrimmedString(
-        activeSession.value?.sessionId || activeSessionId.value,
-      );
-      messageOperationStore?.updateOperation?.(deleteOperation?.opId, { status: "deleting" });
+      if (normalizeTrimmedString(activeSessionId.value) !== initialSessionId) return false;
+      const session = activeSession.value;
+      if (!session) return false;
+      const sessionId = initialSessionId;
+      messageOperationStore.updateOperation(deleteOperation.opId, { status: "deleting" });
       logMessageMutationDiagnostics("frontend.messageDelete.requestPrepared", () => ({
         sessionId,
         dialogProcessId: getMessageDialogProcessId(userTargetMessage),
@@ -290,7 +291,7 @@ export function createMonotonicMessageActions({
             {
               userId: userId.value,
               sessionId,
-              parentSessionId: normalizeTrimmedString(activeSession.value?.parentSessionId),
+              parentSessionId: normalizeTrimmedString(session.parentSessionId),
               anchor,
               expectedAggregateVersion,
               commandId: deleteCommandId,
@@ -305,19 +306,20 @@ export function createMonotonicMessageActions({
           logContext: { turnScopeId: anchor.turnScopeId || "" },
         },
       });
-      const result = mutationResult?.result;
-      const payload = mutationResult?.payload;
+      const result = mutationResult.result;
+      const payload = mutationResult.payload;
+      const responseOk = result?.ok !== false && payload?.ok !== false;
       logMessageMutationDiagnostics("frontend.messageDelete.responseReceived", () => ({
         sessionId,
         dialogProcessId: getMessageDialogProcessId(userTargetMessage),
         turnScopeId: getMessageTurnScopeId(userTargetMessage),
-        responseOk: result?.ok !== false && payload?.ok !== false,
+        responseOk,
         deletedCount: payload?.deletedCount,
         anchorIndex: payload?.anchorIndex,
         deletedTurnScopeIds: payload?.deletedTurnScopeIds,
-        responseMessages: summarizeDeleteMessages(payload?.session?.messages),
+        responseMessages: responseOk ? summarizeDeleteMessages(payload.session.messages) : [],
       }));
-      if (result?.ok === false || payload?.ok === false) return false;
+      if (!responseOk) return false;
       const sessionDetail = normalizeSessionDetailSnapshot(payload, sessionId);
       if (!sessionDetail) return false;
       const confirmedDeletedTurnScopeIds = payload.deletedTurnScopeIds;
@@ -330,21 +332,21 @@ export function createMonotonicMessageActions({
         dialogProcessId: getMessageDialogProcessId(userTargetMessage),
         turnScopeId: getMessageTurnScopeId(userTargetMessage),
         stage: "before-detail-apply",
-        messages: summarizeDeleteMessages(activeSession.value?.messages),
+        messages: summarizeDeleteMessages(session.messages),
       }));
-      applySessionDetail?.(sessionDetail);
+      applySessionDetail(sessionDetail);
       cascadeDeleteMessagesFrom(userTargetMessage);
       logMessageMutationDiagnostics("frontend.messageDelete.completed", () => ({
         sessionId,
         dialogProcessId: getMessageDialogProcessId(userTargetMessage),
         turnScopeId: getMessageTurnScopeId(userTargetMessage),
         confirmedDeletedTurnScopeIds,
-        messagesAfter: summarizeDeleteMessages(activeSession.value?.messages),
+        messagesAfter: summarizeDeleteMessages(session.messages),
       }));
-      clearPendingInteraction?.();
+      clearPendingInteraction();
       return true;
     } finally {
-      if (deleteOperation) messageOperationStore?.completeOperation?.(deleteOperation.opId);
+      messageOperationStore.completeOperation(deleteOperation.opId);
     }
   }
 

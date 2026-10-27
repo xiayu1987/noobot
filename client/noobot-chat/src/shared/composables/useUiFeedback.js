@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { ElMessage } from "element-plus";
-import { overlayMessageBox } from "./overlayMessageBox.js";
+import { isOverlayDismissal, overlayMessageBox } from "./overlayMessageBox.js";
 import { useLocale } from "../i18n/useLocale.js";
 import { text } from "@noobot/shared/value";
 
@@ -29,15 +29,21 @@ export function useUiFeedback() {
   }
 
   async function confirmDeleteSession() {
-    await overlayMessageBox.confirm(
-      translate("infra.confirmDelete"),
-      translate("infra.deleteSessionTitle"),
-      {
-        confirmButtonText: translate("infra.confirm"),
-        cancelButtonText: translate("infra.cancel"),
-        type: "warning",
-      },
-    );
+    try {
+      await overlayMessageBox.confirm(
+        translate("infra.confirmDelete"),
+        translate("infra.deleteSessionTitle"),
+        {
+          confirmButtonText: translate("infra.confirm"),
+          cancelButtonText: translate("infra.cancel"),
+          type: "warning",
+        },
+      );
+      return true;
+    } catch (error) {
+      if (isOverlayDismissal(error)) return false;
+      throw error;
+    }
   }
 
   return {

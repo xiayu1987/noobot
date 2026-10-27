@@ -20,6 +20,7 @@ import {
   AGENT_TRANSPORT_EVENT,
   createAgentCommandReceipt,
   createAgentCommandRejection,
+  ROOT_PARENT_SESSION_ID,
 } from "@noobot/agent-transport-protocol";
 import { createPluginArtifactEnvelope } from "@noobot/event-protocol/plugin-artifact-event";
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
@@ -192,7 +193,7 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       eventId: "event-early",
       commandId: "command-early",
       sessionId: "session-early",
-      parentSessionId: "",
+      parentSessionId: ROOT_PARENT_SESSION_ID,
       turnScopeId: "turn-early",
       presentationMessageId: "assistant-early",
       dialogProcessId: "dialog-early",
@@ -287,7 +288,7 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       eventId: "event-receipt-1",
       commandId: "command-receipt-1",
       sessionId: "session-receipt-1",
-      parentSessionId: "",
+      parentSessionId: ROOT_PARENT_SESSION_ID,
       turnScopeId: "turn-receipt-1",
       presentationMessageId: "assistant-receipt-1",
       dialogProcessId: "dialog-receipt-1",
@@ -340,7 +341,7 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       eventId: "event-receipt-before-reducer",
       commandId: "command-receipt-before-reducer",
       sessionId: "session-receipt-before-reducer",
-      parentSessionId: "",
+      parentSessionId: ROOT_PARENT_SESSION_ID,
       turnScopeId: "turn-receipt-before-reducer",
       presentationMessageId: "assistant-receipt-before-reducer",
       dialogProcessId: "dialog-receipt-before-reducer",
@@ -391,7 +392,7 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       eventId: "event-receipt-failure",
       commandId: "command-receipt-failure",
       sessionId: "session-receipt-failure",
-      parentSessionId: "",
+      parentSessionId: ROOT_PARENT_SESSION_ID,
       turnScopeId: "turn-receipt-failure",
       presentationMessageId: "assistant-receipt-failure",
       dialogProcessId: "dialog-receipt-failure",
@@ -421,7 +422,7 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       resolveWebSocketUrl: () => "ws://test",
     });
     const reconnectPromise = client.reconnect({
-      identity: { sessionId: "s-1", parentSessionId: "p-1", parentDialogProcessId: "pdp-1" },
+      identity: { sessionId: "s-1", parentSessionId: "p-1" },
       knownLifecycleSequenceMap: {},
       onReconnectData: vi.fn(),
     });
@@ -433,7 +434,7 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     expect(sent).toEqual({
       action: "reconnect",
       protocolVersion: 1,
-      identity: { sessionId: "s-1", parentSessionId: "p-1", parentDialogProcessId: "pdp-1" },
+      identity: { sessionId: "s-1", parentSessionId: "p-1" },
       requestId: expect.stringMatching(/^reconnect:/),
       knownLifecycleSequenceMap: {},
     });
@@ -599,7 +600,10 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     expect(MockWebSocket.instances).toHaveLength(0);
 
     const reconnectPromise = client.reconnect({
-      identity: { sessionId: "s-1", parentSessionId: "", parentDialogProcessId: "" },
+      identity: {
+        sessionId: "s-1",
+        parentSessionId: ROOT_PARENT_SESSION_ID,
+      },
       knownLifecycleSequenceMap: {},
     });
     const socket = MockWebSocket.instances[0];
@@ -617,7 +621,10 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
 
     await expect(
       client.reconnect({
-        identity: { sessionId: "s-1", parentSessionId: "", parentDialogProcessId: "" },
+        identity: {
+          sessionId: "s-1",
+          parentSessionId: ROOT_PARENT_SESSION_ID,
+        },
         knownLifecycleSequenceMap: {},
       }),
     ).rejects.toThrow("send failed");
@@ -640,7 +647,10 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     expect(client.connect()).toBe(null);
     await expect(
       client.reconnect({
-        identity: { sessionId: "s-1", parentSessionId: "", parentDialogProcessId: "" },
+        identity: {
+          sessionId: "s-1",
+          parentSessionId: ROOT_PARENT_SESSION_ID,
+        },
         knownLifecycleSequenceMap: {},
       }),
     ).rejects.toThrow();

@@ -10,6 +10,7 @@ import { TURN_EVENT, TURN_PHASE, createEmptyTurnLifecycle } from "@noobot/sessio
 import { normalizeSessionEntity } from "../../src/session/entities/session-entity.js";
 import { acceptTurn, canonical, harness } from "./session-version-hardening.test-helpers.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
+import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
 async function completeTurn(service, turnScopeId) {
   const base = {
@@ -131,6 +132,7 @@ test("dialog order accepts only canonical dialogOrdinal and messageUid fields", 
         {
           sessionId: "s1",
           role: "user",
+          messageOrigin: "natural",
           content: "legacy",
           dialogProcessId: "d1",
           turnScopeId: "t1",
@@ -300,10 +302,20 @@ test("internal append and summary checkpoint use mutation lock without changing 
   const h = harness({
     aggregateVersion: 7,
     messages: [
-      { messageUid: "sm_q", role: "user", content: "q", turnScopeId: "t", dialogProcessId: "dp" },
+      {
+        messageUid: "sm_q",
+        ts: TEST_MESSAGE_TS,
+        role: "user",
+        messageOrigin: "natural",
+        content: "q",
+        turnScopeId: "t",
+        dialogProcessId: "dp",
+      },
       {
         messageUid: "sm_old",
+        ts: TEST_MESSAGE_TS,
         role: "user",
+        messageOrigin: "natural",
         content: "historical",
         turnScopeId: "old",
         dialogProcessId: "dp-old",
@@ -329,6 +341,7 @@ test("internal append and summary checkpoint use mutation lock without changing 
     turns: [
       {
         messageUid: "sm_a",
+        ts: TEST_MESSAGE_TS,
         role: "assistant",
         presentationMessageId: "pm_fx2",
         modelMessageId: "mm_session_version_hardenin_1",
@@ -360,7 +373,14 @@ test("internal append and summary checkpoint use mutation lock without changing 
 test("summary checkpoint without complete transaction identity fails closed", async () => {
   const h = harness({
     messages: [
-      { messageUid: "sm_old", role: "user", content: "historical", dialogProcessId: "dp-old" },
+      {
+        messageUid: "sm_old",
+        ts: TEST_MESSAGE_TS,
+        role: "user",
+        messageOrigin: "natural",
+        content: "historical",
+        dialogProcessId: "dp-old",
+      },
     ],
   });
 
@@ -386,6 +406,7 @@ test("turn summary checkpoints mark exact UIDs and persist an idempotent scoped 
     messages: [
       {
         messageUid: "sm_target",
+        ts: TEST_MESSAGE_TS,
         role: "assistant",
         presentationMessageId: "pm_fx3",
         modelMessageId: "mm_session_version_hardenin_2",
@@ -395,6 +416,7 @@ test("turn summary checkpoints mark exact UIDs and persist an idempotent scoped 
       },
       {
         messageUid: "sm_keep",
+        ts: TEST_MESSAGE_TS,
         role: "assistant",
         presentationMessageId: "pm_fx4",
         modelMessageId: "mm_session_version_hardenin_3",
@@ -404,6 +426,7 @@ test("turn summary checkpoints mark exact UIDs and persist an idempotent scoped 
       },
       {
         messageUid: "sm_history",
+        ts: TEST_MESSAGE_TS,
         role: "assistant",
         presentationMessageId: "pm_fx5",
         modelMessageId: "mm_session_version_hardenin_4",
@@ -457,6 +480,7 @@ test("turn summary checkpoint restores explicitly retained messages to active co
     messages: [
       {
         messageUid: "sm_summary",
+        ts: TEST_MESSAGE_TS,
         sessionId: "s1",
         role: "assistant",
         presentationMessageId: "pm_fx6",
@@ -467,6 +491,7 @@ test("turn summary checkpoint restores explicitly retained messages to active co
       },
       {
         messageUid: "sm_retained",
+        ts: TEST_MESSAGE_TS,
         sessionId: "s1",
         role: "assistant",
         presentationMessageId: "pm_fx7",
@@ -520,6 +545,7 @@ test("turn summary checkpoints reject a split assistant tool-call and result pai
     messages: [
       {
         messageUid: "sm_call",
+        ts: TEST_MESSAGE_TS,
         role: "assistant",
         presentationMessageId: "pm_fx8",
         modelMessageId: "mm_session_version_hardenin_7",
@@ -530,6 +556,7 @@ test("turn summary checkpoints reject a split assistant tool-call and result pai
       },
       {
         messageUid: "sm_result",
+        ts: TEST_MESSAGE_TS,
         role: "tool",
         presentationMessageId: "pm_fx9",
         content: "result",
@@ -579,6 +606,7 @@ test("turn summary checkpoints allow exact historical summary targets but keep p
     messages: [
       {
         messageUid: "sm_current",
+        ts: TEST_MESSAGE_TS,
         role: "assistant",
         presentationMessageId: "pm_fx10",
         modelMessageId: "mm_session_version_hardenin_8",
@@ -588,6 +616,7 @@ test("turn summary checkpoints allow exact historical summary targets but keep p
       },
       {
         messageUid: "sm_old",
+        ts: TEST_MESSAGE_TS,
         role: "assistant",
         presentationMessageId: "pm_fx11",
         modelMessageId: "mm_session_version_hardenin_9",
@@ -663,6 +692,7 @@ test("turn summary checkpoints validate historical tool pairs inside their origi
     messages: [
       {
         messageUid: "sm_old_call",
+        ts: TEST_MESSAGE_TS,
         role: "assistant",
         presentationMessageId: "pm_fx12",
         modelMessageId: "mm_session_version_hardenin_10",
@@ -673,6 +703,7 @@ test("turn summary checkpoints validate historical tool pairs inside their origi
       },
       {
         messageUid: "sm_old_result",
+        ts: TEST_MESSAGE_TS,
         role: "tool",
         presentationMessageId: "pm_fx13",
         content: "result",
@@ -717,6 +748,7 @@ test("terminal turn checkpoints only mark already persisted canonical messages",
     messages: [
       {
         messageUid: "sm_done",
+        ts: TEST_MESSAGE_TS,
         role: "assistant",
         presentationMessageId: "pm_fx14",
         modelMessageId: "mm_session_version_hardenin_11",

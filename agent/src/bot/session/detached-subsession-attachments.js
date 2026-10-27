@@ -63,9 +63,7 @@ async function transferCanonicalAttachment({
     userId,
     sessionId: subSessionId,
     attachmentSource: ATTACHMENT_SOURCE.USER,
-    attachments: [
-      createTransferredAttachment(attachment, parentRecord, sourceContent, attachmentId),
-    ],
+    attachments: [createTransferredAttachment(attachment, parentRecord, sourceContent)],
   });
   if (!transferred || text(transferred?.sessionId) !== subSessionId) {
     throw new Error("detached sub-session attachment transfer did not create child ownership");
@@ -94,9 +92,8 @@ function assertCanonicalAttachmentService(attachmentService) {
   throw new Error("detached sub-session canonical attachment transfer requires AttachmentService");
 }
 
-function createTransferredAttachment(attachment, parentRecord, sourceContent, attachmentId) {
+function createTransferredAttachment(attachment, parentRecord, sourceContent) {
   return {
-    clientAttachmentId: text(attachment?.clientAttachmentId) || `session-transfer:${attachmentId}`,
     name: String(parentRecord?.name || attachment?.name || "attachment").trim(),
     mimeType: String(
       parentRecord?.mimeType || attachment?.mimeType || "application/octet-stream",

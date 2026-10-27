@@ -9,7 +9,8 @@ import {
   buildClosePseudoPanelRoute,
   buildSessionPseudoRoute,
 } from "../routing/appShellRoutePayload.js";
-import { text } from "@noobot/shared/value";
+import { readMountedMessageListPanel } from "../runtime/chatMessageScrollSync.js";
+import { requireFunctionDependencies, text } from "@noobot/shared/value";
 
 export { PSEUDO_PANEL };
 
@@ -41,87 +42,104 @@ export function useAppShellPseudoRoute({
   openThinkingDetailsPanel,
   closeMobileSidebarOnSelect,
   selectSession,
-} = {}) {
+}) {
+  requireFunctionDependencies("useAppShellPseudoRoute", {
+    closeAllPanels,
+    closeMobileSidebar,
+    openMobileSidebar,
+    openWorkspaceRaw,
+    openConnectorsRaw,
+    openUserSettingsRaw,
+    openConfigParamsRaw,
+    closeComposerMorePanel,
+    closeThinkingDetailsPanel,
+    openThinkingDetailsPanel,
+    closeMobileSidebarOnSelect,
+    selectSession,
+  });
+
   function closeAllPseudoPanels() {
-    closeAllPanels?.();
-    closeMobileSidebar?.();
-    closeComposerMorePanel?.();
-    closeThinkingDetailsPanel?.();
-    if (mobileChatNavigatorVisible) mobileChatNavigatorVisible.value = false;
+    closeAllPanels();
+    closeMobileSidebar();
+    closeComposerMorePanel();
+    closeThinkingDetailsPanel();
+    mobileChatNavigatorVisible.value = false;
   }
 
   const panelRegistry = [
     {
       panel: PSEUDO_PANEL.WORKSPACE,
-      isOpen: () => workspaceVisible?.value,
-      open: () => openWorkspaceRaw?.(),
+      isOpen: () => workspaceVisible.value,
+      open: () => openWorkspaceRaw(),
     },
     {
       panel: PSEUDO_PANEL.CONNECTORS,
-      isOpen: () => connectorVisible?.value,
+      isOpen: () => connectorVisible.value,
       open: () => {
-        if (chatNavigatorVisible) chatNavigatorVisible.value = false;
-        openConnectorsRaw?.();
+        chatNavigatorVisible.value = false;
+        openConnectorsRaw();
       },
     },
     {
       panel: PSEUDO_PANEL.USER_SETTINGS,
-      isOpen: () => userSettingsVisible?.value,
+      isOpen: () => userSettingsVisible.value,
       open: () => {
-        if (isSuperAdmin?.value) openUserSettingsRaw?.();
+        if (isSuperAdmin.value) openUserSettingsRaw();
       },
     },
     {
       panel: PSEUDO_PANEL.CONFIG_PARAMS,
-      isOpen: () => configParamsVisible?.value,
-      open: () => openConfigParamsRaw?.(),
+      isOpen: () => configParamsVisible.value,
+      open: () => openConfigParamsRaw(),
     },
     {
       panel: PSEUDO_PANEL.SIDEBAR,
-      isOpen: () => mobileSidebarOpen?.value && isMobile?.value,
-      open: () => openMobileSidebar?.(),
+      isOpen: () => mobileSidebarOpen.value && isMobile.value,
+      open: () => openMobileSidebar(),
     },
     {
       panel: PSEUDO_PANEL.COMPOSER,
-      isOpen: () => composerMorePanelVisible?.value,
+      isOpen: () => composerMorePanelVisible.value,
       open: () => {
-        if (composerMorePanelVisible) composerMorePanelVisible.value = true;
+        composerMorePanelVisible.value = true;
       },
     },
     {
       panel: PSEUDO_PANEL.THINKING_DETAILS,
-      isOpen: () => thinkingDetailsVisible?.value,
-      open: () => openThinkingDetailsPanel?.({ pushRoute: false }),
+      isOpen: () => thinkingDetailsVisible.value,
+      open: () => openThinkingDetailsPanel({ pushRoute: false }),
     },
     {
       panel: PSEUDO_PANEL.CHAT_NAVIGATOR,
-      isOpen: () => mobileChatNavigatorVisible?.value && isMobile?.value,
+      isOpen: () => mobileChatNavigatorVisible.value && isMobile.value,
       open: () => {
-        if (isMobile?.value && mobileChatNavigatorVisible) mobileChatNavigatorVisible.value = true;
+        if (isMobile.value) mobileChatNavigatorVisible.value = true;
       },
     },
   ];
 
   function resolveActivePseudoPanel() {
-    return panelRegistry.find((entry) => entry.isOpen())?.panel || "";
+    const openEntry = panelRegistry.find((entry) => entry.isOpen());
+    return openEntry === undefined ? "" : openEntry.panel;
   }
 
   function isLoadedActiveSessionRouteTarget(sessionId = "") {
     const targetSessionId = text(sessionId);
-    const currentSession = activeSession?.value || null;
-    if (!targetSessionId || !currentSession?.loaded) return false;
-    const currentIds = [activeSessionId?.value, currentSession.sessionId]
+    const currentSession = activeSession.value;
+    if (!targetSessionId || currentSession === null || !currentSession.loaded) return false;
+    const currentIds = [activeSessionId.value, currentSession.sessionId]
       .map((value) => text(value))
       .filter(Boolean);
     return currentIds.includes(targetSessionId);
   }
 
   function resolveRoutableSessionId() {
-    if (activeSession?.value?.isLocal === true) return "";
-    return text(activeSessionId?.value);
+    const currentSession = activeSession.value;
+    if (currentSession !== null && currentSession.isLocal === true) return "";
+    return text(activeSessionId.value);
   }
 
-  async function applyPseudoRouteToUi(route = {}) {
+  async function applyPseudoRouteToUi(route) {
     const targetSessionId = text(route.sessionId);
     const targetPanel = text(route.panel);
     const targetAnchor = text(route.anchor);
@@ -133,11 +151,20 @@ export function useAppShellPseudoRoute({
         silent: true,
       });
     }
-    panelRegistry.find((entry) => entry.panel === targetPanel)?.open();
+    if (targetPanel !== "") {
+      const targetEntry = panelRegistry.find((entry) => entry.panel === targetPanel);
+      if (targetEntry === undefined) {
+        throw new Error(`pseudo route targets unregistered panel: ${targetPanel}`);
+      }
+      targetEntry.open();
+    }
     if (targetAnchor) {
       currentMessageAnchorId.value = targetAnchor;
       await nextTick();
-      messageListPanelRef?.value?.scrollToMessageAnchor?.(targetAnchor);
+      const messageListPanel = readMountedMessageListPanel(messageListPanelRef);
+      if (messageListPanel !== null) {
+        messageListPanel.scrollToMessageAnchor(targetAnchor);
+      }
     }
   }
 
@@ -152,7 +179,7 @@ export function useAppShellPseudoRoute({
   } = usePseudoRoute({
     resolveCurrentSessionId: resolveRoutableSessionId,
     resolveCurrentPanel: resolveActivePseudoPanel,
-    resolveCurrentAnchor: () => currentMessageAnchorId?.value,
+    resolveCurrentAnchor: () => currentMessageAnchorId.value,
     applyRoute: applyPseudoRouteToUi,
   });
 
@@ -165,10 +192,10 @@ export function useAppShellPseudoRoute({
   }
 
   async function handleSelectSession(sessionId, options = {}) {
-    const { fromHistory = false, ...selectOptions } = options || {};
-    const previousSessionId = text(activeSessionId?.value);
-    closeMobileSidebarOnSelect?.(isMobile, mobileSidebarOpen);
-    await selectSession?.(sessionId, selectOptions);
+    const { fromHistory = false, ...selectOptions } = options;
+    const previousSessionId = text(activeSessionId.value);
+    closeMobileSidebarOnSelect(isMobile, mobileSidebarOpen);
+    await selectSession(sessionId, selectOptions);
     const nextSessionId = resolveRoutableSessionId();
     if (
       !fromHistory &&
@@ -184,7 +211,7 @@ export function useAppShellPseudoRoute({
     pushPseudoRoute({ panel });
   }
 
-  function pushPanelVisibilityPseudoRoute({ visible = false, panel = "" } = {}) {
+  function pushPanelVisibilityPseudoRoute({ visible, panel }) {
     pushPseudoRoute({ panel: visible ? panel : "" });
   }
 

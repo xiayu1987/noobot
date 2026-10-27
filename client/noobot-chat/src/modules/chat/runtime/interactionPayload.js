@@ -9,16 +9,10 @@ import {
   normalizeInteractionLifecycle,
   normalizeInteractionResolvedBy,
 } from "@noobot/event-protocol";
-import { text, isObjectLike } from "@noobot/shared/value";
+import { text, isObjectLike, isCanonicalText } from "@noobot/shared/value";
 
 function normalizeInteractionData(input = {}) {
   return input && typeof input === "object" ? input : {};
-}
-
-function normalizeInteractionAckMode(value = "") {
-  const normalized = text(value).toLowerCase();
-  if (["manual", "auto"].includes(normalized)) return normalized;
-  return "manual";
 }
 
 function normalizeInteractionNotification(input = {}) {
@@ -35,40 +29,44 @@ function normalizeInteractionNotification(input = {}) {
   };
 }
 
-export function normalizeInteractionRequestPayload(payload = {}, { channelSessionId = "" } = {}) {
+export function normalizeInteractionRequestPayload(payload, { channelSessionId }) {
+  if (!isCanonicalText(channelSessionId)) {
+    throw new TypeError("interaction request requires channelSessionId");
+  }
+  if (!isCanonicalText(payload.requestId)) {
+    throw new TypeError("interaction request requires requestId");
+  }
   const interactionData = normalizeInteractionData(payload?.interactionData);
   const lifecycle = normalizeInteractionLifecycle(payload?.lifecycle);
-  const ackMode = normalizeInteractionAckMode(payload?.ackMode);
   const resolvedBy = normalizeInteractionResolvedBy(payload?.resolvedBy);
   const notification = normalizeInteractionNotification(payload?.notification);
   return {
-    requestId: String(payload?.requestId || ""),
+    requestId: payload.requestId,
     content: String(payload?.content || ""),
     fields: Array.isArray(payload?.fields) ? payload.fields : [],
-    dialogProcessId: String(payload?.dialogProcessId || ""),
+    dialogProcessId: payload.dialogProcessId,
     requireEncryption: payload?.requireEncryption === true,
-    sessionId: String(payload?.sessionId || ""),
-    turnScopeId: String(payload?.turnScopeId || ""),
-    channelSessionId: text(channelSessionId),
+    sessionId: payload.sessionId,
+    turnScopeId: payload.turnScopeId,
+    channelSessionId,
     toolName: String(payload?.toolName || ""),
     needConnectionInfo: payload?.needConnectionInfo === true,
     connectorName: String(payload?.connectorName || ""),
     connectorType: String(payload?.connectorType || ""),
     interactionType: text(payload?.interactionType),
     lifecycle,
-    ackMode,
     resolvedBy,
     notification,
     interactionData,
   };
 }
 
-export function isAutoResolvedInteraction(payload = {}) {
-  const request = normalizeInteractionRequestPayload(payload);
-  return request.lifecycle === "resolved" && request.ackMode === "auto";
-}
-
-export function isTerminalInteraction(payload = {}) {
-  const request = normalizeInteractionRequestPayload(payload);
-  return isTerminalInteractionLifecycle(request.lifecycle);
+export function reduceInteractionRequest(
+  payload,
+  { channelSessionId, setPendingInteractionRequest, clearPendingInteraction },
+) {
+  const request = normalizeInteractionRequestPayload(payload, { channelSessionId });
+  if (isTerminalInteractionLifecycle(request.lifecycle)) clearPendingInteraction(request);
+  else setPendingInteractionRequest(request);
+  return request;
 }

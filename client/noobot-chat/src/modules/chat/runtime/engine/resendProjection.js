@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { AGENT_COMMAND } from "@noobot/agent-transport-protocol";
 import { normalizeTrimmedString } from "./utils.js";
 import { SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
 import { enrichPersistedAttachmentsWithDraftMetadata } from "./resendAttachments.js";
@@ -23,7 +24,7 @@ export const RESEND_PROJECTION_OUTCOME = {
 };
 
 function findReplacementUserMessageByUid({ session, messageUid }) {
-  const messages = Array.isArray(session?.messages) ? session.messages : [];
+  const messages = session.messages;
   const expectedMessageUid = normalizeTrimmedString(messageUid);
   if (!expectedMessageUid) return null;
   return (
@@ -33,7 +34,7 @@ function findReplacementUserMessageByUid({ session, messageUid }) {
   );
 }
 
-function createSessionDetailSnapshot(session = {}) {
+function createSessionDetailSnapshot(session) {
   return {
     sessionId: session.sessionId,
     sessions: [session],
@@ -51,9 +52,9 @@ function applyReplacementProjection({
   logResendDebug("resend.detail.apply.before", () => ({
     sessionId,
     turnScopeId: resendTurnScopeId,
-    messages: summarizeDebugMessages(activeSession?.value?.messages),
+    messages: summarizeDebugMessages(activeSession.value.messages),
   }));
-  applySessionDetail?.(sessionDetail);
+  applySessionDetail(sessionDetail);
 }
 
 function logMaterializationCommitted({
@@ -70,12 +71,12 @@ function logMaterializationCommitted({
     committedAggregateVersion: turnReplacement.committedAggregateVersion,
     replacedTurnScopeIds,
     replacementUser: summarizeStateMachineMessage(replacementUserMessage),
-    messages: (activeSession?.value?.messages || []).map(summarizeStateMachineMessage),
+    messages: activeSession.value.messages.map(summarizeStateMachineMessage),
   }));
   logResendDebug("resend.detail.apply.after", () => ({
     sessionId,
     turnScopeId: resendTurnScopeId,
-    messages: summarizeDebugMessages(activeSession?.value?.messages),
+    messages: summarizeDebugMessages(activeSession.value.messages),
   }));
 }
 
@@ -91,7 +92,6 @@ export async function projectResendReplacement(context) {
     activeSession,
     applySessionDetail,
     applyRunStateEvent,
-    input,
     operation,
     messageOperationStore,
     ownsMessageOperation,
@@ -105,7 +105,7 @@ export async function projectResendReplacement(context) {
     activeSession,
   });
   const replacementUserMessage = findReplacementUserMessageByUid({
-    session: activeSession?.value,
+    session: activeSession.value,
     messageUid: turnReplacement.replacementUserMessageUid,
   });
   if (!replacementUserMessage) {
@@ -124,8 +124,8 @@ export async function projectResendReplacement(context) {
     pendingDisplayAttachments,
   );
   delete replacementUserMessage.terminalOutcome;
-  if (operation) messageOperationStore?.updateOperation(operation.opId, { status: "sending" });
-  applyRunStateEvent?.({
+  messageOperationStore.updateOperation(operation.opId, { status: "sending" });
+  applyRunStateEvent({
     type: SESSION_RUN_EVENT.LOCAL_RESEND_STREAMING,
     sessionId,
     turnScopeId: resendTurnScopeId,
@@ -134,29 +134,25 @@ export async function projectResendReplacement(context) {
   if (!ownsMessageOperation(messageOperationStore, operation)) {
     return { outcome: RESEND_PROJECTION_OUTCOME.ABORTED };
   }
-  input.value = text;
   logResendDebug("resend.send.before", () => ({
     sessionId,
     turnScopeId: resendTurnScopeId,
     finalAttachments: summarizeDebugAttachments(replacementUserMessage.attachments),
-    messages: summarizeDebugMessages(activeSession?.value?.messages),
+    messages: summarizeDebugMessages(activeSession.value.messages),
   }));
-  const sent = await send?.({
+  const sent = await send({
+    commandType: AGENT_COMMAND.RESEND,
     messageText: text,
-    reuseExistingUserTurn: true,
-    userMessageId: normalizeTrimmedString(replacementUserMessage?.userMessageId),
+    userMessageId: replacementUserMessage.userMessageId,
     dialogProcessId: turnReplacement.replacementDialogProcessId,
     turnScopeId: resendTurnScopeId,
-    allowDuringResend: true,
-    attachmentFiles: [],
-    userAttachments: replacementUserMessage.attachments,
-    transportAttachments: replacementUserMessage.attachments,
+    attachments: replacementUserMessage.attachments,
   });
   logResendDebug("resend.send.after", () => ({
     sessionId,
     turnScopeId: resendTurnScopeId,
     sent,
-    messages: summarizeDebugMessages(activeSession?.value?.messages),
+    messages: summarizeDebugMessages(activeSession.value.messages),
   }));
   if (!sent) return { outcome: RESEND_PROJECTION_OUTCOME.REJECTED };
   return { outcome: RESEND_PROJECTION_OUTCOME.SENT };

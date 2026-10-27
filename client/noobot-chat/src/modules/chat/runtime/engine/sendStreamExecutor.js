@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { AGENT_COMMAND } from "@noobot/agent-transport-protocol";
 import { createSendStreamEventHandler } from "./sendStreamEventRouter.js";
 import { createAuthorityResolutionTracker } from "./authorityResolutionTracker.js";
 import { createTurnPayloadBuilder } from "./sendPayloadBuilder.js";
@@ -13,7 +14,6 @@ export async function executeSendStream({
   chatWebSocketClient,
   clearUploads,
   debugLogger,
-  filesToSend,
   navigateOnFirstResponseOnce,
   payloadPreferences,
   prepared,
@@ -22,19 +22,15 @@ export async function executeSendStream({
   sessionAggregateVersionManager,
   streamHandlerDependencies,
   streamOutput,
-  translate,
 }) {
-  const {
-    explicitAttachmentFiles,
-    explicitTransportAttachments,
-    explicitUserAttachments,
-    sessionId,
-    turnScopeId,
-  } = request;
-  const { botMessage, text, userMessage } = prepared;
+  const { sessionId, turnScopeId } = request;
+  const { botMessage } = prepared;
 
-  if (!explicitAttachmentFiles) clearUploads();
-  const attachments = explicitTransportAttachments || (await serializeAttachments(filesToSend));
+  if (request.commandType !== AGENT_COMMAND.RESEND) clearUploads();
+  const attachments =
+    request.commandType === AGENT_COMMAND.RESEND
+      ? request.attachments
+      : await serializeAttachments(request.attachmentFiles);
   const requestedTextStreaming = streamOutput.value === true;
 
   const buildPayloadForCurrentVersion = createTurnPayloadBuilder({
@@ -44,23 +40,12 @@ export async function executeSendStream({
       activeSession,
       attachments,
       requestedTextStreaming,
-      text,
-      uploadHint: translate("chat.uploadHint"),
-      userMessage,
     },
   });
   const payload = buildPayloadForCurrentVersion({
     expectedAggregateVersion: sessionAggregateVersionManager.getVersion(),
   });
-  debugLogger.streamBefore({
-    requestedTextStreaming,
-    attachments,
-    payload,
-    explicitUserAttachments,
-    explicitTransportAttachments,
-    filesToSend,
-    botMessage,
-  });
+  debugLogger.streamBefore({ request, requestedTextStreaming, attachments, payload, botMessage });
   const authorityResolutions = createAuthorityResolutionTracker({ applyTurnLifecycleEnvelope });
   const handleStreamEvent = createSendStreamEventHandler({
     ...streamHandlerDependencies,

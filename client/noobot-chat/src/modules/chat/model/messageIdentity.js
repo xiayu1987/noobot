@@ -7,26 +7,10 @@ import {
   areCanonicalTurnScopeIdsEqual,
   requireOptionalCanonicalTurnScopeId,
 } from "@noobot/session-protocol/turn-scope-identity";
-import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 function trim(value = "") {
   return text(value);
-}
-
-function stringifyMessageContent(value) {
-  if (typeof value === "string") return value;
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => {
-        if (typeof item === "string") return item;
-        if (!isPlainObject(item)) return "";
-        return trim(item.text || item.content || item.value);
-      })
-      .filter(Boolean)
-      .join("\n");
-  }
-  if (value === undefined || value === null) return "";
-  return JSON.stringify(value);
 }
 
 export function getMessageSessionId(messageItem) {
@@ -86,8 +70,11 @@ export function clearTurnScopedAssets(messageItem = {}) {
   return messageItem;
 }
 
-export function getMessageContentIdentity(messageItem = {}) {
-  return trim(stringifyMessageContent(messageItem?.content));
+export function getMessageContentIdentity(messageItem) {
+  if (typeof messageItem.content !== "string") {
+    throw new TypeError("message_content_not_string");
+  }
+  return trim(messageItem.content);
 }
 
 export function isSameMessageIdentity(targetMessage = {}, candidateMessage = {}) {

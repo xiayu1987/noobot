@@ -30,8 +30,8 @@ async function resolveResendAttachments({
   userTargetMessage,
 }) {
   const keptAttachments = resolveKeptAttachments(userTargetMessage, options);
-  const attachmentFiles = Array.isArray(options?.attachmentFiles) ? options.attachmentFiles : [];
-  const serializedNewAttachments = (await serializeAttachments?.(attachmentFiles)) || [];
+  const { attachmentFiles } = options;
+  const serializedNewAttachments = await serializeAttachments(attachmentFiles);
   if (!operationGuard.owns()) return ABORTED;
   const pendingDisplayAttachments = serializedNewAttachments
     .map((attachment) => toPendingDisplayAttachment(attachment))
@@ -44,11 +44,10 @@ async function resolveResendAttachments({
     sessionId,
     oldTurnScopeId: getMessageTurnScopeId(userTargetMessage),
     turnScopeId: resendTurnScopeId,
-    optionsAttachments: summarizeDebugAttachments(options?.attachments),
-    targetAttachments: summarizeDebugAttachments(userTargetMessage?.attachments),
+    optionsAttachments: summarizeDebugAttachments(options.attachments),
+    targetAttachments: summarizeDebugAttachments(userTargetMessage.attachments),
     keptAttachments: summarizeDebugAttachments(keptAttachments),
     attachmentFiles: {
-      kind: Array.isArray(options?.attachmentFiles) ? "array" : "undefined",
       count: attachmentFiles.length,
     },
     serializedNewAttachments: summarizeDebugAttachments(serializedNewAttachments),
@@ -59,7 +58,7 @@ async function resolveResendAttachments({
     oldTurnScopeId: getMessageTurnScopeId(userTargetMessage),
     turnScopeId: resendTurnScopeId,
     target: summarizeDebugMessage(userTargetMessage),
-    messages: summarizeDebugMessages(originalSession?.messages),
+    messages: summarizeDebugMessages(originalSession.messages),
   }));
   return { finalAttachments, pendingDisplayAttachments };
 }
@@ -70,12 +69,11 @@ export async function prepareResendTransaction({
   options,
   originalSession,
   prepareMonotonicMessageAction,
-  replaceSessionTurnApi,
   resendTurnScopeId,
   sessionId,
   userTargetMessage,
 }) {
-  const prepared = await prepareMonotonicMessageAction?.(options);
+  const prepared = await prepareMonotonicMessageAction();
   if (prepared === false || !operationGuard.owns()) return REJECTED;
 
   const attachmentResolution = await resolveResendAttachments({
@@ -88,8 +86,7 @@ export async function prepareResendTransaction({
   });
   if (attachmentResolution.aborted) return ABORTED;
 
-  if (typeof replaceSessionTurnApi !== "function") return REJECTED;
-  const anchor = buildMonotonicMessageAnchor?.(userTargetMessage) || {};
+  const anchor = buildMonotonicMessageAnchor(userTargetMessage);
   if (!normalizeTrimmedString(anchor.turnScopeId)) return REJECTED;
 
   return {

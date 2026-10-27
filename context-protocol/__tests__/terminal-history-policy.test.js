@@ -108,7 +108,6 @@ test("user-stopped history ignores summary flags and projects only user, latest 
       sourceTurnScopeId: "turn-1",
       dialogProcessId: "dialog-1",
       turnScopeId: "turn-1",
-      messageOrigin: "internal",
       noobotInternalMessageType: "terminal_history_explanation",
       terminalHistoryProjection: true,
       terminalHistoryExplanation: true,

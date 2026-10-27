@@ -5,7 +5,9 @@
  */
 import { ref } from "vue";
 import { vi } from "vitest";
+import { ROOT_PARENT_SESSION_ID } from "@noobot/agent-transport-protocol";
 import { useChatSession } from "../../../../../src/modules/chat/composables/useChatSession.js";
+import { rejectUnexpectedRequest } from "../../../helpers/jsonResponse.js";
 
 export const wsClientMock = {
   connect: vi.fn(),
@@ -14,6 +16,7 @@ export const wsClientMock = {
   requestJson: vi.fn(),
   stream: vi.fn(),
   requestStop: vi.fn(),
+  cancelStreamForTurn: vi.fn(),
   clearLastReceivedSeqMap: vi.fn(),
   reconnect: vi.fn(async () => {}),
 };
@@ -29,6 +32,7 @@ export function createSessionFixture(overrides = {}) {
   return {
     id: "s-action-state",
     sessionId: "s-action-state",
+    parentSessionId: ROOT_PARENT_SESSION_ID,
     title: "session",
     isLocal: false,
     loaded: true,
@@ -65,9 +69,9 @@ export function createChatSession(options = {}) {
     selectedPlugins: ref([]),
     connected: ref(true),
     ensureConnected: vi.fn(() => true),
-    authFetch: null,
+    authFetch: vi.fn(rejectUnexpectedRequest),
+    navigateToLastMessage: vi.fn(),
     isImageMime: () => false,
-    scrollBottom: vi.fn(),
     notify: vi.fn(),
     clearUploadSelection: vi.fn(),
     ...options,

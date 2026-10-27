@@ -8,126 +8,85 @@ import {
   buildChatMessageNavItem,
   buildChatMessageNavItems,
   normalizeChatMessageNavContent,
-  resolveChatMessageNavRoleLabel,
+  resolveChatMessageNavRoleLabelKey,
 } from "../../../src/app/state/chatMessageNavItemsState.js";
+import { getMessageAnchorId } from "../../../src/modules/chat/model/messageAnchor.js";
+
+const LABELS = Object.freeze({
+  "message.me": "我",
+  "message.ai": "AI",
+  "message.tool": "工具",
+  "common.session": "会话",
+});
+
+function translate(key) {
+  if (!Object.hasOwn(LABELS, key)) throw new Error(`unexpected i18n key ${key}`);
+  return LABELS[key];
+}
 
 describe("chatMessageNavItemsState", () => {
-  it("normalizes message content from content, text, whitespace, and missing values", () => {
+  it("collapses whitespace of string content and rejects non-string content", () => {
     expect(normalizeChatMessageNavContent({ content: " hello\n  world " })).toBe("hello world");
-    expect(normalizeChatMessageNavContent({ text: " fallback\ttext " })).toBe("fallback text");
-    expect(normalizeChatMessageNavContent({ content: "", text: "backup" })).toBe("backup");
-    expect(normalizeChatMessageNavContent(null)).toBe("");
+    expect(() => normalizeChatMessageNavContent({ text: "legacy" })).toThrow(
+      "chat_message_nav_content_not_string",
+    );
   });
 
-  it("builds a navigator item with stable anchor fallback, translated role fallback, and truncated content", () => {
+  it("maps every role to a single i18n key", () => {
+    expect(resolveChatMessageNavRoleLabelKey("user")).toBe("message.me");
+    expect(resolveChatMessageNavRoleLabelKey("assistant")).toBe("message.ai");
+    expect(resolveChatMessageNavRoleLabelKey("tool")).toBe("message.tool");
+    expect(resolveChatMessageNavRoleLabelKey("system")).toBe("common.session");
+  });
+
+  it("builds an item whose id is the list panel anchor of the same message and index", () => {
     const message = {
-      role: " assistant ",
+      role: "assistant",
+      sessionId: "session-1",
+      turnScopeId: "client-turn:00000000-0000-4000-8000-000000000001",
       content: "abcdefghijklmnopqrstuvwxyz0123456789",
     };
 
-    expect(
-      buildChatMessageNavItem({
-        messageItem: message,
-        messageIndex: 2,
-        getMessageAnchorId: () => "chat-message-assistant-2",
-        translateSession: () => "Session",
-        translateRole: (role) => (role === "assistant" ? "AI" : ""),
-      }),
-    ).toEqual({
-      id: "chat-message-assistant-2",
+    expect(buildChatMessageNavItem({ messageItem: message, messageIndex: 2, translate })).toEqual({
+      id: getMessageAnchorId(message, 2),
       role: "assistant",
       roleLabel: "AI",
       content: "abcdefghijklmnopqrstuvwxyz0123456789",
       preview: "abcdefghijklmnopqrstuvwxyz01",
       title: "3. AI：abcdefghijklmnopqrstuvwxyz0123456789",
     });
-
-    expect(
-      buildChatMessageNavItem({
-        messageItem: { content: "hello" },
-        messageIndex: 0,
-        getMessageAnchorId: () => "",
-        translateSession: () => "Session",
-      }),
-    ).toEqual({
-      id: "chat-message-0",
-      role: "",
-      roleLabel: "Session",
-      content: "hello",
-      preview: "hello",
-      title: "1. Session：hello",
-    });
   });
 
-  it("builds items only for renderable messages and delegates anchor creation", () => {
+  it("keeps source indexes of renderable messages so anchors match the list panel", () => {
     const shouldRenderMessageInChat = vi.fn((message) => message.role !== "system");
-    const getMessageAnchorId = vi.fn((message, index) => `anchor-${message.role}-${index}`);
+    const messages = [
+      { role: "user", content: "hello" },
+      { role: "system", content: "hidden" },
+      { role: "tool", content: "result" },
+    ];
 
-    expect(
-      buildChatMessageNavItems({
-        messages: [
-          { role: "user", content: "hello" },
-          { role: "system", content: "hidden" },
-          { role: "assistant", text: "answer" },
-        ],
-        shouldRenderMessageInChat,
-        getMessageAnchorId,
-        translateSession: () => "Session",
-        translateRole: (role) => ({ user: "我", assistant: "AI" })[role] || "",
-      }),
-    ).toEqual([
-      {
-        id: "anchor-user-0",
-        role: "user",
-        roleLabel: "ME",
-        content: "hello",
-        preview: "hello",
-        title: "1. ME：hello",
-      },
-      {
-        id: "anchor-assistant-2",
-        role: "assistant",
-        roleLabel: "AI",
-        content: "answer",
-        preview: "answer",
-        title: "3. AI：answer",
-      },
+    const items = buildChatMessageNavItems({ messages, shouldRenderMessageInChat, translate });
+
+    expect(items.map((item) => [item.id, item.roleLabel, item.title])).toEqual([
+      [getMessageAnchorId(messages[0], 0), "我", "1. 我：hello"],
+      [getMessageAnchorId(messages[2], 2), "工具", "3. 工具：result"],
     ]);
-
     expect(shouldRenderMessageInChat).toHaveBeenCalledTimes(3);
-    expect(getMessageAnchorId).toHaveBeenCalledTimes(2);
-    expect(getMessageAnchorId).toHaveBeenNthCalledWith(1, { role: "user", content: "hello" }, 0);
-    expect(getMessageAnchorId).toHaveBeenNthCalledWith(2, { role: "assistant", text: "answer" }, 2);
   });
 
-  it("tolerates non-array message sources and missing callbacks", () => {
-    expect(buildChatMessageNavItems({ messages: null })).toEqual([]);
-    expect(
+  it("rejects missing dependencies and non-array message sources", () => {
+    expect(() =>
+      buildChatMessageNavItems({ messages: [], shouldRenderMessageInChat: () => true }),
+    ).toThrow();
+    expect(() =>
       buildChatMessageNavItems({
-        messages: [{ role: "", content: "hello" }],
-        shouldRenderMessageInChat: null,
-        getMessageAnchorId: null,
-        translateSession: null,
+        messages: null,
+        shouldRenderMessageInChat: () => true,
+        translate,
       }),
-    ).toEqual([
-      {
-        id: "chat-message-0",
-        role: "",
-        roleLabel: "session",
-        content: "hello",
-        preview: "hello",
-        title: "1. session：hello",
-      },
-    ]);
-  });
-
-  it("resolves visible user and assistant role labels for navigator items", () => {
-    expect(resolveChatMessageNavRoleLabel("user")).toBe("ME");
-    expect(resolveChatMessageNavRoleLabel("assistant")).toBe("AI");
-    expect(
-      resolveChatMessageNavRoleLabel("user", {
-        translateRole: (role) => (role === "user" ? "我" : ""),
-      }),
-    ).toBe("ME");
+    ).toThrow("chat_message_nav_messages_not_array");
+    expect(() => getMessageAnchorId({ role: "user", content: "x" }, -1)).toThrow(
+      "message_anchor_index_invalid",
+    );
   });
 });

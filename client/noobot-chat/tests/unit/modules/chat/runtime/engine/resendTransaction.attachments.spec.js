@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { attachmentIdentityKey, projectAttachmentIdentity } from "@noobot/attachment-protocol";
 import { resolveKeptAttachments } from "../../../../../../src/modules/chat/runtime/engine/resendTransaction.js";
+import { NO_ATTACHMENT_EDITS } from "../../../../helpers/resendEdits.js";
 
 const identityKeyOf = (attachment) => attachmentIdentityKey(projectAttachmentIdentity(attachment));
 
@@ -19,7 +20,10 @@ const attachment = (attachmentId, overrides = {}) => ({
 
 describe("resolveKeptAttachments", () => {
   it("keeps every authoritative attachment when nothing is removed", () => {
-    const kept = resolveKeptAttachments({ attachments: [attachment("a"), attachment("b")] }, {});
+    const kept = resolveKeptAttachments(
+      { attachments: [attachment("a"), attachment("b")] },
+      NO_ATTACHMENT_EDITS,
+    );
     expect(kept.map((item) => item.attachmentId)).toEqual(["a", "b"]);
   });
 
@@ -27,33 +31,16 @@ describe("resolveKeptAttachments", () => {
     const removed = attachment("b");
     const kept = resolveKeptAttachments(
       { attachments: [attachment("a"), removed, attachment("c")] },
-      { removedAttachmentKeys: [identityKeyOf(removed)] },
+      { ...NO_ATTACHMENT_EDITS, removedAttachmentKeys: [identityKeyOf(removed)] },
     );
     expect(kept.map((item) => item.attachmentId)).toEqual(["a", "c"]);
-  });
-
-  it("ignores blank and whitespace-only removal keys", () => {
-    const kept = resolveKeptAttachments(
-      { attachments: [attachment("a")] },
-      { removedAttachmentKeys: ["", "   ", null, undefined] },
-    );
-    expect(kept.map((item) => item.attachmentId)).toEqual(["a"]);
-  });
-
-  it("trims removal keys before matching", () => {
-    const removed = attachment("a");
-    const kept = resolveKeptAttachments(
-      { attachments: [removed] },
-      { removedAttachmentKeys: [`  ${identityKeyOf(removed)}  `] },
-    );
-    expect(kept).toEqual([]);
   });
 
   it("merges option attachments and deduplicates by identity", () => {
     const shared = attachment("a");
     const kept = resolveKeptAttachments(
       { attachments: [shared] },
-      { attachments: [shared, attachment("b")] },
+      { ...NO_ATTACHMENT_EDITS, attachments: [shared, attachment("b")] },
     );
     expect(kept.map((item) => item.attachmentId)).toEqual(["a", "b"]);
   });
@@ -61,24 +48,14 @@ describe("resolveKeptAttachments", () => {
   it("strips raw and file carriers from returned metadata", () => {
     const kept = resolveKeptAttachments(
       { attachments: [attachment("a", { raw: { blob: 1 }, file: { name: "a.txt" } })] },
-      {},
+      NO_ATTACHMENT_EDITS,
     );
     expect(kept[0]).not.toHaveProperty("raw");
     expect(kept[0]).not.toHaveProperty("file");
     expect(kept[0].fileName).toBe("a.txt");
   });
 
-  it("tolerates missing attachments and non-array inputs", () => {
-    expect(resolveKeptAttachments({}, {})).toEqual([]);
-    expect(resolveKeptAttachments({ attachments: null }, { attachments: "nope" })).toEqual([]);
-    expect(resolveKeptAttachments(undefined, undefined)).toEqual([]);
-    expect(resolveKeptAttachments({ attachments: [] }, { removedAttachmentKeys: "nope" })).toEqual(
-      [],
-    );
-  });
-
-  it("skips non-object entries instead of throwing on identity projection", () => {
-    const kept = resolveKeptAttachments({ attachments: [attachment("a"), null, "x", []] }, {});
-    expect(kept.map((item) => item.attachmentId)).toEqual(["a"]);
+  it("rejects an edit payload without the attachment edit arrays", () => {
+    expect(() => resolveKeptAttachments({ attachments: [attachment("a")] }, {})).toThrow(TypeError);
   });
 });

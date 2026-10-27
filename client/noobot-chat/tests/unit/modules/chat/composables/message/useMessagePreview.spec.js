@@ -282,6 +282,25 @@ describe("useMessagePreview attachment downloads", () => {
     expect(preview.attachmentPreviewTextContent.value).toBe("# parsed");
   });
 
+  it("parsed result preview is unavailable without a parsed_result relation", () => {
+    const preview = createMessagePreview({
+      userId: "admin",
+      attachmentService: createAttachmentService(() => createTextResponse("")),
+    });
+    const attachment = {
+      attachmentId: "source-2",
+      sessionId: "session-1",
+      attachmentSource: "upload",
+      name: "plain.docx",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      size: 1024,
+      relations: [],
+    };
+
+    expect(preview.canPreviewParsedResult(attachment)).toBe(false);
+    expect(preview.canPreviewAttachment(attachment)).toBe(false);
+  });
+
   it("source attachment preview delegates office attachments to parsed result preview", async () => {
     const attachmentService = createAttachmentService(() =>
       createTextResponse("# parsed from office"),

@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createHarness, makeTurnReplacementResponse } from "../helpers/useChatEngineHarness.js";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { isTurnRuntimeDeleted } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { NO_ATTACHMENT_EDITS } from "../../../helpers/resendEdits.js";
 
 describe("useChatEngine.resend scoped pruning", () => {
   it("resendMonotonicMessage keeps edited content when reusing a stale user message object", async () => {
@@ -56,7 +57,9 @@ describe("useChatEngine.resend scoped pruning", () => {
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
 
-    await expect(engine.resendMonotonicMessage(target, "edited question")).resolves.toBe(true);
+    await expect(
+      engine.resendMonotonicMessage(target, "edited question", NO_ATTACHMENT_EDITS),
+    ).resolves.toBe(true);
 
     expect(stream).toHaveBeenCalledTimes(1);
     expect(observedUserMessage).toEqual(
@@ -120,9 +123,9 @@ describe("useChatEngine.resend scoped pruning", () => {
     activeSession.value.rawMessages = [oldUser, oldAssistant];
     activeSession.value.aggregateVersion = 3;
 
-    await expect(engine.resendMonotonicMessage(oldAssistant, "edited question")).resolves.toBe(
-      true,
-    );
+    await expect(
+      engine.resendMonotonicMessage(oldAssistant, "edited question", NO_ATTACHMENT_EDITS),
+    ).resolves.toBe(true);
 
     expect(deleteSessionMessagesFromApi).not.toHaveBeenCalled();
     expect(observedMessagesAtStream.find((message) => message.id === "old-user")).toBeUndefined();
@@ -221,7 +224,9 @@ describe("useChatEngine.resend scoped pruning", () => {
     activeSession.value.rawMessages = [previousUser, previousAssistant, latestUser];
     activeSession.value.aggregateVersion = 3;
 
-    await expect(engine.resendMonotonicMessage(latestUser, "same question")).resolves.toBe(true);
+    await expect(
+      engine.resendMonotonicMessage(latestUser, "same question", NO_ATTACHMENT_EDITS),
+    ).resolves.toBe(true);
 
     expect(replaceSessionTurnApi).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -287,7 +292,9 @@ describe("useChatEngine.resend scoped pruning", () => {
     activeSession.value.rawMessages = [first, target];
     input.value = "draft before replace";
 
-    await expect(engine.resendMonotonicMessage(target, "edited question")).resolves.toBe(true);
+    await expect(
+      engine.resendMonotonicMessage(target, "edited question", NO_ATTACHMENT_EDITS),
+    ).resolves.toBe(true);
 
     expect(deleteSessionMessagesFromApi).not.toHaveBeenCalled();
     expect(stream).toHaveBeenCalledTimes(1);

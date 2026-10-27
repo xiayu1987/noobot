@@ -8,11 +8,12 @@ import assert from "node:assert/strict";
 import { AIMessage } from "@langchain/core/messages";
 
 import { projectSessionRecordsToContextMessages as toConversationMessages } from "@noobot/context-protocol/message/session-projection";
-import { buildContextMessages } from "../../../src/context/assembly/message-builder.js";
+import { buildContextMessageBlocks } from "../../../src/context/assembly/message-builder.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
+import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
 
-test("buildContextMessages preserves thought-signature payload/tool_calls and omits non-required kwargs", () => {
+test("buildContextMessageBlocks preserves thought-signature payload/tool_calls and omits non-required kwargs", () => {
   const thoughtPayload = [
     {
       type: "text",
@@ -53,7 +54,7 @@ test("buildContextMessages preserves thought-signature payload/tool_calls and om
       turnScopeId: "turn-thought-signature",
     },
   ]);
-  const messages = buildContextMessages(
+  const messages = buildContextMessageBlocks(
     createTestAgentExecutionScope(
       createTestRuntimeContext({
         identity: {
@@ -65,8 +66,8 @@ test("buildContextMessages preserves thought-signature payload/tool_calls and om
       }),
       { messageBlocks: { system: [], history, incremental: [] } },
     ),
-    { currentUserMessage: null },
-  );
+    { currentUserMessage: createPersistedCurrentUserMessage("current") },
+  ).messages;
 
   const aiMessage = messages.find((messageItem) => messageItem instanceof AIMessage);
   assert.ok(aiMessage);
@@ -81,7 +82,7 @@ test("buildContextMessages preserves thought-signature payload/tool_calls and om
   assert.deepEqual(aiMessage.response_metadata || {}, {});
 });
 
-test("buildContextMessages restores OpenAI Responses reasoning output sequence", () => {
+test("buildContextMessageBlocks restores OpenAI Responses reasoning output sequence", () => {
   const output = [
     { id: "rs_1", type: "reasoning", encrypted_content: "encrypted", summary: [] },
     { id: "fc_1", type: "function_call", call_id: "call_1", name: "read_file", arguments: "{}" },
@@ -98,7 +99,7 @@ test("buildContextMessages restores OpenAI Responses reasoning output sequence",
       turnScopeId: "turn-responses",
     },
   ]);
-  const messages = buildContextMessages(
+  const messages = buildContextMessageBlocks(
     createTestAgentExecutionScope(
       createTestRuntimeContext({
         identity: {
@@ -110,8 +111,8 @@ test("buildContextMessages restores OpenAI Responses reasoning output sequence",
       }),
       { messageBlocks: { system: [], history, incremental: [] } },
     ),
-    { currentUserMessage: null },
-  );
+    { currentUserMessage: createPersistedCurrentUserMessage("current") },
+  ).messages;
   const aiMessage = messages.find((messageItem) => messageItem instanceof AIMessage);
   assert.ok(aiMessage);
   assert.deepEqual(aiMessage.response_metadata.output, output);

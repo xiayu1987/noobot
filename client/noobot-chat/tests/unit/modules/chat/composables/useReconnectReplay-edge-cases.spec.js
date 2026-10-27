@@ -14,7 +14,7 @@ import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model
 
 const reconnectControl = createReconnectControl({
   requestId: "reconnect-s-1",
-  identity: { sessionId: "s-1", parentSessionId: "", parentDialogProcessId: "" },
+  identity: { sessionId: "s-1", parentSessionId: "" },
   knownLifecycleSequenceMap: {},
 });
 
@@ -96,13 +96,16 @@ describe("useReconnectReplay", () => {
       },
       { sessionId: "s-1", turnScopeId: "turn-missing" },
     );
-    const result = await api.applyReconnectEvent(interaction.identity.eventType, interaction);
+    const result = await api.applyReconnectEvent(interaction.identity.eventType, interaction, {
+      channelSessionId: "s-1",
+    });
 
     expect(result?.applied).not.toBe(false);
     expect(mocks.setPendingInteractionRequest).toHaveBeenCalledWith(
       expect.objectContaining({
         requestId: "req-late",
         dialogProcessId: "dp-late",
+        channelSessionId: "s-1",
       }),
     );
 

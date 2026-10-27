@@ -8,8 +8,14 @@ import {
   readProtocolEventReducerInput,
   validateProtocolEvent,
 } from "@noobot/event-protocol";
+import {
+  AGENT_TRANSPORT_NON_ENVELOPE_EVENT_KIND,
+  classifyAgentTransportNonEnvelopeEvent,
+  validateAgentTransportNonEnvelopePayload,
+} from "@noobot/agent-transport-protocol";
 
 const TRANSPORT_EVENT_TYPE_MISMATCH = "transport_event_type_mismatch";
+const UNREGISTERED_NON_ENVELOPE_EVENT = "unregistered_non_envelope_event";
 
 function validateTransportProtocolEnvelope(event, envelope) {
   const validation = validateProtocolEvent(envelope);
@@ -24,7 +30,41 @@ function validateTransportProtocolEnvelope(event, envelope) {
 
 export function normalizeTurnTransportEnvelope({ event, data, channelSessionId }) {
   if (!isEventProtocolEnvelope(data)) {
-    return { event, data, protocolEnvelope: null, family: "", rejected: null, channelSessionId };
+    const nonEnvelopeKind = classifyAgentTransportNonEnvelopeEvent(event);
+    if (!nonEnvelopeKind) {
+      return {
+        event,
+        data: null,
+        protocolEnvelope: null,
+        family: "",
+        nonEnvelopeKind: "",
+        rejected: { errors: [UNREGISTERED_NON_ENVELOPE_EVENT] },
+        channelSessionId,
+      };
+    }
+    if (nonEnvelopeKind === AGENT_TRANSPORT_NON_ENVELOPE_EVENT_KIND.SESSION_RECEIPT) {
+      const validation = validateAgentTransportNonEnvelopePayload(event, data);
+      if (!validation.valid) {
+        return {
+          event,
+          data: null,
+          protocolEnvelope: null,
+          family: "",
+          nonEnvelopeKind,
+          rejected: { errors: validation.errors },
+          channelSessionId,
+        };
+      }
+    }
+    return {
+      event,
+      data,
+      protocolEnvelope: null,
+      family: "",
+      nonEnvelopeKind,
+      rejected: null,
+      channelSessionId,
+    };
   }
   const validation = validateTransportProtocolEnvelope(event, data);
   if (!validation.valid) {
@@ -33,6 +73,7 @@ export function normalizeTurnTransportEnvelope({ event, data, channelSessionId }
       data: null,
       protocolEnvelope: null,
       family: "",
+      nonEnvelopeKind: "",
       rejected: { errors: validation.errors },
       channelSessionId,
     };
@@ -42,6 +83,7 @@ export function normalizeTurnTransportEnvelope({ event, data, channelSessionId }
     data: readProtocolEventReducerInput(data).input,
     protocolEnvelope: data,
     family: validation.descriptor.family,
+    nonEnvelopeKind: "",
     rejected: null,
     channelSessionId,
   };

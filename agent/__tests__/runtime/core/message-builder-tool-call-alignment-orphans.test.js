@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { HumanMessage, ToolMessage } from "@langchain/core/messages";
 
-import { buildContextMessages } from "../../../src/context/assembly/message-builder.js";
+import { buildContextMessageBlocks } from "../../../src/context/assembly/message-builder.js";
 
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
@@ -22,6 +22,7 @@ import {
 } from "@noobot/context-protocol/tool/context-policy";
 import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
 import { createMessageUid } from "@noobot/session-protocol/message-identity";
+import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
 
 function sessionContextHistory(records) {
   return records.map((record) =>
@@ -29,8 +30,8 @@ function sessionContextHistory(records) {
   );
 }
 
-test("buildContextMessages drops orphan tool results without matching assistant tool_call", () => {
-  const messages = buildContextMessages(
+test("buildContextMessageBlocks drops orphan tool results without matching assistant tool_call", () => {
+  const messages = buildContextMessageBlocks(
     createTestAgentExecutionScope(createTestRuntimeContext(), {
       messageBlocks: {
         system: [],
@@ -75,15 +76,15 @@ test("buildContextMessages drops orphan tool results without matching assistant 
         incremental: [],
       },
     }),
-    { currentUserMessage: null },
-  );
+    { currentUserMessage: createPersistedCurrentUserMessage("current") },
+  ).messages;
 
   const toolMessages = messages.filter((item) => item instanceof ToolMessage);
   assert.equal(toolMessages.length, 1);
   assert.equal(toolMessages[0].tool_call_id, "call_ok_1");
 });
 
-test("buildContextMessages converts orphan task_summary tool result to user summary message", () => {
+test("buildContextMessageBlocks converts orphan task_summary tool result to user summary message", () => {
   const summaryContent = [
     "NOOBOT_TASK_SUMMARY/1",
     "[STATE]",
@@ -97,7 +98,7 @@ test("buildContextMessages converts orphan task_summary tool result to user summ
   ].join("\n");
   const summary = createTaskSummaryReceipt(parseTaskSummaryContent(summaryContent));
   const contextPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
-  const messages = buildContextMessages(
+  const messages = buildContextMessageBlocks(
     createTestAgentExecutionScope(createTestRuntimeContext(), {
       messageBlocks: {
         system: [],
@@ -129,8 +130,8 @@ test("buildContextMessages converts orphan task_summary tool result to user summ
         incremental: [],
       },
     }),
-    { currentUserMessage: null },
-  );
+    { currentUserMessage: createPersistedCurrentUserMessage("current") },
+  ).messages;
 
   assert.equal(
     messages.some((item) => item instanceof ToolMessage),

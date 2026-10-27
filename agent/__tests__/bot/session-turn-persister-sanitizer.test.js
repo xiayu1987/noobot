@@ -162,6 +162,7 @@ test("appendAgentMessages forwards the canonical internal control message type",
       {
         messageUid: "sm_control",
         role: "user",
+        injectedMessage: true,
         type: "context_control",
         content: "checkpoint",
         noobotInternalMessageType: "noobot.phase_summary_prompt",
@@ -364,7 +365,7 @@ test("SessionTurnPersister persists final assistant transfer envelopes with atta
 
   assert.equal(appendedTurns.length, 1);
   assert.equal(appendedTurns[0].attachmentMetas, undefined);
-  assert.equal("attachments" in appendedTurns[0], false);
+  assert.deepEqual(appendedTurns[0].attachments, []);
   assert.equal("transferEnvelopes" in appendedTurns[0], true);
   assert.equal(
     appendedTurns[0].transferEnvelopes?.[0]?.payload?.attachments?.[0]?.identity?.attachmentId,

@@ -27,14 +27,14 @@ function summarizeInput({
   currentUserMessage,
 }) {
   const requestedMessageLength = String(normalizedMessage ?? "").length;
-  const persistedMessageLength = String(currentUserMessage?.content ?? "").length;
+  const persistedMessageLength = currentUserMessage.content.length;
   return {
     requestedMessageLength,
     persistedMessageLength,
     messageConsumed: requestedMessageLength === persistedMessageLength,
     requestedAttachmentCount: countOf(requestedAttachments),
     canonicalAttachmentCount: countOf(canonicalAttachments),
-    persistedAttachmentCount: countOf(currentUserMessage?.attachments),
+    persistedAttachmentCount: currentUserMessage.attachments.length,
   };
 }
 
@@ -61,7 +61,7 @@ function summarizePreferences(resolvedRunConfig) {
 }
 
 function summarizePresentation({ currentUserMessage, resolvedRunConfig, dispatchRuntime }) {
-  const persistedUserMessageId = clean(currentUserMessage?.userMessageId);
+  const persistedUserMessageId = clean(currentUserMessage.userMessageId);
   const requestedUserMessageId = clean(resolvedRunConfig?.userMessageId);
   const requestedPresentationMessageId = clean(resolvedRunConfig?.presentationMessageId);
   const boundPresentationMessageId = clean(
@@ -95,7 +95,7 @@ export function buildAgentTransportConsumption({
   normalizedMessage = "",
   requestedAttachments = [],
   canonicalAttachments = [],
-  currentUserMessage = null,
+  currentUserMessage,
   resolvedRunConfig = {},
   committedTurnResult = null,
   dispatchRuntime = null,

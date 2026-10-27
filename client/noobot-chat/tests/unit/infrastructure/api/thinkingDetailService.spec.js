@@ -4,77 +4,80 @@
  * SPDX-License-Identifier: MIT
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { API_REQUEST_ERROR_CODE, isApiRequestError } from "@noobot/shared/request-error";
+
+import { configureAuthenticatedFetcher } from "../../../../src/infrastructure/http/authenticatedHttpService.js";
 
 const getSessionThinkingDetailApi = vi.fn();
+const fetcher = vi.fn();
 vi.mock("../../../../src/infrastructure/api/chat/chatApi.js", () => ({
   getSessionThinkingDetailApi: (...args) => getSessionThinkingDetailApi(...args),
 }));
 
-const { thinkingDetailService, THINKING_DETAIL_NOT_FOUND, THINKING_DETAIL_REQUEST_FAILED } =
+const { thinkingDetailService } =
   await import("../../../../src/infrastructure/api/thinking/thinkingDetailService.js");
 
-function jsonResponse(payload, { ok = true, status = 200 } = {}) {
-  return { ok, status, json: async () => payload };
+const TARGET = Object.freeze({
+  userId: "u1",
+  sessionId: "s1",
+  dialogProcessId: "",
+  turnScopeId: "t1",
+});
+
+function jsonResponse(payload, { status = 200 } = {}) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+async function captureError() {
+  return thinkingDetailService.getDetail(TARGET).catch((caught) => caught);
 }
 
 describe("thinkingDetailService.getDetail", () => {
   beforeEach(() => {
     getSessionThinkingDetailApi.mockReset();
-    thinkingDetailService.configure({ fetcher: null });
+    configureAuthenticatedFetcher(fetcher);
   });
 
-  it("returns payload when the detail exists", async () => {
+  it("returns the payload through the configured fetcher when the detail exists", async () => {
     const payload = { ok: true, exists: true, detail: { a: 1 } };
     getSessionThinkingDetailApi.mockResolvedValue(jsonResponse(payload));
-    await expect(thinkingDetailService.getDetail({ sessionId: "s1" })).resolves.toEqual(payload);
-    expect(getSessionThinkingDetailApi).toHaveBeenCalledWith(
-      { userId: "", sessionId: "s1", dialogProcessId: "", turnScopeId: "" },
-      {},
+    await expect(thinkingDetailService.getDetail(TARGET)).resolves.toEqual(payload);
+    expect(getSessionThinkingDetailApi).toHaveBeenCalledWith(TARGET, { fetcher });
+  });
+
+  it("raises an http ApiRequestError carrying the failure envelope", async () => {
+    getSessionThinkingDetailApi.mockResolvedValue(
+      jsonResponse({ ok: false, error: "denied", errorCode: "FORBIDDEN" }, { status: 403 }),
     );
-  });
-
-  it("passes the configured fetcher through", async () => {
-    const fetcher = vi.fn();
-    thinkingDetailService.configure({ fetcher });
-    getSessionThinkingDetailApi.mockResolvedValue(jsonResponse({ ok: true, exists: true }));
-    await thinkingDetailService.getDetail();
-    expect(getSessionThinkingDetailApi.mock.calls[0][1]).toEqual({ fetcher });
-  });
-
-  it("throws with the HTTP status when the response is not ok", async () => {
-    getSessionThinkingDetailApi.mockResolvedValue(jsonResponse({}, { ok: false, status: 404 }));
-    const error = await thinkingDetailService.getDetail().catch((caught) => caught);
-    expect(error.message).toBe("failed to load thinking detail: 404");
-    expect(error.code).toBe(THINKING_DETAIL_REQUEST_FAILED);
-    expect(error.status).toBe(404);
-  });
-
-  it("falls back to status 500 when there is no response", async () => {
-    getSessionThinkingDetailApi.mockResolvedValue(null);
-    const error = await thinkingDetailService.getDetail().catch((caught) => caught);
-    expect(error.message).toBe("failed to load thinking detail: 500");
-    expect(error.code).toBe(THINKING_DETAIL_REQUEST_FAILED);
-    expect(error.status).toBe(500);
-  });
-
-  it("marks missing details with thinking_detail_not_found", async () => {
-    getSessionThinkingDetailApi.mockResolvedValue(jsonResponse({ ok: true, exists: false }));
-    const error = await thinkingDetailService.getDetail().catch((caught) => caught);
-    expect(error.message).toBe("thinking detail not found");
-    expect(error.code).toBe(THINKING_DETAIL_NOT_FOUND);
-  });
-
-  it("surfaces the server error without a code when ok is false", async () => {
-    getSessionThinkingDetailApi.mockResolvedValue(jsonResponse({ ok: false, error: "denied" }));
-    const error = await thinkingDetailService.getDetail().catch((caught) => caught);
+    const error = await captureError();
+    expect(isApiRequestError(error)).toBe(true);
+    expect(error.code).toBe(API_REQUEST_ERROR_CODE.HTTP);
+    expect(error.status).toBe(403);
     expect(error.message).toBe("denied");
-    expect(error.code).toBeUndefined();
+    expect(error.serverErrorCode).toBe("FORBIDDEN");
   });
 
-  it("treats an empty JSON body as not found without a code", async () => {
-    getSessionThinkingDetailApi.mockResolvedValue(jsonResponse(null));
-    const error = await thinkingDetailService.getDetail().catch((caught) => caught);
-    expect(error.message).toBe("thinking detail not found");
-    expect(error.code).toBeUndefined();
+  it("treats a 2xx body without ok:true as a contract violation", async () => {
+    getSessionThinkingDetailApi.mockResolvedValue(jsonResponse({ ok: false, error: "denied" }));
+    const error = await captureError();
+    expect(error).toBeInstanceOf(TypeError);
+    expect(isApiRequestError(error)).toBe(false);
+  });
+
+  it("raises a not_found ApiRequestError when the detail does not exist", async () => {
+    getSessionThinkingDetailApi.mockResolvedValue(jsonResponse({ ok: true, exists: false }));
+    const error = await captureError();
+    expect(error.code).toBe(API_REQUEST_ERROR_CODE.NOT_FOUND);
+    expect(error.status).toBe(200);
+  });
+
+  it("treats a missing response as a contract violation", async () => {
+    getSessionThinkingDetailApi.mockResolvedValue(null);
+    const error = await captureError();
+    expect(error).toBeInstanceOf(TypeError);
+    expect(isApiRequestError(error)).toBe(false);
   });
 });

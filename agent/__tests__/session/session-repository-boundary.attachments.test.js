@@ -24,6 +24,7 @@ import {
   createTestSessionRequiredFields,
 } from "../helpers/session-message-facts.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
 async function withTempWorkspace(fn) {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-session-boundary-"));
@@ -74,6 +75,7 @@ test("session display summary keeps rich attachment fields for preview and parse
     messages: [
       {
         role: "user",
+        messageOrigin: "natural",
         content: "rich attachment",
         attachments: [
           {
@@ -389,8 +391,10 @@ test("session artifact persistence should normalize attachment fields before wri
         messages: [
           {
             messageUid: "sm_attachment_user",
+            ts: TEST_MESSAGE_TS,
             sessionId: "s-attachments",
             role: "user",
+            messageOrigin: "natural",
             content: "canonical survives",
             dialogProcessId: "dialog-attachments",
             turnScopeId: "turn-attachments",
@@ -408,6 +412,7 @@ test("session artifact persistence should normalize attachment fields before wri
           },
           {
             messageUid: "sm_attachment_assistant",
+            ts: TEST_MESSAGE_TS,
             sessionId: "s-attachments",
             role: "assistant",
             presentationMessageId: "pm_fx5",
@@ -428,7 +433,7 @@ test("session artifact persistence should normalize attachment fields before wri
     const summaryJson = JSON.stringify(persistedSummary);
 
     assert.equal(persistedSession.messages[0].attachments[0].attachmentId, "att-canonical");
-    assert.equal("attachments" in persistedSession.messages[1], false);
+    assert.deepEqual(persistedSession.messages[1].attachments, []);
     assert.equal(sessionJson.includes("attachmentMetas"), false);
     assert.equal(sessionJson.includes("attachment_metas"), false);
     assert.equal(persistedSummary.depth, undefined);

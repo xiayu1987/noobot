@@ -15,6 +15,7 @@ import {
 import { normalizeThinkingToolLogs } from "../../../../../../src/modules/chat/model/thinkingDetailModel.js";
 import ThinkingPanelRealtime from "../../../../../../src/modules/chat/components/thinking/ThinkingPanelRealtime.vue";
 import { setTurnThinkingOpenNames } from "../../../../../../src/modules/chat/runtime/engine/turnUiStore.js";
+import { API_REQUEST_ERROR_CODE, ApiRequestError } from "@noobot/shared/request-error";
 
 const detailServiceMock = vi.hoisted(() => ({ getDetail: null }));
 vi.mock("../../../../../../src/infrastructure/api/thinking/thinkingDetailService.js", () => ({
@@ -22,6 +23,13 @@ vi.mock("../../../../../../src/infrastructure/api/thinking/thinkingDetailService
     getDetail: (...args) => detailServiceMock.getDetail(...args),
   },
 }));
+
+async function rejectUnservedDetail() {
+  throw new ApiRequestError("thinking detail is not served after the test", {
+    code: API_REQUEST_ERROR_CODE.HTTP,
+    status: 503,
+  });
+}
 
 async function flushAsync() {
   for (let index = 0; index < 20; index += 1) {
@@ -60,7 +68,7 @@ function persistedToolTimeline(text, id = "call-1") {
 describe("ThinkingPanel thinking-detail recovery", () => {
   afterEach(() => {
     __resetThinkingDetailCacheForTests();
-    detailServiceMock.getDetail = null;
+    detailServiceMock.getDetail = rejectUnservedDetail;
     vi.restoreAllMocks();
   });
 
@@ -188,7 +196,12 @@ describe("ThinkingPanel thinking-detail recovery", () => {
   it("retries an eventually consistent thinking detail until it becomes available", async () => {
     const getDetail = vi
       .fn()
-      .mockResolvedValueOnce({ ok: true, exists: false })
+      .mockRejectedValueOnce(
+        new ApiRequestError("thinking detail not found", {
+          code: API_REQUEST_ERROR_CODE.NOT_FOUND,
+          status: 200,
+        }),
+      )
       .mockResolvedValueOnce(
         thinkingDetailPayload({
           role: "assistant",

@@ -10,6 +10,7 @@ import {
   sessionLogClientMock,
   wsClientMock,
 } from "./useChatSession.test-helpers.js";
+import { rejectUnexpectedRequest } from "../../../helpers/jsonResponse.js";
 import { useChatSession } from "../../../../../src/modules/chat/composables/useChatSession.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { deriveAgentExecutionId } from "@noobot/session-protocol/execution-lifecycle";
@@ -382,33 +383,6 @@ describe("useChatSession reconnect replay", () => {
         }),
       );
       onReconnectData({
-        event: StreamEventEnum.DONE,
-        data: {
-          sessionId: "s-1",
-          dialogProcessId: "dp-new",
-          turnScopeId: "turn-new",
-          messages: [
-            { role: RoleEnum.USER, content: "old q" },
-            {
-              role: RoleEnum.ASSISTANT,
-              presentationMessageId: "msg-old",
-              dialogProcessId: "dp-old",
-              turnScopeId: "turn-old",
-              content: "old overwritten by snapshot",
-            },
-            { role: RoleEnum.USER, content: "new q" },
-            {
-              role: RoleEnum.ASSISTANT,
-              presentationMessageId: "msg-new",
-              dialogProcessId: "dp-new",
-              turnScopeId: "turn-new",
-              content: "new final answer",
-              modelAlias: "alias-1",
-            },
-          ],
-        },
-      });
-      onReconnectData({
         event: StreamEventEnum.CHANNEL_STATE,
         data: {
           sessionId: "s-1",
@@ -481,6 +455,7 @@ describe("useChatSession reconnect replay", () => {
       connected: ref(true),
       ensureConnected: vi.fn(() => true),
       authFetch,
+      navigateToLastMessage: vi.fn(),
       isImageMime: () => false,
       notify: vi.fn(),
       clearUploadSelection: vi.fn(),
@@ -513,7 +488,6 @@ describe("useChatSession reconnect replay", () => {
         id: "s-reconnect-user",
         sessionId: "s-reconnect-user",
         parentSessionId: "p-reconnect",
-        parentDialogProcessId: "pdp-reconnect",
         title: "session",
         isLocal: false,
         loaded: true,
@@ -540,7 +514,8 @@ describe("useChatSession reconnect replay", () => {
       botScenario: ref(""),
       connected: ref(true),
       ensureConnected: vi.fn(() => true),
-      authFetch: null,
+      authFetch: vi.fn(rejectUnexpectedRequest),
+      navigateToLastMessage: vi.fn(),
       isImageMime: () => false,
       notify: vi.fn(),
       clearUploadSelection: vi.fn(),
@@ -553,7 +528,6 @@ describe("useChatSession reconnect replay", () => {
       identity: {
         sessionId: "s-reconnect-user",
         parentSessionId: "p-reconnect",
-        parentDialogProcessId: "pdp-reconnect",
       },
     });
     expect("userId" in request).toBe(false);
@@ -658,7 +632,6 @@ describe("useChatSession reconnect replay", () => {
         identity: {
           sessionId: "workflow-session",
           parentSessionId: "",
-          parentDialogProcessId: "",
         },
         knownLifecycleSequenceMap: { "workflow-session": 1 },
       }),
@@ -723,6 +696,7 @@ describe("useChatSession reconnect replay", () => {
         connected: ref(true),
         ensureConnected: vi.fn(() => true),
         authFetch,
+        navigateToLastMessage: vi.fn(),
         isImageMime: () => false,
         notify,
         clearUploadSelection: vi.fn(),

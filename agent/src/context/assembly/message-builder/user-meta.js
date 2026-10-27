@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { HumanMessage } from "@langchain/core/messages";
-import { normalizeParentSessionId } from "@noobot/session-protocol";
+import { MESSAGE_ORIGIN, normalizeParentSessionId } from "@noobot/session-protocol";
 import { tEngine } from "../../../runtime/i18n-adapter.js";
 import { MESSAGE_ROLE } from "../../../bot/config/constants.js";
 import { getTransferAttachments } from "../../../transfer-adapter/storage/consumer.js";
@@ -87,8 +87,7 @@ export function buildHumanMessagesForUser(runtime = {}, msg = {}) {
 
 export function shouldBuildUserMetaForHistoryMessage(msg = {}) {
   if (resolveContextMessageRole(msg) !== MESSAGE_ROLE.USER) return false;
-  const messageOrigin = resolveContextMessageOrigin(msg);
-  if (messageOrigin !== "natural") return false;
+  if (resolveContextMessageOrigin(msg) !== MESSAGE_ORIGIN.NATURAL) return false;
   if (readContextMessageField(msg, "noobotInternalMessageType")) return false;
   const flags = resolveContextMessageFlags(msg);
   return !flags.injected && !flags.plugin;

@@ -30,6 +30,7 @@ import {
   applySessionMessageFacts,
   createTestSessionRequiredFields,
 } from "../helpers/session-message-facts.js";
+import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
 async function withTempDir(fn) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "noobot-attach-test-"));
@@ -652,8 +653,10 @@ test("AttachmentService.linkParsedResultToAttachment updates only the attachment
       messages: [
         {
           messageUid: "sm_attachment_source",
+          ts: TEST_MESSAGE_TS,
           sessionId: rootSessionId,
           role: "user",
+          messageOrigin: "natural",
           content: "test",
           dialogProcessId: "dialog-attachment-source",
           turnScopeId: "turn-attachment-source",

@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, isRef, nextTick, ref, watch } from "vue";
 import { createChatMessageScrollSync } from "../runtime/chatMessageScrollSync.js";
 import {
   closeChatMessageNavigator,
@@ -12,7 +12,7 @@ import {
 } from "../state/chatMessageNavigatorState.js";
 import { buildChatMessageNavItems } from "../state/chatMessageNavItemsState.js";
 import { selectTurnPresentations } from "../../modules/chat/runtime/engine/turnPresentation.js";
-import { text } from "@noobot/shared/value";
+import { requireFunctionDependencies } from "@noobot/shared/value";
 
 export function useChatMessageNavigatorPanel({
   activeSession,
@@ -26,34 +26,37 @@ export function useChatMessageNavigatorPanel({
   chatNavigatorPanel,
   pushPseudoRoute,
   replacePseudoRoute,
-} = {}) {
+}) {
+  requireFunctionDependencies("useChatMessageNavigatorPanel", {
+    translate,
+    shouldRenderMessageInChat,
+    pushPseudoRoute,
+    replacePseudoRoute,
+  });
+  if (!isRef(activeSession) || !isRef(activeSessionId)) {
+    throw new TypeError(
+      "useChatMessageNavigatorPanel requires activeSession and activeSessionId refs",
+    );
+  }
   const chatNavigatorVisible = ref(true);
   const mobileChatNavigatorVisible = ref(false);
   const currentMessageAnchorId = ref("");
 
-  const presentationMessages = computed(() =>
-    selectTurnPresentations({
-      activeSession: activeSession?.value || {},
-      workflowRegistry: workflowNodeStateRegistry.value,
-      turnRuntimeRegistry: turnRuntimeRegistry.value,
-    }),
-  );
-  const chatMessageNavItems = computed(() =>
-    buildChatMessageNavItems({
-      messages: presentationMessages.value,
+  const chatMessageNavItems = computed(() => {
+    const session = activeSession.value;
+    if (session === null) return [];
+    return buildChatMessageNavItems({
+      messages: selectTurnPresentations({
+        activeSession: session,
+        workflowRegistry: workflowNodeStateRegistry.value,
+        turnRuntimeRegistry: turnRuntimeRegistry.value,
+      }),
       shouldRenderMessageInChat,
-      getMessageAnchorId: messageListPanelRef?.value?.getMessageAnchorId,
-      translateSession: () => translate?.("common.session") || "session",
-      translateRole: (role) => {
-        if (role === "user") return "ME";
-        if (role === "assistant") return translate?.("message.ai") || "AI";
-        if (role === "tool") return translate?.("message.tool") || "Tool";
-        return "";
-      },
-    }),
-  );
+      translate,
+    });
+  });
 
-  function handleSelectChatMessageNavItem(item = {}) {
+  function handleSelectChatMessageNavItem(item) {
     selectChatMessageNavigatorItem({
       item,
       currentMessageAnchorId,
@@ -67,10 +70,9 @@ export function useChatMessageNavigatorPanel({
 
   function navigateToLastMessage() {
     nextTick(() => {
-      const items = Array.isArray(chatMessageNavItems.value) ? chatMessageNavItems.value : [];
-      const lastItem = items[items.length - 1] || null;
-      if (!text(lastItem?.id)) return;
-      handleSelectChatMessageNavItem(lastItem);
+      const items = chatMessageNavItems.value;
+      if (!items.length) return;
+      handleSelectChatMessageNavItem(items[items.length - 1]);
     });
   }
 
@@ -106,7 +108,7 @@ export function useChatMessageNavigatorPanel({
   );
 
   watch(
-    () => activeSessionId?.value,
+    () => activeSessionId.value,
     () => {
       currentMessageAnchorId.value = "";
       nextTick(bindChatMessageScrollSync);

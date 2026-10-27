@@ -10,10 +10,12 @@ import {
 } from "../../../chat/model/messageModel.js";
 import { isNewerSessionAggregateVersion } from "../../../chat/runtime/engine/sessionAggregateVersionManager.js";
 import { text } from "@noobot/shared/value";
+import { ROOT_PARENT_SESSION_ID } from "@noobot/agent-transport-protocol";
 
 export function createLocalSessionItem({ id, title, createConnectorPanelState }) {
   return {
     sessionId: id,
+    parentSessionId: ROOT_PARENT_SESSION_ID,
     title,
     isLocal: true,
     loaded: true,
@@ -27,6 +29,13 @@ export function createLocalSessionItem({ id, title, createConnectorPanelState })
     createdAt: nowIso(),
     updatedAt: nowIso(),
   };
+}
+
+function requireParentSessionId(item) {
+  if (typeof item.parentSessionId !== "string") {
+    throw new TypeError("session_summary_parent_session_id_required");
+  }
+  return item.parentSessionId;
 }
 
 export function mapSummaryToSession(item, { sessionTitleFromMessages, createConnectorPanelState }) {
@@ -57,6 +66,7 @@ export function mapSummaryToSession(item, { sessionTitleFromMessages, createConn
           }
         : null,
     sessionId: item.sessionId,
+    parentSessionId: requireParentSessionId(item),
     aggregateVersion: item.aggregateVersion,
     currentTaskId: item.currentTaskId || "",
     messageCount,

@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi, afterEach } from "vitest";
+import { API_REQUEST_ERROR_CODE } from "@noobot/shared/request-error";
+import { jsonResponse } from "../../helpers/jsonResponse.js";
 
 import {
   buildLogWebSocketUrl,
@@ -57,38 +59,47 @@ describe("getSessionExecutionReportApi", () => {
 
   it("returns the decoded payload on success", async () => {
     const payload = { ok: true, report: { status: "completed" } };
-    const fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => payload });
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse(payload));
     await expect(getSessionExecutionReportApi(identity, { fetcher })).resolves.toEqual(payload);
     expect(fetcher).toHaveBeenCalledWith(
       "/api/internal/session/u1/s1/execution-report?dialogProcessId=dp-1",
     );
   });
 
-  it("keeps server error, status and errorCode on failure", async () => {
-    const fetcher = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 409,
-      json: async () => ({ ok: false, error: "scope conflict", errorCode: "SCOPE_CONFLICT" }),
-    });
+  it("keeps server error, status and serverErrorCode on failure", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(
+          { ok: false, error: "scope conflict", errorCode: "SCOPE_CONFLICT" },
+          { status: 409 },
+        ),
+      );
     await expect(getSessionExecutionReportApi(identity, { fetcher })).rejects.toMatchObject({
+      code: API_REQUEST_ERROR_CODE.HTTP,
       message: "scope conflict",
       status: 409,
-      errorCode: "SCOPE_CONFLICT",
+      serverErrorCode: "SCOPE_CONFLICT",
+    });
+  });
+
+  it("reports a missing report as not_found", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ ok: false, error: "not found" }, { status: 404 }));
+    await expect(getSessionExecutionReportApi(identity, { fetcher })).rejects.toMatchObject({
+      code: API_REQUEST_ERROR_CODE.NOT_FOUND,
+      status: 404,
     });
   });
 
   it("keeps the HTTP status when the error body is not JSON", async () => {
-    const fetcher = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 502,
-      json: async () => {
-        throw new SyntaxError("Unexpected token <");
-      },
-    });
+    const fetcher = vi.fn().mockResolvedValue(new Response("<html>", { status: 502 }));
     await expect(getSessionExecutionReportApi(identity, { fetcher })).rejects.toMatchObject({
-      message: "execution_report_failed",
+      code: API_REQUEST_ERROR_CODE.HTTP,
+      message: "http 502",
       status: 502,
-      errorCode: "",
+      serverErrorCode: "",
     });
   });
 });

@@ -173,12 +173,15 @@ test("reconnect confirms a cached active lifecycle with the authoritative snapsh
         turnScopeId,
         presentationMessageId: "presentation-active-2",
         dialogProcessId: "dp-authoritative-running",
+        continuedByTurnScopeId: "",
         revision: 2,
         sequence: 2,
         state: "processing",
         startedAt: "2026-08-17T00:00:00.000Z",
       },
       recentTerminalTurns: [],
+      recovery: "none",
+      unchanged: false,
     }),
   });
   await reconnectPromise;
@@ -244,12 +247,15 @@ test("reconnect opens a query transport without replaying the stale run command"
             turnScopeId,
             presentationMessageId: "presentation-query-active-1",
             dialogProcessId: "dp-query-transport",
+            continuedByTurnScopeId: "",
             revision: 2,
             sequence: 2,
             state: "processing_failed",
             failure: { code: "service_restart_orphaned_turn" },
           },
         ],
+        recovery: "none",
+        unchanged: false,
       }),
     }),
   );
@@ -317,12 +323,15 @@ test("snapshot query completion cannot close a connection claimed by a concurren
           turnScopeId,
           presentationMessageId: "presentation-query-run-race",
           dialogProcessId: "dialog-query-run-race",
+          continuedByTurnScopeId: "",
           revision: 1,
           sequence: 1,
           state: "processing",
           startedAt: "2026-08-17T00:00:00.000Z",
         },
         recentTerminalTurns: [],
+        recovery: "none",
+        unchanged: false,
       }),
     }),
   );
@@ -386,12 +395,12 @@ test("reconnect confirms aggregated active lifecycle with one authoritative snap
   const sessionId = "session-multi-channel-active";
   const turnScopeId = "turn-multi-channel-active";
   const firstChannel = manager.ensureChannel(
-    createChannelKey({ userId: "user-1", sessionId, parentDialogProcessId: "parent-a" }),
-    { userId: "user-1", sessionId, parentDialogProcessId: "parent-a" },
+    createChannelKey({ userId: "user-1", sessionId, parentSessionId: "parent-a" }),
+    { userId: "user-1", sessionId, parentSessionId: "parent-a" },
   );
   const secondChannel = manager.ensureChannel(
-    createChannelKey({ userId: "user-1", sessionId, parentDialogProcessId: "parent-b" }),
-    { userId: "user-1", sessionId, parentDialogProcessId: "parent-b" },
+    createChannelKey({ userId: "user-1", sessionId, parentSessionId: "parent-b" }),
+    { userId: "user-1", sessionId, parentSessionId: "parent-b" },
   );
   manager.pushChannelEvent(
     firstChannel,
@@ -448,12 +457,15 @@ test("reconnect confirms aggregated active lifecycle with one authoritative snap
         turnScopeId,
         presentationMessageId: "presentation-multi-active-2",
         dialogProcessId: "dp-multi-active",
+        continuedByTurnScopeId: "",
         revision: 2,
         sequence: 2,
         state: "processing",
         startedAt: "2026-08-17T00:00:00.000Z",
       },
       recentTerminalTurns: [],
+      recovery: "none",
+      unchanged: false,
     }),
   });
   await reconnectPromise;
@@ -470,11 +482,11 @@ test("latest terminal lifecycle wins across channels of the same session", () =>
   const sessionId = "session-multi-channel-terminal";
   const turnScopeId = "turn-multi-channel-terminal";
   const activeChannel = manager.ensureChannel(
-    createChannelKey({ userId: "user-1", sessionId, parentDialogProcessId: "parent-active" }),
+    createChannelKey({ userId: "user-1", sessionId, parentSessionId: "parent-active" }),
     { userId: "user-1", sessionId },
   );
   const terminalChannel = manager.ensureChannel(
-    createChannelKey({ userId: "user-1", sessionId, parentDialogProcessId: "parent-terminal" }),
+    createChannelKey({ userId: "user-1", sessionId, parentSessionId: "parent-terminal" }),
     { userId: "user-1", sessionId },
   );
   for (const [channel, envelope] of [

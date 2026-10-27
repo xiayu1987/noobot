@@ -3,11 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  isAutoResolvedInteraction,
-  normalizeInteractionRequestPayload,
-} from "../runtime/interactionPayload.js";
-import { tryAutoResolveReconnectInteraction } from "../runtime/reconnect/interactionHandlers.js";
 import { applyReconnectDataReplay } from "../runtime/reconnect/reconnectDataReplay.js";
 import { applyReconnectEventReplay } from "../runtime/reconnect/reconnectEventReplay.js";
 
@@ -26,7 +21,7 @@ import {
   summarizeStateMachineMessage,
 } from "../../debug/loggers/stateMachineLogger.js";
 import { renderActiveSessionBeforeReplay } from "../runtime/reconnect/hydrationReplay.js";
-import { applyReconnectInteractionRequest } from "../runtime/reconnect/interactionReplay.js";
+import { reduceInteractionRequest } from "../runtime/interactionPayload.js";
 import { handleAttachmentLifecycleStreamEvent } from "../runtime/engine/streamHandlers.js";
 import { routeRuntimeStreamEvent } from "../../../extensions/runtime-stream-router.js";
 import { text, isFunction } from "@noobot/shared/value";
@@ -35,7 +30,6 @@ import { scopeSessionLogRecord } from "../../debug/loggers/lazyDebugSink.js";
 export function useReconnectReplay({
   sessions,
   activeSession,
-  interactionSubmitting,
   chatList,
   findMessageByViewKey,
   findMessagesByPresentationId,
@@ -43,7 +37,6 @@ export function useReconnectReplay({
   makeViewAttachments,
   clearPendingInteraction,
   setPendingInteractionRequest,
-  isInteractionRequestHandled,
   sessionLogWebSocketClient,
   turnRuntimeRegistry,
   applyTurnLifecycleEnvelope,
@@ -63,16 +56,6 @@ export function useReconnectReplay({
       sessionId,
       turnScopeId,
     });
-
-  function tryAutoResolveInteraction(rawRequest = {}) {
-    return tryAutoResolveReconnectInteraction({
-      rawRequest,
-      interactionSubmitting,
-      normalizeInteractionRequestPayload,
-      isAutoResolvedInteraction,
-      clearPendingInteraction,
-    });
-  }
 
   function isCurrentActiveSession(sessionId) {
     return isCurrentActiveSessionWithContext(activeSession.value, sessionId);
@@ -120,13 +103,9 @@ export function useReconnectReplay({
       hydrateActiveSessionBeforeReplay,
       applyTurnLifecycleEnvelope,
       applyTurnLifecycleSnapshot,
-      applyPendingInteraction: (interaction, { channelSessionId } = {}) =>
-        applyReconnectInteractionRequest({
-          eventData: interaction,
+      applyPendingInteraction: (interaction, { channelSessionId }) =>
+        reduceInteractionRequest(interaction, {
           channelSessionId,
-          normalizeInteractionRequestPayload,
-          tryAutoResolveInteraction,
-          isInteractionRequestHandled,
           setPendingInteractionRequest,
           clearPendingInteraction,
         }),
@@ -242,10 +221,11 @@ export function useReconnectReplay({
     });
   }
 
-  async function applyReconnectEvent(event, data) {
+  async function applyReconnectEvent(event, data, { channelSessionId } = {}) {
     return applyReconnectEventReplay({
       event,
       data,
+      channelSessionId,
       replayCache,
       isCurrentActiveSession,
       consumeReplayCacheForSession,
@@ -260,12 +240,9 @@ export function useReconnectReplay({
           ...context,
           logRuntimeProjectionDiagnostics: logWorkflowDiagnostics,
         }),
-      applyPendingInteraction: (interaction) =>
-        applyReconnectInteractionRequest({
-          eventData: interaction,
-          normalizeInteractionRequestPayload,
-          tryAutoResolveInteraction,
-          isInteractionRequestHandled,
+      applyPendingInteraction: (interaction, { channelSessionId }) =>
+        reduceInteractionRequest(interaction, {
+          channelSessionId,
           setPendingInteractionRequest,
           clearPendingInteraction,
         }),

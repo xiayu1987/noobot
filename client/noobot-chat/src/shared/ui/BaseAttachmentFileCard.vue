@@ -59,14 +59,10 @@ const showPluginBadge = computed(
 );
 const showAgentBadge = computed(() => props.badgeMode === "auto" && ownerType.value === "agent");
 const showCustomBadge = computed(() => Boolean(text(props.customBadgeText)));
-const hasParsedResult = computed(
-  () =>
-    props.showParsedResult &&
-    Boolean(resolveParsedResultAccessMeta(props.attachmentItem, { userId: props.userId })),
-);
 const parsedResultAccess = computed(() =>
   resolveParsedResultAccessMeta(props.attachmentItem, { userId: props.userId }),
 );
+const hasParsedResult = computed(() => props.showParsedResult && Boolean(parsedResultAccess.value));
 const parsedResultPreviewEnabled = computed(
   () =>
     hasParsedResult.value &&

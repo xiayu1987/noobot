@@ -10,6 +10,7 @@ import {
   makeTurnReplacementResponse,
 } from "../helpers/useChatEngineHarness.js";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
+import { NO_ATTACHMENT_EDITS } from "../../../helpers/resendEdits.js";
 
 describe("useChatEngine.resend failure rollback", () => {
   it("resendMonotonicMessage fails without delete/send fallback when replace-turn is unsupported", async () => {
@@ -46,9 +47,9 @@ describe("useChatEngine.resend failure rollback", () => {
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
 
-    await expect(engine.resendMonotonicMessage(target, "edited through fallback")).resolves.toBe(
-      false,
-    );
+    await expect(
+      engine.resendMonotonicMessage(target, "edited through fallback", NO_ATTACHMENT_EDITS),
+    ).resolves.toBe(false);
 
     expect(replaceSessionTurnApi).toHaveBeenCalledTimes(1);
     expect(deleteSessionMessagesFromApi).not.toHaveBeenCalled();
@@ -96,9 +97,9 @@ describe("useChatEngine.resend failure rollback", () => {
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
 
-    await expect(engine.resendMonotonicMessage(target, "edited after route 404")).resolves.toBe(
-      false,
-    );
+    await expect(
+      engine.resendMonotonicMessage(target, "edited after route 404", NO_ATTACHMENT_EDITS),
+    ).resolves.toBe(false);
 
     expect(replaceSessionTurnApi).toHaveBeenCalledTimes(1);
     expect(deleteSessionMessagesFromApi).not.toHaveBeenCalled();
@@ -132,7 +133,9 @@ describe("useChatEngine.resend failure rollback", () => {
     activeSession.value.lastMessage = target;
     input.value = "draft before conflict";
 
-    await expect(engine.resendMonotonicMessage(target, "edited conflict")).resolves.toBe(false);
+    await expect(
+      engine.resendMonotonicMessage(target, "edited conflict", NO_ATTACHMENT_EDITS),
+    ).resolves.toBe(false);
 
     expect(replaceSessionTurnApi).toHaveBeenCalledTimes(1);
     expect(deleteSessionMessagesFromApi).not.toHaveBeenCalled();
@@ -171,7 +174,9 @@ describe("useChatEngine.resend failure rollback", () => {
     activeSession.value.messages = [oldUser, oldAssistant];
     activeSession.value.rawMessages = [oldUser, oldAssistant];
 
-    await expect(engine.resendMonotonicMessage(oldAssistant, "edited")).resolves.toBe(false);
+    await expect(
+      engine.resendMonotonicMessage(oldAssistant, "edited", NO_ATTACHMENT_EDITS),
+    ).resolves.toBe(false);
 
     expect(stream).not.toHaveBeenCalled();
     expect(activeSession.value.messages).toEqual([oldUser, oldAssistant]);
@@ -224,7 +229,9 @@ describe("useChatEngine.resend failure rollback", () => {
     activeSession.value.messages = [{ ...staleFirst }, { ...staleTarget }];
     activeSession.value.rawMessages = [{ ...staleFirst }, { ...staleTarget }];
 
-    await expect(engine.resendMonotonicMessage(staleTarget, "repeat")).resolves.toBe(false);
+    await expect(
+      engine.resendMonotonicMessage(staleTarget, "repeat", NO_ATTACHMENT_EDITS),
+    ).resolves.toBe(false);
 
     expect(deleteSessionMessagesFromApi).not.toHaveBeenCalled();
     expect(stream).not.toHaveBeenCalled();
@@ -286,7 +293,9 @@ describe("useChatEngine.resend failure rollback", () => {
     activeSession.value.updatedAt = "before";
     input.value = "draft before resend";
 
-    await expect(engine.resendMonotonicMessage(target, "edited retry text")).resolves.toBe(false);
+    await expect(
+      engine.resendMonotonicMessage(target, "edited retry text", NO_ATTACHMENT_EDITS),
+    ).resolves.toBe(false);
 
     expect(stream).toHaveBeenCalledTimes(1);
     expect(activeSession.value.messages[0]).toEqual(

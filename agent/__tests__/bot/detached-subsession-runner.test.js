@@ -290,7 +290,7 @@ test("detached sub-session transfers canonical parent attachments into child own
     },
     async ingest(payload) {
       assert.equal(payload.sessionId, "sub1");
-      assert.equal(payload.attachments[0].clientAttachmentId, "session-transfer:parent-attachment");
+      assert.equal(Object.hasOwn(payload.attachments[0], "clientAttachmentId"), false);
       assert.equal(
         payload.attachments[0].contentBase64,
         Buffer.from("attachment body", "utf8").toString("base64"),

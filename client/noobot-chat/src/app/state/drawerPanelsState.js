@@ -3,8 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { getThinkingDetailsCount } from "./thinkingDetailsState.js";
-
 export function buildAppShellDrawerPanels({
   translate,
   workspaceVisible,
@@ -16,7 +14,7 @@ export function buildAppShellDrawerPanels({
   ThinkingPanel,
   ConfigParamsPanel,
   userId,
-  apiKey,
+  fetcher,
   connected,
   isSuperAdmin,
   thinkingDetailsMessageItem,
@@ -24,65 +22,61 @@ export function buildAppShellDrawerPanels({
   thinkingDetailsRuntime,
   getThinkingDetailsTitle,
   handleWorkspaceReset,
-} = {}) {
-  const t = typeof translate === "function" ? translate : (key) => key;
-  const messageItem = thinkingDetailsMessageItem || {};
-  const resolveThinkingTitle =
-    typeof getThinkingDetailsTitle === "function"
-      ? getThinkingDetailsTitle
-      : (item) => t("message.thinkingDetails", { count: getThinkingDetailsCount(item) });
-
+}) {
   return [
     {
       key: "workspace",
       model: workspaceVisible,
-      title: t("common.workspace"),
+      title: translate("common.workspace"),
       component: WorkspacePanel,
       props: {
         userId,
-        apiKey,
+        fetcher,
         connected,
         active: Boolean(workspaceVisible?.value),
         isSuperAdmin,
       },
-      onWorkspaceReset: handleWorkspaceReset,
+      listeners: { "workspace-reset": handleWorkspaceReset },
     },
     {
       key: "user-settings",
       model: userSettingsVisible,
-      title: t("common.userSettings"),
+      title: translate("common.userSettings"),
       component: UserSettingsPanel,
       props: {
-        apiKey,
+        fetcher,
         connected,
         active: Boolean(userSettingsVisible?.value),
       },
+      listeners: {},
     },
     {
       key: "thinking-details",
       model: thinkingDetailsVisible,
-      title: resolveThinkingTitle(messageItem),
+      title: getThinkingDetailsTitle(thinkingDetailsMessageItem),
       component: ThinkingPanel,
       props: {
-        messageItem,
-        allMessages: thinkingDetailsAllMessages || [],
-        runtime: thinkingDetailsRuntime || null,
+        messageItem: thinkingDetailsMessageItem,
+        allMessages: thinkingDetailsAllMessages,
+        runtime: thinkingDetailsRuntime,
         variant: "details",
         userId,
       },
+      listeners: {},
     },
     {
       key: "config-params",
       model: configParamsVisible,
-      title: t("common.configParams"),
+      title: translate("common.configParams"),
       component: ConfigParamsPanel,
       props: {
         userId,
         isSuperAdmin,
-        apiKey,
+        fetcher,
         connected,
         active: Boolean(configParamsVisible?.value),
       },
+      listeners: {},
     },
   ];
 }

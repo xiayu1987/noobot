@@ -8,12 +8,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { normalizeMessageEntity } from "../../src/session/entities.js";
+import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
 test("normalizeMessageEntity preserves the canonical internal control message type", () => {
   const normalized = normalizeMessageEntity({
     sessionId: "s_fixture",
     messageUid: "sm_fixture_17",
+    ts: TEST_MESSAGE_TS,
     role: "user",
+    injectedMessage: true,
     type: "context_control",
     chatPresentation: false,
     content: "checkpoint",
@@ -48,6 +51,7 @@ test("normalizeMessageEntity persists assistant protocol blocks but not diagnost
   const normalized = normalizeMessageEntity({
     sessionId: "s_fixture",
     messageUid: "sm_fixture_19",
+    ts: TEST_MESSAGE_TS,
     modelMessageId: "mm_fixture_19",
     role: "assistant",
     presentationMessageId: "pm_fx1",
@@ -113,6 +117,7 @@ test("normalizeMessageEntity persists compact transferEnvelopes", () => {
   const normalized = normalizeMessageEntity({
     sessionId: "s_fixture",
     messageUid: "sm_fixture_20",
+    ts: TEST_MESSAGE_TS,
     modelMessageId: "mm_fixture_20",
     role: "assistant",
     presentationMessageId: "pm_fx2",
@@ -133,6 +138,7 @@ test("normalizeMessageEntity rejects invalid transferEnvelopes", () => {
       normalizeMessageEntity({
         sessionId: "s_fixture",
         messageUid: "sm_fixture_21",
+        ts: TEST_MESSAGE_TS,
         modelMessageId: "mm_fixture_21",
         role: "assistant",
         presentationMessageId: "pm_fx3",
@@ -143,23 +149,27 @@ test("normalizeMessageEntity rejects invalid transferEnvelopes", () => {
   );
 });
 
-test("normalizeMessageEntity omits empty attachments", () => {
+test("normalizeMessageEntity always projects attachments as an array", () => {
   const withoutAttachments = normalizeMessageEntity({
     sessionId: "s_fixture",
     messageUid: "sm_fixture_22",
+    ts: TEST_MESSAGE_TS,
     role: "user",
+    messageOrigin: "natural",
     content: "hello",
   });
   const withEmptyAttachments = normalizeMessageEntity({
     sessionId: "s_fixture",
     messageUid: "sm_fixture_23",
+    ts: TEST_MESSAGE_TS,
     role: "user",
+    messageOrigin: "natural",
     content: "hello",
     attachments: [],
   });
 
-  assert.equal("attachments" in withoutAttachments, false);
-  assert.equal("attachments" in withEmptyAttachments, false);
+  assert.deepEqual(withoutAttachments.attachments, []);
+  assert.deepEqual(withEmptyAttachments.attachments, []);
 });
 
 test("normalizeMessageEntity preserves compact non-empty attachments", () => {
@@ -177,7 +187,9 @@ test("normalizeMessageEntity preserves compact non-empty attachments", () => {
   const normalized = normalizeMessageEntity({
     sessionId: "s_fixture",
     messageUid: "sm_fixture_24",
+    ts: TEST_MESSAGE_TS,
     role: "user",
+    messageOrigin: "natural",
     content: "see attachment",
     attachments,
   });
@@ -203,7 +215,9 @@ test("normalizeMessageEntity preserves user attachment source fields for history
   const normalized = normalizeMessageEntity({
     sessionId: "s_fixture",
     messageUid: "sm_fixture_25",
+    ts: TEST_MESSAGE_TS,
     role: "user",
+    messageOrigin: "natural",
     content: "see attachment",
     attachments: [
       {
@@ -243,6 +257,7 @@ test("normalizeMessageEntity preserves message-scoped user identity for history 
   const normalized = normalizeMessageEntity({
     role: "user",
     messageUid: "sm_history",
+    ts: TEST_MESSAGE_TS,
     content: "hello",
     userName: "admin",
     sessionId: "session-history",
@@ -267,27 +282,29 @@ test("normalizeMessageEntity ignores legacy attachment mirror fields", () => {
   const camelAttachments = [{ attachmentId: "att_camel", filename: "camel.txt" }];
   const snakeAttachments = [{ attachmentId: "att_snake", filename: "snake.txt" }];
 
-  assert.equal(
-    "attachments" in
-      normalizeMessageEntity({
-        sessionId: "s_fixture",
-        messageUid: "sm_fixture_27",
-        role: "user",
-        content: "camel",
-        attachmentMetas: camelAttachments,
-      }),
-    false,
+  assert.deepEqual(
+    normalizeMessageEntity({
+      sessionId: "s_fixture",
+      messageUid: "sm_fixture_27",
+      ts: TEST_MESSAGE_TS,
+      role: "user",
+      messageOrigin: "natural",
+      content: "camel",
+      attachmentMetas: camelAttachments,
+    }).attachments,
+    [],
   );
-  assert.equal(
-    "attachments" in
-      normalizeMessageEntity({
-        sessionId: "s_fixture",
-        messageUid: "sm_fixture_28",
-        role: "user",
-        content: "snake",
-        attachment_metas: snakeAttachments,
-      }),
-    false,
+  assert.deepEqual(
+    normalizeMessageEntity({
+      sessionId: "s_fixture",
+      messageUid: "sm_fixture_28",
+      ts: TEST_MESSAGE_TS,
+      role: "user",
+      messageOrigin: "natural",
+      content: "snake",
+      attachment_metas: snakeAttachments,
+    }).attachments,
+    [],
   );
 });
 
@@ -295,6 +312,7 @@ test("normalizeMessageEntity drops thinking timing fields owned by turn facts", 
   const normalized = normalizeMessageEntity({
     sessionId: "s_fixture",
     messageUid: "sm_fixture_29",
+    ts: TEST_MESSAGE_TS,
     modelMessageId: "mm_fixture_29",
     role: "assistant",
     presentationMessageId: "pm_fx4",

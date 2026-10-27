@@ -5,73 +5,50 @@
  */
 import { RoleEnum } from "../../modules/chat/model/chatConstants.js";
 import { getMessageRole } from "../../modules/chat/model/messageIdentity.js";
-import { text } from "@noobot/shared/value";
+import { getMessageAnchorId } from "../../modules/chat/model/messageAnchor.js";
+import { requireFunctionDependencies } from "@noobot/shared/value";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
-export function normalizeChatMessageNavContent(messageItem = {}) {
-  return String(messageItem?.content || messageItem?.text || "")
-    .replace(/\s+/g, " ")
-    .trim();
+const ROLE_LABEL_KEYS = Object.freeze({
+  [RoleEnum.USER]: "message.me",
+  [RoleEnum.ASSISTANT]: "message.ai",
+  [RoleEnum.TOOL]: "message.tool",
+});
+
+const UNCLASSIFIED_ROLE_LABEL_KEY = "common.session";
+
+export function resolveChatMessageNavRoleLabelKey(role) {
+  return Object.hasOwn(ROLE_LABEL_KEYS, role) ? ROLE_LABEL_KEYS[role] : UNCLASSIFIED_ROLE_LABEL_KEY;
 }
 
-export function resolveChatMessageNavRoleLabel(
-  role = "",
-  { translateRole, fallbackRole = "session" } = {},
-) {
-  const normalizedRole = text(role).toLowerCase();
-  if (normalizedRole === RoleEnum.USER) return "ME";
-  if (normalizedRole === RoleEnum.ASSISTANT) return "AI";
-  if (normalizedRole === RoleEnum.TOOL) return "Tool";
-  if (typeof translateRole === "function") {
-    const translatedRole = text(translateRole(normalizedRole));
-    if (translatedRole) return translatedRole;
+export function normalizeChatMessageNavContent(messageItem) {
+  if (typeof messageItem.content !== "string") {
+    throw new TypeError("chat_message_nav_content_not_string");
   }
-  return fallbackRole;
+  return messageItem.content.replace(/\s+/g, " ").trim();
 }
 
-export function buildChatMessageNavItem({
-  messageItem = {},
-  messageIndex = 0,
-  getMessageAnchorId,
-  translateSession,
-  translateRole,
-} = {}) {
-  const anchorId =
-    typeof getMessageAnchorId === "function" ? getMessageAnchorId(messageItem, messageIndex) : "";
-  const fallbackRole = typeof translateSession === "function" ? translateSession() : "session";
+export function buildChatMessageNavItem({ messageItem, messageIndex, translate }) {
+  requireFunctionDependencies("buildChatMessageNavItem", { translate });
   const role = getMessageRole(messageItem);
-  const roleLabel = resolveChatMessageNavRoleLabel(role, { translateRole, fallbackRole });
+  const roleLabel = translate(resolveChatMessageNavRoleLabelKey(role));
   const content = normalizeChatMessageNavContent(messageItem);
-  const preview = content ? content.slice(0, 28) : "";
   return {
-    id: anchorId || `chat-message-${messageIndex}`,
+    id: getMessageAnchorId(messageItem, messageIndex),
     role,
     roleLabel,
     content,
-    preview,
+    preview: content.slice(0, LENGTH_THRESHOLDS.clientPreview.chatMessageNavChars),
     title: `${messageIndex + 1}. ${roleLabel}${content ? `：${content}` : ""}`,
   };
 }
 
-export function buildChatMessageNavItems({
-  messages = [],
-  shouldRenderMessageInChat,
-  getMessageAnchorId,
-  translateSession,
-  translateRole,
-} = {}) {
-  if (!Array.isArray(messages)) return [];
-  const canRender =
-    typeof shouldRenderMessageInChat === "function" ? shouldRenderMessageInChat : () => true;
-  return messages
-    .map((messageItem = {}, messageIndex = 0) => {
-      if (!canRender(messageItem)) return null;
-      return buildChatMessageNavItem({
-        messageItem,
-        messageIndex,
-        getMessageAnchorId,
-        translateSession,
-        translateRole,
-      });
-    })
-    .filter(Boolean);
+export function buildChatMessageNavItems({ messages, shouldRenderMessageInChat, translate }) {
+  requireFunctionDependencies("buildChatMessageNavItems", { shouldRenderMessageInChat, translate });
+  if (!Array.isArray(messages)) throw new TypeError("chat_message_nav_messages_not_array");
+  return messages.flatMap((messageItem, messageIndex) =>
+    shouldRenderMessageInChat(messageItem)
+      ? [buildChatMessageNavItem({ messageItem, messageIndex, translate })]
+      : [],
+  );
 }

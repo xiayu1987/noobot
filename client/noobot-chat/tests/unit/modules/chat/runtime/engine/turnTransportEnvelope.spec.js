@@ -19,8 +19,62 @@ import {
   TURN_PHASE,
   TURN_STATE,
 } from "@noobot/session-protocol";
+import { AGENT_TRANSPORT_NON_ENVELOPE_EVENT_KIND } from "@noobot/agent-transport-protocol";
+
+const committedReceipt = () => ({
+  sessionId: "session-1",
+  aggregateVersion: 1,
+  dialogProcessId: "dialog-1",
+  turnScopeId: "client-turn:1",
+  userMessage: {
+    messageUid: "sm_1",
+    userMessageId: "frontend-user-1",
+    role: "user",
+    sessionId: "session-1",
+    dialogProcessId: "dialog-1",
+    turnScopeId: "client-turn:1",
+    content: "hello",
+    attachments: [],
+  },
+});
 
 describe("turnTransportEnvelope", () => {
+  it("admits a protocol-valid session receipt as a classified non-envelope event", () => {
+    const receipt = committedReceipt();
+
+    const normalized = normalizeTurnTransportEnvelope({ event: "turn_committed", data: receipt });
+
+    expect(normalized).toMatchObject({
+      data: receipt,
+      protocolEnvelope: null,
+      nonEnvelopeKind: AGENT_TRANSPORT_NON_ENVELOPE_EVENT_KIND.SESSION_RECEIPT,
+      rejected: null,
+    });
+  });
+
+  it("rejects an invalid session receipt at the entry with protocol validation errors", () => {
+    const receipt = committedReceipt();
+    delete receipt.userMessage;
+
+    const normalized = normalizeTurnTransportEnvelope({ event: "turn_committed", data: receipt });
+
+    expect(normalized.data).toBeNull();
+    expect(normalized.nonEnvelopeKind).toBe(
+      AGENT_TRANSPORT_NON_ENVELOPE_EVENT_KIND.SESSION_RECEIPT,
+    );
+    expect(normalized.rejected.errors).toEqual(["user_message_missing"]);
+  });
+
+  it("rejects an attachment binding receipt that carries no attachments", () => {
+    const normalized = normalizeTurnTransportEnvelope({
+      event: "turn_attachments_bound",
+      data: committedReceipt(),
+    });
+
+    expect(normalized.data).toBeNull();
+    expect(normalized.rejected.errors).toEqual(["user_message_attachments_missing"]);
+  });
+
   it("rejects invalid protocol envelopes at the transport entry", () => {
     const envelope = canonicalMessageEvent({
       eventId: "event-1",

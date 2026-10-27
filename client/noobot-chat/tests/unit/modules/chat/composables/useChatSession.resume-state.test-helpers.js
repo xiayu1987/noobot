@@ -5,11 +5,12 @@
  */
 import { vi } from "vitest";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
+import { jsonResponse } from "../../../helpers/jsonResponse.js";
 import { terminalStatusFixture } from "../helpers/terminalStatusFixture.js";
 
 export function detailResponse(options) {
   const payload = detailPayload(options);
-  return { ok: true, json: async () => payload };
+  return jsonResponse(payload);
 }
 
 export function detailPayload({ sessionId, dialogProcessId, turnScopeId, turnLifecycleSnapshot }) {
@@ -22,9 +23,21 @@ export function detailPayload({ sessionId, dialogProcessId, turnScopeId, turnLif
       {
         sessionId,
         ...(turnLifecycleSnapshot ? { turnLifecycleSnapshot } : {}),
+        turnTimings: [],
         messages: [
-          { role: RoleEnum.USER, content: "question", turnScopeId },
-          { role: RoleEnum.ASSISTANT, content: "answer", dialogProcessId, turnScopeId },
+          {
+            role: RoleEnum.USER,
+            messageUid: `user-${turnScopeId}`,
+            content: "question",
+            turnScopeId,
+          },
+          {
+            role: RoleEnum.ASSISTANT,
+            presentationMessageId: `msg-${turnScopeId}`,
+            content: "answer",
+            dialogProcessId,
+            turnScopeId,
+          },
         ],
       },
     ],
@@ -118,6 +131,6 @@ export function terminalResolution({
 export function routeAwareFetcher({ detail, terminal }) {
   return vi.fn(async (url) => {
     const payload = String(url).includes("/terminal") ? terminal : detail;
-    return { ok: true, json: async () => payload };
+    return jsonResponse(payload);
   });
 }

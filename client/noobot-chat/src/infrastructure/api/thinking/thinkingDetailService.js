@@ -3,38 +3,27 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import {
+  API_REQUEST_ERROR_CODE,
+  ApiRequestError,
+  readApiResponseEnvelope,
+} from "@noobot/shared/request-error";
 import { getSessionThinkingDetailApi } from "../chat/chatApi.js";
-
-export const THINKING_DETAIL_NOT_FOUND = "thinking_detail_not_found";
-export const THINKING_DETAIL_REQUEST_FAILED = "thinking_detail_request_failed";
-
-let authenticatedFetcher = null;
-
-function assertThinkingDetailPayload(data) {
-  const payload = data || {};
-  if (payload.ok && payload.exists) return payload;
-  const error = new Error(payload.error || "thinking detail not found");
-  if (payload.ok) error.code = THINKING_DETAIL_NOT_FOUND;
-  error.serverMessage = String(payload.error || "");
-  throw error;
-}
+import { requireAuthenticatedFetcher } from "../../http/authenticatedHttpService.js";
 
 export const thinkingDetailService = Object.freeze({
-  configure({ fetcher = null } = {}) {
-    authenticatedFetcher = typeof fetcher === "function" ? fetcher : null;
-  },
-  async getDetail({ userId = "", sessionId = "", dialogProcessId = "", turnScopeId = "" } = {}) {
+  async getDetail({ userId, sessionId, dialogProcessId, turnScopeId }) {
     const response = await getSessionThinkingDetailApi(
       { userId, sessionId, dialogProcessId, turnScopeId },
-      authenticatedFetcher ? { fetcher: authenticatedFetcher } : {},
+      { fetcher: requireAuthenticatedFetcher() },
     );
-    if (!response?.ok) {
-      const status = response?.status || 500;
-      const error = new Error(`failed to load thinking detail: ${status}`);
-      error.code = THINKING_DETAIL_REQUEST_FAILED;
-      error.status = status;
-      throw error;
+    const payload = await readApiResponseEnvelope(response);
+    if (payload.exists !== true) {
+      throw new ApiRequestError("thinking detail not found", {
+        code: API_REQUEST_ERROR_CODE.NOT_FOUND,
+        status: response.status,
+      });
     }
-    return assertThinkingDetailPayload(await response.json());
+    return payload;
   },
 });

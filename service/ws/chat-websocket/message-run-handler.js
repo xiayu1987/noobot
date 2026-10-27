@@ -8,6 +8,7 @@ import {
   createTurnLifecycleCommandId,
   isTurnLifecycleRejectedError,
 } from "@noobot/session-protocol";
+import { ROOT_PARENT_DIALOG_PROCESS_ID } from "@noobot/agent-transport-protocol";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import {
   consumeUserInterjections,
@@ -128,7 +129,7 @@ async function executeAcceptedRun(context, run, accepted, active) {
     parentSessionId: run.parentSessionId,
     persistenceScope: context.persistenceScope,
     dialogProcessId: run.dialogProcessId,
-    parentDialogProcessId: run.parentDialogProcessId,
+    parentDialogProcessId: ROOT_PARENT_DIALOG_PROCESS_ID,
     turnScopeId: run.turnScopeId,
     caller: SESSION_CALLER.USER,
     message: run.message,

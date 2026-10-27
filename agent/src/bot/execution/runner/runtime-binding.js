@@ -20,12 +20,6 @@ import { appendUserInterjectionMessage } from "../../../runtime/turn/turn-contex
 import { text, isObjectLike } from "@noobot/shared/value";
 import { projectWorkflowNodeOwnership } from "@noobot/session-protocol/execution-lifecycle";
 
-function projectPresentationAttachments(attachments) {
-  return Array.isArray(attachments)
-    ? attachments.map((attachment = {}) => ({ ...attachment }))
-    : [];
-}
-
 function projectUserPresentationMessage({
   currentUserMessage,
   sessionId,
@@ -35,19 +29,19 @@ function projectUserPresentationMessage({
   turnScopeId,
 }) {
   return {
-    messageUid: text(currentUserMessage?.messageUid),
-    userMessageId: text(currentUserMessage?.userMessageId),
+    messageUid: currentUserMessage.messageUid,
+    userMessageId: currentUserMessage.userMessageId,
     sessionId,
     parentSessionId,
     dialogProcessId,
     parentDialogProcessId,
     turnScopeId,
     role: "user",
-    type: text(currentUserMessage?.type) || "message",
-    content: String(currentUserMessage?.content || ""),
-    attachments: projectPresentationAttachments(currentUserMessage?.attachments),
-    messageOrigin: text(currentUserMessage?.messageOrigin).toLowerCase(),
-    ts: currentUserMessage?.ts,
+    type: currentUserMessage.type,
+    content: currentUserMessage.content,
+    attachments: currentUserMessage.attachments.map((attachment) => ({ ...attachment })),
+    messageOrigin: currentUserMessage.messageOrigin,
+    ts: currentUserMessage.ts,
   };
 }
 
@@ -82,8 +76,7 @@ export async function bindAgentDispatchRuntime({
 
   dispatchRuntime.eventListener = eventListener;
   dispatchRuntime.systemRuntime.sessionDir = text(sessionDir);
-  dispatchRuntime.currentUserMessageUid = text(currentUserMessage?.messageUid);
-  dispatchRuntime.currentUserMessageOrigin = text(currentUserMessage?.messageOrigin).toLowerCase();
+  dispatchRuntime.currentUserMessage = currentUserMessage;
   dispatchRuntime.userInterjectionPort = userInterjectionPort;
 
   initializeAgentModelHost({

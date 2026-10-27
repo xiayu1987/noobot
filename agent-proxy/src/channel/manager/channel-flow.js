@@ -93,7 +93,6 @@ class ChannelFlowMethods {
       userId: socket.__agentProxyUserId,
       sessionId: identity.sessionId,
       parentSessionId: identity.parentSessionId,
-      parentDialogProcessId: identity.parentDialogProcessId,
     });
     return { routeSource: "channel_key", channel: this.channelStore.get(channelKey) ?? null };
   }
@@ -223,7 +222,6 @@ class ChannelFlowMethods {
       userId,
       sessionId,
       parentSessionId: identity.parentSessionId,
-      parentDialogProcessId: identity.parentDialogProcessId,
     });
     const channel = this.ensureChannel(channelKey, payload);
 

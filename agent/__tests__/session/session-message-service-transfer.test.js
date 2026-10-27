@@ -247,7 +247,13 @@ test("SessionMessageService.deleteFromMessage prunes orphan turnTimings", async 
         turnScopeId: "turn-keep",
         dialogProcessId: "dp-keep",
       },
-      { role: "user", content: "hi", turnScopeId: "turn-delete", dialogProcessId: "dp-delete" },
+      {
+        role: "user",
+        messageOrigin: "natural",
+        content: "hi",
+        turnScopeId: "turn-delete",
+        dialogProcessId: "dp-delete",
+      },
     ],
     turnTimings: [
       {
@@ -310,6 +316,7 @@ test("SessionMessageService.replaceTurn prunes replaced turnTimings", async () =
       {
         sessionId: "s1",
         role: "user",
+        messageOrigin: "natural",
         content: "keep",
         turnScopeId: "turn-keep",
         dialogProcessId: "dp-keep",

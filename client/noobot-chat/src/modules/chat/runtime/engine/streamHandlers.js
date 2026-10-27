@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { StreamEventEnum } from "../../model/chatConstants.js";
-import { getMessageRole, getMessageTurnScopeId } from "../../model/messageIdentity.js";
-import { normalizeTrimmedString } from "./utils.js";
+import { getMessageRole } from "../../model/messageIdentity.js";
 import {
   attachmentIdentityKey,
   ATTACHMENT_EVENT_TYPE,
@@ -13,16 +12,8 @@ import {
   projectAttachmentIdentity,
   reduceAttachmentLifecycle,
 } from "@noobot/attachment-protocol";
-import {
-  isTerminalInteraction,
-  normalizeInteractionRequestPayload,
-} from "../interactionPayload.js";
+import { reduceInteractionRequest } from "../interactionPayload.js";
 import { text } from "@noobot/shared/value";
-
-function markFirstStreamEvent(botMessage) {
-  if (!botMessage) return;
-  botMessage.hasFirstStreamEvent = true;
-}
 
 function canonicalAttachmentProjectionKey(attachment = {}) {
   const attachmentId = text(attachment?.attachmentId);
@@ -34,18 +25,6 @@ function canonicalAttachmentProjectionKey(attachment = {}) {
   return "";
 }
 
-function handleAttachmentsStreamEvent({
-  data,
-  botMessage,
-  mergeAssistantAttachments,
-  navigateOnFirstResponseOnce,
-}) {
-  markFirstStreamEvent(botMessage);
-  if (!getMessageTurnScopeId(botMessage)) return;
-  mergeAssistantAttachments(botMessage, data?.attachments || []);
-  navigateOnFirstResponseOnce?.();
-}
-
 export function handleAttachmentLifecycleStreamEvent({
   data,
   activeSession,
@@ -53,8 +32,8 @@ export function handleAttachmentLifecycleStreamEvent({
   logSessionEvent,
 }) {
   const event = createAttachmentLifecycleEvent(data);
-  if (event.eventType !== ATTACHMENT_EVENT_TYPE.PARSED || !activeSession?.value) return;
-  logSessionEvent?.({
+  if (event.eventType !== ATTACHMENT_EVENT_TYPE.PARSED || !activeSession.value) return;
+  logSessionEvent({
     category: "debug",
     level: "debug",
     debugType: "workflow-diagnostics",
@@ -65,7 +44,7 @@ export function handleAttachmentLifecycleStreamEvent({
     data: { incomingCount: 1 },
   });
   const eventKey = canonicalAttachmentProjectionKey(event.identity);
-  const messages = Array.isArray(activeSession.value.messages) ? activeSession.value.messages : [];
+  const { messages } = activeSession.value;
   let matchedCount = 0;
   for (const message of messages) {
     if (getMessageRole(message) !== "user" || !Array.isArray(message?.attachments)) continue;
@@ -83,12 +62,12 @@ export function handleAttachmentLifecycleStreamEvent({
     });
     message.attachments.splice(0, message.attachments.length, ...nextAttachments);
   }
-  logSessionEvent?.({
+  logSessionEvent({
     category: "debug",
     level: "debug",
     debugType: "workflow-diagnostics",
     event: "frontend.attachmentParsed.projected",
-    sessionId: text(activeSession?.value?.sessionId),
+    sessionId: text(activeSession.value.sessionId),
     dialogProcessId: text(data?.dialogProcessId),
     turnScopeId: text(data?.turnScopeId),
     data: {
@@ -105,38 +84,23 @@ export function handleInteractionRequestStreamEvent({
   channelSessionId,
   clearMissingInteractionPayloadTimer,
   navigateOnFirstResponseOnce,
-  tryAutoResolveInteraction,
   setPendingInteractionRequest,
   clearPendingInteraction,
 }) {
-  const normalizedInteractionRequest = normalizeInteractionRequestPayload(
-    {
-      ...(data || {}),
-      interactionType: normalizeTrimmedString(data?.interactionType),
-    },
-    { channelSessionId },
-  );
+  const request = reduceInteractionRequest(data, {
+    channelSessionId,
+    setPendingInteractionRequest,
+    clearPendingInteraction,
+  });
   clearMissingInteractionPayloadTimer({
-    sessionId: normalizeTrimmedString(normalizedInteractionRequest?.sessionId),
-    turnScopeId: normalizeTrimmedString(normalizedInteractionRequest?.turnScopeId),
+    sessionId: request.sessionId,
+    turnScopeId: request.turnScopeId,
   });
   navigateOnFirstResponseOnce?.();
-  if (tryAutoResolveInteraction(normalizedInteractionRequest)) {
-    return true;
-  }
-  if (isTerminalInteraction(normalizedInteractionRequest)) {
-    clearPendingInteraction?.(normalizedInteractionRequest);
-    return true;
-  }
-  setPendingInteractionRequest(normalizedInteractionRequest);
   return true;
 }
 
 export function handleBasicStreamEvent(event, context = {}) {
-  if (event === StreamEventEnum.ATTACHMENTS) {
-    handleAttachmentsStreamEvent(context);
-    return true;
-  }
   if (event === StreamEventEnum.ATTACHMENT_LIFECYCLE) {
     handleAttachmentLifecycleStreamEvent(context);
     return true;

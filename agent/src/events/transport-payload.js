@@ -3,10 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  ATTACHMENT_LIFECYCLE_WIRE_EVENT,
-  createAttachmentLifecycleEvent,
-} from "@noobot/attachment-protocol";
 import { isPlainObject } from "@noobot/shared/value";
 
 const ROUTE_IDENTITY_FIELDS = Object.freeze([
@@ -45,8 +41,7 @@ export function omitExecutionRouteIdentity(data = {}) {
   return payload;
 }
 
-export function projectExecutionTransportPayload({ event, data, route }) {
+export function projectExecutionTransportPayload({ data, route }) {
   const eventData = isPlainObject(data) ? data : {};
-  if (event === ATTACHMENT_LIFECYCLE_WIRE_EVENT) return createAttachmentLifecycleEvent(eventData);
   return { ...omitExecutionRouteIdentity(eventData), ...route };
 }

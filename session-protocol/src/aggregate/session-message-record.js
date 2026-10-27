@@ -5,6 +5,7 @@
  */
 import { isCanonicalText, isPlainObject, text } from "@noobot/shared/value";
 import { MESSAGE_IDENTITY_FIELD } from "../identity/message-identity.js";
+import { isNaturalDialogUserMessage } from "../message-entity-contract.js";
 import {
   MESSAGE_RECORD_REMOVED_FIELDS,
   messageFieldRemovalsFor,
@@ -154,9 +155,7 @@ export function resolveSessionMessageRecordInternalMessageType(record = {}) {
 }
 
 export function isDialogAnchorMessageRecord(record = {}) {
-  if (text(record?.role) !== "user") return false;
-  if (isInjectedOrPluginSessionMessageRecord(record)) return false;
-  return text(record?.messageOrigin).toLowerCase() !== "internal";
+  return isNaturalDialogUserMessage(record);
 }
 
 export function resolveSessionAutoTitle(record = {}) {

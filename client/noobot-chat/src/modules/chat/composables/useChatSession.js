@@ -68,12 +68,13 @@ import {
   closeMobileSidebarOnSelect,
   createSessionMessageView,
 } from "../runtime/session/messageView.js";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { createComposerRuntimeState } from "../runtime/session/composerRuntimeState.js";
 import { createComposerActions } from "../runtime/session/composerActions.js";
 import { createReconnectCoordinator } from "../runtime/session/reconnectCoordinator.js";
 import { installSessionLifecycleHydration } from "../runtime/session/sessionLifecycleHydration.js";
 import { createRuntimeEventProjector } from "../runtime/session/runtimeEventProjector.js";
-import { text } from "@noobot/shared/value";
+import { requireFunctionDependencies, text } from "@noobot/shared/value";
 import { scopeSessionLogRecord } from "../../debug/loggers/lazyDebugSink.js";
 
 export function useChatSession({
@@ -98,8 +99,9 @@ export function useChatSession({
   isImageMime,
   navigateToLastMessage,
   notify = () => {},
-  clearUploadSelection = () => {},
+  clearUploadSelection,
 }) {
+  requireFunctionDependencies("useChatSession", { isImageMime, clearUploadSelection });
   const { translate } = useLocale();
   const chatStore = useChatStore();
   const {
@@ -394,7 +396,6 @@ export function useChatSession({
     clearPendingInteractionIfObsolete,
     setPendingInteractionRequest,
     submitInteractionResponse,
-    isInteractionRequestHandled,
   } = useAgentInteraction({
     encryptPayloadBySessionId,
     sendJson: (payload) => chatWebSocketClient.sendJson(payload),
@@ -434,6 +435,7 @@ export function useChatSession({
     loadingSessions,
     loadingSessionDetail,
     turnRuntimeRegistry,
+    chatStore,
     createConnectorPanelState,
     generateSessionId,
     sessionTitleFromMessages,
@@ -490,7 +492,6 @@ export function useChatSession({
     clearPendingInteraction,
     clearPendingInteractionIfObsolete,
     setPendingInteractionRequest,
-    submitInteractionResponse,
     onConversationState: trackConversationState,
     chatWebSocketClient,
     sessionLogWebSocketClient,
@@ -502,6 +503,8 @@ export function useChatSession({
     removeWorkflowOwnersForReplacedTurns: chatStore.removeWorkflowOwnersForReplacedTurns,
     ensureConnected,
     notify,
+    monotonicActionStopTimeoutMs: TIME_THRESHOLDS.client.monotonicActionStopTimeoutMs,
+    monotonicActionStopPollIntervalMs: TIME_THRESHOLDS.client.monotonicActionStopPollIntervalMs,
   });
   resolveDiscoveredTerminalTurn = chatEngine.resolveTurnTerminalState;
   for (const discovery of pendingTerminalResolutionDiscoveries.values()) {
@@ -517,7 +520,6 @@ export function useChatSession({
     sessions,
     activeSession,
     turnRuntimeRegistry,
-    interactionSubmitting,
     chatList,
     findMessageByViewKey,
     findMessagesByPresentationId,
@@ -525,7 +527,6 @@ export function useChatSession({
     makeViewAttachments,
     clearPendingInteraction,
     setPendingInteractionRequest,
-    isInteractionRequestHandled,
     sessionLogWebSocketClient,
     applyTurnLifecycleEnvelope: chatEngine.applyTurnLifecycleEnvelope,
     applyExecutionSnapshot: (payload) => chatStore.applyExecutionSnapshot(payload),
@@ -540,6 +541,7 @@ export function useChatSession({
     {
       composerActionState,
       input,
+      activeSession,
       turnRuntimeRegistry,
       resolveActiveSessionIdentity,
       resolveActiveTurn,

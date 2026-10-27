@@ -8,8 +8,8 @@ import assert from "node:assert/strict";
 
 import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
 import {
-  buildContextMessages,
   buildHumanMessagesForUser,
+  buildContextMessageBlocks,
 } from "../../../src/context/assembly/message-builder.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
@@ -38,8 +38,8 @@ function createRuntimeWithToolAttachments({ toolAttachments, ...options }) {
   return runtime;
 }
 
-test("buildContextMessages uses current runtime userMessageAttachments in user meta", () => {
-  const messages = buildContextMessages(
+test("buildContextMessageBlocks uses current runtime userMessageAttachments in user meta", () => {
+  const messages = buildContextMessageBlocks(
     createTestAgentExecutionScope(
       createTestRuntimeContext({
         userMessageAttachments: [
@@ -65,7 +65,7 @@ test("buildContextMessages uses current runtime userMessageAttachments in user m
         ],
       }),
     },
-  );
+  ).messages;
 
   const metaMessage = findUserMetaMessage(messages);
   assert.ok(metaMessage);
@@ -75,8 +75,8 @@ test("buildContextMessages uses current runtime userMessageAttachments in user m
   assert.equal(meta.attachments[0].name, "AI 体系现状概览.docx");
 });
 
-test("buildContextMessages preserves explicit empty current userMessageAttachments", () => {
-  const messages = buildContextMessages(
+test("buildContextMessageBlocks preserves explicit empty current userMessageAttachments", () => {
+  const messages = buildContextMessageBlocks(
     createTestAgentExecutionScope(
       createTestRuntimeContext({
         userMessageAttachments: [],
@@ -86,7 +86,7 @@ test("buildContextMessages preserves explicit empty current userMessageAttachmen
       { messageBlocks: { system: [], history: [], incremental: [] } },
     ),
     { currentUserMessage: createPersistedCurrentUserMessage("hello") },
-  );
+  ).messages;
 
   const metaMessage = findUserMetaMessage(messages);
   assert.ok(metaMessage);
@@ -94,8 +94,8 @@ test("buildContextMessages preserves explicit empty current userMessageAttachmen
   assert.deepEqual(meta.attachments, []);
 });
 
-test("buildContextMessages does not treat runtime attachments bucket as current user attachments", () => {
-  const messages = buildContextMessages(
+test("buildContextMessageBlocks does not treat runtime attachments bucket as current user attachments", () => {
+  const messages = buildContextMessageBlocks(
     createTestAgentExecutionScope(
       createRuntimeWithToolAttachments({
         userMessageAttachments: [],
@@ -108,7 +108,7 @@ test("buildContextMessages does not treat runtime attachments bucket as current 
       { messageBlocks: { system: [], history: [], incremental: [] } },
     ),
     { currentUserMessage: createPersistedCurrentUserMessage("hello") },
-  );
+  ).messages;
 
   const metaMessage = findUserMetaMessage(messages);
   assert.ok(metaMessage);
@@ -116,8 +116,8 @@ test("buildContextMessages does not treat runtime attachments bucket as current 
   assert.deepEqual(meta.attachments, []);
 });
 
-test("buildContextMessages uses only userMessageAttachments as current user attachment input", () => {
-  const messages = buildContextMessages(
+test("buildContextMessageBlocks uses only userMessageAttachments as current user attachment input", () => {
+  const messages = buildContextMessageBlocks(
     createTestAgentExecutionScope(
       createRuntimeWithToolAttachments({
         userMessageAttachments: [
@@ -144,7 +144,7 @@ test("buildContextMessages uses only userMessageAttachments as current user atta
         ],
       }),
     },
-  );
+  ).messages;
 
   const metaMessage = findUserMetaMessage(messages);
   assert.ok(metaMessage);
@@ -156,8 +156,8 @@ test("buildContextMessages uses only userMessageAttachments as current user atta
   );
 });
 
-test("buildContextMessages does not use fallback meta attachments as current user attachments", () => {
-  const messages = buildContextMessages(
+test("buildContextMessageBlocks does not use fallback meta attachments as current user attachments", () => {
+  const messages = buildContextMessageBlocks(
     createTestAgentExecutionScope(
       createRuntimeWithToolAttachments({
         userMessageAttachments: [],
@@ -191,7 +191,7 @@ test("buildContextMessages does not use fallback meta attachments as current use
       },
     ),
     { currentUserMessage: createPersistedCurrentUserMessage("hello") },
-  );
+  ).messages;
 
   const metaMessage = findUserMetaMessage(messages);
   assert.ok(metaMessage);
@@ -199,7 +199,7 @@ test("buildContextMessages does not use fallback meta attachments as current use
   assert.deepEqual(meta.attachments, []);
 });
 
-test("buildContextMessages projects only model attachment metadata", () => {
+test("buildContextMessageBlocks projects only model attachment metadata", () => {
   const richAttachment = {
     attachmentId: "att-rich",
     name: "AI 体系现状概览.docx",
@@ -215,7 +215,7 @@ test("buildContextMessages projects only model attachment metadata", () => {
     transferFilePath: "runtime/attach/scoped/session-rich/user/att-rich/AI 体系现状概览.docx",
     size: 1407731,
   };
-  const messages = buildContextMessages(
+  const messages = buildContextMessageBlocks(
     createTestAgentExecutionScope(
       createTestRuntimeContext({
         userMessageAttachments: [richAttachment],
@@ -232,7 +232,7 @@ test("buildContextMessages projects only model attachment metadata", () => {
         attachments: [richAttachment],
       }),
     },
-  );
+  ).messages;
 
   const metaMessage = findUserMetaMessage(messages);
   assert.ok(metaMessage);
@@ -284,8 +284,8 @@ test("buildHumanMessagesForUser projects user metadata attachments only from the
   assert.notStrictEqual(emptyMeta.attachments, historyMeta.attachments);
 });
 
-test("buildContextMessages keeps complete metadata per historical user turn without current-turn fallback", () => {
-  const messages = buildContextMessages(
+test("buildContextMessageBlocks keeps complete metadata per historical user turn without current-turn fallback", () => {
+  const messages = buildContextMessageBlocks(
     createTestAgentExecutionScope(
       createTestRuntimeContext({
         userMessageAttachments: [
@@ -360,7 +360,7 @@ test("buildContextMessages keeps complete metadata per historical user turn with
         ],
       }),
     },
-  );
+  ).messages;
 
   const metas = messages
     .filter((message) => String(message?.content || "").startsWith("[用户元信息]"))
@@ -395,7 +395,7 @@ test("buildContextMessages keeps complete metadata per historical user turn with
   );
 });
 
-test("buildContextMessages rebuilds metadata beside every persisted stopped/resend user turn", () => {
+test("buildContextMessageBlocks rebuilds metadata beside every persisted stopped/resend user turn", () => {
   const history = [
     {
       role: "user",
@@ -444,7 +444,7 @@ test("buildContextMessages rebuilds metadata beside every persisted stopped/rese
       ],
     },
   ].map(contextMessage);
-  const messages = buildContextMessages(
+  const messages = buildContextMessageBlocks(
     createTestAgentExecutionScope(
       createTestRuntimeContext({
         userMessageAttachments: [],
@@ -458,7 +458,7 @@ test("buildContextMessages rebuilds metadata beside every persisted stopped/rese
       { messageBlocks: { system: [], history, incremental: [] } },
     ),
     { currentUserMessage: createPersistedCurrentUserMessage("current") },
-  );
+  ).messages;
 
   const historicalBodies = messages.filter(
     (message) => message?.content === "你好" && message?.type === "human",
@@ -488,8 +488,8 @@ test("buildContextMessages rebuilds metadata beside every persisted stopped/rese
   );
 });
 
-test("buildContextMessages discards classified user_meta without inferring from user text", () => {
-  const messages = buildContextMessages(
+test("buildContextMessageBlocks discards classified user_meta without inferring from user text", () => {
+  const messages = buildContextMessageBlocks(
     createTestAgentExecutionScope(
       createTestRuntimeContext({
         resumeFromStoppedSnapshot: true,
@@ -533,8 +533,14 @@ test("buildContextMessages discards classified user_meta without inferring from 
         },
       },
     ),
-    { currentUserMessage: null },
-  );
+    {
+      currentUserMessage: createPersistedCurrentUserMessage("next internal task", {
+        messageOrigin: "internal",
+        dialogProcessId: "dialog-next",
+        turnScopeId: "turn-next",
+      }),
+    },
+  ).messages;
 
   assert.equal(messages.filter((message) => message?.content === "hello").length, 1);
   assert.equal(
@@ -547,8 +553,8 @@ test("buildContextMessages discards classified user_meta without inferring from 
   );
 });
 
-test("buildContextMessages ignores derived metadata and uses stopped source facts", () => {
-  const messages = buildContextMessages(
+test("buildContextMessageBlocks ignores derived metadata and uses stopped source facts", () => {
+  const messages = buildContextMessageBlocks(
     createTestAgentExecutionScope(
       createTestRuntimeContext({
         resumeFromStoppedSnapshot: true,
@@ -600,7 +606,7 @@ test("buildContextMessages ignores derived metadata and uses stopped source fact
         attachments: [userAttachment("attachment-b", "s1", { name: "continue.docx" })],
       }),
     },
-  );
+  ).messages;
 
   const bodies = messages.filter((message) =>
     ["parse attachment", "continue"].includes(String(message?.content || "")),
@@ -654,8 +660,8 @@ test("buildContextMessages ignores derived metadata and uses stopped source fact
   );
 });
 
-test("buildContextMessages does not project frontend user metadata for internal prompts", () => {
-  const messages = buildContextMessages(
+test("buildContextMessageBlocks does not project frontend user metadata for internal prompts", () => {
+  const messages = buildContextMessageBlocks(
     createTestAgentExecutionScope(
       createTestRuntimeContext({
         userMessageAttachments: [],
@@ -679,7 +685,14 @@ test("buildContextMessages does not project frontend user metadata for internal 
         },
       },
     ),
-  );
+    {
+      currentUserMessage: createPersistedCurrentUserMessage("current internal task", {
+        messageOrigin: "internal",
+        dialogProcessId: "dialog-child",
+        turnScopeId: "internal-turn:2",
+      }),
+    },
+  ).messages;
   assert.equal(
     messages.some((message) => message?.content === "internal task"),
     true,
@@ -689,7 +702,7 @@ test("buildContextMessages does not project frontend user metadata for internal 
     false,
   );
 
-  const currentMessages = buildContextMessages(
+  const currentMessages = buildContextMessageBlocks(
     createTestAgentExecutionScope(
       createTestRuntimeContext({
         userMessageAttachments: [],
@@ -711,7 +724,7 @@ test("buildContextMessages does not project frontend user metadata for internal 
         messageOrigin: "internal",
       }),
     },
-  );
+  ).messages;
   assert.equal(
     currentMessages.some((message) => message?.content === "current internal task"),
     true,

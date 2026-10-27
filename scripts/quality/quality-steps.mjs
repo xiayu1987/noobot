@@ -14,6 +14,7 @@ export const QUALITY_STEPS = Object.freeze([
   "check:complexity-baseline",
   "check:fallback-chain-baseline",
   "check:unused-parameters-baseline",
+  "check:injected-dependency-defaults",
   "check:file-effective-lines",
   "check:source-cycles",
   "check:empty-promise-catches",

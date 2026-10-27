@@ -29,15 +29,16 @@ import {
   writeSessionArtifact,
 } from "./session-artifact-store-v2.test-helpers.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
+import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
 const allowSessionWrite = async () => {};
 
 test("session manifest stores ordered turn references and rejects noncanonical sessions", async () =>
   withTemp(async (root) => {
     const messages = [
-      { role: "user", content: "u1", turnScopeId: "a" },
+      { role: "user", messageOrigin: "natural", content: "u1", turnScopeId: "a" },
       { role: "assistant", presentationMessageId: "pm_fx1", content: "a1", turnScopeId: "a" },
-      { role: "user", content: "u2", turnScopeId: "b" },
+      { role: "user", messageOrigin: "natural", content: "u2", turnScopeId: "b" },
     ];
     await writeSessionArtifact({
       sessionDir: root,
@@ -87,9 +88,9 @@ test("session manifest stores ordered turn references and rejects noncanonical s
 test("session turns preserve non-contiguous scopes without reordering and reject missing Turn identity", async () =>
   withTemp(async (root) => {
     const messages = [
-      { role: "user", content: "a first", turnScopeId: "a" },
+      { role: "user", messageOrigin: "natural", content: "a first", turnScopeId: "a" },
       { role: "assistant", presentationMessageId: "pm_fx2", content: "a answer", turnScopeId: "a" },
-      { role: "user", content: "b", turnScopeId: "b" },
+      { role: "user", messageOrigin: "natural", content: "b", turnScopeId: "b" },
       { role: "assistant", presentationMessageId: "pm_fx3", content: "a again", turnScopeId: "a" },
     ];
     await writeSessionArtifact({
@@ -138,7 +139,9 @@ test("session turns preserve non-contiguous scopes without reordering and reject
             {
               sessionId: "missing-turn-identity",
               messageUid: "sm_missing_turn",
+              ts: TEST_MESSAGE_TS,
               role: "user",
+              messageOrigin: "natural",
               content: "invalid",
             },
           ],
@@ -157,7 +160,7 @@ test("session artifacts group interleaved messages by logical dialog without cha
         dialogProcessId: "a",
         turnScopeId: "turn-a",
         messageOrigin: "natural",
-        ts: "2026-01-01T00:00:00Z",
+        ts: "2026-01-01T00:00:00.000Z",
       },
       {
         role: "user",
@@ -165,7 +168,7 @@ test("session artifacts group interleaved messages by logical dialog without cha
         dialogProcessId: "b",
         turnScopeId: "turn-b",
         messageOrigin: "natural",
-        ts: "2026-01-01T00:01:00Z",
+        ts: "2026-01-01T00:01:00.000Z",
       },
       {
         role: "assistant",
@@ -173,7 +176,7 @@ test("session artifacts group interleaved messages by logical dialog without cha
         content: "a late",
         dialogProcessId: "a",
         turnScopeId: "turn-a",
-        ts: "2026-01-01T00:02:00Z",
+        ts: "2026-01-01T00:02:00.000Z",
       },
       {
         role: "assistant",
@@ -181,7 +184,7 @@ test("session artifacts group interleaved messages by logical dialog without cha
         content: "b answer",
         dialogProcessId: "b",
         turnScopeId: "turn-b",
-        ts: "2026-01-01T00:03:00Z",
+        ts: "2026-01-01T00:03:00.000Z",
       },
     ];
     await writeSessionArtifact({
@@ -235,13 +238,16 @@ test("session artifact publication rejects duplicate persistent message UIDs", a
           messages: [
             {
               messageUid: "sm_same",
+              ts: TEST_MESSAGE_TS,
               role: "user",
+              messageOrigin: "natural",
               content: "one",
               dialogProcessId: "d1",
               turnScopeId: "t1",
             },
             {
               messageUid: "sm_same",
+              ts: TEST_MESSAGE_TS,
               role: "assistant",
               presentationMessageId: "pm_fx6",
               content: "two",
@@ -263,6 +269,7 @@ test("canonical turn journals append only changed messages and hide uncommitted 
       content: "one",
       turnScopeId: "active",
       messageUid: "m1",
+      ts: TEST_MESSAGE_TS,
     };
     const second = {
       role: "assistant",
@@ -270,6 +277,7 @@ test("canonical turn journals append only changed messages and hide uncommitted 
       content: "two",
       turnScopeId: "active",
       messageUid: "m2",
+      ts: TEST_MESSAGE_TS,
     };
     await writeSessionArtifact({
       sessionDir: root,
@@ -310,6 +318,7 @@ test("summary checkpoints write immutable snapshots indexed by the manifest", as
     const messages = [
       {
         role: "user",
+        messageOrigin: "natural",
         content: "question",
         turnScopeId: "active",
         messageUid: "m1",
@@ -456,14 +465,18 @@ test("replacement turns receive a new stable journal identity instead of reusing
   withTemp(async (root) => {
     const first = {
       messageUid: "m1",
+      ts: TEST_MESSAGE_TS,
       role: "user",
+      messageOrigin: "natural",
       content: "keep",
       dialogProcessId: "d1",
       turnScopeId: "t1",
     };
     const replaced = {
       messageUid: "m2",
+      ts: TEST_MESSAGE_TS,
       role: "user",
+      messageOrigin: "natural",
       content: "old",
       dialogProcessId: "d2",
       turnScopeId: "t2",
@@ -488,7 +501,9 @@ test("replacement turns receive a new stable journal identity instead of reusing
 
     const replacement = {
       messageUid: "m3",
+      ts: TEST_MESSAGE_TS,
       role: "user",
+      messageOrigin: "natural",
       content: "new",
       dialogProcessId: "d3",
       turnScopeId: "t3",
@@ -547,6 +562,7 @@ test("a stopped turn followed by continuation keeps distinct journal identities 
   withTemp(async (root) => {
     const stopped = {
       messageUid: "stopped",
+      ts: TEST_MESSAGE_TS,
       role: "assistant",
       presentationMessageId: "pm_fx11",
       content: "partial",
@@ -564,6 +580,7 @@ test("a stopped turn followed by continuation keeps distinct journal identities 
     });
     const continuation = {
       messageUid: "continued",
+      ts: TEST_MESSAGE_TS,
       role: "assistant",
       presentationMessageId: "pm_fx12",
       content: "complete",
@@ -601,7 +618,7 @@ test("session reader reports missing and corrupted turn artifacts", async () =>
         ...createTestSessionRequiredFields(),
         sessionId: "broken",
         aggregateVersion: 0,
-        messages: [{ role: "user", content: "x", turnScopeId: "x" }],
+        messages: [{ role: "user", messageOrigin: "natural", content: "x", turnScopeId: "x" }],
       },
     });
     const manifest = JSON.parse(await readFile(files.session, "utf8"));
@@ -630,7 +647,7 @@ test("session reader rejects order references to messages that were never commit
         ...createTestSessionRequiredFields(),
         sessionId: "order-gap",
         aggregateVersion: 0,
-        messages: [{ role: "user", content: "x", turnScopeId: "x" }],
+        messages: [{ role: "user", messageOrigin: "natural", content: "x", turnScopeId: "x" }],
       },
     });
     const original = JSON.parse(await readFile(files.session, "utf8"));
@@ -657,7 +674,7 @@ test("inspect is read-only, repair is idempotent, and cleanup honors dry-run and
         ...createTestSessionRequiredFields(),
         sessionId: "a",
         aggregateVersion: 0,
-        messages: [{ role: "user", content: "x" }],
+        messages: [{ role: "user", messageOrigin: "natural", content: "x" }],
       },
     });
     const files = buildSessionArtifactFileMap(sessionDir);
@@ -719,7 +736,9 @@ test("artifact mutation utilities honor deleted-session lifecycle gates", async 
         ...createTestSessionRequiredFields(),
         sessionId: "deleted-session",
         aggregateVersion: 0,
-        messages: [{ role: "user", content: "legacy", turnScopeId: "one" }],
+        messages: [
+          { role: "user", messageOrigin: "natural", content: "legacy", turnScopeId: "one" },
+        ],
       }),
       "utf8",
     );

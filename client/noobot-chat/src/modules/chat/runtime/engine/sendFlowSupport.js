@@ -4,11 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { getMessageTurnScopeId } from "../../model/messageIdentity.js";
-import {
-  selectCurrentTurnRuntime,
-  turnRuntimeDisplayState,
-} from "../run-state-machine/turnRuntimeRegistry.js";
-import { isStageStatusStepState } from "../run-state-machine/statusStep.js";
 import { normalizeTrimmedString } from "./utils.js";
 import { createSecureId } from "@noobot/shared/secure-identity";
 
@@ -19,10 +14,4 @@ export function createTurnScopeId() {
 export function isEventForCurrentTurn(data = {}, botMessage = {}) {
   const botTurnScopeId = getMessageTurnScopeId(botMessage);
   return normalizeTrimmedString(data?.turnScopeId) === botTurnScopeId;
-}
-
-export function hasActiveTurnInFlight({ activeSession, turnRuntimeRegistry }) {
-  const sessionId = normalizeTrimmedString(activeSession.value?.sessionId);
-  const turn = selectCurrentTurnRuntime(turnRuntimeRegistry.value, sessionId);
-  return isStageStatusStepState(turnRuntimeDisplayState(turn));
 }

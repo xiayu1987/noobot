@@ -13,6 +13,7 @@ import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDeb
 export async function applyReconnectEventReplay({
   event: incomingEvent,
   data: incomingData,
+  channelSessionId,
   replayCache,
   isCurrentActiveSession,
   consumeReplayCacheForSession,
@@ -95,7 +96,7 @@ export async function applyReconnectEventReplay({
     return applyRuntimeStreamEvent(protocolEnvelope, { source: "reconnect" });
   }
   if (family === EVENT_FAMILY.INTERACTION_REQUEST) {
-    return applyPendingInteraction(data);
+    return applyPendingInteraction(data, { channelSessionId });
   }
   if (family === EVENT_FAMILY.ATTACHMENT_LIFECYCLE) {
     onAttachmentLifecycle(protocolEnvelope.payload);

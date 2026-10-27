@@ -16,6 +16,7 @@ import {
   FrontendRunState,
 } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
+import { NO_ATTACHMENT_EDITS } from "../../../helpers/resendEdits.js";
 
 describe("useChatEngine.resend replace turn", () => {
   it("does not start a stale resend stream after delete supersedes its pending replace command", async () => {
@@ -69,9 +70,11 @@ describe("useChatEngine.resend replace turn", () => {
     activeSession.value.rawMessages = [user, assistant];
     activeSession.value.aggregateVersion = 1;
 
-    const resendPromise = engine.resendMonotonicMessage(assistant, "edited question", {
-      turnScopeId: "client-turn:replacement",
-    });
+    const resendPromise = engine.resendMonotonicMessage(
+      assistant,
+      "edited question",
+      NO_ATTACHMENT_EDITS,
+    );
     await vi.waitFor(() => expect(replaceSessionTurnApi).toHaveBeenCalledTimes(1));
 
     await expect(engine.deleteMonotonicMessage(user)).resolves.toBe(true);
@@ -85,11 +88,11 @@ describe("useChatEngine.resend replace turn", () => {
         replacementUser: {
           messageUid: "replacement-user",
           userMessageId: "replacement-user",
-          turnScopeId: "client-turn:replacement",
+          turnScopeId: resendRequest.turnScopeId,
           role: RoleEnum.USER,
           content: "edited question",
         },
-        replacementDialogProcessId: "dialog:client-turn:replacement",
+        replacementDialogProcessId: `dialog:${resendRequest.turnScopeId}`,
       }),
     );
 
@@ -148,7 +151,9 @@ describe("useChatEngine.resend replace turn", () => {
     activeSession.value.aggregateVersion = 3;
     input.value = "draft before replace";
 
-    await expect(engine.resendMonotonicMessage(target, "edited question")).resolves.toBe(true);
+    await expect(
+      engine.resendMonotonicMessage(target, "edited question", NO_ATTACHMENT_EDITS),
+    ).resolves.toBe(true);
 
     expect(replaceSessionTurnApi).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -480,6 +485,7 @@ describe("useChatEngine.resend replace turn", () => {
       engine.resendMonotonicMessage(stoppedAssistant, "old with attachment A", {
         attachments: [originalAttachment],
         attachmentFiles: [],
+        removedAttachmentKeys: [],
       }),
     ).resolves.toBe(true);
 
@@ -586,6 +592,7 @@ describe("useChatEngine.resend replace turn", () => {
       engine.resendMonotonicMessage(stoppedAssistant, "old with rich attachment", {
         attachments: [richAttachment],
         attachmentFiles: [],
+        removedAttachmentKeys: [],
       }),
     ).resolves.toBe(true);
 
@@ -745,7 +752,7 @@ describe("useChatEngine.resend replace turn", () => {
     activeSession.value.revision = 3;
 
     await expect(
-      engine.resendMonotonicMessage(stoppedAssistant, "edited after conflict"),
+      engine.resendMonotonicMessage(stoppedAssistant, "edited after conflict", NO_ATTACHMENT_EDITS),
     ).resolves.toBe(false);
 
     expect(replaceSessionTurnApi).toHaveBeenCalledTimes(1);

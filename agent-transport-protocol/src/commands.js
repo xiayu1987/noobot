@@ -7,6 +7,7 @@ import {
   AGENT_COMMAND,
   AGENT_COMMAND_TYPES,
   AGENT_TRANSPORT_PROTOCOL_VERSION,
+  CHANNEL_IDENTITY_KEYS,
   EXECUTION_QUERY_COMMAND_TYPES,
   RUN_COMMAND_TYPES,
 } from "./constants.js";
@@ -43,13 +44,37 @@ const TOP_LEVEL_KEYS = new Set([
   "options",
 ]);
 const BASE_COMMAND_KEYS = ["protocolVersion", "commandType", "commandId", "identity"];
-const IDENTITY_KEYS = new Set([
-  "sessionId",
-  "parentSessionId",
+const TURN_START_IDENTITY_KEYS = Object.freeze([...CHANNEL_IDENTITY_KEYS, "turnScopeId"]);
+const TURN_IDENTITY_KEYS = Object.freeze([
+  ...CHANNEL_IDENTITY_KEYS,
   "dialogProcessId",
-  "parentDialogProcessId",
   "turnScopeId",
 ]);
+const INTERACTION_IDENTITY_KEYS = Object.freeze(["sessionId", "dialogProcessId", "turnScopeId"]);
+const COMMAND_IDENTITY_KEYS = Object.freeze({
+  [AGENT_COMMAND.SEND]: TURN_START_IDENTITY_KEYS,
+  [AGENT_COMMAND.CONTINUE]: TURN_START_IDENTITY_KEYS,
+  [AGENT_COMMAND.RESEND]: TURN_IDENTITY_KEYS,
+  [AGENT_COMMAND.STOP]: TURN_START_IDENTITY_KEYS,
+  [AGENT_COMMAND.INTERJECT]: TURN_IDENTITY_KEYS,
+  [AGENT_COMMAND.INTERACTION_RESPONSE]: INTERACTION_IDENTITY_KEYS,
+  [AGENT_COMMAND.TURN_SNAPSHOT_GET]: CHANNEL_IDENTITY_KEYS,
+  [AGENT_COMMAND.FINALIZE]: CHANNEL_IDENTITY_KEYS,
+  ...Object.fromEntries(EXECUTION_QUERY_COMMAND_TYPES.map((type) => [type, CHANNEL_IDENTITY_KEYS])),
+});
+
+export function getAgentCommandIdentityKeys(commandType) {
+  const keys = COMMAND_IDENTITY_KEYS[commandType];
+  if (!keys) throw new TypeError("unsupported_command_type");
+  return keys;
+}
+
+export function selectAgentCommandIdentity(commandType, source) {
+  if (!isPlainObject(source)) throw new TypeError("identity_source_not_object");
+  return Object.fromEntries(
+    getAgentCommandIdentityKeys(commandType).map((key) => [key, source[key]]),
+  );
+}
 const INPUT_KEYS = new Set(["message", "attachments"]);
 const PRESENTATION_KEYS = new Set(["userMessageId", "presentationMessageId"]);
 const RUN_CONCURRENCY_KEYS = new Set(["expectedTurnRevision", "expectedAggregateVersion"]);
@@ -71,10 +96,17 @@ function compactObject(source = {}) {
   );
 }
 
-function createIdentity(input) {
+function createIdentity(commandType, input) {
   if (!isPlainObject(input)) throw new TypeError("identity_not_object");
+  const identityKeys = getAgentCommandIdentityKeys(commandType);
+  for (const key of Object.keys(input)) {
+    if (!identityKeys.includes(key)) throw new TypeError(`unknown_identity_field:${key}`);
+  }
   return Object.fromEntries(
-    [...IDENTITY_KEYS].map((key) => [key, input[key] === undefined ? "" : input[key]]),
+    identityKeys.map((key) => {
+      if (typeof input[key] !== "string") throw new TypeError(`identity_field_required:${key}`);
+      return [key, input[key]];
+    }),
   );
 }
 
@@ -98,7 +130,7 @@ function createEnvelope(commandType, input) {
     protocolVersion: AGENT_TRANSPORT_PROTOCOL_VERSION,
     commandType,
     commandId: input.commandId,
-    identity: createIdentity(input.identity),
+    identity: createIdentity(commandType, input.identity),
   };
 }
 
@@ -115,14 +147,14 @@ function withDerivedCommandId(input, command) {
   return assertValidCommand({ ...command, commandId: deriveAgentCommandId(command) });
 }
 
-export function createTurnRunCommand(input = {}) {
+export function createTurnRunCommand(input) {
   const { commandType } = input;
   if (!RUN_COMMAND_SET.has(commandType)) throw new TypeError("invalid_run_command_type");
   return withDerivedCommandId(input, {
     ...createEnvelope(commandType, input),
     input: {
-      message: String(input.input?.message ?? ""),
-      attachments: Array.isArray(input.input?.attachments) ? input.input.attachments : [],
+      message: input.input.message,
+      attachments: input.input.attachments,
     },
     preferences: createRunPreferences(input.preferences),
     presentation: compactObject({
@@ -215,8 +247,10 @@ function validateIdentity(command, errors) {
     errors.push("identity_not_object");
     return;
   }
-  rejectUnknownFields(command.identity, IDENTITY_KEYS, "identity", errors);
-  for (const key of IDENTITY_KEYS) {
+  const identityKeys = COMMAND_IDENTITY_KEYS[command.commandType];
+  if (!identityKeys) return;
+  rejectUnknownFields(command.identity, new Set(identityKeys), "identity", errors);
+  for (const key of identityKeys) {
     const value = command.identity[key];
     if (typeof value !== "string" || value !== value.trim()) {
       errors.push(`invalid_identity_field:${key}`);
@@ -348,8 +382,6 @@ function validateRunCommand(command, commandType, errors) {
   requireIdentityField(command, "turnScopeId", "missing_turn_scope_id", errors);
   if (commandType === AGENT_COMMAND.RESEND) {
     requireIdentityField(command, "dialogProcessId", "missing_resend_dialog_process_id", errors);
-  } else if (clean(command.identity?.dialogProcessId)) {
-    errors.push("unexpected_dialog_process_id");
   }
   validateRunInput(command, errors);
   errors.push(...validateRunPreferences(command.preferences).errors);
@@ -484,6 +516,6 @@ export function parseAgentCommand(rawCommand) {
   return command;
 }
 
-export function getAgentCommandIdentity(command = {}) {
-  return createIdentity(command.identity);
+export function getAgentCommandIdentity(command) {
+  return createIdentity(command.commandType, command.identity);
 }

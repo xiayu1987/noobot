@@ -14,11 +14,19 @@ import { translateStoredLocaleMessageKey } from "../../../../shared/i18n/message
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
 import { mergeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 import { getMessageTransferEnvelopes } from "../../model/transferEnvelopes.js";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isCanonicalText, isPlainObject, text } from "@noobot/shared/value";
 import { resolveMessageViewKey } from "@noobot/event-protocol/message-event";
 
-function sessionIdFromSession(session = {}) {
-  return text(session?.sessionId);
+export const EMPTY_TURN_PRESENTATIONS = Object.freeze([]);
+
+function requirePresentationSession(session) {
+  if (!isPlainObject(session) || !isCanonicalText(session.sessionId)) {
+    throw new TypeError("selectTurnPresentations requires activeSession.sessionId");
+  }
+  if (!Array.isArray(session.messages)) {
+    throw new TypeError("selectTurnPresentations requires activeSession.messages");
+  }
+  return session;
 }
 
 function turnKey(sessionId = "", turnScopeId = "") {
@@ -232,15 +240,10 @@ function coalescePersistedAssistantPresentations(messages = [], activeSessionId 
   return output;
 }
 
-export function selectTurnPresentations({
-  activeSession = {},
-  workflowRegistry,
-  turnRuntimeRegistry,
-}) {
-  const activeSessionId = sessionIdFromSession(activeSession);
-  const sourceMessages = (
-    Array.isArray(activeSession?.messages) ? activeSession.messages : []
-  ).filter(
+export function selectTurnPresentations({ activeSession, workflowRegistry, turnRuntimeRegistry }) {
+  const { sessionId: activeSessionId, messages: sessionMessages } =
+    requirePresentationSession(activeSession);
+  const sourceMessages = sessionMessages.filter(
     (message) =>
       !isTurnRuntimeDeleted(turnRuntimeRegistry, {
         sessionId: activeSessionId,

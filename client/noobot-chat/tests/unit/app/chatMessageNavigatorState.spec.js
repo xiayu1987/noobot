@@ -7,7 +7,6 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildChatMessageNavigatorCloseRoute,
   buildChatMessageNavigatorOpenRoute,
-  normalizeChatMessageNavigatorAnchor,
   openChatMessageNavigator,
   selectChatMessageNavigatorItem,
 } from "../../../src/app/state/chatMessageNavigatorState.js";
@@ -17,14 +16,6 @@ function ref(value) {
 }
 
 describe("chatMessageNavigatorState", () => {
-  it("normalizes selected navigator item anchors", () => {
-    expect(normalizeChatMessageNavigatorAnchor({ id: "  chat-message-2  " })).toBe(
-      "chat-message-2",
-    );
-    expect(normalizeChatMessageNavigatorAnchor({ id: 42 })).toBe("42");
-    expect(normalizeChatMessageNavigatorAnchor(null)).toBe("");
-  });
-
   it("builds pseudo routes for opening and closing the mobile navigator", () => {
     expect(
       buildChatMessageNavigatorOpenRoute({
@@ -59,7 +50,7 @@ describe("chatMessageNavigatorState", () => {
     const pushPseudoRoute = vi.fn();
 
     selectChatMessageNavigatorItem({
-      item: { id: " chat-message-3 " },
+      item: { id: "chat-message-3" },
       currentMessageAnchorId,
       messageListPanelRef: ref({ getWrapRef, scrollToMessageAnchor }),
       isMobile: ref(true),
@@ -103,29 +94,25 @@ describe("chatMessageNavigatorState", () => {
     });
   });
 
-  it("safely handles an empty navigator item without throwing", () => {
+  it("records the anchor and pushes the route without scrolling when the message list is unmounted", () => {
     const currentMessageAnchorId = ref("previous-anchor");
-    const scrollToMessageAnchor = vi.fn();
     const pushPseudoRoute = vi.fn();
 
-    expect(() =>
-      selectChatMessageNavigatorItem({
-        item: null,
-        currentMessageAnchorId,
-        messageListPanelRef: ref({ scrollToMessageAnchor }),
-        isMobile: ref(false),
-        mobileChatNavigatorVisible: ref(false),
-        activeSessionId: ref("session-empty"),
-        pushPseudoRoute,
-      }),
-    ).not.toThrow();
+    selectChatMessageNavigatorItem({
+      item: { id: "chat-message-7" },
+      currentMessageAnchorId,
+      messageListPanelRef: ref(null),
+      isMobile: ref(false),
+      mobileChatNavigatorVisible: ref(false),
+      activeSessionId: ref("session-unmounted"),
+      pushPseudoRoute,
+    });
 
-    expect(currentMessageAnchorId.value).toBe("");
-    expect(scrollToMessageAnchor).toHaveBeenCalledWith("");
+    expect(currentMessageAnchorId.value).toBe("chat-message-7");
     expect(pushPseudoRoute).toHaveBeenCalledWith({
-      sessionId: "session-empty",
+      sessionId: "session-unmounted",
       panel: "",
-      anchor: "",
+      anchor: "chat-message-7",
     });
   });
 

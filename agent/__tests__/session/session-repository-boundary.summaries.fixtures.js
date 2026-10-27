@@ -7,6 +7,7 @@
 import os from "node:os";
 import path from "node:path";
 import { access, mkdtemp, rm } from "node:fs/promises";
+import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
 export async function withTempWorkspace(fn) {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-session-boundary-"));
@@ -39,6 +40,7 @@ export function canonicalMessages(messages, sessionId, namespace = "summary") {
     return {
       sessionId,
       messageUid: String(message?.messageUid || `sm_${namespace}_${index + 1}`),
+      ts: TEST_MESSAGE_TS,
       dialogProcessId: String(message?.dialogProcessId || `dialog-${turnScopeId}`),
       turnScopeId,
       ...roleIdentity,

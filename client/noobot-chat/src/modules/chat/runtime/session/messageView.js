@@ -27,7 +27,7 @@ import {
   projectTurnPresentation,
   resolveMessageViewKey,
 } from "@noobot/event-protocol/message-event";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const PRESENTATION_RUNTIME_FIELDS = Object.freeze([
   "messageEventState",
@@ -45,11 +45,12 @@ function isInternalControlMessage(messageItem = {}) {
 
 function createSessionMessageLookup(sessions) {
   function findSession(sessionId) {
-    return sessions.value.find((sessionItem) => sessionItem.sessionId === sessionId) || null;
+    return sessions.value.find((sessionItem) => sessionItem.sessionId === sessionId) ?? null;
   }
 
   function sessionMessages(sessionId) {
-    return findSession(sessionId)?.messages || [];
+    const session = findSession(sessionId);
+    return session === null ? [] : session.messages;
   }
 
   function findMessageByViewKey(sessionId, viewKey) {
@@ -106,7 +107,16 @@ export function createSessionMessageView({ sessions, activeSession, activeSessio
     findUserMessageForCommit,
   } = createSessionMessageLookup(sessions);
 
-  function appendMessage(role, content = "", attachments = [], options = {}) {
+  function appendMessage(role, content, attachments, options) {
+    if (typeof content !== "string") {
+      throw new TypeError("appendMessage requires string content");
+    }
+    if (!Array.isArray(attachments)) {
+      throw new TypeError("appendMessage requires attachments array");
+    }
+    if (!isPlainObject(options)) {
+      throw new TypeError("appendMessage requires options object");
+    }
     const msg = reactive(
       buildAppendMessage({
         sessionId: activeSession.value.sessionId,
@@ -129,24 +139,14 @@ export function createSessionMessageView({ sessions, activeSession, activeSessio
     return appendMessage(RoleEnum.ASSISTANT, "", [], { ...identity, presentationMessageId });
   }
 
-  function materializeTurnPresentation(envelope = {}) {
-    const presentation = projectTurnPresentation(envelope?.payload);
-    const sessionId = text(envelope?.identity?.sessionId);
-    const targetSession = (Array.isArray(sessions?.value) ? sessions.value : []).find(
-      (sessionItem) => text(sessionItem?.sessionId) === sessionId,
-    );
-    if (!presentation || !targetSession) {
-      return { applied: false, reason: presentation ? "session_not_found" : "not_presentation" };
-    }
-    const messages = Array.isArray(targetSession.messages)
-      ? targetSession.messages
-      : (targetSession.messages = []);
+  function materializeTurnPresentation(envelope) {
+    const presentation = projectTurnPresentation(envelope);
+    const { sessionId } = envelope.identity;
+    const targetSession = findSession(sessionId);
+    if (targetSession === null) return { applied: false, reason: "session_not_found" };
+    const { messages } = targetSession;
     let createdCount = 0;
-    for (const source of [presentation.userMessage, presentation.assistantMessage]) {
-      const sourceMessage = {
-        ...source,
-        ts: source.ts || source.createdAt || envelope.occurredAt,
-      };
+    for (const sourceMessage of [presentation.userMessage, presentation.assistantMessage]) {
       const existing =
         getMessageRole(sourceMessage) === RoleEnum.USER
           ? findUserMessageForCommit(sessionId, sourceMessage)
@@ -166,7 +166,7 @@ export function createSessionMessageView({ sessions, activeSession, activeSessio
     }
     targetSession.messageCount = messages.length;
     targetSession.lastMessage = findVisibleLastMessage(messages);
-    targetSession.updatedAt = envelope.occurredAt || targetSession.updatedAt;
+    targetSession.updatedAt = envelope.occurredAt;
     return { applied: true, createdCount };
   }
 
@@ -194,7 +194,7 @@ export function createSessionMessageView({ sessions, activeSession, activeSessio
       childWorkflowMessage
     ) {
       logWorkflowDiagnostics("frontend.workflowRender.messageVisibilityEvaluated", () => ({
-        sessionId: String(activeSession.value?.sessionId || activeSessionId.value || ""),
+        sessionId: activeSessionId.value,
         dialogProcessId: summary.dialogProcessId,
         turnScopeId: summary.turnScopeId,
         workflowRunId: summary.workflowRunId,

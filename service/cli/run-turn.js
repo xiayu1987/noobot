@@ -10,6 +10,7 @@ import {
 } from "@noobot/session-protocol/message-identity";
 import {
   AGENT_COMMAND,
+  ROOT_PARENT_SESSION_ID,
   createInteractionResponseCommand,
   createTurnRunCommand,
   createTurnStopCommand,
@@ -34,9 +35,10 @@ export const CLIENT_CLOSE_REASON = Object.freeze({
   INTERACTION_FAILED: "client_interaction_failed",
 });
 
-export function createCliTurnIdentity({ sessionId = "" } = {}) {
+export function createCliTurnIdentity({ sessionId }) {
+  if (typeof sessionId !== "string" || !sessionId) throw new TypeError("cli_session_id_required");
   return {
-    sessionId: sessionId || randomUUID(),
+    sessionId,
     turnScopeId: `cli-turn:${randomUUID()}`,
     userMessageId: createUserMessageId(),
     presentationMessageId: createPresentationMessageId(),
@@ -53,7 +55,11 @@ export function buildRunCommand({
   const isContinue = invocation.action === CLI_ACTION.RESUME_TURN;
   return createTurnRunCommand({
     commandType: isContinue ? AGENT_COMMAND.CONTINUE : AGENT_COMMAND.SEND,
-    identity: { sessionId: identity.sessionId, turnScopeId: identity.turnScopeId },
+    identity: {
+      sessionId: identity.sessionId,
+      parentSessionId: ROOT_PARENT_SESSION_ID,
+      turnScopeId: identity.turnScopeId,
+    },
     input: { message: invocation.message, attachments },
     preferences: invocation.preferences,
     presentation: {
@@ -99,8 +105,8 @@ export async function runCliTurn({
       createTurnStopCommand({
         identity: {
           sessionId: identity.sessionId,
+          parentSessionId: ROOT_PARENT_SESSION_ID,
           turnScopeId: identity.turnScopeId,
-          dialogProcessId: tracker.state.dialogProcessId,
         },
         concurrency: { expectedTurnRevision: tracker.state.revision },
         stop: { executionId: tracker.state.executionId },
@@ -125,7 +131,7 @@ export async function runCliTurn({
         identity: {
           sessionId: identity.sessionId,
           turnScopeId: identity.turnScopeId,
-          dialogProcessId: request.dialogProcessId || tracker.state.dialogProcessId,
+          dialogProcessId: request.dialogProcessId,
         },
         interaction: { requestId: request.requestId, response },
       }),

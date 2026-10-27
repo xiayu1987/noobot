@@ -26,7 +26,13 @@ describe("useAgentInteraction", () => {
       encryptPayloadBySessionId: (payload) => payload,
       sendJson,
     });
-    const request = { requestId: "req-1", sessionId: "s-1", channelSessionId: "s-1" };
+    const request = {
+      requestId: "req-1",
+      sessionId: "s-1",
+      channelSessionId: "s-1",
+      dialogProcessId: "dp-1",
+      turnScopeId: "turn-1",
+    };
 
     interaction.setPendingInteractionRequest(request);
     expect(interaction.pendingInteractionRequest.value?.requestId).toBe("req-1");
@@ -34,32 +40,8 @@ describe("useAgentInteraction", () => {
     interaction.submitInteractionResponse({ ok: true });
     expect(sendJson).toHaveBeenCalledTimes(1);
     expect(interaction.pendingInteractionRequest.value).toBeNull();
-    expect(interaction.isInteractionRequestHandled("req-1")).toBe(true);
 
     interaction.setPendingInteractionRequest(request);
-    expect(interaction.pendingInteractionRequest.value).toBeNull();
-  });
-
-  it("deduplicates by signature when requestId is missing", () => {
-    const interaction = useAgentInteraction({
-      encryptPayloadBySessionId: (payload) => payload,
-      sendJson: vi.fn(),
-    });
-    const requestNoId = {
-      sessionId: "s-1",
-      channelSessionId: "s-1",
-      dialogProcessId: "dp-1",
-      interactionType: "confirm",
-      toolName: "toolA",
-      connectorType: "terminal",
-      connectorName: "local",
-      content: "continue?",
-    };
-
-    interaction.markInteractionRequestHandled(requestNoId);
-    expect(interaction.isInteractionRequestHandled(requestNoId)).toBe(true);
-
-    interaction.setPendingInteractionRequest(requestNoId);
     expect(interaction.pendingInteractionRequest.value).toBeNull();
   });
 
@@ -72,6 +54,7 @@ describe("useAgentInteraction", () => {
     const sharedInteractionFields = {
       sessionId: "s-1",
       channelSessionId: "s-1",
+      turnScopeId: "turn-1",
       dialogProcessId: "dp-1",
       interactionType: "user_interaction",
       toolName: "user_interaction",
@@ -98,9 +81,7 @@ describe("useAgentInteraction", () => {
       identity: {
         sessionId: "s-1",
         dialogProcessId: "dp-1",
-        turnScopeId: "",
-        parentSessionId: "",
-        parentDialogProcessId: "",
+        turnScopeId: "turn-1",
       },
       interaction: { requestId: "req-first", response: { value: "first" } },
     });
@@ -121,6 +102,7 @@ describe("useAgentInteraction", () => {
       requestId: "req-a",
       sessionId: "s-1",
       channelSessionId: "s-1",
+      turnScopeId: "turn-1",
       dialogProcessId: "dp-1",
       interactionType: "confirm",
       content: "first?",
@@ -129,6 +111,7 @@ describe("useAgentInteraction", () => {
       requestId: "req-b",
       sessionId: "s-1",
       channelSessionId: "s-1",
+      turnScopeId: "turn-1",
       dialogProcessId: "dp-1",
       interactionType: "confirm",
       content: "second?",
@@ -148,9 +131,7 @@ describe("useAgentInteraction", () => {
       identity: {
         sessionId: "s-1",
         dialogProcessId: "dp-1",
-        turnScopeId: "",
-        parentSessionId: "",
-        parentDialogProcessId: "",
+        turnScopeId: "turn-1",
       },
       interaction: { requestId: "req-a", response: { approved: true } },
     });
@@ -171,11 +152,15 @@ describe("useAgentInteraction", () => {
       requestId: "req-old",
       sessionId: "old-session",
       channelSessionId: "old-session",
+      dialogProcessId: "dp-1",
+      turnScopeId: "turn-1",
     });
     interaction.setPendingInteractionRequest({
       requestId: "req-current",
       sessionId: "s-1",
       channelSessionId: "s-1",
+      dialogProcessId: "dp-1",
+      turnScopeId: "turn-1",
     });
     expect(interaction.pendingInteractionRequest.value?.requestId).toBe("req-current");
     expect(
@@ -204,6 +189,8 @@ describe("useAgentInteraction", () => {
       requestId: "req-2",
       sessionId: "session-2",
       channelSessionId: "session-2",
+      dialogProcessId: "dp-1",
+      turnScopeId: "turn-1",
       requireEncryption: true,
     });
     interaction.submitInteractionResponse({ approved: true });
@@ -215,10 +202,8 @@ describe("useAgentInteraction", () => {
       commandId: "interaction:req-2",
       identity: {
         sessionId: "session-2",
-        dialogProcessId: "",
-        turnScopeId: "",
-        parentSessionId: "",
-        parentDialogProcessId: "",
+        dialogProcessId: "dp-1",
+        turnScopeId: "turn-1",
       },
       interaction: {
         requestId: "req-2",
@@ -253,7 +238,6 @@ describe("useAgentInteraction", () => {
     expect(() => interaction.submitInteractionResponse({ approved: true })).toThrow(sendError);
     expect(interaction.pendingInteractionRequest.value).toEqual(request);
     expect(interaction.pendingInteractionRequests.value).toEqual([request]);
-    expect(interaction.isInteractionRequestHandled(request)).toBe(false);
     expect(interaction.interactionSubmitting.value).toBe(false);
   });
 
@@ -283,8 +267,6 @@ describe("useAgentInteraction", () => {
         sessionId: "child-session",
         dialogProcessId: "child-dialog",
         turnScopeId: "child-turn",
-        parentSessionId: "",
-        parentDialogProcessId: "",
       },
       interaction: {
         requestId: "req-child",

@@ -16,7 +16,7 @@ import { normalizeTurnTransportEnvelope } from "../../../../../../src/modules/ch
 const identity = { sessionId: "session-1", turnScopeId: "turn-1" };
 const message = () =>
   buildViewMessage(
-    { ...identity, role: "assistant", presentationMessageId: "message-1" },
+    { ...identity, role: "assistant", content: "", presentationMessageId: "message-1" },
     { sessionId: "session-1" },
   );
 const envelope = (overrides) =>

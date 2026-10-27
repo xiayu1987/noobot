@@ -5,6 +5,7 @@
  */
 import { normalizeTrimmedString } from "./utils.js";
 import { AGENT_COMMAND, createTurnRunCommand } from "@noobot/agent-transport-protocol";
+import { buildAgentCommandIdentity } from "./commandIdentity.js";
 import { isPlainObject } from "@noobot/shared/value";
 
 function normalizeSelectedPluginKeys(selectedPlugins) {
@@ -14,12 +15,6 @@ function normalizeSelectedPluginKeys(selectedPlugins) {
 }
 
 const plainObjectOrNull = (source) => (isPlainObject(source.value) ? source.value : null);
-
-function resolveCommandType({ continueFromStopped, reuseExistingUserTurn }) {
-  if (continueFromStopped) return AGENT_COMMAND.CONTINUE;
-  if (reuseExistingUserTurn) return AGENT_COMMAND.RESEND;
-  return AGENT_COMMAND.SEND;
-}
 
 function buildPreferences(options) {
   const scenario = normalizeTrimmedString(options.botScenario.value);
@@ -46,34 +41,32 @@ function buildPreferences(options) {
 
 function buildSessionBlock({ activeSession, commandType }) {
   const createsLocalSession =
-    commandType === AGENT_COMMAND.SEND && activeSession?.value?.isLocal === true;
+    commandType === AGENT_COMMAND.SEND && activeSession.value.isLocal === true;
   return {
     createIfAbsent: createsLocalSession,
     selectedConnectorIds: createsLocalSession
-      ? activeSession.value.connectorPanelState?.selectedConnectorIds || []
+      ? activeSession.value.connectorPanelState.selectedConnectorIds
       : [],
   };
 }
 
-function buildIdentity({ activeSession, dialogProcessId, turnScopeId }) {
-  return {
-    sessionId: activeSession?.value?.sessionId,
-    parentSessionId: activeSession?.value?.parentSessionId,
-    dialogProcessId: normalizeTrimmedString(dialogProcessId),
-    parentDialogProcessId: activeSession?.value?.parentDialogProcessId,
-    turnScopeId,
-  };
+function buildIdentity({ activeSession, request }) {
+  return buildAgentCommandIdentity(request.commandType, {
+    channel: activeSession.value,
+    turn: { dialogProcessId: request.dialogProcessId, turnScopeId: request.turnScopeId },
+  });
 }
 
 export function buildChatPayload({
+  request,
   activeSession,
-  message,
-  attachments = [],
+  attachments,
+  requestedTextStreaming,
+  expectedAggregateVersion,
   allowUserInteraction,
   safeConfirm,
   safeConfirmLevel,
   sanitizeOutput,
-  requestedTextStreaming = false,
   botScenario,
   selectedModel,
   memoryModel,
@@ -82,27 +75,12 @@ export function buildChatPayload({
   summaryPolicy,
   locale,
   selectedPlugins,
-  uploadHint = "",
-  reuseExistingUserTurn = false,
-  dialogProcessId = "",
-  turnScopeId = "",
-  userMessageId = "",
-  presentationMessageId = "",
-  continueFromStopped = false,
-  resumeDialogProcessId = "",
-  resumeTurnScopeId = "",
-  expectedAggregateVersion,
-} = {}) {
-  const normalizedTurnScopeId = normalizeTrimmedString(turnScopeId);
-  const commandType = resolveCommandType({ continueFromStopped, reuseExistingUserTurn });
+}) {
+  const { commandType } = request;
   return createTurnRunCommand({
     commandType,
-    identity: buildIdentity({
-      activeSession,
-      dialogProcessId: commandType === AGENT_COMMAND.RESEND ? dialogProcessId : "",
-      turnScopeId: normalizedTurnScopeId,
-    }),
-    input: { message: message || uploadHint, attachments },
+    identity: buildIdentity({ activeSession, request }),
+    input: { message: request.messageText, attachments },
     preferences: buildPreferences({
       allowUserInteraction,
       safeConfirm,
@@ -119,17 +97,14 @@ export function buildChatPayload({
       selectedPlugins,
     }),
     presentation: {
-      userMessageId: normalizeTrimmedString(userMessageId),
-      presentationMessageId: normalizeTrimmedString(presentationMessageId),
+      userMessageId: request.userMessageId,
+      presentationMessageId: request.presentationMessageId,
     },
     concurrency: {
       expectedTurnRevision: 0,
       expectedAggregateVersion,
     },
     session: buildSessionBlock({ activeSession, commandType }),
-    continuation: {
-      dialogProcessId: normalizeTrimmedString(resumeDialogProcessId),
-      turnScopeId: normalizeTrimmedString(resumeTurnScopeId),
-    },
+    ...(commandType === AGENT_COMMAND.CONTINUE ? { continuation: request.continuation } : {}),
   });
 }

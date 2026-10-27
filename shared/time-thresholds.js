@@ -45,6 +45,7 @@ export const TIME_THRESHOLDS = deepFreeze({
     hookTimeoutMs: TIME_TIERS.hookMs,
     authorityOutboxDeliveredRetentionMs: TIME_TIERS.fiveMinutesMs,
     authorityOutboxCompactIntervalMs: TIME_TIERS.standardCommandMs,
+    terminalResolutionRetryDelayMs: 250,
   },
 
   memory: {

@@ -64,13 +64,13 @@ function prepareAttachmentBinding({
 export async function bindTurnAttachments({
   userId,
   sessionId,
-  turnScopeId = "",
-  messageUid = "",
-  attachments = [],
-  expectedAggregateVersion = null,
-  commandId = "",
+  turnScopeId,
+  messageUid,
+  attachments,
+  expectedAggregateVersion,
+  commandId,
   persistenceContext,
-} = {}) {
+}) {
   const { identity, canonicalAttachments, normalizedExpectedVersion, requestHash } =
     prepareAttachmentBinding({
       userId,
@@ -106,7 +106,7 @@ export async function bindTurnAttachments({
         (message) =>
           text(message?.messageUid) === identity.messageUid &&
           text(message?.turnScopeId) === identity.turnScopeId &&
-          text(message?.role).toLowerCase() === "user",
+          message.role === "user",
       );
       if (messageIndex < 0) {
         throw Object.assign(new Error("Turn user message not found"), { statusCode: 404 });
@@ -115,7 +115,7 @@ export async function bindTurnAttachments({
         return {
           session,
           userMessage: messages[messageIndex],
-          attachments: messages[messageIndex].attachments || [],
+          attachments: messages[messageIndex].attachments,
           aggregateVersion: requireSessionAggregateVersion(session?.aggregateVersion),
           deduplicated: true,
         };
@@ -144,7 +144,7 @@ export async function bindTurnAttachments({
         });
       }
       const currentMessage = messages[messageIndex];
-      if (Array.isArray(currentMessage.attachments) && currentMessage.attachments.length > 0) {
+      if (currentMessage.attachments.length > 0) {
         throw Object.assign(new Error("Turn attachments are already bound"), {
           statusCode: 409,
           code: SESSION_ERROR_CODE.TURN_ATTACHMENTS_ALREADY_BOUND,
@@ -176,14 +176,14 @@ export async function bindTurnAttachments({
         persistenceContext,
       });
       if (!savedSession) throw new TypeError("attachment binding saved Session is missing");
-      const savedMessage = (savedSession.messages || []).find(
+      const savedMessage = savedSession.messages.find(
         (message) => text(message?.messageUid) === identity.messageUid,
       );
       if (!savedMessage) throw new TypeError("attachment binding materialization is missing");
       return {
         session: savedSession,
         userMessage: savedMessage,
-        attachments: savedMessage.attachments || [],
+        attachments: savedMessage.attachments,
         aggregateVersion: requireSessionAggregateVersion(savedSession.aggregateVersion),
         deduplicated: false,
       };

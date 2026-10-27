@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
+import { AGENT_COMMAND } from "@noobot/agent-transport-protocol";
 import { deriveAgentExecutionId } from "@noobot/session-protocol/execution-lifecycle";
 import { createHarness, activateRuntimeTurn } from "../helpers/useChatEngineHarness.js";
 import {
@@ -15,6 +16,8 @@ import {
   applyExecutionSnapshot,
   selectTurnRuntimeByScope,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+
+const SEND_REQUEST = Object.freeze({ commandType: AGENT_COMMAND.SEND });
 
 const CHILD_EXECUTION_ID = deriveAgentExecutionId({ turnScopeId: "child-turn" });
 
@@ -32,7 +35,7 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
       stream,
     });
 
-    const sendPromise = engine.send();
+    const sendPromise = engine.send(SEND_REQUEST);
     await Promise.resolve();
 
     expect(sending.value).toBe(true);
@@ -82,10 +85,8 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
       commandId: "stop:turn-stop-payload",
       identity: {
         sessionId: "backend-stop-payload",
-        dialogProcessId: "dp-stop-payload",
         turnScopeId: "turn-stop-payload",
         parentSessionId: "parent-session",
-        parentDialogProcessId: "",
       },
       concurrency: { expectedTurnRevision: 2 },
       stop: {},
@@ -131,7 +132,6 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
         commandId: "stop:turn-refreshed",
         identity: expect.objectContaining({
           sessionId: "backend-stop-refreshed",
-          dialogProcessId: "dp-refreshed",
           turnScopeId: "turn-refreshed",
         }),
         stop: {},
@@ -170,7 +170,6 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
         commandId: "stop:turn-channel-identity",
         identity: expect.objectContaining({
           sessionId: "backend-stop-channel-identity",
-          dialogProcessId: "dp-channel-identity",
           turnScopeId: "turn-channel-identity",
         }),
         stop: {},
@@ -215,7 +214,6 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
         commandId: "stop:turn-user-fallback",
         identity: expect.objectContaining({
           sessionId: "backend-stop-user-turn-fallback",
-          dialogProcessId: "dp-user-turn-fallback",
           turnScopeId: "turn-user-fallback",
         }),
         stop: {},
@@ -254,7 +252,6 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
         identity: expect.objectContaining({
           sessionId: "child-session",
           parentSessionId: "main-session",
-          dialogProcessId: "child-dialog",
           turnScopeId: "child-turn",
         }),
         concurrency: { expectedTurnRevision: 7 },
@@ -286,6 +283,17 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
     expect(engine.stopExecution("missing-execution")).toBe(false);
     expect(engine.stopExecution("terminal-execution")).toBe(false);
     expect(engine.stopExecution("locked-execution")).toBe(false);
+    expect(deps.chatWebSocketClient.requestStop).not.toHaveBeenCalled();
+  });
+
+  it("stopSending without an active session is rejected explicitly and sends no stop command", () => {
+    const { engine, deps, activeSession, activeSessionId } = createHarness({
+      sessionId: "stop-no-active-session",
+    });
+    activeSessionId.value = "missing-session";
+    expect(activeSession.value).toBeNull();
+
+    expect(engine.stopSending()).toBe(false);
     expect(deps.chatWebSocketClient.requestStop).not.toHaveBeenCalled();
   });
 });

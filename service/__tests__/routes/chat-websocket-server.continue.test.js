@@ -243,7 +243,6 @@ test("chat-websocket-server: continue action does not fallback to current dialog
           action: "continue",
           userId: "u1",
           sessionId: "s1",
-          dialogProcessId: "dp-current",
           message: "continue",
           turnScopeId: "turn-new",
           config: {
@@ -295,7 +294,6 @@ test("chat-websocket-server: stop during continue request ends with authoritativ
         action: "continue",
         userId: "u1",
         sessionId: "s-continue-stop",
-        dialogProcessId: "dp-stopped",
         message: "continue",
         turnScopeId: "turn-new",
         config: {
@@ -307,7 +305,6 @@ test("chat-websocket-server: stop during continue request ends with authoritativ
       stopPayload: {
         sessionId: "s-continue-stop",
         turnScopeId: "turn-new",
-        dialogProcessId: "dp-stopped",
       },
     });
 

@@ -4,23 +4,23 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeTrimmedString } from "./utils.js";
+import { isObjectLike } from "@noobot/shared/value";
 import { FrontendRunState, SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
 import { nowMs } from "../../model/timeFields.js";
-import { createTurnStopCommand } from "@noobot/agent-transport-protocol";
+import { AGENT_COMMAND, createTurnStopCommand } from "@noobot/agent-transport-protocol";
+import { buildAgentCommandIdentity } from "./commandIdentity.js";
 import { logStopDebug } from "../../../debug/loggers/stopDebugLogger.js";
 import {
   selectCurrentTurnRuntime,
   selectExecution,
 } from "../run-state-machine/turnRuntimeRegistry.js";
 
-function buildStopCommand(target, executionId) {
+function buildStopCommand({ target, executionId }) {
   return createTurnStopCommand({
-    identity: {
-      sessionId: normalizeTrimmedString(target.sessionId),
-      parentSessionId: normalizeTrimmedString(target.parentSessionId),
-      dialogProcessId: normalizeTrimmedString(target.dialogProcessId),
-      turnScopeId: normalizeTrimmedString(target.turnScopeId),
-    },
+    identity: buildAgentCommandIdentity(AGENT_COMMAND.STOP, {
+      channel: target,
+      turn: { turnScopeId: target.turnScopeId },
+    }),
     concurrency: { expectedTurnRevision: target.revision },
     stop: { executionId },
   });
@@ -42,19 +42,17 @@ function logStopSkipped(target) {
   }));
 }
 
-function requestStop({ stopPayload, chatWebSocketClient, applyRunStateEvent }) {
+function requestStop({ target, stopPayload, chatWebSocketClient, applyRunStateEvent }) {
+  const identity = {
+    sessionId: target.sessionId,
+    dialogProcessId: target.dialogProcessId,
+    turnScopeId: target.turnScopeId,
+  };
   logStopDebug("stop.payload", () => ({
-    sessionId: stopPayload.identity.sessionId,
-    dialogProcessId: stopPayload.identity.dialogProcessId,
-    turnScopeId: stopPayload.identity.turnScopeId,
+    ...identity,
     commandId: stopPayload.commandId,
     stopPayload,
   }));
-  const identity = {
-    sessionId: stopPayload.identity.sessionId,
-    dialogProcessId: stopPayload.identity.dialogProcessId,
-    turnScopeId: stopPayload.identity.turnScopeId,
-  };
   applyRunStateEvent({
     type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED,
     state: FrontendRunState.USER_STOPPING,
@@ -91,16 +89,22 @@ export function stopActiveTurn({
   chatWebSocketClient,
   applyRunStateEvent,
 }) {
+  const currentSession = activeSession.value;
+  if (!isObjectLike(currentSession)) {
+    logStopSkipped(null);
+    return false;
+  }
   const turnRuntime = selectCurrentTurnRuntime(
     turnRuntimeRegistry.value,
-    normalizeTrimmedString(activeSession.value?.sessionId),
+    normalizeTrimmedString(currentSession.sessionId),
   );
   if (!isStoppable(turnRuntime, turnRuntime?.canStop === true)) {
     logStopSkipped(turnRuntime);
     return false;
   }
   return requestStop({
-    stopPayload: buildStopCommand(turnRuntime, ""),
+    target: turnRuntime,
+    stopPayload: buildStopCommand({ target: turnRuntime, executionId: "" }),
     chatWebSocketClient,
     applyRunStateEvent,
   });
@@ -118,7 +122,8 @@ export function stopExecution({
     return false;
   }
   return requestStop({
-    stopPayload: buildStopCommand(execution, execution.executionId),
+    target: execution,
+    stopPayload: buildStopCommand({ target: execution, executionId: execution.executionId }),
     chatWebSocketClient,
     applyRunStateEvent,
   });

@@ -102,10 +102,9 @@ function mountPanel(props = {}, options = {}) {
   return mount(ChatMessageListPanel, {
     props: {
       loadingSessionDetail: false,
-      activeSession: { messages: [] },
+      activeSession: { sessionId: "s-1", messages: [] },
       shouldRenderMessageInChat: () => true,
       userId: "u-1",
-      authFetch: null,
       stopExecution: async () => true,
       fetchExecutionReport: async () => null,
       renderMarkdown: (v) => v,
@@ -145,6 +144,7 @@ describe("ChatMessageListPanel", () => {
     const wrapper = mountPanel({
       loadingSessionDetail: true,
       activeSession: {
+        sessionId: "s-1",
         messages: [{ role: RoleEnum.USER, content: "hello" }],
       },
     });
@@ -162,6 +162,7 @@ describe("ChatMessageListPanel", () => {
     mountPanel(
       {
         activeSession: {
+          sessionId: "session-current",
           id: "session-current",
           messages: [
             {
@@ -216,6 +217,7 @@ describe("ChatMessageListPanel", () => {
     };
 
     const activeSession = reactive({
+      sessionId: "s-1",
       messages: [{ role: RoleEnum.ASSISTANT, dialogProcessId: "dp-1", content: "v1", ts: 1 }],
     });
     const wrapper = mount(ChatMessageListPanel, {
@@ -249,6 +251,7 @@ describe("ChatMessageListPanel", () => {
 
     await wrapper.setProps({
       activeSession: {
+        sessionId: "s-1",
         messages: [{ role: RoleEnum.ASSISTANT, dialogProcessId: "dp-1", content: "v2", ts: 2 }],
       },
     });
@@ -269,6 +272,7 @@ describe("ChatMessageListPanel", () => {
     };
 
     const activeSession = reactive({
+      sessionId: "s-1",
       messages: [
         {
           role: RoleEnum.ASSISTANT,
@@ -307,6 +311,7 @@ describe("ChatMessageListPanel", () => {
 
     await wrapper.setProps({
       activeSession: {
+        sessionId: "s-1",
         messages: [
           {
             role: RoleEnum.ASSISTANT,
@@ -334,6 +339,7 @@ describe("ChatMessageListPanel", () => {
     };
 
     const activeSession = reactive({
+      sessionId: "s-1",
       messages: [
         { role: RoleEnum.USER, content: "old", turnScopeId: "client-turn:old" },
         {
@@ -378,6 +384,7 @@ describe("ChatMessageListPanel", () => {
 
     await wrapper.setProps({
       activeSession: {
+        sessionId: "s-1",
         messages: [
           { role: RoleEnum.USER, content: "new", turnScopeId: "client-turn:new" },
           {
@@ -548,6 +555,7 @@ describe("ChatMessageListPanel", () => {
     mountPanel(
       {
         activeSession: {
+          sessionId: "s-1",
           messages: renderedMessages,
           rawMessages: staleRawMessages,
         },
@@ -567,6 +575,7 @@ describe("ChatMessageListPanel", () => {
   it("renders stable anchors and exposes scrollToMessageAnchor", () => {
     const wrapper = mountPanel({
       activeSession: {
+        sessionId: "s-1",
         messages: [
           {
             role: RoleEnum.USER,

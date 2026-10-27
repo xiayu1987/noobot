@@ -11,14 +11,10 @@ import {
   isTerminalAgentChannelState,
 } from "@noobot/agent-transport-protocol";
 import { RoleEnum } from "../../model/chatConstants.js";
-import {
-  isAutoResolvedInteraction,
-  normalizeInteractionRequestPayload,
-} from "../interactionPayload.js";
 import { isFinalizedAssistantMessage } from "../sessionRunStateMachine.js";
 import { getMessageRole, getMessageTurnScopeId } from "../../model/messageIdentity.js";
 import { logResendDebug, summarizeDebugMessage } from "../../../debug/loggers/resendDebugLogger.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike, requireFunctionDependencies } from "@noobot/shared/value";
 
 const MISSING_INTERACTION_PAYLOAD_WAIT_MS = 1200;
 
@@ -28,47 +24,18 @@ export function createChatEngineConversationState({
   pendingInteractionRequest,
   clearPendingInteraction,
   clearPendingInteractionIfObsolete,
-  submitInteractionResponse,
   onConversationState,
   notify,
   translate,
-} = {}) {
+}) {
+  requireFunctionDependencies("createChatEngineConversationState", {
+    clearPendingInteraction,
+    clearPendingInteractionIfObsolete,
+    onConversationState,
+    notify,
+    translate,
+  });
   const missingInteractionPayloadTimers = new Map();
-  const connectorConnectedAckedRequestIds = new Set();
-
-  function tryAutoResolveInteraction(rawRequest = {}) {
-    const request = normalizeInteractionRequestPayload(rawRequest || {});
-    if (!isAutoResolvedInteraction(request)) {
-      return false;
-    }
-    const requestId = text(request?.requestId);
-    if (requestId && connectorConnectedAckedRequestIds.has(requestId)) {
-      return true;
-    }
-    if (request?.requestId) {
-      try {
-        submitInteractionResponse(
-          {
-            confirmed: true,
-            response: text(request?.interactionType)
-              ? `${String(request.interactionType).trim()}_ack`
-              : "interaction_auto_ack",
-          },
-          {
-            requestId: request.requestId,
-            requireEncryption: request.requireEncryption === true,
-            sessionId: String(request.sessionId || ""),
-          },
-        );
-      } catch (error) {
-        notify?.({ type: "error", message: error?.message || translate?.("common.error") });
-        return false;
-      }
-    }
-    if (requestId) connectorConnectedAckedRequestIds.add(requestId);
-    clearPendingInteraction(request);
-    return true;
-  }
 
   function interactionPayloadWaitKey({ sessionId = "", turnScopeId = "" } = {}) {
     return `${text(sessionId)}::${text(turnScopeId)}`;
@@ -101,9 +68,7 @@ export function createChatEngineConversationState({
   }
 
   function findTurnAssistantMessage(turnScopeId = "") {
-    const messageList = Array.isArray(activeSession.value?.messages)
-      ? activeSession.value.messages
-      : [];
+    const messageList = activeSession.value.messages;
     for (let messageIndex = messageList.length - 1; messageIndex >= 0; messageIndex -= 1) {
       const messageItem = messageList[messageIndex];
       if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) continue;
@@ -164,8 +129,10 @@ export function createChatEngineConversationState({
   }
 
   function applyConversationState(channelState) {
-    const applied = channelState.sessionId === text(activeSession.value?.sessionId);
-    onConversationState?.({ source: "stream", ...channelState, applied });
+    const currentSession = activeSession.value;
+    const applied =
+      isObjectLike(currentSession) && channelState.sessionId === text(currentSession.sessionId);
+    onConversationState({ source: "stream", ...channelState, applied });
     if (!applied) return;
     if (channelState.scope === AGENT_CHANNEL_STATE_SCOPE.SESSION) {
       applySessionChannelState(channelState);
@@ -179,13 +146,11 @@ export function createChatEngineConversationState({
       clearTimeout(timer);
     }
     missingInteractionPayloadTimers.clear();
-    connectorConnectedAckedRequestIds.clear();
   }
 
   return {
     applyConversationState,
     clearMissingInteractionPayloadTimer,
     disposeConversationState,
-    tryAutoResolveInteraction,
   };
 }

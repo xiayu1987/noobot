@@ -11,7 +11,9 @@ import {
   SESSION_NOT_FOUND_REASON,
   createSessionDeletedError,
   createSessionNotFoundError,
+  isCanonicalMessageTimestamp,
   normalizeDialogProcessId,
+  pickMessageOriginField,
 } from "@noobot/session-protocol";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import { emitEvent } from "../../events/index.js";
@@ -21,11 +23,12 @@ import { summarizeSessionTurnPayload } from "./turn-payload-summary.js";
 
 const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set(["tool_result_overflow"]);
 
-function normalizeIsoTime(value = "") {
-  const normalizedText = text(value);
-  if (!normalizedText) return "";
-  const ms = Date.parse(normalizedText);
-  return Number.isFinite(ms) && ms > 0 ? new Date(ms).toISOString() : "";
+function pickSourceTimestampField(source) {
+  if (source.ts === undefined) return {};
+  if (!isCanonicalMessageTimestamp(source.ts)) {
+    throw new TypeError("session turn ts must be a canonical ISO timestamp");
+  }
+  return { ts: source.ts };
 }
 
 function filterSessionAttachments(attachments = []) {
@@ -119,11 +122,11 @@ function normalizeSessionTurnInput(input = {}) {
     ...(input.interjectionSequence === undefined
       ? {}
       : { interjectionSequence: input.interjectionSequence }),
-    messageOrigin: text(input.messageOrigin).toLowerCase(),
+    ...pickMessageOriginField(input),
     pluginMessage: input.pluginMessage === true,
     pluginMeta: valueOrDefault(input.pluginMeta, null),
     transferEnvelopes: filterSessionTransferEnvelopes(valueOrDefault(input.transferEnvelopes, [])),
-    ts: normalizeIsoTime(valueOrDefault(input.ts, "")),
+    ...pickSourceTimestampField(input),
     persistenceScope: input.persistenceScope,
   };
 }
@@ -147,7 +150,7 @@ function buildFullTurnPayload(input) {
     turnScopeId: input.turnScopeId,
     tool_calls: Array.isArray(input.tool_calls) ? input.tool_calls : [],
     tool_call_id: stringValue(input.tool_call_id),
-    ...optionalListField("attachments", input.attachments),
+    attachments: input.attachments,
     modelAlias: stringValue(input.modelAlias).trim(),
     modelName: stringValue(input.modelName).trim(),
     summarized: input.summarized,
@@ -163,11 +166,11 @@ function buildFullTurnPayload(input) {
     ...(input.interjectionSequence === undefined
       ? {}
       : { interjectionSequence: input.interjectionSequence }),
-    messageOrigin: input.messageOrigin,
+    ...pickMessageOriginField(input),
     pluginMessage: input.pluginMessage,
     pluginMeta: normalizedOptionalObject(input.pluginMeta),
     ...optionalListField("transferEnvelopes", input.transferEnvelopes),
-    ...optionalValueField("ts", input.ts),
+    ...pickSourceTimestampField(input),
     modelResponseMetadata: normalizedOptionalObject(input.modelResponseMetadata),
     ...optionalListField("activityTimeline", input.activityTimeline),
     ...optionalListField("toolTimeline", input.toolTimeline),
@@ -216,7 +219,7 @@ function buildTurnPayload(input) {
     turnScopeId: input.turnScopeId,
     tool_calls: input.tool_calls,
     tool_call_id: input.tool_call_id,
-    ...(input.attachments.length ? { attachments: input.attachments } : {}),
+    attachments: input.attachments,
     modelAlias: input.modelAlias,
     modelName: input.modelName,
     summarized: input.summarized,
@@ -235,11 +238,11 @@ function buildTurnPayload(input) {
     ...(input.interjectionSequence === undefined
       ? {}
       : { interjectionSequence: input.interjectionSequence }),
-    messageOrigin: input.messageOrigin,
+    ...pickMessageOriginField(input),
     pluginMessage: input.pluginMessage,
     pluginMeta: input.pluginMeta,
     ...(input.transferEnvelopes.length ? { transferEnvelopes: input.transferEnvelopes } : {}),
-    ts: input.ts,
+    ...pickSourceTimestampField(input),
   };
 }
 
@@ -299,7 +302,7 @@ function buildAgentMessageTurnInput(messageItem, input) {
     ...(messageItem.interjectionSequence === undefined
       ? {}
       : { interjectionSequence: messageItem.interjectionSequence }),
-    messageOrigin: text(messageItem?.messageOrigin).toLowerCase(),
+    ...pickMessageOriginField(messageItem),
     pluginMessage: messageItem?.pluginMessage === true,
     pluginMeta: normalizedOptionalObject(messageItem.pluginMeta),
     transferEnvelopes: arrayValue(messageItem.transferEnvelopes),
@@ -307,7 +310,7 @@ function buildAgentMessageTurnInput(messageItem, input) {
     activityTimeline: arrayValue(messageItem.activityTimeline),
     toolTimeline: arrayValue(messageItem.toolTimeline),
     turnScopeId: stringValue(firstTruthyValue([messageItem.turnScopeId, input.turnScopeId])).trim(),
-    ts: stringValue(messageItem.ts).trim(),
+    ...pickSourceTimestampField(messageItem),
     eventListener: input.eventListener,
     persistenceScope: input.persistenceScope,
   };

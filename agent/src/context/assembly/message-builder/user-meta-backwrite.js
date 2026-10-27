@@ -15,7 +15,7 @@ import {
   readContextMessageValue,
   writeContextMessageMetadata,
 } from "@noobot/context-protocol/message/codec";
-import { text } from "@noobot/shared/value";
+import { isNaturalDialogUserMessage } from "@noobot/session-protocol";
 import { requireActiveModelContext } from "../../../runtime/active-model-context.js";
 
 function setBackwrites(modelContext, records) {
@@ -23,13 +23,12 @@ function setBackwrites(modelContext, records) {
 }
 
 export function queueUserMetaBackwrite(runtime, { attachmentRef, result, createdAt = "" }) {
-  const sourceMessageUid = text(runtime.currentUserMessageUid);
-  const sourceOrigin = text(runtime.currentUserMessageOrigin).toLowerCase();
-  if (!sourceMessageUid || sourceOrigin !== "natural") {
+  const sourceMessage = runtime.currentUserMessage;
+  if (!sourceMessage || !isNaturalDialogUserMessage(sourceMessage)) {
     throw new Error("user_meta backwrite requires the current natural user message");
   }
   const backwrite = createUserMetaBackwrite({
-    userMetaSourceMessageUid: sourceMessageUid,
+    userMetaSourceMessageUid: sourceMessage.messageUid,
     attachmentRef,
     result,
     createdAt: createdAt || new Date().toISOString(),

@@ -18,7 +18,7 @@ function validControl(overrides = {}) {
   return {
     ...createReconnectControl({
       requestId: "reconnect-1",
-      identity: { sessionId: "child-1", parentSessionId: "root-1", parentDialogProcessId: "dp-1" },
+      identity: { sessionId: "child-1", parentSessionId: "root-1" },
       knownLifecycleSequenceMap: { "child-1": 3 },
     }),
     ...overrides,
@@ -28,14 +28,14 @@ function validControl(overrides = {}) {
 test("reconnect control carries identity in a single identity object", () => {
   const control = createReconnectControl({
     requestId: "r-1",
-    identity: { sessionId: "s-1", parentSessionId: "", parentDialogProcessId: "" },
+    identity: { sessionId: "s-1", parentSessionId: "" },
     knownLifecycleSequenceMap: {},
   });
   assert.deepEqual(control, {
     action: RECONNECT_CONTROL_ACTION,
     protocolVersion: RECONNECT_CONTROL_PROTOCOL_VERSION,
     requestId: "r-1",
-    identity: { sessionId: "s-1", parentSessionId: "", parentDialogProcessId: "" },
+    identity: { sessionId: "s-1", parentSessionId: "" },
     knownLifecycleSequenceMap: {},
   });
   assert.equal(parseReconnectControl(control), control);
@@ -44,14 +44,14 @@ test("reconnect control carries identity in a single identity object", () => {
 test("reconnect control allows an empty identity when no session is active", () => {
   const control = createReconnectControl({
     requestId: "r-1",
-    identity: { sessionId: "", parentSessionId: "", parentDialogProcessId: "" },
+    identity: { sessionId: "", parentSessionId: "" },
     knownLifecycleSequenceMap: {},
   });
   assert.equal(validateReconnectControl(control).valid, true);
 });
 
 test("reconnect control builder rejects untrimmed or missing fields instead of normalizing", () => {
-  const identity = { sessionId: "s-1", parentSessionId: "", parentDialogProcessId: "" };
+  const identity = { sessionId: "s-1", parentSessionId: "" };
   for (const input of [
     { requestId: " r-1 ", identity, knownLifecycleSequenceMap: {} },
     { requestId: "r-1", identity: { sessionId: " s-1 " }, knownLifecycleSequenceMap: {} },
@@ -86,13 +86,13 @@ test("reconnect control rejects malformed identity, version and request id", () 
       error.errors.includes("missing_request_id"),
   );
   const untrimmed = validControl({
-    identity: { sessionId: " s ", parentSessionId: "", parentDialogProcessId: "" },
+    identity: { sessionId: " s ", parentSessionId: "" },
   });
   assert.deepEqual(validateReconnectControl(untrimmed).errors, [
     "invalid_identity_field:sessionId",
   ]);
   const orphanParent = validControl({
-    identity: { sessionId: "", parentSessionId: "root-1", parentDialogProcessId: "" },
+    identity: { sessionId: "", parentSessionId: "root-1" },
   });
   assert.deepEqual(validateReconnectControl(orphanParent).errors, [
     "parent_identity_requires_session_id",

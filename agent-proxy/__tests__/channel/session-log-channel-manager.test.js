@@ -109,7 +109,6 @@ test("ChannelManager conversation state requires an explicit sessionId", () => {
     userId: "user-1",
     sessionId: "session-from-key",
     parentSessionId: "",
-    parentDialogProcessId: "",
   });
   assert.ok(Object.isFrozen(channel.identity));
   channel.apiKey = "upstream-key";
@@ -153,8 +152,8 @@ test("channel keys require userId and sessionId on both encode and decode", () =
   assert.throws(() => createChannelKey({ userId: "user-1" }), /requires sessionId/);
   assert.throws(() => createChannelKey({ sessionId: "session-1" }), /requires userId/);
   const manager = new ChannelManager({ OPEN: 1 });
-  assert.throws(() => manager.ensureChannel("user-1::::parent::"), /requires sessionId/);
-  assert.throws(() => manager.ensureChannel("::session-1::::"), /requires userId/);
+  assert.throws(() => manager.ensureChannel("user-1::::parent"), /requires sessionId/);
+  assert.throws(() => manager.ensureChannel("::session-1::"), /requires userId/);
   assert.equal(manager.channelStore.size, 0);
 });
 

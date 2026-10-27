@@ -11,6 +11,7 @@ import { runAgentTurn } from "../../../src/runtime/engine.js";
 import { initializeAgentModelHost } from "../../../src/runtime/model-port-host.js";
 import { getAgentContextEnvelope } from "../../../src/context/agent-context-accessor.js";
 import { createHookManager } from "@noobot/hook-protocol";
+import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
 
 test("runAgentTurn completes terminal hooks before the runner seals a stopped snapshot", async () => {
   const events = [];
@@ -73,13 +74,11 @@ test("runAgentTurn completes terminal hooks before the runner seals a stopped sn
     () =>
       runAgentTurn({
         agentContext,
-        currentUserMessage: {
+        currentUserMessage: createPersistedCurrentUserMessage("stop after snapshot candidate", {
           messageUid: "sm_engine_stop",
-          role: "user",
-          content: "stop after snapshot candidate",
           dialogProcessId: "dialog-engine-stop",
           turnScopeId: "turn-engine-stop",
-        },
+        }),
       }),
     (error) => error?.type === "user_stop" && error?.reason === "user stop action",
   );

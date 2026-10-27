@@ -170,23 +170,20 @@ function buildReplacementUserMessage(replacedUserMessage, fields, nowValue) {
     delete replacementBaseMessage[key];
   }
   const nextAttachments = normalizeIncomingAttachmentsForSessionMessage(fields.attachments);
-  return normalizeMessageEntity(
-    {
-      ...replacementBaseMessage,
-      messageUid: createMessageUid(),
-      userMessageId: createUserMessageId(),
-      role: "user",
-      type: "message",
-      content: fields.content,
-      turnScopeId: fields.turnScopeId,
-      dialogProcessId: fields.dialogProcessId,
-      pending: false,
-      done: true,
-      ts: nowValue,
-      ...(nextAttachments !== undefined ? { attachments: nextAttachments } : {}),
-    },
-    () => nowValue,
-  );
+  return normalizeMessageEntity({
+    ...replacementBaseMessage,
+    messageUid: createMessageUid(),
+    userMessageId: createUserMessageId(),
+    role: "user",
+    type: "message",
+    content: fields.content,
+    turnScopeId: fields.turnScopeId,
+    dialogProcessId: fields.dialogProcessId,
+    pending: false,
+    done: true,
+    ts: nowValue,
+    ...(nextAttachments !== undefined ? { attachments: nextAttachments } : {}),
+  });
 }
 
 export async function deleteFromMessage({

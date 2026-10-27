@@ -118,12 +118,12 @@ export function validateInteractionRequestPayload(data) {
   if (data.timeoutMs !== undefined && (!Number.isInteger(data.timeoutMs) || data.timeoutMs <= 0)) {
     return invalidInteractionPayload(["invalid_timeout_ms"]);
   }
+  if (Object.hasOwn(data, "ackMode"))
+    return invalidInteractionPayload(["retired_interaction_ack_mode"]);
   const interactionData = data.interactionData;
   if (
     isObjectLike(interactionData) &&
-    ["lifecycle", "resolvedBy", "ackMode", "notification"].some((key) =>
-      Object.hasOwn(interactionData, key),
-    )
+    ["lifecycle", "resolvedBy", "notification"].some((key) => Object.hasOwn(interactionData, key))
   ) {
     return invalidInteractionPayload(["noncanonical_interaction_control"]);
   }

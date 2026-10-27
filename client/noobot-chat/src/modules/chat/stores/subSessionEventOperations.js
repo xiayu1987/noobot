@@ -41,14 +41,13 @@ export function createSubSessionEventOperations({
         ...(gate.current ? { current: gate.current } : {}),
       };
     }
-    const { identity, payload, occurredAt } = envelope;
+    const { identity, payload } = envelope;
     const { currentSession, transient } = gate;
     const messages = [...currentSession.messages];
     if (payload.eventType === MESSAGE_EVENT_TYPE.TURN_PRESENTATION_COMMITTED) {
       materializeTurnPresentationMessages({
         messages,
-        turnPresentation: projectTurnPresentation(payload),
-        occurredAt,
+        turnPresentation: projectTurnPresentation(envelope),
       });
     }
     const existingIndex = findSubSessionMessageIndex(messages, payload.presentationMessageId);

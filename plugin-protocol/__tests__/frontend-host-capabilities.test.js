@@ -6,10 +6,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  EXTENSION_CONTEXT_ERROR_CODE,
   HOST_CAPABILITY_ERROR_CODE,
   MESSAGE_CARD_HOST_CAPABILITIES,
   MESSAGE_CARD_HOST_STATES,
   MESSAGE_CARD_HOST_STATE_VERSION,
+  SESSION_ARTIFACT_PANEL_CONTEXT_FIELDS,
+  createSessionArtifactPanelContext,
   requireMessageCardHostCapabilities,
 } from "../src/frontend.js";
 
@@ -78,6 +81,35 @@ test("non-integer registry version is rejected", () => {
     assertMissing(
       { ...completeContext(), [MESSAGE_CARD_HOST_STATE_VERSION]: value },
       MESSAGE_CARD_HOST_STATE_VERSION,
+    );
+  }
+});
+
+test("session artifact panel context carries only the declared fields", () => {
+  const context = createSessionArtifactPanelContext({
+    sessionId: "session-1",
+    panelResizing: false,
+    panelResizeRevision: 0,
+  });
+  assert.deepEqual(Object.keys(context), [...SESSION_ARTIFACT_PANEL_CONTEXT_FIELDS]);
+  assert.equal(Object.isFrozen(context), true);
+});
+
+test("session artifact panel context rejects invalid fields", () => {
+  const valid = { sessionId: "session-1", panelResizing: true, panelResizeRevision: 2 };
+  for (const [field, value] of [
+    ["sessionId", ""],
+    ["sessionId", " session-1"],
+    ["panelResizing", undefined],
+    ["panelResizeRevision", -1],
+    ["panelResizeRevision", 1.5],
+  ]) {
+    assert.throws(
+      () => createSessionArtifactPanelContext({ ...valid, [field]: value }),
+      (error) =>
+        error instanceof TypeError &&
+        error.code === EXTENSION_CONTEXT_ERROR_CODE.INVALID &&
+        error.message.endsWith(field),
     );
   }
 });

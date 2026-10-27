@@ -7,6 +7,14 @@
 import { text, isPlainObject, isCanonicalText } from "@noobot/shared/value";
 import { TURN_SNAPSHOT_WIRE_EVENT } from "@noobot/session-protocol";
 import { EXECUTION_QUERY_CONTRACT } from "@noobot/session-protocol/execution-lifecycle";
+import {
+  TURN_ATTACHMENTS_BOUND_WIRE_EVENT,
+  validateTurnAttachmentsBoundEventData,
+} from "@noobot/session-protocol/turn-attachment-bind";
+import {
+  TURN_COMMITTED_WIRE_EVENT,
+  validateTurnCommittedEventData,
+} from "@noobot/session-protocol/turn-commit";
 
 export const AGENT_TRANSPORT_EVENT = Object.freeze({
   READY: "transport_ready",
@@ -42,10 +50,6 @@ const TRANSPORT_ERROR_FIELDS = new Set([
   "identity",
   "occurredAt",
 ]);
-
-export function usesExactAgentTransportPayload(eventName) {
-  return EXACT_PAYLOAD_VALIDATORS.has(eventName);
-}
 
 export const AGENT_CHANNEL_STATE = Object.freeze({
   NO_CONVERSATION: "no_conversation",
@@ -358,6 +362,47 @@ const EXACT_PAYLOAD_VALIDATORS = new Map([
 export function validateAgentTransportPayload(eventName, data) {
   const validator = EXACT_PAYLOAD_VALIDATORS.get(eventName);
   if (!validator) throw new TypeError(`no transport payload contract: ${eventName}`);
+  return validator(data);
+}
+
+export const AGENT_TRANSPORT_NON_ENVELOPE_EVENT_KIND = Object.freeze({
+  EXACT_PAYLOAD: "exact_payload",
+  DIRECT_CONTROL: "direct_control",
+  SESSION_RECEIPT: "session_receipt",
+});
+
+const NON_ENVELOPE_EVENT_KINDS = new Map([
+  ...[...EXACT_PAYLOAD_VALIDATORS.keys()].map((eventName) => [
+    eventName,
+    AGENT_TRANSPORT_NON_ENVELOPE_EVENT_KIND.EXACT_PAYLOAD,
+  ]),
+  [AGENT_TRANSPORT_EVENT.READY, AGENT_TRANSPORT_NON_ENVELOPE_EVENT_KIND.DIRECT_CONTROL],
+  [AGENT_TRANSPORT_EVENT.RECONNECT_DATA, AGENT_TRANSPORT_NON_ENVELOPE_EVENT_KIND.DIRECT_CONTROL],
+  [
+    AGENT_TRANSPORT_EVENT.RECONNECT_COMPLETE,
+    AGENT_TRANSPORT_NON_ENVELOPE_EVENT_KIND.DIRECT_CONTROL,
+  ],
+  [TURN_COMMITTED_WIRE_EVENT, AGENT_TRANSPORT_NON_ENVELOPE_EVENT_KIND.SESSION_RECEIPT],
+  [TURN_ATTACHMENTS_BOUND_WIRE_EVENT, AGENT_TRANSPORT_NON_ENVELOPE_EVENT_KIND.SESSION_RECEIPT],
+]);
+
+export function classifyAgentTransportNonEnvelopeEvent(eventName) {
+  return NON_ENVELOPE_EVENT_KINDS.get(eventName) ?? "";
+}
+
+const NON_ENVELOPE_PAYLOAD_VALIDATORS = new Map([
+  ...EXACT_PAYLOAD_VALIDATORS,
+  [TURN_COMMITTED_WIRE_EVENT, validateTurnCommittedEventData],
+  [TURN_ATTACHMENTS_BOUND_WIRE_EVENT, validateTurnAttachmentsBoundEventData],
+]);
+
+export function hasAgentTransportNonEnvelopePayloadContract(eventName) {
+  return NON_ENVELOPE_PAYLOAD_VALIDATORS.has(eventName);
+}
+
+export function validateAgentTransportNonEnvelopePayload(eventName, data) {
+  const validator = NON_ENVELOPE_PAYLOAD_VALIDATORS.get(eventName);
+  if (!validator) throw new TypeError(`no non-envelope payload contract: ${eventName}`);
   return validator(data);
 }
 

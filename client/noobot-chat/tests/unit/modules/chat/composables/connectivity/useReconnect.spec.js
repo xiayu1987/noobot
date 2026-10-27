@@ -64,4 +64,25 @@ describe("useReconnect", () => {
     expect(handleReconnect).toHaveBeenCalledTimes(2);
     unmount();
   });
+
+  it("does not reconnect when there is no active session with a backend identity", async () => {
+    const connected = ref(true);
+    const hasActiveSession = vi.fn(() => false);
+    const handleReconnect = vi.fn(async () => {});
+
+    const { result, unmount } = mountComposable(() =>
+      useReconnect({
+        connected,
+        hasActiveSession,
+        handleReconnect,
+      }),
+    );
+    const { reconnectActiveSession } = result;
+
+    await expect(reconnectActiveSession({ force: true })).resolves.toBe(false);
+
+    expect(hasActiveSession).toHaveBeenCalledTimes(1);
+    expect(handleReconnect).not.toHaveBeenCalled();
+    unmount();
+  });
 });

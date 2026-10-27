@@ -40,13 +40,6 @@ export function isInjectedOrPluginMessage(message = {}) {
   return flags.injected || flags.plugin;
 }
 
-export function isDialogAnchorMessage(message = {}) {
-  if (text(message?.role) !== "user") return false;
-  if (isInjectedOrPluginMessage(message)) return false;
-  if (text(message?.injectedMessageType)) return false;
-  return text(message?.messageOrigin).toLowerCase() !== "internal";
-}
-
 export const SESSION_AUTO_TITLE_MAX_LENGTH = 20;
 
 export function resolveSessionAutoTitle(message = {}) {

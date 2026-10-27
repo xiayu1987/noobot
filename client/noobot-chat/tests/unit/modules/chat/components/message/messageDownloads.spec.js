@@ -9,8 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia } from "pinia";
 import SharedChatMessageItem from "../../../../../../src/modules/chat/components/message/SharedChatMessageItem.vue";
 import { useMarkdownRenderer } from "../../../../../../src/modules/chat/composables/message/useMarkdownRenderer.js";
-import { attachmentService } from "../../../../../../src/infrastructure/api/attachments/attachmentService.js";
 import { fileMutationPreviewService } from "../../../../../../src/infrastructure/api/fileMutation/fileMutationPreviewService.js";
+import { configureAuthenticatedFetcher } from "../../../../../../src/infrastructure/http/authenticatedHttpService.js";
 import { createElementPlusMountOptions } from "../../../../fixtures/elementPlusStubs.js";
 
 vi.mock("../../../../../../src/shared/utils/mermaid-renderer.js", () => ({
@@ -56,8 +56,6 @@ describe("main message download clicks", () => {
   });
   afterEach(() => {
     wrappers.splice(0).forEach((wrapper) => wrapper.unmount());
-    attachmentService.configure();
-    fileMutationPreviewService.configure();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -69,7 +67,7 @@ describe("main message download clicks", () => {
       if (platform === "desktop") vi.stubGlobal("noobotDesktop", { saveDownload });
       const blob = new NodeBlob(["真实文件内容\n"], { type: "text/plain" });
       const fetcher = vi.fn().mockResolvedValue({ ok: true, blob: async () => blob });
-      attachmentService.configure({ fetcher });
+      configureAuthenticatedFetcher(fetcher);
       const wrapper = await mountMessage(`[下载](${ref})`);
       const originalUrl = window.location.href;
       const event = new MouseEvent("click", { bubbles: true, cancelable: true });
@@ -105,7 +103,7 @@ describe("main message download clicks", () => {
     const fetcher = vi
       .fn()
       .mockResolvedValue({ ok: true, blob: async () => new NodeBlob(["data"]) });
-    attachmentService.configure({ fetcher });
+    configureAuthenticatedFetcher(fetcher);
     const wrapper = await mountMessage("生成中");
     await wrapper.setProps({
       messageItem: {
@@ -139,7 +137,7 @@ describe("main message download clicks", () => {
       headers: new Headers(),
       blob: async () => new NodeBlob(["workspace file"]),
     });
-    attachmentService.configure({ fetcher });
+    configureAuthenticatedFetcher(fetcher);
     const wrapper = await mountMessage("[下载](runtime/fixture.txt)", []);
     await wrapper.get(".base-markdown-content a").trigger("click");
     await flushPromises();
@@ -161,7 +159,7 @@ describe("main message download clicks", () => {
         headers: new Headers(),
         blob: async () => new NodeBlob(["session file"]),
       });
-      attachmentService.configure({ fetcher });
+      configureAuthenticatedFetcher(fetcher);
       const directory =
         "C:/Users/xiayu/AppData/Roaming/Noobot/workspace/xiayu/tool_test/session-d3193767";
       const wrapper = await mountMessage(
@@ -211,7 +209,7 @@ describe("main message download clicks", () => {
         content: "generated contents",
       }),
     });
-    fileMutationPreviewService.configure({ fetcher });
+    configureAuthenticatedFetcher(fetcher);
     await fileMutationPreviewService.downloadFile({
       userId: "admin",
       sessionId: "report-session",

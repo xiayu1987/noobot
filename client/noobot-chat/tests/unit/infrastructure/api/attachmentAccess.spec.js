@@ -11,6 +11,7 @@ import {
   resolveAttachmentAccessMeta,
   resolveAttachmentDisplayKey,
   resolveParsedResultAccessMeta,
+  resolveParsedResultRelation,
 } from "../../../../src/infrastructure/api/attachments/attachmentAccess.js";
 
 describe("attachmentAccess", () => {
@@ -29,7 +30,7 @@ describe("attachmentAccess", () => {
 
     expect(resolveAttachmentDisplayKey(draft)).toBe("draft:draft-1");
     expect(resolveAttachmentDisplayKey(canonical)).toContain("canonical:");
-    expect(resolveParsedResultAccessMeta(draft)).toBeNull();
+    expect(resolveParsedResultRelation(draft)).toBeNull();
     expect(mergeAttachmentDisplayItems([draft], [canonical])).toEqual([draft, canonical]);
   });
 
@@ -113,7 +114,7 @@ describe("attachmentAccess", () => {
 
   it("returns no parsed access when the canonical relation is absent", () => {
     expect(
-      resolveParsedResultAccessMeta({
+      resolveParsedResultRelation({
         attachmentId: "source-1",
         sessionId: "session-1",
         attachmentSource: "upload",

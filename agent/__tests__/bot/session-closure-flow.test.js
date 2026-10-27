@@ -24,7 +24,7 @@ import { createTestSessionRequiredFields } from "../helpers/session-message-fact
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { writeContextMessageMetadata } from "@noobot/context-protocol/message/codec";
 import { createMessageUid } from "@noobot/session-protocol/message-identity";
-import { createTestSessionRunPayload } from "../helpers/session-run-payload.js";
+import { TEST_MESSAGE_TS, createTestSessionRunPayload } from "../helpers/session-run-payload.js";
 
 const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-closure-flow-"));
 test.after(() => fs.rmSync(workspaceRoot, { recursive: true, force: true }));
@@ -92,6 +92,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
         turnScopeId: payload.turnScopeId,
         messageOrigin: "natural",
         attachments: [],
+        ts: TEST_MESSAGE_TS,
       };
       persistedTurns.push(userMessage);
       return {
@@ -474,6 +475,7 @@ test("continue mode closed-loop: should build continue context and persist paren
         turnScopeId: payload.turnScopeId,
         messageOrigin: "natural",
         attachments: [],
+        ts: TEST_MESSAGE_TS,
       };
       persistedTurns.push(userMessage);
       return { userMessage, attachments: userMessage.attachments, aggregateVersion: 1 };

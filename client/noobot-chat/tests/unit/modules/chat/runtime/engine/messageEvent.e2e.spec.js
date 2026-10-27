@@ -118,6 +118,7 @@ describe("authoritative message event end-to-end fidelity", () => {
             turnScopeId: "child-turn",
             content: "run the workflow node",
             attachments: [],
+            ts: "2026-01-01T00:00:00.000Z",
           },
           assistantMessage: {
             presentationMessageId,

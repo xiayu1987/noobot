@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { requireFunctionDependencies } from "@noobot/shared/value";
 import { createSessionAggregateVersionManager } from "./sessionAggregateVersionManager.js";
 import { applySendErrorState, finalizeSendCleanup } from "./sendFinalize.js";
 import { prepareChatSend } from "./sendPrepare.js";
@@ -45,7 +46,6 @@ export function createChatEngineSender({
   locale,
   makeViewMessage,
   makeViewAttachments,
-  mergeAssistantAttachments,
   notify,
   pendingInteractionRequest,
   pluginModelConfig,
@@ -61,12 +61,15 @@ export function createChatEngineSender({
   serializeAttachments,
   streamOutput,
   translate,
-  tryAutoResolveInteraction,
   setPendingInteractionRequest,
   uploadFiles,
 }) {
-  const logSessionEvent = (event = {}) =>
-    sessionLogWebSocketClient?.log?.(scopeSessionLogRecord(event));
+  requireFunctionDependencies("createChatEngineSender", {
+    navigateToLastMessage,
+    applyRunStateEvent,
+    logSession: sessionLogWebSocketClient.log,
+  });
+  const logSessionEvent = (event) => sessionLogWebSocketClient.log(scopeSessionLogRecord(event));
   const sessionAggregateVersionManager = createSessionAggregateVersionManager({
     activeSession,
     log: logResendDebug,
@@ -99,32 +102,18 @@ export function createChatEngineSender({
     logSessionEvent,
     makeViewMessage,
     makeViewAttachments,
-    mergeAssistantAttachments,
     setPendingInteractionRequest,
-    tryAutoResolveInteraction,
   };
-  return async function send(options = {}) {
-    const request = resolveSendRequest(options, {
+  return async function send(sendRequest) {
+    const request = resolveSendRequest(sendRequest, {
       activeSession,
       ensureConnected,
       input,
-      turnRuntimeRegistry,
       uploadFiles,
+      translate,
     });
     if (!request) return false;
-    const {
-      explicitMessageText,
-      explicitAttachmentFiles,
-      explicitUserAttachments,
-      explicitTransportAttachments,
-      hasTextToSend,
-      allowDuringResend,
-      reuseExistingUserTurn,
-      turnScopeId,
-      userMessageId,
-      presentationMessageId,
-      sessionId,
-    } = request;
+    const { sessionId, turnScopeId } = request;
     const runtimeView = () =>
       projectTurnRuntimeView(
         sessionId,
@@ -138,15 +127,10 @@ export function createChatEngineSender({
       turnRuntimeRegistry,
       turnScopeId,
     });
-    debugLogger.begin({
-      reuseExistingUserTurn,
-      allowDuringResend,
-      hasText: hasTextToSend,
-      uploadCount: explicitAttachmentFiles?.length ?? uploadFiles.value.length,
-    });
+    debugLogger.begin({ request });
     const turnStartedAtMs = Date.now();
     const startedAt = new Date(turnStartedAtMs).toISOString();
-    applyRunStateEvent?.({
+    applyRunStateEvent({
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
       sessionId,
       turnScopeId,
@@ -154,39 +138,20 @@ export function createChatEngineSender({
       source: "send_flow",
     });
     const {
-      text,
-      filesToSend,
       userMessage,
       botMessage: botMsg,
       navigateOnFirstResponseOnce,
     } = prepareChatSend({
+      request,
       input,
-      uploadFiles,
       isImageMime,
       appendMessage,
       upsertCanonicalAssistantMessage,
       activeSession,
       translate,
       navigateToLastMessage,
-      sessionId,
-      messageText: explicitMessageText,
-      turnScopeId,
-      userMessageId,
-      presentationMessageId,
-      reuseExistingUserTurn,
-      attachmentFiles: explicitAttachmentFiles,
-      userAttachments: explicitUserAttachments,
     });
-    debugLogger.prepareAfter({
-      reuseExistingUserTurn,
-      userMessageId,
-      presentationMessageId,
-      userMessage,
-      botMessage: botMsg,
-      explicitUserAttachments,
-      explicitTransportAttachments,
-      filesToSend,
-    });
+    debugLogger.prepareAfter({ request, userMessage, botMessage: botMsg });
 
     try {
       return await executeSendStream({
@@ -195,16 +160,14 @@ export function createChatEngineSender({
         chatWebSocketClient,
         clearUploads,
         debugLogger,
-        filesToSend,
         navigateOnFirstResponseOnce,
         payloadPreferences,
-        prepared: { botMessage: botMsg, text, userMessage },
+        prepared: { botMessage: botMsg, userMessage },
         request,
         serializeAttachments,
         sessionAggregateVersionManager,
         streamHandlerDependencies,
         streamOutput,
-        translate,
       });
     } catch (error) {
       applySendErrorState({

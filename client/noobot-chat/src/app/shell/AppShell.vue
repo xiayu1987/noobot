@@ -33,11 +33,8 @@ import {
   getMessageTurnScopeId,
 } from "../../modules/chat/model/messageIdentity.js";
 import { selectTurnMessageRuntime } from "../../modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
-import { attachmentService } from "../../infrastructure/api/attachments/attachmentService.js";
-import { thinkingDetailService } from "../../infrastructure/api/thinking/thinkingDetailService.js";
 import { executionReportService } from "../../infrastructure/api/thinking/executionReportService.js";
-import { fileMutationPreviewService } from "../../infrastructure/api/fileMutation/fileMutationPreviewService.js";
-import { authenticatedHttpService } from "../../infrastructure/http/authenticatedHttpService.js";
+import { configureAuthenticatedFetcher } from "../../infrastructure/http/authenticatedHttpService.js";
 import {
   formatFileSize,
   formatTime,
@@ -64,6 +61,7 @@ const {
   toggleSidebar,
   closeMobileSidebar,
   openMobileSidebar,
+  closeAllDrawers,
   closeAllPanels,
   openWorkspace: openWorkspaceRaw,
   openConnectors: openConnectorsRaw,
@@ -71,12 +69,17 @@ const {
   openConfigParams: openConfigParamsRaw,
 } = usePanelState();
 
-const layoutRef = ref();
-const composerRef = computed(() => layoutRef.value?.composerRef || null);
-const messageListPanelRef = computed(() => layoutRef.value?.messageListPanelRef || null);
+const layoutRef = ref(null);
+const composerRef = computed(() => (layoutRef.value === null ? null : layoutRef.value.composerRef));
+const messageListPanelRef = computed(() =>
+  layoutRef.value === null ? null : layoutRef.value.messageListPanelRef,
+);
 const composerMorePanelVisible = ref(false);
 let chatMessageNavigatorPanel = null;
-let appShellPanelActions = null;
+
+function closeComposerMorePanel() {
+  composerMorePanelVisible.value = false;
+}
 
 async function navigateToLastMessageAfterRender() {
   await nextTick();
@@ -145,16 +148,15 @@ const {
     await reconnectActiveSession({ force: true });
   },
 });
-attachmentService.configure({ fetcher: authFetch });
-thinkingDetailService.configure({ fetcher: authFetch });
-executionReportService.configure({ fetcher: authFetch });
 const fetchExecutionReport = executionReportService.getReport;
-fileMutationPreviewService.configure({ fetcher: authFetch });
-authenticatedHttpService.configure({ fetcher: authFetch });
+configureAuthenticatedFetcher(authFetch);
 bindScenarioConfig(scenarioConfig);
 
 function navigateToLastMessage() {
-  chatMessageNavigatorPanel?.navigateToLastMessage?.();
+  if (!chatMessageNavigatorPanel) {
+    throw new Error("navigateToLastMessage called before chat message navigator was bound");
+  }
+  chatMessageNavigatorPanel.navigateToLastMessage();
 }
 
 function refreshSessionsFromSidebar() {
@@ -228,7 +230,7 @@ const {
   isImageMime,
   navigateToLastMessage,
   notify: notifyUi,
-  clearUploadSelection: () => composerRef.value?.clearUploadSelection?.(),
+  clearUploadSelection: () => composerRef.value.clearUploadSelection(),
 });
 
 const showConversationStateDebugPanel = computed(
@@ -289,10 +291,6 @@ const { openOpenVSCode } = useOpenVSCodeAction({
   translate,
 });
 
-function closeComposerMorePanel() {
-  appShellPanelActions?.closeComposerMorePanel?.();
-}
-
 const {
   thinkingDetailsVisible,
   thinkingDetailsMessageItem,
@@ -306,6 +304,7 @@ const {
   fetchThinkingDetail,
   notify: notifyUi,
   translate,
+  closeAllDrawers,
   closeMobileSidebar,
   closeComposerMorePanel,
   pushPseudoRoute: (route) => pushPseudoRoute(route),
@@ -353,13 +352,14 @@ const {
   selectSession,
 });
 
-appShellPanelActions = useAppShellPanelActions({
+const appShellPanelActions = useAppShellPanelActions({
   userId,
   apiRole,
   isSuperAdmin,
   isMobile,
   mobileSidebarOpen,
   composerMorePanelVisible,
+  closeComposerMorePanel,
   ensureConnected,
   notify: notifyUi,
   translate,
@@ -444,8 +444,8 @@ function onAppUnmounted() {
   unbindChatMessageScrollSync();
   releaseAllPreviewUrls();
   unsubscribeTransportClosed();
-  chatWebSocketClient?.dispose?.();
-  sessionLogWebSocketClient?.dispose?.();
+  chatWebSocketClient.dispose();
+  sessionLogWebSocketClient.dispose();
 }
 
 onMounted(onAppMounted);
@@ -497,7 +497,7 @@ const drawerPanels = computed(() =>
     ThinkingPanel,
     ConfigParamsPanel,
     userId: userId.value,
-    apiKey: apiKey.value,
+    fetcher: authFetch,
     connected: connected.value,
     isSuperAdmin: isSuperAdmin.value,
     thinkingDetailsMessageItem: thinkingDetailsMessageItem.value || {},
@@ -526,8 +526,8 @@ const drawerPanels = computed(() =>
       :sessions="sessions"
       :active-session-id="activeSessionId"
       :turn-runtime-registry="turnRuntimeRegistry"
-      :active-session="activeSession || {}"
-      :title="activeSession?.title || translate('common.session')"
+      :active-session="activeSession"
+      :title="activeSession === null ? translate('common.session') : activeSession.title"
       :is-super-admin="isSuperAdmin"
       :can-use-ide="canUseIDE"
       :loading-session-detail="loadingSessionDetail"

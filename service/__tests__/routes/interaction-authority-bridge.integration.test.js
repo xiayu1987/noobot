@@ -81,7 +81,6 @@ test("child interaction authority commits through the protocol persistence scope
         turnScopeId: "internal-turn:child-turn",
         toolName: "user_interaction",
         lifecycle: "pending",
-        ackMode: "manual",
       },
     });
 
@@ -141,7 +140,6 @@ test("interaction authority bridge leaves identity rejection to the event protoc
       turnScopeId: " turn-1",
       toolName: "user_interaction",
       lifecycle: "pending",
-      ackMode: "manual",
     };
     await assert.rejects(
       commitInteractionRequest({ userId: "user-1", persistenceScope: null, payload }),

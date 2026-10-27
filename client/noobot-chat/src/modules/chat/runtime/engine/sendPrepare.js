@@ -3,133 +3,85 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { AGENT_COMMAND } from "@noobot/agent-transport-protocol";
+import { MESSAGE_ORIGIN } from "@noobot/session-protocol";
 import { RoleEnum } from "../../model/chatConstants.js";
 import { zhCNMessages } from "noobot-i18n/client/locales/zh-CN";
 import { enUSMessages } from "noobot-i18n/client/locales/en-US";
-import { mergeAttachments } from "../../model/dialogProcessChain.js";
 import { text } from "@noobot/shared/value";
 
-function toDraftAttachmentMeta(fileItem, isImageMime) {
-  const clientAttachmentId = text(fileItem?.clientAttachmentId || fileItem?.draftAttachmentId);
+function toDraftAttachmentMeta(uploadFile, isImageMime) {
   return {
-    ...(clientAttachmentId ? { clientAttachmentId } : {}),
-    name: fileItem.name,
-    mimeType: fileItem.mimeType,
-    size: fileItem.size,
-    previewUrl: isImageMime(fileItem.mimeType || "") ? URL.createObjectURL(fileItem.raw) : "",
+    clientAttachmentId: uploadFile.clientAttachmentId,
+    name: uploadFile.name,
+    mimeType: uploadFile.mimeType,
+    size: uploadFile.size,
+    previewUrl: isImageMime(uploadFile.mimeType) ? URL.createObjectURL(uploadFile.raw) : "",
   };
 }
 
-function resolveUserAttachments({ userAttachments, filesToSend, isImageMime }) {
-  if (Array.isArray(userAttachments)) return [...userAttachments];
-  return filesToSend.map((fileItem) => toDraftAttachmentMeta(fileItem, isImageMime));
+function applySessionTitleFromText({ activeSession, translate, messageText }) {
+  if (!messageText) return;
+  const defaultTitles = [
+    text(translate("chat.newSession")),
+    text(zhCNMessages.chat.newSession),
+    text(enUSMessages.chat.newSession),
+  ];
+  if (!defaultTitles.includes(text(activeSession.value.title))) return;
+  activeSession.value.title = messageText.slice(0, 20);
 }
 
-function findExistingUserMessage(activeSession, userMessageId) {
-  const targetId = text(userMessageId);
-  return (activeSession.value?.messages || []).find(
-    (message) => text(message?.userMessageId) === targetId,
+function prepareComposerUserMessage({ request, appendMessage, isImageMime }) {
+  return appendMessage(
+    RoleEnum.USER,
+    request.messageText,
+    request.attachmentFiles.map((uploadFile) => toDraftAttachmentMeta(uploadFile, isImageMime)),
+    {
+      userMessageId: request.userMessageId,
+      turnScopeId: request.turnScopeId,
+      messageOrigin: MESSAGE_ORIGIN.NATURAL,
+    },
   );
 }
 
-function applyUserMessageIdentity({
-  userMessage,
-  normalizedTurnScopeId,
-  userAttachments,
-  resolvedUserAttachments,
-}) {
-  if (!userMessage) return;
-  if (normalizedTurnScopeId) {
-    userMessage.turnScopeId = normalizedTurnScopeId;
-  }
-  if (!Array.isArray(userAttachments)) return;
-  userMessage.attachments =
-    resolvedUserAttachments.length === 0
-      ? []
-      : mergeAttachments(userMessage.attachments || [], resolvedUserAttachments).map(
-          (attachment) => ({ ...attachment }),
-        );
-}
-
-function applySessionTitleFromText({ activeSession, translate, text: sourceText }) {
-  if (!sourceText) return;
-  const defaultTitles = [
-    text(translate("chat.newSession")),
-    text(zhCNMessages?.chat?.newSession),
-    text(enUSMessages?.chat?.newSession),
-  ];
-  if (!defaultTitles.includes(text(activeSession.value.title))) return;
-  activeSession.value.title = sourceText.slice(0, 20);
+function prepareResendUserMessage({ request, activeSession }) {
+  const userMessage = activeSession.value.messages.find(
+    (message) => message.userMessageId === request.userMessageId,
+  );
+  if (!userMessage) throw new TypeError("resend_user_message_missing");
+  userMessage.turnScopeId = request.turnScopeId;
+  userMessage.attachments = request.attachments.map((attachment) => ({ ...attachment }));
+  return userMessage;
 }
 
 export function prepareChatSend({
+  request,
   input,
-  uploadFiles,
   isImageMime,
   appendMessage,
   upsertCanonicalAssistantMessage,
   activeSession,
   translate,
   navigateToLastMessage,
-  sessionId,
-  messageText = "",
-  turnScopeId = "",
-  userMessageId = "",
-  presentationMessageId = "",
-  reuseExistingUserTurn = false,
-  attachmentFiles = null,
-  userAttachments = null,
 }) {
-  const normalizedTurnScopeId = text(turnScopeId);
-  const explicitText = typeof messageText === "string" ? messageText.trim() : "";
-  const normalizedText = explicitText || input.value.trim();
   input.value = "";
+  const userMessage =
+    request.commandType === AGENT_COMMAND.RESEND
+      ? prepareResendUserMessage({ request, activeSession })
+      : prepareComposerUserMessage({ request, appendMessage, isImageMime });
+  applySessionTitleFromText({ activeSession, translate, messageText: request.authoredText });
 
-  const filesToSend = Array.isArray(attachmentFiles)
-    ? [...attachmentFiles]
-    : [...uploadFiles.value];
-  const resolvedUserAttachments = resolveUserAttachments({
-    userAttachments,
-    filesToSend,
-    isImageMime,
-  });
-  const userMessage = reuseExistingUserTurn
-    ? findExistingUserMessage(activeSession, userMessageId)
-    : appendMessage(
-        RoleEnum.USER,
-        normalizedText || translate("chat.uploadOnly"),
-        resolvedUserAttachments,
-        {
-          userMessageId,
-          turnScopeId: normalizedTurnScopeId,
-          messageOrigin: "natural",
-        },
-      );
-  applyUserMessageIdentity({
-    userMessage,
-    normalizedTurnScopeId,
-    userAttachments,
-    resolvedUserAttachments,
-  });
-  applySessionTitleFromText({ activeSession, translate, text: normalizedText });
-
-  const botMessage = upsertCanonicalAssistantMessage(presentationMessageId, {
-    sessionId,
-    turnScopeId: normalizedTurnScopeId,
+  const botMessage = upsertCanonicalAssistantMessage(request.presentationMessageId, {
+    sessionId: request.sessionId,
+    turnScopeId: request.turnScopeId,
   });
 
   let navigatedOnFirstResponse = false;
   const navigateOnFirstResponseOnce = () => {
     if (navigatedOnFirstResponse) return;
     navigatedOnFirstResponse = true;
-    navigateToLastMessage?.();
+    navigateToLastMessage();
   };
 
-  return {
-    text: normalizedText,
-    filesToSend,
-    userMessage,
-    botMessage,
-    navigateOnFirstResponseOnce,
-  };
+  return { userMessage, botMessage, navigateOnFirstResponseOnce };
 }

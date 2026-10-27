@@ -61,12 +61,14 @@ function baseSession(overrides = {}) {
         sessionId: "s1",
         turnScopeId: "scope-keep",
         role: "user",
+        messageOrigin: "natural",
         content: "keep",
         dialogProcessId: "dp-keep",
       },
       {
         sessionId: "s1",
         role: "user",
+        messageOrigin: "natural",
         content: "old",
         error: "old failure",
         dialogProcessId: "dp-old",
@@ -80,7 +82,13 @@ function baseSession(overrides = {}) {
         dialogProcessId: "dp-old",
         turnScopeId: "scope-old",
       },
-      { sessionId: "s1", role: "user", content: "tail", turnScopeId: "scope-tail" },
+      {
+        sessionId: "s1",
+        role: "user",
+        messageOrigin: "natural",
+        content: "tail",
+        turnScopeId: "scope-tail",
+      },
     ],
     ...overrides,
   };
@@ -257,7 +265,15 @@ test("SessionMessageService.replaceTurn mutates only the owning lifecycle aggreg
     initialSession: {
       sessionId: "child",
       parentSessionId: "s1",
-      messages: [{ sessionId: "child", turnScopeId: "child-turn", role: "user", content: "child" }],
+      messages: [
+        {
+          sessionId: "child",
+          turnScopeId: "child-turn",
+          role: "user",
+          messageOrigin: "internal",
+          content: "child",
+        },
+      ],
       turnLifecycle: {
         ...createEmptyTurnLifecycle(),
         turns: {
@@ -305,6 +321,7 @@ test("SessionMessageService.replaceTurn persists only the incoming canonical att
         {
           sessionId: "s1",
           role: "user",
+          messageOrigin: "natural",
           content: "old",
           dialogProcessId: "dp-old",
           turnScopeId: "scope-old",
@@ -372,6 +389,7 @@ test("SessionMessageService.replaceTurn rejects attachments without stable ident
       messages: [
         {
           role: "user",
+          messageOrigin: "natural",
           content: "old",
           dialogProcessId: "dp-old",
           turnScopeId: "scope-old",
@@ -417,6 +435,7 @@ test("SessionMessageService.assertReusedUserTurnIdentity rejects attachment dive
       messages: [
         {
           role: "user",
+          messageOrigin: "natural",
           content: "edited",
           dialogProcessId: "dp-new",
           turnScopeId: "scope-edited",
@@ -444,7 +463,7 @@ test("SessionMessageService.replaceTurn rejects ts anchors", async () => {
   const { service: tsService, saved: tsSaved } = createService({
     initialSession: baseSession({
       messages: [
-        { role: "user", content: "old", ts: "ts-user" },
+        { role: "user", messageOrigin: "natural", content: "old", ts: "ts-user" },
         {
           role: "assistant",
           modelMessageId: "mm_session_message_service__4",
@@ -472,14 +491,14 @@ test("SessionMessageService.replaceTurn rejects dialogId compatibility anchors",
   const { service, saved } = createService({
     initialSession: baseSession({
       messages: [
-        { role: "user", content: "first", dialogId: "dp-compat" },
+        { role: "user", messageOrigin: "natural", content: "first", dialogId: "dp-compat" },
         {
           role: "assistant",
           modelMessageId: "mm_session_message_service__5",
           content: "answer",
           dialogId: "dp-compat",
         },
-        { role: "user", content: "tail", dialogId: "dp-tail" },
+        { role: "user", messageOrigin: "natural", content: "tail", dialogId: "dp-tail" },
       ],
     }),
   });
@@ -629,6 +648,7 @@ test("SessionMessageService.assertReusedUserTurnIdentity ignores derived attachm
       messages: [
         {
           role: "user",
+          messageOrigin: "natural",
           content: "edited",
           dialogProcessId: "dp-new",
           turnScopeId: "scope-edited",
@@ -687,6 +707,7 @@ test("SessionMessageService.assertReusedUserTurnIdentity rejects immutable attac
       messages: [
         {
           role: "user",
+          messageOrigin: "natural",
           content: "edited",
           dialogProcessId: "dp-new",
           turnScopeId: "scope-edited",
@@ -725,6 +746,7 @@ test("SessionMessageService.assertReusedUserTurnIdentity rejects dialog identity
       messages: [
         {
           role: "user",
+          messageOrigin: "natural",
           content: "edited",
           dialogProcessId: "dp-committed",
           turnScopeId: "scope-edited",

@@ -6,8 +6,10 @@
 import { createSessionCommand, SESSION_COMMAND } from "@noobot/session-protocol";
 import { FILE_TRACE_ID_HEADER } from "@noobot/shared/runtime-events-config";
 import { text } from "@noobot/shared/value";
-function resolveFetcher(fetcher) {
-  return fetcher || fetch;
+import { readApiResponseEnvelope } from "@noobot/shared/request-error";
+function requireFetcher(fetcher) {
+  if (typeof fetcher !== "function") throw new Error("authenticated fetcher is required");
+  return fetcher;
 }
 
 function buildOptionalHeaders(traceId = "") {
@@ -24,40 +26,12 @@ function buildQueryString(params = {}) {
 }
 
 function runFileFetch(fetcher, path, { traceId = "", query = {} } = {}) {
-  const runFetch = resolveFetcher(fetcher);
+  const runFetch = requireFetcher(fetcher);
   const queryString = buildQueryString(query);
   return runFetch(
     queryString ? `${path}?${queryString}` : path,
     buildOptionalHeaders(traceId) ? { headers: buildOptionalHeaders(traceId) } : undefined,
   );
-}
-
-async function readResponsePayload(response) {
-  if (response.ok !== false) return response.json();
-  try {
-    return await response.json();
-  } catch {
-    return null;
-  }
-}
-
-async function decodeJsonResponse(response, operation) {
-  if (response && typeof response.json === "function") {
-    const payload = await readResponsePayload(response);
-    if (response.ok === false || payload?.ok === false) {
-      const error = new Error(payload?.error || payload?.message || `${operation}_failed`);
-      error.status = Number(response.status || 0);
-      error.errorCode = text(payload?.errorCode);
-      const retryAfter = response.headers?.get?.("retry-after");
-      const retryAfterSeconds = Number(retryAfter);
-      error.retryAfterMs =
-        Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0 ? retryAfterSeconds * 1000 : 0;
-      error.payload = payload;
-      throw error;
-    }
-    return payload;
-  }
-  return response;
 }
 
 export function buildAttachmentUrl({
@@ -79,10 +53,9 @@ export function buildAttachmentUrl({
   return `/api/internal/attachment/${normalizedUserId}/${normalizedAttachmentId}${query}`;
 }
 
-export async function connectApi({ userId = "", connectCode = "", locale = "" }, { fetcher } = {}) {
-  const runFetch = resolveFetcher(fetcher);
+export async function connectApi({ userId = "", connectCode = "", locale = "" }) {
   const normalizedLocale = text(locale);
-  return runFetch("/api/internal/connect", {
+  return fetch("/api/internal/connect", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -96,13 +69,13 @@ export async function connectApi({ userId = "", connectCode = "", locale = "" },
   });
 }
 
-export async function getSessionsApi({ userId = "" }, { fetcher } = {}) {
-  const runFetch = resolveFetcher(fetcher);
+export async function getSessionsApi({ userId = "" }, { fetcher }) {
+  const runFetch = requireFetcher(fetcher);
   return runFetch(`/api/internal/sessions/${encodeURIComponent(userId)}`);
 }
 
-export async function getSessionConnectorsApi({ userId = "", sessionId = "" }, { fetcher } = {}) {
-  const runFetch = resolveFetcher(fetcher);
+export async function getSessionConnectorsApi({ userId = "", sessionId = "" }, { fetcher }) {
+  const runFetch = requireFetcher(fetcher);
   return runFetch(
     `/api/internal/connectors/${encodeURIComponent(userId)}/sessions/${encodeURIComponent(sessionId)}`,
   );
@@ -110,9 +83,9 @@ export async function getSessionConnectorsApi({ userId = "", sessionId = "" }, {
 
 export async function putSessionConnectorSelectionApi(
   { userId = "", sessionId = "", selectedConnectorIds = [] },
-  { fetcher } = {},
+  { fetcher },
 ) {
-  const runFetch = resolveFetcher(fetcher);
+  const runFetch = requireFetcher(fetcher);
   return runFetch(
     `/api/internal/connectors/${encodeURIComponent(userId)}/sessions/${encodeURIComponent(sessionId)}/selection`,
     {
@@ -123,11 +96,8 @@ export async function putSessionConnectorSelectionApi(
   );
 }
 
-export async function renameSessionApi(
-  { userId = "", sessionId = "", title = "" },
-  { fetcher } = {},
-) {
-  const runFetch = resolveFetcher(fetcher);
+export async function renameSessionApi({ userId = "", sessionId = "", title = "" }, { fetcher }) {
+  const runFetch = requireFetcher(fetcher);
   return runFetch(
     `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/rename`,
     {
@@ -138,8 +108,8 @@ export async function renameSessionApi(
   );
 }
 
-export async function getSessionDetailApi({ userId = "", sessionId = "" }, { fetcher } = {}) {
-  const runFetch = resolveFetcher(fetcher);
+export async function getSessionDetailApi({ userId = "", sessionId = "" }, { fetcher }) {
+  const runFetch = requireFetcher(fetcher);
   return runFetch(
     `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`,
   );
@@ -147,21 +117,20 @@ export async function getSessionDetailApi({ userId = "", sessionId = "" }, { fet
 
 export async function resolveTurnTerminalStateApi(
   { userId, sessionId, turnScopeId, commandId },
-  { fetcher } = {},
+  { fetcher },
 ) {
-  const runFetch = resolveFetcher(fetcher);
+  const runFetch = requireFetcher(fetcher);
   const response = await runFetch(
     `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/turns/${encodeURIComponent(turnScopeId)}/terminal?commandId=${encodeURIComponent(commandId)}`,
   );
-  const payload = await decodeJsonResponse(response, "terminal_resolution");
-  return payload && typeof payload === "object" ? payload : {};
+  return readApiResponseEnvelope(response);
 }
 
 export async function getSessionThinkingDetailApi(
   { userId = "", sessionId = "", dialogProcessId = "", turnScopeId = "" },
-  { fetcher } = {},
+  { fetcher },
 ) {
-  const runFetch = resolveFetcher(fetcher);
+  const runFetch = requireFetcher(fetcher);
   const queryParams = [];
   const normalizedDialogProcessId = text(dialogProcessId);
   const normalizedTurnScopeId = text(turnScopeId);
@@ -178,15 +147,15 @@ export async function getSessionThinkingDetailApi(
 }
 
 export async function getSessionExecutionReportApi(
-  { userId = "", sessionId = "", dialogProcessId = "" },
-  { fetcher } = {},
+  { userId, sessionId, dialogProcessId },
+  { fetcher },
 ) {
-  const runFetch = resolveFetcher(fetcher);
-  const query = `?dialogProcessId=${encodeURIComponent(text(dialogProcessId))}`;
+  const runFetch = requireFetcher(fetcher);
+  const query = `?dialogProcessId=${encodeURIComponent(dialogProcessId)}`;
   const response = await runFetch(
     `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/execution-report${query}`,
   );
-  return decodeJsonResponse(response, "execution_report");
+  return readApiResponseEnvelope(response);
 }
 
 export async function deleteSessionMessagesFromApi(
@@ -198,9 +167,9 @@ export async function deleteSessionMessagesFromApi(
     expectedAggregateVersion = undefined,
     commandId = "",
   },
-  { fetcher } = {},
+  { fetcher },
 ) {
-  const runFetch = resolveFetcher(fetcher);
+  const runFetch = requireFetcher(fetcher);
   const body = createSessionCommand({
     commandId,
     type: SESSION_COMMAND.MESSAGE_DELETE_FROM,
@@ -230,9 +199,9 @@ export async function replaceSessionTurnApi(
     commandId = "",
     attachments = undefined,
   },
-  { fetcher } = {},
+  { fetcher },
 ) {
-  const runFetch = resolveFetcher(fetcher);
+  const runFetch = requireFetcher(fetcher);
   const body = createSessionCommand({
     commandId,
     type: SESSION_COMMAND.TURN_REPLACE,
@@ -255,8 +224,8 @@ export async function replaceSessionTurnApi(
   );
 }
 
-export async function deleteSessionApi({ userId = "", sessionId = "" }, { fetcher } = {}) {
-  const runFetch = resolveFetcher(fetcher);
+export async function deleteSessionApi({ userId = "", sessionId = "" }, { fetcher }) {
+  const runFetch = requireFetcher(fetcher);
   return runFetch(
     `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`,
     { method: "DELETE" },
@@ -279,30 +248,30 @@ export function buildLogWebSocketUrl({ apiKey = "" } = {}) {
   return `${protocol}//${host}/api/logs/ws${query}`;
 }
 
-export async function postOpenVSCodeServerApi({ userId = "" }, { fetcher } = {}) {
-  const runFetch = resolveFetcher(fetcher);
+export async function postOpenVSCodeServerApi({ userId = "" }, { fetcher }) {
+  const runFetch = requireFetcher(fetcher);
   return runFetch(`/api/internal/ide/open/${encodeURIComponent(userId)}`, {
     method: "POST",
   });
 }
 
-export async function getWorkspaceTreeApi({ userId = "" }, { fetcher } = {}) {
-  const runFetch = resolveFetcher(fetcher);
+export async function getWorkspaceTreeApi({ userId = "" }, { fetcher }) {
+  const runFetch = requireFetcher(fetcher);
   return runFetch(`/api/internal/workspace/${encodeURIComponent(userId)}/tree`);
 }
 
-export async function getWorkspaceAllTreeApi({ fetcher } = {}) {
-  const runFetch = resolveFetcher(fetcher);
+export async function getWorkspaceAllTreeApi({ fetcher }) {
+  const runFetch = requireFetcher(fetcher);
   return runFetch("/api/internal/admin/workspace-all/tree");
 }
 
-export async function getWorkspaceAllFileApi({ path = "" }, { fetcher } = {}) {
-  const runFetch = resolveFetcher(fetcher);
+export async function getWorkspaceAllFileApi({ path = "" }, { fetcher }) {
+  const runFetch = requireFetcher(fetcher);
   return runFetch(`/api/internal/admin/workspace-all/file?path=${encodeURIComponent(path)}`);
 }
 
-export async function putWorkspaceAllFileApi({ path = "", content = "" }, { fetcher } = {}) {
-  const runFetch = resolveFetcher(fetcher);
+export async function putWorkspaceAllFileApi({ path = "", content = "" }, { fetcher }) {
+  const runFetch = requireFetcher(fetcher);
   return runFetch("/api/internal/admin/workspace-all/file", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
@@ -310,8 +279,8 @@ export async function putWorkspaceAllFileApi({ path = "", content = "" }, { fetc
   });
 }
 
-export async function postResetWorkspaceApi({ userId = "", sections = [] }, { fetcher } = {}) {
-  const runFetch = resolveFetcher(fetcher);
+export async function postResetWorkspaceApi({ userId = "", sections = [] }, { fetcher }) {
+  const runFetch = requireFetcher(fetcher);
   return runFetch(`/api/internal/workspace/reset/${encodeURIComponent(userId)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -319,20 +288,20 @@ export async function postResetWorkspaceApi({ userId = "", sections = [] }, { fe
   });
 }
 
-export async function postSyncWorkspaceApi({ userId = "" }, { fetcher } = {}) {
-  const runFetch = resolveFetcher(fetcher);
+export async function postSyncWorkspaceApi({ userId = "" }, { fetcher }) {
+  const runFetch = requireFetcher(fetcher);
   return runFetch(`/api/internal/workspace/sync/${encodeURIComponent(userId)}`, { method: "POST" });
 }
 
-export async function postSyncAllWorkspaceApi({ fetcher } = {}) {
-  const runFetch = resolveFetcher(fetcher);
+export async function postSyncAllWorkspaceApi({ fetcher }) {
+  const runFetch = requireFetcher(fetcher);
   return runFetch("/api/internal/admin/workspace-all/sync", {
     method: "POST",
   });
 }
 
-export async function postResetAllWorkspaceApi({ sections = [] } = {}, { fetcher } = {}) {
-  const runFetch = resolveFetcher(fetcher);
+export async function postResetAllWorkspaceApi({ sections = [] }, { fetcher }) {
+  const runFetch = requireFetcher(fetcher);
   return runFetch("/api/internal/admin/workspace-all/reset", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -340,24 +309,21 @@ export async function postResetAllWorkspaceApi({ sections = [] } = {}, { fetcher
   });
 }
 
-export async function getWorkspaceFileApi(
-  { userId = "", path = "", traceId = "" },
-  { fetcher } = {},
-) {
+export async function getWorkspaceFileApi({ userId = "", path = "", traceId = "" }, { fetcher }) {
   return runFileFetch(fetcher, `/api/internal/workspace/${encodeURIComponent(userId)}/file`, {
     traceId,
     query: { path },
   });
 }
 
-export async function getWorkspaceConfigDeclarationsApi({ userId = "" }, { fetcher } = {}) {
-  const runFetch = resolveFetcher(fetcher);
+export async function getWorkspaceConfigDeclarationsApi({ userId = "" }, { fetcher }) {
+  const runFetch = requireFetcher(fetcher);
   return runFetch(`/api/internal/workspace/${encodeURIComponent(userId)}/config-declarations`);
 }
 
 export async function downloadWorkspaceFileApi(
   { userId = "", path = "", traceId = "" },
-  { fetcher } = {},
+  { fetcher },
 ) {
   return runFileFetch(fetcher, `/api/internal/workspace/${encodeURIComponent(userId)}/download`, {
     traceId,
@@ -367,7 +333,7 @@ export async function downloadWorkspaceFileApi(
 
 export async function getHostFileApi(
   { path = "", traceId = "", isSandbox = undefined },
-  { fetcher } = {},
+  { fetcher },
 ) {
   return runFileFetch(fetcher, "/api/internal/host-file/file", {
     traceId,
@@ -380,7 +346,7 @@ export async function getHostFileApi(
 
 export async function downloadHostFileApi(
   { path = "", traceId = "", isSandbox = undefined },
-  { fetcher } = {},
+  { fetcher },
 ) {
   return runFileFetch(fetcher, "/api/internal/host-file/download", {
     traceId,
@@ -391,17 +357,14 @@ export async function downloadHostFileApi(
   });
 }
 
-export async function downloadWorkspaceAllFileApi({ path = "" }, { fetcher } = {}) {
+export async function downloadWorkspaceAllFileApi({ path = "" }, { fetcher }) {
   return runFileFetch(fetcher, "/api/internal/admin/workspace-all/download", {
     query: { path },
   });
 }
 
-export async function putWorkspaceFileApi(
-  { userId = "", path = "", content = "" },
-  { fetcher } = {},
-) {
-  const runFetch = resolveFetcher(fetcher);
+export async function putWorkspaceFileApi({ userId = "", path = "", content = "" }, { fetcher }) {
+  const runFetch = requireFetcher(fetcher);
   return runFetch(`/api/internal/workspace/${encodeURIComponent(userId)}/file`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
@@ -412,9 +375,9 @@ export async function putWorkspaceFileApi(
 async function getWorkspaceFileMutationApi(
   { userId = "", sessionId = "", sessionScope = null, mutationId = "", allWorkspace = false },
   artifact,
-  { fetcher } = {},
+  { fetcher },
 ) {
-  const runFetch = resolveFetcher(fetcher);
+  const runFetch = requireFetcher(fetcher);
   const prefix = allWorkspace
     ? "/api/internal/admin/workspace-all"
     : `/api/internal/workspace/${encodeURIComponent(userId)}`;
@@ -430,31 +393,31 @@ async function getWorkspaceFileMutationApi(
   );
 }
 
-export async function getWorkspaceFileMutationDiffApi(request, options = {}) {
+export async function getWorkspaceFileMutationDiffApi(request, options) {
   return getWorkspaceFileMutationApi(request, "diff", options);
 }
 
-export async function getWorkspaceFileMutationFileApi(request, options = {}) {
+export async function getWorkspaceFileMutationFileApi(request, options) {
   return getWorkspaceFileMutationApi(request, "file", options);
 }
 
-export async function getRegularUsersApi({ fetcher } = {}) {
-  const runFetch = resolveFetcher(fetcher);
+export async function getRegularUsersApi({ fetcher }) {
+  const runFetch = requireFetcher(fetcher);
   return runFetch("/api/internal/admin/users");
 }
 
-export async function getTemplateTreeApi({ fetcher } = {}) {
-  const runFetch = resolveFetcher(fetcher);
+export async function getTemplateTreeApi({ fetcher }) {
+  const runFetch = requireFetcher(fetcher);
   return runFetch("/api/internal/admin/template/tree");
 }
 
-export async function getTemplateFileApi({ path = "" }, { fetcher } = {}) {
-  const runFetch = resolveFetcher(fetcher);
+export async function getTemplateFileApi({ path = "" }, { fetcher }) {
+  const runFetch = requireFetcher(fetcher);
   return runFetch(`/api/internal/admin/template/file?path=${encodeURIComponent(path)}`);
 }
 
-export async function putTemplateFileApi({ path = "", content = "" }, { fetcher } = {}) {
-  const runFetch = resolveFetcher(fetcher);
+export async function putTemplateFileApi({ path = "", content = "" }, { fetcher }) {
+  const runFetch = requireFetcher(fetcher);
   return runFetch("/api/internal/admin/template/file", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
@@ -462,8 +425,8 @@ export async function putTemplateFileApi({ path = "", content = "" }, { fetcher 
   });
 }
 
-export async function putRegularUsersApi({ users = [] }, { fetcher } = {}) {
-  const runFetch = resolveFetcher(fetcher);
+export async function putRegularUsersApi({ users = [] }, { fetcher }) {
+  const runFetch = requireFetcher(fetcher);
   return runFetch("/api/internal/admin/users", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
@@ -471,25 +434,21 @@ export async function putRegularUsersApi({ users = [] }, { fetcher } = {}) {
   });
 }
 
-export async function getConfigParamsApi({ scope = "user", fetcher } = {}) {
-  const runFetch = resolveFetcher(fetcher);
-  return runFetch(
-    `/api/internal/config-params?scope=${encodeURIComponent(String(scope || "user"))}`,
-  );
+export async function getConfigParamsApi({ scope, fetcher }) {
+  const runFetch = requireFetcher(fetcher);
+  return runFetch(`/api/internal/config-params?scope=${encodeURIComponent(scope)}`);
 }
 
-export async function getConfigParamCatalogApi({ scope = "system", fetcher } = {}) {
-  const runFetch = resolveFetcher(fetcher);
-  return runFetch(
-    `/api/internal/config-params/catalog?scope=${encodeURIComponent(String(scope || "system"))}`,
-  );
+export async function getConfigParamCatalogApi({ scope, fetcher }) {
+  const runFetch = requireFetcher(fetcher);
+  return runFetch(`/api/internal/config-params/catalog?scope=${encodeURIComponent(scope)}`);
 }
 
 export async function putConfigParamsApi(
   { scope = "user", values = {}, descriptions = {} },
-  { fetcher } = {},
+  { fetcher },
 ) {
-  const runFetch = resolveFetcher(fetcher);
+  const runFetch = requireFetcher(fetcher);
   return runFetch("/api/internal/config-params", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },

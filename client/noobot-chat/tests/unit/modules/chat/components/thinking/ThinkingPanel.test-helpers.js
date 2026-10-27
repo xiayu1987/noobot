@@ -7,7 +7,16 @@ import { mount } from "@vue/test-utils";
 import { computed, defineComponent, h, inject, provide } from "vue";
 import { vi } from "vitest";
 import ThinkingPanel from "../../../../../../src/modules/chat/components/thinking/ThinkingPanel.vue";
+import { configureAuthenticatedFetcher } from "../../../../../../src/infrastructure/http/authenticatedHttpService.js";
 export { canonicalActivityFact } from "../../helpers/messageEventFixture.js";
+
+configureAuthenticatedFetcher(
+  async () =>
+    new Response(
+      JSON.stringify({ ok: false, error: "thinking detail is not served in component tests" }),
+      { status: 404, headers: { "content-type": "application/json" } },
+    ),
+);
 
 if (!globalThis.localStorage?.getItem) {
   const values = new Map();

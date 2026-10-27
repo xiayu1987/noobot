@@ -8,9 +8,11 @@ import {
   AGENT_COMMAND,
   AGENT_COMMAND_RECEIPT_OUTCOME,
   AGENT_TRANSPORT_EVENT,
+  ROOT_PARENT_SESSION_ID,
   createAgentCommandReceipt,
   createReconnectComplete,
   createTurnRunCommand,
+  getAgentCommandIdentityKeys,
 } from "@noobot/agent-transport-protocol";
 import { createTurnLifecycleEventEnvelope } from "@noobot/event-protocol";
 
@@ -84,7 +86,21 @@ export function emitReconnectComplete(socket, totalSessions) {
   );
 }
 
-export function streamCommand(identity) {
+const ROOT_PARENT_IDENTITY = Object.freeze({
+  parentSessionId: ROOT_PARENT_SESSION_ID,
+});
+
+export function rootCommandIdentity(commandType, identity) {
+  const keys = getAgentCommandIdentityKeys(commandType);
+  for (const key of Object.keys(identity)) {
+    if (!keys.includes(key)) throw new TypeError(`test_identity_field_out_of_scope:${key}`);
+  }
+  const source = { ...ROOT_PARENT_IDENTITY, ...identity };
+  return Object.fromEntries(keys.map((key) => [key, source[key]]));
+}
+
+export function streamCommand(scope) {
+  const identity = rootCommandIdentity(AGENT_COMMAND.SEND, scope);
   return createTurnRunCommand({
     commandType: AGENT_COMMAND.SEND,
     identity,

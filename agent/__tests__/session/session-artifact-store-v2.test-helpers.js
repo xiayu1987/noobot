@@ -7,6 +7,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { MESSAGE_ORIGIN, isDialogUserMessageRecord } from "@noobot/session-protocol";
 import {
   buildSessionArtifactFileMap,
   writeSessionArtifact as writeSessionArtifactCanonical,
@@ -15,6 +16,7 @@ import {
   applySessionMessageFacts,
   createTestSessionRequiredFields,
 } from "../helpers/session-message-facts.js";
+import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
 export const TEST_TURN = "turn-1";
 
@@ -51,13 +53,19 @@ function roleIdentityOf(message = {}, index = 0, turnScopeId = "") {
   return {};
 }
 
+function entityContractOf(message) {
+  return isDialogUserMessageRecord(message) ? { messageOrigin: MESSAGE_ORIGIN.NATURAL } : {};
+}
+
 export function canonicalMessages(messages, sessionId) {
   return messages.map((message, index) => {
     const turnScopeId = String(message?.turnScopeId || `turn-fixture-${index + 1}`);
     return {
       sessionId,
       messageUid: String(message?.messageUid || `sm_fixture_${index + 1}`),
+      ts: TEST_MESSAGE_TS,
       ...roleIdentityOf(message, index, turnScopeId),
+      ...entityContractOf(message),
       dialogProcessId: String(message?.dialogProcessId || `dialog-${turnScopeId}`),
       turnScopeId,
       ...message,

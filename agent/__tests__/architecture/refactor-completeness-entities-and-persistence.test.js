@@ -17,6 +17,7 @@ import {
 } from "@noobot/context-protocol/tool/context-policy";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { MESSAGE_REMOVED_FIELD_NAME } from "@noobot/session-protocol";
+import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
 const LEGACY_MESSAGE_ID = MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID;
 
@@ -29,6 +30,7 @@ describe("2. 字段对齐测试", () => {
         content: "hello",
         sessionId: "s_fixture",
         messageUid: "sm_assistant-1",
+        ts: TEST_MESSAGE_TS,
         modelMessageId: "mm_model-1",
       });
       assert.equal("id" in normalized, false);
@@ -44,6 +46,7 @@ describe("2. 字段对齐测试", () => {
             content: "hello",
             sessionId: "s_fixture",
             messageUid: "sm_assistant-2",
+            ts: TEST_MESSAGE_TS,
             modelMessageId: "mm_model-2",
             [LEGACY_MESSAGE_ID]: "message-2",
           }),
@@ -53,9 +56,11 @@ describe("2. 字段对齐测试", () => {
     it("user 只有 messageUid 时不派生任何 messageId", () => {
       const normalized = normalizeMessageEntity({
         role: "user",
+        messageOrigin: "natural",
         content: "legacy user message",
         sessionId: "s_fixture",
         messageUid: "sm_persisted-1",
+        ts: TEST_MESSAGE_TS,
       });
       assert.equal("id" in normalized, false);
       assert.equal("messageId" in normalized, false);
@@ -66,7 +71,9 @@ describe("2. 字段对齐测试", () => {
       const raw = {
         sessionId: "s_fixture",
         messageUid: "sm_fixture_4",
+        ts: TEST_MESSAGE_TS,
         role: "user",
+        messageOrigin: "natural",
         content: "hello",
         type: "text",
       };
@@ -77,36 +84,43 @@ describe("2. 字段对齐测试", () => {
       assert.ok("ts" in normalized, "应包含 ts");
     });
 
-    it("ts 应为字符串类型（ISO 时间或传入值转字符串）", () => {
-      const raw = {
-        sessionId: "s_fixture",
-        messageUid: "sm_fixture_5",
-        role: "user",
-        content: "test",
-        ts: 1234567890,
-      };
-      const normalized = normalizeMessageEntity(raw);
-      assert.equal(typeof normalized.ts, "string", "ts 应为字符串");
-      assert.equal(normalized.ts, "1234567890", "数值 ts 应转为字符串");
+    it("non-canonical ts is rejected", () => {
+      for (const ts of [1234567890, "2026-01-01T00:00:00Z"]) {
+        assert.throws(
+          () =>
+            normalizeMessageEntity({
+              sessionId: "s_fixture",
+              messageUid: "sm_fixture_5",
+              role: "user",
+              messageOrigin: "natural",
+              content: "test",
+              ts,
+            }),
+          /ts_not_canonical_iso/,
+        );
+      }
     });
 
-    it("缺失 ts 时应自动生成 ISO 时间字符串", () => {
-      const raw = {
-        sessionId: "s_fixture",
-        messageUid: "sm_fixture_6",
-        modelMessageId: "mm_fixture_6",
-        role: "assistant",
-        presentationMessageId: "pm_fx3",
-        content: "hi",
-      };
-      const normalized = normalizeMessageEntity(raw);
-      assert.ok(typeof normalized.ts === "string" && normalized.ts.length > 0, "应自动生成 ts");
+    it("missing ts is rejected instead of generated", () => {
+      assert.throws(
+        () =>
+          normalizeMessageEntity({
+            sessionId: "s_fixture",
+            messageUid: "sm_fixture_6",
+            modelMessageId: "mm_fixture_6",
+            role: "assistant",
+            presentationMessageId: "pm_fx3",
+            content: "hi",
+          }),
+        /ts_not_canonical_iso/,
+      );
     });
 
     it("tool_calls 字段在 type=tool_call 时应保证为数组", () => {
       const raw = {
         sessionId: "s_fixture",
         messageUid: "sm_fixture_7",
+        ts: TEST_MESSAGE_TS,
         modelMessageId: "mm_fixture_7",
         role: "assistant",
         presentationMessageId: "pm_fx4",
@@ -122,18 +136,22 @@ describe("2. 字段对齐测试", () => {
       const call = normalizeMessageEntity({
         sessionId: "s_fixture",
         messageUid: "sm_fixture_8",
+        ts: TEST_MESSAGE_TS,
         modelMessageId: "mm_fixture_8",
         role: "assistant",
         presentationMessageId: "pm_fx5",
         type: "tool_call",
+        content: "",
         tool_calls: [{ id: "call-1", function: { name: "control" }, contextPolicy }],
       });
       const result = normalizeMessageEntity({
         sessionId: "s_fixture",
         messageUid: "sm_fixture_9",
+        ts: TEST_MESSAGE_TS,
         role: "tool",
         presentationMessageId: "pm_fx6",
         type: "tool_result",
+        content: "",
         tool_call_id: "call-1",
         toolName: "control",
         contextPolicy,
@@ -147,7 +165,9 @@ describe("2. 字段对齐测试", () => {
       const raw = {
         sessionId: "s_fixture",
         messageUid: "sm_fixture_10",
+        ts: TEST_MESSAGE_TS,
         role: "user",
+        messageOrigin: "natural",
         content: "test",
       };
       const normalized = normalizeMessageEntity(raw);
@@ -158,7 +178,9 @@ describe("2. 字段对齐测试", () => {
       const raw1 = {
         sessionId: "s_fixture",
         messageUid: "sm_fixture_11",
+        ts: TEST_MESSAGE_TS,
         role: "user",
+        messageOrigin: "natural",
         content: "test",
         rawModelContent: "raw text",
       };
@@ -168,6 +190,7 @@ describe("2. 字段对齐测试", () => {
       const rawSig = {
         sessionId: "s_fixture",
         messageUid: "sm_fixture_12",
+        ts: TEST_MESSAGE_TS,
         modelMessageId: "mm_fixture_12",
         role: "assistant",
         presentationMessageId: "pm_fx7",
@@ -181,7 +204,9 @@ describe("2. 字段对齐测试", () => {
       const raw2 = {
         sessionId: "s_fixture",
         messageUid: "sm_fixture_13",
+        ts: TEST_MESSAGE_TS,
         role: "user",
+        messageOrigin: "natural",
         content: "test",
         rawModelContent: 123,
       };
@@ -193,6 +218,7 @@ describe("2. 字段对齐测试", () => {
       const raw1 = {
         sessionId: "s_fixture",
         messageUid: "sm_fixture_14",
+        ts: TEST_MESSAGE_TS,
         modelMessageId: "mm_fixture_14",
         role: "assistant",
         presentationMessageId: "pm_fx8",
@@ -217,7 +243,9 @@ describe("2. 字段对齐测试", () => {
       const raw2 = {
         sessionId: "s_fixture",
         messageUid: "sm_fixture_15",
+        ts: TEST_MESSAGE_TS,
         role: "user",
+        messageOrigin: "natural",
         content: "test",
         modelAdditionalKwargs: [1, 2],
       };
@@ -386,9 +414,10 @@ describe("3. Session 字段完整性测试", () => {
         sessionId: "s_fixture",
         messageUid: "sm_fixture_16",
         role: "user",
+        messageOrigin: "natural",
         content: "hello",
         type: "text",
-        ts: Date.now(),
+        ts: TEST_MESSAGE_TS,
       });
 
       const requiredFields = ["role", "content", "type", "ts", "summarized"];

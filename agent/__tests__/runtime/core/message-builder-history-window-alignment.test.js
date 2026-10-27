@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildContextMessages } from "../../../src/context/assembly/message-builder.js";
+import { buildContextMessageBlocks } from "../../../src/context/assembly/message-builder.js";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 const MAIN_MODEL_HISTORY_ROUND_LIMIT = TURN_THRESHOLDS.session.mainModelHistoryRoundLimit;
@@ -14,6 +14,7 @@ import { createTestAgentExecutionScope } from "../../helpers/agent-execution-sco
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
 import { createMessageUid } from "@noobot/session-protocol/message-identity";
+import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
 
 function sessionContextHistory(records) {
   return records.map((record) =>
@@ -57,8 +58,8 @@ function expectedDefaultHistoryContents() {
   return buildRoundContents(totalRounds - MAIN_MODEL_HISTORY_ROUND_LIMIT + 1, totalRounds);
 }
 
-test("buildContextMessages keeps explicit history dialog groups in natural order", () => {
-  const messages = buildContextMessages(
+test("buildContextMessageBlocks keeps explicit history dialog groups in natural order", () => {
+  const messages = buildContextMessageBlocks(
     createMessageBuilderScope({
       runtime: { identity: { dialogProcessId: "dlg_current" } },
       history: sessionContextHistory([
@@ -85,8 +86,8 @@ test("buildContextMessages keeps explicit history dialog groups in natural order
         },
       ]),
     }),
-    { currentUserMessage: null },
-  );
+    { currentUserMessage: createPersistedCurrentUserMessage("current") },
+  ).messages;
 
   assert.equal(
     messages.some((item) => item?.content === "当前对话注入"),
@@ -98,23 +99,23 @@ test("buildContextMessages keeps explicit history dialog groups in natural order
   );
 });
 
-test("buildContextMessages applies main model recent round window by default", () => {
+test("buildContextMessageBlocks applies main model recent round window by default", () => {
   const history = buildDefaultHistoryRounds();
-  const messages = buildContextMessages(createMessageBuilderScope({ history }), {
-    currentUserMessage: null,
-  });
+  const messages = buildContextMessageBlocks(createMessageBuilderScope({ history }), {
+    currentUserMessage: createPersistedCurrentUserMessage("current"),
+  }).messages;
 
   assert.deepEqual(
     messages
       .filter((item) => item?.additional_kwargs?.noobotInternalMessageType !== "user_meta")
       .map((item) => item?.content),
-    expectedDefaultHistoryContents(),
+    [...expectedDefaultHistoryContents(), "current"],
   );
 });
 
-test("buildContextMessages keeps harness plugin history aligned with main recent rounds", () => {
+test("buildContextMessageBlocks keeps harness plugin history aligned with main recent rounds", () => {
   const history = buildDefaultHistoryRounds();
-  const messages = buildContextMessages(
+  const messages = buildContextMessageBlocks(
     createMessageBuilderScope({
       runtime: {
         globalConfig: {
@@ -128,13 +129,13 @@ test("buildContextMessages keeps harness plugin history aligned with main recent
       },
       history,
     }),
-    { currentUserMessage: null },
-  );
+    { currentUserMessage: createPersistedCurrentUserMessage("current") },
+  ).messages;
 
   assert.deepEqual(
     messages
       .filter((item) => item?.additional_kwargs?.noobotInternalMessageType !== "user_meta")
       .map((item) => item?.content),
-    expectedDefaultHistoryContents(),
+    [...expectedDefaultHistoryContents(), "current"],
   );
 });

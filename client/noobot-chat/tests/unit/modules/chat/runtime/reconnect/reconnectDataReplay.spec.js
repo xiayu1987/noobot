@@ -35,7 +35,7 @@ import {
 
 const reconnectControl = createReconnectControl({
   requestId: "reconnect-s-1",
-  identity: { sessionId: "s-1", parentSessionId: "", parentDialogProcessId: "" },
+  identity: { sessionId: "s-1", parentSessionId: "" },
   knownLifecycleSequenceMap: {},
 });
 

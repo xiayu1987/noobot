@@ -14,7 +14,6 @@ import {
   putWorkspaceFileApi,
 } from "../../../infrastructure/api/chat/chatApi.js";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
-import { createApiKeyFetch } from "../../../shared/network/apiKeyFetch.js";
 import { ConfigDocumentForm, SettingsJsonListEditorLayout } from "../public-api.js";
 import {
   assertConfigParamListMatchesCatalog,
@@ -32,7 +31,7 @@ import { buildConfigNavTree, firstConfigNavPath } from "../state/configNavigatio
 import { text } from "@noobot/shared/value";
 
 const props = defineProps({
-  apiKey: { type: String, default: "" },
+  fetcher: { type: Function, required: true },
   connected: { type: Boolean, default: false },
   active: { type: Boolean, default: false },
   userId: { type: String, default: "" },
@@ -82,7 +81,6 @@ const editorActions = computed(() => [
     loading: saving.value,
   },
 ]);
-const { authFetch } = createApiKeyFetch(() => props.apiKey);
 
 function toValuesObject(list = params.value) {
   return Object.fromEntries(normalizeConfigParamList(list).map((item) => [item.key, item.value]));
@@ -136,10 +134,10 @@ const paramsJsonText = computed({
 });
 
 async function loadParams(scope = activeScope.value) {
-  if (!props.connected || !props.apiKey) return;
+  if (!props.connected) return;
   loading.value = true;
   try {
-    const res = await getConfigParamsApi({ scope, fetcher: authFetch });
+    const res = await getConfigParamsApi({ scope, fetcher: props.fetcher });
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.loadParamsFailed"));
     catalog.value = Array.isArray(data.catalog) ? data.catalog : [];
@@ -157,7 +155,7 @@ async function loadParams(scope = activeScope.value) {
 }
 
 async function saveParams() {
-  if (!props.connected || !props.apiKey) return;
+  if (!props.connected) return;
   if (activeScope.value === "system" && !props.isSuperAdmin) {
     ElMessage.warning(translate("settings.normalCannotSaveSystem"));
     return;
@@ -170,7 +168,7 @@ async function saveParams() {
     const values = toValuesObject(params.value);
     const res = await putConfigParamsApi(
       { scope: activeScope.value, values },
-      { fetcher: authFetch },
+      { fetcher: props.fetcher },
     );
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.saveParamsFailed"));
@@ -205,15 +203,15 @@ function resolveConfigErrorText(error) {
 }
 
 async function loadConfigDocument() {
-  if (!props.connected || !props.apiKey || !props.userId) return;
+  if (!props.connected || !props.userId) return;
   configLoading.value = true;
   try {
     const [documentResponse, declarationsResponse] = await Promise.all([
       getWorkspaceFileApi(
         { userId: props.userId, path: CONFIG_DOCUMENT_PATH },
-        { fetcher: authFetch },
+        { fetcher: props.fetcher },
       ),
-      getWorkspaceConfigDeclarationsApi({ userId: props.userId }, { fetcher: authFetch }),
+      getWorkspaceConfigDeclarationsApi({ userId: props.userId }, { fetcher: props.fetcher }),
     ]);
     const [documentData, declarationsData] = await Promise.all([
       documentResponse.json(),
@@ -237,7 +235,7 @@ async function loadConfigDocument() {
 }
 
 async function saveConfigDocument() {
-  if (!props.connected || !props.apiKey || !props.userId) return;
+  if (!props.connected || !props.userId) return;
   configSaving.value = true;
   try {
     const nextDocument = buildConfigDocumentForSave(
@@ -250,7 +248,7 @@ async function saveConfigDocument() {
         path: CONFIG_DOCUMENT_PATH,
         content: serializeConfigDocument(nextDocument),
       },
-      { fetcher: authFetch },
+      { fetcher: props.fetcher },
     );
     const data = await res.json();
     if (!res.ok || !data.ok) {
@@ -297,13 +295,6 @@ watch(
     if (visible) loadActiveScope(activeScope.value);
   },
   { immediate: true },
-);
-
-watch(
-  () => props.apiKey,
-  () => {
-    if (props.active && props.connected) loadActiveScope(activeScope.value);
-  },
 );
 
 watch(

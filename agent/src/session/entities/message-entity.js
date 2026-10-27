@@ -8,6 +8,7 @@ import { compactTransferEnvelopes } from "../transfer-attachment-refs.js";
 import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import {
+  assertSessionMessageEntity,
   assertSessionMessageRecordIdentity,
   normalizeTurnCommitMetadata,
   projectSessionMessageRecordIdentity,
@@ -57,10 +58,10 @@ function normalizeAttachmentOwner(owner = null) {
   return { ...(type ? { type } : {}), ...(id ? { id } : {}) };
 }
 
-function createBaseMessageEntity(message, now) {
+function createBaseMessageEntity(message) {
   return {
     role: text(message?.role),
-    content: message?.content || "",
+    content: message.content,
     type: text(message?.type),
     userName: text(message?.userName),
     sessionId: message.sessionId,
@@ -73,12 +74,12 @@ function createBaseMessageEntity(message, now) {
     modelAlias: text(message?.modelAlias),
     modelName: text(message?.modelName),
     summarized: message?.summarized === true,
-    ts: text(message?.ts) || now(),
+    ts: message.ts,
   };
 }
 
 function applyMessageArtifacts(target, message, attachments) {
-  if (attachments.length) target.attachments = attachments;
+  target.attachments = attachments;
   const transferEnvelopes = normalizeTransferEnvelopesFromMessage(message);
   if (transferEnvelopes.length) target.transferEnvelopes = transferEnvelopes;
 }
@@ -102,8 +103,7 @@ function applyMessageInjection(target, message) {
 }
 
 function applyMessageOrigin(target, message) {
-  const origin = text(message?.messageOrigin).toLowerCase();
-  if (origin === "natural" || origin === "internal") target.messageOrigin = origin;
+  if (Object.hasOwn(message, "messageOrigin")) target.messageOrigin = message.messageOrigin;
 }
 
 function applyUserMetaParsedResults(target, message) {
@@ -204,7 +204,7 @@ function applyMessageToolFields(target, message) {
   if (target.type === "tool_call" && !Array.isArray(target.tool_calls)) target.tool_calls = [];
 }
 
-export function normalizeMessageEntity(message = {}, now = () => new Date().toISOString()) {
+export function normalizeMessageEntity(message) {
   const normalizedAttachments = Array.isArray(message?.attachments)
     ? dedupeAttachmentsByIdentity(
         message.attachments.map(normalizeSessionAttachment).filter(Boolean),
@@ -212,7 +212,7 @@ export function normalizeMessageEntity(message = {}, now = () => new Date().toIS
     : [];
 
   const identity = projectSessionMessageRecordIdentity(assertSessionMessageRecordIdentity(message));
-  const normalizedMessage = Object.assign(createBaseMessageEntity(message, now), identity);
+  const normalizedMessage = Object.assign(createBaseMessageEntity(message), identity);
   const turnCommit = normalizeTurnCommitMetadata(message?.turnCommit);
   if (turnCommit) normalizedMessage.turnCommit = turnCommit;
   applyMessageArtifacts(normalizedMessage, message, normalizedAttachments);
@@ -220,9 +220,9 @@ export function normalizeMessageEntity(message = {}, now = () => new Date().toIS
   applyMessagePresentation(normalizedMessage, message);
   applyMessageRuntimeFields(normalizedMessage, message);
   applyMessageToolFields(normalizedMessage, message);
-  return normalizedMessage;
+  return assertSessionMessageEntity(normalizedMessage);
 }
 
-export function normalizeMessagesEntity(messages, now) {
-  return messages.map((messageItem) => normalizeMessageEntity(messageItem, now));
+export function normalizeMessagesEntity(messages) {
+  return messages.map((messageItem) => normalizeMessageEntity(messageItem));
 }

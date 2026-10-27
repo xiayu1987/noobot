@@ -24,30 +24,26 @@ export function buildCancelledInteractionPayload() {
 }
 
 export function submitInteractionConfirm({
-  payload = {},
+  payload,
   submitInteractionResponse,
   notify,
-  translate = (key) => key,
-} = {}) {
+  translate,
+}) {
   try {
-    submitInteractionResponse?.(payload || {});
+    submitInteractionResponse(payload);
   } catch (error) {
-    notify?.({
+    notify({
       type: "error",
       message: error.message || translate("common.interactionSubmitFailed"),
     });
   }
 }
 
-export function submitInteractionCancel({
-  submitInteractionResponse,
-  notify,
-  translate = (key) => key,
-} = {}) {
+export function submitInteractionCancel({ submitInteractionResponse, notify, translate }) {
   try {
-    submitInteractionResponse?.(buildCancelledInteractionPayload());
+    submitInteractionResponse(buildCancelledInteractionPayload());
   } catch (error) {
-    notify?.({
+    notify({
       type: "error",
       message: error.message || translate("common.interactionCancelFailed"),
     });

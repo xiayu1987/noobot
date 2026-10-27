@@ -8,6 +8,7 @@ import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { getMessageDialogProcessId, getMessageTurnScopeId } from "./messageIdentity.js";
 import { isFunction, text } from "@noobot/shared/value";
+import { isApiRequestNotFound } from "@noobot/shared/request-error";
 
 const cache = reactive({ entries: {} });
 const inflight = new Map();
@@ -19,19 +20,13 @@ function wait(delayMs) {
 async function fetchWithMissingDetailRetry(runFetch, identity, { retryLimit, retryDelayMs }) {
   for (let attempt = 0; ; attempt += 1) {
     try {
-      const detail = await runFetch({
+      return await runFetch({
         sessionId: identity.sessionId,
         dialogProcessId: identity.dialogProcessId,
         turnScopeId: identity.turnScopeId,
       });
-      if (detail?.exists === false) {
-        const error = new Error(detail?.error || "thinking detail not found");
-        error.code = "thinking_detail_not_found";
-        throw error;
-      }
-      return detail;
     } catch (error) {
-      if (error?.code !== "thinking_detail_not_found" || attempt >= retryLimit) throw error;
+      if (!isApiRequestNotFound(error) || attempt >= retryLimit) throw error;
       await wait(retryDelayMs);
     }
   }
