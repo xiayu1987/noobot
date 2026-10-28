@@ -22,11 +22,7 @@ export {
 export function buildThinkingDetailPayload(fullResult = {}, filters = {}) {
   const sessions = Array.isArray(fullResult?.sessions) ? fullResult.sessions : [];
   const sessionItem = sessions[0] || {};
-  const messages = Array.isArray(sessionItem?.rawMessages)
-    ? sessionItem.rawMessages
-    : Array.isArray(sessionItem?.messages)
-      ? sessionItem.messages
-      : [];
+  const messages = Array.isArray(sessionItem?.rawMessages) ? sessionItem.rawMessages : [];
   const dialogProcessId = normalizeThinkingRoute(filters.dialogProcessId);
   const turnScopeId = normalizeThinkingRoute(filters.turnScopeId);
   const {

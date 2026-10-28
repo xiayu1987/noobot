@@ -73,7 +73,7 @@ export function buildMessageSummary(message = {}) {
   if (!isPlainObject(message)) return null;
   const summary = {
     role: text(message?.role),
-    content: message?.content || "",
+    content: message.content,
     type: text(message?.type),
     dialogProcessId: text(message?.dialogProcessId),
     parentDialogProcessId: text(message?.parentDialogProcessId),
@@ -160,8 +160,6 @@ export function buildDisplayMessageSummary(message = {}) {
   if (!presentation) return null;
   const { type, hasActivity } = presentation;
   const summary = buildMessageSummary(message) || {};
-  summary.content =
-    typeof message.content === "string" ? message.content : JSON.stringify(message.content ?? "");
   if (hasActivity && message.chatPresentation !== true) {
     summary.type = "message";
     summary.chatPresentation = true;
