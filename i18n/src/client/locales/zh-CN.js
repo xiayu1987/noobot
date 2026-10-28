@@ -388,6 +388,7 @@ export const zhCNMessages = {
     pluginAttachment: "插件",
     attachmentPreviewTitle: "附件预览：{name}",
     filePreviewTitle: "文件预览：{name}",
+    artifactTabs: "消息产物",
     artifactAttachments: "附件",
     artifactWriteFiles: "文件写入",
     artifactPatchFiles: "文件更新",

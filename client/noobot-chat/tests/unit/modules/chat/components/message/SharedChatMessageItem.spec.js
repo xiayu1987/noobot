@@ -6,7 +6,7 @@
 import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import { mount } from "@vue/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { defineComponent, h, nextTick } from "vue";
+import { defineComponent, h, nextTick, ref } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import SharedChatMessageItem from "../../../../../../src/modules/chat/components/message/SharedChatMessageItem.vue";
 import { useChatStore } from "../../../../../../src/modules/chat/stores/useChatStore.js";
@@ -23,6 +23,7 @@ import {
 import { WORKFLOW_RUNTIME_EVENT } from "@noobot/event-protocol/workflow-runtime-event";
 import { resolveMessageViewKey } from "@noobot/event-protocol/message-event";
 import { createElementPlusMountOptions } from "../../../../fixtures/elementPlusStubs.js";
+import { ElTabPane, ElTabs } from "element-plus";
 
 vi.mock("../../../../../../src/shared/public-api/ui.js", async () => {
   const { defineComponent, h } = await import("vue");
@@ -768,5 +769,66 @@ describe("SharedChatMessageItem", () => {
     const wrapper = mountItem({ hideHeader: true });
 
     expect(wrapper.find(".BaseMessageShell-stub").attributes("data-hide-header")).toBe("true");
+  });
+
+  it("renders artifact tabs as an accessible tablist with the first available tab active", () => {
+    const wrapper = mountItem();
+    const tabs = wrapper.findAll('.message-artifact-tabs [role="tab"]');
+
+    expect(wrapper.find('.message-artifact-tabs [role="tablist"]').attributes("aria-label")).toBe(
+      "message.artifactTabs",
+    );
+    expect(tabs).toHaveLength(1);
+    expect(tabs[0].attributes("data-tab-name")).toBe("attachments");
+    expect(tabs[0].attributes("aria-selected")).toBe("true");
+    const panel = wrapper.find('.message-artifact-tabs [role="tabpanel"]');
+    expect(panel.attributes("aria-labelledby")).toBe(tabs[0].attributes("id"));
+    expect(panel.findAll(".BaseAttachmentFileCard-stub")).toHaveLength(1);
+  });
+
+  // Virtual message rows can mount and unmount within one flush when navigation jumps;
+  // artifact tabs must not depend on mounted-time child registration. Real ElTabs are
+  // mounted so a regression back to ordered-children registration fails here.
+  it("unmounts artifact tabs in the same flush they were mounted in", async () => {
+    const errors = [];
+    const visible = ref(false);
+    const HideOnSetup = defineComponent({
+      setup() {
+        visible.value = false;
+        return () => null;
+      },
+    });
+    const host = mountItem();
+    const messageProps = { ...host.props() };
+    host.unmount();
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          return () =>
+            visible.value ? [h(SharedChatMessageItem, messageProps), h(HideOnSetup)] : null;
+        },
+      }),
+      {
+        global: {
+          plugins: [pinia],
+          config: { errorHandler: (error) => errors.push(error) },
+          ...createElementPlusMountOptions({
+            "el-dialog": true,
+            "el-tabs": ElTabs,
+            ElTabs,
+            "el-tab-pane": ElTabPane,
+            ElTabPane,
+          }),
+        },
+      },
+    );
+    visible.value = true;
+    await nextTick();
+    await nextTick();
+    wrapper.unmount();
+
+    expect(errors).toEqual([]);
   });
 });

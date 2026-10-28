@@ -391,6 +391,7 @@ export const enUSMessages = {
     pluginAttachment: "Plugin",
     attachmentPreviewTitle: "Attachment Preview: {name}",
     filePreviewTitle: "File Preview: {name}",
+    artifactTabs: "Message artifacts",
     artifactAttachments: "Attachments",
     artifactWriteFiles: "File Writes",
     artifactPatchFiles: "File Updates",

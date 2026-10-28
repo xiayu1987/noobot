@@ -33,8 +33,6 @@ import {
   ElSelect,
   ElSkeleton,
   ElSlider,
-  ElStep,
-  ElSteps,
   ElSwitch,
   ElTabPane,
   ElTabs,
@@ -109,8 +107,6 @@ export function installElementPlusComponents(app) {
   app.use(ElSelect);
   app.use(ElSkeleton);
   app.use(ElSlider);
-  app.use(ElStep);
-  app.use(ElSteps);
   app.use(ElSwitch);
   app.use(ElTabPane);
   app.use(ElTabs);

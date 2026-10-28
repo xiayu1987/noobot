@@ -22,8 +22,6 @@ const ELEMENT_PLUS_TAGS = Object.freeze([
   "el-select",
   "el-skeleton",
   "el-slider",
-  "el-step",
-  "el-steps",
   "el-switch",
   "el-tab-pane",
   "el-tabs",

@@ -20,6 +20,12 @@ const TERMINAL_FINISH_STATUS = Object.freeze({
   [STATUS_STEP_TERMINAL.STOPPED]: "warning",
   [STATUS_STEP_TERMINAL.ERROR]: "error",
 });
+// Steps before the active ordinal are finished, the active one is in process, the rest wait.
+function resolveStepStatus(stepIndex, activeOrdinal, finishStatus) {
+  if (stepIndex < activeOrdinal) return finishStatus;
+  if (stepIndex === activeOrdinal) return "process";
+  return "wait";
+}
 
 const props = defineProps({
   statusStepState: { type: String, default: "" },
@@ -30,15 +36,14 @@ const stepView = computed(() => {
   const terminal = isTerminalStatusStepState(props.statusStepState)
     ? props.statusStepState
     : ANTICIPATED_TERMINAL_STEP;
-  const steps = [...STATUS_STEP_STAGE_SEQUENCE, terminal].map((stepState) => ({
+  const finishStatus = TERMINAL_FINISH_STATUS[terminal];
+  const activeOrdinal = resolveStatusStepStageOrdinal(props.statusStepState);
+  const steps = [...STATUS_STEP_STAGE_SEQUENCE, terminal].map((stepState, stepIndex) => ({
     key: stepState,
     title: translate(resolveStatusStepLabelKey(stepState)),
+    status: resolveStepStatus(stepIndex, activeOrdinal, finishStatus),
   }));
-  return {
-    steps,
-    active: resolveStatusStepStageOrdinal(props.statusStepState),
-    finishStatus: TERMINAL_FINISH_STATUS[terminal],
-  };
+  return { steps, finishStatus };
 });
 </script>
 
@@ -50,9 +55,18 @@ const stepView = computed(() => {
     role="status"
     aria-live="polite"
   >
-    <el-steps :active="stepView.active" :finish-status="stepView.finishStatus" align-center>
-      <el-step v-for="step in stepView.steps" :key="step.key" :title="step.title" />
-    </el-steps>
+    <ol class="message-status-steps__list">
+      <li
+        v-for="step in stepView.steps"
+        :key="step.key"
+        class="message-status-steps__item"
+        :class="`is-${step.status}`"
+        :aria-current="step.status === 'process' ? 'step' : undefined"
+      >
+        <span class="message-status-steps__dot" aria-hidden="true" />
+        <span class="message-status-steps__title">{{ step.title }}</span>
+      </li>
+    </ol>
   </div>
 </template>
 
@@ -71,86 +85,93 @@ const stepView = computed(() => {
   transition: border-color var(--noobot-duration-normal) ease;
 }
 
-.message-status-steps.is-running {
-  background: transparent;
-}
-.message-status-steps.is-error {
-  background: transparent;
-}
-.message-status-steps.is-warning {
-  background: transparent;
+.message-status-steps__list {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.message-status-steps :deep(.el-step__icon) {
-  width: 6px !important;
-  height: 6px !important;
-  border: none !important;
+.message-status-steps__item {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  text-align: center;
+}
+
+/* Connector from this step's dot to the next step's dot. */
+.message-status-steps__item:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  right: -50%;
+  height: 1px;
+  background-color: var(--noobot-divider);
+}
+
+.message-status-steps__dot {
+  position: relative;
+  z-index: 1;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background-color: var(--noobot-panel-border);
   transition: background-color var(--noobot-duration-slow) ease;
 }
 
-.message-status-steps :deep(.el-step__icon-inner) {
-  display: none !important;
-}
-
-.message-status-steps :deep(.el-step__line) {
-  top: 3px !important;
-  height: 1px !important;
-  background-color: var(--noobot-divider);
-  left: 50% !important;
-  right: -50% !important;
-}
-.message-status-steps :deep(.el-step__line-inner) {
-  border-width: 0 !important;
-}
-
-.message-status-steps :deep(.el-step__title) {
-  font-size: 11px !important;
-  line-height: var(--noobot-line-height-none) !important;
-  margin-top: var(--noobot-space-xs) !important;
-  font-weight: var(--noobot-font-weight-regular) !important;
+.message-status-steps__title {
+  max-width: 100%;
+  margin-top: var(--noobot-space-xs);
+  font-size: 11px;
+  line-height: var(--noobot-line-height-none);
+  font-weight: var(--noobot-font-weight-regular);
   color: var(--noobot-thinking-muted);
   letter-spacing: var(--noobot-letter-spacing-caps);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.message-status-steps :deep(.el-step__head.is-success .el-step__icon),
-.message-status-steps :deep(.el-step__head.is-finish .el-step__icon) {
+.message-status-steps__item.is-success .message-status-steps__dot {
   background-color: var(--noobot-text-muted);
 }
-.message-status-steps :deep(.el-step__title.is-success),
-.message-status-steps :deep(.el-step__title.is-finish) {
+.message-status-steps__item.is-success .message-status-steps__title {
   color: var(--noobot-text-secondary);
 }
 
-.message-status-steps :deep(.el-step__head.is-process .el-step__icon) {
+.message-status-steps__item.is-process .message-status-steps__dot {
   background-color: var(--noobot-status-running);
   transform: scale(1.2);
 }
-.message-status-steps.is-running :deep(.el-step__head.is-process .el-step__icon) {
-  width: 8px !important;
-  height: 8px !important;
+.message-status-steps.is-running .message-status-steps__item.is-process .message-status-steps__dot {
+  top: -1px;
+  width: 8px;
+  height: 8px;
   animation: dot-pulse 1.25s ease-in-out infinite alternate;
 }
-.message-status-steps :deep(.el-step__title.is-process) {
+.message-status-steps__item.is-process .message-status-steps__title {
   color: var(--noobot-status-running);
-  font-weight: var(--noobot-font-weight-semibold) !important;
+  font-weight: var(--noobot-font-weight-semibold);
 }
-.message-status-steps.is-running :deep(.el-step__title.is-process) {
+.message-status-steps.is-running .message-status-steps__item.is-process .message-status-steps__title {
   letter-spacing: var(--noobot-letter-spacing-caps-wide);
 }
 
-.message-status-steps.is-error :deep(.el-step__head.is-error .el-step__icon) {
+.message-status-steps__item.is-error .message-status-steps__dot {
   background-color: var(--noobot-status-error);
 }
-.message-status-steps.is-error :deep(.el-step__title.is-error) {
+.message-status-steps__item.is-error .message-status-steps__title {
   color: var(--noobot-status-error);
 }
 
-.message-status-steps.is-warning :deep(.el-step__head.is-warning .el-step__icon) {
+.message-status-steps__item.is-warning .message-status-steps__dot {
   background-color: var(--noobot-status-warning);
 }
-.message-status-steps.is-warning :deep(.el-step__title.is-warning) {
+.message-status-steps__item.is-warning .message-status-steps__title {
   color: var(--noobot-status-warning);
 }
 
@@ -163,13 +184,13 @@ const stepView = computed(() => {
   }
 }
 
+
 @media (max-width: 640px) {
   .message-status-steps {
     padding: var(--noobot-space-sm) var(--noobot-space-md) var(--noobot-space-xs);
   }
-  .message-status-steps :deep(.el-step__title) {
-    font-size: 10px !important;
-    transform: scale(0.9);
+  .message-status-steps__title {
+    font-size: 10px;
   }
 }
 </style>

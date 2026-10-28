@@ -4,7 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, ref, useId, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { Paperclip } from "@element-plus/icons-vue";
 import { useMessagePreview } from "../../composables/message/useMessagePreview.js";
@@ -135,37 +135,35 @@ const artifactAttachments = computed(() =>
 );
 
 const attachmentRefIndex = computed(() => buildAttachmentRefIndex(displayedAttachments.value));
-const hasMessageArtifacts = computed(
-  () =>
-    artifactAttachments.value.length > 0 ||
-    writeMutations.value.length > 0 ||
-    patchMutations.value.length > 0,
-);
-const artifactTab = ref("attachments");
-watch(
+// Artifact tabs render as plain markup: message rows mount and unmount inside one
+// virtual-list flush, which ElTabs' ordered-children registration cannot survive.
+const artifactTabs = computed(() =>
   [
-    () => artifactAttachments.value.length,
-    () => writeMutations.value.length,
-    () => patchMutations.value.length,
-  ],
-  () => {
-    const availableTab = artifactAttachments.value.length
-      ? "attachments"
-      : writeMutations.value.length
-        ? "write-files"
-        : patchMutations.value.length
-          ? "patch-files"
-          : "attachments";
-    const activeTabAvailable =
-      (artifactTab.value === "attachments" && artifactAttachments.value.length > 0) ||
-      (artifactTab.value === "write-files" && writeMutations.value.length > 0) ||
-      (artifactTab.value === "patch-files" && patchMutations.value.length > 0);
-    if (!activeTabAvailable) {
-      artifactTab.value = availableTab;
-    }
-  },
-  { immediate: true },
+    { name: "attachments", labelKey: "message.artifactAttachments", count: artifactAttachments.value.length },
+    { name: "write-files", labelKey: "message.artifactWriteFiles", count: writeMutations.value.length },
+    { name: "patch-files", labelKey: "message.artifactPatchFiles", count: patchMutations.value.length },
+  ].filter((tab) => tab.count > 0),
 );
+const selectedArtifactTab = ref("");
+const activeArtifactTab = computed(() =>
+  artifactTabs.value.some((tab) => tab.name === selectedArtifactTab.value)
+    ? selectedArtifactTab.value
+    : artifactTabs.value[0]?.name,
+);
+const artifactTabsDomId = useId();
+const ARTIFACT_TAB_KEY_STEP = Object.freeze({ ArrowRight: 1, ArrowLeft: -1 });
+function onArtifactTabKeydown(event) {
+  const step = ARTIFACT_TAB_KEY_STEP[event.key];
+  if (!step) return;
+  event.preventDefault();
+  const tabs = artifactTabs.value;
+  const currentIndex = tabs.findIndex((tab) => tab.name === activeArtifactTab.value);
+  const nextTab = tabs[(currentIndex + step + tabs.length) % tabs.length];
+  selectedArtifactTab.value = nextTab.name;
+  event.currentTarget.parentElement
+    .querySelector(`[data-tab-name="${nextTab.name}"]`)
+    .focus();
+}
 const mutationPreviewVisible = ref(false);
 useOverlayHistory(mutationPreviewVisible, () => (mutationPreviewVisible.value = false));
 useOverlayHistory(previewVisible, () => (previewVisible.value = false));
@@ -539,17 +537,37 @@ function toggleAssistantContent() {
 
     <MonotonicMessageActions v-bind="defaultMonotonicMessageActionProps" />
 
-    <el-tabs
-      v-if="hasMessageArtifacts"
-      v-model="artifactTab"
-      class="message-artifact-tabs noobot-tabs"
-    >
-      <el-tab-pane
-        v-if="artifactAttachments.length"
-        :label="translate('message.artifactAttachments')"
-        name="attachments"
+    <section v-if="artifactTabs.length" class="message-artifact-tabs">
+      <div
+        class="message-artifact-tabs__nav"
+        role="tablist"
+        :aria-label="translate('message.artifactTabs')"
       >
-        <BaseFileCardList>
+        <button
+          v-for="tab in artifactTabs"
+          :id="`${artifactTabsDomId}-tab-${tab.name}`"
+          :key="tab.name"
+          type="button"
+          role="tab"
+          class="message-artifact-tabs__tab"
+          :class="{ 'is-active': tab.name === activeArtifactTab }"
+          :data-tab-name="tab.name"
+          :aria-selected="tab.name === activeArtifactTab ? 'true' : 'false'"
+          :aria-controls="`${artifactTabsDomId}-panel`"
+          :tabindex="tab.name === activeArtifactTab ? 0 : -1"
+          @click="selectedArtifactTab = tab.name"
+          @keydown="onArtifactTabKeydown"
+        >
+          {{ translate(tab.labelKey) }}
+        </button>
+      </div>
+      <div
+        :id="`${artifactTabsDomId}-panel`"
+        class="message-artifact-tabs__panel"
+        role="tabpanel"
+        :aria-labelledby="`${artifactTabsDomId}-tab-${activeArtifactTab}`"
+      >
+        <BaseFileCardList v-if="activeArtifactTab === 'attachments'">
           <BaseAttachmentFileCard
             v-for="attachmentItem in artifactAttachments"
             :key="`attachment:${getAttachmentRenderKey(attachmentItem)}`"
@@ -569,14 +587,8 @@ function toggleAssistantContent() {
             @download-parsed-result="onDownloadParsedResult"
           />
         </BaseFileCardList>
-      </el-tab-pane>
-      <el-tab-pane
-        v-if="writeMutations.length"
-        :label="translate('message.artifactWriteFiles')"
-        name="write-files"
-      >
         <FileMutationPreview
-          v-if="writeMutations.length"
+          v-else-if="activeArtifactTab === 'write-files'"
           :user-id="userId"
           :session-id="getMessageSessionId(messageItem)"
           :mutations="writeMutations"
@@ -587,14 +599,8 @@ function toggleAssistantContent() {
           @preview="openMutationPreview"
           @download="downloadMutation"
         />
-      </el-tab-pane>
-      <el-tab-pane
-        v-if="patchMutations.length"
-        :label="translate('message.artifactPatchFiles')"
-        name="patch-files"
-      >
         <FileMutationPreview
-          v-if="patchMutations.length"
+          v-else
           :user-id="userId"
           :session-id="getMessageSessionId(messageItem)"
           :mutations="patchMutations"
@@ -605,8 +611,8 @@ function toggleAssistantContent() {
           @preview="openMutationPreview"
           @download="downloadMutation"
         />
-      </el-tab-pane>
-    </el-tabs>
+      </div>
+    </section>
 
     <ExtensionOutlet
       :point="EXTENSION_POINTS.MESSAGE_CARD_POST"
@@ -710,13 +716,45 @@ function toggleAssistantContent() {
   border-radius: var(--noobot-radius-md);
   background: var(--noobot-msg-file-card-bg);
 }
-.message-artifact-tabs :deep(.el-tabs__header) {
+.message-artifact-tabs__nav {
+  display: flex;
   margin-bottom: var(--noobot-space-md);
-}
-.message-artifact-tabs :deep(.el-tabs__nav-wrap) {
   padding-inline: var(--noobot-space-xs);
+  overflow-x: auto;
+  scrollbar-width: none;
 }
-.message-artifact-tabs :deep(.el-tabs__content) {
+.message-artifact-tabs__tab {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  height: var(--noobot-control-height-md);
+  padding: 0 var(--noobot-space-md);
+  color: var(--noobot-text-secondary);
+  font: inherit;
+  font-size: var(--noobot-font-size-md);
+  font-weight: var(--noobot-font-weight-medium);
+  line-height: var(--noobot-control-height-md);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition:
+    color var(--noobot-duration-normal) ease,
+    border-color var(--noobot-duration-normal) ease;
+}
+.message-artifact-tabs__tab:hover {
+  color: var(--noobot-text-strong);
+}
+.message-artifact-tabs__tab.is-active {
+  color: var(--noobot-text-strong);
+  font-weight: var(--noobot-font-weight-semibold);
+  border-bottom-color: var(--noobot-accent);
+}
+.message-artifact-tabs__tab:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--noobot-accent-border);
+  border-radius: var(--noobot-radius-xs);
+}
+.message-artifact-tabs__panel {
   padding: var(--noobot-space-xs);
   background: var(--noobot-msg-file-card-bg);
 }
