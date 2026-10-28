@@ -10,12 +10,9 @@ import { readJsonWithStorage } from "./artifact-json-io.js";
 import {
   TURN_JOURNAL_SCHEMA_VERSION,
   assertCanonicalSessionManifest,
-  journalPath,
-  materializeTurnJournal,
-  readJournalRecords,
-  readSummarySnapshots,
   turnArtifactRequiresRewrite,
 } from "./turn-journal-store.js";
+import { turnMaterializer } from "./turn-materializer.js";
 import { text, isObjectLike } from "@noobot/shared/value";
 
 async function readCanonicalManifest({ storageService, sessionDir }) {
@@ -32,12 +29,7 @@ async function readCanonicalManifest({ storageService, sessionDir }) {
 async function materializeOrderedMessages(sessionDir, turnItems, references) {
   const messagesByUid = new Map();
   for (const item of turnItems) {
-    const records = await readJournalRecords(
-      journalPath(sessionDir, item.turnId),
-      item.committedBytes,
-    );
-    const summarySnapshots = await readSummarySnapshots(sessionDir, item.summarySnapshots);
-    for (const message of materializeTurnJournal(records, item.messageOrder, summarySnapshots))
+    for (const message of await turnMaterializer.materialize(sessionDir, item))
       messagesByUid.set(message.messageUid, message);
   }
   return references.map((reference) => {

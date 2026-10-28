@@ -213,8 +213,11 @@ function createToolCallExecutionState({
   runtime,
   agentContext,
   abortSignal,
+  toolStartedAtMs,
 }) {
-  const toolStartedAtMs = Date.now();
+  if (!Number.isFinite(toolStartedAtMs)) {
+    throw new TypeError(`tool call ${text(call?.id)} requires toolStartedAtMs`);
+  }
   return {
     call,
     tool,
@@ -260,18 +263,20 @@ async function runToolHook(state, point, fields = {}) {
 }
 
 function completedToolTiming(state) {
+  const endedAtMs = Date.now();
   return {
-    endedAt: new Date(Date.now()).toISOString(),
-    durationMs: Date.now() - state.toolStartedAtMs,
+    endedAt: new Date(endedAtMs).toISOString(),
+    durationMs: endedAtMs - state.toolStartedAtMs,
   };
 }
 
-function projectToolExecutionResult(state, fields = {}) {
+function projectToolExecutionResult(state, timing, fields) {
   return {
     call: state.call,
     toolResultText: state.toolResultText,
     riskLevel: getToolRiskLevel(state.riskAssessment),
     securityAssessment: state.riskAssessment.current,
+    durationMs: timing.durationMs,
     ...fields,
   };
 }
@@ -283,14 +288,15 @@ async function completeMissingTool(state) {
     code: ERROR_CODE.RECOVERABLE_TOOL_NOT_FOUND,
     error: `tool not found: ${state.call?.name}`,
   });
+  const timing = completedToolTiming(state);
   await runToolHook(state, HOOK_POINT.AGENT.AFTER_TOOL_CALL, {
     status: HOOK_PHASE_STATUS.ERROR,
-    ...completedToolTiming(state),
+    ...timing,
     success: false,
     failureReason: "tool_not_found",
     toolResultText: state.toolResultText,
   });
-  return projectToolExecutionResult(state, {
+  return projectToolExecutionResult(state, timing, {
     transferEnvelopes: [],
     success: false,
     failureReason: "tool_not_found",
@@ -310,15 +316,16 @@ async function completeToolInputOverflow(state, meta) {
       ...state.toolInputTransferPayload,
     }),
   );
+  const timing = completedToolTiming(state);
   await runToolHook(state, HOOK_POINT.AGENT.AFTER_TOOL_CALL, {
     status: HOOK_PHASE_STATUS.SUCCESS,
-    ...completedToolTiming(state),
+    ...timing,
     args: state.call?.args || {},
     success: true,
     failureReason: "",
     toolResultText: state.toolResultText,
   });
-  return projectToolExecutionResult(state, {
+  return projectToolExecutionResult(state, timing, {
     transferEnvelopes: state.inputTransfer.transferEnvelopes || [],
     success: true,
     failureReason: "",
@@ -537,16 +544,17 @@ async function finalizeToolExecution(state) {
     "resourceId",
   );
   state.toolResultText = projectToolResultForModel(state.toolResultText);
+  const timing = completedToolTiming(state);
   await runToolHook(state, HOOK_POINT.AGENT.AFTER_TOOL_CALL, {
     status: failureState.success ? HOOK_PHASE_STATUS.SUCCESS : HOOK_PHASE_STATUS.ERROR,
-    ...completedToolTiming(state),
+    ...timing,
     args: state.call?.args || {},
     success: failureState.success,
     failureReason: failureState.reason || "",
     toolResultText: state.rawToolResultText,
     internalResources,
   });
-  return projectToolExecutionResult(state, {
+  return projectToolExecutionResult(state, timing, {
     internalResources,
     transferEnvelopes,
     success: failureState.success,
@@ -603,6 +611,7 @@ export async function executeToolCallInTurn(options) {
     tool: call?.name,
     result: String(result?.toolResultText || ""),
     success: result?.success === true,
+    durationMs: result?.durationMs,
     toolCallId,
     riskLevel: result?.riskLevel,
     securityAssessment: result?.securityAssessment,
@@ -641,10 +650,11 @@ function rejectedToolCallResult({ call, error, abortSignal }) {
 export async function settleToolCallInTurn(options) {
   const { call, runtime, eventListener, turn, toolCallId, abortSignal } =
     createTurnToolExecutionContext(options);
+  const toolStartedAtMs = Date.now();
   try {
     return {
       status: "fulfilled",
-      result: await executeToolCallInTurn(options),
+      result: await executeToolCallInTurn({ ...options, toolStartedAtMs }),
       error: null,
     };
   } catch (error) {
@@ -658,6 +668,7 @@ export async function settleToolCallInTurn(options) {
       tool: call?.name,
       result: result.toolResultText,
       success: false,
+      durationMs: Date.now() - toolStartedAtMs,
       toolCallId,
       riskLevel: result.riskLevel,
       securityAssessment: result.securityAssessment,

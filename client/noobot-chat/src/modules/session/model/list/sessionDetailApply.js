@@ -30,8 +30,11 @@ import { applyLatestSessionAggregateVersion } from "../../../chat/runtime/engine
 import { isTurnRuntimeDeleted } from "../../../chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { isPlainObject, requireFunctionDependencies, text } from "@noobot/shared/value";
 
+function isSessionDocAvailable(sessionDoc) {
+  return sessionDoc.availability !== "unavailable";
+}
+
 function requireAvailableTurnTimings(sessionDoc) {
-  if (sessionDoc.availability === "unavailable") return null;
   if (!Array.isArray(sessionDoc.turnTimings)) {
     throw new TypeError(
       `[session-detail] available session doc ${text(sessionDoc.sessionId)} requires turnTimings array`,
@@ -46,7 +49,6 @@ export function createSessionDetailApplicator({
   chatStore,
   makeViewMessage,
   sessionTitleFromMessages,
-  navigateToLastMessage,
   onSessionDetailApplied,
 }) {
   if (!isPlainObject(chatStore)) {
@@ -56,7 +58,6 @@ export function createSessionDetailApplicator({
     applyTurnTimingSnapshot: chatStore.applyTurnTimingSnapshot,
     makeViewMessage,
     sessionTitleFromMessages,
-    navigateToLastMessage,
     onSessionDetailApplied,
   });
   function pruneMessagesFromConfirmedDeletes(messages = [], sessionId = "") {
@@ -85,7 +86,7 @@ export function createSessionDetailApplicator({
     };
   }
 
-  function applySessionDetail(detail, options = {}) {
+  function applySessionDetail(detail) {
     const sessionItem = findSessionByAnyIdInList(sessions.value, detail.sessionId);
     if (!sessionItem) return;
     logResendDebug("detail.apply.begin", () => ({
@@ -115,9 +116,10 @@ export function createSessionDetailApplicator({
     const hasMessageSnapshot = Array.isArray(mainSessionDoc.messages);
     sessionItem.currentTaskId = mainSessionDoc.currentTaskId || "";
 
-    const turnLifecycleSnapshot = mainSessionDoc?.turnLifecycleSnapshot;
-    if (turnLifecycleSnapshot) {
-      sessionItem.turnLifecycleSnapshot = turnLifecycleSnapshot;
+    if (isSessionDocAvailable(mainSessionDoc)) {
+      if (isSessionDocAvailable(mainSessionDoc)) {
+        sessionItem.turnLifecycleSnapshot = mainSessionDoc.turnLifecycleSnapshot;
+      }
     }
     applyLatestSessionAggregateVersion(sessionItem, mainSessionDoc);
     sessionItem.createdAt = mainSessionDoc.createdAt || sessionItem.createdAt;
@@ -141,7 +143,6 @@ export function createSessionDetailApplicator({
     if (detailMessages !== canonicalDetail.messages) {
       canonicalDetail.messages = detailMessages;
     }
-    const turnTimings = requireAvailableTurnTimings(mainSessionDoc);
     if (hasMessageSnapshot) {
       sessionItem.detailMessages = detailMessages.map((item) => ({ ...item }));
     }
@@ -150,8 +151,11 @@ export function createSessionDetailApplicator({
       sessionDocs,
       makeViewMessage,
     });
-    if (turnTimings) {
-      chatStore.applyTurnTimingSnapshot({ sessionId: detailSessionId, turnTimings });
+    if (isSessionDocAvailable(mainSessionDoc)) {
+      chatStore.applyTurnTimingSnapshot({
+        sessionId: detailSessionId,
+        turnTimings: requireAvailableTurnTimings(mainSessionDoc),
+      });
     }
     logResendDebug("detail.apply.mode", () => ({
       sessionId: detail.sessionId,
@@ -225,7 +229,6 @@ export function createSessionDetailApplicator({
         sessionItem.messages,
         sessionItem.title || detail.sessionId.slice(0, 8),
       );
-    if (options.navigateToLastMessage === true) navigateToLastMessage();
   }
 
   return { applySessionDetail };

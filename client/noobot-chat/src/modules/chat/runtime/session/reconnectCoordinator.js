@@ -18,10 +18,11 @@ import {
 } from "../../../debug/loggers/stateMachineLogger.js";
 import { createExecutionQueryCommand } from "@noobot/agent-transport-protocol";
 import { buildAgentCommandIdentity, buildChannelIdentity } from "../engine/commandIdentity.js";
-import { text } from "@noobot/shared/value";
+import { requireFunctionDependencies, text } from "@noobot/shared/value";
 
 export function createReconnectCoordinator({
   activeSession,
+  requestSessionNavigation,
   turnRuntimeRegistry,
   chatWebSocketClient,
   reconnectReplay,
@@ -30,6 +31,7 @@ export function createReconnectCoordinator({
   notify,
   translate,
 }) {
+  requireFunctionDependencies("createReconnectCoordinator", { requestSessionNavigation });
   async function handleReconnect() {
     let pendingReconnectReplayCount = 0;
     let reconnectReplayQueue = Promise.resolve();
@@ -152,6 +154,8 @@ export function createReconnectCoordinator({
           replayFailureCount: reconnectReplayFailures.length,
           activeTurnAfter: summarizeStateMachineTurn(replayRuntime),
         }));
+
+        requestSessionNavigation(reconnectSessionId);
         const sessionId = text(activeSession.value.sessionId);
         const currentTurn = resolveActiveTurn();
         const execution = selectTurnExecution(

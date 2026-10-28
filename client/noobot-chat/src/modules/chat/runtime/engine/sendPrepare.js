@@ -62,7 +62,7 @@ export function prepareChatSend({
   upsertCanonicalAssistantMessage,
   activeSession,
   translate,
-  navigateToLastMessage,
+  requestTurnNavigation,
 }) {
   input.value = "";
   const userMessage =
@@ -80,7 +80,7 @@ export function prepareChatSend({
   const navigateOnFirstResponseOnce = () => {
     if (navigatedOnFirstResponse) return;
     navigatedOnFirstResponse = true;
-    navigateToLastMessage();
+    requestTurnNavigation({ sessionId: request.sessionId, turnScopeId: request.turnScopeId });
   };
 
   return { userMessage, botMessage, navigateOnFirstResponseOnce };

@@ -40,7 +40,6 @@ function createApplySessionDetailHarness({ sessionId = "s-apply-mode", messages 
     sessions,
     makeViewMessage: (message) => ({ ...message }),
     sessionTitleFromMessages: () => "title",
-    navigateToLastMessage: vi.fn(),
     onSessionDetailApplied: vi.fn(),
     turnRuntimeRegistry,
     chatStore,
@@ -161,7 +160,6 @@ describe("useChatEngine.session-detail", () => {
       ...createTurnRuntimeStore(),
       makeViewMessage: (message) => ({ ...message }),
       sessionTitleFromMessages,
-      navigateToLastMessage: vi.fn(),
       onSessionDetailApplied: vi.fn(),
     });
 
@@ -209,7 +207,6 @@ describe("useChatEngine.session-detail", () => {
       ...createTurnRuntimeStore(),
       makeViewMessage: (message) => ({ ...message }),
       sessionTitleFromMessages: () => "title",
-      navigateToLastMessage: vi.fn(),
       onSessionDetailApplied: vi.fn(),
     });
 
@@ -354,7 +351,6 @@ describe("useChatEngine.session-detail", () => {
       chatStore,
       makeViewMessage: (message) => ({ ...message }),
       sessionTitleFromMessages: () => "title",
-      navigateToLastMessage: vi.fn(),
       onSessionDetailApplied: vi.fn(),
     });
 
@@ -434,7 +430,6 @@ describe("useChatEngine.session-detail", () => {
       ...createTurnRuntimeStore(),
       makeViewMessage: (message) => ({ ...message }),
       sessionTitleFromMessages: () => "title",
-      navigateToLastMessage: vi.fn(),
       onSessionDetailApplied: vi.fn(),
     });
 

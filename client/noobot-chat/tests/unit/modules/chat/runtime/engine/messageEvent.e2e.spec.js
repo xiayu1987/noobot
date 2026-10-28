@@ -155,6 +155,7 @@ describe("authoritative message event end-to-end fidelity", () => {
         toolCallId: "call-1",
         result: "ok",
         success: true,
+        durationMs: 5,
       }),
     );
 

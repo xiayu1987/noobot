@@ -521,6 +521,12 @@ workspace/<userId>/runtime/plugin-data/harness/runs/<dialogProcessId>/
 
 断言：该 Turn 的 durable journal 中，assistant 的 `tool_calls` 含 `access_connector`；对应 `tool_call_id` 的 tool 结果已落盘，且包含 `RECOVERABLE_SELECTED_CONNECTOR_MISMATCH`。
 
+### PBE-056：消息导航精确落位
+
+步骤：自然完成三轮长回复，使消息列表高度超过三个视口；不带 `turn` 刷新；点击第一轮导航项；带 `turn` 刷新；断网重连；把 URL `turn` 改为第二轮后刷新。
+
+断言：不带 `turn` 刷新落在最后一轮且不写入 URL；点击后 URL `turn` 等于该轮 turnScopeId；带 `turn` 的刷新与重连都落在该轮。每次落位时，该轮首条消息顶部距消息列表视口顶部 16px（误差不超过 2px）。
+
 ### 模型调用唯一观测边界
 
 模型输入观测发生在模型 factory 返回的 observed model 端口，并紧邻底层 provider `invoke()`。

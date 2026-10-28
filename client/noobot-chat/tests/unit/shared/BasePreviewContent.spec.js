@@ -78,7 +78,7 @@ describe("BasePreviewContent", () => {
     await buttons[0].trigger("click");
     await buttons[1].trigger("click");
 
-    expect(wrapper.emitted("copy-markdown-rich")?.[0]?.[0]).toContain("<h1># Preview</h1>");
+    expect(wrapper.emitted("copy-markdown-rich")).toEqual([[]]);
     expect(wrapper.emitted("copy-markdown-text")).toHaveLength(1);
   });
 

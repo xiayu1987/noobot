@@ -17,7 +17,12 @@ import {
   selectSessionTurnRuntime,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { AGENT_CHANNEL_STATE } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
-import { backendState, settleTerminal, snapshot } from "./turnRuntimeRegistryTestFixtures.js";
+import {
+  backendState,
+  lifecycle,
+  settleTerminal,
+  snapshot,
+} from "./turnRuntimeRegistryTestFixtures.js";
 import { createTurnRuntimeStoreActions } from "../../../../../../src/modules/chat/stores/chatStoreTurnRuntime.js";
 import { createComposerRuntimeState } from "../../../../../../src/modules/chat/runtime/session/composerRuntimeState.js";
 import {
@@ -122,6 +127,101 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
 
     expect(resolveTurnRuntimeByScope(recovered, "t1", { sessionId: "s1" })).toEqual(
       resolveTurnRuntimeByScope(realtime, "t1", { sessionId: "s1" }),
+    );
+  });
+
+  it("absorbs thinkingFinishedAt from a terminal lifecycle snapshot without a session detail refresh", () => {
+    const registry = createTurnRuntimeRegistryState();
+    const thinkingFinishedAt = "2026-01-01T00:00:03.000Z";
+    const terminal = snapshot({
+      sequence: 4,
+      activeTurnScopeId: "",
+      activeTurn: null,
+      recentTerminalTurns: [
+        {
+          ...snapshot().activeTurn,
+          state: "completed",
+          phase: "completion",
+          executionState: "completed",
+          revision: 4,
+          sequence: 4,
+          completionCommitId: "commit-t1",
+          summaryVersion: 1,
+          finishedAt: "2026-01-01T00:00:04.000Z",
+          thinkingFinishedAt,
+        },
+      ],
+    });
+    expect(applyTurnLifecycleSnapshot(registry, terminal)).toMatchObject({ applied: true });
+    const turnScopeId = terminal.recentTerminalTurns[0].turnScopeId;
+    expect(
+      resolveTurnRuntimeByScope(registry, turnScopeId, { sessionId: "s1" })?.timing,
+    ).toMatchObject({ turnScopeId, thinkingFinishedAt });
+  });
+
+  it("rejects a terminal snapshot whose thinkingFinishedAt conflicts with the recorded timing", () => {
+    const registry = createTurnRuntimeRegistryState();
+    const terminalTurn = {
+      ...snapshot().activeTurn,
+      state: "completed",
+      phase: "completion",
+      executionState: "completed",
+      revision: 4,
+      sequence: 4,
+      completionCommitId: "commit-t1",
+      summaryVersion: 1,
+      finishedAt: "2026-01-01T00:00:04.000Z",
+      thinkingFinishedAt: "2026-01-01T00:00:03.000Z",
+    };
+    expect(
+      applyTurnTimingSnapshot(registry, {
+        sessionId: "s1",
+        turnTimings: [
+          {
+            turnScopeId: terminalTurn.turnScopeId,
+            dialogProcessId: terminalTurn.dialogProcessId,
+            thinkingFinishedAt: "2026-01-01T00:00:02.000Z",
+          },
+        ],
+      }),
+    ).toMatchObject({ applied: true });
+    expect(() =>
+      applyTurnLifecycleSnapshot(
+        registry,
+        snapshot({
+          sequence: 4,
+          activeTurnScopeId: "",
+          activeTurn: null,
+          recentTerminalTurns: [terminalTurn],
+        }),
+      ),
+    ).toThrow(expect.objectContaining({ code: "SESSION_TURN_TIMING_CONFLICT" }));
+  });
+
+  it("rejects a timing snapshot owned by another dialog process", () => {
+    const registry = createTurnRuntimeRegistryState();
+    lifecycle(registry, { turnScopeId: "t1", dialogProcessId: "dp1" });
+    expect(() =>
+      applyTurnTimingSnapshot(registry, {
+        sessionId: "s1",
+        turnTimings: [
+          {
+            turnScopeId: "t1",
+            dialogProcessId: "dp-other",
+            thinkingFinishedAt: "2026-01-01T00:00:02.000Z",
+          },
+        ],
+      }),
+    ).toThrow(expect.objectContaining({ code: "SESSION_TURN_TIMING_CONFLICT" }));
+  });
+
+  it("rejects a timing snapshot without session identity or timings array", () => {
+    const registry = createTurnRuntimeRegistryState();
+    expect(() => applyTurnTimingSnapshot(registry, { sessionId: "", turnTimings: [] })).toThrow(
+      "turn timing snapshot requires sessionId",
+    );
+    expect(() => applyTurnTimingSnapshot(registry, { sessionId: "s1" })).toThrow(
+      "turn timing snapshot requires turnTimings array: s1",
     );
   });
 

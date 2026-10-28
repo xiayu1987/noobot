@@ -24,6 +24,7 @@ specs. See the [English plan](../../../../../../docs/browser-protocol-e2e-test-p
 - `048`: animated GLB import, model tool call, authoritative Session artifact, and desktop/mobile rendering.
 - `049`: stopped-turn deletion followed by a new send on the same page.
 - `050`: first-turn stop plus FIFO user-interjection injection, persistence, and refresh recovery.
+- `055`: refresh, reconnect, and click navigation land precisely on the URL `turn` or the latest turn (PBE-056).
 
 PBE-018, PBE-019, and PBE-020 are strict subsets of PBE-033, PBE-032, and PBE-028. PBE-047 covers
 connector creation, persisted-Session selection write ordering, database access, model context, and
@@ -83,6 +84,7 @@ the final answer.
 - `052`：发送、锁失败、停止并删除的 canonical 复现。
 - `053`：执行报告使用权威 `dialogProcessId`（PBE-053、PBE-054）。
 - `054`：可恢复工具错误的 tool_result 进入 durable journal（PBE-055）。
+- `055`：刷新、重连与点击导航按 URL `turn`、最新轮次精确落位（PBE-056）。
 - PBE-018、PBE-019、PBE-020 已分别合并到 PBE-033、PBE-032、PBE-028；PBE-099 的重复组合审计已删除。
 - 当前场景均已落地；禁止提交永久 `skip` 或无业务断言的占位场景。
 

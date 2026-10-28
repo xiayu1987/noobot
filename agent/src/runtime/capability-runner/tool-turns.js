@@ -31,7 +31,13 @@ async function executeCapabilityTool({
   }
   const tool = binding.toolMap.get(call.name);
   if (!tool) return JSON.stringify({ ok: false, error: `tool not found: ${call.name}` });
-  const result = await executeToolCall({ ...execution, call, tool, turn });
+  const result = await executeToolCall({
+    ...execution,
+    call,
+    tool,
+    turn,
+    toolStartedAtMs: Date.now(),
+  });
   return String(result?.toolResultText || "");
 }
 

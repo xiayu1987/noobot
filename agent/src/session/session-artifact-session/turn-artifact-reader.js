@@ -4,29 +4,19 @@
  * SPDX-License-Identifier: MIT
  */
 import { buildSessionArtifactFileMap, readJsonArtifactFile } from "../session-artifact-files.js";
-import {
-  assertCanonicalSessionManifest,
-  journalPath,
-  materializeTurnJournal,
-  readJournalRecords,
-  readSummarySnapshots,
-} from "./turn-journal-store.js";
+import { assertCanonicalSessionManifest } from "./turn-journal-store.js";
+import { turnMaterializer } from "./turn-materializer.js";
 import { text, isObjectLike } from "@noobot/shared/value";
 
 async function materializeTurn(sessionDir, item) {
-  const records = await readJournalRecords(
-    journalPath(sessionDir, item.turnId),
-    item.committedBytes,
-  );
-  const summarySnapshots = await readSummarySnapshots(sessionDir, item.summarySnapshots);
   return {
     turnId: item.turnId,
     artifactOrdinal: item.artifactOrdinal,
     committedBytes: item.committedBytes,
     turnScopeId: item.turnScopeId,
     dialogProcessId: item.dialogProcessId,
-    messages: materializeTurnJournal(records, item.messageOrder, summarySnapshots),
-    summarySnapshots,
+    messages: await turnMaterializer.materialize(sessionDir, item),
+    summarySnapshots: item.summarySnapshots,
   };
 }
 

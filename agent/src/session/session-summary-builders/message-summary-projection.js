@@ -16,7 +16,7 @@ import {
 } from "./message-metadata-projection.js";
 import { text, isPlainObject } from "@noobot/shared/value";
 
-const REQUIRED_MESSAGE_SUMMARY_KEYS = new Set(["turnScopeId"]);
+const REQUIRED_MESSAGE_SUMMARY_KEYS = new Set(["turnScopeId", "content"]);
 
 export function compactThinkingTimeline(items = []) {
   const compactFact = (fact = {}, summary = "", result = null) => ({

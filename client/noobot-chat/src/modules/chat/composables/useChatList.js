@@ -32,7 +32,6 @@ export function useChatList({
   deleteSessionApi,
   renameSessionApi,
   makeViewMessage,
-  navigateToLastMessage,
   refreshSessionConnectorsAsync,
   clearUploads,
   notify,
@@ -63,7 +62,6 @@ export function useChatList({
     chatStore,
     makeViewMessage,
     sessionTitleFromMessages,
-    navigateToLastMessage,
     onSessionDetailApplied,
   });
 
@@ -95,7 +93,6 @@ export function useChatList({
     applySessionDetail,
     createLocalSession,
     refreshSessionConnectorsAsync,
-    navigateToLastMessage,
     onSessionDetailApplied,
     translate,
     notify,

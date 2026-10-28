@@ -40,6 +40,7 @@ export function canonicalMessageEvent(overrides = {}) {
           tool: "read_file",
           toolCallId: "call-1",
           ...(eventType === "tool_call_start" ? { args: {} } : {}),
+          ...(eventType === "tool_call_end" ? { durationMs: 5 } : {}),
         }
       : {}),
     ...overrides,

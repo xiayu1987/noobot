@@ -24,7 +24,13 @@ const metrics = {
     switches: 0,
     models: { m1: 1 },
   },
-  tools: { toolStats: {}, riskLevels: {}, slowestToolCalls: [], totalToolDurationMs: 0 },
+  tools: {
+    toolStats: {},
+    riskLevels: {},
+    slowestToolCalls: [],
+    totalToolDurationMs: 0,
+    totalPersistDurationMs: 0,
+  },
   hooks: { count: 0, errorCount: 0, totalDurationMs: 0 },
   phases: { contextBuildMs: null },
 };

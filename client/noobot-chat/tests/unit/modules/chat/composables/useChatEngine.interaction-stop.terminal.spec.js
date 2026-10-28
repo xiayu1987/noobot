@@ -343,7 +343,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
       applySessionDetail: vi.fn(),
       createLocalSession: vi.fn(),
       refreshSessionConnectorsAsync: vi.fn(),
-      navigateToLastMessage: vi.fn(),
+      requestTurnNavigation: vi.fn(),
       onSessionDetailApplied: vi.fn(),
       translate: (key) => key,
       notify: vi.fn(),

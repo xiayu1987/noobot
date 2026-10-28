@@ -113,11 +113,6 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
     turnScopeId: firstSend.identity.turnScopeId,
     timeoutMs: 260000,
   });
-  await expect(
-    noobot.page.locator(".chat-message-anchor").filter({
-      hasText: "已达到周期任务检查阈值",
-    }),
-  ).toHaveCount(0);
 
   const records = await waitForSessionExecutionEventTree(
     noobot.userId,

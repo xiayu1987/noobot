@@ -5,7 +5,11 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mergeTurnTimingRecord, normalizeTurnTimingRecord } from "../src/index.js";
+import {
+  assertTurnTimingOwnership,
+  mergeTurnTimingRecord,
+  normalizeTurnTimingRecord,
+} from "../src/index.js";
 
 const FINISHED_AT = "2026-10-01T00:00:09.000Z";
 const base = { turnScopeId: "turn-1", dialogProcessId: "dialog-1" };
@@ -55,4 +59,17 @@ test("turn timing merge rejects conflicting facts", () => {
       code: "SESSION_TURN_TIMING_CONFLICT",
     });
   }
+});
+
+test("turn timing ownership accepts an unbound or matching turn owner", () => {
+  const timing = normalizeTurnTimingRecord({ ...base, thinkingFinishedAt: FINISHED_AT });
+  assert.doesNotThrow(() => assertTurnTimingOwnership(timing, ""));
+  assert.doesNotThrow(() => assertTurnTimingOwnership(timing, base.dialogProcessId));
+});
+
+test("turn timing ownership rejects a timing owned by another dialog process", () => {
+  const timing = normalizeTurnTimingRecord({ ...base, thinkingFinishedAt: FINISHED_AT });
+  assert.throws(() => assertTurnTimingOwnership(timing, "dialog-2"), {
+    code: "SESSION_TURN_TIMING_CONFLICT",
+  });
 });

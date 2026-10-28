@@ -51,7 +51,7 @@ export function createChatEngineSender({
   pluginModelConfig,
   frontendThresholdsEnabled,
   summaryPolicy,
-  navigateToLastMessage,
+  requestTurnNavigation,
   memoryModel,
   selectedModel,
   selectedPlugins,
@@ -65,7 +65,7 @@ export function createChatEngineSender({
   uploadFiles,
 }) {
   requireFunctionDependencies("createChatEngineSender", {
-    navigateToLastMessage,
+    requestTurnNavigation,
     applyRunStateEvent,
     logSession: sessionLogWebSocketClient.log,
   });
@@ -149,7 +149,7 @@ export function createChatEngineSender({
       upsertCanonicalAssistantMessage,
       activeSession,
       translate,
-      navigateToLastMessage,
+      requestTurnNavigation,
     });
     debugLogger.prepareAfter({ request, userMessage, botMessage: botMsg });
 

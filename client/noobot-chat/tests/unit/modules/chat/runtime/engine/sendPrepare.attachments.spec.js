@@ -46,7 +46,7 @@ function createPrepareHarness({ existingMessages = [] } = {}) {
     upsertCanonicalAssistantMessage,
     appended,
     translate: vi.fn((key) => key),
-    navigateToLastMessage: vi.fn(),
+    requestTurnNavigation: vi.fn(),
     isImageMime: vi.fn(() => false),
   };
 }
@@ -195,5 +195,34 @@ describe("prepareChatSend attachment architecture", () => {
     });
 
     expect(userMessage.attachments).toEqual([]);
+  });
+});
+
+describe("prepareChatSend turn-start navigation", () => {
+  it("requests navigation to the started turn exactly once on first response", () => {
+    const harness = createPrepareHarness();
+    const result = prepareChatSend({
+      ...harness,
+      request: {
+        commandType: AGENT_COMMAND.SEND,
+        sessionId: "session-a",
+        turnScopeId: "client-turn:started",
+        userMessageId: "msg-user-started",
+        presentationMessageId: "msg-assistant-started",
+        authoredText: "hi",
+        messageText: "hi",
+        attachmentFiles: [],
+      },
+    });
+    expect(harness.requestTurnNavigation).not.toHaveBeenCalled();
+
+    result.navigateOnFirstResponseOnce();
+    result.navigateOnFirstResponseOnce();
+
+    expect(harness.requestTurnNavigation).toHaveBeenCalledTimes(1);
+    expect(harness.requestTurnNavigation).toHaveBeenCalledWith({
+      sessionId: "session-a",
+      turnScopeId: "client-turn:started",
+    });
   });
 });

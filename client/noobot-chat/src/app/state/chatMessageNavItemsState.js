@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { RoleEnum } from "../../modules/chat/model/chatConstants.js";
-import { getMessageRole } from "../../modules/chat/model/messageIdentity.js";
+import { getMessageRole, getMessageTurnScopeId } from "../../modules/chat/model/messageIdentity.js";
 import { getMessageAnchorId } from "../../modules/chat/model/messageAnchor.js";
 import { requireFunctionDependencies } from "@noobot/shared/value";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
@@ -35,6 +35,7 @@ export function buildChatMessageNavItem({ messageItem, messageIndex, translate }
   const content = normalizeChatMessageNavContent(messageItem);
   return {
     id: getMessageAnchorId(messageItem, messageIndex),
+    turnScopeId: getMessageTurnScopeId(messageItem),
     role,
     roleLabel,
     content,
@@ -51,4 +52,11 @@ export function buildChatMessageNavItems({ messages, shouldRenderMessageInChat, 
       ? [buildChatMessageNavItem({ messageItem, messageIndex, translate })]
       : [],
   );
+}
+
+export function resolveChatMessageNavTarget(items, turnScopeId) {
+  if (!Array.isArray(items)) throw new TypeError("chat_message_nav_items_not_array");
+  if (!items.length) return null;
+  const targetTurnScopeId = turnScopeId || items[items.length - 1].turnScopeId;
+  return items.find((item) => item.turnScopeId === targetTurnScopeId) ?? null;
 }

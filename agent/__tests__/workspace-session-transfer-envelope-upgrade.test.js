@@ -17,8 +17,8 @@ import { legacyV2TransferEnvelope } from "./helpers/legacy-transfer-envelope.js"
 import { upgradeSessionTransferEnvelopes } from "../src/workspace-lifecycle/session-transfer-envelope-upgrade.js";
 import {
   SUMMARY_SNAPSHOT_SCHEMA_VERSION,
-  readSummarySnapshots,
   messageHash,
+  summarySnapshotContentHash,
 } from "../src/session/session-artifact-session/turn-journal-store.js";
 import { createSessionDisplaySourceRevision } from "../src/session/session-display-source-revision.js";
 
@@ -231,12 +231,11 @@ test("v6 rewrites session envelopes and resyncs every derived checksum", async (
     assert.equal(turn.recordCount, 2);
     assert.equal(turn.messageHashes.sm_a, records[0].hash);
     assert.equal(turn.messageHashes.sm_b, seeded.manifest.turnOrder[0].messageHashes.sm_b);
-    const snapshots = await readSummarySnapshots(
-      path.join(fixture.base, SESSION),
-      turn.summarySnapshots,
-    );
-    assertV3(snapshots[0].payload.records[0].message.transferEnvelopes[0], "c");
-    assert.equal(turn.messageHashes.sm_c, snapshots[0].payload.records[0].hash);
+    const [snapshotIndex] = turn.summarySnapshots;
+    const snapshot = await fixture.readJson(snapshotIndex.file);
+    assert.equal(summarySnapshotContentHash(snapshot), snapshotIndex.contentHash);
+    assertV3(snapshot.records[0].message.transferEnvelopes[0], "c");
+    assert.equal(turn.messageHashes.sm_c, snapshot.records[0].hash);
 
     const detail = await fixture.readJson(DETAIL_FILE);
     assertV3(detail.toolTimeline[0].transfer, "d");

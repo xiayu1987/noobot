@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { text } from "@noobot/shared/value";
-import { normalizeTurnTimingRecord, mergeTurnTimingRecord } from "@noobot/session-protocol";
+import {
+  assertTurnTimingOwnership,
+  normalizeTurnTimingRecord,
+  mergeTurnTimingRecord,
+} from "@noobot/session-protocol";
 import { ensureSessionBucket, isTurnRuntimeDeleted } from "./turnRuntimeRegistryIdentity.js";
 
 function normalizeSnapshotTimings(turnTimings) {
@@ -19,11 +23,22 @@ function isSameTiming(left, right) {
   );
 }
 
+export function mergeAuthoritativeTurnTiming(currentTiming, authoritativeTurn) {
+  const thinkingFinishedAt = text(authoritativeTurn.thinkingFinishedAt);
+  if (!thinkingFinishedAt) return currentTiming;
+  const incoming = {
+    turnScopeId: authoritativeTurn.turnScopeId,
+    dialogProcessId: authoritativeTurn.dialogProcessId,
+    thinkingFinishedAt,
+  };
+  return currentTiming
+    ? mergeTurnTimingRecord(currentTiming, incoming)
+    : normalizeTurnTimingRecord(incoming);
+}
+
 function applyTurnTiming(registry, bucket, sessionId, timing) {
   const current = bucket.turns[timing.turnScopeId] || {};
-  if (text(current.dialogProcessId) && text(current.dialogProcessId) !== timing.dialogProcessId) {
-    return { applied: false, reason: "timing_dialog_process_conflict" };
-  }
+  assertTurnTimingOwnership(timing, current.dialogProcessId);
   const merged = current.timing ? mergeTurnTimingRecord(current.timing, timing) : timing;
   if (isSameTiming(merged, current.timing)) {
     return { applied: false, deduplicated: true };
@@ -39,20 +54,20 @@ function applyTurnTiming(registry, bucket, sessionId, timing) {
   return { applied: true };
 }
 
-export function applyTurnTimingSnapshot(registry, snapshot = {}) {
-  const sessionId = text(snapshot?.sessionId);
-  if (!sessionId) return { applied: false, reason: "missing_session_identity" };
-  if (!Array.isArray(snapshot?.turnTimings) || !snapshot.turnTimings.length) {
-    return { applied: false, reason: "empty_timing_snapshot" };
+export function applyTurnTimingSnapshot(registry, snapshot) {
+  const sessionId = text(snapshot.sessionId);
+  if (!sessionId) throw new TypeError("turn timing snapshot requires sessionId");
+  if (!Array.isArray(snapshot.turnTimings)) {
+    throw new TypeError(`turn timing snapshot requires turnTimings array: ${sessionId}`);
   }
   const timings = normalizeSnapshotTimings(snapshot.turnTimings);
   const bucket = ensureSessionBucket(registry, sessionId);
   const hydratedTurnScopeIds = [];
   for (const timing of timings) {
     if (isTurnRuntimeDeleted(registry, { sessionId, turnScopeId: timing.turnScopeId })) continue;
-    const result = applyTurnTiming(registry, bucket, sessionId, timing);
-    if (result.reason) return result;
-    if (result.applied) hydratedTurnScopeIds.push(timing.turnScopeId);
+    if (applyTurnTiming(registry, bucket, sessionId, timing).applied) {
+      hydratedTurnScopeIds.push(timing.turnScopeId);
+    }
   }
   return hydratedTurnScopeIds.length
     ? { applied: true, bucket, hydratedTurnScopeIds }

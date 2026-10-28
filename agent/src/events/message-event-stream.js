@@ -249,13 +249,20 @@ export async function emitMessageEvent(eventListener, runtime, eventType, data) 
   const payload = createMessageEventPayload(runtime, eventType, data);
   const state = runtimeState(runtime);
   const input = messageEventCommitInput(runtime, state, payload);
-  const envelope = isTransientMessageEventType(payload.eventType)
-    ? createTransientMessageEventEnvelope(input)
-    : await commitDurableMessageEvent(runtime, input);
+  let envelope;
+  let persistDurationMs = 0;
+  if (isTransientMessageEventType(payload.eventType)) {
+    envelope = createTransientMessageEventEnvelope(input);
+  } else {
+    const persistStartedAtMs = performance.now();
+    envelope = await commitDurableMessageEvent(runtime, input);
+    persistDurationMs = performance.now() - persistStartedAtMs;
+  }
   await runtime.projectCurrentTurnMessageEvent(envelope);
   await emitEvent(eventListener, AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED, {
     envelope,
     persistenceScope: state.persistenceScope,
+    persistDurationMs,
   });
   return envelope;
 }

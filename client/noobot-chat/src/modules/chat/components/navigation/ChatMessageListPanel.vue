@@ -4,6 +4,8 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { useVirtualizer } from "@tanstack/vue-virtual";
 import { computed, ref, watch } from "vue";
 import ChatMessageItem from "../message/ChatMessageItem.vue";
 import { useChatStore } from "../../stores/useChatStore.js";
@@ -148,20 +150,54 @@ watch(
   { immediate: true, flush: "post" },
 );
 
+const {
+  messageAnchorScrollOffsetPx,
+  messageAnchorCurrentThresholdPx,
+  messageListEstimatedRowHeightPx,
+  messageListInitialViewportHeightPx,
+  messageListVirtualOverscan,
+} = QUANTITY_THRESHOLDS.client;
+const renderedAnchorIds = computed(() =>
+  renderedMessages.value.map(({ messageItem, sourceIndex }) =>
+    getMessageAnchorId(messageItem, sourceIndex),
+  ),
+);
+const messageVirtualizer = useVirtualizer(
+  computed(() => ({
+    count: renderedMessages.value.length,
+    estimateSize: () => messageListEstimatedRowHeightPx,
+    getItemKey: (index) => renderedMessages.value[index].renderKey,
+    getScrollElement: () => (listRef.value === null ? null : listRef.value.wrapRef),
+    initialRect: { height: messageListInitialViewportHeightPx, width: 0 },
+    overscan: messageListVirtualOverscan,
+    scrollPaddingStart: messageAnchorScrollOffsetPx,
+  })),
+);
+const virtualRows = computed(() => messageVirtualizer.value.getVirtualItems());
+const virtualListHeight = computed(() => messageVirtualizer.value.getTotalSize());
+function measureMessageRow(element) {
+  if (element) messageVirtualizer.value.measureElement(element);
+}
+
 function scrollToMessageAnchor(anchorId) {
   if (!isCanonicalText(anchorId)) throw new TypeError("scrollToMessageAnchor requires anchorId");
-  const wrapRef = getWrapRef();
-  const target = wrapRef.querySelector(`#${CSS.escape(anchorId)}`);
-  if (!target) return false;
-  const offset = 16;
-  const nextTop = target.offsetTop - offset;
-  wrapRef.scrollTo({ top: Math.max(0, nextTop), behavior: "smooth" });
-  return true;
+  const index = renderedAnchorIds.value.indexOf(anchorId);
+  if (index < 0) throw new Error(`message anchor is not rendered: ${anchorId}`);
+  messageVirtualizer.value.scrollToIndex(index, { align: "start", behavior: "auto" });
+}
+
+function resolveCurrentMessageAnchorId() {
+  const virtualizer = messageVirtualizer.value;
+  const item = virtualizer.getVirtualItemForOffset(
+    virtualizer.getScrollOffset() + messageAnchorCurrentThresholdPx,
+  );
+  return item === undefined ? "" : renderedAnchorIds.value[item.index];
 }
 
 defineExpose({
   getWrapRef,
   scrollToMessageAnchor,
+  resolveCurrentMessageAnchorId,
 });
 </script>
 
@@ -183,23 +219,37 @@ defineExpose({
           <p>{{ translate("common.emptyChatHint") }}</p>
         </div>
 
-        <template
-          v-for="{ messageItem, sourceIndex, renderKey } in renderedMessages"
-          :key="renderKey"
+        <div
+          v-if="renderedMessages.length"
+          class="msg-virtual-space"
+          :style="{ height: `${virtualListHeight}px` }"
         >
           <div
-            :id="getMessageAnchorId(messageItem, sourceIndex)"
-            class="chat-message-anchor"
-            :data-chat-message-anchor="getMessageAnchorId(messageItem, sourceIndex)"
+            v-for="virtualRow in virtualRows"
+            :key="virtualRow.key"
+            :ref="measureMessageRow"
+            :data-index="virtualRow.index"
+            class="msg-virtual-row"
+            :class="{
+              'is-first': virtualRow.index === 0,
+              'is-last': virtualRow.index === renderedMessages.length - 1,
+            }"
+            :style="{ transform: `translateY(${virtualRow.start}px)` }"
           >
-            <ChatMessageItem
-              v-bind="messageItemSharedProps"
-              :message-item="messageItem"
-              :current-turn="isCurrentTurnMessage(messageItem)"
-              @open-thinking-details="$emit('open-thinking-details', $event)"
-            />
+            <div
+              :id="renderedAnchorIds[virtualRow.index]"
+              class="chat-message-anchor"
+              :data-chat-message-anchor="renderedAnchorIds[virtualRow.index]"
+            >
+              <ChatMessageItem
+                v-bind="messageItemSharedProps"
+                :message-item="renderedMessages[virtualRow.index].messageItem"
+                :current-turn="isCurrentTurnMessage(renderedMessages[virtualRow.index].messageItem)"
+                @open-thinking-details="$emit('open-thinking-details', $event)"
+              />
+            </div>
           </div>
-        </template>
+        </div>
       </div>
     </el-scrollbar>
     <SessionArtifactPanel v-if="activeSession !== null" :session-id="activeSession.sessionId" />
@@ -219,18 +269,36 @@ defineExpose({
 }
 
 .msg-list-inner {
-  padding: var(--noobot-space-2xl) max(var(--noobot-space-2xl), calc(50% - 400px));
+  padding: 0 max(var(--noobot-space-2xl), calc(50% - 400px));
   display: flex;
   flex-direction: column;
-  gap: var(--noobot-space-2xl);
+  --msg-list-edge-gap: var(--noobot-space-2xl);
+  --msg-list-row-gap: var(--noobot-space-2xl);
 }
 
-.chat-message-anchor {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 180px;
+.msg-virtual-space {
+  position: relative;
+  width: 100%;
+}
+
+.msg-virtual-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  padding-bottom: var(--msg-list-row-gap);
+}
+
+.msg-virtual-row.is-first {
+  padding-top: var(--msg-list-edge-gap);
+}
+
+.msg-virtual-row.is-last {
+  padding-bottom: var(--msg-list-edge-gap);
 }
 
 .skeleton-loading {
+  margin: var(--msg-list-edge-gap) 0;
   padding: var(--noobot-space-xl);
 }
 
@@ -257,9 +325,10 @@ defineExpose({
 
 @media (max-width: 768px) {
   .msg-list-inner {
-    padding: var(--noobot-space-lg) max(var(--noobot-space-md), env(safe-area-inset-left))
-      var(--noobot-space-lg) max(var(--noobot-space-md), env(safe-area-inset-right));
-    gap: var(--noobot-space-xs);
+    padding: 0 max(var(--noobot-space-md), env(safe-area-inset-right)) 0
+      max(var(--noobot-space-md), env(safe-area-inset-left));
+    --msg-list-edge-gap: var(--noobot-space-lg);
+    --msg-list-row-gap: var(--noobot-space-xs);
   }
 }
 </style>

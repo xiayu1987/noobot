@@ -4,51 +4,52 @@
  * SPDX-License-Identifier: MIT
  */
 import { requireFunctionDependencies } from "@noobot/shared/value";
-import {
-  lockChatMessageScrollSyncToAnchor,
-  readMountedMessageListPanel,
-} from "../runtime/chatMessageScrollSync.js";
+import { lockChatMessageScrollSyncToAnchor } from "../runtime/chatMessageScrollSync.js";
 
-export function buildChatMessageNavigatorOpenRoute({ sessionId, anchor, chatNavigatorPanel }) {
+export function buildChatMessageNavigatorOpenRoute({ sessionId, turn, chatNavigatorPanel }) {
   return {
     sessionId,
     panel: chatNavigatorPanel,
-    anchor,
+    turn,
   };
 }
 
-export function buildChatMessageNavigatorCloseRoute({ sessionId, anchor }) {
+export function buildChatMessageNavigatorCloseRoute({ sessionId, turn }) {
   return {
     sessionId,
     panel: "",
-    anchor,
+    turn,
   };
+}
+
+export function scrollToChatMessageNavigatorItem({
+  item,
+  currentMessageAnchorId,
+  messageListPanel,
+}) {
+  currentMessageAnchorId.value = item.id;
+  lockChatMessageScrollSyncToAnchor(messageListPanel.getWrapRef(), item.id);
+  messageListPanel.scrollToMessageAnchor(item.id);
 }
 
 export function selectChatMessageNavigatorItem({
   item,
   currentMessageAnchorId,
-  messageListPanelRef,
+  messageListPanel,
   isMobile,
   mobileChatNavigatorVisible,
   activeSessionId,
   pushPseudoRoute,
 }) {
   requireFunctionDependencies("selectChatMessageNavigatorItem", { pushPseudoRoute });
-  const anchor = item.id;
-  currentMessageAnchorId.value = anchor;
-  const messageListPanel = readMountedMessageListPanel(messageListPanelRef);
-  if (messageListPanel !== null) {
-    lockChatMessageScrollSyncToAnchor(messageListPanel.getWrapRef(), anchor);
-    messageListPanel.scrollToMessageAnchor(anchor);
-  }
+  scrollToChatMessageNavigatorItem({ item, currentMessageAnchorId, messageListPanel });
   if (isMobile.value) {
     mobileChatNavigatorVisible.value = false;
   }
   pushPseudoRoute(
     buildChatMessageNavigatorCloseRoute({
       sessionId: activeSessionId.value,
-      anchor,
+      turn: item.turnScopeId,
     }),
   );
 }
@@ -56,7 +57,7 @@ export function selectChatMessageNavigatorItem({
 export function openChatMessageNavigator({
   mobileChatNavigatorVisible,
   activeSessionId,
-  currentMessageAnchorId,
+  routedTurnScopeId,
   chatNavigatorPanel,
   pushPseudoRoute,
 }) {
@@ -65,7 +66,7 @@ export function openChatMessageNavigator({
   pushPseudoRoute(
     buildChatMessageNavigatorOpenRoute({
       sessionId: activeSessionId.value,
-      anchor: currentMessageAnchorId.value,
+      turn: routedTurnScopeId.value,
       chatNavigatorPanel,
     }),
   );
@@ -73,14 +74,14 @@ export function openChatMessageNavigator({
 
 export function closeChatMessageNavigator({
   activeSessionId,
-  currentMessageAnchorId,
+  routedTurnScopeId,
   replacePseudoRoute,
 }) {
   requireFunctionDependencies("closeChatMessageNavigator", { replacePseudoRoute });
   replacePseudoRoute(
     buildChatMessageNavigatorCloseRoute({
       sessionId: activeSessionId.value,
-      anchor: currentMessageAnchorId.value,
+      turn: routedTurnScopeId.value,
     }),
   );
 }

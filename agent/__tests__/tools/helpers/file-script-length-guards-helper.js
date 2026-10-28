@@ -83,7 +83,11 @@ function buildAgentContext(basePath, userId = "u-test", overrides = {}) {
 }
 
 function executeToolCall(options) {
-  return executeToolCallProduction({ abortSignal: options.runtime.abortSignal, ...options });
+  return executeToolCallProduction({
+    abortSignal: options.runtime.abortSignal,
+    toolStartedAtMs: Date.now(),
+    ...options,
+  });
 }
 
 function toolCallScope(agentContext) {

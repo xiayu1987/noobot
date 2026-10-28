@@ -9,6 +9,7 @@ import {
   buildChatMessageNavItems,
   normalizeChatMessageNavContent,
   resolveChatMessageNavRoleLabelKey,
+  resolveChatMessageNavTarget,
 } from "../../../src/app/state/chatMessageNavItemsState.js";
 import { getMessageAnchorId } from "../../../src/modules/chat/model/messageAnchor.js";
 
@@ -49,6 +50,7 @@ describe("chatMessageNavItemsState", () => {
 
     expect(buildChatMessageNavItem({ messageItem: message, messageIndex: 2, translate })).toEqual({
       id: getMessageAnchorId(message, 2),
+      turnScopeId: message.turnScopeId,
       role: "assistant",
       roleLabel: "AI",
       content: "abcdefghijklmnopqrstuvwxyz0123456789",
@@ -88,5 +90,19 @@ describe("chatMessageNavItemsState", () => {
     expect(() => getMessageAnchorId({ role: "user", content: "x" }, -1)).toThrow(
       "message_anchor_index_invalid",
     );
+  });
+
+  it("resolves the navigation target to the start of the requested or latest turn", () => {
+    const items = [
+      { id: "a-1", turnScopeId: "turn-1" },
+      { id: "a-2", turnScopeId: "turn-1" },
+      { id: "a-3", turnScopeId: "turn-2" },
+      { id: "a-4", turnScopeId: "turn-2" },
+    ];
+    expect(resolveChatMessageNavTarget(items, "turn-1").id).toBe("a-1");
+    expect(resolveChatMessageNavTarget(items, "").id).toBe("a-3");
+    expect(resolveChatMessageNavTarget(items, "turn-missing")).toBeNull();
+    expect(resolveChatMessageNavTarget([], "")).toBeNull();
+    expect(() => resolveChatMessageNavTarget(null, "")).toThrow("chat_message_nav_items_not_array");
   });
 });

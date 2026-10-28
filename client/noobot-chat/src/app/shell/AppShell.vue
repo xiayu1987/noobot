@@ -4,7 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { ref, computed, nextTick, onMounted, onBeforeUnmount } from "vue";
+import { ref, computed, onMounted, onBeforeUnmount } from "vue";
 import noobotLogo from "../../shared/assets/noobot.svg";
 import AppShellDrawers from "./AppShellDrawers.vue";
 import AppShellLayout from "./AppShellLayout.vue";
@@ -81,11 +81,6 @@ function closeComposerMorePanel() {
   composerMorePanelVisible.value = false;
 }
 
-async function navigateToLastMessageAfterRender() {
-  await nextTick();
-  navigateToLastMessage();
-}
-
 const {
   userId,
   allowUserInteraction,
@@ -139,11 +134,9 @@ const {
   onConnected: async () => {
     const route = parsePseudoRouteFromLocation();
     await fetchSessions(route.sessionId || "", {
-      navigateToLastMessage: false,
       forceCurrentSessionRerender: true,
     });
     await applyInitialPseudoRoute(route);
-    await navigateToLastMessageAfterRender();
     chatWebSocketClient.connect();
     await reconnectActiveSession({ force: true });
   },
@@ -152,11 +145,19 @@ const fetchExecutionReport = executionReportService.getReport;
 configureAuthenticatedFetcher(authFetch);
 bindScenarioConfig(scenarioConfig);
 
-function navigateToLastMessage() {
+function requireChatMessageNavigatorPanel() {
   if (!chatMessageNavigatorPanel) {
-    throw new Error("navigateToLastMessage called before chat message navigator was bound");
+    throw new Error("message navigation requested before chat message navigator was bound");
   }
-  chatMessageNavigatorPanel.navigateToLastMessage();
+  return chatMessageNavigatorPanel;
+}
+
+function requestTurnNavigation(target) {
+  requireChatMessageNavigatorPanel().requestTurnNavigation(target);
+}
+
+function requestSessionNavigation(sessionId) {
+  requireChatMessageNavigatorPanel().requestSessionNavigation(sessionId);
 }
 
 function refreshSessionsFromSidebar() {
@@ -206,8 +207,6 @@ const {
   conversationStateTimeline,
   turnRuntimeRegistry,
   workflowNodeStateRegistry,
-  subSessionMessageRegistry,
-  subSessionMessageRegistryVersion,
 } = useChatSession({
   userId,
   apiKey,
@@ -228,7 +227,8 @@ const {
   authFetch,
   refreshAuthentication,
   isImageMime,
-  navigateToLastMessage,
+  requestTurnNavigation,
+  requestSessionNavigation,
   notify: notifyUi,
   clearUploadSelection: () => composerRef.value.clearUploadSelection(),
 });
@@ -241,8 +241,6 @@ chatMessageNavigatorPanel = useChatMessageNavigatorPanel({
   activeSession,
   activeSessionId,
   workflowNodeStateRegistry,
-  subSessionMessageRegistry,
-  subSessionMessageRegistryVersion,
   turnRuntimeRegistry,
   shouldRenderMessageInChat,
   messageListPanelRef,
@@ -257,6 +255,8 @@ const {
   chatNavigatorVisible,
   mobileChatNavigatorVisible,
   currentMessageAnchorId,
+  routedTurnScopeId,
+  applyRoutedTurn,
   chatMessageNavItems,
   handleSelectChatMessageNavItem,
   openChatMessageNavigator,
@@ -325,8 +325,9 @@ const {
 } = useAppShellPseudoRoute({
   activeSessionId,
   activeSession,
-  currentMessageAnchorId,
-  messageListPanelRef,
+  routedTurnScopeId,
+  applyRoutedTurn,
+  requestSessionNavigation,
   workspaceVisible,
   connectorVisible,
   userSettingsVisible,
@@ -432,8 +433,7 @@ async function onAppMounted() {
   addPseudoRoutePopStateListener();
   const autoConnected = await tryAutoConnect();
   if (autoConnected || connected.value) return;
-  await initSessionsAfterMount({ navigateToLastMessage: false });
-  await navigateToLastMessageAfterRender();
+  await initSessionsAfterMount();
 }
 
 function onAppUnmounted() {

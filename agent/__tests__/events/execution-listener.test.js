@@ -264,7 +264,10 @@ test("execution listener persists the canonical message fact instead of the priv
     },
   });
 
-  await listener.onEvent({ event: "authority_event_committed", data: { envelope } });
+  await listener.onEvent({
+    event: "authority_event_committed",
+    data: { envelope, persistDurationMs: 12.5 },
+  });
   await listener.flush();
 
   assert.equal(persisted.length, 1);
@@ -272,6 +275,51 @@ test("execution listener persists the canonical message fact instead of the priv
   assert.equal(persisted[0].data.tool, "read_file");
   assert.equal(persisted[0].data.eventId, "tool-event-a");
   assert.equal(persisted[0].data.sequence, 1);
+  assert.equal(persisted[0].data.persistDurationMs, 12.5);
+});
+
+test("execution listener requires persistDurationMs on committed message events", () => {
+  const listener = createExecutionEventListener({
+    sessionManager: { appendExecutionLog: async () => {} },
+    userId: "user-a",
+    sessionId: "session-a",
+    turnScopeId: "turn-a",
+    dialogProcessId: "dialog-a",
+    upstream: { onEvent: async () => true },
+    parentSessionId: "",
+    persistenceScope: null,
+  });
+  const envelope = createEventEnvelope({
+    family: EVENT_FAMILY.MESSAGE_TIMELINE,
+    schemaVersion: getEventFamily(EVENT_FAMILY.MESSAGE_TIMELINE).schemaVersion,
+    identity: {
+      eventId: "tool-event-b",
+      eventType: "message_event",
+      sessionId: "session-a",
+      turnScopeId: "turn-a",
+    },
+    causality: {},
+    ordering: { domain: "message-event", scopeId: "presentation-a", sequence: 1 },
+    producer: { type: "agent", id: "message-runtime" },
+    occurredAt: "2026-08-16T00:00:00.000Z",
+    payload: {
+      eventType: "tool_call_start",
+      presentationMessageId: "presentation-a",
+      dialogProcessId: "dialog-a",
+      tool: "read_file",
+      toolCallId: "call-b",
+    },
+  });
+  for (const persistDurationMs of [undefined, -1, Number.NaN]) {
+    assert.throws(
+      () =>
+        listener.onEvent({
+          event: "authority_event_committed",
+          data: { envelope, persistDurationMs },
+        }),
+      /requires persistDurationMs/,
+    );
+  }
 });
 
 test("execution listener forwards transient message events without persisting them", async () => {
@@ -325,7 +373,10 @@ test("execution listener forwards transient message events without persisting th
   });
 
   for (const envelope of [...transientEnvelopes, durable]) {
-    await listener.onEvent({ event: "authority_event_committed", data: { envelope } });
+    await listener.onEvent({
+      event: "authority_event_committed",
+      data: { envelope, persistDurationMs: 1 },
+    });
   }
   await listener.flush();
 
@@ -443,7 +494,7 @@ test("execution listener exposes rejected asynchronous upstream delivery at the 
   });
   const delivered = await listener.onEvent({
     event: "authority_event_committed",
-    data: { envelope },
+    data: { envelope, persistDurationMs: 1 },
   });
 
   assert.equal(delivered, false);

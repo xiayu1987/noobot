@@ -216,11 +216,19 @@ watch(
                 :style="barStyle(call.ratio)"
               ></span>
             </span>
-            <span
-              class="execution-report-bar-text"
-              :class="{ 'execution-report-failed': !call.success }"
-            >
-              {{ call.duration }}
+            <span class="execution-report-slowest-time">
+              <span
+                class="execution-report-bar-text"
+                :class="{ 'execution-report-failed': !call.success }"
+              >
+                {{ call.duration }}
+              </span>
+              <span
+                class="execution-report-slowest-persist"
+                data-testid="execution-report-slowest-persist"
+                >{{ translate("message.executionReportPersistDuration") }}
+                {{ call.persistDuration }}</span
+              >
             </span>
           </li>
         </ol>
@@ -445,9 +453,17 @@ watch(
   grid-area: bar;
   width: 100%;
 }
-.execution-report-slowest .execution-report-bar-text {
+.execution-report-slowest-time {
   grid-area: time;
   align-self: start;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.execution-report-slowest-persist {
+  color: var(--noobot-text-secondary);
+  font-size: var(--noobot-font-size-xs);
+  font-variant-numeric: tabular-nums;
 }
 .execution-report-slowest-subject {
   overflow: hidden;

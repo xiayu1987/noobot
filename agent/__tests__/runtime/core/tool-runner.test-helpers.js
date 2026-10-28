@@ -41,7 +41,14 @@ export function executeToolCall({
     runtime.sessionManager = createCanonicalMessageEventSessionManager();
   }
   const agentContext = createTestAgentExecutionScope(runtime, { identity });
-  const execution = { abortSignal: runtime.abortSignal, ...options, call, runtime, agentContext };
+  const execution = {
+    abortSignal: runtime.abortSignal,
+    toolStartedAtMs: Date.now(),
+    ...options,
+    call,
+    runtime,
+    agentContext,
+  };
   return runtime.eventListener
     ? executeToolCallInTurn(execution)
     : executeToolCallWithoutTurn(execution);

@@ -7,10 +7,18 @@ import { expect } from "@playwright/test";
 import {
   AGENT_COMMAND,
   AGENT_TRANSPORT_PROTOCOL_VERSION,
+  getAgentCommandIdentityKeys,
   validateAgentCommand,
 } from "@noobot/agent-transport-protocol";
 
 const RUN_COMMANDS = new Set([AGENT_COMMAND.SEND, AGENT_COMMAND.RESEND, AGENT_COMMAND.CONTINUE]);
+
+export function assertStopCommandIdentity(stop, turnIdentity) {
+  const stopIdentityKeys = getAgentCommandIdentityKeys(AGENT_COMMAND.STOP);
+  expect(stop.identity).toEqual(
+    Object.fromEntries(stopIdentityKeys.map((key) => [key, turnIdentity[key]])),
+  );
+}
 
 export function assertAgentTransportCommand(command, expected = {}) {
   expect(validateAgentCommand(command)).toEqual({ valid: true, errors: [] });

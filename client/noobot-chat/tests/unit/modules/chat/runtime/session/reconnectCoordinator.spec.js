@@ -23,7 +23,9 @@ import { StreamEventEnum } from "../../../../../../src/modules/chat/model/chatCo
 describe("createReconnectCoordinator", () => {
   it("declares the active child session parent identity on reconnect", async () => {
     const chatWebSocketClient = { reconnect: vi.fn(async () => {}) };
+    const requestSessionNavigation = vi.fn();
     const coordinator = createReconnectCoordinator({
+      requestSessionNavigation,
       activeSession: ref({
         sessionId: "child-1",
         parentSessionId: "parent-1",
@@ -82,7 +84,9 @@ describe("createReconnectCoordinator", () => {
     };
     const notify = vi.fn();
     const logSessionSystemEvent = vi.fn();
+    const requestSessionNavigation = vi.fn();
     const coordinator = createReconnectCoordinator({
+      requestSessionNavigation,
       activeSession: ref({ sessionId: "s-1", messages: [] }),
       turnRuntimeRegistry: ref(createTurnRuntimeRegistryState()),
       chatWebSocketClient,
@@ -152,7 +156,9 @@ describe("createReconnectCoordinator", () => {
         return { event, data };
       }),
     };
+    const requestSessionNavigation = vi.fn();
     const coordinator = createReconnectCoordinator({
+      requestSessionNavigation,
       activeSession: ref({
         sessionId: "s-1",
         parentSessionId: ROOT_PARENT_SESSION_ID,
@@ -171,6 +177,7 @@ describe("createReconnectCoordinator", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(chatWebSocketClient.requestJson).toHaveBeenCalledTimes(2);
+    expect(requestSessionNavigation).toHaveBeenCalledTimes(1);
     expect(reconnectReplay.applyReconnectEvent.mock.calls.map(([event]) => event)).toEqual([
       StreamEventEnum.EXECUTION_TREE,
       StreamEventEnum.EXECUTION_SNAPSHOT,
@@ -198,7 +205,9 @@ describe("createReconnectCoordinator", () => {
     ).toBe(true);
     const logSessionSystemEvent = vi.fn();
     const notify = vi.fn();
+    const requestSessionNavigation = vi.fn();
     const coordinator = createReconnectCoordinator({
+      requestSessionNavigation,
       activeSession: ref({
         sessionId: "s-1",
         parentSessionId: ROOT_PARENT_SESSION_ID,

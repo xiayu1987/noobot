@@ -84,6 +84,14 @@ describe("session message view", () => {
     expect(
       view.shouldRenderMessageInChat({
         role: "user",
+        type: "context_control",
+        noobotInternalMessageType: "noobot.task_check_prompt",
+        content: "已达到周期任务检查阈值。",
+      }),
+    ).toBe(false);
+    expect(
+      view.shouldRenderMessageInChat({
+        role: "user",
         type: "message",
         content: "真实用户消息",
       }),

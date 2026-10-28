@@ -8,7 +8,7 @@ import { resolveSessionTitle } from "../entities/session-message-facts.js";
 import { isPlainObject } from "@noobot/shared/value";
 import { requireSessionAggregateVersion } from "@noobot/session-protocol";
 
-export const SESSIONS_SUMMARY_SCHEMA_VERSION = 4;
+export const SESSIONS_SUMMARY_SCHEMA_VERSION = 5;
 
 const SESSION_SUMMARY_AVAILABILITY = new Set(["available", "unavailable"]);
 
@@ -25,6 +25,7 @@ export function buildSessionSummary(session, { listFacts }) {
     title: resolveSessionTitle(session),
     messageCount,
     lastMessage: lastMessage ? buildMessageSummary(lastMessage) : null,
+    activeTurnScopeId: session.turnLifecycle.activeTurnScopeId,
     availability: "available",
   };
 }
@@ -46,6 +47,7 @@ export function buildUnavailableSessionSummary({
     title: resolveSessionTitle({ sessionId, customTitle: metadata.title, autoTitle: "" }),
     messageCount: 0,
     lastMessage: null,
+    activeTurnScopeId: "",
     availability: "unavailable",
     unavailableReason: { code: error.code, message: error.message },
   };
@@ -64,6 +66,9 @@ export function requireSessionsSummaryPayload(payload) {
   for (const item of payload.sessions) {
     if (!isPlainObject(item) || typeof item.sessionId !== "string" || !item.sessionId) {
       throw sessionsSummaryInvalid("each session requires a sessionId");
+    }
+    if (typeof item.activeTurnScopeId !== "string") {
+      throw sessionsSummaryInvalid(`${item.sessionId} requires activeTurnScopeId`);
     }
     if (!SESSION_SUMMARY_AVAILABILITY.has(item.availability)) {
       throw sessionsSummaryInvalid(`${item.sessionId} has unknown availability`);

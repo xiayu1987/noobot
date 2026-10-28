@@ -48,12 +48,6 @@ function handleFileLink(event) {
   }
   emit("download-workspace-file", link.getAttribute("data-noobot-workspace-path"));
 }
-
-function getHtml() {
-  return String(mermaidHostRef.value?.innerHTML || "");
-}
-
-defineExpose({ getHtml });
 </script>
 
 <template>

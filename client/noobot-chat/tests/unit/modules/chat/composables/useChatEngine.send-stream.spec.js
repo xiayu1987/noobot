@@ -166,6 +166,7 @@ describe("useChatEngine.send-stream", () => {
       terminalResolutionTurnTiming: {
         startedAt: thinkingStartedAt,
         finishedAt: thinkingFinishedAt,
+        thinkingFinishedAt,
       },
     });
 
@@ -187,6 +188,7 @@ describe("useChatEngine.send-stream", () => {
       running: false,
       startedAt: thinkingStartedAt,
       finishedAt: thinkingFinishedAt,
+      thinkingFinishedAt,
     });
     expect(Date.parse(runtime.finishedAt) - Date.parse(runtime.startedAt)).toBe(3600);
   });
@@ -421,15 +423,16 @@ describe("useChatEngine.send-stream", () => {
       emitAuthorityProcessing(onEvent, serverTurnSource(payload, "dp-new"));
       emitAuthorityTerminal(onEvent, serverTurnSource(payload, "dp-new"));
     });
-    const { engine, activeSession, activeSessionId, sending, activeTurnRuntime } = createHarness({
-      sessionId: "local-1",
-      stream,
-      deps: {
-        fetchSessionDetail: vi.fn(async () => {
-          throw new Error("ignore detail fetch in this unit test");
-        }),
-      },
-    });
+    const { engine, deps, activeSession, activeSessionId, sending, activeTurnRuntime } =
+      createHarness({
+        sessionId: "local-1",
+        stream,
+        deps: {
+          fetchSessionDetail: vi.fn(async () => {
+            throw new Error("ignore detail fetch in this unit test");
+          }),
+        },
+      });
 
     const diagnostics = [];
     setTransportDiagnosticsLogSink({
@@ -469,6 +472,15 @@ describe("useChatEngine.send-stream", () => {
       terminal: "completed",
     });
     expect(sending.value).toBe(false);
+
+    const turnScopeId = botMessage.turnScopeId;
+
+    await vi.waitFor(() =>
+      expect(deps.requestTurnNavigation.mock.calls).toEqual([
+        [{ sessionId: "local-1", turnScopeId }],
+        [{ sessionId: "local-1", turnScopeId }],
+      ]),
+    );
   });
 
   it("channel_state sending preserves thinking elapsed start in the turn timing store", async () => {

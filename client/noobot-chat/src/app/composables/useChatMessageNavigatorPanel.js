@@ -11,6 +11,7 @@ import {
   selectChatMessageNavigatorItem,
 } from "../state/chatMessageNavigatorState.js";
 import { buildChatMessageNavItems } from "../state/chatMessageNavItemsState.js";
+import { createPendingMessageNavigation, EMPTY_ROUTED_TURN } from "./pendingMessageNavigation.js";
 import { selectTurnPresentations } from "../../modules/chat/runtime/engine/turnPresentation.js";
 import { requireFunctionDependencies } from "@noobot/shared/value";
 
@@ -40,7 +41,13 @@ export function useChatMessageNavigatorPanel({
   }
   const chatNavigatorVisible = ref(true);
   const mobileChatNavigatorVisible = ref(false);
+
   const currentMessageAnchorId = ref("");
+
+  const routedTurn = ref(EMPTY_ROUTED_TURN);
+  const routedTurnScopeId = computed(() =>
+    routedTurn.value.sessionId === activeSessionId.value ? routedTurn.value.turnScopeId : "",
+  );
 
   const chatMessageNavItems = computed(() => {
     const session = activeSession.value;
@@ -57,10 +64,15 @@ export function useChatMessageNavigatorPanel({
   });
 
   function handleSelectChatMessageNavItem(item) {
+    const messageListPanel = messageListPanelRef.value;
+    if (messageListPanel === null) {
+      throw new Error("chat message navigator item selected before message list mounted");
+    }
+    routedTurn.value = { sessionId: activeSessionId.value, turnScopeId: item.turnScopeId };
     selectChatMessageNavigatorItem({
       item,
       currentMessageAnchorId,
-      messageListPanelRef,
+      messageListPanel,
       isMobile,
       mobileChatNavigatorVisible,
       activeSessionId,
@@ -68,19 +80,26 @@ export function useChatMessageNavigatorPanel({
     });
   }
 
-  function navigateToLastMessage() {
-    nextTick(() => {
-      const items = chatMessageNavItems.value;
-      if (!items.length) return;
-      handleSelectChatMessageNavItem(items[items.length - 1]);
-    });
+  const { requestSessionNavigation, requestTurnNavigation } = createPendingMessageNavigation({
+    activeSession,
+    activeSessionId,
+    messageListPanelRef,
+    turnRuntimeRegistry,
+    chatMessageNavItems,
+    routedTurn,
+    routedTurnScopeId,
+    currentMessageAnchorId,
+  });
+
+  function applyRoutedTurn({ sessionId, turnScopeId }) {
+    routedTurn.value = turnScopeId ? { sessionId, turnScopeId } : EMPTY_ROUTED_TURN;
   }
 
   function openChatMessageNavigator() {
     openChatMessageNavigatorState({
       mobileChatNavigatorVisible,
       activeSessionId,
-      currentMessageAnchorId,
+      routedTurnScopeId,
       chatNavigatorPanel,
       pushPseudoRoute,
     });
@@ -89,7 +108,7 @@ export function useChatMessageNavigatorPanel({
   function handleMobileChatNavigatorClosed() {
     closeChatMessageNavigator({
       activeSessionId,
-      currentMessageAnchorId,
+      routedTurnScopeId,
       replacePseudoRoute,
     });
   }
@@ -109,8 +128,9 @@ export function useChatMessageNavigatorPanel({
 
   watch(
     () => activeSessionId.value,
-    () => {
+    (sessionId) => {
       currentMessageAnchorId.value = "";
+      if (sessionId) requestSessionNavigation(sessionId);
       nextTick(bindChatMessageScrollSync);
     },
   );
@@ -119,9 +139,12 @@ export function useChatMessageNavigatorPanel({
     chatNavigatorVisible,
     mobileChatNavigatorVisible,
     currentMessageAnchorId,
+    routedTurnScopeId,
     chatMessageNavItems,
     handleSelectChatMessageNavItem,
-    navigateToLastMessage,
+    requestSessionNavigation,
+    requestTurnNavigation,
+    applyRoutedTurn,
     openChatMessageNavigator,
     handleMobileChatNavigatorClosed,
     bindChatMessageScrollSync,

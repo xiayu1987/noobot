@@ -68,6 +68,16 @@ export const QUANTITY_THRESHOLDS = deepFreeze({
 
     executionLogDisplayLimit: QUANTITY_TIERS.smallDisplay,
 
+    messageAnchorScrollOffsetPx: 16,
+
+    messageAnchorCurrentThresholdPx: 24,
+
+    messageListEstimatedRowHeightPx: 180,
+
+    messageListInitialViewportHeightPx: 900,
+
+    messageListVirtualOverscan: QUANTITY_TIERS.localContext,
+
     thinkingDetailEstimatedRowHeightPx: 32,
 
     thinkingDetailInitialViewportHeightPx: 600,

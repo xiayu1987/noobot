@@ -8,7 +8,7 @@ import { text, isObjectLike } from "@noobot/shared/value";
 
 const PSEUDO_ROUTE_SESSION_KEY = "session";
 export const PSEUDO_ROUTE_PANEL_KEY = "panel";
-const PSEUDO_ROUTE_ANCHOR_KEY = "anchor";
+const PSEUDO_ROUTE_TURN_KEY = "turn";
 
 export const PSEUDO_PANEL = Object.freeze({
   WORKSPACE: "workspace",
@@ -45,7 +45,7 @@ function normalizePseudoRoute(route = {}, { allowedPanels = DEFAULT_ALLOWED_PANE
   return {
     sessionId: text(route?.sessionId),
     panel: normalizePseudoPanel(route?.panel || "", allowedPanels),
-    anchor: text(route?.anchor),
+    turn: text(route?.turn),
   };
 }
 
@@ -55,7 +55,7 @@ export function isSamePseudoRoute(left = {}, right = {}, options = {}) {
   return (
     normalizedLeft.sessionId === normalizedRight.sessionId &&
     normalizedLeft.panel === normalizedRight.panel &&
-    normalizedLeft.anchor === normalizedRight.anchor
+    normalizedLeft.turn === normalizedRight.turn
   );
 }
 
@@ -68,7 +68,7 @@ export function parsePseudoRouteFromLocation(
     {
       sessionId: params.get(PSEUDO_ROUTE_SESSION_KEY),
       panel: params.get(PSEUDO_ROUTE_PANEL_KEY),
-      anchor: params.get(PSEUDO_ROUTE_ANCHOR_KEY),
+      turn: params.get(PSEUDO_ROUTE_TURN_KEY),
     },
     options,
   );
@@ -78,7 +78,7 @@ export function usePseudoRoute({
   allowedPanels = DEFAULT_ALLOWED_PANELS,
   resolveCurrentSessionId = () => "",
   resolveCurrentPanel = () => "",
-  resolveCurrentAnchor = () => "",
+  resolveCurrentTurn = () => "",
   applyRoute = async () => {},
 } = {}) {
   const allowedPanelSet =
@@ -98,7 +98,7 @@ export function usePseudoRoute({
     return normalizeRoute({
       sessionId: resolveCurrentSessionId(),
       panel: resolveCurrentPanel(),
-      anchor: resolveCurrentAnchor(),
+      turn: resolveCurrentTurn(),
     });
   }
 
@@ -109,7 +109,7 @@ export function usePseudoRoute({
     return normalizeRoute({
       sessionId: hasOwn(patch, "sessionId") ? patch.sessionId : currentRoute.sessionId,
       panel: hasOwn(patch, "panel") ? patch.panel : currentRoute.panel,
-      anchor: hasOwn(patch, "anchor") ? patch.anchor : currentRoute.anchor,
+      turn: hasOwn(patch, "turn") ? patch.turn : currentRoute.turn,
     });
   }
 
@@ -126,10 +126,10 @@ export function usePseudoRoute({
     } else {
       params.delete(PSEUDO_ROUTE_PANEL_KEY);
     }
-    if (nextRoute.anchor) {
-      params.set(PSEUDO_ROUTE_ANCHOR_KEY, nextRoute.anchor);
+    if (nextRoute.turn) {
+      params.set(PSEUDO_ROUTE_TURN_KEY, nextRoute.turn);
     } else {
-      params.delete(PSEUDO_ROUTE_ANCHOR_KEY);
+      params.delete(PSEUDO_ROUTE_TURN_KEY);
     }
     const query = params.toString();
     return `${locationObject?.pathname || "/"}${query ? `?${query}` : ""}${locationObject?.hash || ""}`;

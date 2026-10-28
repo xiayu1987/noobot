@@ -17,6 +17,7 @@ import {
   resolveTurnRoute as resolveRoute,
 } from "./turnRuntimeRegistryIdentity.js";
 import { selectCurrentTurnRuntime } from "./turnRuntimeSelectors.js";
+import { mergeAuthoritativeTurnTiming } from "./turnRuntimeTiming.js";
 
 function resolveTurnRuntimeConflict({
   current,
@@ -86,7 +87,7 @@ function projectTurn({ current, transition, event, sessionId, turnScopeId }) {
   const terminal = transition.next.terminal;
   const startedAt = resolveProjectedStart(currentValue, event);
   const finishedAt = resolveProjectedFinish(currentValue, event, terminal);
-  return {
+  const turn = {
     ...currentValue,
     ...transition.next,
     sessionId,
@@ -111,6 +112,12 @@ function projectTurn({ current, transition, event, sessionId, turnScopeId }) {
       event.continuedByTurnScopeId || currentValue.continuedByTurnScopeId,
     ),
   };
+  turn.timing = mergeAuthoritativeTurnTiming(currentValue.timing, {
+    turnScopeId,
+    dialogProcessId: turn.dialogProcessId,
+    thinkingFinishedAt: event.thinkingFinishedAt,
+  });
+  return turn;
 }
 
 function commitProjectedTurn(registry, turn) {

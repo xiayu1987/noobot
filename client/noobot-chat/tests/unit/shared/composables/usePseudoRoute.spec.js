@@ -27,7 +27,7 @@ describe("usePseudoRoute", () => {
     expect(parsePseudoRouteFromLocation()).toEqual({
       sessionId: "s1",
       panel: PSEUDO_PANEL.WORKSPACE,
-      anchor: "",
+      turn: "",
     });
     resetUrl("/chat?session=s1&panel=thinking-details");
     expect(parsePseudoRouteFromLocation().panel).toBe(PSEUDO_PANEL.THINKING_DETAILS);
@@ -55,7 +55,7 @@ describe("usePseudoRoute", () => {
     expect(window.history.state.noobotPseudoRoute).toEqual({
       sessionId: "s1",
       panel: PSEUDO_PANEL.THINKING_DETAILS,
-      anchor: "",
+      turn: "",
     });
   });
 
@@ -107,7 +107,7 @@ describe("usePseudoRoute", () => {
     expect(window.history.state.noobotPseudoRoute).toEqual({
       sessionId: "s1",
       panel: PSEUDO_PANEL.COMPOSER,
-      anchor: "",
+      turn: "",
     });
   });
 
@@ -124,7 +124,7 @@ describe("usePseudoRoute", () => {
     expect(window.history.state.noobotPseudoRoute).toEqual({
       sessionId: "s1",
       panel: "",
-      anchor: "",
+      turn: "",
     });
   });
 
@@ -139,7 +139,7 @@ describe("usePseudoRoute", () => {
     expect(applyRoute).toHaveBeenCalledWith({
       sessionId: "s2",
       panel: PSEUDO_PANEL.WORKSPACE,
-      anchor: "",
+      turn: "",
     });
   });
 

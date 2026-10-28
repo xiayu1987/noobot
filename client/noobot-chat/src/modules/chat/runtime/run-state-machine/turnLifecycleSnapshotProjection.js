@@ -12,6 +12,7 @@ import {
 import { deriveTurnEventType, isTerminalTurnState } from "@noobot/session-protocol";
 import { ensureSessionBucket, isTurnRuntimeDeleted } from "./turnRuntimeRegistryIdentity.js";
 import { confirmTurnRuntimeDeletion } from "./turnRuntimeRetention.js";
+import { mergeAuthoritativeTurnTiming } from "./turnRuntimeTiming.js";
 
 function snapshotTurnDecision(registry, bucket, source, sessionId, sequence) {
   const { turnScopeId } = source;
@@ -75,6 +76,7 @@ function projectSnapshotTiming(source, current, sourceIsTerminal) {
       : Number(current.finishedAtMs || 0),
     updatedAt,
     updatedAtMs: updatedAt ? Date.parse(updatedAt) || 0 : Number(current.updatedAtMs || 0),
+    timing: mergeAuthoritativeTurnTiming(current.timing, source),
   };
 }
 

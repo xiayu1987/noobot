@@ -386,7 +386,7 @@ test("summary checkpoints write immutable snapshots indexed by the manifest", as
       await import("../../src/session/session-artifact-session.js")
     ).readSessionTurn({ sessionDir: root, turnScopeId: "active" });
     assert.equal(turn.summarySnapshots.length, 1);
-    assert.equal(turn.summarySnapshots[0].payload.checkpointId, "checkpoint-1");
+    assert.equal(turn.summarySnapshots[0].checkpointId, "checkpoint-1");
 
     await writeSessionArtifact({ sessionDir: root, sessionPayload });
     assert.deepEqual((await readManifestTurn()).summarySnapshots, [index]);

@@ -8,6 +8,7 @@ import { mount } from "@vue/test-utils";
 import { createPinia, getActivePinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ChatMessageListPanel from "../../../../../../src/modules/chat/components/navigation/ChatMessageListPanel.vue";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { RoleEnum } from "../../../../../../src/modules/chat/model/chatConstants.js";
 import { createElementPlusMountOptions } from "../../../../fixtures/elementPlusStubs.js";
 
@@ -67,6 +68,22 @@ vi.mock("../../../../../../src/shared/i18n/useLocale", () => ({
   }),
 }));
 
+const VIEWPORT_HEIGHT_PX = 2000;
+
+const ScrollbarStub = defineComponent({
+  name: "ElScrollbarStub",
+  template: "<div class='el-scrollbar-stub'><slot /></div>",
+  computed: {
+    wrapRef() {
+      return this.$el;
+    },
+  },
+  mounted() {
+    Object.defineProperty(this.$el, "offsetHeight", { value: VIEWPORT_HEIGHT_PX });
+    Object.defineProperty(this.$el, "offsetWidth", { value: VIEWPORT_HEIGHT_PX });
+  },
+});
+
 function mountPanel(props = {}, options = {}) {
   if (!options.preserveChatMessageItemMock) {
     chatMessageItemMock.field = "content";
@@ -119,13 +136,7 @@ function mountPanel(props = {}, options = {}) {
       ...createElementPlusMountOptions({
         ChatMessageItem: ChatMessageItemStub,
         "chat-message-item": ChatMessageItemStub,
-        "el-scrollbar": defineComponent({
-          name: "ElScrollbarStub",
-          template: "<div class='el-scrollbar-stub'><slot /></div>",
-          methods: {
-            setScrollTop() {},
-          },
-        }),
+        "el-scrollbar": ScrollbarStub,
         "el-skeleton": defineComponent({
           name: "ElSkeletonStub",
           template: "<div class='el-skeleton-stub'></div>",
@@ -237,10 +248,7 @@ describe("ChatMessageListPanel", () => {
       },
       global: {
         ...createElementPlusMountOptions({
-          "el-scrollbar": defineComponent({
-            name: "ElScrollbarStub",
-            template: "<div><slot /></div>",
-          }),
+          "el-scrollbar": ScrollbarStub,
           "el-skeleton": true,
         }),
       },
@@ -298,10 +306,7 @@ describe("ChatMessageListPanel", () => {
       },
       global: {
         ...createElementPlusMountOptions({
-          "el-scrollbar": defineComponent({
-            name: "ElScrollbarStub",
-            template: "<div><slot /></div>",
-          }),
+          "el-scrollbar": ScrollbarStub,
           "el-skeleton": true,
         }),
       },
@@ -369,10 +374,7 @@ describe("ChatMessageListPanel", () => {
       },
       global: {
         ...createElementPlusMountOptions({
-          "el-scrollbar": defineComponent({
-            name: "ElScrollbarStub",
-            template: "<div><slot /></div>",
-          }),
+          "el-scrollbar": ScrollbarStub,
           "el-skeleton": true,
         }),
       },
@@ -620,5 +622,70 @@ describe("ChatMessageListPanel", () => {
       ),
     ).toBe("chat-message-assistant-session-1--turn-assistant-1");
     expect(typeof wrapper.vm.scrollToMessageAnchor).toBe("function");
+  });
+});
+
+describe("ChatMessageListPanel virtual navigation", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+  });
+
+  const messages = [
+    { role: RoleEnum.USER, sessionId: "s-1", turnScopeId: "turn-a", content: "a" },
+    { role: RoleEnum.ASSISTANT, sessionId: "s-1", turnScopeId: "turn-a", content: "hidden" },
+    { role: RoleEnum.USER, sessionId: "s-1", turnScopeId: "turn-b", content: "b" },
+  ];
+
+  async function mountVirtualPanel() {
+    const wrapper = mountPanel({
+      activeSession: { sessionId: "s-1", messages },
+      shouldRenderMessageInChat: (item) => item.content !== "hidden",
+    });
+    const wrap = wrapper.find(".el-scrollbar-stub").element;
+    Object.defineProperty(wrap, "scrollHeight", { value: VIEWPORT_HEIGHT_PX * 4 });
+    Object.defineProperty(wrap, "clientHeight", { value: VIEWPORT_HEIGHT_PX });
+    wrap.scrollTo = vi.fn();
+    await nextTick();
+    wrap.scrollTo.mockClear();
+    return { wrapper, wrap };
+  }
+
+  it("scrolls to the rendered index of the anchor with the navigator offset", async () => {
+    const { wrapper, wrap } = await mountVirtualPanel();
+    const targetAnchorId = wrapper.vm.getMessageAnchorId(messages[2], 2);
+
+    wrapper.vm.scrollToMessageAnchor(targetAnchorId);
+
+    const { messageListEstimatedRowHeightPx, messageAnchorScrollOffsetPx } =
+      QUANTITY_THRESHOLDS.client;
+    expect(wrap.scrollTo).toHaveBeenCalledWith({
+      top: messageListEstimatedRowHeightPx - messageAnchorScrollOffsetPx,
+      behavior: "auto",
+    });
+  });
+
+  it("throws when the anchor is not part of the rendered messages", async () => {
+    const { wrapper, wrap } = await mountVirtualPanel();
+    const hiddenAnchorId = wrapper.vm.getMessageAnchorId(messages[1], 1);
+
+    expect(() => wrapper.vm.scrollToMessageAnchor(hiddenAnchorId)).toThrow(
+      "message anchor is not rendered",
+    );
+    expect(() => wrapper.vm.scrollToMessageAnchor("")).toThrow(TypeError);
+    expect(wrap.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("resolves the current anchor from the virtual scroll offset", async () => {
+    const { wrapper } = await mountVirtualPanel();
+
+    expect(wrapper.vm.resolveCurrentMessageAnchorId()).toBe(
+      wrapper.vm.getMessageAnchorId(messages[0], 0),
+    );
+  });
+
+  it("resolves no current anchor when nothing is rendered", () => {
+    const wrapper = mountPanel();
+
+    expect(wrapper.vm.resolveCurrentMessageAnchorId()).toBe("");
   });
 });

@@ -43,20 +43,14 @@ export function readMountedMessageListWrap(messageListPanelRef) {
 
 export function createChatMessageScrollSync({ currentMessageAnchorId, messageListPanelRef }) {
   function syncCurrentMessageAnchorId() {
-    const wrapRef = readMountedMessageListWrap(messageListPanelRef);
-    if (wrapRef === null) return;
-    const anchors = Array.from(wrapRef.querySelectorAll("[data-chat-message-anchor]"));
-    if (!anchors.length) {
+    const panel = readMountedMessageListPanel(messageListPanelRef);
+    if (panel === null) return;
+    const nextAnchorId = panel.resolveCurrentMessageAnchorId();
+    if (!nextAnchorId) {
       currentMessageAnchorId.value = "";
       return;
     }
-    const threshold = wrapRef.scrollTop + 24;
-    let currentAnchor = anchors[0];
-    for (const anchor of anchors) {
-      if (anchor.offsetTop <= threshold) currentAnchor = anchor;
-      else break;
-    }
-    const nextAnchorId = currentAnchor.dataset.chatMessageAnchor;
+    const wrapRef = panel.getWrapRef();
     if (shouldKeepNavigatorScrollLock(wrapRef, nextAnchorId)) return;
     currentMessageAnchorId.value = nextAnchorId;
   }

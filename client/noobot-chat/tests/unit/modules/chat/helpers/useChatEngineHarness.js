@@ -262,7 +262,7 @@ export const createHarness = ({
     summaryPolicy: ref({}),
     selectedPlugins: ref([]),
     isImageMime: () => false,
-    navigateToLastMessage: vi.fn(),
+    requestTurnNavigation: vi.fn(),
     activeSession,
     activeSessionId,
     turnRuntimeRegistry,

@@ -321,6 +321,14 @@ real model call. The tool result and authoritative plugin artifact must agree; d
 render one Three.js card in the Session artifact panel, and refresh restores it without placing a
 duplicate card in the Character panel.
 
+### PBE-056: Precise Message Navigation
+
+Complete three long replies so the message list exceeds three viewports. Refresh without `turn`,
+click the first-turn navigator item, refresh with `turn`, cycle offline, then rewrite the URL `turn`
+to the second turn and refresh. A refresh without `turn` lands on the latest turn and writes no URL
+`turn`; a click writes the turn's turnScopeId; refresh and reconnect with `turn` land on that turn.
+Each landing places the turn's first message 16px (within 2px) below the message list viewport top.
+
 ### Single Model Invocation Observation Boundary
 
 All model observations occur at the observed model port adjacent to provider `invoke()`. Main Agent,

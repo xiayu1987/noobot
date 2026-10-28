@@ -85,6 +85,15 @@ export function mergeTurnTimingRecord(existing, incoming) {
   return { ...current, ...next };
 }
 
+export function assertTurnTimingOwnership(timing, ownerDialogProcessId) {
+  const recordedOwner = normalizeDialogProcessId(ownerDialogProcessId);
+  if (!recordedOwner || recordedOwner === timing.dialogProcessId) return;
+  throw timingError(
+    SESSION_ERROR_CODE.TURN_TIMING_CONFLICT,
+    `turn timing dialogProcessId conflicts with turn owner: ${timing.turnScopeId}`,
+  );
+}
+
 function findTurnTiming(turnScopeId, timings) {
   return timings.find((item) => isPlainObject(item) && clean(item.turnScopeId) === turnScopeId);
 }

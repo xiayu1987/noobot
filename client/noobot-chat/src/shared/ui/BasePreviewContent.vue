@@ -53,11 +53,6 @@ const showCopyActions = computed(
   () => resolvedPreviewMode.value === "markdown" && !resolvedLoading.value && !resolvedError.value,
 );
 
-function emitCopyMarkdownRich() {
-  if (!markdownContainerRef.value) return;
-  emit("copy-markdown-rich", String(markdownContainerRef.value.innerHTML || ""));
-}
-
 watch(
   () => [props.active, resolvedPreviewText.value, resolvedPreviewMode.value],
   async ([active, content, mode]) => {
@@ -82,7 +77,7 @@ watch(
           size="small"
           class="noobot-icon-button noobot-flat-inline-icon-btn noobot-copy-button"
           :aria-label="translate('message.copyFormat')"
-          @click="emitCopyMarkdownRich"
+          @click="emit('copy-markdown-rich')"
         >
           <el-icon><CopyDocument /></el-icon>
         </el-button>

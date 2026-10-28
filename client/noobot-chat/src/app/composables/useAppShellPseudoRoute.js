@@ -3,13 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { nextTick, watch } from "vue";
+import { watch } from "vue";
 import { PSEUDO_PANEL, usePseudoRoute } from "../../shared/composables/usePseudoRoute.js";
 import {
   buildClosePseudoPanelRoute,
   buildSessionPseudoRoute,
 } from "../routing/appShellRoutePayload.js";
-import { readMountedMessageListPanel } from "../runtime/chatMessageScrollSync.js";
 import { requireFunctionDependencies, text } from "@noobot/shared/value";
 
 export { PSEUDO_PANEL };
@@ -17,8 +16,9 @@ export { PSEUDO_PANEL };
 export function useAppShellPseudoRoute({
   activeSessionId,
   activeSession,
-  currentMessageAnchorId,
-  messageListPanelRef,
+  routedTurnScopeId,
+  applyRoutedTurn,
+  requestSessionNavigation,
   workspaceVisible,
   connectorVisible,
   userSettingsVisible,
@@ -56,6 +56,8 @@ export function useAppShellPseudoRoute({
     openThinkingDetailsPanel,
     closeMobileSidebarOnSelect,
     selectSession,
+    applyRoutedTurn,
+    requestSessionNavigation,
   });
 
   function closeAllPseudoPanels() {
@@ -142,14 +144,17 @@ export function useAppShellPseudoRoute({
   async function applyPseudoRouteToUi(route) {
     const targetSessionId = text(route.sessionId);
     const targetPanel = text(route.panel);
-    const targetAnchor = text(route.anchor);
     closeAllPseudoPanels();
+
+    applyRoutedTurn({ sessionId: targetSessionId, turnScopeId: text(route.turn) });
     if (targetSessionId && !isLoadedActiveSessionRouteTarget(targetSessionId)) {
       await handleSelectSession(targetSessionId, {
         fromHistory: true,
         force: true,
         silent: true,
       });
+    } else if (activeSessionId.value) {
+      requestSessionNavigation(activeSessionId.value);
     }
     if (targetPanel !== "") {
       const targetEntry = panelRegistry.find((entry) => entry.panel === targetPanel);
@@ -157,14 +162,6 @@ export function useAppShellPseudoRoute({
         throw new Error(`pseudo route targets unregistered panel: ${targetPanel}`);
       }
       targetEntry.open();
-    }
-    if (targetAnchor) {
-      currentMessageAnchorId.value = targetAnchor;
-      await nextTick();
-      const messageListPanel = readMountedMessageListPanel(messageListPanelRef);
-      if (messageListPanel !== null) {
-        messageListPanel.scrollToMessageAnchor(targetAnchor);
-      }
     }
   }
 
@@ -179,7 +176,7 @@ export function useAppShellPseudoRoute({
   } = usePseudoRoute({
     resolveCurrentSessionId: resolveRoutableSessionId,
     resolveCurrentPanel: resolveActivePseudoPanel,
-    resolveCurrentAnchor: () => currentMessageAnchorId.value,
+    resolveCurrentTurn: () => routedTurnScopeId.value,
     applyRoute: applyPseudoRouteToUi,
   });
 

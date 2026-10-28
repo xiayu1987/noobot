@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filePath as path, resolveScopedArtifactPath } from "@noobot/path-resolver";
+import { filePath as path } from "@noobot/path-resolver";
 import {
   SESSION_ARTIFACT_SCHEMA_VERSION,
   SESSION_ERROR_CODE,
@@ -11,9 +11,9 @@ import {
 } from "@noobot/session-protocol";
 import { SESSION_REPAIR_ERROR_CODE, assertTurnJournalBoundary } from "@noobot/session-repair";
 import { createHash } from "node:crypto";
-import { mkdir, open, readFile, rename, writeFile } from "node:fs/promises";
-import { SESSION_ARTIFACT_FILE_NAMES, readJsonArtifactFile } from "../session-artifact-files.js";
-import { text, isObjectLike } from "@noobot/shared/value";
+import { mkdir, open, rename, writeFile } from "node:fs/promises";
+import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
+import { text } from "@noobot/shared/value";
 
 export const TURN_JOURNAL_SCHEMA_VERSION = SESSION_ARTIFACT_SCHEMA_VERSION;
 export const SUMMARY_SNAPSHOT_SCHEMA_VERSION = 2;
@@ -35,15 +35,8 @@ export function journalPath(sessionDir, turnId) {
   return path.join(sessionDir, SESSION_ARTIFACT_FILE_NAMES.turnsDir, `${turnId}.jsonl`);
 }
 
-function resolveSummarySnapshotPath(sessionDir = "", file = "") {
-  return resolveScopedArtifactPath({
-    baseDir: sessionDir,
-    reference: file,
-    scopeDir: SESSION_ARTIFACT_FILE_NAMES.turnSnapshotsDir,
-    extensions: [".json"],
-    errorCode: "SESSION_SUMMARY_SNAPSHOT_PATH_INVALID",
-    errorLabel: "session summary snapshot reference",
-  });
+export function summarySnapshotContentHash(payload) {
+  return `sha256:${createHash("sha256").update(JSON.stringify(payload)).digest("hex")}`;
 }
 
 export function messageHash(message) {
@@ -134,55 +127,9 @@ export async function writeSummarySnapshot(file, payload) {
   await rename(temp, file);
 }
 
-export async function readSummarySnapshots(sessionDir, indexes) {
-  const snapshots = [];
-  let previousCheckpointHash = "";
-  for (const record of indexes) {
-    const file = text(record?.file);
-    const payload = await readJsonArtifactFile(resolveSummarySnapshotPath(sessionDir, file), null);
-    if (
-      !payload ||
-      Number(payload.schemaVersion) !== SUMMARY_SNAPSHOT_SCHEMA_VERSION ||
-      !Array.isArray(payload.records) ||
-      Object.hasOwn(payload, "messages") ||
-      payload.previousCheckpointHash !== previousCheckpointHash ||
-      payload.checkpointId !== record.checkpointId ||
-      payload.checkpointRevision !== record.checkpointRevision
-    ) {
-      const error = new Error(`summary snapshot does not match its manifest index: ${file}`);
-      error.code = "SESSION_SUMMARY_SNAPSHOT_INDEX_MISMATCH";
-      throw error;
-    }
-    const contentHash = `sha256:${createHash("sha256")
-      .update(JSON.stringify(payload))
-      .digest("hex")}`;
-    if (contentHash !== record.contentHash) {
-      const error = new Error(`summary snapshot hash mismatch: ${file}`);
-      error.code = "SESSION_SUMMARY_SNAPSHOT_HASH_MISMATCH";
-      throw error;
-    }
-    snapshots.push({ ...record, payload });
-    previousCheckpointHash = record.contentHash;
-  }
-  return snapshots;
-}
-
-export async function readJournalRecords(file, committedBytes) {
-  let raw;
-  try {
-    raw = await readFile(file);
-  } catch (error) {
-    if (error?.code === "ENOENT" && committedBytes === 0) return [];
-    if (error?.code === "ENOENT") {
-      const failure = new Error(`session turn journal is missing: ${file}`);
-      failure.code = SESSION_REPAIR_ERROR_CODE.TURN_ARTIFACT_MISSING;
-      throw failure;
-    }
-    throw error;
-  }
-  const limit = assertTurnJournalBoundary(file, raw.length, committedBytes);
+function parseJournalRecords(file, raw) {
   const records = [];
-  for (const line of raw.subarray(0, limit).toString("utf8").split("\n")) {
+  for (const line of raw.toString("utf8").split("\n")) {
     if (!line.trim()) continue;
     try {
       records.push(JSON.parse(line));
@@ -197,30 +144,46 @@ export async function readJournalRecords(file, committedBytes) {
   return records;
 }
 
-function materializeJournal(records, order) {
-  const byUid = new Map();
-  for (const record of records) {
-    const uid = text(record?.messageUid);
-    if (!uid) continue;
-    if (record.op === "remove") byUid.delete(uid);
-    else if (record.op === "upsert" && isObjectLike(record.message)) byUid.set(uid, record.message);
-  }
-  const ordered = order.map((uid) => {
-    const message = byUid.get(uid);
-    if (message) return message;
-    const error = new Error(`turn journal is missing an ordered message: ${uid}`);
-    error.code = SESSION_ERROR_CODE.TURN_JOURNAL_MESSAGE_MISSING;
+async function openCommittedJournal(file, committedBytes) {
+  try {
+    return await open(file, "r");
+  } catch (error) {
+    if (error?.code === "ENOENT" && committedBytes === 0) return null;
+    if (error?.code === "ENOENT") {
+      const failure = new Error(`session turn journal is missing: ${file}`);
+      failure.code = SESSION_REPAIR_ERROR_CODE.TURN_ARTIFACT_MISSING;
+      throw failure;
+    }
     throw error;
-  });
-  const remaining = [...byUid.entries()]
-    .filter(([uid]) => !order.includes(uid))
-    .map(([, message]) => message);
-  return [...ordered, ...remaining];
+  }
 }
 
-export function materializeTurnJournal(records, order, summarySnapshots) {
-  const checkpointRecords = summarySnapshots.flatMap((snapshot) => snapshot.payload.records);
-  return materializeJournal([...checkpointRecords, ...records], order);
+export async function readJournalRecordRange(file, committedBytes, resume = null) {
+  const handle = await openCommittedJournal(file, committedBytes);
+  if (!handle) return { identity: "", resumed: false, records: [] };
+  try {
+    const info = await handle.stat({ bigint: true });
+    const identity = `${info.dev}:${info.ino}`;
+    const limit = assertTurnJournalBoundary(file, Number(info.size), committedBytes);
+    const resumed =
+      resume !== null && resume.identity === identity && resume.committedBytes <= limit;
+    const fromBytes = resumed ? resume.committedBytes : 0;
+    const raw = Buffer.alloc(limit - fromBytes);
+    let offset = 0;
+    while (offset < raw.length) {
+      const { bytesRead } = await handle.read(raw, offset, raw.length - offset, fromBytes + offset);
+      if (bytesRead === 0) break;
+      offset += bytesRead;
+    }
+    assertTurnJournalBoundary(file, fromBytes + offset, committedBytes);
+    return { identity, resumed, records: parseJournalRecords(file, raw) };
+  } finally {
+    await handle.close();
+  }
+}
+
+export async function readJournalRecords(file, committedBytes) {
+  return (await readJournalRecordRange(file, committedBytes)).records;
 }
 
 export async function appendJournal(file, records, committedBytes = 0) {

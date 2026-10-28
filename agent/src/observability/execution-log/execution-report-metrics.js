@@ -43,13 +43,13 @@ function trackToolCall(acc, { log, data }, phase) {
   const toolCallId = text(data.toolCallId);
   if (!toolCallId) return;
   const entry = acc.toolCalls.get(toolCallId) || { tool: resolveToolName(log) };
-  const ts = resolveTimestampMs(log);
-  if (phase === "start" && entry.startMs == null) {
-    entry.startMs = ts;
+  if (phase === "start" && entry.subject === undefined) {
     entry.subject = projectToolOperationSubject(entry.tool, data.args);
   }
   if (phase === "end") {
-    entry.endMs = ts;
+    entry.ended = true;
+    entry.durationMs = data.durationMs;
+    entry.persistDurationMs = data.persistDurationMs;
     entry.success = data.success === true;
     entry.riskLevel = normalizeSecurityRiskLevel(data.riskLevel);
   }
@@ -97,6 +97,7 @@ function summarizeToolCalls(toolCalls) {
   const toolStats = {};
   const riskLevels = {};
   const timedCalls = [];
+  let totalPersistDurationMs = 0;
   for (const [toolCallId, entry] of toolCalls) {
     const stats = (toolStats[entry.tool] ||= {
       calls: 0,
@@ -106,11 +107,14 @@ function summarizeToolCalls(toolCalls) {
       maxDurationMs: 0,
     });
     stats.calls += 1;
-    if (entry.endMs === undefined) continue;
+    if (!entry.ended) continue;
     if (entry.success === false) stats.failures += 1;
     increment(riskLevels, entry.riskLevel);
-    const durationMs = resolveSpanMs(entry.startMs, entry.endMs);
-    if (durationMs == null) continue;
+    const { durationMs, persistDurationMs } = entry;
+    if (!Number.isFinite(durationMs) || !Number.isFinite(persistDurationMs)) {
+      throw new TypeError(`tool_call_end ${toolCallId} missing durationMs/persistDurationMs`);
+    }
+    totalPersistDurationMs += persistDurationMs;
     stats.timedCount += 1;
     stats.totalDurationMs += durationMs;
     stats.maxDurationMs = Math.max(stats.maxDurationMs, durationMs);
@@ -119,6 +123,7 @@ function summarizeToolCalls(toolCalls) {
       tool: entry.tool,
       subject: entry.subject || "",
       durationMs,
+      persistDurationMs,
       success: entry.success,
     });
   }
@@ -126,7 +131,7 @@ function summarizeToolCalls(toolCalls) {
     .sort((left, right) => right.durationMs - left.durationMs)
     .slice(0, SLOWEST_TOOL_CALL_LIMIT);
   const totalToolDurationMs = timedCalls.reduce((sum, call) => sum + call.durationMs, 0);
-  return { toolStats, riskLevels, slowestToolCalls, totalToolDurationMs };
+  return { toolStats, riskLevels, slowestToolCalls, totalToolDurationMs, totalPersistDurationMs };
 }
 
 export function summarizeExecutionMetrics(scopedLogs = []) {

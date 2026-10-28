@@ -176,7 +176,9 @@ describe("useChatSession reconnect replay", () => {
       });
     wsClientMock.reconnect.mockImplementationOnce(async ({ onReconnectData }) => {
       onReconnectData(envelope("tool_call_start", 1, { args: { filePath: "notes.txt" } }));
-      onReconnectData(envelope("tool_call_end", 2, { result: { ok: true }, success: true }));
+      onReconnectData(
+        envelope("tool_call_end", 2, { result: { ok: true }, success: true, durationMs: 5 }),
+      );
     });
 
     const session = createChatSession();
@@ -455,7 +457,8 @@ describe("useChatSession reconnect replay", () => {
       connected: ref(true),
       ensureConnected: vi.fn(() => true),
       authFetch,
-      navigateToLastMessage: vi.fn(),
+      requestTurnNavigation: vi.fn(),
+      requestSessionNavigation: vi.fn(),
       isImageMime: () => false,
       notify: vi.fn(),
       clearUploadSelection: vi.fn(),
@@ -515,7 +518,8 @@ describe("useChatSession reconnect replay", () => {
       connected: ref(true),
       ensureConnected: vi.fn(() => true),
       authFetch: vi.fn(rejectUnexpectedRequest),
-      navigateToLastMessage: vi.fn(),
+      requestTurnNavigation: vi.fn(),
+      requestSessionNavigation: vi.fn(),
       isImageMime: () => false,
       notify: vi.fn(),
       clearUploadSelection: vi.fn(),
@@ -696,7 +700,8 @@ describe("useChatSession reconnect replay", () => {
         connected: ref(true),
         ensureConnected: vi.fn(() => true),
         authFetch,
-        navigateToLastMessage: vi.fn(),
+        requestTurnNavigation: vi.fn(),
+        requestSessionNavigation: vi.fn(),
         isImageMime: () => false,
         notify,
         clearUploadSelection: vi.fn(),

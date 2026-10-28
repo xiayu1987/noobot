@@ -235,6 +235,9 @@ function validateToolCallEnd(value) {
   if (!text(value?.toolCallId)) errors.push("missing_tool_call_id");
   if (!("result" in (value || {}))) errors.push("missing_tool_result");
   if (typeof value?.success !== "boolean") errors.push("missing_tool_success");
+  if (!Number.isFinite(value?.durationMs) || value.durationMs < 0) {
+    errors.push("invalid_tool_duration");
+  }
   return [...errors, ...validateToolSecurityAssessment(value)];
 }
 

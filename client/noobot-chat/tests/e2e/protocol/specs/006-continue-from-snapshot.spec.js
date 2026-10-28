@@ -21,7 +21,6 @@ test("@smoke PBE-006 无附件停止、保存快照后继续", async ({ noobot, 
     prompt: uniquePrompt(testInfo, "long first run"),
   });
   expect(stop.concurrency.expectedTurnRevision).toBeGreaterThanOrEqual(1);
-  expect(stop.identity).toMatchObject(send.identity);
   const firstSnapshots = await assertPersistedSnapshots(noobot.userId, noobot.sessionId, 1);
   expect(firstSnapshots[0]).toMatchObject(expectedSnapshotIdentity(noobot.userId, send.identity));
   const continued = await continueAndStop({

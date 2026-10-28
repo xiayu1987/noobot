@@ -11,7 +11,15 @@ import { mountComposable } from "../../../../fixtures/mountComposable.js";
 const mountedComposables = [];
 
 function createMessagePreview(options) {
-  const mounted = mountComposable(() => useMessagePreview(options));
+  const mounted = mountComposable(() =>
+    useMessagePreview({
+      userId: "admin",
+      isImageMime: () => false,
+      renderMarkdown: () => "",
+      notify: vi.fn(),
+      ...options,
+    }),
+  );
   mountedComposables.push(mounted);
   return mounted.result;
 }
@@ -392,5 +400,44 @@ describe("useMessagePreview attachment downloads", () => {
     expect(preview.attachmentPreviewVisible.value).toBe(true);
     expect(preview.attachmentPreviewType.value).toBe("markdown");
     expect(preview.attachmentPreviewTextContent.value).toBe("# parsed payload");
+  });
+});
+
+describe("useMessagePreview markdown copy", () => {
+  afterEach(() => {
+    mountedComposables.splice(0).forEach(({ unmount }) => unmount());
+    delete document.execCommand;
+  });
+
+  it("renders message rich copy with the same options as the message body", () => {
+    document.execCommand = vi.fn(() => true);
+    const renderMarkdown = vi.fn(() => "<p>body</p>");
+    const notify = vi.fn();
+    const attachmentRefIndex = new Map();
+    const preview = createMessagePreview({ renderMarkdown, notify });
+
+    preview.onCopyMessageMarkdownRich({ textContent: "body", attachmentRefIndex });
+
+    expect(renderMarkdown).toHaveBeenCalledWith("body", {
+      attachmentRefIndex,
+      workspaceFileLinks: true,
+    });
+    expect(notify).toHaveBeenCalledWith({ type: "success", message: "Copied as HTML page" });
+  });
+
+  it("renders preview rich copy from the preview text without message options", () => {
+    document.execCommand = vi.fn(() => true);
+    const renderMarkdown = vi.fn(() => "<p>preview</p>");
+    const preview = createMessagePreview({ renderMarkdown });
+
+    preview.onCopyMarkdownRich();
+
+    expect(renderMarkdown).toHaveBeenCalledWith("", undefined);
+  });
+
+  it("rejects construction without the required render dependency", () => {
+    expect(() => createMessagePreview({ renderMarkdown: undefined })).toThrow(
+      "useMessagePreview requires function dependencies: renderMarkdown",
+    );
   });
 });

@@ -13,7 +13,10 @@ function toolLog(phase, tool, toolCallId, extra = {}) {
     event: phase === "call" ? "tool_call_start" : "tool_call_end",
     category: "tool",
     type: phase === "call" ? "tool_call" : "tool_result",
-    data: { tool, toolCallId, ...extra },
+    data:
+      phase === "call"
+        ? { tool, toolCallId, ...extra }
+        : { tool, toolCallId, durationMs: 1, persistDurationMs: 0, ...extra },
   };
 }
 

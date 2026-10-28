@@ -8,7 +8,7 @@ import { requireDialogProcessKey } from "./identity.js";
 import { isPlainObject, isObjectLike } from "@noobot/shared/value";
 
 export const EXECUTION_REPORT_PROTOCOL = "noobot.execution-report";
-export const EXECUTION_REPORT_VERSION = 4;
+export const EXECUTION_REPORT_VERSION = 5;
 
 export const EXECUTION_REPORT_STATUS = Object.freeze({
   COMPLETED: "completed",
@@ -52,7 +52,7 @@ const SUMMARY_COUNT_FIELDS = Object.freeze([
 
 const METRICS_SECTION_FIELDS = Object.freeze({
   model: ["llmCalls", "llmCallsWithTools", "maxLoopRound", "invocations", "retries", "switches"],
-  tools: ["totalToolDurationMs"],
+  tools: ["totalToolDurationMs", "totalPersistDurationMs"],
   hooks: ["count", "errorCount", "totalDurationMs"],
 });
 

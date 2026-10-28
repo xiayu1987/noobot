@@ -90,6 +90,10 @@ function buildPhaseRows(metrics, translate) {
       formatDuration(metrics.tools.totalToolDurationMs),
     ),
     row(
+      translate("message.executionReportPersistDuration"),
+      formatDuration(metrics.tools.totalPersistDurationMs),
+    ),
+    row(
       translate("message.executionReportHookDuration"),
       formatDuration(metrics.hooks.totalDurationMs),
     ),
@@ -133,6 +137,7 @@ function buildSlowestCalls(calls) {
     tool: call.tool,
     subject: call.subject,
     duration: formatDuration(call.durationMs),
+    persistDuration: formatDuration(call.persistDurationMs),
     ratio: ratioOf(call.durationMs, maxDuration),
     success: call.success,
   }));

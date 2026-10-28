@@ -5,6 +5,7 @@
  */
 import { expect } from "@playwright/test";
 import { normalizeSnapshotIdentity } from "@noobot/context-protocol/policy/snapshot";
+import { assertStopCommandIdentity } from "./agent-transport-assertions.js";
 import { assertModelMessageSnapshot } from "./snapshot-assertions.js";
 import {
   addAttachment,
@@ -47,7 +48,7 @@ export async function sendAndStop({ page, capture, sessionId, prompt, attachment
   await waitForLifecycle(capture, sessionId, "turn.stop_completed", 0, send.identity.turnScopeId);
   assertCommandChain(capture, sessionId);
   assertTurnLifecycle(capture, sessionId, send.identity.turnScopeId);
-  expect(stop.identity).toMatchObject(authoritativeSend.identity);
+  assertStopCommandIdentity(stop, authoritativeSend.identity);
   return { send: authoritativeSend, stop };
 }
 

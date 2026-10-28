@@ -28,7 +28,6 @@ function createUseChatListFixture(overrides = {}) {
   const loadingSessionDetail = ref(false);
   const sending = ref(false);
   const notify = vi.fn();
-  const navigateToLastMessage = vi.fn();
   const refreshSessionConnectorsAsync = vi.fn();
   const authFetch = vi.fn(rejectUnexpectedRequest);
 
@@ -61,7 +60,6 @@ function createUseChatListFixture(overrides = {}) {
     getSessionDetailApi,
     deleteSessionApi: vi.fn(),
     renameSessionApi: vi.fn(),
-    navigateToLastMessage,
     onSessionDetailApplied: vi.fn(),
     makeViewMessage: (message) => ({ ...message }),
     refreshSessionConnectorsAsync,
@@ -83,7 +81,6 @@ function createUseChatListFixture(overrides = {}) {
       getSessionsApi,
       getSessionDetailApi,
       notify,
-      navigateToLastMessage,
       refreshSessionConnectorsAsync,
     },
   };
@@ -157,6 +154,7 @@ describe("useChatList", () => {
             sessionId: "backend-1",
             parentSessionId: ROOT_PARENT_SESSION_ID,
             caller: RoleEnum.USER,
+            activeTurnScopeId: "",
             createdAt: "2026-05-14T00:00:00.000Z",
             updatedAt: "2026-05-14T00:01:00.000Z",
             messages: [{ role: RoleEnum.USER, content: "server-summary" }],
@@ -198,6 +196,7 @@ describe("useChatList", () => {
             sessionId: "backend-2",
             parentSessionId: ROOT_PARENT_SESSION_ID,
             caller: RoleEnum.USER,
+            activeTurnScopeId: "",
             createdAt: "2026-05-14T00:00:00.000Z",
             updatedAt: "2026-05-14T00:01:00.000Z",
             messages: [],
@@ -249,6 +248,7 @@ describe("useChatList", () => {
               parentSessionId: ROOT_PARENT_SESSION_ID,
               turnTimings: [],
               caller: RoleEnum.USER,
+              activeTurnScopeId: "",
               messages: [
                 {
                   messageUid: "route-message",
@@ -298,6 +298,7 @@ describe("useChatList", () => {
                   sessionId,
                   parentSessionId: ROOT_PARENT_SESSION_ID,
                   caller: RoleEnum.USER,
+                  activeTurnScopeId: "",
                   messages: [],
                   turnTimings: [],
                 },
@@ -314,6 +315,7 @@ describe("useChatList", () => {
               sessionId: "persisted-session",
               parentSessionId: ROOT_PARENT_SESSION_ID,
               caller: RoleEnum.USER,
+              activeTurnScopeId: "",
               updatedAt: "2026-08-05T00:00:00.000Z",
             },
           ],
@@ -351,6 +353,7 @@ describe("useChatList", () => {
               sessionId: "backend-refresh",
               parentSessionId: ROOT_PARENT_SESSION_ID,
               caller: RoleEnum.USER,
+              activeTurnScopeId: "",
               createdAt: "2026-05-14T00:00:00.000Z",
               updatedAt: "2026-05-14T00:03:00.000Z",
               messages: [{ role: RoleEnum.USER, content: "summary" }],
@@ -506,8 +509,8 @@ describe("useChatList", () => {
     expect(getSessionDetailApi).not.toHaveBeenCalled();
   });
 
-  it("applySessionDetail can skip scrolling when session detail is restored on reload", () => {
-    const { api, refs, mocks } = createUseChatListFixture();
+  it("applySessionDetail restores session detail on reload", () => {
+    const { api, refs } = createUseChatListFixture();
     const session = {
       sessionId: "reload-backend",
       title: "old title",
@@ -558,7 +561,6 @@ describe("useChatList", () => {
     expect(session.loaded).toBe(true);
     expect(session.messages).toHaveLength(2);
     expect(session.title).toBe("restored question");
-    expect(mocks.navigateToLastMessage).not.toHaveBeenCalled();
   });
 
   it("selectSession allows switching while another session is sending", async () => {

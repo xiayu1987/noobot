@@ -16,14 +16,20 @@ function createRouteHarness() {
   });
   const connectorVisible = ref(false);
   const chatNavigatorVisible = ref(true);
+  const routedTurnScopeId = ref("");
+  const applyRoutedTurn = vi.fn(({ turnScopeId }) => {
+    routedTurnScopeId.value = turnScopeId;
+  });
+  const requestSessionNavigation = vi.fn();
   const openConnectorsRaw = vi.fn(() => {
     connectorVisible.value = true;
   });
   const route = useAppShellPseudoRoute({
     activeSessionId,
     activeSession,
-    currentMessageAnchorId: ref(""),
-    messageListPanelRef: ref(null),
+    routedTurnScopeId,
+    applyRoutedTurn,
+    requestSessionNavigation,
     workspaceVisible: ref(false),
     connectorVisible,
     userSettingsVisible: ref(false),
@@ -56,6 +62,8 @@ function createRouteHarness() {
     connectorVisible,
     chatNavigatorVisible,
     openConnectorsRaw,
+    applyRoutedTurn,
+    requestSessionNavigation,
   };
 }
 
@@ -83,7 +91,7 @@ describe("useAppShellPseudoRoute initial Session activation", () => {
 
   it("applies the initial Session route exactly once from the connected entrypoint", async () => {
     const { route, selectSession } = createRouteHarness();
-    const requested = { sessionId: "persisted-session", panel: "", anchor: "" };
+    const requested = { sessionId: "persisted-session", panel: "", turn: "" };
     await expect(route.applyInitialPseudoRoute(requested)).resolves.toBe(true);
     await expect(route.applyInitialPseudoRoute(requested)).resolves.toBe(false);
     expect(selectSession).toHaveBeenCalledTimes(1);
@@ -99,7 +107,7 @@ describe("useAppShellPseudoRoute initial Session activation", () => {
     activeSessionId.value = "local-session";
     activeSession.value = { sessionId: "local-session", isLocal: true, loaded: true };
 
-    await route.applyInitialPseudoRoute({ sessionId: "", panel: "", anchor: "" });
+    await route.applyInitialPseudoRoute({ sessionId: "", panel: "", turn: "" });
 
     expect(new URL(window.location.href).searchParams.has("session")).toBe(false);
   });
@@ -109,7 +117,7 @@ describe("useAppShellPseudoRoute initial Session activation", () => {
     const { route, activeSessionId, activeSession } = createRouteHarness();
     activeSessionId.value = "local-session";
     activeSession.value = { sessionId: "local-session", isLocal: true, loaded: true };
-    await route.applyInitialPseudoRoute({ sessionId: "", panel: "", anchor: "" });
+    await route.applyInitialPseudoRoute({ sessionId: "", panel: "", turn: "" });
     expect(new URL(window.location.href).searchParams.has("session")).toBe(false);
 
     activeSession.value.isLocal = false;
@@ -125,11 +133,38 @@ describe("useAppShellPseudoRoute initial Session activation", () => {
     await route.applyInitialPseudoRoute({
       sessionId: "local-session",
       panel: "connectors",
-      anchor: "",
+      turn: "",
     });
 
     expect(chatNavigatorVisible.value).toBe(false);
     expect(connectorVisible.value).toBe(true);
     expect(openConnectorsRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it("registers the URL turn before selecting the routed Session", async () => {
+    const { route, selectSession, applyRoutedTurn, requestSessionNavigation } =
+      createRouteHarness();
+    const turn = "client-turn:00000000-0000-4000-8000-000000000009";
+
+    await route.applyInitialPseudoRoute({ sessionId: "persisted-session", panel: "", turn });
+
+    expect(applyRoutedTurn).toHaveBeenCalledWith({
+      sessionId: "persisted-session",
+      turnScopeId: turn,
+    });
+    expect(applyRoutedTurn).toHaveBeenCalledBefore(selectSession);
+
+    expect(requestSessionNavigation).not.toHaveBeenCalled();
+    expect(new URL(window.location.href).searchParams.get("turn")).toBe(turn);
+  });
+
+  it("requests Session navigation when the routed Session is already active", async () => {
+    const { route, selectSession, requestSessionNavigation } = createRouteHarness();
+    const turn = "client-turn:00000000-0000-4000-8000-000000000010";
+
+    await route.applyInitialPseudoRoute({ sessionId: "local-session", panel: "", turn });
+
+    expect(selectSession).not.toHaveBeenCalled();
+    expect(requestSessionNavigation).toHaveBeenCalledWith("local-session");
   });
 });

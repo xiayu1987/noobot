@@ -42,7 +42,7 @@ export function useChatEngine({
   summaryPolicy,
   selectedPlugins,
   isImageMime,
-  navigateToLastMessage,
+  requestTurnNavigation,
   activeSession,
   activeSessionId,
   turnRuntimeRegistry,
@@ -82,7 +82,7 @@ export function useChatEngine({
   monotonicActionStopPollIntervalMs,
 }) {
   requireFunctionDependencies("useChatEngine", {
-    navigateToLastMessage,
+    requestTurnNavigation,
     notify,
     onConversationState,
     applyTurnRuntimeEvent,
@@ -90,11 +90,19 @@ export function useChatEngine({
   });
   const { translate, locale } = useLocale();
   const turnTerminalNavigatedKeys = new Set();
-  const navigateToLastMessageOnTurnTerminalOnce = (sessionId, turnScopeId) => {
+
+  const navigateToTurnOnTerminalOnce = (sessionId, turnScopeId) => {
     const key = `${sessionId}::${turnScopeId}`;
     if (turnTerminalNavigatedKeys.has(key)) return;
     turnTerminalNavigatedKeys.add(key);
-    navigateToLastMessage();
+    requestTurnNavigation({ sessionId, turnScopeId });
+  };
+
+  const navigateOnTurnTerminalCommit = (result) => {
+    if (result.applied === false || !result.turn?.terminal) return;
+    const { sessionId, turnScopeId } = result.turn;
+    if (text(activeSession.value?.sessionId) !== sessionId) return;
+    navigateToTurnOnTerminalOnce(sessionId, turnScopeId);
   };
   const applyAuthoritativeTerminalResolution = (response) => {
     const sessionId = text(response?.sessionId);
@@ -112,6 +120,7 @@ export function useChatEngine({
     }
     try {
       const result = commitTurnTerminalResolution(response);
+      navigateOnTurnTerminalCommit(result);
       if (result.applied !== true) {
         const current = selectTurnRuntimeByScope(turnRuntimeRegistry.value, sessionId, turnScopeId);
         logTerminalResolutionDebug("frontend.terminalResolution.reducerRejected", () => ({
@@ -129,7 +138,6 @@ export function useChatEngine({
         const targetSession = activeSession.value;
         if (text(targetSession?.sessionId) === sessionId) {
           applyLatestSessionAggregateVersion(targetSession, response);
-          navigateToLastMessageOnTurnTerminalOnce(sessionId, turnScopeId);
         }
         const projected = projectTurnRuntimeView(
           sessionId,
@@ -181,6 +189,7 @@ export function useChatEngine({
   });
   const applyAuthoritativeTurnLifecycle = async (envelope) => {
     const lifecycleResult = commitTurnLifecycleEnvelope(envelope);
+    navigateOnTurnTerminalCommit(lifecycleResult);
     await terminalResolutionCoordinator.observe({
       ...envelope,
       type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
@@ -216,6 +225,7 @@ export function useChatEngine({
       activeSessionId: activeSessionId.value,
     }));
     const turnResult = applyTurnRuntimeEvent(event);
+    navigateOnTurnTerminalCommit(turnResult);
     const runtime = projectTurnRuntimeView(turnResult?.canonicalSessionId, turnResult?.turn);
     logStateMachineDebug("stateMachine.reducer.decision", () => ({
       ...eventSummary,
@@ -348,7 +358,7 @@ export function useChatEngine({
     applyTurnLifecycleEnvelope: applyAuthoritativeTurnLifecycle,
   };
   const senderUiDeps = {
-    navigateToLastMessage,
+    requestTurnNavigation,
     notify,
     translate,
   };

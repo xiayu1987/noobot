@@ -12,6 +12,7 @@ import {
   waitForNaturalCompletion,
 } from "../helpers/browser-actions.js";
 import { reloadAndWaitForReconnect } from "../helpers/reconnect-scenarios.js";
+import { assertStopCommandIdentity } from "../helpers/agent-transport-assertions.js";
 import {
   modelInvocationTraces,
   readSessionExecutionEventTree,
@@ -114,11 +115,7 @@ test("@core PBE-050 首轮可停止且用户插话按 FIFO 注入、持久化并
     "turn.stop",
     firstOffset,
   );
-  expect(firstStop.identity).toMatchObject({
-    sessionId: noobot.sessionId,
-    turnScopeId: firstSend.identity.turnScopeId,
-    dialogProcessId: firstProcessing.dialogProcessId,
-  });
+  assertStopCommandIdentity(firstStop, firstSend.identity);
   await waitForLifecycle(
     protocolCapture,
     noobot.sessionId,

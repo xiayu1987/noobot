@@ -22,6 +22,7 @@ import {
 import { AttachmentService } from "../../../src/artifacts/service/attachment-service.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { bindTestDispatchLifecycle } from "./turn-runtime-test-helper.js";
+import { findCommittedMessagePayload } from "./tool-runner.test-helpers.js";
 
 const wait = (durationMs) => new Promise((resolve) => setTimeout(resolve, durationMs));
 
@@ -319,4 +320,33 @@ test("settleToolCallInTurn pairs a pre-existing stop without invoking the tool",
     code: "RECOVERABLE_USER_CANCELLED",
     stopType: "user_stop",
   });
+});
+
+test("settleToolCallInTurn rejected fatal path reports elapsed durationMs on tool_call_end", async () => {
+  const runtime = createRuntime();
+  const events = [];
+  runtime.eventListener = { onEvent: (event) => events.push(event) };
+  const fatalError = Object.assign(new Error("fatal tool failure"), { code: "FATAL_TEST" });
+
+  const settlement = await settleToolCallInTurn({
+    call: { id: "call-fatal", name: "execute_script", args: {} },
+    tool: {
+      async invoke() {
+        await wait(20);
+        throw fatalError;
+      },
+    },
+    executionScope: "primary",
+    turn: 1,
+    runtime,
+    agentContext: createTestAgentExecutionScope(runtime),
+    abortSignal: runtime.abortSignal,
+  });
+
+  assert.equal(settlement.status, "rejected");
+  assert.equal(settlement.error, fatalError);
+  const toolCallEnd = findCommittedMessagePayload(events, "tool_call_end");
+  assert.equal(toolCallEnd.success, false);
+  assert.ok(Number.isFinite(toolCallEnd.durationMs));
+  assert.ok(toolCallEnd.durationMs >= 20);
 });

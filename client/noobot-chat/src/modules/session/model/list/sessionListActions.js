@@ -41,7 +41,6 @@ export function createSessionListActions({
   applySessionDetail,
   createLocalSession,
   refreshSessionConnectorsAsync,
-  navigateToLastMessage,
   onSessionDetailApplied,
   translate,
   notify,
@@ -57,19 +56,13 @@ export function createSessionListActions({
     applySessionDetail,
     createLocalSession,
     refreshSessionConnectorsAsync,
-    navigateToLastMessage,
     onSessionDetailApplied,
     translate,
     notify,
   });
 
   async function selectSession(sessionId, options = {}) {
-    const {
-      force = false,
-      requireFresh = false,
-      shouldNavigateToLastMessage = options.navigateToLastMessage !== false,
-      silent = false,
-    } = options;
+    const { force = false, requireFresh = false, silent = false } = options;
     if (!sessionId) return;
     const target = findSessionByAnyIdInList(sessions.value, sessionId);
     if (!target) return;
@@ -86,7 +79,6 @@ export function createSessionListActions({
     activeSessionId.value = targetPrimaryId;
     if (target.isLocal) {
       refreshSessionConnectorsAsync(targetPrimaryId);
-      if (shouldNavigateToLastMessage) navigateToLastMessage();
       return;
     }
     if (target.loaded && !force) {
@@ -101,7 +93,6 @@ export function createSessionListActions({
         normalizedDetailMessages: Array.isArray(target.messages) ? target.messages : [],
       });
       refreshSessionConnectorsAsync(targetPrimaryId);
-      if (shouldNavigateToLastMessage) navigateToLastMessage();
       return;
     }
 
@@ -122,9 +113,7 @@ export function createSessionListActions({
       if (!silent) loadingSessionDetail.value = false;
     }
     if (detail) {
-      applySessionDetail(detail, {
-        navigateToLastMessage: shouldNavigateToLastMessage,
-      });
+      applySessionDetail(detail);
     }
     refreshSessionConnectorsAsync(targetPrimaryId);
   }
@@ -213,6 +202,20 @@ export function createSessionListActions({
     return { status: "loaded", detail, resolvedSessionId, requestedSessionDoc };
   }
 
+  function requireActiveTurnScopeId(summary) {
+    if (typeof summary.activeTurnScopeId !== "string") {
+      throw new TypeError("session_summary_active_turn_scope_id_required");
+    }
+    return summary.activeTurnScopeId;
+  }
+
+  function resolveInitialSessionId(data, nextSessions) {
+    const runningSummary = data.sessions
+      .filter((summary) => summary.caller === RoleEnum.USER && requireActiveTurnScopeId(summary))
+      .sort((left, right) => parseTimeMs(right.updatedAt) - parseTimeMs(left.updatedAt))[0];
+    return runningSummary === undefined ? nextSessions[0].sessionId : runningSummary.sessionId;
+  }
+
   function insertRequestedSession(requestedSessionDoc, persistedSessionIds) {
     const requestedSession = mapSummaryToSession(requestedSessionDoc, {
       sessionTitleFromMessages,
@@ -222,10 +225,7 @@ export function createSessionListActions({
     persistedSessionIds.add(requestedSession.sessionId);
   }
 
-  async function loadSessionList(
-    preferredActiveId,
-    { silent, shouldNavigateToLastMessage, forceCurrentSessionRerender },
-  ) {
+  async function loadSessionList(preferredActiveId, { silent, forceCurrentSessionRerender }) {
     const prevActiveId = String(preferredActiveId || activeSessionId.value || "");
     const requestedSessionId = text(preferredActiveId);
 
@@ -252,9 +252,7 @@ export function createSessionListActions({
     }
     if (requestedResult.status === "loaded") {
       activeSessionId.value = requestedResult.resolvedSessionId;
-      applySessionDetail(requestedResult.detail, {
-        navigateToLastMessage: shouldNavigateToLastMessage,
-      });
+      applySessionDetail(requestedResult.detail);
       refreshSessionConnectorsAsync(requestedResult.resolvedSessionId);
       return true;
     }
@@ -262,27 +260,24 @@ export function createSessionListActions({
     const retainedPrimaryId = findSessionByAnyIdInList(sessions.value, prevActiveId)
       ? resolveSessionPrimaryIdInList(sessions.value, prevActiveId)
       : "";
-    await selectSession(retainedPrimaryId || sessions.value[0].sessionId, {
-      force: forceCurrentSessionRerender,
-      silent,
-      navigateToLastMessage: shouldNavigateToLastMessage,
-      requireFresh: forceCurrentSessionRerender,
-    });
+    await selectSession(
+      retainedPrimaryId || resolveInitialSessionId(listResult.data, nextSessions),
+      {
+        force: forceCurrentSessionRerender,
+        silent,
+        requireFresh: forceCurrentSessionRerender,
+      },
+    );
     return true;
   }
 
   async function fetchSessions(preferredActiveId = "", options = {}) {
-    const {
-      silent = false,
-      shouldNavigateToLastMessage = options.navigateToLastMessage !== false,
-      forceCurrentSessionRerender = false,
-    } = options;
+    const { silent = false, forceCurrentSessionRerender = false } = options;
     if (!ensureConnected()) return false;
     if (!silent) loadingSessions.value = true;
     try {
       return await loadSessionList(preferredActiveId, {
         silent,
-        shouldNavigateToLastMessage,
         forceCurrentSessionRerender,
       });
     } finally {

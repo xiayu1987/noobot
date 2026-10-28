@@ -334,6 +334,7 @@ test("message payload validates and projects tool facts", () => {
     eventType: MESSAGE_EVENT_TYPE.TOOL_CALL_END,
     result: "body",
     success: true,
+    durationMs: 5,
   });
   assert.deepEqual(validateMessageEventPayload(endedPayload), { valid: true, errors: [] });
   assert.deepEqual(projectMessageEventToolFacets(endedPayload).toolResult, {
@@ -344,11 +345,31 @@ test("message payload validates and projects tool facts", () => {
   });
 });
 
+test("tool_call_end requires a finite non-negative durationMs", () => {
+  const ended = (fields) =>
+    payload({
+      eventType: MESSAGE_EVENT_TYPE.TOOL_CALL_END,
+      result: "body",
+      success: true,
+      ...fields,
+    });
+  assert.deepEqual(validateMessageEventPayload(ended({ durationMs: 0 })), {
+    valid: true,
+    errors: [],
+  });
+  for (const durationMs of [undefined, -1, Number.NaN, "5"]) {
+    assert.deepEqual(validateMessageEventPayload(ended({ durationMs })).errors, [
+      "invalid_tool_duration",
+    ]);
+  }
+});
+
 test("message payload rejects nested and aliased tool facts", () => {
   const noncanonical = payload({
     eventType: MESSAGE_EVENT_TYPE.TOOL_CALL_END,
     result: { ok: true },
     success: false,
+    durationMs: 5,
     toolResult: { tool_call_id: "call-1", output: { ok: true }, success: true },
   });
   assert.deepEqual(validateMessageEventPayload(noncanonical).errors, ["noncanonical_toolResult"]);
@@ -400,6 +421,7 @@ test("message payload validates and projects canonical tool risk", () => {
     eventType: MESSAGE_EVENT_TYPE.TOOL_CALL_END,
     result: { ok: true },
     success: true,
+    durationMs: 5,
     riskLevel: "high",
     securityAssessment: raisedAssessment,
   });

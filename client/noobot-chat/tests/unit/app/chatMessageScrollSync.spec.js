@@ -10,27 +10,23 @@ import {
   lockChatMessageScrollSyncToAnchor,
 } from "../../../src/app/runtime/chatMessageScrollSync.js";
 
-function createAnchor({ top, anchorId }) {
-  return {
-    offsetTop: top,
-    dataset: { chatMessageAnchor: anchorId },
-  };
-}
-
-function createWrapRef(anchors, scrollTop) {
-  return {
-    scrollTop,
-    querySelectorAll: vi.fn(() => anchors),
+function createPanel(currentAnchorId) {
+  const wrapRef = {
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
   };
+  const panel = {
+    currentAnchorId,
+    getWrapRef: () => wrapRef,
+    resolveCurrentMessageAnchorId: vi.fn(() => panel.currentAnchorId),
+  };
+  return { panel, wrapRef, messageListPanelRef: { value: panel } };
 }
 
 describe("chat message scroll sync", () => {
-  it("clears the current anchor when the message list wrapper has no anchors", () => {
+  it("clears the current anchor when the panel resolves no current message", () => {
     const currentMessageAnchorId = { value: "old-anchor" };
-    const wrapRef = createWrapRef([], 120);
-    const messageListPanelRef = { value: { getWrapRef: () => wrapRef } };
+    const { panel, messageListPanelRef } = createPanel("");
     const { syncCurrentMessageAnchorId } = createChatMessageScrollSync({
       currentMessageAnchorId,
       messageListPanelRef,
@@ -38,21 +34,13 @@ describe("chat message scroll sync", () => {
 
     syncCurrentMessageAnchorId();
 
-    expect(wrapRef.querySelectorAll).toHaveBeenCalledWith("[data-chat-message-anchor]");
+    expect(panel.resolveCurrentMessageAnchorId).toHaveBeenCalledTimes(1);
     expect(currentMessageAnchorId.value).toBe("");
   });
 
-  it("highlights the latest anchor above the scroll threshold", () => {
+  it("highlights the anchor resolved by the message list panel", () => {
     const currentMessageAnchorId = { value: "" };
-    const wrapRef = createWrapRef(
-      [
-        createAnchor({ top: 0, anchorId: "message-1" }),
-        createAnchor({ top: 84, anchorId: "message-2" }),
-        createAnchor({ top: 200, anchorId: "message-3" }),
-      ],
-      72,
-    );
-    const messageListPanelRef = { value: { getWrapRef: () => wrapRef } };
+    const { messageListPanelRef } = createPanel("message-2");
     const { syncCurrentMessageAnchorId } = createChatMessageScrollSync({
       currentMessageAnchorId,
       messageListPanelRef,
@@ -63,18 +51,9 @@ describe("chat message scroll sync", () => {
     expect(currentMessageAnchorId.value).toBe("message-2");
   });
 
-  it("keeps the clicked navigator target highlighted while smooth scrolling past middle anchors", () => {
+  it("keeps the navigator target highlighted while the list repositions past other anchors", () => {
     const currentMessageAnchorId = { value: "message-4" };
-    const wrapRef = createWrapRef(
-      [
-        createAnchor({ top: 0, anchorId: "message-1" }),
-        createAnchor({ top: 100, anchorId: "message-2" }),
-        createAnchor({ top: 200, anchorId: "message-3" }),
-        createAnchor({ top: 300, anchorId: "message-4" }),
-      ],
-      176,
-    );
-    const messageListPanelRef = { value: { getWrapRef: () => wrapRef } };
+    const { wrapRef, messageListPanelRef } = createPanel("message-3");
     const { syncCurrentMessageAnchorId } = createChatMessageScrollSync({
       currentMessageAnchorId,
       messageListPanelRef,
@@ -88,16 +67,7 @@ describe("chat message scroll sync", () => {
 
   it("releases the navigator scroll lock when the target anchor becomes current", () => {
     const currentMessageAnchorId = { value: "message-4" };
-    const wrapRef = createWrapRef(
-      [
-        createAnchor({ top: 0, anchorId: "message-1" }),
-        createAnchor({ top: 100, anchorId: "message-2" }),
-        createAnchor({ top: 200, anchorId: "message-3" }),
-        createAnchor({ top: 300, anchorId: "message-4" }),
-      ],
-      276,
-    );
-    const messageListPanelRef = { value: { getWrapRef: () => wrapRef } };
+    const { panel, wrapRef, messageListPanelRef } = createPanel("message-4");
     const { syncCurrentMessageAnchorId } = createChatMessageScrollSync({
       currentMessageAnchorId,
       messageListPanelRef,
@@ -105,7 +75,7 @@ describe("chat message scroll sync", () => {
 
     lockChatMessageScrollSyncToAnchor(wrapRef, "message-4");
     syncCurrentMessageAnchorId();
-    wrapRef.scrollTop = 76;
+    panel.currentAnchorId = "message-2";
     syncCurrentMessageAnchorId();
 
     expect(currentMessageAnchorId.value).toBe("message-2");
@@ -116,16 +86,7 @@ describe("chat message scroll sync", () => {
     vi.setSystemTime(new Date("2026-06-19T00:00:00.000Z"));
     try {
       const currentMessageAnchorId = { value: "message-4" };
-      const wrapRef = createWrapRef(
-        [
-          createAnchor({ top: 0, anchorId: "message-1" }),
-          createAnchor({ top: 100, anchorId: "message-2" }),
-          createAnchor({ top: 200, anchorId: "message-3" }),
-          createAnchor({ top: 300, anchorId: "message-4" }),
-        ],
-        176,
-      );
-      const messageListPanelRef = { value: { getWrapRef: () => wrapRef } };
+      const { wrapRef, messageListPanelRef } = createPanel("message-3");
       const { syncCurrentMessageAnchorId } = createChatMessageScrollSync({
         currentMessageAnchorId,
         messageListPanelRef,
@@ -143,8 +104,7 @@ describe("chat message scroll sync", () => {
 
   it("binds passive scroll sync only once and performs an immediate sync", () => {
     const currentMessageAnchorId = { value: "" };
-    const wrapRef = createWrapRef([createAnchor({ top: 0, anchorId: "message-1" })], 0);
-    const messageListPanelRef = { value: { getWrapRef: () => wrapRef } };
+    const { wrapRef, messageListPanelRef } = createPanel("message-1");
     const scrollSync = createChatMessageScrollSync({ currentMessageAnchorId, messageListPanelRef });
 
     scrollSync.bindChatMessageScrollSync();
@@ -162,8 +122,7 @@ describe("chat message scroll sync", () => {
 
   it("unbinds the scroll listener and removes the bound marker", () => {
     const currentMessageAnchorId = { value: "" };
-    const wrapRef = createWrapRef([createAnchor({ top: 0, anchorId: "message-1" })], 0);
-    const messageListPanelRef = { value: { getWrapRef: () => wrapRef } };
+    const { wrapRef, messageListPanelRef } = createPanel("message-1");
     const scrollSync = createChatMessageScrollSync({ currentMessageAnchorId, messageListPanelRef });
 
     scrollSync.bindChatMessageScrollSync();

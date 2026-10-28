@@ -107,6 +107,7 @@ function resolveTimeFields(rawEvent) {
     updatedAt: trim(rawEvent?.updatedAt),
     startedAt: trim(rawEvent.startedAt),
     finishedAt: trim(rawEvent.finishedAt),
+    thinkingFinishedAt: trim(rawEvent.thinkingFinishedAt),
   };
 }
 

@@ -12,7 +12,7 @@ import {
 } from "../../../../infrastructure/api/attachments/attachmentAccess.js";
 import { useLocale } from "../../../../shared/i18n/useLocale.js";
 import { triggerBlobDownload } from "./useMessagePreview/file-access-log.js";
-import { buildNoCopyableSet, handleCopyMarkdown } from "./useMessagePreview/markdown-copy.js";
+import { handleCopyMarkdown } from "./useMessagePreview/markdown-copy.js";
 import {
   createAttachmentPreviewState,
   createFilePreviewState,
@@ -21,15 +21,16 @@ import { createFileDownloadController } from "./useMessagePreview/file-download-
 import { createFilePreviewController } from "./useMessagePreview/file-preview-controller.js";
 import { createAttachmentPreviewController } from "./useMessagePreview/attachment-preview-controller.js";
 import { canPreviewFileItem } from "./useMessagePreview/file-preview-capabilities.js";
-import { text } from "@noobot/shared/value";
+import { requireFunctionDependencies, text } from "@noobot/shared/value";
 
 export function useMessagePreview({
-  userId = "",
+  userId,
   attachmentService = defaultAttachmentService,
-  isImageMime = () => false,
-  renderMarkdown = () => "",
-  notify = () => {},
-} = {}) {
+  isImageMime,
+  renderMarkdown,
+  notify,
+}) {
+  requireFunctionDependencies("useMessagePreview", { isImageMime, renderMarkdown, notify });
   const { translate } = useLocale();
   const filePreview = createFilePreviewState();
   const attachmentPreview = createAttachmentPreviewState();
@@ -147,33 +148,23 @@ function createMarkdownCopyController({
   filePreview,
   attachmentPreview,
 }) {
-  const noCopyableContentTexts = buildNoCopyableSet(translate, "noCopyableContent");
-  const noCopyableTextTexts = buildNoCopyableSet(translate, "noCopyableText");
-  const copy = ({ textContent = "", renderedPreviewHtml = "", rich = false } = {}) =>
+  const copyRich = (markdownText, renderOptions) =>
     handleCopyMarkdown({
-      textContent: rich
-        ? renderedPreviewHtml || renderMarkdown(String(textContent || ""))
-        : String(textContent || ""),
-      renderMarkdown,
+      markdownText,
+      html: renderMarkdown(markdownText, renderOptions),
       translate,
       notify,
-      noCopyableContentTexts,
-      noCopyableTextTexts,
-      rich,
+      rich: true,
     });
+  const copyText = (markdownText) =>
+    handleCopyMarkdown({ markdownText, html: "", translate, notify, rich: false });
   return {
-    onCopyMarkdownRich: (html = "") =>
-      copy({ textContent: filePreview.textContent.value, renderedPreviewHtml: html, rich: true }),
-    onCopyMarkdownText: () => copy({ textContent: filePreview.textContent.value }),
-    onCopyAttachmentMarkdownRich: (html = "") =>
-      copy({
-        textContent: attachmentPreview.textContent.value,
-        renderedPreviewHtml: html,
-        rich: true,
-      }),
-    onCopyAttachmentMarkdownText: () => copy({ textContent: attachmentPreview.textContent.value }),
-    onCopyMessageMarkdownRich: ({ textContent = "", renderedPreviewHtml = "" } = {}) =>
-      copy({ textContent, renderedPreviewHtml, rich: true }),
-    onCopyMessageMarkdownText: (textContent = "") => copy({ textContent }),
+    onCopyMarkdownRich: () => copyRich(filePreview.textContent.value),
+    onCopyMarkdownText: () => copyText(filePreview.textContent.value),
+    onCopyAttachmentMarkdownRich: () => copyRich(attachmentPreview.textContent.value),
+    onCopyAttachmentMarkdownText: () => copyText(attachmentPreview.textContent.value),
+    onCopyMessageMarkdownRich: ({ textContent, attachmentRefIndex }) =>
+      copyRich(textContent, { attachmentRefIndex, workspaceFileLinks: true }),
+    onCopyMessageMarkdownText: (textContent) => copyText(textContent),
   };
 }

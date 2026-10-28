@@ -251,7 +251,6 @@ const { messageModelLabel, showSubTaskActivity, subTaskStatusText, statusStepSta
     getRuntimeView: () => messageRuntime.value,
   });
 
-const messageMarkdownRef = ref(null);
 const { translate } = useLocale();
 const chatStore = useChatStore();
 const messageRuntime = computed(() => {
@@ -451,15 +450,15 @@ function handleThinkingPanelVisibility(visible) {
   thinkingPanelVisible.value = visible === true;
 }
 
-async function handleCopyAssistantMessageRich() {
-  await onCopyMessageMarkdownRich({
+function handleCopyAssistantMessageRich() {
+  onCopyMessageMarkdownRich({
     textContent: props.messageItem.content,
-    renderedPreviewHtml: String(messageMarkdownRef.value?.getHtml?.() || ""),
+    attachmentRefIndex: attachmentRefIndex.value,
   });
 }
 
-async function handleCopyAssistantMessageText() {
-  await onCopyMessageMarkdownText(props.messageItem.content);
+function handleCopyAssistantMessageText() {
+  onCopyMessageMarkdownText(props.messageItem.content);
 }
 
 function toggleAssistantContent() {
@@ -526,7 +525,6 @@ function toggleAssistantContent() {
         !hideMessageMarkdownForInlineEditor &&
         (getMessageRole(messageItem) !== 'assistant' || assistantContentExpanded)
       "
-      ref="messageMarkdownRef"
       :content="messageItem.content"
       :render-markdown="renderMarkdown"
       :attachment-ref-index="attachmentRefIndex"

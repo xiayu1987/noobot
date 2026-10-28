@@ -51,7 +51,6 @@ describe("useChatEngine.send-stream terminal detail", () => {
       }),
       makeViewMessage: (message) => ({ ...message }),
       sessionTitleFromMessages: () => "title",
-      navigateToLastMessage: vi.fn(),
       onSessionDetailApplied: vi.fn(),
     });
     harness.deps.fetchSessionDetail = fetchSessionDetail;

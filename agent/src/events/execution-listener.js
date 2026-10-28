@@ -23,10 +23,14 @@ function projectExecutionLogRecord(event = "", data = {}) {
     throw new TypeError(`invalid committed authority event: ${validation.errors.join(",")}`);
   }
   if (validation.descriptor?.family !== EVENT_FAMILY.MESSAGE_TIMELINE) return { event, data };
+  if (!Number.isFinite(data.persistDurationMs) || data.persistDurationMs < 0) {
+    throw new TypeError("committed message event requires persistDurationMs");
+  }
   return {
     event: envelope.payload.eventType,
     data: {
       ...envelope.payload,
+      persistDurationMs: data.persistDurationMs,
       eventId: envelope.identity.eventId,
       executionId: envelope.identity.executionId,
       sequence: envelope.ordering.sequence,

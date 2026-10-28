@@ -614,6 +614,7 @@ test("harness records tool call and state commit hook artifacts", async () => {
     runtime,
     agentContext,
     turn: 1,
+    toolStartedAtMs: Date.now(),
   });
   assert.equal(successResult.success, true);
 
@@ -629,6 +630,7 @@ test("harness records tool call and state commit hook artifacts", async () => {
     runtime,
     agentContext,
     turn: 1,
+    toolStartedAtMs: Date.now(),
   });
   assert.equal(errorResult.success, false);
   assert.equal(errorResult.failureReason, "invoke_error");

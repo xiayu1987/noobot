@@ -5,6 +5,18 @@
  */
 import { text } from "@noobot/shared/value";
 
+export const MARKDOWN_COPY_ERROR_CODES = Object.freeze({
+  noCopyableContent: "noCopyableContent",
+  noCopyableText: "noCopyableText",
+  clipboardUnavailable: "clipboardUnavailable",
+});
+
+function markdownCopyError(code) {
+  const error = new Error(code);
+  error.code = code;
+  return error;
+}
+
 function stripBackgroundStylesFromHtml(htmlContent = "") {
   const wrapper = document.createElement("div");
   wrapper.innerHTML = String(htmlContent || "");
@@ -187,9 +199,39 @@ ${normalizedHtmlBodyContent}
 </html>`;
 }
 
-export async function copyMarkdownRichAsHtmlPage(rawHtmlContent = "") {
-  let rawHtml = text(rawHtmlContent);
-  if (!rawHtml) throw new Error("NO_COPYABLE_CONTENT");
+function writeClipboardData(clipboardEntries) {
+  const selectionHost = document.createElement("textarea");
+  selectionHost.value = clipboardEntries["text/plain"];
+  selectionHost.setAttribute("readonly", "");
+  selectionHost.setAttribute("aria-hidden", "true");
+  selectionHost.style.position = "fixed";
+  selectionHost.style.top = "0";
+  selectionHost.style.left = "0";
+  selectionHost.style.opacity = "0";
+  selectionHost.style.pointerEvents = "none";
+  const previousFocus = document.activeElement;
+  const writeEntries = (copyEvent) => {
+    copyEvent.preventDefault();
+    for (const [mimeType, value] of Object.entries(clipboardEntries)) {
+      copyEvent.clipboardData.setData(mimeType, value);
+    }
+  };
+  document.body.appendChild(selectionHost);
+  selectionHost.select();
+  document.addEventListener("copy", writeEntries, { capture: true });
+  try {
+    if (!document.execCommand("copy"))
+      throw markdownCopyError(MARKDOWN_COPY_ERROR_CODES.clipboardUnavailable);
+  } finally {
+    document.removeEventListener("copy", writeEntries, { capture: true });
+    selectionHost.remove();
+    if (previousFocus instanceof HTMLElement) previousFocus.focus();
+  }
+}
+
+export function copyMarkdownRichAsHtmlPage({ html, markdownText }) {
+  let rawHtml = text(html);
+  if (!rawHtml) throw markdownCopyError(MARKDOWN_COPY_ERROR_CODES.noCopyableContent);
 
   rawHtml = rawHtml.replace(
     /<svg\s+/gi,
@@ -231,18 +273,11 @@ export async function copyMarkdownRichAsHtmlPage(rawHtmlContent = "") {
     htmlPageContent = exportStyles + htmlPageContent;
   }
 
-  if (!navigator.clipboard || typeof window.ClipboardItem !== "function")
-    throw new Error("clipboard API unavailable");
-  const clipboardItem = new window.ClipboardItem({
-    "text/html": new Blob([htmlPageContent], { type: "text/html" }),
-    "text/plain": new Blob([htmlPageContent], { type: "text/plain" }),
-  });
-  await navigator.clipboard.write([clipboardItem]);
+  writeClipboardData({ "text/plain": String(markdownText), "text/html": htmlPageContent });
 }
 
-export async function copyMarkdownText(markdownText = "") {
-  const normalizedText = String(markdownText || "");
-  if (!normalizedText.trim()) throw new Error("NO_COPYABLE_TEXT");
-  if (!navigator.clipboard?.writeText) throw new Error("clipboard API unavailable");
-  await navigator.clipboard.writeText(normalizedText);
+export function copyMarkdownText(markdownText) {
+  const normalizedText = String(markdownText);
+  if (!normalizedText.trim()) throw markdownCopyError(MARKDOWN_COPY_ERROR_CODES.noCopyableText);
+  writeClipboardData({ "text/plain": normalizedText });
 }

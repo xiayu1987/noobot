@@ -97,11 +97,17 @@ export function useChatSession({
   authFetch,
   refreshAuthentication = null,
   isImageMime,
-  navigateToLastMessage,
+  requestTurnNavigation,
+  requestSessionNavigation,
   notify = () => {},
   clearUploadSelection,
 }) {
-  requireFunctionDependencies("useChatSession", { isImageMime, clearUploadSelection });
+  requireFunctionDependencies("useChatSession", {
+    isImageMime,
+    clearUploadSelection,
+    requestTurnNavigation,
+    requestSessionNavigation,
+  });
   const { translate } = useLocale();
   const chatStore = useChatStore();
   const {
@@ -445,7 +451,6 @@ export function useChatSession({
     renameSessionApi,
     deleteSessionMessagesFromApi,
     makeViewMessage,
-    navigateToLastMessage,
     refreshSessionConnectorsAsync: connectorPanel.refreshSessionConnectorsAsync,
     clearUploads,
     notify,
@@ -467,7 +472,7 @@ export function useChatSession({
     summaryPolicy,
     selectedPlugins,
     isImageMime,
-    navigateToLastMessage,
+    requestTurnNavigation,
     activeSession,
     activeSessionId,
     turnRuntimeRegistry,
@@ -557,6 +562,7 @@ export function useChatSession({
 
   const { handleReconnect } = createReconnectCoordinator({
     activeSession,
+    requestSessionNavigation,
     turnRuntimeRegistry,
     chatWebSocketClient,
     reconnectReplay,

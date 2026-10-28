@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path } from "@noobot/path-resolver";
-import { createHash } from "node:crypto";
 import { mkdir, readdir, rm } from "node:fs/promises";
 import { normalizeSessionEntity } from "../entities/session-entity.js";
 import {
@@ -31,6 +30,7 @@ import {
   replaceJournalRecords,
   resolveTurnSummaryReceipts,
   SUMMARY_SNAPSHOT_SCHEMA_VERSION,
+  summarySnapshotContentHash,
   summarySnapshotIndex,
   turnArtifactRequiresRewrite,
   turnIdOrdinal,
@@ -179,9 +179,7 @@ async function writeTurnSummarySnapshots({
       previousCheckpointHash,
       records: checkpointRecords,
     });
-    const contentHash = `sha256:${createHash("sha256")
-      .update(JSON.stringify(snapshotPayload))
-      .digest("hex")}`;
+    const contentHash = summarySnapshotContentHash(snapshotPayload);
     await writeSummarySnapshot(path.join(sessionDir, relativeSnapshotFile), snapshotPayload);
     summarySnapshots.push(summarySnapshotIndex(receipt, relativeSnapshotFile, contentHash));
     previousCheckpointIds.add(checkpoint.checkpointId);

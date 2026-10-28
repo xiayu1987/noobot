@@ -20,6 +20,7 @@ import {
   waitForSessionExecutionEventTree,
 } from "../helpers/persistence-audit.js";
 import { reloadAndWaitForReconnect } from "../helpers/reconnect-scenarios.js";
+import { assertStopCommandIdentity } from "../helpers/agent-transport-assertions.js";
 import { runOpsWorkdir } from "../helpers/run-ops-workdir.js";
 import {
   assertContinuation,
@@ -168,7 +169,7 @@ test("@full PBE-031 Workflow 运行中停止并继续", async ({ noobot, protoco
     0,
     send.identity.turnScopeId,
   );
-  expect(stop.identity).toMatchObject(authoritativeSend.identity);
+  assertStopCommandIdentity(stop, authoritativeSend.identity);
   assertTurnLifecycle(protocolCapture, noobot.sessionId, send.identity.turnScopeId);
   const stoppedExecutionEvents = await waitForSessionExecutionEventTree(
     noobot.userId,
