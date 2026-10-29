@@ -28,6 +28,8 @@ import { upgradeSessionLifecycle } from "./session-lifecycle-upgrade.js";
 import { upgradeSessionTransferEnvelopes } from "./session-transfer-envelope-upgrade.js";
 import { upgradeModelContextSnapshots } from "./model-context-snapshot-upgrade.js";
 import { upgradeSessionMessageIdentity } from "./session-message-identity-upgrade.js";
+import { upgradeExecutionEventIndexes } from "./execution-event-index-upgrade.js";
+import { retireSessionTaskArtifacts } from "./session-task-artifact-retirement.js";
 import { releaseQuarantinedUnits } from "./migration-quarantine.js";
 import { ignoreSessionProgress } from "./session-directory-walk.js";
 
@@ -37,6 +39,8 @@ const LAYOUT_UPGRADE_HANDLERS = Object.freeze({
   [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_TRANSFER_ENVELOPE]: upgradeSessionTransferEnvelopes,
   [WORKSPACE_LAYOUT_UPGRADE_OWNER.MODEL_CONTEXT_SNAPSHOT]: upgradeModelContextSnapshots,
   [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MESSAGE_IDENTITY]: upgradeSessionMessageIdentity,
+  [WORKSPACE_LAYOUT_UPGRADE_OWNER.EXECUTION_EVENT_INDEX]: upgradeExecutionEventIndexes,
+  [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_TASK_ARTIFACT]: retireSessionTaskArtifacts,
 });
 
 const QUARANTINE_RETRY_OWNERS = Object.freeze([
@@ -44,6 +48,7 @@ const QUARANTINE_RETRY_OWNERS = Object.freeze([
   WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_TRANSFER_ENVELOPE,
   WORKSPACE_LAYOUT_UPGRADE_OWNER.MODEL_CONTEXT_SNAPSHOT,
   WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MESSAGE_IDENTITY,
+  WORKSPACE_LAYOUT_UPGRADE_OWNER.EXECUTION_EVENT_INDEX,
 ]);
 
 const retriedQuarantines = new Set();
@@ -104,6 +109,7 @@ export async function upgradeWorkspaceLayout({
   backupBase,
   created,
   scopedSessionRoots,
+  storageService,
   reportProgress = ignoreSessionProgress,
 }) {
   const installedVersion = await readInstalledLayoutVersion(base, created);
@@ -115,6 +121,7 @@ export async function upgradeWorkspaceLayout({
         base,
         backupBase,
         scopedSessionRoots,
+        storageService,
         onSessionProcessed: createUpgradeProgress(reportProgress, {
           upgradeId: upgrade.id,
           upgradeIndex: index + 1,
@@ -137,12 +144,24 @@ export async function upgradeWorkspaceLayout({
     await writeLayoutVersion(base, WORKSPACE_LAYOUT_VERSION);
   }
   applied.push(
-    ...(await retryQuarantinedUnits({ base, backupBase, scopedSessionRoots, reportProgress })),
+    ...(await retryQuarantinedUnits({
+      base,
+      backupBase,
+      scopedSessionRoots,
+      storageService,
+      reportProgress,
+    })),
   );
   return applied;
 }
 
-async function retryQuarantinedUnits({ base, backupBase, scopedSessionRoots, reportProgress }) {
+async function retryQuarantinedUnits({
+  base,
+  backupBase,
+  scopedSessionRoots,
+  storageService,
+  reportProgress,
+}) {
   const retried = [];
   for (const owner of QUARANTINE_RETRY_OWNERS) {
     const key = `${base}\u0000${owner}`;
@@ -156,6 +175,7 @@ async function retryQuarantinedUnits({ base, backupBase, scopedSessionRoots, rep
         base,
         backupBase,
         scopedSessionRoots,
+        storageService,
         onSessionProcessed: createUpgradeProgress(reportProgress, {
           upgradeId: id,
           upgradeIndex: 1,

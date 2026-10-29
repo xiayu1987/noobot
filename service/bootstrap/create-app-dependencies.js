@@ -89,6 +89,7 @@ export async function createAppDependencies({
     resolveAuthByApiKey,
     isForbiddenUserScope,
     requireApiKey,
+    enforceUserScopeParam,
     requireSuperAdmin,
   } = authService;
 
@@ -179,6 +180,7 @@ export async function createAppDependencies({
       normalizeWorkspaceUsersConfig,
       requireSuperAdmin,
       requireApiKey,
+      enforceUserScopeParam,
       resolveAuthByApiKey,
       resolveConfigParamScope,
       readScopedConfigParams,

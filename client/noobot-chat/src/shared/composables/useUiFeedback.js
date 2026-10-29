@@ -28,10 +28,10 @@ export function useUiFeedback() {
     ElMessage.info(normalizedText);
   }
 
-  async function confirmDeleteSession() {
+  async function confirmDeleteSession(count) {
     try {
       await overlayMessageBox.confirm(
-        translate("infra.confirmDelete"),
+        translate("infra.confirmDelete", { count }),
         translate("infra.deleteSessionTitle"),
         {
           confirmButtonText: translate("infra.confirm"),

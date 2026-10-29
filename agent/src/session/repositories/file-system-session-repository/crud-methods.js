@@ -8,11 +8,16 @@ import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { fsMkdir, fsRm } from "../../../shared/storage/fs-adapter.js";
 import { normalizeSessionEntity } from "../../entities/session-entity.js";
-import { writeSessionArtifact, writeSessionTurnArtifacts } from "../../session-artifact-store.js";
 import {
-  SESSION_ERROR_CODE,
+  SESSION_ARTIFACT_PREDECESSOR,
+  writeSessionArtifact,
+  writeSessionTurnArtifacts,
+} from "../../session-artifact-store.js";
+import {
   assertSessionScopeIdentity,
+  createAggregateVersionConflictError,
   createEmptyTurnLifecycle,
+  createSessionNotFoundError,
   requireSessionAggregateVersion,
 } from "@noobot/session-protocol";
 import { requireSessionCaller } from "@noobot/shared/session-caller";
@@ -48,6 +53,8 @@ class SessionCrudMethods {
           sessionDir: scope.sessionDir,
           sessionPayload: payload,
           atomic: true,
+          now: this.now,
+          predecessor: SESSION_ARTIFACT_PREDECESSOR.CANONICAL,
         });
         await this.commitSessionPlacement(userId, payload, persistenceContext);
         await this.upsertSessionSummary(userId, payload, { listFacts, scope });
@@ -65,7 +72,6 @@ class SessionCrudMethods {
         aggregateVersion: 0,
         caller: requireSessionCaller(caller),
         modelAlias: "",
-        currentTaskId: "",
         shortMemoryCheckpoint: 0,
         messages: [],
         dialogOrder: [],
@@ -84,7 +90,7 @@ class SessionCrudMethods {
     });
   }
 
-  async findTurnView(userId, sessionId, { turnScopeIds = [], persistenceContext } = {}) {
+  async findTurnView(userId, sessionId, { turnScopeIds, persistenceContext }) {
     return this._findCanonicalSession(userId, sessionId, {
       persistenceContext,
       read: (scope) => this._readNormalizedTurnView(scope, sessionId, turnScopeIds),
@@ -95,23 +101,14 @@ class SessionCrudMethods {
     if (await this.isSessionDeleted(userId, sessionId)) return null;
     const scope = await this.locateSessionScope(userId, sessionId, persistenceContext);
     if (!scope || !(await this.storageService.exists(scope.sessionFile))) return null;
-    try {
-      return await read(scope);
-    } catch (error) {
-      try {
-        await this.markSessionSummaryUnavailable(userId, sessionId, { error, scope });
-      } catch (projectionError) {
-        error.unavailableProjectionCause = projectionError;
-      }
-      throw error;
-    }
+    return this._projectUnavailableOnFailure(userId, sessionId, scope, () => read(scope));
   }
 
   async readSelectedConnectorIds(userId, sessionId, { persistenceContext } = {}) {
     if (await this.isSessionDeleted(userId, sessionId)) return [];
     const scope = await this.locateSessionScope(userId, sessionId, persistenceContext);
     if (!scope || !(await this.storageService.exists(scope.sessionFile))) return [];
-    const manifest = await this.storageService.readJson(scope.sessionFile, null);
+    const manifest = await this.storageService.readJson(scope.sessionFile);
     assertSessionScopeIdentity({
       session: manifest,
       sessionId,
@@ -142,20 +139,10 @@ class SessionCrudMethods {
           throw error;
         }
         if (versionExpected) {
-          if (!persistedForChecks) {
-            const error = new Error("session aggregate version expected for a missing session");
-            error.statusCode = 409;
-            error.code = SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT;
-            throw error;
-          }
+          if (!persistedForChecks) throw createSessionNotFoundError({ userId, sessionId });
           const actualVersion = requireSessionAggregateVersion(persistedForChecks.aggregateVersion);
-          if (actualVersion !== expectedAggregateVersion) {
-            const error = new Error("session aggregate version conflict");
-            error.statusCode = 409;
-            error.code = SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT;
-            error.currentVersion = actualVersion;
-            throw error;
-          }
+          if (actualVersion !== expectedAggregateVersion)
+            throw createAggregateVersionConflictError({ currentVersion: actualVersion });
         }
         const payload = this._buildSavePayload(session);
         const { listFacts } = await writeSessionArtifact({
@@ -163,6 +150,8 @@ class SessionCrudMethods {
           sessionDir: scope.sessionDir,
           sessionPayload: payload,
           atomic: true,
+          now: this.now,
+          predecessor: SESSION_ARTIFACT_PREDECESSOR.CANONICAL,
         });
         if (createOnly) await this.commitSessionPlacement(userId, payload, persistenceContext);
         return { payload, listFacts };
@@ -170,7 +159,7 @@ class SessionCrudMethods {
     });
   }
 
-  async saveTurnView(userId, session = {}, { turnScopeIds = [], persistenceContext } = {}) {
+  async saveTurnView(userId, session, { turnScopeIds, persistenceContext }) {
     return this._writeScopedSession(userId, session, {
       persistenceContext,
       placement: false,
@@ -182,6 +171,7 @@ class SessionCrudMethods {
           sessionPayload: payload,
           turnScopeIds,
           atomic: true,
+          now: this.now,
         });
         return { payload, listFacts };
       },

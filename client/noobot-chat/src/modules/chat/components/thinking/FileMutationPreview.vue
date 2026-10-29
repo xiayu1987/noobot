@@ -9,6 +9,8 @@ import { DocumentAdd, Download, EditPen } from "@element-plus/icons-vue";
 import { BaseFileCardList } from "../../../../shared/public-api/ui.js";
 import MutationDiffSplit from "./MutationDiffSplit.vue";
 import { text, isFunction } from "@noobot/shared/value";
+import "../../../../shared/ui/file-card-common.css";
+import "../../../../shared/ui/file-mutation-preview-common.css";
 
 const props = defineProps({
   userId: { type: String, default: "" },
@@ -191,9 +193,6 @@ async function openCompactPreview(mutation) {
   </section>
 </template>
 
-<style src="../../../../shared/ui/file-card-common.css"></style>
-<style src="../../../../shared/ui/file-mutation-preview-common.css"></style>
-
 <style scoped>
 .file-mutation-preview {
   margin-top: var(--noobot-space-xl);
@@ -207,15 +206,11 @@ async function openCompactPreview(mutation) {
 }
 .mutation-select {
   width: min(100%, 28rem);
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--noobot-space-sm);
 }
 .mutation-file-item {
   color: inherit;
   text-align: left;
   cursor: pointer;
-}
-.mutation-file-item:focus-visible {
-  outline: 2px solid var(--noobot-accent);
-  outline-offset: 1px;
 }
 </style>

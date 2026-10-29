@@ -8,7 +8,14 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { appendExecutionLogArtifact, buildThinkingDetailPayload } from "noobot-agent/session";
+import { appendExecutionLogArtifact } from "noobot-agent/session";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { TEST_STORAGE_SERVICE } from "../storage-service.test-helpers.js";
+import { availableDetailDocument } from "../session-detail.test-helpers.js";
+import {
+  SESSIONS_SUMMARY_SCHEMA_VERSION,
+  SESSION_SUMMARY_AVAILABILITY,
+} from "@noobot/session-protocol/sessions-summary";
 import express, {
   createSessionApp,
   registerSessionRoutes,
@@ -16,33 +23,47 @@ import express, {
 } from "./session-routes.helpers.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
+function appendTestExecutionLog({ sessionDir, executionLog }) {
+  return appendExecutionLogArtifact({
+    storageService: TEST_STORAGE_SERVICE,
+    sessionDir,
+    executionLog,
+    maxSegmentBytes: LENGTH_THRESHOLDS.artifact.executionEventSegmentBytes,
+    alreadyLocked: false,
+  });
+}
+
 test("session-routes: sessions 列表只读取并返回概要", async () => {
   const app = express();
   let fullDataCalled = false;
   registerSessionRoutes(app, {
     bot: {
       session: {
-        getSessionData: async () => ({}),
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
         getAllSessionsData: async () => {
           fullDataCalled = true;
           return [{ sessionId: "full", messages: [{ role: "user", content: "full" }] }];
         },
-        getAllSessionSummaries: async () => [
-          {
-            sessionId: "s1",
-            parentSessionId: "",
-            caller: SESSION_CALLER.USER,
-            currentTaskId: "t1",
-            createdAt: "2026-05-14T00:00:00.000Z",
-            updatedAt: "2026-05-14T00:01:00.000Z",
-            depth: 1,
-            title: "hello",
-            messageCount: 2,
-            lastMessage: { role: "assistant", content: "ok" },
-          },
-        ],
+        getAllSessionSummaries: async () => ({
+          schemaVersion: SESSIONS_SUMMARY_SCHEMA_VERSION,
+          updatedAt: "2026-05-14T00:02:00.000Z",
+          sessions: [
+            {
+              sessionId: "s1",
+              parentSessionId: "",
+              caller: SESSION_CALLER.USER,
+              createdAt: "2026-05-14T00:00:00.000Z",
+              updatedAt: "2026-05-14T00:01:00.000Z",
+              aggregateVersion: 2,
+              title: "hello",
+              messageCount: 2,
+              lastMessage: { role: "assistant", content: "ok" },
+              activeTurnScopeId: "",
+              availability: SESSION_SUMMARY_AVAILABILITY.AVAILABLE,
+            },
+          ],
+        }),
       },
       getAttachmentById: async () => null,
     },
@@ -55,6 +76,8 @@ test("session-routes: sessions 列表只读取并返回概要", async () => {
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.ok, true);
+    assert.equal(payload.schemaVersion, SESSIONS_SUMMARY_SCHEMA_VERSION);
+    assert.equal(payload.updatedAt, "2026-05-14T00:02:00.000Z");
     assert.equal(fullDataCalled, false);
     assert.equal(payload.sessions.length, 1);
     assert.equal(payload.sessions[0].sessionId, "s1");
@@ -63,66 +86,21 @@ test("session-routes: sessions 列表只读取并返回概要", async () => {
     assert.equal("rawMessages" in payload.sessions[0], false);
   });
 });
-test("session-routes: session 详情默认返回展示概要，full 模式按需返回完整数据", async () => {
+test("session-routes: session 详情只返回 detail 协议文档，拒绝任何 query 字段", async () => {
   const app = express();
-  let summaryCalled = false;
-  let fullCalled = false;
+  let detailCalls = 0;
   registerSessionRoutes(app, {
     bot: {
       session: {
         getSessionDisplayData: async () => {
-          summaryCalled = true;
-          return {
-            exists: true,
+          detailCalls += 1;
+          return availableDetailDocument({
             sessionId: "s1",
-            messageProjection: "canonical-presentation",
-            summary: true,
-            sessions: [
-              {
-                sessionId: "s1",
-                messages: [
-                  {
-                    id: "a1",
-                    role: "assistant",
-                    content: "summary answer",
-                    hasThinkingDetails: true,
-                  },
-                ],
-                stats: { messageCount: 4, injectedMessageCount: 1, thinkingMessageCount: 1 },
-              },
+            aggregateVersion: 3,
+            messages: [
+              { id: "a1", role: "assistant", content: "summary answer", hasThinkingDetails: true },
             ],
-          };
-        },
-        getSessionData: async () => {
-          fullCalled = true;
-          return {
-            exists: true,
-            sessionId: "s1",
-            detailMode: "full",
-            messageProjection: "canonical-presentation",
-            sessions: [
-              {
-                sessionId: "s1",
-                messages: [
-                  {
-                    id: "a1",
-                    role: "assistant",
-                    content: "summary answer",
-                    hasThinkingDetails: true,
-                  },
-                ],
-                sessionDocs: [{ id: "doc-1" }],
-                rawMessages: [
-                  {
-                    role: "assistant",
-                    content: "raw",
-                    realtimeLogs: [{ event: "thinking", text: "full thinking" }],
-                    injectedMessage: true,
-                  },
-                ],
-              },
-            ],
-          };
+          });
         },
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
@@ -139,27 +117,17 @@ test("session-routes: session 详情默认返回展示概要，full 模式按需
     let payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.ok, true);
-    assert.equal(payload.summary, true);
-    assert.equal(payload.messageProjection, "canonical-presentation");
-    assert.equal(summaryCalled, true);
-    assert.equal(fullCalled, false);
+    assert.deepEqual(Object.keys(payload).sort(), ["exists", "ok", "sessionId", "sessions"]);
+    assert.equal(payload.sessions[0].availability, SESSION_SUMMARY_AVAILABILITY.AVAILABLE);
+    assert.equal(detailCalls, 1);
     assert.equal(payload.sessions[0].messages[0].hasThinkingDetails, true);
-    assert.equal("realtimeLogs" in payload.sessions[0].messages[0], false);
-    assert.equal("sessionDocs" in payload.sessions[0], false);
     assert.equal("rawMessages" in payload.sessions[0], false);
 
     response = await fetch(`${baseUrl}/internal/session/u1/s1?mode=full`);
     payload = await response.json();
-    assert.equal(response.status, 200);
-    assert.equal(payload.ok, true);
-    assert.equal(fullCalled, true);
-    assert.equal(payload.detailMode, "full");
-    assert.equal(payload.messageProjection, "canonical-presentation");
-    assert.equal(payload.sessions[0].messages[0].content, "summary answer");
-    assert.equal("realtimeLogs" in payload.sessions[0].messages[0], false);
-    assert.equal(payload.sessions[0].sessionDocs.length, 1);
-    assert.equal(payload.sessions[0].rawMessages.length, 1);
-    assert.equal(payload.sessions[0].rawMessages[0].realtimeLogs.length, 1);
+    assert.equal(response.status, 400);
+    assert.equal(payload.ok, false);
+    assert.equal(detailCalls, 1);
   });
 });
 
@@ -211,32 +179,26 @@ test("session-routes: session detail does not project workflow state from observ
     },
   ];
   for (const record of records) {
-    await appendExecutionLogArtifact({
+    await appendTestExecutionLog({
       sessionDir,
       executionLog: { ...record, dialogProcessId: "dialog-1" },
-      executionPayload: { sessionId: "s-workflow" },
     });
   }
   const app = createSessionApp({
     session: {
-      getSessionDisplayData: async () => ({
-        exists: true,
-        sessionId: "s-workflow",
-        summary: true,
-        sessions: [
-          {
-            sessionId: "s-workflow",
-            messages: [
-              {
-                role: "user",
-                content: "run",
-                dialogProcessId: "dialog-1",
-                turnScopeId: "client-turn:one",
-              },
-            ],
-          },
-        ],
-      }),
+      getSessionDisplayData: async () =>
+        availableDetailDocument({
+          sessionId: "s-workflow",
+          aggregateVersion: 1,
+          messages: [
+            {
+              role: "user",
+              content: "run",
+              dialogProcessId: "dialog-1",
+              turnScopeId: "client-turn:one",
+            },
+          ],
+        }),
     },
     bot: { getWorkspacePath: () => workspaceRoot },
   });
@@ -255,7 +217,7 @@ test("session-routes: deleted Turn audit events are not returned as workflow UI 
   );
   const sessionDir = path.join(workspaceRoot, "runtime/session/s-deleted-workflow");
   await fs.mkdir(sessionDir, { recursive: true });
-  await appendExecutionLogArtifact({
+  await appendTestExecutionLog({
     sessionDir,
     executionLog: {
       dialogProcessId: "dialog-deleted",
@@ -269,22 +231,15 @@ test("session-routes: deleted Turn audit events are not returned as workflow UI 
         nodeSessions: [{ nodeExecutionId: "node-deleted" }],
       },
     },
-    executionPayload: { sessionId: "s-deleted-workflow" },
   });
   const app = createSessionApp({
     session: {
-      getSessionDisplayData: async () => ({
-        exists: true,
-        sessionId: "s-deleted-workflow",
-        summary: true,
-        sessions: [
-          {
-            sessionId: "s-deleted-workflow",
-            messages: [],
-            turnTimings: [],
-          },
-        ],
-      }),
+      getSessionDisplayData: async () =>
+        availableDetailDocument({
+          sessionId: "s-deleted-workflow",
+          aggregateVersion: 1,
+          messages: [],
+        }),
     },
     bot: { getWorkspacePath: () => workspaceRoot },
   });
@@ -297,91 +252,15 @@ test("session-routes: deleted Turn audit events are not returned as workflow UI 
   });
 });
 
-test("session-routes: thinking-detail 仅按 dialogProcessId 返回本次对话明细", async () => {
+test("session-routes: thinking-detail 原样透传 Turn 查找键，不在路由层归一化", async () => {
   const app = express();
-  let fullCalled = false;
-  let detailCalled = false;
+  const detailCalls = [];
   registerSessionRoutes(app, {
     bot: {
       session: {
-        getSessionData: async () => {
-          fullCalled = true;
-          return {};
-        },
-        getSessionThinkingDetail: async ({ dialogProcessId }) => {
-          detailCalled = true;
-          return buildThinkingDetailPayload(
-            {
-              exists: true,
-              sessionId: "s1",
-              sessions: [
-                {
-                  sessionId: "s1",
-                  rawMessages: [
-                    {
-                      id: "a1",
-                      role: "assistant",
-                      type: "message",
-                      dialogProcessId: "dp-1",
-                      content: "answer",
-                      toolTimeline: [
-                        {
-                          key: "call:call-1",
-                          toolCallId: "call-1",
-                          status: "completed",
-                          call: { eventId: "tool-1" },
-                          resultEvent: { eventId: "tool-2" },
-                        },
-                        {
-                          key: "call:call-2",
-                          toolCallId: "call-2",
-                          status: "running",
-                          call: { eventId: "tool-3" },
-                        },
-                      ],
-                    },
-                    {
-                      id: "i1",
-                      role: "system",
-                      dialogProcessId: "dp-1",
-                      injectedMessage: true,
-                      injectedBy: "harness-plugin",
-                      content: "injected without round",
-                    },
-                    {
-                      id: "t1",
-                      role: "assistant",
-                      type: "tool_call",
-                      dialogProcessId: "dp-1",
-                      content: "tool call",
-                    },
-                    {
-                      id: "t2",
-                      role: "tool",
-                      type: "tool_result",
-                      dialogProcessId: "dp-1",
-                      content: "tool result",
-                    },
-                    {
-                      id: "a2",
-                      role: "assistant",
-                      type: "message",
-                      dialogProcessId: "dp-2",
-                      content: "other answer",
-                    },
-                    {
-                      id: "t3",
-                      role: "assistant",
-                      type: "tool_call",
-                      dialogProcessId: "dp-2",
-                      content: "other tool",
-                    },
-                  ],
-                },
-              ],
-            },
-            { dialogProcessId },
-          );
+        getSessionThinkingDetail: async (payload) => {
+          detailCalls.push(payload);
+          return { exists: true, sessionId: "s1" };
         },
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
@@ -395,18 +274,14 @@ test("session-routes: thinking-detail 仅按 dialogProcessId 返回本次对话�
 
   await withTestServer(app, async (baseUrl) => {
     const response = await fetch(
-      `${baseUrl}/internal/session/u1/s1/thinking-detail?dialogProcessId=dp-1`,
+      `${baseUrl}/internal/session/u1/s1/thinking-detail?dialogProcessId=dp-1&turnScopeId=${encodeURIComponent(" turn-1")}`,
     );
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.ok, true);
     assert.equal(payload.exists, true);
-    assert.equal(fullCalled, false);
-    assert.equal(detailCalled, true);
-    assert.equal(payload.messageItem.dialogProcessId, "dp-1");
-    assert.equal(payload.messageItem.hasThinkingDetails, true);
-    assert.equal(payload.counts.executionLogCount, 3);
-    assert.equal(payload.counts.injectedMessageCount, 1);
-    assert.equal(Object.hasOwn(payload, "allMessages"), false);
+    assert.deepEqual(detailCalls, [
+      { userId: "u1", sessionId: "s1", dialogProcessId: "dp-1", turnScopeId: " turn-1" },
+    ]);
   });
 });

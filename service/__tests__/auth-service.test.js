@@ -105,7 +105,7 @@ test("auth-service: issueApiKey rejects non-canonical userId", () => {
   }
 });
 
-test("auth-service: requireApiKey forbids any mismatched userId source", () => {
+test("auth-service: requireApiKey forbids a mismatched body or query userId", () => {
   const service = createAuthService({ translateText: (key) => key });
   const apiKey = service.issueApiKey({ userId: "u1", role: "user" });
   let statusCode = 0;
@@ -119,7 +119,6 @@ test("auth-service: requireApiKey forbids any mismatched userId source", () => {
   service.requireApiKey(
     {
       headers: { "x-api-key": apiKey },
-      params: { userId: "u1" },
       body: { userId: "u2" },
       query: {},
     },

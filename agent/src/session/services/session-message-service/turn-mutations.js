@@ -24,10 +24,12 @@ import {
 } from "@noobot/context-protocol/policy/summary";
 import {
   appendCommandReceipt,
-  assertTurnReplacementMaterialization,
   createMessageDeleteFingerprint,
+  createMessageDeleteResponse,
   createTurnReplaceFingerprint,
   createTurnReplacementCommit,
+  createTurnReplaceResponse,
+  createAggregateVersionConflictError,
   decideAggregateConcurrency,
   decideCommandIdempotency,
   normalizeExpectedAggregateVersion,
@@ -62,11 +64,7 @@ function assertIdempotencyDecision(decision) {
 
 function assertConcurrencyDecision(decision) {
   if (decision.allowed) return;
-  const error = new Error("session aggregate version conflict");
-  error.statusCode = 409;
-  error.code = SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT;
-  error.currentVersion = decision.aggregateVersion;
-  throw error;
+  throw createAggregateVersionConflictError({ currentVersion: decision.aggregateVersion });
 }
 
 async function prepareSessionCommand({
@@ -93,16 +91,7 @@ async function prepareSessionCommand({
   });
   assertIdempotencyDecision(idempotency);
   if (idempotency.deduplicated) {
-    return {
-      deduplicatedResult: createCommandResult({
-        session,
-        receiptResult: idempotency.receipt.result,
-        commandId,
-        committedAggregateVersion: idempotency.receipt.aggregateVersion,
-        removedAuthorityOutboxEvents: 0,
-        deduplicated: true,
-      }),
-    };
+    return { deduplicatedReceipt: idempotency.receipt };
   }
   const currentVersion = requireSessionAggregateVersion(session?.aggregateVersion);
   const concurrency = decideAggregateConcurrency({
@@ -132,23 +121,23 @@ async function removeOutboxTurnScopes(sessionDir, removedTurnScopeIds) {
   );
 }
 
-function createCommandResult({
-  session,
+async function createMutationResponse({
+  userId,
+  sessionId,
+  createResponse,
   receiptResult,
   commandId,
   committedAggregateVersion,
-  removedAuthorityOutboxEvents,
   deduplicated,
 }) {
-  return {
-    session,
-    ...receiptResult,
-    aggregateVersion: requireSessionAggregateVersion(session?.aggregateVersion),
-    committedAggregateVersion,
+  const detail = await this.sessionCrudService.getSessionDisplayData({ userId, sessionId });
+  return createResponse({
+    receiptResult,
     commandId,
-    removedAuthorityOutboxEvents,
+    committedAggregateVersion,
     deduplicated,
-  };
+    detail,
+  });
 }
 
 function badRequest(message) {
@@ -216,7 +205,17 @@ export async function deleteFromMessage({
         expectedAggregateVersion: normalizedExpectedVersion,
         matcher,
       });
-      if (prepared.deduplicatedResult) return prepared.deduplicatedResult;
+      if (prepared.deduplicatedReceipt) {
+        return createMutationResponse.call(this, {
+          userId,
+          sessionId,
+          createResponse: createMessageDeleteResponse,
+          receiptResult: prepared.deduplicatedReceipt.result,
+          commandId: normalizedCommandId,
+          committedAggregateVersion: prepared.deduplicatedReceipt.aggregateVersion,
+          deduplicated: true,
+        });
+      }
       const { session, currentVersion, nextAggregateVersion, messages, anchorIndex } = prepared;
       const deletedMessages = messages.slice(anchorIndex);
       const deletedCount = deletedMessages.length;
@@ -248,16 +247,14 @@ export async function deleteFromMessage({
         expectedAggregateVersion: currentVersion,
         persistenceContext,
       });
-      const removedAuthorityOutboxEvents = await removeOutboxTurnScopes(
-        scope.sessionDir,
-        lifecycleDeletion.removedTurnScopeIds,
-      );
-      return createCommandResult({
-        session,
+      await removeOutboxTurnScopes(scope.sessionDir, lifecycleDeletion.removedTurnScopeIds);
+      return createMutationResponse.call(this, {
+        userId,
+        sessionId,
+        createResponse: createMessageDeleteResponse,
         receiptResult: result,
         commandId: normalizedCommandId,
         committedAggregateVersion: session.aggregateVersion,
-        removedAuthorityOutboxEvents,
         deduplicated: false,
       });
     },
@@ -307,7 +304,17 @@ export async function replaceTurn({
         expectedAggregateVersion: normalizedExpectedVersion,
         matcher,
       });
-      if (prepared.deduplicatedResult) return prepared.deduplicatedResult;
+      if (prepared.deduplicatedReceipt) {
+        return createMutationResponse.call(this, {
+          userId,
+          sessionId,
+          createResponse: createTurnReplaceResponse,
+          receiptResult: prepared.deduplicatedReceipt.result,
+          commandId: normalizedCommandId,
+          committedAggregateVersion: prepared.deduplicatedReceipt.aggregateVersion,
+          deduplicated: true,
+        });
+      }
       const { session, currentVersion, nextAggregateVersion, messages, anchorIndex } = prepared;
       const turnStartIndex = resolveUserTurnStartIndex(messages, anchorIndex);
       const replacedMessages = messages.slice(turnStartIndex);
@@ -363,21 +370,18 @@ export async function replaceTurn({
           committedAt: nowValue,
         },
       );
-      assertTurnReplacementMaterialization({ commit: turnReplacement, session });
       await this.sessionRepo.save(userId, session, {
         expectedAggregateVersion: currentVersion,
         persistenceContext,
       });
-      const removedAuthorityOutboxEvents = await removeOutboxTurnScopes(
-        scope.sessionDir,
-        lifecycleReplacement.removedTurnScopeIds,
-      );
-      return createCommandResult({
-        session,
+      await removeOutboxTurnScopes(scope.sessionDir, lifecycleReplacement.removedTurnScopeIds);
+      return createMutationResponse.call(this, {
+        userId,
+        sessionId,
+        createResponse: createTurnReplaceResponse,
         receiptResult: result,
         commandId: normalizedCommandId,
         committedAggregateVersion: session.aggregateVersion,
-        removedAuthorityOutboxEvents,
         deduplicated: false,
       });
     },

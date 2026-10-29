@@ -50,7 +50,6 @@ test("dispatchAgentTurn accepts completed-turn summary state into the canonical 
           summarized: false,
         },
       ],
-      turnTasks: [],
       modelLoopRound: 0,
       modelMessages: [],
     }),

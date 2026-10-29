@@ -5,7 +5,11 @@
  */
 
 import { text, isPlainObject, isCanonicalText } from "@noobot/shared/value";
-import { TURN_SNAPSHOT_WIRE_EVENT } from "@noobot/session-protocol";
+import {
+  isSessionAggregateVersion,
+  SESSION_ERROR_CODE,
+  TURN_SNAPSHOT_WIRE_EVENT,
+} from "@noobot/session-protocol";
 import { EXECUTION_QUERY_CONTRACT } from "@noobot/session-protocol/execution-lifecycle";
 import {
   TURN_ATTACHMENTS_BOUND_WIRE_EVENT,
@@ -216,7 +220,7 @@ export function validateAgentTransportError(errorEvent) {
 }
 
 const COMMAND_RESULT_IDENTITY_FIELDS = new Set(["sessionId", "turnScopeId", "dialogProcessId"]);
-const COMMAND_RESULT_ERROR_FIELDS = new Set(["code", "message"]);
+const COMMAND_RESULT_ERROR_FIELDS = new Set(["code", "message", "currentVersion"]);
 const RECEIPT_FIELDS = new Set([
   "protocolVersion",
   "commandId",
@@ -289,6 +293,20 @@ function validateCommandResultError(error, prefix, errors) {
   collectUnknownFields(error, COMMAND_RESULT_ERROR_FIELDS, `unknown_${prefix}_error_field`, errors);
   if (!isCanonicalText(error.code)) errors.push(`missing_${prefix}_code`);
   if (!isCanonicalText(error.message)) errors.push(`missing_${prefix}_message`);
+  if (error.code === SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT) {
+    if (!isSessionAggregateVersion(error.currentVersion)) {
+      errors.push(`invalid_${prefix}_current_version`);
+    }
+  } else if (Object.hasOwn(error, "currentVersion")) {
+    errors.push(`unexpected_${prefix}_current_version`);
+  }
+}
+
+function projectCommandResultError(error) {
+  return error.code === SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT ||
+    Object.hasOwn(error, "currentVersion")
+    ? { code: error.code, message: error.message, currentVersion: error.currentVersion }
+    : { code: error.code, message: error.message };
 }
 
 function freezeValid(result, validate) {
@@ -307,7 +325,7 @@ export function createAgentCommandReceipt({ command, outcome, error, occurredAt 
       identity: projectCommandResultIdentity(command.identity),
       occurredAt,
       ...(outcome === AGENT_COMMAND_RECEIPT_OUTCOME.FAILED
-        ? { error: { code: error.code, message: error.message } }
+        ? { error: projectCommandResultError(error) }
         : {}),
     },
     validateAgentCommandReceipt,
@@ -336,7 +354,7 @@ export function createAgentCommandRejection({ command, error, occurredAt }) {
       commandType: command.commandType,
       identity: projectCommandResultIdentity(command.identity),
       occurredAt,
-      error: { code: error.code, message: error.message },
+      error: projectCommandResultError(error),
     },
     validateAgentCommandRejection,
   );

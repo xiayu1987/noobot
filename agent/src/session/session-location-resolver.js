@@ -19,7 +19,6 @@ function buildScope(sessionDir, resolvedParentSessionId, { indexed, registered }
     sessionDir,
     sessionFile: files.session,
     sessionSummaryFile: files.sessionSummary,
-    taskFile: files.task,
     executionEventsDir: files.executionEventsDir,
     turnsDir: files.turnsDir,
     turnSnapshotsDir: files.turnSnapshotsDir,

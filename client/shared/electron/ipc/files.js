@@ -4,13 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import fs from "node:fs";
-import {
-  clientPathBasename,
-  clientPathDirname,
-  isAbsoluteClientPath,
-  joinClientPath,
-  normalizeClientPath,
-} from "../../path-resolver.js";
+import { clientPathDirname, joinClientPath } from "../../path-resolver.js";
 import { text } from "@noobot/shared/value";
 
 function sanitizeDownloadFileName(fileName = "") {
@@ -52,35 +46,6 @@ function sanitizeFileAccessLogPayload(payload = {}) {
   return output;
 }
 
-function maskHostPath(pathValue = "") {
-  const normalized = normalizeClientPath(text(pathValue));
-  if (!normalized) return "";
-  const parts = normalized.split("/").filter(Boolean);
-  if (parts.length <= 2) return normalized;
-  return `${parts[0]}/.../${parts.at(-1)}`;
-}
-
-async function resolveHostFile(pathValue = "") {
-  const targetPath = text(pathValue);
-  if (!targetPath) {
-    const error = new Error("Missing host file path.");
-    error.code = "missing_path";
-    throw error;
-  }
-  if (!isAbsoluteClientPath(targetPath)) {
-    const error = new Error("Host file path must be absolute.");
-    error.code = "not_absolute";
-    throw error;
-  }
-  const stats = await fs.promises.stat(targetPath);
-  if (!stats.isFile()) {
-    const error = new Error("Host path is not a file.");
-    error.code = "not_file";
-    throw error;
-  }
-  return { targetPath, stats };
-}
-
 export function registerFileIpcHandlers({
   app,
   dialog,
@@ -88,19 +53,6 @@ export function registerFileIpcHandlers({
   appendDesktopLog = () => {},
   getMainWindow = () => null,
 } = {}) {
-  function logHostFileAccess(event, payload = {}) {
-    appendDesktopLog(
-      `[noobot:file-access] ${JSON.stringify(
-        sanitizeFileAccessLogPayload({
-          layer: "electron.main",
-          event,
-          channel: "desktop-host-ipc",
-          ...payload,
-        }),
-      )}`,
-    );
-  }
-
   ipcMain.handle("noobot:save-download", async (_event, { fileName = "download", bytes } = {}) => {
     const buffer = normalizeDownloadBytes(bytes);
     const defaultPath = joinClientPath(
@@ -123,112 +75,4 @@ export function registerFileIpcHandlers({
     );
     return { ok: true };
   });
-
-  registerHostFileIpcHandlers({ app, dialog, ipcMain, getMainWindow, logHostFileAccess });
-}
-
-function registerHostFileIpcHandlers({ app, dialog, ipcMain, getMainWindow, logHostFileAccess }) {
-  ipcMain.handle(
-    "noobot:read-host-file",
-    async (_event, { path: pathValue = "", traceId = "" } = {}) => {
-      const hostPath = text(pathValue);
-      try {
-        logHostFileAccess("host.read.request", {
-          traceId,
-          hostPath: maskHostPath(hostPath),
-          hasPath: Boolean(hostPath),
-        });
-        const { targetPath, stats } = await resolveHostFile(hostPath);
-        const buffer = await fs.promises.readFile(targetPath);
-        const isText = !buffer.includes(0);
-        const content = isText ? buffer.toString("utf8") : "";
-        logHostFileAccess("host.read.response", {
-          traceId,
-          hostPath: maskHostPath(targetPath),
-          isText,
-          size: stats.size,
-        });
-        return {
-          ok: true,
-          path: targetPath,
-          fileName: clientPathBasename(targetPath),
-          isText,
-          size: stats.size,
-          content,
-        };
-      } catch (error) {
-        logHostFileAccess("host.read.failed", {
-          traceId,
-          hostPath: maskHostPath(hostPath),
-          errorCode: error?.code || "host_read_failed",
-          error: error?.message || String(error),
-        });
-        return {
-          ok: false,
-          errorCode: error?.code || "host_read_failed",
-          error: error?.message || String(error),
-        };
-      }
-    },
-  );
-
-  ipcMain.handle(
-    "noobot:download-host-file",
-    async (_event, { path: pathValue = "", traceId = "" } = {}) => {
-      const hostPath = text(pathValue);
-      try {
-        logHostFileAccess("host.download.request", {
-          traceId,
-          hostPath: maskHostPath(hostPath),
-          hasPath: Boolean(hostPath),
-        });
-        const { targetPath, stats } = await resolveHostFile(hostPath);
-        const fileName = clientPathBasename(targetPath);
-        const defaultPath = joinClientPath(
-          app.getPath("downloads"),
-          sanitizeDownloadFileName(fileName),
-        );
-        const result = await dialog.showSaveDialog(getMainWindow() || undefined, {
-          defaultPath,
-          properties: ["createDirectory", "showOverwriteConfirmation"],
-        });
-        if (result.canceled || !result.filePath) {
-          logHostFileAccess("host.download.response", {
-            traceId,
-            hostPath: maskHostPath(targetPath),
-            canceled: true,
-            size: stats.size,
-          });
-          return { ok: false, canceled: true, fileName, size: stats.size };
-        }
-        await fs.promises.mkdir(clientPathDirname(result.filePath), { recursive: true });
-        await fs.promises.copyFile(targetPath, result.filePath);
-        logHostFileAccess("host.download.response", {
-          traceId,
-          hostPath: maskHostPath(targetPath),
-          savedPath: maskHostPath(result.filePath),
-          size: stats.size,
-        });
-        return {
-          ok: true,
-          path: targetPath,
-          savedPath: result.filePath,
-          fileName,
-          size: stats.size,
-        };
-      } catch (error) {
-        logHostFileAccess("host.download.failed", {
-          traceId,
-          hostPath: maskHostPath(hostPath),
-          errorCode: error?.code || "host_download_failed",
-          error: error?.message || String(error),
-        });
-        return {
-          ok: false,
-          errorCode: error?.code || "host_download_failed",
-          error: error?.message || String(error),
-        };
-      }
-    },
-  );
 }

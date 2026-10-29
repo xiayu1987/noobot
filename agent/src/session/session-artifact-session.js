@@ -5,7 +5,6 @@
  */
 export {
   readRecentSessionTurns,
-  readSessionMessageCount,
   readSessionTurn,
 } from "./session-artifact-session/turn-artifact-reader.js";
 export { resolveTurnArtifactPath } from "./session-artifact-session/turn-message-partition.js";
@@ -27,5 +26,4 @@ export {
   appendExecutionLogArtifact,
   readExecutionReportArtifact,
   writeExecutionReportArtifact,
-  writeTaskArtifact,
 } from "./session-artifact-session/related-artifact-writer.js";

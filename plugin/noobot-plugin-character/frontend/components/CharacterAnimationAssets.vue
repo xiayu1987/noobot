@@ -355,7 +355,7 @@ input[type="file"] {
   font-size: var(--noobot-font-size-xs);
 }
 .character-animation-assets__empty {
-  color: var(--noobot-text-muted);
+  color: var(--noobot-text-secondary);
   font-size: var(--noobot-font-size-xs);
 }
 .character-animation-assets__previews {

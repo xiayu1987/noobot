@@ -7,55 +7,61 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { createChatSession } from "./useChatSession.test-helpers.js";
-import { ROOT_PARENT_SESSION_ID } from "@noobot/agent-transport-protocol";
+import { jsonResponse } from "../../../helpers/jsonResponse.js";
+import {
+  availableDetailDocument,
+  availableSummaryEntry,
+  detailResponse,
+  sessionsSummaryResponse,
+} from "../../../helpers/sessionDetailFixture.js";
 
 const SESSION_ID = "s-wiring";
 const TURN_SCOPE_ID = "client-turn:wiring";
-
-function jsonResponse(body) {
-  return { ok: true, status: 200, json: async () => body };
-}
+const DIALOG_PROCESS_ID = "dp-wiring";
+const LIST_UPDATED_AT = "2026-07-15T10:01:00.000Z";
 
 function createAuthFetch() {
   return vi.fn(async (url) => {
     if (String(url).startsWith("/api/internal/sessions/")) {
-      return jsonResponse({
-        ok: true,
+      return sessionsSummaryResponse({
+        userId: "u-1",
+        updatedAt: LIST_UPDATED_AT,
         sessions: [
-          { sessionId: SESSION_ID, parentSessionId: ROOT_PARENT_SESSION_ID, caller: RoleEnum.USER },
+          availableSummaryEntry({
+            sessionId: SESSION_ID,
+            title: SESSION_ID,
+            aggregateVersion: 1,
+            messageCount: 1,
+            updatedAt: LIST_UPDATED_AT,
+          }),
         ],
       });
     }
     if (String(url).startsWith(`/api/internal/session/u-1/${SESSION_ID}`)) {
-      return jsonResponse({
-        ok: true,
-        exists: true,
-        sessionId: SESSION_ID,
-        sessions: [
-          {
-            sessionId: SESSION_ID,
-            parentSessionId: ROOT_PARENT_SESSION_ID,
-            caller: RoleEnum.USER,
-            messages: [
-              {
-                messageUid: "wiring-user",
-                userMessageId: "wiring-user",
-                role: RoleEnum.USER,
-                content: "q",
-                turnScopeId: TURN_SCOPE_ID,
-                dialogProcessId: "dp-wiring",
-              },
-            ],
-            turnTimings: [
-              {
-                turnScopeId: TURN_SCOPE_ID,
-                dialogProcessId: "dp-wiring",
-                thinkingFinishedAt: "2026-07-15T10:00:05.000Z",
-              },
-            ],
-          },
-        ],
-      });
+      return detailResponse(
+        availableDetailDocument({
+          sessionId: SESSION_ID,
+          title: SESSION_ID,
+          aggregateVersion: 1,
+          messages: [
+            {
+              messageUid: "wiring-user",
+              userMessageId: "wiring-user",
+              role: RoleEnum.USER,
+              content: "q",
+              turnScopeId: TURN_SCOPE_ID,
+              dialogProcessId: DIALOG_PROCESS_ID,
+            },
+          ],
+          turnTimings: [
+            {
+              turnScopeId: TURN_SCOPE_ID,
+              dialogProcessId: DIALOG_PROCESS_ID,
+              thinkingFinishedAt: "2026-07-15T10:00:05.000Z",
+            },
+          ],
+        }),
+      );
     }
     return jsonResponse({ ok: true });
   });

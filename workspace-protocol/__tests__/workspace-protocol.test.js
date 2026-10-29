@@ -190,6 +190,9 @@ test("layout upgrades run every step above the installed version and end at the 
       "session-message-error-text-v13",
       "session-turn-timing-lifecycle-start-v14",
       "session-message-entity-contract-v15",
+      "session-retired-task-fields-v16",
+      "execution-event-index-v3-v17",
+      "session-task-artifact-retired-v18",
     ],
   );
   assert.deepEqual(
@@ -207,6 +210,9 @@ test("layout upgrades run every step above the installed version and end at the 
       "session-message-error-text-v13",
       "session-turn-timing-lifecycle-start-v14",
       "session-message-entity-contract-v15",
+      "session-retired-task-fields-v16",
+      "execution-event-index-v3-v17",
+      "session-task-artifact-retired-v18",
     ],
   );
   assert.deepEqual(planWorkspaceLayoutUpgrades({ installedVersion: WORKSPACE_LAYOUT_VERSION }), []);

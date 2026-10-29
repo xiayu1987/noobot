@@ -47,6 +47,10 @@ import {
 import { runDockerCommand } from "./script-tool/docker-runner.js";
 import { buildScriptToolDescription } from "./script-tool/description.js";
 import { text, isObjectLike } from "@noobot/shared/value";
+import {
+  assertScriptOutputFilesAuthorized,
+  persistScriptOutputFiles,
+} from "./script-tool/output-files.js";
 
 export { buildExecutionWorkspaceMeta, buildScriptExecutionMeta };
 
@@ -85,6 +89,7 @@ export function createScriptTool({ agentContext }) {
         riskLevel,
         executionMode = SCRIPT_EXECUTION_MODE.FOREGROUND,
         includeLineNumbers = false,
+        outputFiles = [],
       },
       toolConfig = {},
     ) => {
@@ -116,6 +121,7 @@ export function createScriptTool({ agentContext }) {
         operation: "execute script",
         reason: "The command may make destructive or security-sensitive changes.",
       });
+      await assertScriptOutputFilesAuthorized({ agentContext, outputFiles });
 
       if (!sandboxEnabled) {
         const runResult =
@@ -126,18 +132,25 @@ export function createScriptTool({ agentContext }) {
             : await run(normalizedCommand, basePath, timeout, abortSignal, {
                 generatedDataRoot,
               });
+        const outputFileEnvelopes = await persistScriptOutputFiles({
+          agentContext,
+          runtime,
+          identity,
+          outputFiles,
+        });
         if (requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND) {
           return toolFileBackedExecResult(
             "local",
             runResult,
             buildScriptExecutionMeta({ executionPolicy }),
-            { runtime, identity },
+            { runtime, identity, outputFileEnvelopes },
           );
         }
         return toolExecResult("local", runResult, buildScriptExecutionMeta({ executionPolicy }), {
           includeLineNumbers: shouldIncludeLineNumbers,
           runtime,
           identity,
+          outputFileEnvelopes,
         });
       }
 
@@ -159,18 +172,29 @@ export function createScriptTool({ agentContext }) {
         runnerOptions: { generatedDataRoot },
         runner: requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND ? runFileBacked : run,
       });
+      const outputFileEnvelopes = await persistScriptOutputFiles({
+        agentContext,
+        runtime,
+        identity,
+        outputFiles,
+      });
       if (requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND) {
-        return toolFileBackedExecResult(mode, runResult, extra, { runtime, identity });
+        return toolFileBackedExecResult(mode, runResult, extra, {
+          runtime,
+          identity,
+          outputFileEnvelopes,
+        });
       }
       return toolExecResult(mode, runResult, extra, {
         includeLineNumbers: shouldIncludeLineNumbers,
         runtime,
         identity,
+        outputFileEnvelopes,
       });
     },
     {
       name: EXECUTE_SCRIPT_TOOL_NAME,
-      metadata: { pathContract: TOOL_PATH_CONTRACTS.scriptInput },
+      metadata: { pathContract: TOOL_PATH_CONTRACTS.scriptOutput },
       description,
       schema: z.object({
         command: z.string().describe(tTool(runtime, "tools.script.fieldCommand")),
@@ -185,6 +209,11 @@ export function createScriptTool({ agentContext }) {
           .optional()
           .default(false)
           .describe(tTool(runtime, "tools.script.fieldIncludeLineNumbers")),
+        outputFiles: z
+          .array(z.string())
+          .optional()
+          .default([])
+          .describe(tTool(runtime, "tools.script.fieldOutputFiles")),
       }),
     },
   );

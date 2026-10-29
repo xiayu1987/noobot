@@ -33,14 +33,16 @@ import {
   TRANSIENT_MESSAGE_EVENT_SEQUENCE,
 } from "@noobot/event-protocol/message-event";
 import { workflowSequenceDomainForEvent } from "@noobot/event-protocol/workflow-runtime-event";
+import { selectMainSessionDetailEntry } from "@noobot/session-protocol/session-detail";
+import { availableDetailDocument } from "../../../helpers/sessionDetailFixture.js";
 import { createSessionMessageView } from "../../../../../src/modules/chat/runtime/session/messageView.js";
 import { buildViewMessage } from "../../../../../src/modules/chat/model/messageModel.js";
 
 function createSession(id) {
   return {
-    id,
     sessionId: id,
     title: `session-${id}`,
+    aggregateVersion: 0,
     loaded: true,
     messages: [],
     rawMessages: [],
@@ -214,15 +216,29 @@ export function createFixture({ activeId = "s-1", currentRun = null } = {}) {
   const reduceSubSessionMessageEvent = vi.fn(() => ({ applied: true }));
   const chatList = {
     fetchSessions: vi.fn(async () => {}),
-    fetchSessionDetail: vi.fn(async (sessionId) => ({
-      sessionId,
-      sessions: sessions.value.filter((sessionItem) => sessionItem.sessionId === sessionId),
-    })),
+    fetchSessionDetail: vi.fn(async (sessionId) => {
+      const sessionItem = sessions.value.find((item) => item.sessionId === sessionId);
+      return availableDetailDocument({
+        sessionId,
+        title: sessionItem.title,
+        aggregateVersion: sessionItem.aggregateVersion,
+        messages: sessionItem.messages.map((message) => ({ ...message })),
+        turnTimings: [],
+      });
+    }),
     applySessionDetail: vi.fn((detail) => {
+      const entry = selectMainSessionDetailEntry(detail);
       const index = sessions.value.findIndex(
         (sessionItem) => sessionItem.sessionId === detail.sessionId,
       );
-      sessions.value[index] = { ...sessions.value[index], ...detail.sessions[0] };
+      const messages = entry.messages.map((message) => ({ ...message }));
+      sessions.value[index] = {
+        ...sessions.value[index],
+        title: entry.title,
+        aggregateVersion: entry.aggregateVersion,
+        messages,
+        rawMessages: [...messages],
+      };
     }),
     selectSession: vi.fn(async (sessionId) => {
       activeSessionId.value = sessionId;

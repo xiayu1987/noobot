@@ -38,7 +38,6 @@ export function createDeps(overrides = {}) {
         return {
           answer: "agent answer",
           traces: [{ type: "trace" }],
-          turnTasks: [{ taskId: "t1" }],
           messages: [{ role: "assistant", content: "agent answer" }],
           dialogProcessId: payload.dialogProcessId || "sub-dialog",
         };

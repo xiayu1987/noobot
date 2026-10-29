@@ -24,8 +24,9 @@ import {
 } from "../session/session-artifact-files.js";
 import {
   EXECUTION_EVENT_INDEX_FILE,
-  EXECUTION_EVENT_INDEX_SCHEMA_VERSION,
-} from "../session/session-artifact-execution-logs.js";
+  LEGACY_V2_EXECUTION_EVENT_INDEX_SCHEMA_VERSION,
+} from "@noobot/session-protocol/execution-event-index";
+import { isPlainObject } from "@noobot/shared/value";
 
 const SKIPPED_RUNTIME_DIRECTORIES = new Set([
   WORKSPACE_LAYOUT.WORKSPACE_BACKUPS_DIR,
@@ -39,19 +40,30 @@ const SKIPPED_RUNTIME_DIRECTORIES = new Set([
 const SESSION_ARTIFACT_DIRECTORIES = new Set(Object.values(SESSION_ARTIFACT_FILE_NAMES));
 const MUTATION_LOCK_SUFFIX = ".mutation-lock";
 
+const JSON_DOCUMENT_STATE = Object.freeze({
+  MISSING: "missing",
+  UNPARSABLE: "unparsable",
+  PARSED: "parsed",
+});
+
 async function readJsonDocument(filePath) {
   let raw;
   try {
     raw = await readFile(filePath, "utf8");
   } catch (error) {
-    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return { exists: false };
+    if (error.code === "ENOENT" || error.code === "ENOTDIR") {
+      return { state: JSON_DOCUMENT_STATE.MISSING, document: null };
+    }
     throw error;
   }
+  let document;
   try {
-    return { exists: true, document: JSON.parse(raw) };
-  } catch {
-    return { exists: true, document: null };
+    document = JSON.parse(raw);
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
+    return { state: JSON_DOCUMENT_STATE.UNPARSABLE, document: null };
   }
+  return { state: JSON_DOCUMENT_STATE.PARSED, document };
 }
 
 async function listDirectories(directory) {
@@ -60,7 +72,7 @@ async function listDirectories(directory) {
       entry.isDirectory(),
     );
   } catch (error) {
-    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return [];
+    if (error.code === "ENOENT" || error.code === "ENOTDIR") return [];
     throw error;
   }
 }
@@ -80,7 +92,9 @@ async function readSessionDocuments(sessionRoot, segments = []) {
     const session = await readJsonDocument(
       path.join(sessionRoot, ...segments, SESSION_ARTIFACT_FILE_NAMES.session),
     );
-    if (session.exists) documents.push({ segments, document: session.document });
+    if (session.state !== JSON_DOCUMENT_STATE.MISSING) {
+      documents.push({ segments, document: session.document });
+    }
   }
   for (const entry of await listDirectories(path.join(sessionRoot, ...segments))) {
     if (SESSION_ARTIFACT_DIRECTORIES.has(entry.name)) continue;
@@ -99,7 +113,7 @@ async function readPlacedSessionDocuments(base, placements) {
     entries.push({
       sessionId,
       parentSessionId,
-      document: session.exists ? session.document : null,
+      document: session.document,
     });
   }
   return entries;
@@ -149,7 +163,7 @@ async function retireUnplacedSessions({ sessionRoot, tree, retire }) {
 async function upgradeSessionTree({ base, retire }) {
   const treeFile = path.join(base, WORKSPACE_LAYOUT.SESSION_TREE_FILE);
   const current = await readJsonDocument(treeFile);
-  if (!current.exists) return null;
+  if (current.state === JSON_DOCUMENT_STATE.MISSING) return null;
   const sessionRoot = path.join(base, WORKSPACE_LAYOUT.SESSION_DIR);
   const upgrade = await resolveSessionTreeUpgrade({
     sessionRoot,
@@ -176,6 +190,11 @@ async function upgradeSessionTree({ base, retire }) {
   };
 }
 
+function isRetiredJsonDocument({ state, document }, isCurrent) {
+  if (state === JSON_DOCUMENT_STATE.UNPARSABLE) return true;
+  return !isPlainObject(document) || !isCurrent(document);
+}
+
 async function isRetiredExecutionEvents(sessionDir) {
   const index = await readJsonDocument(
     path.join(
@@ -184,7 +203,11 @@ async function isRetiredExecutionEvents(sessionDir) {
       EXECUTION_EVENT_INDEX_FILE,
     ),
   );
-  return index.exists && index.document?.schemaVersion !== EXECUTION_EVENT_INDEX_SCHEMA_VERSION;
+  if (index.state === JSON_DOCUMENT_STATE.MISSING) return false;
+  return isRetiredJsonDocument(
+    index,
+    (document) => document.schemaVersion === LEGACY_V2_EXECUTION_EVENT_INDEX_SCHEMA_VERSION,
+  );
 }
 
 async function listRetiredReports(sessionDir) {
@@ -193,13 +216,16 @@ async function listRetiredReports(sessionDir) {
   try {
     names = await readdir(reportsDir);
   } catch (error) {
-    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return [];
+    if (error.code === "ENOENT" || error.code === "ENOTDIR") return [];
     throw error;
   }
   const retired = [];
   for (const name of names.filter((item) => item.endsWith(".json"))) {
     const report = await readJsonDocument(path.join(reportsDir, name));
-    if (report.document?.version !== EXECUTION_REPORT_VERSION) {
+    if (report.state === JSON_DOCUMENT_STATE.MISSING) continue;
+    if (
+      isRetiredJsonDocument(report, (document) => document.version === EXECUTION_REPORT_VERSION)
+    ) {
       retired.push(path.join(SESSION_ARTIFACT_FILE_NAMES.executionReportsDir, name));
     }
   }

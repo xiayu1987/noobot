@@ -82,7 +82,6 @@ function createNormalizedSessionEntity(session, context, messages) {
     aggregateVersion: requireSessionAggregateVersion(session?.aggregateVersion),
     caller: session.caller,
     modelAlias: String(session?.modelAlias || ""),
-    currentTaskId: text(session?.currentTaskId),
     shortMemoryCheckpoint: context.shortMemoryCheckpoint,
     messages,
     dialogOrder: normalizeDialogOrderEntity(session.dialogOrder),

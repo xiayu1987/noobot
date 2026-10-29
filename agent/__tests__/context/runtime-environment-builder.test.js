@@ -47,7 +47,7 @@ test("createRuntimeContext passes inputs through and creates turn stores", () =>
   assert.equal(runtime.hooks, undefined);
   assert.equal(runtime.runConfig.streaming, false);
   assert.equal(typeof runtime.currentTurnMessages.push, "function");
-  assert.equal(typeof runtime.currentTurnTasks.push, "function");
+  assert.equal(Object.hasOwn(runtime, "currentTurnTasks"), false);
   assert.deepEqual(runtime.userMessageAttachments, [{ attachmentId: "att_1" }]);
   assert.deepEqual(runtime.attachments, []);
 });

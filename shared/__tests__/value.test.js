@@ -11,8 +11,20 @@ import {
   isObjectLike,
   isPlainObject,
   requireFunctionDependencies,
+  stableValue,
   text,
 } from "../value.js";
+
+test("stableValue sorts object keys recursively and keeps array order", () => {
+  const value = { b: [{ y: 1, x: 2 }, 3], a: null, c: { e: "e", d: undefined } };
+  assert.equal(
+    JSON.stringify(stableValue(value)),
+    JSON.stringify({ a: null, b: [{ x: 2, y: 1 }, 3], c: { d: undefined, e: "e" } }),
+  );
+  assert.deepEqual(Object.keys(stableValue(value)), ["a", "b", "c"]);
+  assert.equal(stableValue(null), null);
+  assert.equal(stableValue("s"), "s");
+});
 
 test("requireFunctionDependencies names every missing function dependency", () => {
   assert.doesNotThrow(() =>

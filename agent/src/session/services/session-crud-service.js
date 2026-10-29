@@ -4,22 +4,22 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
-import {
-  buildSessionDisplaySummary,
-  SESSION_DETAIL_MESSAGE_PROJECTION,
-} from "../session-summary-builders.js";
 import { resolveAuthoritativeTurnTerminal } from "@noobot/authoritative-state/application";
 import {
   SESSION_NOT_FOUND_REASON,
+  createSessionArtifactNotFoundError,
   createSessionNotFoundError,
+  createSessionUnavailableReason,
   createTurnTerminalResolution,
 } from "@noobot/session-protocol";
-import { buildThinkingDetailPayload } from "../session-thinking-detail.js";
-import { reconcileSessionSummaryIndex } from "@noobot/session-repair";
+import { requireTurnLookupKey } from "@noobot/session-protocol/turn-lookup-key";
 import {
-  requireSessionTreeNode,
-  resolveSessionTreeDepth,
-} from "@noobot/workspace-protocol/session-tree";
+  createAvailableSessionDetailEntry,
+  createMissingSessionDetailDocument,
+  createSessionDetailDocument,
+} from "@noobot/session-protocol/session-detail";
+import { buildThinkingDetailPayload } from "../session-thinking-detail.js";
+import { requireSessionTreeNode } from "@noobot/workspace-protocol/session-tree";
 import { projectSessionAttachmentState } from "./session-attachment-projection.js";
 import { text } from "@noobot/shared/value";
 
@@ -28,13 +28,11 @@ function ignoreSummaryProgress() {}
 export class SessionCrudService {
   constructor({
     sessionRepo,
-    taskRepo,
     sessionTreeService,
     attachmentService,
     now = () => new Date().toISOString(),
   } = {}) {
     this.sessionRepo = sessionRepo;
-    this.taskRepo = taskRepo;
     this.sessionTreeService = sessionTreeService;
     this.attachmentService = attachmentService;
     this.now = now;
@@ -57,129 +55,22 @@ export class SessionCrudService {
 
   async getSessionBundle({ userId, sessionId, persistenceContext }) {
     const session = await this.sessionRepo.findById(userId, sessionId, { persistenceContext });
-    if (!session) return { exists: false, session: null, task: null };
-    const task = await this.taskRepo.getBundle(userId, sessionId, { persistenceContext });
-    return { exists: true, session, task };
+    if (!session) return { exists: false, session: null };
+    return { exists: true, session };
   }
 
   async locateSessionScope({ userId, sessionId, persistenceContext }) {
     return this.sessionRepo.locateSessionScope(userId, sessionId, persistenceContext);
   }
 
-  async getSessionData({ userId, sessionId }) {
-    const normalizedSessionId = text(sessionId);
-    let sessionBundle;
-    try {
-      sessionBundle = await this.getSessionBundle({
-        userId,
-        sessionId: normalizedSessionId,
-        persistenceContext: this.sessionRepo.treePersistenceContext(userId, normalizedSessionId),
-      });
-    } catch (error) {
-      if (error?.code !== "SESSION_PROTOCOL_INVALID") throw error;
-      const sessionTree = await this.sessionTreeService.getSessionTree({ userId });
-      return {
-        exists: true,
-        sessionId: normalizedSessionId,
-        sessions: [
-          await this.sessionRepo.buildUnavailableSessionSummary(
-            userId,
-            requireSessionTreeNode(sessionTree, normalizedSessionId),
-            error,
-          ),
-        ],
-        availability: "unavailable",
-        unavailableReason: { code: error.code, message: error.message },
-      };
-    }
-    if (!sessionBundle.exists) {
-      return { exists: false, sessionId: normalizedSessionId, sessions: [] };
-    }
-
-    const sessionTree = await this.sessionTreeService.getSessionTree({ userId });
-    const allSessionIds = this.sessionTreeService.collectBranchSessionIds(
-      normalizedSessionId,
-      sessionTree,
-    );
-
-    const sessions = [];
-    for (const currentSessionId of allSessionIds) {
-      const currentNode = requireSessionTreeNode(sessionTree, currentSessionId);
-      const currentParentSessionId = currentNode.parentSessionId;
-      const depth = resolveSessionTreeDepth(sessionTree, currentSessionId);
-      const currentBundle = await this.getSessionBundle({
-        userId,
-        sessionId: currentSessionId,
-        persistenceContext: this.sessionRepo.treePersistenceContext(userId, currentSessionId),
-      });
-      if (!currentBundle.exists) {
-        if (await this.sessionRepo.isSessionDeleted(userId, currentSessionId)) continue;
-        const missing = new Error("Canonical session artifact is missing");
-        missing.code = "SESSION_ARTIFACT_MISSING";
-        const unavailable = await this.sessionRepo.buildUnavailableSessionSummary(
-          userId,
-          currentNode,
-          missing,
-        );
-        sessions.push({ ...unavailable, depth });
-        continue;
-      }
-      const rawMessages = currentBundle.session.messages;
-      sessions.push(
-        await projectSessionAttachmentState({
-          attachmentService: this.attachmentService,
-          userId,
-          session: {
-            ...currentBundle.session,
-            ...buildSessionDisplaySummary(currentBundle.session),
-            depth,
-            sessionId: currentSessionId,
-            parentSessionId: currentParentSessionId,
-            rawMessages,
-          },
-        }),
-      );
-    }
-
-    return {
-      exists: true,
-      sessionId: normalizedSessionId,
-      detailMode: "full",
-      messageProjection: SESSION_DETAIL_MESSAGE_PROJECTION,
-      sessions,
-    };
-  }
-
-  async getSessionThinkingDetail({ userId, sessionId, turnScopeId = "", dialogProcessId = "" }) {
-    const normalizedSessionId = text(sessionId);
-    const persistenceContext = this.sessionRepo.treePersistenceContext(userId, normalizedSessionId);
-    const [turn, displaySummary] = await Promise.all([
-      this.sessionRepo.readSessionTurn(userId, normalizedSessionId, {
-        turnScopeId,
-        dialogProcessId,
-        persistenceContext,
-      }),
-      this.sessionRepo.readSessionDisplaySummary(userId, normalizedSessionId, {
-        persistenceContext,
-      }),
-    ]);
-    const summaryMessage = (
-      Array.isArray(displaySummary?.messages) ? displaySummary.messages : []
-    ).find(
-      (message = {}) =>
-        text(message?.turnScopeId) === text(turnScopeId) &&
-        (!dialogProcessId || text(message?.dialogProcessId) === String(dialogProcessId).trim()),
-    );
-    const detailContentHash = text(summaryMessage?.thinkingDetailRef?.contentHash);
-    return buildThinkingDetailPayload(
-      {
-        sessionId: normalizedSessionId,
-        revision:
-          detailContentHash || (turn ? `turn-journal:${turn.turnId}:${turn.committedBytes}` : ""),
-        sessions: turn ? [{ sessionId: normalizedSessionId, rawMessages: turn.messages }] : [],
-      },
-      { turnScopeId, dialogProcessId },
-    );
+  async getSessionThinkingDetail({ userId, sessionId, turnScopeId, dialogProcessId }) {
+    const lookupKey = requireTurnLookupKey({ turnScopeId, dialogProcessId });
+    const persistenceContext = this.sessionRepo.treePersistenceContext(userId, sessionId);
+    const turn = await this.sessionRepo.readSessionTurn(userId, sessionId, {
+      lookupKey,
+      persistenceContext,
+    });
+    return buildThinkingDetailPayload(turn);
   }
 
   async resolveTurnTerminalState({
@@ -219,70 +110,45 @@ export class SessionCrudService {
   }
 
   async getSessionDisplayData({ userId, sessionId }) {
-    const normalizedSessionId = text(sessionId);
     const sessionTree = await this.sessionTreeService.getSessionTree({ userId });
-    if (!Object.hasOwn(sessionTree.nodes, normalizedSessionId)) {
-      return {
-        exists: false,
-        sessionId: normalizedSessionId,
-        detailMode: "summary",
-        messageProjection: SESSION_DETAIL_MESSAGE_PROJECTION,
-        sessions: [],
-        summary: true,
-      };
+    if (!Object.hasOwn(sessionTree.nodes, sessionId)) {
+      return createMissingSessionDetailDocument({ sessionId });
     }
-
-    const allSessionIds = this.sessionTreeService.collectBranchSessionIds(
-      normalizedSessionId,
+    const branchSessionIds = this.sessionTreeService.collectBranchSessionIds(
+      sessionId,
       sessionTree,
     );
-
     const sessions = [];
-    for (const currentSessionId of allSessionIds) {
-      const currentNode = requireSessionTreeNode(sessionTree, currentSessionId);
-      const currentParentSessionId = currentNode.parentSessionId;
-      const depth = resolveSessionTreeDepth(sessionTree, currentSessionId);
-      let summary = null;
-      try {
-        summary = await this.sessionRepo.readSessionDisplaySummary(userId, currentSessionId, {
-          persistenceContext: this.sessionRepo.treePersistenceContext(userId, currentSessionId),
-        });
-      } catch (error) {
-        const unavailable = await this.sessionRepo.buildUnavailableSessionSummary(
-          userId,
-          currentNode,
-          error,
-        );
-        sessions.push({ ...unavailable, depth });
-        continue;
-      }
-      if (!summary) continue;
+    for (const branchSessionId of branchSessionIds) {
       sessions.push(
-        await projectSessionAttachmentState({
-          attachmentService: this.attachmentService,
+        await this._readSessionDetailEntry(
           userId,
-          session: {
-            ...summary,
-            sessionId: currentSessionId,
-            parentSessionId: currentParentSessionId,
-            depth,
-          },
-        }),
+          requireSessionTreeNode(sessionTree, branchSessionId),
+        ),
       );
     }
+    return createSessionDetailDocument({ sessionId, sessions });
+  }
 
-    return {
-      exists: true,
-      sessionId: normalizedSessionId,
-      detailMode: "summary",
-      messageProjection: SESSION_DETAIL_MESSAGE_PROJECTION,
-      summary: true,
-      sessions,
-    };
+  async _readSessionDetailEntry(userId, node) {
+    let summary;
+    try {
+      summary = await this.sessionRepo.readSessionDisplaySummary(userId, node.sessionId, {
+        persistenceContext: this.sessionRepo.treePersistenceContext(userId, node.sessionId),
+      });
+    } catch (error) {
+      return this.sessionRepo.buildUnavailableSessionSummary(node, error);
+    }
+    return createAvailableSessionDetailEntry(
+      await projectSessionAttachmentState({
+        attachmentService: this.attachmentService,
+        userId,
+        session: summary,
+      }),
+    );
   }
 
   async maintainSessionDisplaySummaries({ userId, onProgress = ignoreSummaryProgress }) {
-    await this.sessionRepo.ensureSessionsSummarySchema(userId);
     const sessionIds = await this.listSessionIds({ userId });
     const rebuiltSessionIds = [];
     const failures = [];
@@ -294,52 +160,36 @@ export class SessionCrudService {
         });
         if (result.rebuilt) rebuiltSessionIds.push(sessionId);
       } catch (error) {
-        failures.push({
-          sessionId,
-          code: String(error?.code || ""),
-          message: String(error?.message || error || ""),
-        });
+        failures.push({ sessionId, ...createSessionUnavailableReason(error) });
       }
     }
     return { userId, rebuiltSessionIds, failures };
   }
 
-  async getAllSessionsData({ userId, failures = null }) {
+  async getAllSessionsData({ userId, failures }) {
     const sessionTree = await this.sessionTreeService.getSessionTree({ userId });
     const sessionIds = await this.listSessionIds({ userId });
-
-    const sessionList = (
-      await Promise.all(
-        sessionIds.map(async (sessionId) => {
-          const { parentSessionId } = requireSessionTreeNode(sessionTree, sessionId);
-          let sessionBundle;
-          try {
-            sessionBundle = await this.getSessionBundle({
-              userId,
-              sessionId,
-              persistenceContext: this.sessionRepo.treePersistenceContext(userId, sessionId),
-            });
-          } catch (error) {
-            if (Array.isArray(failures)) {
-              failures.push({
-                sessionId,
-                code: String(error?.code || ""),
-                message: String(error?.message || error || ""),
-              });
-            }
-            return null;
-          }
-          if (!sessionBundle?.exists || !sessionBundle?.session) return null;
-          return {
-            ...sessionBundle.session,
+    const reads = await Promise.all(
+      sessionIds.map(async (sessionId) => {
+        requireSessionTreeNode(sessionTree, sessionId);
+        try {
+          const bundle = await this.getSessionBundle({
+            userId,
             sessionId,
-            parentSessionId,
-            depth: resolveSessionTreeDepth(sessionTree, sessionId),
-          };
-        }),
-      )
-    ).filter(Boolean);
-
+            persistenceContext: this.sessionRepo.treePersistenceContext(userId, sessionId),
+          });
+          if (!bundle.exists) throw createSessionArtifactNotFoundError("session manifest");
+          return { session: bundle.session };
+        } catch (error) {
+          return { failure: { sessionId, ...createSessionUnavailableReason(error) } };
+        }
+      }),
+    );
+    const sessionList = [];
+    for (const read of reads) {
+      if (read.failure) failures.push(read.failure);
+      else sessionList.push(read.session);
+    }
     sessionList.sort((leftSession, rightSession) =>
       rightSession.updatedAt.localeCompare(leftSession.updatedAt),
     );
@@ -347,37 +197,7 @@ export class SessionCrudService {
   }
 
   async getAllSessionSummaries({ userId }) {
-    const sessionTree = await this.sessionTreeService.getSessionTree({ userId });
-    await this.sessionRepo.ensureSessionsSummarySchema(userId);
-    const sessionIds = await this.listSessionIds({ userId });
-    for (const sessionId of sessionIds) {
-      const persistenceContext = this.sessionRepo.treePersistenceContext(userId, sessionId);
-      try {
-        await this.sessionRepo.ensureSessionDisplaySummary(userId, sessionId, {
-          persistenceContext,
-        });
-      } catch (error) {
-        const scope = await this.sessionRepo.requireSessionScope(
-          userId,
-          sessionId,
-          persistenceContext,
-        );
-        await this.sessionRepo.markSessionSummaryUnavailable(userId, sessionId, { error, scope });
-      }
-    }
-    let payload = await this.sessionRepo.readSessionsSummary(userId);
-    if (reconcileSessionSummaryIndex({ sessions: payload.sessions, sessionIds }).changed) {
-      payload = await this.sessionRepo.rebuildSessionsSummary(userId);
-    }
-
-    return payload.sessions
-      .map((summary) => ({
-        ...summary,
-        depth: resolveSessionTreeDepth(sessionTree, summary.sessionId),
-      }))
-      .sort((leftSession, rightSession) =>
-        rightSession.updatedAt.localeCompare(leftSession.updatedAt),
-      );
+    return this.sessionRepo.readSessionsSummary(userId);
   }
 
   async setSessionModelAlias({ userId, sessionId, modelAlias, persistenceContext }) {

@@ -100,7 +100,6 @@ export function createRunner({
               content: "ok",
             },
           ],
-          turnTasks: [],
           modelMessages: [],
           modelLoopRound: 0,
         });

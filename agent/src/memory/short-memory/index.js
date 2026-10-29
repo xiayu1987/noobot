@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { resolveSessionMessageRecordDialogProcessId } from "@noobot/session-protocol";
+import { isPlainObject } from "@noobot/shared/value";
 import {
   excludeShortMemoryItemsBySessionIds,
   sortShortMemoryItems,
@@ -16,8 +17,16 @@ export class ShortMemoryManager {
   }
 
   async readItems(basePath) {
-    const short = await this.storage.readJson(this.storage.shortPath(basePath), { items: [] });
-    return sortShortMemoryItems(short?.items);
+    const filePath = this.storage.shortPath(basePath);
+    const short = await this.storage.readOptionalJson(filePath);
+
+    if (short === null) return [];
+    if (!isPlainObject(short) || !Array.isArray(short.items)) {
+      const error = new Error(`short memory document is invalid: ${filePath}`);
+      error.code = "SHORT_MEMORY_DOCUMENT_INVALID";
+      throw error;
+    }
+    return sortShortMemoryItems(short.items);
   }
 
   async writeItems(basePath, items = []) {

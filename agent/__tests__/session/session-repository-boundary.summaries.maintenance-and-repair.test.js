@@ -11,7 +11,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 
 import { createTestSessionServices, provisionTestSession } from "../helpers/session-services.js";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
-import { SESSIONS_SUMMARY_SCHEMA_VERSION } from "../../src/session/session-summary-builders.js";
+import { SESSIONS_SUMMARY_SCHEMA_VERSION } from "@noobot/session-protocol/sessions-summary";
 import {
   SESSION_ARTIFACT_LEGACY_TURN_COMMIT_SCHEMA_VERSION,
   SESSION_ERROR_CODE,
@@ -63,7 +63,6 @@ test("session summaries should be maintained and rebuilt for list API", async ()
       "B",
       "list_b",
     );
-    sessionB.currentTaskId = "task-b";
     sessionB.aggregateVersion = 4;
     await runtime.repositories.sessionRepository.save(userId, applySessionMessageFacts(sessionB), {
       persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
@@ -83,11 +82,11 @@ test("session summaries should be maintained and rebuilt for list API", async ()
     assert.equal(writtenB.lastMessage.role, "assistant");
     assert.equal("attachmentMetas" in writtenB.lastMessage, false);
 
-    const list = await runtime.sessionCrudService.getAllSessionSummaries({ userId });
+    const { sessions: list } = await runtime.sessionCrudService.getAllSessionSummaries({ userId });
     const listedB = list.find((item) => item.sessionId === "B");
     assert.equal(list.length, 2);
     assert.equal(listedB.aggregateVersion, 4);
-    assert.equal(listedB.depth, 2);
+    assert.equal("depth" in listedB, false);
     assert.equal("messages" in listedB, false);
 
     summary = JSON.parse(
@@ -100,7 +99,7 @@ test("session summaries should be maintained and rebuilt for list API", async ()
   });
 });
 
-test("list index under another schema is rejected on read and rebuilt by listing reconciliation", async () => {
+test("list index under another schema is rebuilt from the Session source on read", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     await initializeUserWorkspace(workspaceRoot, userId);
@@ -118,11 +117,14 @@ test("list index under another schema is rejected on read and rebuilt by listing
       JSON.stringify({ schemaVersion: SESSIONS_SUMMARY_SCHEMA_VERSION - 1, sessions: [] }),
     );
 
-    await assert.rejects(repository.readSessionsSummary(userId), {
-      code: "SESSIONS_SUMMARY_SCHEMA_UNSUPPORTED",
-    });
+    const read = await repository.readSessionsSummary(userId);
+    assert.equal(read.schemaVersion, SESSIONS_SUMMARY_SCHEMA_VERSION);
+    assert.deepEqual(
+      read.sessions.map((item) => item.sessionId),
+      ["A"],
+    );
 
-    const list = await runtime.sessionCrudService.getAllSessionSummaries({ userId });
+    const { sessions: list } = await runtime.sessionCrudService.getAllSessionSummaries({ userId });
     assert.deepEqual(
       list.map((item) => item.sessionId),
       ["A"],
@@ -177,11 +179,13 @@ test("session list projects session-tree nodes without Session artifacts as unav
       caller: SESSION_CALLER.BOT,
     });
 
-    const summaries = await runtime.sessionCrudService.getAllSessionSummaries({ userId });
+    const { sessions: summaries } = await runtime.sessionCrudService.getAllSessionSummaries({
+      userId,
+    });
     assert.deepEqual(summaries.map((item) => item.sessionId).sort(), ["materialized", "orphan"]);
     const orphan = summaries.find((item) => item.sessionId === "orphan");
     assert.equal(orphan.availability, "unavailable");
-    assert.equal(orphan.unavailableReason.code, "SESSION_ARTIFACT_MISSING");
+    assert.equal(orphan.unavailableReason.code, "SESSION_ARTIFACT_NOT_FOUND");
     assert.equal(orphan.caller, SESSION_CALLER.BOT);
   });
 });
@@ -203,14 +207,17 @@ test("session detail projects a tree child without artifact as unavailable", asy
       caller: SESSION_CALLER.BOT,
     });
 
-    const detail = await runtime.sessionCrudService.getSessionData({ userId, sessionId: "root" });
+    const detail = await runtime.sessionCrudService.getSessionDisplayData({
+      userId,
+      sessionId: "root",
+    });
     assert.deepEqual(
       detail.sessions.map((item) => item.sessionId),
       ["root", "child"],
     );
     const child = detail.sessions.find((item) => item.sessionId === "child");
     assert.equal(child.availability, "unavailable");
-    assert.equal(child.unavailableReason.code, "SESSION_ARTIFACT_MISSING");
+    assert.equal(child.unavailableReason.code, "SESSION_ARTIFACT_NOT_FOUND");
     assert.equal(child.parentSessionId, "root");
     assert.equal(child.caller, SESSION_CALLER.BOT);
   });
@@ -275,7 +282,7 @@ test("session discovery traverses only canonical Session directories", async () 
   });
 });
 
-test("session summary rebuild isolates an unreadable session as an unavailable projection", async () => {
+test("session summary rebuild isolates an unreadable session as an unavailable projection from the tree node", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u-unavailable";
     await initializeUserWorkspace(workspaceRoot, userId);
@@ -293,19 +300,22 @@ test("session summary rebuild isolates an unreadable session as an unavailable p
       userId,
       sessionId: "legacy",
       parentSessionId: "",
-      caller: SESSION_CALLER.USER,
+      caller: SESSION_CALLER.BOT,
     });
 
     const repository = runtime.repositories.sessionRepository;
-    const findById = repository.findById.bind(repository);
-    repository.findById = async (...args) => {
-      if (args[1] === "legacy") {
-        const error = new Error("invalid_transfer_envelope:forbidden_path_field");
-        error.code = "INVALID_TRANSFER_ENVELOPE";
-        throw error;
-      }
-      return findById(...args);
-    };
+    const legacyDir = path.join(workspaceRoot, userId, "runtime", "session", "legacy");
+    await writeFile(path.join(legacyDir, "session.json"), "{invalid-json", "utf8");
+    let readError = null;
+    await assert.rejects(
+      repository.findById(userId, "legacy", {
+        persistenceContext: repository.treePersistenceContext(userId, "legacy"),
+      }),
+      (error) => {
+        readError = error;
+        return true;
+      },
+    );
 
     const payload = await repository.rebuildSessionsSummary(userId);
     const available = payload.sessions.find((item) => item.sessionId === "available");
@@ -313,13 +323,16 @@ test("session summary rebuild isolates an unreadable session as an unavailable p
     assert.equal(available.availability, "available");
     assert.equal(unavailable.availability, "unavailable");
     assert.equal("messages" in unavailable, false);
-    assert.equal(unavailable.messageCount, 0);
-    assert.equal(unavailable.lastMessage, null);
-    assert.equal(unavailable.unavailableReason.code, "INVALID_TRANSFER_ENVELOPE");
-    assert.equal(
-      unavailable.unavailableReason.message,
-      "invalid_transfer_envelope:forbidden_path_field",
-    );
+    assert.equal("messageCount" in unavailable, false);
+    assert.equal("lastMessage" in unavailable, false);
+    assert.deepEqual(unavailable.unavailableReason, {
+      code: readError.code,
+      message: readError.message,
+    });
+    assert.equal(unavailable.caller, SESSION_CALLER.BOT);
+    assert.equal(unavailable.parentSessionId, "");
+    assert.equal(Object.hasOwn(unavailable, "createdAt"), false);
+    assert.equal(Object.hasOwn(unavailable, "updatedAt"), false);
 
     const persisted = await repository.readSessionsSummary(userId);
     assert.equal(
@@ -358,31 +371,6 @@ test("unreadable Session is rejected with its read error and projected unavailab
     const summary = await repository.readSessionsSummary(userId);
     const projected = summary.sessions.find((item) => item.sessionId === sessionId);
     assert.equal(projected.availability, "unavailable");
-  });
-});
-
-test("unavailable summary takes caller from the session tree when the manifest is corrupt", async () => {
-  await withTempWorkspace(async (workspaceRoot) => {
-    const userId = "u-corrupt-manifest-caller";
-    const sessionId = "corrupt";
-    await initializeUserWorkspace(workspaceRoot, userId);
-    const runtime = createTestSessionServices({ workspaceRoot });
-    await provisionTestSession(runtime, {
-      userId,
-      sessionId,
-      parentSessionId: "",
-      caller: SESSION_CALLER.BOT,
-    });
-    const sessionDir = path.join(workspaceRoot, userId, "runtime", "session", sessionId);
-    await writeFile(path.join(sessionDir, "session.json"), "{invalid-json", "utf8");
-
-    const payload = await runtime.repositories.sessionRepository.rebuildSessionsSummary(userId);
-    const unavailable = payload.sessions.find((item) => item.sessionId === sessionId);
-    assert.equal(unavailable.availability, "unavailable");
-    assert.equal(unavailable.caller, SESSION_CALLER.BOT);
-    assert.equal(unavailable.parentSessionId, "");
-    assert.equal(unavailable.createdAt, "");
-    assert.equal(unavailable.updatedAt, "");
   });
 });
 
@@ -484,13 +472,13 @@ test("deleting one session does not invalidate another session display summary",
     const persistedSummary = JSON.parse(await readFile(keptSummaryFile, "utf8"));
     assert.equal("depth" in persistedSummary, false);
 
-    await runtime.sessionTreeService.deleteSessionBranch({ userId, sessionId: "deleted" });
+    await runtime.sessionTreeService.deleteSessionBranch({ userId, sessionIds: ["deleted"] });
     const display = await runtime.sessionCrudService.getSessionDisplayData({
       userId,
       sessionId: "kept",
     });
     assert.equal(display.exists, true);
-    assert.equal(display.sessions[0].depth, 1);
+    assert.equal(display.sessions[0].availability, "available");
     assert.equal(display.sessions[0].messages[0].content, "keep me");
   });
 });
@@ -522,7 +510,7 @@ test("summary session detail projects an unreadable tree child as unavailable wi
     const child = detail.sessions.find((item) => item.sessionId === "child");
     assert.equal(child.availability, "unavailable");
     assert.equal("messages" in child, false);
-    assert.equal(child.depth, 2);
+    assert.equal("depth" in child, false);
     assert.equal(typeof child.unavailableReason.code, "string");
   });
 });

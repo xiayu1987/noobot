@@ -6,10 +6,9 @@
 import { PathResolver } from "./path-resolver.js";
 import { SessionPathResolver } from "./session-path-resolver.js";
 import { StorageService } from "./storage-service.js";
-import { normalizeTaskEntity } from "./entities/normalizers.js";
+import { ATOMIC_RENAME_RETRY_DELAYS_MS } from "../shared/storage/atomic-file-write.js";
 import { FileSystemSessionTreeRepository } from "./repositories/file-system-session-tree-repository.js";
 import { FileSystemSessionRepository } from "./repositories/file-system-session-repository.js";
-import { FileSystemTaskRepository } from "./repositories/file-system-task-repository.js";
 import { FileSystemExecutionRepository } from "./repositories/file-system-execution-repository.js";
 import { FileSystemConnectorInstanceRepository } from "./repositories/file-system-connector-instance-repository.js";
 import { SessionTreeService } from "./services/session-tree-service.js";
@@ -17,9 +16,9 @@ import { SessionCrudService } from "./services/session-crud-service.js";
 import { SessionMessageService } from "./services/session-message-service.js";
 import { ExecutionReadService } from "./services/execution-read-service.js";
 import { SessionContextService } from "./services/session-context-service.js";
-import { TaskService } from "./services/task-service.js";
 import { ExecutionLogRepository } from "../observability/execution-log/execution-log-repository.js";
 import { ExecutionLogService } from "../observability/execution-log/execution-log-service.js";
+import { createScopedSessionArtifactReader } from "./session-scoped-artifact-reader.js";
 import {
   ScopedSessionLocationResolver,
   createPersistenceContext,
@@ -96,7 +95,10 @@ export function createSessionServices(
     throw new TypeError("createSessionServices requires scopedSessionRoots");
   }
   const pathResolver = new PathResolver(globalConfig);
-  const storageService = new StorageService({ pathResolver });
+  const storageService = new StorageService({
+    atomicRenameRetryDelaysMs: ATOMIC_RENAME_RETRY_DELAYS_MS,
+    platform: process.platform,
+  });
   const connectorInstanceRepository = new FileSystemConnectorInstanceRepository({
     workspaceRoot: globalConfig.workspaceRoot,
   });
@@ -119,12 +121,6 @@ export function createSessionServices(
     now,
   });
 
-  const taskRepository = new FileSystemTaskRepository({
-    storageService,
-    normalizeTask: normalizeTaskEntity,
-    sessionRepository,
-  });
-
   const fileSystemExecutionRepository = new FileSystemExecutionRepository({
     storageService,
     sessionRepository,
@@ -142,7 +138,6 @@ export function createSessionServices(
 
   const sessionCrudService = new SessionCrudService({
     sessionRepo: sessionRepository,
-    taskRepo: taskRepository,
     sessionTreeService,
     attachmentService,
     now,
@@ -162,16 +157,12 @@ export function createSessionServices(
 
   const sessionContextService = new SessionContextService({ sessionMessageService });
 
-  const taskService = new TaskService({
-    taskRepo: taskRepository,
-    sessionRepo: sessionRepository,
-    now,
-  });
-
   const executionLogService = new ExecutionLogService({
     executionRepo: executionRepository,
     sessionRepo: sessionRepository,
   });
+
+  const scopedArtifactReader = createScopedSessionArtifactReader({ storageService });
 
   return {
     pathResolver,
@@ -189,12 +180,11 @@ export function createSessionServices(
     sessionMessageService,
     executionReadService,
     sessionContextService,
-    taskService,
     executionLogService,
+    scopedArtifactReader,
     repositories: {
       sessionTreeRepository,
       sessionRepository,
-      taskRepository,
       fileSystemExecutionRepository,
       executionRepository,
       connectorInstanceRepository,
@@ -209,8 +199,8 @@ export function createSessionFacade(runtime) {
     sessionMessageService,
     executionReadService,
     sessionContextService,
-    taskService,
     executionLogService,
+    scopedArtifactReader,
   } = runtime;
   const { connectorInstanceRepository } = runtime.repositories;
 
@@ -252,10 +242,6 @@ export function createSessionFacade(runtime) {
       return sessionTreeService.getRootSessionId({ userId, sessionId });
     },
 
-    async getSessionData(payload = {}) {
-      return sessionCrudService.getSessionData(payload);
-    },
-
     async getSessionDisplayData(payload = {}) {
       return sessionCrudService.getSessionDisplayData(payload);
     },
@@ -264,7 +250,7 @@ export function createSessionFacade(runtime) {
       return sessionCrudService.getSessionThinkingDetail(payload);
     },
 
-    async getAllSessionsData({ userId, failures = null }) {
+    async getAllSessionsData({ userId, failures }) {
       return sessionCrudService.getAllSessionsData({ userId, failures });
     },
 
@@ -354,15 +340,15 @@ export function createSessionFacade(runtime) {
       return sessionMessageService.compactAuthorityEvents(bindPersistenceScope(payload));
     },
 
-    async getExecution(payload = {}) {
+    async getExecution(payload) {
       return executionReadService.getExecution(payload);
     },
 
-    async getExecutionChildren(payload = {}) {
+    async getExecutionChildren(payload) {
       return executionReadService.getExecutionChildren(payload);
     },
 
-    async getExecutionTree(payload = {}) {
+    async getExecutionTree(payload) {
       return executionReadService.getExecutionTree(payload);
     },
 
@@ -414,20 +400,24 @@ export function createSessionFacade(runtime) {
       return executionLogService.getExecutionReport(bindPersistenceScope(payload));
     },
 
+    async readScopedSessionSnapshot({ sessionDir }) {
+      return scopedArtifactReader.readScopedSessionSnapshot({ sessionDir });
+    },
+
+    async readScopedThinkingDetail({ sessionDir, turnScopeId, dialogProcessId }) {
+      return scopedArtifactReader.readScopedThinkingDetail({
+        sessionDir,
+        turnScopeId,
+        dialogProcessId,
+      });
+    },
+
+    async readScopedExecutionReport({ sessionDir, dialogProcessId }) {
+      return scopedArtifactReader.readScopedExecutionReport({ sessionDir, dialogProcessId });
+    },
+
     async getContextProjection(payload = {}) {
       return sessionContextService.getContextProjection(bindPersistenceScope(payload));
-    },
-
-    async startSkillTask(payload = {}) {
-      return taskService.startSkillTask(bindPersistenceScope(payload));
-    },
-
-    async finishSkillTask(payload = {}) {
-      return taskService.finishSkillTask(bindPersistenceScope(payload));
-    },
-
-    async saveCurrentTurnTasks(payload = {}) {
-      return taskService.saveCurrentTurnTasks(bindPersistenceScope(payload));
     },
 
     async setSessionModelAlias(payload = {}) {
@@ -474,8 +464,8 @@ export function createSessionFacade(runtime) {
       return connectorInstanceRepository.migrateLegacy(payload);
     },
 
-    async deleteSessionBranch({ userId, sessionId }) {
-      return sessionTreeService.deleteSessionBranch({ userId, sessionId });
+    async deleteSessionBranch({ userId, sessionIds }) {
+      return sessionTreeService.deleteSessionBranch({ userId, sessionIds });
     },
   };
 }
@@ -484,14 +474,12 @@ export { SessionTreeService } from "./services/session-tree-service.js";
 export { SessionCrudService } from "./services/session-crud-service.js";
 export { SessionMessageService } from "./services/session-message-service.js";
 export { SessionContextService } from "./services/session-context-service.js";
-export { TaskService } from "./services/task-service.js";
 export { ExecutionLogService } from "../observability/execution-log/execution-log-service.js";
 export { PathResolver } from "./path-resolver.js";
 export { SessionPathResolver } from "./session-path-resolver.js";
 export { StorageService } from "./storage-service.js";
 export { FileSystemSessionTreeRepository } from "./repositories/file-system-session-tree-repository.js";
 export { FileSystemSessionRepository } from "./repositories/file-system-session-repository.js";
-export { FileSystemTaskRepository } from "./repositories/file-system-task-repository.js";
 export { FileSystemExecutionRepository } from "./repositories/file-system-execution-repository.js";
 export { FileSystemConnectorInstanceRepository } from "./repositories/file-system-connector-instance-repository.js";
 export {
@@ -503,43 +491,33 @@ export {
   buildSessionDisplaySummary,
   buildSessionSummary,
   isSessionDisplaySummaryPayload,
-  requireSessionsSummaryPayload,
 } from "./session-summary-builders.js";
 export {
   SESSION_ARTIFACT_FILE_NAMES,
+  SESSION_ARTIFACT_PREDECESSOR,
   appendExecutionLogArtifact,
   buildSessionArtifactFileMap,
   inspectSessionArtifacts,
   repairSessionArtifacts,
   cleanupSessionArtifacts,
-  readJsonArtifactFile,
   readExecutionLogs,
-  iterateExecutionLogs,
+  readTurnExecutionLogs,
   readRecentSessionTurns,
   readSessionArtifact,
-  readSessionMessageCount,
   readSessionTurn,
   readSessionArtifactSnapshot,
   rebuildSessionDisplaySummaryArtifact,
   writeExecutionReportArtifact,
   readExecutionReportArtifact,
-  writeJsonArtifactFile,
   writeSessionArtifact,
-  writeTaskArtifact,
 } from "./session-artifact-store.js";
 export {
   normalizeMessageEntity,
   normalizeMessagesEntity,
   normalizeSelectedConnectorIds,
   normalizeSessionTreeEntity,
-  normalizeTaskEntity,
   normalizeExecutionLogEntity,
 } from "./entities/normalizers.js";
 
-export {
-  normalizeRouteText as normalizeSessionThinkingRouteText,
-  isInjectedMessage as isSessionThinkingInjectedMessage,
-  isToolOrThinkingMessage as isSessionToolOrThinkingMessage,
-  isSameThinkingRound as isSameSessionThinkingRound,
-  buildThinkingDetailPayload,
-} from "./session-thinking-detail.js";
+export { readSessionThinkingDetail } from "./session-thinking-detail.js";
+export { createScopedSessionArtifactReader } from "./session-scoped-artifact-reader.js";

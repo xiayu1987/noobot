@@ -64,7 +64,7 @@ const iconButtonContract = {
     {
       label: "shared icon button shape",
       pattern:
-        /\.noobot-icon-button\s*,\s*\.el-button\.noobot-icon-button\s*\{(?=[^}]*border-radius\s*:\s*50%)(?=[^}]*aspect-ratio\s*:\s*1)(?=[^}]*padding\s*:\s*0)[^}]*\}/s,
+        /\.noobot-icon-button\s*,\s*\.el-button\.noobot-icon-button\s*\{(?=[^}]*border-radius\s*:\s*var\(--noobot-radius-circle\))(?=[^}]*aspect-ratio\s*:\s*1)(?=[^}]*padding\s*:\s*0)[^}]*\}/s,
     },
   ],
 };
@@ -79,10 +79,14 @@ const checks = [
   ["transition: all is forbidden", /\btransition(?:-property)?\s*:\s*all\b/i],
   [
     "literal border radius must use a design token",
-    /\bborder-radius\s*:\s*[^;\n}]*(?:\d+px|999px)/i,
+    /\bborder-radius\s*:\s*[^;\n}]*(?:\d+px|\d+%)/i,
   ],
   ["literal hex color must be declared in a token location", /#[0-9a-f]{3,8}\b/i],
   ["literal rgb color must be declared in a token location", /\brgba?\(\s*\d/i],
+  [
+    "literal font size must use a font-size token",
+    /(?:^|[^-\w])font-size\s*:\s*[^;\n}]*\d(?:px|rem)\b/i,
+  ],
   [
     "literal font weight must use a font-weight token",
     /(?:^|[^-\w])font-weight\s*:\s*(?:\d+|bold|bolder|lighter)\b/i,
@@ -94,6 +98,10 @@ const checks = [
   [
     "literal letter spacing must use a letter-spacing token",
     /(?:^|[^-\w])letter-spacing\s*:\s*-?\d*\.?\d+/i,
+  ],
+  [
+    "literal transition easing must use an easing token",
+    /^(?!.*\banimation\b).*(?:\d*\.?\d+m?s|var\(--noobot-duration-[\w-]+\))\s+(?:ease(?:-in|-out|-in-out)?|linear|cubic-bezier\(|steps\()/i,
   ],
 ];
 
@@ -198,7 +206,9 @@ function inspectFile(filePath) {
       if (
         (message.includes("color") ||
           message.includes("radius") ||
-          message.includes("font weight")) &&
+          message.includes("font size") ||
+          message.includes("font weight") ||
+          message.includes("easing")) &&
         isTokenDeclaration(filePath, line)
       )
         continue;

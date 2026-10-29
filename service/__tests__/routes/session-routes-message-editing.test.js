@@ -12,6 +12,7 @@ import {
   SESSION_COMMAND,
 } from "@noobot/session-protocol";
 import express, { registerSessionRoutes, withTestServer } from "./session-routes.helpers.js";
+import { availableDetailDocument } from "../session-detail.test-helpers.js";
 import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
 
 useProvisionedRuntimeEventsWorkspace(["u1"]);
@@ -28,11 +29,14 @@ function createReplaceTurnResult(
     turnScopeId: payload.turnScopeId,
   };
   return {
-    session: {
+    commandId: payload.commandId,
+    committedAggregateVersion: version,
+    deduplicated: false,
+    detail: availableDetailDocument({
       sessionId: payload.sessionId,
       aggregateVersion: version,
       messages: [replacementUser],
-    },
+    }),
     turnReplacement: createTurnReplacementCommit({
       commandId: payload.commandId,
       sessionId: payload.sessionId,
@@ -41,6 +45,7 @@ function createReplaceTurnResult(
       replacementDialogProcessId,
       replacementTurnScopeId: payload.turnScopeId,
       replacementUserMessageUid,
+      requestHash: "request-hash-replace",
       committedAt: "2026-07-31T00:00:00.000Z",
     }),
   };
@@ -73,22 +78,23 @@ test("session-routes: delete-from 路由透传请求体并返回后端快照", a
   registerSessionRoutes(app, {
     bot: {
       session: {
-        getSessionData: async () => ({}),
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
         getAllSessionsData: async () => [],
         deleteFromMessage: async (payload) => {
           calls.push(payload);
           return {
-            session: {
+            commandId: payload.commandId,
+            committedAggregateVersion: 3,
+            deduplicated: false,
+            detail: availableDetailDocument({
               sessionId: payload.sessionId,
-              messages: [{ id: "m1" }],
               aggregateVersion: 3,
-            },
+              messages: [],
+            }),
             deletedCount: 2,
             anchorIndex: 1,
             deletedTurnScopeIds: ["turn-delete", "turn-tail"],
-            aggregateVersion: 3,
           };
         },
       },
@@ -113,7 +119,8 @@ test("session-routes: delete-from 路由透传请求体并返回后端快照", a
     });
     const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(payload.ok, true);
+    assert.equal(payload.commandId, "idem-1");
+    assert.equal(payload.committedAggregateVersion, 3);
     assert.equal(payload.deletedCount, 2);
     assert.equal(payload.anchorIndex, 1);
     assert.deepEqual(payload.deletedTurnScopeIds, ["turn-delete", "turn-tail"]);
@@ -134,7 +141,6 @@ test("session-routes: delete-from 保留服务层 404/409 状态码", async () =
   registerSessionRoutes(app, {
     bot: {
       session: {
-        getSessionData: async () => ({}),
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
         getAllSessionsData: async () => [],
@@ -185,7 +191,6 @@ test("session-routes: rename 路由 trim 标题并返回成功", async () => {
   registerSessionRoutes(app, {
     bot: {
       session: {
-        getSessionData: async () => ({}),
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
         getAllSessionsData: async () => [],
@@ -223,7 +228,6 @@ test("session-routes: rename 空标题返回 400，session 不存在返回 404",
   registerSessionRoutes(app, {
     bot: {
       session: {
-        getSessionData: async () => ({}),
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
         getAllSessionsData: async () => [],
@@ -262,7 +266,6 @@ test("session-routes: replace-turn 路由透传请求体并返回后端快照", 
   registerSessionRoutes(app, {
     bot: {
       session: {
-        getSessionData: async () => ({}),
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
         getAllSessionsData: async () => [],
@@ -298,7 +301,8 @@ test("session-routes: replace-turn 路由透传请求体并返回后端快照", 
     });
     const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(payload.ok, true);
+    assert.equal(payload.commandId, "idem-2");
+    assert.equal(payload.committedAggregateVersion, 4);
     assert.equal(payload.turnReplacement.replacementTurnScopeId, "turn-scope-replace");
     assert.equal(payload.turnReplacement.replacementDialogProcessId, "dialog-replacement");
     assert.equal(payload.turnReplacement.replacementUserMessageUid, "replacement-user-1");
@@ -321,7 +325,6 @@ test("session-routes: replace-turn rejects duplicate /api/internal service route
   registerSessionRoutes(app, {
     bot: {
       session: {
-        getSessionData: async () => ({}),
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
         getAllSessionsData: async () => [],
@@ -370,7 +373,6 @@ test("session-routes: replace-turn 保留服务层 404/409 状态码", async () 
   registerSessionRoutes(app, {
     bot: {
       session: {
-        getSessionData: async () => ({}),
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
         getAllSessionsData: async () => [],

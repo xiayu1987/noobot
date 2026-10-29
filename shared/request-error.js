@@ -22,6 +22,10 @@ function isPositiveInteger(value) {
   return Number.isInteger(value) && value > 0;
 }
 
+function isNonNegativeInteger(value) {
+  return Number.isInteger(value) && value >= 0;
+}
+
 function readRetryAfterMs(response) {
   const seconds = Number(response.headers.get("retry-after"));
   if (!isPositiveInteger(seconds)) {
@@ -31,7 +35,10 @@ function readRetryAfterMs(response) {
 }
 
 export class ApiRequestError extends Error {
-  constructor(message, { code, status, serverErrorCode = "", retryAfterMs, cause }) {
+  constructor(
+    message,
+    { code, status, serverErrorCode = "", retryAfterMs, currentVersion, cause },
+  ) {
     if (!KNOWN_CODES.has(code)) throw new TypeError(`unknown api request error code: ${code}`);
     if (status !== null && !Number.isInteger(status)) {
       throw new TypeError("api request error status must be an integer or null");
@@ -49,12 +56,16 @@ export class ApiRequestError extends Error {
     ) {
       throw new TypeError("api request error retryAfterMs is required only for http 429");
     }
+    if (currentVersion !== undefined && !isNonNegativeInteger(currentVersion)) {
+      throw new TypeError("api request error currentVersion must be a non-negative integer");
+    }
     super(message, { cause });
     this.name = API_REQUEST_ERROR_NAME;
     this.code = code;
     this.status = status;
     this.serverErrorCode = serverErrorCode;
     if (status === HTTP_TOO_MANY_REQUESTS) this.retryAfterMs = retryAfterMs;
+    if (currentVersion !== undefined) this.currentVersion = currentVersion;
   }
 }
 
@@ -76,22 +87,28 @@ async function readFailureEnvelope(response) {
   if (!isJsonResponse(response)) return { error: `http ${response.status}`, errorCode: "" };
   const payload = await response.json();
   const hasErrorCode = Object.hasOwn(payload ?? {}, "errorCode");
+  const hasCurrentVersion = Object.hasOwn(payload ?? {}, "currentVersion");
   if (
     payload?.ok !== false ||
     typeof payload.error !== "string" ||
     !payload.error ||
-    (hasErrorCode && (typeof payload.errorCode !== "string" || !payload.errorCode))
+    (hasErrorCode && (typeof payload.errorCode !== "string" || !payload.errorCode)) ||
+    (hasCurrentVersion && !isNonNegativeInteger(payload.currentVersion))
   ) {
     throw new TypeError(`api failure envelope violates contract: http ${response.status}`);
   }
-  return { error: payload.error, errorCode: hasErrorCode ? payload.errorCode : "" };
+  return {
+    error: payload.error,
+    errorCode: hasErrorCode ? payload.errorCode : "",
+    currentVersion: hasCurrentVersion ? payload.currentVersion : undefined,
+  };
 }
 
 export async function readApiResponseEnvelope(response) {
   if (!response.ok) {
     const retryAfterMs =
       response.status === HTTP_TOO_MANY_REQUESTS ? readRetryAfterMs(response) : undefined;
-    const { error, errorCode } = await readFailureEnvelope(response);
+    const { error, errorCode, currentVersion } = await readFailureEnvelope(response);
     throw new ApiRequestError(error, {
       code:
         response.status === HTTP_NOT_FOUND
@@ -100,6 +117,7 @@ export async function readApiResponseEnvelope(response) {
       status: response.status,
       serverErrorCode: errorCode,
       retryAfterMs,
+      currentVersion,
     });
   }
   const payload = await response.json();

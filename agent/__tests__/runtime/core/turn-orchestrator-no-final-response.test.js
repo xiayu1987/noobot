@@ -84,7 +84,6 @@ function createHarness({ emptyResponses = 0, failWith = null, script = null } = 
           aiContentText: "",
           calls: [{ id: `call-${invocation}`, name: "execute_script", args: {} }],
           turnMessageStore: currentTurnMessages,
-          turnTaskStore: { toArray: () => [] },
           stateCommitter: {},
         };
       }
@@ -93,7 +92,6 @@ function createHarness({ emptyResponses = 0, failWith = null, script = null } = 
         modelMessageId: `assistant-${invocation}`,
         calls: [],
         turnMessageStore: currentTurnMessages,
-        turnTaskStore: { toArray: () => [] },
       };
     },
     processToolResultsFn: async () => ({ toolCallResults: [], taskSummaryOutcome: null }),
@@ -118,7 +116,6 @@ function createHarness({ emptyResponses = 0, failWith = null, script = null } = 
         maxTurns: 10,
         dialogProcessId: "dialog-1",
         turnMessages: [],
-        turnTasks: [],
       },
     });
   const retryPrompts = () =>

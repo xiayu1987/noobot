@@ -533,14 +533,14 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
 .workflow-runtime-panel-title {
   font-size: var(--noobot-font-size-md);
   font-weight: var(--noobot-font-weight-bold);
-  line-height: var(--noobot-line-height-cozy);
+  line-height: var(--noobot-line-height-balanced);
   color: var(--noobot-text-primary);
 }
 
 .workflow-runtime-panel-subtitle {
   margin-top: var(--noobot-space-2xs);
   font-size: var(--noobot-font-size-xs);
-  line-height: var(--noobot-line-height-relaxed);
+  line-height: var(--noobot-line-height-comfortable);
   color: var(--noobot-text-secondary);
 }
 
@@ -591,8 +591,8 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
   text-align: left;
   cursor: pointer;
   transition:
-    border-color var(--noobot-duration-fast) ease,
-    background var(--noobot-duration-fast) ease;
+    border-color var(--noobot-duration-fast) var(--noobot-ease-standard),
+    background var(--noobot-duration-fast) var(--noobot-ease-standard);
 }
 
 .workflow-runtime-step-box:hover:not(:disabled) {
@@ -624,7 +624,7 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
   padding: var(--noobot-space-3xs) var(--noobot-space-xs);
   font-size: var(--noobot-font-size-xs);
   color: var(--noobot-text-secondary);
-  background: color-mix(in srgb, var(--noobot-text-muted) 12%, transparent);
+  background: color-mix(in srgb, var(--noobot-text-secondary) 12%, transparent);
 }
 
 .workflow-runtime-step-box.succeeded .workflow-runtime-step-status {

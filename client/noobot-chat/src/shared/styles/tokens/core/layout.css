@@ -4,6 +4,7 @@
   --noobot-radius-md: 8px;
   --noobot-radius-lg: 10px;
   --noobot-radius-pill: 999px;
+  --noobot-radius-circle: 50%;
   --noobot-space-xs: 6px;
   --noobot-space-2xs: 4px;
   --noobot-space-3xs: 2px;
@@ -29,12 +30,8 @@
   --noobot-line-height-loose: 1.7;
   --noobot-line-height-none: 1;
   --noobot-line-height-compact: 1.2;
-  --noobot-line-height-snug: 1.25;
-  --noobot-line-height-cozy: 1.35;
   --noobot-line-height-balanced: 1.4;
-  --noobot-line-height-relaxed: 1.45;
   --noobot-line-height-comfortable: 1.5;
-  --noobot-line-height-roomy: 1.55;
   --noobot-letter-spacing-none: 0;
   --noobot-letter-spacing-subtle: 0.01em;
   --noobot-letter-spacing-wide: 0.04em;

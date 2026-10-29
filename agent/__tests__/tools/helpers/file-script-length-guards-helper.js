@@ -113,6 +113,7 @@ function buildAttachmentService() {
           relativePath: `runtime/attach/${artifact.name}`,
           generatedByModel: true,
           generationSource: payload.generationSource,
+          sourcePath: artifact.sourcePath,
         }),
       );
     },

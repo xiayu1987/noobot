@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createServicePluginHost } from "../../services/service-plugin-host.js";
+const enforceUserScopeParam = (_req, _res, next) => next();
 
 function serviceEntry({
   activate,
@@ -65,7 +66,11 @@ test("service plugin host binds declared routes without exposing Express", async
     loadPluginRuntime: async () => ({ registry: new Map([["demo", entry]]), errors: [] }),
   });
 
-  const result = await host.registerServiceRoutes(app, { ports, translateText: () => "" });
+  const result = await host.registerServiceRoutes(app, {
+    ports,
+    translateText: () => "",
+    enforceUserScopeParam,
+  });
 
   assert.equal(result.length, 1);
   assert.equal(receivedHost.ports.sessions, scopedSessions);
@@ -90,7 +95,10 @@ test("service plugin host scopes the workspace asset port to plugin identity", a
     loadPluginRuntime: async () => ({ registry: new Map([["demo", entry]]), errors: [] }),
   });
 
-  await host.registerServiceRoutes({ use() {} }, { ports: { workspaceAssets: { forPlugin } } });
+  await host.registerServiceRoutes(
+    { use() {} },
+    { ports: { workspaceAssets: { forPlugin } }, enforceUserScopeParam },
+  );
 
   assert.equal(receivedPort, scoped);
 });
@@ -106,7 +114,7 @@ test("service plugin host rejects an undeclared route", async () => {
     loadPluginRuntime: async () => ({ registry: new Map([["demo", entry]]), errors: [] }),
   });
   await assert.rejects(
-    () => host.registerServiceRoutes({ use() {} }, { ports: {} }),
+    () => host.registerServiceRoutes({ use() {} }, { ports: {}, enforceUserScopeParam }),
     /did not declare route/,
   );
 });
@@ -121,7 +129,7 @@ test("service plugin host loads the service surface from the configured plugin r
       return { registry: new Map(), errors: [] };
     },
   });
-  await host.registerServiceRoutes({ use() {} }, { ports: {} });
+  await host.registerServiceRoutes({ use() {} }, { ports: {}, enforceUserScopeParam });
   assert.deepEqual(calls, [{ surface: "service", pluginRootDir }]);
 });
 
@@ -150,7 +158,7 @@ test("failed refresh preserves the committed generation and disposes it only whe
   });
   const app = { use() {} };
 
-  await host.registerServiceRoutes(app, { ports: {} });
+  await host.registerServiceRoutes(app, { ports: {}, enforceUserScopeParam });
   await assert.rejects(() => host.refresh(), /candidate failed/);
   assert.equal(activeDisposals, 0);
 
@@ -176,7 +184,7 @@ test("successful refresh releases the previous scope exactly once", async () => 
       ),
   });
 
-  await host.registerServiceRoutes({ use() {} }, { ports: {} });
+  await host.registerServiceRoutes({ use() {} }, { ports: {}, enforceUserScopeParam });
   await host.refresh();
   assert.equal(previousDisposals, 1);
   assert.equal(currentDisposals, 0);
@@ -213,7 +221,7 @@ test("concurrent refreshes commit in request order without an older generation o
     },
   });
 
-  await host.registerServiceRoutes({ use() {} }, { ports: {} });
+  await host.registerServiceRoutes({ use() {} }, { ports: {}, enforceUserScopeParam });
   const first = host.refresh();
   const second = host.refresh();
   await new Promise((resolve) => setImmediate(resolve));
@@ -248,7 +256,10 @@ test("dispose invalidates an activation in progress and cleans its candidate sco
   const host = createServicePluginHost({
     loadPluginRuntime: async () => runtimeWithActivation(() => activationStarted),
   });
-  const registration = host.registerServiceRoutes({ use() {} }, { ports: {} });
+  const registration = host.registerServiceRoutes(
+    { use() {} },
+    { ports: {}, enforceUserScopeParam },
+  );
   await new Promise((resolve) => setImmediate(resolve));
 
   const disposal = host.dispose();
@@ -256,5 +267,8 @@ test("dispose invalidates an activation in progress and cleans its candidate sco
   await assert.rejects(() => registration, /lost lifecycle ownership/);
   await disposal;
   assert.equal(candidateDisposals, 1);
-  await assert.rejects(() => host.registerServiceRoutes({ use() {} }, { ports: {} }), /disposed/);
+  await assert.rejects(
+    () => host.registerServiceRoutes({ use() {} }, { ports: {}, enforceUserScopeParam }),
+    /disposed/,
+  );
 });

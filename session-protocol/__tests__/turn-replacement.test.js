@@ -6,13 +6,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  assertTurnReplacementMaterialization,
+  assertTurnReplacementCommit,
   createTurnReplacementCommit,
   validateTurnReplacementCommit,
 } from "../src/lifecycle/turn-replacement.js";
 
-test("turn replacement commit binds one replacement user to one committed session version", () => {
-  const commit = createTurnReplacementCommit({
+function input(overrides = {}) {
+  return {
     commandId: "resend-1",
     sessionId: "session-1",
     committedAggregateVersion: 4,
@@ -22,168 +22,59 @@ test("turn replacement commit binds one replacement user to one committed sessio
     replacementUserMessageUid: "user-new",
     requestHash: "request-hash-1",
     committedAt: "2026-07-31T00:00:00.000Z",
-  });
+    ...overrides,
+  };
+}
+
+test("turn replacement commit binds one replacement user to one committed session version", () => {
+  const commit = createTurnReplacementCommit(input());
   assert.equal(validateTurnReplacementCommit(commit).valid, true);
-  const materialized = assertTurnReplacementMaterialization({
-    commit,
-    session: {
-      sessionId: "session-1",
-      aggregateVersion: 4,
-      messages: [
-        {
-          role: "user",
-          messageUid: "user-new",
-          userMessageId: "um_new",
-          dialogProcessId: "dialog-new",
-          turnScopeId: "turn-new",
-        },
-      ],
-    },
-  });
-  assert.equal(materialized.replacementUser.messageUid, "user-new");
+  assert.equal(assertTurnReplacementCommit(commit), commit);
+  assert.equal(commit.committedAggregateVersion, 4);
+  assert.equal(Object.isFrozen(commit.replacedTurnScopeIds), true);
 });
 
-test("turn replacement materialization rejects a snapshot from another version", () => {
-  const commit = createTurnReplacementCommit({
-    commandId: "resend-1",
-    sessionId: "session-1",
-    committedAggregateVersion: 4,
-    replacedTurnScopeIds: ["turn-old"],
-    replacementDialogProcessId: "dialog-new",
-    replacementTurnScopeId: "turn-new",
-    replacementUserMessageUid: "user-new",
-    requestHash: "request-hash-1",
-  });
-  assert.throws(
-    () =>
-      assertTurnReplacementMaterialization({
-        commit,
-        session: {
-          sessionId: "session-1",
-          aggregateVersion: 3,
-          messages: [
-            {
-              role: "user",
-              messageUid: "user-new",
-              userMessageId: "um_new",
-              dialogProcessId: "dialog-new",
-              turnScopeId: "turn-new",
-            },
-          ],
-        },
-      }),
-    /aggregate_version_mismatch/,
+test("turn replacement commit requires every field and never fills a default", () => {
+  for (const field of Object.keys(input())) {
+    const { [field]: _omitted, ...rest } = input();
+    assert.throws(
+      () => createTurnReplacementCommit(rest),
+      /invalid turn replacement commit/,
+      field,
+    );
+  }
+});
+
+test("turn replacement commit rejects non-canonical values instead of coercing them", () => {
+  const invalid = [
+    { committedAggregateVersion: "4" },
+    { committedAggregateVersion: 0 },
+    { commandId: " resend-1" },
+    { replacedTurnScopeIds: [] },
+    { replacedTurnScopeIds: ["turn-old", "turn-old"] },
+    { replacedTurnScopeIds: ["turn-old", ""] },
+    { replacementTurnScopeId: "turn-old" },
+  ];
+  for (const overrides of invalid) {
+    assert.throws(
+      () => createTurnReplacementCommit(input(overrides)),
+      /invalid turn replacement commit/,
+    );
+  }
+});
+
+test("turn replacement commit validation rejects a non-object and a foreign protocol version", () => {
+  assert.deepEqual(validateTurnReplacementCommit(null).errors, ["commit_not_object"]);
+  assert.deepEqual(validateTurnReplacementCommit(undefined).errors, ["commit_not_object"]);
+  const commit = createTurnReplacementCommit(input());
+  assert.ok(
+    validateTurnReplacementCommit({ ...commit, protocolVersion: 2 }).errors.includes(
+      "unsupported_protocol_version",
+    ),
   );
-});
-
-test("turn replacement materialization rejects a snapshot that still contains a replaced scope", () => {
-  const commit = createTurnReplacementCommit({
-    commandId: "resend-2",
-    sessionId: "session-1",
-    committedAggregateVersion: 5,
-    replacedTurnScopeIds: ["turn-old"],
-    replacementDialogProcessId: "dialog-new",
-    replacementTurnScopeId: "turn-new",
-    replacementUserMessageUid: "user-new",
-    requestHash: "request-hash-2",
-  });
-  assert.throws(
-    () =>
-      assertTurnReplacementMaterialization({
-        commit,
-        session: {
-          sessionId: "session-1",
-          aggregateVersion: 5,
-          messages: [
-            {
-              role: "user",
-              messageUid: "user-old",
-              userMessageId: "um_old",
-              turnScopeId: "turn-old",
-            },
-            {
-              role: "user",
-              messageUid: "user-new",
-              userMessageId: "um_new",
-              dialogProcessId: "dialog-new",
-              turnScopeId: "turn-new",
-            },
-          ],
-        },
-      }),
-    /replaced_scope_still_materialized/,
-  );
-});
-
-test("turn replacement materialization requires a user-only replacement scope", () => {
-  const commit = createTurnReplacementCommit({
-    commandId: "resend-3",
-    sessionId: "session-1",
-    committedAggregateVersion: 6,
-    replacedTurnScopeIds: ["turn-old"],
-    replacementDialogProcessId: "dialog-new",
-    replacementTurnScopeId: "turn-new",
-    replacementUserMessageUid: "user-new",
-    requestHash: "request-hash-3",
-  });
-  assert.throws(
-    () =>
-      assertTurnReplacementMaterialization({
-        commit,
-        session: {
-          sessionId: "session-1",
-          aggregateVersion: 6,
-          messages: [
-            {
-              role: "user",
-              messageUid: "user-new",
-              userMessageId: "um_new",
-              dialogProcessId: "dialog-new",
-              turnScopeId: "turn-new",
-            },
-            {
-              role: "assistant",
-              messageUid: "assistant-new",
-              modelMessageId: "mm_new",
-              dialogProcessId: "dialog-new",
-              turnScopeId: "turn-new",
-            },
-          ],
-        },
-      }),
-    /replacement_scope_not_user_only/,
-  );
-});
-
-test("turn replacement materialization requires the committed dialog identity", () => {
-  const commit = createTurnReplacementCommit({
-    commandId: "resend-4",
-    sessionId: "session-1",
-    committedAggregateVersion: 7,
-    replacedTurnScopeIds: ["turn-old"],
-    replacementDialogProcessId: "dialog-new",
-    replacementTurnScopeId: "turn-new",
-    replacementUserMessageUid: "user-new",
-    requestHash: "request-hash-4",
-  });
-  assert.throws(
-    () =>
-      assertTurnReplacementMaterialization({
-        commit,
-        session: {
-          sessionId: "session-1",
-          aggregateVersion: 7,
-          messages: [
-            {
-              role: "user",
-              messageUid: "user-new",
-              userMessageId: "um_new",
-              dialogProcessId: "dialog-other",
-              turnScopeId: "turn-new",
-            },
-          ],
-        },
-      }),
-    /replacement_dialog_process_mismatch/,
+  assert.ok(
+    validateTurnReplacementCommit({ ...commit, eventType: "turn.other" }).errors.includes(
+      "invalid_event_type",
+    ),
   );
 });

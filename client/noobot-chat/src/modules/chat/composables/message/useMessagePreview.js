@@ -34,7 +34,7 @@ export function useMessagePreview({
   const { translate } = useLocale();
   const filePreview = createFilePreviewState();
   const attachmentPreview = createAttachmentPreviewState();
-  const { onDownloadFile, onDownloadWorkspacePath } = createFileDownloadController({
+  const { onDownloadFile } = createFileDownloadController({
     userId,
     attachmentService,
     translate,
@@ -85,7 +85,6 @@ export function useMessagePreview({
     closePreviewDialog: filePreview.reset,
     closeAttachmentPreview: attachmentPreview.reset,
     onDownloadFile,
-    onDownloadWorkspacePath,
   };
 }
 
@@ -164,7 +163,7 @@ function createMarkdownCopyController({
     onCopyAttachmentMarkdownRich: () => copyRich(attachmentPreview.textContent.value),
     onCopyAttachmentMarkdownText: () => copyText(attachmentPreview.textContent.value),
     onCopyMessageMarkdownRich: ({ textContent, attachmentRefIndex }) =>
-      copyRich(textContent, { attachmentRefIndex, workspaceFileLinks: true }),
+      copyRich(textContent, { attachmentRefIndex }),
     onCopyMessageMarkdownText: (textContent) => copyText(textContent),
   };
 }

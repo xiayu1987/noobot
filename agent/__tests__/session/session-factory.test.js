@@ -34,7 +34,6 @@ test("createSessionServices wires repositories/services with expected dependency
     assert.ok(runtime.sessionCrudService);
     assert.ok(runtime.sessionMessageService);
     assert.ok(runtime.sessionContextService);
-    assert.ok(runtime.taskService);
     assert.ok(runtime.executionLogService);
 
     assert.equal(
@@ -47,7 +46,6 @@ test("createSessionServices wires repositories/services with expected dependency
       runtime.repositories.executionRepository,
     );
     assert.equal(runtime.executionLogService.sessionRepo, runtime.repositories.sessionRepository);
-    assert.equal(runtime.taskService.taskRepo, runtime.repositories.taskRepository);
     assert.equal(runtime.sessionTreeService.treeRepo, runtime.repositories.sessionTreeRepository);
   });
 });

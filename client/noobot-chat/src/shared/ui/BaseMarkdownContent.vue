@@ -16,20 +16,17 @@ const props = defineProps({
   renderMarkdown: { type: Function, required: true },
   attachmentRefIndex: { type: Map, default: null },
 });
-const emit = defineEmits(["download-workspace-file", "download-attachment"]);
+const emit = defineEmits(["download-attachment"]);
 
 const { mermaidHostRef } = useMermaidRender();
 const renderedHtml = computed(() =>
   props.renderMarkdown(String(props.content || ""), {
     attachmentRefIndex: props.attachmentRefIndex,
-    workspaceFileLinks: true,
   }),
 );
 
 function handleFileLink(event) {
-  const link = event.target?.closest?.(
-    "a[data-noobot-workspace-path], a[data-noobot-attachment-ref]",
-  );
+  const link = event.target?.closest?.("a[data-noobot-attachment-ref]");
   if (!link || !event.currentTarget?.contains(link)) return;
   event.preventDefault();
   if (event.type === "auxclick") return;
@@ -46,7 +43,6 @@ function handleFileLink(event) {
     if (attachment) emit("download-attachment", attachment);
     return;
   }
-  emit("download-workspace-file", link.getAttribute("data-noobot-workspace-path"));
 }
 </script>
 
@@ -77,7 +73,6 @@ function handleFileLink(event) {
 
 .base-markdown-content :deep(code) {
   padding: var(--noobot-space-3xs) var(--noobot-space-xs);
-  font-size: var(--noobot-font-size-sm);
 }
 
 .base-markdown-content :deep(pre) {
@@ -87,7 +82,6 @@ function handleFileLink(event) {
 
 .base-markdown-content :deep(pre code) {
   padding: 0;
-  font-size: var(--noobot-font-size-sm);
 }
 
 .base-markdown-content :deep(ul),
@@ -165,13 +159,7 @@ function handleFileLink(event) {
 .base-markdown-content :deep(h3),
 .base-markdown-content :deep(h4) {
   margin: var(--noobot-space-md) 0 var(--noobot-space-sm);
-  line-height: var(--noobot-line-height-cozy);
-}
-
-.base-markdown-content :deep(.mermaid svg) {
-  max-width: 100%;
-  height: auto;
-  display: block;
+  line-height: var(--noobot-line-height-balanced);
 }
 
 .base-markdown-content :deep(.noobot-attachment-chip) {

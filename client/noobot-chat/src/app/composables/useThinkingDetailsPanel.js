@@ -141,23 +141,11 @@ export function useThinkingDetailsPanel({
     return getThinkingDetailsTitleState(messageItem, translate);
   }
 
-  function normalizeDialogProcessId(messageItem = {}) {
-    return getMessageDialogProcessId(messageItem);
-  }
-
-  function expectedThinkingDetailRevision(messageItem = {}) {
-    return text(messageItem?.thinkingDetailRef?.contentHash);
-  }
-
-  async function fetchThinkingDetailForMessage(messageItem = {}) {
-    const dialogProcessId = normalizeDialogProcessId(messageItem);
-    const turnScopeId = text(messageItem?.turnScopeId);
-    if (!dialogProcessId && !turnScopeId) return null;
+  async function fetchThinkingDetailForMessage(messageItem) {
     return loadThinkingDetail({
       sessionId: getMessageSessionId(messageItem),
       messageItem,
       fetchThinkingDetail: currentFetchDetail,
-      expectedRevision: expectedThinkingDetailRevision(messageItem),
     });
   }
 
@@ -184,7 +172,7 @@ export function useThinkingDetailsPanel({
         : [sourceMessage.pending === true ? "pending" : "done", timelineRevision(sourceMessage)];
     return [
       getMessageSessionId(messageItem),
-      normalizeDialogProcessId(messageItem),
+      getMessageDialogProcessId(messageItem),
       getMessageTurnScopeId(messageItem),
       ...sourceKey,
     ].join("::");
@@ -215,12 +203,7 @@ export function useThinkingDetailsPanel({
       initialMessageItem,
       getMessageSessionId(initialMessageItem),
     );
-    const expectedRevision = expectedThinkingDetailRevision(initialMessageItem);
-    const cachedCandidate = getCachedThinkingDetail(cachedIdentity);
-    const cachedThinkingDetail =
-      expectedRevision && text(cachedCandidate?.revision) === expectedRevision
-        ? cachedCandidate
-        : null;
+    const cachedThinkingDetail = getCachedThinkingDetail(cachedIdentity);
     const initialDetailMessage = cachedThinkingDetail?.messageItem || initialMessageItem;
     closeAllDrawers();
     closeMobileSidebar();
@@ -264,9 +247,7 @@ export function useThinkingDetailsPanel({
       return;
     }
     const currentMessage = thinkingDetailsMessageItem.value;
-    const dialogProcessId = normalizeDialogProcessId(currentMessage);
-    const turnScopeId = text(currentMessage?.turnScopeId);
-    if (!dialogProcessId && !turnScopeId) return;
+    const { dialogProcessId, turnScopeId } = currentMessage;
     const sourceMessage = findActiveCanonicalMessage(currentMessage);
     if (sourceMessage?.pending === true) {
       detailRequestVersion += 1;
@@ -289,8 +270,8 @@ export function useThinkingDetailsPanel({
       if (
         requestVersion !== detailRequestVersion ||
         !detail ||
-        normalizeDialogProcessId(latestMessage) !== dialogProcessId ||
-        text(latestMessage?.turnScopeId) !== turnScopeId
+        latestMessage.dialogProcessId !== dialogProcessId ||
+        latestMessage.turnScopeId !== turnScopeId
       )
         return;
       thinkingDetailsMessageItem.value = detail.messageItem || currentMessage;

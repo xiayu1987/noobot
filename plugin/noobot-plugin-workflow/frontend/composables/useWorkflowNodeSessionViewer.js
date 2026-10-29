@@ -68,7 +68,7 @@ function createExecutionController({ props, refs, nodeViewTransaction }) {
 function createViewerCommands(context) {
   const { props, emit, refs, nodeViewTransaction, buildWorkflowDrawerRoute, stepHasSession } =
     context;
-  async function fetchSelectedNodeThinkingDetail({ dialogProcessId = "", turnScopeId = "" } = {}) {
+  async function fetchSelectedNodeThinkingDetail({ dialogProcessId, turnScopeId }) {
     const route = buildWorkflowDrawerRoute(refs.selectedNode.value || {});
     return fetchWorkflowNodeThinkingDetail({
       props,

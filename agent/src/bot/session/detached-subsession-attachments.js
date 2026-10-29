@@ -99,6 +99,5 @@ function createTransferredAttachment(attachment, parentRecord, sourceContent) {
       parentRecord?.mimeType || attachment?.mimeType || "application/octet-stream",
     ).trim(),
     contentBase64: sourceContent.content.toString("base64"),
-    ...(typeof attachment?.isSandbox === "boolean" ? { isSandbox: attachment.isSandbox } : {}),
   };
 }

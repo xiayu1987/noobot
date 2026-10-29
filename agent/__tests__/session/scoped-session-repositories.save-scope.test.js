@@ -113,7 +113,10 @@ test("concurrent repository saves allocate monotonic Turn journals without cross
       manifest.turnOrder.length,
     );
 
-    const restored = await readSessionArtifact({ sessionDir: scope.sessionDir });
+    const restored = await readSessionArtifact({
+      sessionDir: scope.sessionDir,
+      storageService: sessionRepo.storageService,
+    });
     assert.equal(restored.messages[0].turnScopeId, "turn-keep");
     assert.equal(restored.messages.length, 2);
     assert.equal(["turn-a", "turn-b"].includes(restored.messages[1].turnScopeId), true);

@@ -18,7 +18,6 @@ export function buildLoopResult({
   modelMessageId,
   traces,
   loopState,
-  turnTaskStore,
   turnMessageStore,
   modelMessages,
 }) {
@@ -26,7 +25,6 @@ export function buildLoopResult({
     "toArray",
     "updateWhere",
   ]);
-  const tasks = requireStore(turnTaskStore, "currentTurnTasks", ["toArray"]);
   return createAgentTurnResult({
     output,
     modelMessageId,
@@ -34,6 +32,5 @@ export function buildLoopResult({
     turnMessages: messages.toArray(),
     modelMessages,
     modelLoopRound: loopState.systemRuntime.modelLoopRound,
-    turnTasks: tasks.toArray(),
   });
 }

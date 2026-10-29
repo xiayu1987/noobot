@@ -20,7 +20,7 @@ import {
 } from "./paths.js";
 import {
   fileExists,
-  readJson,
+  readOptionalJson,
   writeJson,
   readText,
   appendText,
@@ -103,8 +103,8 @@ export class StorageManager {
     return fileExists(filePath);
   }
 
-  async readJson(filePath, fallback = {}) {
-    return readJson(filePath, fallback);
+  async readOptionalJson(filePath) {
+    return readOptionalJson(filePath);
   }
 
   async writeJson(filePath, payload = {}) {

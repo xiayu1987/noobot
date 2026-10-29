@@ -16,7 +16,6 @@ const REQUIRED_FIELDS = Object.freeze({
   output: isString,
   traces: Array.isArray,
   turnMessages: isTurnMessageList,
-  turnTasks: Array.isArray,
   modelLoopRound: isNonNegativeInteger,
   modelMessages: Array.isArray,
 });

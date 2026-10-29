@@ -3,10 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  createCurrentTurnMessagesStore,
-  createCurrentTurnTasksStore,
-} from "../../../src/runtime/turn/current-turn-ledger.js";
+import { createCurrentTurnMessagesStore } from "../../../src/runtime/turn/current-turn-ledger.js";
 import { bindAssistantMessageEventStream } from "../../../src/events/message-event-stream.js";
 import { initializeCurrentTurnMessageEventProjection } from "../../../src/events/current-turn-message-event-projection.js";
 import { createModelContext } from "@noobot/context-protocol";
@@ -20,10 +17,6 @@ import { isFunction, isObjectLike } from "@noobot/shared/value";
 
 export function createTestTurnMessagesStore(messages = []) {
   return createCurrentTurnMessagesStore(messages);
-}
-
-export function createTestTurnTasksStore(tasks = []) {
-  return createCurrentTurnTasksStore(tasks);
 }
 
 export function createTestModelPort(providerModel = {}) {
@@ -89,9 +82,7 @@ function bindActiveTurnIdentity(modelContext, identity) {
 
 const LOOP_STATE_RUNTIME_FIELDS = Object.freeze([
   "turnMessages",
-  "turnTasks",
   "currentTurnMessages",
-  "currentTurnTasks",
   "systemRuntime",
   "toolConsecutiveFailureCount",
 ]);
@@ -126,7 +117,6 @@ export function prepareTestTurnExecution(modelState, loopState, presentationMess
   }
   normalizeSystemRuntimeCounters(runtime.systemRuntime, "");
   loopState.currentTurnMessages = runtime.currentTurnMessages;
-  loopState.currentTurnTasks = runtime.currentTurnTasks;
   loopState.systemRuntime = runtime.systemRuntime;
   if (runtime.sessionManager === null) {
     throw new TypeError("test turn execution requires an explicit runtime.sessionManager");

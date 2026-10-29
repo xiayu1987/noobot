@@ -21,7 +21,7 @@ const TEST_SCOPE = Object.freeze({
 });
 
 test("appendTurns upserts an ordered message batch with one Session save", async () => {
-  const session = { ...createTestSessionRequiredFields(), currentTaskId: "" };
+  const session = createTestSessionRequiredFields();
   let findCount = 0;
   let saveCount = 0;
   const service = {
@@ -84,7 +84,7 @@ test("appendTurns upserts an ordered message batch with one Session save", async
 });
 
 test("appendTurns supersedes the prior canonical assistant presentation in one Turn", async () => {
-  const session = { ...createTestSessionRequiredFields(), currentTaskId: "" };
+  const session = createTestSessionRequiredFields();
   const service = {
     now: () => "2026-07-25T00:01:00.000Z",
     sessionRepo: {
@@ -139,7 +139,7 @@ test("appendTurns supersedes the prior canonical assistant presentation in one T
 });
 
 test("appendTurns persists the canonical tool policy", async () => {
-  const session = { ...createTestSessionRequiredFields(), currentTaskId: "" };
+  const session = createTestSessionRequiredFields();
   const policy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
   const service = {
     now: () => "2026-07-25T00:01:00.000Z",
@@ -171,7 +171,7 @@ test("appendTurns persists the canonical tool policy", async () => {
 });
 
 test("appendTurns persists the canonical internal control message type", async () => {
-  const session = { ...createTestSessionRequiredFields(), currentTaskId: "" };
+  const session = createTestSessionRequiredFields();
   const service = {
     now: () => "2026-07-25T00:01:00.000Z",
     sessionRepo: {
@@ -204,7 +204,7 @@ test("appendTurns persists the canonical internal control message type", async (
 });
 
 test("appendTurns preserves canonical user interjection time and sequence", async () => {
-  const session = { ...createTestSessionRequiredFields(), currentTaskId: "" };
+  const session = createTestSessionRequiredFields();
   const service = {
     now: () => "2026-09-18T01:01:00.000Z",
     sessionRepo: {
@@ -238,7 +238,7 @@ test("appendTurns preserves canonical user interjection time and sequence", asyn
 });
 
 test("appendTurns leaves natural user presentation unspecified and visible", async () => {
-  const session = { ...createTestSessionRequiredFields(), currentTaskId: "" };
+  const session = createTestSessionRequiredFields();
   const service = {
     now: () => "2026-07-25T00:01:00.000Z",
     sessionRepo: {
@@ -270,7 +270,6 @@ test("appendTurns leaves natural user presentation unspecified and visible", asy
 test("appendTurns updates an existing message with the same messageUid", async () => {
   const session = {
     ...createTestSessionRequiredFields(),
-    currentTaskId: "",
     messages: [
       {
         messageUid: "sm_existing",
@@ -328,7 +327,6 @@ test("appendTurns updates an existing message with the same messageUid", async (
 test("appendTurns keeps distinct messageUids separate when runtime message ids collide", async () => {
   const session = {
     ...createTestSessionRequiredFields(),
-    currentTaskId: "",
     messages: [
       {
         messageUid: "sm_old_guidance",
@@ -379,7 +377,7 @@ test("appendTurns keeps distinct messageUids separate when runtime message ids c
 });
 
 test("appendTurns rejects a turn without messageUid", async () => {
-  const session = { ...createTestSessionRequiredFields(), currentTaskId: "" };
+  const session = createTestSessionRequiredFields();
   const service = {
     now: () => "2026-07-25T00:01:00.000Z",
     sessionRepo: {
@@ -405,7 +403,6 @@ test("appendTurns rejects a turn without messageUid", async () => {
 test("appendTurns uses messageUid as the persistence identity and validates its dialog scope", async () => {
   const session = {
     ...createTestSessionRequiredFields(),
-    currentTaskId: "",
     messages: [
       {
         messageUid: "sm_fixed",
@@ -469,7 +466,7 @@ test("appendTurns uses messageUid as the persistence identity and validates its 
 });
 
 test("appendTurns preserves assistant presentation identity in the authoritative snapshot", async () => {
-  const session = { ...createTestSessionRequiredFields(), currentTaskId: "" };
+  const session = createTestSessionRequiredFields();
   const service = {
     now: () => "2026-07-25T00:01:00.000Z",
     sessionRepo: {

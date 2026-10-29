@@ -4,17 +4,20 @@
  * SPDX-License-Identifier: MIT
  */
 import { reactive } from "vue";
+import {
+  collectTurnLookupKeyErrors,
+  requireTurnLookupKey,
+} from "@noobot/session-protocol/turn-lookup-key";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-import { getMessageDialogProcessId, getMessageTurnScopeId } from "./messageIdentity.js";
-import { isFunction, text } from "@noobot/shared/value";
+import { isCanonicalText, isFunction } from "@noobot/shared/value";
 import { isApiRequestNotFound } from "@noobot/shared/request-error";
 
 const cache = reactive({ entries: {} });
 const inflight = new Map();
 
 function wait(delayMs) {
-  return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(delayMs) || 0)));
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
 async function fetchWithMissingDetailRetry(runFetch, identity, { retryLimit, retryDelayMs }) {
@@ -32,55 +35,53 @@ async function fetchWithMissingDetailRetry(runFetch, identity, { retryLimit, ret
   }
 }
 
-function thinkingDetailCacheKey({ sessionId = "", turnScopeId = "", dialogProcessId = "" } = {}) {
-  const sid = text(sessionId);
-  const turnKey = text(turnScopeId);
-  const route = turnKey || text(dialogProcessId);
-  return sid && route ? `${sid}::${route}` : "";
+function messageTurnLookupKey(messageItem) {
+  return { turnScopeId: messageItem.turnScopeId, dialogProcessId: messageItem.dialogProcessId };
+}
+
+function createThinkingDetailIdentity(sessionId, lookupKey) {
+  return Object.freeze({
+    sessionId,
+    turnScopeId: lookupKey.turnScopeId,
+    dialogProcessId: lookupKey.dialogProcessId,
+    key: `${sessionId}::${lookupKey.turnScopeId}::${lookupKey.dialogProcessId}`,
+  });
 }
 
 export function resolveThinkingDetailIdentity(messageItem, sessionId) {
-  const turnScopeId = getMessageTurnScopeId(messageItem);
-  const dialogProcessId = getMessageDialogProcessId(messageItem);
-  return {
-    sessionId,
-    turnScopeId,
-    turnScopeKey: turnScopeId,
-    dialogProcessId,
-    key: thinkingDetailCacheKey({ sessionId, turnScopeId, dialogProcessId }),
-  };
+  const candidate = messageTurnLookupKey(messageItem);
+  if (!isCanonicalText(sessionId) || collectTurnLookupKeyErrors(candidate).length > 0) return null;
+  return createThinkingDetailIdentity(sessionId, requireTurnLookupKey(candidate));
 }
 
-export function getCachedThinkingDetail(identity = {}) {
-  const key = identity.key || thinkingDetailCacheKey(identity);
-  return key ? cache.entries[key]?.data || null : null;
+export function getCachedThinkingDetail(identity) {
+  if (identity === null) return null;
+  return cache.entries[identity.key]?.data || null;
 }
 
 export async function loadThinkingDetail({
-  sessionId = "",
-  messageItem = {},
+  sessionId,
+  messageItem,
   fetchThinkingDetail,
-  expectedRevision = "",
   retryLimit = QUANTITY_THRESHOLDS.client.thinkingDetailRetryLimit,
   retryDelayMs = TIME_THRESHOLDS.client.thinkingDetailRetryDelayMs,
-} = {}) {
+}) {
   if (!isFunction(fetchThinkingDetail)) throw new TypeError("fetchThinkingDetail is required");
-  const identity = resolveThinkingDetailIdentity(messageItem, sessionId);
-  if (!identity.key) return null;
-  const cached = cache.entries[identity.key];
-  const revision = text(expectedRevision);
-  if (cached?.data && revision && text(cached.data.revision) === revision) return cached.data;
-  const requestKey = `${identity.key}::${revision || "latest"}`;
-  if (inflight.has(requestKey)) return inflight.get(requestKey);
+  if (!isCanonicalText(sessionId)) throw new TypeError("thinking detail sessionId is required");
+  const identity = createThinkingDetailIdentity(
+    sessionId,
+    requireTurnLookupKey(messageTurnLookupKey(messageItem)),
+  );
+  if (inflight.has(identity.key)) return inflight.get(identity.key);
   const request = (async () => {
     const data = await fetchWithMissingDetailRetry(fetchThinkingDetail, identity, {
-      retryLimit: Math.max(0, Number(retryLimit) || 0),
+      retryLimit,
       retryDelayMs,
     });
     cache.entries[identity.key] = { data, updatedAt: Date.now(), identity };
     return data;
-  })().finally(() => inflight.delete(requestKey));
-  inflight.set(requestKey, request);
+  })().finally(() => inflight.delete(identity.key));
+  inflight.set(identity.key, request);
   return request;
 }
 

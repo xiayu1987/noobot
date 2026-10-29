@@ -34,6 +34,10 @@ export function isDialogProcessKey(value) {
   return DIALOG_PROCESS_KEY_PATTERN.test(clean(value));
 }
 
+export function isCanonicalDialogProcessKey(value) {
+  return typeof value === "string" && DIALOG_PROCESS_KEY_PATTERN.test(value);
+}
+
 export function requireDialogProcessKey(value) {
   const key = clean(value);
   if (DIALOG_PROCESS_KEY_PATTERN.test(key)) return key;

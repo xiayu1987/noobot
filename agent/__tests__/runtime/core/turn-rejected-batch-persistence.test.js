@@ -135,12 +135,11 @@ function createOrchestratorHarness() {
         modelMessageId: "m-final",
         calls: [],
         turnMessageStore: turnStore,
-        turnTaskStore: turnStore,
       };
     },
     invokeNoToolsTurnFn: async ({ turn }) => {
       calls.noTools.push(turn);
-      return { output: "finalized", turnMessageStore: turnStore, turnTaskStore: turnStore };
+      return { output: "finalized", turnMessageStore: turnStore };
     },
     buildLoopResultFn: ({ output }) => ({ output }),
     maybeRequestPhaseSummaryFn: () => {},

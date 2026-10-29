@@ -26,7 +26,6 @@ function createRealFacade(calls) {
       },
     },
     sessionContextService: {},
-    taskService: {},
     executionLogService: {},
     repositories: { connectorInstanceRepository: {} },
     createSessionPersistenceContext: ({ sessionId }) => Object.freeze({ kind: "ctx", sessionId }),

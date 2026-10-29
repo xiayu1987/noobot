@@ -54,7 +54,6 @@ const MESSAGE_STATUS_FIELDS = Object.freeze([
   "terminalOutcome",
   "statusTurnScopeId",
   "hasFirstStreamEvent",
-  "taskId",
 ]);
 
 function buildMessageStatusFacet(canonicalMessage) {

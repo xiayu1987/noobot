@@ -522,7 +522,6 @@ defineExpose({
   border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 70%, transparent);
   background: color-mix(in srgb, var(--noobot-surface-sidebar) 78%, transparent);
   color: var(--noobot-text-main);
-  box-shadow: none;
   display: inline-flex;
   align-items: center;
   gap: var(--noobot-space-2xs);
@@ -589,7 +588,7 @@ defineExpose({
   }
 
   .more-actions-row {
-    padding: 9px var(--noobot-space-md);
+    padding: var(--noobot-space-md);
   }
 
   .more-panel-content {

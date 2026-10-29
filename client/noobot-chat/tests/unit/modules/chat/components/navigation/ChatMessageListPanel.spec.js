@@ -346,8 +346,9 @@ describe("ChatMessageListPanel", () => {
     const activeSession = reactive({
       sessionId: "s-1",
       messages: [
-        { role: RoleEnum.USER, content: "old", turnScopeId: "client-turn:old" },
+        { sessionId: "s-1", role: RoleEnum.USER, content: "old", turnScopeId: "client-turn:old" },
         {
+          sessionId: "s-1",
           role: RoleEnum.ASSISTANT,
           content: "",
           turnScopeId: "client-turn:old",
@@ -388,8 +389,9 @@ describe("ChatMessageListPanel", () => {
       activeSession: {
         sessionId: "s-1",
         messages: [
-          { role: RoleEnum.USER, content: "new", turnScopeId: "client-turn:new" },
+          { sessionId: "s-1", role: RoleEnum.USER, content: "new", turnScopeId: "client-turn:new" },
           {
+            sessionId: "s-1",
             role: RoleEnum.ASSISTANT,
             content: "",
             turnScopeId: "client-turn:new",

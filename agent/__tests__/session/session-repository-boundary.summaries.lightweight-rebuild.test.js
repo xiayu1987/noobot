@@ -179,7 +179,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
         },
         {
           role: "tool",
-          presentationMessageId: "pm_fx3",
+          presentationMessageId: "a1",
           type: "tool_result",
           turnScopeId: "turn-scope-u1",
           dialogProcessId: "dp-u1",
@@ -323,7 +323,10 @@ test("session display summary should keep chat view lightweight and rebuild stal
       runtime.repositories.sessionRepository.treePersistenceContext(userId, "B"),
     );
     const summaryFile = path.join(scopeB.sessionDir, "session-summary.json");
-    const persistedSession = await readSessionArtifact({ sessionDir: scopeB.sessionDir });
+    const persistedSession = await readSessionArtifact({
+      sessionDir: scopeB.sessionDir,
+      storageService: runtime.repositories.sessionRepository.storageService,
+    });
     assert.equal(
       persistedSession.messages.every((item) => "turnScopeId" in item),
       true,
@@ -513,9 +516,10 @@ test("session display summary should keep chat view lightweight and rebuild stal
       userId,
       sessionId: "B",
     });
-    assert.equal(displayData.summary, true);
+    assert.equal(displayData.exists, true);
     assert.equal(displayData.sessions.length, 1);
-    assert.equal(displayData.sessions[0].depth, 2);
+    assert.equal(displayData.sessions[0].availability, "available");
+    assert.equal("depth" in displayData.sessions[0], false);
     assert.equal("toolLogSummaries" in displayData.sessions[0], false);
     summary = JSON.parse(await readFile(summaryFile, "utf8"));
     assert.equal(summary.schemaVersion, SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION);

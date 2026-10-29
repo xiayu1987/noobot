@@ -9,7 +9,7 @@ import {
   queryAuthoritativeExecutionChildren,
   queryAuthoritativeExecutionTree,
 } from "@noobot/authoritative-state/application";
-import { text as clean } from "@noobot/shared/value";
+import { SESSION_SUMMARY_AVAILABILITY } from "@noobot/session-protocol/sessions-summary";
 
 function withReadDiagnostics(readModel, result) {
   return readModel.unreadableSessions
@@ -17,36 +17,27 @@ function withReadDiagnostics(readModel, result) {
     : result;
 }
 
+function summaryEntryFingerprint(entry) {
+  const revisionFact =
+    entry.availability === SESSION_SUMMARY_AVAILABILITY.AVAILABLE
+      ? entry.updatedAt
+      : entry.unavailableReason.code;
+  return [entry.sessionId, entry.parentSessionId, entry.availability, revisionFact];
+}
+
+function summaryFingerprint(payload) {
+  return JSON.stringify(
+    payload.sessions
+      .map(summaryEntryFingerprint)
+      .sort((left, right) => left[0].localeCompare(right[0])),
+  );
+}
+
 export class ExecutionReadService {
-  constructor({ sessionCrudService, now = () => new Date().toISOString() } = {}) {
+  constructor({ sessionCrudService, now }) {
     this.sessionCrudService = sessionCrudService;
     this.now = now;
     this.readIndexByUser = new Map();
-  }
-
-  _summaryFingerprint(summaries = []) {
-    return JSON.stringify(
-      (Array.isArray(summaries) ? summaries : [])
-        .map((item = {}) => ({
-          sessionId: clean(item.sessionId),
-          parentSessionId: clean(item.parentSessionId),
-          updatedAt: clean(item.updatedAt),
-        }))
-        .filter((item) => item.sessionId)
-        .sort((left, right) => left.sessionId.localeCompare(right.sessionId)),
-    );
-  }
-
-  async _readIndexFingerprint(userId) {
-    if (typeof this.sessionCrudService?.getAllSessionSummaries !== "function") return null;
-    const summaries = await this.sessionCrudService.getAllSessionSummaries({ userId });
-    return this._summaryFingerprint(summaries);
-  }
-
-  invalidate(userId = "") {
-    const normalizedUserId = clean(userId);
-    if (normalizedUserId) this.readIndexByUser.delete(normalizedUserId);
-    else this.readIndexByUser.clear();
   }
 
   async _scanAuthoritative(userId) {
@@ -57,24 +48,17 @@ export class ExecutionReadService {
   }
 
   async _readAll(userId) {
-    const normalizedUserId = clean(userId);
-    if (!normalizedUserId) return { executions: [], conflicts: new Map() };
-    let fingerprint = null;
-    try {
-      fingerprint = await this._readIndexFingerprint(normalizedUserId);
-      const indexed = this.readIndexByUser.get(normalizedUserId);
-      if (fingerprint !== null && indexed?.fingerprint === fingerprint) return indexed.readModel;
-    } catch {
-      fingerprint = null;
-    }
-    const readModel = await this._scanAuthoritative(normalizedUserId);
-    if (fingerprint !== null)
-      this.readIndexByUser.set(normalizedUserId, { fingerprint, readModel });
+    const fingerprint = summaryFingerprint(
+      await this.sessionCrudService.getAllSessionSummaries({ userId }),
+    );
+    const indexed = this.readIndexByUser.get(userId);
+    if (indexed !== undefined && indexed.fingerprint === fingerprint) return indexed.readModel;
+    const readModel = await this._scanAuthoritative(userId);
+    this.readIndexByUser.set(userId, { fingerprint, readModel });
     return readModel;
   }
 
-  async getExecution({ userId, executionId } = {}) {
-    if (!userId) return { found: false, reason: "missing_execution" };
+  async getExecution({ userId, executionId }) {
     const readModel = await this._readAll(userId);
     return withReadDiagnostics(
       readModel,
@@ -82,8 +66,7 @@ export class ExecutionReadService {
     );
   }
 
-  async getExecutionChildren({ userId, executionId } = {}) {
-    if (!userId) return { found: false, reason: "missing_user" };
+  async getExecutionChildren({ userId, executionId }) {
     const readModel = await this._readAll(userId);
     return withReadDiagnostics(
       readModel,
@@ -91,8 +74,7 @@ export class ExecutionReadService {
     );
   }
 
-  async getExecutionTree({ userId, executionId, rootExecutionId } = {}) {
-    if (!userId) return { found: false, reason: "missing_user" };
+  async getExecutionTree({ userId, executionId, rootExecutionId }) {
     const readModel = await this._readAll(userId);
     const result = queryAuthoritativeExecutionTree(readModel, {
       executionId,

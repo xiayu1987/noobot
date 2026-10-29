@@ -13,6 +13,12 @@ import {
   SESSION_ARTIFACT_MANIFEST_SNAPSHOT_INDEX_SCHEMA_VERSION,
   resolveSessionArtifactSchemaVersion,
 } from "@noobot/session-protocol";
+import {
+  EXECUTION_EVENT_INDEX_FILE,
+  EXECUTION_EVENT_TURNS_DIR,
+  decodeExecutionSegment,
+  requireLegacyV2TurnExecutionIndex,
+} from "@noobot/session-protocol/execution-event-index";
 import { WORKSPACE_LAYOUT, WORKSPACE_LAYOUT_UPGRADE_OWNER } from "@noobot/workspace-protocol";
 import { RUNTIME_EVENTS_DIR } from "@noobot/runtime-events";
 import {
@@ -26,18 +32,12 @@ import {
   SESSION_ARTIFACT_FILE_NAMES,
   resolveSessionArtifactMutationLock,
 } from "../session/session-artifact-files.js";
-import {
-  EXECUTION_EVENT_INDEX_FILE,
-  EXECUTION_EVENT_TURNS_DIR,
-  readExecutionTurnIndex,
-} from "../session/session-artifact-execution-logs.js";
 import { AUTHORITY_OUTBOX_DIR } from "../session/authority-outbox-store/outbox-journal.js";
 import {
   SUMMARY_SNAPSHOT_SCHEMA_VERSION,
   journalPath,
   messageHash,
 } from "../session/session-artifact-session/turn-journal-store.js";
-import { createSessionDisplaySourceRevision } from "../session/session-display-source-revision.js";
 import { quarantineMigrationUnit } from "./migration-quarantine.js";
 import { ignoreSessionProgress, walkSessionManifestDirectories } from "./session-directory-walk.js";
 
@@ -364,19 +364,13 @@ function syncThinkingDetailRef(message, detailRefs, filePath) {
   return { ...message, thinkingDetailRef: { ...ref, contentHash: change.to } };
 }
 
-async function upgradeSessionSummary({
-  sessionDir,
-  previousManifest,
-  manifest,
-  detailRefs,
-  stage,
-}) {
+async function upgradeSessionSummary({ sessionDir, detailRefs, stage }) {
   const filePath = path.join(sessionDir, SESSION_ARTIFACT_FILE_NAMES.sessionSummary);
   const text = await readTextOrNull(filePath);
   if (text === null) return false;
   const payload = parseJson(text, filePath);
   const result = upgradeValue(payload, filePath);
-  const value = Array.isArray(result.value?.messages)
+  const next = Array.isArray(result.value?.messages)
     ? {
         ...result.value,
         messages: result.value.messages.map((message) =>
@@ -384,14 +378,6 @@ async function upgradeSessionSummary({
         ),
       }
     : result.value;
-  const revision = value?.source?.revision;
-  const next =
-    revision && revision === createSessionDisplaySourceRevision(previousManifest)
-      ? {
-          ...value,
-          source: { ...value.source, revision: createSessionDisplaySourceRevision(manifest) },
-        }
-      : value;
   if (JSON.stringify(next) === JSON.stringify(payload)) return false;
   stage(filePath, jsonText(next));
   return true;
@@ -416,8 +402,24 @@ async function upgradePlainDocuments(sessionDir, stage) {
   return upgraded;
 }
 
-function countJsonlRecords(text) {
-  return text.split("\n").filter((line) => line.trim()).length;
+function requireLegacyV2TurnIndex(index, indexPath, dialogProcessId) {
+  try {
+    return requireLegacyV2TurnExecutionIndex(index, dialogProcessId);
+  } catch (error) {
+    throw Object.assign(upgradeError("execution_index_invalid", { filePath: indexPath }), {
+      cause: error,
+    });
+  }
+}
+
+function decodeUpgradedSegment(text, segmentPath) {
+  try {
+    return decodeExecutionSegment(text, segmentPath);
+  } catch (error) {
+    throw Object.assign(upgradeError("execution_segment_invalid", { segmentPath }), {
+      cause: error,
+    });
+  }
 }
 
 async function upgradeExecutionEvents(sessionDir, stage) {
@@ -431,28 +433,34 @@ async function upgradeExecutionEvents(sessionDir, stage) {
     if (!entry.isDirectory()) continue;
     const turnDir = path.join(turnsDir, entry.name);
     const indexPath = path.join(turnDir, EXECUTION_EVENT_INDEX_FILE);
-
-    const index = await readExecutionTurnIndex(turnDir);
-    if (index === null) continue;
+    const indexText = await readTextOrNull(indexPath);
+    if (indexText === null) continue;
+    const index = requireLegacyV2TurnIndex(parseJson(indexText, indexPath), indexPath, entry.name);
     let changed = false;
     const segments = [];
     for (const segment of index.segments) {
-      const segmentPath = path.join(turnDir, String(segment?.file || ""));
+      const segmentPath = path.join(turnDir, segment.file);
       const result = await upgradeDocumentFile(segmentPath, TRANSFER_DOCUMENT_FORMAT.JSONL, stage);
       if (result === null) throw upgradeError("execution_segment_missing", { segmentPath });
-      if (!result?.upgraded) {
+      if (!result.upgraded) {
         segments.push(segment);
         continue;
       }
       upgraded += result.upgraded;
       changed = true;
+      const decoded = decodeUpgradedSegment(result.text, segmentPath);
       segments.push({
         ...segment,
-        bytes: Buffer.byteLength(result.text, "utf8"),
-        records: countJsonlRecords(result.text),
+        bytes: decoded.bytes,
+        records: decoded.records.length,
       });
     }
-    if (changed) stage(indexPath, jsonText({ ...index, segments }));
+    if (changed) {
+      stage(
+        indexPath,
+        jsonText(requireLegacyV2TurnIndex({ ...index, segments }, indexPath, entry.name)),
+      );
+    }
   }
   return upgraded;
 }
@@ -486,7 +494,7 @@ async function upgradeSessionDirectory({ base, backupBase, sessionDir }) {
     : previousManifest;
   if (turns.changed) stage(manifestPath, jsonText(manifest));
   const detailRefs = await upgradeSummaryDetails(sessionDir, stage);
-  await upgradeSessionSummary({ sessionDir, previousManifest, manifest, detailRefs, stage });
+  await upgradeSessionSummary({ sessionDir, detailRefs, stage });
   const plain = await upgradePlainDocuments(sessionDir, stage);
   const meta = await upgradeDocumentFile(
     path.join(sessionDir, SESSION_ARTIFACT_FILE_NAMES.meta),

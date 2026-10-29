@@ -327,7 +327,6 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
   const tempRoot = await createTempRoot();
   const persistedTurns = [];
   const executionLogs = [];
-  let savedCurrentTurnTasksPayload = null;
   let capturedRuntime = null;
   let capturedAgentUserMessage = "";
 
@@ -390,9 +389,6 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
       };
       persistedTurns.push(userMessage);
       return { userMessage };
-    },
-    async saveCurrentTurnTasks(payload = {}) {
-      savedCurrentTurnTasksPayload = payload;
     },
   };
   const sessionManager = createCanonicalMessageEventSessionManager({
@@ -463,7 +459,6 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
             content: "ok from fake agent",
           },
         ],
-        turnTasks: [{ taskId: "t1", status: "done" }],
         modelLoopRound: 0,
         modelMessages: [],
       };
@@ -524,7 +519,6 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
   assert.equal(result.answer, "ok from fake agent");
   assert.equal(capturedAgentUserMessage, "hello plugin");
   assert.ok(capturedRuntime?.hookManager);
-  assert.equal(savedCurrentTurnTasksPayload?.currentTurnTasks?.[0]?.taskId, "t1");
   assert.ok(
     persistedTurns.some(
       (turn) =>

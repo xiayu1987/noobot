@@ -3,10 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  requireCurrentTurnMessagesStore,
-  requireCurrentTurnTasksStore,
-} from "./current-turn-ledger.js";
+import { requireCurrentTurnMessagesStore } from "./current-turn-ledger.js";
 import { emitEvent } from "../../events/index.js";
 import { createStateCommitter } from "../tool-execution/state-committer.js";
 import { requireActiveModelContext } from "../active-model-context.js";
@@ -24,14 +21,13 @@ export async function commitNoToolsTurnState({
   messageUid = "",
   presentationMessageId = "",
 } = {}) {
-  const { currentTurnMessages, currentTurnTasks } = loopState;
+  const { currentTurnMessages } = loopState;
   const { runtime } = modelState;
   const { dialogProcessId } = requireActiveModelContext(runtime).activeTurnIdentity;
   const { eventListener } = runtime;
 
   const turnMessageStore = requireCurrentTurnMessagesStore(currentTurnMessages);
   const currentModelInfo = resolveCurrentModelInfo(modelState);
-  const turnTaskStore = requireCurrentTurnTasksStore(currentTurnTasks);
   const stateCommitter = createStateCommitter({
     traces,
     turnMessageStore,
@@ -70,5 +66,5 @@ export async function commitNoToolsTurnState({
   });
   emitEvent(eventListener, "llm_call_end", { turn, mode: "no_tools", toolCallCount: 0 });
 
-  return { turnMessageStore, turnTaskStore };
+  return { turnMessageStore };
 }

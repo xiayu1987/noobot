@@ -22,7 +22,9 @@ import {
   ATTACHMENT_RECORD_VERSION,
   ATTACHMENT_RELATION_TYPE,
   mergeAttachmentsByIdentity,
+  normalizeSourcePath,
   reduceAttachmentLifecycle,
+  resolveLinkedAttachment,
   validateAttachmentLifecycleEvent,
 } from "../src/index.js";
 import { DEFAULT_MIME_TYPE, resolveMimeTypeFromFileName } from "../src/mime.js";
@@ -290,4 +292,101 @@ test("attachment event identity has its own generator", () => {
   const first = createAttachmentEventId();
   assert.match(first, /^attachment-event:[0-9a-f-]{36}$/);
   assert.notEqual(first, createAttachmentEventId());
+});
+
+test("normalizeSourcePath unifies separators, drive letter case and file URIs", () => {
+  const expected = "D:/work/report.xlsx";
+  assert.equal(normalizeSourcePath("D:\\work\\report.xlsx"), expected);
+  assert.equal(normalizeSourcePath("d:/work/report.xlsx"), expected);
+  assert.equal(normalizeSourcePath("file:///D:/work/report.xlsx"), expected);
+  assert.equal(normalizeSourcePath("D://work//report.xlsx"), expected);
+  assert.equal(normalizeSourcePath("/home/u/Report.xlsx"), "/home/u/Report.xlsx");
+  assert.notEqual(
+    normalizeSourcePath("/home/u/Report.xlsx"),
+    normalizeSourcePath("/home/u/report.xlsx"),
+  );
+});
+
+test("normalizeSourcePath rejects relative paths, dot segments, UNC and bad encodings", () => {
+  assert.throws(
+    () => normalizeSourcePath("work/report.xlsx"),
+    /attachment_source_path_not_absolute/,
+  );
+  assert.throws(
+    () => normalizeSourcePath("/home/../etc/passwd"),
+    /invalid_attachment_source_path_segment/,
+  );
+  assert.throws(
+    () => normalizeSourcePath("//server/share/a.txt"),
+    /unsupported_attachment_source_path_unc/,
+  );
+  assert.throws(
+    () => normalizeSourcePath("file:///%E0%A4%A"),
+    /invalid_attachment_source_path_encoding/,
+  );
+  assert.throws(() => normalizeSourcePath("/"), /invalid_attachment_source_path/);
+  assert.throws(() => normalizeSourcePath(""), /invalid_attachment_source_path/);
+});
+
+test("descriptor accepts only a canonical sourcePath", () => {
+  const parsed = parseAttachmentDescriptor({ ...descriptor(), sourcePath: "D:/work/report.xlsx" });
+  assert.equal(parsed.sourcePath, "D:/work/report.xlsx");
+  assert.equal("sourcePath" in parseAttachmentDescriptor(descriptor()), false);
+  assert.throws(
+    () => parseAttachmentDescriptor({ ...descriptor(), sourcePath: "d:\\work\\report.xlsx" }),
+    /non_canonical_attachment_source_path/,
+  );
+  assert.throws(
+    () => parseAttachmentDescriptor({ ...descriptor(), sourcePath: "work/report.xlsx" }),
+    /attachment_source_path_not_absolute/,
+  );
+});
+
+test("resolveLinkedAttachment binds a registered path and takes the latest registration", () => {
+  const older = {
+    identity: { ...identity, attachmentId: "att-old" },
+    sourcePath: "D:/work/report.xlsx",
+  };
+  const newer = {
+    identity: { ...identity, attachmentId: "att-new" },
+    sourcePath: "D:/work/report.xlsx",
+  };
+  const other = {
+    identity: { ...identity, attachmentId: "att-other" },
+    sourcePath: "D:/work/other.xlsx",
+  };
+  for (const href of [
+    "D:/work/report.xlsx",
+    "d:\\work\\report.xlsx",
+    "file:///d:/work/report.xlsx",
+  ]) {
+    assert.deepEqual(resolveLinkedAttachment(href, [older, newer, other]), {
+      status: "bound",
+      identity: newer.identity,
+    });
+  }
+  assert.deepEqual(
+    resolveLinkedAttachment("D:/work/report.xlsx", [newer, older]).identity,
+    older.identity,
+  );
+});
+
+test("resolveLinkedAttachment reports unregistered paths explicitly", () => {
+  const registered = { identity, sourcePath: "D:/work/report.xlsx" };
+  assert.deepEqual(resolveLinkedAttachment("D:/work/other.xlsx", [registered]), {
+    status: "unregistered",
+    href: "D:/work/other.xlsx",
+  });
+  assert.deepEqual(resolveLinkedAttachment("relative/report.xlsx", [registered]), {
+    status: "unregistered",
+    href: "relative/report.xlsx",
+  });
+  assert.deepEqual(resolveLinkedAttachment("D:/work/report.xlsx", []), {
+    status: "unregistered",
+    href: "D:/work/report.xlsx",
+  });
+  assert.throws(
+    () => resolveLinkedAttachment("D:/work/report.xlsx", null),
+    /invalid_attachment_descriptors/,
+  );
 });

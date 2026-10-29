@@ -5,88 +5,15 @@
  */
 
 import { mergeCanonicalActivityTimelines } from "@noobot/event-protocol/activity-timeline";
-import {
-  isThinkingDetailInjectedMessage,
-  projectThinkingDetailContentTimeline,
-} from "@noobot/event-protocol/thinking-detail-content";
-import { text } from "@noobot/shared/value";
+import { projectThinkingDetailContentTimeline } from "@noobot/event-protocol/thinking-detail-content";
+import { requireCanonicalTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
 
-export function normalizeThinkingRoute(value = "") {
-  return text(value);
-}
-
-export function isInjectedThinkingMessage(message = {}) {
-  return isThinkingDetailInjectedMessage(message);
-}
-
-export function hasThinkingTimeline(message = {}) {
-  return (
-    Array.isArray(message?.toolTimeline) ||
-    Array.isArray(message?.activityTimeline) ||
-    Array.isArray(message?.thinkingContentTimeline)
-  );
-}
-
-export function isMessageInThinkingRound(rootMessage = {}, candidateMessage = {}, filters = {}) {
-  const turnScopeId = normalizeThinkingRoute(filters.turnScopeId || rootMessage?.turnScopeId);
-  if (turnScopeId) {
-    return normalizeThinkingRoute(candidateMessage?.turnScopeId) === turnScopeId;
-  }
-  const dialogProcessId = normalizeThinkingRoute(
-    filters.dialogProcessId || rootMessage?.dialogProcessId,
-  );
-  if (dialogProcessId) {
-    return normalizeThinkingRoute(candidateMessage?.dialogProcessId) === dialogProcessId;
-  }
-  return candidateMessage === rootMessage;
-}
-
-function selectThinkingRootMessage(messages = [], filters = {}) {
-  const hasRouteFilter = Boolean(
-    normalizeThinkingRoute(filters.turnScopeId) || normalizeThinkingRoute(filters.dialogProcessId),
-  );
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const item = messages[index] || {};
-    if (normalizeThinkingRoute(item.role) !== "assistant") continue;
-    if (normalizeThinkingRoute(item.type || "message") !== "message") continue;
-    if (isInjectedThinkingMessage(item)) continue;
-    if (!hasRouteFilter || isMessageInThinkingRound(filters, item, filters)) return item;
-  }
-  const roundMessages = messages.filter((item) => isMessageInThinkingRound(filters, item, filters));
-  const presentationMessageIds = [
-    ...new Set(
-      roundMessages
-        .map((item = {}) => normalizeThinkingRoute(item?.presentationMessageId))
-        .filter(Boolean),
-    ),
-  ];
-  if (presentationMessageIds.length > 1) {
-    throw new TypeError("thinking detail invariant failed: presentation_message_identity_conflict");
-  }
-  if (presentationMessageIds.length !== 1) return {};
-  const source =
-    roundMessages.find(
-      (item = {}) =>
-        normalizeThinkingRoute(item?.presentationMessageId) === presentationMessageIds[0],
-    ) || {};
-  return {
-    presentationMessageId: presentationMessageIds[0],
-    role: "assistant",
-    type: "message",
-    content: "",
-    chatPresentation: true,
-    sessionId: normalizeThinkingRoute(source?.sessionId),
-    dialogProcessId: normalizeThinkingRoute(source?.dialogProcessId),
-    turnScopeId: normalizeThinkingRoute(source?.turnScopeId),
-  };
-}
-
-function mergeTimeline(messages = [], field, resolveKey) {
+function mergeTimeline(messages, field, resolveKey) {
   const timeline = [];
   const indexByKey = new Map();
   for (const message of messages) {
-    for (const item of Array.isArray(message?.[field]) ? message[field] : []) {
-      const key = normalizeThinkingRoute(resolveKey(item));
+    for (const item of message[field] ?? []) {
+      const key = resolveKey(item);
       if (!key || !indexByKey.has(key)) {
         if (key) indexByKey.set(key, timeline.length);
         timeline.push(item);
@@ -99,38 +26,20 @@ function mergeTimeline(messages = [], field, resolveKey) {
   return timeline;
 }
 
-export function projectThinkingTimeline(messages = [], rootMessage = {}, filters = {}) {
-  const roundMessages = messages.filter((item) =>
-    isMessageInThinkingRound(rootMessage, item, filters),
-  );
+export function projectThinkingTimeline(messages, { turnScopeId }) {
+  const scope = requireCanonicalTurnScopeId(turnScopeId);
+  const roundMessages = messages.filter((message) => message.turnScopeId === scope);
   const toolTimeline = mergeTimeline(
     roundMessages,
     "toolTimeline",
-    (item) => item?.key || item?.toolCallId,
+    (item) => item.key || item.toolCallId,
   );
   const activityTimeline = mergeCanonicalActivityTimelines(
-    ...roundMessages.map((message) => message?.activityTimeline || []),
+    ...roundMessages.map((message) => message.activityTimeline ?? []),
   );
   const thinkingContentTimeline = projectThinkingDetailContentTimeline(
     roundMessages,
     activityTimeline,
   );
-  return {
-    rootMessage,
-    roundMessages,
-    toolTimeline,
-    activityTimeline,
-    thinkingContentTimeline,
-    projectedRootMessage: {
-      ...rootMessage,
-      toolTimeline,
-      activityTimeline,
-      thinkingContentTimeline,
-    },
-  };
-}
-
-export function projectThinkingDetailRound(messages = [], filters = {}) {
-  const rootMessage = selectThinkingRootMessage(messages, filters);
-  return projectThinkingTimeline(messages, rootMessage, filters);
+  return { roundMessages, toolTimeline, activityTimeline, thinkingContentTimeline };
 }

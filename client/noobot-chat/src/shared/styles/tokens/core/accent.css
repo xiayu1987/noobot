@@ -2,5 +2,6 @@
   --noobot-accent: var(--noobot-base-blue-500);
   --noobot-accent-hover: var(--noobot-base-blue-600);
   --noobot-accent-soft: color-mix(in srgb, var(--noobot-accent) 12%, transparent);
+  --noobot-accent-hover-soft: color-mix(in srgb, var(--noobot-accent) 8%, transparent);
   --noobot-accent-border: color-mix(in srgb, var(--noobot-accent) 72%, transparent);
 }

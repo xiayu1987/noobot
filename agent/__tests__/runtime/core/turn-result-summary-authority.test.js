@@ -7,10 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { buildLoopResult } from "../../../src/runtime/turn/turn-result-aggregator.js";
-import {
-  createCurrentTurnMessagesStore,
-  createCurrentTurnTasksStore,
-} from "../../../src/runtime/turn/current-turn-ledger.js";
+import { createCurrentTurnMessagesStore } from "../../../src/runtime/turn/current-turn-ledger.js";
 
 test("turn result aggregation does not declare the turn complete before final hooks", () => {
   const turnMessageStore = createCurrentTurnMessagesStore([
@@ -25,7 +22,6 @@ test("turn result aggregation does not declare the turn complete before final ho
     modelMessageId: "model-final",
     traces: [],
     loopState: { systemRuntime: { modelLoopRound: 2 } },
-    turnTaskStore: createCurrentTurnTasksStore(),
     turnMessageStore,
     modelMessages: [],
   });

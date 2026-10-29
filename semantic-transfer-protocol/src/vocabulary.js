@@ -25,6 +25,7 @@ export const TRANSFER_REASON = Object.freeze({
   EXECUTE_SCRIPT_INPUT_TOO_LONG: "execute_script_input_too_long",
   EXECUTE_SCRIPT_BACKGROUND: "execute_script_background",
   EXECUTE_SCRIPT_OUTPUT_OVERFLOW: "execute_script_output_overflow",
+  EXECUTE_SCRIPT_OUTPUT_FILES: "execute_script_output_files",
   EXECUTE_NATIVE_SCRIPT_OUTPUT: "execute_native_script_output",
   WRITE_FILE_INPUT_TOO_LONG: "write_file_input_too_long",
   PATCH_FILE_INPUT_TOO_LONG: "patch_file_input_too_long",

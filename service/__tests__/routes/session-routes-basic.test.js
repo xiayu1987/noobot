@@ -13,7 +13,6 @@ test("session-routes: streams an attachment opened by the canonical attachment s
   registerSessionRoutes(app, {
     bot: {
       session: {
-        getSessionData: async () => ({}),
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
         getAllSessionsData: async () => [],
@@ -42,7 +41,6 @@ test("session-routes: 附件不存在返回 404 + 标准错误体", async () => 
   registerSessionRoutes(app, {
     bot: {
       session: {
-        getSessionData: async () => ({}),
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
         getAllSessionsData: async () => [],
@@ -71,7 +69,6 @@ for (const [label, query] of [
     registerSessionRoutes(app, {
       bot: {
         session: {
-          getSessionData: async () => ({}),
           getRootSessionId: async () => "",
           deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
           getAllSessionsData: async () => [],
@@ -124,7 +121,6 @@ test("session-routes: 插件诊断接口返回发现/加载/错误信息", async
   registerSessionRoutes(app, {
     bot: {
       session: {
-        getSessionData: async () => ({}),
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
         getAllSessionsData: async () => [],
@@ -248,4 +244,52 @@ test("session-routes: terminal resolution requires a commandId", async () => {
     assert.equal(response.status, 400);
   });
   assert.equal(called, false);
+});
+
+function createAttachmentApp(openAttachmentStream) {
+  const app = express();
+  registerSessionRoutes(app, {
+    bot: {
+      session: {
+        getRootSessionId: async () => "",
+        deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
+        getAllSessionsData: async () => [],
+      },
+      openAttachmentStream,
+    },
+    translateText: (key) => key,
+  });
+  return app;
+}
+
+test("session-routes: 附件下载头按 RFC 6266 编码非 ASCII 文件名", async () => {
+  const app = createAttachmentApp(async () => ({
+    name: "调查表 (v1).xlsx",
+    mimeType: "application/octet-stream",
+    stream: Readable.from(["x"]),
+  }));
+  await withTestServer(app, async (baseUrl) => {
+    const response = await fetch(
+      `${baseUrl}/internal/attachment/u1/a1?sessionId=s1&attachmentSource=model`,
+    );
+    const disposition = response.headers.get("content-disposition");
+    assert.equal(response.status, 200);
+    assert.ok(disposition.startsWith('inline; filename="'));
+    assert.ok(disposition.includes("filename*=UTF-8''"));
+    assert.ok(disposition.endsWith("%E8%B0%83%E6%9F%A5%E8%A1%A8%20%28v1%29.xlsx"));
+  });
+});
+
+test("session-routes: 附件存储异常返回 500 而不是伪装成 404", async () => {
+  const app = createAttachmentApp(async () => {
+    throw new Error("storage-corrupted");
+  });
+  await withTestServer(app, async (baseUrl) => {
+    const response = await fetch(
+      `${baseUrl}/internal/attachment/u1/a1?sessionId=s1&attachmentSource=model`,
+    );
+    const payload = await response.json();
+    assert.equal(response.status, 500);
+    assert.equal(payload.error, "storage-corrupted");
+  });
 });

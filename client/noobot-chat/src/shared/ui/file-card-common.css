@@ -31,11 +31,6 @@
   line-height: 0;
 }
 
-.attachment-preview-btn:focus-visible {
-  outline: 2px solid var(--noobot-accent);
-  outline-offset: 2px;
-}
-
 .file-icon {
   box-sizing: border-box;
   width: var(--noobot-msg-file-thumb-size);
@@ -67,7 +62,7 @@
   color: var(--noobot-text-strong);
   background: transparent;
   border: 0;
-  border-radius: 50%;
+  border-radius: var(--noobot-radius-circle);
 }
 
 .file-icon-button:hover {
@@ -93,16 +88,16 @@
   white-space: nowrap;
   font-size: var(--noobot-msg-caption-font-size);
   color: var(--noobot-msg-file-name);
-  line-height: var(--noobot-line-height-snug);
+  line-height: var(--noobot-line-height-tight);
 }
 
 .file-size {
   font-size: var(--noobot-msg-file-size-font-size);
-  line-height: var(--noobot-line-height-snug);
+  line-height: var(--noobot-line-height-tight);
   color: var(--noobot-msg-file-size);
 }
 
 .attachment-download-btn {
-  border-radius: 50%;
+  border-radius: var(--noobot-radius-circle);
   color: var(--noobot-msg-file-name);
 }

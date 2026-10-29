@@ -14,11 +14,13 @@ import {
   readSessionTurnView,
   writeSessionArtifact as writeSessionArtifactCanonical,
   writeSessionTurnArtifacts,
+  SESSION_ARTIFACT_PREDECESSOR,
 } from "../../src/session/session-artifact-store.js";
 import { registerSessionMessageFacts } from "../../src/session/entities/session-message-facts.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 import { withTemp, writeSessionArtifact } from "./session-artifact-store-v2.test-helpers.js";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
+import { TEST_STORAGE_SERVICE as storageService } from "../helpers/storage-service.js";
 
 const now = () => "2026-10-19T00:00:00.000Z";
 
@@ -70,7 +72,7 @@ const appended = {
   ts: TEST_MESSAGE_TS,
   sessionId: "s",
   role: "tool",
-  presentationMessageId: "pm_fx2",
+  presentationMessageId: "pm_fx1",
   content: "late",
   turnScopeId: "a",
   dialogProcessId: "dp1",
@@ -106,6 +108,25 @@ async function seed(root) {
   });
 }
 
+function writeTurnView(sessionDir, view, turnScopeIds) {
+  return writeSessionTurnArtifacts({
+    storageService,
+    sessionDir,
+    sessionPayload: view.session,
+    turnScopeIds,
+    atomic: true,
+    now,
+  });
+}
+
+function readView(sessionDir, turnScopeIds) {
+  return readSessionTurnView({ storageService, sessionDir, turnScopeIds });
+}
+
+function readFull(sessionDir) {
+  return readSessionArtifact({ storageService, sessionDir });
+}
+
 test("turn view write matches the full write when an earlier turn of a dialog grows", async () =>
   withTemp(async (root) => {
     const fullDir = path.join(root, "full");
@@ -113,26 +134,25 @@ test("turn view write matches the full write when an earlier turn of a dialog gr
     await seed(fullDir);
     await seed(viewDir);
 
-    const full = await readSessionArtifact({ sessionDir: fullDir });
+    const full = await readFull(fullDir);
     full.messages.push(appended);
-    await writeSessionArtifactCanonical({ sessionDir: fullDir, sessionPayload: full, now });
-
-    const view = await readSessionTurnView({ sessionDir: viewDir, turnScopeIds: ["a"] });
-    assert.deepEqual(view.turnScopeIds.sort(), ["a", "c"]);
-    view.session.messages.push(appended);
-    registerSessionMessageFacts(view.session, appended);
-    const { listFacts } = await writeSessionTurnArtifacts({
-      sessionDir: viewDir,
-      sessionPayload: view.session,
-      turnScopeIds: view.turnScopeIds,
+    await writeSessionArtifactCanonical({
+      storageService,
+      sessionDir: fullDir,
+      sessionPayload: full,
+      atomic: true,
+      predecessor: SESSION_ARTIFACT_PREDECESSOR.CANONICAL,
       now,
     });
 
+    const view = await readView(viewDir, ["a"]);
+    assert.deepEqual(view.turnScopeIds.sort(), ["a", "c"]);
+    view.session.messages.push(appended);
+    registerSessionMessageFacts(view.session, appended);
+    const { listFacts } = await writeTurnView(viewDir, view, view.turnScopeIds);
+
     assert.deepEqual(layoutOf(await readManifest(viewDir)), layoutOf(await readManifest(fullDir)));
-    assert.deepEqual(
-      (await readSessionArtifact({ sessionDir: viewDir })).messages,
-      (await readSessionArtifact({ sessionDir: fullDir })).messages,
-    );
+    assert.deepEqual((await readFull(viewDir)).messages, (await readFull(fullDir)).messages);
     assert.equal(listFacts.messageCount, 5);
     assert.equal(listFacts.lastMessage.messageUid, "sm_a_tool");
   }));
@@ -141,7 +161,7 @@ test("consecutive turn view appends keep later views scoped and the session comp
   withTemp(async (root) => {
     await seed(root);
     for (const turnScopeId of ["d", "e"]) {
-      const view = await readSessionTurnView({ sessionDir: root, turnScopeIds: [turnScopeId] });
+      const view = await readView(root, [turnScopeId]);
       const message = {
         messageUid: `sm_${turnScopeId}_u`,
         ts: TEST_MESSAGE_TS,
@@ -154,17 +174,12 @@ test("consecutive turn view appends keep later views scoped and the session comp
       };
       view.session.messages.push(message);
       registerSessionMessageFacts(view.session, message);
-      await writeSessionTurnArtifacts({
-        sessionDir: root,
-        sessionPayload: view.session,
-        turnScopeIds: view.turnScopeIds,
-        now,
-      });
+      await writeTurnView(root, view, view.turnScopeIds);
     }
-    const latest = await readSessionTurnView({ sessionDir: root, turnScopeIds: ["f"] });
+    const latest = await readView(root, ["f"]);
     assert.deepEqual(latest.turnScopeIds, ["e"]);
     assert.deepEqual(
-      (await readSessionArtifact({ sessionDir: root })).messages.map((item) => item.messageUid),
+      (await readFull(root)).messages.map((item) => item.messageUid),
       ["sm_a_u", "sm_a_a", "sm_b_u", "sm_c_u", "sm_d_u", "sm_e_u"],
     );
   }));
@@ -172,22 +187,16 @@ test("consecutive turn view appends keep later views scoped and the session comp
 test("turn view write rejects a messageUid owned by a turn outside the view", async () =>
   withTemp(async (root) => {
     await seed(root);
-    const view = await readSessionTurnView({ sessionDir: root, turnScopeIds: ["c"] });
+    const view = await readView(root, ["c"]);
     view.session.messages.push({
       ...appended,
       messageUid: "sm_a_u",
       turnScopeId: "c",
       dialogProcessId: "dp2",
     });
-    await assert.rejects(
-      writeSessionTurnArtifacts({
-        sessionDir: root,
-        sessionPayload: view.session,
-        turnScopeIds: view.turnScopeIds,
-        now,
-      }),
-      { code: "SESSION_MESSAGE_IDENTITY_CONFLICT" },
-    );
+    await assert.rejects(writeTurnView(root, view, view.turnScopeIds), {
+      code: "SESSION_MESSAGE_IDENTITY_CONFLICT",
+    });
   }));
 
 test("turn view write rejects an outside turn without ordered messages", async () =>
@@ -202,29 +211,17 @@ test("turn view write rejects an outside turn without ordered messages", async (
     target.messageOrder = [];
     target.messageHashes = {};
     await writeFile(files.session, JSON.stringify(manifest));
-    const view = await readSessionTurnView({ sessionDir: root, turnScopeIds: ["a"] });
-    await assert.rejects(
-      writeSessionTurnArtifacts({
-        sessionDir: root,
-        sessionPayload: view.session,
-        turnScopeIds: view.turnScopeIds,
-        now,
-      }),
-      { code: "SESSION_TURN_VIEW_INCOMPLETE" },
-    );
+    const view = await readView(root, ["a"]);
+    await assert.rejects(writeTurnView(root, view, view.turnScopeIds), {
+      code: "SESSION_TURN_VIEW_INCOMPLETE",
+    });
   }));
 
 test("turn view write rejects a scope list that omits a materialized turn", async () =>
   withTemp(async (root) => {
     await seed(root);
-    const view = await readSessionTurnView({ sessionDir: root, turnScopeIds: ["a"] });
-    await assert.rejects(
-      writeSessionTurnArtifacts({
-        sessionDir: root,
-        sessionPayload: view.session,
-        turnScopeIds: ["a"],
-        now,
-      }),
-      { code: "SESSION_TURN_VIEW_INCOMPLETE" },
-    );
+    const view = await readView(root, ["a"]);
+    await assert.rejects(writeTurnView(root, view, ["a"]), {
+      code: "SESSION_TURN_VIEW_INCOMPLETE",
+    });
   }));

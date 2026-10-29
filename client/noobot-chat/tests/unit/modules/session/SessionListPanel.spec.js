@@ -36,4 +36,34 @@ describe("SessionListPanel", () => {
     expect(sessionListPanelSource).toContain('if (sessionStatus.sending) return "running";');
     expect(sessionListPanelSource).not.toContain("currentTaskStatus");
   });
+
+  it("groups sessions older than a week into one date group", () => {
+    expect(sessionListPanelSource).toContain(
+      "const RECENT_DAY_GROUP_COUNT = QUANTITY_THRESHOLDS.client.sessionListRecentDayGroupCount;",
+    );
+    expect(sessionListPanelSource).toContain('const OLDER_GROUP_KEY = "older";');
+    expect(sessionListPanelSource).toContain("if (timeMs < cutoffMs) return OLDER_GROUP_KEY;");
+    expect(sessionListPanelSource).toContain('compactLabel: "common.sessionDateOlderCompact"');
+    expect(sessionListPanelSource).toContain('compactLabel: "common.sessionDateUnknownCompact"');
+  });
+
+  it("deletes a whole date group through the session id array contract", () => {
+    expect(sessionListPanelSource).toContain('class="session-group-delete-btn');
+    expect(sessionListPanelSource).toContain(
+      "dateGroup.items.map((sessionItem) => sessionItem.sessionId)",
+    );
+    expect(sessionListPanelSource).toMatch(/@click\.stop="\s*emit\(\s*'delete-session',/);
+    expect(sessionListPanelSource).toContain("@keydown.stop");
+    expect(sessionListPanelSource).toContain(
+      "@click.stop=\"emit('delete-session', [sessionItem.sessionId])\"",
+    );
+  });
+
+  it("shows compact date labels when collapsed and session icons only when collapsed", () => {
+    expect(sessionListPanelSource).toContain(
+      "{{ collapsed ? dateGroup.compactLabel : dateGroup.label }}",
+    );
+    expect(sessionListPanelSource).toContain(':title="dateGroup.label"');
+    expect(sessionListPanelSource).toContain('<div v-if="collapsed" class="session-icon-wrapper">');
+  });
 });

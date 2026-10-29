@@ -5,6 +5,7 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import { reconcileCompletedTurnOrphanToolCalls } from "../src/index.js";
 import { SESSION_REPAIR_ERROR_CODE } from "../src/errors.js";
 
@@ -12,6 +13,7 @@ function orphanToolCallSession({ status = "completed", answeredIds = [] } = {}) 
   const scope = { dialogProcessId: "dialog-1", turnScopeId: "turn-1" };
   return {
     turnLifecycle: {
+      ...createEmptyTurnLifecycle(),
       turns: { "turn-1": { ...scope, terminalStatus: { status, reason: "run_completed" } } },
     },
     messages: [
@@ -60,4 +62,12 @@ test("orphan tool_call repair rejects partially answered tool_calls", () => {
     () => reconcileCompletedTurnOrphanToolCalls(orphanToolCallSession({ answeredIds: ["call-1"] })),
     { code: SESSION_REPAIR_ERROR_CODE.ORPHAN_TOOL_CALL_REPAIR_AMBIGUOUS },
   );
+});
+
+test("orphan tool_call repair rejects non-object messages as an invalid repair source", () => {
+  const source = orphanToolCallSession();
+  source.messages.push("not-a-message");
+  assert.throws(() => reconcileCompletedTurnOrphanToolCalls(source), {
+    code: SESSION_REPAIR_ERROR_CODE.REPAIR_SOURCE_INVALID,
+  });
 });

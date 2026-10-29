@@ -7,11 +7,16 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { after } from "node:test";
-import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol";
+import {
+  TURN_EVENT,
+  TURN_PHASE,
+  createAggregateVersionConflictError,
+} from "@noobot/session-protocol";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { isObjectLike } from "@noobot/shared/value";
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 import { createAcceptedAgentExecution } from "../helpers/accepted-run-identity.js";
+import { createSessionCrudServiceStub } from "../helpers/session-crud-service-stub.js";
 import {
   applySessionMessageFacts,
   createTestSessionRequiredFields,
@@ -53,14 +58,9 @@ export function harness(initial = {}) {
       session = structuredClone(next);
     },
     async save(_u, next, { expectedAggregateVersion } = {}) {
-      const actual = Number(session.aggregateVersion ?? 0);
-      if (expectedAggregateVersion != null && Number(expectedAggregateVersion) !== actual) {
-        const error = new Error("session version conflict");
-        error.statusCode = 409;
-        error.code = "SESSION_AGGREGATE_VERSION_CONFLICT";
-        error.currentVersion = actual;
-        throw error;
-      }
+      const actual = session.aggregateVersion;
+      if (expectedAggregateVersion != null && expectedAggregateVersion !== actual)
+        throw createAggregateVersionConflictError({ currentVersion: actual });
       session = structuredClone(next);
     },
   };
@@ -68,6 +68,7 @@ export function harness(initial = {}) {
     service: new SessionMessageService({
       repo,
       sessionRepo: repo,
+      sessionCrudService: createSessionCrudServiceStub(() => session),
       now: () => "2026-01-01T00:00:00.000Z",
       allocateDialogProcessId: () => "dialog-replacement",
     }),

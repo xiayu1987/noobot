@@ -20,9 +20,9 @@ import {
   messageHash,
   summarySnapshotContentHash,
 } from "../src/session/session-artifact-session/turn-journal-store.js";
-import { createSessionDisplaySourceRevision } from "../src/session/session-display-source-revision.js";
-
 const V2_FIELD = TRANSFER_ENVELOPE_V2.presentationField;
+
+const SUMMARY_REVISION = `sha256:${"a".repeat(64)}`;
 
 const SESSION = `${WORKSPACE_LAYOUT.SESSION_DIR}/s-1`;
 const TURN = "client-turn:t-1";
@@ -88,9 +88,28 @@ async function createFixture() {
 const SNAPSHOT_FILE = "turn-snapshots/turn-1-cp-1.json";
 const DETAIL_FILE = "session-summary-details/msg_detail.json";
 const SEGMENT_DIR = `execution-events/turns/${DIALOG}`;
+const SEGMENT_FILE = "segment-000001.jsonl";
+
+function v2TurnIndex(segment) {
+  return {
+    schemaVersion: 2,
+    dialogProcessId: DIALOG,
+    activeSequence: 1,
+    maxSegmentBytes: 1048576,
+    segments: [
+      {
+        sequence: 1,
+        file: SEGMENT_FILE,
+        bytes: Buffer.byteLength(segment, "utf8"),
+        records: 2,
+        sealed: false,
+      },
+    ],
+  };
+}
 const TAIL = '{"op":"upsert","partial":';
 
-async function seedSession(fixture, { summaryRevisionCurrent = true } = {}) {
+async function seedSession(fixture) {
   const withEnvelope = toolMessage("sm_a", "a");
   const plain = toolMessage("sm_b", null);
   const snapshotRecord = upsert(toolMessage("sm_c", "c"));
@@ -111,7 +130,6 @@ async function seedSession(fixture, { summaryRevisionCurrent = true } = {}) {
     schemaVersion: SESSION_ARTIFACT_MANIFEST_SNAPSHOT_INDEX_SCHEMA_VERSION,
     parentSessionId: "",
     caller: "user",
-    currentTaskId: "",
     aggregateVersion: 3,
     turnTimings: [],
     turnLifecycle: {},
@@ -158,11 +176,7 @@ async function seedSession(fixture, { summaryRevisionCurrent = true } = {}) {
   };
   await fixture.write(DETAIL_FILE, detail);
   const summary = {
-    source: {
-      revision: summaryRevisionCurrent
-        ? createSessionDisplaySourceRevision(manifest)
-        : "sha256:stale",
-    },
+    source: { revision: SUMMARY_REVISION },
     messages: [
       {
         presentationMessageId: "msg_detail",
@@ -187,11 +201,8 @@ async function seedSession(fixture, { summaryRevisionCurrent = true } = {}) {
   );
 
   const segment = jsonl([{ type: "x", transfer: v2Envelope("x") }, { type: "plain" }]);
-  await fixture.write(`${SEGMENT_DIR}/segment-1.jsonl`, segment);
-  await fixture.write(`${SEGMENT_DIR}/index.json`, {
-    schemaVersion: 2,
-    segments: [{ file: "segment-1.jsonl", bytes: Buffer.byteLength(segment, "utf8"), records: 2 }],
-  });
+  await fixture.write(`${SEGMENT_DIR}/${SEGMENT_FILE}`, segment);
+  await fixture.write(`${SEGMENT_DIR}/index.json`, v2TurnIndex(segment));
   return { manifest, committed, snapshot, detail, summary, withEnvelope, plain };
 }
 
@@ -242,7 +253,7 @@ test("v6 rewrites session envelopes and resyncs every derived checksum", async (
     const summary = await fixture.readJson("session-summary.json");
     assert.equal(summary.messages[0].thinkingDetailRef.contentHash, sha(detail));
     assertV3(summary.messages[0].transferEnvelopes[0], "s");
-    assert.equal(summary.source.revision, createSessionDisplaySourceRevision(manifest));
+    assert.equal(summary.source.revision, SUMMARY_REVISION);
 
     assertV3(
       JSON.parse((await fixture.readText("events/events.jsonl")).split("\n")[0]).transfer,
@@ -250,12 +261,10 @@ test("v6 rewrites session envelopes and resyncs every derived checksum", async (
     );
     assertV3(JSON.parse(await fixture.readText("events/events.20260514.jsonl")).transfer, "r");
     assertV3(JSON.parse(await fixture.readText("authority-outbox/outbox.jsonl")).transfer, "o");
-    const segment = await fixture.readText(`${SEGMENT_DIR}/segment-1.jsonl`);
+    const segment = await fixture.readText(`${SEGMENT_DIR}/${SEGMENT_FILE}`);
     assertV3(JSON.parse(segment.split("\n")[0]).transfer, "x");
     const index = await fixture.readJson(`${SEGMENT_DIR}/index.json`);
-    assert.deepEqual(index.segments, [
-      { file: "segment-1.jsonl", bytes: Buffer.byteLength(segment, "utf8"), records: 2 },
-    ]);
+    assert.deepEqual(index, v2TurnIndex(segment));
 
     assert.equal(await fixture.readBackupText("turns/turn-1.jsonl"), originalJournal);
     assert.deepEqual(
@@ -265,7 +274,7 @@ test("v6 rewrites session envelopes and resyncs every derived checksum", async (
         "events/events.20260514.jsonl",
         "events/events.jsonl",
         `${SEGMENT_DIR}/index.json`,
-        `${SEGMENT_DIR}/segment-1.jsonl`,
+        `${SEGMENT_DIR}/${SEGMENT_FILE}`,
         DETAIL_FILE,
         "session-summary.json",
         "session.json",
@@ -276,19 +285,6 @@ test("v6 rewrites session envelopes and resyncs every derived checksum", async (
 
     const rerun = await upgradeSessionTransferEnvelopes(fixture);
     assert.deepEqual(rerun, { sessions: [], quarantined: [] });
-  } finally {
-    await fixture.restore();
-  }
-});
-
-test("v6 keeps a stale summary revision stale", async () => {
-  const fixture = await createFixture();
-  try {
-    await seedSession(fixture, { summaryRevisionCurrent: false });
-    await upgradeSessionTransferEnvelopes(fixture);
-    const summary = await fixture.readJson("session-summary.json");
-    assert.equal(summary.source.revision, "sha256:stale");
-    assertV3(summary.messages[0].transferEnvelopes[0], "s");
   } finally {
     await fixture.restore();
   }

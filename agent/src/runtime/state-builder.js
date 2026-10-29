@@ -135,7 +135,6 @@ function buildLoopState({ tools, runtime, sys, loopConfig, errorLogger }) {
     tools,
     traces: [],
     currentTurnMessages: runtime.currentTurnMessages,
-    currentTurnTasks: runtime.currentTurnTasks,
     maxTurns: loopConfig.maxToolLoopTurns,
     phaseSummaryLoopTurns: loopConfig.phaseSummaryLoopTurns,
     taskCheckLoopTurns: loopConfig.taskCheckLoopTurns,

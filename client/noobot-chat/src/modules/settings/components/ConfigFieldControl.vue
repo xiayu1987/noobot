@@ -276,7 +276,7 @@ function syncRawDraft(text) {
 .field-hint {
   font-family: var(--noobot-font-mono);
   font-size: var(--noobot-font-size-xs);
-  color: var(--noobot-text-muted);
+  color: var(--noobot-text-secondary);
   word-break: break-all;
 }
 
@@ -285,7 +285,7 @@ function syncRawDraft(text) {
   align-items: baseline;
   flex-wrap: wrap;
   gap: var(--noobot-space-xs);
-  color: var(--noobot-text-muted);
+  color: var(--noobot-text-secondary);
   font-size: var(--noobot-font-size-xs);
   line-height: var(--noobot-line-height-body);
 }

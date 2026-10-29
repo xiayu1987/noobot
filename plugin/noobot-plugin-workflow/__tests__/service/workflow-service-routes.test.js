@@ -59,10 +59,26 @@ test("rejects absent required query values as required", async () => {
     code: WORKFLOW_ROUTE_ERROR_CODE.QUERY_REQUIRED,
     statusCode: 400,
   });
-  await assert.rejects(handlers["workflow.thinking-detail"](request({}), response().res), {
-    code: WORKFLOW_ROUTE_ERROR_CODE.QUERY_REQUIRED,
-    statusCode: 400,
+});
+
+test("thinking-detail passes the Turn lookup key to the host port unmodified", async () => {
+  const received = [];
+  const handlers = createHandlers({
+    readThinkingDetail: async (input) => {
+      received.push(input);
+      return { exists: true };
+    },
   });
+  const { result, res } = response();
+  await handlers["workflow.thinking-detail"](
+    request({ turnScopeId: " turn-1", dialogProcessId: "dialog-2" }),
+    res,
+  );
+  assert.equal(received.length, 1);
+  assert.equal(received[0].turnScopeId, " turn-1");
+  assert.equal(received[0].dialogProcessId, "dialog-2");
+  assert.deepEqual(received[0].segments.slice(-1), ["dialog-1"]);
+  assert.equal(result.body.dialogProcessId, "dialog-1");
 });
 
 test("reports a missing execution report as not found", async () => {

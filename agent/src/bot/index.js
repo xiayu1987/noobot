@@ -53,6 +53,7 @@ export class BotManager {
       globalConfig,
       globalConfigRaw: this.globalConfigRaw,
       scopedSessionRoots,
+      storageService: this.sessionRuntime.storageService,
     });
     this.configService = new ConfigService();
     this.errorLogger = new SystemErrorLogger({

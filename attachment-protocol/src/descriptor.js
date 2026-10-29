@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { parseAttachmentIdentity } from "./identity.js";
+import { parseSourcePath } from "./source-path.js";
 import {
   assertKnownFields,
   freezeDefined,
@@ -23,6 +24,7 @@ const FIELDS = new Set([
   "owner",
   "generationSource",
   "generatedByModel",
+  "sourcePath",
 ]);
 function parseOwner(value) {
   if (value === undefined) return undefined;
@@ -52,5 +54,6 @@ export function parseAttachmentDescriptor(value) {
       "invalid_attachment_generation_source",
     ),
     generatedByModel: optionalBoolean(s.generatedByModel, "invalid_attachment_generated_by_model"),
+    sourcePath: parseSourcePath(s.sourcePath),
   });
 }

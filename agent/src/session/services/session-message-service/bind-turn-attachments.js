@@ -7,6 +7,7 @@ import {
   SESSION_COMMAND,
   SESSION_ERROR_CODE,
   appendCommandReceipt,
+  createAggregateVersionConflictError,
   createTurnAttachmentBindFingerprint,
   decideAggregateConcurrency,
   decideCommandIdempotency,
@@ -136,13 +137,7 @@ export async function bindTurnAttachments({
         expectedAggregateVersion: normalizedExpectedVersion,
         aggregateVersion: currentVersion,
       });
-      if (!concurrency.allowed) {
-        throw Object.assign(new Error("session aggregate version conflict"), {
-          statusCode: 409,
-          code: SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT,
-          currentVersion,
-        });
-      }
+      if (!concurrency.allowed) throw createAggregateVersionConflictError({ currentVersion });
       const currentMessage = messages[messageIndex];
       if (currentMessage.attachments.length > 0) {
         throw Object.assign(new Error("Turn attachments are already bound"), {

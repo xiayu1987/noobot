@@ -104,7 +104,6 @@ test("task_summary sends one checkpoint command without mutating messages before
           aiContentText: "",
           calls: [{ id: "summary", name: "task_summary", args: {} }],
           turnMessageStore: currentTurnMessages,
-          turnTaskStore: { toArray: () => [] },
           stateCommitter: {},
         };
       }
@@ -112,7 +111,6 @@ test("task_summary sends one checkpoint command without mutating messages before
         aiContentText: "done",
         calls: [],
         turnMessageStore: currentTurnMessages,
-        turnTaskStore: { toArray: () => [] },
       };
     },
     processToolResultsFn: async () => ({
@@ -132,7 +130,6 @@ test("task_summary sends one checkpoint command without mutating messages before
       traces: [],
       maxTurns: 10,
       turnMessages: currentTurnMessages.toArray(),
-      turnTasks: [],
     },
     turn: 1,
   });
@@ -164,14 +161,12 @@ test("rejected task_summary does not request a checkpoint", async () => {
             aiContentText: "",
             calls: [{ id: "summary", name: "task_summary", args: {} }],
             turnMessageStore: currentTurnMessages,
-            turnTaskStore: { toArray: () => [] },
             stateCommitter: {},
           }
         : {
             aiContentText: "done",
             calls: [],
             turnMessageStore: currentTurnMessages,
-            turnTaskStore: { toArray: () => [] },
           };
     },
     processToolResultsFn: async () => ({
@@ -192,7 +187,6 @@ test("rejected task_summary does not request a checkpoint", async () => {
       traces: [],
       maxTurns: 10,
       turnMessages: [],
-      turnTasks: [],
     },
     turn: 1,
   });

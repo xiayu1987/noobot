@@ -115,7 +115,7 @@ function handleClick(nodeItem = {}, clickable = true) {
   align-items: center;
   gap: var(--noobot-space-xs);
   cursor: default;
-  transition: border-color var(--noobot-duration-normal) ease;
+  transition: border-color var(--noobot-duration-normal) var(--noobot-ease-standard);
 }
 
 .workflow-node.is-state-node {
@@ -200,7 +200,7 @@ function handleClick(nodeItem = {}, clickable = true) {
 
 .workflow-node-name {
   font-weight: var(--noobot-font-weight-semibold);
-  line-height: var(--noobot-line-height-snug);
+  line-height: var(--noobot-line-height-tight);
   font-size: var(--noobot-font-size-xs);
   word-break: break-word;
 }
@@ -270,7 +270,7 @@ function handleClick(nodeItem = {}, clickable = true) {
 
   .workflow-node-name {
     font-size: var(--noobot-font-size-xs);
-    line-height: var(--noobot-line-height-snug);
+    line-height: var(--noobot-line-height-tight);
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;

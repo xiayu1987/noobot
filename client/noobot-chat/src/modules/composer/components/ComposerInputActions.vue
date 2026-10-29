@@ -128,16 +128,15 @@ function onInputKeydown(event) {
   width: var(--noobot-control-height-xl);
   height: var(--noobot-control-height-xl);
   padding: 0;
-  border-radius: 50%;
+  border-radius: var(--noobot-radius-circle);
   border: none;
-  box-shadow: none;
   display: flex;
   justify-content: center;
   align-items: center;
   flex-shrink: 0;
   transition:
-    background-color var(--noobot-duration-normal) ease,
-    filter var(--noobot-duration-normal) ease;
+    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    filter var(--noobot-duration-normal) var(--noobot-ease-standard);
 }
 
 .stop-float-btn:hover,
@@ -169,7 +168,7 @@ function onInputKeydown(event) {
 }
 
 .chat-input :deep(.el-textarea__inner::placeholder) {
-  color: var(--noobot-text-muted);
+  color: var(--noobot-text-secondary);
 }
 
 .composer-icon-btn {
@@ -178,14 +177,13 @@ function onInputKeydown(event) {
   min-width: var(--composer-icon-size);
   min-height: var(--composer-icon-size);
   padding: 0;
-  border-radius: 50%;
+  border-radius: var(--noobot-radius-circle);
   border: 1px solid transparent;
   background: transparent;
   color: var(--noobot-text-secondary);
   transition:
-    background-color var(--noobot-duration-normal) ease,
-    color var(--noobot-duration-normal) ease;
-  box-shadow: none;
+    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    color var(--noobot-duration-normal) var(--noobot-ease-standard);
 }
 
 .composer-icon-btn:hover {
@@ -206,10 +204,9 @@ function onInputKeydown(event) {
   letter-spacing: var(--noobot-letter-spacing-caps);
   flex-shrink: 0;
   border: none;
-  box-shadow: none;
   transition:
-    filter var(--noobot-duration-normal) ease,
-    opacity var(--noobot-duration-normal) ease;
+    filter var(--noobot-duration-normal) var(--noobot-ease-standard),
+    opacity var(--noobot-duration-normal) var(--noobot-ease-standard);
 }
 
 .send-btn-wrap {

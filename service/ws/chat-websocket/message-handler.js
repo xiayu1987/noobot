@@ -271,6 +271,7 @@ function resolveRejectedCommand({ state, translateText }, error, parsedCommand) 
       error: {
         code: error.code,
         message: translateText("ws.commandRejected", state.currentLocale),
+        ...(Object.hasOwn(error, "currentVersion") ? { currentVersion: error.currentVersion } : {}),
       },
     };
   }

@@ -30,6 +30,12 @@ summary,
   color: var(--noobot-text-strong);
 }
 
+
+:where(a, button, summary, [role="button"], [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: var(--noobot-focus-outline);
+  outline-offset: var(--noobot-focus-outline-offset);
+}
+
 .mermaidTooltip {
   position: fixed;
   z-index: var(--noobot-layer-tooltip);
@@ -43,7 +49,7 @@ summary,
 }
 
 *::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--noobot-text-muted) 45%, transparent);
+  background: color-mix(in srgb, var(--noobot-text-secondary) 45%, transparent);
   border-radius: var(--noobot-radius-pill);
 }
 

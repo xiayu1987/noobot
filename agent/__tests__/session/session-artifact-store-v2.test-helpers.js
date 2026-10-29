@@ -10,13 +10,17 @@ import path from "node:path";
 import { MESSAGE_ORIGIN, isDialogUserMessageRecord } from "@noobot/session-protocol";
 import {
   buildSessionArtifactFileMap,
+  readSessionArtifact,
   writeSessionArtifact as writeSessionArtifactCanonical,
+  SESSION_ARTIFACT_PREDECESSOR,
 } from "../../src/session/session-artifact-store.js";
+import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
 import {
   applySessionMessageFacts,
   createTestSessionRequiredFields,
 } from "../helpers/session-message-facts.js";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
+import { TEST_STORAGE_SERVICE } from "../helpers/storage-service.js";
 
 export const TEST_TURN = "turn-1";
 
@@ -39,15 +43,19 @@ export async function withTemp(fn) {
   }
 }
 
-function roleIdentityOf(message = {}, index = 0, turnScopeId = "") {
-  if (message?.role === "assistant") {
+export async function buildPersistedDisplaySummary(sessionPayload) {
+  return buildSessionDisplaySummary(await persistSessionManifest(sessionPayload));
+}
+
+function roleIdentityOf(message, index, turnScopeId) {
+  if (message.role === "assistant") {
     return {
       modelMessageId: `mm_fixture_${index + 1}`,
       presentationMessageId: `pm_${turnScopeId}`,
     };
   }
-  if (message?.role === "tool") return { presentationMessageId: `pm_${turnScopeId}` };
-  if (message?.role === "user" && !message?.injectedMessage) {
+  if (message.role === "tool") return { presentationMessageId: `pm_${turnScopeId}` };
+  if (message.role === "user" && !message.injectedMessage) {
     return { userMessageId: `um_fixture_${index + 1}` };
   }
   return {};
@@ -59,30 +67,43 @@ function entityContractOf(message) {
 
 export function canonicalMessages(messages, sessionId) {
   return messages.map((message, index) => {
-    const turnScopeId = String(message?.turnScopeId || `turn-fixture-${index + 1}`);
+    const turnScopeId = Object.hasOwn(message, "turnScopeId")
+      ? message.turnScopeId
+      : `turn-fixture-${index + 1}`;
     return {
       sessionId,
-      messageUid: String(message?.messageUid || `sm_fixture_${index + 1}`),
+      messageUid: `sm_fixture_${index + 1}`,
       ts: TEST_MESSAGE_TS,
       ...roleIdentityOf(message, index, turnScopeId),
       ...entityContractOf(message),
-      dialogProcessId: String(message?.dialogProcessId || `dialog-${turnScopeId}`),
+      dialogProcessId: `dialog-${turnScopeId}`,
       turnScopeId,
       ...message,
     };
   });
 }
 
-export async function writeSessionArtifact(options = {}) {
+export async function writeSessionArtifact({ sessionPayload, ...options }) {
   return writeSessionArtifactCanonical({
     ...options,
+    storageService: TEST_STORAGE_SERVICE,
+
+    atomic: true,
+    predecessor: SESSION_ARTIFACT_PREDECESSOR.CANONICAL,
     sessionPayload: applySessionMessageFacts({
       ...createTestSessionRequiredFields(),
-      ...options.sessionPayload,
-      messages: canonicalMessages(
-        options.sessionPayload.messages,
-        options.sessionPayload.sessionId,
-      ),
+      ...sessionPayload,
+      messages: canonicalMessages(sessionPayload.messages, sessionPayload.sessionId),
     }),
   });
+}
+
+export async function persistSessionManifest(sessionPayload) {
+  const root = await mkdtemp(path.join(tmpdir(), "noobot-manifest-"));
+  try {
+    await writeSessionArtifact({ sessionDir: root, sessionPayload });
+    return await readSessionArtifact({ storageService: TEST_STORAGE_SERVICE, sessionDir: root });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 }

@@ -12,10 +12,10 @@ import assert from "node:assert/strict";
 import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
 import { canonicalActivity } from "./session-repository-boundary.summaries.fixtures.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
+import { buildPersistedDisplaySummary } from "./session-artifact-store-v2.test-helpers.js";
 
-test("session display summary projects persisted userMessageId and messageUid without identity fallback", () => {
-  const summary = buildSessionDisplaySummary({
-    ...createTestSessionRequiredFields(),
+test("session display summary projects persisted userMessageId and messageUid without identity fallback", async () => {
+  const summary = await buildPersistedDisplaySummary({
     sessionId: "identity-session",
     aggregateVersion: 0,
     messages: [
@@ -42,9 +42,8 @@ test("session display summary projects persisted userMessageId and messageUid wi
   );
 });
 
-test("session display summary preserves the canonical internal control message type", () => {
-  const summary = buildSessionDisplaySummary({
-    ...createTestSessionRequiredFields(),
+test("session display summary preserves the canonical internal control message type", async () => {
+  const summary = await buildPersistedDisplaySummary({
     sessionId: "internal-control-session",
     aggregateVersion: 0,
     messages: [
@@ -65,9 +64,8 @@ test("session display summary preserves the canonical internal control message t
   assert.equal(summary.messages[0]?.noobotInternalMessageType, "noobot.task_check_prompt");
 });
 
-test("session display summary retains a workflow final assistant with stable presentation identity", () => {
-  const summary = buildSessionDisplaySummary({
-    ...createTestSessionRequiredFields(),
+test("session display summary retains a workflow final assistant with stable presentation identity", async () => {
+  const summary = await buildPersistedDisplaySummary({
     sessionId: "workflow-final-session",
     aggregateVersion: 0,
     messages: [
@@ -115,9 +113,8 @@ test("session display summary rejects an active Turn without canonical presentat
   );
 });
 
-test("session display summary does not duplicate an active Turn with persisted assistant facts", () => {
-  const summary = buildSessionDisplaySummary({
-    ...createTestSessionRequiredFields(),
+test("session display summary does not duplicate an active Turn with persisted assistant facts", async () => {
+  const summary = await buildPersistedDisplaySummary({
     sessionId: "active-turn-with-facts",
     aggregateVersion: 0,
     messages: [
@@ -166,9 +163,8 @@ test("session display summary does not duplicate an active Turn with persisted a
   assert.notEqual(summary.messages[0].turnPlaceholder, true);
 });
 
-test("session display summary projects one explicit assistant presentation from many model messages", () => {
-  const summary = buildSessionDisplaySummary({
-    ...createTestSessionRequiredFields(),
+test("session display summary projects one explicit assistant presentation from many model messages", async () => {
+  const summary = await buildPersistedDisplaySummary({
     sessionId: "assistant-presentation-session",
     aggregateVersion: 0,
     messages: [

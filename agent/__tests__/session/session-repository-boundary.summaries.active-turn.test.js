@@ -11,22 +11,18 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createTestSessionServices, provisionTestSession } from "../helpers/session-services.js";
-import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
 import {
   withTempWorkspace,
   canonicalActivity,
   canonicalMessages,
 } from "./session-repository-boundary.summaries.fixtures.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
-import {
-  applySessionMessageFacts,
-  createTestSessionRequiredFields,
-} from "../helpers/session-message-facts.js";
+import { applySessionMessageFacts } from "../helpers/session-message-facts.js";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
+import { buildPersistedDisplaySummary } from "./session-artifact-store-v2.test-helpers.js";
 
-test("session display summary materializes the active Turn presentation in the zero-event window", () => {
-  const summary = buildSessionDisplaySummary({
-    ...createTestSessionRequiredFields(),
+test("session display summary materializes the active Turn presentation in the zero-event window", async () => {
+  const summary = await buildPersistedDisplaySummary({
     sessionId: "active-turn-session",
     aggregateVersion: 0,
     messages: [
@@ -88,9 +84,8 @@ test("session display summary materializes the active Turn presentation in the z
   assert.equal(summary.messages[1].chatPresentation, true);
 });
 
-test("session display summary materializes stopped Turn details on its stable presentation", () => {
-  const summary = buildSessionDisplaySummary({
-    ...createTestSessionRequiredFields(),
+test("session display summary materializes stopped Turn details on its stable presentation", async () => {
+  const summary = await buildPersistedDisplaySummary({
     sessionId: "stopped-turn-session",
     aggregateVersion: 0,
     messages: [
@@ -101,11 +96,13 @@ test("session display summary materializes stopped Turn details on its stable pr
         content: "run tools",
         userMessageId: "stopped-user",
         turnScopeId: "turn-stopped",
+        dialogProcessId: "dialog-stopped",
       },
       {
         role: "assistant",
         modelMessageId: "mm_session_repository_bound_1",
         type: "tool_call",
+        content: "",
         chatPresentation: false,
         presentationMessageId: "presentation-stopped",
         turnScopeId: "turn-stopped",
@@ -147,7 +144,7 @@ test("session display summary materializes stopped Turn details on its stable pr
   assert.equal(stoppedPresentation.toolTimeline.length, 1);
 });
 
-test("full and summary Session Detail expose the same canonical active Turn messages", async () => {
+test("Session Detail exposes canonical active Turn messages", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     const sessionId = "active-full-detail";
@@ -211,16 +208,11 @@ test("full and summary Session Detail expose the same canonical active Turn mess
       userId,
       sessionId,
     });
-    const fullDetail = await runtime.sessionCrudService.getSessionData({ userId, sessionId });
     const summarySession = summaryDetail.sessions[0];
-    const fullSession = fullDetail.sessions[0];
 
-    assert.equal(fullDetail.detailMode, "full");
-    assert.equal(fullDetail.messageProjection, "canonical-presentation");
-    assert.equal(summaryDetail.messageProjection, fullDetail.messageProjection);
-    assert.deepEqual(fullSession.messages, summarySession.messages);
+    assert.equal(summarySession.availability, "available");
     assert.deepEqual(
-      fullSession.messages.map((message) => [
+      summarySession.messages.map((message) => [
         message.role,
         message.messageUid,
         message.presentationMessageId,
@@ -230,29 +222,26 @@ test("full and summary Session Detail expose the same canonical active Turn mess
         ["assistant", undefined, "presentation-active-full"],
       ],
     );
-    assert.equal(fullSession.messages[1].turnPlaceholder, true);
-    assert.deepEqual(
-      fullSession.rawMessages.map((message) => message.messageUid),
-      ["user-active-full"],
-    );
+    assert.equal(summarySession.messages[1].turnPlaceholder, true);
   });
 });
 
-test("active Turn summary carries its authoritative thinking timelines", () => {
+test("active Turn summary carries its authoritative thinking timelines", async () => {
   const turnScopeId = "client-turn:active-timeline";
   const presentationMessageId = "presentation-active-timeline";
-  const summary = buildSessionDisplaySummary({
-    ...createTestSessionRequiredFields(),
+  const summary = await buildPersistedDisplaySummary({
     sessionId: "active-timeline-session",
     aggregateVersion: 0,
     messages: [
       {
         role: "assistant",
         type: "tool_call",
+        content: "",
         chatPresentation: false,
         modelMessageId: "source-tool-message",
         presentationMessageId,
         turnScopeId,
+        dialogProcessId: "dialog-active-timeline",
         toolTimeline: [
           {
             key: "call:active-tool",
@@ -275,10 +264,12 @@ test("active Turn summary carries its authoritative thinking timelines", () => {
       {
         role: "assistant",
         type: "tool_call",
+        content: "",
         chatPresentation: false,
         modelMessageId: "source-tool-message-2",
         presentationMessageId,
         turnScopeId,
+        dialogProcessId: "dialog-active-timeline",
         toolTimeline: [
           {
             key: "call:active-tool-2",

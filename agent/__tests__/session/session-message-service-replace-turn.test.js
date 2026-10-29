@@ -12,6 +12,7 @@ import assert from "node:assert/strict";
 
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
+import { createSessionCrudServiceStub } from "../helpers/session-crud-service-stub.js";
 
 const TEST_SESSION_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-session-dir-"));
 after(() => fs.rmSync(TEST_SESSION_DIR, { recursive: true, force: true }));
@@ -43,6 +44,7 @@ function createService({ initialSession }) {
   };
   const service = new SessionMessageService({
     sessionRepo,
+    sessionCrudService: createSessionCrudServiceStub(() => currentSession),
     now: () => "2026-06-22T00:00:00.000Z",
     allocateDialogProcessId: () => "dialog-replacement",
   });
@@ -166,15 +168,12 @@ test("SessionMessageService.replaceTurn matches turnScopeId and returns snapshot
   });
 
   assert.deepEqual(Object.keys(result).sort(), [
-    "aggregateVersion",
     "commandId",
     "committedAggregateVersion",
     "deduplicated",
-    "removedAuthorityOutboxEvents",
-    "session",
+    "detail",
     "turnReplacement",
   ]);
-  assert.equal(result.aggregateVersion, 3);
   assert.equal(result.commandId, "idem-1");
   assert.equal(result.committedAggregateVersion, 3);
   assert.deepEqual(result.turnReplacement, {

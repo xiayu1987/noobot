@@ -158,7 +158,9 @@ test("failed Session repair projects an unavailable list item", async () => {
       }),
     );
 
-    const summaries = await runtime.sessionCrudService.getAllSessionSummaries({ userId });
+    const { sessions: summaries } = await runtime.sessionCrudService.getAllSessionSummaries({
+      userId,
+    });
     const unavailable = summaries.find((item) => item.sessionId === sessionId);
     assert.equal(unavailable.availability, "unavailable");
     assert.ok(unavailable.unavailableReason.code);

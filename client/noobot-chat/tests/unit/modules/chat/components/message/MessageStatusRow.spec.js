@@ -34,8 +34,6 @@ describe("MessageStatusRow", () => {
     expect(stepStatuses(wrapper)).toEqual(["is-error", "is-error", "is-error", "is-error"]);
   });
 
-  // Session switches replace message rows within one flush; the row must unmount
-  // before its mounted hooks run without throwing.
   it("unmounts in the same flush it was mounted in", async () => {
     const visible = ref(false);
     const errors = [];

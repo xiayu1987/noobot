@@ -145,7 +145,7 @@ function startProcessing(context, run, accepted, lifecycleData) {
     })
     .then((started) => {
       if (!started.applied && !started.deduplicated) {
-        throw createTurnLifecycleRejectedError(started.reason);
+        throw createTurnLifecycleRejectedError(started);
       }
       context.lifecycle.latestTurn = started.turn;
       return started;

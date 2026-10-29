@@ -79,14 +79,14 @@ function onWorkflowSemanticModelChange(value = "") {
 .plugin-model-title {
   font-size: var(--noobot-font-size-sm);
   font-weight: var(--noobot-font-weight-bold);
-  color: var(--noobot-text-strong, var(--el-text-color-primary));
+  color: var(--noobot-text-strong);
 }
 
 .plugin-model-description {
   margin: var(--noobot-space-3xs) 0 0;
   font-size: var(--noobot-font-size-xs);
-  line-height: var(--noobot-line-height-relaxed);
-  color: var(--noobot-text-secondary, var(--el-text-color-regular));
+  line-height: var(--noobot-line-height-comfortable);
+  color: var(--noobot-text-secondary);
 }
 
 .plugin-model-field {
@@ -96,64 +96,20 @@ function onWorkflowSemanticModelChange(value = "") {
   gap: var(--noobot-space-xs);
   min-width: 0;
   padding: var(--noobot-space-md);
-  border: 1px solid
-    color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 64%, transparent);
+  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 64%, transparent);
   border-radius: var(--noobot-radius-md);
-  background: color-mix(
-    in srgb,
-    var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) 88%,
-    transparent
-  );
+  background: color-mix(in srgb, var(--noobot-control-bg) 88%, transparent);
 }
 
 .plugin-model-label {
   font-size: var(--noobot-font-size-xs);
   font-weight: var(--noobot-font-weight-semibold);
-  color: var(--noobot-text-main, var(--el-text-color-primary));
+  color: var(--noobot-text-main);
 }
 
 .model-select {
   width: 100%;
   min-width: 0;
-}
-
-.composer-select :deep(.el-select__wrapper) {
-  min-height: var(--noobot-control-height-lg);
-  height: var(--noobot-control-height-lg);
-  box-sizing: border-box;
-  border-radius: var(--noobot-radius-md);
-  background: color-mix(
-    in srgb,
-    var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) 94%,
-    var(--el-color-primary)
-  );
-  border-color: color-mix(
-    in srgb,
-    var(--noobot-panel-border, var(--el-border-color)) 78%,
-    transparent
-  );
-  transition:
-    background-color var(--noobot-duration-normal) ease,
-    border-color var(--noobot-duration-normal) ease;
-}
-
-.composer-select :deep(.el-select__wrapper.is-focused),
-.composer-select :deep(.el-select__wrapper:hover) {
-  border-color: color-mix(
-    in srgb,
-    var(--el-color-primary) 50%,
-    var(--noobot-panel-border, var(--el-border-color))
-  );
-}
-
-.composer-select :deep(.el-select__selected-item),
-.composer-select :deep(.el-select__placeholder) {
-  min-width: 0;
-  color: var(--noobot-text-main, var(--el-text-color-primary));
-}
-
-.composer-select :deep(.el-select__placeholder.is-transparent) {
-  color: var(--noobot-text-muted, var(--el-text-color-placeholder));
 }
 
 .model-option-content {
@@ -165,20 +121,15 @@ function onWorkflowSemanticModelChange(value = "") {
 
 .model-option-label {
   font-weight: var(--noobot-font-weight-semibold);
-  color: var(--noobot-text-main, var(--el-text-color-primary));
+  color: var(--noobot-text-main);
 }
 
 .model-option-meta,
 .model-option-description,
 .plugin-empty-text {
   font-size: var(--noobot-font-size-xs);
-  line-height: var(--noobot-line-height-cozy);
-  color: var(--noobot-text-secondary, var(--el-text-color-regular));
-}
-
-.model-option-description,
-.plugin-empty-text {
-  color: var(--noobot-text-muted, var(--el-text-color-secondary));
+  line-height: var(--noobot-line-height-balanced);
+  color: var(--noobot-text-secondary);
 }
 
 @media (max-width: 768px) {

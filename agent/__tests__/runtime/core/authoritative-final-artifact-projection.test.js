@@ -103,7 +103,6 @@ test("authoritative final event owns generated attachment envelopes before persi
     turnMessages: runtime.currentTurnMessages.toArray(),
     modelMessages: [],
     modelLoopRound: 0,
-    turnTasks: [],
   });
   runtime.currentTurnMessages.push({
     role: "system",
@@ -212,7 +211,6 @@ test("authoritative final completion retains classified checkpoint call-result p
     turnMessages: runtime.currentTurnMessages.toArray(),
     modelMessages: [],
     modelLoopRound: 0,
-    turnTasks: [],
   });
 
   assert.equal(await commitAuthoritativeFinalResult({ result, runtime }), true);

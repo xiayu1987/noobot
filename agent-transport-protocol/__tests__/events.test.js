@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
 import {
   AGENT_CHANNEL_STATE,
   AGENT_CHANNEL_STATE_SCOPE,
@@ -264,6 +265,46 @@ test("transport error carries an enumerated code and projects canonical identity
   assert.deepEqual(
     validateAgentTransportError({ ...errorEvent, identity: { sessionId: "" } }).errors,
     ["invalid_transport_error_identity_field:sessionId"],
+  );
+});
+
+test("version conflict command results carry the authoritative current version only", () => {
+  const command = { commandId: "command-1", commandType: "send", identity: { sessionId: "s" } };
+  const occurredAt = "2026-01-01T00:00:00.000Z";
+  const conflict = { code: SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT, message: "m" };
+  const receipt = createAgentCommandReceipt({
+    command,
+    outcome: AGENT_COMMAND_RECEIPT_OUTCOME.FAILED,
+    error: { ...conflict, currentVersion: 3 },
+    occurredAt,
+  });
+  assert.deepEqual(receipt.error, { ...conflict, currentVersion: 3 });
+  const rejection = createAgentCommandRejection({
+    command,
+    error: { ...conflict, currentVersion: 0 },
+    occurredAt,
+  });
+  assert.deepEqual(rejection.error, { ...conflict, currentVersion: 0 });
+  for (const currentVersion of [undefined, null, "3", -1, 1.5]) {
+    assert.throws(
+      () =>
+        createAgentCommandReceipt({
+          command,
+          outcome: AGENT_COMMAND_RECEIPT_OUTCOME.FAILED,
+          error: { ...conflict, currentVersion },
+          occurredAt,
+        }),
+      /invalid_receipt_current_version/,
+    );
+  }
+  assert.throws(
+    () =>
+      createAgentCommandRejection({
+        command,
+        error: { code: "c", message: "m", currentVersion: 3 },
+        occurredAt,
+      }),
+    /unexpected_rejection_current_version/,
   );
 });
 

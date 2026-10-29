@@ -118,7 +118,6 @@ export function createTurnOrchestrator({
           modelMessageId: noToolsResult.modelMessageId,
           traces,
           loopState,
-          turnTaskStore: noToolsResult.turnTaskStore,
           turnMessageStore: noToolsResult.turnMessageStore,
           modelMessages: noToolsResult.modelMessages,
         });
@@ -166,7 +165,6 @@ export function createTurnOrchestrator({
           modelMessageId: finalResult.modelMessageId,
           traces,
           loopState,
-          turnTaskStore: finalResult.turnTaskStore,
           turnMessageStore: finalResult.turnMessageStore,
           modelMessages: finalResult.modelMessages,
         });
@@ -193,7 +191,6 @@ export function createTurnOrchestrator({
           modelMessageId: noToolsResult.modelMessageId,
           traces,
           loopState,
-          turnTaskStore: noToolsResult.turnTaskStore,
           turnMessageStore: noToolsResult.turnMessageStore,
           modelMessages: noToolsResult.modelMessages,
         });
@@ -230,8 +227,7 @@ export function createTurnOrchestrator({
         );
         return runFunctionCallLoop({ modelState, loopState, turn: turn + 1 });
       }
-      const { aiContentText, calls, turnMessageStore, turnTaskStore, stateCommitter } =
-        withToolsResult;
+      const { aiContentText, calls, turnMessageStore, stateCommitter } = withToolsResult;
 
       if (!calls.length) {
         const continuedResult = await continueForAcceptedUserInterjections(turn + 1);
@@ -241,7 +237,6 @@ export function createTurnOrchestrator({
           modelMessageId: withToolsResult.modelMessageId,
           traces,
           loopState,
-          turnTaskStore,
           turnMessageStore,
           modelMessages: requireActiveModelContext(runtime).messages,
         });

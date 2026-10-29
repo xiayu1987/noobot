@@ -55,7 +55,6 @@ test("SessionExecutionRunner checkpoints current turn messages with scoped persi
         modelMessageId: createModelMessageId(),
         traces: [],
         turnMessages: [],
-        turnTasks: [],
         modelLoopRound: 0,
         modelMessages: [],
       };
@@ -161,7 +160,6 @@ test("SessionExecutionRunner checkpoints only new or changed current-turn messag
         modelMessageId: createModelMessageId(),
         traces: [],
         turnMessages: [],
-        turnTasks: [],
         modelLoopRound: 0,
         modelMessages: [],
       };
@@ -235,7 +233,6 @@ test("SessionExecutionRunner coalesces persistence requests inside one tool-resu
         modelMessageId: createModelMessageId(),
         traces: [],
         turnMessages: [],
-        turnTasks: [],
         modelLoopRound: 0,
         modelMessages: [],
       };
@@ -283,7 +280,6 @@ test("SessionExecutionRunner retries an incremental checkpoint after persistence
         modelMessageId: createModelMessageId(),
         traces: [],
         turnMessages: [],
-        turnTasks: [],
         modelLoopRound: 0,
         modelMessages: [],
       };
@@ -388,7 +384,6 @@ test("SessionExecutionRunner rejects a checkpoint whose messages are missing fro
         modelMessageId: createModelMessageId(),
         traces: [],
         turnMessages: [],
-        turnTasks: [],
         modelLoopRound: 0,
         modelMessages: [],
       };

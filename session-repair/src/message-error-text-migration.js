@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { SESSION_ARTIFACT_MESSAGE_ERROR_TEXT_SCHEMA_VERSION } from "@noobot/session-protocol";
-import { isPlainObject } from "@noobot/shared/value";
 
 export const SESSION_MESSAGE_ERROR_TEXT_MIGRATION = "message-error-text-v15";
 
@@ -12,7 +11,7 @@ export function migrateMessageErrorText(context) {
   if (context.sourceSchemaVersion >= SESSION_ARTIFACT_MESSAGE_ERROR_TEXT_SCHEMA_VERSION) return;
   let migrated = false;
   for (const message of context.next.messages) {
-    if (!isPlainObject(message) || !Object.hasOwn(message, "error")) continue;
+    if (!Object.hasOwn(message, "error")) continue;
     if (typeof message.error === "string") continue;
     delete message.error;
     migrated = true;

@@ -65,6 +65,7 @@ test("session save keeps thinking timing out of messages and projects finish fro
         role: "assistant",
         presentationMessageId: "pm_fx1",
         modelMessageId: "mm_session_repository_bound_1",
+        chatPresentation: false,
         content: "first assistant chunk",
         turnScopeId: "turn-1",
         dialogProcessId: "dp-1",
@@ -74,8 +75,9 @@ test("session save keeps thinking timing out of messages and projects finish fro
         ts: TEST_MESSAGE_TS,
         sessionId: "S",
         role: "assistant",
-        presentationMessageId: "pm_fx2",
+        presentationMessageId: "pm_fx1",
         modelMessageId: "mm_session_repository_bound_2",
+        chatPresentation: true,
         content: "final assistant chunk",
         turnScopeId: "turn-1",
         dialogProcessId: "dp-1",
@@ -100,7 +102,10 @@ test("session save keeps thinking timing out of messages and projects finish fro
       "S",
       runtime.repositories.sessionRepository.treePersistenceContext(userId, "S"),
     );
-    const full = await readSessionArtifact({ sessionDir: scope.sessionDir });
+    const full = await readSessionArtifact({
+      sessionDir: scope.sessionDir,
+      storageService: runtime.repositories.sessionRepository.storageService,
+    });
     await runtime.repositories.sessionRepository.ensureSessionDisplaySummary(userId, "S", {
       persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
         userId,
@@ -192,7 +197,10 @@ test("session save keeps the model loop round on persisted turn timings", async 
       "S",
       runtime.repositories.sessionRepository.treePersistenceContext(userId, "S"),
     );
-    const full = await readSessionArtifact({ sessionDir: scope.sessionDir });
+    const full = await readSessionArtifact({
+      sessionDir: scope.sessionDir,
+      storageService: runtime.repositories.sessionRepository.storageService,
+    });
     await runtime.repositories.sessionRepository.ensureSessionDisplaySummary(userId, "S", {
       persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
         userId,

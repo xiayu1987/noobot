@@ -8,11 +8,6 @@ import {
   summarizeDebugMessages,
 } from "../../../debug/loggers/resendDebugLogger.js";
 
-function resolveMatchingSessionDetail(detail, sessionId) {
-  if (detail === null || detail.sessionId !== sessionId) return null;
-  return detail.sessions.find((sessionDoc) => sessionDoc.sessionId === sessionId) || null;
-}
-
 export async function renderActiveSessionBeforeReplay({
   activeSession,
   chatList,
@@ -29,14 +24,12 @@ export async function renderActiveSessionBeforeReplay({
       const detail = await chatList.fetchSessionDetail(sessionId, {
         source: "reconnectProtocolReconcile",
       });
-      const matchingSessionDoc = resolveMatchingSessionDetail(detail, sessionId);
       const currentActiveSessionId = activeSession.value.sessionId;
-      if (!matchingSessionDoc || currentActiveSessionId !== sessionId) {
+      if (!detail.exists || currentActiveSessionId !== sessionId) {
         logResendDebug("hydration.detail.rejected", () => ({
           sessionId,
           currentActiveSessionId,
-          detailSessionId: detail === null ? null : detail.sessionId,
-          reason: !matchingSessionDoc ? "identity_mismatch_or_empty" : "active_session_changed",
+          reason: detail.exists ? "active_session_changed" : "session_missing",
         }));
         return false;
       }

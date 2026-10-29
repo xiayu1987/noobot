@@ -14,6 +14,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import {
   readSessionArtifact,
   writeSessionArtifact,
+  SESSION_ARTIFACT_PREDECESSOR,
 } from "../../src/session/session-artifact-store.js";
 import {
   buildSessionDisplaySummary,
@@ -25,6 +26,8 @@ import {
 } from "../helpers/session-message-facts.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
+import { TEST_STORAGE_SERVICE } from "../helpers/storage-service.js";
+import { buildPersistedDisplaySummary } from "./session-artifact-store-v2.test-helpers.js";
 
 async function withTempWorkspace(fn) {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-session-boundary-"));
@@ -35,9 +38,8 @@ async function withTempWorkspace(fn) {
   }
 }
 
-test("session display summary should keep canonical attachment fields", () => {
-  const summary = buildSessionDisplaySummary({
-    ...createTestSessionRequiredFields(),
+test("session display summary should keep canonical attachment fields", async () => {
+  const summary = await buildPersistedDisplaySummary({
     sessionId: "s-attachments",
     aggregateVersion: 0,
     messages: [
@@ -67,9 +69,8 @@ test("session display summary should keep canonical attachment fields", () => {
   assert.equal(summary.stats.attachmentCount, 1);
 });
 
-test("session display summary keeps rich attachment fields for preview and parsed result", () => {
-  const summary = buildSessionDisplaySummary({
-    ...createTestSessionRequiredFields(),
+test("session display summary keeps rich attachment fields for preview and parsed result", async () => {
+  const summary = await buildPersistedDisplaySummary({
     sessionId: "s-rich-attachments",
     aggregateVersion: 0,
     messages: [
@@ -147,9 +148,8 @@ test("session display summary keeps rich attachment fields for preview and parse
   });
 });
 
-test("session display summary derives attachments from transfer envelopes", () => {
-  const summary = buildSessionDisplaySummary({
-    ...createTestSessionRequiredFields(),
+test("session display summary derives attachments from transfer envelopes", async () => {
+  const summary = await buildPersistedDisplaySummary({
     sessionId: "s-transfer-attachments",
     aggregateVersion: 0,
     messages: [
@@ -209,9 +209,8 @@ test("session display summary derives attachments from transfer envelopes", () =
   );
 });
 
-test("session display summary binds completed tool artifacts to one explicit assistant turn", () => {
-  const summary = buildSessionDisplaySummary({
-    ...createTestSessionRequiredFields(),
+test("session display summary binds completed tool artifacts to one explicit assistant turn", async () => {
+  const summary = await buildPersistedDisplaySummary({
     sessionId: "s-tool-artifacts",
     aggregateVersion: 0,
     messages: [
@@ -242,7 +241,8 @@ test("session display summary binds completed tool artifacts to one explicit ass
       },
       {
         role: "tool",
-        presentationMessageId: "pm_fx2",
+        presentationMessageId: "assistant-one",
+        content: "",
         type: "tool_result",
         tool_call_id: "call-one",
         toolName: "execute_script",
@@ -307,14 +307,12 @@ test("session display summary binds completed tool artifacts to one explicit ass
   assert.equal(summary.stats.attachmentCount, 1);
 });
 
-test("session display summary does not guess ownership for an unmatched tool artifact turn", () => {
-  const summary = buildSessionDisplaySummary({
-    ...createTestSessionRequiredFields(),
+test("session display summary does not guess ownership for an unmatched tool artifact turn", async () => {
+  const summary = await buildPersistedDisplaySummary({
     sessionId: "s-unmatched-artifact",
     aggregateVersion: 0,
     messages: [
       {
-        id: "assistant-one",
         role: "assistant",
         presentationMessageId: "pm_fx3",
         modelMessageId: "mm_session_repository_bound_2",
@@ -325,6 +323,7 @@ test("session display summary does not guess ownership for an unmatched tool art
       {
         role: "tool",
         presentationMessageId: "pm_fx4",
+        content: "",
         type: "tool_result",
         tool_call_id: "call-other",
         turnScopeId: "turn-other",
@@ -381,7 +380,9 @@ test("session artifact persistence should normalize attachment fields before wri
     const sessionDir = path.join(workspaceRoot, "u1", "runtime", "session", "s-attachments");
     await writeSessionArtifact({
       sessionDir,
-      depth: 1,
+      storageService: TEST_STORAGE_SERVICE,
+      atomic: true,
+      predecessor: SESSION_ARTIFACT_PREDECESSOR.CANONICAL,
       now: () => "2026-05-14T00:00:00.000Z",
       sessionPayload: applySessionMessageFacts({
         ...createTestSessionRequiredFields(),
@@ -427,7 +428,10 @@ test("session artifact persistence should normalize attachment fields before wri
       }),
     });
 
-    const persistedSession = await readSessionArtifact({ sessionDir });
+    const persistedSession = await readSessionArtifact({
+      sessionDir,
+      storageService: TEST_STORAGE_SERVICE,
+    });
     const persistedSummary = buildSessionDisplaySummary(persistedSession);
     const sessionJson = JSON.stringify(persistedSession);
     const summaryJson = JSON.stringify(persistedSummary);

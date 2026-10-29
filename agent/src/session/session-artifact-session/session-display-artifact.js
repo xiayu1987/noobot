@@ -8,22 +8,17 @@ import {
   isSessionDisplaySummaryPayload,
 } from "../session-summary-builders.js";
 import { buildSessionArtifactFileMap } from "../session-artifact-files.js";
-import { readJsonWithStorage, writeJsonWithStorage } from "./artifact-json-io.js";
+import { readOptionalJsonWithStorage, writeJsonWithStorage } from "./artifact-json-io.js";
 import {
   hydrateSessionSummaryDetails,
   writeSessionSummaryDetails,
 } from "./summary-detail-store.js";
 
-export async function readSessionDisplaySummaryArtifact({
-  storageService = null,
-  sessionDir = "",
-  sessionId = "",
-} = {}) {
+export async function readSessionDisplaySummaryArtifact({ storageService, sessionDir, sessionId }) {
   const files = buildSessionArtifactFileMap(sessionDir);
-  const payload = await readJsonWithStorage({
+  const payload = await readOptionalJsonWithStorage({
     storageService,
     artifactPath: files.sessionSummary,
-    fallback: null,
   });
   if (!isSessionDisplaySummaryPayload(payload, sessionId)) return null;
   const hydrated = await hydrateSessionSummaryDetails({ storageService, sessionDir, payload });
@@ -31,10 +26,10 @@ export async function readSessionDisplaySummaryArtifact({
 }
 
 export async function rebuildSessionDisplaySummaryArtifact({
-  storageService = null,
-  sessionDir = "",
-  sessionPayload = {},
-} = {}) {
+  storageService,
+  sessionDir,
+  sessionPayload,
+}) {
   const files = buildSessionArtifactFileMap(sessionDir);
   const summaryPayload = buildSessionDisplaySummary(sessionPayload);
   await writeSessionSummaryDetails({ storageService, sessionDir, summaryPayload });

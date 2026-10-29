@@ -229,7 +229,10 @@ test("deleted Session cannot be revived by initial provision", async () => {
       "session-1",
       runtime.repositories.sessionRepository.treePersistenceContext("u1", "session-1"),
     );
-    await runtime.sessionTreeService.deleteSessionBranch({ userId: "u1", sessionId: "session-1" });
+    await runtime.sessionTreeService.deleteSessionBranch({
+      userId: "u1",
+      sessionIds: ["session-1"],
+    });
     const result = await runtime.sessionMessageService.applyTurnLifecycleEvent(
       withTreeContext(runtime, firstSend("revive-command")),
     );
@@ -271,7 +274,7 @@ test("failed initial provision save leaves no empty Session artifact or summary"
   });
 });
 
-test("summary write failure surfaces and the explicit rebuild repairs the list index", async () => {
+test("summary write failure surfaces and the next index read rebuilds membership from the source", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const runtime = createTestSessionServices({ workspaceRoot });
     const repository = runtime.repositories.sessionRepository;
@@ -291,12 +294,7 @@ test("summary write failure surfaces and the explicit rebuild repairs the list i
       persistenceContext: repository.treePersistenceContext("u1", "session-1"),
     });
     assert.equal(persisted.turnLifecycle.sequence, 1);
-    const stale = await repository.readSessionsSummary("u1");
-    assert.equal(
-      stale.sessions.some((item) => item.sessionId === "session-1"),
-      false,
-    );
-    const summary = await repository.rebuildSessionsSummary("u1");
+    const summary = await repository.readSessionsSummary("u1");
     assert.equal(summary.sessions.filter((item) => item.sessionId === "session-1").length, 1);
 
     const replay = await runtime.sessionMessageService.applyTurnLifecycleEvent(

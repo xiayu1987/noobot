@@ -10,8 +10,10 @@ import test from "node:test";
 import {
   writeSessionArtifact,
   readSessionArtifactSnapshot,
+  SESSION_ARTIFACT_PREDECESSOR,
 } from "../../src/session/session-artifact-store.js";
 import { canonicalMessages, withTemp } from "./session-artifact-store-v2.test-helpers.js";
+import { TEST_STORAGE_SERVICE } from "../helpers/storage-service.js";
 import {
   applySessionMessageFacts,
   createTestSessionRequiredFields,
@@ -21,6 +23,9 @@ test("snapshot reads the canonical Session artifact without read-time migration"
   withTemp(async (root) => {
     await writeSessionArtifact({
       sessionDir: root,
+      storageService: TEST_STORAGE_SERVICE,
+      atomic: true,
+      predecessor: SESSION_ARTIFACT_PREDECESSOR.CANONICAL,
       sessionPayload: applySessionMessageFacts({
         ...createTestSessionRequiredFields(),
         sessionId: "legacy-transfer-session",
@@ -71,6 +76,7 @@ test("snapshot reads the canonical Session artifact without read-time migration"
       }),
     });
     const snapshot = await readSessionArtifactSnapshot({
+      storageService: TEST_STORAGE_SERVICE,
       outputDir: root,
       includeExecutionLogs: false,
     });
@@ -101,6 +107,9 @@ test("snapshot rejects a completed turn whose summary marks need canonical repai
     ).map((message) => ({ ...message, summarized: false }));
     await writeSessionArtifact({
       sessionDir: root,
+      storageService: TEST_STORAGE_SERVICE,
+      atomic: true,
+      predecessor: SESSION_ARTIFACT_PREDECESSOR.CANONICAL,
       sessionPayload: applySessionMessageFacts({
         ...required,
         sessionId: "summary-marks-session",
@@ -120,7 +129,11 @@ test("snapshot rejects a completed turn whose summary marks need canonical repai
       }),
     });
     await assert.rejects(
-      readSessionArtifactSnapshot({ outputDir: root, includeExecutionLogs: false }),
+      readSessionArtifactSnapshot({
+        storageService: TEST_STORAGE_SERVICE,
+        outputDir: root,
+        includeExecutionLogs: false,
+      }),
       { code: SESSION_ERROR_CODE.COMPLETION_SUMMARY_REPAIR_REQUIRED },
     );
   }));
@@ -128,7 +141,11 @@ test("snapshot rejects a completed turn whose summary marks need canonical repai
 test("snapshot rejects a missing Session artifact instead of returning null", async () =>
   withTemp(async (root) => {
     await assert.rejects(
-      readSessionArtifactSnapshot({ outputDir: root, includeExecutionLogs: false }),
+      readSessionArtifactSnapshot({
+        storageService: TEST_STORAGE_SERVICE,
+        outputDir: root,
+        includeExecutionLogs: false,
+      }),
       { code: SESSION_ERROR_CODE.ARTIFACT_NOT_FOUND, statusCode: 404 },
     );
   }));

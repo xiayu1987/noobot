@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { isImageFile, isMarkdownFile, isNonImagePreviewOverSizeLimit } from "./file-type.js";
-import { maskHostPath, maskWorkspacePath } from "./path-utils.js";
+import { maskWorkspacePath } from "./path-utils.js";
 import { logFileAccess } from "./file-access-log.js";
 import {
   buildFileAccessLogPayload,
@@ -23,8 +23,7 @@ export function createFilePreviewController({
   filePreview,
 }) {
   async function openFilePreview(fileItem = {}) {
-    const desktopRead = window?.noobotDesktop?.readHostFile;
-    const context = createFileAccessContext("preview", fileItem, userId, desktopRead);
+    const context = createFileAccessContext("preview", fileItem, userId);
     const mimeType = text(fileItem?.mimeType || fileItem?.type);
     if (isPreviewOverLimit(fileItem, context.fileName, mimeType, isImageMime)) {
       notify({ type: "warning", message: translate("message.previewFileTooLarge") });
@@ -39,15 +38,10 @@ export function createFilePreviewController({
     }
     filePreview.open(context.fileName);
     try {
-      if (context.useHostChannel) {
-        await previewHostFile(context, attachmentService, translate, filePreview);
-      } else {
-        await previewWorkspaceFile(context, attachmentService, translate, filePreview);
-      }
+      await previewWorkspaceFile(context, attachmentService, translate, filePreview);
     } catch (error) {
       logFileAccess("preview.failed", {
         traceId: context.traceId,
-        channel: context.channel,
         error: String(error?.message || error || ""),
       });
       filePreview.state.error.value = error?.message || translate("message.previewFailed");
@@ -65,66 +59,6 @@ function isPreviewOverLimit(fileItem, fileName, mimeType, isImageMime) {
     fileName,
     isImageMimeChecker: isImageMime,
   });
-}
-
-async function previewHostFile(context, attachmentService, translate, filePreview) {
-  if (isImageFile(context.fileName)) {
-    await previewHostImage(context, attachmentService, translate, filePreview);
-    return;
-  }
-  const data = await readHostText(context, attachmentService, translate);
-  if (!data?.ok) throw new Error(data?.error || translate("message.previewFailed"));
-  if (data.isText === false) throw new Error(translate("message.fileTypeNotSupported"));
-  applyTextPreview(filePreview.state, context.fileName, data.content);
-}
-
-async function previewHostImage(context, attachmentService, translate, filePreview) {
-  const desktopDownload = window?.noobotDesktop?.downloadHostFile;
-  const channel = desktopDownload ? "desktop-host-ipc" : "backend-host-api";
-  logFileAccess("preview.imageRequest", { ...maskedContext(context), channel });
-  if (desktopDownload) {
-    const result = await desktopDownload({ path: context.hostPath, traceId: context.traceId });
-    if (!result?.ok) throw new Error(result?.error || translate("message.previewFailed"));
-    filePreview.state.imageUrl.value = result.url;
-  } else {
-    const response = await attachmentService.downloadHostFile({
-      path: context.hostPath,
-      traceId: context.traceId,
-      isSandbox: context.isSandbox,
-    });
-    if (!response.ok) {
-      throw new Error(translate("message.previewFailedHttp", { status: response.status }));
-    }
-    filePreview.state.imageUrl.value = URL.createObjectURL(await response.blob());
-  }
-  filePreview.state.mode.value = "image";
-  logFileAccess("preview.imageResponse", { traceId: context.traceId, channel, ok: true });
-}
-
-async function readHostText(context, attachmentService, translate) {
-  logFileAccess("preview.textRequest", maskedContext(context));
-  if (window?.noobotDesktop?.readHostFile) {
-    const data = await window.noobotDesktop.readHostFile({
-      path: context.hostPath,
-      traceId: context.traceId,
-    });
-    logTextResponse(context, data);
-    return data;
-  }
-  const response = await attachmentService.getHostFile({
-    path: context.hostPath,
-    traceId: context.traceId,
-    isSandbox: context.isSandbox,
-  });
-  const data = await response.json();
-  const result = response.ok
-    ? data
-    : {
-        ok: false,
-        error: data?.error || translate("message.previewFailedHttp", { status: response.status }),
-      };
-  logTextResponse(context, result);
-  return result;
 }
 
 async function previewWorkspaceFile(context, attachmentService, translate, filePreview) {
@@ -190,22 +124,9 @@ function applyTextPreview(state, fileName, content) {
   state.textContent.value = String(content || "");
   state.mode.value = isMarkdownFile(fileName) ? "markdown" : "text";
 }
-
-function logTextResponse(context, data) {
-  logFileAccess("preview.textResponse", {
-    traceId: context.traceId,
-    channel: context.channel,
-    ok: Boolean(data?.ok),
-    isText: data?.isText,
-  });
-}
-
 function maskedContext(context) {
   return {
     traceId: context.traceId,
-    channel: context.channel,
-    isSandbox: context.isSandbox,
     relativePath: maskWorkspacePath(context.relativePath),
-    hostPath: maskHostPath(context.hostPath),
   };
 }

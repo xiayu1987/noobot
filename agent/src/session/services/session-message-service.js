@@ -38,7 +38,7 @@ import { recordUserMetaParsedResult } from "./session-message-service/user-meta-
 export class SessionMessageService {
   constructor({
     sessionRepo,
-    sessionCrudService = null,
+    sessionCrudService,
     now = () => new Date().toISOString(),
     allocateDialogProcessId,
   } = {}) {

@@ -786,9 +786,6 @@ describe("SharedChatMessageItem", () => {
     expect(panel.findAll(".BaseAttachmentFileCard-stub")).toHaveLength(1);
   });
 
-  // Virtual message rows can mount and unmount within one flush when navigation jumps;
-  // artifact tabs must not depend on mounted-time child registration. Real ElTabs are
-  // mounted so a regression back to ordered-children registration fails here.
   it("unmounts artifact tabs in the same flush they were mounted in", async () => {
     const errors = [];
     const visible = ref(false);

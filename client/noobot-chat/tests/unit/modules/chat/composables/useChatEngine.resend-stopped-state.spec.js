@@ -5,8 +5,9 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import {
+  applyMainEntryMessages,
   createHarness,
-  makeSession,
+  makeTurnReplacementBody,
   makeTurnReplacementResponse,
   emitChannelState,
   emitAuthorityProcessing,
@@ -24,11 +25,22 @@ import {
   selectTurnRuntimeByScope,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { createTurnTerminalResolution } from "@noobot/session-protocol";
+import { logStateMachineDebug } from "../../../../../src/modules/debug/loggers/stateMachineLogger.js";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { settleStoppedTurn } from "./useChatEngine.resend-stopped-state.test-helpers.js";
 import { terminalStatusFixture } from "../helpers/terminalStatusFixture.js";
 import { NO_ATTACHMENT_EDITS } from "../../../helpers/resendEdits.js";
 import { jsonResponse } from "../../../helpers/jsonResponse.js";
+import { mutationSuccessResponse } from "../../../helpers/sessionDetailFixture.js";
+import { lastResendFailure } from "../helpers/resendFailureLog.js";
+
+vi.mock(
+  "../../../../../src/modules/debug/loggers/stateMachineLogger.js",
+  async (importOriginal) => ({
+    ...(await importOriginal()),
+    logStateMachineDebug: vi.fn(),
+  }),
+);
 
 describe("useChatEngine.resend stopped state", () => {
   it("edit-resends immediately after stop without requiring a session refresh", async () => {
@@ -77,17 +89,15 @@ describe("useChatEngine.resend stopped state", () => {
         return makeTurnReplacementResponse({
           commandId,
           sessionId,
-          aggregateVersion: Number(expectedAggregateVersion || 0) + 1,
+          aggregateVersion: expectedAggregateVersion + 1,
           replacedTurnScopeIds: [anchor.turnScopeId],
           replacementUser,
           replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
+          messages: [replacementUser],
         });
       },
     );
-    const applySessionDetail = vi.fn((detail) => {
-      const mainSession = detail.sessions?.[0] || {};
-      activeSession.value = { ...activeSession.value, ...mainSession };
-    });
+    const applySessionDetail = applyMainEntryMessages(() => activeSession);
     const { engine, activeSession, turnRuntimeRegistry, deps } = createHarness({
       sessionId,
       stream,
@@ -169,17 +179,26 @@ describe("useChatEngine.resend stopped state", () => {
       terminalOutcome: "stopped",
       stopState: "user_stopped",
     };
-    const replaceSessionTurnApi = vi.fn(async () => ({
-      ok: true,
-      session: makeSession("local-resend-stale-stopped", {
-        messages: [staleStoppedUser, staleStoppedAssistant],
-        rawMessages: [staleStoppedUser, staleStoppedAssistant],
-      }),
-    }));
-    const applySessionDetail = vi.fn((detail) => {
-      const mainSession = detail.sessions?.[0] || {};
-      activeSession.value = { ...activeSession.value, ...mainSession };
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, commandId, anchor }) => {
+      const replacementUser = {
+        messageUid: `msg-user-${turnScopeId}`,
+        turnScopeId,
+        role: RoleEnum.USER,
+        content: "edited again",
+      };
+      return mutationSuccessResponse(
+        makeTurnReplacementBody({
+          commandId,
+          sessionId: "local-resend-stale-stopped",
+          aggregateVersion: 1,
+          replacedTurnScopeIds: [anchor.turnScopeId],
+          replacementUser,
+          replacementDialogProcessId: `dialog:${turnScopeId}`,
+          messages: [],
+        }),
+      );
     });
+    const applySessionDetail = applyMainEntryMessages(() => activeSession);
     const { engine, activeSession } = createHarness({
       sessionId: "local-resend-stale-stopped",
       stream,
@@ -187,11 +206,17 @@ describe("useChatEngine.resend stopped state", () => {
     });
     activeSession.value.messages = [staleStoppedUser, staleStoppedAssistant];
     activeSession.value.rawMessages = [staleStoppedUser, staleStoppedAssistant];
+    logStateMachineDebug.mockClear();
 
     await expect(
       engine.resendMonotonicMessage(staleStoppedAssistant, "edited again", NO_ATTACHMENT_EDITS),
     ).resolves.toBe(false);
 
+    expect(lastResendFailure()).toMatchObject({
+      replacementCommitted: false,
+      errorMessage:
+        "session mutation response is invalid: replacement_user_missing,replacement_scope_not_user_only",
+    });
     expect(stream).not.toHaveBeenCalled();
     expect(activeSession.value.messages).toEqual([staleStoppedUser, staleStoppedAssistant]);
   });
@@ -211,17 +236,15 @@ describe("useChatEngine.resend stopped state", () => {
         return makeTurnReplacementResponse({
           commandId,
           sessionId: "local-resend-repeat-stopped",
-          aggregateVersion: Number(expectedAggregateVersion || 0) + 1,
+          aggregateVersion: expectedAggregateVersion + 1,
           replacedTurnScopeIds: [anchor.turnScopeId],
           replacementUser,
           replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
+          messages: [replacementUser],
         });
       },
     );
-    const applySessionDetail = vi.fn((detail) => {
-      const mainSession = detail.sessions?.[0] || {};
-      activeSession.value = { ...activeSession.value, ...mainSession };
-    });
+    const applySessionDetail = applyMainEntryMessages(() => activeSession);
     const { engine, activeSession } = createHarness({
       sessionId: "local-resend-repeat-stopped",
       stream,
@@ -310,47 +333,15 @@ describe("useChatEngine.resend stopped state", () => {
         return makeTurnReplacementResponse({
           commandId,
           sessionId,
-          aggregateVersion: Number(expectedAggregateVersion || 0) + 1,
+          aggregateVersion: expectedAggregateVersion + 1,
           replacedTurnScopeIds: [anchor.turnScopeId],
           replacementUser,
           replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
+          messages: [replacementUser],
         });
       },
     );
-    const fetchSessionDetail = vi.fn(async () => {
-      const stopped = stoppedTurns[stoppedTurns.length - 1];
-      const user = {
-        role: RoleEnum.USER,
-        content: stopped.content,
-        turnScopeId: stopped.turnScopeId,
-      };
-      const assistant = {
-        role: RoleEnum.ASSISTANT,
-        content: "partial",
-        pending: false,
-        terminalOutcome: "stopped",
-        turnScopeId: stopped.turnScopeId,
-        dialogProcessId: stopped.dialogProcessId,
-        channelState: {
-          state: "user_stopped",
-          turnScopeId: stopped.turnScopeId,
-          dialogProcessId: stopped.dialogProcessId,
-        },
-      };
-      return {
-        sessionId,
-        sessions: [
-          makeSession(sessionId, {
-            messages: [user, assistant],
-            rawMessages: [user, assistant],
-          }),
-        ],
-      };
-    });
-    const applySessionDetail = vi.fn((detail) => {
-      const session = detail.sessions?.[0];
-      if (session) activeSession.value = { ...activeSession.value, ...session };
-    });
+    const applySessionDetail = applyMainEntryMessages(() => activeSession);
     let terminalResolutionCount = 0;
     const terminalResolutionFetcher = vi.fn(async (url) => {
       terminalResolutionCount += 1;
@@ -391,7 +382,6 @@ describe("useChatEngine.resend stopped state", () => {
       stream,
       deps: {
         replaceSessionTurnApi,
-        fetchSessionDetail,
         applySessionDetail,
         authFetch: terminalResolutionFetcher,
       },
@@ -468,17 +458,15 @@ describe("useChatEngine.resend stopped state", () => {
         return makeTurnReplacementResponse({
           commandId,
           sessionId: "local-resend-second-stopped",
-          aggregateVersion: Number(expectedAggregateVersion || 0) + 1,
+          aggregateVersion: expectedAggregateVersion + 1,
           replacedTurnScopeIds: [anchor.turnScopeId],
           replacementUser,
           replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
+          messages: [replacementUser],
         });
       },
     );
-    const applySessionDetail = vi.fn((detail) => {
-      const mainSession = detail.sessions?.[0] || {};
-      activeSession.value = { ...activeSession.value, ...mainSession };
-    });
+    const applySessionDetail = applyMainEntryMessages(() => activeSession);
     const { engine, activeSession, activeTurnRuntime, sending, canStop, turnRuntimeRegistry } =
       createHarness({
         sessionId: "local-resend-second-stopped",
@@ -608,7 +596,7 @@ describe("useChatEngine.resend stopped state", () => {
         return makeTurnReplacementResponse({
           commandId,
           sessionId: "local-resend-stale-stop-replay",
-          aggregateVersion: Number(expectedAggregateVersion || 0) + 1,
+          aggregateVersion: expectedAggregateVersion + 1,
           replacedTurnScopeIds: [anchor.turnScopeId],
           replacementUser,
           replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
@@ -616,10 +604,7 @@ describe("useChatEngine.resend stopped state", () => {
         });
       },
     );
-    const applySessionDetail = vi.fn((detail) => {
-      const mainSession = detail.sessions?.[0] || {};
-      activeSession.value = { ...activeSession.value, ...mainSession };
-    });
+    const applySessionDetail = applyMainEntryMessages(() => activeSession);
     const { engine, activeSession, activeTurnRuntime, sending, canStop, turnRuntimeRegistry } =
       createHarness({
         sessionId: "local-resend-stale-stop-replay",
@@ -704,17 +689,15 @@ describe("useChatEngine.resend stopped state", () => {
         return makeTurnReplacementResponse({
           commandId,
           sessionId: "local-resend-state-mismatch",
-          aggregateVersion: Number(expectedAggregateVersion || 0) + 1,
+          aggregateVersion: expectedAggregateVersion + 1,
           replacedTurnScopeIds: [anchor.turnScopeId],
           replacementUser,
           replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
+          messages: [replacementUser],
         });
       },
     );
-    const applySessionDetail = vi.fn((detail) => {
-      const mainSession = detail.sessions?.[0] || {};
-      activeSession.value = { ...activeSession.value, ...mainSession };
-    });
+    const applySessionDetail = applyMainEntryMessages(() => activeSession);
     const { engine, activeSession, deps } = createHarness({
       sessionId: "local-resend-state-mismatch",
       stream,
@@ -770,17 +753,15 @@ describe("useChatEngine.resend stopped state", () => {
         return makeTurnReplacementResponse({
           commandId,
           sessionId: "local-resend-ignore-stale-assistant",
-          aggregateVersion: Number(expectedAggregateVersion || 0) + 1,
+          aggregateVersion: expectedAggregateVersion + 1,
           replacedTurnScopeIds: [anchor.turnScopeId],
           replacementUser,
           replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
+          messages: [replacementUser],
         });
       },
     );
-    const applySessionDetail = vi.fn((detail) => {
-      const mainSession = detail.sessions?.[0] || {};
-      activeSession.value = { ...activeSession.value, ...mainSession };
-    });
+    const applySessionDetail = applyMainEntryMessages(() => activeSession);
     const { engine, activeSession } = createHarness({
       sessionId: "local-resend-ignore-stale-assistant",
       stream,

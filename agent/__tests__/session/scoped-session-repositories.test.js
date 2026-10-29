@@ -64,7 +64,7 @@ function ensureScopedSession(runtime, { sessionId, parentSessionId, persistenceC
 
 test("scoped repositories keep all artifacts and metadata in their execution directory without default leakage", async () => {
   const harness = buildHarness();
-  const { root, runtime, sessionRepo, taskRepo, executionRepo } = await harness.setup();
+  const { root, runtime, sessionRepo, executionRepo } = await harness.setup();
   try {
     const access = scopedAccess(runtime, {
       sessionId: "child-a",
@@ -81,12 +81,6 @@ test("scoped repositories keep all artifacts and metadata in their execution dir
       "alice",
       "child-a",
       { plugin: "workflow-test", sessionId: "child-a" },
-      options,
-    );
-    await taskRepo.save(
-      "alice",
-      "child-a",
-      { taskId: "task-a", skillName: "skill", taskName: "task", taskStatus: "start" },
       options,
     );
     await executionRepo.appendLog(
@@ -106,8 +100,15 @@ test("scoped repositories keep all artifacts and metadata in their execution dir
     assert.equal((await readJson(scope.sessionFile)).parentSessionId, "parent-a");
     await sessionRepo.ensureSessionDisplaySummary("alice", "child-a", options);
     assert.equal((await readJson(scope.sessionSummaryFile)).sessionId, "child-a");
-    assert.equal((await readJson(scope.taskFile)).tasks[0].taskId, "task-a");
-    assert.equal((await readExecutionLogs(scope.sessionDir))[0].value, 1);
+    assert.equal(
+      (
+        await readExecutionLogs({
+          storageService: sessionRepo.storageService,
+          sessionDir: scope.sessionDir,
+        })
+      )[0].value,
+      1,
+    );
 
     const defaultRoot = path.join(root, "alice/runtime/session");
     const { storageService } = sessionRepo;
@@ -152,7 +153,15 @@ test("session facade execution reads do not create a default shadow session for 
     await session.appendExecutionLog({ ...payload, event: "workflow_started" });
 
     const scope = await access.locate();
-    assert.equal((await readExecutionLogs(scope.sessionDir))[0].event, "workflow_started");
+    assert.equal(
+      (
+        await readExecutionLogs({
+          storageService: sessionRepo.storageService,
+          sessionDir: scope.sessionDir,
+        })
+      )[0].event,
+      "workflow_started",
+    );
     assert.equal(
       await sessionRepo.storageService.exists(
         path.join(root, "alice/runtime/session/child-facade/session.json"),
@@ -217,7 +226,7 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
         {
           messageUid: "sm_tool_result",
           role: "tool",
-          presentationMessageId: "pm_fx2",
+          presentationMessageId: "pm_fx1",
           type: "tool_result",
           content: "body",
           tool_call_id: "call-1",
@@ -225,7 +234,7 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
         {
           messageUid: "sm_done",
           role: "assistant",
-          presentationMessageId: "pm_fx3",
+          presentationMessageId: "pm_fx1",
           modelMessageId: "mm_scoped_session_repositor_2",
           type: "message",
           content: "done",
@@ -234,16 +243,22 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
     });
 
     const scope = await access.locate();
-    const scopedSession = await readSessionArtifact({ sessionDir: scope.sessionDir });
+    const scopedSession = await readSessionArtifact({
+      sessionDir: scope.sessionDir,
+      storageService: sessionRepo.storageService,
+    });
     assert.deepEqual(
       scopedSession.messages.map((message) => message.role),
       ["user", "assistant", "tool", "assistant"],
     );
     assert.equal(scopedSession.messages.at(-1).content, "done");
     assert.equal(
-      (await readExecutionLogs(scope.sessionDir)).some((item) =>
-        JSON.stringify(item).includes("session_turn_full"),
-      ),
+      (
+        await readExecutionLogs({
+          storageService: sessionRepo.storageService,
+          sessionDir: scope.sessionDir,
+        })
+      ).some((item) => JSON.stringify(item).includes("session_turn_full")),
       true,
     );
     assert.equal(
@@ -259,7 +274,7 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
 
 test("scoped repositories isolate concurrent contexts and mutation locks", async () => {
   const harness = buildHarness();
-  const { runtime, sessionRepo, taskRepo, executionRepo } = await harness.setup();
+  const { runtime, sessionRepo, executionRepo } = await harness.setup();
   try {
     const nodes = ["node-1", "node-2"].map((node, index) => ({
       node,
@@ -281,12 +296,6 @@ test("scoped repositories isolate concurrent contexts and mutation locks", async
         });
         await Promise.all([
           sessionRepo.writeSessionMetadata("alice", sessionId, { node }, options),
-          taskRepo.save(
-            "alice",
-            sessionId,
-            { taskId: `task-${index}`, taskStatus: "start" },
-            options,
-          ),
           executionRepo.appendLog(
             "alice",
             sessionId,
@@ -301,8 +310,6 @@ test("scoped repositories isolate concurrent contexts and mutation locks", async
     assert.notEqual(firstScope.sessionDir, secondScope.sessionDir);
     assert.equal((await readJson(firstScope.metadataFile)).node, "node-1");
     assert.equal((await readJson(secondScope.metadataFile)).node, "node-2");
-    assert.equal((await readJson(firstScope.taskFile)).tasks[0].taskId, "task-0");
-    assert.equal((await readJson(secondScope.taskFile)).tasks[0].taskId, "task-1");
     for (const scope of [firstScope, secondScope]) {
       assert.equal(
         await sessionRepo.storageService.exists(

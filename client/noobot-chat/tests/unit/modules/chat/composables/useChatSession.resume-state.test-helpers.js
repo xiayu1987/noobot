@@ -7,6 +7,8 @@ import { vi } from "vitest";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { jsonResponse } from "../../../helpers/jsonResponse.js";
 import { terminalStatusFixture } from "../helpers/terminalStatusFixture.js";
+import { createSessionDetailDocument } from "@noobot/session-protocol/session-detail";
+import { detailEntryWithLifecycle } from "../../../helpers/sessionDetailFixture.js";
 
 export function detailResponse(options) {
   const payload = detailPayload(options);
@@ -16,31 +18,33 @@ export function detailResponse(options) {
 export function detailPayload({ sessionId, dialogProcessId, turnScopeId, turnLifecycleSnapshot }) {
   return {
     ok: true,
-    exists: true,
-    sessionId,
-    ...(turnLifecycleSnapshot ? { turnLifecycleSnapshot } : {}),
-    sessions: [
-      {
-        sessionId,
-        ...(turnLifecycleSnapshot ? { turnLifecycleSnapshot } : {}),
-        turnTimings: [],
-        messages: [
-          {
-            role: RoleEnum.USER,
-            messageUid: `user-${turnScopeId}`,
-            content: "question",
-            turnScopeId,
-          },
-          {
-            role: RoleEnum.ASSISTANT,
-            presentationMessageId: `msg-${turnScopeId}`,
-            content: "answer",
-            dialogProcessId,
-            turnScopeId,
-          },
-        ],
-      },
-    ],
+    ...createSessionDetailDocument({
+      sessionId,
+      sessions: [
+        detailEntryWithLifecycle({
+          sessionId,
+          title: sessionId,
+          aggregateVersion: 1,
+          turnTimings: [],
+          turnLifecycleSnapshot,
+          messages: [
+            {
+              role: RoleEnum.USER,
+              messageUid: `user-${turnScopeId}`,
+              content: "question",
+              turnScopeId,
+            },
+            {
+              role: RoleEnum.ASSISTANT,
+              presentationMessageId: `msg-${turnScopeId}`,
+              content: "answer",
+              dialogProcessId,
+              turnScopeId,
+            },
+          ],
+        }),
+      ],
+    }),
   };
 }
 

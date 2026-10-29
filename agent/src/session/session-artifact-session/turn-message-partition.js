@@ -3,10 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { resolveSessionMessageRecordDialogProcessId } from "@noobot/session-protocol";
+import {
+  requireTurnPartitionIdentity,
+  requireTurnPartitionMessageIdentity,
+} from "@noobot/session-protocol";
 import { resolveScopedArtifactPath } from "@noobot/path-resolver";
 import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
-import { text } from "@noobot/shared/value";
 
 export function dialogLogicalOrder(dialogOrder) {
   return new Map(dialogOrder.map((entry) => [entry.dialogProcessId, entry.dialogOrdinal]));
@@ -29,34 +31,22 @@ export function splitSessionMessages(messages, dialogOrder) {
   const logicalOrder = dialogLogicalOrder(dialogOrder);
   const buckets = new Map();
   source.forEach((message, sourceIndex) => {
-    const dialogProcessId = resolveSessionMessageRecordDialogProcessId(message);
-    const turnScopeId = text(message?.turnScopeId);
-    if (!turnScopeId || !dialogProcessId) {
-      const error = new TypeError(
-        `session message is missing Turn identity at index ${sourceIndex}`,
-      );
-      error.code = "SESSION_TURN_IDENTITY_REQUIRED";
-      throw error;
-    }
-    const key = `turn:${turnScopeId}`;
-    const bucket = buckets.get(key) || {
+    const { turnScopeId, dialogProcessId } = requireTurnPartitionMessageIdentity(
+      message,
+      sourceIndex,
+    );
+    const bucket = buckets.get(turnScopeId) || {
       dialogProcessId,
       turnScopeId,
       firstSourceIndex: sourceIndex,
       messages: [],
       sourceIndices: [],
     };
-    if (bucket.dialogProcessId !== dialogProcessId) {
-      const error = new TypeError(
-        `turnScopeId ${turnScopeId} maps to multiple dialogProcessId values`,
-      );
-      error.code = "SESSION_TURN_IDENTITY_CONFLICT";
-      throw error;
-    }
     bucket.messages.push(message);
     bucket.sourceIndices.push(sourceIndex);
-    buckets.set(key, bucket);
+    buckets.set(turnScopeId, bucket);
   });
+  for (const bucket of buckets.values()) requireTurnPartitionIdentity(bucket.messages);
   const ordered = [...buckets.values()].sort(compareTurnPlacement(logicalOrder));
   const turns = ordered.map((bucket, index) => {
     const artifactOrdinal = index + 1;

@@ -5,7 +5,7 @@
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeMessageEntity, normalizeTaskEntity } from "../../src/session/entities.js";
+import { normalizeMessageEntity } from "../../src/session/entities.js";
 import { resolveDefaultModelSpec, resolveSkillModelSpec } from "../../src/models/resolver/index.js";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
@@ -101,15 +101,6 @@ describe("8. 综合集成测试", () => {
       assert.ok("content" in normalizedMsg, "应包含 content");
       assert.ok("type" in normalizedMsg, "应包含 type");
       assert.ok("ts" in normalizedMsg, "应包含 ts");
-
-      const rawTask = { taskId: "task-1", taskName: "test", taskStatus: "completed" };
-      const normalizedTask = normalizeTaskEntity(rawTask);
-
-      assert.ok("taskId" in normalizedTask, "应包含 taskId");
-      assert.ok("taskName" in normalizedTask, "应包含 taskName");
-      assert.ok("taskStatus" in normalizedTask, "应包含 taskStatus");
-      assert.ok("startedAt" in normalizedTask, "应包含 startedAt");
-      assert.ok("endedAt" in normalizedTask, "应包含 endedAt");
     });
 
     it("模型切换后 spec 应保持完整字段", () => {

@@ -166,7 +166,7 @@ async function commitAction(context, actionEvent, run) {
     accepted = await context.commitTurnLifecycle(actionEvent);
   }
   if (!accepted.applied && !accepted.deduplicated) {
-    throw createTurnLifecycleRejectedError(accepted.reason);
+    throw createTurnLifecycleRejectedError(accepted);
   }
   return accepted;
 }

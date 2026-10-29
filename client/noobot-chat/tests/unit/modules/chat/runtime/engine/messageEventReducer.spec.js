@@ -513,7 +513,6 @@ describe("reduceMessageEvent", () => {
             toolName: "write_file",
             resolvedPath: "/workspace/admin/runtime/ops_workdir/write_test.txt",
             fileName: "write_test.txt",
-            isSandbox: true,
           },
         ],
       }),

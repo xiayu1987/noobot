@@ -18,6 +18,8 @@ export const WORKSPACE_LAYOUT_UPGRADE_OWNER = Object.freeze({
   SESSION_TRANSFER_ENVELOPE: "session-transfer-envelope",
   MODEL_CONTEXT_SNAPSHOT: "model-context-snapshot",
   SESSION_MESSAGE_IDENTITY: "session-message-identity",
+  EXECUTION_EVENT_INDEX: "execution-event-index",
+  SESSION_TASK_ARTIFACT: "session-task-artifact",
 });
 
 export const WORKSPACE_LAYOUT_UPGRADES = Object.freeze([
@@ -90,6 +92,21 @@ export const WORKSPACE_LAYOUT_UPGRADES = Object.freeze([
     id: "session-message-entity-contract-v15",
     toVersion: 15,
     owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MESSAGE_IDENTITY,
+  }),
+  Object.freeze({
+    id: "session-retired-task-fields-v16",
+    toVersion: 16,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MESSAGE_IDENTITY,
+  }),
+  Object.freeze({
+    id: "execution-event-index-v3-v17",
+    toVersion: 17,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.EXECUTION_EVENT_INDEX,
+  }),
+  Object.freeze({
+    id: "session-task-artifact-retired-v18",
+    toVersion: 18,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_TASK_ARTIFACT,
   }),
 ]);
 

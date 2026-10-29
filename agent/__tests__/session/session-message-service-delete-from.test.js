@@ -11,8 +11,9 @@ import test, { after } from "node:test";
 import assert from "node:assert/strict";
 
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
-import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
+import { createSessionCrudServiceStub } from "../helpers/session-crud-service-stub.js";
+import { buildPersistedDisplaySummary } from "./session-artifact-store-v2.test-helpers.js";
 
 const TEST_SESSION_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-session-dir-"));
 after(() => fs.rmSync(TEST_SESSION_DIR, { recursive: true, force: true }));
@@ -44,6 +45,7 @@ function createService({ initialSession }) {
   };
   const service = new SessionMessageService({
     sessionRepo,
+    sessionCrudService: createSessionCrudServiceStub(() => currentSession),
     now: () => "2026-06-17T00:00:00.000Z",
   });
   return { service, saved, getSession: () => currentSession };
@@ -75,7 +77,9 @@ test("SessionMessageService.deleteFromMessage deletes from anchor message to ses
   assert.equal(result.deletedCount, 2);
   assert.equal(result.anchorIndex, 1);
   assert.deepEqual(result.deletedTurnScopeIds, ["scope-delete", "scope-tail"]);
-  assert.equal(result.aggregateVersion, 3);
+  assert.equal(result.committedAggregateVersion, 3);
+  assert.equal(result.deduplicated, false);
+  assert.equal(result.detail.sessions[0].aggregateVersion, 3);
   assert.equal(saved.length, 1);
   assert.deepEqual(
     saved[0].messages.map((message) => message.content),
@@ -189,7 +193,7 @@ test("SessionMessageService.deleteFromMessage removes deleted terminal Turns fro
   });
 
   const persisted = getSession();
-  const summary = buildSessionDisplaySummary(persisted);
+  const summary = await buildPersistedDisplaySummary(persisted);
   const lifecycle = await service.getTurnLifecycleSnapshot({
     userId: "u1",
     sessionId: "s1",

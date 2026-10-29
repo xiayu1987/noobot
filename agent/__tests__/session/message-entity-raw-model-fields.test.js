@@ -230,6 +230,7 @@ test("normalizeMessageEntity preserves user attachment source fields for history
         relativePath: "runtime/attach/scoped/s-source/user/source.md",
         sandboxPath: "/workspace/primary-user/runtime/attach/scoped/s-source/user/source.md",
         size: 42,
+        sourcePath: "D:/work/source.md",
         isSandbox: true,
         raw: "drop",
       },
@@ -247,10 +248,11 @@ test("normalizeMessageEntity preserves user attachment source fields for history
       relativePath: "runtime/attach/scoped/s-source/user/source.md",
       sandboxPath: "/workspace/primary-user/runtime/attach/scoped/s-source/user/source.md",
       path: "/workspace/primary-user/runtime/attach/scoped/s-source/user/source.md",
-      isSandbox: true,
+      sourcePath: "D:/work/source.md",
     },
   ]);
   assert.equal("raw" in normalized.attachments[0], false);
+  assert.equal("isSandbox" in normalized.attachments[0], false);
 });
 
 test("normalizeMessageEntity preserves message-scoped user identity for history rebuild", () => {

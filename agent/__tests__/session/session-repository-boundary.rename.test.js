@@ -84,7 +84,10 @@ test("renameSession should persist custom title to full, display summary and ses
       "A",
       runtime.repositories.sessionRepository.treePersistenceContext(userId, "A"),
     );
-    const full = await readSessionArtifact({ sessionDir: scope.sessionDir });
+    const full = await readSessionArtifact({
+      sessionDir: scope.sessionDir,
+      storageService: runtime.repositories.sessionRepository.storageService,
+    });
     await runtime.repositories.sessionRepository.ensureSessionDisplaySummary(userId, "A", {
       persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
         userId,

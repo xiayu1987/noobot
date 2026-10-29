@@ -15,7 +15,7 @@ import {
   selectSessionTurnRuntime,
   selectTurnRuntimeByScope,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
-import { mapSummaryToSession } from "../../../../../src/modules/session/model/list/sessionRecords.js";
+import { mapSummaryEntryToSession } from "../../../../../src/modules/session/model/list/sessionRecords.js";
 import {
   createChatSession,
   createSessionFixture,
@@ -26,10 +26,23 @@ import { lifecycle } from "../runtime/run-state-machine/turnRuntimeRegistryTestF
 import {
   detailPayload,
   routeAwareFetcher,
+  terminalLifecycleSnapshot,
   terminalResolution,
 } from "./useChatSession.resume-state.test-helpers.js";
 import { terminalStatusFixture } from "../helpers/terminalStatusFixture.js";
-import { ROOT_PARENT_SESSION_ID } from "@noobot/agent-transport-protocol";
+import {
+  availableSummaryEntry,
+  idleTurnLifecycleSnapshot,
+} from "../../../helpers/sessionDetailFixture.js";
+
+function idleDetail({ sessionId, dialogProcessId, turnScopeId }) {
+  return detailPayload({
+    sessionId,
+    dialogProcessId,
+    turnScopeId,
+    turnLifecycleSnapshot: idleTurnLifecycleSnapshot(sessionId),
+  });
+}
 
 describe("useChatSession summary and reconnect state", () => {
   beforeEach(() => {
@@ -84,7 +97,11 @@ describe("useChatSession summary and reconnect state", () => {
 
     createChatSession({
       authFetch: routeAwareFetcher({
-        detail: { ok: true, exists: true, sessionId: "s-snapshot", sessions: [] },
+        detail: idleDetail({
+          sessionId: "s-snapshot",
+          dialogProcessId: "dp-snapshot",
+          turnScopeId: "t-snapshot",
+        }),
         terminal: terminalResolution({
           sessionId: "s-snapshot",
           turnScopeId: "t-snapshot",
@@ -159,7 +176,7 @@ describe("useChatSession summary and reconnect state", () => {
 
     createChatSession({
       authFetch: routeAwareFetcher({
-        detail: { ok: true, exists: true, sessionId, sessions: [] },
+        detail: idleDetail({ sessionId, dialogProcessId: "dp-action-failure", turnScopeId }),
       }),
     });
     await nextTick();
@@ -217,7 +234,11 @@ describe("useChatSession summary and reconnect state", () => {
     ];
     store.activeSessionId = "";
     const authFetch = routeAwareFetcher({
-      detail: { ok: true, exists: true, sessionId: "s-late-identity", sessions: [] },
+      detail: idleDetail({
+        sessionId: "s-late-identity",
+        dialogProcessId: "dp-late-identity",
+        turnScopeId: "t-late-identity",
+      }),
       terminal: terminalResolution({
         sessionId: "s-late-identity",
         turnScopeId: "t-late-identity",
@@ -279,7 +300,7 @@ describe("useChatSession summary and reconnect state", () => {
     ];
     store.activeSessionId = sessionId;
     const authFetch = routeAwareFetcher({
-      detail: { ok: true, exists: true, sessionId, sessions: [] },
+      detail: idleDetail({ sessionId, dialogProcessId: `dp-${turnScopeId}`, turnScopeId }),
       terminal: terminalResolution({
         sessionId,
         turnScopeId,
@@ -314,12 +335,22 @@ describe("useChatSession summary and reconnect state", () => {
     });
   });
 
-  it("resolves a terminal snapshot when a mapped Session summary arrives asynchronously after startup", async () => {
+  it("resolves a terminal snapshot from detail after a list-mapped Session arrives asynchronously", async () => {
     const store = useChatStore();
     store.sessions = [];
     store.activeSessionId = "";
     const authFetch = routeAwareFetcher({
-      detail: { ok: true, exists: true, sessionId: "s-async-refresh", sessions: [] },
+      detail: detailPayload({
+        sessionId: "s-async-refresh",
+        dialogProcessId: "dp-async-refresh",
+        turnScopeId: "t-async-refresh",
+        turnLifecycleSnapshot: terminalLifecycleSnapshot({
+          sessionId: "s-async-refresh",
+          turnScopeId: "t-async-refresh",
+          dialogProcessId: "dp-async-refresh",
+          state: "completed",
+        }),
+      }),
       terminal: terminalResolution({
         sessionId: "s-async-refresh",
         turnScopeId: "t-async-refresh",
@@ -328,45 +359,22 @@ describe("useChatSession summary and reconnect state", () => {
         sequence: 4,
       }),
     });
-    createChatSession({ authFetch });
+    const session = createChatSession({ authFetch });
 
-    const summary = {
-      sessionId: "s-async-refresh",
-      parentSessionId: ROOT_PARENT_SESSION_ID,
-      caller: "user",
-      messages: [],
-      turnLifecycleSnapshot: {
-        protocolVersion: 1,
-        eventType: "turn.snapshot",
-        recovery: "none",
-        commandId: "summary:s-async-refresh:4",
-        sessionId: "s-async-refresh",
-        sequence: 4,
-        unchanged: false,
-        activeTurnScopeId: "",
-        activeTurn: null,
-        replacedTurns: [],
-        recentTerminalTurns: [
-          {
-            sessionId: "s-async-refresh",
-            turnScopeId: "t-async-refresh",
-            presentationMessageId: "msg-t-async-refresh",
-            dialogProcessId: "dp-async-refresh",
-            state: "completed",
-            phase: "completion",
-            revision: 4,
-            sequence: 4,
-            capabilities: { canStop: false },
-          },
-        ],
-      },
-    };
     store.sessions = [
-      mapSummaryToSession(summary, {
-        sessionTitleFromMessages: (_messages, fallback) => fallback,
-        createConnectorPanelState: () => ({ selectedConnectorIds: [], connectors: [] }),
-      }),
+      mapSummaryEntryToSession(
+        availableSummaryEntry({
+          sessionId: "s-async-refresh",
+          title: "s-async-refresh",
+          aggregateVersion: 1,
+          messageCount: 2,
+          updatedAt: "2026-07-15T10:01:00.000Z",
+        }),
+        { createConnectorPanelState: () => ({ selectedConnectorIds: [], connectors: [] }) },
+      ),
     ];
+    expect(store.sessions[0]).not.toHaveProperty("turnLifecycleSnapshot");
+    await session.selectSession("s-async-refresh", { force: true });
 
     await vi.waitFor(() =>
       expect(
@@ -450,7 +458,7 @@ describe("useChatSession summary and reconnect state", () => {
         },
       });
     });
-    const detail = detailPayload({
+    const detail = idleDetail({
       sessionId: "s-detail-race",
       dialogProcessId: "dp-detail-race",
       turnScopeId: "turn-detail-race",
@@ -529,7 +537,7 @@ describe("useChatSession summary and reconnect state", () => {
         },
       });
     });
-    const detail = detailPayload({
+    const detail = idleDetail({
       sessionId: "s-processing-race",
       dialogProcessId,
       turnScopeId,

@@ -5,7 +5,7 @@
 }
 
 .chat-input .el-textarea__inner::placeholder {
-  color: var(--noobot-text-muted);
+  color: var(--noobot-text-secondary);
 }
 
 .head-sub {

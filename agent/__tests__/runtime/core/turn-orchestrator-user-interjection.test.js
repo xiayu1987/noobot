@@ -72,7 +72,6 @@ test("an interjection accepted during the final model call is consumed before co
         modelMessageId: `assistant-${invocation}`,
         calls: [],
         turnMessageStore: currentTurnMessages,
-        turnTaskStore: { toArray: () => [] },
       };
     },
     buildLoopResultFn: ({ output }) => ({ output }),
@@ -89,7 +88,6 @@ test("an interjection accepted during the final model call is consumed before co
       traces: [],
       maxTurns: 10,
       turnMessages: [],
-      turnTasks: [],
     },
   });
 

@@ -3,63 +3,55 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
+import { requireCanonicalTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
 import { readSessionForProtocolRepair } from "@noobot/session-repair";
 import { buildSessionArtifactFileMap } from "../session-artifact-files.js";
-import { readJsonWithStorage } from "./artifact-json-io.js";
+import { readOptionalJsonWithStorage } from "./artifact-json-io.js";
 import {
   TURN_JOURNAL_SCHEMA_VERSION,
   assertCanonicalSessionManifest,
   turnArtifactRequiresRewrite,
 } from "./turn-journal-store.js";
 import { turnMaterializer } from "./turn-materializer.js";
-import { text, isObjectLike } from "@noobot/shared/value";
 
 async function readCanonicalManifest({ storageService, sessionDir }) {
   const files = buildSessionArtifactFileMap(sessionDir);
-  const session = await readJsonWithStorage({
+  const session = await readOptionalJsonWithStorage({
     storageService,
     artifactPath: files.session,
-    fallback: null,
   });
-  if (!isObjectLike(session)) return null;
+  if (session === null) return null;
   return assertCanonicalSessionManifest(session, "Session artifact");
 }
 
-async function materializeOrderedMessages(sessionDir, turnItems, references) {
+async function materializeOrderedMessages({ storageService, sessionDir, turnItems, references }) {
   const messagesByUid = new Map();
   for (const item of turnItems) {
-    for (const message of await turnMaterializer.materialize(sessionDir, item))
+    for (const message of await turnMaterializer.materialize({ storageService, sessionDir, item }))
       messagesByUid.set(message.messageUid, message);
   }
-  return references.map((reference) => {
-    const { messageUid } = reference;
-    const message = messagesByUid.get(messageUid);
-    if (message) return message;
-    const error = new Error(`session message order references a missing message: ${messageUid}`);
-    error.code = SESSION_ERROR_CODE.MESSAGE_ORDER_MESSAGE_MISSING;
-    throw error;
-  });
+  return references.map(({ messageUid }) => messagesByUid.get(messageUid));
 }
 
-export async function readSessionArtifact({ storageService = null, sessionDir = "" } = {}) {
+export async function readSessionArtifact({ storageService, sessionDir }) {
   const session = await readCanonicalManifest({ storageService, sessionDir });
   if (!session) return null;
   return {
     ...session,
-    messages: await materializeOrderedMessages(sessionDir, session.turnOrder, session.messageOrder),
+    messages: await materializeOrderedMessages({
+      storageService,
+      sessionDir,
+      turnItems: session.turnOrder,
+      references: session.messageOrder,
+    }),
   };
 }
 
-export async function readSessionTurnView({
-  storageService = null,
-  sessionDir = "",
-  turnScopeIds = [],
-} = {}) {
+export async function readSessionTurnView({ storageService, sessionDir, turnScopeIds }) {
   const session = await readCanonicalManifest({ storageService, sessionDir });
   if (!session) return null;
-  const scopes = new Set(turnScopeIds.map((turnScopeId) => text(turnScopeId)));
-  const lastMessageUid = text(session.messageOrder.at(-1)?.messageUid);
+  const scopes = new Set(turnScopeIds.map(requireCanonicalTurnScopeId));
+  const lastMessageUid = session.messageOrder.length ? session.messageOrder.at(-1).messageUid : "";
   const turnItems = session.turnOrder.filter(
     (item) =>
       scopes.has(item.turnScopeId) ||
@@ -70,27 +62,26 @@ export async function readSessionTurnView({
   return {
     session: {
       ...session,
-      messages: await materializeOrderedMessages(
+      messages: await materializeOrderedMessages({
+        storageService,
         sessionDir,
         turnItems,
-        session.messageOrder.filter((reference) => viewMessageUids.has(reference.messageUid)),
-      ),
+        references: session.messageOrder.filter((reference) =>
+          viewMessageUids.has(reference.messageUid),
+        ),
+      }),
     },
     turnScopeIds: turnItems.map((item) => item.turnScopeId),
   };
 }
 
-export async function readSessionArtifactForRepair({
-  storageService = null,
-  sessionDir = "",
-} = {}) {
+export async function readSessionArtifactForRepair({ storageService, sessionDir }) {
   const files = buildSessionArtifactFileMap(sessionDir);
-  const session = await readJsonWithStorage({
+  const session = await readOptionalJsonWithStorage({
     storageService,
     artifactPath: files.session,
-    fallback: null,
   });
-  if (!isObjectLike(session)) return null;
+  if (session === null) return null;
   if (session.schemaVersion === TURN_JOURNAL_SCHEMA_VERSION) {
     return readSessionArtifact({ storageService, sessionDir });
   }

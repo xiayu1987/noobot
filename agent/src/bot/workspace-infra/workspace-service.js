@@ -12,15 +12,17 @@ import {
 } from "../../workspace-lifecycle/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { text } from "@noobot/shared/value";
+import { requireStorageService } from "../../session/storage-service.js";
 
 export class WorkspaceService {
-  constructor({ globalConfig = {}, globalConfigRaw = null, scopedSessionRoots } = {}) {
+  constructor({ globalConfig = {}, globalConfigRaw = null, scopedSessionRoots, storageService }) {
     if (!Array.isArray(scopedSessionRoots) || !scopedSessionRoots.length) {
       throw new TypeError("WorkspaceService requires scopedSessionRoots");
     }
     this.globalConfig = globalConfig;
     this.globalConfigRaw = globalConfigRaw;
     this.scopedSessionRoots = scopedSessionRoots;
+    this.storageService = requireStorageService(storageService, "WorkspaceService");
   }
 
   getWorkspacePath(userId) {
@@ -38,6 +40,7 @@ export class WorkspaceService {
       userId,
       baseValues: this.globalConfigRaw ?? {},
       scopedSessionRoots: this.scopedSessionRoots,
+      storageService: this.storageService,
     };
   }
 

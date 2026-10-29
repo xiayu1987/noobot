@@ -45,22 +45,3 @@ export function summarizeWorkflowMessage(message = {}, index = -1) {
     tagKeys: summarizeTagKeys(source.tags),
   };
 }
-
-export function summarizeWorkflowMessages(messages = [], limit = 20) {
-  const source = Array.isArray(messages) ? messages : [];
-  const start = Math.max(0, source.length - Math.max(1, Number(limit) || 20));
-  return source
-    .slice(start)
-    .map((message, index) => summarizeWorkflowMessage(message, start + index))
-    .filter(
-      (message) =>
-        message.type === "workflow" ||
-        message.pluginSource === "workflow-plugin" ||
-        Boolean(message.workflowRunId) ||
-        message.tagKeys.includes("message") ||
-        (message.role.toLowerCase() === "assistant" &&
-          message.type === "message" &&
-          message.contentLength === 0 &&
-          Boolean(message.turnScopeId || message.dialogProcessId)),
-    );
-}

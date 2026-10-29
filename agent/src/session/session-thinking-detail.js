@@ -4,65 +4,64 @@
  * SPDX-License-Identifier: MIT
  */
 
-import {
-  hasThinkingTimeline,
-  isInjectedThinkingMessage,
-  normalizeThinkingRoute,
-  projectThinkingDetailRound,
-} from "./thinking-timeline-projection.js";
+import { requireTurnPartitionIdentity } from "@noobot/session-protocol";
+import { createTurnArtifactRevision } from "@noobot/session-protocol/turn-lookup-key";
 import { countCanonicalThinkingDetailEvents } from "@noobot/event-protocol/tool-timeline";
+import { isThinkingDetailInjectedMessage } from "@noobot/event-protocol/thinking-detail-content";
+import { readSessionTurn } from "./session-artifact-session.js";
+import { projectThinkingTimeline } from "./thinking-timeline-projection.js";
 
-export {
-  normalizeThinkingRoute as normalizeRouteText,
-  isInjectedThinkingMessage as isInjectedMessage,
-  hasThinkingTimeline as isToolOrThinkingMessage,
-  isMessageInThinkingRound as isSameThinkingRound,
-} from "./thinking-timeline-projection.js";
+function hasThinkingTimeline(message) {
+  return (
+    Array.isArray(message.toolTimeline) ||
+    Array.isArray(message.activityTimeline) ||
+    Array.isArray(message.thinkingContentTimeline)
+  );
+}
 
-export function buildThinkingDetailPayload(fullResult = {}, filters = {}) {
-  const sessions = Array.isArray(fullResult?.sessions) ? fullResult.sessions : [];
-  const sessionItem = sessions[0] || {};
-  const messages = Array.isArray(sessionItem?.rawMessages) ? sessionItem.rawMessages : [];
-  const dialogProcessId = normalizeThinkingRoute(filters.dialogProcessId);
-  const turnScopeId = normalizeThinkingRoute(filters.turnScopeId);
-  const {
-    rootMessage,
-    roundMessages,
-    toolTimeline,
-    activityTimeline,
-    thinkingContentTimeline,
-    projectedRootMessage,
-  } = projectThinkingDetailRound(messages, { dialogProcessId, turnScopeId });
-  const scopedMessages = roundMessages
-    .filter(
-      (item = {}) =>
-        isInjectedThinkingMessage(item) || hasThinkingTimeline(item) || item === rootMessage,
-    )
-    .map((item) => (item === rootMessage ? projectedRootMessage : item));
-  const injectedMessages = roundMessages.filter((item = {}) => isInjectedThinkingMessage(item));
+export function buildThinkingDetailPayload(turn) {
+  if (turn === null) return { exists: false };
+  const { presentationMessageId } = requireTurnPartitionIdentity(turn.messages);
+  const { roundMessages, toolTimeline, activityTimeline, thinkingContentTimeline } =
+    projectThinkingTimeline(turn.messages, { turnScopeId: turn.turnScopeId });
+  const injectedMessages = roundMessages.filter(isThinkingDetailInjectedMessage);
+  const detailMessages = roundMessages.filter(
+    (message) => isThinkingDetailInjectedMessage(message) || hasThinkingTimeline(message),
+  );
   const thinkingDetailCount = countCanonicalThinkingDetailEvents({
     toolTimeline,
     activityTimeline,
   });
-  const sessionId = fullResult?.sessionId || sessionItem?.sessionId || "";
-  const messageItem = {
-    ...projectedRootMessage,
-    sessionId: normalizeThinkingRoute(rootMessage?.sessionId || sessionId),
-    toolTimeline,
-    activityTimeline,
-    thinkingContentTimeline,
-    hasThinkingDetails: thinkingDetailCount > 0 || thinkingContentTimeline.length > 0,
-  };
   return {
-    exists: Boolean(rootMessage?.role || scopedMessages.length),
-    sessionId,
-    revision: normalizeThinkingRoute(fullResult?.revision),
-    messageItem,
+    exists: true,
+    sessionId: turn.sessionId,
+    revision: createTurnArtifactRevision(turn),
+    messageItem: {
+      sessionId: turn.sessionId,
+      turnScopeId: turn.turnScopeId,
+      dialogProcessId: turn.dialogProcessId,
+      presentationMessageId,
+      toolTimeline,
+      activityTimeline,
+      thinkingContentTimeline,
+      hasThinkingDetails: thinkingDetailCount > 0 || thinkingContentTimeline.length > 0,
+    },
     counts: {
       executionLogCount: countCanonicalThinkingDetailEvents({ toolTimeline }),
       injectedMessageCount: injectedMessages.length,
       thinkingContentCount: thinkingContentTimeline.length,
-      messageCount: scopedMessages.length,
+      messageCount: detailMessages.length,
     },
   };
+}
+
+export async function readSessionThinkingDetail({
+  storageService,
+  sessionDir,
+  turnScopeId,
+  dialogProcessId,
+}) {
+  return buildThinkingDetailPayload(
+    await readSessionTurn({ storageService, sessionDir, turnScopeId, dialogProcessId }),
+  );
 }

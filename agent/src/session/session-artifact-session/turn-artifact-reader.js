@@ -3,76 +3,71 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { buildSessionArtifactFileMap, readJsonArtifactFile } from "../session-artifact-files.js";
+import { createSessionArtifactNotFoundError } from "@noobot/session-protocol";
+import { buildSessionArtifactFileMap } from "../session-artifact-files.js";
+import { readOptionalJsonWithStorage } from "./artifact-json-io.js";
 import { assertCanonicalSessionManifest } from "./turn-journal-store.js";
 import { turnMaterializer } from "./turn-materializer.js";
-import { text, isObjectLike } from "@noobot/shared/value";
+import {
+  matchesTurnLookupKey,
+  requireTurnLookupKey,
+} from "@noobot/session-protocol/turn-lookup-key";
 
-async function materializeTurn(sessionDir, item) {
+async function materializeTurn({ storageService, sessionDir, item }) {
   return {
     turnId: item.turnId,
     artifactOrdinal: item.artifactOrdinal,
     committedBytes: item.committedBytes,
     turnScopeId: item.turnScopeId,
     dialogProcessId: item.dialogProcessId,
-    messages: await turnMaterializer.materialize(sessionDir, item),
+    messages: await turnMaterializer.materialize({ storageService, sessionDir, item }),
     summarySnapshots: item.summarySnapshots,
   };
 }
 
-export async function readRecentSessionTurns({
-  sessionDir = "",
-  limit = 10,
-  fallback = null,
-} = {}) {
+async function readCanonicalManifest({ storageService, sessionDir, label }) {
   const files = buildSessionArtifactFileMap(sessionDir);
-  const session = await readJsonArtifactFile(files.session, fallback);
-  if (!isObjectLike(session)) return [];
-  assertCanonicalSessionManifest(session, "recent Session turns");
-  const count = Math.max(0, Number(limit) || 0);
+  const session = await readOptionalJsonWithStorage({
+    storageService,
+    artifactPath: files.session,
+  });
+  if (session === null) throw createSessionArtifactNotFoundError(`${label} manifest`);
+  assertCanonicalSessionManifest(session, label);
+  return session;
+}
+
+export async function readRecentSessionTurns({ storageService, sessionDir, limit }) {
+  if (!Number.isInteger(limit) || limit < 0) {
+    throw new TypeError("recent Session turns limit must be a non-negative integer");
+  }
+  const session = await readCanonicalManifest({
+    storageService,
+    sessionDir,
+    label: "recent Session turns",
+  });
   const turns = [];
-  for (const item of session.turnOrder.slice(-count)) {
-    turns.push(await materializeTurn(sessionDir, item));
+  for (const item of session.turnOrder.slice(Math.max(0, session.turnOrder.length - limit))) {
+    turns.push(await materializeTurn({ storageService, sessionDir, item }));
   }
   return turns;
 }
 
 export async function readSessionTurn({
-  sessionDir = "",
-  turnScopeId = "",
-  dialogProcessId = "",
-} = {}) {
-  const files = buildSessionArtifactFileMap(sessionDir);
-  const session = await readJsonArtifactFile(files.session, null);
-  if (!isObjectLike(session)) return null;
-  assertCanonicalSessionManifest(session, "session turn lookup");
-  const normalizedTurnScopeId = text(turnScopeId);
-  const normalizedDialogProcessId = text(dialogProcessId);
-  if (!normalizedTurnScopeId) {
-    const error = new Error("turnScopeId is required");
-    error.code = "SESSION_TURN_IDENTITY_REQUIRED";
-    throw error;
-  }
-  const matches = session.turnOrder.filter((item) => {
-    if (item.turnScopeId !== normalizedTurnScopeId) return false;
-    return !normalizedDialogProcessId || item.dialogProcessId === normalizedDialogProcessId;
+  storageService,
+  sessionDir,
+  turnScopeId,
+  dialogProcessId,
+}) {
+  const lookupKey = requireTurnLookupKey({ turnScopeId, dialogProcessId });
+  const session = await readCanonicalManifest({
+    storageService,
+    sessionDir,
+    label: "session turn lookup",
   });
-  if (matches.length > 1) {
-    const error = new Error("session turn identity is ambiguous");
-    error.code = "SESSION_TURN_IDENTITY_AMBIGUOUS";
-    throw error;
-  }
-  if (!matches[0]) return null;
+  const turn = session.turnOrder.find((item) => matchesTurnLookupKey(item, lookupKey));
+  if (!turn) return null;
   return {
-    sessionId: text(session.sessionId),
-    ...(await materializeTurn(sessionDir, matches[0])),
+    sessionId: session.sessionId,
+    ...(await materializeTurn({ storageService, sessionDir, item: turn })),
   };
-}
-
-export async function readSessionMessageCount({ sessionDir = "" } = {}) {
-  const files = buildSessionArtifactFileMap(sessionDir);
-  const session = await readJsonArtifactFile(files.session, null);
-  if (!isObjectLike(session)) return 0;
-  assertCanonicalSessionManifest(session, "session message count");
-  return session.turnOrder.reduce((count, item) => count + item.messageOrder.length, 0);
 }

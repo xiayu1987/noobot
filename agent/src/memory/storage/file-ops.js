@@ -12,7 +12,7 @@ import {
 } from "../../shared/storage/atomic-file-write.js";
 import {
   isMissingPersistencePathError,
-  readPersistedJsonFile,
+  readOptionalPersistedJsonFile,
 } from "../../shared/storage/json-file-reader.js";
 
 export async function fileExists(filePath = "") {
@@ -25,8 +25,8 @@ export async function fileExists(filePath = "") {
   }
 }
 
-export async function readJson(filePath, fallback = {}) {
-  return readPersistedJsonFile({ filePath, fallback, readFile });
+export async function readOptionalJson(filePath) {
+  return readOptionalPersistedJsonFile({ filePath, readFile });
 }
 
 export async function writeJson(filePath, payload = {}) {

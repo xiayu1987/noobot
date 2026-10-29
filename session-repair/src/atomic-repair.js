@@ -5,16 +5,22 @@
  */
 import { randomUUID } from "node:crypto";
 import { cp, rename, rm } from "node:fs/promises";
-import { text, isFunction } from "@noobot/shared/value";
+import { isFunction } from "@noobot/shared/value";
 import { SESSION_REPAIR_ERROR_CODE } from "./errors.js";
 
 export const SESSION_REPAIR_STAGING_MARKER = ".repair-staging-";
 export const SESSION_REPAIR_BACKUP_MARKER = ".repair-backup-";
 
-export function isSessionRepairTempDirectoryName(name = "") {
-  const value = String(name);
+export function isSessionRepairTempDirectoryName(name) {
   return (
-    value.includes(SESSION_REPAIR_STAGING_MARKER) || value.includes(SESSION_REPAIR_BACKUP_MARKER)
+    name.includes(SESSION_REPAIR_STAGING_MARKER) || name.includes(SESSION_REPAIR_BACKUP_MARKER)
+  );
+}
+
+export function isOwnedSessionRepairTempDirectoryName(name, sessionDirName) {
+  return (
+    name.startsWith(`${sessionDirName}${SESSION_REPAIR_STAGING_MARKER}`) ||
+    name.startsWith(`${sessionDirName}${SESSION_REPAIR_BACKUP_MARKER}`)
   );
 }
 
@@ -28,13 +34,13 @@ function swapFailure(message, details, cause) {
 
 const DEFAULT_FS = Object.freeze({ cp, rename, rm });
 
-export async function runAtomicSessionRepair({
-  sessionDir = "",
-  repair,
-  validate,
-  fs = DEFAULT_FS,
-} = {}) {
-  if (!text(sessionDir) || !isFunction(repair) || !isFunction(validate)) {
+export async function runAtomicSessionRepair({ sessionDir, repair, validate, fs = DEFAULT_FS }) {
+  if (
+    typeof sessionDir !== "string" ||
+    !sessionDir ||
+    !isFunction(repair) ||
+    !isFunction(validate)
+  ) {
     throw Object.assign(
       new TypeError("Atomic Session repair requires sessionDir, repair and validate"),
       {

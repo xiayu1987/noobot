@@ -8,6 +8,7 @@ import { computed } from "vue";
 import { Document, Download } from "@element-plus/icons-vue";
 import { resolveParsedResultAccessMeta } from "../../infrastructure/api/attachments/attachmentAccess.js";
 import { text } from "@noobot/shared/value";
+import "./file-card-common.css";
 
 const props = defineProps({
   attachmentItem: { type: Object, required: true },
@@ -191,14 +192,12 @@ function emitPreview() {
   </div>
 </template>
 
-<style src="./file-card-common.css"></style>
-
 <style scoped>
 .attachment-owner-badge {
   flex: 0 0 auto;
   height: 18px;
   padding: 0 var(--noobot-space-xs);
-  font-size: var(--noobot-font-size-2xs);
+  font-size: var(--noobot-font-size-xs);
   line-height: var(--noobot-line-height-none);
 }
 .file-size {

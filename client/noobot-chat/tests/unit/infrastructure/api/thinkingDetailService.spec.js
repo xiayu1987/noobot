@@ -20,7 +20,7 @@ const { thinkingDetailService } =
 const TARGET = Object.freeze({
   userId: "u1",
   sessionId: "s1",
-  dialogProcessId: "",
+  dialogProcessId: "dp-1",
   turnScopeId: "t1",
 });
 

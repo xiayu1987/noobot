@@ -4,10 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
+import { ApiRequestError } from "@noobot/shared/request-error";
 import {
-  createHarness,
   activateRuntimeTurn,
-  makeSession,
+  applyMainEntryMessages,
+  createHarness,
 } from "../helpers/useChatEngineHarness.js";
 import {
   AGENT_CHANNEL_STATE,
@@ -20,6 +21,10 @@ import {
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { settleStoppedTurn } from "./useChatEngine.resend-stopped-state.test-helpers.js";
 import { NO_ATTACHMENT_EDITS } from "../../../helpers/resendEdits.js";
+import {
+  deleteSuccessResponse,
+  mutationFailureResponse,
+} from "../../../helpers/sessionDetailFixture.js";
 
 describe("useChatEngine.delete", () => {
   it("cascadeDeleteMessagesFrom resolves assistant target to user message and removes the user turn", () => {
@@ -36,7 +41,13 @@ describe("useChatEngine.delete", () => {
       role: RoleEnum.ASSISTANT,
       content: "target",
     };
-    const tail = { id: "m3", role: RoleEnum.USER, content: "tail" };
+    const tail = {
+      messageUid: "m3",
+      turnScopeId: "scope-tail",
+      dialogProcessId: "dp-tail",
+      role: RoleEnum.USER,
+      content: "tail",
+    };
     activeSession.value.messages = [first, target, tail];
     activeSession.value.rawMessages = [first, target, tail];
     activeSession.value.messageCount = 3;
@@ -90,18 +101,16 @@ describe("useChatEngine.delete", () => {
     let stopConfirmedBeforeDelete = false;
     const deleteSessionMessagesFromApi = vi.fn(async () => {
       stopConfirmedBeforeDelete = stopConfirmed;
-      return {
-        ok: true,
-        session: makeSession("local-delete", { messages: [], rawMessages: [], messageCount: 0 }),
+      return deleteSuccessResponse({
+        sessionId: "local-delete",
+        turnScopeId: "client-turn:resend-stale",
+        aggregateVersion: 1,
+        messages: [],
         deletedCount: 2,
         anchorIndex: 0,
-        deletedTurnScopeIds: ["client-turn:resend-stale"],
-      };
+      });
     });
-    const applySessionDetail = vi.fn((detail) => {
-      const mainSession = detail.sessions?.[0] || {};
-      activeSession.value = { ...activeSession.value, ...mainSession };
-    });
+    const applySessionDetail = applyMainEntryMessages(() => activeSession);
     const { engine, activeSession, deps, turnRuntimeRegistry } = createHarness({
       sessionId: "local-delete",
       deps: { deleteSessionMessagesFromApi, applySessionDetail },
@@ -193,24 +202,25 @@ describe("useChatEngine.delete", () => {
   });
 
   it("deleteMonotonicMessage resolves assistant turnScopeId to user anchor and applies backend snapshot", async () => {
-    const backendSession = makeSession("local-delete-api", {
-      messages: [{ id: "m1", role: RoleEnum.USER, content: "first" }],
-      rawMessages: [{ id: "m1", role: RoleEnum.USER, content: "first" }],
-      messageCount: 1,
-      version: 3,
-    });
-    const deleteSessionMessagesFromApi = vi.fn(async () => ({
-      ok: true,
-      session: backendSession,
-      deletedCount: 2,
-      anchorIndex: 1,
-      deletedTurnScopeIds: ["client-turn:delete-1"],
-      version: 3,
-    }));
-    const applySessionDetail = vi.fn((detail) => {
-      const mainSession = detail.sessions?.[0] || {};
-      activeSession.value = { ...activeSession.value, ...mainSession };
-    });
+    const backendMessages = [
+      {
+        messageUid: "m1",
+        turnScopeId: "client-turn:keep-1",
+        role: RoleEnum.USER,
+        content: "first",
+      },
+    ];
+    const deleteSessionMessagesFromApi = vi.fn(async () =>
+      deleteSuccessResponse({
+        sessionId: "local-delete-api",
+        turnScopeId: "client-turn:delete-1",
+        aggregateVersion: 3,
+        messages: backendMessages,
+        deletedCount: 2,
+        anchorIndex: 1,
+      }),
+    );
+    const applySessionDetail = applyMainEntryMessages(() => activeSession);
     const { engine, activeSession } = createHarness({
       sessionId: "local-delete-api",
       deps: { deleteSessionMessagesFromApi, applySessionDetail },
@@ -221,7 +231,12 @@ describe("useChatEngine.delete", () => {
       role: RoleEnum.ASSISTANT,
       content: "target",
     };
-    const tail = { id: "m3", role: RoleEnum.USER, content: "tail" };
+    const tail = {
+      messageUid: "m3",
+      turnScopeId: "client-turn:delete-tail",
+      role: RoleEnum.USER,
+      content: "tail",
+    };
     activeSession.value.messages = [first, target, tail];
     activeSession.value.rawMessages = [first, target, tail];
     activeSession.value.aggregateVersion = 2;
@@ -241,44 +256,26 @@ describe("useChatEngine.delete", () => {
         sessions: [
           expect.objectContaining({
             sessionId: "local-delete-api",
-            messages: backendSession.messages,
+            messages: backendMessages,
           }),
         ],
       }),
     );
-    expect(activeSession.value.messages).toHaveLength(1);
+    expect(activeSession.value.messages).toEqual(backendMessages);
   });
 
-  it("deleteMonotonicMessage immediately removes stopped pending tail even when detail preserve would keep it", async () => {
-    const backendSession = makeSession("local-delete-stopped-tail", {
-      messages: [],
-      rawMessages: [],
-      messageCount: 0,
-      version: 4,
-    });
-    const deleteSessionMessagesFromApi = vi.fn(async () => ({
-      ok: true,
-      session: backendSession,
-      deletedCount: 2,
-      anchorIndex: 0,
-      deletedTurnScopeIds: ["turn-stopped-tail"],
-      version: 4,
-    }));
-    const applySessionDetail = vi.fn((detail) => {
-      const mainSession = detail.sessions?.[0] || {};
-      const detailTurnScopeIds = new Set(
-        (mainSession.messages || []).map((message) => message.turnScopeId).filter(Boolean),
-      );
-      const shouldPreserveStoppedTail = activeSession.value.messages.some(
-        (message) =>
-          message.role === RoleEnum.ASSISTANT &&
-          message.turnScopeId &&
-          !detailTurnScopeIds.has(message.turnScopeId) &&
-          (message.pending === true || message.channelState?.state === "stopping"),
-      );
-      if (shouldPreserveStoppedTail) return;
-      activeSession.value = { ...activeSession.value, ...mainSession };
-    });
+  it("deleteMonotonicMessage removes stopped pending tail and applies backend detail", async () => {
+    const deleteSessionMessagesFromApi = vi.fn(async () =>
+      deleteSuccessResponse({
+        sessionId: "local-delete-stopped-tail",
+        turnScopeId: "turn-stopped-tail",
+        aggregateVersion: 4,
+        messages: [],
+        deletedCount: 2,
+        anchorIndex: 0,
+      }),
+    );
+    const applySessionDetail = applyMainEntryMessages(() => activeSession);
     const { engine, activeSession } = createHarness({
       sessionId: "local-delete-stopped-tail",
       deps: { deleteSessionMessagesFromApi, applySessionDetail },
@@ -304,46 +301,57 @@ describe("useChatEngine.delete", () => {
     await expect(engine.deleteMonotonicMessage(target)).resolves.toBe(true);
 
     expect(deleteSessionMessagesFromApi).toHaveBeenCalledTimes(1);
-    expect(applySessionDetail).toHaveBeenCalledWith(expect.any(Object));
+    expect(applySessionDetail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "local-delete-stopped-tail",
+        sessions: [expect.objectContaining({ messages: [] })],
+      }),
+    );
     expect(activeSession.value.messages).toEqual([]);
   });
 
-  it("deleteMonotonicMessage does not locally delete when backend returns failure", async () => {
-    const deleteSessionMessagesFromApi = vi.fn(async () => ({ ok: false, status: 409 }));
+  it("deleteMonotonicMessage rejects and keeps local messages when backend returns failure", async () => {
+    const deleteSessionMessagesFromApi = vi.fn(async () =>
+      mutationFailureResponse({ status: 409, error: "delete rejected" }),
+    );
     const { engine, activeSession } = createHarness({
       sessionId: "local-delete-api-fail",
       deps: { deleteSessionMessagesFromApi },
     });
-    const first = { id: "m1", role: RoleEnum.USER, content: "first" };
-    const target = { id: "m2", role: RoleEnum.ASSISTANT, content: "target" };
+    const first = {
+      messageUid: "m1",
+      turnScopeId: "turn-delete-api-fail",
+      role: RoleEnum.USER,
+      content: "first",
+    };
+    const target = {
+      presentationMessageId: "m2",
+      turnScopeId: "turn-delete-api-fail",
+      role: RoleEnum.ASSISTANT,
+      content: "target",
+    };
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
     activeSession.value.aggregateVersion = 2;
 
-    await expect(engine.deleteMonotonicMessage(target)).resolves.toBe(false);
+    await expect(engine.deleteMonotonicMessage(target)).rejects.toBeInstanceOf(ApiRequestError);
 
+    expect(deleteSessionMessagesFromApi).toHaveBeenCalledTimes(1);
     expect(activeSession.value.messages).toEqual([first, target]);
   });
 
   it("deleteMonotonicMessage deletes stopped turn when sending state is still stop-requested", async () => {
-    const backendSession = makeSession("local-delete-stopped-sending", {
-      messages: [],
-      rawMessages: [],
-      messageCount: 0,
-      version: 8,
-    });
-    const deleteSessionMessagesFromApi = vi.fn(async () => ({
-      ok: true,
-      session: backendSession,
-      deletedCount: 2,
-      anchorIndex: 0,
-      deletedTurnScopeIds: [],
-      version: 8,
-    }));
-    const applySessionDetail = vi.fn((detail) => {
-      const mainSession = detail.sessions?.[0] || {};
-      activeSession.value = { ...activeSession.value, ...mainSession };
-    });
+    const deleteSessionMessagesFromApi = vi.fn(async () =>
+      deleteSuccessResponse({
+        sessionId: "local-delete-stopped-sending",
+        turnScopeId: "turn-stopped-sending",
+        aggregateVersion: 8,
+        messages: [],
+        deletedCount: 2,
+        anchorIndex: 0,
+      }),
+    );
+    const applySessionDetail = applyMainEntryMessages(() => activeSession);
     const { engine, activeSession, sending, canStop, turnRuntimeRegistry, deps } = createHarness({
       sessionId: "local-delete-stopped-sending",
       deps: { deleteSessionMessagesFromApi, applySessionDetail },
@@ -395,29 +403,6 @@ describe("useChatEngine.delete", () => {
       expect.any(Object),
     );
     expect(activeSession.value.messages).toEqual([]);
-  });
-
-  it("resendMonotonicMessage does not send when backend delete fails", async () => {
-    const stream = vi.fn(async () => {});
-    const deleteSessionMessagesFromApi = vi.fn(async () => ({ ok: false, status: 404 }));
-    const { engine, activeSession, input } = createHarness({
-      sessionId: "local-resend-api-fail",
-      stream,
-      deps: { deleteSessionMessagesFromApi },
-    });
-    const first = { id: "m1", role: RoleEnum.USER, content: "first" };
-    const target = { id: "m2", role: RoleEnum.ASSISTANT, content: "target" };
-    activeSession.value.messages = [first, target];
-    activeSession.value.rawMessages = [first, target];
-    input.value = "draft before resend";
-
-    await expect(
-      engine.resendMonotonicMessage(target, "edited retry text", NO_ATTACHMENT_EDITS),
-    ).resolves.toBe(false);
-
-    expect(stream).not.toHaveBeenCalled();
-    expect(activeSession.value.messages).toEqual([first, target]);
-    expect(input.value).toBe("draft before resend");
   });
 
   it("deleteMonotonicMessage does not delete when stop precondition fails", async () => {
@@ -503,19 +488,22 @@ describe("useChatEngine.delete", () => {
   it("clears a deleted stopped turn from the registry so the next send is not continue", async () => {
     const sessionId = "local-delete-stopped-registry";
     const turnScopeId = "turn-stopped-registry";
-    const backendSession = makeSession(sessionId, { messages: [], rawMessages: [], version: 5 });
-    const deleteSessionMessagesFromApi = vi.fn(async () => ({
-      ok: true,
-      session: backendSession,
-      deletedTurnScopeIds: [turnScopeId],
-      version: 5,
-    }));
+    const deleteSessionMessagesFromApi = vi.fn(async () =>
+      deleteSuccessResponse({
+        sessionId,
+        turnScopeId,
+        aggregateVersion: 5,
+        messages: [],
+        deletedCount: 2,
+        anchorIndex: 0,
+      }),
+    );
     const applySessionDetail = vi.fn();
     const { engine, activeSession, turnRuntimeRegistry } = createHarness({
       sessionId,
       deps: { deleteSessionMessagesFromApi, applySessionDetail },
     });
-    const first = { id: "u1", turnScopeId, role: RoleEnum.USER, content: "first" };
+    const first = { messageUid: "u1", turnScopeId, role: RoleEnum.USER, content: "first" };
     const target = {
       presentationMessageId: "a1",
       turnScopeId,

@@ -12,6 +12,7 @@ import assert from "node:assert/strict";
 
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
+import { createSessionCrudServiceStub } from "../helpers/session-crud-service-stub.js";
 
 const TEST_SESSION_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-session-dir-"));
 after(() => fs.rmSync(TEST_SESSION_DIR, { recursive: true, force: true }));
@@ -233,7 +234,7 @@ test("SessionMessageService.upsertTurnTiming is first-write-wins and rejects con
 
 test("SessionMessageService.deleteFromMessage prunes orphan turnTimings", async () => {
   const saved = [];
-  const session = {
+  let session = {
     ...createTestSessionRequiredFields(),
     sessionId: "s1",
     parentSessionId: "",
@@ -280,11 +281,13 @@ test("SessionMessageService.deleteFromMessage prunes orphan turnTimings", async 
       return session;
     },
     async save(_userId, nextSession) {
+      session = structuredClone(nextSession);
       saved.push(JSON.parse(JSON.stringify(nextSession)));
     },
   };
   const service = new SessionMessageService({
     sessionRepo,
+    sessionCrudService: createSessionCrudServiceStub(() => session),
     now: () => "2026-06-07T00:00:00.000Z",
   });
 
@@ -307,7 +310,7 @@ test("SessionMessageService.deleteFromMessage prunes orphan turnTimings", async 
 
 test("SessionMessageService.replaceTurn prunes replaced turnTimings", async () => {
   const saved = [];
-  const session = {
+  let session = {
     ...createTestSessionRequiredFields(),
     sessionId: "s1",
     parentSessionId: "",
@@ -356,11 +359,13 @@ test("SessionMessageService.replaceTurn prunes replaced turnTimings", async () =
       return session;
     },
     async save(_userId, nextSession) {
+      session = structuredClone(nextSession);
       saved.push(JSON.parse(JSON.stringify(nextSession)));
     },
   };
   const service = new SessionMessageService({
     sessionRepo,
+    sessionCrudService: createSessionCrudServiceStub(() => session),
     now: () => "2026-06-07T00:00:00.000Z",
     allocateDialogProcessId: () => "dp-new",
   });

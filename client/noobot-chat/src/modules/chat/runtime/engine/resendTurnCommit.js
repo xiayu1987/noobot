@@ -3,17 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { assertTurnReplacementMaterialization } from "@noobot/session-protocol";
+import { requireTurnReplaceResponse } from "@noobot/session-protocol";
 import { confirmTurnRuntimeDeletion } from "../run-state-machine/turnRuntimeRegistry.js";
-import {
-  logResendDebug,
-  summarizeDebugMessage,
-  summarizeDebugMessages,
-} from "../../../debug/loggers/resendDebugLogger.js";
+import { logResendDebug } from "../../../debug/loggers/resendDebugLogger.js";
 
 export const RESEND_COMMIT_OUTCOME = {
   COMMITTED: "committed",
-  REJECTED: "rejected",
   ABORTED: "aborted",
 };
 
@@ -61,24 +56,6 @@ function tombstoneReplacedTurns({
   }));
 }
 
-function logCommitRejected(context, { result, payload, expectedAggregateVersion }) {
-  const { sessionId, resendTurnScopeId, anchor, operation, userTargetMessage, activeSession } =
-    context;
-  logResendDebug("resend.replaceTurn.failed", () => ({
-    sessionId,
-    turnScopeId: resendTurnScopeId,
-    httpOk: result?.ok,
-    status: result?.status,
-    statusText: result?.statusText,
-    anchor,
-    expectedAggregateVersion,
-    commandId: operation.opId,
-    payload,
-    target: summarizeDebugMessage(userTargetMessage),
-    messages: summarizeDebugMessages(activeSession.value.messages),
-  }));
-}
-
 export async function commitResendTurnReplacement(context) {
   const {
     sessionId,
@@ -94,30 +71,21 @@ export async function commitResendTurnReplacement(context) {
   } = context;
   const mutationResult = await sessionAggregateVersionManager.runAggregateVersionedMutation({
     shouldRetry: false,
+    conflictOptions: { sessionId, logContext: { turnScopeId: resendTurnScopeId } },
     mutate: ({ expectedAggregateVersion, attempt }) =>
       requestReplaceTurn({ expectedAggregateVersion, attempt }),
   });
-  const { result, payload, expectedAggregateVersion } = mutationResult;
+  const { payload } = mutationResult;
   logResendDebug("resend.replaceTurn.result", () => ({
     sessionId,
     turnScopeId: resendTurnScopeId,
-    ok: result?.ok !== false && payload?.ok !== false,
-    generation: payload?.generation,
-    generated: payload?.generated,
-    replacement: payload?.turnReplacement || null,
+    ok: true,
   }));
-  if (result?.ok === false || payload?.ok === false) {
-    logCommitRejected(context, { result, payload, expectedAggregateVersion });
-    return { outcome: RESEND_COMMIT_OUTCOME.REJECTED };
-  }
   if (!ownsMessageOperation(messageOperationStore, operation)) {
     return { outcome: RESEND_COMMIT_OUTCOME.ABORTED };
   }
-  const materialization = assertTurnReplacementMaterialization({
-    commit: payload?.turnReplacement,
-    session: payload?.session,
-  });
-  const turnReplacement = materialization.commit;
+  const response = requireTurnReplaceResponse(payload);
+  const turnReplacement = response.turnReplacement;
   assertReplacementIdentity({
     turnReplacement,
     expectedCommandId: operation.opId,
@@ -140,6 +108,6 @@ export async function commitResendTurnReplacement(context) {
     outcome: RESEND_COMMIT_OUTCOME.COMMITTED,
     turnReplacement,
     replacedTurnScopeIds,
-    session: materialization.session,
+    detail: response.detail,
   };
 }

@@ -477,6 +477,7 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       error: {
         code: "SESSION_AGGREGATE_VERSION_CONFLICT",
         message: "session version conflict",
+        currentVersion: 3,
       },
       occurredAt: "2026-01-01T00:00:00.000Z",
     });

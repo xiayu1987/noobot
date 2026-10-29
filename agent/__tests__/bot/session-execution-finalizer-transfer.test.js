@@ -61,7 +61,6 @@ test("SessionExecutionFinalizer waits for execution event durability before read
     session: {
       async saveExecutionReport() {},
       async upsertTurnTiming() {},
-      async saveCurrentTurnTasks() {},
       async getExecutionTurnLogs() {
         order.push("bundle");
         return [];
@@ -83,7 +82,6 @@ test("SessionExecutionFinalizer waits for execution event durability before read
       turnMessages: [
         { messageUid: "sm_done", role: "assistant", type: "message", content: "done" },
       ],
-      turnTasks: [],
     },
     persistedTurnMessageUids: [],
     persistedTurnMessages: [],
@@ -113,7 +111,6 @@ test("SessionExecutionFinalizer rejects completion when execution event persiste
     session: {
       async saveExecutionReport() {},
       async upsertTurnTiming() {},
-      async saveCurrentTurnTasks() {},
       async getExecutionTurnLogs() {
         bundleReads += 1;
         return [];
@@ -137,7 +134,6 @@ test("SessionExecutionFinalizer rejects completion when execution event persiste
         turnMessages: [
           { messageUid: "sm_done", role: "assistant", type: "message", content: "done" },
         ],
-        turnTasks: [],
       },
       persistedTurnMessageUids: [],
       persistedTurnMessages: [],
@@ -168,7 +164,6 @@ test("SessionExecutionFinalizer promotes semantic-transfer attachments as transf
     session: {
       async saveExecutionReport() {},
       async upsertTurnTiming() {},
-      async saveCurrentTurnTasks() {},
       async getExecutionTurnLogs() {
         return [];
       },
@@ -201,7 +196,6 @@ test("SessionExecutionFinalizer promotes semantic-transfer attachments as transf
         },
         { messageUid: "sm_done", role: "assistant", type: "message", content: "done" },
       ],
-      turnTasks: [],
     },
   });
 
@@ -231,7 +225,6 @@ test("SessionExecutionFinalizer promotes ordinary generated attachments to final
     session: {
       async saveExecutionReport() {},
       async upsertTurnTiming() {},
-      async saveCurrentTurnTasks() {},
       async getExecutionTurnLogs() {
         return [];
       },
@@ -277,7 +270,6 @@ test("SessionExecutionFinalizer promotes ordinary generated attachments to final
         },
         { messageUid: "sm_done", role: "assistant", type: "message", content: "done" },
       ],
-      turnTasks: [],
     },
   });
 
@@ -304,7 +296,6 @@ test("SessionExecutionFinalizer promotes checkpoint attachment sources without r
       async saveExecutionReport() {},
       async upsertTurnTiming() {},
       async flushSessionMessagesToArchive() {},
-      async saveCurrentTurnTasks() {},
       async getExecutionTurnLogs() {
         return [];
       },
@@ -367,7 +358,6 @@ test("SessionExecutionFinalizer promotes checkpoint attachment sources without r
         },
         { messageUid: "sm_tail", role: "assistant", type: "message", content: "tail" },
       ],
-      turnTasks: [],
     },
   });
 
@@ -388,7 +378,6 @@ test("SessionExecutionFinalizer restores the pre-refactor full result from persi
       async saveExecutionReport() {},
       async upsertTurnTiming() {},
       async flushSessionMessagesToArchive() {},
-      async saveCurrentTurnTasks() {},
       async getExecutionTurnLogs() {
         return [];
       },
@@ -418,7 +407,6 @@ test("SessionExecutionFinalizer restores the pre-refactor full result from persi
     summaryCheckpointPromotionSources: [],
     agentResult: {
       turnMessages: [{ messageUid: "sm_tail", role: "assistant", content: "tail" }],
-      turnTasks: [],
     },
   });
 
@@ -438,7 +426,6 @@ test("SessionExecutionFinalizer skips non-contiguous persisted UIDs without dupl
     session: {
       async saveExecutionReport() {},
       async upsertTurnTiming() {},
-      async saveCurrentTurnTasks() {},
       async getExecutionTurnLogs() {
         return [];
       },
@@ -471,7 +458,6 @@ test("SessionExecutionFinalizer skips non-contiguous persisted UIDs without dupl
         { messageUid: "sm_retained", role: "tool", content: "retained" },
         { messageUid: "sm_tail", role: "assistant", content: "tail" },
       ],
-      turnTasks: [],
     },
   });
 
@@ -492,7 +478,6 @@ test("SessionExecutionFinalizer persists canonical summary-state changes for an 
     session: {
       async saveExecutionReport() {},
       async upsertTurnTiming() {},
-      async saveCurrentTurnTasks() {},
       async getExecutionTurnLogs() {
         return [];
       },
@@ -532,7 +517,6 @@ test("SessionExecutionFinalizer persists canonical summary-state changes for an 
           summarized: true,
         },
       ],
-      turnTasks: [],
     },
     runtimeEventListener: {
       async flush() {},
@@ -570,7 +554,6 @@ test("SessionExecutionFinalizer upserts summary marks for an already durable tur
     session: {
       async saveExecutionReport() {},
       async upsertTurnTiming() {},
-      async saveCurrentTurnTasks() {},
       async getExecutionTurnLogs() {
         return [];
       },
@@ -588,7 +571,7 @@ test("SessionExecutionFinalizer upserts summary marks for an already durable tur
     sessionId: "s1",
     dialogProcessId: "dp1",
     turnScopeId: "turn-1",
-    agentResult: { turnMessages: [{ ...durableMessage, summarized: true }], turnTasks: [] },
+    agentResult: { turnMessages: [{ ...durableMessage, summarized: true }] },
     persistedTurnMessages: [],
     durableTurnMessages: [durableMessage],
     persistedTurnMessageUids: [durableMessage.messageUid],
@@ -638,7 +621,6 @@ test("completed turn summary policy marks are durably upserted before the next d
     traces: [],
     turnMessages: turnMessageStore.toArray(),
     modelMessages: [],
-    turnTasks: [],
     modelLoopRound: 0,
   });
   assert.deepEqual(
@@ -651,7 +633,6 @@ test("completed turn summary policy marks are durably upserted before the next d
     session: {
       async saveExecutionReport() {},
       async upsertTurnTiming() {},
-      async saveCurrentTurnTasks() {},
       async getExecutionTurnLogs() {
         return [];
       },
@@ -692,7 +673,6 @@ test("SessionExecutionFinalizer rejects a persisted UID without a durable journa
     session: {
       async saveExecutionReport() {},
       async upsertTurnTiming() {},
-      async saveCurrentTurnTasks() {},
       async getExecutionTurnLogs() {
         return [];
       },
@@ -723,7 +703,6 @@ test("SessionExecutionFinalizer rejects a persisted UID without a durable journa
             content: "canonical",
           },
         ],
-        turnTasks: [],
       },
     }),
     /persisted turn message is missing from the durable journal: sm_missing/,

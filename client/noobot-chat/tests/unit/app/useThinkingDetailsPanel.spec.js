@@ -144,79 +144,70 @@ describe("useThinkingDetailsPanel request isolation", () => {
     expect(panel.dependencies.pushPseudoRoute).not.toHaveBeenCalled();
   });
 
-  it("reuses a cached completed detail when the authoritative revision is unchanged", async () => {
-    const message = buildViewMessage(
-      {
-        ...normalMessage,
-        sessionId: "session-1",
-        thinkingDetailRef: { contentHash: "sha256:detail-seven" },
-      },
-      { sessionId: "session-1" },
-    );
-    const activeSession = ref({
-      sessionId: "session-1",
-      aggregateVersion: 7,
-      messages: [message],
-    });
-    const fetcher = vi.fn(async () => ({
-      revision: "sha256:detail-seven",
-      messageItem: { ...message, loaded: true },
-    }));
-    const panel = createPanel(fetcher, activeSession);
-
-    await panel.openThinkingDetailsPanel({ messageItem: message });
-    panel.closeThinkingDetailsPanel();
-    await panel.openThinkingDetailsPanel({ messageItem: message });
-
-    expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(panel.thinkingDetailsVisible.value).toBe(true);
-    expect(panel.thinkingDetailsMessageItem.value.loaded).toBe(true);
-  });
-
-  it("does not reuse detail when its authoritative content hash changes", async () => {
-    const firstMessage = buildViewMessage(
-      {
-        ...normalMessage,
-        sessionId: "session-1",
-        thinkingDetailRef: { contentHash: "sha256:first-detail" },
-      },
-      { sessionId: "session-1" },
-    );
-    const secondMessage = buildViewMessage(
-      {
-        ...firstMessage,
-        thinkingDetailRef: { contentHash: "sha256:second-detail" },
-      },
-      { sessionId: "session-1" },
-    );
-    const activeSession = ref({
-      sessionId: "session-1",
-      aggregateVersion: 1,
-      messages: [firstMessage],
-    });
+  it("shows the cached Turn detail on reopen and replaces it with the turn-journal response", async () => {
+    const activeSession = ref({ sessionId: "session-1", messages: [normalMessage] });
+    const refresh = deferred();
     const fetcher = vi
       .fn()
       .mockResolvedValueOnce({
-        revision: "sha256:first-detail",
-        messageItem: { ...firstMessage, detailGeneration: 1 },
+        revision: "turn-journal:normal-turn:100",
+        messageItem: { ...normalMessage, loaded: true, detailGeneration: 1 },
       })
-      .mockResolvedValueOnce({
-        revision: "sha256:second-detail",
-        messageItem: { ...secondMessage, detailGeneration: 2 },
-      });
+      .mockReturnValueOnce(refresh.promise);
     const panel = createPanel(fetcher, activeSession);
 
-    await panel.openThinkingDetailsPanel({ messageItem: firstMessage });
+    await panel.openThinkingDetailsPanel({ messageItem: normalMessage });
     panel.closeThinkingDetailsPanel();
-    activeSession.value = {
-      sessionId: "session-1",
-      aggregateVersion: 1,
-      messages: [secondMessage],
-    };
-    await panel.openThinkingDetailsPanel({ messageItem: secondMessage });
+    const reopening = panel.openThinkingDetailsPanel({ messageItem: normalMessage });
+
+    expect(panel.thinkingDetailsVisible.value).toBe(true);
+    expect(panel.thinkingDetailsMessageItem.value.detailGeneration).toBe(1);
+
+    refresh.resolve({
+      revision: "turn-journal:normal-turn:200",
+      messageItem: { ...normalMessage, loaded: true, detailGeneration: 2 },
+    });
+    await reopening;
 
     expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenLastCalledWith({
+      sessionId: "session-1",
+      dialogProcessId: "normal-message",
+      turnScopeId: "normal-turn",
+    });
     expect(panel.thinkingDetailsMessageItem.value.detailGeneration).toBe(2);
+  });
+
+  it("does not show the cached detail of another Turn lookup key", async () => {
+    const activeSession = ref({
+      sessionId: "session-1",
+      messages: [normalMessage, workflowMessage],
+    });
+    const workflowRequest = deferred();
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce({
+        revision: "turn-journal:normal-turn:100",
+        messageItem: { ...normalMessage, loaded: true, detailGeneration: 1 },
+      })
+      .mockReturnValueOnce(workflowRequest.promise);
+    const panel = createPanel(fetcher, activeSession);
+
+    await panel.openThinkingDetailsPanel({ messageItem: normalMessage });
+    panel.closeThinkingDetailsPanel();
+    const openingWorkflow = panel.openThinkingDetailsPanel({ messageItem: workflowMessage });
+
+    expect(panel.thinkingDetailsMessageItem.value.dialogProcessId).toBe("workflow-node");
+    expect(panel.thinkingDetailsMessageItem.value.detailGeneration).toBeUndefined();
+
+    workflowRequest.resolve({
+      revision: "turn-journal:workflow-turn:50",
+      messageItem: { ...workflowMessage, loaded: true, detailGeneration: 7 },
+    });
+    await openingWorkflow;
+
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(panel.thinkingDetailsMessageItem.value.detailGeneration).toBe(7);
   });
 
   it("binds the drawer to the active canonical turn instead of a stale click payload", async () => {

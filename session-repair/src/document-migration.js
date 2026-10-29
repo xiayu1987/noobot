@@ -31,6 +31,7 @@ import {
   isTurnCommitAction,
   MESSAGE_REMOVED_FIELD_NAME,
   collectTurnReplacementTombstoneErrors,
+  isTurnLifecycleShape,
 } from "@noobot/session-protocol";
 import {
   completedSemanticTransferMigrationNames,
@@ -48,6 +49,7 @@ import { migrateTurnTerminalDescription } from "./terminal-description-migration
 import { migrateMessageErrorText } from "./message-error-text-migration.js";
 import { migrateTurnTimingLifecycleStart } from "./turn-timing-lifecycle-start-migration.js";
 import { migrateMessageEntityContract } from "./message-entity-contract-migration.js";
+import { migrateRetiredTaskFields } from "./retired-task-fields-migration.js";
 import { SESSION_REPAIR_ERROR_CODE } from "./errors.js";
 import {
   assertLegacyAuthorityEventOutbox,
@@ -167,16 +169,31 @@ function migrateMessage(context, message, index) {
   return { message: next, changed };
 }
 
-export function reconcileDuplicateCanonicalAssistantPresentations(document = {}) {
-  const next = structuredClone(document);
-  const messages = Array.isArray(next.messages) ? next.messages : [];
+function requireRepairSource(document) {
+  if (
+    isPlainObject(document) &&
+    Array.isArray(document.messages) &&
+    document.messages.every(isPlainObject) &&
+    isTurnLifecycleShape(document.turnLifecycle)
+  ) {
+    return document;
+  }
+  throw migrationError(
+    "Session repair source requires object messages and a turnLifecycle",
+    SESSION_REPAIR_ERROR_CODE.REPAIR_SOURCE_INVALID,
+  );
+}
+
+export function reconcileDuplicateCanonicalAssistantPresentations(document) {
+  const next = structuredClone(requireRepairSource(document));
+  const { messages } = next;
   const canonicalIndexes = new Map();
   for (let index = 0; index < messages.length; index += 1) {
     const message = messages[index];
     if (
-      text(message?.role) !== "assistant" ||
-      message?.chatPresentation !== true ||
-      !text(message?.turnScopeId)
+      text(message.role) !== "assistant" ||
+      message.chatPresentation !== true ||
+      !text(message.turnScopeId)
     )
       continue;
     const turnScopeId = text(message.turnScopeId);
@@ -188,11 +205,10 @@ export function reconcileDuplicateCanonicalAssistantPresentations(document = {})
   for (const [turnScopeId, indexes] of canonicalIndexes) {
     if (indexes.length < 2) continue;
     const authoritativePresentationMessageId = text(
-      next.turnLifecycle?.turns?.[turnScopeId]?.presentationMessageId,
+      next.turnLifecycle.turns[turnScopeId]?.presentationMessageId,
     );
     const authoritativeIndex = indexes.find(
-      (index) =>
-        text(messages[index]?.presentationMessageId) === authoritativePresentationMessageId,
+      (index) => text(messages[index].presentationMessageId) === authoritativePresentationMessageId,
     );
     if (!authoritativePresentationMessageId || authoritativeIndex === undefined) {
       throw Object.assign(
@@ -211,7 +227,7 @@ export function reconcileDuplicateCanonicalAssistantPresentations(document = {})
 
 function completedTurnKeys(document) {
   return new Set(
-    Object.values(document.turnLifecycle?.turns || {})
+    Object.values(document.turnLifecycle.turns)
       .filter((turn) => text(turn?.terminalStatus?.status) === TURN_TERMINAL_STATUS.COMPLETED)
       .map((turn) => `${text(turn?.dialogProcessId)}\u0000${text(turn?.turnScopeId)}`)
       .filter((key) => !key.startsWith("\u0000") && !key.endsWith("\u0000")),
@@ -219,20 +235,20 @@ function completedTurnKeys(document) {
 }
 
 function messageTurnKey(message) {
-  return `${text(message?.dialogProcessId)}\u0000${text(message?.turnScopeId)}`;
+  return `${text(message.dialogProcessId)}\u0000${text(message.turnScopeId)}`;
 }
 
-export function reconcileCompletedTurnOrphanToolCalls(document = {}) {
-  const messages = Array.isArray(document.messages) ? document.messages : [];
+export function reconcileCompletedTurnOrphanToolCalls(document) {
+  const { messages } = requireRepairSource(document);
   const completedTurns = completedTurnKeys(document);
   const resultIds = new Set(
     messages
-      .filter((message) => message?.type === "tool_result")
+      .filter((message) => message.type === "tool_result")
       .map((message) => `${messageTurnKey(message)}\u0000${text(message.tool_call_id)}`),
   );
   const removed = [];
   const kept = messages.filter((message) => {
-    if (message?.type !== "tool_call" || !completedTurns.has(messageTurnKey(message))) return true;
+    if (message.type !== "tool_call" || !completedTurns.has(messageTurnKey(message))) return true;
     const ids = (Array.isArray(message.tool_calls) ? message.tool_calls : []).map((call) =>
       text(call?.id),
     );
@@ -253,8 +269,8 @@ export function reconcileCompletedTurnOrphanToolCalls(document = {}) {
   return { document: changed ? { ...document, messages: kept } : document, changed, removed };
 }
 
-export function reconcileCompletedTurnSummaryMarks(document = {}) {
-  const messages = Array.isArray(document.messages) ? [...document.messages] : [];
+export function reconcileCompletedTurnSummaryMarks(document) {
+  const messages = [...requireRepairSource(document).messages];
   const completedTurns = completedTurnKeys(document);
   const turnIndexes = new Map();
   messages.forEach((message, index) => {
@@ -271,7 +287,7 @@ export function reconcileCompletedTurnSummaryMarks(document = {}) {
     const projected = projectTurnCompletionMessages(source);
     let turnChanged = false;
     projected.forEach((message, index) => {
-      if (message === source[index] || source[index]?.summarized === true) return;
+      if (message === source[index] || source[index].summarized === true) return;
       messages[indexes[index]] = message;
       turnChanged = true;
     });
@@ -293,7 +309,7 @@ function isUncommittedAggregateConflictContinuation(turn, turns, messages) {
     turn?.failure?.code !== SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT ||
     !sourceTurnScopeId ||
     !sourceDialogProcessId ||
-    messages.some((message) => text(message?.turnScopeId) === turnScopeId)
+    messages.some((message) => text(message.turnScopeId) === turnScopeId)
   ) {
     return false;
   }
@@ -306,15 +322,10 @@ function isUncommittedAggregateConflictContinuation(turn, turns, messages) {
   );
 }
 
-export function reconcileUncommittedAggregateConflictContinuations(document = {}) {
-  if (!isPlainObject(document)) {
-    throw Object.assign(new TypeError("Session repair source must be an object"), {
-      code: SESSION_REPAIR_ERROR_CODE.REPAIR_SOURCE_INVALID,
-    });
-  }
-  const next = structuredClone(document);
-  const turns = isPlainObject(next.turnLifecycle?.turns) ? next.turnLifecycle.turns : {};
-  const messages = Array.isArray(next.messages) ? next.messages : [];
+export function reconcileUncommittedAggregateConflictContinuations(document) {
+  const next = structuredClone(requireRepairSource(document));
+  const { turns } = next.turnLifecycle;
+  const { messages } = next;
   const repaired = Object.values(turns)
     .filter((turn) => isUncommittedAggregateConflictContinuation(turn, turns, messages))
     .map((turn) => text(turn.turnScopeId));
@@ -334,9 +345,9 @@ export function reconcileUncommittedAggregateConflictContinuations(document = {}
         sourceScopeIds.has(turnScopeId) ? { ...turn, continuedByTurnScopeId: "" } : turn,
       ]),
   );
-  next.turnLifecycle.commandReceipts = (
-    Array.isArray(next.turnLifecycle.commandReceipts) ? next.turnLifecycle.commandReceipts : []
-  ).filter((receipt) => !repairedSet.has(text(receipt?.turnScopeId)));
+  next.turnLifecycle.commandReceipts = next.turnLifecycle.commandReceipts.filter(
+    (receipt) => !repairedSet.has(text(receipt?.turnScopeId)),
+  );
   return { document: next, changed: true, repaired };
 }
 
@@ -528,10 +539,9 @@ function hasCommandReceipt(lifecycle, commandId) {
 
 function migrateTurnCommitReceipts(context) {
   const { next, lifecycle } = context;
-  if (!Array.isArray(next.messages)) return;
   let migratedTurnCommitReceipt = false;
   for (const message of next.messages) {
-    const turnCommit = message?.turnCommit;
+    const turnCommit = message.turnCommit;
     const commandId = text(turnCommit?.commandId);
     if (!commandId) continue;
     const requestHash = createTurnCommitFingerprint({
@@ -618,9 +628,7 @@ function requireAggregateVersion(value, code) {
 }
 
 function isUncommittedSessionDocument(next, lifecycle) {
-  const messages = Array.isArray(next.messages) ? next.messages : [];
-  const receipts = Array.isArray(lifecycle.commandReceipts) ? lifecycle.commandReceipts : [];
-  return messages.length === 0 && receipts.length === 0;
+  return next.messages.length === 0 && lifecycle.commandReceipts.length === 0;
 }
 
 function resolveContractAggregateVersion(next, lifecycle) {
@@ -655,7 +663,6 @@ function resolveContractAggregateVersion(next, lifecycle) {
 }
 
 function stripLifecycleReceiptAggregateVersions(lifecycle) {
-  if (!Array.isArray(lifecycle.commandReceipts)) return false;
   let stripped = false;
   for (const receipt of lifecycle.commandReceipts) {
     if (!isPlainObject(receipt) || SESSION_COMMAND_TYPES.has(text(receipt.type))) continue;
@@ -694,11 +701,9 @@ function applyMessageRepair(context, repair, migration) {
 
 function migrateDocumentMessages(context) {
   const { next } = context;
-  if (Array.isArray(next.messages)) {
-    next.messages = next.messages.map((message, index) =>
-      migrateDocumentMessage(context, message, index),
-    );
-  }
+  next.messages = next.messages.map((message, index) =>
+    migrateDocumentMessage(context, message, index),
+  );
   applyMessageRepair(
     context,
     reconcileDuplicateCanonicalAssistantPresentations(next),
@@ -790,6 +795,7 @@ const DOCUMENT_MIGRATION_STEPS = Object.freeze([
   migrateMessageErrorText,
   migrateTurnTimingLifecycleStart,
   migrateMessageEntityContract,
+  migrateRetiredTaskFields,
   migrateMessageIdentity,
   migrateReplacedTurns,
   dropLegacyTerminalCommits,
@@ -797,7 +803,7 @@ const DOCUMENT_MIGRATION_STEPS = Object.freeze([
   migrateSessionCaller,
 ]);
 
-export function migrateSessionDocument(document = {}) {
+export function migrateSessionDocument(document) {
   const context = createDocumentMigrationContext(document);
   for (const step of DOCUMENT_MIGRATION_STEPS) step(context);
   const legacyAuthorityEventOutbox = extractLegacyAuthorityEventOutbox(context);

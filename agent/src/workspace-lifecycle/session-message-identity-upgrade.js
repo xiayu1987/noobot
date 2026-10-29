@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { copyFile, mkdir, readFile, readdir, stat } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
 import { WORKSPACE_LAYOUT, WORKSPACE_LAYOUT_UPGRADE_OWNER } from "@noobot/workspace-protocol";
 import {
@@ -36,6 +36,7 @@ import {
 import { isPlainObject } from "@noobot/shared/value";
 import { sessionMutationCoordinator } from "../session/session-mutation-coordinator.js";
 import { resolveSessionArtifactMutationLock } from "../session/session-artifact-files.js";
+import { requireStorageService } from "../session/storage-service.js";
 import {
   normalizeSessionEntity,
   normalizeSessionTreeEntity,
@@ -45,7 +46,6 @@ import {
   SESSION_ARTIFACT_PREDECESSOR,
   readSessionArtifact,
   readSessionArtifactForRepair,
-  repairSessionArtifacts,
   writeSessionArtifact,
 } from "../session/session-artifact-store.js";
 import {
@@ -54,6 +54,7 @@ import {
   replaceAuthorityOutboxRecords,
 } from "../session/authority-outbox-store/outbox-journal.js";
 import { quarantineMigrationUnit } from "./migration-quarantine.js";
+import { backupRewrittenFiles } from "./session-rewrite-backup.js";
 import { PERSISTED_JSON_READ_ERROR_CODE } from "../shared/storage/json-file-reader.js";
 import { ignoreSessionProgress, walkSessionManifestDirectories } from "./session-directory-walk.js";
 
@@ -158,97 +159,32 @@ async function migrateOutboxJournal(stagingDir, legacyOutbox) {
   return { records: migrated.length, changed, droppedEventIds: [...droppedEventIds] };
 }
 
-function stagingWriteGuard(stagingDir) {
-  return ({ sessionDir }) => {
-    if (sessionDir !== stagingDir) throw upgradeError("write_outside_staging", { sessionDir });
-  };
-}
-
-async function listFiles(directory) {
-  try {
-    const entries = await readdir(directory, { withFileTypes: true, recursive: true });
-    return entries
-      .filter((entry) => entry.isFile())
-      .map((entry) => path.relative(directory, path.join(entry.parentPath, entry.name)));
-  } catch (error) {
-    if (error?.code === "ENOENT") return [];
-    throw error;
-  }
-}
-
-async function sizeOrNull(filePath) {
-  try {
-    return (await stat(filePath)).size;
-  } catch (error) {
-    if (error?.code === "ENOENT") return null;
-    throw error;
-  }
-}
-
-async function isFileUnchanged(originalPath, stagedPath) {
-  const [originalSize, stagedSize] = await Promise.all([
-    sizeOrNull(originalPath),
-    sizeOrNull(stagedPath),
-  ]);
-  if (originalSize === null || stagedSize === null || originalSize !== stagedSize) return false;
-  const [original, staged] = await Promise.all([readFile(originalPath), readFile(stagedPath)]);
-  return original.equals(staged);
-}
-
-async function backupRewrittenFiles({ base, backupBase, sessionDir, stagingDir }) {
-  const relativeFiles = new Set([
-    ...(await listFiles(sessionDir)),
-    ...(await listFiles(stagingDir)),
-  ]);
-  const files = [];
-  for (const relativeFile of [...relativeFiles].sort()) {
-    const originalPath = path.join(sessionDir, relativeFile);
-    const stagedPath = path.join(stagingDir, relativeFile);
-    if (await isFileUnchanged(originalPath, stagedPath)) continue;
-    const original = (await sizeOrNull(originalPath)) !== null;
-    const staged = (await sizeOrNull(stagedPath)) !== null;
-    const relativePath = path.relative(base, originalPath);
-    if (original) {
-      const backupPath = path.join(backupBase, relativePath);
-      await mkdir(path.dirname(backupPath), { recursive: true });
-      await copyFile(path.join(sessionDir, relativeFile), backupPath);
-    }
-    files.push({ path: relativePath, created: !original, removed: !staged });
-  }
-  return files;
-}
-
-async function repairStagedSession({ stagingDir, expectScope }) {
-  const source = await readSessionArtifactForRepair({ sessionDir: stagingDir });
+async function repairStagedSession({ storageService, stagingDir, expectScope }) {
+  const source = await readSessionArtifactForRepair({ storageService, sessionDir: stagingDir });
   if (!source) throw upgradeError("session_artifact_missing", {});
   const scope = await expectScope(source);
   const migration = normalizeSessionDocumentForCurrentProtocol(source, { now: MIGRATION_NOW });
   await writeSessionArtifact({
+    storageService,
     sessionDir: stagingDir,
     sessionPayload: migration.document,
+    atomic: true,
     now: MIGRATION_NOW,
     predecessor: SESSION_ARTIFACT_PREDECESSOR.LEGACY_REWRITE,
   });
   const outbox = await migrateOutboxJournal(stagingDir, migration.legacyAuthorityEventOutbox);
   await resegmentMigratedCheckpointBaselines({ sessionDir: stagingDir });
-  const artifacts = await repairSessionArtifacts({
-    sessionDir: stagingDir,
-    sessionId: scope.sessionId,
-    mutationCoordinator: null,
-    assertSessionWritable: stagingWriteGuard(stagingDir),
-  });
   return {
     scope,
     fromSchemaVersion: source.schemaVersion,
     migrations: migration.migrations,
     droppedCommandReceiptIds: migration.droppedCommandReceiptIds,
     outbox,
-    repairedArtifacts: artifacts.repaired,
   };
 }
 
-async function validateStagedSession(stagingDir, scope) {
-  const session = await readSessionArtifact({ sessionDir: stagingDir });
+async function validateStagedSession({ storageService, stagingDir, scope }) {
+  const session = await readSessionArtifact({ storageService, sessionDir: stagingDir });
   if (!session) throw upgradeError("session_artifact_missing", {});
   const normalized = normalizeSessionEntity(session, { now: MIGRATION_NOW });
   assertSessionScopeIdentity({ session: normalized, ...scope });
@@ -267,15 +203,21 @@ async function validateStagedSession(stagingDir, scope) {
   }
 }
 
-async function upgradeSessionDirectory({ base, backupBase, sessionDir, expectScope }) {
+async function upgradeSessionDirectory({
+  storageService,
+  base,
+  backupBase,
+  sessionDir,
+  expectScope,
+}) {
   let report = null;
   await runAtomicSessionRepair({
     sessionDir,
     repair: async (stagingDir) => {
-      report = await repairStagedSession({ stagingDir, expectScope });
+      report = await repairStagedSession({ storageService, stagingDir, expectScope });
     },
     validate: async (stagingDir) => {
-      await validateStagedSession(stagingDir, report.scope);
+      await validateStagedSession({ storageService, stagingDir, scope: report.scope });
       report.files = await backupRewrittenFiles({ base, backupBase, sessionDir, stagingDir });
     },
   });
@@ -306,11 +248,13 @@ export async function upgradeSessionMessageIdentity({
   base,
   backupBase,
   scopedSessionRoots,
+  storageService,
   onSessionProcessed = ignoreSessionProgress,
 }) {
   if (!Array.isArray(scopedSessionRoots) || !scopedSessionRoots.length) {
     throw new TypeError("session message identity upgrade requires scopedSessionRoots");
   }
+  requireStorageService(storageService, "session message identity upgrade");
   const sessions = [];
   const quarantined = [];
   const roots = [
@@ -327,6 +271,7 @@ export async function upgradeSessionMessageIdentity({
           resolveSessionArtifactMutationLock(sessionDir),
           () =>
             upgradeSessionDirectory({
+              storageService,
               base,
               backupBase,
               sessionDir,

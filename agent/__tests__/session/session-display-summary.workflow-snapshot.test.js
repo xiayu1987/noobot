@@ -13,11 +13,10 @@ import {
 } from "@noobot/event-protocol/workflow-runtime-event";
 import { TURN_RECOVERY_ACTION, createTurnLifecycleSnapshot } from "@noobot/session-protocol";
 import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
-import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
+import { persistSessionManifest } from "./session-artifact-store-v2.test-helpers.js";
 
-test("display summary messages are admissible as workflow session snapshot messages", () => {
-  const summary = buildSessionDisplaySummary({
-    ...createTestSessionRequiredFields(),
+test("display summary messages are admissible as workflow session snapshot messages", async () => {
+  const manifest = await persistSessionManifest({
     sessionId: "child-session",
     aggregateVersion: 3,
     messages: [
@@ -45,6 +44,7 @@ test("display summary messages are admissible as workflow session snapshot messa
       },
     ],
   });
+  const summary = buildSessionDisplaySummary(manifest);
 
   assert.equal(summary.messages.length, 2);
   for (const message of summary.messages) assert.equal(Object.hasOwn(message, "sessionId"), false);
@@ -84,9 +84,8 @@ test("display summary messages are admissible as workflow session snapshot messa
   assert.equal(envelope.payload.messages.length, 2);
 });
 
-function buildWorkflowSummary(payload) {
-  return buildSessionDisplaySummary({
-    ...createTestSessionRequiredFields(),
+async function buildWorkflowSummary(payload) {
+  const manifest = await persistSessionManifest({
     sessionId: "root-session",
     aggregateVersion: 1,
     messages: [
@@ -104,9 +103,10 @@ function buildWorkflowSummary(payload) {
       },
     ],
   });
+  return buildSessionDisplaySummary(manifest);
 }
 
-test("display summary passes plugin payload through unchanged", () => {
+test("display summary passes plugin payload through unchanged", async () => {
   const failure = { source: "workflow", code: "WORKFLOW_NODE_EXECUTION_FAILED", message: "boom" };
   const payload = {
     workflowRunId: "run-1",
@@ -115,13 +115,13 @@ test("display summary passes plugin payload through unchanged", () => {
     nodeSessions: [{ nodeId: "node-1", nodeSessionId: "child-1", status: "failed", failure }],
     interaction: { semanticTextPreview: "preview" },
   };
-  const summary = buildWorkflowSummary(payload);
+  const summary = await buildWorkflowSummary(payload);
 
   assert.deepEqual(summary.messages[0].pluginMeta.payload, payload);
 });
 
-test("display summary rejects transfer envelopes inside plugin payload", () => {
-  assert.throws(
+test("display summary rejects transfer envelopes inside plugin payload", async () => {
+  await assert.rejects(
     () =>
       buildWorkflowSummary({
         workflowRunId: "run-1",

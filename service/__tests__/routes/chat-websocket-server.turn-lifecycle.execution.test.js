@@ -242,6 +242,7 @@ test("stale aggregate version is rejected before lifecycle state and Agent execu
       (item) => item?.event === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
     )?.data;
     assert.equal(receipt?.error?.code, SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT);
+    assert.equal(receipt?.error?.currentVersion, 3);
     assert.equal(receipt?.identity?.turnScopeId, "turn-stale-aggregate");
     assert.equal(
       findActiveRun({

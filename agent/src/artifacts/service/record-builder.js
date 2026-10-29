@@ -41,7 +41,7 @@ export function buildPublicRecord(basePath, record) {
     attachmentSource: identity.attachmentSource,
     generatedByModel: record?.generatedByModel === true,
     generationSource: safeStr(record.generationSource),
-    ...(typeof record?.isSandbox === "boolean" ? { isSandbox: record.isSandbox } : {}),
+    ...(safeStr(record.sourcePath) ? { sourcePath: safeStr(record.sourcePath) } : {}),
     ...(owner ? { owner } : {}),
     ...(turnScope ? { turnScope } : {}),
     relations: Array.isArray(record?.relations) ? record.relations : [],

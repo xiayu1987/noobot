@@ -23,7 +23,6 @@ function createEngine({
     async appendExecutionLog() {},
     appendTurns,
     upsertTurnTiming,
-    async saveCurrentTurnTasks() {},
     async getExecutionTurnLogs() {
       return [];
     },
@@ -71,7 +70,6 @@ function buildFinalizeInput(userConfig = {}) {
     agentResult: {
       output: "ok",
       turnMessages: [{ role: "assistant", type: "message", content: "ok", messageUid: "sm_final" }],
-      turnTasks: [],
     },
     persistedTurnMessageUids: [],
     persistedTurnMessages: [],

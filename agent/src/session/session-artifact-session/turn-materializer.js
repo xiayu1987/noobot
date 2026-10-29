@@ -7,11 +7,14 @@ import { resolveScopedArtifactPath } from "@noobot/path-resolver";
 import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
 import { deepFreeze } from "@noobot/shared/deep-freeze";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-import { isObjectLike, text } from "@noobot/shared/value";
+import { isPlainObject } from "@noobot/shared/value";
 import { stat } from "node:fs/promises";
-import { SESSION_ARTIFACT_FILE_NAMES, readJsonArtifactFile } from "../session-artifact-files.js";
+import { isMissingPersistencePathError } from "../../shared/storage/json-file-reader.js";
+import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
+import { readJsonWithStorage } from "./artifact-json-io.js";
 import {
   SUMMARY_SNAPSHOT_SCHEMA_VERSION,
+  assertIncrementalJournalRecords,
   journalPath,
   readJournalRecordRange,
   summarySnapshotContentHash,
@@ -39,17 +42,23 @@ function snapshotError(message, code) {
   return error;
 }
 
-async function readVerifiedSnapshot(sessionDir, index, previousCheckpointHash) {
-  const file = text(index?.file);
+async function readVerifiedSnapshot({ storageService, sessionDir, index, previousCheckpointHash }) {
+  const file = index.file;
   const artifactPath = resolveSummarySnapshotPath(sessionDir, file);
   const identityBeforeRead = await readFileIdentity(artifactPath).catch((error) => {
-    if (error?.code === "ENOENT") return null;
-    throw error;
+    if (!isMissingPersistencePathError(error)) throw error;
+
+    const failure = snapshotError(
+      `summary snapshot registered in manifest is missing: ${file}`,
+      "SESSION_SUMMARY_SNAPSHOT_INDEX_MISMATCH",
+    );
+    failure.cause = error;
+    throw failure;
   });
-  const payload = identityBeforeRead ? await readJsonArtifactFile(artifactPath, null) : null;
+  const payload = await readJsonWithStorage({ storageService, artifactPath });
   if (
-    !payload ||
-    Number(payload.schemaVersion) !== SUMMARY_SNAPSHOT_SCHEMA_VERSION ||
+    !isPlainObject(payload) ||
+    payload.schemaVersion !== SUMMARY_SNAPSHOT_SCHEMA_VERSION ||
     !Array.isArray(payload.records) ||
     Object.hasOwn(payload, "messages") ||
     payload.previousCheckpointHash !== previousCheckpointHash ||
@@ -67,12 +76,14 @@ async function readVerifiedSnapshot(sessionDir, index, previousCheckpointHash) {
       "SESSION_SUMMARY_SNAPSHOT_HASH_MISMATCH",
     );
   }
+
+  assertIncrementalJournalRecords(payload.records, artifactPath);
   return { payload, identity: identityBeforeRead };
 }
 
 function sameLink(link, index) {
   return (
-    link.file === text(index?.file) &&
+    link.file === index.file &&
     link.checkpointId === index.checkpointId &&
     link.checkpointRevision === index.checkpointRevision &&
     link.contentHash === index.contentHash
@@ -81,11 +92,8 @@ function sameLink(link, index) {
 
 function foldRecordsIntoOrderedMessageMap(state, records) {
   for (const record of records) {
-    const uid = text(record?.messageUid);
-    if (!uid) continue;
-    if (record.op === "remove") state.delete(uid);
-    else if (record.op === "upsert" && isObjectLike(record.message))
-      state.set(uid, deepFreeze(record.message));
+    if (record.op === "remove") state.delete(record.messageUid);
+    else state.set(record.messageUid, deepFreeze(record.message));
   }
   return state;
 }
@@ -138,7 +146,7 @@ export function createTurnMaterializer({ byteBudget }) {
       const identity = await readFileIdentity(
         resolveSummarySnapshotPath(sessionDir, link.file),
       ).catch((error) => {
-        if (error?.code === "ENOENT") return null;
+        if (isMissingPersistencePathError(error)) return null;
         throw error;
       });
       if (identity?.key !== link.identityKey) return null;
@@ -146,7 +154,7 @@ export function createTurnMaterializer({ byteBudget }) {
     return cached;
   }
 
-  async function verifyCheckpointChain(sessionDir, cached, indexes) {
+  async function verifyCheckpointChain({ storageService, sessionDir, cached, indexes }) {
     const reusable = await reusableLinks(sessionDir, cached, indexes);
     if (reusable && reusable.links.length === indexes.length) return reusable;
     const links = reusable ? [...reusable.links] : [];
@@ -154,14 +162,15 @@ export function createTurnMaterializer({ byteBudget }) {
     let bytes = reusable ? reusable.checkpointBytes : 0;
     let previousCheckpointHash = links.at(-1)?.contentHash || "";
     for (const index of indexes.slice(links.length)) {
-      const { payload, identity } = await readVerifiedSnapshot(
+      const { payload, identity } = await readVerifiedSnapshot({
+        storageService,
         sessionDir,
         index,
         previousCheckpointHash,
-      );
+      });
       foldRecordsIntoOrderedMessageMap(state, payload.records);
       links.push({
-        file: text(index.file),
+        file: index.file,
         checkpointId: index.checkpointId,
         checkpointRevision: index.checkpointRevision,
         contentHash: index.contentHash,
@@ -173,10 +182,15 @@ export function createTurnMaterializer({ byteBudget }) {
     return { links, checkpointState: state, checkpointBytes: bytes };
   }
 
-  async function materialize(sessionDir, item) {
+  async function materialize({ storageService, sessionDir, item }) {
     const key = journalPath(sessionDir, item.turnId);
     const cached = entries.get(key);
-    const chain = await verifyCheckpointChain(sessionDir, cached, item.summarySnapshots);
+    const chain = await verifyCheckpointChain({
+      storageService,
+      sessionDir,
+      cached,
+      indexes: item.summarySnapshots,
+    });
     const chainReused = cached !== undefined && chain.links === cached.links;
     const resume = chainReused
       ? { identity: cached.journalIdentity, committedBytes: cached.committedBytes }

@@ -78,12 +78,13 @@ describe("ThinkingPanel thinking-detail recovery", () => {
         userId: "user-1",
         sessionId: "session-restore",
         turnScopeId: "client-turn:restore",
-        dialogProcessId: "",
+        dialogProcessId: "dp-restore",
       });
       return thinkingDetailPayload({
         role: "assistant",
         sessionId: "session-restore",
         turnScopeId: "client-turn:restore",
+        dialogProcessId: "dp-restore",
         toolTimeline: persistedToolTimeline("persisted-tool"),
       });
     });
@@ -94,6 +95,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
         role: "assistant",
         sessionId: "session-restore",
         turnScopeId: "client-turn:restore",
+        dialogProcessId: "dp-restore",
         hasThinkingDetails: true,
       },
       {
@@ -117,6 +119,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
         role: "assistant",
         sessionId: "session-restore",
         turnScopeId: "client-turn:restore",
+        dialogProcessId: "dp-restore",
       },
       "session-restore",
     );
@@ -137,6 +140,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
         role: "assistant",
         sessionId: "session-restore",
         turnScopeId: "client-turn:restore",
+        dialogProcessId: "dp-restore",
         hasThinkingDetails: true,
       },
     });
@@ -151,6 +155,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
       role: "assistant",
       sessionId: "session-interjection-detail",
       turnScopeId: "client-turn:interjection-detail",
+      dialogProcessId: "dp-interjection-detail",
       hasThinkingDetails: true,
       toolTimeline: persistedToolTimeline("local-tool", "call-local"),
       thinkingContentTimeline: [
@@ -207,6 +212,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
           role: "assistant",
           sessionId: "session-eventual-detail",
           turnScopeId: "client-turn:eventual-detail",
+          dialogProcessId: "dp-eventual-detail",
           thinkingContentTimeline: [
             {
               contentId: "message:eventual-interjection",
@@ -225,6 +231,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
       messageItem: {
         sessionId: "session-eventual-detail",
         turnScopeId: "client-turn:eventual-detail",
+        dialogProcessId: "dp-eventual-detail",
       },
       retryLimit: 1,
       retryDelayMs: 0,
@@ -242,6 +249,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
         role: "assistant",
         sessionId: "session-details",
         turnScopeId: "client-turn:details",
+        dialogProcessId: "dp-details",
         toolTimeline: persistedToolTimeline("details-tool", "call-details"),
       }),
     );
@@ -252,6 +260,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
         role: "assistant",
         sessionId: "session-details",
         turnScopeId: "client-turn:details",
+        dialogProcessId: "dp-details",
         hasThinkingDetails: true,
       },
       {
@@ -274,6 +283,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
       role: "assistant",
       sessionId: "session-cached-details",
       turnScopeId: "client-turn:cached-details",
+      dialogProcessId: "dp-cached-details",
       hasThinkingDetails: true,
     };
     await loadThinkingDetail({
@@ -312,6 +322,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
         role: "assistant",
         sessionId: "session-running",
         turnScopeId: "client-turn:running",
+        dialogProcessId: "dp-running",
         pending: true,
         hasThinkingDetails: true,
       },
@@ -332,6 +343,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
         role: "assistant",
         sessionId: "session-local",
         turnScopeId: "client-turn:local",
+        dialogProcessId: "dp-local",
         hasThinkingDetails: true,
         toolTimeline: persistedToolTimeline("live-tool", "call-live"),
       },
@@ -356,6 +368,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
         role: "assistant",
         sessionId: "session-stale",
         turnScopeId: "client-turn:stale",
+        dialogProcessId: "dp-stale",
         toolTimeline: persistedToolTimeline("restored-after-refresh", "call-stale"),
       }),
     );
@@ -366,6 +379,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
         role: "assistant",
         sessionId: "session-stale",
         turnScopeId: "client-turn:stale",
+        dialogProcessId: "dp-stale",
         pending: false,
       },
       {

@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
+import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
 import {
+  applyMainEntryMessages,
   createHarness,
-  makeSession,
   makeTurnReplacementResponse,
   emitAuthorityProcessing,
   serverTurnSource,
@@ -17,6 +18,10 @@ import {
 } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { NO_ATTACHMENT_EDITS } from "../../../helpers/resendEdits.js";
+import {
+  deleteSuccessResponse,
+  mutationFailureResponse,
+} from "../../../helpers/sessionDetailFixture.js";
 
 describe("useChatEngine.resend replace turn", () => {
   it("does not start a stale resend stream after delete supersedes its pending replace command", async () => {
@@ -26,26 +31,17 @@ describe("useChatEngine.resend replace turn", () => {
     });
     const stream = vi.fn();
     const replaceSessionTurnApi = vi.fn(() => replaceResponse);
-    const deleteSessionMessagesFromApi = vi.fn(async () => ({
-      ok: true,
-      json: async () => ({
-        ok: true,
+    const deleteSessionMessagesFromApi = vi.fn(async () =>
+      deleteSuccessResponse({
         sessionId: "resend-delete-race",
+        turnScopeId: "client-turn:old",
         aggregateVersion: 3,
-        deletedTurnScopeIds: ["client-turn:old"],
-        session: {
-          sessionId: "resend-delete-race",
-          aggregateVersion: 3,
-          revision: 3,
-          messages: [],
-          rawMessages: [],
-        },
+        messages: [],
+        deletedCount: 2,
+        anchorIndex: 0,
       }),
-    }));
-    const applySessionDetail = vi.fn((detail) => {
-      const mainSession = detail.sessions?.[0] || {};
-      activeSession.value = { ...activeSession.value, ...mainSession };
-    });
+    );
+    const applySessionDetail = applyMainEntryMessages(() => activeSession);
     const { engine, activeSession } = createHarness({
       sessionId: "resend-delete-race",
       stream,
@@ -79,20 +75,22 @@ describe("useChatEngine.resend replace turn", () => {
 
     await expect(engine.deleteMonotonicMessage(user)).resolves.toBe(true);
     const resendRequest = replaceSessionTurnApi.mock.calls[0][0];
+    const raceReplacementUser = {
+      messageUid: "replacement-user",
+      userMessageId: "replacement-user",
+      turnScopeId: resendRequest.turnScopeId,
+      role: RoleEnum.USER,
+      content: "edited question",
+    };
     resolveReplace(
       makeTurnReplacementResponse({
         commandId: resendRequest.commandId,
         sessionId: "resend-delete-race",
         aggregateVersion: 2,
         replacedTurnScopeIds: ["client-turn:old"],
-        replacementUser: {
-          messageUid: "replacement-user",
-          userMessageId: "replacement-user",
-          turnScopeId: resendRequest.turnScopeId,
-          role: RoleEnum.USER,
-          content: "edited question",
-        },
+        replacementUser: raceReplacementUser,
         replacementDialogProcessId: `dialog:${resendRequest.turnScopeId}`,
+        messages: [raceReplacementUser],
       }),
     );
 
@@ -105,7 +103,6 @@ describe("useChatEngine.resend replace turn", () => {
     const stream = vi.fn(async (payload, onEvent) => {
       emitAuthorityProcessing(onEvent, serverTurnSource(payload, "dp-server"));
     });
-    const deleteSessionMessagesFromApi = vi.fn();
     const removeWorkflowOwnersForReplacedTurns = vi.fn(() => ({
       removedWorkflowRunIds: ["workflow:client-turn:old"],
       removedSessionIds: ["child-session-old"],
@@ -125,21 +122,16 @@ describe("useChatEngine.resend replace turn", () => {
         replacedTurnScopeIds: [anchor.turnScopeId],
         replacementUser,
         replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
-        session: { messageCount: 1 },
+        messages: [replacementUser],
       });
     });
-    const applySessionDetail = vi.fn((detail) => {
-      const mainSession = detail.sessions?.[0] || {};
-      activeSession.value = { ...activeSession.value, ...mainSession };
-      input.value = "";
-    });
+    const applySessionDetail = applyMainEntryMessages(() => activeSession);
     const { engine, activeSession, input, appendMessage, sending, canStop, activeTurnRuntime } =
       createHarness({
         sessionId: "local-resend-replace-success",
         stream,
         deps: {
           replaceSessionTurnApi,
-          deleteSessionMessagesFromApi,
           applySessionDetail,
           removeWorkflowOwnersForReplacedTurns,
         },
@@ -168,7 +160,6 @@ describe("useChatEngine.resend replace turn", () => {
       expect.any(Object),
     );
     expect(applySessionDetail.mock.calls[0]).toHaveLength(1);
-    expect(deleteSessionMessagesFromApi).not.toHaveBeenCalled();
     expect(removeWorkflowOwnersForReplacedTurns).toHaveBeenCalledWith({
       parentSessionId: "local-resend-replace-success",
       replacedTurnScopeIds: ["client-turn:old"],
@@ -272,13 +263,11 @@ describe("useChatEngine.resend replace turn", () => {
           replacedTurnScopeIds: [anchor.turnScopeId],
           replacementUser,
           replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
+          messages: [replacementUser],
         });
       },
     );
-    const applySessionDetail = vi.fn((detail) => {
-      const mainSession = detail.sessions?.[0] || {};
-      activeSession.value = { ...activeSession.value, ...mainSession };
-    });
+    const applySessionDetail = applyMainEntryMessages(() => activeSession);
     const { engine, activeSession } = createHarness({
       sessionId: "local-resend-attachments",
       stream,
@@ -377,12 +366,11 @@ describe("useChatEngine.resend replace turn", () => {
           replacedTurnScopeIds: [anchor.turnScopeId],
           replacementUser,
           replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
+          messages: [replacementUser],
         });
       },
     );
-    const applySessionDetail = vi.fn((detail) => {
-      activeSession.value = { ...activeSession.value, ...(detail.sessions?.[0] || {}) };
-    });
+    const applySessionDetail = applyMainEntryMessages(() => activeSession);
     const stream = vi.fn(async () => {});
     const { engine, activeSession } = createHarness({
       sessionId: "local-resend-preserve-baseline",
@@ -453,13 +441,11 @@ describe("useChatEngine.resend replace turn", () => {
           replacedTurnScopeIds: [anchor.turnScopeId],
           replacementUser,
           replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
+          messages: [replacementUser],
         });
       },
     );
-    const applySessionDetail = vi.fn((detail) => {
-      const mainSession = detail.sessions?.[0] || {};
-      activeSession.value = { ...activeSession.value, ...mainSession };
-    });
+    const applySessionDetail = applyMainEntryMessages(() => activeSession);
     const { engine, activeSession } = createHarness({
       sessionId: "local-resend-unchanged-attachment",
       stream,
@@ -560,13 +546,11 @@ describe("useChatEngine.resend replace turn", () => {
           replacedTurnScopeIds: [anchor.turnScopeId],
           replacementUser,
           replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
+          messages: [replacementUser],
         });
       },
     );
-    const applySessionDetail = vi.fn((detail) => {
-      const mainSession = detail.sessions?.[0] || {};
-      activeSession.value = { ...activeSession.value, ...mainSession };
-    });
+    const applySessionDetail = applyMainEntryMessages(() => activeSession);
     const { engine, activeSession } = createHarness({
       sessionId: "local-resend-rich-raw",
       stream,
@@ -650,13 +634,11 @@ describe("useChatEngine.resend replace turn", () => {
           replacedTurnScopeIds: [anchor.turnScopeId],
           replacementUser,
           replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
+          messages: [replacementUser],
         });
       },
     );
-    const applySessionDetail = vi.fn((detail) => {
-      const mainSession = detail.sessions?.[0] || {};
-      activeSession.value = { ...activeSession.value, ...mainSession };
-    });
+    const applySessionDetail = applyMainEntryMessages(() => activeSession);
     const { engine, activeSession } = createHarness({
       sessionId: "local-resend-delete-attachments",
       stream,
@@ -701,39 +683,18 @@ describe("useChatEngine.resend replace turn", () => {
 
   it("resendMonotonicMessage treats a version conflict as terminal and never rebases a stale replacement", async () => {
     const stream = vi.fn(async () => {});
-    const fetchSessionDetail = vi.fn(async () => ({
-      sessionId: "local-resend-version-retry",
-      sessions: [
-        makeSession("local-resend-version-retry", {
-          aggregateVersion: 5,
-          revision: 5,
-          messages: [
-            { turnScopeId: "client-turn:old-version", role: RoleEnum.USER, content: "old" },
-            {
-              turnScopeId: "client-turn:old-version",
-              role: RoleEnum.ASSISTANT,
-              content: "stopped",
-              stopState: "user_stopped",
-            },
-          ],
-        }),
-      ],
-    }));
-    const replaceSessionTurnApi = vi.fn(async () => ({
-      ok: false,
-      status: 409,
-      statusText: "Conflict",
-      error: "session version conflict",
-      errorCode: "SESSION_AGGREGATE_VERSION_CONFLICT",
-    }));
-    const applySessionDetail = vi.fn((detail) => {
-      const mainSession = detail.sessions?.[0] || {};
-      activeSession.value = { ...activeSession.value, ...mainSession };
-    });
+    const replaceSessionTurnApi = vi.fn(async () =>
+      mutationFailureResponse({
+        status: 409,
+        error: "session version conflict",
+        errorCode: SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT,
+        currentVersion: 5,
+      }),
+    );
     const { engine, activeSession, appendMessage } = createHarness({
       sessionId: "local-resend-version-retry",
       stream,
-      deps: { replaceSessionTurnApi, fetchSessionDetail, applySessionDetail },
+      deps: { replaceSessionTurnApi },
     });
     const stoppedUser = {
       turnScopeId: "client-turn:old-version",
@@ -759,7 +720,6 @@ describe("useChatEngine.resend replace turn", () => {
     expect(replaceSessionTurnApi.mock.calls[0][0]).toEqual(
       expect.objectContaining({ expectedAggregateVersion: 3 }),
     );
-    expect(fetchSessionDetail).not.toHaveBeenCalled();
     expect(stream).not.toHaveBeenCalled();
     expect(appendMessage).not.toHaveBeenCalled();
   });

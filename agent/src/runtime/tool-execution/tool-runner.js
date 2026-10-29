@@ -5,8 +5,9 @@
  */
 import { Buffer } from "node:buffer";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
+import { emitEvent } from "../../events/index.js";
 import { emitMessageEvent } from "../../events/message-event-stream.js";
-import { isFatalError } from "../../shared/errors/index.js";
+import { isFatalError, NoobotError, recoverableToolError } from "../../shared/errors/index.js";
 import {
   parseToolOutputArtifacts,
   stripToolOutputArtifacts,
@@ -48,6 +49,7 @@ import {
   runWithToolRiskAssessment,
 } from "../../tools/execution/tool-risk.js";
 import { isPlainObject, text } from "@noobot/shared/value";
+import { repairToolCallArgs } from "./tool-args-repair.js";
 
 function shouldTransferToolInput(call = {}) {
   const toolName = text(call?.name);
@@ -448,29 +450,41 @@ function reportToolInvocationError(state, error) {
 }
 
 function recoverableToolErrorResult(call, error) {
-  const details = error?.details && typeof error.details === "object" ? error.details : null;
+  const details =
+    isPlainObject(error.details) && Object.keys(error.details).length ? error.details : null;
   return toToolJsonResult(call?.name, {
     ok: false,
     status: "failed",
-    code: String(error?.code || ERROR_CODE.RECOVERABLE_TOOL_INVOKE_ERROR),
-    error: error?.message || String(error),
+    code: error.code,
+    error: error.message,
     ...(details ? { details } : {}),
   });
 }
 
+function toRecoverableInvocationError(error) {
+  if (error instanceof NoobotError) return error;
+  return recoverableToolError(resolveErrorMessage(error) || String(error), {
+    code: text(error?.code) || ERROR_CODE.RECOVERABLE_TOOL_INVOKE_ERROR,
+    details: error?.details,
+    cause: error,
+  });
+}
+
 async function handleToolInvocationError(state, error) {
-  const isAbort = isAbortError(error);
-  const isFatal = isFatalError(error);
-  reportToolInvocationError(state, error);
-  if (isAbort || isFatal) throw error;
+  if (isAbortError(error) || isFatalError(error)) {
+    reportToolInvocationError(state, error);
+    throw error;
+  }
+  const recoverableError = toRecoverableInvocationError(error);
+  reportToolInvocationError(state, recoverableError);
   await runToolHook(state, HOOK_POINT.AGENT.TOOL_CALL_ERROR, {
     status: HOOK_PHASE_STATUS.ERROR,
     ...completedToolTiming(state),
     args: state.call?.args || {},
-    error,
+    error: recoverableError,
   });
-  state.invokeError = error;
-  state.toolResultText = recoverableToolErrorResult(state.call, error);
+  state.invokeError = recoverableError;
+  state.toolResultText = recoverableToolErrorResult(state.call, recoverableError);
   state.rawToolResultText = state.toolResultText;
   await sanitizeToolOutput(state);
   logRecoverableToolError(state, error);
@@ -591,7 +605,21 @@ function transferEnvelopeEventFields(result = {}) {
   return transferEnvelopes.length ? { transferEnvelopes } : {};
 }
 
-export async function executeToolCallInTurn(options) {
+function normalizeToolCallOptions(options) {
+  const { call, tool, runtime } = options;
+  if (!tool) return options;
+  const repaired = repairToolCallArgs(tool.schema, call?.args);
+  if (!repaired) return options;
+  emitEvent(runtime.eventListener, "tool_args_repaired", {
+    turn: options.turn,
+    tool: text(call?.name),
+    toolCallId: text(call?.id),
+    repairs: repaired.repairs,
+  });
+  return { ...options, call: { ...call, args: repaired.args } };
+}
+
+async function runToolCallInTurn(options) {
   const { call, runtime, eventListener, turn, toolCallId, abortSignal } =
     createTurnToolExecutionContext(options);
   const initialRiskAssessment = createToolRiskAssessment(call);
@@ -618,6 +646,10 @@ export async function executeToolCallInTurn(options) {
     ...transferEnvelopeEventFields(result),
   });
   return result;
+}
+
+export async function executeToolCallInTurn(options) {
+  return runToolCallInTurn(normalizeToolCallOptions(options));
 }
 
 function rejectedToolCallResult({ call, error, abortSignal }) {
@@ -647,14 +679,15 @@ function rejectedToolCallResult({ call, error, abortSignal }) {
   };
 }
 
-export async function settleToolCallInTurn(options) {
+export async function settleToolCallInTurn(rawOptions) {
+  const options = normalizeToolCallOptions(rawOptions);
   const { call, runtime, eventListener, turn, toolCallId, abortSignal } =
     createTurnToolExecutionContext(options);
   const toolStartedAtMs = Date.now();
   try {
     return {
       status: "fulfilled",
-      result: await executeToolCallInTurn({ ...options, toolStartedAtMs }),
+      result: await runToolCallInTurn({ ...options, toolStartedAtMs }),
       error: null,
     };
   } catch (error) {

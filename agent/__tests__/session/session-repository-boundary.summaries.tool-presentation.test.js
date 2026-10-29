@@ -7,22 +7,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
-import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
+import { buildPersistedDisplaySummary } from "./session-artifact-store-v2.test-helpers.js";
 
-test("session summary projects attachment identities without object stringification", () => {
+test("session summary projects attachment identities without object stringification", async () => {
   const attachmentIdentity = {
     attachmentId: "att-summary-1",
     sessionId: "summary-session",
     attachmentSource: "model",
   };
-  const summary = buildSessionDisplaySummary({
-    ...createTestSessionRequiredFields(),
+  const summary = await buildPersistedDisplaySummary({
     sessionId: "summary-session",
     aggregateVersion: 0,
     messages: [
       {
-        id: "assistant-1",
         modelMessageId: "assistant-1",
         messageUid: "sm-summary-1",
         presentationMessageId: "assistant-1",
@@ -59,14 +56,12 @@ test("session summary projects attachment identities without object stringificat
   assert.doesNotMatch(JSON.stringify(timeline), /\[object Object\]/);
 });
 
-test("session summary uses the canonical tool presentation protocol", () => {
-  const summary = buildSessionDisplaySummary({
-    ...createTestSessionRequiredFields(),
+test("session summary uses the canonical tool presentation protocol", async () => {
+  const summary = await buildPersistedDisplaySummary({
     sessionId: "tool-summary-session",
     aggregateVersion: 0,
     messages: [
       {
-        id: "assistant-tool-summary",
         modelMessageId: "assistant-tool-summary",
         messageUid: "sm-tool-summary",
         presentationMessageId: "assistant-tool-summary",

@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeTrimmedString } from "./utils.js";
 import { getMessageTurnScopeId } from "../../model/messageIdentity.js";
 import {
   logResendDebug,
@@ -86,8 +85,8 @@ export async function prepareResendTransaction({
   });
   if (attachmentResolution.aborted) return ABORTED;
 
+  if (!getMessageTurnScopeId(userTargetMessage)) return REJECTED;
   const anchor = buildMonotonicMessageAnchor(userTargetMessage);
-  if (!normalizeTrimmedString(anchor.turnScopeId)) return REJECTED;
 
   return {
     anchor,

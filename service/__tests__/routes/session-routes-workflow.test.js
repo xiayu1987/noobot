@@ -11,13 +11,19 @@ import path from "node:path";
 import { createPluginServicePorts } from "../../services/plugin-service-ports.js";
 import { createServicePluginHost } from "../../services/service-plugin-host.js";
 import {
+  SESSION_ARTIFACT_PREDECESSOR,
   appendExecutionLogArtifact,
-  writeJsonArtifactFile,
+  createScopedSessionArtifactReader,
   writeSessionArtifact,
-  writeTaskArtifact,
 } from "noobot-agent/session";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { TEST_STORAGE_SERVICE } from "../storage-service.test-helpers.js";
+
+const SCOPED_SESSION_READER = createScopedSessionArtifactReader({
+  storageService: TEST_STORAGE_SERVICE,
+});
 import { buildExecutionReport } from "@noobot/session-protocol/execution-report";
-import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
+import { SESSION_ERROR_CODE, createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { summarizeExecutionLogs } from "noobot-agent/tracking";
 import express, {
@@ -26,16 +32,32 @@ import express, {
   withTestServer,
 } from "./session-routes.helpers.js";
 
-async function writeScopedSessionDir({ sessionDir, sessionPayload, taskPayload, metadata = null }) {
-  await writeSessionArtifact({ sessionDir, sessionPayload });
-  await writeTaskArtifact({ sessionDir, taskPayload });
-  if (metadata) await writeJsonArtifactFile(path.join(sessionDir, "meta.json"), metadata);
+async function writeScopedSessionDir({ sessionDir, sessionPayload, metadata = null }) {
+  await writeSessionArtifact({
+    storageService: TEST_STORAGE_SERVICE,
+    sessionDir,
+    sessionPayload,
+    atomic: true,
+    predecessor: SESSION_ARTIFACT_PREDECESSOR.CANONICAL,
+  });
+  if (metadata) await TEST_STORAGE_SERVICE.writeJson(path.join(sessionDir, "meta.json"), metadata);
+}
+
+function appendTestExecutionLog({ sessionDir, executionLog }) {
+  return appendExecutionLogArtifact({
+    storageService: TEST_STORAGE_SERVICE,
+    sessionDir,
+    executionLog,
+    maxSegmentBytes: LENGTH_THRESHOLDS.artifact.executionEventSegmentBytes,
+    alreadyLocked: false,
+  });
 }
 
 async function registerWorkflowPluginRoutes(app, { bot, translateText }) {
   const pluginHost = createServicePluginHost();
   await pluginHost.registerServiceRoutes(app, {
     ports: createPluginServicePorts({ bot, translateText }),
+    enforceUserScopeParam: (_req, _res, next) => next(),
     translateText,
   });
   return pluginHost;
@@ -43,7 +65,7 @@ async function registerWorkflowPluginRoutes(app, { bot, translateText }) {
 
 test("workflow service reads child execution events only from the workflow scope", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workflow-child-events-"));
-  await appendExecutionLogArtifact({
+  await appendTestExecutionLog({
     sessionDir: path.join(workspaceRoot, "runtime/session/root-s/child-s"),
     executionLog: { event: "host_tree_event", dialogProcessId: "host-turn", data: {} },
   });
@@ -63,10 +85,9 @@ test("workflow service reads child execution events only from the workflow scope
       turnTimings: [],
       turnLifecycle: createEmptyTurnLifecycle(),
     },
-    taskPayload: { sessionId: "child-s", tasks: [] },
   });
   const ports = createPluginServicePorts({
-    bot: { getWorkspacePath: () => workspaceRoot },
+    bot: { session: SCOPED_SESSION_READER, getWorkspacePath: () => workspaceRoot },
     translateText: (key) => key,
   });
   const { executionLogs: logs } = await ports.sessions.forPlugin("workflow").readSnapshot({
@@ -110,7 +131,6 @@ test("session-routes: workflow session returns summary and execution jsonl from 
         },
       ],
     },
-    taskPayload: { sessionId: "node-s", tasks: [] },
     metadata: {
       nodeId: "n1",
       workflowRunId: "workflow-run-1",
@@ -119,7 +139,7 @@ test("session-routes: workflow session returns summary and execution jsonl from 
       turnScopeId: "workflow-node:wf_node_1",
     },
   });
-  await appendExecutionLogArtifact({
+  await appendTestExecutionLog({
     sessionDir: workflowDir,
     executionLog: { event: "x", dialogProcessId: "wf_node_1" },
   });
@@ -127,7 +147,7 @@ test("session-routes: workflow session returns summary and execution jsonl from 
   const app = express();
   const bot = {
     session: {
-      getSessionData: async () => ({}),
+      ...SCOPED_SESSION_READER,
       getRootSessionId: async () => "",
       deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
       getAllSessionsData: async () => [],
@@ -180,10 +200,9 @@ test("session-routes: workflow session rejects a node snapshot without session m
       dialogOrder: [],
       messages: [],
     },
-    taskPayload: { sessionId: "node-s", tasks: [] },
   });
   const app = express();
-  const bot = { getWorkspacePath: () => workspaceRoot };
+  const bot = { session: SCOPED_SESSION_READER, getWorkspacePath: () => workspaceRoot };
   const translateText = (key) => key;
   await registerWorkflowPluginRoutes(app, { bot, translateText });
 
@@ -289,13 +308,12 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
         },
       ],
     },
-    taskPayload: { sessionId: "node-s", tasks: [] },
   });
 
   const app = express();
   const bot = {
     session: {
-      getSessionData: async () => ({}),
+      ...SCOPED_SESSION_READER,
       getRootSessionId: async () => "",
       deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
       getAllSessionsData: async () => [],
@@ -312,8 +330,9 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
   await registerWorkflowPluginRoutes(app, { bot, translateText });
 
   await withTestServer(app, async (baseUrl) => {
+    const detailUrl = `${baseUrl}/internal/workflow/session/u1/root-s/wf_node_1/thinking-detail`;
     const response = await fetch(
-      `${baseUrl}/internal/workflow/session/u1/root-s/wf_node_1/thinking-detail?turnScopeId=${encodeURIComponent(turnScopeId)}`,
+      `${detailUrl}?turnScopeId=${encodeURIComponent(turnScopeId)}&dialogProcessId=dp-1`,
     );
     const payload = await response.json();
     assert.equal(response.status, 200);
@@ -324,6 +343,18 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
     assert.equal(payload.counts.executionLogCount, 3);
     assert.equal(payload.counts.injectedMessageCount, 1);
     assert.equal(Object.hasOwn(payload, "allMessages"), false);
+
+    for (const query of [
+      `turnScopeId=${encodeURIComponent(turnScopeId)}`,
+      "dialogProcessId=dp-1",
+      `turnScopeId=${encodeURIComponent(` ${turnScopeId}`)}&dialogProcessId=dp-1`,
+    ]) {
+      const rejected = await fetch(`${detailUrl}?${query}`);
+      const rejectedPayload = await rejected.json();
+      assert.equal(rejected.status, 400, query);
+      assert.equal(rejectedPayload.ok, false, query);
+      assert.equal(rejectedPayload.errorCode, SESSION_ERROR_CODE.TURN_LOOKUP_KEY_INVALID, query);
+    }
   });
 });
 
@@ -346,7 +377,7 @@ test("session-routes: workflow execution-report reads the scoped node report", a
     ),
   );
   const app = express();
-  const bot = { session: {}, getWorkspacePath: () => workspaceRoot };
+  const bot = { session: SCOPED_SESSION_READER, getWorkspacePath: () => workspaceRoot };
   const translateText = (key) => key;
   await registerWorkflowPluginRoutes(app, { bot, translateText });
 

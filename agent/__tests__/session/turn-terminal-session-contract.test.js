@@ -8,14 +8,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { normalizeSessionEntity } from "../../src/session/entities/session-entity.js";
-import {
-  buildSessionDisplaySummary,
-  SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION,
-} from "../../src/session/session-summary-builders.js";
+import { SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION } from "../../src/session/session-summary-builders.js";
 import {
   applySessionMessageFacts,
   createTestSessionRequiredFields,
 } from "../helpers/session-message-facts.js";
+import { buildPersistedDisplaySummary } from "./session-artifact-store-v2.test-helpers.js";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
 const now = () => "2026-07-10T00:00:00.000Z";
@@ -87,7 +85,7 @@ test("message-local lifecycle fields cannot become authoritative terminal facts"
   }
 });
 
-test("summary projects only the authoritative lifecycle snapshot", () => {
+test("summary projects only the authoritative lifecycle snapshot", async () => {
   const session = normalizeSessionEntity(
     applySessionMessageFacts({
       ...createTestSessionRequiredFields(),
@@ -112,7 +110,7 @@ test("summary projects only the authoritative lifecycle snapshot", () => {
     { now },
   );
 
-  const summary = buildSessionDisplaySummary(session);
+  const summary = await buildPersistedDisplaySummary(session);
   assert.equal(summary.schemaVersion, SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION);
   assert.equal(summary.turnLifecycleSnapshot.eventType, "turn.snapshot");
   assert.equal(summary.turnLifecycleSnapshot.sessionId, "s-lifecycle");
@@ -125,7 +123,7 @@ test("summary projects only the authoritative lifecycle snapshot", () => {
   assert.ok(summary.turnLifecycleSnapshot.commandId);
 });
 
-test("action failure before message persistence remains terminal after summary hydration", () => {
+test("action failure before message persistence remains terminal after summary hydration", async () => {
   const session = normalizeSessionEntity(
     {
       ...createTestSessionRequiredFields(),
@@ -142,7 +140,7 @@ test("action failure before message persistence remains terminal after summary h
     { now },
   );
 
-  const summary = buildSessionDisplaySummary(session);
+  const summary = await buildPersistedDisplaySummary(session);
   assert.equal(summary.messages.length, 1);
   assert.equal(summary.messages[0].turnPlaceholder, true);
   assert.equal(summary.messages[0].turnScopeId, "t1");
@@ -192,9 +190,9 @@ test("parent and child sessions own independent lifecycle aggregates", () => {
   assert.equal(childStatus.description, "error explanation");
 });
 
-test("synthetic placeholders cannot enter persistence or summary", () => {
+test("synthetic placeholders cannot enter persistence or summary", async () => {
   const session = normalizeSessionEntity(
-    {
+    applySessionMessageFacts({
       ...createTestSessionRequiredFields(),
       sessionId: "s-placeholder",
       aggregateVersion: 0,
@@ -208,6 +206,7 @@ test("synthetic placeholders cannot enter persistence or summary", () => {
           modelMessageId: "mm_turn_terminal_session_co_2",
           content: "本轮异常停止",
           turnScopeId: "t1",
+          dialogProcessId: "dp1",
           synthetic: true,
           placeholder: true,
           turnStatusPlaceholder: true,
@@ -216,7 +215,7 @@ test("synthetic placeholders cannot enter persistence or summary", () => {
           status: "error",
         },
       ],
-    },
+    }),
     { now },
   );
 
@@ -232,7 +231,7 @@ test("synthetic placeholders cannot enter persistence or summary", () => {
   ]) {
     assert.equal(message[key], undefined);
   }
-  const summary = buildSessionDisplaySummary(session);
+  const summary = await buildPersistedDisplaySummary(session);
   assert.equal(summary.turnLifecycleSnapshot.sequence, 0);
   assert.equal(summary.messages[0].turnStatusPlaceholder, undefined);
 });

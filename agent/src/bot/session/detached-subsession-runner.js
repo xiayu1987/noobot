@@ -543,7 +543,6 @@ function projectDetachedResult(result, identity, terminalLifecycle) {
       traces: readArray(result?.traces),
       messages,
       ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
-      turnTasks: readArray(result?.turnTasks),
       dialogProcessId,
     },
   };

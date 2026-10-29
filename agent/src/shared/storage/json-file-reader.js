@@ -6,6 +6,7 @@
 
 import { isFunction } from "@noobot/shared/value";
 export const PERSISTED_JSON_READ_ERROR_CODE = Object.freeze({
+  MISSING: "PERSISTED_JSON_MISSING",
   CORRUPTED: "PERSISTED_JSON_CORRUPTED",
   PERMISSION_DENIED: "PERSISTENCE_PERMISSION_DENIED",
   IO_FAILED: "PERSISTENCE_IO_FAILED",
@@ -33,15 +34,38 @@ function createPersistedJsonReadError(filePath, cause) {
   return error;
 }
 
-export async function readPersistedJsonFile({ filePath = "", fallback = null, readFile } = {}) {
+function createPersistedJsonMissingError(filePath, cause) {
+  const error = new Error(`persisted JSON is missing: ${filePath}`, { cause });
+  error.code = PERSISTED_JSON_READ_ERROR_CODE.MISSING;
+  error.persistencePath = filePath;
+  return error;
+}
+
+async function readParsedJson({ filePath, readFile }) {
   if (!isFunction(readFile)) {
     throw new TypeError("readPersistedJsonFile requires readFile");
   }
+  if (typeof filePath !== "string" || !filePath) {
+    throw new TypeError("readPersistedJsonFile requires filePath");
+  }
   try {
-    const raw = await readFile(filePath, "utf8");
-    return JSON.parse(raw);
+    return JSON.parse(await readFile(filePath, "utf8"));
   } catch (error) {
-    if (isMissingPersistencePathError(error)) return fallback;
+    if (isMissingPersistencePathError(error))
+      throw createPersistedJsonMissingError(filePath, error);
     throw createPersistedJsonReadError(filePath, error);
+  }
+}
+
+export async function readPersistedJsonFile({ filePath, readFile }) {
+  return readParsedJson({ filePath, readFile });
+}
+
+export async function readOptionalPersistedJsonFile({ filePath, readFile }) {
+  try {
+    return await readParsedJson({ filePath, readFile });
+  } catch (error) {
+    if (error.code === PERSISTED_JSON_READ_ERROR_CODE.MISSING) return null;
+    throw error;
   }
 }

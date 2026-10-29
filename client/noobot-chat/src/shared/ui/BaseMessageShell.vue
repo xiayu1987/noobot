@@ -79,7 +79,7 @@ const { translate } = useLocale();
 .base-message-avatar {
   width: var(--noobot-msg-avatar-size);
   height: var(--noobot-msg-avatar-size);
-  border-radius: 50%;
+  border-radius: var(--noobot-radius-circle);
   display: inline-flex;
   align-items: center;
   justify-content: center;

@@ -1,0 +1,109 @@
+.noobot-rich-content :where(code) {
+  background: var(--noobot-msg-inline-code-bg);
+  color: var(--noobot-msg-inline-code-text);
+  border-radius: var(--noobot-radius-xs);
+  font-family: var(--noobot-font-mono);
+  font-size: var(--noobot-font-size-sm);
+}
+
+.noobot-rich-content :where(pre) {
+  background: var(--noobot-msg-code-block-bg);
+  color: var(--noobot-msg-code-block-text);
+  border-radius: var(--noobot-radius-md);
+  border: 1px solid var(--noobot-panel-border);
+  overflow-x: auto;
+}
+
+.noobot-rich-content :where(.mermaid) {
+  background: var(--noobot-panel-bg);
+  border: 1px solid var(--noobot-panel-border);
+  border-radius: var(--noobot-radius-md);
+}
+
+.noobot-rich-content :where(.mermaid svg) {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+.noobot-rich-content :where(pre code) {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  border-radius: 0;
+}
+
+.noobot-rich-content :where(table) {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.noobot-rich-content :where(th, td) {
+  border: 1px solid var(--noobot-panel-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.noobot-rich-content :where(th) {
+  background: var(--noobot-panel-muted);
+  font-weight: var(--noobot-font-weight-semibold);
+}
+
+.noobot-rich-content :where(blockquote) {
+  background: var(--noobot-panel-muted);
+  border-left: 4px solid var(--noobot-panel-border);
+}
+
+.noobot-rich-content :where(p) {
+  margin-top: 0;
+}
+
+.noobot-rich-content :where(a) {
+  color: var(--noobot-text-accent);
+  text-decoration: none;
+  text-underline-offset: 2px;
+}
+
+.noobot-rich-content :where(a:hover) {
+  text-decoration: underline;
+}
+
+.noobot-rich-content :where(hr) {
+  height: 1px;
+  padding: 0;
+  background-color: var(--noobot-divider);
+  border: 0;
+}
+
+.noobot-rich-content :where(h1, h2, h3, h4, h5, h6) {
+  font-weight: var(--noobot-font-weight-semibold);
+  line-height: var(--noobot-line-height-tight);
+  color: inherit;
+}
+
+.noobot-rich-content :where(h1, h2) {
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--noobot-divider);
+}
+
+.noobot-rich-content :where(ul li::marker) {
+  color: var(--noobot-text-secondary);
+}
+
+.noobot-rich-content :where(ol li::marker) {
+  color: var(--noobot-text-secondary);
+  font-weight: var(--noobot-font-weight-semibold);
+}
+
+.noobot-rich-content :where(tr:nth-child(even) td) {
+  background: color-mix(in srgb, var(--noobot-panel-muted) 62%, transparent);
+}
+
+.noobot-rich-content :where(.mermaid-render-error) {
+  color: var(--noobot-preview-danger-text);
+  background: var(--noobot-preview-danger-bg);
+  border: 1px solid var(--noobot-preview-danger-border);
+  border-radius: var(--noobot-radius-sm);
+  white-space: pre-wrap;
+  font-family: var(--noobot-font-mono);
+}

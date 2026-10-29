@@ -5,20 +5,10 @@
  */
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
-import { text, isObjectLike } from "@noobot/shared/value";
-
-function stable(value) {
-  if (Array.isArray(value)) return value.map(stable);
-  if (!isObjectLike(value)) return value;
-  return Object.fromEntries(
-    Object.keys(value)
-      .sort()
-      .map((key) => [key, stable(value[key])]),
-  );
-}
+import { text, stableValue } from "@noobot/shared/value";
 
 function canonicalizeCommandRequest(value = {}) {
-  return JSON.stringify(stable(value));
+  return JSON.stringify(stableValue(value));
 }
 
 export function createCommandRequestHash(value = {}) {

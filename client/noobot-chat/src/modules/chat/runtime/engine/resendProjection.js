@@ -34,27 +34,19 @@ function findReplacementUserMessageByUid({ session, messageUid }) {
   );
 }
 
-function createSessionDetailSnapshot(session) {
-  return {
-    sessionId: session.sessionId,
-    sessions: [session],
-  };
-}
-
 function applyReplacementProjection({
   sessionId,
   resendTurnScopeId,
-  session,
+  detail,
   applySessionDetail,
   activeSession,
 }) {
-  const sessionDetail = createSessionDetailSnapshot(session);
   logResendDebug("resend.detail.apply.before", () => ({
     sessionId,
     turnScopeId: resendTurnScopeId,
     messages: summarizeDebugMessages(activeSession.value.messages),
   }));
-  applySessionDetail(sessionDetail);
+  applySessionDetail(detail);
 }
 
 function logMaterializationCommitted({
@@ -87,7 +79,7 @@ export async function projectResendReplacement(context) {
     text,
     turnReplacement,
     replacedTurnScopeIds,
-    session,
+    detail,
     pendingDisplayAttachments,
     activeSession,
     applySessionDetail,
@@ -100,7 +92,7 @@ export async function projectResendReplacement(context) {
   applyReplacementProjection({
     sessionId,
     resendTurnScopeId,
-    session,
+    detail,
     applySessionDetail,
     activeSession,
   });

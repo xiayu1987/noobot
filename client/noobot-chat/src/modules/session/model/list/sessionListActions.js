@@ -3,16 +3,17 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { RoleEnum } from "../../../chat/model/chatConstants.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import {
   buildSessionIdentityMap,
   findSessionByAnyId as findSessionByAnyIdInList,
   resolveSessionPrimaryId as resolveSessionPrimaryIdInList,
 } from "../../../chat/model/sessionIdentity.js";
-import { parseTimeMs } from "../../../chat/model/timeFields.js";
 import {
-  mapSummaryToSession,
+  mapDetailEntryToSession,
+  mapSummaryEntryToSession,
   reconcileSessionObject,
+  requireLoadedSessionDetail,
   revokeMessagePreviewUrls,
 } from "./sessionRecords.js";
 import {
@@ -22,6 +23,12 @@ import {
 import { clearSessionTurnUiStates } from "../../../chat/runtime/engine/turnUiStore.js";
 import { requireFunctionDependencies, text } from "@noobot/shared/value";
 import { isApiRequestError, readApiResponseEnvelope } from "@noobot/shared/request-error";
+import {
+  SESSION_SUMMARY_AVAILABILITY,
+  compareSessionSummaries,
+  requireSessionsSummaryPayload,
+} from "@noobot/session-protocol/sessions-summary";
+import { selectMainSessionDetailEntry } from "@noobot/session-protocol/session-detail";
 
 export function createSessionListActions({
   sessions,
@@ -36,7 +43,6 @@ export function createSessionListActions({
   deleteSessionApi,
   renameSessionApi,
   createConnectorPanelState,
-  sessionTitleFromMessages,
   fetchSessionDetail,
   applySessionDetail,
   createLocalSession,
@@ -51,7 +57,6 @@ export function createSessionListActions({
     deleteSessionApi,
     renameSessionApi,
     createConnectorPanelState,
-    sessionTitleFromMessages,
     fetchSessionDetail,
     applySessionDetail,
     createLocalSession,
@@ -66,14 +71,10 @@ export function createSessionListActions({
     if (!sessionId) return;
     const target = findSessionByAnyIdInList(sessions.value, sessionId);
     if (!target) return;
-    const targetPrimaryId = text(target.sessionId || sessionId);
+    const targetPrimaryId = target.sessionId;
     if (!force && targetPrimaryId === activeSessionId.value) return;
     if (target.isUnavailable === true) {
-      notify({
-        type: "warning",
-        message:
-          target.unavailableReason?.message || translate("common.sessionUnavailableLegacyProtocol"),
-      });
+      notify({ type: "warning", message: target.unavailableReason.message });
       return;
     }
     activeSessionId.value = targetPrimaryId;
@@ -82,15 +83,12 @@ export function createSessionListActions({
       return;
     }
     if (target.loaded && !force) {
+      const detail = requireLoadedSessionDetail(target);
       onSessionDetailApplied({
-        detail: {
-          sessionId: target.sessionId || targetPrimaryId,
-          sessions: target.sessionDocs || [],
-          source: "selectSession.loadedSnapshot",
-        },
+        detail,
         sessionItem: target,
-        mainSessionDoc: Array.isArray(target.sessionDocs) ? target.sessionDocs[0] || {} : {},
-        normalizedDetailMessages: Array.isArray(target.messages) ? target.messages : [],
+        mainSessionDoc: selectMainSessionDetailEntry(detail),
+        normalizedDetailMessages: target.messages,
       });
       refreshSessionConnectorsAsync(targetPrimaryId);
       return;
@@ -99,7 +97,7 @@ export function createSessionListActions({
     if (!silent) loadingSessionDetail.value = true;
     let detail;
     try {
-      detail = await fetchSessionDetail(text(target.sessionId || sessionId), {
+      detail = await fetchSessionDetail(targetPrimaryId, {
         source: "selectSession",
         force,
         requireFresh,
@@ -112,9 +110,11 @@ export function createSessionListActions({
     } finally {
       if (!silent) loadingSessionDetail.value = false;
     }
-    if (detail) {
-      applySessionDetail(detail);
+    if (!detail.exists) {
+      notify({ type: "error", message: translate("chat.sessionNotFound") });
+      return;
     }
+    applySessionDetail(detail);
     refreshSessionConnectorsAsync(targetPrimaryId);
   }
 
@@ -128,8 +128,10 @@ export function createSessionListActions({
     try {
       return {
         status: "loaded",
-        data: await readApiResponseEnvelope(
-          await getSessionsApi({ userId: userId.value }, { fetcher: authFetch }),
+        data: requireSessionsSummaryPayload(
+          await readApiResponseEnvelope(
+            await getSessionsApi({ userId: userId.value }, { fetcher: authFetch }),
+          ),
         ),
       };
     } catch (error) {
@@ -141,23 +143,14 @@ export function createSessionListActions({
   function buildNextSessionList({ data, existingSessionsById }) {
     const persistedSessionIds = new Set();
     const nextSessions = data.sessions
-      .filter((sessionItem) => sessionItem.caller === RoleEnum.USER)
-      .sort(
-        (leftSession, rightSession) =>
-          parseTimeMs(rightSession.updatedAt) - parseTimeMs(leftSession.updatedAt),
-      )
+      .filter((sessionItem) => sessionItem.caller === SESSION_CALLER.USER)
+      .sort(compareSessionSummaries)
       .map((sessionItem) => {
-        const mappedSession = mapSummaryToSession(sessionItem, {
-          sessionTitleFromMessages,
-          createConnectorPanelState,
-        });
+        const mappedSession = mapSummaryEntryToSession(sessionItem, { createConnectorPanelState });
         persistedSessionIds.add(mappedSession.sessionId);
         return reconcileSessionObject(
           mappedSession,
           existingSessionsById.get(mappedSession.sessionId),
-          {
-            sessionTitleFromMessages,
-          },
         );
       });
     const retainedLocalSessions = sessions.value.filter(
@@ -183,42 +176,36 @@ export function createSessionListActions({
       detail = await fetchSessionDetail(requestedSessionId, {
         source: "explicitSessionRoute",
         requireFresh: true,
-        requireExists: false,
       });
     } catch (error) {
       if (!isApiRequestError(error)) throw error;
       return { status: "failed", failure: reportSessionListRequestFailure(error) };
     }
-    if (!detail) {
+    if (!detail.exists) {
       return { status: "missing" };
     }
-    const resolvedSessionId = text(detail.sessionId) || requestedSessionId;
-    const requestedSessionDoc = detail.sessions.find(
-      (doc) => text(doc.sessionId) === resolvedSessionId,
-    );
-    if (!requestedSessionDoc) {
-      throw new TypeError("requested_session_document_missing");
-    }
-    return { status: "loaded", detail, resolvedSessionId, requestedSessionDoc };
-  }
-
-  function requireActiveTurnScopeId(summary) {
-    if (typeof summary.activeTurnScopeId !== "string") {
-      throw new TypeError("session_summary_active_turn_scope_id_required");
-    }
-    return summary.activeTurnScopeId;
+    return {
+      status: "loaded",
+      detail,
+      resolvedSessionId: detail.sessionId,
+      requestedSessionDoc: selectMainSessionDetailEntry(detail),
+    };
   }
 
   function resolveInitialSessionId(data, nextSessions) {
     const runningSummary = data.sessions
-      .filter((summary) => summary.caller === RoleEnum.USER && requireActiveTurnScopeId(summary))
-      .sort((left, right) => parseTimeMs(right.updatedAt) - parseTimeMs(left.updatedAt))[0];
+      .filter(
+        (summary) =>
+          summary.caller === SESSION_CALLER.USER &&
+          summary.availability === SESSION_SUMMARY_AVAILABILITY.AVAILABLE &&
+          summary.activeTurnScopeId !== "",
+      )
+      .sort(compareSessionSummaries)[0];
     return runningSummary === undefined ? nextSessions[0].sessionId : runningSummary.sessionId;
   }
 
   function insertRequestedSession(requestedSessionDoc, persistedSessionIds) {
-    const requestedSession = mapSummaryToSession(requestedSessionDoc, {
-      sessionTitleFromMessages,
+    const requestedSession = mapDetailEntryToSession(requestedSessionDoc, {
       createConnectorPanelState,
     });
     sessions.value.unshift(requestedSession);
@@ -296,7 +283,7 @@ export function createSessionListActions({
     const targetSession = findSessionByAnyIdInList(sessions.value, targetSessionId);
     if (!targetSession) return false;
     if (targetSession.isUnavailable === true) {
-      notify({ type: "warning", message: translate("common.sessionUnavailableLegacyProtocol") });
+      notify({ type: "warning", message: targetSession.unavailableReason.message });
       return false;
     }
     if (text(targetSession.title) === normalizedTitle) {
@@ -319,47 +306,52 @@ export function createSessionListActions({
     return true;
   }
 
-  async function deleteSession(sessionId = "") {
-    const targetSessionId = text(sessionId);
-    if (!targetSessionId) return false;
-
-    const index = sessions.value.findIndex(
-      (sessionItem) => sessionItem.sessionId === targetSessionId,
+  async function deleteSession(sessionIds) {
+    if (!Array.isArray(sessionIds)) {
+      throw new TypeError("delete_session_ids_array_required");
+    }
+    const targetSessionIds = new Set(sessionIds.map((sessionId) => text(sessionId)));
+    const targetSessions = sessions.value.filter((sessionItem) =>
+      targetSessionIds.has(sessionItem.sessionId),
     );
-    if (index < 0) return false;
-    const targetSession = sessions.value[index];
-    const runtimeSessionId = sessionRuntimeId(targetSession);
+    if (!targetSessions.length) return false;
 
-    if (targetSession?.isLocal) {
-      revokeMessagePreviewUrls(targetSession.messages || []);
-      sessions.value.splice(index, 1);
-      removeSessionRuntime(turnRuntimeRegistry.value, runtimeSessionId);
-      clearSessionTurnUiStates(runtimeSessionId);
-      if (!sessions.value.length) {
-        createLocalSession();
-      } else if (activeSessionId.value === targetSessionId) {
-        activeSessionId.value = sessions.value[0].sessionId;
-        await selectSession(activeSessionId.value, { force: true });
-      }
-      return true;
+    const remoteSessionIds = targetSessions
+      .filter((sessionItem) => sessionItem.isLocal !== true)
+      .map((sessionItem) => sessionItem.sessionId);
+    if (remoteSessionIds.length) {
+      if (!ensureConnected()) return false;
+      await readApiResponseEnvelope(
+        await deleteSessionApi(
+          { userId: userId.value, sessionIds: remoteSessionIds },
+          { fetcher: authFetch },
+        ),
+      );
     }
 
-    if (!ensureConnected()) return false;
-    const isDeletingActive = activeSessionId.value === targetSessionId;
-    const fallbackNextSessionId = isDeletingActive
-      ? String(sessions.value[index + 1]?.sessionId || sessions.value[index - 1]?.sessionId || "")
-      : String(activeSessionId.value || "");
-    await readApiResponseEnvelope(
-      await deleteSessionApi(
-        { userId: userId.value, sessionId: targetSessionId },
-        { fetcher: authFetch },
-      ),
+    for (const targetSession of targetSessions) {
+      if (targetSession.isLocal === true) revokeMessagePreviewUrls(targetSession.messages || []);
+      const runtimeSessionId = sessionRuntimeId(targetSession);
+      removeSessionRuntime(turnRuntimeRegistry.value, runtimeSessionId);
+      clearSessionTurnUiStates(runtimeSessionId);
+    }
+    const isDeletingActive = targetSessionIds.has(activeSessionId.value);
+    const remainingSessions = sessions.value.filter(
+      (sessionItem) => !targetSessionIds.has(sessionItem.sessionId),
     );
+    sessions.value.splice(0, sessions.value.length, ...remainingSessions);
 
-    removeSessionRuntime(turnRuntimeRegistry.value, runtimeSessionId);
-    clearSessionTurnUiStates(runtimeSessionId);
-
-    await fetchSessions(fallbackNextSessionId);
+    if (remoteSessionIds.length) {
+      await fetchSessions(
+        isDeletingActive ? text(remainingSessions[0]?.sessionId) : activeSessionId.value,
+      );
+      return true;
+    }
+    if (!sessions.value.length) {
+      createLocalSession();
+    } else if (isDeletingActive) {
+      await selectSession(sessions.value[0].sessionId, { force: true });
+    }
     return true;
   }
 

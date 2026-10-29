@@ -152,6 +152,7 @@ export async function openAttachmentStream(service, identity) {
     } catch (closeError) {
       error.closeError = closeError;
     }
-    return null;
+    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return null;
+    throw error;
   }
 }

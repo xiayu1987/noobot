@@ -40,7 +40,7 @@ function normalizeSessionAttachment(item = {}) {
     "path",
     "previewUrl",
     "downloadUrl",
-    "isSandbox",
+    "sourcePath",
     "generationSource",
   ]);
   const relations = parseAttachmentRelations(item.relations);
@@ -69,8 +69,6 @@ function createBaseMessageEntity(message) {
     dialogProcessId: resolveSessionMessageRecordDialogProcessId(message),
     parentDialogProcessId: text(message?.parentDialogProcessId),
     turnScopeId: text(message?.turnScopeId),
-    taskId: text(message?.taskId),
-    taskStatus: text(message?.taskStatus),
     modelAlias: text(message?.modelAlias),
     modelName: text(message?.modelName),
     summarized: message?.summarized === true,

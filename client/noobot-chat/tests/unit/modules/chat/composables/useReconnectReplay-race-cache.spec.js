@@ -39,7 +39,7 @@ describe("useReconnectReplay", () => {
 
   it("RC-01: rapid session switching does not apply replay to wrong session", async () => {
     const { api, refs } = createFixture();
-    refs.sessions.value.find((session) => session.id === "s-1").messages = [
+    refs.sessions.value.find((session) => session.sessionId === "s-1").messages = [
       { role: RoleEnum.USER, content: "s1-q" },
       createCanonicalAssistant({
         sessionId: "s-1",
@@ -48,7 +48,7 @@ describe("useReconnectReplay", () => {
         turnScopeId: "turn-s1",
       }),
     ];
-    refs.sessions.value.find((session) => session.id === "s-2").messages = [
+    refs.sessions.value.find((session) => session.sessionId === "s-2").messages = [
       { role: RoleEnum.USER, content: "s2-q" },
       createCanonicalAssistant({
         sessionId: "s-2",
@@ -68,7 +68,7 @@ describe("useReconnectReplay", () => {
     });
 
     refs.activeSessionId.value = "s-2";
-    refs.activeSession.value = refs.sessions.value.find((s) => s.id === "s-2");
+    refs.activeSession.value = refs.sessions.value.find((s) => s.sessionId === "s-2");
 
     await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-2",
@@ -80,7 +80,7 @@ describe("useReconnectReplay", () => {
     });
 
     refs.activeSessionId.value = "s-1";
-    refs.activeSession.value = refs.sessions.value.find((s) => s.id === "s-1");
+    refs.activeSession.value = refs.sessions.value.find((s) => s.sessionId === "s-1");
 
     await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",
@@ -92,10 +92,10 @@ describe("useReconnectReplay", () => {
     });
 
     const s1Assistant = refs.sessions.value
-      .find((session) => session.id === "s-1")
+      .find((session) => session.sessionId === "s-1")
       .messages.find((message) => message.dialogProcessId === "dp-s1");
     const s2Assistant = refs.sessions.value
-      .find((session) => session.id === "s-2")
+      .find((session) => session.sessionId === "s-2")
       .messages.find((message) => message.dialogProcessId === "dp-s2");
 
     expect(s1Assistant?.content).toBe("C");

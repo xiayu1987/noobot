@@ -70,7 +70,6 @@ export function createCanonicalHandledResult(output = "") {
         content: output,
       },
     ],
-    turnTasks: [],
     modelMessages: [],
     modelLoopRound: 0,
   });

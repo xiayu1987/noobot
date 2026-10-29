@@ -49,7 +49,7 @@ function normalizedItems() {
 .base-status-dot {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: var(--noobot-radius-circle);
   background: var(--noobot-msg-pending-dot);
   box-shadow: none;
   animation: none;

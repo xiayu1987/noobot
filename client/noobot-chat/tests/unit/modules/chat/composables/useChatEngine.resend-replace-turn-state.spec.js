@@ -5,6 +5,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import {
+  applyMainEntryMessages,
   createHarness,
   emitAuthorityProcessing,
   serverTurnSource,
@@ -18,7 +19,7 @@ import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js
 import { NO_ATTACHMENT_EDITS } from "../../../helpers/resendEdits.js";
 
 describe("useChatEngine.resend replacement turn state", () => {
-  it("ignores a stopped assistant returned with the fresh replacement turn", async () => {
+  it("starts the replacement turn without inheriting the replaced stopped assistant", async () => {
     const stream = vi.fn(async (payload, onEvent) => {
       emitAuthorityProcessing(onEvent, serverTurnSource(payload, "dp-server"));
     });
@@ -37,12 +38,10 @@ describe("useChatEngine.resend replacement turn state", () => {
         replacedTurnScopeIds: [anchor.turnScopeId],
         replacementUser,
         replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
+        messages: [replacementUser],
       });
     });
-    const applySessionDetail = vi.fn((detail) => {
-      const mainSession = detail.sessions?.[0] || {};
-      activeSession.value = { ...activeSession.value, ...mainSession };
-    });
+    const applySessionDetail = applyMainEntryMessages(() => activeSession);
     const { engine, activeSession, sending, canStop, activeTurnRuntime } = createHarness({
       sessionId: "local-resend-fresh-stopped-assistant",
       stream,

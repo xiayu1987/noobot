@@ -11,6 +11,8 @@ import path from "node:path";
 import express, { registerSessionRoutes, withTestServer } from "./session-routes.helpers.js";
 import { createServicePluginHost } from "../../services/service-plugin-host.js";
 import { createPluginServicePorts } from "../../services/plugin-service-ports.js";
+import { createScopedSessionArtifactReader } from "noobot-agent/session";
+import { TEST_STORAGE_SERVICE } from "../storage-service.test-helpers.js";
 
 const emptyCleanup = async () => ({ deletedCount: 0, deletedSessionIds: [] });
 
@@ -50,12 +52,16 @@ test("session-routes: 删除 session 时清理 harness 运行记录", async () =
 
   const app = express();
   const bot = createDeletionBot({
-    session: { deleteSessionBranch: async () => ({ deletedSessionIds: ["s-delete"] }) },
+    session: {
+      ...createScopedSessionArtifactReader({ storageService: TEST_STORAGE_SERVICE }),
+      deleteSessionBranch: async () => ({ deletedSessionIds: ["s-delete"] }),
+    },
     getWorkspacePath: () => basePath,
   });
   const pluginHost = createServicePluginHost();
   await pluginHost.registerServiceRoutes(app, {
     ports: createPluginServicePorts({ bot, translateText: (key) => key }),
+    enforceUserScopeParam: (_req, _res, next) => next(),
     translateText: (key) => key,
   });
   registerSessionRoutes(app, {
@@ -195,4 +201,79 @@ test("session-routes: orphan attachment cleanup reads ids without loading Sessio
       keepSessionIds: ["s-keep"],
     },
   ]);
+});
+
+test("session-routes: 批量删除按 sessionIds 一次删除多个分支并统一清理", async () => {
+  const deleteBranchCalls = [];
+  const attachmentDeleteCalls = [];
+  const app = express();
+  app.use(express.json());
+  registerSessionRoutes(app, {
+    bot: createDeletionBot({
+      session: {
+        deleteSessionBranch: async (payload) => {
+          deleteBranchCalls.push(payload);
+          return { ok: true, deletedSessionIds: ["s-a", "s-a-child", "s-b"] };
+        },
+        listSessionIds: async () => ["s-keep"],
+      },
+      deleteScopedAttachmentsBySessionIds: async (payload) => {
+        attachmentDeleteCalls.push(payload);
+        return { deletedCount: payload.sessionIds.length, deletedSessionIds: payload.sessionIds };
+      },
+    }),
+    translateText: (key) => key,
+  });
+
+  await withTestServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/internal/sessions/u1/delete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionIds: ["s-a", "s-b"] }),
+    });
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.ok, true);
+    assert.deepEqual(payload.deletedSessionIds, ["s-a", "s-a-child", "s-b"]);
+  });
+
+  assert.deepEqual(deleteBranchCalls, [{ userId: "u1", sessionIds: ["s-a", "s-b"] }]);
+  assert.deepEqual(attachmentDeleteCalls, [
+    { userId: "u1", sessionIds: ["s-a", "s-a-child", "s-b"] },
+  ]);
+});
+
+test("session-routes: 批量删除拒绝非法 sessionIds 且不触发删除", async () => {
+  const deleteBranchCalls = [];
+  const app = express();
+  app.use(express.json());
+  registerSessionRoutes(app, {
+    bot: createDeletionBot({
+      session: {
+        deleteSessionBranch: async (payload) => {
+          deleteBranchCalls.push(payload);
+          return { ok: true, deletedSessionIds: [] };
+        },
+      },
+    }),
+    translateText: (key) => key,
+  });
+
+  await withTestServer(app, async (baseUrl) => {
+    for (const body of [
+      {},
+      { sessionIds: [] },
+      { sessionIds: ["s-a", " "] },
+      { sessionIds: [1] },
+    ]) {
+      const response = await fetch(`${baseUrl}/internal/sessions/u1/delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      assert.equal(response.status, 400);
+      assert.equal((await response.json()).ok, false);
+    }
+  });
+  assert.equal(deleteBranchCalls.length, 0);
 });

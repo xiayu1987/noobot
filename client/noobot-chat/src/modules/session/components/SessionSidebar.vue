@@ -166,11 +166,10 @@ const { translate } = useLocale();
   display: flex;
   flex-direction: column;
   z-index: 10;
-  box-shadow: none;
   transition:
-    width var(--noobot-duration-slow) cubic-bezier(0.4, 0, 0.2, 1),
-    min-width var(--noobot-duration-slow) cubic-bezier(0.4, 0, 0.2, 1),
-    transform var(--noobot-duration-slow) cubic-bezier(0.4, 0, 0.2, 1);
+    width var(--noobot-duration-slow) var(--noobot-ease-emphasized),
+    min-width var(--noobot-duration-slow) var(--noobot-ease-emphasized),
+    transform var(--noobot-duration-slow) var(--noobot-ease-emphasized);
 }
 
 .sidebar.collapsed {
@@ -197,7 +196,7 @@ const { translate } = useLocale();
 .brand-logo {
   width: var(--noobot-msg-avatar-size);
   height: var(--noobot-msg-avatar-size);
-  border-radius: 50%;
+  border-radius: var(--noobot-radius-circle);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -212,7 +211,7 @@ const { translate } = useLocale();
 }
 
 .brand-text {
-  font-size: var(--noobot-font-size-xl);
+  font-size: var(--noobot-font-size-lg);
   font-weight: var(--noobot-font-weight-bold);
   color: var(--noobot-text-accent);
   letter-spacing: var(--noobot-letter-spacing-none);
@@ -227,15 +226,15 @@ const { translate } = useLocale();
   flex: 0 0 var(--noobot-control-icon-size-lg);
   padding: 0;
   line-height: var(--noobot-line-height-none);
-  border-radius: 50%;
+  border-radius: var(--noobot-radius-circle);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition:
-    color var(--noobot-duration-normal) ease,
-    background-color var(--noobot-duration-normal) ease,
-    border-color var(--noobot-duration-normal) ease;
+    color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    border-color var(--noobot-duration-normal) var(--noobot-ease-standard);
 }
 
 .collapse-btn :deep(.el-icon) {
@@ -261,10 +260,10 @@ const { translate } = useLocale();
   background-color: transparent;
   box-shadow: var(--noobot-input-ring);
   transition:
-    color var(--noobot-duration-normal) ease,
-    background-color var(--noobot-duration-normal) ease,
-    border-color var(--noobot-duration-normal) ease,
-    box-shadow var(--noobot-duration-normal) ease;
+    color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    border-color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    box-shadow var(--noobot-duration-normal) var(--noobot-ease-standard);
   padding: 0 var(--noobot-space-md);
 }
 
@@ -280,7 +279,7 @@ const { translate } = useLocale();
 }
 
 .input-icon {
-  font-size: var(--noobot-font-size-xl);
+  font-size: var(--noobot-font-size-lg);
   opacity: 0.7;
   color: var(--noobot-text-secondary);
 }
@@ -316,12 +315,11 @@ const { translate } = useLocale();
 .new-chat-btn {
   background: var(--noobot-btn-primary-bg);
   border: 1px solid transparent;
-  box-shadow: none;
   color: var(--noobot-text-on-accent);
   transition:
-    color var(--noobot-duration-normal) ease,
-    background-color var(--noobot-duration-normal) ease,
-    border-color var(--noobot-duration-normal) ease;
+    color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    border-color var(--noobot-duration-normal) var(--noobot-ease-standard);
 }
 
 .new-chat-btn:not(:disabled):hover {
@@ -332,7 +330,7 @@ const { translate } = useLocale();
   flex: 0 0 var(--noobot-control-icon-size-lg);
   width: var(--noobot-control-icon-size-lg);
   height: var(--noobot-control-icon-size-lg);
-  border-radius: 50%;
+  border-radius: var(--noobot-radius-circle);
   background: transparent;
   border: 0;
   color: var(--noobot-btn-soft-text);
@@ -340,12 +338,12 @@ const { translate } = useLocale();
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: var(--noobot-font-size-xl);
+  font-size: var(--noobot-font-size-lg);
   margin-left: 0;
   transition:
-    color var(--noobot-duration-normal) ease,
-    background-color var(--noobot-duration-normal) ease,
-    border-color var(--noobot-duration-normal) ease;
+    color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    border-color var(--noobot-duration-normal) var(--noobot-ease-standard);
 }
 
 .tail-btn :deep(.el-icon) {
@@ -361,7 +359,7 @@ const { translate } = useLocale();
 .status-btn {
   cursor: default;
   pointer-events: none;
-  color: var(--noobot-text-muted);
+  color: var(--noobot-text-secondary);
   background: transparent;
   border: 0;
 }
@@ -373,7 +371,7 @@ const { translate } = useLocale();
 }
 
 .status-icon {
-  font-size: var(--noobot-font-size-xl);
+  font-size: var(--noobot-font-size-lg);
 }
 
 .sidebar.collapsed .brand {
@@ -401,7 +399,6 @@ const { translate } = useLocale();
 
 .sidebar.mobile.mobile-open {
   transform: translateX(0);
-  box-shadow: none;
 }
 
 @media (max-width: 768px) {

@@ -7,7 +7,6 @@ button,
 .noobot-action-btn {
   border-radius: var(--noobot-btn-radius);
   font-weight: var(--noobot-btn-font-weight);
-  backdrop-filter: none;
   transition: var(--noobot-btn-transition);
 }
 
@@ -18,322 +17,6 @@ button,
 .noobot-action-btn:not(:disabled):hover,
 .noobot-action-btn:not(:disabled):active {
   transform: none;
-  box-shadow: none;
-}
-
-.noobot-flat-card {
-  background: var(--noobot-msg-file-card-bg);
-  border: 1px solid var(--noobot-panel-border);
-  border-radius: var(--noobot-radius-md);
-  box-shadow: none;
-  transition:
-    background-color var(--noobot-duration-normal) ease,
-    border-color var(--noobot-duration-normal) ease;
-}
-
-.noobot-flat-card:hover {
-  border-color: var(--noobot-panel-border);
-  box-shadow: none;
-}
-
-.noobot-soft-card {
-  box-sizing: border-box;
-  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 56%, transparent);
-  border-radius: var(--noobot-radius-md);
-  background: var(--noobot-panel-bg);
-}
-
-.noobot-panel-card {
-  box-sizing: border-box;
-  border: 1px solid color-mix(in srgb, var(--noobot-accent) 16%, var(--noobot-panel-border));
-  border-radius: var(--noobot-radius-md);
-  background: var(--noobot-panel-bg);
-}
-
-.noobot-overlay-card {
-  box-sizing: border-box;
-  background: var(--noobot-panel-bg);
-  border: 1px solid var(--noobot-overlay-border);
-  outline: 1px solid var(--noobot-overlay-outline);
-  border-radius: var(--noobot-radius-md);
-}
-
-.noobot-overlay-card-header {
-  background: var(--noobot-panel-head-bg);
-  border-bottom: 1px solid var(--noobot-overlay-border);
-}
-
-.noobot-composer-surface {
-  box-sizing: border-box;
-  background: var(--noobot-surface-sidebar);
-  border: 1px solid color-mix(in srgb, var(--noobot-accent) 24%, var(--noobot-panel-border));
-  border-radius: var(--noobot-radius-md);
-  box-shadow: none;
-  transition:
-    border-color var(--noobot-duration-slow) ease,
-    box-shadow var(--noobot-duration-slow) ease;
-}
-
-.noobot-composer-surface:focus-within {
-  border-color: var(--noobot-accent-border);
-  box-shadow: var(--noobot-focus-ring);
-}
-
-.noobot-drop-surface {
-  border: 1px dashed color-mix(in srgb, var(--noobot-accent) 62%, var(--noobot-panel-border));
-  border-radius: var(--noobot-radius-lg);
-  background: color-mix(in srgb, var(--noobot-surface-sidebar) 88%, var(--noobot-accent));
-  color: var(--noobot-text-strong);
-}
-
-.noobot-surface-card {
-  box-sizing: border-box;
-  border: 1px solid var(--noobot-panel-border);
-  border-radius: var(--noobot-radius-md);
-  background: var(--noobot-panel-bg);
-}
-
-.noobot-subtle-row {
-  box-sizing: border-box;
-  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 20%, transparent);
-  border-radius: var(--noobot-radius-sm);
-  background: color-mix(in srgb, var(--noobot-panel-bg) 78%, transparent);
-  transition:
-    background-color var(--noobot-duration-normal) ease,
-    border-color var(--noobot-duration-normal) ease,
-    color var(--noobot-duration-normal) ease;
-}
-
-.noobot-subtle-row:hover {
-  background: var(--noobot-panel-muted);
-  border-color: color-mix(in srgb, var(--noobot-panel-border) 28%, transparent);
-}
-
-.noobot-subtle-row.is-active,
-.noobot-subtle-row.active {
-  background: color-mix(in srgb, var(--noobot-surface-primary-soft) 68%, var(--noobot-panel-bg));
-  border-color: color-mix(in srgb, var(--noobot-panel-border) 35%, transparent);
-  box-shadow: none;
-}
-
-.noobot-soft-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--noobot-radius-pill);
-  color: var(--noobot-text-strong);
-  background: var(--noobot-panel-muted);
-  border: 0;
-  box-shadow: none;
-}
-
-.noobot-soft-badge.is-agent,
-.noobot-soft-badge.is-primary {
-  color: color-mix(in srgb, var(--noobot-accent) 78%, var(--noobot-text-strong));
-  border: 1px solid color-mix(in srgb, var(--noobot-accent) 35%, transparent);
-  background: color-mix(in srgb, var(--noobot-accent) 14%, transparent);
-}
-
-.noobot-soft-badge.is-plugin,
-.noobot-soft-badge.is-warning {
-  color: color-mix(in srgb, var(--noobot-status-warning) 80%, var(--noobot-text-strong));
-  border: 1px solid color-mix(in srgb, var(--noobot-status-warning) 35%, transparent);
-  background: color-mix(in srgb, var(--noobot-status-warning) 14%, transparent);
-}
-
-.noobot-soft-badge.is-recognized,
-.noobot-soft-badge.is-success {
-  color: color-mix(in srgb, var(--noobot-status-success) 82%, var(--noobot-text-strong));
-  border: 1px solid color-mix(in srgb, var(--noobot-status-success) 35%, transparent);
-  background: color-mix(in srgb, var(--noobot-status-success) 14%, transparent);
-}
-
-.noobot-inline-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--noobot-space-2xs);
-  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 46%, transparent);
-  border-radius: var(--noobot-radius-pill);
-  background: color-mix(in srgb, var(--noobot-panel-muted) 76%, transparent);
-  white-space: nowrap;
-}
-
-.noobot-selectable-row {
-  border-radius: var(--noobot-radius-sm);
-  transition:
-    background-color var(--noobot-duration-fast) ease,
-    border-color var(--noobot-duration-fast) ease;
-}
-
-.noobot-selectable-row:hover {
-  background: color-mix(in srgb, var(--noobot-accent) 8%, transparent);
-}
-
-.noobot-message-avatar {
-  border-radius: 50%;
-  color: var(--noobot-msg-avatar-text);
-  background: var(--noobot-msg-avatar-bg);
-  box-shadow: none;
-}
-
-.noobot-message-bubble {
-  border-radius: var(--noobot-radius-md);
-  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 62%, transparent);
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  transition:
-    background-color var(--noobot-duration-normal) ease,
-    border-color var(--noobot-duration-normal) ease;
-}
-
-.noobot-message-bubble:hover {
-  border-color: color-mix(in srgb, var(--noobot-accent) 24%, var(--noobot-panel-border));
-  box-shadow: none;
-}
-
-.noobot-message-bubble.is-assistant {
-  background: transparent;
-  border-color: transparent;
-  color: var(--noobot-msg-assistant-text);
-}
-
-.noobot-message-bubble.is-assistant:hover {
-  background: transparent;
-  border-color: transparent;
-}
-
-.noobot-message-bubble.is-user {
-  background: var(--noobot-msg-user-bg);
-  border-color: var(--noobot-msg-user-border);
-  color: var(--noobot-msg-user-text);
-}
-
-.noobot-error-surface {
-  border-radius: var(--noobot-radius-sm);
-  background: var(--noobot-msg-error-bg);
-  border: 1px solid var(--noobot-msg-error-border);
-  color: var(--noobot-msg-error-text);
-  box-shadow: none;
-}
-
-.noobot-error-surface.is-preview {
-  color: var(--noobot-preview-danger-text);
-  background: var(--noobot-preview-danger-bg);
-  border-color: var(--noobot-preview-danger-border);
-}
-
-.noobot-preview-surface {
-  background: var(--noobot-preview-bg);
-  color: var(--noobot-preview-text);
-  border: 1px solid var(--noobot-preview-border);
-  border-radius: var(--noobot-radius-sm);
-  box-shadow: none;
-}
-
-.noobot-rich-content :where(code) {
-  background: var(--noobot-msg-inline-code-bg);
-  color: var(--noobot-msg-inline-code-text);
-  border-radius: var(--noobot-radius-xs);
-  font-family: var(--noobot-font-mono);
-}
-
-.noobot-rich-content :where(pre) {
-  background: var(--noobot-msg-code-block-bg);
-  color: var(--noobot-msg-code-block-text);
-  border-radius: var(--noobot-radius-md);
-  border: 1px solid var(--noobot-panel-border);
-  box-shadow: none;
-  overflow-x: auto;
-}
-
-.noobot-rich-content :where(.mermaid) {
-  background: var(--noobot-panel-bg);
-  border: 1px solid var(--noobot-panel-border);
-  border-radius: var(--noobot-radius-md);
-  box-shadow: none;
-}
-
-.noobot-rich-content :where(pre code) {
-  background: transparent;
-  color: inherit;
-  padding: 0;
-  border-radius: 0;
-}
-
-.noobot-rich-content :where(table) {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.noobot-rich-content :where(th, td) {
-  border: 1px solid var(--noobot-panel-border);
-  text-align: left;
-  vertical-align: top;
-}
-
-.noobot-rich-content :where(th) {
-  background: var(--noobot-panel-muted);
-  font-weight: var(--noobot-font-weight-semibold);
-}
-
-.noobot-rich-content :where(blockquote) {
-  background: var(--noobot-panel-muted);
-  border-left: 4px solid var(--noobot-panel-border);
-}
-
-.noobot-rich-content :where(p) {
-  margin-top: 0;
-}
-
-.noobot-rich-content :where(a) {
-  color: var(--noobot-text-accent);
-  text-decoration: none;
-  text-underline-offset: 2px;
-}
-
-.noobot-rich-content :where(a:hover) {
-  text-decoration: underline;
-}
-
-.noobot-rich-content :where(hr) {
-  height: 1px;
-  padding: 0;
-  background-color: var(--noobot-divider);
-  border: 0;
-}
-
-.noobot-rich-content :where(h1, h2, h3, h4, h5, h6) {
-  font-weight: var(--noobot-font-weight-semibold);
-  line-height: var(--noobot-line-height-tight);
-  color: inherit;
-}
-
-.noobot-rich-content :where(h1, h2) {
-  padding-bottom: 0.3em;
-  border-bottom: 1px solid var(--noobot-divider);
-}
-
-.noobot-rich-content :where(ul li::marker) {
-  color: var(--noobot-text-muted);
-}
-
-.noobot-rich-content :where(ol li::marker) {
-  color: var(--noobot-text-secondary);
-  font-weight: var(--noobot-font-weight-semibold);
-}
-
-.noobot-rich-content :where(tr:nth-child(even) td) {
-  background: color-mix(in srgb, var(--noobot-panel-muted) 62%, transparent);
-}
-
-.noobot-rich-content :where(.mermaid-render-error) {
-  color: var(--noobot-preview-danger-text);
-  background: var(--noobot-preview-danger-bg);
-  border: 1px solid var(--noobot-preview-danger-border);
-  border-radius: var(--noobot-radius-sm);
-  white-space: pre-wrap;
-  font-family: var(--noobot-font-mono);
 }
 
 .noobot-sticky-actions {
@@ -359,7 +42,6 @@ button,
   color: var(--noobot-msg-tag-text);
   background: var(--noobot-panel-muted);
   border: 1px solid var(--noobot-panel-border);
-  box-shadow: none;
 }
 
 .noobot-chip-action-btn {
@@ -372,20 +54,15 @@ button,
   border-radius: var(--noobot-radius-pill);
   color: var(--noobot-text-main);
   background: var(--noobot-control-bg);
-  box-shadow: none;
   cursor: pointer;
   font-size: var(--noobot-font-size-md);
   font-weight: var(--noobot-font-weight-medium);
   line-height: var(--noobot-line-height-none);
   transition:
-    background-color var(--noobot-duration-normal) ease,
-    border-color var(--noobot-duration-normal) ease,
-    color var(--noobot-duration-normal) ease,
-    transform var(--noobot-duration-normal) ease;
-}
-
-.noobot-chip-action-btn:hover:not(:disabled) {
-  box-shadow: none;
+    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    border-color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    transform var(--noobot-duration-normal) var(--noobot-ease-standard);
 }
 
 .noobot-chip-action-btn.is-primary:hover:not(:disabled) {
@@ -403,7 +80,6 @@ button,
 .noobot-chip-action-btn:disabled {
   cursor: not-allowed;
   opacity: var(--noobot-btn-muted-disabled-opacity);
-  box-shadow: none;
 }
 
 .noobot-primary-pill-action {
@@ -413,9 +89,9 @@ button,
   font-weight: var(--noobot-font-weight-semibold);
   filter: none;
   transition:
-    border-color var(--noobot-duration-fast) ease,
-    background var(--noobot-duration-fast) ease,
-    box-shadow var(--noobot-duration-fast) ease;
+    border-color var(--noobot-duration-fast) var(--noobot-ease-standard),
+    background var(--noobot-duration-fast) var(--noobot-ease-standard),
+    box-shadow var(--noobot-duration-fast) var(--noobot-ease-standard);
 }
 
 .noobot-primary-pill-action:hover {
@@ -439,10 +115,10 @@ button,
   font-weight: var(--noobot-font-weight-semibold);
   line-height: 16px;
   transition:
-    background-color var(--noobot-duration-normal) ease,
-    border-color var(--noobot-duration-normal) ease,
-    color var(--noobot-duration-normal) ease,
-    box-shadow var(--noobot-duration-normal) ease;
+    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    border-color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    box-shadow var(--noobot-duration-normal) var(--noobot-ease-standard);
 }
 
 .noobot-pill-option.el-button--default {
@@ -466,10 +142,9 @@ button,
 .noobot-pill-option.is-disabled,
 .noobot-pill-option.is-disabled:hover,
 .noobot-pill-option.is-disabled:focus {
-  color: var(--noobot-text-muted);
+  color: var(--noobot-text-secondary);
   border-color: color-mix(in srgb, var(--noobot-panel-border) 58%, transparent);
   background: color-mix(in srgb, var(--noobot-control-bg) 72%, transparent);
-  box-shadow: none;
 }
 
 .noobot-floating-action-btn.el-button {
@@ -480,7 +155,7 @@ button,
 
 .noobot-icon-button,
 .el-button.noobot-icon-button {
-  border-radius: 50%;
+  border-radius: var(--noobot-radius-circle);
   aspect-ratio: 1;
   padding: 0;
   display: inline-flex;
@@ -494,12 +169,11 @@ button,
   background: transparent;
   color: var(--noobot-text-main);
   cursor: pointer;
-  backdrop-filter: none;
   transition:
-    background-color var(--noobot-duration-normal) ease,
-    border-color var(--noobot-duration-normal) ease,
-    color var(--noobot-duration-normal) ease,
-    box-shadow var(--noobot-duration-normal) ease;
+    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    border-color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    box-shadow var(--noobot-duration-normal) var(--noobot-ease-standard);
 }
 
 .noobot-copy-actions {
@@ -508,9 +182,8 @@ button,
   gap: 0;
 }
 
-.noobot-copy-actions > *,
-.noobot-copy-actions .el-button {
-  margin-left: 0 !important;
+.noobot-copy-actions .el-button + .el-button {
+  margin-left: 0;
 }
 
 .noobot-copy-button {
@@ -542,7 +215,6 @@ button,
 .noobot-flat-inline-icon-btn:hover {
   background: var(--noobot-panel-muted);
   color: var(--noobot-text-main);
-  box-shadow: none;
 }
 
 .noobot-flat-soft-btn {
@@ -616,8 +288,7 @@ button,
   background: transparent;
   border: 0;
   color: var(--noobot-btn-soft-text);
-  backdrop-filter: none;
-  font-size: var(--noobot-font-size-xl);
+  font-size: var(--noobot-font-size-lg);
 }
 
 .noobot-tail-btn .el-icon {

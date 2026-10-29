@@ -78,10 +78,8 @@ export async function hydrateSessionSummaryDetails({ storageService, sessionDir,
       const detail = await readJsonWithStorage({
         storageService,
         artifactPath: resolveSummaryDetailPath(sessionDir, ref.file),
-        fallback: null,
       });
       if (
-        !detail ||
         detail.presentationMessageId !== text(message?.presentationMessageId) ||
         summaryDetailHash(detail) !== ref.contentHash
       ) {

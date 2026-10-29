@@ -97,10 +97,10 @@ export function findMessageIdentityIndex(targetMessage = {}, messages = []) {
   return source.findIndex((message) => isSameMessageIdentity(targetMessage, message));
 }
 
-export function buildMessageAnchor(targetMessage = {}) {
+export function buildMessageAnchor(targetMessage) {
   const turnScopeId = getMessageTurnScopeId(targetMessage);
-  if (turnScopeId) return { turnScopeId };
-  return {};
+  if (!turnScopeId) throw new TypeError("message anchor requires turnScopeId");
+  return { turnScopeId };
 }
 
 export function getMessageExplicitTurnIdentity(messageItem = {}) {

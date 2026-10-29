@@ -7,7 +7,6 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   normalizeMessageEntity,
-  normalizeTaskEntity,
   normalizeSessionTreeEntity,
   normalizeSelectedConnectorIds,
 } from "../../src/session/entities.js";
@@ -254,41 +253,6 @@ describe("2. 字段对齐测试", () => {
     });
   });
 
-  describe("normalizeTaskEntity 字段对齐", () => {
-    it("应包含 taskId, taskName, taskStatus, startedAt, endedAt, result, meta 字段", () => {
-      const raw = { taskId: "task-1", taskName: "test task", taskStatus: "completed" };
-      const normalized = normalizeTaskEntity(raw);
-      const requiredFields = [
-        "taskId",
-        "taskName",
-        "taskStatus",
-        "startedAt",
-        "endedAt",
-        "result",
-        "meta",
-      ];
-      for (const field of requiredFields) {
-        assert.ok(field in normalized, `应包含 ${field}`);
-      }
-    });
-
-    it("taskStatus 仅 start/completed 有效，其他为空字符串", () => {
-      const n1 = normalizeTaskEntity({ taskId: "t1", taskStatus: "start" });
-      assert.equal(n1.taskStatus, "start");
-
-      const n2 = normalizeTaskEntity({ taskId: "t2", taskStatus: "completed" });
-      assert.equal(n2.taskStatus, "completed");
-
-      const n3 = normalizeTaskEntity({ taskId: "t3", taskStatus: "running" });
-      assert.equal(n3.taskStatus, "", "running 应转为空字符串");
-    });
-
-    it("meta 字段缺失时默认为空对象", () => {
-      const normalized = normalizeTaskEntity({ taskId: "t1" });
-      assert.deepEqual(normalized.meta, {}, "meta 默认应为空对象");
-    });
-  });
-
   describe("normalizeSessionTreeEntity 字段对齐", () => {
     it("只包含 nodes 字段", () => {
       const normalized = normalizeSessionTreeEntity({
@@ -359,7 +323,6 @@ describe("3. Session 字段完整性测试", () => {
         parentSessionId: "",
         children: [],
         messages: [],
-        tasks: [],
         config: {},
         metadata: {},
       };
@@ -374,38 +337,12 @@ describe("3. Session 字段完整性测试", () => {
         "parentSessionId",
         "children",
         "messages",
-        "tasks",
         "config",
         "metadata",
       ];
 
       for (const field of requiredFields) {
         assert.ok(field in session, `Session 应包含字段: ${field}`);
-      }
-    });
-
-    it("Task 实体应包含 taskId, taskName, taskStatus, startedAt, endedAt, result, meta", () => {
-      const task = normalizeTaskEntity({
-        taskId: "task-1",
-        taskName: "execute script",
-        taskStatus: "completed",
-        startedAt: new Date().toISOString(),
-        endedAt: new Date().toISOString(),
-        result: "success",
-        meta: { exitCode: 0 },
-      });
-
-      const requiredFields = [
-        "taskId",
-        "taskName",
-        "taskStatus",
-        "startedAt",
-        "endedAt",
-        "result",
-        "meta",
-      ];
-      for (const field of requiredFields) {
-        assert.ok(field in task, `Task 应包含字段: ${field}`);
       }
     });
 
@@ -468,36 +405,6 @@ describe("4. 落盘字段完整性测试", () => {
 
       for (const field of requiredFields) {
         assert.ok(field in diskSession, `session.json 应包含字段: ${field}`);
-      }
-    });
-  });
-
-  describe("task.json 落盘结构", () => {
-    it("落盘 task.json 应包含完整字段", () => {
-      const diskTask = {
-        taskId: "task-1",
-        taskName: "execute script",
-        taskStatus: "completed",
-        skillName: "default",
-        startedAt: new Date().toISOString(),
-        endedAt: new Date().toISOString(),
-        result: "success",
-        meta: { exitCode: 0, duration: 150 },
-      };
-
-      const requiredFields = [
-        "taskId",
-        "taskName",
-        "taskStatus",
-        "skillName",
-        "startedAt",
-        "endedAt",
-        "result",
-        "meta",
-      ];
-
-      for (const field of requiredFields) {
-        assert.ok(field in diskTask, `task.json 应包含字段: ${field}`);
       }
     });
   });

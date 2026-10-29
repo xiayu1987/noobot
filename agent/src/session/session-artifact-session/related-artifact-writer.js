@@ -5,41 +5,23 @@
  */
 import { filePath as path } from "@noobot/path-resolver";
 import { mkdir } from "node:fs/promises";
-import { sessionMutationCoordinator } from "../session-mutation-coordinator.js";
 import { buildSessionArtifactFileMap } from "../session-artifact-files.js";
 import { appendRollingJsonlArtifactLog } from "../session-artifact-execution-logs.js";
 import { requireDialogProcessKey } from "@noobot/session-protocol";
 import { decodeExecutionReport } from "@noobot/session-protocol/execution-report";
-import { readJsonWithStorage, writeJsonWithStorage } from "./artifact-json-io.js";
+import { readOptionalJsonWithStorage, writeJsonWithStorage } from "./artifact-json-io.js";
 
 function resolveExecutionReportPath(sessionDir, dialogProcessId) {
   const key = requireDialogProcessKey(dialogProcessId);
   return path.join(buildSessionArtifactFileMap(sessionDir).executionReportsDir, `${key}.json`);
 }
 
-export async function writeTaskArtifact({
-  storageService = null,
-  sessionDir = "",
-  taskPayload = {},
-  atomic = false,
-} = {}) {
-  const files = buildSessionArtifactFileMap(sessionDir);
-  await mkdir(sessionDir, { recursive: true });
-  await writeJsonWithStorage({
-    storageService,
-    artifactPath: files.task,
-    payload: taskPayload,
-    atomic,
-  });
-  return { files, task: taskPayload };
-}
-
 export async function writeExecutionReportArtifact({
-  storageService = null,
-  sessionDir = "",
-  reportPayload = {},
-  atomic = true,
-} = {}) {
+  storageService,
+  sessionDir,
+  reportPayload,
+  atomic,
+}) {
   const report = decodeExecutionReport(reportPayload);
   const artifactPath = resolveExecutionReportPath(sessionDir, report.dialogProcessId);
   await mkdir(path.dirname(artifactPath), { recursive: true });
@@ -52,30 +34,27 @@ export async function writeExecutionReportArtifact({
   return { artifactPath, executionReport: report };
 }
 
-export async function readExecutionReportArtifact({
-  storageService = null,
-  sessionDir = "",
-  dialogProcessId = "",
-} = {}) {
-  const payload = await readJsonWithStorage({
+export async function readExecutionReportArtifact({ storageService, sessionDir, dialogProcessId }) {
+  const payload = await readOptionalJsonWithStorage({
     storageService,
     artifactPath: resolveExecutionReportPath(sessionDir, dialogProcessId),
-    fallback: null,
   });
   return payload === null ? null : decodeExecutionReport(payload);
 }
 
 export async function appendExecutionLogArtifact({
-  sessionDir = "",
-  executionLog = {},
-  mutationCoordinator = sessionMutationCoordinator,
-  alreadyLocked = false,
-} = {}) {
+  storageService,
+  sessionDir,
+  executionLog,
+  maxSegmentBytes,
+  alreadyLocked,
+}) {
   await mkdir(sessionDir, { recursive: true });
   await appendRollingJsonlArtifactLog({
+    storageService,
     sessionDir,
     log: executionLog,
-    mutationCoordinator,
+    maxSegmentBytes,
     alreadyLocked,
   });
   return { executionLog };

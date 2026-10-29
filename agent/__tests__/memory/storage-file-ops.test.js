@@ -24,27 +24,27 @@ test("splitTextIntoChunks splits by max chars", async () => {
   assert.deepEqual(chunks, ["abcd", "efgh", "ij"]);
 });
 
-test("readJson distinguishes a missing file from corrupted persisted JSON", async () => {
-  const { readJson } = await import(buildFreshModuleUrl());
+test("readOptionalJson distinguishes a missing file from corrupted persisted JSON", async () => {
+  const { readOptionalJson } = await import(buildFreshModuleUrl());
   const root = await mkdtemp(path.join(tmpdir(), "noobot-memory-json-"));
   const missingPath = path.join(root, "missing.json");
-  assert.deepEqual(await readJson(missingPath, { empty: true }), { empty: true });
+  assert.equal(await readOptionalJson(missingPath), null);
 
   const corruptedPath = path.join(root, "corrupted.json");
   await writeFile(corruptedPath, "{broken", "utf8");
-  await assert.rejects(readJson(corruptedPath, {}), {
+  await assert.rejects(readOptionalJson(corruptedPath), {
     code: "PERSISTED_JSON_CORRUPTED",
     persistencePath: corruptedPath,
   });
 });
 
 test("writeJson replaces persisted JSON atomically", async () => {
-  const { readJson, writeJson } = await import(buildFreshModuleUrl());
+  const { readOptionalJson, writeJson } = await import(buildFreshModuleUrl());
   const root = await mkdtemp(path.join(tmpdir(), "noobot-memory-json-"));
   const filePath = path.join(root, "short-memory.json");
   await writeJson(filePath, { items: [{ sessionId: "s1" }] });
 
-  assert.deepEqual(await readJson(filePath, {}), { items: [{ sessionId: "s1" }] });
+  assert.deepEqual(await readOptionalJson(filePath), { items: [{ sessionId: "s1" }] });
   assert.equal(
     await readFile(filePath, "utf8"),
     '{\n  "items": [\n    {\n      "sessionId": "s1"\n    }\n  ]\n}',

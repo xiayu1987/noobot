@@ -194,6 +194,6 @@ watch(
   margin: 0 0 var(--noobot-space-md);
   font-family: var(--noobot-font-mono);
   font-size: var(--noobot-font-size-xs);
-  color: var(--noobot-text-muted);
+  color: var(--noobot-text-secondary);
 }
 </style>

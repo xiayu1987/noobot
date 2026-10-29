@@ -42,3 +42,7 @@ export function createCommandResultError(event, data) {
   error.data = data;
   return error;
 }
+
+export function isCommandResultError(error) {
+  return error instanceof Error && COMMAND_RESULT_EVENTS.has(error.event);
+}

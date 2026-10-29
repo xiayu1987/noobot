@@ -11,6 +11,7 @@ import {
   createInteractionEnvelope,
   createWorkflowEnvelope,
 } from "../helpers/useReconnectReplayHelper.js";
+import { availableDetailDocument } from "../../../helpers/sessionDetailFixture.js";
 import {
   AGENT_CHANNEL_STATE,
   SESSION_RUN_EVENT,
@@ -247,31 +248,42 @@ describe("useReconnectReplay", () => {
     ];
     refs.activeSession.value.rawMessages = [...refs.activeSession.value.messages];
 
-    mocks.chatList.fetchSessionDetail = vi.fn(async () => ({
-      sessionId: "s-1",
-      sessions: [
-        {
-          sessionId: "s-1",
-          messages: [
-            { role: RoleEnum.USER, content: "old-q", ts: 1 },
-            { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-old", content: "old-a", ts: 2 },
-            { role: RoleEnum.USER, content: "new-q", ts: 3 },
-            createCanonicalAssistant({
-              sessionId: "s-1",
-              presentationMessageId: "message-dp-new",
-              dialogProcessId: "dp-new",
-              turnScopeId: "turn-dp-new",
-              ts: 4,
-            }),
-          ],
-        },
-      ],
-    }));
-    mocks.chatList.applySessionDetail = vi.fn((detail) => {
-      const main = (detail?.sessions || [])[0] || {};
-      refs.activeSession.value.messages = (main.messages || []).map((message) => ({ ...message }));
-      refs.activeSession.value.rawMessages = [...refs.activeSession.value.messages];
-    });
+    mocks.chatList.fetchSessionDetail = vi.fn(async () =>
+      availableDetailDocument({
+        sessionId: "s-1",
+        title: "session-s-1",
+        aggregateVersion: 1,
+        turnTimings: [],
+        messages: [
+          {
+            messageUid: "u-old",
+            role: RoleEnum.USER,
+            content: "old-q",
+            turnScopeId: "turn-dp-old",
+          },
+          {
+            presentationMessageId: "message-dp-old",
+            role: RoleEnum.ASSISTANT,
+            turnScopeId: "turn-dp-old",
+            dialogProcessId: "dp-old",
+            content: "old-a",
+          },
+          {
+            messageUid: "u-new",
+            role: RoleEnum.USER,
+            content: "new-q",
+            turnScopeId: "turn-dp-new",
+          },
+          createCanonicalAssistant({
+            sessionId: "s-1",
+            presentationMessageId: "message-dp-new",
+            dialogProcessId: "dp-new",
+            turnScopeId: "turn-dp-new",
+            ts: 4,
+          }),
+        ],
+      }),
+    );
 
     const snapshot = createTurnLifecycleSnapshot({
       generatedAt: "2026-01-01T00:00:00.000Z",

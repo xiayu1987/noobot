@@ -167,11 +167,11 @@ watch(
   background: var(--noobot-surface-soft);
   border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 56%, transparent);
   font-size: var(--noobot-font-size-sm);
-  line-height: var(--noobot-line-height-cozy);
+  line-height: var(--noobot-line-height-balanced);
   transition:
-    color var(--noobot-duration-normal) ease,
-    background-color var(--noobot-duration-normal) ease,
-    border-color var(--noobot-duration-normal) ease;
+    color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    border-color var(--noobot-duration-normal) var(--noobot-ease-standard);
 }
 
 .chat-message-navigator__item {
@@ -184,16 +184,16 @@ watch(
 
 .chat-message-navigator__role {
   flex: 0 0 auto;
-  width: var(--noobot-msg-avatar-size, 30px);
-  height: var(--noobot-msg-avatar-size, 30px);
-  min-width: var(--noobot-msg-avatar-size, 30px);
+  width: var(--noobot-msg-avatar-size);
+  height: var(--noobot-msg-avatar-size);
+  min-width: var(--noobot-msg-avatar-size);
   padding: 0;
-  border-radius: 50%;
+  border-radius: var(--noobot-radius-circle);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: var(--noobot-font-size-2xs);
-  line-height: var(--noobot-line-height-snug);
+  font-size: var(--noobot-font-size-xs);
+  line-height: var(--noobot-line-height-tight);
   font-weight: var(--noobot-font-weight-bold);
   letter-spacing: var(--noobot-letter-spacing-none);
   text-align: center;
@@ -285,7 +285,7 @@ watch(
   display: flex;
   gap: var(--noobot-space-xs);
   font-size: var(--noobot-font-size-sm);
-  line-height: var(--noobot-line-height-relaxed);
+  line-height: var(--noobot-line-height-comfortable);
 }
 
 .chat-nav-popover__meta .k {

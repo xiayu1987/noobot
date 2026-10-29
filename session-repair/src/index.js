@@ -15,8 +15,12 @@ export {
   reconcileDuplicateCanonicalAssistantPresentations,
   reconcileUncommittedAggregateConflictContinuations,
 } from "./document-migration.js";
-export { reconcileExecutionSegmentIndex, reconcileSessionSummaryIndex } from "./index-reconcile.js";
-export { isSessionRepairTempDirectoryName, runAtomicSessionRepair } from "./atomic-repair.js";
+export { reconcileExecutionSegmentIndex } from "./index-reconcile.js";
+export {
+  isOwnedSessionRepairTempDirectoryName,
+  isSessionRepairTempDirectoryName,
+  runAtomicSessionRepair,
+} from "./atomic-repair.js";
 export {
   SESSION_TREE_REJECTION,
   SESSION_TREE_SHAPE,

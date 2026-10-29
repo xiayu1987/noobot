@@ -5,7 +5,11 @@
  */
 import { resolveMessageViewKey } from "@noobot/event-protocol/message-event";
 import { describe, expect, it, vi } from "vitest";
-import { createHarness, makeTurnReplacementResponse } from "../helpers/useChatEngineHarness.js";
+import {
+  applyMainEntryMessages,
+  createHarness,
+  makeTurnReplacementResponse,
+} from "../helpers/useChatEngineHarness.js";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { isTurnRuntimeDeleted } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { NO_ATTACHMENT_EDITS } from "../../../helpers/resendEdits.js";
@@ -33,12 +37,10 @@ describe("useChatEngine.resend scoped pruning", () => {
         replacedTurnScopeIds: [anchor.turnScopeId],
         replacementUser: staleReplacementUser,
         replacementDialogProcessId: `dialog:${staleReplacementUser.turnScopeId}`,
+        messages: [staleReplacementUser],
       });
     });
-    const applySessionDetail = vi.fn((detail) => {
-      const mainSession = detail.sessions?.[0] || {};
-      activeSession.value = { ...activeSession.value, ...mainSession };
-    });
+    const applySessionDetail = applyMainEntryMessages(() => activeSession);
     const { engine, activeSession } = createHarness({
       sessionId: "local-resend-replace-stale",
       stream,
@@ -79,7 +81,6 @@ describe("useChatEngine.resend scoped pruning", () => {
     const stream = vi.fn(async () => {
       observedMessagesAtStream = [...activeSession.value.messages];
     });
-    const deleteSessionMessagesFromApi = vi.fn();
     const oldUser = {
       messageUid: "old-user",
       turnScopeId: "client-turn:old",
@@ -107,17 +108,14 @@ describe("useChatEngine.resend scoped pruning", () => {
         replacedTurnScopeIds: [anchor.turnScopeId],
         replacementUser,
         replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
-        session: { messageCount: 1 },
+        messages: [replacementUser],
       });
     });
-    const applySessionDetail = vi.fn((detail) => {
-      const mainSession = detail.sessions?.[0] || {};
-      activeSession.value = { ...activeSession.value, ...mainSession };
-    });
+    const applySessionDetail = applyMainEntryMessages(() => activeSession);
     const { engine, activeSession, turnRuntimeRegistry } = createHarness({
       sessionId: "local-resend-replace-mapping",
       stream,
-      deps: { replaceSessionTurnApi, deleteSessionMessagesFromApi, applySessionDetail },
+      deps: { replaceSessionTurnApi, applySessionDetail },
     });
     activeSession.value.messages = [oldUser, oldAssistant];
     activeSession.value.rawMessages = [oldUser, oldAssistant];
@@ -127,20 +125,10 @@ describe("useChatEngine.resend scoped pruning", () => {
       engine.resendMonotonicMessage(oldAssistant, "edited question", NO_ATTACHMENT_EDITS),
     ).resolves.toBe(true);
 
-    expect(deleteSessionMessagesFromApi).not.toHaveBeenCalled();
-    expect(observedMessagesAtStream.find((message) => message.id === "old-user")).toBeUndefined();
-    expect(
-      observedMessagesAtStream.find((message) => message.id === "old-assistant"),
-    ).toBeUndefined();
-    expect(observedMessagesAtStream).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          role: RoleEnum.USER,
-          content: "edited question",
-          turnScopeId: expect.stringMatching(/^client-turn:/),
-        }),
-      ]),
-    );
+    const observedViewKeys = observedMessagesAtStream.map(resolveMessageViewKey);
+    expect(observedViewKeys).not.toContain("old-user");
+    expect(observedViewKeys).not.toContain("old-assistant");
+    expect(observedViewKeys).toContain("new-user");
     expect(
       activeSession.value.messages.find((message) => resolveMessageViewKey(message) === "new-user"),
     ).toEqual(
@@ -150,14 +138,6 @@ describe("useChatEngine.resend scoped pruning", () => {
         turnScopeId: expect.stringMatching(/^client-turn:/),
       }),
     );
-    expect(
-      activeSession.value.messages.find(
-        (message) =>
-          message.role === RoleEnum.USER &&
-          message.content === "edited question" &&
-          /^client-turn:/.test(message.turnScopeId),
-      ),
-    ).toBeTruthy();
     expect(
       isTurnRuntimeDeleted(turnRuntimeRegistry.value, {
         sessionId: "local-resend-replace-mapping",
@@ -171,7 +151,6 @@ describe("useChatEngine.resend scoped pruning", () => {
     const stream = vi.fn(async () => {
       observedMessagesAtStream = [...activeSession.value.messages];
     });
-    const deleteSessionMessagesFromApi = vi.fn();
     const previousUser = {
       messageUid: "u-old",
       role: RoleEnum.USER,
@@ -202,17 +181,11 @@ describe("useChatEngine.resend scoped pruning", () => {
         messages: [previousUser, previousAssistant, replacementUser],
       });
     });
-    const applySessionDetail = vi.fn((detail) => {
-      const mainSession = detail.sessions?.[0] || {};
-      activeSession.value.messages = [...(mainSession.messages || [])];
-      activeSession.value.rawMessages = [
-        ...(mainSession.rawMessages || mainSession.messages || []),
-      ];
-    });
+    const applySessionDetail = applyMainEntryMessages(() => activeSession);
     const { engine, activeSession } = createHarness({
       sessionId: "local-resend-duplicate-scoped-latest",
       stream,
-      deps: { replaceSessionTurnApi, deleteSessionMessagesFromApi, applySessionDetail },
+      deps: { replaceSessionTurnApi, applySessionDetail },
     });
     const latestUser = {
       messageUid: "u-latest",
@@ -259,7 +232,6 @@ describe("useChatEngine.resend scoped pruning", () => {
 
   it("resendMonotonicMessage starts generation from the user-only replace-turn snapshot", async () => {
     const stream = vi.fn(async () => {});
-    const deleteSessionMessagesFromApi = vi.fn();
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, commandId, anchor }) => {
       const replacementUser = {
         messageUid: "msg-user-replace-completed",
@@ -275,16 +247,14 @@ describe("useChatEngine.resend scoped pruning", () => {
         replacedTurnScopeIds: [anchor.turnScopeId],
         replacementUser,
         replacementDialogProcessId: `dialog:${replacementUser.turnScopeId}`,
+        messages: [replacementUser],
       });
     });
-    const applySessionDetail = vi.fn((detail) => {
-      const mainSession = detail.sessions?.[0] || {};
-      activeSession.value = { ...activeSession.value, ...mainSession };
-    });
+    const applySessionDetail = applyMainEntryMessages(() => activeSession);
     const { engine, activeSession, input } = createHarness({
       sessionId: "local-resend-replace-completed",
       stream,
-      deps: { replaceSessionTurnApi, deleteSessionMessagesFromApi, applySessionDetail },
+      deps: { replaceSessionTurnApi, applySessionDetail },
     });
     const first = { turnScopeId: "scope-old", role: RoleEnum.USER, content: "first" };
     const target = { turnScopeId: "scope-old", role: RoleEnum.ASSISTANT, content: "target" };
@@ -296,9 +266,8 @@ describe("useChatEngine.resend scoped pruning", () => {
       engine.resendMonotonicMessage(target, "edited question", NO_ATTACHMENT_EDITS),
     ).resolves.toBe(true);
 
-    expect(deleteSessionMessagesFromApi).not.toHaveBeenCalled();
     expect(stream).toHaveBeenCalledTimes(1);
-    expect(stream.mock.calls[0]?.[0]).toEqual(
+    expect(stream.mock.calls[0][0]).toEqual(
       expect.objectContaining({
         commandType: "turn.resend",
         input: expect.objectContaining({ message: "edited question" }),

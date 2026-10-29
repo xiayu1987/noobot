@@ -9,12 +9,9 @@ import path from "node:path";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import {
-  MESSAGE_ORIGIN,
   MESSAGE_REMOVED_FIELD_NAME,
   SESSION_ARTIFACT_SCHEMA_VERSION,
-  SESSION_ERROR_CODE,
 } from "@noobot/session-protocol";
-import { projectTurnCompletionMessages } from "@noobot/context-protocol";
 import { SESSION_REPAIR_DATA_REJECTION_CODES } from "@noobot/session-repair";
 import { TRANSFER_ENVELOPE_V2 } from "@noobot/semantic-transfer-protocol";
 import { EVENT_FAMILY, createEventEnvelope, getEventFamily } from "@noobot/event-protocol";
@@ -24,56 +21,24 @@ import {
 } from "@noobot/event-protocol/message-event";
 import { upgradeSessionMessageIdentity } from "../src/workspace-lifecycle/session-message-identity-upgrade.js";
 import { messageHash } from "../src/session/session-artifact-session/turn-journal-store.js";
-import { readSessionArtifact } from "../src/session/session-artifact-store.js";
-import { readSessionArtifactSnapshot } from "../src/session/session-artifact-snapshot.js";
 import { TEST_SCOPED_SESSION_ROOTS } from "./helpers/scoped-session-roots.js";
+import { TEST_STORAGE_SERVICE } from "./helpers/storage-service.js";
 import { legacyV2TransferEnvelope } from "./helpers/legacy-transfer-envelope.js";
-import {
-  applySessionMessageFacts,
-  createTestSessionRequiredFields,
-} from "./helpers/session-message-facts.js";
 import {
   buildHarness,
   readJson,
   readJournalLines,
 } from "./session/scoped-session-repositories.fixtures.js";
-import { TEST_MESSAGE_TS } from "./helpers/session-run-payload.js";
+import {
+  SESSION_ID,
+  jsonl,
+  saveCanonicalSession,
+  v9Options,
+} from "./helpers/session-identity-upgrade.fixtures.js";
 
-const SESSION_ID = "s-v9";
 const LEGACY_MESSAGE_ID = MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID;
 const LEGACY_USER_ID = "msg_legacy_user";
 const LEGACY_EVENT_MESSAGE_ID = "msg_event_msg_legacy";
-const jsonl = (records) => records.map((record) => `${JSON.stringify(record)}\n`).join("");
-
-async function saveCanonicalSession(sessionRepo) {
-  const persistenceContext = sessionRepo.treePersistenceContext("alice", SESSION_ID);
-  const message = (messageUid, role, extra) => ({
-    sessionId: SESSION_ID,
-    messageUid,
-    role,
-    content: messageUid,
-    dialogProcessId: "d1",
-    turnScopeId: "t1",
-    ts: `2026-01-01T00:00:0${messageUid.at(-1)}.000Z`,
-    ...extra,
-  });
-  await sessionRepo.save(
-    "alice",
-    applySessionMessageFacts({
-      ...createTestSessionRequiredFields(),
-      parentSessionId: "",
-      sessionId: SESSION_ID,
-      aggregateVersion: 0,
-      messages: [
-        message("m1", "user", { messageOrigin: MESSAGE_ORIGIN.NATURAL }),
-        message("m2", "assistant", { modelMessageId: "mm_m2", presentationMessageId: "pm_1" }),
-      ],
-    }),
-    { createOnly: true, persistenceContext },
-  );
-  const scope = await sessionRepo.requireSessionScope("alice", SESSION_ID, persistenceContext);
-  return scope.sessionDir;
-}
 
 function legacyOutboxCommit() {
   const envelope = createEventEnvelope({
@@ -172,7 +137,12 @@ test("v9 upgrade migrates schema 12 message identity, backs up rewritten files a
     const sessionDir = await saveCanonicalSession(sessionRepo);
     await downgradeToSchema12(sessionDir);
     const badUnit = await writeCorruptScopedSession(base);
-    const options = { base, backupBase, scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS };
+    const options = {
+      base,
+      backupBase,
+      scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS,
+      storageService: TEST_STORAGE_SERVICE,
+    };
 
     const first = await upgradeSessionMessageIdentity(options);
 
@@ -228,6 +198,7 @@ test("v9 upgrade aborts on file system failures instead of quarantining the unit
         base,
         backupBase,
         scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS,
+        storageService: TEST_STORAGE_SERVICE,
       }),
       (error) => Boolean(error.syscall),
     );
@@ -255,6 +226,7 @@ test("v9 upgrade aborts on unregistered rejection codes instead of quarantining 
         base,
         backupBase: path.join(root, "layout-backup"),
         scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS,
+        storageService: TEST_STORAGE_SERVICE,
       }),
       (error) =>
         typeof error.code === "string" &&
@@ -281,6 +253,7 @@ test("v9 upgrade drops legacy-envelope outbox commits with their deliveries and 
       base,
       backupBase: path.join(root, "layout-backup"),
       scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS,
+      storageService: TEST_STORAGE_SERVICE,
     };
 
     const first = await upgradeSessionMessageIdentity(options);
@@ -305,6 +278,66 @@ test("v9 upgrade drops legacy-envelope outbox commits with their deliveries and 
   }
 });
 
+async function writeLegacyV2ExecutionIndexes(sessionDir) {
+  const eventsDir = path.join(sessionDir, "execution-events");
+  const turnDir = path.join(eventsDir, "turns", "d1");
+  await mkdir(turnDir, { recursive: true });
+  const segment = `${JSON.stringify({ event: "log" })}\n`;
+  await writeFile(path.join(turnDir, "segment-000001.jsonl"), segment, "utf8");
+  const sessionIndex = { schemaVersion: 2, turns: [{ dialogProcessId: "d1" }] };
+  const turnIndex = {
+    schemaVersion: 2,
+    dialogProcessId: "d1",
+    activeSequence: 1,
+    maxSegmentBytes: 1048576,
+    segments: [
+      {
+        sequence: 1,
+        file: "segment-000001.jsonl",
+        bytes: Buffer.byteLength(segment),
+        records: 1,
+        sealed: false,
+      },
+    ],
+  };
+  await writeFile(path.join(eventsDir, "index.json"), JSON.stringify(sessionIndex), "utf8");
+  await writeFile(path.join(turnDir, "index.json"), JSON.stringify(turnIndex), "utf8");
+  return { sessionIndex, turnIndex };
+}
+
+test("message identity upgrade leaves v2 execution event indexes to their own layout step", async () => {
+  const harness = buildHarness();
+  const { sessionRepo, root } = await harness.setup();
+  try {
+    const base = path.join(root, "alice");
+    const sessionDir = await saveCanonicalSession(sessionRepo);
+    await downgradeToSchema12(sessionDir);
+    const legacy = await writeLegacyV2ExecutionIndexes(sessionDir);
+
+    const result = await upgradeSessionMessageIdentity({
+      base,
+      backupBase: path.join(root, "layout-backup"),
+      scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS,
+      storageService: TEST_STORAGE_SERVICE,
+    });
+
+    assert.deepEqual(result.quarantined, []);
+    assert.deepEqual(
+      result.sessions.map((item) => item.sessionId),
+      [SESSION_ID],
+    );
+    assert.equal(Object.hasOwn(result.sessions[0], "repairedArtifacts"), false);
+    const eventsDir = path.join(sessionDir, "execution-events");
+    assert.deepEqual(await readJson(path.join(eventsDir, "index.json")), legacy.sessionIndex);
+    assert.deepEqual(
+      await readJson(path.join(eventsDir, "turns", "d1", "index.json")),
+      legacy.turnIndex,
+    );
+  } finally {
+    await harness.cleanup();
+  }
+});
+
 test("v9 upgrade quarantines outbox commits whose v3 envelope fails validation", async () => {
   const harness = buildHarness();
   const { sessionRepo, root } = await harness.setup();
@@ -320,6 +353,7 @@ test("v9 upgrade quarantines outbox commits whose v3 envelope fails validation",
       base,
       backupBase: path.join(root, "layout-backup"),
       scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS,
+      storageService: TEST_STORAGE_SERVICE,
     });
 
     assert.deepEqual(result.sessions, []);
@@ -354,14 +388,6 @@ async function injectLegacyTransferEnvelope(sessionDir, shapeEnvelope = (envelop
     records.map((record) => [record.messageUid, record.hash]),
   );
   await writeFile(manifestFile, JSON.stringify(manifest, null, 2), "utf8");
-}
-
-function v9Options(root) {
-  return {
-    base: path.join(root, "alice"),
-    backupBase: path.join(root, "layout-backup"),
-    scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS,
-  };
 }
 
 test("v9 upgrade lifts a lingering v2 transfer envelope to v3 in place", async () => {
@@ -412,299 +438,6 @@ test("v9 upgrade quarantines a session whose v2 transfer envelope cannot migrate
     );
     assert.match(JSON.stringify(result.quarantined[0].error), /transfer_envelope_unmigratable/i);
     assert.equal((await readJson(path.join(sessionDir, "session.json"))).schemaVersion, 12);
-  } finally {
-    await harness.cleanup();
-  }
-});
-
-async function saveCheckpointedSession(sessionRepo, sessionId) {
-  const persistenceContext = sessionRepo.treePersistenceContext("alice", sessionId);
-  const message = (messageUid, ts) => ({
-    sessionId,
-    messageUid,
-    role: messageUid === "m1" ? "user" : "assistant",
-    ...(messageUid === "m1"
-      ? { messageOrigin: MESSAGE_ORIGIN.NATURAL }
-      : { modelMessageId: `mm_${messageUid}`, presentationMessageId: "pm_active" }),
-    content: messageUid,
-    dialogProcessId: "dialog-active",
-    turnScopeId: "active",
-    ts,
-  });
-  await sessionRepo.save(
-    "alice",
-    applySessionMessageFacts({
-      ...createTestSessionRequiredFields(),
-      parentSessionId: "",
-      sessionId,
-      aggregateVersion: 0,
-      messages: [
-        message("m1", "2026-01-01T00:00:00.000Z"),
-        message("m2", "2026-01-01T00:00:30.000Z"),
-      ],
-      turnSummaryCheckpoints: {
-        active: {
-          dialogProcessId: "dialog-active",
-          turnScopeId: "active",
-          checkpointRevision: 1,
-          receipts: [
-            {
-              checkpointId: "checkpoint-1",
-              checkpointRevision: 1,
-              requestHash: "sha256:fixture",
-              persistedMessageUids: ["m1", "m2"],
-              summarizedMessageUids: ["m1"],
-              retainedMessageUids: [],
-              markedCount: 1,
-              committedAt: "2026-01-01T00:01:00.000Z",
-            },
-          ],
-        },
-      },
-    }),
-    { createOnly: true, persistenceContext },
-  );
-  const scope = await sessionRepo.requireSessionScope("alice", sessionId, persistenceContext);
-  return { sessionDir: scope.sessionDir, tail: message("m3", "2026-01-01T00:02:00.000Z") };
-}
-
-async function downgradeToSchema10JournalSnapshots(sessionDir, tail) {
-  const manifestFile = path.join(sessionDir, "session.json");
-  const manifest = await readJson(manifestFile);
-  const [turn] = manifest.turnOrder;
-  const records = [
-    ...turn.summarySnapshots.map((index) => ({
-      op: "summary_snapshot",
-      ...index,
-      turnScopeId: turn.turnScopeId,
-      dialogProcessId: turn.dialogProcessId,
-    })),
-    { op: "upsert", messageUid: tail.messageUid, message: tail, hash: messageHash(tail) },
-  ];
-  const journalText = jsonl(records);
-  await writeFile(path.join(sessionDir, turn.file), journalText, "utf8");
-  const { summarySnapshots, ...v10Turn } = turn;
-  manifest.schemaVersion = 10;
-  manifest.messageOrder = [...manifest.messageOrder, { messageUid: tail.messageUid }];
-  manifest.turnOrder = [
-    {
-      ...v10Turn,
-      committedBytes: Buffer.byteLength(journalText),
-      recordCount: records.length,
-      messageCount: 3,
-      messageOrder: ["m1", "m2", "m3"],
-    },
-  ];
-  await writeFile(manifestFile, JSON.stringify(manifest), "utf8");
-  return { file: turn.file, summarySnapshots };
-}
-
-test("v9 upgrade moves schema 10 journal snapshot indexes into the manifest", async () => {
-  const harness = buildHarness();
-  const { sessionRepo, root } = await harness.setup();
-  try {
-    const sessionId = "v10-journal-snapshot-index";
-    const { sessionDir, tail } = await saveCheckpointedSession(sessionRepo, sessionId);
-    const { file, summarySnapshots } = await downgradeToSchema10JournalSnapshots(sessionDir, tail);
-
-    const result = await upgradeSessionMessageIdentity({
-      base: path.join(root, "alice"),
-      backupBase: path.join(root, "layout-backup"),
-      scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS,
-    });
-
-    assert.deepEqual(
-      result.sessions.map((item) => [item.sessionId, item.fromSchemaVersion]),
-      [[sessionId, 10]],
-    );
-    const migrated = await readJson(path.join(sessionDir, "session.json"));
-    assert.equal(migrated.schemaVersion, SESSION_ARTIFACT_SCHEMA_VERSION);
-    const withoutContentHash = ({ contentHash, ...index }) => index;
-    assert.deepEqual(
-      migrated.turnOrder[0].summarySnapshots.map(withoutContentHash),
-      summarySnapshots.map(withoutContentHash),
-    );
-    const journal = readJournalLines(await readFile(path.join(sessionDir, file), "utf8"));
-    assert.equal(
-      journal.some((record) => record.op === "summary_snapshot"),
-      false,
-    );
-    const restored = await readSessionArtifact({ sessionDir });
-    assert.deepEqual(
-      restored.messages.map((entry) => entry.messageUid),
-      ["m1", "m2", "m3"],
-    );
-  } finally {
-    await harness.cleanup();
-  }
-});
-
-async function saveCompletedTurnWithRejectedBatch(sessionRepo, sessionId) {
-  const persistenceContext = sessionRepo.treePersistenceContext("alice", sessionId);
-  const turn = { sessionId, dialogProcessId: "dialog-done", turnScopeId: "done" };
-  const assistant = (messageUid, extra) => ({
-    messageUid,
-    ts: TEST_MESSAGE_TS,
-    role: "assistant",
-    modelMessageId: `mm_${messageUid}`,
-    presentationMessageId: "pm_done",
-    content: "",
-    ...turn,
-    ...extra,
-  });
-  const toolCall = (messageUid, id, name) =>
-    assistant(messageUid, {
-      type: "tool_call",
-      chatPresentation: false,
-      tool_calls: [{ id, type: "function", function: { name, arguments: "{}" } }],
-    });
-
-  const canonical = projectTurnCompletionMessages([
-    {
-      messageUid: "m1",
-      ts: TEST_MESSAGE_TS,
-      role: "user",
-      messageOrigin: "natural",
-      userMessageId: "um_done",
-      content: "go",
-      ...turn,
-    },
-    toolCall("m2", "call-ok", "read_file"),
-    {
-      messageUid: "m3",
-      ts: TEST_MESSAGE_TS,
-      role: "tool",
-      type: "tool_result",
-      presentationMessageId: "pm_done",
-      content: "file",
-      tool_call_id: "call-ok",
-      toolName: "read_file",
-      ...turn,
-    },
-    assistant("m5", { content: "done" }),
-  ]);
-
-  const rejected = {
-    ...toolCall("m4", "call-rejected", "task_check"),
-    summarized: false,
-  };
-  await sessionRepo.save(
-    "alice",
-    applySessionMessageFacts({
-      ...createTestSessionRequiredFields(),
-      sessionId,
-      aggregateVersion: 0,
-      turnLifecycle: {
-        ...createTestSessionRequiredFields().turnLifecycle,
-        turns: {
-          done: {
-            revision: 1,
-            sequence: 1,
-            ...turn,
-            terminalStatus: { ...turn, status: "completed", reason: "run_completed" },
-          },
-        },
-      },
-      messages: [...canonical.slice(0, 3), rejected, canonical[3]],
-    }),
-    { createOnly: true, persistenceContext },
-  );
-  const scope = await sessionRepo.requireSessionScope("alice", sessionId, persistenceContext);
-  return scope.sessionDir;
-}
-
-test("v11 upgrade removes rejected-batch tool_calls of completed turns, backs up and is idempotent", async () => {
-  const harness = buildHarness();
-  const { sessionRepo, root } = await harness.setup();
-  try {
-    const sessionId = "v11-rejected-batch";
-    const base = path.join(root, "alice");
-    const backupBase = path.join(root, "layout-backup");
-    const sessionDir = await saveCompletedTurnWithRejectedBatch(sessionRepo, sessionId);
-    const openSession = () =>
-      readSessionArtifactSnapshot({ outputDir: sessionDir, includeExecutionLogs: false });
-    await assert.rejects(openSession(), {
-      code: SESSION_ERROR_CODE.COMPLETION_SUMMARY_REPAIR_REQUIRED,
-    });
-    const options = { base, backupBase, scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS };
-
-    const first = await upgradeSessionMessageIdentity(options);
-
-    assert.deepEqual(first.quarantined, []);
-    assert.deepEqual(
-      first.sessions.map((item) => item.sessionId),
-      [sessionId],
-    );
-    assert.ok(first.sessions[0].migrations.includes("completed-turn-orphan-tool-calls"));
-    const { session: restored } = await openSession();
-    assert.deepEqual(
-      restored.messages.map((entry) => entry.messageUid),
-      ["m1", "m2", "m3", "m5"],
-    );
-    const relativeDir = path.relative(base, sessionDir);
-    const backedUp = await readJson(path.join(backupBase, relativeDir, "session.json"));
-    assert.ok(backedUp.messageOrder.some((entry) => entry.messageUid === "m4"));
-
-    const second = await upgradeSessionMessageIdentity(options);
-    assert.deepEqual(second.sessions, []);
-    assert.deepEqual(second.quarantined, []);
-  } finally {
-    await harness.cleanup();
-  }
-});
-
-test("v14 upgrade drops schema 15 turn timing starts and timing shells, backs up and is idempotent", async () => {
-  const harness = buildHarness();
-  const { sessionRepo, root } = await harness.setup();
-  try {
-    const base = path.join(root, "alice");
-    const backupBase = path.join(root, "layout-backup");
-    const sessionDir = await saveCanonicalSession(sessionRepo);
-    const manifestFile = path.join(sessionDir, "session.json");
-    const manifest = await readJson(manifestFile);
-    manifest.schemaVersion = 15;
-    manifest.turnTimings = [
-      {
-        turnScopeId: "t1",
-        dialogProcessId: "d1",
-        thinkingStartedAt: "2026-01-01T00:00:01.000Z",
-        thinkingFinishedAt: "2026-01-01T00:00:09.000Z",
-      },
-      { turnScopeId: "t0", dialogProcessId: "d0", thinkingStartedAt: "2026-01-01T00:00:00.000Z" },
-    ];
-    await writeFile(manifestFile, JSON.stringify(manifest, null, 2), "utf8");
-    await assert.rejects(
-      readSessionArtifactSnapshot({ outputDir: sessionDir, includeExecutionLogs: false }),
-      { code: SESSION_ERROR_CODE.TURN_JOURNAL_SCHEMA_REQUIRED },
-    );
-    const options = { base, backupBase, scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS };
-
-    const first = await upgradeSessionMessageIdentity(options);
-
-    assert.deepEqual(first.quarantined, []);
-    assert.deepEqual(
-      first.sessions.map((item) => item.sessionId),
-      [SESSION_ID],
-    );
-    assert.ok(first.sessions[0].migrations.includes("turn-timing-lifecycle-start-v16"));
-    const upgraded = await readJson(manifestFile);
-    assert.equal(upgraded.schemaVersion, SESSION_ARTIFACT_SCHEMA_VERSION);
-    assert.deepEqual(upgraded.turnTimings, [
-      { turnScopeId: "t1", dialogProcessId: "d1", thinkingFinishedAt: "2026-01-01T00:00:09.000Z" },
-    ]);
-    const { session: restored } = await readSessionArtifactSnapshot({
-      outputDir: sessionDir,
-      includeExecutionLogs: false,
-    });
-    assert.deepEqual(restored.turnTimings, upgraded.turnTimings);
-    const relativeDir = path.relative(base, sessionDir);
-    const backedUp = await readJson(path.join(backupBase, relativeDir, "session.json"));
-    assert.equal(backedUp.schemaVersion, 15);
-    assert.equal(backedUp.turnTimings.length, 2);
-
-    const second = await upgradeSessionMessageIdentity(options);
-    assert.deepEqual(second.sessions, []);
-    assert.deepEqual(second.quarantined, []);
   } finally {
     await harness.cleanup();
   }

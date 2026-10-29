@@ -119,9 +119,8 @@ describe("committed user Turn routing", () => {
     };
     const activeSession = {
       value: {
-        id: "session-1",
         sessionId: "session-1",
-        version: 0,
+        aggregateVersion: 0,
         messages: [draftMessage],
       },
     };
@@ -212,7 +211,7 @@ describe("committed user Turn routing", () => {
   it("rejects a commit whose stable message id has no local target", () => {
     const logSessionEvent = vi.fn();
     const activeSession = {
-      value: { id: "session-1", sessionId: "session-1", version: 0, messages: [] },
+      value: { sessionId: "session-1", aggregateVersion: 0, messages: [] },
     };
 
     expect(
@@ -251,4 +250,56 @@ describe("committed user Turn routing", () => {
       }),
     );
   });
+
+  it.each([["1"], [0], [null]])(
+    "rejects a commit with protocol-invalid aggregateVersion %j without touching the session",
+    (aggregateVersion) => {
+      const logSessionEvent = vi.fn();
+      const draftMessage = { userMessageId: "frontend-user-1", role: "user", attachments: [] };
+      const activeSession = {
+        value: { sessionId: "session-1", aggregateVersion: 4, messages: [draftMessage] },
+      };
+
+      expect(
+        routeCurrentTurnLifecycleEvent(
+          "turn_committed",
+          {
+            sessionId: "session-1",
+            aggregateVersion,
+            dialogProcessId: "dialog-1",
+            turnScopeId: "client-turn:1",
+            userMessage: {
+              messageUid: "sm_1",
+              userMessageId: "frontend-user-1",
+              role: "user",
+              content: "hello",
+              sessionId: "session-1",
+              dialogProcessId: "dialog-1",
+              turnScopeId: "client-turn:1",
+              attachments: [],
+            },
+          },
+          {
+            findSession: viewFor(activeSession).findSession,
+            findUserMessageForCommit: viewFor(activeSession).findUserMessageForCommit,
+            makeViewMessage: vi.fn(),
+            logSessionEvent,
+            sessionId: "session-1",
+          },
+        ),
+      ).toBe(true);
+
+      expect(activeSession.value.aggregateVersion).toBe(4);
+      expect(draftMessage.messageUid).toBeUndefined();
+      expect(logSessionEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: "frontend.turnCommit.userMessageRejected",
+          data: expect.objectContaining({
+            reason: "invalid_event_data",
+            errors: ["aggregate_version_invalid"],
+          }),
+        }),
+      );
+    },
+  );
 });

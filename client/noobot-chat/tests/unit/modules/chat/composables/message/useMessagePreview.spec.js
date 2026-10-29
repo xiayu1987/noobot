@@ -90,34 +90,6 @@ describe("useMessagePreview attachment downloads", () => {
     },
   );
 
-  it("saves a desktop workspace link using the authorized response and server filename", async () => {
-    const saveDownload = vi.fn().mockResolvedValue({ ok: true });
-    const downloadHostFile = vi.fn();
-    vi.stubGlobal("noobotDesktop", { saveDownload, downloadHostFile });
-    const response = createBlobResponse();
-    response.headers = new Headers({
-      "content-disposition": "attachment; filename*=UTF-8''%E6%8A%A5%E5%91%8A.txt",
-    });
-    const attachmentService = { downloadWorkspaceFile: vi.fn().mockResolvedValue(response) };
-    const notify = vi.fn();
-    const preview = createMessagePreview({ userId: "admin", attachmentService, notify });
-
-    await preview.onDownloadWorkspacePath("runtime/tool-test/fixture.txt");
-
-    expect(attachmentService.downloadWorkspaceFile).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: "admin",
-        path: "runtime/tool-test/fixture.txt",
-      }),
-    );
-    expect(saveDownload).toHaveBeenCalledTimes(1);
-    expect(saveDownload.mock.calls[0][0].fileName).toBe("报告.txt");
-    expect(new TextDecoder().decode(saveDownload.mock.calls[0][0].bytes)).toBe("content");
-    expect(downloadHostFile).not.toHaveBeenCalled();
-    expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
-    expect(notify).not.toHaveBeenCalled();
-  });
-
   it.each(["canceled", "failed", "rejected"])(
     "handles a %s desktop save without starting another download",
     async (outcome) => {
@@ -148,23 +120,6 @@ describe("useMessagePreview attachment downloads", () => {
       expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
     },
   );
-
-  it("treats the native host file save cancellation as cancellation", async () => {
-    const downloadHostFile = vi.fn().mockResolvedValue({ ok: false, canceled: true });
-    vi.stubGlobal("noobotDesktop", { downloadHostFile });
-    const notify = vi.fn();
-    const preview = createMessagePreview({ userId: "admin", attachmentService: {}, notify });
-
-    await preview.onDownloadFile({
-      isSandbox: false,
-      hostPath: "/host/report.txt",
-      fileName: "report.txt",
-    });
-
-    expect(downloadHostFile).toHaveBeenCalledTimes(1);
-    expect(notify).not.toHaveBeenCalled();
-    expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
-  });
 
   it("rejects a non-canonical attachment instead of constructing an access URL", async () => {
     const attachmentService = createAttachmentService(createBlobResponse);
@@ -418,10 +373,7 @@ describe("useMessagePreview markdown copy", () => {
 
     preview.onCopyMessageMarkdownRich({ textContent: "body", attachmentRefIndex });
 
-    expect(renderMarkdown).toHaveBeenCalledWith("body", {
-      attachmentRefIndex,
-      workspaceFileLinks: true,
-    });
+    expect(renderMarkdown).toHaveBeenCalledWith("body", { attachmentRefIndex });
     expect(notify).toHaveBeenCalledWith({ type: "success", message: "Copied as HTML page" });
   });
 

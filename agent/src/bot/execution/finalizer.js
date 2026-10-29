@@ -118,12 +118,6 @@ export class SessionExecutionFinalizer {
       modelLoopRound: agentResult?.modelLoopRound,
       persistenceScope,
     });
-    await this.session.saveCurrentTurnTasks({
-      userId,
-      sessionId,
-      currentTurnTasks: agentResult?.turnTasks || [],
-      persistenceScope,
-    });
 
     lifecycle?.enterMemory?.();
     const memoryPostProcessAsyncEnabled =
@@ -184,7 +178,6 @@ export class SessionExecutionFinalizer {
       answer: agentResult.output,
       traces: agentResult.traces,
       messages: turnMessages,
-      turnTasks: agentResult?.turnTasks || [],
       dialogProcessId,
       turnScopeId: text(turnScopeId),
     };

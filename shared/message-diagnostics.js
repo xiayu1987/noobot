@@ -7,7 +7,7 @@ import crypto from "node:crypto";
 
 import { LENGTH_THRESHOLDS } from "./length-thresholds.js";
 import { QUANTITY_THRESHOLDS } from "./quantity-thresholds.js";
-import { isPlainObject, text, isObjectLike } from "./value.js";
+import { isPlainObject, text, isObjectLike, stableValue } from "./value.js";
 
 const DEFAULT_PREVIEW_LIMIT = QUANTITY_THRESHOLDS.diagnostics.modelContextPreviewLimit;
 const DEFAULT_CONTENT_CHARS = LENGTH_THRESHOLDS.display.modelContextContentChars;
@@ -41,16 +41,6 @@ function textHash(value = "") {
     .update(String(value || ""))
     .digest("hex")
     .slice(0, 16);
-}
-
-function stableValue(value) {
-  if (Array.isArray(value)) return value.map(stableValue);
-  if (!isObjectLike(value)) return value;
-  return Object.fromEntries(
-    Object.keys(value)
-      .sort()
-      .map((key) => [key, stableValue(value[key])]),
-  );
 }
 
 function firstDefined(...values) {

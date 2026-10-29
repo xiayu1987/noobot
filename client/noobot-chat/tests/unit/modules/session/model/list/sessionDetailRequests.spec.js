@@ -5,6 +5,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
+import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
 
 const getSessionThinkingDetailApi = vi.fn();
 vi.mock("../../../../../../src/infrastructure/api/chat/chatApi.js", () => ({
@@ -76,6 +77,7 @@ describe("sessionDetailRequests thinking detail", () => {
       messageItem: {
         sessionId: "session-eventual-detail",
         turnScopeId: "client-turn:eventual-detail",
+        dialogProcessId: "dp-eventual-detail",
       },
       fetchThinkingDetail,
       retryLimit: 1,
@@ -86,7 +88,7 @@ describe("sessionDetailRequests thinking detail", () => {
     expect(getSessionThinkingDetailApi.mock.calls[0][0]).toEqual({
       userId: "admin",
       sessionId: "session-eventual-detail",
-      dialogProcessId: "",
+      dialogProcessId: "dp-eventual-detail",
       turnScopeId: "client-turn:eventual-detail",
     });
     expect(detail).toEqual(detailPayload);
@@ -98,9 +100,11 @@ describe("sessionDetailRequests thinking detail", () => {
     );
     const { fetchThinkingDetail } = createRequests();
 
-    const error = await fetchThinkingDetail({ sessionId: "s1", turnScopeId: "t1" }).catch(
-      (caught) => caught,
-    );
+    const error = await fetchThinkingDetail({
+      sessionId: "s1",
+      turnScopeId: "t1",
+      dialogProcessId: "dp-1",
+    }).catch((caught) => caught);
     expect(error.code).toBe("http");
     expect(error.status).toBe(503);
     expect(error.message).toBe("denied");
@@ -110,19 +114,27 @@ describe("sessionDetailRequests thinking detail", () => {
     getSessionThinkingDetailApi.mockResolvedValue(response({ ok: true, exists: false }));
     const { fetchThinkingDetail } = createRequests();
 
-    const error = await fetchThinkingDetail({ sessionId: "s1", turnScopeId: "t1" }).catch(
-      (caught) => caught,
-    );
+    const error = await fetchThinkingDetail({
+      sessionId: "s1",
+      turnScopeId: "t1",
+      dialogProcessId: "dp-1",
+    }).catch((caught) => caught);
     expect(error.message).toBe("thinking detail not found");
     expect(error.code).toBe("not_found");
   });
 
-  it("requires a dialog process or turn scope identity", async () => {
+  it("rejects a message without the complete protocol Turn lookup key", async () => {
     const { fetchThinkingDetail } = createRequests();
 
-    await expect(fetchThinkingDetail({ sessionId: "s1" })).rejects.toThrow(
-      "dialogProcessId or turnScopeId is required",
-    );
+    for (const messageItem of [
+      { sessionId: "s1", turnScopeId: "t1" },
+      { sessionId: "s1", dialogProcessId: "dp-1" },
+      { sessionId: "s1", turnScopeId: "t1", dialogProcessId: " dp-1 " },
+    ]) {
+      await expect(
+        loadThinkingDetail({ sessionId: "s1", messageItem, fetchThinkingDetail }),
+      ).rejects.toMatchObject({ code: SESSION_ERROR_CODE.TURN_LOOKUP_KEY_INVALID });
+    }
     expect(getSessionThinkingDetailApi).not.toHaveBeenCalled();
   });
 });

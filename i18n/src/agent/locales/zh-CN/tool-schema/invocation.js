@@ -112,6 +112,10 @@ export const INVOCATION_TOOL_SCHEMA = {
         key: "tools.script.fieldIncludeLineNumbers",
         text: "stdout/stderr 是否带行号（默认关闭）。",
       },
+      outputFiles: {
+        key: "tools.script.fieldOutputFiles",
+        text: "需要交付给用户的产物文件绝对路径列表（按本工具的执行视角书写）。命令执行后这些文件会登记为附件快照，结果返回附件引用；回复中请引用该附件，未声明的文件无法下载。",
+      },
       riskLevel: {
         key: "tools.script.fieldRiskLevel",
         text: "脚本风险等级（必填）：low、medium、high 或 critical。具有破坏性的脚本必须标记为 critical。",

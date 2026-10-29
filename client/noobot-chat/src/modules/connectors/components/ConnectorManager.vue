@@ -409,15 +409,15 @@ watch(() => [props.connected, props.userId], refresh);
 .connector-identity strong {
   color: var(--noobot-text-strong);
   font-size: var(--noobot-font-size-sm);
-  line-height: var(--noobot-line-height-cozy);
+  line-height: var(--noobot-line-height-balanced);
 }
 .connector-identity small {
   color: var(--noobot-text-secondary);
   font-size: var(--noobot-font-size-xs);
-  line-height: var(--noobot-line-height-cozy);
+  line-height: var(--noobot-line-height-balanced);
 }
-.connector-meta {
-  display: flex !important;
+.connector-identity .connector-meta {
+  display: flex;
   align-items: center;
   gap: var(--noobot-space-2xs);
 }
@@ -435,7 +435,7 @@ watch(() => [props.connected, props.userId], refresh);
   color: var(--noobot-status-error);
 }
 .connector-status-icon.is-disconnected {
-  color: var(--noobot-text-muted);
+  color: var(--noobot-text-secondary);
 }
 .connector-row-actions {
   gap: var(--noobot-space-3xs);

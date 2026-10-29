@@ -20,7 +20,7 @@ const TERMINAL_FINISH_STATUS = Object.freeze({
   [STATUS_STEP_TERMINAL.STOPPED]: "warning",
   [STATUS_STEP_TERMINAL.ERROR]: "error",
 });
-// Steps before the active ordinal are finished, the active one is in process, the rest wait.
+
 function resolveStepStatus(stepIndex, activeOrdinal, finishStatus) {
   if (stepIndex < activeOrdinal) return finishStatus;
   if (stepIndex === activeOrdinal) return "process";
@@ -76,13 +76,13 @@ const stepView = computed(() => {
   width: 100%;
   max-width: 100%;
   margin: 0;
-  padding: var(--noobot-space-md) var(--noobot-space-md) var(--noobot-space-sm);
+  padding: var(--noobot-space-xl) var(--noobot-space-md) var(--noobot-space-sm);
   border: none;
   border-radius: var(--noobot-radius-xs);
   color: var(--noobot-text-secondary);
   background: transparent;
   overflow: hidden;
-  transition: border-color var(--noobot-duration-normal) ease;
+  transition: border-color var(--noobot-duration-normal) var(--noobot-ease-standard);
 }
 
 .message-status-steps__list {
@@ -118,15 +118,15 @@ const stepView = computed(() => {
   z-index: 1;
   width: 6px;
   height: 6px;
-  border-radius: 50%;
+  border-radius: var(--noobot-radius-circle);
   background-color: var(--noobot-panel-border);
-  transition: background-color var(--noobot-duration-slow) ease;
+  transition: background-color var(--noobot-duration-slow) var(--noobot-ease-standard);
 }
 
 .message-status-steps__title {
   max-width: 100%;
   margin-top: var(--noobot-space-xs);
-  font-size: 11px;
+  font-size: var(--noobot-font-size-xs);
   line-height: var(--noobot-line-height-none);
   font-weight: var(--noobot-font-weight-regular);
   color: var(--noobot-thinking-muted);
@@ -137,7 +137,7 @@ const stepView = computed(() => {
 }
 
 .message-status-steps__item.is-success .message-status-steps__dot {
-  background-color: var(--noobot-text-muted);
+  background-color: var(--noobot-text-secondary);
 }
 .message-status-steps__item.is-success .message-status-steps__title {
   color: var(--noobot-text-secondary);
@@ -157,7 +157,9 @@ const stepView = computed(() => {
   color: var(--noobot-status-running);
   font-weight: var(--noobot-font-weight-semibold);
 }
-.message-status-steps.is-running .message-status-steps__item.is-process .message-status-steps__title {
+.message-status-steps.is-running
+  .message-status-steps__item.is-process
+  .message-status-steps__title {
   letter-spacing: var(--noobot-letter-spacing-caps-wide);
 }
 
@@ -184,13 +186,12 @@ const stepView = computed(() => {
   }
 }
 
-
 @media (max-width: 640px) {
   .message-status-steps {
-    padding: var(--noobot-space-sm) var(--noobot-space-md) var(--noobot-space-xs);
+    padding: var(--noobot-space-lg) var(--noobot-space-md) var(--noobot-space-xs);
   }
   .message-status-steps__title {
-    font-size: 10px;
+    font-size: var(--noobot-font-size-xs);
   }
 }
 </style>

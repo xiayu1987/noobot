@@ -7,3 +7,4 @@ export * from "./descriptor.js";
 export * from "./storage-ref.js";
 export * from "./relation.js";
 export * from "./access-ref.js";
+export * from "./source-path.js";

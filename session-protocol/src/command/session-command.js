@@ -3,9 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject, text as clean } from "@noobot/shared/value";
+import { isCanonicalText, isPlainObject, text as clean } from "@noobot/shared/value";
 import { createSessionScope, validateSessionScope } from "../identity.js";
-import { SESSION_ERROR_CODE } from "../errors.js";
+import { SESSION_ERROR_CODE, TURN_LIFECYCLE_REJECTION_ERROR } from "../errors.js";
 import { SESSION_PROTOCOL_VERSION } from "../version.js";
 
 export const SESSION_COMMAND = Object.freeze({
@@ -73,6 +73,39 @@ export function requireSessionAggregateVersion(value, field = "aggregateVersion"
     statusCode: 400,
     code: SESSION_ERROR_CODE.AGGREGATE_VERSION_INVALID,
   });
+}
+
+export function isNewerSessionAggregateVersion(nextVersion, currentVersion) {
+  return (
+    requireSessionAggregateVersion(nextVersion, "nextAggregateVersion") >
+    requireSessionAggregateVersion(currentVersion, "currentAggregateVersion")
+  );
+}
+
+export function createAggregateVersionConflictError({ currentVersion }) {
+  return Object.assign(new Error("session aggregate version conflict"), {
+    statusCode: 409,
+    code: SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT,
+    currentVersion: requireSessionAggregateVersion(currentVersion, "currentVersion"),
+  });
+}
+
+export function createTurnLifecycleRejectedError(rejection) {
+  if (!isPlainObject(rejection) || !isCanonicalText(rejection.reason)) {
+    throw new TypeError("turn lifecycle rejection requires a canonical reason");
+  }
+  const error = new Error(rejection.reason);
+  error.name = TURN_LIFECYCLE_REJECTION_ERROR;
+  error.code = rejection.reason;
+  if (rejection.reason === SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT) {
+    error.currentVersion = requireSessionAggregateVersion(
+      rejection.currentVersion,
+      "currentVersion",
+    );
+  } else if (Object.hasOwn(rejection, "currentVersion")) {
+    throw new TypeError("currentVersion is only allowed for aggregate version conflicts");
+  }
+  return error;
 }
 
 export function normalizeExpectedAggregateVersion(value) {

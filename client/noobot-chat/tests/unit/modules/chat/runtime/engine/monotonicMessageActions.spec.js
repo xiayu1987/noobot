@@ -14,6 +14,12 @@ import {
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { lifecycle } from "../run-state-machine/turnRuntimeRegistryTestFixtures.js";
 import { createPendingMessageOperationStore } from "../../../../../../src/modules/chat/runtime/engine/messageOperationStore.js";
+import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
+import { selectMainSessionDetailEntry } from "@noobot/session-protocol/session-detail";
+import {
+  deleteSuccessResponse,
+  mutationFailureResponse,
+} from "../../../../helpers/sessionDetailFixture.js";
 
 function createActions({
   turnRuntimeRegistry = ref(createTurnRuntimeRegistryState()),
@@ -42,18 +48,24 @@ function createActions({
     rawMessages: [userMessage, assistantMessage],
     aggregateVersion: 1,
   });
-  const deleteSessionMessagesFromApi = vi.fn(async () => ({
-    ok: true,
-    json: async () => ({ ok: true, session: activeSession.value, deletedTurnScopeIds: [] }),
-  }));
-  const applySessionDetail = vi.fn((detail = {}) => {
-    const nextSession = Array.isArray(detail?.sessions) ? detail.sessions[0] : detail?.session;
-    if (nextSession) activeSession.value = { ...activeSession.value, ...nextSession };
+  const deleteSessionMessagesFromApi = vi.fn(async () =>
+    deleteSuccessResponse({
+      sessionId: "s1",
+      turnScopeId: "turn-1",
+      aggregateVersion: 2,
+      messages: [],
+      deletedCount: 2,
+      anchorIndex: 0,
+    }),
+  );
+  const applySessionDetail = vi.fn((detail) => {
+    const mainEntry = selectMainSessionDetailEntry(detail);
+    activeSession.value = {
+      ...activeSession.value,
+      messages: [...mainEntry.messages],
+      aggregateVersion: mainEntry.aggregateVersion,
+    };
   });
-  const fetchSessionDetail = vi.fn(async () => ({
-    sessionId: "s1",
-    sessions: [{ ...activeSession.value, aggregateVersion: 2 }],
-  }));
   const actions = createMonotonicMessageActions({
     activeSession,
     activeSessionId,
@@ -70,7 +82,6 @@ function createActions({
     translate: (key) => key,
     userId: ref("user-1"),
     applySessionDetail,
-    fetchSessionDetail,
     turnRuntimeRegistry,
     messageOperationStore: createPendingMessageOperationStore(),
     chatWebSocketClient: { cancelStreamForTurn: vi.fn() },
@@ -90,7 +101,6 @@ function createActions({
     stopSending,
     userMessage,
     deleteSessionMessagesFromApi,
-    fetchSessionDetail,
     applySessionDetail,
     applyRunStateEvent,
   };
@@ -154,55 +164,39 @@ describe("monotonicMessageActions stop-window gates", () => {
     expect(deleteSessionMessagesFromApi).toHaveBeenCalledTimes(1);
   });
 
-  it("applies the conflict version and retries delete-from without loading session detail", async () => {
-    const {
-      actions,
-      activeSession,
-      userMessage,
-      deleteSessionMessagesFromApi,
-      fetchSessionDetail,
-    } = createActions();
+  it("applies the conflict version and retries delete-from once", async () => {
+    const { actions, activeSession, userMessage, deleteSessionMessagesFromApi } = createActions();
     deleteSessionMessagesFromApi
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 409,
-        json: async () => ({
-          ok: false,
+      .mockResolvedValueOnce(
+        mutationFailureResponse({
+          status: 409,
           error: "session version conflict",
-          errorCode: "SESSION_AGGREGATE_VERSION_CONFLICT",
+          errorCode: SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT,
           currentVersion: 2,
         }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          ok: true,
-          session: { ...activeSession.value, messages: [], rawMessages: [], aggregateVersion: 3 },
-          deletedTurnScopeIds: [],
+      )
+      .mockResolvedValueOnce(
+        deleteSuccessResponse({
+          sessionId: "s1",
+          turnScopeId: "turn-1",
+          aggregateVersion: 3,
+          messages: [],
+          deletedCount: 2,
+          anchorIndex: 0,
         }),
-      });
+      );
 
     const result = await actions.deleteMonotonicMessage(userMessage);
 
     expect(result).toBe(true);
-    expect(fetchSessionDetail).not.toHaveBeenCalled();
+    expect(activeSession.value.aggregateVersion).toBe(3);
     expect(deleteSessionMessagesFromApi).toHaveBeenCalledTimes(2);
     expect(deleteSessionMessagesFromApi.mock.calls[0][0].expectedAggregateVersion).toBe(1);
     expect(deleteSessionMessagesFromApi.mock.calls[1][0].expectedAggregateVersion).toBe(2);
   });
 
-  it("applies the top-level mutation version after deleting a stopped turn", async () => {
-    const { actions, activeSession, userMessage, deleteSessionMessagesFromApi } = createActions();
-    deleteSessionMessagesFromApi.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        ok: true,
-        sessionId: "s1",
-        aggregateVersion: 2,
-        session: { ...activeSession.value, messages: [], rawMessages: [] },
-        deletedTurnScopeIds: [],
-      }),
-    });
+  it("applies the detail aggregate version after deleting a stopped turn", async () => {
+    const { actions, activeSession, userMessage } = createActions();
 
     expect(await actions.deleteMonotonicMessage(userMessage)).toBe(true);
     expect(activeSession.value.aggregateVersion).toBe(2);
@@ -210,18 +204,8 @@ describe("monotonicMessageActions stop-window gates", () => {
 
   it("deletes a stopped turn after its authoritative summary clears the temporary lock", async () => {
     const applyRunStateEvent = vi.fn();
-    const { actions, activeSession, userMessage, deleteSessionMessagesFromApi } = createActions({
+    const { actions, activeSession, userMessage } = createActions({
       applyRunStateEvent,
-    });
-    deleteSessionMessagesFromApi.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        ok: true,
-        sessionId: "s1",
-        aggregateVersion: 2,
-        session: { ...activeSession.value, messages: [], rawMessages: [] },
-        deletedTurnScopeIds: [],
-      }),
     });
 
     expect(await actions.deleteMonotonicMessage(userMessage)).toBe(true);

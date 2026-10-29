@@ -11,7 +11,7 @@
   padding: var(--noobot-space-sm);
   color: var(--noobot-text-main);
   background: var(--noobot-msg-file-card-bg);
-  font-family: var(--noobot-font-mono, monospace);
+  font-family: var(--noobot-font-mono);
   white-space: pre-wrap;
 }
 
@@ -22,7 +22,7 @@
   overflow: auto;
   color: var(--noobot-text-main);
   background: var(--noobot-msg-file-card-bg);
-  font-family: var(--noobot-font-mono, monospace);
+  font-family: var(--noobot-font-mono);
 }
 
 .mutation-diff-pane + .mutation-diff-pane {
@@ -32,11 +32,11 @@
   position: sticky;
   top: 0;
   z-index: 1;
-  padding: 0.45rem 0.75rem;
+  padding: var(--noobot-space-sm) var(--noobot-space-lg);
   background: var(--noobot-control-bg);
-  color: var(--noobot-text-muted);
-  font-family: var(--noobot-font-sans, sans-serif);
-  font-size: 0.8rem;
+  color: var(--noobot-text-secondary);
+  font-family: var(--noobot-font-sans);
+  font-size: var(--noobot-font-size-xs);
 }
 .mutation-diff-line {
   display: grid;
@@ -45,20 +45,20 @@
   white-space: pre;
 }
 .mutation-line-number {
-  padding-right: 0.5rem;
-  color: var(--noobot-text-muted);
+  padding-right: var(--noobot-space-sm);
+  color: var(--noobot-text-secondary);
   text-align: right;
   user-select: none;
 }
 .mutation-line-sign {
-  color: var(--noobot-text-muted);
+  color: var(--noobot-text-secondary);
   font-weight: var(--noobot-font-weight-bold);
   text-align: center;
   user-select: none;
 }
 .mutation-diff-line code {
   overflow: hidden;
-  padding: 0 0.5rem;
+  padding: 0 var(--noobot-space-sm);
   text-overflow: ellipsis;
 }
 .mutation-diff-line.is-empty {

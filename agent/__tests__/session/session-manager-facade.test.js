@@ -15,7 +15,6 @@ function createFacadeRuntime(overrides = {}) {
     sessionCrudService: {},
     sessionMessageService: {},
     sessionContextService: {},
-    taskService: {},
     executionLogService: {},
     repositories: { connectorInstanceRepository: {} },
     createSessionPersistenceContext(input) {
@@ -270,11 +269,11 @@ test("createSessionFacade should delegate message and tree methods", async () =>
     turns: [{ role: "user", content: "hi" }],
   });
   const turns = await session.getSessionTurns({ userId: "u1", sessionId: "s1" });
-  const deleted = await session.deleteSessionBranch({ userId: "u1", sessionId: "s2" });
+  const deleted = await session.deleteSessionBranch({ userId: "u1", sessionIds: ["s2"] });
 
   assert.equal(appendCaptured.sessionId, "s1");
   assert.equal(appendCaptured.persistenceContext.kind, "test-context");
   assert.equal(turns.length, 1);
-  assert.equal(deleteCaptured.sessionId, "s2");
+  assert.deepEqual(deleteCaptured, { userId: "u1", sessionIds: ["s2"] });
   assert.equal(deleted.ok, true);
 });

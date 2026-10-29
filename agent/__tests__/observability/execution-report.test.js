@@ -21,7 +21,6 @@ function createFinalizer(session) {
   return new SessionExecutionFinalizer({
     session: {
       async upsertTurnTiming() {},
-      async saveCurrentTurnTasks() {},
       async getExecutionTurnLogs() {
         return [];
       },
@@ -44,7 +43,6 @@ const finalizePayload = {
   agentResult: {
     output: "done",
     turnMessages: [{ messageUid: "sm_done", role: "assistant", type: "message", content: "done" }],
-    turnTasks: [],
   },
   persistedTurnMessageUids: [],
   persistedTurnMessages: [],

@@ -301,7 +301,7 @@ defineExpose({ focusTextarea });
 
 .monotonic-edit-title {
   color: var(--noobot-text-strong);
-  font-size: var(--noobot-font-size-xl);
+  font-size: var(--noobot-font-size-lg);
   font-weight: var(--noobot-font-weight-semibold);
   line-height: var(--noobot-line-height-balanced);
 }
@@ -356,12 +356,12 @@ defineExpose({ focusTextarea });
   color: var(--noobot-text-main);
   background: var(--noobot-control-bg);
   border: none;
-  font-size: var(--noobot-font-size-base);
+  font-size: var(--noobot-font-size-md);
   line-height: var(--noobot-line-height-body);
   transition:
-    color var(--noobot-duration-normal) ease,
-    background-color var(--noobot-duration-normal) ease,
-    box-shadow var(--noobot-duration-normal) ease;
+    color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    box-shadow var(--noobot-duration-normal) var(--noobot-ease-standard);
 }
 
 .monotonic-edit-textarea :deep(.el-textarea__inner:hover) {
@@ -385,7 +385,7 @@ defineExpose({ focusTextarea });
 }
 
 .monotonic-attachment-title {
-  font-size: var(--noobot-font-size-base);
+  font-size: var(--noobot-font-size-md);
   font-weight: var(--noobot-font-weight-semibold);
   color: var(--noobot-text-main);
 }
@@ -425,16 +425,15 @@ defineExpose({ focusTextarea });
   gap: var(--noobot-space-xs);
   padding: var(--noobot-space-sm) var(--noobot-space-md);
   transition:
-    color var(--noobot-duration-normal) ease,
-    background-color var(--noobot-duration-normal) ease,
-    border-color var(--noobot-duration-normal) ease;
+    color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    border-color var(--noobot-duration-normal) var(--noobot-ease-standard);
   position: relative;
   background: var(--noobot-control-bg);
   border-color: var(--noobot-panel-border);
 }
 
 .monotonic-attachment-item:hover {
-  box-shadow: none;
   background: var(--noobot-attachment-hover-bg);
   border-color: var(--noobot-attachment-hover-border);
 }
@@ -490,14 +489,14 @@ defineExpose({ focusTextarea });
 .kind-tag {
   height: 18px;
   padding: 0 var(--noobot-space-xs);
-  font-size: var(--noobot-font-size-2xs);
+  font-size: var(--noobot-font-size-xs);
   border: none;
   background: transparent;
 }
 
 .dot {
   margin: 0 var(--noobot-space-2xs);
-  color: var(--noobot-text-muted);
+  color: var(--noobot-text-secondary);
 }
 
 .desc-text {
@@ -510,16 +509,16 @@ defineExpose({ focusTextarea });
   justify-content: center;
   width: 28px;
   height: 28px;
-  border-radius: 50%;
+  border-radius: var(--noobot-radius-circle);
   border: none;
   background: var(--noobot-surface-soft);
   color: var(--noobot-text-secondary);
   cursor: pointer;
   opacity: 0;
   transition:
-    color var(--noobot-duration-normal) ease,
-    background-color var(--noobot-duration-normal) ease,
-    opacity var(--noobot-duration-normal) ease;
+    color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    opacity var(--noobot-duration-normal) var(--noobot-ease-standard);
 }
 
 .monotonic-attachment-item:hover .monotonic-attachment-remove {
@@ -550,9 +549,9 @@ defineExpose({ focusTextarea });
   font-weight: var(--noobot-font-weight-medium);
   cursor: pointer;
   transition:
-    color var(--noobot-duration-normal) ease,
-    background-color var(--noobot-duration-normal) ease,
-    border-color var(--noobot-duration-normal) ease;
+    color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    border-color var(--noobot-duration-normal) var(--noobot-ease-standard);
 }
 
 .monotonic-add-attachment-btn:hover:not(:disabled) {
@@ -593,7 +592,7 @@ defineExpose({ focusTextarea });
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: var(--noobot-space-xs) 20px;
+  padding: var(--noobot-space-xs) var(--noobot-space-2xl);
   font-weight: var(--noobot-font-weight-medium);
 }
 

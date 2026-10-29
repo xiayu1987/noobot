@@ -30,7 +30,6 @@
     var(--noobot-base-white)
   );
   --noobot-base-emerald-400: #10b981;
-  --noobot-base-emerald-500: var(--noobot-base-emerald-400);
   --noobot-base-red-500: #ef4444;
   --noobot-base-red-100: color-mix(
     in srgb,
@@ -48,9 +47,6 @@
   --noobot-font-size-sm: 13px;
   --noobot-font-size-md: 14px;
   --noobot-font-size-lg: 16px;
-  --noobot-font-size-2xs: var(--noobot-font-size-xs);
-  --noobot-font-size-base: var(--noobot-font-size-md);
-  --noobot-font-size-xl: var(--noobot-font-size-lg);
   --noobot-font-weight-regular: 400;
   --noobot-font-weight-medium: 500;
   --noobot-font-weight-semibold: 600;
@@ -58,4 +54,6 @@
   --noobot-duration-fast: 0.16s;
   --noobot-duration-normal: 0.2s;
   --noobot-duration-slow: 0.3s;
+  --noobot-ease-standard: ease;
+  --noobot-ease-emphasized: cubic-bezier(0.4, 0, 0.2, 1);
 }

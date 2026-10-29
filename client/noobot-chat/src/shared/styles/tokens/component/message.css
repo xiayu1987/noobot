@@ -3,7 +3,7 @@
   --noobot-msg-avatar-text: var(--noobot-text-on-accent);
   --noobot-msg-user-avatar: var(--noobot-control-bg);
   --noobot-msg-user-avatar-text: var(--noobot-text-strong);
-  --noobot-msg-meta: var(--noobot-text-muted);
+  --noobot-msg-meta: var(--noobot-text-secondary);
   --noobot-msg-assistant-bg: var(--noobot-panel-bg);
   --noobot-msg-assistant-border: var(--noobot-panel-border);
   --noobot-msg-assistant-text: var(--noobot-text-main);
@@ -20,7 +20,7 @@
   --noobot-msg-file-card-bg: var(--noobot-control-bg);
   --noobot-msg-file-card-border: var(--noobot-panel-border);
   --noobot-msg-file-name: var(--noobot-text-main);
-  --noobot-msg-file-size: var(--noobot-text-muted);
+  --noobot-msg-file-size: var(--noobot-text-secondary);
   --noobot-msg-inline-code-bg: var(--noobot-control-bg);
   --noobot-msg-inline-code-text: var(--noobot-text-main);
   --noobot-msg-code-block-bg: var(--noobot-base-slate-900);

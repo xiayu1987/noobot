@@ -224,21 +224,16 @@ function requireTurnTarget(translate, values) {
 export async function fetchWorkflowNodeThinkingDetail({
   props,
   translate,
-  rootSessionId = "",
-  routeDialogProcessId = "",
-  dialogProcessId = "",
-  turnScopeId = "",
+  rootSessionId,
+  routeDialogProcessId,
+  dialogProcessId,
+  turnScopeId,
 }) {
   const target = requireTurnTarget(translate, {
     userId: props.userId,
     rootSessionId,
     routeDialogProcessId,
-    dialogProcessId,
-    turnScopeId,
   });
-  if (!target.dialogProcessId && !target.turnScopeId) {
-    throw new Error(translate("workflow.nodeSessionMissing"));
-  }
   const response = await requireSessionMethod(
     props,
     "getThinkingDetail",
@@ -246,8 +241,8 @@ export async function fetchWorkflowNodeThinkingDetail({
     userId: target.userId,
     sessionId: target.rootSessionId,
     routeDialogProcessId: target.routeDialogProcessId,
-    dialogProcessId: target.dialogProcessId,
-    turnScopeId: target.turnScopeId,
+    dialogProcessId,
+    turnScopeId,
   });
   const payload = await readApiResponseEnvelope(response);
   if (payload.exists !== true) {

@@ -61,7 +61,6 @@ const MARKDOWN_EXPORT_TOKENS = `
       --noobot-font-size-sm: 13px;
       --noobot-font-size-md: 14px;
       --noobot-font-size-lg: 16px;
-      --noobot-font-size-base: var(--noobot-font-size-md);
       --noobot-line-height-body: 1.6;
       --noobot-line-height-loose: 1.7;
       --noobot-radius-xs: 8px;
@@ -139,7 +138,7 @@ function applyInlineStylesForCopy(htmlContent = "") {
     setStyle(elementNode, { margin: "8px 0 12px 20px", "padding-left": "16px" });
   });
   wrapper.querySelectorAll("li").forEach((elementNode) => {
-    setStyle(elementNode, { margin: "4px 0", "line-height": "1.7" });
+    setStyle(elementNode, { margin: "4px 0", "line-height": "var(--noobot-line-height-loose)" });
   });
   wrapper.querySelectorAll(".mermaid").forEach((elementNode) => {
     setStyle(elementNode, {
@@ -173,7 +172,7 @@ function buildHtmlDocumentForCopy(htmlBodyContent = "") {
   <title>Noobot Markdown Preview</title>
   <style>
 ${MARKDOWN_EXPORT_TOKENS}
-    body { margin: 0; padding: 16px; color: var(--noobot-base-slate-900); background: var(--noobot-base-white); line-height: var(--noobot-line-height-body); font-size: var(--noobot-font-size-base); }
+    body { margin: 0; padding: 16px; color: var(--noobot-base-slate-900); background: var(--noobot-base-white); line-height: var(--noobot-line-height-body); font-size: var(--noobot-font-size-md); }
     p { margin: 0 0 12px 0; }
     a { color: var(--noobot-base-blue-600); text-decoration: none; }
     a:hover { text-decoration: underline; }

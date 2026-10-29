@@ -19,15 +19,13 @@ export function buildHarness() {
       restoreRuntimeEventsEnv = applyRuntimeEventsEnv({ workspaceRoot: root });
       await initializeUserWorkspace(root, "alice");
       const runtime = createTestSessionServices({ workspaceRoot: root });
-      const { sessionRepository, taskRepository, fileSystemExecutionRepository } =
-        runtime.repositories;
+      const { sessionRepository, fileSystemExecutionRepository } = runtime.repositories;
       return {
         root,
         runtime,
         pathResolver: runtime.pathResolver,
         storageService: runtime.storageService,
         sessionRepo: sessionRepository,
-        taskRepo: taskRepository,
         executionRepo: fileSystemExecutionRepository,
       };
     },

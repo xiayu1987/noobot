@@ -134,23 +134,8 @@ watch(
   overflow-x: hidden;
   padding: var(--noobot-space-xl) var(--noobot-space-2xl);
   transition:
-    padding var(--noobot-duration-slow) ease,
-    max-height var(--noobot-duration-slow) ease;
-}
-
-.preview-body::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-.preview-body::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--noobot-panel-border) 90%, var(--noobot-text-muted));
-  border-radius: var(--noobot-radius-xs);
-}
-.preview-body::-webkit-scrollbar-thumb:hover {
-  background: var(--noobot-text-secondary);
-}
-.preview-body::-webkit-scrollbar-track {
-  background: transparent;
+    padding var(--noobot-duration-slow) var(--noobot-ease-standard),
+    max-height var(--noobot-duration-slow) var(--noobot-ease-standard);
 }
 
 .preview-error {
@@ -171,7 +156,6 @@ watch(
   margin: 0 auto;
   display: block;
   border-radius: var(--noobot-radius-xs);
-  box-shadow: none;
 }
 
 .preview-video {
@@ -193,7 +177,7 @@ watch(
   word-break: break-word;
   color: var(--noobot-preview-text);
   font-family: var(--noobot-font-mono);
-  font-size: var(--noobot-font-size-base);
+  font-size: var(--noobot-font-size-md);
   line-height: var(--noobot-line-height-body);
 }
 
@@ -259,20 +243,17 @@ watch(
 }
 .preview-markdown :deep(code) {
   padding: 0.2em 0.4em;
-  font-size: var(--noobot-font-size-sm);
 }
 
 .preview-markdown :deep(pre) {
   padding: var(--noobot-space-md);
   margin-bottom: var(--noobot-space-xl);
-}
-.preview-markdown :deep(pre code) {
-  font-size: var(--noobot-font-size-sm);
+  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 88%, transparent);
 }
 
 .preview-markdown :deep(table) {
   margin-bottom: var(--noobot-space-xl);
-  font-size: var(--noobot-font-size-base);
+  font-size: var(--noobot-font-size-md);
 }
 .preview-markdown :deep(th),
 .preview-markdown :deep(td) {
@@ -280,6 +261,7 @@ watch(
 }
 .preview-markdown :deep(th) {
   color: var(--noobot-preview-text);
+  background: color-mix(in srgb, var(--noobot-panel-border) 45%, transparent);
 }
 .preview-markdown :deep(tr:hover) {
   background-color: var(--noobot-accent-soft);
@@ -291,11 +273,6 @@ watch(
   overflow-x: auto;
   display: flex;
   justify-content: center;
-}
-.preview-markdown :deep(.mermaid svg) {
-  max-width: 100%;
-  height: auto;
-  display: block;
 }
 .preview-markdown :deep(.mermaid-render-error) {
   padding: var(--noobot-space-md);

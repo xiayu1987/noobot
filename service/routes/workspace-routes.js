@@ -5,17 +5,12 @@
  */
 import { isSuperAdminRole, resolveConfiguredSuperUserId } from "#agent/utils";
 import path from "node:path";
-import { access, mkdir, readdir, readFile, stat } from "node:fs/promises";
+import { access, mkdir, readdir } from "node:fs/promises";
 import { registerFileCrudRoutes } from "./file-crud-routes.js";
-import { recordFileAccessDebug } from "../runtime-events/file-access-debug.js";
 import { resolveFileMutationRoot } from "noobot-agent/file-mutation-service";
 import { buildWorkspaceTree } from "../services/workspace-tree-service.js";
 import { buildDirectoryArchiveFile } from "../services/zip-service.js";
-import {
-  classifyRequestedPathError,
-  createBadRequestError,
-  createJsonRouteWrapper,
-} from "./route-wrapper.js";
+import { createBadRequestError, createJsonRouteWrapper } from "./route-wrapper.js";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
@@ -78,106 +73,6 @@ export function registerWorkspaceRoutes(
   } = {},
 ) {
   const jsonRoute = createJsonRouteWrapper({ translateText });
-
-  const maskHostPath = (pathValue = "") => {
-    const normalized = text(pathValue).replaceAll("\\", "/");
-    if (!normalized) return "";
-    const parts = normalized.split("/").filter(Boolean);
-    if (parts.length <= 2) return normalized;
-    return `${parts[0]}/.../${parts.at(-1)}`;
-  };
-
-  const logHostFileAccess = (req, event, payload = {}) =>
-    recordFileAccessDebug(req, {
-      event: "service.hostFile.fileAccess.trace",
-      traceEvent: event,
-      data: { apiChannel: "backend-host-api", ...payload },
-    });
-
-  const assertHostAccessAllowed = (req) => {
-    const isSandbox = text(req?.query?.isSandbox).toLowerCase();
-    if (isSandbox !== "false") {
-      const error = new Error("Host file access requires non-sandbox attachment metadata.");
-      error.statusCode = 403;
-      error.code = "host_access_requires_non_sandbox";
-      throw error;
-    }
-  };
-
-  const resolveHostFilePath = async (req) => {
-    const hostPath = text(req?.query?.path);
-    if (!hostPath) {
-      throw createBadRequestError(translateText("common.pathRequired", req.locale), {
-        code: "missing_path",
-      });
-    }
-    if (!path.isAbsolute(hostPath)) {
-      throw createBadRequestError("Host file path must be absolute.", { code: "not_absolute" });
-    }
-    const fileStats = await stat(hostPath).catch((error) => {
-      throw classifyRequestedPathError(error);
-    });
-    if (!fileStats.isFile()) {
-      throw createBadRequestError(translateText("common.pathIsNotFile", req.locale), {
-        code: "not_file",
-      });
-    }
-    return { hostPath, fileStats };
-  };
-
-  app.get(
-    "/internal/host-file/file",
-    jsonRoute(
-      async (req, res) => {
-        const requestedPath = text(req?.query?.path);
-        logHostFileAccess(req, "file.request", {
-          hasPath: Boolean(requestedPath),
-          hostPath: maskHostPath(requestedPath),
-          isSandbox: String(req?.query?.isSandbox || ""),
-        });
-        assertHostAccessAllowed(req);
-        const { hostPath, fileStats } = await resolveHostFilePath(req);
-        const contentBuffer = await readFile(hostPath);
-        const isText = !contentBuffer.includes(0);
-        logHostFileAccess(req, "file.response", {
-          hostPath: maskHostPath(hostPath),
-          isText,
-          size: fileStats.size,
-        });
-        res.json({
-          ok: true,
-          path: hostPath,
-          fileName: path.basename(hostPath),
-          isText,
-          size: fileStats.size,
-          content: isText ? contentBuffer.toString("utf8") : "",
-        });
-      },
-      { fallbackErrorKey: "common.readWorkspaceFileFailed" },
-    ),
-  );
-
-  app.get(
-    "/internal/host-file/download",
-    jsonRoute(
-      async (req, res) => {
-        const requestedPath = text(req?.query?.path);
-        logHostFileAccess(req, "download.request", {
-          hasPath: Boolean(requestedPath),
-          hostPath: maskHostPath(requestedPath),
-          isSandbox: String(req?.query?.isSandbox || ""),
-        });
-        assertHostAccessAllowed(req);
-        const { hostPath, fileStats } = await resolveHostFilePath(req);
-        logHostFileAccess(req, "download.response", {
-          hostPath: maskHostPath(hostPath),
-          size: fileStats.size,
-        });
-        res.download(hostPath, path.basename(hostPath));
-      },
-      { fallbackErrorKey: "common.downloadWorkspaceFileFailed" },
-    ),
-  );
 
   app.post(
     "/internal/workspace/reset/:userId",

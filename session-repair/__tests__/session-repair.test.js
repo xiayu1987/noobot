@@ -13,6 +13,7 @@ import {
   MESSAGE_REMOVED_FIELD_NAME,
   SESSION_ARTIFACT_CHECKPOINT_RECORDS_SCHEMA_VERSION,
   SESSION_ARTIFACT_SCHEMA_VERSION,
+  createEmptyTurnLifecycle,
 } from "@noobot/session-protocol";
 import { releasedSession } from "./helpers/released-session.js";
 import { historicalMultimodalParseEnvelope } from "./helpers/transfer-envelope.js";
@@ -22,7 +23,6 @@ import {
   reconcileCompletedTurnSummaryMarks,
   reconcileDuplicateCanonicalAssistantPresentations,
   reconcileExecutionSegmentIndex,
-  reconcileSessionSummaryIndex,
   reconcileUncommittedAggregateConflictContinuations,
   resegmentMigratedCheckpointBaselines,
   runAtomicSessionRepair,
@@ -33,6 +33,7 @@ const LEGACY_MESSAGE_ID = MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID;
 test("session repair demotes older duplicate canonical assistant presentations", () => {
   const result = reconcileDuplicateCanonicalAssistantPresentations({
     turnLifecycle: {
+      ...createEmptyTurnLifecycle(),
       turns: {
         "turn-1": { presentationMessageId: "presentation-new" },
       },
@@ -94,6 +95,7 @@ function aggregateConflictContinuationSession({ withCommittedMessage = false } =
         : []),
     ],
     turnLifecycle: {
+      ...createEmptyTurnLifecycle(),
       sequence: 14,
       turns: {
         "unrelated-turn": { turnScopeId: "unrelated-turn", state: "completed" },
@@ -338,24 +340,37 @@ test("rejects the historical reason without matching multimodal tool-call eviden
 });
 
 test("reconciles execution index metadata through one repair function", () => {
-  const result = reconcileExecutionSegmentIndex(
-    { segments: [{ file: "segment-1.jsonl", bytes: 1, records: 1 }] },
-    [{ file: "segment-1.jsonl", bytes: 20, records: 2 }],
-  );
-  assert.deepEqual(result.repaired, ["segment-1.jsonl"]);
-  assert.deepEqual(result.index.segments[0], { file: "segment-1.jsonl", bytes: 20, records: 2 });
-});
-
-test("reconciles session summary membership from materialized artifact ids", () => {
-  const result = reconcileSessionSummaryIndex({
-    sessionIds: ["a", "b"],
-    sessions: [{ sessionId: "a" }, { sessionId: "a" }, { sessionId: "orphan" }],
+  const index = {
+    schemaVersion: 3,
+    segments: [
+      { sequence: 1, file: "segment-000001.jsonl", bytes: 1, records: 1, sealed: true },
+      { sequence: 2, file: "segment-000002.jsonl", bytes: 5, records: 1, sealed: false },
+    ],
+  };
+  const result = reconcileExecutionSegmentIndex(index, [
+    { file: "segment-000001.jsonl", bytes: 20, records: 2 },
+    { file: "segment-000002.jsonl", bytes: 5, records: 1 },
+  ]);
+  assert.deepEqual(result.repaired, ["segment-000001.jsonl"]);
+  assert.deepEqual(result.index.segments[0], {
+    sequence: 1,
+    file: "segment-000001.jsonl",
+    bytes: 20,
+    records: 2,
+    sealed: true,
   });
-  assert.deepEqual(
-    result.sessions.map((item) => item.sessionId),
-    ["a"],
+  assert.equal(index.segments[0].bytes, 1);
+  assert.ok(Object.isFrozen(result.index));
+  assert.throws(
+    () =>
+      reconcileExecutionSegmentIndex(index, [
+        { file: "segment-000001.jsonl", bytes: 1, records: 1 },
+      ]),
+    TypeError,
   );
-  assert.equal(result.changed, true);
+  assert.throws(() => reconcileExecutionSegmentIndex({ segments: [] }, []), {
+    code: "EXECUTION_EVENT_INDEX_SCHEMA_UNSUPPORTED",
+  });
 });
 
 test("migrates duplicate terminal and command facts into the canonical lifecycle", () => {
@@ -491,6 +506,7 @@ test("rejects conflicting duplicate terminal facts during explicit migration", (
 test("repairs eligible messages in completed turns without marking preserved user or final messages", () => {
   const result = reconcileCompletedTurnSummaryMarks({
     turnLifecycle: {
+      ...createEmptyTurnLifecycle(),
       turns: {
         "turn-1": {
           dialogProcessId: "dialog-1",
@@ -747,6 +763,7 @@ test("protocol repair resegments a migrated checkpoint baseline and preserves th
             {
               turnId: "turn-000001",
               turnScopeId: "scope-1",
+              dialogProcessId: "dialog-1",
               file: "turns/turn-000001.jsonl",
               committedBytes: 0,
               recordCount: 0,
@@ -754,10 +771,15 @@ test("protocol repair resegments a migrated checkpoint baseline and preserves th
               messageHashes: Object.fromEntries(
                 records.map((item) => [item.messageUid, item.hash]),
               ),
-              summarySnapshots: indexes.map(({ op, ...index }) => index),
+              summarySnapshots: indexes.map(({ op, ...index }, position) => ({
+                ...index,
+                committedAt: checkpointPayloads[position].committedAt,
+                messageUids: [],
+              })),
               compacted: false,
             },
           ],
+          turnLifecycle: createEmptyTurnLifecycle(),
           messageOrder: [{ messageUid: "m1" }, { messageUid: "m2" }, { messageUid: "m3" }],
         }),
         "utf8",

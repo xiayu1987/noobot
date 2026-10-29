@@ -12,7 +12,6 @@ import { useChatStore } from "../../stores/useChatStore.js";
 import {
   isWorkflowDiagnosticsEnabled,
   logWorkflowDiagnostics,
-  summarizeWorkflowMessages,
 } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
 import {
   isStateMachineDebugEnabled,
@@ -76,7 +75,6 @@ watch(
     logWorkflowDiagnostics("frontend.workflowRender.turnPresentationsSelected", () => ({
       ...summarizeActiveSessionSource(),
       presentationMessageCount: presentedMessages.value.length,
-      workflowPresentations: summarizeWorkflowMessages(presentedMessages.value),
     }));
   },
   { flush: "post" },

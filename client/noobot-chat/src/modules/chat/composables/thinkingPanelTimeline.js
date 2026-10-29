@@ -47,7 +47,6 @@ import {
   reduceThinkingDetailContentTimelines,
   selectThinkingDetailContentTimeline,
 } from "@noobot/event-protocol/thinking-detail-content";
-import { text } from "@noobot/shared/value";
 import { isApiRequestError } from "@noobot/shared/request-error";
 import { thinkingDetailService } from "../../../infrastructure/api/thinking/thinkingDetailService.js";
 
@@ -266,9 +265,9 @@ export function useThinkingTimeline(
       return null;
     const loaded = loadedThinkingDetail.value;
     const identity = resolveThinkingDetailIdentity(messageItem, getMessageSessionId(messageItem));
-    if (!identity.key) return loaded;
+    if (identity === null) return null;
     if (loaded?.__thinkingDetailIdentity?.key === identity.key) return loaded;
-    return getCachedThinkingDetail(identity) || null;
+    return getCachedThinkingDetail(identity);
   }
 
   const currentExecutionLogs = computed(() =>
@@ -376,7 +375,7 @@ export function useThinkingTimeline(
     if (shouldLoadThinkingDetail() !== true) return "";
     if (messageItem?.pending === true) return "";
     const identity = resolveThinkingDetailIdentity(messageItem, getMessageSessionId(messageItem));
-    return identity.key || "";
+    return identity === null ? "" : identity.key;
   });
 
   watch(
@@ -385,7 +384,7 @@ export function useThinkingTimeline(
       if (!key) return;
       const messageItem = props.messageItem || {};
       const identity = resolveThinkingDetailIdentity(messageItem, getMessageSessionId(messageItem));
-      if (!identity.key) return;
+      if (identity === null) return;
       const cached = getCachedThinkingDetail(identity);
       if (cached && hasLocalThinkingDetails(cached.messageItem || {})) {
         loadedThinkingDetail.value = { ...cached, __thinkingDetailIdentity: identity };
@@ -411,7 +410,6 @@ export function useThinkingTimeline(
           messageItem,
           fetchThinkingDetail: (target) =>
             thinkingDetailService.getDetail({ userId: props.userId, ...target }),
-          expectedRevision: text(cached?.revision),
         });
         if (!detail) {
           logThinkingReplayDebug("frontend.thinkingReplay.detailRequestEmpty", () => ({

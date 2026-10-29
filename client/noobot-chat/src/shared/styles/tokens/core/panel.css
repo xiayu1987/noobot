@@ -3,6 +3,8 @@
   --noobot-focus-ring:
     0 0 0 1px var(--noobot-accent-border),
     0 0 5px color-mix(in srgb, var(--noobot-accent) 28%, transparent);
+  --noobot-focus-outline: 2px solid var(--noobot-accent);
+  --noobot-focus-outline-offset: 2px;
   --noobot-runtime-glow: 0 0 9px color-mix(in srgb, var(--noobot-accent) 24%, transparent);
   --noobot-runtime-border: color-mix(in srgb, var(--noobot-accent) 38%, var(--noobot-panel-border));
   --noobot-panel-bg: color-mix(

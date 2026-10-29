@@ -167,7 +167,6 @@ test("buildContextMessageBlocks builds user_meta with source info for historical
                 sandboxPath:
                   "/workspace/primary-user/runtime/attach/scoped/s-history/user/att-history-1.md",
                 size: 42,
-                isSandbox: true,
               },
             ],
           },

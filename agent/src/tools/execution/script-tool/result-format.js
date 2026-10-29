@@ -41,6 +41,9 @@ export async function toolExecResult(mode, r = {}, extra = {}, options = {}) {
   } = r || {};
   const normalizedResult = normalizeExecOutput(publicResult, { includeLineNumbers });
   const { runtime } = options;
+  const outputFileEnvelopes = Array.isArray(options?.outputFileEnvelopes)
+    ? options.outputFileEnvelopes
+    : [];
   const overflowFiles =
     r?.outputOverflow === true
       ? [
@@ -86,13 +89,15 @@ export async function toolExecResult(mode, r = {}, extra = {}, options = {}) {
       ? {
           ...buildOutputTransferDeclaration({
             reason: TRANSFER_REASON.EXECUTE_SCRIPT_OUTPUT_OVERFLOW,
-            transferEnvelopes,
+            transferEnvelopes: [...transferEnvelopes, ...outputFileEnvelopes],
             outputLimitExceeded: r?.outputLimitExceeded === true,
             outputLimitBytes: Number(r?.outputLimitBytes || 0),
           }),
           outputOverflow: true,
         }
-      : {}),
+      : outputFileEnvelopes.length
+        ? { transferEnvelopes: outputFileEnvelopes }
+        : {}),
     includeLineNumbers,
   });
 }

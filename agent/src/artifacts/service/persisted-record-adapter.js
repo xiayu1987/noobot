@@ -65,9 +65,9 @@ export function toPersistedAttachmentRecord(basePath, record) {
   const identity = identityFor(record);
   const createdAt = safeStr(record.createdAt);
   const updatedAt = safeStr(record.updatedAt);
-  const sourcePath = safeStr(record.path);
-  if (!sourcePath) return null;
-  const ref = storageRef(basePath, identity, sourcePath);
+  const storagePath = safeStr(record.path);
+  if (!storagePath) return null;
+  const ref = storageRef(basePath, identity, storagePath);
   const persisted = {
     schema: ATTACHMENT_RECORD_SCHEMA,
     version: ATTACHMENT_RECORD_VERSION,
@@ -86,6 +86,7 @@ export function toPersistedAttachmentRecord(basePath, record) {
         ? { generationSource: safeStr(record.generationSource) }
         : {}),
       ...(record?.generatedByModel === true ? { generatedByModel: true } : {}),
+      ...(safeStr(record?.sourcePath) ? { sourcePath: safeStr(record.sourcePath) } : {}),
     },
     storageRef: { kind: "attachment-store", ref },
     relations: Array.isArray(record?.relations) ? record.relations : [],
@@ -115,6 +116,7 @@ export function fromPersistedAttachmentRecord(basePath, persisted) {
     attachmentSource: identity.attachmentSource,
     generatedByModel: descriptor.generatedByModel === true,
     generationSource: descriptor.generationSource || "",
+    ...(descriptor.sourcePath ? { sourcePath: descriptor.sourcePath } : {}),
     relations: record.relations,
   };
   return output;

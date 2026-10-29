@@ -13,6 +13,7 @@ import { ChatDotRound, Delete, EditPen } from "@element-plus/icons-vue";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 import { selectSessionTurnRuntime } from "../../chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { text } from "@noobot/shared/value";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
 const props = defineProps({
   sessions: { type: Array, required: true },
@@ -31,14 +32,26 @@ const lastSessionListScrollTop = ref(0);
 const listWrapEl = shallowRef(null);
 const expandedDateGroups = ref([]);
 
+const RECENT_DAY_GROUP_COUNT = QUANTITY_THRESHOLDS.client.sessionListRecentDayGroupCount;
+const OLDER_GROUP_KEY = "older";
+const UNKNOWN_GROUP_KEY = "unknown";
+
 function sessionTimeMs(sessionItem = {}) {
   const timeMs = Date.parse(sessionItem.updatedAt || sessionItem.createdAt || "");
   return Number.isFinite(timeMs) ? timeMs : 0;
 }
 
-function dateGroupKey(sessionItem = {}) {
+function olderGroupCutoffMs() {
+  const cutoff = new Date();
+  cutoff.setHours(0, 0, 0, 0);
+  cutoff.setDate(cutoff.getDate() - (RECENT_DAY_GROUP_COUNT - 1));
+  return cutoff.getTime();
+}
+
+function dateGroupKey(sessionItem, cutoffMs) {
   const timeMs = sessionTimeMs(sessionItem);
-  if (!timeMs) return "unknown";
+  if (!timeMs) return UNKNOWN_GROUP_KEY;
+  if (timeMs < cutoffMs) return OLDER_GROUP_KEY;
   const date = new Date(timeMs);
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -46,19 +59,43 @@ function dateGroupKey(sessionItem = {}) {
   return `${year}-${month}-${day}`;
 }
 
+const NAMED_GROUP_LABEL_KEYS = {
+  [UNKNOWN_GROUP_KEY]: {
+    label: "common.sessionDateUnknown",
+    compactLabel: "common.sessionDateUnknownCompact",
+  },
+  [OLDER_GROUP_KEY]: {
+    label: "common.sessionDateOlderThanWeek",
+    compactLabel: "common.sessionDateOlderCompact",
+  },
+};
+
+function dateGroupLabels(key) {
+  const namedLabelKeys = NAMED_GROUP_LABEL_KEYS[key];
+  if (namedLabelKeys) {
+    return {
+      label: translate(namedLabelKeys.label),
+      compactLabel: translate(namedLabelKeys.compactLabel),
+    };
+  }
+
+  return { label: key, compactLabel: key.slice(5) };
+}
+
 const groupedSessions = computed(() => {
   const groupsByDate = new Map();
+  const cutoffMs = olderGroupCutoffMs();
   const sortedSessions = [...props.sessions].sort(
     (leftSession, rightSession) => sessionTimeMs(rightSession) - sessionTimeMs(leftSession),
   );
   for (const sessionItem of sortedSessions) {
-    const key = dateGroupKey(sessionItem);
+    const key = dateGroupKey(sessionItem, cutoffMs);
     if (!groupsByDate.has(key)) groupsByDate.set(key, []);
     groupsByDate.get(key).push(sessionItem);
   }
   return [...groupsByDate].map(([key, items]) => ({
     key,
-    label: key === "unknown" ? translate("common.sessionDateUnknown") : key,
+    ...dateGroupLabels(key),
     items,
   }));
 });
@@ -183,8 +220,30 @@ watch(
           v-for="dateGroup in groupedSessions"
           :key="dateGroup.key"
           :name="dateGroup.key"
-          :title="dateGroup.label"
         >
+          <template #title>
+            <div class="session-date-header" :title="dateGroup.label">
+              <span class="session-date-label">
+                {{ collapsed ? dateGroup.compactLabel : dateGroup.label }}
+              </span>
+              <button
+                v-if="!collapsed"
+                type="button"
+                class="session-group-delete-btn noobot-action-btn noobot-icon-button noobot-flat-icon-btn"
+                :title="translate('common.deleteSessionGroup')"
+                :aria-label="translate('common.deleteSessionGroup')"
+                @click.stop="
+                  emit(
+                    'delete-session',
+                    dateGroup.items.map((sessionItem) => sessionItem.sessionId),
+                  )
+                "
+                @keydown.stop
+              >
+                <el-icon><Delete /></el-icon>
+              </button>
+            </div>
+          </template>
           <div class="session-list-inner">
             <el-popover
               v-for="sessionItem in dateGroup.items"
@@ -209,7 +268,7 @@ watch(
                   :aria-disabled="sessionItem.isUnavailable === true ? 'true' : undefined"
                   @click="emit('select-session', sessionItem.sessionId)"
                 >
-                  <div class="session-icon-wrapper">
+                  <div v-if="collapsed" class="session-icon-wrapper">
                     <el-icon class="session-icon"><ChatDotRound /></el-icon>
                   </div>
                   <div class="session-info">
@@ -244,7 +303,7 @@ watch(
                       class="session-delete-btn noobot-action-btn noobot-icon-button noobot-flat-icon-btn"
                       :title="translate('common.deleteSession')"
                       :aria-label="translate('common.deleteSession')"
-                      @click.stop="emit('delete-session', sessionItem.sessionId)"
+                      @click.stop="emit('delete-session', [sessionItem.sessionId])"
                     >
                       <el-icon><Delete /></el-icon>
                     </button>
@@ -320,7 +379,7 @@ watch(
   padding: 0 var(--noobot-space-lg);
   border: 0;
   background: transparent;
-  color: var(--noobot-text-muted);
+  color: var(--noobot-text-secondary);
   font-size: var(--noobot-font-size-sm);
   font-weight: var(--noobot-font-weight-semibold);
 }
@@ -334,6 +393,22 @@ watch(
   padding: 0;
 }
 
+.session-date-header {
+  display: flex;
+  align-items: center;
+  gap: var(--noobot-space-2xs);
+  width: 100%;
+  min-width: 0;
+}
+
+.session-date-label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .session-item {
   display: flex;
   align-items: center;
@@ -342,8 +417,8 @@ watch(
   cursor: pointer;
   border-radius: var(--noobot-radius-sm);
   transition:
-    background-color var(--noobot-duration-normal) ease,
-    color var(--noobot-duration-normal) ease;
+    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    color var(--noobot-duration-normal) var(--noobot-ease-standard);
 }
 
 .session-item.unavailable {
@@ -377,8 +452,8 @@ watch(
   align-items: center;
   justify-content: center;
   transition:
-    color var(--noobot-duration-normal) ease,
-    background-color var(--noobot-duration-normal) ease;
+    color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    background-color var(--noobot-duration-normal) var(--noobot-ease-standard);
   color: var(--noobot-text-main);
 }
 
@@ -388,7 +463,7 @@ watch(
 }
 
 .session-icon {
-  font-size: var(--noobot-font-size-xl);
+  font-size: var(--noobot-font-size-lg);
 }
 
 .session-info {
@@ -407,16 +482,17 @@ watch(
 }
 
 .session-rename-btn,
-.session-delete-btn {
+.session-delete-btn,
+.session-group-delete-btn {
   display: inline-flex;
-  color: var(--noobot-text-muted);
+  color: var(--noobot-text-secondary);
   opacity: 0;
   transform: none;
   transition:
-    opacity var(--noobot-duration-normal) ease,
-    color var(--noobot-duration-normal) ease,
-    background-color var(--noobot-duration-normal) ease,
-    border-color var(--noobot-duration-normal) ease;
+    opacity var(--noobot-duration-normal) var(--noobot-ease-standard),
+    color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    border-color var(--noobot-duration-normal) var(--noobot-ease-standard);
 }
 
 .session-item:hover .session-rename-btn,
@@ -426,13 +502,19 @@ watch(
   opacity: 1;
 }
 
+.session-date-header:hover .session-group-delete-btn,
+.session-group-delete-btn:focus-visible {
+  opacity: 1;
+}
+
 .session-rename-btn:hover {
   color: var(--noobot-text-strong);
   border-color: var(--noobot-panel-border);
   background: var(--noobot-surface-soft-hover);
 }
 
-.session-delete-btn:hover {
+.session-delete-btn:hover,
+.session-group-delete-btn:hover {
   color: color-mix(in srgb, var(--noobot-status-error) 70%, var(--noobot-text-strong));
   border-color: var(--noobot-status-error);
   background: var(--noobot-danger-soft);
@@ -452,7 +534,7 @@ watch(
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: color var(--noobot-duration-normal) ease;
+  transition: color var(--noobot-duration-normal) var(--noobot-ease-standard);
 }
 
 .session-item.active .title {
@@ -462,7 +544,7 @@ watch(
 
 .sid {
   font-size: var(--noobot-font-size-xs);
-  color: var(--noobot-text-muted);
+  color: var(--noobot-text-secondary);
   display: flex;
   align-items: center;
   gap: var(--noobot-space-2xs);
@@ -472,7 +554,7 @@ watch(
 .status-dot {
   width: 6px;
   height: 6px;
-  border-radius: 50%;
+  border-radius: var(--noobot-radius-circle);
   background-color: var(--noobot-status-idle);
 }
 
@@ -481,7 +563,7 @@ watch(
 }
 
 .status-dot.done {
-  background-color: var(--noobot-status-done);
+  background-color: var(--noobot-status-success);
 }
 
 .status-dot.error {
@@ -497,24 +579,22 @@ watch(
 .session-list-panel.collapsed .session-item {
   display: grid;
   place-items: center;
-  width: 100%;
-  padding: var(--noobot-space-xs) 0;
+  box-sizing: border-box;
+  width: var(--noobot-control-icon-size-lg);
+  height: var(--noobot-control-icon-size-lg);
+  padding: 0;
   gap: 0;
 }
 
 .session-list-panel.collapsed .session-list-inner {
   align-items: center;
-  padding-inline: var(--noobot-space-2xs);
+  padding-inline: var(--noobot-space-sm);
 }
 
 .session-list-panel.collapsed .session-date-collapse :deep(.el-collapse-item__header) {
   justify-content: center;
-  padding: 0;
-  font-size: 0;
-}
-
-.session-list-panel.collapsed .session-icon-wrapper {
-  margin: 0;
+  padding: 0 var(--noobot-space-sm);
+  font-size: var(--noobot-font-size-xs);
 }
 </style>
 
@@ -581,7 +661,7 @@ watch(
 .session-popover__meta .status-dot {
   width: 6px;
   height: 6px;
-  border-radius: 50%;
+  border-radius: var(--noobot-radius-circle);
   background-color: var(--noobot-status-idle);
   flex: 0 0 auto;
 }
@@ -591,7 +671,7 @@ watch(
 }
 
 .session-popover__meta .status-dot.done {
-  background-color: var(--noobot-status-done);
+  background-color: var(--noobot-status-success);
 }
 
 .session-popover__meta .status-dot.error {

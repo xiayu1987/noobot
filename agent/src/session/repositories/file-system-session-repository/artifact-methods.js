@@ -15,75 +15,54 @@ import {
   rebuildSessionDisplaySummaryArtifact,
 } from "../../session-artifact-store.js";
 import { buildSessionListFacts } from "../../session-artifact-session/session-list-facts.js";
-import { assertSessionScopeIdentity } from "@noobot/session-protocol";
-import { text } from "@noobot/shared/value";
+import {
+  assertSessionScopeIdentity,
+  createSessionArtifactNotFoundError,
+  createSessionNotFoundError,
+} from "@noobot/session-protocol";
 
 class SessionArtifactMethods {
-  async readSessionDisplaySummary(userId, sessionId, { persistenceContext } = {}) {
+  async readSessionDisplaySummary(userId, sessionId, { persistenceContext }) {
     const result = await this.ensureSessionDisplaySummary(userId, sessionId, {
       persistenceContext,
     });
     return result.summary;
   }
 
-  async ensureSessionDisplaySummary(userId, sessionId, { persistenceContext } = {}) {
-    const normalizedSessionId = text(sessionId);
-    if (!normalizedSessionId) return { summary: null, rebuilt: false };
-    const scope = await this.locateSessionScope(userId, normalizedSessionId, persistenceContext);
-    if (!scope) return { summary: null, rebuilt: false };
-    try {
-      const [manifest, summary] = await Promise.all([
-        this.storageService.readJson(scope.sessionFile, null),
-        readDisplaySummaryArtifact({
-          storageService: this.storageService,
-          sessionDir: scope.sessionDir,
-          sessionId: normalizedSessionId,
-        }),
-      ]);
-      if (isSessionDisplaySummaryCurrent(summary, manifest)) {
-        return { summary, rebuilt: false };
-      }
-      const session = await this.findById(userId, normalizedSessionId, { persistenceContext });
-      if (!session) return { summary: null, rebuilt: false };
-      let rebuilt = await readDisplaySummaryArtifact({
+  async ensureSessionDisplaySummary(userId, sessionId, { persistenceContext }) {
+    const scope = await this.requireSessionScope(userId, sessionId, persistenceContext);
+    return this._projectUnavailableOnFailure(userId, sessionId, scope, async () => {
+      const cached = await this._readCurrentDisplaySummary(scope, sessionId);
+      if (cached !== null) return { summary: cached, rebuilt: false };
+      const session = await this.findById(userId, sessionId, { persistenceContext });
+      if (!session) throw createSessionNotFoundError({ userId, sessionId });
+      return this._rebuildSessionDisplaySummary(userId, sessionId, session, persistenceContext);
+    });
+  }
+
+  async _readCurrentDisplaySummary(scope, sessionId) {
+    const [manifest, summary] = await Promise.all([
+      this._readSessionManifest(scope),
+      readDisplaySummaryArtifact({
         storageService: this.storageService,
         sessionDir: scope.sessionDir,
-        sessionId: normalizedSessionId,
-      });
-      let currentManifest = await this.storageService.readJson(scope.sessionFile, null);
-      if (isSessionDisplaySummaryCurrent(rebuilt, currentManifest)) {
-        await this.upsertSessionSummary(userId, session, {
-          listFacts: buildSessionListFacts(session),
-          scope,
-        });
-        return { summary: rebuilt, rebuilt: true };
-      }
-      await this._refreshSessionDisplaySummary(
-        userId,
-        normalizedSessionId,
-        session,
-        persistenceContext,
-      );
-      rebuilt = await readDisplaySummaryArtifact({
-        storageService: this.storageService,
-        sessionDir: scope.sessionDir,
-        sessionId: normalizedSessionId,
-      });
-      currentManifest = await this.storageService.readJson(scope.sessionFile, null);
-      if (isSessionDisplaySummaryCurrent(rebuilt, currentManifest)) {
-        return { summary: rebuilt, rebuilt: true };
-      }
-      const error = new Error("rebuilt Session display summary is not current");
-      error.code = "SESSION_DISPLAY_SUMMARY_REBUILD_INVALID";
-      throw error;
-    } catch (error) {
-      try {
-        await this.markSessionSummaryUnavailable(userId, normalizedSessionId, { error, scope });
-      } catch (projectionError) {
-        error.unavailableProjectionCause = projectionError;
-      }
-      throw error;
-    }
+        sessionId,
+      }),
+    ]);
+    return isSessionDisplaySummaryCurrent(summary, manifest) ? summary : null;
+  }
+
+  async _rebuildSessionDisplaySummary(userId, sessionId, session, persistenceContext) {
+    const outcome = await this._refreshSessionDisplaySummary(
+      userId,
+      sessionId,
+      session,
+      persistenceContext,
+    );
+    if (outcome.summary !== null) return outcome;
+    const error = new Error("rebuilt Session display summary is not current");
+    error.code = "SESSION_DISPLAY_SUMMARY_REBUILD_INVALID";
+    throw error;
   }
 
   async _refreshSessionDisplaySummary(userId, sessionId, candidateSession, persistenceContext) {
@@ -91,11 +70,12 @@ class SessionArtifactMethods {
       userId,
       sessionId,
       async (scope) => {
-        const manifest = await this.storageService.readJson(scope.sessionFile, null);
+        const current = await this._readCurrentDisplaySummary(scope, sessionId);
+        if (current !== null) return { summary: current, rebuilt: false };
+        const manifest = await this._readSessionManifest(scope);
         const session =
-          manifest &&
           createSessionDisplaySourceRevision(candidateSession) ===
-            createSessionDisplaySourceRevision(manifest)
+          createSessionDisplaySourceRevision(manifest)
             ? candidateSession
             : await this._readNormalizedSession(scope, sessionId);
         await rebuildSessionDisplaySummaryArtifact({
@@ -107,22 +87,26 @@ class SessionArtifactMethods {
           listFacts: buildSessionListFacts(session),
           scope,
         });
-        return session;
+        return { summary: await this._readCurrentDisplaySummary(scope, sessionId), rebuilt: true };
       },
       { persistenceContext },
     );
   }
 
-  async readSessionTurn(
-    userId,
-    sessionId,
-    { turnScopeId = "", dialogProcessId = "", persistenceContext } = {},
-  ) {
-    const normalizedSessionId = text(sessionId);
-    if (!normalizedSessionId) return null;
-    const scope = await this.locateSessionScope(userId, normalizedSessionId, persistenceContext);
-    if (!scope) return null;
-    return readSessionTurn({ sessionDir: scope.sessionDir, turnScopeId, dialogProcessId });
+  async readSessionTurn(userId, sessionId, { lookupKey, persistenceContext }) {
+    const scope = await this.locateSessionScope(userId, sessionId, persistenceContext);
+    if (!scope) throw createSessionNotFoundError({ userId, sessionId });
+    return readSessionTurn({
+      storageService: this.storageService,
+      sessionDir: scope.sessionDir,
+      ...lookupKey,
+    });
+  }
+
+  async _readSessionManifest(scope) {
+    const manifest = await this.storageService.readOptionalJson(scope.sessionFile);
+    if (manifest === null) throw createSessionArtifactNotFoundError("session manifest");
+    return manifest;
   }
 
   async _readNormalizedSession(scope, sessionId) {
@@ -139,8 +123,9 @@ class SessionArtifactMethods {
       sessionDir: scope.sessionDir,
       turnScopeIds,
     });
+    if (view === null) throw createSessionArtifactNotFoundError("session turn view manifest");
     return {
-      session: this._normalizeReadSession(view?.session, sessionId, scope),
+      session: this._normalizeReadSession(view.session, sessionId, scope),
       turnScopeIds: view.turnScopeIds,
     };
   }

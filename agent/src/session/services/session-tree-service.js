@@ -28,16 +28,28 @@ export class SessionTreeService {
     return collectSessionTreeBranch(sessionTree, sessionId);
   }
 
-  async deleteSessionBranch({ userId, sessionId }) {
-    const normalizedSessionId = text(sessionId);
-    if (!normalizedSessionId) {
+  collectBranchesSessionIds(rootSessionIds = [], sessionTree = null) {
+    const collected = new Set();
+    for (const rootSessionId of rootSessionIds) {
+      for (const id of this.collectBranchSessionIds(rootSessionId, sessionTree)) {
+        collected.add(id);
+      }
+    }
+    return [...collected];
+  }
+
+  async deleteSessionBranch({ userId, sessionIds }) {
+    const rootSessionIds = Array.isArray(sessionIds)
+      ? [...new Set(sessionIds.map((id) => text(id)))]
+      : [];
+    if (!rootSessionIds.length || rootSessionIds.some((id) => !id)) {
       throw fatalSystemError(tSystem("common.sessionIdRequired"), {
         code: ERROR_CODE.FATAL_SESSION_ID_REQUIRED,
       });
     }
 
-    let toDelete = this.collectBranchSessionIds(
-      normalizedSessionId,
+    let toDelete = this.collectBranchesSessionIds(
+      rootSessionIds,
       await this.treeRepo.getTree(userId),
     );
     let deletedSessionIds = null;
@@ -47,8 +59,8 @@ export class SessionTreeService {
         userId,
         planned,
         async () => {
-          const lockedBranch = this.collectBranchSessionIds(
-            normalizedSessionId,
+          const lockedBranch = this.collectBranchesSessionIds(
+            rootSessionIds,
             await this.treeRepo.getTree(userId),
           );
           const plannedSet = new Set(planned);
@@ -77,7 +89,6 @@ export class SessionTreeService {
 
     return {
       ok: true,
-      sessionId: normalizedSessionId,
       deletedSessionIds,
     };
   }

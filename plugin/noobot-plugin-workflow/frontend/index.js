@@ -69,9 +69,7 @@ function createWorkflowSessionService(authenticatedRequest) {
       );
     },
     getThinkingDetail({ userId, sessionId, routeDialogProcessId, dialogProcessId, turnScopeId }) {
-      const query = new URLSearchParams();
-      if (dialogProcessId) query.set("dialogProcessId", dialogProcessId);
-      if (turnScopeId) query.set("turnScopeId", turnScopeId);
+      const query = new URLSearchParams({ dialogProcessId, turnScopeId });
       return request(
         `/api/internal/workflow/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/${encodeURIComponent(routeDialogProcessId)}/thinking-detail?${query.toString()}`,
         { method: "GET" },

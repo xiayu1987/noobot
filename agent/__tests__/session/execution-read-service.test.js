@@ -4,11 +4,41 @@
  * SPDX-License-Identifier: MIT
  */
 import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
+import {
+  SESSIONS_SUMMARY_SCHEMA_VERSION,
+  SESSION_SUMMARY_AVAILABILITY,
+  requireSessionsSummaryPayload,
+} from "@noobot/session-protocol/sessions-summary";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { ExecutionReadService } from "../../src/session/services/execution-read-service.js";
 
 const now = () => "2026-07-20T00:00:00.000Z";
+
+function availableSummary({ sessionId, updatedAt }) {
+  return {
+    sessionId,
+    parentSessionId: "",
+    caller: SESSION_CALLER.USER,
+    createdAt: "2026-07-20T00:00:00.000Z",
+    updatedAt,
+    aggregateVersion: 1,
+    title: sessionId,
+    messageCount: 0,
+    lastMessage: null,
+    activeTurnScopeId: "",
+    availability: SESSION_SUMMARY_AVAILABILITY.AVAILABLE,
+  };
+}
+
+function summaryPayload(entries) {
+  return requireSessionsSummaryPayload({
+    schemaVersion: SESSIONS_SUMMARY_SCHEMA_VERSION,
+    sessions: entries,
+    updatedAt: now(),
+  });
+}
 
 function turn(overrides = {}) {
   return {
@@ -29,6 +59,11 @@ function turn(overrides = {}) {
 function service(sessions) {
   return new ExecutionReadService({
     sessionCrudService: {
+      async getAllSessionSummaries() {
+        return summaryPayload(
+          sessions.map(({ sessionId }) => availableSummary({ sessionId, updatedAt: now() })),
+        );
+      },
       async getAllSessionsData() {
         return structuredClone(sessions);
       },
@@ -176,42 +211,6 @@ test("children query returns direct children only and preserves historical attem
   ]);
 });
 
-test("same execution identity resolves deterministically to the newest authoritative fact", async () => {
-  const reader = service([
-    {
-      sessionId: "same",
-      turnLifecycle: {
-        ...createEmptyTurnLifecycle(),
-        turns: {
-          old: turn({
-            turnScopeId: "duplicate",
-            executionId: "agent:duplicate",
-            revision: 2,
-            updatedAt: "2026-07-19T00:00:00.000Z",
-          }),
-        },
-      },
-    },
-    {
-      sessionId: "same",
-      turnLifecycle: {
-        ...createEmptyTurnLifecycle(),
-        turns: {
-          newer: turn({
-            turnScopeId: "duplicate",
-            executionId: "agent:duplicate",
-            revision: 3,
-            updatedAt: "2026-07-20T00:00:00.000Z",
-          }),
-        },
-      },
-    },
-  ]);
-  const result = await reader.getExecution({ userId: "u1", executionId: "agent:duplicate" });
-  assert.equal(result.found, true);
-  assert.equal(result.execution.revision, 3);
-});
-
 test("duplicate executionId with different ownership is diagnosed and excluded", async () => {
   const reader = service([
     {
@@ -295,7 +294,7 @@ test("disposable read index is isolated by user and rebuilds when authoritative 
   const reader = new ExecutionReadService({
     sessionCrudService: {
       async getAllSessionSummaries({ userId }) {
-        return sessionsByUser[userId].map(({ sessionId, updatedAt }) => ({ sessionId, updatedAt }));
+        return summaryPayload(sessionsByUser[userId].map(availableSummary));
       },
       async getAllSessionsData({ userId }) {
         scans += 1;
@@ -326,15 +325,10 @@ test("disposable read index is isolated by user and rebuilds when authoritative 
   const refreshed = await reader.getExecution({ userId: "u1", executionId: "agent:root" });
   assert.equal(refreshed.execution.revision, 4);
   assert.equal(scans, 3);
-
-  reader.invalidate("u1");
-  await reader.getExecution({ userId: "u1", executionId: "agent:root" });
-  assert.equal(scans, 4);
 });
 
-test("summary/index failure falls back to authoritative scan without caching stale facts", async () => {
+test("summary read failure propagates instead of falling back to an uncached scan", async () => {
   let scans = 0;
-  let revision = 2;
   const reader = new ExecutionReadService({
     sessionCrudService: {
       async getAllSessionSummaries() {
@@ -342,35 +336,24 @@ test("summary/index failure falls back to authoritative scan without caching sta
       },
       async getAllSessionsData() {
         scans += 1;
-        return [
-          {
-            sessionId: "root",
-            turnLifecycle: {
-              ...createEmptyTurnLifecycle(),
-              turns: { root: turn({ revision, sequence: revision }) },
-            },
-          },
-        ];
+        return [];
       },
     },
     now,
   });
-
-  assert.equal(
-    (await reader.getExecution({ userId: "u1", executionId: "agent:root" })).execution.revision,
-    2,
+  await assert.rejects(
+    reader.getExecution({ userId: "u1", executionId: "agent:root" }),
+    /index unavailable/,
   );
-  revision = 3;
-  assert.equal(
-    (await reader.getExecution({ userId: "u1", executionId: "agent:root" })).execution.revision,
-    3,
-  );
-  assert.equal(scans, 2);
+  assert.equal(scans, 0);
 });
 
 test("unreadable sessions are skipped and surfaced as read diagnostics", async () => {
   const reader = new ExecutionReadService({
     sessionCrudService: {
+      async getAllSessionSummaries() {
+        return summaryPayload([availableSummary({ sessionId: "ok", updatedAt: now() })]);
+      },
       async getAllSessionsData({ failures }) {
         failures.push({ sessionId: "broken", code: "SESSION_REPAIR_FAILED", message: "bad" });
         return [

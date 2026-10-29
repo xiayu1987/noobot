@@ -113,6 +113,22 @@ function logDisplayedAttachmentsSummary({
   }));
 }
 
+export function collectSessionAttachments(
+  allMessages = [],
+  messageItem = {},
+  displayedAttachments = [],
+) {
+  const messages = Array.isArray(allMessages) ? allMessages : [];
+  const position = messages.indexOf(messageItem);
+  const preceding = position < 0 ? [] : messages.slice(0, position);
+  return mergeAttachments(
+    preceding
+      .filter((candidate) => getMessageRole(candidate) === "assistant")
+      .flatMap((candidate) => getMessageAttachments(candidate)),
+    displayedAttachments,
+  );
+}
+
 export function useMessageFiles({ getMessageItem = () => ({}), getAllMessages = () => [] } = {}) {
   const displayedAttachments = computed(() => {
     const messageItem = getMessageItem() || {};

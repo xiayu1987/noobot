@@ -416,6 +416,6 @@ watch(
 
 .list-empty-tip p {
   margin: 0;
-  color: var(--noobot-text-muted);
+  color: var(--noobot-text-secondary);
 }
 </style>

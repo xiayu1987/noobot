@@ -19,6 +19,7 @@ const TOOL_PHASE_BY_EVENT = Object.freeze({
 });
 
 const VISIBLE_CATEGORIES = new Set(["error", "semantic_transfer"]);
+const TOOL_ERROR_TYPE = "tool_error";
 
 function isVisibleExecutionLog(log) {
   if (TOOL_PHASE_BY_EVENT[log.event]) return Boolean(resolveToolName(log));
@@ -37,7 +38,8 @@ function countVisibleActivity(visibleLogs) {
     }
     if (phase === "call") counts.toolCallCount += 1;
     if (phase === "result") counts.toolResultCount += 1;
-    if (log.category === "error" || isFailedToolResult(log)) counts.errorCount += 1;
+    const isNonToolError = log.category === "error" && log.type !== TOOL_ERROR_TYPE;
+    if (isNonToolError || isFailedToolResult(log)) counts.errorCount += 1;
   }
   return counts;
 }

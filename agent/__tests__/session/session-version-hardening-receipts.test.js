@@ -119,10 +119,10 @@ test("deleteFromMessage replays a committed receipt without deleting again", asy
   const committed = await h.service.deleteFromMessage(input);
   await acceptTurn(h.service, { turnScopeId: "later", expectedAggregateVersion: 3 });
   const replay = await h.service.deleteFromMessage(input);
-  assert.equal(committed.aggregateVersion, 3);
-  assert.equal(replay.aggregateVersion, 4);
+  assert.equal(committed.committedAggregateVersion, 3);
+  assert.equal(committed.deduplicated, false);
   assert.equal(replay.committedAggregateVersion, 3);
-  assert.equal(replay.session.aggregateVersion, replay.aggregateVersion);
+  assert.equal(replay.detail.sessions[0].aggregateVersion, 4);
   assert.equal(replay.deduplicated, true);
   assert.deepEqual(replay.deletedCount, committed.deletedCount);
   assert.equal(h.get().messages.length, 2);
@@ -152,8 +152,8 @@ test("replaceTurn replays a committed receipt after the original anchor is gone"
   };
   const committed = await h.service.replaceTurn(input);
   const replay = await h.service.replaceTurn(input);
-  assert.equal(committed.session.aggregateVersion, 5);
-  assert.equal(replay.session.aggregateVersion, 5);
+  assert.equal(committed.committedAggregateVersion, 5);
+  assert.equal(replay.committedAggregateVersion, 5);
   assert.equal(replay.deduplicated, true);
   assert.equal(replay.turnReplacement.replacementTurnScopeId, "replacement");
   assert.equal(

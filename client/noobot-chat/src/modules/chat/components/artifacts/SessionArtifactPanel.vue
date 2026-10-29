@@ -350,7 +350,7 @@ onBeforeUnmount(() => {
 }
 
 .session-artifact-panel__toggle {
-  border-radius: 50%;
+  border-radius: var(--noobot-radius-circle);
 }
 
 .session-artifact-panel.is-collapsed .session-artifact-panel__header,

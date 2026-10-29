@@ -17,12 +17,34 @@ export function requireFunctionDependencies(owner, dependencies) {
   }
 }
 
+export function requireBoolean(owner, name, value) {
+  if (typeof value !== "boolean") throw new TypeError(`${owner} requires boolean ${name}`);
+  return value;
+}
+
+export function requirePositiveInteger(owner, name, value) {
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new TypeError(`${owner} requires positive integer ${name}`);
+  }
+  return value;
+}
+
 export function isObjectLike(value) {
   return value !== null && typeof value === "object";
 }
 
 export function isPlainObject(value) {
   return isObjectLike(value) && !Array.isArray(value);
+}
+
+export function stableValue(value) {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (!isObjectLike(value)) return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map((key) => [key, stableValue(value[key])]),
+  );
 }
 
 export function text(value) {

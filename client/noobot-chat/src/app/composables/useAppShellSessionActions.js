@@ -38,9 +38,9 @@ export function useAppShellSessionActions({
     }
   }
 
-  async function handleDeleteSession(sessionId) {
-    if (!(await confirmDeleteSession())) return;
-    const deleted = await notifyRequestFailure(() => deleteSession(sessionId));
+  async function handleDeleteSession(sessionIds) {
+    if (!(await confirmDeleteSession(sessionIds.length))) return;
+    const deleted = await notifyRequestFailure(() => deleteSession(sessionIds));
     if (deleted) notify({ type: "success", message: translate("common.deleteSessionSuccess") });
   }
 

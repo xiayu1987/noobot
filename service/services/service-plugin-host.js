@@ -49,7 +49,10 @@ function reportPluginEvent(record = {}) {
 }
 
 function createRouteGeneration({ context = {} } = {}) {
+  if (!isFunction(context?.enforceUserScopeParam))
+    throw new TypeError("service plugin routes require an enforceUserScopeParam guard");
   const router = express.Router();
+  router.param("userId", context.enforceUserScopeParam);
   const jsonRoute = createJsonRouteWrapper({ translateText: context?.translateText });
   const endpointKeys = new Set();
   const routes = [];
@@ -269,7 +272,6 @@ export function createServicePluginHost({
     async emitAfterSessionDelete({
       bot = null,
       userId = "",
-      sessionId = "",
       deletedSessionIds = [],
       remainingSessionIds = [],
     } = {}) {
@@ -278,7 +280,6 @@ export function createServicePluginHost({
       if (!basePath) throw new Error("session deletion hook requires a workspace basePath");
       const hookResult = await activeHookManager.emit(HOOK_POINT.SERVICE.AFTER_SESSION_DELETE, {
         userId: text(userId),
-        sessionId: text(sessionId),
         deletedSessionIds: mergeSessionDeletionIds(deletedSessionIds),
         remainingSessionIds: mergeSessionDeletionIds(remainingSessionIds),
         basePath,

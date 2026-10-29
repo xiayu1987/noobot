@@ -15,6 +15,13 @@ import {
   resolveSessionTarget,
   splitStartupArgs,
 } from "../../cli/session-context.js";
+import { createMissingSessionDetailDocument } from "@noobot/session-protocol/session-detail";
+import {
+  SESSIONS_SUMMARY_SCHEMA_VERSION,
+  SESSION_SUMMARY_AVAILABILITY,
+} from "@noobot/session-protocol/sessions-summary";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import { availableDetailDocument } from "../session-detail.test-helpers.js";
 
 test("send maps flags onto run preferences", () => {
   const invocation = parseCliArgs(
@@ -113,8 +120,29 @@ test("auth defaults to configured super admin; --user runs as that user", () => 
 test("session target: new, -c latest, -r existing", async () => {
   const bot = {
     session: {
-      getAllSessionSummaries: async () => [{ sessionId: "s2", aggregateVersion: 7 }],
-      getSessionDisplayData: async () => ({ sessions: [{ sessionId: "s1", aggregateVersion: 4 }] }),
+      getAllSessionSummaries: async () => ({
+        schemaVersion: SESSIONS_SUMMARY_SCHEMA_VERSION,
+        updatedAt: "2026-05-14T00:02:00.000Z",
+        sessions: [
+          {
+            sessionId: "s2",
+            parentSessionId: "",
+            caller: SESSION_CALLER.USER,
+            createdAt: "2026-05-14T00:00:00.000Z",
+            updatedAt: "2026-05-14T00:01:00.000Z",
+            aggregateVersion: 7,
+            title: "s2",
+            messageCount: 0,
+            lastMessage: null,
+            activeTurnScopeId: "",
+            availability: SESSION_SUMMARY_AVAILABILITY.AVAILABLE,
+          },
+        ],
+      }),
+      getSessionDisplayData: async ({ sessionId }) =>
+        sessionId === "s1"
+          ? availableDetailDocument({ sessionId, aggregateVersion: 4, messages: [] })
+          : createMissingSessionDetailDocument({ sessionId }),
     },
   };
   const created = await resolveSessionTarget({ bot, userId: "u", invocation: {} });

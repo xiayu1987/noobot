@@ -6,9 +6,12 @@
 import {
   ATTACHMENT_IDENTITY_REF_PREFIX,
   attachmentIdentityKey,
+  formatAttachmentIdentityRef,
   parseAttachmentIdentityRef,
   projectAttachmentIdentity,
 } from "@noobot/attachment-protocol/identity";
+import { resolveLinkedAttachment } from "@noobot/attachment-protocol";
+import { isAbsolutePathForPlatform } from "@noobot/path-resolver/syntax";
 import { text } from "@noobot/shared/value";
 
 const ATTACHMENT_INLINE_TOKEN = "noobot_attachment_ref";
@@ -53,6 +56,7 @@ export function buildAttachmentRefIndex(attachmentItems = []) {
     index.set(attachmentIdentityKey(identity), {
       ...identity,
       name: text(attachmentItem?.name || attachmentItem?.fileName),
+      ...(text(attachmentItem?.sourcePath) ? { sourcePath: text(attachmentItem.sourcePath) } : {}),
     });
   }
   return index;
@@ -132,6 +136,51 @@ function rewriteAttachmentTextTokens(state) {
   }
 }
 
+function isFileLinkHref(href) {
+  if (!href || href.startsWith("#") || href.startsWith("//")) return false;
+  return !/^[a-z][a-z0-9+.-]*:/i.test(href) || isAbsolutePathForPlatform(href);
+}
+
+function sourcePathDescriptors(env) {
+  const index = env?.attachmentRefIndex;
+  if (!(index instanceof Map)) return [];
+  return [...index.values()]
+    .filter((entry) => entry.sourcePath)
+    .map((entry) => ({
+      identity: {
+        attachmentId: entry.attachmentId,
+        sessionId: entry.sessionId,
+        attachmentSource: entry.attachmentSource,
+      },
+      sourcePath: entry.sourcePath,
+    }));
+}
+
+function decodeLinkPath(href) {
+  try {
+    return decodeURIComponent(href);
+  } catch {
+    return null;
+  }
+}
+
+function resolveLinkTarget(href, env) {
+  if (href.startsWith(ATTACHMENT_IDENTITY_REF_PREFIX)) {
+    const identity = resolveIdentity(href);
+    return identity ? { ref: href, identity } : null;
+  }
+  if (!isFileLinkHref(href)) return null;
+  const path = decodeLinkPath(href);
+  const linked =
+    path === null
+      ? { status: "unregistered" }
+      : resolveLinkedAttachment(path, sourcePathDescriptors(env));
+  if (linked.status === "bound") {
+    return { ref: formatAttachmentIdentityRef(linked.identity), identity: linked.identity };
+  }
+  return { unregistered: true, href };
+}
+
 function rewriteAttachmentLinkTokens(state) {
   for (const blockToken of state.tokens || []) {
     if (blockToken.type !== "inline" || !Array.isArray(blockToken.children)) continue;
@@ -140,9 +189,8 @@ function rewriteAttachmentLinkTokens(state) {
       const token = children[index];
       if (token.type !== "link_open") continue;
       const href = String(token.attrGet?.("href") || "");
-      if (!href.startsWith(ATTACHMENT_IDENTITY_REF_PREFIX)) continue;
-      const identity = resolveIdentity(href);
-      if (!identity) continue;
+      const target = resolveLinkTarget(href, state.env);
+      if (!target) continue;
 
       let closeIndex = index + 1;
       let depth = 1;
@@ -161,7 +209,7 @@ function rewriteAttachmentLinkTokens(state) {
       if (depth !== 0) continue;
 
       const replacement = new state.Token(ATTACHMENT_INLINE_TOKEN, "", 0);
-      replacement.meta = { ref: href, identity, label: labelParts.join("").trim() };
+      replacement.meta = { ...target, label: labelParts.join("").trim() };
       children.splice(index, closeIndex - index + 1, replacement);
     }
   }
@@ -170,6 +218,9 @@ function rewriteAttachmentLinkTokens(state) {
 function renderAttachmentToken(tokens, idx, _options, env) {
   const meta = tokens[idx]?.meta || {};
   const { identity, ref, label } = meta;
+  if (meta.unregistered) {
+    return renderMissingChip({ label: label || meta.href, reason: "attachment_not_registered" });
+  }
   if (!identity) return escapeHtmlAttribute(ref || "");
 
   const matched = lookupAttachment(env, identity);

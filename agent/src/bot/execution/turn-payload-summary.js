@@ -64,8 +64,6 @@ export function summarizeSessionTurnPayload(fullTurnPayload = {}) {
     summaryVersion: 1,
     role: fullTurnPayload.role,
     type: fullTurnPayload.type || "",
-    taskId: fullTurnPayload.taskId ?? "",
-    taskStatus: fullTurnPayload.taskStatus ?? "",
     dialogProcessId: fullTurnPayload.dialogProcessId || "",
     parentDialogProcessId: fullTurnPayload.parentDialogProcessId || "",
     turnScopeId: fullTurnPayload.turnScopeId || "",

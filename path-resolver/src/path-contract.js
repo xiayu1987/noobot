@@ -34,6 +34,7 @@ export const PATH_CAPABILITIES = Object.freeze({
   DOCUMENT_INPUT: "document.input",
   MULTIMODAL_INPUT: "multimodal.input",
   SCRIPT_INPUT: "script.input",
+  SCRIPT_OUTPUT: "script.output",
   NATIVE_INPUT: "native.input",
 });
 
@@ -94,6 +95,10 @@ const DEFAULT_CAPABILITIES = {
     hostRequiresRole: "super_admin",
   },
   "script.input": { acceptedViews: ["workspace", "attachment"], hostRequiresRole: "deny" },
+  "script.output": {
+    acceptedViews: ["workspace", "host"],
+    hostRequiresRole: "super_admin",
+  },
   "native.input": {
     acceptedViews: ["workspace", "attachment", "host"],
     hostRequiresRole: "super_admin",
@@ -167,6 +172,12 @@ export const TOOL_PATH_CONTRACTS = Object.freeze({
   scriptInput: Object.freeze({
     capability: "script.input",
     accepted: ["workspace", "attachment"],
+    execution: ["host", "sandbox"],
+    display: "runtime",
+  }),
+  scriptOutput: Object.freeze({
+    capability: "script.output",
+    accepted: ["workspace", "host"],
     execution: ["host", "sandbox"],
     display: "runtime",
   }),
@@ -510,9 +521,9 @@ export function assertToolPathContract(contract = {}) {
     throw new Error("sandbox cannot be a logical path view");
   if (
     contract.execution.includes("sandbox") &&
-    contract.capability !== PATH_CAPABILITIES.SCRIPT_INPUT
+    ![PATH_CAPABILITIES.SCRIPT_INPUT, PATH_CAPABILITIES.SCRIPT_OUTPUT].includes(contract.capability)
   )
-    throw new Error("sandbox execution is restricted to script.input");
+    throw new Error("sandbox execution is restricted to script.input and script.output");
   return Object.freeze({
     ...contract,
     accepted: Object.freeze([...contract.accepted]),

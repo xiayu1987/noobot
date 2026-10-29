@@ -18,7 +18,6 @@ test("compact tool timeline reads key and toolCallId only", () => {
 });
 
 test("thinking timeline merges tool entries by key or toolCallId, not tool_call_id", () => {
-  const root = { role: "assistant", turnScopeId: "turn-1" };
   const messages = [
     {
       role: "assistant",
@@ -33,7 +32,7 @@ test("thinking timeline merges tool entries by key or toolCallId, not tool_call_
     { role: "assistant", turnScopeId: "turn-1", toolTimeline: [{ key: "b", status: "running" }] },
     { role: "assistant", turnScopeId: "turn-1", toolTimeline: [{ key: "b", status: "done" }] },
   ];
-  const { toolTimeline } = projectThinkingTimeline(messages, root);
+  const { toolTimeline } = projectThinkingTimeline(messages, { turnScopeId: "turn-1" });
   assert.equal(toolTimeline.filter((item) => item.key === "b").length, 1);
   assert.equal(toolTimeline.filter((item) => item.tool_call_id === "a").length, 2);
 });

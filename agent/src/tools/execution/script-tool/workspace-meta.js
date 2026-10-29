@@ -95,7 +95,10 @@ export async function toolFileBackedExecResult(mode, r = {}, extra = {}, options
     result: r,
     identity: options?.identity,
   });
-  const transferEnvelopes = persisted?.transferEnvelopes || [];
+  const transferEnvelopes = [
+    ...(persisted?.transferEnvelopes || []),
+    ...(Array.isArray(options?.outputFileEnvelopes) ? options.outputFileEnvelopes : []),
+  ];
   return toToolJsonResult(EXECUTE_SCRIPT_TOOL_NAME, {
     ok: Number(r?.code || 0) === 0,
     mode,

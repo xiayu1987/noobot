@@ -6,13 +6,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { StorageService } from "../../src/session/storage-service.js";
+import { ATOMIC_RENAME_RETRY_DELAYS_MS } from "../../src/shared/storage/atomic-file-write.js";
 import { resetFsAdapter, setFsAdapter } from "../../src/shared/storage/fs-adapter.js";
 
 test.afterEach(() => {
   resetFsAdapter();
 });
 
-test("readJson returns fallback only when the persisted file is missing", async () => {
+test("readJson rejects missing files while readOptionalJson returns null", async () => {
   setFsAdapter({
     readFile: async () => {
       const error = new Error("missing");
@@ -20,19 +21,29 @@ test("readJson returns fallback only when the persisted file is missing", async 
       throw error;
     },
   });
-  const storage = new StorageService();
-  assert.deepEqual(await storage.readJson("/tmp/missing.json", { empty: true }), {
-    empty: true,
+  const storage = new StorageService({
+    atomicRenameRetryDelaysMs: ATOMIC_RENAME_RETRY_DELAYS_MS,
+    platform: process.platform,
   });
+  await assert.rejects(storage.readJson("/tmp/missing.json"), {
+    code: "PERSISTED_JSON_MISSING",
+    persistencePath: "/tmp/missing.json",
+  });
+  assert.equal(await storage.readOptionalJson("/tmp/missing.json"), null);
 });
 
-test("readJson preserves corrupted and permission-denied persistence failures", async () => {
-  const storage = new StorageService();
-  setFsAdapter({ readFile: async () => "{broken" });
-  await assert.rejects(storage.readJson("/tmp/broken.json", {}), {
-    code: "PERSISTED_JSON_CORRUPTED",
-    persistencePath: "/tmp/broken.json",
+test("readJson and readOptionalJson preserve corrupted and permission-denied failures", async () => {
+  const storage = new StorageService({
+    atomicRenameRetryDelaysMs: ATOMIC_RENAME_RETRY_DELAYS_MS,
+    platform: process.platform,
   });
+  setFsAdapter({ readFile: async () => "{broken" });
+  for (const read of [storage.readJson, storage.readOptionalJson]) {
+    await assert.rejects(read.call(storage, "/tmp/broken.json"), {
+      code: "PERSISTED_JSON_CORRUPTED",
+      persistencePath: "/tmp/broken.json",
+    });
+  }
 
   setFsAdapter({
     readFile: async () => {
@@ -41,10 +52,12 @@ test("readJson preserves corrupted and permission-denied persistence failures", 
       throw error;
     },
   });
-  await assert.rejects(storage.readJson("/tmp/private.json", {}), {
-    code: "PERSISTENCE_PERMISSION_DENIED",
-    persistencePath: "/tmp/private.json",
-  });
+  for (const read of [storage.readJson, storage.readOptionalJson]) {
+    await assert.rejects(read.call(storage, "/tmp/private.json"), {
+      code: "PERSISTENCE_PERMISSION_DENIED",
+      persistencePath: "/tmp/private.json",
+    });
+  }
 });
 
 test("writeJsonAtomic retries transient Windows rename EPERM errors", async () => {

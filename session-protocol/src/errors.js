@@ -17,7 +17,6 @@ export const SESSION_ERROR_CODE = Object.freeze({
   TURN_APPEND_REJECTED: "SESSION_TURN_APPEND_REJECTED",
   TURN_MESSAGE_NOT_PERSISTED: "SESSION_TURN_MESSAGE_NOT_PERSISTED",
   TURN_JOURNAL_MESSAGE_MISSING: "SESSION_TURN_JOURNAL_MESSAGE_MISSING",
-  MESSAGE_ORDER_MESSAGE_MISSING: "SESSION_MESSAGE_ORDER_MESSAGE_MISSING",
   MANIFEST_LAYOUT_INVALID: "SESSION_MANIFEST_LAYOUT_INVALID",
   TURN_JOURNAL_SCHEMA_REQUIRED: "SESSION_TURN_JOURNAL_SCHEMA_REQUIRED",
   ARTIFACT_NOT_FOUND: "SESSION_ARTIFACT_NOT_FOUND",
@@ -39,17 +38,17 @@ export const SESSION_ERROR_CODE = Object.freeze({
   TURN_SUMMARY_CHECKPOINT_REQUEST_INVALID: "TURN_SUMMARY_CHECKPOINT_REQUEST_INVALID",
   TURN_TIMING_INVALID: "SESSION_TURN_TIMING_INVALID",
   TURN_TIMING_CONFLICT: "SESSION_TURN_TIMING_CONFLICT",
+  TURN_LOOKUP_KEY_INVALID: "SESSION_TURN_LOOKUP_KEY_INVALID",
+  TURN_IDENTITY_REQUIRED: "SESSION_TURN_IDENTITY_REQUIRED",
+  TURN_IDENTITY_CONFLICT: "SESSION_TURN_IDENTITY_CONFLICT",
+  SESSIONS_SUMMARY_SCHEMA_UNSUPPORTED: "SESSIONS_SUMMARY_SCHEMA_UNSUPPORTED",
+  SESSIONS_SUMMARY_PAYLOAD_INVALID: "SESSIONS_SUMMARY_PAYLOAD_INVALID",
+  SESSIONS_SUMMARY_PROJECTION_FAILED: "SESSIONS_SUMMARY_PROJECTION_FAILED",
+  SESSION_DETAIL_PAYLOAD_INVALID: "SESSION_DETAIL_PAYLOAD_INVALID",
+  SESSION_MUTATION_RESPONSE_INVALID: "SESSION_MUTATION_RESPONSE_INVALID",
 });
 
 export const TURN_LIFECYCLE_REJECTION_ERROR = "TurnLifecycleRejectedError";
-
-export function createTurnLifecycleRejectedError(reason) {
-  if (!isCanonicalText(reason)) throw new TypeError("turn lifecycle rejection reason is required");
-  const error = new Error(reason);
-  error.name = TURN_LIFECYCLE_REJECTION_ERROR;
-  error.code = reason;
-  return error;
-}
 
 export function isTurnLifecycleRejectedError(error) {
   return error instanceof Error && error.name === TURN_LIFECYCLE_REJECTION_ERROR;
@@ -85,6 +84,16 @@ export function createSessionNotFoundError({ userId = "", sessionId = "" } = {})
 
 export function isSessionNotFoundError(error) {
   return error?.code === SESSION_ERROR_CODE.SESSION_NOT_FOUND;
+}
+
+export function createSessionArtifactNotFoundError(subject) {
+  if (!isCanonicalText(subject)) {
+    throw new TypeError("session artifact not-found subject is required");
+  }
+  return Object.assign(new Error(`session artifact not found: ${subject}`), {
+    statusCode: 404,
+    code: SESSION_ERROR_CODE.ARTIFACT_NOT_FOUND,
+  });
 }
 
 export function assertSessionScopeIdentity({ session, sessionId, parentSessionId }) {

@@ -1,0 +1,68 @@
+.el-drawer,
+.el-dialog,
+.el-message-box {
+  background: var(--noobot-panel-bg);
+  border: 1px solid var(--noobot-panel-border);
+  box-shadow: none;
+}
+
+.el-drawer__header,
+.el-dialog__header {
+  background: var(--noobot-panel-head-bg);
+  border-bottom: 1px solid var(--noobot-divider);
+}
+
+.el-drawer__title,
+.el-dialog__title,
+.el-message-box__title {
+  color: var(--noobot-text-strong);
+  font-weight: var(--noobot-font-weight-semibold);
+}
+
+.el-message-box {
+  border-radius: var(--noobot-radius-lg);
+}
+
+.el-message-box__message,
+.el-message-box__errormsg {
+  color: var(--noobot-text-main);
+}
+
+.el-message-box__headerbtn .el-message-box__close {
+  color: var(--noobot-text-secondary);
+}
+
+.el-message-box__headerbtn:hover .el-message-box__close {
+  color: var(--noobot-text-accent);
+}
+
+.el-overlay.is-message-box .el-overlay-message-box {
+  background: var(--noobot-mask-bg);
+}
+
+.el-collapse,
+.el-collapse-item__wrap,
+.el-collapse-item__content {
+  background: transparent;
+  border-color: var(--noobot-divider);
+  color: var(--noobot-text-main);
+}
+
+.el-collapse-item__header {
+  background: transparent;
+  border-color: var(--noobot-divider);
+  color: var(--noobot-text-main);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.el-collapse-item__header:active,
+.el-collapse-item__header:focus,
+.el-collapse-item__header.focusing,
+.el-collapse-item__header.focusing:focus:not(:hover) {
+  background: transparent;
+}
+
+.el-empty__description p,
+.el-alert__description {
+  color: var(--noobot-text-secondary);
+}

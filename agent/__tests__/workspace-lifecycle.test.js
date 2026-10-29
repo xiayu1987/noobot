@@ -16,6 +16,7 @@ import { MEMORY_DOCUMENT_KIND } from "@noobot/memory-protocol/document";
 import { renderDefaultExperienceModelText } from "@noobot/memory-protocol/experience/default-model";
 import { WORKSPACE_LAYOUT, WORKSPACE_RUNTIME_DIRECTORIES } from "@noobot/workspace-protocol";
 import { TEST_SCOPED_SESSION_ROOTS } from "./helpers/scoped-session-roots.js";
+import { TEST_STORAGE_SERVICE } from "./helpers/storage-service.js";
 import {
   ensureUserWorkspace,
   repairUserWorkspace,
@@ -43,6 +44,7 @@ async function createFixture() {
     userId: "user-1",
     baseValues: BASE_VALUES,
     scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS,
+    storageService: TEST_STORAGE_SERVICE,
   };
   return {
     root,

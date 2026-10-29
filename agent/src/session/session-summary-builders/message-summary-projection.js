@@ -77,8 +77,6 @@ export function buildMessageSummary(message = {}) {
     type: text(message?.type),
     dialogProcessId: text(message?.dialogProcessId),
     parentDialogProcessId: text(message?.parentDialogProcessId),
-    taskId: text(message?.taskId),
-    taskStatus: text(message?.taskStatus),
     modelAlias: text(message?.modelAlias),
     modelName: text(message?.modelName),
     summarized: message?.summarized === true,

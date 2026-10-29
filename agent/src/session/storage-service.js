@@ -4,25 +4,38 @@
  * SPDX-License-Identifier: MIT
  */
 import { fsReadFile, fsRm, fsRename, fsStat, fsWriteFile } from "../shared/storage/fs-adapter.js";
-import {
-  ATOMIC_RENAME_RETRY_DELAYS_MS,
-  writeFileAtomic,
-} from "../shared/storage/atomic-file-write.js";
+import { writeFileAtomic } from "../shared/storage/atomic-file-write.js";
 import {
   isMissingPersistencePathError,
+  readOptionalPersistedJsonFile,
   readPersistedJsonFile,
 } from "../shared/storage/json-file-reader.js";
+import { isFunction } from "@noobot/shared/value";
+
+const STORAGE_SERVICE_METHODS = Object.freeze([
+  "exists",
+  "isDirectory",
+  "readJson",
+  "readOptionalJson",
+  "readTextOrNull",
+  "writeJson",
+  "writeJsonAtomic",
+]);
+
+export function requireStorageService(storageService, owner) {
+  if (
+    storageService === null ||
+    typeof storageService !== "object" ||
+    !STORAGE_SERVICE_METHODS.every((method) => isFunction(storageService[method]))
+  ) {
+    throw new TypeError(`${owner} requires storageService`);
+  }
+  return storageService;
+}
 
 export class StorageService {
-  constructor({
-    pathResolver,
-    atomicRenameRetryDelaysMs = ATOMIC_RENAME_RETRY_DELAYS_MS,
-    platform = process.platform,
-  } = {}) {
-    this.pathResolver = pathResolver;
-    this.atomicRenameRetryDelaysMs = Array.isArray(atomicRenameRetryDelaysMs)
-      ? atomicRenameRetryDelaysMs
-      : ATOMIC_RENAME_RETRY_DELAYS_MS;
+  constructor({ atomicRenameRetryDelaysMs, platform }) {
+    this.atomicRenameRetryDelaysMs = atomicRenameRetryDelaysMs;
     this.platform = platform;
   }
 
@@ -31,7 +44,7 @@ export class StorageService {
       await fsStat(filePath);
       return true;
     } catch (error) {
-      if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return false;
+      if (isMissingPersistencePathError(error)) return false;
       throw error;
     }
   }
@@ -40,13 +53,17 @@ export class StorageService {
     try {
       return (await fsStat(directoryPath)).isDirectory();
     } catch (error) {
-      if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return false;
+      if (isMissingPersistencePathError(error)) return false;
       throw error;
     }
   }
 
-  async readJson(filePath, fallback) {
-    return readPersistedJsonFile({ filePath, fallback, readFile: fsReadFile });
+  async readJson(filePath) {
+    return readPersistedJsonFile({ filePath, readFile: fsReadFile });
+  }
+
+  async readOptionalJson(filePath) {
+    return readOptionalPersistedJsonFile({ filePath, readFile: fsReadFile });
   }
 
   async readTextOrNull(filePath) {

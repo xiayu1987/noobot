@@ -13,6 +13,7 @@ import { TRANSFER_ENVELOPE_V2, TRANSFER_REASON } from "@noobot/semantic-transfer
 import {
   SESSION_REPAIR_DATA_REJECTION_CODES,
   SESSION_REPAIR_ERROR_CODE,
+  isOwnedSessionRepairTempDirectoryName,
   isSessionRepairTempDirectoryName,
   migrateSessionDocument,
   runAtomicSessionRepair,
@@ -81,6 +82,13 @@ test("repair temp directory names are recognized", () => {
   assert.equal(isSessionRepairTempDirectoryName("s1.repair-backup-abc"), true);
   assert.equal(isSessionRepairTempDirectoryName("s1.repair-staging-abc"), true);
   assert.equal(isSessionRepairTempDirectoryName("44d9a0d8-7bfc-4bd6-903d-2a16aca7d793"), false);
+});
+
+test("owned repair temp directory names only match their own session directory", () => {
+  assert.equal(isOwnedSessionRepairTempDirectoryName("s1.repair-staging-abc", "s1"), true);
+  assert.equal(isOwnedSessionRepairTempDirectoryName("s1.repair-backup-abc", "s1"), true);
+  assert.equal(isOwnedSessionRepairTempDirectoryName("s2.repair-staging-abc", "s1"), false);
+  assert.equal(isOwnedSessionRepairTempDirectoryName("s1.staging-abc", "s1"), false);
 });
 
 test("atomic repair preserves staging and backup when swap and rollback both fail", async () => {

@@ -27,6 +27,7 @@ import {
   upgradeWorkspaceLayout,
 } from "./sections.js";
 import { text } from "@noobot/shared/value";
+import { requireStorageService } from "../session/storage-service.js";
 
 const workspaceMutationCoordinator = new FileMutationCoordinator({
   timeoutMessage: "workspace mutation lock timeout",
@@ -108,6 +109,7 @@ async function runWorkspaceOperation({
   sections,
   created,
   scopedSessionRoots,
+  storageService,
   reportProgress,
 }) {
   const backupBase = resolveWorkspaceBackupBase(base);
@@ -123,6 +125,7 @@ async function runWorkspaceOperation({
     backupBase,
     created,
     scopedSessionRoots,
+    storageService,
     reportProgress,
   });
   await ensureRuntimeDirectories(base);
@@ -149,6 +152,7 @@ async function withWorkspace(options, operation, sections) {
   if (!Array.isArray(options?.scopedSessionRoots) || !options.scopedSessionRoots.length) {
     throw new TypeError("workspace lifecycle requires scopedSessionRoots");
   }
+  const storageService = requireStorageService(options.storageService, "workspace lifecycle");
   const { base, assetPackageBase, mutationLockDir } = await resolveWorkspacePaths(options);
   return workspaceMutationCoordinator.run(mutationLockDir, async () => {
     const existed = await requireWorkspaceDirectory(base);
@@ -162,6 +166,7 @@ async function withWorkspace(options, operation, sections) {
       sections,
       created: !existed,
       scopedSessionRoots: options.scopedSessionRoots,
+      storageService,
       reportProgress: options.onProgress,
     });
     return { base, report };

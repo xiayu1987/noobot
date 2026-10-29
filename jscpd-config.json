@@ -18,6 +18,7 @@
   ],
   "minLines": 5,
   "minTokens": 70,
+  "mode": "weak",
   "threshold": 3,
   "reporters": ["console", "json"],
   "output": "report",

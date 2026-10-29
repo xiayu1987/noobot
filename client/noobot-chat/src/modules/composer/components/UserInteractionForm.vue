@@ -139,7 +139,6 @@ watch(
   width: 4px;
   border-radius: 0 var(--noobot-radius-xs) var(--noobot-radius-xs) 0;
   background: var(--noobot-text-accent);
-  box-shadow: none;
 }
 
 .interaction-head {
@@ -160,7 +159,7 @@ watch(
 
 .interaction-title {
   color: var(--noobot-text-main);
-  font-size: var(--noobot-font-size-base);
+  font-size: var(--noobot-font-size-md);
   font-weight: var(--noobot-font-weight-semibold);
   margin-bottom: 0;
   line-height: var(--noobot-line-height-comfortable);
@@ -185,7 +184,7 @@ watch(
 
 .interaction-form :deep(.el-input) {
   --el-input-text-color: var(--noobot-text-main);
-  --el-input-placeholder-color: var(--noobot-text-muted);
+  --el-input-placeholder-color: var(--noobot-text-secondary);
 }
 
 .interaction-actions {

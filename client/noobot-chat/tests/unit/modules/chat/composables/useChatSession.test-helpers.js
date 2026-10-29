@@ -41,7 +41,6 @@ export function createSessionFixture(overrides = {}) {
     rawMessages: [],
     sessionDocs: [],
     connectorPanelState: { selectedConnectorIds: [], connectors: [] },
-    currentTaskId: "",
     currentTaskStatus: "idle",
     messageCount: 0,
     lastMessage: null,

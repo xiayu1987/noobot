@@ -401,7 +401,7 @@ const composerExtensionBaseProps = computed(() => ({
 
 .safe-confirm-level-slider :deep(.el-slider__marks-text) {
   margin-top: var(--noobot-space-xs);
-  color: var(--noobot-text-muted);
+  color: var(--noobot-text-secondary);
   font-size: var(--noobot-font-size-xs);
   font-weight: var(--noobot-font-weight-medium);
   line-height: var(--noobot-space-xl);
@@ -450,36 +450,9 @@ const composerExtensionBaseProps = computed(() => ({
   min-width: 0;
 }
 
-.composer-select :deep(.el-select__wrapper) {
-  min-height: var(--noobot-control-height-lg);
-  height: var(--noobot-control-height-lg);
-  box-sizing: border-box;
-  border-radius: var(--noobot-radius-md);
-  background: color-mix(in srgb, var(--noobot-control-bg) 94%, var(--noobot-accent));
-  border-color: color-mix(in srgb, var(--noobot-panel-border) 78%, transparent);
-  transition:
-    background-color var(--noobot-duration-normal) ease,
-    border-color var(--noobot-duration-normal) ease;
-}
-
-.composer-select :deep(.el-select__wrapper.is-focused),
-.composer-select :deep(.el-select__wrapper:hover) {
-  border-color: color-mix(in srgb, var(--noobot-accent) 50%, var(--noobot-panel-border));
-}
-
-.composer-select :deep(.el-select__selected-item),
-.composer-select :deep(.el-select__placeholder) {
-  min-width: 0;
-  color: var(--noobot-text-main);
-}
-
-.composer-select :deep(.el-select__placeholder.is-transparent) {
-  color: var(--noobot-text-muted);
-}
-
 .plugin-empty-text {
   font-size: var(--noobot-font-size-sm);
-  color: var(--noobot-text-muted);
+  color: var(--noobot-text-secondary);
 }
 
 .model-config-panel {
@@ -509,9 +482,9 @@ const composerExtensionBaseProps = computed(() => ({
 
 .model-config-description,
 .model-field-hint {
-  margin: 3px 0 0;
+  margin: var(--noobot-space-2xs) 0 0;
   font-size: var(--noobot-font-size-sm);
-  line-height: var(--noobot-line-height-relaxed);
+  line-height: var(--noobot-line-height-comfortable);
   color: var(--noobot-text-secondary);
 }
 
@@ -572,12 +545,12 @@ const composerExtensionBaseProps = computed(() => ({
 .model-option-meta,
 .model-option-description {
   font-size: var(--noobot-font-size-sm);
-  line-height: var(--noobot-line-height-cozy);
+  line-height: var(--noobot-line-height-balanced);
   color: var(--noobot-text-secondary);
 }
 
 .model-option-description {
-  color: var(--noobot-text-muted);
+  color: var(--noobot-text-secondary);
 }
 
 .plugin-model-extension {

@@ -21,6 +21,10 @@ import {
   isCanonicalSessionId,
   isCanonicalParentSessionId,
   decideAggregateConcurrency,
+  isNewerSessionAggregateVersion,
+  createAggregateVersionConflictError,
+  createTurnLifecycleRejectedError,
+  isTurnLifecycleRejectedError,
   decideCommandIdempotency,
   normalizeCommandReceipt,
   normalizeTurnCommitMetadata,
@@ -34,7 +38,7 @@ import {
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 test("Session artifact and Turn commit metadata have one canonical protocol shape", () => {
-  assert.equal(SESSION_ARTIFACT_SCHEMA_VERSION, 17);
+  assert.equal(SESSION_ARTIFACT_SCHEMA_VERSION, 18);
   assert.deepEqual(
     normalizeTurnCommitMetadata({
       action: " SEND ",
@@ -440,6 +444,59 @@ test("aggregate concurrency and command idempotency are deterministic", () => {
     decideAggregateConcurrency({ expectedAggregateVersion: 2, aggregateVersion: 3 }).reason,
     "aggregate_version_conflict",
   );
+  assert.equal(isNewerSessionAggregateVersion(4, 3), true);
+  assert.equal(isNewerSessionAggregateVersion(3, 3), false);
+  assert.equal(isNewerSessionAggregateVersion(2, 3), false);
+  for (const invalid of [null, undefined, "", "3", -1, 1.5]) {
+    assert.throws(
+      () => isNewerSessionAggregateVersion(invalid, 3),
+      (error) => error.code === SESSION_ERROR_CODE.AGGREGATE_VERSION_INVALID,
+    );
+    assert.throws(
+      () => isNewerSessionAggregateVersion(3, invalid),
+      (error) => error.code === SESSION_ERROR_CODE.AGGREGATE_VERSION_INVALID,
+    );
+  }
+  const conflict = createAggregateVersionConflictError({ currentVersion: 7 });
+  assert.equal(conflict.statusCode, 409);
+  assert.equal(conflict.code, SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT);
+  assert.equal(conflict.currentVersion, 7);
+  for (const invalid of [null, undefined, "", "7", -1, 1.5]) {
+    assert.throws(
+      () => createAggregateVersionConflictError({ currentVersion: invalid }),
+      (error) => error.code === SESSION_ERROR_CODE.AGGREGATE_VERSION_INVALID,
+    );
+  }
+  const rejectedConflict = createTurnLifecycleRejectedError({
+    applied: false,
+    reason: SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT,
+    currentVersion: 4,
+  });
+  assert.equal(isTurnLifecycleRejectedError(rejectedConflict), true);
+  assert.equal(rejectedConflict.code, SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT);
+  assert.equal(rejectedConflict.currentVersion, 4);
+  for (const invalid of [null, undefined, "4", -1, 1.5]) {
+    assert.throws(
+      () =>
+        createTurnLifecycleRejectedError({
+          reason: SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT,
+          currentVersion: invalid,
+        }),
+      (error) => error.code === SESSION_ERROR_CODE.AGGREGATE_VERSION_INVALID,
+    );
+  }
+  const rejectedAction = createTurnLifecycleRejectedError({
+    applied: false,
+    reason: "session_action_conflict",
+  });
+  assert.equal(rejectedAction.code, "session_action_conflict");
+  assert.equal(Object.hasOwn(rejectedAction, "currentVersion"), false);
+  assert.throws(
+    () =>
+      createTurnLifecycleRejectedError({ reason: "session_action_conflict", currentVersion: 4 }),
+    /currentVersion is only allowed for aggregate version conflicts/,
+  );
+  assert.throws(() => createTurnLifecycleRejectedError("session_action_conflict"), TypeError);
   assert.equal(
     decideCommandIdempotency({
       commandId: "c1",

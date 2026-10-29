@@ -6,7 +6,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { TURN_EVENT, TURN_PHASE, createEmptyTurnLifecycle } from "@noobot/session-protocol";
+import {
+  SESSION_ERROR_CODE,
+  TURN_EVENT,
+  TURN_PHASE,
+  createEmptyTurnLifecycle,
+} from "@noobot/session-protocol";
 import { normalizeSessionEntity } from "../../src/session/entities/session-entity.js";
 import { acceptTurn, canonical, harness } from "./session-version-hardening.test-helpers.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
@@ -252,7 +257,10 @@ test("bindTurnAttachments enforces command, aggregate, message and single-bindin
         expectedAggregateVersion: 0,
         attachments: [canonical()],
       }),
-      (error) => error.code === "SESSION_AGGREGATE_VERSION_CONFLICT",
+      (error) =>
+        error.code === SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT &&
+        error.statusCode === 409 &&
+        Number.isSafeInteger(error.currentVersion),
     );
   });
 

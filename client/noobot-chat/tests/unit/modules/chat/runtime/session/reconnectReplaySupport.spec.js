@@ -7,6 +7,20 @@ import { describe, expect, it, vi } from "vitest";
 
 import { renderActiveSessionBeforeReplay } from "../../../../../../src/modules/chat/runtime/reconnect/hydrationReplay.js";
 import { createReconnectReplayPublicApi } from "../../../../../../src/modules/chat/runtime/reconnect/publicApi.js";
+import {
+  availableDetailDocument,
+  missingDetailDocument,
+} from "../../../../helpers/sessionDetailFixture.js";
+
+function detailDocument(sessionId) {
+  return availableDetailDocument({
+    sessionId,
+    title: sessionId,
+    aggregateVersion: 1,
+    messages: [],
+    turnTimings: [],
+  });
+}
 
 function hydrate(activeSession, chatList) {
   return renderActiveSessionBeforeReplay({
@@ -43,7 +57,7 @@ describe("reconnectReplay support modules", () => {
   });
 
   it("fetches fresh session detail when hydrating active session before replay", async () => {
-    const detail = { sessionId: "s-1", sessions: [{ sessionId: "s-1", messages: [] }] };
+    const detail = detailDocument("s-1");
     const fetchSessionDetail = vi.fn(async () => detail);
     const applySessionDetail = vi.fn();
 
@@ -70,19 +84,14 @@ describe("reconnectReplay support modules", () => {
     expect(fetchSessionDetail).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ["skipped request", null],
-    ["empty detail", { sessionId: "s-1", sessions: [] }],
-    [
-      "mismatched top-level identity",
-      { sessionId: "s-other", sessions: [{ sessionId: "s-other" }] },
-    ],
-    ["mismatched session document", { sessionId: "s-1", sessions: [{ sessionId: "s-other" }] }],
-  ])("rejects %s before applying reconnect hydration", async (_label, detail) => {
+  it("does not apply hydration when the Session no longer exists", async () => {
     const applySessionDetail = vi.fn();
     const result = await hydrate(
       { value: { id: "s-1", sessionId: "s-1", messages: [] } },
-      { fetchSessionDetail: vi.fn(async () => detail), applySessionDetail },
+      {
+        fetchSessionDetail: vi.fn(async () => missingDetailDocument({ sessionId: "s-1" })),
+        applySessionDetail,
+      },
     );
 
     expect(result).toBe(false);
@@ -95,7 +104,7 @@ describe("reconnectReplay support modules", () => {
     const result = await hydrate(activeSession, {
       fetchSessionDetail: vi.fn(async () => {
         activeSession.value = { id: "s-2", sessionId: "s-2", messages: [] };
-        return { sessionId: "s-1", sessions: [{ sessionId: "s-1", messages: [] }] };
+        return detailDocument("s-1");
       }),
       applySessionDetail,
     });

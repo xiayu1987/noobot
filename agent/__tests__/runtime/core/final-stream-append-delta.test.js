@@ -55,7 +55,6 @@ test("authoritative final content is the sole terminal content event", async () 
     traces: [],
     turnMessages: [],
     modelMessages: [],
-    turnTasks: [],
     modelLoopRound: 0,
   });
 
@@ -111,7 +110,6 @@ test("final content commit follows hook-appended streaming delta", async () => {
         modelMessageId: messageId,
       },
     ],
-    turnTasks: [],
     modelLoopRound: 0,
     modelMessages: [],
   });
@@ -163,7 +161,6 @@ test("final content uses the result message identity after active stream changes
         modelMessageId: finalMessageId,
       },
     ],
-    turnTasks: [],
     modelLoopRound: 0,
     modelMessages: [],
   });
@@ -187,7 +184,6 @@ test("rewritten final content is committed only through the authoritative final 
     output: "旧回答",
     traces: [],
     turnMessages: [],
-    turnTasks: [],
     modelLoopRound: 0,
     modelMessages: [],
   });

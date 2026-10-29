@@ -144,3 +144,55 @@ test("http 429 without a positive retry-after violates the contract", async () =
     TypeError,
   );
 });
+
+test("readApiResponseEnvelope carries the failure envelope currentVersion", async () => {
+  const response = jsonResponse(
+    {
+      ok: false,
+      error: "conflict",
+      errorCode: "SESSION_AGGREGATE_VERSION_CONFLICT",
+      currentVersion: 7,
+    },
+    409,
+  );
+  await assert.rejects(readApiResponseEnvelope(response), (error) => {
+    assert.equal(error.status, 409);
+    assert.equal(error.serverErrorCode, "SESSION_AGGREGATE_VERSION_CONFLICT");
+    assert.equal(error.currentVersion, 7);
+    return true;
+  });
+  const withoutVersion = jsonResponse({ ok: false, error: "conflict" }, 409);
+  await assert.rejects(readApiResponseEnvelope(withoutVersion), (error) => {
+    assert.equal(Object.hasOwn(error, "currentVersion"), false);
+    return true;
+  });
+});
+
+test("failure envelope with a non-integer currentVersion violates the contract", async () => {
+  for (const currentVersion of [-1, 1.5, "7", null]) {
+    await assert.rejects(
+      readApiResponseEnvelope(jsonResponse({ ok: false, error: "conflict", currentVersion }, 409)),
+      TypeError,
+    );
+  }
+});
+
+test("ApiRequestError validates the optional currentVersion", () => {
+  const error = new ApiRequestError("x", {
+    code: API_REQUEST_ERROR_CODE.HTTP,
+    status: 409,
+    currentVersion: 0,
+  });
+  assert.equal(error.currentVersion, 0);
+  for (const currentVersion of [-1, 1.5, "7", null]) {
+    assert.throws(
+      () =>
+        new ApiRequestError("x", {
+          code: API_REQUEST_ERROR_CODE.HTTP,
+          status: 409,
+          currentVersion,
+        }),
+      TypeError,
+    );
+  }
+});

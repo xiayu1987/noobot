@@ -601,9 +601,9 @@ defineExpose({
   padding: var(--noobot-space-md);
   background: var(--noobot-panel-bg);
   transition:
-    width var(--noobot-duration-normal) ease,
-    padding var(--noobot-duration-normal) ease,
-    max-width var(--noobot-duration-normal) ease;
+    width var(--noobot-duration-normal) var(--noobot-ease-standard),
+    padding var(--noobot-duration-normal) var(--noobot-ease-standard),
+    max-width var(--noobot-duration-normal) var(--noobot-ease-standard);
 }
 
 .right-tool-panels {
@@ -652,9 +652,9 @@ defineExpose({
   padding: var(--noobot-space-md);
   background: var(--noobot-panel-bg);
   transition:
-    width var(--noobot-duration-normal) ease,
-    padding var(--noobot-duration-normal) ease,
-    max-width var(--noobot-duration-normal) ease;
+    width var(--noobot-duration-normal) var(--noobot-ease-standard),
+    padding var(--noobot-duration-normal) var(--noobot-ease-standard),
+    max-width var(--noobot-duration-normal) var(--noobot-ease-standard);
 }
 
 .connector-overview-panel.is-collapsed {
@@ -686,7 +686,7 @@ defineExpose({
 .extension-feature-panel.is-collapsed .chat-message-nav-icon-button {
   width: 100%;
   height: 100%;
-  border-radius: 50%;
+  border-radius: var(--noobot-radius-circle);
 }
 
 .connector-overview-header {
@@ -736,7 +736,7 @@ defineExpose({
   width: var(--noobot-control-icon-size-sm);
   height: var(--noobot-control-icon-size-sm);
   place-items: center;
-  border-radius: 50%;
+  border-radius: var(--noobot-radius-circle);
   color: var(--noobot-text-accent);
   background: var(--noobot-accent-soft);
   font-weight: var(--noobot-font-weight-bold);

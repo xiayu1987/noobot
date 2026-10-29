@@ -229,7 +229,7 @@ function handleHeaderAction(command = "") {
   padding: 0;
   line-height: var(--noobot-line-height-none);
   aspect-ratio: 1 / 1;
-  border-radius: 50%;
+  border-radius: var(--noobot-radius-circle);
 }
 
 .mobile-menu-btn :deep(.el-icon) {
@@ -261,7 +261,7 @@ function handleHeaderAction(command = "") {
   height: var(--noobot-control-icon-size-lg);
   min-width: var(--noobot-control-icon-size-lg);
   padding: 0;
-  border-radius: 50%;
+  border-radius: var(--noobot-radius-circle);
 }
 
 .locale-select {
@@ -278,7 +278,7 @@ function handleHeaderAction(command = "") {
 
 .head-title {
   margin: 0;
-  font-size: var(--noobot-font-size-xl);
+  font-size: var(--noobot-font-size-lg);
   font-weight: var(--noobot-font-weight-semibold);
   color: var(--noobot-text-strong);
 }

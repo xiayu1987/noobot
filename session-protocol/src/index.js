@@ -37,11 +37,16 @@ export * from "./turn-presentation.js";
 export * from "./identity/session-identity.js";
 export * from "./identity/turn-identity.js";
 export * from "./identity/message-identity-schema.js";
+export * from "./identity/turn-lookup-key.js";
+export * from "./aggregate/turn-partition-identity.js";
 export {
   SESSION_COMMAND,
   assertSessionCommand,
   createSessionCommand,
   isSessionAggregateVersion,
+  isNewerSessionAggregateVersion,
+  createAggregateVersionConflictError,
+  createTurnLifecycleRejectedError,
   normalizeExpectedAggregateVersion,
   requireSessionAggregateVersion,
   validateSessionCommand,
@@ -78,3 +83,7 @@ export * from "./aggregate/turn-commit-metadata.js";
 export * from "./aggregate/session-message-record.js";
 export * from "./aggregate/session-document-identity-migration.js";
 export * from "./aggregate/session-manifest-layout.js";
+export * from "./aggregate/execution-event-index.js";
+export * from "./aggregate/sessions-summary.js";
+export * from "./aggregate/session-detail.js";
+export * from "./aggregate/session-mutation-response.js";

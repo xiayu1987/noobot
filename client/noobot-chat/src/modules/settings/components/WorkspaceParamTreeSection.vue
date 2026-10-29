@@ -64,7 +64,7 @@ const emit = defineEmits(["insert-param"]);
 
 .param-desc {
   margin-left: auto;
-  color: var(--noobot-text-muted);
+  color: var(--noobot-text-secondary);
   font-size: var(--noobot-font-size-sm);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -78,6 +78,6 @@ const emit = defineEmits(["insert-param"]);
 }
 
 .empty-tip :deep(.el-empty__description p) {
-  color: var(--noobot-text-muted);
+  color: var(--noobot-text-secondary);
 }
 </style>

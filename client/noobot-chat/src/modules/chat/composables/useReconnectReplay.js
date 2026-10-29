@@ -24,7 +24,6 @@ import { renderActiveSessionBeforeReplay } from "../runtime/reconnect/hydrationR
 import { reduceInteractionRequest } from "../runtime/interactionPayload.js";
 import { handleAttachmentLifecycleStreamEvent } from "../runtime/engine/streamHandlers.js";
 import { routeRuntimeStreamEvent } from "../../../extensions/runtime-stream-router.js";
-import { text, isFunction } from "@noobot/shared/value";
 import { scopeSessionLogRecord } from "../../debug/loggers/lazyDebugSink.js";
 
 export function useReconnectReplay({
@@ -112,19 +111,15 @@ export function useReconnectReplay({
     });
   }
 
-  async function hydrateActiveSessionBeforeReplay(sessionId = "", activeTurnSnapshot = null) {
-    const requestedSessionId = text(sessionId);
-    if (!requestedSessionId || !isCurrentActiveSession(requestedSessionId)) return false;
-    const presentationMessageId = text(activeTurnSnapshot?.presentationMessageId);
+  async function hydrateActiveSessionBeforeReplay(requestedSessionId, activeTurnSnapshot) {
+    if (!isCurrentActiveSession(requestedSessionId)) return false;
+    const { presentationMessageId, dialogProcessId, turnScopeId } = activeTurnSnapshot;
     logStateMachineDebug("stateMachine.reconnect.presentationHydration.before", () => ({
       sessionId: requestedSessionId,
-      dialogProcessId: text(activeTurnSnapshot?.dialogProcessId),
-      turnScopeId: text(activeTurnSnapshot?.turnScopeId),
+      dialogProcessId,
+      turnScopeId,
       presentationMessageId,
-      messages: (Array.isArray(activeSession.value?.messages)
-        ? activeSession.value.messages
-        : []
-      ).map(summarizeStateMachineMessage),
+      messages: activeSession.value.messages.map(summarizeStateMachineMessage),
     }));
     const hydrated = await renderActiveSessionBeforeReplay({
       activeSession,
@@ -137,52 +132,37 @@ export function useReconnectReplay({
       onError: (error) =>
         logReconnectReplaySystemEvent("reconnectReplay.hydration.failed", {
           sessionId: requestedSessionId,
-          error: String(error?.message || error || ""),
+          error: error.message,
         }),
     });
     if (!isCurrentActiveSession(requestedSessionId)) return false;
     const presentationMessage = presentationMessageId
-      ? findMessageByViewKey?.(requestedSessionId, presentationMessageId)
+      ? findMessageByViewKey(requestedSessionId, presentationMessageId)
       : null;
     const protocolViolation =
       presentationMessageId && !presentationMessage ? "presentation_missing" : "";
     logStateMachineDebug("stateMachine.reconnect.presentationHydration.after", () => ({
       sessionId: requestedSessionId,
-      dialogProcessId: text(activeTurnSnapshot?.dialogProcessId),
-      turnScopeId: text(activeTurnSnapshot?.turnScopeId),
+      dialogProcessId,
+      turnScopeId,
       presentationMessageId,
       detailHydrated: hydrated === true,
       presentationHydratedFromDetail: Boolean(presentationMessage),
       presentationMaterialized: Boolean(presentationMessage),
       protocolViolation,
       presentationMessage: summarizeStateMachineMessage(presentationMessage),
-      messages: (Array.isArray(activeSession.value?.messages)
-        ? activeSession.value.messages
-        : []
-      ).map(summarizeStateMachineMessage),
+      messages: activeSession.value.messages.map(summarizeStateMachineMessage),
     }));
     return presentationMessageId ? Boolean(presentationMessage) : hydrated;
   }
 
-  async function reconcileSessionState({ sessionId = "" } = {}) {
-    const normalizedSessionId = text(sessionId);
-    if (!normalizedSessionId) return false;
-    let detailApplied = false;
-    if (
-      isFunction(chatList?.fetchSessionDetail) &&
-      typeof chatList?.applySessionDetail === "function"
-    ) {
-      const detail = await chatList
-        .fetchSessionDetail(normalizedSessionId, {
-          source: "reconnectProtocolReconcile",
-        })
-        .catch(() => null);
-      if (detail) {
-        chatList.applySessionDetail(detail);
-        detailApplied = true;
-      }
-    }
-    return detailApplied;
+  async function reconcileSessionState({ sessionId }) {
+    const detail = await chatList.fetchSessionDetail(sessionId, {
+      source: "reconnectProtocolReconcile",
+    });
+    if (!detail.exists) return false;
+    chatList.applySessionDetail(detail);
+    return true;
   }
 
   async function consumeReplayCacheForSession(sessionId) {

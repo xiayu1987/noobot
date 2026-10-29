@@ -3,17 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
+import { SESSION_ERROR_CODE, createSessionArtifactNotFoundError } from "@noobot/session-protocol";
 import { reconcileCompletedTurnSummaryMarks } from "@noobot/session-repair";
 import { normalizeSessionEntity } from "./entities/session-entity.js";
 
 export function normalizeStoredSession(session, options = {}) {
-  if (!session) {
-    const error = new Error("session not found");
-    error.code = SESSION_ERROR_CODE.ARTIFACT_NOT_FOUND;
-    error.statusCode = 404;
-    throw error;
-  }
+  if (!session) throw createSessionArtifactNotFoundError("session manifest");
   const normalized = normalizeSessionEntity(session, options);
   const summaryRepair = reconcileCompletedTurnSummaryMarks(normalized);
   if (summaryRepair.changed) {

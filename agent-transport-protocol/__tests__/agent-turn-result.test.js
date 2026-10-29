@@ -16,7 +16,6 @@ function turnResult(turnMessages) {
     output: "",
     traces: [],
     turnMessages,
-    turnTasks: [],
     modelLoopRound: 0,
     modelMessages: [],
   };

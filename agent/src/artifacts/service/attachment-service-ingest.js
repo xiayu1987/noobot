@@ -51,9 +51,9 @@ export async function saveAttachmentRecord({
   turnScope = null,
   turnScopeId = "",
   dialogProcessId = "",
-  isSandbox = undefined,
   clientAttachmentId = "",
   contentSha256 = "",
+  sourcePath = "",
 }) {
   const attachmentId = uuidv4();
   const extension = normalizeExtension(name, mimeType);
@@ -80,7 +80,7 @@ export async function saveAttachmentRecord({
     turnScope,
     turnScopeId,
     dialogProcessId,
-    ...(typeof isSandbox === "boolean" ? { isSandbox } : {}),
+    sourcePath,
   });
 
   attachmentIndex.attachments[attachmentId] = record;
@@ -196,7 +196,6 @@ export async function ingestAttachments(
         name,
         mimeType: normalizedMime,
         contentBytes: bytes,
-        isSandbox: typeof item.isSandbox === "boolean" ? item.isSandbox : undefined,
         clientAttachmentId,
         contentSha256,
       });
@@ -246,7 +245,7 @@ export async function ingestGeneratedArtifacts(
         turnScope: isPlainObject(item?.turnScope) ? item.turnScope : turnScope,
         turnScopeId: safeStr(item?.turnScopeId || turnScopeId),
         dialogProcessId: safeStr(item?.dialogProcessId || dialogProcessId),
-        isSandbox: typeof item?.isSandbox === "boolean" ? item.isSandbox : undefined,
+        sourcePath: safeStr(item?.sourcePath),
       });
       saved.push(record);
     }

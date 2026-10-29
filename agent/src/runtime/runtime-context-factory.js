@@ -4,10 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { createExecutionCancellationScope } from "@noobot/session-protocol/execution-cancellation-scope";
-import {
-  createCurrentTurnMessagesStore,
-  createCurrentTurnTasksStore,
-} from "./turn/current-turn-ledger.js";
+import { createCurrentTurnMessagesStore } from "./turn/current-turn-ledger.js";
 import { assertOptionalHookManager } from "@noobot/hook-protocol/runtime";
 import {
   HOOK_RUNTIME_IDENTITY_FIELDS,
@@ -111,7 +108,6 @@ export function createRuntimeContext(input) {
     mainFlowControlState: createMainFlowControlState(),
     activeMessageContext: null,
     currentTurnMessages: createCurrentTurnMessagesStore(),
-    currentTurnTasks: createCurrentTurnTasksStore(),
     userMessageAttachments: input.userMessageAttachments,
     summaryCheckpointRevision: 0,
     summaryCheckpointPersistedMessageUids: [],

@@ -15,6 +15,7 @@ import {
 import { createTurnMaterializer } from "../../src/session/session-artifact-session/turn-materializer.js";
 import { replaceJournalRecords } from "../../src/session/session-artifact-session/turn-journal-store.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
+import { TEST_STORAGE_SERVICE as storageService } from "../helpers/storage-service.js";
 import { withTemp, writeSessionArtifact } from "./session-artifact-store-v2.test-helpers.js";
 
 const TS = "2026-01-01T00:00:00.000Z";
@@ -24,7 +25,7 @@ function message(uid, role, content) {
     ? { role, messageOrigin: "natural", content, turnScopeId: "active", messageUid: uid, ts: TS }
     : {
         role,
-        presentationMessageId: `pm_${uid}`,
+        presentationMessageId: "pm_active",
         content,
         turnScopeId: "active",
         messageUid: uid,
@@ -82,10 +83,18 @@ test("verified checkpoint chain and journal prefix are reused across reads", asy
   withTemp(async (root) => {
     const base = await seedCheckpointedTurn(root);
     const materializer = createTurnMaterializer({ byteBudget: 1024 * 1024 });
-    const first = await materializer.materialize(root, await manifestTurn(root));
+    const first = await materializer.materialize({
+      storageService,
+      sessionDir: root,
+      item: await manifestTurn(root),
+    });
     assert.deepEqual(uids(first), ["m1", "m2"]);
     assert.equal(Object.isFrozen(first[0]), true);
-    const second = await materializer.materialize(root, await manifestTurn(root));
+    const second = await materializer.materialize({
+      storageService,
+      sessionDir: root,
+      item: await manifestTurn(root),
+    });
     assert.equal(second[0], first[0], "checkpoint message must come from the verified cache");
 
     const grown = [...base, message("m3", "assistant", "tail")];
@@ -95,11 +104,11 @@ test("verified checkpoint chain and journal prefix are reused across reads", asy
     });
     const item = await manifestTurn(root);
     assert.ok(item.committedBytes > 0, "tail message must live in the turn journal");
-    const third = await materializer.materialize(root, item);
+    const third = await materializer.materialize({ storageService, sessionDir: root, item });
     assert.deepEqual(uids(third), ["m1", "m2", "m3"]);
     assert.equal(third[0], first[0]);
     assert.equal(Object.isFrozen(third[2]), true, "journal tail messages are frozen as well");
-    const fourth = await materializer.materialize(root, item);
+    const fourth = await materializer.materialize({ storageService, sessionDir: root, item });
     assert.equal(fourth[2], third[2], "journal prefix must be reused, not re-parsed");
     assert.throws(() => {
       fourth[2].content = "mutated";
@@ -116,12 +125,16 @@ test("journal replacement changes the identity and forces a full journal read", 
     });
     const materializer = createTurnMaterializer({ byteBudget: 1024 * 1024 });
     const item = await manifestTurn(root);
-    const before = await materializer.materialize(root, item);
+    const before = await materializer.materialize({ storageService, sessionDir: root, item });
     const journal = path.join(root, item.file);
     const records = (await readFile(journal, "utf8")).trim().split("\n").map(JSON.parse);
     const committedBytes = await replaceJournalRecords(journal, records);
     assert.equal(committedBytes, item.committedBytes);
-    const after = await materializer.materialize(root, { ...item, committedBytes });
+    const after = await materializer.materialize({
+      storageService,
+      sessionDir: root,
+      item: { ...item, committedBytes },
+    });
     assert.deepEqual(uids(after), ["m1", "m2", "m3"]);
     assert.notEqual(after[2], before[2], "a replaced journal must be parsed again");
     assert.equal(after[0], before[0], "the unchanged checkpoint chain stays verified");
@@ -132,28 +145,35 @@ test("checkpoint chain is re-verified when a link changes on disk or in the mani
     await seedCheckpointedTurn(root);
     const materializer = createTurnMaterializer({ byteBudget: 1024 * 1024 });
     const item = await manifestTurn(root);
-    await materializer.materialize(root, item);
+    await materializer.materialize({ storageService, sessionDir: root, item });
     const snapshotFile = path.join(root, item.summarySnapshots[0].file);
     const original = await readFile(snapshotFile, "utf8");
     await writeFile(`${snapshotFile}.tmp`, original.replace('"answer"', '"ANSWER"'), "utf8");
     await rename(`${snapshotFile}.tmp`, snapshotFile);
-    await assert.rejects(materializer.materialize(root, item), {
+    await assert.rejects(materializer.materialize({ storageService, sessionDir: root, item }), {
       code: "SESSION_SUMMARY_SNAPSHOT_HASH_MISMATCH",
     });
     await writeFile(`${snapshotFile}.tmp`, original, "utf8");
     await rename(`${snapshotFile}.tmp`, snapshotFile);
-    assert.deepEqual(uids(await materializer.materialize(root, item)), ["m1", "m2"]);
+    assert.deepEqual(
+      uids(await materializer.materialize({ storageService, sessionDir: root, item })),
+      ["m1", "m2"],
+    );
     await assert.rejects(
-      materializer.materialize(root, {
-        ...item,
-        summarySnapshots: [{ ...item.summarySnapshots[0], contentHash: "sha256:other" }],
+      materializer.materialize({
+        storageService,
+        sessionDir: root,
+        item: {
+          ...item,
+          summarySnapshots: [{ ...item.summarySnapshots[0], contentHash: "sha256:other" }],
+        },
       }),
       { code: "SESSION_SUMMARY_SNAPSHOT_HASH_MISMATCH" },
     );
-    const shortened = await materializer.materialize(root, {
-      ...item,
-      summarySnapshots: [],
-      messageOrder: [],
+    const shortened = await materializer.materialize({
+      storageService,
+      sessionDir: root,
+      item: { ...item, summarySnapshots: [], messageOrder: [] },
     });
     assert.deepEqual(uids(shortened), [], "a shortened chain must not reuse cached state");
   }));
@@ -163,13 +183,13 @@ test("byte budget evicts least recently materialized turns", async () =>
     await seedCheckpointedTurn(root);
     const item = await manifestTurn(root);
     const unbounded = createTurnMaterializer({ byteBudget: 1024 * 1024 });
-    await unbounded.materialize(root, item);
+    await unbounded.materialize({ storageService, sessionDir: root, item });
     const entryBytes = unbounded.cachedBytes();
     assert.ok(entryBytes > 0);
     const tight = createTurnMaterializer({ byteBudget: entryBytes - 1 });
-    const first = await tight.materialize(root, item);
+    const first = await tight.materialize({ storageService, sessionDir: root, item });
     assert.equal(tight.cachedBytes(), 0, "an entry above the budget is not retained");
-    const second = await tight.materialize(root, item);
+    const second = await tight.materialize({ storageService, sessionDir: root, item });
     assert.notEqual(second[0], first[0]);
     assert.throws(() => createTurnMaterializer({ byteBudget: -1 }), TypeError);
   }));
@@ -177,15 +197,15 @@ test("byte budget evicts least recently materialized turns", async () =>
 test("session reads expose frozen materialized messages without breaking writers", async () =>
   withTemp(async (root) => {
     const base = await seedCheckpointedTurn(root);
-    const restored = await readSessionArtifact({ sessionDir: root });
+    const restored = await readSessionArtifact({ sessionDir: root, storageService });
     assert.deepEqual(uids(restored.messages), ["m1", "m2"]);
     const next = [...restored.messages, message("m3", "assistant", "after read")];
     await writeSessionArtifact({
       sessionDir: root,
       sessionPayload: payloadOf(next, [receipt(1, ["m1", "m2"], ["m1"])]),
     });
-    assert.deepEqual(uids((await readSessionArtifact({ sessionDir: root })).messages), [
-      ...uids(base),
-      "m3",
-    ]);
+    assert.deepEqual(
+      uids((await readSessionArtifact({ sessionDir: root, storageService })).messages),
+      [...uids(base), "m3"],
+    );
   }));

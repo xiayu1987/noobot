@@ -21,11 +21,7 @@ import {
 } from "../../../infrastructure/api/chat/chatApi.js";
 import { encryptPayloadBySessionId } from "../../../shared/utils/sessionCrypto.js";
 import { listUserConnectors } from "../../../infrastructure/api/connectors/connectorApi.js";
-import {
-  createConnectorPanelState,
-  generateSessionId,
-  sessionTitleFromMessages,
-} from "../../session/model/sessionModel.js";
+import { createConnectorPanelState, generateSessionId } from "../../session/model/sessionModel.js";
 import { createChatWebSocketClient } from "../../../infrastructure/websocket/chatWebSocketClient.js";
 import { createSessionLogWebSocketClient } from "../../../infrastructure/websocket/sessionLogWebSocketClient.js";
 import { useChatInput } from "./useChatInput.js";
@@ -444,7 +440,6 @@ export function useChatSession({
     chatStore,
     createConnectorPanelState,
     generateSessionId,
-    sessionTitleFromMessages,
     getSessionsApi,
     getSessionDetailApi,
     deleteSessionApi,

@@ -3,69 +3,62 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
 
 const TURN_REPLACEMENT_PROTOCOL_VERSION = 1;
 const TURN_REPLACEMENT_EVENT = "turn.replaced";
 
-import { text } from "@noobot/shared/value";
-
-export function createTurnReplacementCommit({
-  commandId,
-  sessionId,
-  committedAggregateVersion,
-  replacedTurnScopeIds = [],
-  replacementDialogProcessId,
-  replacementTurnScopeId,
-  replacementUserMessageUid,
-  requestHash,
-  committedAt = new Date().toISOString(),
-} = {}) {
-  return Object.freeze({
-    protocolVersion: TURN_REPLACEMENT_PROTOCOL_VERSION,
-    eventType: TURN_REPLACEMENT_EVENT,
-    commandId: text(commandId),
-    sessionId: text(sessionId),
-    committedAggregateVersion: Number(committedAggregateVersion || 0),
-    replacedTurnScopeIds: Object.freeze([
-      ...new Set(
-        (Array.isArray(replacedTurnScopeIds) ? replacedTurnScopeIds : []).map(text).filter(Boolean),
-      ),
-    ]),
-    replacementDialogProcessId: text(replacementDialogProcessId),
-    replacementTurnScopeId: text(replacementTurnScopeId),
-    replacementUserMessageUid: text(replacementUserMessageUid),
-    requestHash: text(requestHash),
-    committedAt: text(committedAt),
-  });
+function isCommittedAggregateVersion(value) {
+  return Number.isSafeInteger(value) && value >= 1;
 }
 
-export function validateTurnReplacementCommit(commit = {}) {
+function isUniqueCanonicalTextList(value) {
+  return (
+    Array.isArray(value) && value.every(isCanonicalText) && new Set(value).size === value.length
+  );
+}
+
+export function validateTurnReplacementCommit(commit) {
+  if (!isPlainObject(commit)) {
+    return Object.freeze({ valid: false, errors: Object.freeze(["commit_not_object"]) });
+  }
   const errors = [];
-  if (Number(commit?.protocolVersion) !== TURN_REPLACEMENT_PROTOCOL_VERSION)
+  if (commit.protocolVersion !== TURN_REPLACEMENT_PROTOCOL_VERSION) {
     errors.push("unsupported_protocol_version");
-  if (text(commit?.eventType) !== TURN_REPLACEMENT_EVENT) errors.push("invalid_event_type");
-  if (!text(commit?.commandId)) errors.push("missing_command_id");
-  if (!text(commit?.sessionId)) errors.push("missing_session_id");
-  if (
-    !Number.isInteger(Number(commit?.committedAggregateVersion)) ||
-    Number(commit.committedAggregateVersion) < 1
-  )
+  }
+  if (commit.eventType !== TURN_REPLACEMENT_EVENT) errors.push("invalid_event_type");
+  if (!isCanonicalText(commit.commandId)) errors.push("missing_command_id");
+  if (!isCanonicalText(commit.sessionId)) errors.push("missing_session_id");
+  if (!isCommittedAggregateVersion(commit.committedAggregateVersion)) {
     errors.push("invalid_committed_aggregate_version");
-  if (!Array.isArray(commit?.replacedTurnScopeIds) || !commit.replacedTurnScopeIds.length)
-    errors.push("missing_replaced_turn_scope_ids");
-  if (!text(commit?.replacementDialogProcessId))
+  }
+  if (
+    !isUniqueCanonicalTextList(commit.replacedTurnScopeIds) ||
+    !commit.replacedTurnScopeIds.length
+  ) {
+    errors.push("invalid_replaced_turn_scope_ids");
+  }
+  if (!isCanonicalText(commit.replacementDialogProcessId)) {
     errors.push("missing_replacement_dialog_process_id");
-  if (!text(commit?.replacementTurnScopeId)) errors.push("missing_replacement_turn_scope_id");
-  if (!text(commit?.replacementUserMessageUid)) errors.push("missing_replacement_user_message_uid");
-  if (!text(commit?.requestHash)) errors.push("missing_request_hash");
-  if (commit?.replacedTurnScopeIds?.map(text).includes(text(commit?.replacementTurnScopeId))) {
+  }
+  if (!isCanonicalText(commit.replacementTurnScopeId)) {
+    errors.push("missing_replacement_turn_scope_id");
+  }
+  if (!isCanonicalText(commit.replacementUserMessageUid)) {
+    errors.push("missing_replacement_user_message_uid");
+  }
+  if (!isCanonicalText(commit.requestHash)) errors.push("missing_request_hash");
+  if (!isCanonicalText(commit.committedAt)) errors.push("missing_committed_at");
+  if (
+    Array.isArray(commit.replacedTurnScopeIds) &&
+    commit.replacedTurnScopeIds.includes(commit.replacementTurnScopeId)
+  ) {
     errors.push("replacement_scope_reuses_replaced_scope");
   }
-  if (!text(commit?.committedAt)) errors.push("missing_committed_at");
   return Object.freeze({ valid: errors.length === 0, errors: Object.freeze(errors) });
 }
 
-export function assertTurnReplacementCommit(commit = {}) {
+export function assertTurnReplacementCommit(commit) {
   const validation = validateTurnReplacementCommit(commit);
   if (!validation.valid) {
     throw new TypeError(`invalid turn replacement commit: ${validation.errors.join(",")}`);
@@ -73,45 +66,32 @@ export function assertTurnReplacementCommit(commit = {}) {
   return commit;
 }
 
-export function assertTurnReplacementMaterialization({ commit = {}, session = {} } = {}) {
-  assertTurnReplacementCommit(commit);
-  const sessionId = text(session?.sessionId);
-  const aggregateVersion = Number(session?.aggregateVersion);
-  if (sessionId !== text(commit.sessionId)) {
-    throw new TypeError("invalid turn replacement materialization: session_identity_mismatch");
-  }
-  if (aggregateVersion !== Number(commit.committedAggregateVersion)) {
-    throw new TypeError("invalid turn replacement materialization: aggregate_version_mismatch");
-  }
-  const messages = Array.isArray(session?.messages) ? session.messages : [];
-  const replacementUsers = messages.filter(
-    (message = {}) => text(message?.messageUid) === text(commit.replacementUserMessageUid),
-  );
-  if (replacementUsers.length !== 1 || text(replacementUsers[0]?.role).toLowerCase() !== "user") {
-    throw new TypeError("invalid turn replacement materialization: replacement_user_missing");
-  }
-  const replacementUser = replacementUsers[0];
-  if (text(replacementUser?.turnScopeId) !== text(commit.replacementTurnScopeId)) {
-    throw new TypeError("invalid turn replacement materialization: replacement_scope_mismatch");
-  }
-  if (text(replacementUser?.dialogProcessId) !== text(commit.replacementDialogProcessId)) {
-    throw new TypeError(
-      "invalid turn replacement materialization: replacement_dialog_process_mismatch",
-    );
-  }
-  const replacementScopeMessages = messages.filter(
-    (message = {}) => text(message?.turnScopeId) === text(commit.replacementTurnScopeId),
-  );
-  if (replacementScopeMessages.length !== 1 || replacementScopeMessages[0] !== replacementUser) {
-    throw new TypeError(
-      "invalid turn replacement materialization: replacement_scope_not_user_only",
-    );
-  }
-  const replacedScopes = new Set(commit.replacedTurnScopeIds.map(text));
-  if (messages.some((message = {}) => replacedScopes.has(text(message?.turnScopeId)))) {
-    throw new TypeError(
-      "invalid turn replacement materialization: replaced_scope_still_materialized",
-    );
-  }
-  return Object.freeze({ commit, session, replacementUser });
+export function createTurnReplacementCommit({
+  commandId,
+  sessionId,
+  committedAggregateVersion,
+  replacedTurnScopeIds,
+  replacementDialogProcessId,
+  replacementTurnScopeId,
+  replacementUserMessageUid,
+  requestHash,
+  committedAt,
+}) {
+  const commit = assertTurnReplacementCommit({
+    protocolVersion: TURN_REPLACEMENT_PROTOCOL_VERSION,
+    eventType: TURN_REPLACEMENT_EVENT,
+    commandId,
+    sessionId,
+    committedAggregateVersion,
+    replacedTurnScopeIds,
+    replacementDialogProcessId,
+    replacementTurnScopeId,
+    replacementUserMessageUid,
+    requestHash,
+    committedAt,
+  });
+  return Object.freeze({
+    ...commit,
+    replacedTurnScopeIds: Object.freeze([...commit.replacedTurnScopeIds]),
+  });
 }

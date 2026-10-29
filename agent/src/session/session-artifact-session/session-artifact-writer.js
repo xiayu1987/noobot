@@ -4,13 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path } from "@noobot/path-resolver";
+import { requireCanonicalTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
 import { mkdir, readdir, rm } from "node:fs/promises";
 import { normalizeSessionEntity } from "../entities/session-entity.js";
 import {
   buildSessionArtifactFileMap,
   SESSION_ARTIFACT_FILE_NAMES,
 } from "../session-artifact-files.js";
-import { readJsonWithStorage, writeJsonWithStorage } from "./artifact-json-io.js";
+import { readOptionalJsonWithStorage, writeJsonWithStorage } from "./artifact-json-io.js";
 import { buildSessionListFacts } from "./session-list-facts.js";
 import {
   compareTurnPlacement,
@@ -38,7 +39,6 @@ import {
   turnKey,
   writeSummarySnapshot,
 } from "./turn-journal-store.js";
-import { text } from "@noobot/shared/value";
 
 function ignoreMissingDirectory(error) {
   if (error?.code !== "ENOENT") throw error;
@@ -51,11 +51,20 @@ export const SESSION_ARTIFACT_PREDECESSOR = Object.freeze({
 
 const TURN_PLACEMENT = Object.freeze({ RETAINED: "retained", REWRITTEN: "rewritten" });
 
+const SESSION_ARTIFACT_PREDECESSOR_VALUES = new Set(Object.values(SESSION_ARTIFACT_PREDECESSOR));
+
+function requireSessionArtifactPredecessor(predecessor) {
+  if (!SESSION_ARTIFACT_PREDECESSOR_VALUES.has(predecessor)) {
+    throw new TypeError("Session artifact write requires SESSION_ARTIFACT_PREDECESSOR predecessor");
+  }
+  return predecessor;
+}
+
 async function readPreviousTurnManifest({ storageService, files, predecessor }) {
-  const previousManifest = await readJsonWithStorage({
+  requireSessionArtifactPredecessor(predecessor);
+  const previousManifest = await readOptionalJsonWithStorage({
     storageService,
     artifactPath: files.session,
-    fallback: null,
   });
   if (previousManifest === null) return null;
   if (
@@ -108,10 +117,6 @@ function diffTurnMessages(messages, previousHashes) {
   return { nextHashes, records };
 }
 
-function arrayOrEmpty(value) {
-  return Array.isArray(value) ? value : [];
-}
-
 function buildSummarySnapshotPayload({
   sessionPayload,
   turn,
@@ -124,13 +129,13 @@ function buildSummarySnapshotPayload({
     schemaVersion: SUMMARY_SNAPSHOT_SCHEMA_VERSION,
     checkpointId: checkpoint.checkpointId,
     checkpointRevision: checkpoint.checkpointRevision,
-    sessionId: text(sessionPayload.sessionId),
+    sessionId: sessionPayload.sessionId,
     turnId: turn.turnId,
     turnScopeId: turn.turnScopeId,
     dialogProcessId: turn.dialogProcessId,
-    persistedMessageUids: arrayOrEmpty(receipt?.persistedMessageUids),
-    summarizedMessageUids: arrayOrEmpty(receipt?.summarizedMessageUids),
-    committedAt: text(receipt?.committedAt),
+    persistedMessageUids: [...receipt.persistedMessageUids],
+    summarizedMessageUids: [...receipt.summarizedMessageUids],
+    committedAt: receipt.committedAt,
     previousCheckpointHash,
     records,
   };
@@ -155,11 +160,9 @@ async function writeTurnSummarySnapshots({
   records,
 }) {
   const summarySnapshots = previous ? [...previous.summarySnapshots] : [];
-  const previousCheckpointIds = new Set(
-    summarySnapshots.map((snapshot) => text(snapshot?.checkpointId)).filter(Boolean),
-  );
+  const previousCheckpointIds = new Set(summarySnapshots.map((snapshot) => snapshot.checkpointId));
   let checkpointRecords = null;
-  let previousCheckpointHash = summarySnapshots.at(-1)?.contentHash || "";
+  let previousCheckpointHash = summarySnapshots.length ? summarySnapshots.at(-1).contentHash : "";
   for (const receipt of resolveTurnSummaryReceipts(sessionPayload, turn)) {
     const checkpoint = receiptCheckpoint(receipt, previousCheckpointIds);
     if (!checkpoint) continue;
@@ -272,9 +275,7 @@ async function pruneUnreferencedJournals(files, artifactTurns) {
 
 function collectReferencedSnapshots(turnOrder) {
   return new Set(
-    turnOrder.flatMap((turn) =>
-      turn.summarySnapshots.map((snapshot) => text(snapshot?.file).replaceAll("\\", "/")),
-    ),
+    turnOrder.flatMap((turn) => turn.summarySnapshots.map((snapshot) => snapshot.file)),
   );
 }
 
@@ -303,13 +304,13 @@ async function pruneUnreferencedSnapshots(files, turnOrder) {
 }
 
 export async function writeSessionArtifact({
-  storageService = null,
-  sessionDir = "",
-  sessionPayload = {},
-  atomic = true,
-  now = () => new Date().toISOString(),
-  predecessor = SESSION_ARTIFACT_PREDECESSOR.CANONICAL,
-} = {}) {
+  storageService,
+  sessionDir,
+  sessionPayload,
+  atomic,
+  now,
+  predecessor,
+}) {
   const files = buildSessionArtifactFileMap(sessionDir);
   await mkdir(sessionDir, { recursive: true });
   const normalizedSessionPayload = normalizeSessionEntity(sessionPayload, { now });
@@ -439,13 +440,13 @@ function placeTurnViewTurns({ session, outsideItems, turns, messageOrder }) {
 }
 
 export async function writeSessionTurnArtifacts({
-  storageService = null,
-  sessionDir = "",
-  sessionPayload = {},
-  turnScopeIds = [],
-  atomic = true,
-  now = () => new Date().toISOString(),
-} = {}) {
+  storageService,
+  sessionDir,
+  sessionPayload,
+  turnScopeIds,
+  atomic,
+  now,
+}) {
   const files = buildSessionArtifactFileMap(sessionDir);
   const session = normalizeSessionEntity(sessionPayload, { now });
   const previous = await readPreviousTurnManifest({
@@ -454,7 +455,7 @@ export async function writeSessionTurnArtifacts({
     predecessor: SESSION_ARTIFACT_PREDECESSOR.CANONICAL,
   });
   if (!previous) throw turnJournalSchemaRequiredError("Session turn view write");
-  const viewScopes = new Set(turnScopeIds.map((turnScopeId) => text(turnScopeId)));
+  const viewScopes = new Set(turnScopeIds.map(requireCanonicalTurnScopeId));
   const { turns } = splitSessionMessages(session.messages, session.dialogOrder);
   const outsideItems = assertTurnViewOwnership({ session, previous, viewScopes, turns });
   const messageOrder = mergeTurnViewMessageOrder({

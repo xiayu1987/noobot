@@ -40,6 +40,9 @@
   --startup-font-size-sm: 12px;
   --startup-font-size-md: 14px;
   --startup-font-size-error: 12px;
+  --startup-font-size-icon: 20px;
+  --startup-font-size-title: clamp(30px, 5vw, 42px);
+  --startup-font-size-title-compact: 28px;
   --startup-font-weight-semibold: 600;
   --startup-font-weight-bold: 700;
   --startup-line-height-cozy: 1.35;
@@ -116,7 +119,7 @@ input {
 }
 h1 {
   margin: 18px 0 10px;
-  font-size: clamp(30px, 5vw, 42px);
+  font-size: var(--startup-font-size-title);
   letter-spacing: var(--startup-letter-spacing-tight);
   color: var(--startup-text-strong);
 }
@@ -141,7 +144,7 @@ p {
 }
 .status-spinner {
   color: var(--startup-status-running);
-  font-size: 20px;
+  font-size: var(--startup-font-size-icon);
   animation: spin 0.9s linear infinite;
 }
 .content {
@@ -444,6 +447,6 @@ pre {
     grid-template-columns: 1fr;
   }
   h1 {
-    font-size: 28px;
+    font-size: var(--startup-font-size-title-compact);
   }
 }

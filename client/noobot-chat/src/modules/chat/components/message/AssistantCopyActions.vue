@@ -97,7 +97,7 @@ function handleRowKeydown(event) {
   color: var(--noobot-text-secondary);
   font-size: var(--noobot-msg-disclosure-icon-size);
   transform: rotate(-90deg);
-  transition: transform var(--noobot-duration-normal) ease;
+  transition: transform var(--noobot-duration-normal) var(--noobot-ease-standard);
 }
 
 .assistant-copy-actions__toggle.is-expanded {

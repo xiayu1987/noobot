@@ -27,6 +27,7 @@ import {
   terminalResolution,
 } from "./useChatSession.resume-state.test-helpers.js";
 import { jsonResponse } from "../../../helpers/jsonResponse.js";
+import { idleTurnLifecycleSnapshot } from "../../../helpers/sessionDetailFixture.js";
 
 describe("useChatSession conversation and composer action state", () => {
   beforeEach(() => {
@@ -64,13 +65,14 @@ describe("useChatSession conversation and composer action state", () => {
       });
     });
     const authFetch = vi.fn(async () =>
-      jsonResponse({
-        ok: true,
-        exists: true,
-        sessionId: "s-state",
-        sessions: [],
-        messages: [],
-      }),
+      jsonResponse(
+        detailPayload({
+          sessionId: "s-state",
+          dialogProcessId: "same-id",
+          turnScopeId: "same-id",
+          turnLifecycleSnapshot: idleTurnLifecycleSnapshot("s-state"),
+        }),
+      ),
     );
     const session = createChatSession({ authFetch });
 
@@ -260,6 +262,7 @@ describe("useChatSession conversation and composer action state", () => {
             sessionId,
             dialogProcessId: `dp-${status}`,
             turnScopeId: `turn-${status}`,
+            turnLifecycleSnapshot: idleTurnLifecycleSnapshot(sessionId),
           }),
           terminal: terminalResolution({
             sessionId,

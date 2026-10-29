@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { readApiResponseEnvelope } from "@noobot/shared/request-error";
 import { normalizeTrimmedString } from "./utils.js";
 import {
   logResendDebug,
@@ -37,7 +38,7 @@ export function createReplaceTurnRequester({
       attachments: summarizeDebugAttachments(attachments),
       messages: summarizeDebugMessages(activeSession.value?.messages),
     }));
-    const result = await replaceSessionTurnApi(
+    const response = await replaceSessionTurnApi(
       {
         userId: userId.value,
         sessionId,
@@ -51,7 +52,7 @@ export function createReplaceTurnRequester({
       },
       { fetcher: authFetch },
     );
-    const payload = typeof result?.json === "function" ? await result.json() : result;
-    return { result, payload };
+    const { ok: _envelopeOk, ...payload } = await readApiResponseEnvelope(response);
+    return payload;
   };
 }

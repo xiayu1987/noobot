@@ -4,7 +4,7 @@
   --noobot-thinking-detail-background: var(--noobot-panel-muted);
   --noobot-thinking-header: var(--noobot-text-secondary);
   --noobot-thinking-text: var(--noobot-text-main);
-  --noobot-thinking-muted: var(--noobot-text-muted);
+  --noobot-thinking-muted: var(--noobot-text-secondary);
   --noobot-thinking-line-border: var(--noobot-divider);
   --noobot-thinking-tool-border: var(--noobot-divider);
 }

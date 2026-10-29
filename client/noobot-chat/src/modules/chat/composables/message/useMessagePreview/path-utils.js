@@ -61,14 +61,6 @@ export function resolveFileItemRelativePath(fileItem = {}, userId = "") {
   return resolveWorkspaceRelativePath(fileItem?.relativePath || "", userId);
 }
 
-export function resolveFileItemHostPath(fileItem = {}) {
-  for (const value of [fileItem?.hostPath, fileItem?.resolvedPath, fileItem?.path]) {
-    const normalized = text(value);
-    if (normalized && isAbsolutePathForPlatform(normalized)) return normalized;
-  }
-  return "";
-}
-
 export function resolveFileItemName(fileItem = {}, relativePath = "") {
   const explicitName = text(fileItem?.fileName || fileItem?.name);
   if (explicitName) return explicitName;
@@ -89,12 +81,4 @@ export function maskWorkspacePath(pathValue = "") {
   const parts = normalized.split("/").filter(Boolean);
   if (parts.length <= 2) return normalized;
   return `${parts.slice(0, 2).join("/")}/.../${parts.at(-1)}`;
-}
-
-export function maskHostPath(pathValue = "") {
-  const normalized = text(pathValue).replaceAll("\\", "/");
-  if (!normalized) return "";
-  const parts = normalized.split("/").filter(Boolean);
-  if (parts.length <= 2) return normalized;
-  return `${parts[0]}/.../${parts.at(-1)}`;
 }

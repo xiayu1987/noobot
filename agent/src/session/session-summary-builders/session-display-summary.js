@@ -23,8 +23,7 @@ import {
   TURN_SNAPSHOT_TERMINAL_LIMIT,
 } from "@noobot/session-protocol/turn-lifecycle";
 
-export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 33;
-export const SESSION_DETAIL_MESSAGE_PROJECTION = "canonical-presentation";
+export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 34;
 
 function isValidTransferEnvelopeList(value) {
   return (
@@ -127,7 +126,6 @@ export function buildSessionDisplaySummary(session) {
     sessionId,
     parentSessionId: session.parentSessionId,
     caller: session.caller,
-    currentTaskId: session.currentTaskId,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
     title: resolveSessionTitle(session),

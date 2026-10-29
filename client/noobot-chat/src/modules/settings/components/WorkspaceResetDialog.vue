@@ -130,7 +130,7 @@ useOverlayHistory(
 .reset-dialog-note {
   margin-top: var(--noobot-space-sm);
   font-size: var(--noobot-font-size-sm);
-  color: var(--noobot-text-muted);
+  color: var(--noobot-text-secondary);
 }
 
 @media (max-width: 768px) {

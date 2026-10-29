@@ -21,6 +21,7 @@ import {
 import {
   readSessionArtifact,
   writeSessionArtifact,
+  SESSION_ARTIFACT_PREDECESSOR,
 } from "../../src/session/session-artifact-store.js";
 import {
   createTestAgentEnvironment,
@@ -31,6 +32,7 @@ import {
   createTestSessionRequiredFields,
 } from "../helpers/session-message-facts.js";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
+import { TEST_STORAGE_SERVICE } from "../helpers/storage-service.js";
 
 async function withTempDir(fn) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "noobot-attach-test-"));
@@ -670,6 +672,9 @@ test("AttachmentService.linkParsedResultToAttachment updates only the attachment
     });
     await writeSessionArtifact({
       sessionDir: path.dirname(runtimeSessionFile),
+      storageService: TEST_STORAGE_SERVICE,
+      atomic: true,
+      predecessor: SESSION_ARTIFACT_PREDECESSOR.CANONICAL,
       sessionPayload: snapshotPayload,
     });
     await writeFile(
@@ -679,6 +684,9 @@ test("AttachmentService.linkParsedResultToAttachment updates only the attachment
     );
     await writeSessionArtifact({
       sessionDir: path.dirname(pluginSessionFile),
+      storageService: TEST_STORAGE_SERVICE,
+      atomic: true,
+      predecessor: SESSION_ARTIFACT_PREDECESSOR.CANONICAL,
       sessionPayload: snapshotPayload,
     });
     await writeFile(
@@ -722,9 +730,11 @@ test("AttachmentService.linkParsedResultToAttachment updates only the attachment
 
     const runtimeSnapshot = await readSessionArtifact({
       sessionDir: path.dirname(runtimeSessionFile),
+      storageService: TEST_STORAGE_SERVICE,
     });
     const pluginSnapshot = await readSessionArtifact({
       sessionDir: path.dirname(pluginSessionFile),
+      storageService: TEST_STORAGE_SERVICE,
     });
     assert.equal(runtimeSnapshot.messages[0].attachments[0].parsedResult, undefined);
     assert.equal(pluginSnapshot.messages[0].attachments[0].parsedResult, undefined);

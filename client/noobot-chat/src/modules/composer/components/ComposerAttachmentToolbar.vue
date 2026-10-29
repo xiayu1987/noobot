@@ -112,9 +112,9 @@ defineExpose({
   padding: 0 var(--noobot-space-md);
   flex-shrink: 0;
   transition:
-    color var(--noobot-duration-normal) ease,
-    border-color var(--noobot-duration-normal) ease,
-    background-color var(--noobot-duration-normal) ease;
+    color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    border-color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    background-color var(--noobot-duration-normal) var(--noobot-ease-standard);
 }
 
 .poe-upload-btn:hover {

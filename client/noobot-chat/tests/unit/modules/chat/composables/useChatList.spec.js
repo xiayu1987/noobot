@@ -9,14 +9,38 @@ import { useChatList } from "../../../../../src/modules/chat/composables/useChat
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { createTurnRuntimeRegistryState } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { createTurnRuntimeStoreActions } from "../../../../../src/modules/chat/stores/chatStoreTurnRuntime.js";
+import { createLocalSessionItem } from "../../../../../src/modules/session/model/list/sessionRecords.js";
 import { rejectUnexpectedRequest } from "../../../helpers/jsonResponse.js";
-import { ROOT_PARENT_SESSION_ID } from "@noobot/agent-transport-protocol";
+import {
+  availableDetailDocument,
+  availableDetailEntry,
+  availableSummaryEntry,
+  detailResponse,
+  missingDetailDocument,
+  sessionsSummaryResponse,
+} from "../../../helpers/sessionDetailFixture.js";
 
 vi.mock("../../../../../src/shared/i18n/useLocale", () => ({
   useLocale: () => ({
     translate: (key) => key,
   }),
 }));
+
+function listResponse(entries) {
+  return sessionsSummaryResponse({
+    userId: "u-1",
+    updatedAt: "2026-08-05T00:00:00.000Z",
+    sessions: entries.map(({ sessionId, updatedAt }) =>
+      availableSummaryEntry({
+        sessionId,
+        title: sessionId,
+        aggregateVersion: 1,
+        messageCount: 0,
+        updatedAt,
+      }),
+    ),
+  });
+}
 
 function createUseChatListFixture(overrides = {}) {
   const userId = ref("u-1");
@@ -53,8 +77,6 @@ function createUseChatListFixture(overrides = {}) {
     sending,
     createConnectorPanelState: () => ({ selectedConnectorIds: [], connectors: [] }),
     generateSessionId: () => "local-generated",
-    sessionTitleFromMessages: (messages, fallback = "") =>
-      messages?.[0]?.content || fallback || "title",
     applyCompletedToolLogsToMessages: vi.fn(),
     getSessionsApi,
     getSessionDetailApi,
@@ -95,7 +117,15 @@ describe("useChatList", () => {
       isLocal: false,
       loaded: true,
       messages: [],
-      sessionDocs: [],
+      sessionDocs: [
+        availableDetailEntry({
+          sessionId: "persisted-1",
+          title: "Persisted",
+          aggregateVersion: 1,
+          messages: [],
+          turnTimings: [],
+        }),
+      ],
       connectorPanelState: { selectedConnectorIds: [], connectors: [] },
     };
     refs.sessions.value = [persisted];
@@ -123,20 +153,12 @@ describe("useChatList", () => {
     const { api, refs, mocks } = fixture;
     const existingMessages = [{ role: RoleEnum.USER, content: "local" }];
     const existingSession = {
-      sessionId: "backend-1",
-      title: "old",
-      isLocal: true,
-      loaded: true,
+      ...createLocalSessionItem({
+        id: "backend-1",
+        title: "old",
+        createConnectorPanelState: () => ({ selectedConnectorIds: [], connectors: [] }),
+      }),
       messages: existingMessages,
-      rawMessages: existingMessages,
-      sessionDocs: [{ sessionId: "backend-1", messages: [] }],
-      connectorPanelState: { selectedConnectorIds: [], connectors: [] },
-      createdAt: "2026-05-14T00:00:00.000Z",
-      updatedAt: "2026-05-14T00:00:00.000Z",
-      currentTaskId: "",
-      currentTaskStatus: "idle",
-      messageCount: 1,
-      lastMessage: existingMessages[0],
     };
 
     refs.sessions.value.push(existingSession);
@@ -145,34 +167,20 @@ describe("useChatList", () => {
     const existingSessionRef = refs.sessions.value[0];
     const existingMessagesRef = refs.sessions.value[0].messages;
 
-    mocks.getSessionsApi.mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        ok: true,
-        sessions: [
-          {
-            sessionId: "backend-1",
-            parentSessionId: ROOT_PARENT_SESSION_ID,
-            caller: RoleEnum.USER,
-            activeTurnScopeId: "",
-            createdAt: "2026-05-14T00:00:00.000Z",
-            updatedAt: "2026-05-14T00:01:00.000Z",
-            messages: [{ role: RoleEnum.USER, content: "server-summary" }],
-          },
-        ],
-      }),
-    });
-    mocks.getSessionDetailApi.mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        ok: true,
-        exists: true,
-        sessionId: "backend-1",
-        sessions: [
-          { sessionId: "backend-1", parentSessionId: ROOT_PARENT_SESSION_ID, messages: [] },
-        ],
-      }),
-    });
+    mocks.getSessionsApi.mockResolvedValue(
+      listResponse([{ sessionId: "backend-1", updatedAt: "2026-05-14T00:01:00.000Z" }]),
+    );
+    mocks.getSessionDetailApi.mockResolvedValue(
+      detailResponse(
+        availableDetailDocument({
+          sessionId: "backend-1",
+          title: "backend-1",
+          aggregateVersion: 1,
+          messages: [],
+          turnTimings: [],
+        }),
+      ),
+    );
 
     await api.fetchSessions("backend-1", {
       silent: true,
@@ -187,41 +195,22 @@ describe("useChatList", () => {
   });
 
   it("fetchSessions with silent=true does not enable loadingSessions flag", async () => {
-    const getSessionsApi = vi.fn(async () => ({
-      ok: true,
-      json: async () => ({
-        ok: true,
-        sessions: [
-          {
-            sessionId: "backend-2",
-            parentSessionId: ROOT_PARENT_SESSION_ID,
-            caller: RoleEnum.USER,
-            activeTurnScopeId: "",
-            createdAt: "2026-05-14T00:00:00.000Z",
-            updatedAt: "2026-05-14T00:01:00.000Z",
-            messages: [],
-          },
-        ],
-      }),
-    }));
+    const getSessionsApi = vi.fn(async () =>
+      listResponse([{ sessionId: "backend-2", updatedAt: "2026-05-14T00:01:00.000Z" }]),
+    );
     const fixture = createUseChatListFixture({
       getSessionsApi,
-      getSessionDetailApi: vi.fn(async () => ({
-        ok: true,
-        json: async () => ({
-          ok: true,
-          exists: true,
-          sessionId: "backend-2",
-          sessions: [
-            {
-              sessionId: "backend-2",
-              parentSessionId: ROOT_PARENT_SESSION_ID,
-              turnTimings: [],
-              messages: [],
-            },
-          ],
-        }),
-      })),
+      getSessionDetailApi: vi.fn(async () =>
+        detailResponse(
+          availableDetailDocument({
+            sessionId: "backend-2",
+            title: "backend-2",
+            aggregateVersion: 1,
+            messages: [],
+            turnTimings: [],
+          }),
+        ),
+      ),
     });
 
     expect(fixture.refs.loadingSessions.value).toBe(false);
@@ -232,37 +221,27 @@ describe("useChatList", () => {
 
   it("loads an explicitly requested Session from detail when the list projection is behind", async () => {
     const fixture = createUseChatListFixture({
-      getSessionsApi: vi.fn(async () => ({
-        ok: true,
-        json: async () => ({ ok: true, sessions: [] }),
-      })),
-      getSessionDetailApi: vi.fn(async () => ({
-        ok: true,
-        json: async () => ({
-          ok: true,
-          exists: true,
-          sessionId: "session-from-route",
-          sessions: [
-            {
-              sessionId: "session-from-route",
-              parentSessionId: ROOT_PARENT_SESSION_ID,
-              turnTimings: [],
-              caller: RoleEnum.USER,
-              activeTurnScopeId: "",
-              messages: [
-                {
-                  messageUid: "route-message",
-                  userMessageId: "route-message",
-                  role: RoleEnum.USER,
-                  content: "authority",
-                  turnScopeId: "route-turn",
-                  dialogProcessId: "route-dialog",
-                },
-              ],
-            },
-          ],
-        }),
-      })),
+      getSessionsApi: vi.fn(async () => listResponse([])),
+      getSessionDetailApi: vi.fn(async () =>
+        detailResponse(
+          availableDetailDocument({
+            sessionId: "session-from-route",
+            title: "Route session",
+            aggregateVersion: 1,
+            turnTimings: [],
+            messages: [
+              {
+                messageUid: "route-message",
+                userMessageId: "route-message",
+                role: RoleEnum.USER,
+                content: "authority",
+                turnScopeId: "route-turn",
+                dialogProcessId: "route-dialog",
+              },
+            ],
+          }),
+        ),
+      ),
     });
 
     await expect(
@@ -284,43 +263,23 @@ describe("useChatList", () => {
   });
 
   it("keeps the authoritative list when an explicit Session route does not exist", async () => {
-    const getSessionDetailApi = vi.fn(async ({ sessionId }) => ({
-      ok: true,
-      json: async () =>
+    const getSessionDetailApi = vi.fn(async ({ sessionId }) =>
+      detailResponse(
         sessionId === "missing-session"
-          ? { ok: true, exists: false, sessionId }
-          : {
-              ok: true,
-              exists: true,
+          ? missingDetailDocument({ sessionId })
+          : availableDetailDocument({
               sessionId,
-              sessions: [
-                {
-                  sessionId,
-                  parentSessionId: ROOT_PARENT_SESSION_ID,
-                  caller: RoleEnum.USER,
-                  activeTurnScopeId: "",
-                  messages: [],
-                  turnTimings: [],
-                },
-              ],
-            },
-    }));
+              title: sessionId,
+              aggregateVersion: 1,
+              messages: [],
+              turnTimings: [],
+            }),
+      ),
+    );
     const fixture = createUseChatListFixture({
-      getSessionsApi: vi.fn(async () => ({
-        ok: true,
-        json: async () => ({
-          ok: true,
-          sessions: [
-            {
-              sessionId: "persisted-session",
-              parentSessionId: ROOT_PARENT_SESSION_ID,
-              caller: RoleEnum.USER,
-              activeTurnScopeId: "",
-              updatedAt: "2026-08-05T00:00:00.000Z",
-            },
-          ],
-        }),
-      })),
+      getSessionsApi: vi.fn(async () =>
+        listResponse([{ sessionId: "persisted-session", updatedAt: "2026-08-05T00:00:00.000Z" }]),
+      ),
       getSessionDetailApi,
     });
 
@@ -344,54 +303,32 @@ describe("useChatList", () => {
   it("fetchSessions can force the unchanged active session to reload and rerender messages", async () => {
     const existingMessages = [{ role: RoleEnum.USER, content: "stale local" }];
     const fixture = createUseChatListFixture({
-      getSessionsApi: vi.fn(async () => ({
-        ok: true,
-        json: async () => ({
-          ok: true,
-          sessions: [
-            {
-              sessionId: "backend-refresh",
-              parentSessionId: ROOT_PARENT_SESSION_ID,
-              caller: RoleEnum.USER,
-              activeTurnScopeId: "",
-              createdAt: "2026-05-14T00:00:00.000Z",
-              updatedAt: "2026-05-14T00:03:00.000Z",
-              messages: [{ role: RoleEnum.USER, content: "summary" }],
-            },
-          ],
-        }),
-      })),
-      getSessionDetailApi: vi.fn(async () => ({
-        ok: true,
-        json: async () => ({
-          ok: true,
-          exists: true,
-          sessionId: "backend-refresh",
-          sessions: [
-            {
-              sessionId: "backend-refresh",
-              parentSessionId: ROOT_PARENT_SESSION_ID,
-              turnTimings: [],
-              currentTaskId: "",
-              createdAt: "2026-05-14T00:00:00.000Z",
-              updatedAt: "2026-05-14T00:03:00.000Z",
-              messages: [
-                {
-                  messageUid: "refresh-user",
-                  userMessageId: "refresh-user",
-                  role: RoleEnum.USER,
-                  content: "fresh server",
-                },
-                {
-                  presentationMessageId: "refresh-assistant",
-                  role: RoleEnum.ASSISTANT,
-                  content: "fresh answer",
-                },
-              ],
-            },
-          ],
-        }),
-      })),
+      getSessionsApi: vi.fn(async () =>
+        listResponse([{ sessionId: "backend-refresh", updatedAt: "2026-05-14T00:03:00.000Z" }]),
+      ),
+      getSessionDetailApi: vi.fn(async () =>
+        detailResponse(
+          availableDetailDocument({
+            sessionId: "backend-refresh",
+            title: "backend-refresh",
+            aggregateVersion: 1,
+            turnTimings: [],
+            messages: [
+              {
+                messageUid: "refresh-user",
+                userMessageId: "refresh-user",
+                role: RoleEnum.USER,
+                content: "fresh server",
+              },
+              {
+                presentationMessageId: "refresh-assistant",
+                role: RoleEnum.ASSISTANT,
+                content: "fresh answer",
+              },
+            ],
+          }),
+        ),
+      ),
     });
     const { api, refs, mocks } = fixture;
     refs.sessions.value = [
@@ -402,8 +339,15 @@ describe("useChatList", () => {
         isLocal: false,
         loaded: true,
         messages: existingMessages,
-        rawMessages: [],
-        sessionDocs: [{ sessionId: "backend-refresh", messages: existingMessages }],
+        sessionDocs: [
+          availableDetailEntry({
+            sessionId: "backend-refresh",
+            title: "loaded",
+            aggregateVersion: 0,
+            messages: existingMessages,
+            turnTimings: [],
+          }),
+        ],
         connectorPanelState: { selectedConnectorIds: [], connectors: [] },
       },
     ];
@@ -423,21 +367,24 @@ describe("useChatList", () => {
   });
 
   it("fetchSessionDetail can reuse a just-loaded detail snapshot for initialization replay", async () => {
-    const getSessionDetailApi = vi.fn(async () => ({
-      ok: true,
-      json: async () => ({
-        ok: true,
-        exists: true,
-        sessionId: "backend-cache",
-        sessions: [
-          { sessionId: "backend-cache", parentSessionId: ROOT_PARENT_SESSION_ID, messages: [] },
-        ],
-      }),
-    }));
+    const getSessionDetailApi = vi.fn(async () =>
+      detailResponse(
+        availableDetailDocument({
+          sessionId: "backend-cache",
+          title: "backend-cache",
+          aggregateVersion: 1,
+          messages: [],
+          turnTimings: [],
+        }),
+      ),
+    );
     const { api } = createUseChatListFixture({ getSessionDetailApi });
 
-    const first = await api.fetchSessionDetail("backend-cache");
-    const second = await api.fetchSessionDetail("backend-cache", { reuseRecentlyLoaded: true });
+    const first = await api.fetchSessionDetail("backend-cache", { source: "selectSession" });
+    const second = await api.fetchSessionDetail("backend-cache", {
+      source: "reconnectProtocolReconcile",
+      reuseRecentlyLoaded: true,
+    });
 
     expect(first).toBe(second);
     expect(getSessionDetailApi).toHaveBeenCalledTimes(1);
@@ -449,21 +396,17 @@ describe("useChatList", () => {
       () =>
         new Promise((resolve) => {
           resolveResponse = () =>
-            resolve({
-              ok: true,
-              json: async () => ({
-                ok: true,
-                exists: true,
-                sessionId: "backend-pending",
-                sessions: [
-                  {
-                    sessionId: "backend-pending",
-                    parentSessionId: ROOT_PARENT_SESSION_ID,
-                    messages: [],
-                  },
-                ],
-              }),
-            });
+            resolve(
+              detailResponse(
+                availableDetailDocument({
+                  sessionId: "backend-pending",
+                  title: "backend-pending",
+                  aggregateVersion: 1,
+                  messages: [],
+                  turnTimings: [],
+                }),
+              ),
+            );
         }),
     );
     const { api } = createUseChatListFixture({ getSessionDetailApi });
@@ -490,9 +433,14 @@ describe("useChatList", () => {
         isLocal: false,
         loaded: true,
         messages: [{ role: RoleEnum.USER, content: "hi" }],
-        rawMessages: [],
         sessionDocs: [
-          { sessionId: "s-loaded", messages: [{ role: RoleEnum.USER, content: "hi" }] },
+          availableDetailEntry({
+            sessionId: "s-loaded",
+            title: "loaded",
+            aggregateVersion: 1,
+            messages: [{ role: RoleEnum.USER, content: "hi" }],
+            turnTimings: [],
+          }),
         ],
         connectorPanelState: { selectedConnectorIds: [], connectors: [] },
       },
@@ -514,53 +462,46 @@ describe("useChatList", () => {
     const session = {
       sessionId: "reload-backend",
       title: "old title",
+      aggregateVersion: 0,
       isLocal: true,
       loaded: false,
       messages: [],
-      rawMessages: [],
       sessionDocs: [],
       connectorPanelState: { selectedConnectorIds: [], connectors: [] },
       createdAt: "2026-05-14T00:00:00.000Z",
       updatedAt: "2026-05-14T00:00:00.000Z",
-      currentTaskId: "",
-      currentTaskStatus: "idle",
       messageCount: 0,
       lastMessage: null,
     };
     refs.sessions.value.push(session);
     refs.activeSessionId.value = "reload-backend";
 
-    api.applySessionDetail({
-      sessionId: "reload-backend",
-      sessions: [
-        {
-          sessionId: "reload-backend",
-          parentSessionId: ROOT_PARENT_SESSION_ID,
-          turnTimings: [],
-          currentTaskId: "",
-          createdAt: "2026-05-14T00:00:00.000Z",
-          updatedAt: "2026-05-14T00:02:00.000Z",
-          messages: [
-            {
-              messageUid: "restored-user",
-              userMessageId: "restored-user",
-              role: RoleEnum.USER,
-              content: "restored question",
-            },
-            {
-              presentationMessageId: "restored-assistant",
-              role: RoleEnum.ASSISTANT,
-              content: "restored answer",
-            },
-          ],
-        },
-      ],
-    });
+    api.applySessionDetail(
+      availableDetailDocument({
+        sessionId: "reload-backend",
+        title: "Authority title",
+        aggregateVersion: 1,
+        turnTimings: [],
+        messages: [
+          {
+            messageUid: "restored-user",
+            userMessageId: "restored-user",
+            role: RoleEnum.USER,
+            content: "restored question",
+          },
+          {
+            presentationMessageId: "restored-assistant",
+            role: RoleEnum.ASSISTANT,
+            content: "restored answer",
+          },
+        ],
+      }),
+    );
 
     expect(refs.activeSessionId.value).toBe("reload-backend");
     expect(session.loaded).toBe(true);
     expect(session.messages).toHaveLength(2);
-    expect(session.title).toBe("restored question");
+    expect(session.title).toBe("Authority title");
   });
 
   it("selectSession allows switching while another session is sending", async () => {
@@ -573,7 +514,6 @@ describe("useChatList", () => {
         isLocal: true,
         loaded: true,
         messages: [],
-        rawMessages: [],
         sessionDocs: [],
         connectorPanelState: { selectedConnectorIds: [], connectors: [] },
       },
@@ -584,7 +524,6 @@ describe("useChatList", () => {
         isLocal: true,
         loaded: true,
         messages: [],
-        rawMessages: [],
         sessionDocs: [],
         connectorPanelState: { selectedConnectorIds: [], connectors: [] },
       },

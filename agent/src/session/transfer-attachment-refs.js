@@ -46,7 +46,7 @@ export function compactSessionAttachmentRef(reference = {}) {
     "path",
     "previewUrl",
     "downloadUrl",
-    "isSandbox",
+    "sourcePath",
     "generationSource",
   ]) {
     if (reference[key] !== undefined && reference[key] !== null && reference[key] !== "")

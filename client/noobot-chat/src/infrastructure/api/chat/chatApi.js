@@ -69,7 +69,7 @@ export async function connectApi({ userId = "", connectCode = "", locale = "" })
   });
 }
 
-export async function getSessionsApi({ userId = "" }, { fetcher }) {
+export async function getSessionsApi({ userId }, { fetcher }) {
   const runFetch = requireFetcher(fetcher);
   return runFetch(`/api/internal/sessions/${encodeURIComponent(userId)}`);
 }
@@ -127,22 +127,13 @@ export async function resolveTurnTerminalStateApi(
 }
 
 export async function getSessionThinkingDetailApi(
-  { userId = "", sessionId = "", dialogProcessId = "", turnScopeId = "" },
+  { userId, sessionId, dialogProcessId, turnScopeId },
   { fetcher },
 ) {
   const runFetch = requireFetcher(fetcher);
-  const queryParams = [];
-  const normalizedDialogProcessId = text(dialogProcessId);
-  const normalizedTurnScopeId = text(turnScopeId);
-  if (normalizedDialogProcessId) {
-    queryParams.push(`dialogProcessId=${encodeURIComponent(normalizedDialogProcessId)}`);
-  }
-  if (normalizedTurnScopeId) {
-    queryParams.push(`turnScopeId=${encodeURIComponent(normalizedTurnScopeId)}`);
-  }
-  const query = queryParams.length ? `?${queryParams.join("&")}` : "";
+  const query = new URLSearchParams({ dialogProcessId, turnScopeId });
   return runFetch(
-    `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/thinking-detail${query}`,
+    `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/thinking-detail?${query.toString()}`,
   );
 }
 
@@ -224,12 +215,13 @@ export async function replaceSessionTurnApi(
   );
 }
 
-export async function deleteSessionApi({ userId = "", sessionId = "" }, { fetcher }) {
+export async function deleteSessionApi({ userId = "", sessionIds }, { fetcher }) {
   const runFetch = requireFetcher(fetcher);
-  return runFetch(
-    `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`,
-    { method: "DELETE" },
-  );
+  return runFetch(`/api/internal/sessions/${encodeURIComponent(userId)}/delete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionIds }),
+  });
 }
 
 export function buildChatWebSocketUrl({ apiKey = "" } = {}) {
@@ -328,32 +320,6 @@ export async function downloadWorkspaceFileApi(
   return runFileFetch(fetcher, `/api/internal/workspace/${encodeURIComponent(userId)}/download`, {
     traceId,
     query: { path },
-  });
-}
-
-export async function getHostFileApi(
-  { path = "", traceId = "", isSandbox = undefined },
-  { fetcher },
-) {
-  return runFileFetch(fetcher, "/api/internal/host-file/file", {
-    traceId,
-    query: {
-      path,
-      isSandbox: typeof isSandbox === "boolean" ? isSandbox : undefined,
-    },
-  });
-}
-
-export async function downloadHostFileApi(
-  { path = "", traceId = "", isSandbox = undefined },
-  { fetcher },
-) {
-  return runFileFetch(fetcher, "/api/internal/host-file/download", {
-    traceId,
-    query: {
-      path,
-      isSandbox: typeof isSandbox === "boolean" ? isSandbox : undefined,
-    },
   });
 }
 

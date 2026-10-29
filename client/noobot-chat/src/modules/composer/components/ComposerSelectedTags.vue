@@ -104,7 +104,7 @@ function onRemoveUpload(clientAttachmentId) {
 }
 
 .selected-attachment-name {
-  border-color: color-mix(in srgb, var(--noobot-text-muted) 28%, transparent);
+  border-color: color-mix(in srgb, var(--noobot-text-secondary) 28%, transparent);
   background: color-mix(in srgb, var(--noobot-surface-soft) 78%, var(--noobot-accent));
   padding-right: var(--noobot-space-xs);
 }

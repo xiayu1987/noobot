@@ -3,12 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  maskHostPath,
-  maskWorkspacePath,
-  parseContentDisposition,
-  resolveFileItemName,
-} from "./path-utils.js";
+import { maskWorkspacePath, parseContentDisposition, resolveFileItemName } from "./path-utils.js";
 import { logFileAccess, triggerBlobDownload } from "./file-access-log.js";
 import {
   buildFileAccessLogPayload,
@@ -19,22 +14,7 @@ import { readHttpResponseErrorText } from "./http-response.js";
 
 export function createFileDownloadController({ userId, attachmentService, translate, notify }) {
   async function onDownloadFile(fileItem = {}) {
-    const desktopDownload = window?.noobotDesktop?.downloadHostFile;
-    const context = createFileAccessContext("download", fileItem, userId, desktopDownload);
-    await downloadFile(context, fileItem, desktopDownload);
-  }
-
-  async function onDownloadWorkspacePath(path = "") {
-    const fileItem = {
-      relativePath: path,
-      fileName: resolveFileItemName({}, path),
-    };
-    const desktopDownload = window?.noobotDesktop?.downloadHostFile;
-    const context = createFileAccessContext("download", fileItem, userId, desktopDownload);
-    await downloadFile(context, fileItem);
-  }
-
-  async function downloadFile(context, fileItem, desktopDownload) {
+    const context = createFileAccessContext("download", fileItem, userId);
     logFileAccess("download.click", buildFileAccessLogPayload(context, fileItem));
     const validation = validateFileAccessContext(context, fileItem);
     if (!validation.valid) {
@@ -43,48 +23,16 @@ export function createFileDownloadController({ userId, attachmentService, transl
       return;
     }
     try {
-      if (context.useHostChannel) {
-        await downloadHostFile(context, fileItem, desktopDownload, attachmentService, translate);
-      } else {
-        await downloadWorkspaceFile(context, fileItem, attachmentService, translate);
-      }
+      await downloadWorkspaceFile(context, fileItem, attachmentService, translate);
     } catch (error) {
       logFileAccess("download.failed", {
         traceId: context.traceId,
-        channel: context.channel,
         error: String(error?.message || error || ""),
       });
       notify({ type: "error", message: error?.message || translate("message.downloadFailed") });
     }
   }
-  return { onDownloadFile, onDownloadWorkspacePath };
-}
-
-async function downloadHostFile(context, fileItem, desktopDownload, attachmentService, translate) {
-  logFileAccess("download.request", contextForLog(context));
-  if (desktopDownload) {
-    const result = await desktopDownload({ path: context.hostPath, traceId: context.traceId });
-    logFileAccess("download.response", {
-      traceId: context.traceId,
-      channel: context.channel,
-      ok: Boolean(result?.ok),
-      canceled: result?.canceled === true,
-      hasSavedPath: Boolean(result?.savedPath),
-    });
-    if (result?.canceled) return;
-    if (!result?.ok) throw new Error(result?.error || translate("message.downloadFailed"));
-    return;
-  }
-  const response = await attachmentService.downloadHostFile({
-    path: context.hostPath,
-    traceId: context.traceId,
-    isSandbox: context.isSandbox,
-  });
-  logDownloadResponse(context, response);
-  if (!response.ok) {
-    throw new Error(translate("message.downloadFailedHttp", { status: response.status }));
-  }
-  await downloadResponseBlob(response, resolveFileItemName(fileItem, context.hostPath));
+  return { onDownloadFile };
 }
 
 async function downloadWorkspaceFile(context, fileItem, attachmentService, translate) {
@@ -110,7 +58,6 @@ async function downloadWorkspaceFile(context, fileItem, attachmentService, trans
 function logDownloadResponse(context, response) {
   logFileAccess("download.response", {
     traceId: context.traceId,
-    channel: context.channel,
     ok: Boolean(response?.ok),
     status: Number(response?.status || 0),
     contentType: String(response?.headers?.get("content-type") || ""),
@@ -120,18 +67,13 @@ function logDownloadResponse(context, response) {
 
 async function downloadResponseBlob(response, fallbackName) {
   const fileName =
-    parseContentDisposition(response.headers?.get("content-disposition") || "") ||
-    fallbackName ||
-    "download";
+    parseContentDisposition(response.headers?.get("content-disposition") || "") || fallbackName;
   await triggerBlobDownload(await response.blob(), fileName);
 }
 
 function contextForLog(context) {
   return {
     traceId: context.traceId,
-    channel: context.channel,
-    isSandbox: context.isSandbox,
     relativePath: maskWorkspacePath(context.relativePath),
-    hostPath: maskHostPath(context.hostPath),
   };
 }

@@ -16,6 +16,7 @@ import {
 import { emitEvent } from "../events/index.js";
 import { resolveEffectiveModelSpec } from "./run-config/index.js";
 import { applyActiveModelSpec } from "../models/runtime/model-manager.js";
+import { projectToolsForModel } from "../models/tool/model-tool-definition.js";
 import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
 
 function resolveCredential(modelSpec = {}) {
@@ -97,7 +98,7 @@ function createModelPort({ resolveTurnModelSpec, modelState }) {
         model: requestModelSpec,
         operation,
         messages,
-        tools,
+        tools: projectToolsForModel(tools, { strict: options?.toolBinding?.strict === true }),
         options,
         policies,
         metadata: {

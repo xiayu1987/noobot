@@ -147,48 +147,39 @@ watch(
 
       <section v-if="view.tools.length" class="execution-report-section">
         <BaseSectionHeader :title="translate('message.executionReportToolSection')" />
-        <div class="execution-report-table-wrap execution-report-panel">
-          <table class="execution-report-table" data-testid="execution-report-tools">
-            <thead>
-              <tr>
-                <th scope="col">{{ translate("message.toolEvent") }}</th>
-                <th scope="col" class="is-num">
-                  {{ translate("message.executionReportToolCalls") }}
-                </th>
-                <th scope="col" class="is-num">{{ translate("message.executionReportErrors") }}</th>
-                <th scope="col">{{ translate("message.executionReportTotalDuration") }}</th>
-                <th scope="col" class="is-num">
-                  {{ translate("message.executionReportAvgDuration") }}
-                </th>
-                <th scope="col" class="is-num">
-                  {{ translate("message.executionReportMaxDuration") }}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="tool in view.tools" :key="tool.tool">
-                <td class="execution-report-tool-name">{{ tool.tool }}</td>
-                <td class="is-num">{{ tool.calls }}</td>
-                <td class="is-num" :class="{ 'execution-report-failed': tool.failures }">
-                  {{ tool.failures }}
-                </td>
-                <td>
-                  <span class="execution-report-bar-cell">
-                    <span class="execution-report-bar" aria-hidden="true">
-                      <span
-                        class="execution-report-bar-fill"
-                        :style="barStyle(tool.totalRatio)"
-                      ></span>
-                    </span>
-                    <span class="execution-report-bar-text">{{ tool.totalDuration }}</span>
-                  </span>
-                </td>
-                <td class="is-num">{{ tool.avgDuration }}</td>
-                <td class="is-num">{{ tool.maxDuration }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <ul
+          class="execution-report-tools execution-report-panel"
+          data-testid="execution-report-tools"
+        >
+          <li v-for="tool in view.tools" :key="tool.tool" class="execution-report-tool">
+            <span class="execution-report-tool-name">{{ tool.tool }}</span>
+            <span class="execution-report-bar" aria-hidden="true">
+              <span class="execution-report-bar-fill" :style="barStyle(tool.totalRatio)"></span>
+            </span>
+            <dl class="execution-report-tool-stats">
+              <div>
+                <dt>{{ translate("message.executionReportToolCalls") }}</dt>
+                <dd>{{ tool.calls }}</dd>
+              </div>
+              <div>
+                <dt>{{ translate("message.executionReportErrors") }}</dt>
+                <dd :class="{ 'execution-report-failed': tool.failures }">{{ tool.failures }}</dd>
+              </div>
+              <div>
+                <dt>{{ translate("message.executionReportTotalDuration") }}</dt>
+                <dd>{{ tool.totalDuration }}</dd>
+              </div>
+              <div>
+                <dt>{{ translate("message.executionReportAvgDuration") }}</dt>
+                <dd>{{ tool.avgDuration }}</dd>
+              </div>
+              <div>
+                <dt>{{ translate("message.executionReportMaxDuration") }}</dt>
+                <dd>{{ tool.maxDuration }}</dd>
+              </div>
+            </dl>
+          </li>
+        </ul>
       </section>
 
       <section v-if="view.slowest.length" class="execution-report-section">
@@ -275,13 +266,13 @@ watch(
   border-left: 3px solid var(--execution-report-tone, var(--noobot-accent));
 }
 .execution-report-card-value {
-  font-size: var(--noobot-font-size-xl);
+  font-size: var(--noobot-font-size-lg);
   font-weight: var(--noobot-font-weight-semibold);
   font-variant-numeric: tabular-nums;
 }
 .execution-report-card-label,
 .execution-report-meta dt,
-.execution-report-table th {
+.execution-report-tool-stats dt {
   font-size: var(--noobot-font-size-xs);
   color: var(--noobot-thinking-muted);
 }
@@ -324,7 +315,7 @@ watch(
 .execution-report-dot {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: var(--noobot-radius-circle);
   background: currentColor;
 }
 [data-tone="success"] {
@@ -351,40 +342,39 @@ watch(
   flex-wrap: wrap;
   gap: var(--noobot-space-xs);
 }
-.execution-report-table-wrap {
-  padding: 0;
-  overflow-x: auto;
-}
-.execution-report-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--noobot-font-size-xs);
-}
-.execution-report-table th,
-.execution-report-table td {
-  padding: var(--noobot-space-sm) var(--noobot-space-md);
-  border-bottom: 1px solid var(--noobot-divider);
-  text-align: left;
-  white-space: nowrap;
-}
-.execution-report-table thead th {
-  background: var(--noobot-panel-muted);
-  font-weight: var(--noobot-font-weight-medium);
-}
-.execution-report-table tbody tr:hover td {
-  background: color-mix(in srgb, var(--noobot-accent) 6%, transparent);
-}
-.execution-report-table tbody tr:last-child td {
-  border-bottom: none;
-}
-.execution-report-table .is-num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-.execution-report-bar-cell {
+.execution-report-tools {
   display: flex;
-  align-items: center;
-  gap: var(--noobot-space-sm);
+  flex-direction: column;
+  gap: var(--noobot-space-md);
+  margin: 0;
+  list-style: none;
+}
+.execution-report-tool {
+  display: flex;
+  flex-direction: column;
+  gap: var(--noobot-space-xs);
+  min-width: 0;
+}
+.execution-report-tool .execution-report-tool-name {
+  font-weight: var(--noobot-font-weight-medium);
+  overflow-wrap: anywhere;
+}
+.execution-report-tool-stats {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--noobot-space-xs) var(--noobot-space-md);
+  margin: 0;
+}
+.execution-report-tool-stats div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--noobot-space-2xs);
+  min-width: 0;
+}
+.execution-report-tool-stats dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 .execution-report-bar {
   flex: none;
@@ -425,7 +415,8 @@ watch(
   align-items: center;
   gap: var(--noobot-space-2xs) var(--noobot-space-sm);
 }
-.execution-report-slowest li + li {
+.execution-report-slowest li + li,
+.execution-report-tool + .execution-report-tool {
   padding-top: var(--noobot-space-md);
   border-top: 1px solid var(--noobot-divider);
 }
@@ -437,7 +428,7 @@ watch(
   justify-content: center;
   width: 20px;
   height: 20px;
-  border-radius: 50%;
+  border-radius: var(--noobot-radius-circle);
   background: var(--noobot-panel-muted);
   color: var(--noobot-text-secondary);
   font-size: var(--noobot-font-size-xs);
@@ -451,6 +442,9 @@ watch(
 }
 .execution-report-slowest .execution-report-bar {
   grid-area: bar;
+  width: 100%;
+}
+.execution-report-tool .execution-report-bar {
   width: 100%;
 }
 .execution-report-slowest-time {
@@ -475,6 +469,9 @@ watch(
 @media (max-width: 768px) {
   .execution-report-body {
     padding: var(--noobot-space-sm);
+  }
+  .execution-report-tool-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 </style>

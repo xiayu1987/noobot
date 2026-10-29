@@ -34,20 +34,11 @@ function resolvePluginMeta(value) {
   return isPlainObject(value) ? value : null;
 }
 
-function resolveTaskFields(session, input) {
-  const taskId = input.taskId ?? session?.currentTaskId ?? "";
-  return {
-    taskId,
-    taskStatus: input.taskStatus ?? (taskId ? "start" : ""),
-  };
-}
-
 function resolveUserName(input) {
   return normalizedString(input.userName === undefined ? input.userId : input.userName);
 }
 
-function buildTurnEntity(service, session, resolvedParentSessionId, input) {
-  const task = resolveTaskFields(session, input);
+function buildTurnEntity(service, resolvedParentSessionId, input) {
   const contextPolicy = resolveToolContextPolicy(input);
   const chatPresentation =
     typeof input.chatPresentation === "boolean" ? input.chatPresentation : undefined;
@@ -66,7 +57,6 @@ function buildTurnEntity(service, session, resolvedParentSessionId, input) {
     dialogProcessId: normalizeDialogProcessId(input.dialogProcessId || ""),
     parentDialogProcessId: input.parentDialogProcessId || "",
     turnScopeId: normalizedString(input.turnScopeId),
-    ...task,
     modelAlias: normalizedString(input.modelAlias),
     modelName: normalizedString(input.modelName),
     ...(contextPolicy ? { contextPolicy } : {}),
@@ -185,7 +175,7 @@ function updateSessionMetadata(service, session) {
 }
 
 export function upsertTurnInSession(service, session, resolvedParentSessionId, input = {}) {
-  const turn = buildTurnEntity(service, session, resolvedParentSessionId, input);
+  const turn = buildTurnEntity(service, resolvedParentSessionId, input);
   applyToolFields(turn, input);
   applyAttachments(turn, input);
   const persistedTurn = persistTurn(session.messages, turn);

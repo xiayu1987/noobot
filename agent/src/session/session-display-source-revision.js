@@ -5,23 +5,13 @@
  */
 import { createHash } from "node:crypto";
 import {
+  assertSessionManifestLayout,
   requireSessionAggregateVersion,
   SESSION_ARTIFACT_SCHEMA_VERSION,
 } from "@noobot/session-protocol";
-import { text, isObjectLike } from "@noobot/shared/value";
-import { messageHash } from "./session-artifact-session/turn-journal-store.js";
+import { text, stableValue } from "@noobot/shared/value";
 
 export const SESSION_SOURCE_SCHEMA_VERSION = SESSION_ARTIFACT_SCHEMA_VERSION;
-
-function stableValue(value) {
-  if (Array.isArray(value)) return value.map(stableValue);
-  if (!isObjectLike(value)) return value;
-  return Object.fromEntries(
-    Object.keys(value)
-      .sort()
-      .map((key) => [key, stableValue(value[key])]),
-  );
-}
 
 function hash(value) {
   return `sha256:${createHash("sha256")
@@ -29,21 +19,9 @@ function hash(value) {
     .digest("hex")}`;
 }
 
-function manifestMessageHashes(session) {
-  const hashes = new Map();
-  for (const turn of session.turnOrder) {
-    for (const [messageUid, hash] of Object.entries(turn.messageHashes)) {
-      hashes.set(messageUid, hash);
-    }
-  }
-  return hashes;
-}
-
 function orderedMessageRevisions(session) {
-  if (Array.isArray(session.messages)) {
-    return session.messages.map((message) => [message.messageUid, messageHash(message)]);
-  }
-  const hashes = manifestMessageHashes(session);
+  assertSessionManifestLayout(session);
+  const hashes = new Map(session.turnOrder.flatMap((turn) => Object.entries(turn.messageHashes)));
   return session.messageOrder.map(({ messageUid }) => [messageUid, hashes.get(messageUid)]);
 }
 
@@ -53,7 +31,6 @@ export function createSessionDisplaySourceRevision(session) {
     sessionId: session.sessionId,
     parentSessionId: session.parentSessionId,
     caller: session.caller,
-    currentTaskId: session.currentTaskId,
     customTitle: text(session.customTitle),
     autoTitle: text(session.autoTitle),
     createdAt: session.createdAt,

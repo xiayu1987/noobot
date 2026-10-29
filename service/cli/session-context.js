@@ -4,6 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 import { resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports";
+import {
+  isAvailableSessionDetailEntry,
+  requireSessionDetailDocument,
+  selectMainSessionDetailEntry,
+} from "@noobot/session-protocol/session-detail";
+import {
+  SESSION_SUMMARY_AVAILABILITY,
+  compareSessionSummaries,
+} from "@noobot/session-protocol/sessions-summary";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { randomUUID } from "node:crypto";
 import { CliUsageError } from "./cli-args.js";
@@ -38,8 +47,14 @@ export function resolveCliAuthInfo({ userId, superUserId, superAdminRole, isForb
 
 export async function resolveSessionTarget({ bot, userId, invocation }) {
   if (invocation.continueLatest) {
-    const [latest] = await bot.session.getAllSessionSummaries({ userId });
-    if (!latest?.sessionId) throw new CliUsageError("no session to continue");
+    const payload = await bot.session.getAllSessionSummaries({ userId });
+    const [latest] = [...payload.sessions].sort(compareSessionSummaries);
+    if (latest === undefined) throw new CliUsageError("no session to continue");
+    if (latest.availability !== SESSION_SUMMARY_AVAILABILITY.AVAILABLE) {
+      throw new CliUsageError(
+        `latest session unavailable: ${latest.sessionId} (${latest.unavailableReason.code})`,
+      );
+    }
     return {
       sessionId: latest.sessionId,
       aggregateVersion: latest.aggregateVersion,
@@ -57,11 +72,15 @@ export async function resolveSessionTarget({ bot, userId, invocation }) {
 }
 
 export async function readAggregateVersion({ bot, userId, sessionId }) {
-  const result = await bot.session.getSessionDisplayData({ userId, sessionId });
-  const sessions = Array.isArray(result?.sessions) ? result.sessions : [];
-  const session = sessions.find((item) => String(item?.sessionId || "") === sessionId);
-  if (!session) throw new CliUsageError(`session not found: ${sessionId}`);
-  return session.aggregateVersion;
+  const document = requireSessionDetailDocument(
+    await bot.session.getSessionDisplayData({ userId, sessionId }),
+  );
+  if (!document.exists) throw new CliUsageError(`session not found: ${sessionId}`);
+  const entry = selectMainSessionDetailEntry(document);
+  if (!isAvailableSessionDetailEntry(entry)) {
+    throw new CliUsageError(`session unavailable: ${sessionId} (${entry.unavailableReason.code})`);
+  }
+  return entry.aggregateVersion;
 }
 
 export async function probeRunningService(env = process.env) {

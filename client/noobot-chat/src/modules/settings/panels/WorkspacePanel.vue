@@ -537,7 +537,7 @@ watch(
 }
 
 .empty-tip :deep(.el-empty__description p) {
-  color: var(--noobot-text-muted);
+  color: var(--noobot-text-secondary);
 }
 
 @media (max-width: 768px) {

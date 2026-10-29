@@ -12,6 +12,7 @@ import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { upgradeSessionLifecycle } from "../src/workspace-lifecycle/session-lifecycle-upgrade.js";
 import { releaseQuarantinedUnits } from "../src/workspace-lifecycle/migration-quarantine.js";
 import { upgradeWorkspaceLayout } from "../src/workspace-lifecycle/sections.js";
+import { TEST_STORAGE_SERVICE } from "./helpers/storage-service.js";
 
 const RECORDS = WORKSPACE_LAYOUT.RETIRED_SESSION_LIFECYCLE_RECORDS_DIR;
 const TOMBSTONE = WORKSPACE_LAYOUT.SESSION_TOMBSTONE_FILE;
@@ -170,6 +171,7 @@ test("v10 retires repair records left by v4 in a workspace already at layout v9"
       backupBase: fixture.backupBase,
       created: false,
       scopedSessionRoots: [],
+      storageService: TEST_STORAGE_SERVICE,
     });
     assert.deepEqual(
       applied.map((item) => [item.id, item.result?.retired.map((retired) => retired.path)]),

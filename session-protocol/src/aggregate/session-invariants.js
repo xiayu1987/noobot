@@ -14,7 +14,7 @@ export function createEmptyTurnLifecycle() {
   return { activeTurnScopeId: "", sequence: 0, turns: {}, replacedTurns: {}, commandReceipts: [] };
 }
 
-function isTurnLifecycleShape(lifecycle) {
+export function isTurnLifecycleShape(lifecycle) {
   return (
     isPlainObject(lifecycle) &&
     isPlainObject(lifecycle.turns) &&
@@ -31,7 +31,9 @@ export function validateSessionAggregateShape(session) {
     errors.push("invalid_session_id");
   if (typeof session.parentSessionId !== "string") errors.push("invalid_parent_session_id");
   if (!isSessionCaller(session.caller)) errors.push("invalid_caller");
-  if (!Array.isArray(session.messages)) errors.push("invalid_messages");
+  if (!Array.isArray(session.messages) || !session.messages.every(isPlainObject)) {
+    errors.push("invalid_messages");
+  }
   if (!Array.isArray(session.dialogOrder)) errors.push("invalid_dialog_order");
   if (!Array.isArray(session.turnTimings)) errors.push("invalid_turn_timings");
   if (!isTurnLifecycleShape(session.turnLifecycle)) errors.push("invalid_turn_lifecycle");

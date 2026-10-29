@@ -100,7 +100,6 @@ test("session execution preserves every user interjection into the next model hi
     async commitTurnSummaryCheckpoint() {
       return { committed: true, markedCount: 1, checkpointRevision: 1 };
     },
-    async saveCurrentTurnTasks() {},
   };
 
   const engine = createTestSessionExecutionEngine({
@@ -165,7 +164,6 @@ test("session execution preserves every user interjection into the next model hi
         output: "completed",
         modelMessageId: "assistant:e2e:final",
         traces: [],
-        turnTasks: [],
         turnMessages: runtime.currentTurnMessages.toArray(),
         modelMessages: modelContext.messageBlocks.incremental,
         currentUserMessage,

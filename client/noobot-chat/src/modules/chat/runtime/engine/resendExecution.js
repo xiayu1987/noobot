@@ -48,16 +48,13 @@ export async function executeResendReplacement(context) {
   let replacementCommitted = false;
   try {
     const commit = await commitResendTurnReplacement(context);
-    if (commit.outcome === RESEND_COMMIT_OUTCOME.REJECTED) {
-      return failResend(context, originalInputValue);
-    }
     if (commit.outcome === RESEND_COMMIT_OUTCOME.ABORTED) return false;
     replacementCommitted = true;
     const projection = await projectResendReplacement({
       ...context,
       turnReplacement: commit.turnReplacement,
       replacedTurnScopeIds: commit.replacedTurnScopeIds,
-      session: commit.session,
+      detail: commit.detail,
     });
     if (projection.outcome === RESEND_PROJECTION_OUTCOME.ABORTED) return false;
     if (projection.outcome === RESEND_PROJECTION_OUTCOME.REJECTED) {

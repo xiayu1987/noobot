@@ -75,19 +75,6 @@ export function createCurrentTurnMessagesStore(messages = []) {
   };
 }
 
-export function createCurrentTurnTasksStore(tasks = []) {
-  const store = createCurrentTurnStore(tasks);
-  const { items } = store;
-  return {
-    push: store.push,
-    updateLast: store.updateLast,
-    last() {
-      return items.length ? { ...(items[items.length - 1] || {}) } : null;
-    },
-    toArray: store.toArray,
-  };
-}
-
 export function requireCurrentTurnMessagesStore(currentTurnMessages) {
   if (
     currentTurnMessages &&
@@ -98,16 +85,4 @@ export function requireCurrentTurnMessagesStore(currentTurnMessages) {
   )
     return currentTurnMessages;
   throw new Error("turn execution requires the canonical currentTurnMessages store");
-}
-
-export function requireCurrentTurnTasksStore(currentTurnTasks) {
-  if (
-    currentTurnTasks &&
-    typeof currentTurnTasks.push === "function" &&
-    typeof currentTurnTasks.updateLast === "function" &&
-    typeof currentTurnTasks.last === "function" &&
-    typeof currentTurnTasks.toArray === "function"
-  )
-    return currentTurnTasks;
-  throw new Error("turn execution requires the canonical currentTurnTasks store");
 }

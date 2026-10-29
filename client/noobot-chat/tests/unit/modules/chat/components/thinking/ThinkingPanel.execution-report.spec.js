@@ -228,8 +228,11 @@ describe("ThinkingPanel execution report", () => {
       .map((n) => n.text());
     expect(risks).toEqual(["low × 2", "critical × 1"]);
     const rows = drawer
-      .findAll('[data-testid="execution-report-tools"] tbody tr')
-      .map((row) => row.findAll("td").map((td) => td.text()));
+      .findAll('[data-testid="execution-report-tools"] .execution-report-tool')
+      .map((item) => [
+        item.find(".execution-report-tool-name").text(),
+        ...item.findAll("dd").map((dd) => dd.text()),
+      ]);
     expect(rows).toEqual([
       ["execute", "1", "1", "3.0s", "3.0s", "3.0s"],
       ["read_file", "2", "0", "400ms", "200ms", "300ms"],

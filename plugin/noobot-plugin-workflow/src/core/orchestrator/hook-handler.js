@@ -29,7 +29,6 @@ export async function handleBeforeAgentDispatch({ hookManager, options, ctx, sig
     output: "",
     traces: [],
     turnMessages: [],
-    turnTasks: [],
     modelMessages: [],
     modelLoopRound: 0,
   });

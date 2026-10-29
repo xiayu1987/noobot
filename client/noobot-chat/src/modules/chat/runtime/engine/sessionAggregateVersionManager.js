@@ -3,19 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
-import { isObjectLike, requireFunctionDependencies, text } from "@noobot/shared/value";
-
-function hasValue(value) {
-  return value !== undefined && value !== null && value !== "";
-}
-
-function numericValue(value) {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value)))
-    return Number(value);
-  return null;
-}
+import {
+  SESSION_ERROR_CODE,
+  isNewerSessionAggregateVersion as isNewerProtocolAggregateVersion,
+} from "@noobot/session-protocol";
+import { isApiRequestError } from "@noobot/shared/request-error";
+import { isObjectLike, requireFunctionDependencies } from "@noobot/shared/value";
+import { isCommandResultError } from "../../../../infrastructure/websocket/chatWebSocketProtocol.js";
 
 function getCurrentSessionAggregateVersion(activeSession) {
   const session = activeSession.value;
@@ -25,25 +19,27 @@ function getCurrentSessionAggregateVersion(activeSession) {
   return session.aggregateVersion;
 }
 
-function isSessionAggregateVersionConflict(result, payload) {
-  return (
-    text(payload?.errorCode || result?.errorCode) === SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT
-  );
+function readMutationVersionConflict(error) {
+  if (!isApiRequestError(error)) return null;
+  if (error.serverErrorCode !== SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT) return null;
+  return error;
 }
 
-function selectAggregateVersionConflict(result, payload) {
-  if (isSessionAggregateVersionConflict(null, payload)) return payload;
-  if (isSessionAggregateVersionConflict(result, null)) return result;
-  return null;
+function readStreamVersionConflict(error) {
+  if (!isCommandResultError(error)) return null;
+  const resultError = error.data.error;
+  if (resultError.code !== SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT) return null;
+  return resultError;
+}
+
+function requireConflictOptions(owner, conflictOptions) {
+  if (!isObjectLike(conflictOptions)) {
+    throw new TypeError(`${owner} requires conflictOptions`);
+  }
 }
 
 export function isNewerSessionAggregateVersion(nextVersion, currentVersion) {
-  if (!hasValue(nextVersion)) return false;
-  if (!hasValue(currentVersion)) return true;
-  const nextNumber = numericValue(nextVersion);
-  const currentNumber = numericValue(currentVersion);
-  if (nextNumber !== null && currentNumber !== null) return nextNumber > currentNumber;
-  return nextVersion !== currentVersion;
+  return isNewerProtocolAggregateVersion(nextVersion, currentVersion);
 }
 
 export function applyLatestSessionAggregateVersion(session, source) {
@@ -64,11 +60,8 @@ export function createSessionAggregateVersionManager({ activeSession, log = null
     return getCurrentSessionAggregateVersion(activeSession);
   }
 
-  function applyConflictVersion({ sessionId, previousVersion, conflict = {}, logContext = {} }) {
-    if (!isObjectLike(conflict)) {
-      throw new TypeError("applyConflictVersion requires a conflict payload");
-    }
-    const currentVersion = conflict.currentVersion;
+  function applyConflictVersion({ sessionId, previousVersion, conflict, logContext }) {
+    const { currentVersion } = conflict;
     const changed = applyLatestSessionAggregateVersion(activeSession.value, {
       aggregateVersion: currentVersion,
     });
@@ -82,58 +75,53 @@ export function createSessionAggregateVersionManager({ activeSession, log = null
     return changed;
   }
 
-  async function runAggregateVersionedMutation({
-    mutate,
-    shouldRetry = true,
-    conflictOptions = {},
-  }) {
-    requireFunctionDependencies("runAggregateVersionedMutation", { mutate });
-    let attempt = 1;
+  async function runWithConflictRetry({ attemptAt, readConflict, conflictOptions }) {
     let expectedAggregateVersion = getVersion();
-    let response = await mutate({ expectedAggregateVersion, attempt });
-    const failed = () => response?.result?.ok === false || response?.payload?.ok === false;
-    if (
-      shouldRetry &&
-      failed() &&
-      isSessionAggregateVersionConflict(response?.result, response?.payload)
-    ) {
-      const conflict = selectAggregateVersionConflict(response?.result, response?.payload);
+    try {
+      return await attemptAt(expectedAggregateVersion, 1);
+    } catch (error) {
+      const conflict = readConflict(error);
+      if (!conflict) throw error;
       const versionApplied = applyConflictVersion({
         previousVersion: expectedAggregateVersion,
         conflict,
         ...conflictOptions,
       });
-      if (versionApplied) {
-        attempt = 2;
-        expectedAggregateVersion = getVersion();
-        response = await mutate({ expectedAggregateVersion, attempt });
-      }
+      if (!versionApplied) throw error;
+      expectedAggregateVersion = getVersion();
+      return attemptAt(expectedAggregateVersion, 2);
     }
-    return { ...response, expectedAggregateVersion, attempt };
   }
 
-  async function runAggregateVersionedStream({ buildPayload, stream, conflictOptions = {} }) {
-    requireFunctionDependencies("runAggregateVersionedStream", { buildPayload, stream });
-    let attempt = 1;
-    let expectedAggregateVersion = getVersion();
-    let payload = buildPayload({ expectedAggregateVersion, attempt });
-    try {
-      await stream(payload);
-    } catch (error) {
-      const errorData = error?.data || {};
-      if (!isSessionAggregateVersionConflict(errorData, errorData)) throw error;
-      const versionApplied = applyConflictVersion({
-        previousVersion: expectedAggregateVersion,
-        conflict: errorData,
-        ...conflictOptions,
-      });
-      if (!versionApplied) throw error;
-      attempt = 2;
-      expectedAggregateVersion = getVersion();
-      payload = buildPayload({ expectedAggregateVersion, attempt });
-      await stream(payload);
+  async function runAggregateVersionedMutation({ mutate, shouldRetry, conflictOptions }) {
+    requireFunctionDependencies("runAggregateVersionedMutation", { mutate });
+    if (typeof shouldRetry !== "boolean") {
+      throw new TypeError("runAggregateVersionedMutation requires a boolean shouldRetry");
     }
-    return { payload, expectedAggregateVersion, attempt };
+    requireConflictOptions("runAggregateVersionedMutation", conflictOptions);
+    return runWithConflictRetry({
+      attemptAt: async (expectedAggregateVersion, attempt) => ({
+        payload: await mutate({ expectedAggregateVersion, attempt }),
+        expectedAggregateVersion,
+        attempt,
+      }),
+      readConflict: shouldRetry ? readMutationVersionConflict : () => null,
+      conflictOptions,
+    });
+  }
+
+  async function runAggregateVersionedStream({ buildPayload, stream, conflictOptions }) {
+    requireFunctionDependencies("runAggregateVersionedStream", { buildPayload, stream });
+    requireConflictOptions("runAggregateVersionedStream", conflictOptions);
+    return runWithConflictRetry({
+      attemptAt: async (expectedAggregateVersion, attempt) => {
+        const payload = buildPayload({ expectedAggregateVersion, attempt });
+        await stream(payload);
+        return { payload, expectedAggregateVersion, attempt };
+      },
+      readConflict: readStreamVersionConflict,
+      conflictOptions,
+    });
   }
 
   return {

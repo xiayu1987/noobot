@@ -85,11 +85,11 @@ defineEmits([
 
 .workflow-card-title {
   font-weight: var(--noobot-font-weight-semibold);
-  line-height: var(--noobot-line-height-cozy);
+  line-height: var(--noobot-line-height-balanced);
 }
 
 .workflow-card-subtitle {
-  margin-top: 2px;
+  margin-top: var(--noobot-space-3xs);
   font-size: var(--noobot-font-size-xs);
   color: var(--noobot-text-secondary);
 }
@@ -125,7 +125,7 @@ defineEmits([
   padding: var(--noobot-space-md) var(--noobot-space-lg);
   color: var(--noobot-text-primary);
   font-size: var(--noobot-font-size-xs);
-  line-height: var(--noobot-line-height-roomy);
+  line-height: var(--noobot-line-height-body);
   background: transparent;
   overflow: visible;
 }
@@ -136,7 +136,7 @@ defineEmits([
 
 .workflow-node-title {
   font-size: var(--noobot-font-size-sm);
-  margin-bottom: 6px;
+  margin-bottom: var(--noobot-space-xs);
   color: var(--noobot-text-secondary);
 }
 

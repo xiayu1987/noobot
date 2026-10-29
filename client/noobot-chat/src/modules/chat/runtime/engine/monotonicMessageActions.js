@@ -4,9 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeTrimmedString } from "./utils.js";
+import { readApiResponseEnvelope } from "@noobot/shared/request-error";
 import { createResendMessageTransaction } from "./resendTransaction.js";
 import { findVisibleLastMessage } from "../../model/messageModel.js";
 import { createSessionAggregateVersionManager } from "./sessionAggregateVersionManager.js";
+import {
+  requireMessageDeleteResponse,
+  selectMainSessionDetailEntry,
+} from "@noobot/session-protocol";
 import {
   buildMessageAnchor,
   getMessageDialogProcessId,
@@ -35,12 +40,7 @@ import {
   resolveMonotonicUserTarget as resolveUserTargetInMessages,
 } from "../../model/message-actions/monotonicMessageActionRules.js";
 import { logMessageMutationDiagnostics } from "../../../debug/loggers/messageMutationDiagnosticsLogger.js";
-import {
-  isPlainObject,
-  isObjectLike,
-  requireFunctionDependencies,
-  text,
-} from "@noobot/shared/value";
+import { isObjectLike, requireFunctionDependencies } from "@noobot/shared/value";
 
 const delay = (ms) =>
   new Promise((resolve) => {
@@ -68,36 +68,6 @@ function syncSessionMessageSummary(session) {
   session.messageCount = messages.length;
   session.lastMessage = findVisibleLastMessage(messages);
   session.updatedAt = nowIso();
-}
-
-function normalizeSessionDetailSnapshot(payload = {}, fallbackSessionId = "") {
-  const source = isPlainObject(payload) ? payload : {};
-  if (Array.isArray(source.sessions) && text(source.sessionId)) {
-    return source;
-  }
-  const session = isPlainObject(source.session)
-    ? source.session
-    : source.messages && Array.isArray(source.messages)
-      ? source
-      : null;
-  if (!session) return null;
-  const sessionId = normalizeTrimmedString(
-    session.sessionId || source.sessionId || fallbackSessionId,
-  );
-  if (!sessionId) return null;
-  return {
-    ...source,
-    sessionId,
-    sessions: [
-      {
-        ...session,
-        ...(source.aggregateVersion !== undefined
-          ? { aggregateVersion: source.aggregateVersion }
-          : {}),
-        sessionId: normalizeTrimmedString(session.sessionId || sessionId),
-      },
-    ],
-  };
 }
 
 export function createMonotonicMessageActions({
@@ -237,8 +207,8 @@ export function createMonotonicMessageActions({
     if (!startSession) return false;
     const initialSessionId = normalizeTrimmedString(activeSessionId.value);
     const initialTurnScopeId = getMessageTurnScopeId(userTargetMessage);
+    if (!initialSessionId || !initialTurnScopeId) return false;
     const anchor = buildMessageAnchor(userTargetMessage);
-    if (!initialSessionId || !initialTurnScopeId || !Object.keys(anchor).length) return false;
     const deleteCommandId = `delete:${initialSessionId}:${initialTurnScopeId}`;
     const supersededOperation = messageOperationStore.getActiveOperation(initialSessionId);
     const deleteOperation = messageOperationStore.registerOperation({
@@ -246,7 +216,7 @@ export function createMonotonicMessageActions({
       opId: deleteCommandId,
       sessionId: initialSessionId,
       status: "stopping",
-      turnScopeId: anchor.turnScopeId || "",
+      turnScopeId: anchor.turnScopeId,
     });
     if (
       supersededOperation?.type === "resend" &&
@@ -286,8 +256,9 @@ export function createMonotonicMessageActions({
         activeSession,
       });
       const mutationResult = await sessionAggregateVersionManager.runAggregateVersionedMutation({
+        shouldRetry: true,
         mutate: async ({ expectedAggregateVersion }) => {
-          const result = await deleteSessionMessagesFromApi(
+          const response = await deleteSessionMessagesFromApi(
             {
               userId: userId.value,
               sessionId,
@@ -298,31 +269,26 @@ export function createMonotonicMessageActions({
             },
             { fetcher: authFetch },
           );
-          const payload = typeof result?.json === "function" ? await result.json() : result;
-          return { result, payload };
+          const { ok: _envelopeOk, ...payload } = await readApiResponseEnvelope(response);
+          return payload;
         },
         conflictOptions: {
           sessionId,
-          logContext: { turnScopeId: anchor.turnScopeId || "" },
+          logContext: { turnScopeId: anchor.turnScopeId },
         },
       });
-      const result = mutationResult.result;
-      const payload = mutationResult.payload;
-      const responseOk = result?.ok !== false && payload?.ok !== false;
+      const response = requireMessageDeleteResponse(mutationResult.payload);
+      const mainEntry = selectMainSessionDetailEntry(response.detail);
       logMessageMutationDiagnostics("frontend.messageDelete.responseReceived", () => ({
         sessionId,
         dialogProcessId: getMessageDialogProcessId(userTargetMessage),
         turnScopeId: getMessageTurnScopeId(userTargetMessage),
-        responseOk,
-        deletedCount: payload?.deletedCount,
-        anchorIndex: payload?.anchorIndex,
-        deletedTurnScopeIds: payload?.deletedTurnScopeIds,
-        responseMessages: responseOk ? summarizeDeleteMessages(payload.session.messages) : [],
+        deletedCount: response.deletedCount,
+        anchorIndex: response.anchorIndex,
+        deletedTurnScopeIds: response.deletedTurnScopeIds,
+        responseMessages: summarizeDeleteMessages(mainEntry.messages),
       }));
-      if (!responseOk) return false;
-      const sessionDetail = normalizeSessionDetailSnapshot(payload, sessionId);
-      if (!sessionDetail) return false;
-      const confirmedDeletedTurnScopeIds = payload.deletedTurnScopeIds;
+      const confirmedDeletedTurnScopeIds = response.deletedTurnScopeIds;
       confirmTurnRuntimeDeletion(turnRuntimeRegistry.value, confirmedDeletedTurnScopeIds, {
         sessionId,
       });
@@ -334,8 +300,7 @@ export function createMonotonicMessageActions({
         stage: "before-detail-apply",
         messages: summarizeDeleteMessages(session.messages),
       }));
-      applySessionDetail(sessionDetail);
-      cascadeDeleteMessagesFrom(userTargetMessage);
+      applySessionDetail(response.detail);
       logMessageMutationDiagnostics("frontend.messageDelete.completed", () => ({
         sessionId,
         dialogProcessId: getMessageDialogProcessId(userTargetMessage),

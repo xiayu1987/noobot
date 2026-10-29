@@ -49,7 +49,7 @@ export async function finalizeRunResult(context, run, accepted, active) {
     }),
   });
   if (!processed.applied && !processed.deduplicated) {
-    throw createTurnLifecycleRejectedError(processed.reason);
+    throw createTurnLifecycleRejectedError(processed);
   }
   context.lifecycle.latestTurn = processed.turn;
   await context.finalizeCompleted(context.buildRunStateSnapshot(), {

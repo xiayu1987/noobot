@@ -50,6 +50,9 @@ function requireAggregateFields(document, schemaVersion) {
   const lifecycle = document.turnLifecycle;
   const invalid = [
     ...AGGREGATE_ARRAY_FIELDS.filter((field) => !Array.isArray(document[field])),
+    ...(Array.isArray(document.messages) && !document.messages.every(isPlainObject)
+      ? ["messages[] (object)"]
+      : []),
     ...(isPlainObject(lifecycle)
       ? [
           ...LIFECYCLE_RECORD_FIELDS.filter((field) => !isPlainObject(lifecycle[field])),

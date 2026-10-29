@@ -107,23 +107,14 @@ function logDetail({ userId, sessionId, dialogProcessId, traceId, event, level, 
   });
 }
 
-function createThinkingDetailHandler(sessions, httpStatus) {
+function createThinkingDetailHandler(sessions) {
   return async (req, res) => {
     const { userId, sessionId, dialogProcessId: routeDialogProcessId } = req.params;
-    const dialogProcessId = readOptionalQuery(req.query, "dialogProcessId", httpStatus);
-    const turnScopeId = readOptionalQuery(req.query, "turnScopeId", httpStatus);
-    if (!dialogProcessId && !turnScopeId) {
-      throw routeError(
-        "dialogProcessId or turnScopeId is required",
-        httpStatus.BAD_REQUEST,
-        WORKFLOW_ROUTE_ERROR_CODE.QUERY_REQUIRED,
-      );
-    }
     const detail = await sessions.readThinkingDetail({
       userId,
       segments: [WORKFLOW_DATA_SCOPE.SESSION, sessionId, routeDialogProcessId],
-      dialogProcessId,
-      turnScopeId,
+      dialogProcessId: req.query.dialogProcessId,
+      turnScopeId: req.query.turnScopeId,
       locale: req.locale,
     });
     res.json({
@@ -233,7 +224,7 @@ export function createWorkflowServiceRouteHandlers(context) {
     });
   };
 
-  const thinkingDetailHandler = createThinkingDetailHandler(sessions, httpStatus);
+  const thinkingDetailHandler = createThinkingDetailHandler(sessions);
   const executionReportHandler = createExecutionReportHandler(sessions, httpStatus);
 
   return {

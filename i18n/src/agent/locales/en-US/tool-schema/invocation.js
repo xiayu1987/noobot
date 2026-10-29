@@ -117,6 +117,10 @@ export const INVOCATION_TOOL_SCHEMA = {
         key: "tools.script.fieldIncludeLineNumbers",
         text: "Whether stdout/stderr should include line numbers (disabled by default).",
       },
+      outputFiles: {
+        key: "tools.script.fieldOutputFiles",
+        text: "Absolute paths of deliverable output files, written in this tool's execution view. After the command runs they are registered as attachment snapshots and the result returns attachment references; cite the attachment in your reply, since undeclared files cannot be downloaded.",
+      },
       riskLevel: {
         key: "tools.script.fieldRiskLevel",
         text: "Required script risk level: low, medium, high, or critical. Destructive scripts must be marked critical.",

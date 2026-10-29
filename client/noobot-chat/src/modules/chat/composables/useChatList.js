@@ -26,7 +26,6 @@ export function useChatList({
   chatStore,
   createConnectorPanelState,
   generateSessionId,
-  sessionTitleFromMessages,
   getSessionsApi,
   getSessionDetailApi,
   deleteSessionApi,
@@ -61,7 +60,6 @@ export function useChatList({
     turnRuntimeRegistry,
     chatStore,
     makeViewMessage,
-    sessionTitleFromMessages,
     onSessionDetailApplied,
   });
 
@@ -72,7 +70,6 @@ export function useChatList({
     authFetch,
     getSessionDetailApi,
     isSameSessionIdentity,
-    translate,
   });
 
   const { fetchSessions, selectSession, deleteSession, renameSession } = createSessionListActions({
@@ -88,7 +85,6 @@ export function useChatList({
     deleteSessionApi,
     renameSessionApi,
     createConnectorPanelState,
-    sessionTitleFromMessages,
     fetchSessionDetail,
     applySessionDetail,
     createLocalSession,

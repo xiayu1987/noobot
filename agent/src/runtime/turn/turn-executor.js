@@ -9,10 +9,7 @@ import {
   buildDualLaneModelContext,
   MODEL_CONTEXT_LANE,
 } from "@noobot/context-protocol/assembly/dual-lane";
-import {
-  requireCurrentTurnMessagesStore,
-  requireCurrentTurnTasksStore,
-} from "./current-turn-ledger.js";
+import { requireCurrentTurnMessagesStore } from "./current-turn-ledger.js";
 import { emitEvent } from "../../events/index.js";
 import { createStateCommitter } from "../tool-execution/state-committer.js";
 import { persistModelGeneratedArtifacts } from "../../artifacts/runtime/artifact-service.js";
@@ -257,7 +254,7 @@ export async function invokeNoToolsTurn({
     }),
     { block: "incremental" },
   );
-  const { turnMessageStore, turnTaskStore } = await commitNoToolsTurnState({
+  const { turnMessageStore } = await commitNoToolsTurnState({
     modelState,
     loopState,
     traces,
@@ -271,7 +268,6 @@ export async function invokeNoToolsTurn({
   return {
     output: responseContentText,
     modelMessageId,
-    turnTaskStore,
     turnMessageStore,
     modelMessages: modelContext.messages,
   };
@@ -280,7 +276,7 @@ export async function invokeNoToolsTurn({
 export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   const modelContext = requireActiveModelContext(modelState.runtime);
   const messages = modelContext.messages;
-  const { traces, tools, currentTurnMessages, currentTurnTasks } = loopState;
+  const { traces, tools, currentTurnMessages } = loopState;
   const { dialogProcessId } = modelContext.activeTurnIdentity;
   const { runtime } = modelState;
   const { eventListener } = runtime;
@@ -484,7 +480,6 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   );
 
   const turnMessageStore = requireCurrentTurnMessagesStore(currentTurnMessages);
-  const turnTaskStore = requireCurrentTurnTasksStore(currentTurnTasks);
   const currentModelInfo = resolveCurrentModelInfo(modelState);
 
   const stateCommitter = createStateCommitter({
@@ -546,7 +541,6 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     toolMap,
     stateCommitter,
     turnMessageStore,
-    turnTaskStore,
     traces,
   };
 }

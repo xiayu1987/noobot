@@ -87,6 +87,8 @@ export const QUANTITY_THRESHOLDS = deepFreeze({
     thinkingDetailRetryLimit: QUANTITY_TIERS.smallFiles,
 
     frameHealthTopScriptLimit: 3,
+
+    sessionListRecentDayGroupCount: 7,
   },
 
   sessionLog: {

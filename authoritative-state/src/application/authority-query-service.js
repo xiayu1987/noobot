@@ -5,7 +5,6 @@
  */
 import {
   buildExecutionTree,
-  compareExecutionVersion,
   projectExecutionRecord,
 } from "@noobot/session-protocol/execution-lifecycle";
 import {
@@ -16,7 +15,7 @@ import {
 } from "@noobot/session-protocol/turn-lifecycle";
 import { isTerminalTurnState, projectTurnTiming } from "@noobot/session-protocol";
 import { normalizeTurnLifecycleEntity } from "../domain/turn-lifecycle-entity.js";
-import { text as clean, isObjectLike } from "@noobot/shared/value";
+import { text as clean } from "@noobot/shared/value";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 function selectLifecycleActiveTurn(lifecycle) {
@@ -132,30 +131,6 @@ export function projectAuthoritativeExecution(turn, session) {
   });
 }
 
-function stableObject(value) {
-  if (Array.isArray(value)) return value.map(stableObject);
-  if (!isObjectLike(value)) return value;
-  return Object.fromEntries(
-    Object.keys(value)
-      .sort()
-      .map((key) => [key, stableObject(value[key])]),
-  );
-}
-
-function ownershipFingerprint(execution = {}) {
-  return JSON.stringify(
-    stableObject({
-      executionKind: clean(execution.executionKind).toLowerCase(),
-      sessionId: clean(execution.sessionId),
-      parentSessionId: clean(execution.parentSessionId),
-      turnScopeId: clean(execution.turnScopeId),
-      parentExecutionId: clean(execution.parentExecutionId),
-      rootExecutionId: clean(execution.rootExecutionId),
-      origin: execution.origin && typeof execution.origin === "object" ? execution.origin : {},
-    }),
-  );
-}
-
 export function buildAuthoritativeExecutionReadModel(sessions = []) {
   const byId = new Map();
   const conflicts = new Map();
@@ -164,30 +139,26 @@ export function buildAuthoritativeExecutionReadModel(sessions = []) {
     for (const turn of Object.values(lifecycle.turns)) {
       const execution = projectAuthoritativeExecution(turn, session);
       if (!execution.executionId) continue;
+      if (conflicts.has(execution.executionId)) continue;
       const current = byId.get(execution.executionId);
       if (!current) {
         byId.set(execution.executionId, execution);
         continue;
       }
-      if (ownershipFingerprint(current) !== ownershipFingerprint(execution)) {
-        conflicts.set(execution.executionId, {
-          executionId: execution.executionId,
-          reason: "execution_identity_conflict",
-          identities: [current, execution].map((item) => ({
-            executionKind: item.executionKind,
-            sessionId: item.sessionId,
-            parentSessionId: item.parentSessionId,
-            turnScopeId: item.turnScopeId,
-            parentExecutionId: item.parentExecutionId,
-            rootExecutionId: item.rootExecutionId,
-            origin: item.origin,
-          })),
-        });
-        byId.delete(execution.executionId);
-        continue;
-      }
-      if (!conflicts.has(execution.executionId) && compareExecutionVersion(execution, current) > 0)
-        byId.set(execution.executionId, execution);
+      conflicts.set(execution.executionId, {
+        executionId: execution.executionId,
+        reason: "execution_identity_conflict",
+        identities: [current, execution].map((item) => ({
+          executionKind: item.executionKind,
+          sessionId: item.sessionId,
+          parentSessionId: item.parentSessionId,
+          turnScopeId: item.turnScopeId,
+          parentExecutionId: item.parentExecutionId,
+          rootExecutionId: item.rootExecutionId,
+          origin: item.origin,
+        })),
+      });
+      byId.delete(execution.executionId);
     }
   }
   return { executions: [...byId.values()], conflicts };

@@ -4,7 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AGENT_COMMAND } from "@noobot/agent-transport-protocol";
+import { AGENT_COMMAND, AGENT_TRANSPORT_EVENT } from "@noobot/agent-transport-protocol";
+import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
+import { createCommandResultError } from "../../../../../src/infrastructure/websocket/chatWebSocketProtocol.js";
 import { setTransportDiagnosticsLogSink } from "../../../../../src/modules/debug/loggers/transportDiagnosticsLogger.js";
 import {
   createHarness,
@@ -80,18 +82,20 @@ describe("useChatEngine.send-stream", () => {
   });
 
   it("retries a stale session version without replacing the local Turn presentation", async () => {
-    const conflict = new Error("session version conflict");
-    conflict.data = {
-      errorCode: "SESSION_AGGREGATE_VERSION_CONFLICT",
-      currentVersion: 2,
-    };
+    const conflict = createCommandResultError(AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT, {
+      outcome: "failed",
+      error: {
+        code: SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT,
+        message: "session version conflict",
+        currentVersion: 2,
+      },
+    });
     const stream = vi.fn().mockRejectedValueOnce(conflict).mockResolvedValueOnce(undefined);
-    const fetchSessionDetail = vi.fn();
     const applySessionDetail = vi.fn();
     const { engine, activeSession } = createHarness({
       sessionId: "s-version-conflict",
       stream,
-      deps: { fetchSessionDetail, applySessionDetail },
+      deps: { applySessionDetail },
     });
 
     await expect(engine.send(SEND_REQUEST)).resolves.toBe(true);
@@ -110,7 +114,6 @@ describe("useChatEngine.send-stream", () => {
         expect.objectContaining({ role: RoleEnum.ASSISTANT }),
       ]),
     );
-    expect(fetchSessionDetail).not.toHaveBeenCalled();
     expect(applySessionDetail).not.toHaveBeenCalled();
   });
 
@@ -299,7 +302,6 @@ describe("useChatEngine.send-stream", () => {
       sessionId: "s-active-send",
       stream,
       deps: {
-        fetchSessionDetail: vi.fn(async () => ({ sessionId: "s-active-send" })),
         applySessionDetail,
       },
     });
@@ -351,7 +353,6 @@ describe("useChatEngine.send-stream", () => {
       sessionId: "s-missing-turn",
       stream,
       deps: {
-        fetchSessionDetail: vi.fn(async () => ({ sessionId: "s-missing-turn" })),
         applySessionDetail,
       },
     });
@@ -378,11 +379,6 @@ describe("useChatEngine.send-stream", () => {
     const { engine, activeSession, sending, canStop } = createHarness({
       sessionId: "local-done-open",
       stream,
-      deps: {
-        fetchSessionDetail: vi.fn(async () => {
-          throw new Error("ignore detail fetch in this unit test");
-        }),
-      },
     });
 
     const sendPromise = engine.send(SEND_REQUEST);
@@ -427,11 +423,6 @@ describe("useChatEngine.send-stream", () => {
       createHarness({
         sessionId: "local-1",
         stream,
-        deps: {
-          fetchSessionDetail: vi.fn(async () => {
-            throw new Error("ignore detail fetch in this unit test");
-          }),
-        },
       });
 
     const diagnostics = [];
@@ -517,9 +508,6 @@ describe("useChatEngine.send-stream", () => {
     const { engine, activeSession, sending, turnRuntimeRegistry } = createHarness({
       sessionId: "local-time",
       stream,
-      deps: {
-        fetchSessionDetail: vi.fn(async () => ({ sessionId: "local-time" })),
-      },
     });
 
     vi.useFakeTimers();
@@ -569,7 +557,6 @@ describe("useChatEngine.send-stream", () => {
       sessionId: "local-frontend-complete",
       stream,
       deps: {
-        fetchSessionDetail: vi.fn(async () => ({ sessionId: "local-frontend-complete" })),
         applySessionDetail,
       },
     });
@@ -636,7 +623,6 @@ describe("useChatEngine.send-stream", () => {
       terminalResolutionRevision: 4,
       terminalResolutionSequence: 4,
       deps: {
-        fetchSessionDetail: vi.fn(async () => ({ sessionId: "local-channel-complete" })),
         applySessionDetail,
       },
     });
@@ -681,23 +667,7 @@ describe("useChatEngine.send-stream", () => {
     expect(sending.value).toBe(false);
   });
 
-  it("fetches and applies the authoritative session summary once after a stopped final event", async () => {
-    const fetchSessionDetail = vi.fn(async () => ({
-      sessionId: "local-stop-refresh",
-      sessions: [
-        {
-          sessionId: "local-stop-refresh",
-          messages: [
-            { role: RoleEnum.USER, content: "hello" },
-            {
-              role: RoleEnum.ASSISTANT,
-              dialogProcessId: "dp-stop-refresh",
-              content: "persisted stopped answer",
-            },
-          ],
-        },
-      ],
-    }));
+  it("does not apply a session detail after a stopped final event", async () => {
     const applySessionDetail = vi.fn();
     const stream = vi.fn(async (payload, onEvent) => {
       emitChannelState(onEvent, "local-stop-refresh", "dp-stop-refresh", "user_stopped", {
@@ -714,14 +684,12 @@ describe("useChatEngine.send-stream", () => {
       sessionId: "local-stop-refresh",
       stream,
       deps: {
-        fetchSessionDetail,
         applySessionDetail,
       },
     });
 
     await engine.send(SEND_REQUEST);
 
-    expect(fetchSessionDetail).not.toHaveBeenCalled();
     expect(applySessionDetail).not.toHaveBeenCalled();
   });
 });

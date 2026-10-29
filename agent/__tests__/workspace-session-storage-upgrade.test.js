@@ -10,6 +10,7 @@ import test from "node:test";
 import { filePath as path } from "@noobot/path-resolver";
 import { WORKSPACE_LAYOUT, WORKSPACE_LAYOUT_VERSION } from "@noobot/workspace-protocol";
 import { TEST_SCOPED_SESSION_ROOTS } from "./helpers/scoped-session-roots.js";
+import { TEST_STORAGE_SERVICE } from "./helpers/storage-service.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { EXECUTION_REPORT_VERSION } from "@noobot/session-protocol/execution-report";
 import { ensureUserWorkspace, repairUserWorkspace } from "../src/workspace-lifecycle/index.js";
@@ -41,6 +42,7 @@ async function createFixture() {
       userId: "user-1",
       baseValues: {},
       scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS,
+      storageService: TEST_STORAGE_SERVICE,
     },
     at,
     write: async (relativePath, value) => {

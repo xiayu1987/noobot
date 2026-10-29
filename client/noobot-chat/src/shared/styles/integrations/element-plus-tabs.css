@@ -1,0 +1,103 @@
+.el-dialog {
+  border-radius: var(--noobot-radius-lg);
+  overflow: hidden;
+}
+
+.el-tabs__header {
+  border-bottom: 1px solid var(--noobot-divider);
+}
+
+.el-tabs__item {
+  color: var(--noobot-text-secondary);
+}
+
+.el-tabs__item.is-active {
+  color: var(--noobot-text-main);
+}
+
+.el-tabs__active-bar {
+  background: var(--noobot-text-accent);
+}
+
+.noobot-tabs {
+  --noobot-tab-height: var(--noobot-control-height-md);
+  --noobot-tab-padding: var(--noobot-space-md);
+  --noobot-tab-color: var(--noobot-text-secondary);
+  --noobot-tab-active-color: var(--noobot-text-strong);
+}
+
+.noobot-tabs .el-tabs__header {
+  margin: 0 0 var(--noobot-space-lg);
+  border: 0;
+}
+
+.noobot-tabs .el-tabs__nav-wrap::after {
+  display: none;
+}
+
+.noobot-tabs .el-tabs__nav-wrap {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.noobot-tabs .el-tabs__nav-wrap::-webkit-scrollbar {
+  display: none;
+}
+
+.noobot-tabs .el-tabs__nav {
+  box-sizing: border-box;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.noobot-tabs .el-tabs__item {
+  box-sizing: border-box;
+  height: var(--noobot-tab-height);
+  padding: 0 var(--noobot-tab-padding);
+  color: var(--noobot-tab-color);
+  font-size: var(--noobot-font-size-md);
+  font-weight: var(--noobot-font-weight-medium);
+  line-height: var(--noobot-tab-height);
+  border: 1px solid transparent;
+  border-radius: 0;
+  transition:
+    color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    border-color var(--noobot-duration-normal) var(--noobot-ease-standard);
+}
+
+.noobot-tabs .el-tabs__item:hover {
+  color: var(--noobot-tab-active-color);
+  background: transparent;
+}
+
+.noobot-tabs .el-tabs__item.is-active {
+  color: var(--noobot-tab-active-color);
+  font-weight: var(--noobot-font-weight-semibold);
+}
+
+.noobot-tabs .el-tabs__active-bar {
+  height: 2px;
+  border-radius: 0;
+  background: var(--noobot-accent);
+}
+
+.noobot-tabs .el-tabs__item:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--noobot-accent-border);
+  border-radius: var(--noobot-radius-xs);
+}
+
+@media (max-width: 640px) {
+  .noobot-tabs .el-tabs__nav {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .noobot-tabs .el-tabs__item {
+    flex: 0 0 auto;
+    padding-inline: var(--noobot-space-md);
+    font-size: var(--noobot-font-size-sm);
+  }
+}

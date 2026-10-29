@@ -16,13 +16,8 @@ export function registerIdeRoutes(
   app.post(
     "/internal/ide/open/:userId",
     jsonRoute(async (req, res) => {
-      const userId = text(req.params?.userId || req.auth?.userId);
-      const authUserId = text(req.auth?.userId);
+      const userId = text(req.params.userId);
       const isSuperAdmin = isSuperAdminRole(req.auth?.role);
-      if (!isSuperAdmin && authUserId !== userId) {
-        res.status(403).json({ ok: false, error: "forbidden user scope" });
-        return;
-      }
       if (!isSuperAdmin) {
         const users = typeof readWorkspaceUsers === "function" ? await readWorkspaceUsers() : [];
         const matchedUser = (Array.isArray(users) ? users : []).find(

@@ -510,7 +510,7 @@ function handleNodeClick(nodeItem = {}) {
   width: 10px;
   height: 6px;
   border-radius: var(--noobot-radius-xs);
-  background: color-mix(in srgb, var(--noobot-text-muted) 35%, transparent);
+  background: color-mix(in srgb, var(--noobot-text-secondary) 35%, transparent);
 }
 
 .workflow-minimap-node.succeeded {

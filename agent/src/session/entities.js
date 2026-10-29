@@ -9,6 +9,5 @@ export {
   normalizeMessagesEntity,
   normalizeSelectedConnectorIds,
   normalizeSessionTreeEntity,
-  normalizeTaskEntity,
   normalizeExecutionLogEntity,
 } from "./entities/normalizers.js";

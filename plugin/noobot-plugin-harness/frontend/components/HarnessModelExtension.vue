@@ -232,22 +232,22 @@ function isHarnessStepModelDisabled(stepKey = "") {
   flex-direction: column;
   gap: var(--noobot-space-md);
   padding: var(--noobot-space-lg);
-  border: 1px solid var(--noobot-panel-border, var(--el-border-color));
+  border: 1px solid var(--noobot-panel-border);
   border-radius: var(--noobot-radius-lg);
-  background: var(--noobot-surface-sidebar, var(--el-bg-color));
+  background: var(--noobot-surface-sidebar);
 }
 
 .plugin-model-title {
   font-size: var(--noobot-font-size-sm);
   font-weight: var(--noobot-font-weight-bold);
-  color: var(--noobot-text-strong, var(--el-text-color-primary));
+  color: var(--noobot-text-strong);
 }
 
 .plugin-model-description {
   margin: var(--noobot-space-3xs) 0 0;
   font-size: var(--noobot-font-size-xs);
-  line-height: var(--noobot-line-height-relaxed);
-  color: var(--noobot-text-secondary, var(--el-text-color-regular));
+  line-height: var(--noobot-line-height-comfortable);
+  color: var(--noobot-text-secondary);
 }
 
 .plugin-model-grid {
@@ -263,15 +263,15 @@ function isHarnessStepModelDisabled(stepKey = "") {
   gap: var(--noobot-space-xs);
   min-width: 0;
   padding: var(--noobot-space-sm);
-  border: 1px solid var(--noobot-panel-border, var(--el-border-color));
+  border: 1px solid var(--noobot-panel-border);
   border-radius: var(--noobot-radius-md);
-  background: var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay)));
+  background: var(--noobot-control-bg);
 }
 
 .plugin-model-label {
   font-size: var(--noobot-font-size-xs);
   font-weight: var(--noobot-font-weight-semibold);
-  color: var(--noobot-text-main, var(--el-text-color-primary));
+  color: var(--noobot-text-main);
 }
 
 .model-select {
@@ -301,9 +301,9 @@ function isHarnessStepModelDisabled(stepKey = "") {
   padding-right: var(--noobot-space-xs);
   box-sizing: border-box;
   font-size: var(--noobot-font-size-xs);
-  border-color: var(--noobot-panel-border, var(--el-border-color));
-  background: var(--noobot-control-bg, var(--el-bg-color));
-  color: var(--noobot-text-secondary, var(--el-text-color-regular));
+  border-color: var(--noobot-panel-border);
+  background: var(--noobot-control-bg);
+  color: var(--noobot-text-secondary);
   box-shadow: none;
 }
 
@@ -336,7 +336,7 @@ function isHarnessStepModelDisabled(stepKey = "") {
   max-width: 42%;
   font-size: var(--noobot-font-size-xs);
   line-height: var(--noobot-line-height-compact);
-  color: var(--noobot-text-secondary, var(--el-text-color-regular));
+  color: var(--noobot-text-secondary);
   white-space: nowrap;
 }
 
@@ -371,37 +371,6 @@ function isHarnessStepModelDisabled(stepKey = "") {
   box-shadow: none;
 }
 
-.composer-select :deep(.el-select__wrapper) {
-  min-height: var(--noobot-control-height-lg);
-  height: var(--noobot-control-height-lg);
-  box-sizing: border-box;
-  border-radius: var(--noobot-radius-md);
-  background: var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay)));
-  border-color: var(--noobot-panel-border, var(--el-border-color));
-  transition:
-    background-color var(--noobot-duration-normal) ease,
-    border-color var(--noobot-duration-normal) ease;
-}
-
-.composer-select :deep(.el-select__wrapper.is-focused),
-.composer-select :deep(.el-select__wrapper:hover) {
-  border-color: color-mix(
-    in srgb,
-    var(--el-color-primary) 50%,
-    var(--noobot-panel-border, var(--el-border-color))
-  );
-}
-
-.composer-select :deep(.el-select__selected-item),
-.composer-select :deep(.el-select__placeholder) {
-  min-width: 0;
-  color: var(--noobot-text-main, var(--el-text-color-primary));
-}
-
-.composer-select :deep(.el-select__placeholder.is-transparent) {
-  color: var(--noobot-text-muted, var(--el-text-color-placeholder));
-}
-
 .model-option-content {
   display: flex;
   flex-direction: column;
@@ -411,20 +380,15 @@ function isHarnessStepModelDisabled(stepKey = "") {
 
 .model-option-label {
   font-weight: var(--noobot-font-weight-semibold);
-  color: var(--noobot-text-main, var(--el-text-color-primary));
+  color: var(--noobot-text-main);
 }
 
 .model-option-meta,
 .model-option-description,
 .plugin-empty-text {
   font-size: var(--noobot-font-size-xs);
-  line-height: var(--noobot-line-height-cozy);
-  color: var(--noobot-text-secondary, var(--el-text-color-regular));
-}
-
-.model-option-description,
-.plugin-empty-text {
-  color: var(--noobot-text-muted, var(--el-text-color-secondary));
+  line-height: var(--noobot-line-height-balanced);
+  color: var(--noobot-text-secondary);
 }
 
 @media (max-width: 768px) {

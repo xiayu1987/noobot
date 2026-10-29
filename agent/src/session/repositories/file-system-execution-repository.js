@@ -4,11 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { requireDialogProcessKey } from "@noobot/session-protocol";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { fsMkdir } from "../../shared/storage/fs-adapter.js";
 import {
   appendExecutionLogArtifact,
   readExecutionReportArtifact,
-  readExecutionLogs,
+  readTurnExecutionLogs,
   writeExecutionReportArtifact,
 } from "../session-artifact-store.js";
 
@@ -41,7 +42,9 @@ export class FileSystemExecutionRepository {
 
   async getTurnLogs(userId, sessionId, dialogProcessId, { persistenceContext } = {}) {
     const sessionDir = await this._requireSessionDir(userId, sessionId, persistenceContext);
-    return readExecutionLogs(sessionDir, {
+    return readTurnExecutionLogs({
+      storageService: this.storageService,
+      sessionDir,
       dialogProcessId: requireDialogProcessKey(dialogProcessId),
     });
   }
@@ -52,6 +55,7 @@ export class FileSystemExecutionRepository {
         storageService: this.storageService,
         sessionDir,
         reportPayload: report,
+        atomic: true,
       }),
     );
   }
@@ -67,7 +71,13 @@ export class FileSystemExecutionRepository {
 
   async appendLog(userId, sessionId, executionLog, { persistenceContext } = {}) {
     await this._mutateSessionDir(userId, sessionId, persistenceContext, (sessionDir) =>
-      appendExecutionLogArtifact({ sessionDir, executionLog, alreadyLocked: true }),
+      appendExecutionLogArtifact({
+        storageService: this.storageService,
+        sessionDir,
+        executionLog,
+        maxSegmentBytes: LENGTH_THRESHOLDS.artifact.executionEventSegmentBytes,
+        alreadyLocked: true,
+      }),
     );
   }
 }

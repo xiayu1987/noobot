@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { z } from "zod";
 import { createHookManager, HOOK_PHASE_STATUS, HOOK_POINT } from "@noobot/hook-protocol";
 import { confirmToolOperation } from "../../../src/tools/execution/tool-risk.js";
 import { SECURITY_EVIDENCE_SOURCE } from "@noobot/security-assessment-protocol";
@@ -565,4 +566,108 @@ test("executeToolCall hook payload includes normalized runtime meta", async () =
   assert.equal(typeof starts[0].startedAt, "string");
   assert.equal(ends[0].status, HOOK_PHASE_STATUS.SUCCESS);
   assert.equal(Number.isFinite(ends[0].durationMs), true);
+});
+
+test("executeToolCallInTurn repairs stringified scalar args before start event and invocation", async () => {
+  const events = [];
+  let invokedArgs = null;
+  const result = await executeToolCall({
+    call: {
+      id: "call-repair",
+      name: "patch_file",
+      args: { patch: "x", dryRun: "false", maxLines: "60" },
+    },
+    tool: {
+      schema: z.object({
+        patch: z.string(),
+        dryRun: z.boolean().optional().default(false),
+        maxLines: z.number().int().min(1).optional().default(1000),
+      }),
+      async invoke(args) {
+        invokedArgs = args;
+        return { toolName: "patch_file", ok: true };
+      },
+    },
+    runtime: createTestRuntimeContext({
+      eventListener: { onEvent: (event) => events.push(event) },
+      systemRuntime: { config: { safeConfirm: false } },
+    }),
+  });
+
+  assert.equal(result.success, true);
+  assert.deepEqual(invokedArgs, { patch: "x", dryRun: false, maxLines: 60 });
+  assert.deepEqual(findCommittedMessagePayload(events, "tool_call_start")?.args, {
+    patch: "x",
+    dryRun: false,
+    maxLines: 60,
+  });
+  const repaired = events.find((event) => event.event === "tool_args_repaired");
+  assert.equal(repaired?.data?.toolCallId, "call-repair");
+  assert.deepEqual(repaired?.data?.repairs, [
+    { path: ["dryRun"], from: "false", to: false },
+    { path: ["maxLines"], from: "60", to: 60 },
+  ]);
+});
+
+test("executeToolCallInTurn leaves unrepairable args untouched and emits no repair event", async () => {
+  const events = [];
+  let invokedArgs = null;
+  await executeToolCall({
+    call: { id: "call-no-repair", name: "patch_file", args: { patch: "x", dryRun: "yes" } },
+    tool: {
+      schema: z.object({ patch: z.string(), dryRun: z.boolean().optional() }),
+      async invoke(args) {
+        invokedArgs = args;
+        return { toolName: "patch_file", ok: true };
+      },
+    },
+    runtime: createTestRuntimeContext({
+      eventListener: { onEvent: (event) => events.push(event) },
+      systemRuntime: { config: { safeConfirm: false } },
+    }),
+  });
+
+  assert.deepEqual(invokedArgs, { patch: "x", dryRun: "yes" });
+  assert.equal(
+    events.some((event) => event.event === "tool_args_repaired"),
+    false,
+  );
+});
+
+test("executeToolCall classifies an uncoded invoke error as retryable, matching its result code", async () => {
+  const events = [];
+  const result = await executeToolCall({
+    call: { id: "call-uncoded-class", name: "read_file", args: {} },
+    tool: {
+      invoke: async () => {
+        throw new Error("Received tool input did not match expected schema");
+      },
+    },
+    runtime: createTestRuntimeContext({
+      eventListener: { onEvent: (event) => events.push(event) },
+      systemRuntime: { config: { safeConfirm: false } },
+    }),
+  });
+
+  const payload = JSON.parse(result.toolResultText);
+  assert.equal(payload.code, "RECOVERABLE_TOOL_INVOKE_ERROR");
+  const errorEvent = events.find((event) => event.event === "tool_call_error");
+  assert.equal(errorEvent?.data?.classification, "retryable");
+  assert.equal(errorEvent?.data?.error?.fatal, false);
+  assert.equal(errorEvent?.data?.error?.code, "RECOVERABLE_TOOL_INVOKE_ERROR");
+});
+
+test("executeToolCall keeps a plain-object throw message non-empty", async () => {
+  const result = await executeToolCall({
+    call: { id: "call-plain-object", name: "demo_tool", args: {} },
+    tool: {
+      invoke: async () => {
+        throw { reason: 1 };
+      },
+    },
+  });
+
+  const payload = JSON.parse(result.toolResultText);
+  assert.equal(payload.code, "RECOVERABLE_TOOL_INVOKE_ERROR");
+  assert.equal(payload.error, "[object Object]");
 });

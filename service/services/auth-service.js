@@ -98,10 +98,28 @@ export function createAuthService({
       return;
     }
     req.auth = authInfo;
-    const requestUserIds = [req.params?.userId, req.body?.userId, req.query?.userId]
+    const requestUserIds = [req.body?.userId, req.query?.userId]
       .map((value) => text(value))
       .filter(Boolean);
     if (requestUserIds.some((requestUserId) => isForbiddenUserScope(authInfo, requestUserId))) {
+      res.status(HTTP_STATUS.FORBIDDEN).json({
+        ok: false,
+        error: translateText("auth.forbiddenUserScope", req.locale),
+      });
+      return;
+    }
+    next();
+  }
+
+  function enforceUserScopeParam(req, res, next, userId) {
+    const authInfo = req.auth;
+    if (!authInfo) {
+      res
+        .status(HTTP_STATUS.UNAUTHORIZED)
+        .json({ ok: false, error: translateText("auth.missingApiKey", req.locale) });
+      return;
+    }
+    if (isForbiddenUserScope(authInfo, text(userId))) {
       res.status(HTTP_STATUS.FORBIDDEN).json({
         ok: false,
         error: translateText("auth.forbiddenUserScope", req.locale),
@@ -129,6 +147,7 @@ export function createAuthService({
     resolveAuthByApiKey,
     isForbiddenUserScope,
     requireApiKey,
+    enforceUserScopeParam,
     requireSuperAdmin,
   };
 }

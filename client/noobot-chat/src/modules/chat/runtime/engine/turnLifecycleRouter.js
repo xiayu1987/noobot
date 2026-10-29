@@ -5,13 +5,25 @@
  */
 import { StreamEventEnum } from "../../model/chatConstants.js";
 import { applyLatestSessionAggregateVersion } from "./sessionAggregateVersionManager.js";
-import { TURN_COMMITTED_WIRE_EVENT } from "@noobot/session-protocol/turn-commit";
-import { TURN_ATTACHMENTS_BOUND_WIRE_EVENT } from "@noobot/session-protocol/turn-attachment-bind";
+import {
+  TURN_COMMITTED_WIRE_EVENT,
+  validateTurnCommittedEventData,
+} from "@noobot/session-protocol/turn-commit";
+import {
+  TURN_ATTACHMENTS_BOUND_WIRE_EVENT,
+  validateTurnAttachmentsBoundEventData,
+} from "@noobot/session-protocol/turn-attachment-bind";
 import { isTerminalTurnEvent } from "@noobot/session-protocol/turn-lifecycle";
 
-const TURN_USER_MESSAGE_LOG_PREFIX = Object.freeze({
-  [TURN_COMMITTED_WIRE_EVENT]: "frontend.turnCommit",
-  [TURN_ATTACHMENTS_BOUND_WIRE_EVENT]: "frontend.turnAttachmentsBound",
+const TURN_USER_MESSAGE_ROUTE = Object.freeze({
+  [TURN_COMMITTED_WIRE_EVENT]: Object.freeze({
+    logPrefix: "frontend.turnCommit",
+    validate: validateTurnCommittedEventData,
+  }),
+  [TURN_ATTACHMENTS_BOUND_WIRE_EVENT]: Object.freeze({
+    logPrefix: "frontend.turnAttachmentsBound",
+    validate: validateTurnAttachmentsBoundEventData,
+  }),
 });
 
 function rejectedByException(error) {
@@ -124,8 +136,20 @@ export function routeCurrentTurnLifecycleEvent(event, data, context) {
     );
     return true;
   }
-  const logPrefix = TURN_USER_MESSAGE_LOG_PREFIX[event];
-  if (!logPrefix) return false;
+  const route = TURN_USER_MESSAGE_ROUTE[event];
+  if (!route) return false;
+  const { logPrefix } = route;
+  const validation = route.validate(data);
+  if (!validation.valid) {
+    logSessionEvent({
+      category: "state",
+      level: "warn",
+      event: `${logPrefix}.userMessageRejected`,
+      sessionId: context.sessionId,
+      data: { applied: false, reason: "invalid_event_data", errors: validation.errors },
+    });
+    return true;
+  }
   const { userMessage } = data;
   const reason = applyCommittedUserMessage(data, context);
   const applied = reason === "applied";

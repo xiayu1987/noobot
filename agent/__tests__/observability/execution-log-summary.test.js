@@ -81,3 +81,20 @@ test("summarizeExecutionLogs de-duplicates replayed tool events by toolCallId", 
   assert.equal(summary.toolResultCount, 1);
   assert.equal(summary.errorCount, 1);
 });
+
+test("summarizeExecutionLogs counts a failed tool once even with its companion tool_error event", () => {
+  const summary = summarizeExecutionLogs([
+    toolLog("call", "read_file", "call-1"),
+    {
+      event: "tool_call_error",
+      category: "error",
+      type: "tool_error",
+      data: { tool: "read_file" },
+    },
+    toolLog("result", "read_file", "call-1", { success: false }),
+    { event: "error", category: "error", type: "error", data: {} },
+  ]);
+
+  assert.equal(summary.toolResultCount, 1);
+  assert.equal(summary.errorCount, 2);
+});

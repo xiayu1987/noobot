@@ -50,7 +50,6 @@ describe("useChatEngine.send-stream terminal detail", () => {
         onTurnEvaluated: vi.fn(),
       }),
       makeViewMessage: (message) => ({ ...message }),
-      sessionTitleFromMessages: () => "title",
       onSessionDetailApplied: vi.fn(),
     });
     harness.deps.fetchSessionDetail = fetchSessionDetail;

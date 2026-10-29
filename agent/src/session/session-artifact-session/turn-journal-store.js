@@ -10,10 +10,11 @@ import {
   assertSessionManifestLayout,
 } from "@noobot/session-protocol";
 import { SESSION_REPAIR_ERROR_CODE, assertTurnJournalBoundary } from "@noobot/session-repair";
+import { readTurnSummaryCheckpointState } from "@noobot/context-protocol/policy/summary";
 import { createHash } from "node:crypto";
 import { mkdir, open, rename, writeFile } from "node:fs/promises";
 import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
-import { text } from "@noobot/shared/value";
+import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
 
 export const TURN_JOURNAL_SCHEMA_VERSION = SESSION_ARTIFACT_SCHEMA_VERSION;
 export const SUMMARY_SNAPSHOT_SCHEMA_VERSION = 2;
@@ -43,18 +44,17 @@ export function messageHash(message) {
   return `sha256:${createHash("sha256").update(JSON.stringify(message)).digest("hex")}`;
 }
 
-function assertIncrementalJournalRecords(records, file) {
+export function assertIncrementalJournalRecords(records, file) {
   for (const record of records) {
-    const uid = text(record?.messageUid);
-    const validRemove = record?.op === "remove" && uid;
-    const validUpsert =
-      record?.op === "upsert" &&
-      uid &&
-      record.message &&
-      typeof record.message === "object" &&
-      text(record.message.messageUid) === uid &&
-      record.hash === messageHash(record.message);
-    if (!validRemove && !validUpsert) {
+    const valid =
+      isPlainObject(record) &&
+      isCanonicalText(record.messageUid) &&
+      (record.op === "remove" ||
+        (record.op === "upsert" &&
+          isPlainObject(record.message) &&
+          record.message.messageUid === record.messageUid &&
+          record.hash === messageHash(record.message)));
+    if (!valid) {
       const error = new Error(`turn journal contains an invalid incremental record: ${file}`);
       error.code = "SESSION_TURN_JOURNAL_RECORD_INVALID";
       throw error;
@@ -62,42 +62,36 @@ function assertIncrementalJournalRecords(records, file) {
   }
 }
 
-export function turnKey(turn = {}) {
-  return text(turn.turnScopeId);
+export function turnKey(turn) {
+  return turn.turnScopeId;
 }
 
-export function turnIdOrdinal(turnId = "") {
-  const match = /^turn-(\d+)$/.exec(text(turnId));
+export function turnIdOrdinal(turnId) {
+  const match = /^turn-(\d+)$/.exec(turnId);
   return match ? Number(match[1]) : 0;
 }
 
 export function isTerminalTurn(session, turn) {
-  const scope = text(turn?.turnScopeId);
-  const dialog = text(turn?.dialogProcessId);
-  const lifecycleTurn = session?.turnLifecycle?.turns?.[scope];
-  if (!lifecycleTurn || text(lifecycleTurn.dialogProcessId) !== dialog) return false;
+  const lifecycleTurn = session.turnLifecycle.turns[turn.turnScopeId];
+  if (!lifecycleTurn || lifecycleTurn.dialogProcessId !== turn.dialogProcessId) return false;
   return Boolean(lifecycleTurn.terminalStatus);
 }
 
-export function resolveTurnSummaryReceipts(session = {}, turn = {}) {
-  const state = session?.turnSummaryCheckpoints?.[text(turn?.turnScopeId)];
-  return Array.isArray(state?.receipts) ? state.receipts : [];
+export function resolveTurnSummaryReceipts(session, turn) {
+  return readTurnSummaryCheckpointState(session, {
+    dialogProcessId: turn.dialogProcessId,
+    turnScopeId: turn.turnScopeId,
+  }).receipts;
 }
 
 export function receiptCheckpoint(receipt, previousCheckpointIds) {
-  const checkpointId = text(receipt?.checkpointId);
-  const checkpointRevision = Number(receipt?.checkpointRevision || 0);
-  const valid =
-    checkpointId &&
-    Number.isInteger(checkpointRevision) &&
-    checkpointRevision >= 1 &&
-    !previousCheckpointIds.has(checkpointId);
-  return valid ? { checkpointId, checkpointRevision } : null;
+  if (previousCheckpointIds.has(receipt.checkpointId)) return null;
+  return { checkpointId: receipt.checkpointId, checkpointRevision: receipt.checkpointRevision };
 }
 
 export function turnArtifactRequiresRewrite(session, item) {
   const snapshots = item.summarySnapshots;
-  const checkpointIds = new Set(snapshots.map((snapshot) => text(snapshot?.checkpointId)));
+  const checkpointIds = new Set(snapshots.map((snapshot) => snapshot.checkpointId));
   if (
     resolveTurnSummaryReceipts(session, item).some((receipt) =>
       receiptCheckpoint(receipt, checkpointIds),
@@ -107,16 +101,14 @@ export function turnArtifactRequiresRewrite(session, item) {
   return isTerminalTurn(session, item) && item.compacted !== true && snapshots.length === 0;
 }
 
-export function summarySnapshotIndex(receipt = {}, file = "", contentHash = "") {
+export function summarySnapshotIndex(receipt, file, contentHash) {
   return {
-    checkpointId: text(receipt?.checkpointId),
-    checkpointRevision: Number(receipt?.checkpointRevision || 0),
+    checkpointId: receipt.checkpointId,
+    checkpointRevision: receipt.checkpointRevision,
     file,
     contentHash,
-    messageUids: Array.isArray(receipt?.summarizedMessageUids)
-      ? receipt.summarizedMessageUids.map((uid) => text(uid)).filter(Boolean)
-      : [],
-    committedAt: text(receipt?.committedAt),
+    messageUids: [...receipt.summarizedMessageUids],
+    committedAt: receipt.committedAt,
   };
 }
 

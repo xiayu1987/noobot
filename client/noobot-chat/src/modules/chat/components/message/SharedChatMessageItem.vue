@@ -8,7 +8,10 @@ import { computed, ref, useId, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { Paperclip } from "@element-plus/icons-vue";
 import { useMessagePreview } from "../../composables/message/useMessagePreview.js";
-import { useMessageFiles } from "../../composables/message/useMessageFiles.js";
+import {
+  collectSessionAttachments,
+  useMessageFiles,
+} from "../../composables/message/useMessageFiles.js";
 import {
   resolveAttachmentDisplayKey,
   resolveParsedResultRelation,
@@ -63,6 +66,7 @@ import MutationDiffSplit from "../thinking/MutationDiffSplit.vue";
 import { selectCompletedToolArtifacts } from "../../runtime/engine/toolTimeline.js";
 import { fileMutationPreviewService } from "../../../../infrastructure/api/fileMutation/fileMutationPreviewService.js";
 import { text } from "@noobot/shared/value";
+import "../../../../shared/ui/file-mutation-preview-common.css";
 
 const emit = defineEmits(["open-thinking-details"]);
 
@@ -96,7 +100,6 @@ const {
   openFilePreview,
   closePreviewDialog,
   onDownloadFile,
-  onDownloadWorkspacePath,
   onDownloadAttachment,
   onDownloadParsedResult,
   onCopyMarkdownRich,
@@ -134,14 +137,29 @@ const artifactAttachments = computed(() =>
   suppressDefaultAssets.value ? [] : displayedAttachments.value,
 );
 
-const attachmentRefIndex = computed(() => buildAttachmentRefIndex(displayedAttachments.value));
-// Artifact tabs render as plain markup: message rows mount and unmount inside one
-// virtual-list flush, which ElTabs' ordered-children registration cannot survive.
+const attachmentRefIndex = computed(() =>
+  buildAttachmentRefIndex(
+    collectSessionAttachments(props.allMessages, props.messageItem, displayedAttachments.value),
+  ),
+);
+
 const artifactTabs = computed(() =>
   [
-    { name: "attachments", labelKey: "message.artifactAttachments", count: artifactAttachments.value.length },
-    { name: "write-files", labelKey: "message.artifactWriteFiles", count: writeMutations.value.length },
-    { name: "patch-files", labelKey: "message.artifactPatchFiles", count: patchMutations.value.length },
+    {
+      name: "attachments",
+      labelKey: "message.artifactAttachments",
+      count: artifactAttachments.value.length,
+    },
+    {
+      name: "write-files",
+      labelKey: "message.artifactWriteFiles",
+      count: writeMutations.value.length,
+    },
+    {
+      name: "patch-files",
+      labelKey: "message.artifactPatchFiles",
+      count: patchMutations.value.length,
+    },
   ].filter((tab) => tab.count > 0),
 );
 const selectedArtifactTab = ref("");
@@ -160,9 +178,7 @@ function onArtifactTabKeydown(event) {
   const currentIndex = tabs.findIndex((tab) => tab.name === activeArtifactTab.value);
   const nextTab = tabs[(currentIndex + step + tabs.length) % tabs.length];
   selectedArtifactTab.value = nextTab.name;
-  event.currentTarget.parentElement
-    .querySelector(`[data-tab-name="${nextTab.name}"]`)
-    .focus();
+  event.currentTarget.parentElement.querySelector(`[data-tab-name="${nextTab.name}"]`).focus();
 }
 const mutationPreviewVisible = ref(false);
 useOverlayHistory(mutationPreviewVisible, () => (mutationPreviewVisible.value = false));
@@ -526,7 +542,6 @@ function toggleAssistantContent() {
       :content="messageItem.content"
       :render-markdown="renderMarkdown"
       :attachment-ref-index="attachmentRefIndex"
-      @download-workspace-file="onDownloadWorkspacePath"
       @download-attachment="onDownloadAttachment"
     />
 
@@ -699,8 +714,6 @@ function toggleAssistantContent() {
   </Teleport>
 </template>
 
-<style src="../../../../shared/ui/file-mutation-preview-common.css"></style>
-
 <style scoped>
 .message-runtime-panels {
   box-sizing: border-box;
@@ -738,8 +751,8 @@ function toggleAssistantContent() {
   border-bottom: 2px solid transparent;
   cursor: pointer;
   transition:
-    color var(--noobot-duration-normal) ease,
-    border-color var(--noobot-duration-normal) ease;
+    color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    border-color var(--noobot-duration-normal) var(--noobot-ease-standard);
 }
 .message-artifact-tabs__tab:hover {
   color: var(--noobot-text-strong);

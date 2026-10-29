@@ -33,6 +33,12 @@ import { text } from "@noobot/shared/value";
 import { createSessionMessageView } from "../../../../../src/modules/chat/runtime/session/messageView.js";
 import { terminalStatusFixture } from "./terminalStatusFixture.js";
 import { jsonResponse, rejectUnexpectedRequest } from "../../../helpers/jsonResponse.js";
+import { createTurnReplaceResponse } from "@noobot/session-protocol/session-mutation-response";
+import { selectMainSessionDetailEntry } from "@noobot/session-protocol/session-detail";
+import {
+  availableDetailDocument,
+  mutationSuccessResponse,
+} from "../../../helpers/sessionDetailFixture.js";
 
 const terminalResolutionFromUrl = (
   url,
@@ -101,30 +107,31 @@ export const makeSession = (id, overrides = {}) => ({
   ...overrides,
 });
 
-export function makeTurnReplacementResponse({
+export function makeTurnReplacementBody({
   commandId,
   sessionId,
   aggregateVersion,
   replacedTurnScopeIds,
   replacementUser,
   replacementDialogProcessId,
-  messages = [replacementUser],
-  session = {},
+  messages,
 }) {
   const committedMessages = messages.map((message) =>
     message === replacementUser
       ? { ...message, dialogProcessId: replacementDialogProcessId }
       : message,
   );
-  const committedSession = {
-    ...session,
-    sessionId,
-    aggregateVersion,
-    messages: committedMessages,
-  };
   return {
-    ok: true,
-    session: committedSession,
+    commandId,
+    committedAggregateVersion: aggregateVersion,
+    deduplicated: false,
+    detail: availableDetailDocument({
+      sessionId,
+      title: sessionId,
+      aggregateVersion,
+      messages: committedMessages,
+      turnTimings: [],
+    }),
     turnReplacement: createTurnReplacementCommit({
       commandId,
       sessionId,
@@ -137,6 +144,19 @@ export function makeTurnReplacementResponse({
       committedAt: "2026-07-31T00:00:00.000Z",
     }),
   };
+}
+
+export function makeTurnReplacementResponse(input) {
+  const { turnReplacement, ...envelope } = makeTurnReplacementBody(input);
+  return mutationSuccessResponse(
+    createTurnReplaceResponse({ receiptResult: { turnReplacement }, ...envelope }),
+  );
+}
+
+export function applyMainEntryMessages(readActiveSession) {
+  return vi.fn((detail) => {
+    readActiveSession().value.messages = [...selectMainSessionDetailEntry(detail).messages];
+  });
 }
 
 export const makeMessage = (role, content = "", attachments = []) => ({
@@ -280,7 +300,6 @@ export const createHarness = ({
     materializeTurnPresentation: messageView.materializeTurnPresentation,
     upsertCanonicalAssistantMessage,
     makeViewMessage: messageView.makeViewMessage,
-    fetchSessionDetail: vi.fn(async () => ({})),
     applySessionDetail: vi.fn(),
     refreshSessionConnectorsAsync: vi.fn(),
     connectorTypeSet: new Set(),

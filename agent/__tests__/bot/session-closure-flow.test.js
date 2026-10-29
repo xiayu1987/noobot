@@ -40,7 +40,6 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
   const persistedTurns = [];
   const appendedExecutionLogs = [];
   const upstreamEvents = [];
-  let savedCurrentTurnTasksPayload = null;
   let capturedBuildContextInput = null;
   let capturedAgentContext = null;
 
@@ -115,9 +114,6 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
         attachments: payload.attachments,
         aggregateVersion: 2,
       };
-    },
-    async saveCurrentTurnTasks(payload = {}) {
-      savedCurrentTurnTasksPayload = payload;
     },
   };
   const sessionManager = createCanonicalMessageEventSessionManager({
@@ -199,7 +195,6 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
         output: "已切换模型并生成附件",
         modelMessageId: "closure-assistant-message",
         traces: [{ event: "tool_chain_done" }],
-        turnTasks: [{ taskId: "task-1", taskStatus: "completed" }],
         turnMessages: [
           {
             messageUid: "sm_closure-tool-call",
@@ -378,7 +373,6 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
   assert.equal(finalAssistantTurn.attachments?.[0]?.attachmentId, "att-out-1");
   assert.equal(finalAssistantTurn.transferEnvelopes, undefined);
 
-  assert.equal(savedCurrentTurnTasksPayload?.currentTurnTasks?.length, 1);
   assert.equal(result.answer, "已切换模型并生成附件");
   assert.equal(Array.isArray(result.messages), true);
   assert.equal(result.messages.length, 3);
@@ -480,7 +474,6 @@ test("continue mode closed-loop: should build continue context and persist paren
       persistedTurns.push(userMessage);
       return { userMessage, attachments: userMessage.attachments, aggregateVersion: 1 };
     },
-    async saveCurrentTurnTasks() {},
   };
   const sessionManager = createCanonicalMessageEventSessionManager({
     producerId: "session-closure-continue-flow",
@@ -520,7 +513,6 @@ test("continue mode closed-loop: should build continue context and persist paren
       output: "continue answer",
       modelMessageId: "continue-assistant-message",
       traces: [],
-      turnTasks: [],
       turnMessages: [
         {
           messageUid: "sm_continue-assistant-message",

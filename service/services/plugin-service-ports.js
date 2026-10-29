@@ -9,11 +9,6 @@ import { createWriteStream, createReadStream } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import {
-  buildThinkingDetailPayload,
-  readExecutionReportArtifact,
-  readSessionArtifactSnapshot,
-} from "noobot-agent/session";
 import { HTTP_STATUS } from "noobot-agent/constants";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import {
@@ -201,7 +196,18 @@ function createWorkspaceAssetPort({ bot, pluginId }) {
   });
 }
 
+const SCOPED_SESSION_READ_METHODS = Object.freeze([
+  "readScopedSessionSnapshot",
+  "readScopedThinkingDetail",
+  "readScopedExecutionReport",
+]);
+
 function createPluginSessionPort({ bot, pluginId, translateText }) {
+  for (const method of SCOPED_SESSION_READ_METHODS) {
+    if (!isFunction(bot.session?.[method])) {
+      throw new TypeError(`plugin session port requires bot.session.${method}`);
+    }
+  }
   const normalizedPluginId = requireAssetToken(pluginId, assetIdPattern, "plugin ID");
   function resolveSessionDir({ userId, segments, locale = "" }) {
     const workspacePath = bot.getWorkspacePath(userId);
@@ -220,39 +226,19 @@ function createPluginSessionPort({ bot, pluginId, translateText }) {
   return Object.freeze({
     async readSnapshot({ userId, segments, locale }) {
       const { outputDir } = resolveSessionDir({ userId, segments, locale });
-      const { sessionSummary, executionLogs, meta } = await readSessionArtifactSnapshot({
-        outputDir,
-      });
-      return { sessionSummary, executionLogs, meta };
+      return bot.session.readScopedSessionSnapshot({ sessionDir: outputDir });
     },
     async readThinkingDetail({ userId, segments, dialogProcessId, turnScopeId, locale }) {
       const { outputDir } = resolveSessionDir({ userId, segments, locale });
-      const { session, sessionSummary } = await readSessionArtifactSnapshot({
-        outputDir,
-        includeExecutionLogs: false,
+      return bot.session.readScopedThinkingDetail({
+        sessionDir: outputDir,
+        turnScopeId,
+        dialogProcessId,
       });
-      const summaryMessage = sessionSummary.messages.find(
-        (message = {}) =>
-          text(message?.turnScopeId) === text(turnScopeId) &&
-          (!dialogProcessId || text(message?.dialogProcessId) === String(dialogProcessId).trim()),
-      );
-      return buildThinkingDetailPayload(
-        {
-          sessionId: session.sessionId,
-          revision: text(summaryMessage?.thinkingDetailRef?.contentHash),
-          sessions: [
-            {
-              sessionId: session.sessionId,
-              rawMessages: session.messages,
-            },
-          ],
-        },
-        { dialogProcessId, turnScopeId },
-      );
     },
     async readExecutionReport({ userId, segments, dialogProcessId, locale }) {
       const { outputDir } = resolveSessionDir({ userId, segments, locale });
-      return readExecutionReportArtifact({ sessionDir: outputDir, dialogProcessId });
+      return bot.session.readScopedExecutionReport({ sessionDir: outputDir, dialogProcessId });
     },
   });
 }

@@ -65,7 +65,7 @@ function attachThinkingTimeline(messages, displayMessage) {
   if (text(displayMessage?.role) !== "assistant") return;
   const turnScopeId = text(displayMessage?.turnScopeId);
   if (!turnScopeId) return;
-  const thinkingTimeline = projectThinkingTimeline(messages, displayMessage, { turnScopeId });
+  const thinkingTimeline = projectThinkingTimeline(messages, { turnScopeId });
   if (!thinkingTimeline.toolTimeline.length && !thinkingTimeline.activityTimeline.length) return;
   displayMessage.toolTimeline = compactThinkingTimeline(thinkingTimeline.toolTimeline);
   if (thinkingTimeline.activityTimeline.length) {

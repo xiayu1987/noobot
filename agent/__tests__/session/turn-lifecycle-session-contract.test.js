@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  SESSION_ERROR_CODE,
   TURN_EVENT,
   TURN_PHASE,
   TURN_RECOVERY_ACTION,
@@ -15,7 +16,6 @@ import {
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { normalizeSessionEntity } from "../../src/session/entities/session-entity.js";
 import { SessionCrudService } from "../../src/session/services/session-crud-service.js";
-import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
 import {
   event,
   eventIdOf,
@@ -24,6 +24,7 @@ import {
   now,
 } from "./turn-lifecycle-session-contract.test-helpers.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
+import { buildPersistedDisplaySummary } from "./session-artifact-store-v2.test-helpers.js";
 
 test("first send creates the session before committing action accepted", async () => {
   const h = newSessionHarness();
@@ -259,11 +260,6 @@ test("terminal resolution reads status from the Turn without returning messages"
         return h.reload();
       },
     },
-    taskRepo: {
-      async getBundle() {
-        return null;
-      },
-    },
     sessionTreeService: {},
     now,
   });
@@ -398,7 +394,7 @@ test("session mutex, turn revision and session version conflicts do not mutate s
   );
   assert.equal(second.reason, "session_action_conflict");
   assert.equal(stale.reason, "turn_revision_conflict");
-  assert.equal(sessionStale.reason, "SESSION_AGGREGATE_VERSION_CONFLICT");
+  assert.equal(sessionStale.reason, SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT);
   assert.equal(h.reload().turnLifecycle.sequence, 1);
 });
 
@@ -473,7 +469,7 @@ test("summary and reconnect snapshots share action-failure presentation scope", 
   assert.equal(session.turnLifecycle.turns.t1.state, "action_failed");
   assert.equal(session.turnLifecycle.turns.t1.executionState, "error");
   assert.equal(session.turnLifecycle.turns.t1.terminalStatus.status, "error");
-  const summarySnapshot = buildSessionDisplaySummary(session).turnLifecycleSnapshot;
+  const summarySnapshot = (await buildPersistedDisplaySummary(session)).turnLifecycleSnapshot;
   const reconnectSnapshot = (
     await h.service.getTurnLifecycleSnapshot({
       userId: "u1",

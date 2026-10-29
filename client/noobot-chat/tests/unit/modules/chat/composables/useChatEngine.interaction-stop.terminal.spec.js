@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
-import { AGENT_COMMAND, ROOT_PARENT_SESSION_ID } from "@noobot/agent-transport-protocol";
+import { AGENT_COMMAND } from "@noobot/agent-transport-protocol";
 import {
   createHarness,
   assistantMessage,
@@ -29,6 +29,10 @@ import {
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { SESSION_RUN_EVENT } from "../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
 import { jsonResponse } from "../../../helpers/jsonResponse.js";
+import {
+  availableSummaryEntry,
+  sessionsSummaryResponse,
+} from "../../../helpers/sessionDetailFixture.js";
 
 const SEND_REQUEST = Object.freeze({ commandType: AGENT_COMMAND.SEND });
 
@@ -307,6 +311,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     });
     harness.turnRuntimeRegistry.value = { ...harness.turnRuntimeRegistry.value };
 
+    const fetchSessionDetail = vi.fn();
     const listActions = createSessionListActions({
       sessions: harness.sessions,
       activeSessionId: harness.activeSessionId,
@@ -317,29 +322,24 @@ describe("useChatEngine.interaction-stop: terminal", () => {
       authFetch: vi.fn(),
       ensureConnected: vi.fn(() => true),
       getSessionsApi: vi.fn(async () =>
-        jsonResponse({
-          ok: true,
+        sessionsSummaryResponse({
+          userId: "u-1",
+          updatedAt: "2026-07-24T05:42:15.485Z",
           sessions: [
-            {
+            availableSummaryEntry({
               sessionId,
-              parentSessionId: ROOT_PARENT_SESSION_ID,
-              caller: RoleEnum.USER,
+              title: sessionId,
+              aggregateVersion: 1,
+              messageCount: 1,
               updatedAt: "2026-07-24T05:42:15.485Z",
-              turnLifecycleSnapshot: {
-                activeTurn: null,
-                recentTerminalTurns: [
-                  { turnScopeId, state: "completed", revision: 2, sequence: 2 },
-                ],
-              },
-            },
+            }),
           ],
         }),
       ),
       deleteSessionApi: vi.fn(),
       renameSessionApi: vi.fn(),
       createConnectorPanelState: vi.fn(() => ({})),
-      sessionTitleFromMessages: vi.fn(() => "refresh e2e"),
-      fetchSessionDetail: vi.fn(async () => null),
+      fetchSessionDetail,
       applySessionDetail: vi.fn(),
       createLocalSession: vi.fn(),
       refreshSessionConnectorsAsync: vi.fn(),
@@ -351,6 +351,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
 
     await expect(listActions.fetchSessions(localSessionId, { silent: true })).resolves.toBe(true);
     expect(harness.activeSessionId.value).toBe(sessionId);
+    expect(fetchSessionDetail).not.toHaveBeenCalled();
 
     const resolution = await harness.engine.resolveTurnTerminalState(sessionId, turnScopeId, {
       revision: 2,
@@ -450,11 +451,6 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     const { engine, activeSession, sending, deps } = createHarness({
       sessionId: "local-x",
       stream,
-      deps: {
-        fetchSessionDetail: vi.fn(async () => {
-          throw new Error("ignore");
-        }),
-      },
     });
 
     await engine.send(SEND_REQUEST);
@@ -464,27 +460,10 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     const assistant = assistantMessage(activeSession);
     expect(assistant).not.toHaveProperty("pending");
     expect(assistant?.channelState?.state).not.toBe(FrontendRunState.FRONTEND_COMPLETED);
-    expect(assistant?.terminalOutcome || assistant?.terminalOutcome).not.toBe("generated");
+    expect(assistant.terminalOutcome).not.toBe("generated");
   });
 
   it("terminal channel_state without an Authority event does not converge the Turn", async () => {
-    const fetchSessionDetail = vi.fn(async () => ({
-      sessionId: "local-state-only",
-      sessions: [
-        {
-          sessionId: "local-state-only",
-          parentSessionId: ROOT_PARENT_SESSION_ID,
-          messages: [
-            { role: RoleEnum.USER, content: "hello" },
-            {
-              role: RoleEnum.ASSISTANT,
-              dialogProcessId: "dp-state-only",
-              content: "detail answer",
-            },
-          ],
-        },
-      ],
-    }));
     const applySessionDetail = vi.fn(async () => {
       const assistant = assistantMessage(activeSession);
       assistant.content = "detail answer";
@@ -497,10 +476,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     const { engine, activeSession, sending } = createHarness({
       sessionId: "local-state-only",
       stream,
-      deps: {
-        fetchSessionDetail,
-        applySessionDetail,
-      },
+      deps: { applySessionDetail },
     });
 
     await expect(engine.send(SEND_REQUEST)).resolves.toBe(true);
@@ -508,7 +484,6 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     const assistant = assistantMessage(activeSession);
     expect(sending.value).toBe(true);
     expect(assistant?.content).not.toBe("detail answer");
-    expect(fetchSessionDetail).not.toHaveBeenCalled();
     expect(applySessionDetail).not.toHaveBeenCalled();
   });
 
@@ -523,12 +498,11 @@ describe("useChatEngine.interaction-stop: terminal", () => {
       error.data = errorData;
       throw error;
     });
-    const fetchSessionDetail = vi.fn(async (sessionId) => ({ sessionId, messages: [] }));
     const applySessionDetail = vi.fn();
     const { engine, activeSession, sending, deps } = createHarness({
       sessionId: "s-error",
       stream,
-      deps: { fetchSessionDetail, applySessionDetail },
+      deps: { applySessionDetail },
     });
 
     await expect(engine.send(SEND_REQUEST)).resolves.toBe(false);
@@ -537,7 +511,6 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     expect(botMessage.dialogProcessId).not.toBe("dp-error");
     expect(botMessage).not.toHaveProperty("pending");
     expect(botMessage.error).toBe("invalid tool input");
-    expect(fetchSessionDetail).not.toHaveBeenCalled();
     expect(applySessionDetail).not.toHaveBeenCalled();
     expect(deps.clearPendingInteraction).toHaveBeenCalled();
     expect(sending.value).toBe(true);

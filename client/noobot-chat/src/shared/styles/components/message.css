@@ -1,0 +1,197 @@
+.noobot-flat-card {
+  background: var(--noobot-msg-file-card-bg);
+  border: 1px solid var(--noobot-panel-border);
+  border-radius: var(--noobot-radius-md);
+  transition:
+    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    border-color var(--noobot-duration-normal) var(--noobot-ease-standard);
+}
+
+.noobot-flat-card:hover {
+  border-color: var(--noobot-panel-border);
+}
+
+.noobot-soft-card {
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 56%, transparent);
+  border-radius: var(--noobot-radius-md);
+  background: var(--noobot-panel-bg);
+}
+
+.noobot-panel-card {
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, var(--noobot-accent) 16%, var(--noobot-panel-border));
+  border-radius: var(--noobot-radius-md);
+  background: var(--noobot-panel-bg);
+}
+
+.noobot-overlay-card {
+  box-sizing: border-box;
+  background: var(--noobot-panel-bg);
+  border: 1px solid var(--noobot-overlay-border);
+  outline: 1px solid var(--noobot-overlay-outline);
+  border-radius: var(--noobot-radius-md);
+}
+
+.noobot-overlay-card-header {
+  background: var(--noobot-panel-head-bg);
+  border-bottom: 1px solid var(--noobot-overlay-border);
+}
+
+.noobot-composer-surface {
+  box-sizing: border-box;
+  background: var(--noobot-surface-sidebar);
+  border: 1px solid color-mix(in srgb, var(--noobot-accent) 24%, var(--noobot-panel-border));
+  border-radius: var(--noobot-radius-md);
+  transition:
+    border-color var(--noobot-duration-slow) var(--noobot-ease-standard),
+    box-shadow var(--noobot-duration-slow) var(--noobot-ease-standard);
+}
+
+.noobot-composer-surface:focus-within {
+  border-color: var(--noobot-accent-border);
+  box-shadow: var(--noobot-focus-ring);
+}
+
+.noobot-drop-surface {
+  border: 1px dashed color-mix(in srgb, var(--noobot-accent) 62%, var(--noobot-panel-border));
+  border-radius: var(--noobot-radius-lg);
+  background: color-mix(in srgb, var(--noobot-surface-sidebar) 88%, var(--noobot-accent));
+  color: var(--noobot-text-strong);
+}
+
+.noobot-surface-card {
+  box-sizing: border-box;
+  border: 1px solid var(--noobot-panel-border);
+  border-radius: var(--noobot-radius-md);
+  background: var(--noobot-panel-bg);
+}
+
+.noobot-subtle-row {
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 20%, transparent);
+  border-radius: var(--noobot-radius-sm);
+  background: color-mix(in srgb, var(--noobot-panel-bg) 78%, transparent);
+  transition:
+    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    border-color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    color var(--noobot-duration-normal) var(--noobot-ease-standard);
+}
+
+.noobot-subtle-row:hover {
+  background: var(--noobot-panel-muted);
+  border-color: color-mix(in srgb, var(--noobot-panel-border) 28%, transparent);
+}
+
+.noobot-subtle-row.is-active,
+.noobot-subtle-row.active {
+  background: color-mix(in srgb, var(--noobot-surface-primary-soft) 68%, var(--noobot-panel-bg));
+  border-color: color-mix(in srgb, var(--noobot-panel-border) 35%, transparent);
+}
+
+.noobot-soft-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--noobot-radius-pill);
+  color: var(--noobot-text-strong);
+  background: var(--noobot-panel-muted);
+  border: 0;
+}
+
+.noobot-soft-badge.is-agent,
+.noobot-soft-badge.is-primary {
+  color: color-mix(in srgb, var(--noobot-accent) 78%, var(--noobot-text-strong));
+  border: 1px solid color-mix(in srgb, var(--noobot-accent) 35%, transparent);
+  background: color-mix(in srgb, var(--noobot-accent) 14%, transparent);
+}
+
+.noobot-soft-badge.is-plugin,
+.noobot-soft-badge.is-warning {
+  color: color-mix(in srgb, var(--noobot-status-warning) 80%, var(--noobot-text-strong));
+  border: 1px solid color-mix(in srgb, var(--noobot-status-warning) 35%, transparent);
+  background: color-mix(in srgb, var(--noobot-status-warning) 14%, transparent);
+}
+
+.noobot-soft-badge.is-recognized,
+.noobot-soft-badge.is-success {
+  color: color-mix(in srgb, var(--noobot-status-success) 82%, var(--noobot-text-strong));
+  border: 1px solid color-mix(in srgb, var(--noobot-status-success) 35%, transparent);
+  background: color-mix(in srgb, var(--noobot-status-success) 14%, transparent);
+}
+
+.noobot-inline-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--noobot-space-2xs);
+  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 46%, transparent);
+  border-radius: var(--noobot-radius-pill);
+  background: color-mix(in srgb, var(--noobot-panel-muted) 76%, transparent);
+  white-space: nowrap;
+}
+
+.noobot-selectable-row {
+  border-radius: var(--noobot-radius-sm);
+  transition:
+    background-color var(--noobot-duration-fast) var(--noobot-ease-standard),
+    border-color var(--noobot-duration-fast) var(--noobot-ease-standard);
+}
+
+.noobot-selectable-row:hover {
+  background: var(--noobot-accent-hover-soft);
+}
+
+.noobot-message-avatar {
+  border-radius: var(--noobot-radius-circle);
+  color: var(--noobot-msg-avatar-text);
+  background: var(--noobot-msg-avatar-bg);
+}
+
+.noobot-message-bubble {
+  border-radius: var(--noobot-radius-md);
+  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 62%, transparent);
+  transition:
+    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    border-color var(--noobot-duration-normal) var(--noobot-ease-standard);
+}
+
+.noobot-message-bubble:hover {
+  border-color: color-mix(in srgb, var(--noobot-accent) 24%, var(--noobot-panel-border));
+}
+
+.noobot-message-bubble.is-assistant {
+  background: transparent;
+  border-color: transparent;
+  color: var(--noobot-msg-assistant-text);
+}
+
+.noobot-message-bubble.is-assistant:hover {
+  background: transparent;
+  border-color: transparent;
+}
+
+.noobot-message-bubble.is-user {
+  background: var(--noobot-msg-user-bg);
+  border-color: var(--noobot-msg-user-border);
+  color: var(--noobot-msg-user-text);
+}
+
+.noobot-error-surface {
+  border-radius: var(--noobot-radius-sm);
+  background: var(--noobot-msg-error-bg);
+  border: 1px solid var(--noobot-msg-error-border);
+  color: var(--noobot-msg-error-text);
+}
+
+.noobot-error-surface.is-preview {
+  color: var(--noobot-preview-danger-text);
+  background: var(--noobot-preview-danger-bg);
+  border-color: var(--noobot-preview-danger-border);
+}
+
+.noobot-preview-surface {
+  background: var(--noobot-preview-bg);
+  color: var(--noobot-preview-text);
+  border: 1px solid var(--noobot-preview-border);
+  border-radius: var(--noobot-radius-sm);
+}

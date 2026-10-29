@@ -104,30 +104,3 @@
 .workflow-session-preview-dialog .el-dialog__headerbtn:hover .el-dialog__close {
   color: var(--noobot-text-strong);
 }
-
-.md pre,
-.preview-markdown pre {
-  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 88%, transparent);
-}
-
-.md table th,
-.preview-markdown table th {
-  background: color-mix(in srgb, var(--noobot-panel-border) 45%, transparent);
-}
-
-.preview-body {
-  color: var(--noobot-preview-text);
-  background: var(--noobot-preview-bg);
-  border-color: var(--noobot-preview-border);
-}
-
-.preview-error {
-  color: var(--noobot-preview-danger-text);
-  background: var(--noobot-preview-danger-bg);
-  border-color: var(--noobot-preview-danger-border);
-}
-
-.preview-text,
-.preview-markdown {
-  color: var(--noobot-preview-text);
-}

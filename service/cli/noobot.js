@@ -6,6 +6,10 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { flushJsonLineBatches } from "@noobot/runtime-events";
+import {
+  SESSION_SUMMARY_AVAILABILITY,
+  compareSessionSummaries,
+} from "@noobot/session-protocol/sessions-summary";
 import { resolveConfiguredSuperUserId, SUPER_ADMIN_ROLE } from "#agent/utils";
 import { createHeadlessRuntime } from "../bootstrap/create-headless-runtime.js";
 import { createInProcessChatTransport } from "../bootstrap/create-in-process-chat-transport.js";
@@ -30,10 +34,15 @@ async function readStdin(stdin) {
 }
 
 async function listSessions({ bot, authInfo, invocation, stdout }) {
-  const sessions = await bot.session.getAllSessionSummaries({ userId: authInfo.userId });
+  const payload = await bot.session.getAllSessionSummaries({ userId: authInfo.userId });
+  const sessions = [...payload.sessions].sort(compareSessionSummaries);
   if (invocation.outputFormat === "text") {
     for (const item of sessions) {
-      stdout.write(`${item.sessionId}\t${item.updatedAt || ""}\t${item.title || ""}\n`);
+      const columns =
+        item.availability === SESSION_SUMMARY_AVAILABILITY.AVAILABLE
+          ? [item.sessionId, item.updatedAt, item.title]
+          : [item.sessionId, item.availability, item.unavailableReason.code];
+      stdout.write(`${columns.join("\t")}\n`);
     }
   } else {
     stdout.write(`${JSON.stringify({ userId: authInfo.userId, sessions })}\n`);
