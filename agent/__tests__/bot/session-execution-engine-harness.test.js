@@ -6,7 +6,7 @@
 import { createEmptyTurnSummaryCheckpointState } from "@noobot/context-protocol/policy/summary";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
-import { TEST_MODEL_GLOBAL_CONFIG } from "../helpers/test-model-config.js";
+import { stubModelTransport, TEST_MODEL_GLOBAL_CONFIG } from "../helpers/test-model-config.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -323,7 +323,9 @@ test("global plugin defaults do not activate a plugin absent from selectedPlugin
   assert.equal(selected.plugins.harness.basePath, path.join(tempRoot, "u2"));
 });
 
-test("runSession smoke writes harness artifacts through full execution pipeline", async () => {
+test("runSession smoke writes harness artifacts through full execution pipeline", async (t) => {
+  const restoreFetch = stubModelTransport("WORKFLOW_DSL/1\nEND");
+  t.after(restoreFetch);
   const tempRoot = await createTempRoot();
   const persistedTurns = [];
   const executionLogs = [];
