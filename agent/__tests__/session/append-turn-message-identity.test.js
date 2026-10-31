@@ -110,6 +110,7 @@ test("appendTurns supersedes the prior canonical assistant presentation in one T
     turnScopeId: "turn-1",
     presentationMessageId: "presentation-1",
     chatPresentation: true,
+    workspaceRootDirectory: "/workspace/user-1",
   });
 
   await appendTurns.call(service, {
@@ -144,6 +145,30 @@ test("appendTurns supersedes the prior canonical assistant presentation in one T
       ["second", true],
     ],
   );
+  assert.equal(Object.hasOwn(session.messages[0], "workspaceRootDirectory"), false);
+  assert.equal(session.messages[1].workspaceRootDirectory, "/workspace/user-1");
+
+  const refresh = canonical("assistant-2", "refreshed presentation");
+  delete refresh.workspaceRootDirectory;
+  await appendTurns.call(service, {
+    userId: "user-1",
+    sessionId: "session-1",
+    turns: [refresh],
+  });
+  assert.equal(session.messages[1].chatPresentation, true);
+  assert.equal(session.messages[1].workspaceRootDirectory, "/workspace/user-1");
+
+  const updated = canonical("assistant-2", "updated without presentation");
+  updated.chatPresentation = false;
+  delete updated.workspaceRootDirectory;
+  await appendTurns.call(service, {
+    userId: "user-1",
+    sessionId: "session-1",
+    turns: [updated],
+  });
+  assert.equal(session.messages.length, 2);
+  assert.equal(session.messages[1].chatPresentation, false);
+  assert.equal(Object.hasOwn(session.messages[1], "workspaceRootDirectory"), false);
 });
 
 test("appendTurns persists the canonical tool policy", async () => {

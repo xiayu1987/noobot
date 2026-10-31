@@ -172,11 +172,30 @@ async function auditModelObservation({ userId, sessionId, policy, testInfo }) {
   if (validationError) throw validationError;
 }
 
-async function auditSessionSummaryPersistence({ userId, sessionId, expectation, testInfo }) {
+async function auditSessionSummaryPersistence({
+  page,
+  apiKey,
+  userId,
+  sessionId,
+  expectation,
+  testInfo,
+}) {
   const outputDir = testInfo.outputPath("protocol-evidence");
   await fs.mkdir(outputDir, { recursive: true });
   let audit;
   try {
+    const response = await page.request.get(
+      `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`,
+      { headers: { "x-api-key": apiKey } },
+    );
+    expect(response.ok(), "session detail read must succeed before artifact audit").toBe(true);
+    const detail = await response.json();
+    expect(detail.ok).toBe(true);
+    if (expectation === MODEL_CALL_EXPECTATION.REQUIRED) {
+      expect(detail.exists).toBe(true);
+      expect(detail.sessions.length).toBeGreaterThan(0);
+      for (const session of detail.sessions) expect(session.availability).toBe("available");
+    }
     audit = await auditSessionSummaryArtifacts(userId, sessionId, {
       expectation,
       requiredTitlePrefix: expectation === MODEL_CALL_EXPECTATION.REQUIRED ? "[PBE:" : "",
@@ -230,7 +249,15 @@ export const test = artifactTest.extend({
     });
     const sessionId = await createSessionThroughUi(page);
     try {
-      await use(Object.freeze({ page, sessionId, userId: credentials.userId, connectConfig }));
+      await use(
+        Object.freeze({
+          page,
+          sessionId,
+          userId: credentials.userId,
+          connectConfig,
+          modelAlias: E2E_MODEL_ALIAS,
+        }),
+      );
     } finally {
       const failures = [];
       try {
@@ -240,6 +267,8 @@ export const test = artifactTest.extend({
       }
       try {
         await auditSessionSummaryPersistence({
+          page,
+          apiKey: connectConfig.apiKey,
           userId: credentials.userId,
           sessionId,
           expectation: policy.expectation,

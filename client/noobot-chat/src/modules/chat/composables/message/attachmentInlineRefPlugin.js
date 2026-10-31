@@ -17,6 +17,7 @@ import {
   resolveLinkedResource,
 } from "@noobot/path-resolver/resource-link";
 import { text } from "@noobot/shared/value";
+import { isDraftAttachmentItem } from "../../../../infrastructure/api/attachments/attachmentAccess.js";
 
 const ATTACHMENT_INLINE_TOKEN = "noobot_attachment_ref";
 const REF_TERMINATOR_RE = /[\s<>"'`)\]}]/;
@@ -51,12 +52,8 @@ function resolveIdentity(ref = "") {
 export function buildAttachmentRefIndex(attachmentItems = []) {
   const index = new Map();
   for (const attachmentItem of Array.isArray(attachmentItems) ? attachmentItems : []) {
-    let identity;
-    try {
-      identity = projectAttachmentIdentity(attachmentItem);
-    } catch {
-      continue;
-    }
+    if (isDraftAttachmentItem(attachmentItem)) continue;
+    const identity = projectAttachmentIdentity(attachmentItem);
     index.set(attachmentIdentityKey(identity), {
       ...identity,
       name: text(attachmentItem.name),

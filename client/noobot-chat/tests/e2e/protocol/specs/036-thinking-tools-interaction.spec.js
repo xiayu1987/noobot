@@ -101,9 +101,14 @@ async function assertGeneratedFilesConverged({ page, userId, sessionId, turnScop
   expect(persistedFiles.map((record) => record.mutations[0].id).sort()).toEqual(
     executionMutations.map((mutation) => mutation.id).sort(),
   );
+  expect(executionMutations[0].locator).toEqual({ view: "workspace", path: filePath });
   await expect
     .poll(() => readRenderedFileNames(page), { timeout: 30000 })
-    .toEqual(expect.arrayContaining([filePath]));
+    .toEqual(expect.arrayContaining([executionMutations[0].fileName]));
+  await expect(page.locator(".mutation-file-item .file-name").last()).toHaveAttribute(
+    "title",
+    filePath,
+  );
   expect(executionResults).toHaveLength(1);
 }
 
@@ -116,15 +121,15 @@ async function assertFileMutationArtifacts(page, records, turnScopeId, filePath)
   const writeMutation = writes[0].result.mutations[0];
   const updateMutation = updates[0].result.mutations[0];
   expect(writeMutation).toMatchObject({
-    path: filePath,
+    locator: { view: "workspace", path: filePath },
     operation: "create",
     before: { exists: false },
     after: { exists: true, isText: true },
   });
   expect(updateMutation).toMatchObject({
-    path: filePath,
+    locator: { view: "workspace", path: filePath },
     operation: "update",
-    aggregate: { revision: 1, diffCount: 1, path: filePath },
+    aggregate: { revision: 1, diffCount: 1 },
     before: { exists: true, isText: true },
     after: { exists: true, isText: true },
   });
@@ -138,7 +143,9 @@ async function assertFileMutationArtifacts(page, records, turnScopeId, filePath)
   await expect(updateTab).toBeVisible();
 
   await writeTab.click();
-  const writeCard = artifactTabs.locator(".el-tab-pane:visible .mutation-file-item");
+  const writeCard = artifactTabs
+    .getByRole("tabpanel", { name: /文件写入|File Writes/i })
+    .locator(".mutation-file-item");
   await expect(writeCard).toHaveCount(1);
   await writeCard.click();
   const writeDialog = page.locator(".generated-file-preview-dialog");
@@ -148,7 +155,9 @@ async function assertFileMutationArtifacts(page, records, turnScopeId, filePath)
   await expect(writeDialog).toBeHidden();
 
   await updateTab.click();
-  const updateCard = artifactTabs.locator(".el-tab-pane:visible .mutation-file-item");
+  const updateCard = artifactTabs
+    .getByRole("tabpanel", { name: /文件更新|File Updates/i })
+    .locator(".mutation-file-item");
   await expect(updateCard).toHaveCount(1);
   await updateCard.click();
   const updateDialog = page.locator(".generated-file-preview-dialog");
@@ -359,7 +368,7 @@ test("@full PBE-043 普通用户原生、多模态与外部工具结果闭环", 
       [
         "严格按顺序且每种只调用一次以下七个工具；即使某个外部服务失败，也必须继续后续步骤，不得调用 switch_model：",
         '1) execute_native_script 不传输入，先 const target = await output.file(\'case036-native.svg\'); 再执行 await files.writeText(target, \'<svg xmlns="http://www.w3.org/2000/svg" width="320" height="80"><text x="10" y="45">CASE036-NATIVE</text></svg>\');；',
-        "2) multimodal_parse 解析上一步返回的 case036-native.svg 附件身份，model_name 使用 gpt_6_1_sol，提示词为 Extract the exact visible text；",
+        `2) multimodal_parse 解析上一步返回的 case036-native.svg 附件身份，model_name 使用 ${noobot.modelAlias}，提示词为 Extract the exact visible text；`,
         "3) multimodal_generate 不传 model_name，生成一张简洁的红色正方形图片，n=1；",
         "4) call_service 调用 weather_service.get_weather，queryString.city=Shanghai，custom_param=j1；",
         "5) do_search_web 搜索 Noobot GitHub；",
@@ -409,7 +418,7 @@ test("@full PBE-043 普通用户原生、多模态与外部工具结果闭环", 
     expect(result.data.result.trim()).toBeTruthy();
   }
   const parseCall = calls.find((event) => event.data.tool === "multimodal_parse");
-  expect(parseCall.data.args.model_name).toBe("gpt_6_1_sol");
+  expect(parseCall.data.args.model_name).toBe(noobot.modelAlias);
   const parseResult = results.find((event) => event.data.toolCallId === parseCall.data.toolCallId);
   expect(parseResult.data.success, parseResult.data.result).toBe(true);
 });

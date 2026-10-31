@@ -127,12 +127,14 @@ function assertMessageIdentityMatch(identity, existing = null) {
 }
 
 function mergeExistingTurn(existing, turn) {
-  return normalizeMessageEntity({
+  const merged = {
     ...existing,
     ...turn,
     messageUid: existing.messageUid,
     ts: existing.ts,
-  });
+  };
+  if (merged.chatPresentation === false) delete merged.workspaceRootDirectory;
+  return normalizeMessageEntity(merged);
 }
 
 function persistTurn(messages, turn) {
@@ -144,8 +146,12 @@ function persistTurn(messages, turn) {
     assertCanonicalAssistantPresentation(turn);
     for (const message of messages) {
       const existingPresentation = canonicalAssistantPresentationIdentity(message);
-      if (existingPresentation?.turnScopeId === incomingPresentation.turnScopeId) {
+      if (
+        message !== existing &&
+        existingPresentation?.turnScopeId === incomingPresentation.turnScopeId
+      ) {
         message.chatPresentation = false;
+        delete message.workspaceRootDirectory;
       }
     }
   }

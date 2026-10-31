@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { findRecoverableReconnectSessionId } from "../../model/reconnectReplayModel.js";
+import { findReconnectTargetSessionId } from "../../model/reconnectReplayModel.js";
 import { projectProtocolEventReducerInput, validateReplayBatch } from "@noobot/event-protocol";
 import { isTerminalTurnState } from "@noobot/session-protocol";
 import {
@@ -189,7 +189,7 @@ export async function applyReconnectDataReplay({
   for (const sessionEntry of reconnectSessions) {
     await replaySessionEventTail(sessionEntry, applyTurnLifecycleEnvelope);
   }
-  const recoverableSessionId = findRecoverableReconnectSessionId(
+  const recoverableSessionId = findReconnectTargetSessionId(
     reconnectSessions,
     reconnectData.identity.sessionId,
   );

@@ -47,6 +47,14 @@ The Service maps these values unchanged to `runConfig.summaryPolicy`; the Agent 
 
 There is no V0 adapter or flat-payload compatibility path. Protocol changes require a new explicit protocol version.
 
+## Reconnect navigation
+
+`reconnect_data.identity.sessionId` identifies the requested browser Session. Entries in
+`sessions` provide replay state and do not authorize navigation to another Session.
+The browser activates only the requested Session when it is present in the replay set;
+otherwise it preserves its current selection, including an unprovisioned local Session.
+Running turns and pending interactions in other Sessions never determine the target.
+
 ## Transport diagnostics
 
 The frontend, Agent Proxy, and Service emit `runtime-events` debug records with

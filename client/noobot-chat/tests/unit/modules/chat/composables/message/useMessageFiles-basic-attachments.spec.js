@@ -5,8 +5,46 @@
  */
 import { describe, expect, it } from "vitest";
 import { createMessageFiles } from "./helpers/useMessageFiles-helper.js";
+import { collectSessionAttachments } from "../../../../../../src/modules/chat/composables/message/useMessageFiles.js";
 
 describe("useMessageFiles basic attachments", () => {
+  it("collects a pending upload with preceding canonical assistant attachments", () => {
+    const canonical = {
+      attachmentId: "result-1",
+      sessionId: "session-1",
+      attachmentSource: "model",
+      name: "result.txt",
+    };
+    const draft = { clientAttachmentId: "draft-1", name: "upload.txt" };
+    const assistant = {
+      role: "assistant",
+      sessionId: "session-1",
+      presentationMessageId: "pm-1",
+      attachments: [canonical],
+    };
+    const user = {
+      role: "user",
+      sessionId: "session-1",
+      userMessageId: "um-1",
+      attachments: [draft],
+    };
+    const allMessages = [assistant, user];
+    expect(collectSessionAttachments(allMessages, user, [draft])).toEqual([canonical, draft]);
+    const persisted = {
+      ...draft,
+      attachmentId: "upload-1",
+      sessionId: "session-1",
+      attachmentSource: "user",
+    };
+    expect(collectSessionAttachments(allMessages, user, [persisted])).toEqual([
+      canonical,
+      persisted,
+    ]);
+    expect(() => collectSessionAttachments(allMessages, user, [{ name: "invalid.txt" }])).toThrow(
+      "invalid_attachment_id",
+    );
+  });
+
   it("keeps canonical parsed-result relations from attachments", () => {
     const messageItem = {
       role: "user",

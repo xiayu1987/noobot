@@ -13,7 +13,7 @@ import {
   normalizeSessionTree,
   resolveSessionDirSegments,
 } from "@noobot/workspace-protocol/session-tree";
-import { readSessionArtifact } from "noobot-agent/session";
+import { readSessionArtifact, StorageService } from "noobot-agent/session";
 import { PROTOCOL_TIMEOUTS } from "./protocol-timeouts.js";
 
 import { text } from "@noobot/shared/value";
@@ -272,8 +272,14 @@ export async function auditSessionSummaryArtifacts(
 }
 
 export async function readSessionTurnMessages(userId, sessionId) {
-  const session = await readSessionArtifact({ sessionDir: await sessionRoot(userId, sessionId) });
-  return Array.isArray(session?.messages) ? session.messages : [];
+  const session = await readSessionArtifact({
+    storageService: new StorageService({
+      atomicRenameRetryDelaysMs: [],
+      platform: process.platform,
+    }),
+    sessionDir: await sessionRoot(userId, sessionId),
+  });
+  return session.messages;
 }
 
 export async function readSnapshots(userId, sessionId) {

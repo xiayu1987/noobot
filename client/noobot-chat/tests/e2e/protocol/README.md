@@ -71,6 +71,8 @@ for every PBE. The shared fixture audits the complete root execution-event tree 
 - `protocol-evidence/model-observation-audit.json`
 - `protocol-evidence/session-summary-artifact-audit.json`
 
+Before inspecting summary artifacts, the fixture reads the canonical Session detail endpoint,
+which materializes the revision-checked display projection from persisted Session facts.
 The fixture also validates lightweight Session summaries, detail references, hashes, timeline
 counts, orphan detail files, and the `sessions.json` availability contract. A missing required
 invocation, a forbidden invocation, an unregistered/duplicate PBE, or an obsolete policy entry is
@@ -156,7 +158,8 @@ Playwright 配置加载时校验策略表与全部 spec 的 PBE 编号一一闭�
   前缀稳定性及主链路/非主链路 system 消息完整性汇总。
 - `protocol-evidence/session-summary-artifact-audit.json`：根及子 Session 的轻量 summary、详情引用、哈希、计数和孤儿文件审计。
 
-统一 fixture 在每条用例结束时还会审计 Session summary 持久化协议：`session-summary.json`
+统一 fixture 在检查摘要产物前先读取正式 Session 详情接口，由该接口从持久化事实生成版本校验后的展示投影。
+随后审计 Session summary 持久化协议：`session-summary.json`
 不得内嵌 `toolTimeline` 或 `activityTimeline`；每个 `thinkingDetailRef` 必须唯一、限制在
 `session-summary-details/` 内，并与详情文件的展示消息身份、SHA-256 和 timeline 计数一致；目录中
 不得存在未被主 summary 引用的详情 JSON。该审计与模型调用审计独立收尾，任一失败都会使场景失败，

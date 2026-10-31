@@ -11,6 +11,7 @@ import test, { after } from "node:test";
 import assert from "node:assert/strict";
 
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
+import { dedupeSessionAttachmentRefs } from "../../src/session/transfer-attachment-refs.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 import { createSessionCrudServiceStub } from "../helpers/session-crud-service-stub.js";
 
@@ -623,7 +624,7 @@ test("SessionMessageService.replaceTurn validates required payload", async () =>
   assert.equal(saved.length, 0);
 });
 
-test("SessionMessageService.assertReusedUserTurnIdentity accepts the exact committed identity without saving", async () => {
+test("SessionMessageService.assertReusedUserTurnIdentity accepts persisted attachment integrity without saving", async () => {
   const attachments = [
     {
       attachmentId: "att-1",
@@ -632,6 +633,8 @@ test("SessionMessageService.assertReusedUserTurnIdentity accepts the exact commi
       path: "/runtime/att-1.txt",
       contentSha256: "sha-1",
       name: "report.txt",
+      mimeType: "text/plain",
+      clientAttachmentId: "client-att-1",
     },
   ];
   const { service, saved } = createService({
@@ -643,7 +646,7 @@ test("SessionMessageService.assertReusedUserTurnIdentity accepts the exact commi
           dialogProcessId: "dp-new",
           turnScopeId: "scope-edited",
           messageOrigin: "natural",
-          attachments,
+          attachments: dedupeSessionAttachmentRefs(attachments),
         },
       ],
     }),

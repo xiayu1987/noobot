@@ -14,7 +14,7 @@ import {
   INTERACTION_SEQUENCE_DOMAIN,
 } from "@noobot/event-protocol";
 import { createTurnLifecycleSnapshot } from "@noobot/session-protocol";
-import { findRecoverableReconnectSessionId } from "../../../../../src/modules/chat/model/reconnectReplayModel.js";
+import { findReconnectTargetSessionId } from "../../../../../src/modules/chat/model/reconnectReplayModel.js";
 
 const producer = { type: "test", id: "reconnect-replay-model" };
 
@@ -95,20 +95,21 @@ describe("reconnectReplayModel", () => {
     }),
   });
 
-  it("findRecoverableReconnectSessionId recovers only running turns or pending interactions", () => {
-    expect(findRecoverableReconnectSessionId([entryWithTurn("turn-1", "processing")], "")).toBe(
-      "s-1",
-    );
+  it("does not infer navigation from other running turns or pending interactions", () => {
+    expect(findReconnectTargetSessionId([entryWithTurn("turn-1", "processing")], "")).toBe("");
     expect(
-      findRecoverableReconnectSessionId([entryWithTurn("turn-stopped", "stop_completed")], ""),
+      findReconnectTargetSessionId([entryWithTurn("turn-stopped", "stop_completed")], ""),
     ).toBe("");
-    expect(findRecoverableReconnectSessionId([idleEntry([])], "")).toBe("");
-    expect(
-      findRecoverableReconnectSessionId([idleEntry([pendingInteraction("request-1")])], ""),
-    ).toBe("s-1");
+    expect(findReconnectTargetSessionId([idleEntry([])], "")).toBe("");
+    expect(findReconnectTargetSessionId([idleEntry([pendingInteraction("request-1")])], "")).toBe(
+      "",
+    );
+    expect(findReconnectTargetSessionId([entryWithTurn("turn-1", "processing")], "s-local")).toBe(
+      "",
+    );
   });
 
-  it("findRecoverableReconnectSessionId keeps the authoritative current session when present", () => {
+  it("keeps the protocol target session when present", () => {
     const currentIdle = {
       sessionId: "s-current",
       replayBatch: createReplayBatch({
@@ -158,7 +159,7 @@ describe("reconnectReplayModel", () => {
       }),
     };
 
-    expect(findRecoverableReconnectSessionId([currentIdle, otherRecoverable], "s-current")).toBe(
+    expect(findReconnectTargetSessionId([currentIdle, otherRecoverable], "s-current")).toBe(
       "s-current",
     );
   });

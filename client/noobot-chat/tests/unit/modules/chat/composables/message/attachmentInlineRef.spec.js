@@ -26,6 +26,16 @@ function buildIndex(attachmentItems = [ATTACHMENT_ITEM]) {
 }
 
 describe("attachment inline ref rendering", () => {
+  it("indexes only canonical attachments while an upload is pending", () => {
+    const draft = { clientAttachmentId: "draft-1", name: "pending.txt" };
+    const index = buildIndex([draft, ATTACHMENT_ITEM]);
+    expect([...index.values()]).toEqual([ATTACHMENT_ITEM]);
+    expect(() => buildIndex([{ name: "invalid.txt" }])).toThrow("invalid_attachment_id");
+    expect(() => buildIndex([{ attachmentId: "broken", clientAttachmentId: "draft-1" }])).toThrow(
+      "invalid_attachment_session_id",
+    );
+  });
+
   it("renders a bare ref as a downloadable chip", () => {
     const { renderMarkdown } = useMarkdownRenderer();
 

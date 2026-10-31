@@ -31,6 +31,8 @@ function compactSessionAttachmentRef(reference) {
   const mimeType = requireNonEmptyString(reference.mimeType, "invalid_attachment_mime_type");
   const output = { ...identity, name, mimeType };
   for (const key of [
+    "clientAttachmentId",
+    "contentSha256",
     "size",
     "relativePath",
     "sandboxPath",

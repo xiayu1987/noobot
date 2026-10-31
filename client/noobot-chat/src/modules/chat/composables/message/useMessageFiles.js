@@ -17,7 +17,10 @@ import { getMessageAttachments as resolveRenderableMessageAttachments } from "..
 import { SESSION_RUN_MESSAGE_RUNTIME_MARK } from "../../runtime/sessionRunStateMachine.js";
 import { logStateMachineDebug } from "../../../debug/loggers/stateMachineLogger.js";
 import { logWorkflowDiagnostics } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
-import { resolveParsedResultRelation } from "../../../../infrastructure/api/attachments/attachmentAccess.js";
+import {
+  mergeAttachmentDisplayItems,
+  resolveParsedResultRelation,
+} from "../../../../infrastructure/api/attachments/attachmentAccess.js";
 import { selectToolLinkSnapshots } from "../../runtime/engine/toolTimeline.js";
 import { isPlainObject, text } from "@noobot/shared/value";
 
@@ -120,7 +123,7 @@ function precedingAssistantMessages(allMessages, messageItem) {
 }
 
 export function collectSessionAttachments(allMessages, messageItem, displayedAttachments) {
-  return mergeAttachments(
+  return mergeAttachmentDisplayItems(
     precedingAssistantMessages(allMessages, messageItem).flatMap((candidate) =>
       getMessageAttachments(candidate),
     ),

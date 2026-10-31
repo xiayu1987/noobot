@@ -5,6 +5,7 @@
  */
 import { test, expect } from "../fixtures/noobot.fixture.js";
 import { PLUGIN_PROTOCOL_VERSION } from "@noobot/plugin-protocol";
+import { decodeToolResultText } from "@noobot/event-protocol/tool-result";
 import {
   assertAttachmentHttpAccess,
   assertUniqueAttachmentIds,
@@ -222,12 +223,12 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
     rootSessionId: noobot.sessionId,
   });
   const childMutationRecord = childMutationRecords.find(
-    (record) => record?.mutations?.[0]?.path === childFilePath,
+    (record) => record?.mutations?.[0]?.locator?.path === childFilePath,
   );
   expect(childMutationRecord).toBeTruthy();
   expect(childMutationRecord.mutations[0]).toMatchObject({
     id: childMutations[0].result.mutations[0].id,
-    path: childFilePath,
+    locator: { view: "workspace", path: childFilePath },
     operation: "create",
     after: { exists: true, isText: true },
   });
@@ -380,16 +381,14 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
   expect(new Set(failedReads.map((record) => record.turnScopeId))).toEqual(
     new Set([failedReads[0].turnScopeId]),
   );
-  expect(
-    failedReads.every((record) => {
-      try {
-        const result = JSON.parse(String(record.data?.result || "{}"));
-        return result.ok === false && result.status === "failed";
-      } catch {
-        return false;
-      }
-    }),
-  ).toBe(true);
+  for (const record of failedReads) {
+    const result = decodeToolResultText(record.data.result);
+    expect(result).toMatchObject({
+      toolName: "read_file",
+      ok: false,
+      code: "RECOVERABLE_FILE_NOT_FOUND",
+    });
+  }
 
   const failureChildSessionId = failedReads[0].sessionId;
   const helpPrompts = failureEvents.filter(
@@ -441,7 +440,7 @@ test("@full PBE-038 用户附件解析结果保持 canonical identity 并可预�
     noobot.page,
     uniquePrompt(
       testInfo,
-      "直接调用 multimodal_parse 解析用户上传的 pbe-038-source.png，model_name 使用 gpt_5_6_terra，并报告解析结果文件名；不要创建子会话",
+      `调用 multimodal_parse 解析 pbe-038-source.png，model_name 使用 ${noobot.modelAlias}，报告解析结果文件名；不要创建子会话。`,
     ),
   );
   const send = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
