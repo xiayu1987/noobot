@@ -10,7 +10,7 @@ import { resolvePluginDataRelativePath } from "@noobot/workspace-protocol";
 
 export const PLUGIN_ID = "workflow";
 export const PLUGIN_NAME = "noobot-plugin-workflow";
-export const PLUGIN_VERSION = "4.4.1";
+export const PLUGIN_VERSION = "4.4.2";
 
 export const WORKFLOW_DATA_SCOPE = Object.freeze({
   SESSION: "session",

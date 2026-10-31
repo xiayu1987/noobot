@@ -1,6 +1,6 @@
 {
   "name": "@noobot/memory-repair",
-  "version": "4.4.1",
+  "version": "4.4.2",
   "private": true,
   "type": "module",
   "description": "Explicit migrations of historical memory documents into the canonical Noobot memory protocol",
