@@ -5,7 +5,7 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { access, mkdir, open, readFile, readdir, stat, utimes, writeFile } from "node:fs/promises";
+import { access, open, readFile, readdir, stat, utimes, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { SessionMutationCoordinator } from "../../src/session/session-mutation-coordinator.js";
@@ -67,7 +67,7 @@ test("mutation coordinator uses an atomic lock file and removes it after release
     await assert.rejects(access(lockPath), { code: "ENOENT" });
   }));
 
-test("mutation coordinator replaces stale file and legacy directory locks", async () =>
+test("mutation coordinator replaces stale file locks", async () =>
   withTemp(async (root) => {
     const coordinator = new SessionMutationCoordinator({ staleMs: 10, pollMs: 2 });
     const staleTime = new Date(Date.now() - 1000);
@@ -77,32 +77,21 @@ test("mutation coordinator replaces stale file and legacy directory locks", asyn
     await coordinator.run(fileLock, async () => {
       assert.notEqual(await readFile(fileLock, "utf8"), "stale-owner");
     });
-
-    const directoryLock = path.join(root, "directory.lock");
-    const legacyOwner = path.join(directoryLock, "owner");
-    await mkdir(directoryLock);
-    await writeFile(legacyOwner, "legacy-owner", "utf8");
-    await utimes(legacyOwner, staleTime, staleTime);
-    await coordinator.run(directoryLock, async () => {
-      assert.equal((await stat(directoryLock)).isFile(), true);
-    });
   }));
 
-test("mutation coordinator treats Windows EPERM for a legacy directory as an existing lock", async () =>
+test("mutation coordinator treats Windows EPERM for an existing file as lock contention", async () =>
   withTemp(async (root) => {
     const coordinator = new SessionMutationCoordinator({ staleMs: 10, pollMs: 2 });
-    const lockPath = path.join(root, "windows-legacy.lock");
-    const ownerPath = path.join(lockPath, "owner");
-    await mkdir(lockPath);
-    await writeFile(ownerPath, "legacy-owner", "utf8");
+    const lockPath = path.join(root, "windows-existing.lock");
+    await writeFile(lockPath, "999999999:abandoned", "utf8");
     const staleTime = new Date(Date.now() - 1000);
-    await utimes(ownerPath, staleTime, staleTime);
+    await utimes(lockPath, staleTime, staleTime);
 
     setFsAdapter({
       open: async (target, flags, ...args) => {
         if (target === lockPath && flags === "wx") {
           const targetStat = await stat(target).catch(() => null);
-          if (targetStat?.isDirectory()) {
+          if (targetStat?.isFile()) {
             const error = new Error("operation not permitted");
             error.code = "EPERM";
             throw error;

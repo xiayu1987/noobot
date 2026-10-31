@@ -22,7 +22,7 @@ function heartbeatInterval(staleMs) {
   return Math.max(1, Math.floor(staleMs / 3));
 }
 
-function isOwnerProcessAlive(ownerToken) {
+export function isOwnerProcessAlive(ownerToken) {
   const match = /^(\d+):/.exec(String(ownerToken || ""));
   if (!match) return false;
   const pid = Number(match[1]);
@@ -33,15 +33,6 @@ function isOwnerProcessAlive(ownerToken) {
   } catch (error) {
     return error?.code !== "ESRCH";
   }
-}
-
-async function readLockOwner(lockPath) {
-  const lockStat = await fsStat(lockPath);
-  const ownerPath = lockStat.isDirectory() ? path.join(lockPath, "owner") : lockPath;
-  return fsReadFile(ownerPath, "utf8").catch((error) => {
-    if (error?.code === "ENOENT") return "";
-    throw error;
-  });
 }
 
 async function cleanupBestEffort(operation, operationName, lockPath) {
@@ -82,7 +73,6 @@ function readFileIfPresent(filePath) {
   });
 }
 
-/** Returns the live waiter record, or null when it vanished or was reclaimed as stale. */
 async function inspectWaiter(waiterPath, name, staleMs) {
   const waiterStat = await fsStat(waiterPath);
   if (Date.now() - waiterStat.mtimeMs <= staleMs) return waiterStat;
@@ -178,18 +168,9 @@ async function isElectedWaiter(lockPath, staleMs, waiterName) {
   return settled[0]?.name === waiterName;
 }
 
-async function statLock(lockPath) {
-  const lockStat = await fsStat(lockPath);
-  if (!lockStat.isDirectory()) return lockStat;
-  return fsStat(path.join(lockPath, "owner")).catch((error) => {
-    if (error?.code === "ENOENT") return lockStat;
-    throw error;
-  });
-}
-
 async function statAfterExclusiveCreateFailure(lockPath, createError) {
   try {
-    return await statLock(lockPath);
+    return await fsStat(lockPath);
   } catch (statError) {
     if (statError?.code !== "ENOENT") throw statError;
     if (createError?.code === "EEXIST") return null;
@@ -206,7 +187,7 @@ async function reclaimStaleLock(lockPath) {
     if (error?.code === "ENOENT" || error?.code === "EEXIST") return false;
     throw error;
   }
-  await fsRm(stalePath, { recursive: true, force: true });
+  await fsRm(stalePath, { force: true });
   return true;
 }
 
@@ -226,7 +207,6 @@ function startHeartbeat(handle, staleMs, operationName, context) {
   return timer;
 }
 
-/** Creates the lock file exclusively; a partially written lock is removed before rethrowing. */
 async function openLock(lockPath, ownerToken) {
   const handle = await fsOpen(lockPath, "wx");
   try {
@@ -330,7 +310,6 @@ export class FileMutationCoordinator {
     }
   }
 
-  /** Returns true to retry immediately, false to wait for the next poll. */
   async resolveCreateFailure(key, error, contention) {
     const current = await statAfterExclusiveCreateFailure(key, error);
     if (!current && !isTransientExclusiveCreateFailure(error)) return true;
@@ -341,7 +320,7 @@ export class FileMutationCoordinator {
     }
     contention.transientSince = 0;
     if (Date.now() - current.mtimeMs <= this.staleMs) return false;
-    if (isOwnerProcessAlive(await readLockOwner(key))) return false;
+    if (isOwnerProcessAlive(await readFileIfPresent(key))) return false;
     await reclaimStaleLock(key);
     return true;
   }

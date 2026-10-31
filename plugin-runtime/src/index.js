@@ -61,7 +61,6 @@ function isAbsentPathError(error) {
   return error?.code === "ENOENT" || error?.code === "ENOTDIR";
 }
 
-// An absent plugin root or manifest means "nothing installed"; any other I/O failure propagates.
 async function readPluginRootEntries(root) {
   try {
     return await readdir(root, { withFileTypes: true });
@@ -125,7 +124,6 @@ async function importPluginSurfaceEntry(item, manifest, surface) {
   return { entryPath, activate: moduleNamespace.activate };
 }
 
-/** Loads one discovered plugin; records lifecycle events and either a skip or a registry entry. */
 async function loadDiscoveredPlugin(
   item,
   { include, surface, registry, skipped, lifecycleEvents },

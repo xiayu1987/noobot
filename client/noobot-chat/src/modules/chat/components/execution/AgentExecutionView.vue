@@ -72,7 +72,6 @@ function isCurrentAssistantMessage(messageItem = {}, messageIndex = 0) {
         :resend-monotonic-message="resendMonotonicMessage"
         :stop-execution="stopExecution"
         :fetch-execution-report="fetchExecutionReport"
-        :attachment-preview-dialog-class="attachmentPreviewDialogClass"
         @open-thinking-details="openThinkingDetails($event, messageItem)"
       />
     </div>

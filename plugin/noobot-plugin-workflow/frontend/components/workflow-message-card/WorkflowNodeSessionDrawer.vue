@@ -382,7 +382,6 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
                     ? translate('workflow.nodeSessionPending')
                     : translate('workflow.noNodeSessionContent')
             "
-            attachment-preview-dialog-class="workflow-session-preview-dialog"
             @open-thinking-details="$emit('open-thinking-details', $event)"
           />
           <div

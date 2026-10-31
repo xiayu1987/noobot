@@ -27,6 +27,7 @@ export const WORKSPACE_LAYOUT_UPGRADE_OWNER = Object.freeze({
   SESSION_LEGACY_MCP_RESULT: "session-legacy-mcp-result",
   SESSION_RESULT_OVERFLOW: "session-result-overflow",
   SESSION_CHECKPOINT_IDENTITY: "session-checkpoint-identity",
+  DIRECTORY_LOCK_RETIREMENT: "directory-lock-retirement",
 });
 
 export const WORKSPACE_LAYOUT_UPGRADES = Object.freeze([
@@ -154,6 +155,13 @@ export const WORKSPACE_LAYOUT_UPGRADES = Object.freeze([
     id: "session-checkpoint-identity-v26",
     toVersion: 26,
     owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_CHECKPOINT_IDENTITY,
+  }),
+  Object.freeze({
+    id: "directory-lock-retirement-v27",
+    toVersion: 27,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.DIRECTORY_LOCK_RETIREMENT,
+
+    preflight: true,
   }),
 ]);
 

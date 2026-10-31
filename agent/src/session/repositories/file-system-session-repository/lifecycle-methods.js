@@ -21,7 +21,7 @@ function requireLifecycleSessionKey(sessionId = "") {
 }
 
 class SessionLifecycleMethods {
-  _sessionLifecycleLockDir(userId, sessionId) {
+  _sessionLifecycleLockPath(userId, sessionId) {
     const sessionKey = requireLifecycleSessionKey(sessionId);
     return path.join(
       this.pathResolver.sessionLifecycleLocksDir(this._basePath(userId)),
@@ -30,7 +30,7 @@ class SessionLifecycleMethods {
   }
 
   async withSessionLifecycleMutation(userId, sessionId, operation) {
-    const lockPath = this._sessionLifecycleLockDir(userId, sessionId);
+    const lockPath = this._sessionLifecycleLockPath(userId, sessionId);
     await this.sessionTreeRepository.assertWorkspaceInitialized(userId);
     return this._withMutationLock(lockPath, operation);
   }

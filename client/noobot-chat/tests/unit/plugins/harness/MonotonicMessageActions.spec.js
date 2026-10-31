@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { mount } from "@vue/test-utils";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick } from "vue";
 import MonotonicMessageActions from "../../../../src/modules/chat/components/message/actions/MonotonicMessageActions.vue";
 import { createElementPlusMountOptions } from "../../fixtures/elementPlusStubs.js";
@@ -30,14 +30,23 @@ function mountActions(overrides = {}) {
       onResend: vi.fn(async () => true),
       ...overrides,
     },
-    global: createElementPlusMountOptions(),
+    global: createElementPlusMountOptions({ "el-drawer": true }),
   });
 }
 
 describe("MonotonicMessageActions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    );
   });
+  afterEach(() => vi.unstubAllGlobals());
 
   it("renders only when visible", () => {
     expect(mountActions({ visible: true }).text()).toContain(

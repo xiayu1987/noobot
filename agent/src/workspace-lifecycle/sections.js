@@ -44,8 +44,10 @@ import { upgradeSessionResultOverflow } from "./session-result-overflow-upgrade.
 import { upgradeSessionCheckpointIdentity } from "./session-checkpoint-identity-upgrade.js";
 import { releaseQuarantinedUnits } from "./migration-quarantine.js";
 import { ignoreSessionProgress } from "./session-directory-walk.js";
+import { retireWorkspaceDirectoryLocks } from "./directory-lock-retirement.js";
 
 const LAYOUT_UPGRADE_HANDLERS = Object.freeze({
+  [WORKSPACE_LAYOUT_UPGRADE_OWNER.DIRECTORY_LOCK_RETIREMENT]: retireWorkspaceDirectoryLocks,
   [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_STORAGE]: upgradeSessionStorage,
   [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_LIFECYCLE]: upgradeSessionLifecycle,
   [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_TRANSFER_ENVELOPE]: upgradeSessionTransferEnvelopes,
@@ -129,6 +131,14 @@ function createUpgradeProgress(reportProgress, { upgradeId, upgradeIndex, upgrad
   };
 }
 
+async function prepareLayoutUpgrades(upgrades, options) {
+  const prepared = new Map();
+  for (const upgrade of upgrades.filter((item) => item.preflight)) {
+    prepared.set(upgrade.id, await LAYOUT_UPGRADE_HANDLERS[upgrade.owner](options));
+  }
+  return prepared;
+}
+
 export async function upgradeWorkspaceLayout({
   base,
   backupBase,
@@ -140,19 +150,27 @@ export async function upgradeWorkspaceLayout({
   const installedVersion = await readInstalledLayoutVersion(base, created);
   const applied = [];
   const upgrades = planWorkspaceLayoutUpgrades({ installedVersion });
+  const prepared = await prepareLayoutUpgrades(upgrades, {
+    base,
+    backupBase,
+    scopedSessionRoots,
+    storageService,
+  });
   for (const [index, upgrade] of upgrades.entries()) {
     try {
-      const result = await LAYOUT_UPGRADE_HANDLERS[upgrade.owner]({
-        base,
-        backupBase,
-        scopedSessionRoots,
-        storageService,
-        onSessionProcessed: createUpgradeProgress(reportProgress, {
-          upgradeId: upgrade.id,
-          upgradeIndex: index + 1,
-          upgradeCount: upgrades.length,
-        }),
-      });
+      const result = prepared.has(upgrade.id)
+        ? prepared.get(upgrade.id)
+        : await LAYOUT_UPGRADE_HANDLERS[upgrade.owner]({
+            base,
+            backupBase,
+            scopedSessionRoots,
+            storageService,
+            onSessionProcessed: createUpgradeProgress(reportProgress, {
+              upgradeId: upgrade.id,
+              upgradeIndex: index + 1,
+              upgradeCount: upgrades.length,
+            }),
+          });
       await writeLayoutVersion(base, upgrade.toVersion);
       applied.push({ id: upgrade.id, toVersion: upgrade.toVersion, result });
     } catch (error) {

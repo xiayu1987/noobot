@@ -5,10 +5,6 @@
  */
 import { readdir } from "node:fs/promises";
 
-/**
- * Lists directory entries; an absent directory has no entries.
- * Only ENOENT means "absent"; every other failure propagates to the caller.
- */
 export async function readDirectoryEntriesIfPresent(dirPath) {
   try {
     return await readdir(dirPath, { withFileTypes: true });

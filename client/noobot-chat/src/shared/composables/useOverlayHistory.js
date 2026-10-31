@@ -6,6 +6,8 @@
 import { getCurrentScope, onScopeDispose, watch } from "vue";
 
 export const OVERLAY_DEPTH_STATE_KEY = "noobotOverlayDepth";
+export const OVERLAY_ROUTE_QUERY_KEY = "overlay";
+export const OVERLAY_ROUTE = Object.freeze({ FILE_PREVIEW: "file-preview" });
 
 const openOverlays = [];
 let popStateListening = false;
@@ -28,16 +30,14 @@ function ensureOverlayPopStateListener() {
   popStateListening = true;
 }
 
-export function openOverlayEntry(close = () => {}) {
+export function openOverlayEntry(close = () => {}, { route = "" } = {}) {
   if (typeof window === "undefined" || typeof history === "undefined") return () => {};
   ensureOverlayPopStateListener();
   const currentState = history.state && typeof history.state === "object" ? history.state : {};
   const entry = { depth: readOverlayDepth(currentState) + 1, close };
-  history.pushState(
-    { ...currentState, [OVERLAY_DEPTH_STATE_KEY]: entry.depth },
-    "",
-    window.location.href,
-  );
+  const url = new URL(window.location.href);
+  if (route) url.searchParams.set(OVERLAY_ROUTE_QUERY_KEY, route);
+  history.pushState({ ...currentState, [OVERLAY_DEPTH_STATE_KEY]: entry.depth }, "", url.href);
   openOverlays.push(entry);
   return function releaseOverlayEntry() {
     const index = openOverlays.indexOf(entry);
@@ -47,7 +47,7 @@ export function openOverlayEntry(close = () => {}) {
   };
 }
 
-export function useOverlayHistory(visible, close) {
+export function useOverlayHistory(visible, close, options) {
   let release = null;
   const stop = watch(
     visible,
@@ -56,7 +56,7 @@ export function useOverlayHistory(visible, close) {
         release = openOverlayEntry(() => {
           release = null;
           close();
-        });
+        }, options);
         return;
       }
       if (!open && release) {

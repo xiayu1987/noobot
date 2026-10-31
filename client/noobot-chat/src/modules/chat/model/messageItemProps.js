@@ -18,10 +18,6 @@ export const sharedMessageRenderProps = {
   stopExecution: { type: Function, required: true },
   fetchExecutionReport: { type: Function, required: true },
   hideHeader: { type: Boolean, default: false },
-  attachmentPreviewDialogClass: {
-    type: String,
-    default: "attachment-preview-dialog",
-  },
 };
 
 export const chatMessageItemProps = {

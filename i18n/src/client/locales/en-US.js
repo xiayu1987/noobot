@@ -190,6 +190,7 @@ export const enUSMessages = {
     context: "Context",
     default_provider: "Default provider",
     providers: "Model providers",
+    is_custom: "Custom model",
     enabled: "Enabled",
     used_for_conversation: "Used for conversation",
     api_key: "API key",
@@ -274,6 +275,8 @@ export const enUSMessages = {
     language: "Language",
   },
   configFieldDescriptions: {
+    is_custom:
+      "Custom models are not deleted during model library synchronization. Non-custom models are deleted during synchronization if they are no longer in the model library.",
     enabled: "When off, this provider is excluded from all model calls.",
     used_for_conversation: "Whether this provider may serve main conversation requests.",
     api_key: "Vendor key stored in server config; never echoed back to the client.",

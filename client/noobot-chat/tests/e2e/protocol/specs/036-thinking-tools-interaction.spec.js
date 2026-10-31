@@ -148,10 +148,11 @@ async function assertFileMutationArtifacts(page, records, turnScopeId, filePath)
     .locator(".mutation-file-item");
   await expect(writeCard).toHaveCount(1);
   await writeCard.click();
-  const writeDialog = page.locator(".generated-file-preview-dialog");
+  const writeDialog = page.locator(".generated-file-preview-drawer");
   await expect(writeDialog).toBeVisible();
   await expect(writeDialog.locator(".mutation-file-content")).toContainText("CASE036-TOOL-CONTENT");
-  await writeDialog.locator(".el-dialog__headerbtn").click();
+  await expect(page).toHaveURL(/overlay=file-preview/);
+  await writeDialog.locator(".el-drawer__close-btn").click();
   await expect(writeDialog).toBeHidden();
 
   await updateTab.click();
@@ -160,14 +161,15 @@ async function assertFileMutationArtifacts(page, records, turnScopeId, filePath)
     .locator(".mutation-file-item");
   await expect(updateCard).toHaveCount(1);
   await updateCard.click();
-  const updateDialog = page.locator(".generated-file-preview-dialog");
+  const updateDialog = page.locator(".generated-file-preview-drawer");
   await expect(updateDialog).toBeVisible();
   await expect(updateDialog.locator(".mutation-diff-split")).toBeVisible();
   await expect(updateDialog.locator(".mutation-diff-pane")).toHaveCount(2);
   await expect(updateDialog.locator(".mutation-diff-line.is-removed")).toHaveCount(1);
   await expect(updateDialog.locator(".mutation-diff-line.is-added")).toHaveCount(1);
   await expect(updateDialog.locator(".mutation-line-sign")).toContainText(["-", "+"]);
-  await updateDialog.locator(".el-dialog__headerbtn").click();
+  await expect(page).toHaveURL(/overlay=file-preview/);
+  await page.goBack();
   await expect(updateDialog).toBeHidden();
 }
 

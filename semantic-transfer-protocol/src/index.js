@@ -372,7 +372,6 @@ export function isTransferIdentityConflict(error) {
   );
 }
 
-// Keeps the first item per identity; a repeated identity must carry identical content.
 function dedupeByIdentity(items, identityKeyOf, conflictCode) {
   const result = [];
   const identities = new Map();

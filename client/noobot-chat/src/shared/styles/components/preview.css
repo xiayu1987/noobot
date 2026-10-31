@@ -1,79 +1,36 @@
-.el-dialog.attachment-preview-dialog,
-.el-dialog.generated-file-preview-dialog,
-.el-dialog.workflow-session-preview-dialog {
+.noobot-file-preview-drawer .el-drawer__body {
   display: flex;
   flex-direction: column;
-  box-sizing: border-box;
-  width: 92vw;
-  max-width: calc(100vw - 48px);
-  height: 90dvh;
-  max-height: calc(100dvh - 48px);
-  margin: 0;
-  background: var(--noobot-preview-bg);
-  border: 1px solid var(--noobot-panel-border);
-  border-radius: var(--noobot-radius-sm);
-}
-
-.noobot-file-preview-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: var(--noobot-layer-file-preview);
-}
-
-.noobot-file-preview-overlay .el-overlay-dialog {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  width: 100%;
-  height: 100%;
-  padding: var(--noobot-space-2xl);
-  overflow: hidden;
-}
-
-@media (max-width: 640px) {
-  .el-dialog.attachment-preview-dialog,
-  .el-dialog.generated-file-preview-dialog,
-  .el-dialog.workflow-session-preview-dialog {
-    width: calc(100vw - 16px);
-    height: calc(100dvh - 16px);
-  }
-
-  .noobot-file-preview-overlay .el-overlay-dialog {
-    padding: var(--noobot-space-xs);
-  }
-}
-
-.attachment-preview-dialog .el-dialog__header,
-.generated-file-preview-dialog .el-dialog__header,
-.workflow-session-preview-dialog .el-dialog__header {
-  flex: 0 0 auto;
-  margin-right: 0;
-  padding: var(--noobot-space-lg) var(--noobot-space-xl);
-  background: var(--noobot-panel-head-bg);
-  border-bottom: 1px solid var(--noobot-divider);
-}
-
-.attachment-preview-dialog .el-dialog__body,
-.generated-file-preview-dialog .el-dialog__body,
-.workflow-session-preview-dialog .el-dialog__body {
-  flex: 1 1 auto;
   min-height: 0;
   padding: 0;
   overflow: hidden;
 }
 
-.attachment-preview-dialog .preview-body,
-.generated-file-preview-dialog .preview-body,
-.workflow-session-preview-dialog .preview-body {
+.noobot-file-preview-drawer .el-drawer__title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.noobot-file-preview-drawer .preview-body {
   box-sizing: border-box;
   height: 100%;
   min-height: 0;
   max-height: none;
+  overflow: auto;
+  padding: var(--noobot-space-xl) var(--noobot-space-2xl);
 }
 
-.generated-file-preview-dialog .mutation-file-content,
-.generated-file-preview-dialog .mutation-diff-split {
+.noobot-file-preview-drawer .preview-image {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  margin: 0 auto;
+  object-fit: contain;
+  border-radius: var(--noobot-radius-xs);
+}
+
+.generated-file-preview-drawer .mutation-file-content,
+.generated-file-preview-drawer .mutation-diff-split {
   box-sizing: border-box;
   width: 100%;
   max-height: none;
@@ -81,26 +38,9 @@
   flex: 1 1 auto;
 }
 
-.generated-file-preview-dialog .el-dialog__body {
-  display: flex;
-  flex-direction: column;
-}
-
-.attachment-preview-dialog .el-dialog__title,
-.generated-file-preview-dialog .el-dialog__title,
-.workflow-session-preview-dialog .el-dialog__title {
-  color: var(--noobot-text-strong);
-  font-weight: var(--noobot-font-weight-semibold);
-}
-
-.attachment-preview-dialog .el-dialog__headerbtn .el-dialog__close,
-.generated-file-preview-dialog .el-dialog__headerbtn .el-dialog__close,
-.workflow-session-preview-dialog .el-dialog__headerbtn .el-dialog__close {
-  color: var(--noobot-text-secondary);
-}
-
-.attachment-preview-dialog .el-dialog__headerbtn:hover .el-dialog__close,
-.generated-file-preview-dialog .el-dialog__headerbtn:hover .el-dialog__close,
-.workflow-session-preview-dialog .el-dialog__headerbtn:hover .el-dialog__close {
-  color: var(--noobot-text-strong);
+@media (max-width: 768px) {
+  .noobot-file-preview-drawer .preview-body {
+    padding: var(--noobot-space-md);
+    padding-bottom: max(var(--noobot-space-md), env(safe-area-inset-bottom));
+  }
 }

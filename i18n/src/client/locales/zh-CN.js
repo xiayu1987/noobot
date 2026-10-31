@@ -190,6 +190,7 @@ export const zhCNMessages = {
     context: "上下文",
     default_provider: "默认模型",
     providers: "模型配置",
+    is_custom: "是否自定义",
     enabled: "启用",
     used_for_conversation: "用于对话",
     api_key: "API Key",
@@ -274,6 +275,8 @@ export const zhCNMessages = {
     language: "语言",
   },
   configFieldDescriptions: {
+    is_custom:
+      "自定义模型不会在模型库同步时被删除；非自定义模型若已从模型库移除，会在同步时被删除。",
     enabled: "关闭后该 provider 不参与任何模型调用。",
     used_for_conversation: "是否允许该 provider 承接主对话请求。",
     api_key: "供应商密钥，保存在服务端配置中，不会回显到前端。",

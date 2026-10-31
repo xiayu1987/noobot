@@ -35,7 +35,6 @@ function stripCodeFence(sourceText = "") {
   return trimmed.slice(contentStart, -3).trim();
 }
 
-// End of one token starting at cursor: a quoted run up to its closing quote, else a non-space run.
 function scanTokenEnd(source, cursor) {
   const quote = source[cursor] === '"' || source[cursor] === "'" ? source[cursor] : "";
   if (!quote) {
@@ -148,7 +147,7 @@ function parseEdgeLine(attrs, { lineNo, edgeIndex, fail }) {
   const from = text(attrs.from);
   const to = text(attrs.to);
   if (!from || !to) fail(lineNo, DSL_ERROR_MESSAGE.EDGE_FROM_TO_REQUIRED);
-  // Conditional edges are not part of the protocol; reject them explicitly instead of ignoring.
+
   if (text(attrs.when || attrs.condition))
     fail(lineNo, DSL_ERROR_MESSAGE.EDGE_CONDITION_UNSUPPORTED);
   return { from, to, name: text(attrs.name) || `${from}->${to}#${edgeIndex}` };

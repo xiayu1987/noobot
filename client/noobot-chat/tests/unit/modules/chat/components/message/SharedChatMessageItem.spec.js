@@ -5,7 +5,7 @@
  */
 import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import { mount } from "@vue/test-utils";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick, ref } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import SharedChatMessageItem from "../../../../../../src/modules/chat/components/message/SharedChatMessageItem.vue";
@@ -205,7 +205,7 @@ function mountItem(props = {}) {
     global: {
       plugins: [pinia],
       ...createElementPlusMountOptions({
-        "el-dialog": true,
+        "el-drawer": true,
         "el-button": defineComponent({
           name: "ElButton",
           setup(_, { slots }) {
@@ -218,23 +218,33 @@ function mountItem(props = {}) {
 }
 
 describe("SharedChatMessageItem", () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    );
+  });
   afterEach(() => {
+    vi.unstubAllGlobals();
     clearSessionTurnUiStates("session-content");
     clearExtensionRegistry();
   });
 
-  it("mounts constrained preview dialogs inside the application-level viewport overlay", () => {
+  it("uses the shared right-side preview drawer for attachments and mutations", () => {
     const wrapper = mountItem();
-    const previewDialogs = [...document.body.querySelectorAll("el-dialog-stub")];
+    const drawers = wrapper.findAll("el-drawer-stub");
 
-    expect(previewDialogs).toHaveLength(1);
-    for (const previewDialog of previewDialogs) {
-      expect(wrapper.element.contains(previewDialog)).toBe(false);
-      expect(previewDialog.hasAttribute("fullscreen")).toBe(false);
-      expect(previewDialog.getAttribute("teleported")).toBe("false");
-      expect(previewDialog.getAttribute("modal-class")).toBe("noobot-file-preview-overlay");
-      expect(previewDialog.hasAttribute("width")).toBe(false);
-      expect(previewDialog.hasAttribute("top")).toBe(false);
+    expect(drawers).toHaveLength(2);
+    for (const drawer of drawers) {
+      expect(drawer.attributes("direction")).toBe("rtl");
+      expect(drawer.attributes("size")).toBe("72%");
+      expect(drawer.attributes("append-to-body")).toBeDefined();
+      expect(drawer.classes()).toContain("noobot-side-drawer");
+      expect(drawer.classes()).toContain("noobot-file-preview-drawer");
     }
     wrapper.unmount();
   });

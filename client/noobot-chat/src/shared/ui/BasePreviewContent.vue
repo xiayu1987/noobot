@@ -129,14 +129,7 @@ watch(
 
 <style scoped>
 .preview-body {
-  min-height: 240px;
-  max-height: 68vh;
-  overflow-y: auto;
   overflow-x: hidden;
-  padding: var(--noobot-space-xl) var(--noobot-space-2xl);
-  transition:
-    padding var(--noobot-duration-slow) var(--noobot-ease-standard),
-    max-height var(--noobot-duration-slow) var(--noobot-ease-standard);
 }
 
 .preview-error {
@@ -151,17 +144,9 @@ watch(
   border-bottom: 1px solid var(--noobot-divider);
 }
 
-.preview-image {
-  max-width: 100%;
-  max-height: 60vh;
-  margin: 0 auto;
-  display: block;
-  border-radius: var(--noobot-radius-xs);
-}
-
 .preview-video {
   width: 100%;
-  max-height: 60vh;
+  max-height: 100%;
   display: block;
   border-radius: var(--noobot-radius-xs);
   background: var(--noobot-msg-code-block-bg);

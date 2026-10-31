@@ -564,7 +564,6 @@ test("scoped session root declarations come from every installed manifest withou
       await chmod(lockedRoot, 0o700);
     }
 
-    // Root-independent: a symlink loop fails with ELOOP, which is not "absent" and must propagate.
     const loopRoot = path.join(root, "loop-root");
     await symlink(loopRoot, loopRoot);
     await assert.rejects(loadNoobotPlugins({ pluginRootDir: loopRoot, surface: "agent" }), {

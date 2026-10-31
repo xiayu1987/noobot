@@ -4,7 +4,8 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { ref } from "vue";
+import { computed, ref } from "vue";
+import BaseFilePreviewDrawer from "../../../../../shared/ui/BaseFilePreviewDrawer.vue";
 import {
   attachmentIcon,
   attachmentTypeLabelKey,
@@ -25,6 +26,13 @@ const emit = defineEmits(["send", "cancel", "add-files", "remove-attachment"]);
 
 const textareaRef = ref(null);
 const fileInputRef = ref(null);
+const previewAttachment = ref(null);
+const previewVisible = computed({
+  get: () => previewAttachment.value !== null,
+  set: (visible) => {
+    if (!visible) previewAttachment.value = null;
+  },
+});
 
 function focusTextarea() {
   const input = textareaRef.value;
@@ -135,14 +143,14 @@ defineExpose({ focusTextarea });
               :key="attachment.key || index"
               class="monotonic-attachment-item noobot-subtle-row"
             >
-              <el-image
+              <button
                 v-if="attachment.previewUrl"
                 class="monotonic-attachment-preview"
-                :src="attachment.previewUrl"
-                fit="cover"
-                :preview-src-list="[attachment.previewUrl]"
-                preview-teleported
-              />
+                :aria-label="t('message.previewFile', { name: attachment.name })"
+                @click="previewAttachment = attachment"
+              >
+                <img :src="attachment.previewUrl" :alt="attachment.name" />
+              </button>
               <div v-else class="monotonic-attachment-icon">{{ attachmentIcon(attachment) }}</div>
 
               <div class="monotonic-attachment-meta">
@@ -280,6 +288,19 @@ defineExpose({ focusTextarea });
       </div>
     </div>
   </div>
+  <BaseFilePreviewDrawer
+    v-model="previewVisible"
+    :title="t('message.attachmentPreviewTitle', { name: previewAttachment?.name || '' })"
+  >
+    <div class="preview-body noobot-preview-surface">
+      <img
+        v-if="previewAttachment"
+        class="preview-image"
+        :src="previewAttachment.previewUrl"
+        :alt="previewAttachment.name"
+      />
+    </div>
+  </BaseFilePreviewDrawer>
 </template>
 
 <style scoped>
@@ -445,6 +466,19 @@ defineExpose({ focusTextarea });
   flex-shrink: 0;
   border-radius: var(--noobot-radius-xs);
   overflow: hidden;
+}
+
+button.monotonic-attachment-preview {
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.monotonic-attachment-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .monotonic-attachment-icon {

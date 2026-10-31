@@ -7,6 +7,8 @@ import { describe, expect, it, vi } from "vitest";
 import { effectScope, nextTick, ref } from "vue";
 import {
   OVERLAY_DEPTH_STATE_KEY,
+  OVERLAY_ROUTE,
+  OVERLAY_ROUTE_QUERY_KEY,
   trackOverlayPromise,
   useOverlayHistory,
 } from "../../../../src/shared/composables/useOverlayHistory.js";
@@ -26,6 +28,31 @@ function bindOverlay(visible) {
 }
 
 describe("useOverlayHistory", () => {
+  it("preserves the parent pseudo route when a file preview opens and closes", async () => {
+    history.replaceState({}, "", "/?session=session-1&panel=workspace");
+    const visible = ref(false);
+    const scope = effectScope();
+    scope.run(() =>
+      useOverlayHistory(visible, () => (visible.value = false), {
+        route: OVERLAY_ROUTE.FILE_PREVIEW,
+      }),
+    );
+    visible.value = true;
+    const params = new URLSearchParams(location.search);
+    expect(params.get(OVERLAY_ROUTE_QUERY_KEY)).toBe(OVERLAY_ROUTE.FILE_PREVIEW);
+    expect(params.get("session")).toBe("session-1");
+    expect(params.get("panel")).toBe("workspace");
+    expect(currentDepth()).toBe(1);
+
+    const popped = waitForPopState();
+    history.back();
+    await popped;
+    expect(visible.value).toBe(false);
+    expect(location.search).toBe("?session=session-1&panel=workspace");
+    scope.stop();
+    history.replaceState({}, "", "/");
+  });
+
   it("closes only the top-most overlay on back navigation", async () => {
     const parent = ref(false);
     const child = ref(false);

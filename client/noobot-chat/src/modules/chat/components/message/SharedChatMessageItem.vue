@@ -36,7 +36,7 @@ import {
   setTurnAssistantContentExpanded,
 } from "../../runtime/engine/turnUiStore.js";
 import { useLocale } from "../../../../shared/i18n/useLocale.js";
-import { useOverlayHistory } from "../../../../shared/composables/useOverlayHistory.js";
+import BaseFilePreviewDrawer from "../../../../shared/ui/BaseFilePreviewDrawer.vue";
 import { useChatStore } from "../../stores/useChatStore.js";
 import MonotonicMessageActions from "./actions/MonotonicMessageActions.vue";
 import AssistantCopyActions from "./AssistantCopyActions.vue";
@@ -179,8 +179,6 @@ function onArtifactTabKeydown(event) {
   event.currentTarget.parentElement.querySelector(`[data-tab-name="${nextTab.name}"]`).focus();
 }
 const mutationPreviewVisible = ref(false);
-useOverlayHistory(mutationPreviewVisible, () => (mutationPreviewVisible.value = false));
-useOverlayHistory(attachmentPreviewVisible, () => (attachmentPreviewVisible.value = false));
 const mutationPreviewLoading = ref(false);
 const mutationPreviewError = ref("");
 const mutationPreviewMutation = ref(null);
@@ -654,58 +652,46 @@ function toggleAssistantContent() {
     />
   </BaseMessageShell>
 
-  <Teleport to="body">
-    <el-dialog
-      v-if="mutationPreviewVisible"
-      v-model="mutationPreviewVisible"
-      :title="
-        translate('message.mutationPreviewTitle', { name: mutationPreviewMutation?.fileName })
-      "
-      :teleported="false"
-      modal-class="noobot-file-preview-overlay"
-      class="generated-file-preview-dialog"
-      destroy-on-close
-    >
-      <el-skeleton v-if="mutationPreviewLoading" :rows="5" animated />
-      <el-alert
-        v-else-if="mutationPreviewError"
-        :title="mutationPreviewError"
-        type="error"
-        :closable="false"
-      />
-      <MutationDiffSplit
-        v-else-if="mutationPreviewKind === 'diff' && mutationPreviewDiff"
-        :diff="mutationPreviewDiff"
-        :translate="translate"
-        key-prefix="modal-"
-      />
-      <pre v-else class="mutation-file-content">{{ mutationPreviewContent }}</pre>
-    </el-dialog>
+  <BaseFilePreviewDrawer
+    v-model="mutationPreviewVisible"
+    :title="translate('message.mutationPreviewTitle', { name: mutationPreviewMutation?.fileName })"
+    class="generated-file-preview-drawer"
+  >
+    <el-skeleton v-if="mutationPreviewLoading" :rows="5" animated />
+    <el-alert
+      v-else-if="mutationPreviewError"
+      :title="mutationPreviewError"
+      type="error"
+      :closable="false"
+    />
+    <MutationDiffSplit
+      v-else-if="mutationPreviewKind === 'diff' && mutationPreviewDiff"
+      :diff="mutationPreviewDiff"
+      :translate="translate"
+      key-prefix="preview-"
+    />
+    <pre v-else class="mutation-file-content">{{ mutationPreviewContent }}</pre>
+  </BaseFilePreviewDrawer>
 
-    <el-dialog
-      v-model="attachmentPreviewVisible"
-      :title="translate('message.attachmentPreviewTitle', { name: attachmentPreviewName || '' })"
-      :teleported="false"
-      modal-class="noobot-file-preview-overlay"
-      :class="attachmentPreviewDialogClass"
-      destroy-on-close
-      @closed="closeAttachmentPreview"
-    >
-      <BasePreviewContent
-        content-type="attachment"
-        :active="attachmentPreviewVisible"
-        :attachment-preview-type="attachmentPreviewType"
-        :attachment-preview-url="attachmentPreviewUrl"
-        :attachment-preview-name="attachmentPreviewName"
-        :attachment-preview-loading="attachmentPreviewLoading"
-        :attachment-preview-error="attachmentPreviewError"
-        :attachment-preview-text-content="attachmentPreviewTextContent"
-        :render-markdown="renderPreviewMarkdown"
-        @copy-markdown-rich="onCopyAttachmentMarkdownRich"
-        @copy-markdown-text="onCopyAttachmentMarkdownText"
-      />
-    </el-dialog>
-  </Teleport>
+  <BaseFilePreviewDrawer
+    v-model="attachmentPreviewVisible"
+    :title="translate('message.attachmentPreviewTitle', { name: attachmentPreviewName || '' })"
+    @closed="closeAttachmentPreview"
+  >
+    <BasePreviewContent
+      content-type="attachment"
+      :active="attachmentPreviewVisible"
+      :attachment-preview-type="attachmentPreviewType"
+      :attachment-preview-url="attachmentPreviewUrl"
+      :attachment-preview-name="attachmentPreviewName"
+      :attachment-preview-loading="attachmentPreviewLoading"
+      :attachment-preview-error="attachmentPreviewError"
+      :attachment-preview-text-content="attachmentPreviewTextContent"
+      :render-markdown="renderPreviewMarkdown"
+      @copy-markdown-rich="onCopyAttachmentMarkdownRich"
+      @copy-markdown-text="onCopyAttachmentMarkdownText"
+    />
+  </BaseFilePreviewDrawer>
 </template>
 
 <style scoped>

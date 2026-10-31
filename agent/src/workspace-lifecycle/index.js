@@ -28,6 +28,7 @@ import {
 } from "./sections.js";
 import { text } from "@noobot/shared/value";
 import { requireStorageService } from "../session/storage-service.js";
+import { retireDirectoryLockIfPresent } from "./directory-lock-retirement.js";
 
 const workspaceMutationCoordinator = new FileMutationCoordinator({
   timeoutMessage: "workspace mutation lock timeout",
@@ -35,7 +36,7 @@ const workspaceMutationCoordinator = new FileMutationCoordinator({
   operationName: "workspaceMutation.refreshLock",
 });
 
-function resolveWorkspaceMutationLockDir(workspaceRoot, userId) {
+function resolveWorkspaceMutationLockPath(workspaceRoot, userId) {
   return path.join(`${path.resolve(workspaceRoot)}.mutation-locks`, encodeURIComponent(userId));
 }
 
@@ -65,10 +66,15 @@ async function resolveWorkspacePaths({ workspaceRoot, assetPackagePath, userId }
   }
   const base = path.resolve(normalizedWorkspaceRoot, normalizedUserId);
   await mkdir(path.resolve(normalizedWorkspaceRoot), { recursive: true });
+  const mutationLockPath = resolveWorkspaceMutationLockPath(
+    normalizedWorkspaceRoot,
+    normalizedUserId,
+  );
+  await retireDirectoryLockIfPresent(mutationLockPath);
   return {
     base,
     assetPackageBase,
-    mutationLockDir: resolveWorkspaceMutationLockDir(normalizedWorkspaceRoot, normalizedUserId),
+    mutationLockPath,
   };
 }
 
@@ -155,8 +161,8 @@ async function withWorkspace(options, operation, sections) {
     throw new TypeError("workspace lifecycle requires scopedSessionRoots");
   }
   const storageService = requireStorageService(options.storageService, "workspace lifecycle");
-  const { base, assetPackageBase, mutationLockDir } = await resolveWorkspacePaths(options);
-  return workspaceMutationCoordinator.run(mutationLockDir, async () => {
+  const { base, assetPackageBase, mutationLockPath } = await resolveWorkspacePaths(options);
+  return workspaceMutationCoordinator.run(mutationLockPath, async () => {
     const existed = await requireWorkspaceDirectory(base);
     const effectiveOperation =
       !existed && operation === WORKSPACE_OPERATION.REPAIR ? WORKSPACE_OPERATION.CREATE : operation;
@@ -176,8 +182,8 @@ async function withWorkspace(options, operation, sections) {
 }
 
 export async function ensureUserWorkspace(options) {
-  const { base, mutationLockDir } = await resolveWorkspacePaths(options);
-  const existed = await workspaceMutationCoordinator.run(mutationLockDir, () =>
+  const { base, mutationLockPath } = await resolveWorkspacePaths(options);
+  const existed = await workspaceMutationCoordinator.run(mutationLockPath, () =>
     requireWorkspaceDirectory(base),
   );
   if (existed) return base;

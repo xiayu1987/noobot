@@ -100,7 +100,7 @@ async function mountMessage(
       stopExecution: async () => true,
       fetchExecutionReport: async () => null,
     },
-    global: { plugins: [createPinia()], ...createElementPlusMountOptions({ "el-dialog": true }) },
+    global: { plugins: [createPinia()], ...createElementPlusMountOptions({ "el-drawer": true }) },
   });
   wrappers.push(wrapper);
   await wrapper.get(".assistant-copy-actions").trigger("click");
@@ -109,6 +109,14 @@ async function mountMessage(
 
 describe("main message download clicks", () => {
   beforeEach(() => {
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    );
     vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:message-download");
     vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});

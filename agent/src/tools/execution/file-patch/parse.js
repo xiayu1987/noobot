@@ -128,7 +128,6 @@ function isUnifiedHunkBoundary(lines, index) {
   );
 }
 
-/** Reads hunk body lines; counts are taken from the body, the header only locates the hunk. */
 function parseUnifiedHunk(lines, startIndex) {
   const header =
     lines[startIndex].trim() === "@@" ? null : parseUnifiedHunkHeader(lines[startIndex]);

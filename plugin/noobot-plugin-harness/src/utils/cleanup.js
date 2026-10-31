@@ -16,7 +16,6 @@ function isMissingPathError(error) {
   return error?.code === "ENOENT" || error?.code === "ENOTDIR";
 }
 
-/** Returns null when the path does not exist; any other failure propagates. */
 async function statIfPresent(targetPath) {
   try {
     return await fs.stat(targetPath);
@@ -39,7 +38,6 @@ function normalizeSessionIds(input) {
   return input.map((item) => text(item)).filter(Boolean);
 }
 
-/** Retention options come from normalizeOptions; this module only asserts the contract. */
 function assertRetentionOptions(options) {
   const { maxRuns, maxRunAgeDays, cleanupGraceMs } = options;
   if (!(Number.isFinite(maxRuns) && maxRuns > 0))
@@ -87,11 +85,6 @@ async function isRunWriteLocked(runDirPath) {
   return false;
 }
 
-/**
- * Run activity time: the manifest mtime once it exists, otherwise the run directory
- * mtime (ensureRunDir creates the directory before the debounced manifest is written).
- * Returns null when the run directory disappeared during the scan.
- */
 async function readRunActivityMs(runDirPath) {
   const stat =
     (await statIfPresent(path.join(runDirPath, HARNESS_FILES.RUN_MANIFEST))) ||
@@ -109,7 +102,6 @@ async function collectRunAges(harnessRunsDir, dirNames) {
   return runs.sort((left, right) => left.mtime - right.mtime);
 }
 
-/** Oldest-first runs outside the grace window: expired ones, then overflow beyond maxRuns. */
 function selectExpiredRuns(runs, options) {
   const maxAgeMs = options.maxRunAgeDays * DAY_MS;
   const candidates = runs.filter((run) => run.age >= options.cleanupGraceMs);
