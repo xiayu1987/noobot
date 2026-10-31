@@ -27,12 +27,6 @@
   --noobot-msg-code-block-text: var(--noobot-base-slate-200);
 
   --noobot-msg-avatar-size: 30px;
-  --noobot-msg-avatar-font-size: var(--noobot-font-size-sm);
-  --noobot-msg-meta-font-size: var(--noobot-font-size-sm);
-  --noobot-msg-file-size-font-size: var(--noobot-font-size-xs);
-  --noobot-msg-caption-font-size: var(--noobot-font-size-md);
-  --noobot-msg-font-size: var(--noobot-font-size-lg);
-  --noobot-msg-line-height: var(--noobot-line-height-body);
   --noobot-msg-stack-gap: 14px;
   --noobot-msg-bubble-pad-y: 8px;
   --noobot-msg-bubble-pad-x: 12px;

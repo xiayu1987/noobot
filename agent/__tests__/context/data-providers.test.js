@@ -15,7 +15,10 @@ import {
   resolveContextMessageKey,
 } from "@noobot/context-protocol/message/codec";
 import { buildDynamicInfo } from "../../src/context/providers/environment-provider.js";
-import { TEST_RUNTIME_IDENTITY } from "../helpers/test-runtime-context.js";
+import {
+  TEST_RUNTIME_IDENTITY,
+  createTestAttachmentService,
+} from "../helpers/test-runtime-context.js";
 
 test("resolveRootSessionId rejects a missing session authority", async () => {
   await assert.rejects(
@@ -52,12 +55,12 @@ test("resolveRootSessionId anchors detached sessions at their durable parent", a
 test("resolveAttachments should bypass ingest when attachment already ingested", async () => {
   let ingestCalled = false;
   const result = await resolveAttachments({
-    attachmentService: {
+    attachmentService: createTestAttachmentService({
       async ingest() {
         ingestCalled = true;
         return [];
       },
-    },
+    }),
     userMessageAttachments: [
       {
         attachmentId: "att1",
@@ -81,12 +84,12 @@ test("resolveAttachments should bypass ingest when attachment already ingested",
 test("resolveAttachments should call ingest when attachments are raw", async () => {
   let receivedPayload = null;
   const result = await resolveAttachments({
-    attachmentService: {
+    attachmentService: createTestAttachmentService({
       async ingest(payload = {}) {
         receivedPayload = payload;
         return [{ attachmentId: "att-ingested" }];
       },
-    },
+    }),
     userMessageAttachments: [{ name: "raw.txt", mimeType: "text/plain", size: 10 }],
     userId: "u1",
     sessionId: "s1",
@@ -100,14 +103,14 @@ test("resolveAttachments should call ingest when attachments are raw", async () 
 
 test("resolveAttachments preserves canonical attachments and ingests only raw items", async () => {
   let ingestPayload = null;
-  const attachmentService = {
+  const attachmentService = createTestAttachmentService({
     async ingest(payload) {
       ingestPayload = payload;
       return [
         { attachmentId: "canonicalized", sessionId: payload.sessionId, path: "/tmp/new.txt" },
       ];
     },
-  };
+  });
   const source = [
     {
       attachmentId: "existing",
@@ -135,12 +138,12 @@ test("resolveAttachments preserves canonical attachments and ingests only raw it
 test("resolveAttachments does not infer a canonical identity from an incomplete attachment", async () => {
   let ingestCalled = false;
   const result = await resolveAttachments({
-    attachmentService: {
+    attachmentService: createTestAttachmentService({
       async ingest() {
         ingestCalled = true;
         return [];
       },
-    },
+    }),
     userMessageAttachments: [
       {
         attachmentId: "existing",
@@ -160,12 +163,12 @@ test("resolveAttachments does not infer a canonical identity from an incomplete 
 test("resolveAttachments reads only userMessageAttachments", async () => {
   let receivedPayload = null;
   const result = await resolveAttachments({
-    attachmentService: {
+    attachmentService: createTestAttachmentService({
       async ingest(payload = {}) {
         receivedPayload = payload;
         return [{ attachmentId: "att-input" }];
       },
-    },
+    }),
     userMessageAttachments: [{ name: "input.txt", mimeType: "text/plain", size: 1 }],
     userId: "u1",
     sessionId: "s1",

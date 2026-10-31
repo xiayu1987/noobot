@@ -51,7 +51,6 @@ test("startHttpServer writes a startup runtime event when listen succeeds", () =
       getBot: () => ({ runSession: async () => ({}) }),
       resolveRequestLocale: () => "zh-CN",
       resolveAuthByApiKey: () => ({ userId: "primary-user" }),
-      isForbiddenUserScope: () => false,
       normalizeRunConfig: (config = {}) => config || {},
       normalizeLocale: (locale = "") => String(locale || "zh-CN"),
       defaultLocale: "zh-CN",

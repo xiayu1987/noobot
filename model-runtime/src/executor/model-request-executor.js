@@ -20,7 +20,10 @@ import {
   SYSTEM_CLOCK_PORT,
 } from "@noobot/model-protocol";
 import { normalizeMessages } from "../normalization/message-normalizer.js";
-import { normalizeModelOutput } from "../normalization/response-normalizer.js";
+import {
+  normalizeModelOutput,
+  normalizeModelResponse,
+} from "../normalization/response-normalizer.js";
 import { classifyReasoningOnly } from "../policies/reasoning-retry-policy.js";
 import { classifyEmptyResponse } from "../policies/empty-response-retry-policy.js";
 import { isToolCallStreamingMismatch } from "../policies/tool-call-retry-policy.js";
@@ -114,7 +117,7 @@ export function createModelRequestExecutor({
       let streaming = input.options?.streaming === true;
       let reasoningOnlyAttempts = 0;
       let emptyResponseAttempts = 0;
-      let mismatchAttempts = 0;
+      let toolCallRecoveryAttempts = 0;
       let alternateStreamingAttempted = false;
       let totalAttempts = 0;
       const attempts = [];
@@ -130,6 +133,25 @@ export function createModelRequestExecutor({
         requested: streaming,
         cached: streamingModes.get(streamingCacheKey),
       });
+      const retryToolCallRecovery = (kind, output) => {
+        if (toolCallRecoveryAttempts >= retry.toolCallMismatch.maxAttempts) return false;
+        attempts.push({
+          attempt: totalAttempts,
+          status: MODEL_ATTEMPT_STATUS.RETRY,
+          kind,
+          streaming,
+          output,
+        });
+        toolCallRecoveryAttempts += 1;
+        streaming = retry.toolCallMismatch.downgradeStreaming === true ? false : streaming;
+        streamingModes.set(streamingCacheKey, streaming);
+        observe("model.invocation.semantic_retry", {
+          kind,
+          attempt: totalAttempts,
+          nextStreaming: streaming,
+        });
+        return true;
+      };
       const modelObservationState = resolveModelObservationState(requestBase.model);
       const credential = await credentialPort.resolve({ modelSpec: requestBase.model, invocation });
       if (!credential) {
@@ -344,28 +366,36 @@ export function createModelRequestExecutor({
           throw error;
         }
         streamingModes.set(streamingCacheKey, streaming);
-        const output = normalizeModelOutput(result.value);
+        const { output, invalidToolCalls } = normalizeModelResponse(result.value);
         if (
           streaming &&
-          isToolCallStreamingMismatch(result.value, output.toolCalls) &&
-          mismatchAttempts < retry.toolCallMismatch.maxAttempts
+          isToolCallStreamingMismatch(result.value, { ...output, invalidToolCalls }) &&
+          retryToolCallRecovery(MODEL_ATTEMPT_KIND.TOOL_CALL_STREAMING_MISMATCH, output)
         ) {
+          continue;
+        }
+        if (invalidToolCalls.length) {
+          if (streaming && retryToolCallRecovery(MODEL_ATTEMPT_KIND.TOOL_CALL_INVALID, output)) {
+            continue;
+          }
+          const error = new ModelProtocolError("model returned an invalid tool call", {
+            code: MODEL_ERROR_CODE.TOOL_CALL_INVALID,
+            kind: MODEL_ERROR_KIND.TOOL_CALL_INVALID,
+            details: { attemptCount: totalAttempts, invalidToolCalls },
+          });
           attempts.push({
             attempt: totalAttempts,
-            status: MODEL_ATTEMPT_STATUS.RETRY,
-            kind: MODEL_ATTEMPT_KIND.TOOL_CALL_STREAMING_MISMATCH,
+            status: MODEL_ATTEMPT_STATUS.FAILED,
+            kind: MODEL_ATTEMPT_KIND.TOOL_CALL_INVALID,
             streaming,
             output,
           });
-          mismatchAttempts += 1;
-          streaming = retry.toolCallMismatch.downgradeStreaming === true ? false : streaming;
-          streamingModes.set(streamingCacheKey, streaming);
-          observe("model.invocation.semantic_retry", {
-            kind: MODEL_ATTEMPT_KIND.TOOL_CALL_STREAMING_MISMATCH,
-            attempt: totalAttempts,
-            nextStreaming: streaming,
+          observe("model.invocation.failed", {
+            attemptCount: totalAttempts,
+            code: error.code,
+            kind: error.kind,
           });
-          continue;
+          throw error;
         }
 
         if (classifyReasoningOnly(result.value) && output.toolCalls.length === 0) {

@@ -21,6 +21,7 @@ import {
   EXECUTION_ABORT_TYPE,
   createExecutionAbortReason,
   isExecutionAbortError,
+  raceExecutionAbort,
   resolveExecutionAbortMessage,
   resolveExecutionAbortReason,
   resolveExecutionAbortType,
@@ -235,4 +236,36 @@ test("user stop payload is read only from a user_stop abort reason with a stop c
     createExecutionAbortReason({ type: EXECUTION_ABORT_TYPE.USER_STOP, stopPayload: {} }),
   );
   assert.throws(() => resolveUserStopPayload({ abortSignal: missing.signal }), /commandId/);
+});
+
+async function assertAbortRaceSettlesLateRejection(abortBeforeRace) {
+  const controller = new AbortController();
+  if (abortBeforeRace) controller.abort();
+  const unhandled = [];
+  const onUnhandled = (reason) => unhandled.push(reason);
+  process.on("unhandledRejection", onUnhandled);
+  try {
+    let rejectLate;
+    const inner = new Promise((_, reject) => {
+      rejectLate = reject;
+    });
+    const raced = raceExecutionAbort(inner, { abortSignal: controller.signal });
+    if (!abortBeforeRace) controller.abort();
+    await assert.rejects(raced, (error) =>
+      isExecutionAbortError({ error, abortSignal: controller.signal }),
+    );
+    rejectLate(new Error("late inner failure"));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(unhandled, []);
+  } finally {
+    process.off("unhandledRejection", onUnhandled);
+  }
+}
+
+test("raceExecutionAbort rejects a pre-aborted race and still observes the inner promise", async () => {
+  await assertAbortRaceSettlesLateRejection(true);
+});
+
+test("raceExecutionAbort observes the inner promise after an in-flight abort", async () => {
+  await assertAbortRaceSettlesLateRejection(false);
 });

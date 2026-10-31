@@ -338,13 +338,11 @@ function sanitizeStructuredStrings(value, options = {}) {
     Object.entries(value).map(([key, child]) => [key, sanitizeStructuredStrings(child, options)]),
   );
 }
-function sanitizeToolResultText(toolResultText = "", options = {}) {
-  const text = String(toolResultText || "");
-  let parsed;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    return sanitizeText(text, options);
+function sanitizeToolResultText(toolResultText, options = {}) {
+  if (typeof toolResultText !== "string") throw new TypeError("tool_result_not_text");
+  const parsed = JSON.parse(toolResultText);
+  if (!isObjectLike(parsed) || Array.isArray(parsed)) {
+    throw new TypeError("tool_result_not_object");
   }
   const fieldSanitized = sanitizeSensitiveFields(parsed);
   return JSON.stringify(sanitizeStructuredStrings(fieldSanitized, options));

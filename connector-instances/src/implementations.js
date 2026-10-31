@@ -28,22 +28,14 @@ import {
 } from "./definitions.js";
 import { text } from "@noobot/shared/value";
 
-const command = (request = {}) => text(request?.input?.command);
-const requiredSessionId = (value = "") => {
+const command = (request) => text(request.input.command);
+const requiredSessionId = (value) => {
   const sessionId = text(value);
   if (!sessionId) throw new TypeError("connector sessionId is required");
   return sessionId;
 };
-const outputResult = (result = {}) => ({
-  ok: result.ok === true,
-  output: {
-    code: Number(result.code || 0),
-    stdout: String(result.stdout || ""),
-    stderr: String(result.stderr || ""),
-  },
-  diagnostics:
-    result.ok === true ? {} : { message: String(result.stderr || "connector access failed") },
-});
+const healthResult = (result) =>
+  result.ok ? { ok: true } : { ok: false, code: result.code, error: result.error };
 
 function databaseImplementation(definition, executeCommand, releaseConnection, accessCancellation) {
   const execute = ({ handle, connector, request, context }) =>
@@ -54,7 +46,7 @@ function databaseImplementation(definition, executeCommand, releaseConnection, a
           command: sql,
           connectionInfo: connector.parameters,
           channelKey: handle.channelKey,
-          abortSignal: context?.abortSignal || null,
+          abortSignal: context.abortSignal,
         }),
     });
   return {
@@ -69,9 +61,9 @@ function databaseImplementation(definition, executeCommand, releaseConnection, a
         connectionInfo: connector.parameters,
         channelKey: handle.channelKey,
       });
-      return { ok: result.ok === true, code: result.code, message: result.stderr };
+      return healthResult(result);
     },
-    access: async (context) => outputResult(await execute(context)),
+    access: execute,
     dispose: async ({ handle }) => releaseConnection(handle.channelKey),
   };
 }
@@ -107,16 +99,14 @@ const ssh = {
       connectionInfo: connector.parameters,
       channelKey: handle.channelKey,
     });
-    return { ok: result.ok === true, code: result.code, message: result.stderr };
+    return healthResult(result);
   },
-  access: async ({ handle, connector, request, context }) =>
-    outputResult(
-      await executeSshCommand({
-        command: command(request),
-        connectionInfo: connector.parameters,
-        channelKey: `${handle.channelKey}::${requiredSessionId(context?.sessionId)}`,
-      }),
-    ),
+  access: ({ handle, connector, request, context }) =>
+    executeSshCommand({
+      command: command(request),
+      connectionInfo: connector.parameters,
+      channelKey: `${handle.channelKey}::${requiredSessionId(context.sessionId)}`,
+    }),
   dispose: async ({ handle }) => {
     closeSshConnectorChannels({ connectorKey: handle.channelKey });
     closeSshChannel({ channelKey: handle.channelKey });
@@ -133,17 +123,15 @@ const email = {
       input: {},
       connectionInfo: connector.parameters,
     });
-    return { ok: result.ok === true, code: result.code, message: result.stderr };
+    return healthResult(result);
   },
-  access: async ({ connector, request, context }) =>
-    outputResult(
-      await executeEmailOperation({
-        operation: request.operation,
-        input: request.input,
-        connectionInfo: connector.parameters,
-        attachmentHandler: context?.artifactSink || null,
-      }),
-    ),
+  access: ({ connector, request, context }) =>
+    executeEmailOperation({
+      operation: request.operation,
+      input: request.input,
+      connectionInfo: connector.parameters,
+      attachmentHandler: context.artifactSink,
+    }),
   dispose: async () => {},
 };
 

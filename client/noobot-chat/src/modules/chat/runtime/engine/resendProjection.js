@@ -112,7 +112,7 @@ export async function projectResendReplacement(context) {
     activeSession,
   });
   replacementUserMessage.attachments = enrichPersistedAttachmentsWithDraftMetadata(
-    replacementUserMessage.attachments || [],
+    replacementUserMessage.attachments,
     pendingDisplayAttachments,
   );
   delete replacementUserMessage.terminalOutcome;

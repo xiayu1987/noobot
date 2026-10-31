@@ -43,6 +43,8 @@ test("appendTurns upserts an ordered message batch with one Session save", async
     sessionId: "s1",
     turns: [
       {
+        attachments: [],
+        transferEnvelopes: [],
         messageUid: "sm_assistant",
         role: "assistant",
         presentationMessageId: "pm_fx1",
@@ -52,6 +54,8 @@ test("appendTurns upserts an ordered message batch with one Session save", async
         turnScopeId: "t",
       },
       {
+        attachments: [],
+        transferEnvelopes: [],
         messageUid: "sm_tool_1",
         role: "tool",
         presentationMessageId: "pm_fx2",
@@ -60,6 +64,8 @@ test("appendTurns upserts an ordered message batch with one Session save", async
         turnScopeId: "t",
       },
       {
+        attachments: [],
+        transferEnvelopes: [],
         messageUid: "sm_tool_2",
         role: "tool",
         presentationMessageId: "pm_fx3",
@@ -94,6 +100,8 @@ test("appendTurns supersedes the prior canonical assistant presentation in one T
     },
   };
   const canonical = (messageUid, content) => ({
+    attachments: [],
+    transferEnvelopes: [],
     messageUid,
     modelMessageId: `message-${messageUid}`,
     role: "assistant",
@@ -155,6 +163,8 @@ test("appendTurns persists the canonical tool policy", async () => {
     sessionId: "s1",
     turns: [
       {
+        attachments: [],
+        transferEnvelopes: [],
         messageUid: "sm_boundary_result",
         role: "tool",
         presentationMessageId: "pm_fx4",
@@ -186,6 +196,8 @@ test("appendTurns persists the canonical internal control message type", async (
     sessionId: "s1",
     turns: [
       {
+        attachments: [],
+        transferEnvelopes: [],
         messageUid: "sm_control",
         role: "user",
         injectedMessage: true,
@@ -219,6 +231,8 @@ test("appendTurns preserves canonical user interjection time and sequence", asyn
     sessionId: "s1",
     turns: [
       {
+        attachments: [],
+        transferEnvelopes: [],
         messageUid: "interjection-uid-command-1",
         role: "user",
         type: "message",
@@ -253,6 +267,8 @@ test("appendTurns leaves natural user presentation unspecified and visible", asy
     sessionId: "s1",
     turns: [
       {
+        attachments: [],
+        transferEnvelopes: [],
         messageUid: "sm_natural",
         role: "user",
         type: "message",
@@ -272,6 +288,8 @@ test("appendTurns updates an existing message with the same messageUid", async (
     ...createTestSessionRequiredFields(),
     messages: [
       {
+        attachments: [],
+        transferEnvelopes: [],
         messageUid: "sm_existing",
         role: "assistant",
         presentationMessageId: "pm_fx5",
@@ -301,6 +319,8 @@ test("appendTurns updates an existing message with the same messageUid", async (
     sessionId: "s1",
     turns: [
       {
+        attachments: [],
+        transferEnvelopes: [],
         messageUid: "sm_existing",
         role: "assistant",
         presentationMessageId: "pm_fx6",
@@ -329,6 +349,8 @@ test("appendTurns keeps distinct messageUids separate when runtime message ids c
     ...createTestSessionRequiredFields(),
     messages: [
       {
+        attachments: [],
+        transferEnvelopes: [],
         messageUid: "sm_old_guidance",
         role: "user",
         content: "old guidance",
@@ -354,6 +376,8 @@ test("appendTurns keeps distinct messageUids separate when runtime message ids c
     sessionId: "s1",
     turns: [
       {
+        attachments: [],
+        transferEnvelopes: [],
         messageUid: "sm_new_guidance",
         role: "user",
         content: "new guidance",
@@ -391,7 +415,15 @@ test("appendTurns rejects a turn without messageUid", async () => {
     appendTurns.call(service, {
       userId: "u1",
       sessionId: "s1",
-      turns: [{ role: "user", messageOrigin: "natural", content: "hello" }],
+      turns: [
+        {
+          attachments: [],
+          transferEnvelopes: [],
+          role: "user",
+          messageOrigin: "natural",
+          content: "hello",
+        },
+      ],
     }),
     (error) =>
       error.code === "SESSION_MESSAGE_IDENTITY_INVALID" &&
@@ -405,6 +437,8 @@ test("appendTurns uses messageUid as the persistence identity and validates its 
     ...createTestSessionRequiredFields(),
     messages: [
       {
+        attachments: [],
+        transferEnvelopes: [],
         messageUid: "sm_fixed",
         role: "assistant",
         presentationMessageId: "pm_fx7",
@@ -430,6 +464,8 @@ test("appendTurns uses messageUid as the persistence identity and validates its 
     sessionId: "s1",
     turns: [
       {
+        attachments: [],
+        transferEnvelopes: [],
         messageUid: "sm_fixed",
         role: "assistant",
         presentationMessageId: "pm_fx8",
@@ -451,6 +487,8 @@ test("appendTurns uses messageUid as the persistence identity and validates its 
       sessionId: "s1",
       turns: [
         {
+          attachments: [],
+          transferEnvelopes: [],
           messageUid: "sm_fixed",
           role: "assistant",
           presentationMessageId: "pm_fx9",
@@ -481,6 +519,8 @@ test("appendTurns preserves assistant presentation identity in the authoritative
     sessionId: "s1",
     turns: [
       {
+        attachments: [],
+        transferEnvelopes: [],
         role: "assistant",
         messageUid: "sm_analysis",
         modelMessageId: "msg_model_turn_1",
@@ -488,6 +528,7 @@ test("appendTurns preserves assistant presentation identity in the authoritative
         chatPresentation: false,
         content: "working through the model analysis",
         type: "tool_call",
+        tool_calls: [{ id: "call-1", name: "read_file", args: {}, type: "tool_call" }],
         dialogProcessId: "dialog-1",
         turnScopeId: "turn-1",
       },

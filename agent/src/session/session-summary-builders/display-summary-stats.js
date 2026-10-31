@@ -6,23 +6,12 @@
 import { isInjectedSessionMessageRecord } from "@noobot/session-protocol";
 import {
   collectAttachmentRefsFromTransferEnvelopes,
-  dedupeAttachmentRefs,
   dedupeSessionAttachmentRefs,
 } from "../transfer-attachment-refs.js";
 
 function countMessageAttachments(message) {
-  const sessionAttachments = dedupeSessionAttachmentRefs(
-    Array.isArray(message?.attachments) ? message.attachments : [],
-  );
-  const toolAttachments = Array.isArray(message?.toolTimeline)
-    ? message.toolTimeline.flatMap((item) =>
-        Array.isArray(item?.resultEvent?.attachments) ? item.resultEvent.attachments : [],
-      )
-    : [];
-  const transferAttachments = dedupeAttachmentRefs([
-    ...collectAttachmentRefsFromTransferEnvelopes(message?.transferEnvelopes),
-    ...toolAttachments,
-  ]);
+  const sessionAttachments = dedupeSessionAttachmentRefs(message.attachments);
+  const transferAttachments = collectAttachmentRefsFromTransferEnvelopes(message.transferEnvelopes);
   return sessionAttachments.length + transferAttachments.length;
 }
 
@@ -32,6 +21,7 @@ export function buildSessionDisplayStats({
   toolLogCount,
   assignedToolArtifactCount,
   unassignedToolArtifactCount,
+  conflictedToolArtifactCount,
 }) {
   return {
     messageCount: messages.length,
@@ -43,6 +33,7 @@ export function buildSessionDisplayStats({
     toolLogCount,
     displayToolLogCount: assignedToolArtifactCount,
     unassignedToolArtifactCount,
+    conflictedToolArtifactCount,
     hasToolDetails: toolLogCount > 0,
     attachmentCount: displayMessages.reduce(
       (count, message) => count + countMessageAttachments(message),

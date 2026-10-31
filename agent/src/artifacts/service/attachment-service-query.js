@@ -12,7 +12,7 @@ import {
   fsRealpath,
   fsStat,
 } from "../../shared/storage/fs-adapter.js";
-import { safeNum, safeStr } from "../../shared/utils/shared-utils.js";
+import { safeStr } from "../../shared/utils/shared-utils.js";
 import { readAttachIndex } from "../index-manager.js";
 import { resolveAttachmentScope, resolveBasePath } from "./attachment-scope-resolver.js";
 import { attachScopeRoot } from "./attachment-storage-layout.js";
@@ -37,27 +37,25 @@ export async function getAttachmentById(
   if (!record) return null;
 
   const storedPath = safeStr(record.path);
-  if (!storedPath) return null;
-  let resolvedPath;
+  if (!storedPath) throw new Error("attachment_record_path_missing");
+  let realStoredPath;
   try {
-    const [realScopeRoot, realStoredPath] = await Promise.all([
-      fsRealpath(attachScopeRoot(basePath, scope)),
-      fsRealpath(storedPath),
-    ]);
-    if (!isPathWithinRoot(realScopeRoot, realStoredPath)) {
-      throw new Error("attachment_real_path_scope_mismatch");
-    }
-    resolvedPath = path.resolve(realStoredPath);
-  } catch {
-    return null;
+    realStoredPath = await fsRealpath(storedPath);
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
   }
-
+  const realScopeRoot = await fsRealpath(attachScopeRoot(basePath, scope));
+  if (!isPathWithinRoot(realScopeRoot, realStoredPath)) {
+    throw new Error("attachment_real_path_scope_mismatch");
+  }
+  const resolvedPath = path.resolve(realStoredPath);
   const fileStat = await fsStat(resolvedPath);
-  if (!fileStat?.isFile?.()) return null;
+  if (!fileStat.isFile()) throw new Error("attachment_path_not_file");
   return {
     ...buildPublicRecord(basePath, record),
     absolutePath: resolvedPath,
-    size: safeNum(fileStat?.size, record.size || 0),
+    size: fileStat.size,
   };
 }
 
@@ -71,36 +69,6 @@ export async function readAttachmentMetas(
   return Object.values(index?.attachments || {}).map((record) =>
     buildPublicRecord(basePath, record),
   );
-}
-
-export async function resolveSourceAttachment(
-  service,
-  { userId, sessionId = "", attachmentId = "", attachmentSource = "user" } = {},
-) {
-  const normalizedSessionId = safeStr(sessionId);
-  if (!normalizedSessionId) return null;
-
-  const normalizedAttachmentId = safeStr(attachmentId);
-  let matchedById = null;
-  if (normalizedAttachmentId) {
-    matchedById = await getAttachmentById(service, {
-      userId,
-      attachmentId: normalizedAttachmentId,
-      sessionId: normalizedSessionId,
-      attachmentSource,
-    });
-    if (matchedById) return matchedById;
-  }
-
-  const basePath = resolveBasePath(service.globalConfig, userId);
-  const metas = await readAttachmentMetas(service, {
-    userId,
-    sessionId: normalizedSessionId,
-    attachmentSource,
-  });
-  void basePath;
-  void metas;
-  return null;
 }
 
 export async function readAttachmentContent(
@@ -143,7 +111,7 @@ export async function openAttachmentStream(service, identity) {
     } = record;
     return {
       ...publicRecord,
-      size: safeNum(openedStat.size, record.size || 0),
+      size: openedStat.size,
       stream: handle.createReadStream(),
     };
   } catch (error) {

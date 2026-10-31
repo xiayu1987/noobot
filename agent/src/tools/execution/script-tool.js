@@ -132,18 +132,19 @@ export function createScriptTool({ agentContext }) {
             : await run(normalizedCommand, basePath, timeout, abortSignal, {
                 generatedDataRoot,
               });
-        const outputFileEnvelopes = await persistScriptOutputFiles({
-          agentContext,
-          runtime,
-          identity,
-          outputFiles,
-        });
+        const { transferEnvelopes: outputFileEnvelopes, outputResources } =
+          await persistScriptOutputFiles({
+            agentContext,
+            runtime,
+            identity,
+            outputFiles,
+          });
         if (requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND) {
           return toolFileBackedExecResult(
             "local",
             runResult,
             buildScriptExecutionMeta({ executionPolicy }),
-            { runtime, identity, outputFileEnvelopes },
+            { runtime, identity, outputFileEnvelopes, outputResources },
           );
         }
         return toolExecResult("local", runResult, buildScriptExecutionMeta({ executionPolicy }), {
@@ -151,6 +152,7 @@ export function createScriptTool({ agentContext }) {
           runtime,
           identity,
           outputFileEnvelopes,
+          outputResources,
         });
       }
 
@@ -172,17 +174,19 @@ export function createScriptTool({ agentContext }) {
         runnerOptions: { generatedDataRoot },
         runner: requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND ? runFileBacked : run,
       });
-      const outputFileEnvelopes = await persistScriptOutputFiles({
-        agentContext,
-        runtime,
-        identity,
-        outputFiles,
-      });
+      const { transferEnvelopes: outputFileEnvelopes, outputResources } =
+        await persistScriptOutputFiles({
+          agentContext,
+          runtime,
+          identity,
+          outputFiles,
+        });
       if (requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND) {
         return toolFileBackedExecResult(mode, runResult, extra, {
           runtime,
           identity,
           outputFileEnvelopes,
+          outputResources,
         });
       }
       return toolExecResult(mode, runResult, extra, {
@@ -190,6 +194,7 @@ export function createScriptTool({ agentContext }) {
         runtime,
         identity,
         outputFileEnvelopes,
+        outputResources,
       });
     },
     {

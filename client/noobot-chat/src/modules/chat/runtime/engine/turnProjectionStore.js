@@ -12,6 +12,8 @@ import {
   SESSION_RUN_MESSAGE_RUNTIME_ACTION,
 } from "../sessionRunStateMachine.js";
 import { selectTurnMessageRuntime } from "../run-state-machine/turnRuntimeRegistry.js";
+import { selectMessageActivityTimeline } from "@noobot/event-protocol/activity-timeline";
+import { selectMessageToolTimeline } from "@noobot/event-protocol/tool-timeline";
 import { getMessageTurnScopeId, getMessageDialogProcessId } from "../../model/messageIdentity.js";
 import {
   applyRunStateMessagePatch,
@@ -122,15 +124,11 @@ export function dispatchTurnEnvelope({ targetMessage, envelope, source }) {
       result: String(observation.result || ""),
       reason: String(observation.reason || ""),
       applied: observation.applied === true,
-      activityTimelineCount: Array.isArray(targetMessage?.activityTimeline)
-        ? targetMessage.activityTimeline.length
-        : 0,
-      activityEventIds: (targetMessage?.activityTimeline || [])
+      activityTimelineCount: selectMessageActivityTimeline(targetMessage).length,
+      activityEventIds: selectMessageActivityTimeline(targetMessage)
         .slice(-16)
         .map((activity = {}) => String(activity.eventId || "")),
-      toolTimelineCount: Array.isArray(targetMessage?.toolTimeline)
-        ? targetMessage.toolTimeline.length
-        : 0,
+      toolTimelineCount: selectMessageToolTimeline(targetMessage).length,
     }));
     return observation;
   };

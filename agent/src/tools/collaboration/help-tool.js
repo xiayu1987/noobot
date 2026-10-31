@@ -9,7 +9,8 @@ import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { tToolManual } from "../core/tool-schema-i18n.js";
-import { TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
+import { TOOL_NAME } from "../constants/index.js";
+import { ERROR_CODE } from "../../shared/errors/constants.js";
 import {
   HELP_COMMAND,
   HELP_COMMAND_NAMES,
@@ -38,11 +39,11 @@ function normalizeName(value = "") {
 }
 
 function completed(command, payload) {
-  return { ok: true, status: TOOL_RESULT_STATUS.COMPLETED, command, ...payload };
+  return { ok: true, command, ...payload };
 }
 
-function failed(command, payload) {
-  return { ok: false, status: TOOL_RESULT_STATUS.FAILED, command, ...payload };
+function failed(command, { code, error, ...payload }) {
+  return { ok: false, command, code, error, ...payload };
 }
 
 function projectManualCapabilities(toolName, manual) {
@@ -74,9 +75,10 @@ function buildToolManualResult({ runtime, toolName, manual, capabilityName }) {
     const selected = capabilities.find((item) => item.name === capabilityName);
     if (!selected) {
       return failed(HELP_COMMAND.TOOLS, {
+        code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
+        error: tTool(runtime, "tools.help.unknownCapability"),
         queriedTool: toolName,
         queriedCapability: capabilityName,
-        reason: tTool(runtime, "tools.help.unknownCapability"),
         capabilities: capabilities.map(({ detail: _detail, ...item }) => item),
       });
     }
@@ -117,55 +119,44 @@ function buildToolsResult({ runtime, availableTools, options }) {
   if (!toolName) {
     if (capabilityName) {
       return failed(HELP_COMMAND.TOOLS, {
-        reason: tTool(runtime, "tools.help.capabilityRequiresToolName"),
+        code: ERROR_CODE.RECOVERABLE_MISSING_REQUIRED_FIELD,
+        error: tTool(runtime, "tools.help.capabilityRequiresToolName"),
       });
     }
     return completed(HELP_COMMAND.TOOLS, { toolNames, toolSource: source });
   }
   const isAvailable = toolNames.includes(toolName);
-  const manual = isAvailable ? tToolManual(runtime, toolName) : null;
-  if (manual) {
-    return buildToolManualResult({ runtime, toolName, manual, capabilityName });
+  if (isAvailable) {
+    return buildToolManualResult({
+      runtime,
+      toolName,
+      manual: tToolManual(runtime, toolName),
+      capabilityName,
+    });
   }
   const isRegisteredTool = Object.values(TOOL_NAME).includes(toolName);
   return completed(HELP_COMMAND.TOOLS, {
     queriedTool: toolName,
     manual: null,
-    reason: isAvailable
-      ? tTool(runtime, "tools.help.manualNotFound")
-      : isRegisteredTool
-        ? tTool(runtime, "tools.help.toolNotAvailable")
-        : tTool(runtime, "tools.help.unknownTool"),
+    reason: isRegisteredTool
+      ? tTool(runtime, "tools.help.toolNotAvailable")
+      : tTool(runtime, "tools.help.unknownTool"),
     toolNames,
     toolSource: source,
   });
 }
 
-function attachsFailure(runtime, reasonKey) {
-  return {
-    ok: false,
-    status: TOOL_RESULT_STATUS.FAILED,
-    command: HELP_COMMAND.ATTACHS,
-    reason: tTool(runtime, reasonKey),
-  };
-}
-
 async function buildAttachsResult({ runtime, agentContext, options }) {
-  const attachmentService = runtime?.attachmentService || null;
+  const { attachmentService } = runtime;
   const { userId, sessionId } = buildContextSection(agentContext).identity;
-  if (!attachmentService) {
-    return attachsFailure(runtime, "tools.help.attachmentServiceMissing");
-  }
 
   const requestedSource = normalizeName(options.source);
   if (requestedSource && !ATTACHMENT_SOURCES.includes(requestedSource)) {
-    return {
-      ok: false,
-      status: TOOL_RESULT_STATUS.FAILED,
-      command: HELP_COMMAND.ATTACHS,
-      reason: tTool(runtime, "tools.help.unknownAttachmentSource"),
+    return failed(HELP_COMMAND.ATTACHS, {
+      code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
+      error: tTool(runtime, "tools.help.unknownAttachmentSource"),
       attachmentSources: [...ATTACHMENT_SOURCES],
-    };
+    });
   }
   const sources = requestedSource ? [requestedSource] : ATTACHMENT_SOURCES;
 
@@ -182,13 +173,11 @@ async function buildAttachsResult({ runtime, agentContext, options }) {
         return completed(HELP_COMMAND.ATTACHS, { attachment: projectAttachmentRecord(record) });
       }
     }
-    return {
-      ok: false,
-      status: TOOL_RESULT_STATUS.FAILED,
-      command: HELP_COMMAND.ATTACHS,
+    return failed(HELP_COMMAND.ATTACHS, {
+      code: ERROR_CODE.RECOVERABLE_ATTACHMENT_NOT_FOUND,
+      error: tTool(runtime, "tools.help.attachmentNotFound"),
       requestedAttachmentId: attachmentId,
-      reason: tTool(runtime, "tools.help.attachmentNotFound"),
-    };
+    });
   }
 
   const grouped = await Promise.all(
@@ -200,7 +189,7 @@ async function buildAttachsResult({ runtime, agentContext, options }) {
       });
       return {
         source: attachmentSource,
-        attachments: (records || []).map(projectAttachmentRecord),
+        attachments: records.map(projectAttachmentRecord),
       };
     }),
   );
@@ -214,12 +203,12 @@ async function buildAttachsResult({ runtime, agentContext, options }) {
 }
 
 function buildParseFailure(runtime, parsed) {
-  const { reason, ...rest } = parsed;
+  const { reason, ok: _ok, ...rest } = parsed;
   return {
     ok: false,
-    status: TOOL_RESULT_STATUS.FAILED,
     ...rest,
-    reason: tTool(runtime, `tools.help.parseError.${reason}`),
+    code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
+    error: tTool(runtime, `tools.help.parseError.${reason}`),
     commands: HELP_COMMAND_NAMES.map((name) => `--${name}`),
     usage: [...HELP_COMMAND_USAGE],
   };
@@ -276,7 +265,7 @@ export function createHelpTool({ agentContext } = {}) {
             options: parsed.options,
           })
         : buildParseFailure(runtime, parsed);
-      return toToolJsonResult(HELP_TOOL_NAME, payload, true);
+      return toToolJsonResult(HELP_TOOL_NAME, payload);
     },
     {
       name: HELP_TOOL_NAME,

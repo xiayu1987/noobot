@@ -48,7 +48,6 @@ export async function commitNoToolsTurnState({
       ...(modelResponse?.usage ? { usage: modelResponse.usage } : {}),
     },
     type: "message",
-    toolCalls: [],
     modelAlias: currentModelInfo.modelAlias,
     modelName: currentModelInfo.modelName,
     modelMessageId,

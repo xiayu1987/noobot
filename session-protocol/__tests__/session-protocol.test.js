@@ -381,9 +381,14 @@ test("session command has one strict identity and concurrency coordinate", () =>
     type: SESSION_COMMAND.TURN_REPLACE,
     scope,
     expectedAggregateVersion: 4,
-    payload: { turnScopeId: "turn-2" },
+    payload: { turnScopeId: "turn-2", attachments: [] },
   });
   assert.deepEqual(validateSessionCommand(command), { valid: true, errors: [] });
+  const { attachments: _attachments, ...payloadWithoutAttachments } = command.payload;
+  assert.deepEqual(validateSessionCommand({ ...command, payload: payloadWithoutAttachments }), {
+    valid: false,
+    errors: ["invalid_payload_attachments"],
+  });
   assert.equal(validateSessionCommand({ ...command, idempotencyKey: "old" }).valid, false);
   assert.equal(validateSessionCommand({ ...command, expectedVersion: 4 }).valid, false);
 });

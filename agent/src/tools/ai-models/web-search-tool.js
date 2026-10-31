@@ -8,14 +8,15 @@ import { z } from "zod";
 import { MODEL_CONTEXT_SEQUENCE_POLICY, MODEL_OPERATION_KIND } from "@noobot/model-protocol";
 import { mergeConfig } from "../../config/index.js";
 import { resolveModelSpecByName } from "../../models/index.js";
-import { recoverableToolError } from "../../shared/errors/index.js";
+import { NoobotError, recoverableToolError } from "../../shared/errors/index.js";
+import { isAbortError, resolveErrorMessage } from "../../shared/utils/error-utils.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { browserLikeFetch } from "../../shared/utils/web/fetch.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { requireRuntimeModelHost } from "../../runtime/model-port-host.js";
-import { TOOL_NAME, TOOL_RESULT_STATUS, WEB_SEARCH_MODE } from "../constants/index.js";
+import { TOOL_NAME, WEB_SEARCH_MODE } from "../constants/index.js";
 import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 
 const WEB_SEARCH_FLOW_NAME = "agent.do_search_web";
@@ -133,9 +134,13 @@ export async function searchWithSearchEngine({ runtime, toolCfg, query, abortSig
   const data = contentType.includes("application/json")
     ? await response.json()
     : await response.text();
+  if (!response.ok) {
+    throw recoverableToolError(`${tWebSearch(runtime, "searchFailed")}: HTTP ${response.status}`, {
+      code: ERROR_CODE.RECOVERABLE_WEB_SEARCH_HTTP_ERROR,
+      details: { httpStatus: response.status, url: request.url, data },
+    });
+  }
   return {
-    ok: response.ok,
-    statusCode: response.status,
     url: request.url,
     queryString: request.queryString,
     data,
@@ -174,8 +179,7 @@ export function createWebSearchTool({ agentContext }) {
             return toToolJsonResult(
               TOOL_NAME.DO_SEARCH_WEB,
               {
-                ok: searchEngineResult?.ok !== false,
-                status: TOOL_RESULT_STATUS.COMPLETED,
+                ok: true,
                 mode,
                 query: normalizedQuery,
                 ...searchEngineResult,
@@ -213,7 +217,6 @@ export function createWebSearchTool({ agentContext }) {
             TOOL_NAME.DO_SEARCH_WEB,
             {
               ok: true,
-              status: TOOL_RESULT_STATUS.COMPLETED,
               mode,
               provider: response.execution.provider,
               modelAlias: text(resolvedModelSpec?.alias),
@@ -225,15 +228,18 @@ export function createWebSearchTool({ agentContext }) {
             true,
           );
         } catch (error) {
-          if (error?.isRecoverable || error?.recoverable) throw error;
-          const errorMessage = text(error?.message) || String(error || "");
-          throw recoverableToolError(errorMessage || tWebSearch(runtime, "searchFailed"), {
-            code: String(error?.code || ERROR_CODE.RECOVERABLE_TOOL_ERROR),
-            details: {
-              modelAlias: text(resolvedModelSpec?.alias),
-              model: text(resolvedModelSpec?.model),
+          if (error instanceof NoobotError || isAbortError(error, toolConfig.signal)) throw error;
+          throw recoverableToolError(
+            `${tWebSearch(runtime, "searchFailed")}: ${resolveErrorMessage(error)}`,
+            {
+              code: ERROR_CODE.RECOVERABLE_WEB_SEARCH_FAILED,
+              cause: error,
+              details: {
+                modelAlias: text(resolvedModelSpec?.alias),
+                model: text(resolvedModelSpec?.model),
+              },
             },
-          });
+          );
         }
       },
       {

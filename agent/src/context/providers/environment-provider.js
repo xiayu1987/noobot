@@ -9,6 +9,7 @@ import { resolveToolExecutionPolicy } from "@noobot/execution-isolation-protocol
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { isConfiguredSuperUser } from "../../shared/utils/super-user.js";
 import { resolveConfiguredPathPolicy } from "../../config/core/path-policy-adapter.js";
+import { MODEL_PATH_VIEW_TOOL_NAME } from "../runtime-path-context.js";
 import { isCanonicalText, text } from "@noobot/shared/value";
 
 export function resolveRuntimeBasePath({ userId, globalConfig }) {
@@ -33,7 +34,10 @@ export function buildStaticInfo({ runtimeBasePath, identity, globalConfig }) {
     hostRootDirectory: runtimeBasePath,
     userId: identity.userId,
     globalConfig,
-    executionPolicy: resolveToolExecutionPolicy({ toolName: "execute_script", globalConfig }),
+    executionPolicy: resolveToolExecutionPolicy({
+      toolName: MODEL_PATH_VIEW_TOOL_NAME,
+      globalConfig,
+    }),
     isSuperUser: identity.isSuperUser,
     pathPolicy: resolveConfiguredPathPolicy(globalConfig),
   });

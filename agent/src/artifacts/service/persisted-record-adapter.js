@@ -86,7 +86,7 @@ export function toPersistedAttachmentRecord(basePath, record) {
         ? { generationSource: safeStr(record.generationSource) }
         : {}),
       ...(record?.generatedByModel === true ? { generatedByModel: true } : {}),
-      ...(safeStr(record?.sourcePath) ? { sourcePath: safeStr(record.sourcePath) } : {}),
+      ...(record?.origin === undefined ? {} : { origin: record.origin }),
     },
     storageRef: { kind: "attachment-store", ref },
     relations: Array.isArray(record?.relations) ? record.relations : [],
@@ -116,7 +116,7 @@ export function fromPersistedAttachmentRecord(basePath, persisted) {
     attachmentSource: identity.attachmentSource,
     generatedByModel: descriptor.generatedByModel === true,
     generationSource: descriptor.generationSource || "",
-    ...(descriptor.sourcePath ? { sourcePath: descriptor.sourcePath } : {}),
+    ...(descriptor.origin === undefined ? {} : { origin: descriptor.origin }),
     relations: record.relations,
   };
   return output;

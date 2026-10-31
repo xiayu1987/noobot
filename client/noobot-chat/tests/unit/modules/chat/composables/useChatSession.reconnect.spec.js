@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { selectMessageToolTimeline } from "@noobot/event-protocol/tool-timeline";
 import { buildViewMessage } from "../../../../../src/modules/chat/model/messageModel.js";
 import {
   createChatSession,
@@ -22,10 +23,7 @@ import {
   setResendDebugLogSink,
 } from "../../../../../src/modules/debug/loggers/resendDebugLogger.js";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
-import {
-  selectToolTimeline,
-  selectToolTimelineLogs,
-} from "../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
+import { selectToolTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
 import { selectActivityTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/activityTimeline.js";
 import { FrontendRunState } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { confirmTurnRuntimeDeletion } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
@@ -176,7 +174,15 @@ describe("useChatSession reconnect replay", () => {
     wsClientMock.reconnect.mockImplementationOnce(async ({ onReconnectData }) => {
       onReconnectData(envelope("tool_call_start", 1, { args: { filePath: "notes.txt" } }));
       onReconnectData(
-        envelope("tool_call_end", 2, { result: { ok: true }, success: true, durationMs: 5 }),
+        envelope("tool_call_end", 2, {
+          result: JSON.stringify({
+            ok: true,
+            path: { view: "workspace", path: "README.md" },
+            fileName: "README.md",
+          }),
+          success: true,
+          durationMs: 5,
+        }),
       );
     });
 
@@ -196,7 +202,7 @@ describe("useChatSession reconnect replay", () => {
       expect.objectContaining({ type: "tool_call", toolCallId: "call-live" }),
       expect.objectContaining({ type: "tool_result", toolCallId: "call-live" }),
     ]);
-    expect(selectToolTimeline(restoredAssistant)).toHaveLength(1);
+    expect(selectMessageToolTimeline(restoredAssistant)).toHaveLength(1);
   });
 
   it("keeps projecting message deltas that arrive after reconnect has completed", async () => {
@@ -296,6 +302,8 @@ describe("useChatSession reconnect replay", () => {
     wsClientMock.reconnect.mockImplementationOnce(async ({ onReconnectData }) => {
       onReconnectData(
         createAuthoritativeMessageEnvelope("thinking", {
+          activityId: "activity-l296",
+          activityKind: "model_analysis",
           eventId: "evt-continued-thinking",
           sessionId: "s-continue",
           presentationMessageId: "msg-continued",

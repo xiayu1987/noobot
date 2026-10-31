@@ -11,10 +11,12 @@ import {
 } from "./platform.js";
 import { PLATFORM, normalizePlatform } from "@noobot/platform-compatibility/platform";
 import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
+import { normalizeMountPath, normalizeWorkspacePath } from "@noobot/shared/locator";
 
 export const PATH_REF_VIEWS = Object.freeze({
   WORKSPACE: "workspace",
   HOST: "host",
+  MOUNT: "mount",
   ATTACHMENT: "attachment",
   TASK_LOCAL: "task-local",
 });
@@ -36,6 +38,13 @@ export const PATH_CAPABILITIES = Object.freeze({
   SCRIPT_INPUT: "script.input",
   SCRIPT_OUTPUT: "script.output",
   NATIVE_INPUT: "native.input",
+});
+
+export const PATH_ENTRY_KIND = Object.freeze({
+  MISSING: "missing",
+  FILE: "file",
+  DIRECTORY: "directory",
+  OTHER: "other",
 });
 
 export const PLATFORM_PROTECTED_ROOTS = deepFreeze({
@@ -82,25 +91,25 @@ function mergePolicy(base, override) {
 }
 
 const DEFAULT_CAPABILITIES = {
-  "file.read": { acceptedViews: ["workspace", "host"], hostRequiresRole: "super_admin" },
-  "file.write": { acceptedViews: ["workspace", "host"], hostRequiresRole: "super_admin" },
-  "file.patch": { acceptedViews: ["workspace", "host"], hostRequiresRole: "super_admin" },
-  "file.search": { acceptedViews: ["workspace", "host"], hostRequiresRole: "super_admin" },
+  "file.read": { acceptedViews: ["workspace", "mount", "host"], hostRequiresRole: "super_admin" },
+  "file.write": { acceptedViews: ["workspace", "mount", "host"], hostRequiresRole: "super_admin" },
+  "file.patch": { acceptedViews: ["workspace", "mount", "host"], hostRequiresRole: "super_admin" },
+  "file.search": { acceptedViews: ["workspace", "mount", "host"], hostRequiresRole: "super_admin" },
   "document.input": {
-    acceptedViews: ["workspace", "attachment", "host"],
+    acceptedViews: ["workspace", "mount", "attachment", "host"],
     hostRequiresRole: "super_admin",
   },
   "multimodal.input": {
-    acceptedViews: ["workspace", "attachment", "host"],
+    acceptedViews: ["workspace", "mount", "attachment", "host"],
     hostRequiresRole: "super_admin",
   },
-  "script.input": { acceptedViews: ["workspace", "attachment"], hostRequiresRole: "deny" },
+  "script.input": { acceptedViews: ["workspace", "mount", "attachment"], hostRequiresRole: "deny" },
   "script.output": {
-    acceptedViews: ["workspace", "host"],
+    acceptedViews: ["workspace", "mount", "host"],
     hostRequiresRole: "super_admin",
   },
   "native.input": {
-    acceptedViews: ["workspace", "attachment", "host"],
+    acceptedViews: ["workspace", "mount", "attachment", "host"],
     hostRequiresRole: "super_admin",
   },
 };
@@ -132,62 +141,35 @@ export const BUILTIN_PATH_POLICY = deepFreeze({
   },
 });
 
+function toolPathContract(capability, execution, display) {
+  return Object.freeze({
+    capability,
+    accepted: BUILTIN_PATH_POLICY.capabilities[capability].acceptedViews,
+    execution,
+    display,
+  });
+}
+
 export const TOOL_PATH_CONTRACTS = Object.freeze({
-  fileRead: Object.freeze({
-    capability: "file.read",
-    accepted: ["workspace", "host"],
-    execution: ["host"],
-    display: "runtime",
-  }),
-  fileWrite: Object.freeze({
-    capability: "file.write",
-    accepted: ["workspace", "host"],
-    execution: ["host"],
-    display: "runtime",
-  }),
-  filePatch: Object.freeze({
-    capability: "file.patch",
-    accepted: ["workspace", "host"],
-    execution: ["host"],
-    display: "runtime",
-  }),
-  fileSearch: Object.freeze({
-    capability: "file.search",
-    accepted: ["workspace", "host"],
-    execution: ["host"],
-    display: "runtime",
-  }),
-  documentInput: Object.freeze({
-    capability: "document.input",
-    accepted: ["workspace", "attachment", "host"],
-    execution: ["host"],
-    display: "attachment",
-  }),
-  multimodalInput: Object.freeze({
-    capability: "multimodal.input",
-    accepted: ["workspace", "attachment", "host"],
-    execution: ["host", "service-local"],
-    display: "attachment",
-  }),
-  scriptInput: Object.freeze({
-    capability: "script.input",
-    accepted: ["workspace", "attachment"],
-    execution: ["host", "sandbox"],
-    display: "runtime",
-  }),
-  scriptOutput: Object.freeze({
-    capability: "script.output",
-    accepted: ["workspace", "host"],
-    execution: ["host", "sandbox"],
-    display: "runtime",
-  }),
-  nativeInput: Object.freeze({
-    capability: "native.input",
-    accepted: ["workspace", "attachment", "host"],
-    execution: ["task-local"],
-    display: "attachment",
-  }),
+  fileRead: toolPathContract("file.read", ["host"], "runtime"),
+  fileWrite: toolPathContract("file.write", ["host"], "runtime"),
+  filePatch: toolPathContract("file.patch", ["host"], "runtime"),
+  fileSearch: toolPathContract("file.search", ["host"], "runtime"),
+  documentInput: toolPathContract("document.input", ["host"], "attachment"),
+  multimodalInput: toolPathContract("multimodal.input", ["host", "service-local"], "attachment"),
+  scriptInput: toolPathContract("script.input", ["host", "sandbox"], "runtime"),
+  scriptOutput: toolPathContract("script.output", ["host", "sandbox"], "runtime"),
+  nativeInput: toolPathContract("native.input", ["task-local"], "attachment"),
 });
+
+function resolveMountPathRef(input) {
+  const mountPath = text(input.path);
+  return Object.freeze({
+    view: PATH_REF_VIEWS.MOUNT,
+    mount: normalizeMountPath(text(input.mount)),
+    path: mountPath === "." ? "." : normalizeWorkspacePath(mountPath),
+  });
+}
 
 export function resolvePathRef({ input = "", workspaceRoot = "", owner = "" } = {}) {
   if (isPlainObject(input)) {
@@ -198,6 +180,7 @@ export function resolvePathRef({ input = "", workspaceRoot = "", owner = "" } = 
       if (!isPlainObject(input.identity)) throw new Error("attachment path identity required");
       return Object.freeze({ view, identity: Object.freeze({ ...input.identity }) });
     }
+    if (view === PATH_REF_VIEWS.MOUNT) return resolveMountPathRef(input);
     const logicalPath = text(input.path);
     if (!logicalPath) throw new Error(`${view} path required`);
     return Object.freeze({
@@ -425,7 +408,7 @@ export function authorizePathRef({
   pathPolicy = undefined,
   executionPath = "",
   workspaceRoot = "",
-  executionRoots = [],
+  mounts = [],
 } = {}) {
   const effectivePolicy = requireResolvedPathPolicy(pathPolicy);
   const rule = effectivePolicy.capabilities[capability];
@@ -433,6 +416,28 @@ export function authorizePathRef({
   if (!rule.acceptedViews?.includes(pathRef?.view))
     return Object.freeze({ allowed: false, code: "path_view_not_accepted", pathRef, capability });
   const isSuperAdmin = principal?.role === "super_admin";
+  const writeCapability = [
+    PATH_CAPABILITIES.FILE_WRITE,
+    PATH_CAPABILITIES.FILE_PATCH,
+    PATH_CAPABILITIES.SCRIPT_OUTPUT,
+  ].includes(capability);
+  const deny = (code) => Object.freeze({ allowed: false, code, pathRef, capability });
+  if (pathRef.view === PATH_REF_VIEWS.MOUNT) {
+    if (!executionPath || !isAbsolutePathAnyPlatform(executionPath)) {
+      throw new TypeError("mount path authorization requires an absolute execution path");
+    }
+    const mount = mounts.find((item) => item.target === pathRef.mount);
+    if (!mount) return deny("mount_not_configured");
+    if (!isPathWithinRoot(mount.source, executionPath)) return deny("mount_path_out_of_scope");
+    if (mount.readOnly === true && writeCapability) return deny("mount_read_only");
+    return Object.freeze({
+      allowed: true,
+      code: "allowed",
+      pathRef,
+      capability,
+      policy: "mount_access",
+    });
+  }
   if (pathRef.view === "workspace") {
     const owner = text(pathRef.owner || principal?.userId);
     const principalId = text(principal?.userId);
@@ -441,9 +446,6 @@ export function authorizePathRef({
       : effectivePolicy.roles.regularUser.workspace;
     const access =
       owner && principalId && owner !== principalId ? workspaceRule.others : workspaceRule.own;
-    const writeCapability = [PATH_CAPABILITIES.FILE_WRITE, PATH_CAPABILITIES.FILE_PATCH].includes(
-      capability,
-    );
     if (access === "deny" || (access === "read_only" && writeCapability))
       return Object.freeze({
         allowed: false,
@@ -490,9 +492,7 @@ export function authorizePathRef({
   if (
     pathRef.view === "workspace" &&
     executionPath &&
-    ![workspaceRoot, ...executionRoots]
-      .filter(Boolean)
-      .some((root) => isPathWithinRoot(root, executionPath))
+    !(workspaceRoot && isPathWithinRoot(workspaceRoot, executionPath))
   )
     return Object.freeze({
       allowed: false,

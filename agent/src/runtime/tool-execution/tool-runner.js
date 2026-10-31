@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { Buffer } from "node:buffer";
+import { ToolInputParsingException } from "@langchain/core/tools";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 import { emitEvent } from "../../events/index.js";
 import { emitMessageEvent } from "../../events/message-event-stream.js";
@@ -21,7 +22,11 @@ import {
   resolveAbortStopType,
   resolveErrorMessage,
 } from "../../shared/utils/error-utils.js";
-import { parseJsonObjectSafely } from "../utils/json-utils.js";
+import {
+  assertToolResultObject,
+  decodeToolResultText,
+  encodeToolResultObject,
+} from "@noobot/event-protocol/tool-result";
 import { handleEngineError } from "../errors/index.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
@@ -40,106 +45,66 @@ import { sanitizeToolResultText } from "@noobot/sanitize";
 import {
   getToolOutputPolicy,
   hasToolInputPolicy,
+  mergeTransferEnvelopes,
   TRANSFER_REASON,
 } from "@noobot/semantic-transfer-protocol";
-import { registerTransferAttachmentResources } from "../../tools/core/resource-broker.js";
 import {
   createToolRiskAssessment,
   getToolRiskLevel,
   runWithToolRiskAssessment,
 } from "../../tools/execution/tool-risk.js";
 import { isPlainObject, text } from "@noobot/shared/value";
+import { projectMutationRefs } from "@noobot/file-mutation-protocol";
 import { repairToolCallArgs } from "./tool-args-repair.js";
+import { validateRuntimeToolCall } from "@noobot/context-protocol/tool/context-policy";
 
-function shouldTransferToolInput(call = {}) {
-  const toolName = text(call?.name);
+function shouldTransferToolInput(call) {
+  const toolName = text(call.name);
   return Boolean(toolName) && hasToolInputPolicy(toolName);
 }
 
-function toolProducer(call = {}) {
-  const id = text(call?.id);
+function toolProducer(call) {
+  const id = text(call.id);
   if (!id) throw new Error("semantic_transfer_tool_call_id_required");
   return { type: "tool", id };
 }
 
-function mergeToolInputTransferPayload(toolResultText = "", transferPayload = {}) {
-  const normalizedTransferPayload = isPlainObject(transferPayload) ? transferPayload : {};
-  if (!Object.keys(normalizedTransferPayload).length) return String(toolResultText || "");
-  const parsed = parseJsonObjectSafely(toolResultText);
-  if (!parsed) return String(toolResultText || "");
-  return JSON.stringify({
-    ...parsed,
-    ...normalizedTransferPayload,
-  });
-}
-
-function mergeTaskSummaryTransferPayload(toolResultText = "", transferPayload = {}) {
-  const normalizedTransferPayload = isPlainObject(transferPayload) ? transferPayload : {};
-  if (!Object.keys(normalizedTransferPayload).length) return String(toolResultText || "");
-  const parsed = parseJsonObjectSafely(toolResultText);
-  if (!parsed) return String(toolResultText || "");
-  return JSON.stringify({
-    toolName: parsed.toolName || "task_summary",
-    ok: parsed.ok !== false,
-    status: parsed.status,
-    code: parsed.code,
-    error: parsed.error,
-    details: parsed.details,
-    message: parsed.message,
-    protocolVersion: parsed.protocolVersion,
-    summary: parsed.summary,
-    summarizedMessages: parsed.summarizedMessages,
-    ...normalizedTransferPayload,
-  });
-}
-
-function mergeToolResultWithInputTransferPayload(
-  toolResultText = "",
-  transferPayload = {},
-  toolName = "",
-) {
-  if (text(toolName) === "task_summary") {
-    return mergeTaskSummaryTransferPayload(toolResultText, transferPayload);
+function transferEnvelopesFromResultObject(resultObject) {
+  if (!isPlainObject(resultObject) || resultObject.transferEnvelopes === undefined) return [];
+  if (!Array.isArray(resultObject.transferEnvelopes)) {
+    throw new TypeError("tool result transferEnvelopes must be an array");
   }
-  return mergeToolInputTransferPayload(toolResultText, transferPayload);
+  return resultObject.transferEnvelopes;
 }
 
-function compactSemanticTransferProtocolPayload(inputTransfer = {}) {
-  if (!isPlainObject(inputTransfer)) return {};
-  const transferEnvelopes = Array.isArray(inputTransfer.transferEnvelopes)
-    ? inputTransfer.transferEnvelopes
-    : [];
-  return {
-    ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
-  };
+function outputResourcesFromResultObject(resultObject) {
+  if (!isPlainObject(resultObject) || resultObject.outputResources === undefined) return [];
+  if (!Array.isArray(resultObject.outputResources)) {
+    throw new TypeError("tool result outputResources must be an array");
+  }
+  return resultObject.outputResources;
 }
 
-function transferEnvelopesFromStructuredResult(rawResult = null) {
-  const value = typeof rawResult === "string" ? parseJsonObjectSafely(rawResult) : rawResult;
-  if (!isPlainObject(value)) return [];
-  return Array.isArray(value.transferEnvelopes) ? value.transferEnvelopes : [];
+function decodeToolInvocationResult(rawResult) {
+  return typeof rawResult === "string"
+    ? decodeToolResultText(rawResult)
+    : assertToolResultObject(rawResult);
 }
 
-function resourceRefsFromResult(value = null) {
-  const parsed = typeof value === "string" ? parseJsonObjectSafely(value) : value;
-  if (!isPlainObject(parsed)) return [];
-  return [
-    ...(Array.isArray(parsed.resources) ? parsed.resources : []),
-    ...(Array.isArray(parsed.input_resources) ? parsed.input_resources : []),
-  ];
+function withTransferEnvelopes(resultObject, ...envelopeLists) {
+  const transferEnvelopes = mergeTransferEnvelopes(
+    transferEnvelopesFromResultObject(resultObject),
+    ...envelopeLists,
+  );
+  if (!transferEnvelopes.length) return resultObject;
+  return { ...resultObject, transferEnvelopes };
 }
 
-async function materializeToolOutputArtifacts({
-  rawResult = null,
-  toolResultText = "",
-  call = {},
-  runtime = {},
-  identity = null,
-} = {}) {
-  const rawArtifacts = parseToolOutputArtifacts(rawResult);
-  if (!rawArtifacts.length) return { toolResultText, transferEnvelopes: [] };
+async function materializeToolOutputArtifacts({ resultObject, call, runtime, identity }) {
+  const rawArtifacts = parseToolOutputArtifacts(resultObject);
+  if (!rawArtifacts.length) return { resultObject, transferEnvelopes: [] };
   if (!identity) throw new Error("semantic_transfer_identity_required");
-  const toolName = text(call?.name);
+  const toolName = text(call.name);
   const outputPolicy = getToolOutputPolicy(toolName);
   const artifacts = rawArtifacts.map((artifact = {}) => {
     if (artifact.type !== outputPolicy.type) {
@@ -172,10 +137,8 @@ async function materializeToolOutputArtifacts({
     meta: { sourceTool: toolName },
   });
   return {
-    toolResultText: stripToolOutputArtifacts(toolResultText),
-    transferEnvelopes: Array.isArray(persisted?.transferEnvelopes)
-      ? persisted.transferEnvelopes
-      : [],
+    resultObject: stripToolOutputArtifacts(resultObject),
+    transferEnvelopes: persisted.transferEnvelopes,
   };
 }
 
@@ -191,16 +154,11 @@ function deriveToolInputTransferMeta(inputTransfer) {
   };
 }
 
-function detectToolCallFailure({ rawResult, toolResultText = "", invokeError = null }) {
+function detectToolCallFailure({ resultObject, invokeError }) {
   if (invokeError) {
     return { success: false, reason: "invoke_error" };
   }
-  if (isPlainObject(rawResult)) {
-    if (rawResult.ok === false) return { success: false, reason: "result_ok_false" };
-    return { success: true, reason: "" };
-  }
-  const parsed = parseJsonObjectSafely(toolResultText);
-  if (parsed && parsed.ok === false) {
+  if (resultObject?.ok === false) {
     return { success: false, reason: "result_ok_false" };
   }
   return { success: true, reason: "" };
@@ -218,7 +176,7 @@ function createToolCallExecutionState({
   toolStartedAtMs,
 }) {
   if (!Number.isFinite(toolStartedAtMs)) {
-    throw new TypeError(`tool call ${text(call?.id)} requires toolStartedAtMs`);
+    throw new TypeError(`tool call ${text(call.id)} requires toolStartedAtMs`);
   }
   return {
     call,
@@ -237,8 +195,9 @@ function createToolCallExecutionState({
     rawResult: null,
     rawToolResultText: "",
     inputTransfer: null,
-    toolInputTransferPayload: {},
+    inputTransferEnvelopes: [],
     outputArtifactTransferEnvelopes: [],
+    resultObject: null,
     invokeError: null,
   };
 }
@@ -284,11 +243,10 @@ function projectToolExecutionResult(state, timing, fields) {
 }
 
 async function completeMissingTool(state) {
-  state.toolResultText = toToolJsonResult(state.call?.name, {
+  state.toolResultText = toToolJsonResult(state.call.name, {
     ok: false,
-    status: "failed",
     code: ERROR_CODE.RECOVERABLE_TOOL_NOT_FOUND,
-    error: `tool not found: ${state.call?.name}`,
+    error: `tool not found: ${state.call.name}`,
   });
   const timing = completedToolTiming(state);
   await runToolHook(state, HOOK_POINT.AGENT.AFTER_TOOL_CALL, {
@@ -300,6 +258,8 @@ async function completeMissingTool(state) {
   });
   return projectToolExecutionResult(state, timing, {
     transferEnvelopes: [],
+    resourceRefs: [],
+    mutationRefs: [],
     success: false,
     failureReason: "tool_not_found",
   });
@@ -311,26 +271,31 @@ function hasDeclaredToolInputOverflow(meta = {}) {
 
 async function completeToolInputOverflow(state, meta) {
   state.toolResultText = compactToolResultTextForModel(
-    toToolJsonResult(state.call?.name, {
+    toToolJsonResult(state.call.name, {
       ok: false,
-      message: meta.message,
+      code: ERROR_CODE.RECOVERABLE_TOOL_INPUT_OVERFLOW,
+      error: meta.message,
       toolInputOverflow: meta.toolInputOverflow,
-      ...state.toolInputTransferPayload,
+      ...(state.inputTransferEnvelopes.length
+        ? { transferEnvelopes: state.inputTransferEnvelopes }
+        : {}),
     }),
   );
   const timing = completedToolTiming(state);
   await runToolHook(state, HOOK_POINT.AGENT.AFTER_TOOL_CALL, {
-    status: HOOK_PHASE_STATUS.SUCCESS,
+    status: HOOK_PHASE_STATUS.ERROR,
     ...timing,
-    args: state.call?.args || {},
-    success: true,
-    failureReason: "",
+    args: state.call.args,
+    success: false,
+    failureReason: "tool_input_overflow",
     toolResultText: state.toolResultText,
   });
   return projectToolExecutionResult(state, timing, {
-    transferEnvelopes: state.inputTransfer.transferEnvelopes || [],
-    success: true,
-    failureReason: "",
+    transferEnvelopes: state.inputTransferEnvelopes,
+    resourceRefs: [],
+    mutationRefs: [],
+    success: false,
+    failureReason: "tool_input_overflow",
   });
 }
 
@@ -350,7 +315,7 @@ async function prepareToolInputTransfer(state) {
     }),
   });
   const meta = deriveToolInputTransferMeta(state.inputTransfer);
-  state.toolInputTransferPayload = compactSemanticTransferProtocolPayload(state.inputTransfer);
+  state.inputTransferEnvelopes = state.inputTransfer.transferEnvelopes;
   return hasDeclaredToolInputOverflow(meta) ? completeToolInputOverflow(state, meta) : null;
 }
 
@@ -362,11 +327,11 @@ function toolInvocationConfig(state) {
         runtime: state.runtime,
         producer,
         direction: "output",
-        strategy: text(state.call?.name) || "tool_output",
+        strategy: state.call.name,
       }),
       noobotHookContext: toolHookContext(state, HOOK_POINT.AGENT.BEFORE_TOOL_CALL, {
         status: HOOK_PHASE_STATUS.RUNNING,
-        args: state.call?.args || {},
+        args: state.call.args,
       }),
     },
     signal: state.abortSignal,
@@ -379,17 +344,10 @@ async function sanitizeToolOutput(state) {
 }
 
 async function materializeToolInvocationResult(state) {
-  state.toolResultText =
-    typeof state.rawResult === "string" ? state.rawResult : JSON.stringify(state.rawResult);
-  state.toolResultText = mergeToolResultWithInputTransferPayload(
-    state.toolResultText,
-    state.toolInputTransferPayload,
-    state.call?.name,
-  );
+  state.resultObject = decodeToolInvocationResult(state.rawResult);
   const producer = toolProducer(state.call);
   const materializedOutput = await materializeToolOutputArtifacts({
-    rawResult: state.rawResult,
-    toolResultText: state.toolResultText,
+    resultObject: state.resultObject,
     call: state.call,
     runtime: state.runtime,
     identity: resolveRuntimeTransferIdentity({
@@ -399,13 +357,14 @@ async function materializeToolInvocationResult(state) {
       strategy: "tool_output_artifact",
     }),
   });
-  state.toolResultText = materializedOutput.toolResultText;
   state.outputArtifactTransferEnvelopes = materializedOutput.transferEnvelopes;
-  if (state.outputArtifactTransferEnvelopes.length) {
-    state.toolResultText = mergeToolInputTransferPayload(state.toolResultText, {
-      transferEnvelopes: state.outputArtifactTransferEnvelopes,
-    });
-  }
+  state.toolResultText = encodeToolResultObject(
+    withTransferEnvelopes(
+      materializedOutput.resultObject,
+      state.inputTransferEnvelopes,
+      state.outputArtifactTransferEnvelopes,
+    ),
+  );
   state.rawToolResultText = state.toolResultText;
   await sanitizeToolOutput(state);
 }
@@ -426,7 +385,7 @@ function logRecoverableToolError(state, error) {
       dialogProcessId: state.identity.dialogProcessId,
       turnScopeId: state.identity.turnScopeId,
       executionId: state.identity.runId,
-      toolCallId: text(state.call?.id),
+      toolCallId: text(state.call.id),
       ...(normalizedCause ? { cause: normalizedCause } : {}),
     },
   });
@@ -441,8 +400,8 @@ function reportToolInvocationError(state, error) {
     metadata: {
       source: "tool-runner",
       turn: state.turn,
-      tool: text(state.call?.name),
-      toolCallId: text(state.call?.id),
+      tool: text(state.call.name),
+      toolCallId: text(state.call.id),
       sessionId: state.identity.sessionId,
       parentSessionId: normalizeParentSessionId(state.identity.parentSessionId),
     },
@@ -452,9 +411,8 @@ function reportToolInvocationError(state, error) {
 function recoverableToolErrorResult(call, error) {
   const details =
     isPlainObject(error.details) && Object.keys(error.details).length ? error.details : null;
-  return toToolJsonResult(call?.name, {
+  return toToolJsonResult(call.name, {
     ok: false,
-    status: "failed",
     code: error.code,
     error: error.message,
     ...(details ? { details } : {}),
@@ -463,9 +421,16 @@ function recoverableToolErrorResult(call, error) {
 
 function toRecoverableInvocationError(error) {
   if (error instanceof NoobotError) return error;
+  if (error instanceof ToolInputParsingException) {
+    return recoverableToolError(error.message, {
+      code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
+      cause: error,
+    });
+  }
+  const ownCode = typeof error?.code === "string" ? error.code.trim() : "";
   return recoverableToolError(resolveErrorMessage(error) || String(error), {
-    code: text(error?.code) || ERROR_CODE.RECOVERABLE_TOOL_INVOKE_ERROR,
-    details: error?.details,
+    code: ownCode || ERROR_CODE.RECOVERABLE_TOOL_INVOKE_ERROR,
+    ...(isPlainObject(error?.details) ? { details: error.details } : {}),
     cause: error,
   });
 }
@@ -480,7 +445,7 @@ async function handleToolInvocationError(state, error) {
   await runToolHook(state, HOOK_POINT.AGENT.TOOL_CALL_ERROR, {
     status: HOOK_PHASE_STATUS.ERROR,
     ...completedToolTiming(state),
-    args: state.call?.args || {},
+    args: state.call.args,
     error: recoverableError,
   });
   state.invokeError = recoverableError;
@@ -495,7 +460,7 @@ async function invokeConfiguredTool(state) {
     await raceWithAbort(
       (async () => {
         state.rawResult = await runWithToolRiskAssessment(state.riskAssessment, () =>
-          state.tool.invoke(state.call?.args || {}, toolInvocationConfig(state)),
+          state.tool.invoke(state.call.args, toolInvocationConfig(state)),
         );
         await materializeToolInvocationResult(state);
       })(),
@@ -512,11 +477,10 @@ function uniqueByField(items, field) {
 
 async function finalizeToolExecution(state) {
   const failureState = detectToolCallFailure({
-    rawResult: state.rawResult,
-    toolResultText: state.rawToolResultText,
+    resultObject: state.resultObject,
     invokeError: state.invokeError,
   });
-  const structuredTransferEnvelopes = transferEnvelopesFromStructuredResult(state.rawResult);
+  const structuredTransferEnvelopes = transferEnvelopesFromResultObject(state.resultObject);
   const producer = toolProducer(state.call);
   const overflowNormalized = await transferSemanticContent({
     scenario: "tool",
@@ -532,44 +496,33 @@ async function finalizeToolExecution(state) {
     }),
   });
   state.toolResultText = overflowNormalized.toolResultText;
-  if (text(state.call?.name) === "task_summary") {
-    state.toolResultText = mergeTaskSummaryTransferPayload(
-      state.toolResultText,
-      state.toolInputTransferPayload,
-    );
-  }
-  const transferEnvelopes = uniqueByField(
-    [
-      ...(state.toolInputTransferPayload.transferEnvelopes || []),
-      ...structuredTransferEnvelopes,
-      ...state.outputArtifactTransferEnvelopes,
-      ...(overflowNormalized.transferEnvelopes || []),
-    ],
-    "transferId",
+  const transferEnvelopes = mergeTransferEnvelopes(
+    state.inputTransferEnvelopes,
+    structuredTransferEnvelopes,
+    state.outputArtifactTransferEnvelopes,
+    overflowNormalized.transferEnvelopes,
   );
-  const internalResources = uniqueByField(
-    [
-      ...resourceRefsFromResult(state.rawToolResultText),
-      ...registerTransferAttachmentResources({
-        agentContext: state.agentContext,
-        transferEnvelopes,
-      }),
-    ],
+  const resourceRefs = uniqueByField(
+    outputResourcesFromResultObject(state.resultObject),
     "resourceId",
   );
+
+  const mutationRefs = failureState.success ? projectMutationRefs(state.resultObject) : [];
   state.toolResultText = projectToolResultForModel(state.toolResultText);
   const timing = completedToolTiming(state);
   await runToolHook(state, HOOK_POINT.AGENT.AFTER_TOOL_CALL, {
     status: failureState.success ? HOOK_PHASE_STATUS.SUCCESS : HOOK_PHASE_STATUS.ERROR,
     ...timing,
-    args: state.call?.args || {},
+    args: state.call.args,
     success: failureState.success,
     failureReason: failureState.reason || "",
     toolResultText: state.rawToolResultText,
-    internalResources,
+    resourceRefs,
+    mutationRefs,
   });
   return projectToolExecutionResult(state, timing, {
-    internalResources,
+    resourceRefs,
+    mutationRefs,
     transferEnvelopes,
     success: failureState.success,
     failureReason: failureState.reason,
@@ -577,11 +530,16 @@ async function finalizeToolExecution(state) {
 }
 
 export async function executeToolCall(options) {
+  validateRuntimeToolCall(options.call);
+  return executeValidatedToolCall(options);
+}
+
+async function executeValidatedToolCall(options) {
   const state = createToolCallExecutionState(options);
   if (!state.tool) return completeMissingTool(state);
   await runToolHook(state, HOOK_POINT.AGENT.BEFORE_TOOL_CALL, {
     status: HOOK_PHASE_STATUS.RUNNING,
-    args: state.call?.args || {},
+    args: state.call.args,
   });
   const terminalInputResult = await prepareToolInputTransfer(state);
   if (terminalInputResult) return terminalInputResult;
@@ -600,20 +558,24 @@ function createTurnToolExecutionContext({ call, runtime, turn, abortSignal }) {
   };
 }
 
-function transferEnvelopeEventFields(result = {}) {
-  const transferEnvelopes = Array.isArray(result.transferEnvelopes) ? result.transferEnvelopes : [];
-  return transferEnvelopes.length ? { transferEnvelopes } : {};
+function toolFactEventFields({ transferEnvelopes, resourceRefs, mutationRefs }) {
+  return {
+    ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
+    ...(resourceRefs.length ? { resourceRefs } : {}),
+    ...(mutationRefs.length ? { mutationRefs } : {}),
+  };
 }
 
 function normalizeToolCallOptions(options) {
   const { call, tool, runtime } = options;
+  validateRuntimeToolCall(call);
   if (!tool) return options;
-  const repaired = repairToolCallArgs(tool.schema, call?.args);
+  const repaired = repairToolCallArgs(tool.schema, call.args);
   if (!repaired) return options;
   emitEvent(runtime.eventListener, "tool_args_repaired", {
     turn: options.turn,
-    tool: text(call?.name),
-    toolCallId: text(call?.id),
+    tool: text(call.name),
+    toolCallId: text(call.id),
     repairs: repaired.repairs,
   });
   return { ...options, call: { ...call, args: repaired.args } };
@@ -626,24 +588,24 @@ async function runToolCallInTurn(options) {
   const initialRiskLevel = getToolRiskLevel(initialRiskAssessment);
   await emitMessageEvent(eventListener, runtime, "tool_call_start", {
     turn,
-    tool: call?.name,
-    args: call?.args || {},
+    tool: call.name,
+    args: call.args,
     toolCallId,
     riskLevel: initialRiskLevel,
     securityAssessment: initialRiskAssessment.current,
   });
   assertNotAborted(abortSignal);
-  const result = await executeToolCall(options);
+  const result = await executeValidatedToolCall(options);
   await emitMessageEvent(eventListener, runtime, "tool_call_end", {
     turn,
-    tool: call?.name,
-    result: String(result?.toolResultText || ""),
-    success: result?.success === true,
-    durationMs: result?.durationMs,
+    tool: call.name,
+    result: result.toolResultText,
+    success: result.success === true,
+    durationMs: result.durationMs,
     toolCallId,
-    riskLevel: result?.riskLevel,
-    securityAssessment: result?.securityAssessment,
-    ...transferEnvelopeEventFields(result),
+    riskLevel: result.riskLevel,
+    securityAssessment: result.securityAssessment,
+    ...toolFactEventFields(result),
   });
   return result;
 }
@@ -656,22 +618,22 @@ function rejectedToolCallResult({ call, error, abortSignal }) {
   const riskAssessment = createToolRiskAssessment(call);
   const aborted = isAbortError(error, abortSignal);
   const stopType = aborted ? resolveAbortStopType(error, abortSignal) : "";
-  const errorMessage =
-    (aborted ? resolveExecutionAbortMessage({ error, abortSignal }) : resolveErrorMessage(error)) ||
-    (aborted ? "tool execution aborted" : "tool execution failed");
+  const invocationError = aborted ? null : toRecoverableInvocationError(error);
+  const errorMessage = aborted
+    ? resolveExecutionAbortMessage({ error, abortSignal, fallback: stopType })
+    : invocationError.message;
   return {
     call,
-    toolResultText: toToolJsonResult(call?.name, {
+    toolResultText: toToolJsonResult(call.name, {
       ok: false,
       status: aborted ? "aborted" : "failed",
-      code: aborted
-        ? ERROR_CODE.RECOVERABLE_USER_CANCELLED
-        : String(error?.code || ERROR_CODE.RECOVERABLE_TOOL_INVOKE_ERROR),
+      code: aborted ? ERROR_CODE.RECOVERABLE_USER_CANCELLED : invocationError.code,
       error: errorMessage,
       ...(stopType ? { stopType } : {}),
     }),
-    internalResources: [],
+    resourceRefs: [],
     transferEnvelopes: [],
+    mutationRefs: [],
     success: false,
     failureReason: aborted ? "aborted" : "invoke_error",
     riskLevel: getToolRiskLevel(riskAssessment),
@@ -698,7 +660,7 @@ export async function settleToolCallInTurn(rawOptions) {
     });
     await emitMessageEvent(eventListener, runtime, "tool_call_end", {
       turn,
-      tool: call?.name,
+      tool: call.name,
       result: result.toolResultText,
       success: false,
       durationMs: Date.now() - toolStartedAtMs,

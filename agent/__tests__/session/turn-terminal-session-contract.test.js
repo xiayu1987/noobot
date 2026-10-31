@@ -60,6 +60,7 @@ test("message-local lifecycle fields cannot become authoritative terminal facts"
       aggregateVersion: 0,
       messages: [
         {
+          attachments: [],
           messageUid: "sm_noncanonical_terminal_user",
           ts: TEST_MESSAGE_TS,
           sessionId: "s1",
@@ -94,6 +95,7 @@ test("summary projects only the authoritative lifecycle snapshot", async () => {
       updatedAt: now(),
       messages: [
         {
+          attachments: [],
           messageUid: "sm_lifecycle_assistant",
           ts: TEST_MESSAGE_TS,
           sessionId: "s-lifecycle",
@@ -198,6 +200,7 @@ test("synthetic placeholders cannot enter persistence or summary", async () => {
       aggregateVersion: 0,
       messages: [
         {
+          attachments: [],
           messageUid: "sm_placeholder_assistant",
           ts: TEST_MESSAGE_TS,
           sessionId: "s-placeholder",

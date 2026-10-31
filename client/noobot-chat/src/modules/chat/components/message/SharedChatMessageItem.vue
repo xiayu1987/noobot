@@ -10,6 +10,8 @@ import { Paperclip } from "@element-plus/icons-vue";
 import { useMessagePreview } from "../../composables/message/useMessagePreview.js";
 import {
   collectSessionAttachments,
+  collectSessionLinkSnapshots,
+  sessionMessageIndex,
   useMessageFiles,
 } from "../../composables/message/useMessageFiles.js";
 import {
@@ -17,6 +19,7 @@ import {
   resolveParsedResultRelation,
 } from "../../../../infrastructure/api/attachments/attachmentAccess.js";
 import { buildAttachmentRefIndex } from "../../composables/message/attachmentInlineRefPlugin.js";
+import { outOfSessionRenderContext } from "../../composables/message/useMarkdownRenderer.js";
 import { useMessageMeta } from "../../composables/message/useMessageMeta.js";
 import { resolveMessageViewKey } from "@noobot/event-protocol/message-event";
 import {
@@ -77,13 +80,6 @@ function getAttachmentRenderKey(attachmentItem = {}) {
 const props = defineProps(chatMessageItemProps);
 
 const {
-  previewVisible,
-  previewLoading,
-  previewError,
-  previewFileName,
-  previewMode,
-  previewTextContent,
-  previewImageUrl,
   attachmentPreviewVisible,
   attachmentPreviewType,
   attachmentPreviewUrl,
@@ -97,13 +93,8 @@ const {
   openParsedResultPreview,
   openResolvedAttachmentPreview,
   closeAttachmentPreview,
-  openFilePreview,
-  closePreviewDialog,
-  onDownloadFile,
   onDownloadAttachment,
   onDownloadParsedResult,
-  onCopyMarkdownRich,
-  onCopyMarkdownText,
   onCopyAttachmentMarkdownRich,
   onCopyAttachmentMarkdownText,
   onCopyMessageMarkdownRich,
@@ -142,6 +133,13 @@ const attachmentRefIndex = computed(() =>
     collectSessionAttachments(props.allMessages, props.messageItem, displayedAttachments.value),
   ),
 );
+const linkSnapshots = computed(() => collectSessionLinkSnapshots(props.allMessages));
+const messageIndex = computed(() => sessionMessageIndex(props.allMessages, props.messageItem));
+
+const workspaceRootDirectory = computed(() => props.messageItem.workspaceRootDirectory ?? null);
+
+const renderPreviewMarkdown = (content) =>
+  props.renderMarkdown(content, outOfSessionRenderContext(translate));
 
 const artifactTabs = computed(() =>
   [
@@ -182,7 +180,6 @@ function onArtifactTabKeydown(event) {
 }
 const mutationPreviewVisible = ref(false);
 useOverlayHistory(mutationPreviewVisible, () => (mutationPreviewVisible.value = false));
-useOverlayHistory(previewVisible, () => (previewVisible.value = false));
 useOverlayHistory(attachmentPreviewVisible, () => (attachmentPreviewVisible.value = false));
 const mutationPreviewLoading = ref(false);
 const mutationPreviewError = ref("");
@@ -210,17 +207,25 @@ async function openMutationPreview({ mutation, kind } = {}) {
             userId: props.userId,
             sessionId: requestedSessionId,
             sessionScope: requestedMutation?.sessionScope,
-            mutationId: requestedMutation?.id,
+            mutationId: requestedMutation?.mutationId,
           })
         : await fileMutationPreviewService.getFile({
             userId: props.userId,
             sessionId: requestedSessionId,
             sessionScope: requestedMutation?.sessionScope,
-            mutationId: requestedMutation?.id,
+            mutationId: requestedMutation?.mutationId,
           });
     if (generation !== mutationPreviewGeneration) return;
-    if (requestedKind === "diff") mutationPreviewDiff.value = payload.diff || payload;
-    else mutationPreviewContent.value = String(payload.content || "");
+
+    if (requestedKind === "diff") {
+      mutationPreviewDiff.value = payload.diff;
+      if (payload.diff === null)
+        mutationPreviewContent.value = translate("message.mutationBinaryDiff");
+    } else
+      mutationPreviewContent.value =
+        payload.content === null
+          ? translate(`message.mutationSnapshotState.${payload.snapshot}`)
+          : payload.content;
   } catch (error) {
     if (generation !== mutationPreviewGeneration) return;
     mutationPreviewError.value = String(
@@ -230,18 +235,20 @@ async function openMutationPreview({ mutation, kind } = {}) {
     if (generation === mutationPreviewGeneration) mutationPreviewLoading.value = false;
   }
 }
-async function downloadMutation(mutation = {}) {
+async function downloadMutation(mutationRef) {
   try {
     await fileMutationPreviewService.downloadFile({
       userId: props.userId,
       sessionId: getMessageSessionId(props.messageItem),
-      sessionScope: mutation?.sessionScope,
-      mutationId: mutation?.id,
-      fileName: mutation?.path,
+      mutationRef,
     });
   } catch (error) {
     ElMessage.error(String(error?.message || error || translate("message.downloadFailed")));
   }
+}
+
+function onFileLinkError(error) {
+  ElMessage.error(translate("message.fileLinkFailed", { reason: String(error?.message || error) }));
 }
 
 watch(
@@ -405,8 +412,6 @@ function resolveRendererContext() {
     displayedAttachments: displayedAttachments.value,
     canPreviewAttachment,
     canPreviewParsedResult,
-    onOpenFilePreview: openFilePreview,
-    onDownloadFile,
     onOpenAttachmentPreview: openAttachmentPreview,
     onOpenParsedResultPreview: openParsedResultPreview,
     onOpenResolvedAttachmentPreview: openResolvedAttachmentPreview,
@@ -468,6 +473,9 @@ function handleCopyAssistantMessageRich() {
   onCopyMessageMarkdownRich({
     textContent: props.messageItem.content,
     attachmentRefIndex: attachmentRefIndex.value,
+    linkSnapshots: linkSnapshots.value,
+    messageIndex: messageIndex.value,
+    workspaceRootDirectory: workspaceRootDirectory.value,
   });
 }
 
@@ -516,6 +524,10 @@ function toggleAssistantContent() {
     />
 
     <BaseMessageErrorAlert :error="messageItem.error" />
+    <BaseMessageErrorAlert
+      v-if="messageItem.toolArtifactConflict"
+      :error="translate('message.toolArtifactConflict')"
+    />
 
     <AssistantCopyActions
       :visible="
@@ -542,7 +554,13 @@ function toggleAssistantContent() {
       :content="messageItem.content"
       :render-markdown="renderMarkdown"
       :attachment-ref-index="attachmentRefIndex"
+      :link-snapshots="linkSnapshots"
+      :message-index="messageIndex"
+      :workspace-root-directory="workspaceRootDirectory"
+      :translate="translate"
       @download-attachment="onDownloadAttachment"
+      @download-mutation="downloadMutation"
+      @link-error="onFileLinkError"
     />
 
     <ExtensionOutlet
@@ -641,7 +659,7 @@ function toggleAssistantContent() {
       v-if="mutationPreviewVisible"
       v-model="mutationPreviewVisible"
       :title="
-        translate('message.mutationPreviewTitle', { name: mutationPreviewMutation?.path || '' })
+        translate('message.mutationPreviewTitle', { name: mutationPreviewMutation?.fileName })
       "
       :teleported="false"
       modal-class="noobot-file-preview-overlay"
@@ -682,33 +700,9 @@ function toggleAssistantContent() {
         :attachment-preview-loading="attachmentPreviewLoading"
         :attachment-preview-error="attachmentPreviewError"
         :attachment-preview-text-content="attachmentPreviewTextContent"
-        :render-markdown="renderMarkdown"
+        :render-markdown="renderPreviewMarkdown"
         @copy-markdown-rich="onCopyAttachmentMarkdownRich"
         @copy-markdown-text="onCopyAttachmentMarkdownText"
-      />
-    </el-dialog>
-
-    <el-dialog
-      v-model="previewVisible"
-      :title="translate('message.filePreviewTitle', { name: previewFileName || '' })"
-      :teleported="false"
-      modal-class="noobot-file-preview-overlay"
-      :class="filePreviewDialogClass"
-      destroy-on-close
-      @closed="closePreviewDialog"
-    >
-      <BasePreviewContent
-        content-type="file"
-        :active="previewVisible"
-        :preview-loading="previewLoading"
-        :preview-error="previewError"
-        :preview-file-name="previewFileName"
-        :preview-mode="previewMode"
-        :preview-text-content="previewTextContent"
-        :preview-image-url="previewImageUrl"
-        :render-markdown="renderMarkdown"
-        @copy-markdown-rich="onCopyMarkdownRich"
-        @copy-markdown-text="onCopyMarkdownText"
       />
     </el-dialog>
   </Teleport>

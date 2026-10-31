@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   attachmentTransfer,
+  getTransferSourceReferences,
   sourceReferenceTransfer,
   directTransfer,
   validateTransferEnvelope,
@@ -20,6 +21,8 @@ import {
   mergeTransferEnvelopes,
   transferIdentityKey,
   TRANSFER_REASON,
+  TRANSFER_ERROR_CODE,
+  isTransferIdentityConflict,
 } from "../src/index.js";
 import { decideTransfer } from "../src/policy.js";
 
@@ -116,6 +119,43 @@ test("creates a source reference envelope without persisting an attachment", () 
   assert.equal(envelope.payload.mode, "source_reference");
   assert.equal(envelope.payload.reference.address, "/workspace/u/runtime/ops_workdir/a.txt");
   assert.equal(validateTransferEnvelope(envelope).ok, true);
+});
+
+test("getTransferSourceReferences returns only source reference payloads with totalLines", () => {
+  const intent = {
+    source: "tool",
+    reason: "read_file_source_reference",
+    scenario: "tool",
+    strategy: "tool_output",
+  };
+  const source = sourceReferenceTransfer({
+    transferId: "tr-source-lines",
+    presentationMessageId: "m-source-lines",
+    identity,
+    direction: "output",
+    reference: { address: "/ws/a.txt", name: "a.txt", startLine: 1, endLine: 5, totalLines: 9 },
+    intent,
+  });
+  const attachment = attachmentTransfer({
+    transferId: "tr-attachment-lines",
+    presentationMessageId: "m-source-lines",
+    identity,
+    direction: "output",
+    attachments: [
+      {
+        identity: { attachmentId: "att-lines", sessionId: "s-lines", attachmentSource: "model" },
+        name: "x.txt",
+      },
+    ],
+    intent,
+  });
+  assert.deepEqual(getTransferSourceReferences([source, attachment]), [
+    { address: "/ws/a.txt", name: "a.txt", startLine: 1, endLine: 5, totalLines: 9 },
+  ]);
+  assert.throws(
+    () => attachmentTransfer({ transferId: "tr-x", identity, direction: "output", intent }),
+    /invalid_attachment_transfer_attachments/,
+  );
 });
 
 test("creates a source reference envelope for a canonical attachment identity", () => {
@@ -281,8 +321,12 @@ test("mergeTransferEnvelopes is ordered, idempotent, and rejects identity confli
         ...envelope,
         payload: { ...envelope.payload, content: "different" },
       }),
-    /transfer_identity_conflict/,
+    (error) =>
+      error.code === TRANSFER_ERROR_CODE.IDENTITY_CONFLICT &&
+      /^transfer_identity_conflict:/.test(error.message) &&
+      isTransferIdentityConflict(error),
   );
+  assert.equal(isTransferIdentityConflict(new Error("transfer_identity_conflict:x")), false);
 });
 
 test("attachment references have one canonical conflict-aware projection", () => {

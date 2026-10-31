@@ -15,7 +15,7 @@ function toolLog(phase, tool, toolCallId, extra = {}) {
     type: phase === "call" ? "tool_call" : "tool_result",
     data:
       phase === "call"
-        ? { tool, toolCallId, ...extra }
+        ? { tool, toolCallId, args: {}, ...extra }
         : { tool, toolCallId, durationMs: 1, persistDurationMs: 0, ...extra },
   };
 }

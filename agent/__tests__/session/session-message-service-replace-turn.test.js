@@ -60,6 +60,7 @@ function baseSession(overrides = {}) {
     turnLifecycle: { ...createEmptyTurnLifecycle(), turns: {}, commandReceipts: [] },
     messages: [
       {
+        attachments: [],
         sessionId: "s1",
         turnScopeId: "scope-keep",
         role: "user",
@@ -68,6 +69,7 @@ function baseSession(overrides = {}) {
         dialogProcessId: "dp-keep",
       },
       {
+        attachments: [],
         sessionId: "s1",
         role: "user",
         messageOrigin: "natural",
@@ -77,6 +79,7 @@ function baseSession(overrides = {}) {
         turnScopeId: "scope-old",
       },
       {
+        attachments: [],
         sessionId: "s1",
         role: "assistant",
         modelMessageId: "mm_session_message_service__1",
@@ -85,6 +88,7 @@ function baseSession(overrides = {}) {
         turnScopeId: "scope-old",
       },
       {
+        attachments: [],
         sessionId: "s1",
         role: "user",
         messageOrigin: "natural",
@@ -158,6 +162,7 @@ test("SessionMessageService.replaceTurn matches turnScopeId and returns snapshot
   });
 
   const result = await service.replaceTurn({
+    attachments: [],
     userId: "u1",
     sessionId: "s1",
     anchor: { turnScopeId: "scope-old" },
@@ -266,6 +271,7 @@ test("SessionMessageService.replaceTurn mutates only the owning lifecycle aggreg
       parentSessionId: "s1",
       messages: [
         {
+          attachments: [],
           sessionId: "child",
           turnScopeId: "child-turn",
           role: "user",
@@ -290,6 +296,7 @@ test("SessionMessageService.replaceTurn mutates only the owning lifecycle aggreg
   });
 
   await parent.service.replaceTurn({
+    attachments: [],
     userId: "u1",
     sessionId: "s1",
     anchor: { turnScopeId: "scope-old" },
@@ -327,6 +334,7 @@ test("SessionMessageService.replaceTurn persists only the incoming canonical att
           attachments: [richAttachment],
         },
         {
+          attachments: [],
           sessionId: "s1",
           role: "assistant",
           modelMessageId: "mm_session_message_service__2",
@@ -395,6 +403,7 @@ test("SessionMessageService.replaceTurn rejects attachments without stable ident
           attachments: [richAttachment],
         },
         {
+          attachments: [],
           role: "assistant",
           modelMessageId: "mm_session_message_service__3",
           content: "old answer",
@@ -462,8 +471,9 @@ test("SessionMessageService.replaceTurn rejects ts anchors", async () => {
   const { service: tsService, saved: tsSaved } = createService({
     initialSession: baseSession({
       messages: [
-        { role: "user", messageOrigin: "natural", content: "old", ts: "ts-user" },
+        { attachments: [], role: "user", messageOrigin: "natural", content: "old", ts: "ts-user" },
         {
+          attachments: [],
           role: "assistant",
           modelMessageId: "mm_session_message_service__4",
           content: "old answer",
@@ -474,6 +484,7 @@ test("SessionMessageService.replaceTurn rejects ts anchors", async () => {
   });
   await assert.rejects(
     tsService.replaceTurn({
+      attachments: [],
       userId: "u1",
       sessionId: "s1",
       anchor: { ts: "ts-assistant" },
@@ -490,20 +501,34 @@ test("SessionMessageService.replaceTurn rejects dialogId compatibility anchors",
   const { service, saved } = createService({
     initialSession: baseSession({
       messages: [
-        { role: "user", messageOrigin: "natural", content: "first", dialogId: "dp-compat" },
         {
+          attachments: [],
+          role: "user",
+          messageOrigin: "natural",
+          content: "first",
+          dialogId: "dp-compat",
+        },
+        {
+          attachments: [],
           role: "assistant",
           modelMessageId: "mm_session_message_service__5",
           content: "answer",
           dialogId: "dp-compat",
         },
-        { role: "user", messageOrigin: "natural", content: "tail", dialogId: "dp-tail" },
+        {
+          attachments: [],
+          role: "user",
+          messageOrigin: "natural",
+          content: "tail",
+          dialogId: "dp-tail",
+        },
       ],
     }),
   });
 
   await assert.rejects(
     service.replaceTurn({
+      attachments: [],
       userId: "u1",
       sessionId: "s1",
       anchor: { dialogId: "dp-compat" },
@@ -523,6 +548,7 @@ test("SessionMessageService.replaceTurn rejects conflicts and missing anchors wi
 
   await assert.rejects(
     service.replaceTurn({
+      attachments: [],
       userId: "u1",
       sessionId: "s1",
       anchor: { turnScopeId: "scope-old" },
@@ -535,6 +561,7 @@ test("SessionMessageService.replaceTurn rejects conflicts and missing anchors wi
   );
   await assert.rejects(
     service.replaceTurn({
+      attachments: [],
       userId: "u1",
       sessionId: "s1",
       anchor: { turnScopeId: "missing" },
@@ -552,6 +579,7 @@ test("SessionMessageService.replaceTurn validates required payload", async () =>
 
   await assert.rejects(
     service.replaceTurn({
+      attachments: [],
       userId: "u1",
       sessionId: "s1",
       anchor: { turnScopeId: "scope-old" },
@@ -561,6 +589,7 @@ test("SessionMessageService.replaceTurn validates required payload", async () =>
   );
   await assert.rejects(
     service.replaceTurn({
+      attachments: [],
       userId: "u1",
       sessionId: "s1",
       newContent: "edit",
@@ -571,6 +600,7 @@ test("SessionMessageService.replaceTurn validates required payload", async () =>
   );
   await assert.rejects(
     service.replaceTurn({
+      attachments: [],
       userId: "u1",
       sessionId: "s1",
       anchor: { turnScopeId: "scope-old" },
@@ -581,6 +611,7 @@ test("SessionMessageService.replaceTurn validates required payload", async () =>
   );
   await assert.rejects(
     service.replaceTurn({
+      attachments: [],
       userId: "u1",
       sessionId: "s1",
       anchor: { turnScopeId: "scope-old" },
@@ -744,6 +775,7 @@ test("SessionMessageService.assertReusedUserTurnIdentity rejects dialog identity
     initialSession: baseSession({
       messages: [
         {
+          attachments: [],
           role: "user",
           messageOrigin: "natural",
           content: "edited",

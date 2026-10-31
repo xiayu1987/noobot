@@ -44,8 +44,6 @@ export const ASSISTANCE_TOOL_SCHEMA = {
         "Execution isolation modes and the execution class of every available tool.",
       "tools.help.command.models":
         "The model currently in use plus the models available in this session and their multimodal capabilities.",
-      "tools.help.manualNotFound":
-        "This tool has no extended manual; its schema description is already complete",
       "tools.help.toolNotAvailable":
         "This tool is registered but not assembled in this session and cannot be called; pick one from toolNames",
       "tools.help.unknownTool": "Unknown tool name, pick one from the queryable list",
@@ -53,8 +51,6 @@ export const ASSISTANCE_TOOL_SCHEMA = {
         "The following are memory paths. Use read_file or search to inspect the actual content.",
       "tools.help.memoryHint":
         "The following are memory and summary paths. Use read_file or search to inspect content.",
-      "tools.help.attachmentServiceMissing":
-        "Attachment service is not assembled, cannot query attachments",
       "tools.help.unknownAttachmentSource":
         "Unknown attachment source, pick one from attachmentSources",
       "tools.help.attachmentNotFound":

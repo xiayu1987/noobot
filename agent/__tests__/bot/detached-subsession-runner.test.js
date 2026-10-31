@@ -34,6 +34,7 @@ import {
   createSessionPersistenceScope,
 } from "@noobot/session-protocol";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
+import { createTestAttachmentService } from "../helpers/test-runtime-context.js";
 
 const LEGACY_MESSAGE_ID = MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID;
 
@@ -47,7 +48,7 @@ test("detached sub-session delegates execution and persistence to the main runne
       runConfig: { hookManager: null, runtimeModel: "gpt_5_4" },
     }),
     message: "hello",
-    attachments: [{ name: "a.txt" }],
+    attachments: [],
     systemMessageFactory: () => ["system"],
     runConfigPatch: { extra: true },
     eventListener: {
@@ -79,7 +80,7 @@ test("detached sub-session delegates execution and persistence to the main runne
   assert.equal(payload.parentDialogProcessId, "parent-dialog");
   assert.equal(payload.caller, SESSION_CALLER.BOT);
   assert.equal(payload.message, "hello");
-  assert.deepEqual(payload.attachments, [{ name: "a.txt" }]);
+  assert.deepEqual(payload.attachments, []);
   assert.deepEqual(payload.systemMessages, ["system"]);
   assert.equal(payload.turnScopeId, "turn-1");
   assert.equal(payload.runConfig.stage, "workflow_node");
@@ -191,6 +192,7 @@ test("detached sub-session projects finalizer messages and their transfer envelo
     abortSignal: new AbortController().signal,
     parentExecutionScope: createParentExecutionScope(),
     message: "hello",
+    attachments: [],
     metadata: DETACHED_REQUEST_METADATA,
     strategy: createCompleteStrategy(),
   });
@@ -210,6 +212,7 @@ test("detached sub-session uses the selected parent model over the parent runtim
       runConfig: { hookManager: null, selectedModel: "gpt_5_4", runtimeModel: "parent_override" },
     }),
     message: "hello",
+    attachments: [],
     metadata: DETACHED_REQUEST_METADATA,
     strategy: createCompleteStrategy(),
   });
@@ -227,6 +230,7 @@ test("detached sub-session explicit model override wins over the selected parent
       runConfig: { hookManager: null, selectedModel: "gpt_5_4" },
     }),
     message: "hello",
+    attachments: [],
     runConfigPatch: { runtimeModel: "child_model" },
     metadata: DETACHED_REQUEST_METADATA,
     strategy: createCompleteStrategy(),
@@ -245,6 +249,7 @@ test("detached sub-session empty model override preserves the selected parent mo
       runConfig: { hookManager: null, selectedModel: "gpt_5_4" },
     }),
     message: "hello",
+    attachments: [],
     runConfigPatch: { runtimeModel: "  " },
     metadata: DETACHED_REQUEST_METADATA,
     strategy: createCompleteStrategy(),
@@ -262,7 +267,7 @@ test("detached sub-session transfers canonical parent attachments into child own
     name: "a.txt",
     mimeType: "text/plain",
   };
-  const attachmentService = {
+  const attachmentService = createTestAttachmentService({
     async getAttachmentById(payload) {
       assert.deepEqual(payload, {
         userId: "u1",
@@ -297,7 +302,7 @@ test("detached sub-session transfers canonical parent attachments into child own
       );
       return [transferred];
     },
-  };
+  });
   const { calls, deps } = createDeps({ attachmentService });
   const runner = createDetachedSubSessionRunner(deps);
 
@@ -343,6 +348,7 @@ test("detached sub-session rejects an incomplete persistence and identity strate
       abortSignal: new AbortController().signal,
       parentExecutionScope: createParentExecutionScope(),
       message: "hello",
+      attachments: [],
       strategy: {
         userId: "u1",
         parentSessionId: "parent1",
@@ -442,6 +448,7 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
     abortSignal: new AbortController().signal,
     parentExecutionScope: createParentExecutionScope(),
     message: "hello",
+    attachments: [],
     runConfigPatch: {},
     metadata: DETACHED_REQUEST_METADATA,
     strategy: createCompleteStrategy({
@@ -486,6 +493,7 @@ test("detached sub-session rejects a runner result with a second dialog identity
       abortSignal: new AbortController().signal,
       parentExecutionScope: createParentExecutionScope(),
       message: "hello",
+      attachments: [],
       metadata: DETACHED_REQUEST_METADATA,
       strategy: createCompleteStrategy({
         dialogProcessId: "authoritative-dialog",
@@ -531,6 +539,7 @@ test("detached sub-session does not inherit parent turn transaction identity", a
   const runner = createDetachedSubSessionRunner(deps);
 
   await runner({
+    attachments: [],
     abortSignal: new AbortController().signal,
     parentExecutionScope: createParentExecutionScope({
       runConfig: {
@@ -584,6 +593,7 @@ test("detached sub-session derives commandId from the strategy turnScopeId and t
   const runner = createDetachedSubSessionRunner(deps);
 
   await runner({
+    attachments: [],
     abortSignal: new AbortController().signal,
     parentExecutionScope: createParentExecutionScope({
       runConfig: { hookManager: null, expectedAggregateVersion: 7, commandId: "root-command" },
@@ -622,6 +632,7 @@ test("detached sub-session propagates main runner abort and failure contracts", 
   await assert.rejects(
     () =>
       runner({
+        attachments: [],
         abortSignal: new AbortController().signal,
         parentExecutionScope: createParentExecutionScope(),
         eventListener: {
@@ -691,6 +702,7 @@ test("detached sub-session failure receipt carries the committed turn failure", 
   await assert.rejects(
     () =>
       runner({
+        attachments: [],
         abortSignal: new AbortController().signal,
         parentExecutionScope: createParentExecutionScope(),
         metadata: DETACHED_REQUEST_METADATA,
@@ -728,6 +740,7 @@ test("createDetachedSubSessionRunner requires userId and parentSessionId", async
   await assert.rejects(
     () =>
       runner({
+        attachments: [],
         abortSignal: new AbortController().signal,
         parentExecutionScope: createParentExecutionScope(),
         strategy: { userId: "u1" },
@@ -751,6 +764,7 @@ test("createDetachedSubSessionRunner aborts before execution when signal is alre
   await assert.rejects(
     () =>
       runner({
+        attachments: [],
         parentExecutionScope: createParentExecutionScope(),
         abortSignal: controller.signal,
       }),
@@ -771,6 +785,7 @@ test("createDetachedSubSessionRunner propagates user config loading failures", a
   await assert.rejects(
     () =>
       runner({
+        attachments: [],
         abortSignal: new AbortController().signal,
         parentExecutionScope: createParentExecutionScope(),
         metadata: DETACHED_REQUEST_METADATA,

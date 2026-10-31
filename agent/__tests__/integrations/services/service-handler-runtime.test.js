@@ -21,9 +21,10 @@ test("service handler receives the authoritative runtime and its shared fetch", 
   await writeFile(
     path.join(servicesDir, "runtime-probe.js"),
     [
-      "export default async function runtimeProbe({ runtime }) {",
+      "export default async function runtimeProbe({ runtime, failureCode }) {",
+      "  if (!failureCode.INPUT_INVALID) throw new Error('failureCode missing');",
       "  const response = await runtime.sharedTools.fetch('https://service.test/probe');",
-      "  return { runtimeMarker: runtime.marker, body: await response.text() };",
+      "  return { ok: true, output: { runtimeMarker: runtime.marker, body: await response.text() } };",
       "}",
     ].join("\n"),
     "utf8",
@@ -47,7 +48,7 @@ test("service handler receives the authoritative runtime and its shared fetch", 
   });
 
   assert.deepEqual(result, {
-    runtimeMarker: "authoritative-runtime",
-    body: "fetch-ok",
+    ok: true,
+    output: { runtimeMarker: "authoritative-runtime", body: "fetch-ok" },
   });
 });

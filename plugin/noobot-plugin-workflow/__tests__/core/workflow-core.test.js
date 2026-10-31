@@ -413,6 +413,7 @@ test("workflow hook skips when source text is empty", async () => {
       sessionId: "s1",
       dialogProcessId: "d1",
       userMessage: "",
+      userMessageAttachments: [],
     },
     createTestHookInvocation(),
   );
@@ -441,6 +442,7 @@ test("workflow hook owns the turn and never falls back to main agent when semant
     sessionId: "s1",
     dialogProcessId: "d1",
     userMessage: "main output",
+    userMessageAttachments: [],
     runConfig: { locale: "zh-CN" },
     claimAgentDispatch: (claim = {}) => dispatchClaims.push(claim),
   };
@@ -505,6 +507,7 @@ test("workflow hook in before_agent_dispatch mode can request skipping main agen
     sessionId: "s1",
     dialogProcessId: "d1",
     userMessage: "请规划一个流程",
+    userMessageAttachments: [],
     claimAgentDispatch: (claim = {}) => dispatchClaims.push(claim),
   };
   const dispatchOutcome = await listener.handler(

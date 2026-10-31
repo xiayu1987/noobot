@@ -11,6 +11,8 @@ import {
   normalizeConnectorAccessContext,
   normalizeConnectorAccessRequest,
   normalizeConnectorAccessResult,
+  normalizeConnectorHealthResult,
+  CONNECTOR_FAILURE_CODE,
   normalizeConnectorParameters,
   projectPublicConnector,
 } from "@noobot/connector-protocol";
@@ -38,6 +40,11 @@ function decodeCallerInput(decode) {
 
 function callerInputError(message) {
   return Object.assign(new TypeError(message), { statusCode: CALLER_INPUT_STATUS_CODE });
+}
+
+function connectFailureMessage(failure) {
+  if (!(failure instanceof Error)) throw failure;
+  return failure.message;
 }
 
 export class ConnectorRuntime {
@@ -214,8 +221,10 @@ export class ConnectorRuntime {
       let handle = null;
       try {
         handle = await implementation.create({ connector: record, context });
-        const health = await implementation.health({ handle, connector: record, context });
-        if (health?.ok !== true) {
+        const health = normalizeConnectorHealthResult(
+          await implementation.health({ handle, connector: record, context }),
+        );
+        if (!health.ok) {
           try {
             await implementation.dispose({ handle, connector: record, context });
           } finally {
@@ -223,8 +232,8 @@ export class ConnectorRuntime {
           }
           this.statuses.set(key, {
             status: CONNECTOR_STATUS.ERROR,
-            statusCode: Number(health?.code || 1),
-            statusMessage: String(health?.message || "connector health check failed"),
+            errorCode: health.code,
+            statusMessage: health.error,
           });
           return createConnectorConnectionResult(this.getPublicConnector({ record }));
         }
@@ -232,8 +241,6 @@ export class ConnectorRuntime {
         this.handles.set(key, { handle, implementation, record });
         this.statuses.set(key, {
           status: CONNECTOR_STATUS.CONNECTED,
-          statusCode: 0,
-          statusMessage: "ok",
           connectedAt,
         });
         return createConnectorConnectionResult(this.getPublicConnector({ record }));
@@ -248,8 +255,8 @@ export class ConnectorRuntime {
         }
         this.statuses.set(key, {
           status: CONNECTOR_STATUS.ERROR,
-          statusCode: Number(failure?.code || 1),
-          statusMessage: String(failure?.message || failure),
+          errorCode: CONNECTOR_FAILURE_CODE.CONNECT_FAILED,
+          statusMessage: connectFailureMessage(failure),
         });
         return createConnectorConnectionResult(this.getPublicConnector({ record }));
       }
@@ -267,19 +274,25 @@ export class ConnectorRuntime {
       const record = await this._record(userId, connectorId);
       const active = this.handles.get(key);
       if (!active) return this.getPublicConnector({ record });
-      const health = await active.implementation.health({
-        handle: active.handle,
-        connector: record,
-        context,
-      });
-      this.statuses.set(key, {
-        ...this.statuses.get(key),
-        status: health?.ok === true ? CONNECTOR_STATUS.CONNECTED : CONNECTOR_STATUS.ERROR,
-        statusCode: Number(health?.code || 0),
-        statusMessage: String(
-          health?.message || (health?.ok === true ? "ok" : "health check failed"),
-        ),
-      });
+      const health = normalizeConnectorHealthResult(
+        await active.implementation.health({
+          handle: active.handle,
+          connector: record,
+          context,
+        }),
+      );
+      const { connectedAt } = this.statuses.get(key);
+      this.statuses.set(
+        key,
+        health.ok
+          ? { status: CONNECTOR_STATUS.CONNECTED, connectedAt }
+          : {
+              status: CONNECTOR_STATUS.ERROR,
+              errorCode: health.code,
+              statusMessage: health.error,
+              connectedAt,
+            },
+      );
       return this.getPublicConnector({ record });
     });
   }

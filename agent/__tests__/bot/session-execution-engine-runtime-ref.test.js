@@ -127,6 +127,7 @@ test("detached sub-session runner inherits userInteractionBridge from parent run
       createTestRuntimeContext({ userInteractionBridge: bridge }),
     ),
     message: "node task",
+    attachments: [],
     metadata: DETACHED_REQUEST_METADATA,
     strategy: createAgentDetachedSubSessionStrategy({
       userId: "u1",

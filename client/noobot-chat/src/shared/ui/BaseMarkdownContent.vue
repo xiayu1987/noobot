@@ -10,38 +10,63 @@ import {
   attachmentIdentityKey,
   parseAttachmentIdentityRef,
 } from "@noobot/attachment-protocol/identity";
+import { LINK_SNAPSHOT_KIND, mutationLinkRef } from "@noobot/path-resolver/resource-link";
 
 const props = defineProps({
-  content: { type: String, default: "" },
+  content: { type: String, required: true },
   renderMarkdown: { type: Function, required: true },
-  attachmentRefIndex: { type: Map, default: null },
+  attachmentRefIndex: { type: Map, required: true },
+
+  linkSnapshots: { type: Array, required: true },
+
+  messageIndex: { type: Number, required: true },
+
+  workspaceRootDirectory: { type: [String, null], required: true },
+
+  translate: { type: Function, required: true },
 });
-const emit = defineEmits(["download-attachment"]);
+const emit = defineEmits(["download-attachment", "download-mutation", "link-error"]);
 
 const { mermaidHostRef } = useMermaidRender();
 const renderedHtml = computed(() =>
-  props.renderMarkdown(String(props.content || ""), {
+  props.renderMarkdown(props.content, {
     attachmentRefIndex: props.attachmentRefIndex,
+    linkSnapshots: props.linkSnapshots,
+    messageIndex: props.messageIndex,
+    workspaceRootDirectory: props.workspaceRootDirectory,
+    translate: props.translate,
   }),
 );
 
+function findMutationRef(chipRef) {
+  const snapshot = props.linkSnapshots.find(
+    (item) => item.kind === LINK_SNAPSHOT_KIND.MUTATION && mutationLinkRef(item.ref) === chipRef,
+  );
+  if (!snapshot) throw new Error(`rendered mutation chip has no snapshot: ${chipRef}`);
+  return snapshot.ref;
+}
+
 function handleFileLink(event) {
-  const link = event.target?.closest?.("a[data-noobot-attachment-ref]");
+  const link = event.target?.closest?.(
+    "a[data-noobot-attachment-ref], a[data-noobot-mutation-ref]",
+  );
   if (!link || !event.currentTarget?.contains(link)) return;
   event.preventDefault();
   if (event.type === "auxclick") return;
-  const attachmentRef = link.getAttribute("data-noobot-attachment-ref");
-  if (attachmentRef) {
-    let identity;
-    try {
-      identity = parseAttachmentIdentityRef(attachmentRef);
-    } catch {
+  try {
+    const mutationChipRef = link.getAttribute("data-noobot-mutation-ref");
+    if (mutationChipRef) {
+      emit("download-mutation", findMutationRef(mutationChipRef));
       return;
     }
-    const key = attachmentIdentityKey(identity);
-    const attachment = props.attachmentRefIndex?.get(key);
-    if (attachment) emit("download-attachment", attachment);
-    return;
+    const identity = parseAttachmentIdentityRef(link.getAttribute("data-noobot-attachment-ref"));
+    const attachment = props.attachmentRefIndex.get(attachmentIdentityKey(identity));
+    if (!attachment) {
+      throw new Error(`rendered attachment chip is not indexed: ${identity.attachmentId}`);
+    }
+    emit("download-attachment", attachment);
+  } catch (error) {
+    emit("link-error", error);
   }
 }
 </script>
@@ -59,7 +84,8 @@ function handleFileLink(event) {
 <style scoped>
 .base-markdown-content {
   width: 100%;
-  overflow-x: auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
   color: inherit;
 }
 
@@ -96,10 +122,12 @@ function handleFileLink(event) {
 }
 
 .base-markdown-content :deep(table) {
+  display: block;
+  max-width: 100%;
   margin: var(--noobot-space-md) 0;
   font-size: var(--noobot-msg-caption-font-size);
   border-radius: var(--noobot-radius-sm);
-  overflow: hidden;
+  overflow-x: auto;
 }
 
 .base-markdown-content :deep(th),
@@ -185,6 +213,15 @@ function handleFileLink(event) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.base-markdown-content :deep(.noobot-attachment-chip[data-noobot-link-superseded]) {
+  border-style: dashed;
+}
+
+.base-markdown-content :deep(.noobot-attachment-chip--latest) {
+  margin-left: 4px;
+  color: var(--noobot-text-muted);
 }
 
 .base-markdown-content :deep(.noobot-attachment-chip--missing) {

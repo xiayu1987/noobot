@@ -48,10 +48,12 @@ test("write_file: content 超过 semantic-transfer 阈值时保存附件并直�
   const result = parseToolResult(runnerResult.toolResultText);
 
   assert.equal(invoked, false);
-  assert.equal(runnerResult.success, true);
+  assert.equal(runnerResult.success, false);
+  assert.equal(runnerResult.failureReason, "tool_input_overflow");
   assert.equal(result.toolName, "write_file");
   assert.equal(result.ok, false);
-  assert.equal(result.message, "文件内容过长，请分批写入");
+  assert.equal(result.code, "RECOVERABLE_TOOL_INPUT_OVERFLOW");
+  assert.equal(result.error, "文件内容过长，请分批写入");
   assert.equal(Array.isArray(result.transferEnvelopes), true);
   assert.equal(result.transferEnvelopes.length, 1);
   assert.equal(result.transferEnvelopes[0].version, TRANSFER_VERSION);
@@ -84,7 +86,7 @@ test("write_file: overwrite=false uses the canonical failed result protocol", as
   );
 
   assert.equal(result.ok, false);
-  assert.equal(result.status, "failed");
+  assert.equal(Object.hasOwn(result, "status"), false);
   assert.equal(result.code, "RECOVERABLE_FILE_ALREADY_EXISTS");
   assert.equal(result.error, "文件已存在；如需替换，请将 overwrite 设置为 true。");
   assert.equal(await fs.readFile(path.join(basePath, "existing.txt"), "utf8"), "original");
@@ -165,7 +167,10 @@ test("write_file: successful output uses the canonical mutation result", async (
   assert.equal(runnerResult.transferEnvelopes?.length || 0, 0);
   assert.equal(result.protocol, "noobot.file-mutation-result");
   assert.ok(result.mutations?.[0]?.id);
-  assert.equal(result.mutations[0].path, "runtime/ops_workdir/result.md");
+  assert.deepEqual(result.mutations[0].locator, {
+    view: "workspace",
+    path: "runtime/ops_workdir/result.md",
+  });
   assert.equal(result.mutations[0].after.size, 8);
   assert.equal("outputArtifacts" in result, false);
   assert.equal(
@@ -192,7 +197,7 @@ test("file tools retain one internal ResourceRef for repeated logical path input
   );
 
   assert.equal(written.ok, true, JSON.stringify(written));
-  assert.equal(written.resources.length, 1);
+  assert.equal(written.outputResources.length, 1);
   const read = parseToolResult(
     await readTool.invoke(
       { riskLevel: "low", filePath: written.path.path },
@@ -201,7 +206,7 @@ test("file tools retain one internal ResourceRef for repeated logical path input
   );
   assert.equal(read.ok, true, JSON.stringify(read));
   assert.equal(read.content, "1 | resource-round-trip");
-  assert.equal(read.resources[0].resourceId, written.resources[0].resourceId);
+  assert.equal(read.resources[0].resourceId, written.outputResources[0].resourceId);
 });
 
 test("write_file: sandbox 模式使用宿主受控 I/O 并返回 sandbox 展示路径", async () => {
@@ -353,10 +358,9 @@ test("workspace I/O: file tools keep one sandbox display path end to end", async
   assert.equal(patched.changes.length, 1);
   assert.deepEqual(patched.changes[0].path, written.path);
   assert.equal(patched.changes[0].action, "write");
-  assert.ok(patched.changes[0].mutation?.id);
-  assert.equal(patched.changes[0].mutation.path, written.path.path);
+  assert.equal(Object.hasOwn(patched.changes[0], "mutation"), false);
   assert.equal(patched.mutations.length, 1);
-  assert.equal(patched.mutations[0].id, patched.changes[0].mutation.id);
+  assert.deepEqual(patched.mutations[0].locator, written.path);
 
   const finalRead = parseToolResult(
     await tools.get("read_file").invoke(
@@ -455,7 +459,7 @@ test("write_file: global sandbox mounts enforce their protocol readOnly flag", a
     ),
   );
   assert.equal(written.ok, true);
-  assert.deepEqual(written.path, { view: "workspace", path: "/shared-write/result.txt" });
+  assert.deepEqual(written.path, { view: "mount", mount: "/shared-write", path: "result.txt" });
   assert.equal(await fs.readFile(path.join(writableRoot, "result.txt"), "utf8"), "mounted-write");
 
   await assert.rejects(
@@ -470,7 +474,7 @@ test("write_file: global sandbox mounts enforce their protocol readOnly flag", a
       ),
     (error) => {
       assert.equal(error.code, "RECOVERABLE_PATH_OUT_OF_SCOPE");
-      assert.equal(error.details?.reason, "sandbox_mount_read_only");
+      assert.equal(error.details?.reason, "mount_read_only");
       return true;
     },
   );

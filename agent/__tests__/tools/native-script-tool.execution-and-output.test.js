@@ -12,13 +12,15 @@ import { createNativeScriptTool } from "../../src/tools/execution/native-script-
 
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import { IDENTITY, createRuntime, hasFfmpegCapabilities } from "./native-script-tool.fixtures.js";
+import { SCRIPT_FAILURE_CODE } from "@noobot/execution-isolation-protocol";
+import { createTestAttachmentService } from "../helpers/test-runtime-context.js";
 
 test("execute_native_script injects capabilities and persists task output", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-script-"));
   await fs.writeFile(path.join(basePath, "input.txt"), "source", "utf8");
   let persistedRequest = null;
   const runtime = createRuntime(basePath, {
-    attachmentService: {
+    attachmentService: createTestAttachmentService({
       async ingestGeneratedArtifacts(request) {
         persistedRequest = request;
         return request.artifacts.map((artifact, index) => ({
@@ -30,7 +32,7 @@ test("execute_native_script injects capabilities and persists task output", asyn
           size: Buffer.from(artifact.contentBase64, "base64").length,
         }));
       },
-    },
+    }),
   });
   const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
   assert.match(tool.description, /help.*execute_native_script/);
@@ -147,7 +149,7 @@ test("execute_native_script projects runtime roots but preserves caller path dat
   await fs.writeFile(path.join(basePath, "input.txt"), "source", "utf8");
   let persistedRequest = null;
   const runtime = createRuntime(basePath, {
-    attachmentService: {
+    attachmentService: createTestAttachmentService({
       async ingestGeneratedArtifacts(request) {
         persistedRequest = request;
         return request.artifacts.map((artifact, index) => ({
@@ -159,7 +161,7 @@ test("execute_native_script projects runtime roots but preserves caller path dat
           size: Buffer.from(artifact.contentBase64, "base64").length,
         }));
       },
-    },
+    }),
   });
   const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
   const result = JSON.parse(
@@ -206,7 +208,7 @@ test("execute_native_script reads generated output and temporary text through ta
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-readback-"));
   let persistedRequest = null;
   const runtime = createRuntime(basePath, {
-    attachmentService: {
+    attachmentService: createTestAttachmentService({
       async ingestGeneratedArtifacts(request) {
         persistedRequest = request;
         return request.artifacts.map((artifact, index) => ({
@@ -218,7 +220,7 @@ test("execute_native_script reads generated output and temporary text through ta
           size: Buffer.from(artifact.contentBase64, "base64").length,
         }));
       },
-    },
+    }),
   });
   const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
   const result = JSON.parse(
@@ -330,7 +332,7 @@ log(temporary, await files.readText(temporary));
 test("execute_native_script publishes zero-byte output with the same count as its attachments", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-empty-output-"));
   const runtime = createRuntime(basePath, {
-    attachmentService: {
+    attachmentService: createTestAttachmentService({
       async ingestGeneratedArtifacts(request) {
         return request.artifacts.map((artifact, index) => ({
           attachmentId: `empty-output-${index}`,
@@ -341,7 +343,7 @@ test("execute_native_script publishes zero-byte output with the same count as it
           size: Buffer.from(artifact.contentBase64, "base64").length,
         }));
       },
-    },
+    }),
   });
   const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
   const result = JSON.parse(
@@ -370,7 +372,7 @@ test("execute_native_script promotes temporary binary bytes into a formal output
   await fs.writeFile(path.join(basePath, "source.bin"), sourceBytes);
   let persistedRequest = null;
   const runtime = createRuntime(basePath, {
-    attachmentService: {
+    attachmentService: createTestAttachmentService({
       async ingestGeneratedArtifacts(request) {
         persistedRequest = request;
         return request.artifacts.map((artifact, index) => ({
@@ -382,7 +384,7 @@ test("execute_native_script promotes temporary binary bytes into a formal output
           size: Buffer.from(artifact.contentBase64, "base64").length,
         }));
       },
-    },
+    }),
   });
   const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
   const result = JSON.parse(
@@ -438,6 +440,8 @@ await files.writeBase64(target, "not base64 !!");
   );
 
   assert.equal(result.ok, false, JSON.stringify(result));
-  assert.match(result.error, /files\.writeBase64 requires base64 content/);
+  assert.equal(result.code, SCRIPT_FAILURE_CODE.exited);
+  assert.equal(result.exitCode, 1);
+  assert.match(result.stderr, /files\.writeBase64 requires base64 content/);
   assert.equal(result.output_file_count, 0);
 });

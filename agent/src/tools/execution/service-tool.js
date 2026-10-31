@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { tool as structuredTool } from "@langchain/core/tools";
+import { normalizeServiceHandlerResult } from "@noobot/agent-config-protocol/service-handler";
 import { z } from "zod";
 import { mergeConfig } from "../../config/index.js";
 import {
@@ -16,7 +17,7 @@ import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { TOOL_NAME } from "../constants/index.js";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
 
 function getServices(agentContext) {
   const runtime = getRuntimeFromAgentContext(agentContext);
@@ -64,7 +65,7 @@ function validateCustomParam(customParam, runtime) {
 export function createServiceTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const callServiceTool = structuredTool(
-    async ({ serviceName, endpointName, custom_param, queryString = {}, body }, toolConfig) => {
+    async ({ serviceName, endpointName, custom_param, queryString, body }, toolConfig) => {
       const globalConfig = runtime?.globalConfig || {};
       const userId = resolveRuntimeUserId(runtime);
       const inputErr = validateInput({
@@ -144,15 +145,7 @@ export function createServiceTool({ agentContext }) {
         body,
         abortSignal: toolConfig.signal,
       });
-      const normalizedResult = isPlainObject(result) ? result : { data: result };
-      return toToolJsonResult(
-        TOOL_NAME.CALL_SERVICE,
-        {
-          ok: normalizedResult?.ok !== false,
-          ...normalizedResult,
-        },
-        true,
-      );
+      return toToolJsonResult(TOOL_NAME.CALL_SERVICE, normalizeServiceHandlerResult(result));
     },
     {
       name: TOOL_NAME.CALL_SERVICE,

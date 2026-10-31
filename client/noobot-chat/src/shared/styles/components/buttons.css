@@ -113,7 +113,7 @@ button,
   border-radius: var(--noobot-radius-pill);
   font-size: var(--noobot-font-size-sm);
   font-weight: var(--noobot-font-weight-semibold);
-  line-height: 16px;
+  line-height: var(--noobot-line-height-none);
   transition:
     background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
     border-color var(--noobot-duration-normal) var(--noobot-ease-standard),

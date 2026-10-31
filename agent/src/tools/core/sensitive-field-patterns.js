@@ -11,5 +11,4 @@ export {
   matchesSensitiveFieldPattern,
   REDACTED_SENSITIVE_FIELD_VALUE,
   sanitizeSensitiveFields,
-  sanitizeToolResultText,
 } from "@noobot/sanitize";

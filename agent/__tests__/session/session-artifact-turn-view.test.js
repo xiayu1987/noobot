@@ -27,6 +27,7 @@ const now = () => "2026-10-19T00:00:00.000Z";
 const baseMessages = [
   {
     sessionId: "s",
+    attachments: [],
     messageUid: "sm_a_u",
     ts: TEST_MESSAGE_TS,
     role: "user",
@@ -36,6 +37,7 @@ const baseMessages = [
     dialogProcessId: "dp1",
   },
   {
+    attachments: [],
     messageUid: "sm_a_a",
     ts: TEST_MESSAGE_TS,
     sessionId: "s",
@@ -47,6 +49,7 @@ const baseMessages = [
   },
   {
     sessionId: "s",
+    attachments: [],
     messageUid: "sm_b_u",
     ts: TEST_MESSAGE_TS,
     role: "user",
@@ -57,6 +60,7 @@ const baseMessages = [
   },
   {
     sessionId: "s",
+    attachments: [],
     messageUid: "sm_c_u",
     ts: TEST_MESSAGE_TS,
     role: "user",
@@ -68,6 +72,7 @@ const baseMessages = [
 ];
 
 const appended = {
+  attachments: [],
   messageUid: "sm_a_tool",
   ts: TEST_MESSAGE_TS,
   sessionId: "s",
@@ -163,6 +168,7 @@ test("consecutive turn view appends keep later views scoped and the session comp
     for (const turnScopeId of ["d", "e"]) {
       const view = await readView(root, [turnScopeId]);
       const message = {
+        attachments: [],
         messageUid: `sm_${turnScopeId}_u`,
         ts: TEST_MESSAGE_TS,
         sessionId: "s",
@@ -190,6 +196,7 @@ test("turn view write rejects a messageUid owned by a turn outside the view", as
     const view = await readView(root, ["c"]);
     view.session.messages.push({
       ...appended,
+      attachments: [],
       messageUid: "sm_a_u",
       turnScopeId: "c",
       dialogProcessId: "dp2",

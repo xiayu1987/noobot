@@ -5,42 +5,6 @@
  */
 import { ref } from "vue";
 
-export function createFilePreviewState() {
-  const state = {
-    visible: ref(false),
-    loading: ref(false),
-    error: ref(""),
-    fileName: ref(""),
-    mode: ref("text"),
-    textContent: ref(""),
-    imageUrl: ref(""),
-  };
-  function cleanupImageUrl() {
-    if (!state.imageUrl.value) return;
-    URL.revokeObjectURL(state.imageUrl.value);
-    state.imageUrl.value = "";
-  }
-  function open(fileName) {
-    state.visible.value = true;
-    state.loading.value = true;
-    state.error.value = "";
-    state.fileName.value = fileName;
-    state.mode.value = "text";
-    state.textContent.value = "";
-    cleanupImageUrl();
-  }
-  function reset() {
-    state.visible.value = false;
-    state.loading.value = false;
-    state.error.value = "";
-    state.fileName.value = "";
-    state.mode.value = "text";
-    state.textContent.value = "";
-    cleanupImageUrl();
-  }
-  return { state, open, reset, cleanupImageUrl };
-}
-
 export function createAttachmentPreviewState() {
   const state = {
     visible: ref(false),

@@ -46,9 +46,14 @@ function toolMessage(index) {
         key: `call:call-${index}`,
         toolCallId: `call-${index}`,
         tool: "read_file",
-        args: { path: `/file-${index}` },
-        result: "ok",
+        args: { filePath: `file-${index}.txt` },
+        result: {
+          ok: true,
+          path: { view: "workspace", path: `file-${index}.txt` },
+          fileName: `file-${index}.txt`,
+        },
         call: { eventId: `call-event-${index}`, sequence: index * 2 + 1 },
+        success: true,
         resultEvent: { eventId: `result-event-${index}`, sequence: index * 2 + 2 },
       },
     ],
@@ -120,7 +125,11 @@ describe("thinking panel round timeline reactivity", () => {
     const { allMessages, timeline } = mountRound();
     const before = timeline.currentExecutionLogs.value;
 
-    allMessages[1].toolTimeline[0].result = "updated";
+    allMessages[1].toolTimeline[0].result = {
+      ok: true,
+      path: { view: "workspace", path: "updated.txt" },
+      fileName: "updated.txt",
+    };
     await nextTick();
 
     const after = timeline.currentExecutionLogs.value;

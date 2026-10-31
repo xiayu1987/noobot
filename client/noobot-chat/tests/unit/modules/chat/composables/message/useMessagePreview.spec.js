@@ -123,17 +123,23 @@ describe("useMessagePreview attachment downloads", () => {
 
   it("rejects a non-canonical attachment instead of constructing an access URL", async () => {
     const attachmentService = createAttachmentService(createBlobResponse);
-    const { onDownloadAttachment } = createMessagePreview({ userId: "admin", attachmentService });
+    const notify = vi.fn();
+    const { onDownloadAttachment } = createMessagePreview({
+      userId: "admin",
+      attachmentService,
+      notify,
+    });
 
-    await expect(
-      onDownloadAttachment({
-        name: "missing-id.txt",
-        mimeType: "text/plain",
-        previewUrl: "https://attacker.example/file",
-        downloadUrl: "/api/internal/unrelated",
-      }),
-    ).rejects.toThrow("invalid_attachment_id");
+    await onDownloadAttachment({
+      name: "missing-id.txt",
+      mimeType: "text/plain",
+      previewUrl: "https://attacker.example/file",
+      downloadUrl: "/api/internal/unrelated",
+    });
 
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(notify.mock.calls[0][0]).toMatchObject({ type: "error" });
+    expect(notify.mock.calls[0][0].message).toContain("invalid_attachment_id");
     expect(attachmentService.fetchUrl).not.toHaveBeenCalled();
   });
 
@@ -371,20 +377,20 @@ describe("useMessagePreview markdown copy", () => {
     const attachmentRefIndex = new Map();
     const preview = createMessagePreview({ renderMarkdown, notify });
 
-    preview.onCopyMessageMarkdownRich({ textContent: "body", attachmentRefIndex });
+    const linkSnapshots = [];
+    const context = {
+      attachmentRefIndex,
+      linkSnapshots,
+      messageIndex: 3,
+      workspaceRootDirectory: null,
+    };
+    preview.onCopyMessageMarkdownRich({ textContent: "body", ...context });
 
-    expect(renderMarkdown).toHaveBeenCalledWith("body", { attachmentRefIndex });
+    expect(renderMarkdown).toHaveBeenCalledWith("body", {
+      ...context,
+      translate: expect.any(Function),
+    });
     expect(notify).toHaveBeenCalledWith({ type: "success", message: "Copied as HTML page" });
-  });
-
-  it("renders preview rich copy from the preview text without message options", () => {
-    document.execCommand = vi.fn(() => true);
-    const renderMarkdown = vi.fn(() => "<p>preview</p>");
-    const preview = createMessagePreview({ renderMarkdown });
-
-    preview.onCopyMarkdownRich();
-
-    expect(renderMarkdown).toHaveBeenCalledWith("", undefined);
   });
 
   it("rejects construction without the required render dependency", () => {

@@ -268,6 +268,36 @@ export function resolveContextToolCallDeclarationId(call = {}) {
   return text(call?.id);
 }
 
+function requireContextToolCall(call) {
+  if (!isObjectLike(call) || Array.isArray(call)) {
+    throw new TypeError("context tool call must be an object");
+  }
+  return call;
+}
+
+export function resolveContextToolCallName(call = {}) {
+  const source = requireContextToolCall(call);
+  const name = text(source.name) || text(source.function?.name);
+  if (!name) throw new TypeError("context tool call requires a tool name");
+  return name;
+}
+
+export function resolveContextToolCallArgs(call = {}) {
+  const source = requireContextToolCall(call);
+  const declared = Object.hasOwn(source, "args") ? source.args : source.function?.arguments;
+  if (typeof declared === "string") {
+    const parsed = JSON.parse(declared);
+    if (!isObjectLike(parsed) || Array.isArray(parsed)) {
+      throw new TypeError("context tool call arguments must encode an object");
+    }
+    return parsed;
+  }
+  if (!isObjectLike(declared) || Array.isArray(declared)) {
+    throw new TypeError("context tool call requires object arguments");
+  }
+  return declared;
+}
+
 export function resolveContextToolResultCallId(message = {}) {
   return text(message?.tool_call_id);
 }

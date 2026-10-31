@@ -32,7 +32,6 @@ const props = defineProps({
   selectedGraphDialogProcessId: { type: String, default: "" },
   displayNodeMessages: { type: Array, default: () => [] },
   logWorkflowDiagnostics: { type: Function, required: true },
-  nodeSessionAllMessages: { type: Array, default: () => [] },
   selectedNodeSessionDocs: { type: Array, default: () => [] },
   userId: { type: String, default: "" },
   renderMarkdown: { type: Function, required: true },
@@ -366,7 +365,6 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
             :execution-id="selectedExecutionId || selectedNodeSessionId"
             channel-context="workflow-node"
             :messages="displayNodeMessages"
-            :all-messages="nodeSessionAllMessages"
             :session-docs="selectedNodeSessionDocs"
             :user-id="userId"
             :render-markdown="renderMarkdown"
@@ -385,7 +383,6 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
                     : translate('workflow.noNodeSessionContent')
             "
             attachment-preview-dialog-class="workflow-session-preview-dialog"
-            file-preview-dialog-class="workflow-session-preview-dialog"
             @open-thinking-details="$emit('open-thinking-details', $event)"
           />
           <div

@@ -22,7 +22,7 @@ test("file mutation requires an explicit write capability", async () => {
     applyFileMutation({
       sessionScope: null,
       filePath: "unused.txt",
-      logicalPath: "unused.txt",
+      locator: { view: "workspace", path: "unused.txt" },
       content: "unused",
       mutationRoot: "unused-mutations",
     }),
@@ -38,7 +38,7 @@ test("file mutation persists before snapshot and diff, then reads the same recor
     const result = await applyFileMutation({
       sessionScope: null,
       filePath: target,
-      logicalPath: "file.txt",
+      locator: { view: "workspace", path: "file.txt" },
       content: "after\n",
       mutationRoot: resolveFileMutationRoot(root),
       writeText,
@@ -69,7 +69,7 @@ test("file mutation rolls target back when record commit fails", async () => {
       applyFileMutation({
         sessionScope: null,
         filePath: target,
-        logicalPath: "file.txt",
+        locator: { view: "workspace", path: "file.txt" },
         content: "after\n",
         mutationRoot: path.join(root, "records"),
         writeText: async (filePath, content) => writeFile(filePath, content, "utf8"),
@@ -90,7 +90,7 @@ test("delete mutation persists the before snapshot and a removal diff", async ()
     const result = await applyFileMutation({
       sessionScope: null,
       filePath: target,
-      logicalPath: "file.txt",
+      locator: { view: "workspace", path: "file.txt" },
       operation: "delete",
       mutationRoot: resolveFileMutationRoot(root),
       writeText,
@@ -118,7 +118,7 @@ test("update mutations keep one initial snapshot and append incremental diffs pe
     const first = await applyFileMutation({
       sessionScope: null,
       filePath: target,
-      logicalPath: "file.txt",
+      locator: { view: "workspace", path: "file.txt" },
       content: "middle\n",
       operation: "update",
       scopeId: "turn-1",
@@ -128,7 +128,7 @@ test("update mutations keep one initial snapshot and append incremental diffs pe
     const second = await applyFileMutation({
       sessionScope: null,
       filePath: target,
-      logicalPath: "file.txt",
+      locator: { view: "workspace", path: "file.txt" },
       content: "final\n",
       operation: "update",
       scopeId: "turn-1",
@@ -157,7 +157,7 @@ test("update mutations keep one initial snapshot and append incremental diffs pe
     const isolated = await applyFileMutation({
       sessionScope: null,
       filePath: target,
-      logicalPath: "file.txt",
+      locator: { view: "workspace", path: "file.txt" },
       content: "other\n",
       operation: "update",
       scopeId: "turn-2",
@@ -194,7 +194,7 @@ test("multi-file callers can roll back every committed mutation after a later wr
     const firstMutation = await applyFileMutation({
       sessionScope: null,
       filePath: first,
-      logicalPath: "first.txt",
+      locator: { view: "workspace", path: "first.txt" },
       content: "first-after\n",
       mutationRoot,
       writeText,
@@ -203,12 +203,17 @@ test("multi-file callers can roll back every committed mutation after a later wr
       applyFileMutation({
         sessionScope: null,
         filePath: second,
-        logicalPath: "second.txt",
+        locator: { view: "workspace", path: "second.txt" },
         content: "second-after\n",
         mutationRoot,
         writeText,
       }),
-      { code: "injected_write_failure" },
+      (error) => {
+        assert.equal(error.code, "file_mutation_commit_failed");
+        assert.equal(error.statusCode, 500);
+        assert.equal(error.cause.code, "injected_write_failure");
+        return true;
+      },
     );
     await writeFile(first, "first-before\n", "utf8");
     await rm(path.join(mutationRoot, `${firstMutation.mutations[0].id}.json`), { force: true });
@@ -224,21 +229,28 @@ test("rollback removes a file created by a mutation", async () => {
   try {
     const target = path.join(root, "created.txt");
     const mutationRoot = resolveFileMutationRoot(root);
+    const rollbackState = {};
     const result = await applyFileMutation({
       sessionScope: null,
       filePath: target,
-      logicalPath: "created.txt",
+      locator: { view: "workspace", path: "created.txt" },
       content: "created\n",
       mutationRoot,
+      rollbackState,
       writeText,
     });
     await rollbackFileMutation({
       mutationRoot,
       mutationId: result.mutations[0].id,
       filePath: target,
+      restoreState: rollbackState,
       writeText,
     });
     await assert.rejects(stat(target), { code: "ENOENT" });
+    await assert.rejects(readFileMutation({ mutationRoot, mutationId: result.mutations[0].id }), {
+      code: "file_mutation_not_found",
+      statusCode: 404,
+    });
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -28,7 +28,8 @@ export async function registerHttpModules(
     normalizeWorkspaceUsersConfig,
     requireSuperAdmin,
     requireApiKey,
-    enforceUserScopeParam,
+    administrableUserScopeParam,
+    ownerOnlyUserScopeParam,
     resolveAuthByApiKey,
     resolveConfigParamScope,
     readScopedConfigParams,
@@ -93,7 +94,7 @@ export async function registerHttpModules(
     requireApiKey(req, res, next);
   });
 
-  app.param("userId", enforceUserScopeParam);
+  app.param("userId", administrableUserScopeParam);
 
   registerConfigAndTemplateRoutes(app, {
     requireApiKey,
@@ -115,6 +116,7 @@ export async function registerHttpModules(
     bot,
     connectorRuntime,
     translateText,
+    ownerOnlyUserScopeParam,
   });
 
   registerIdeRoutes(app, {
@@ -135,7 +137,7 @@ export async function registerHttpModules(
   const servicePluginHost = createServicePluginHost({ pluginRootDir });
   await servicePluginHost.registerServiceRoutes(app, {
     translateText,
-    enforceUserScopeParam,
+    enforceUserScopeParam: administrableUserScopeParam,
     ports: createPluginServicePorts({ bot, translateText }),
   });
 

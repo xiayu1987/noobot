@@ -7,10 +7,12 @@ import {
   isCanonicalActivityMessageEvent,
   isDurableActivityMessageEvent,
   reduceCanonicalActivityTimeline,
+  selectMessageActivityTimeline,
 } from "@noobot/event-protocol/activity-timeline";
 import {
   isCanonicalToolMessageEvent,
   reduceCanonicalToolTimeline,
+  selectMessageToolTimeline,
 } from "@noobot/event-protocol/tool-timeline";
 import { resolveMessageEventModelMessageId } from "@noobot/event-protocol/message-event";
 import { mergeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
@@ -37,7 +39,7 @@ export function initializeCurrentTurnMessageEventProjection(runtime = {}) {
       return envelope;
     }
 
-    const modelMessageId = resolveMessageEventModelMessageId(envelope?.payload);
+    const modelMessageId = resolveMessageEventModelMessageId(envelope.payload);
     const messages = store.toArray();
     const ownerIndex = modelMessageId
       ? messages.findIndex(
@@ -53,18 +55,16 @@ export function initializeCurrentTurnMessageEventProjection(runtime = {}) {
     const owner = messages[ownerIndex];
 
     const isToolEvent = isCanonicalToolMessageEvent(envelope);
-    const currentTimeline = isToolEvent ? owner.toolTimeline : owner.activityTimeline;
-    const transferEnvelopes = Array.isArray(envelope?.payload?.transferEnvelopes)
-      ? envelope.payload.transferEnvelopes
-      : [];
+    const currentTimeline = isToolEvent
+      ? selectMessageToolTimeline(owner)
+      : selectMessageActivityTimeline(owner);
+    const transferEnvelopes = envelope.payload.transferEnvelopes ?? [];
     const observed = isToolEvent
-      ? (Array.isArray(currentTimeline) ? currentTimeline : []).some(
+      ? currentTimeline.some(
           (item) =>
             text(item?.call?.eventId) === eventId || text(item?.resultEvent?.eventId) === eventId,
         )
-      : (Array.isArray(currentTimeline) ? currentTimeline : []).some(
-          (item) => text(item?.eventId) === eventId,
-        );
+      : currentTimeline.some((item) => text(item?.eventId) === eventId);
     if (observed) return envelope;
 
     const patch = isToolEvent
@@ -90,15 +90,10 @@ export function initializeCurrentTurnMessageEventProjection(runtime = {}) {
     return envelope;
   };
 
-  const drainPendingMessageEvents = (
-    acceptsOwner,
-    { activityTimeline = [], toolTimeline = [] },
-  ) => {
+  const drainPendingMessageEvents = (acceptsOwner) => {
     const facts = [];
     for (let index = pendingMessageEvents.length - 1; index >= 0; index -= 1) {
-      const pendingOwnerId = resolveMessageEventModelMessageId(
-        pendingMessageEvents[index]?.payload,
-      );
+      const pendingOwnerId = resolveMessageEventModelMessageId(pendingMessageEvents[index].payload);
       if (!pendingOwnerId || acceptsOwner(pendingOwnerId)) {
         facts.unshift(...pendingMessageEvents.splice(index, 1));
       }
@@ -115,26 +110,19 @@ export function initializeCurrentTurnMessageEventProjection(runtime = {}) {
         }
         return projection;
       },
-      {
-        activityTimeline: Array.isArray(activityTimeline) ? [...activityTimeline] : [],
-        toolTimeline: Array.isArray(toolTimeline) ? [...toolTimeline] : [],
-      },
+      { activityTimeline: [], toolTimeline: [] },
     );
   };
 
-  runtime.materializePendingCurrentTurnMessageEvents = ({
-    modelMessageId = "",
-    ...timelines
-  } = {}) => {
-    const ownerId = text(modelMessageId);
+  runtime.materializePendingCurrentTurnMessageEvents = (request) => {
+    const ownerId = text(request?.modelMessageId);
     if (!ownerId) {
       throw new Error("pending message event materialization requires modelMessageId");
     }
-    return drainPendingMessageEvents((pendingOwnerId) => pendingOwnerId === ownerId, timelines);
+    return drainPendingMessageEvents((pendingOwnerId) => pendingOwnerId === ownerId);
   };
 
-  runtime.materializeUnownedCurrentTurnMessageEvents = (timelines = {}) =>
-    drainPendingMessageEvents(() => false, timelines);
+  runtime.materializeUnownedCurrentTurnMessageEvents = () => drainPendingMessageEvents(() => false);
 
   return runtime;
 }

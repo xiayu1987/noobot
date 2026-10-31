@@ -10,7 +10,7 @@ export function createTurnReplaceFingerprint({
   anchor = {},
   newContent = "",
   turnScopeId = "",
-  attachments = [],
+  attachments,
 } = {}) {
   return createCommandRequestHash({
     type: "session.turn.replace",

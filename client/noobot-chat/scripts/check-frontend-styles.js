@@ -32,6 +32,15 @@ const tokenLocations = [
   path.join(projectRoot, "src/shared/utils/markdown-copy.js"),
   path.join(repoRoot, "client/startup/src/style.css"),
 ];
+
+const typographySources = [
+  path.join(projectRoot, "src/shared/styles/tokens/typography.css"),
+  path.join(repoRoot, "client/startup/src/style.css"),
+];
+const typographyTemplateFiles = [path.join(projectRoot, "src/shared/utils/markdown-copy.js")];
+const typographyDeclaration =
+  /(?<![-\w])["']?(?<property>--[\w-]*(?:font|line-height|letter-spacing)[\w-]*|font|font-family|font-size|font-weight|line-height|letter-spacing)["']?\s*:\s*(?:"(?<quotedValue>[^"]*)"|(?<plainValue>[^;{}]+))/g;
+const allowedTypographyValue = /^(?:var\(--[\w-]+\)|inherit|initial|unset|0)$/;
 const formContractFiles = [
   {
     filePath: path.join(projectRoot, "src/shared/styles/integrations/element-plus.css"),
@@ -84,22 +93,6 @@ const checks = [
   ["literal hex color must be declared in a token location", /#[0-9a-f]{3,8}\b/i],
   ["literal rgb color must be declared in a token location", /\brgba?\(\s*\d/i],
   [
-    "literal font size must use a font-size token",
-    /(?:^|[^-\w])font-size\s*:\s*[^;\n}]*\d(?:px|rem)\b/i,
-  ],
-  [
-    "literal font weight must use a font-weight token",
-    /(?:^|[^-\w])font-weight\s*:\s*(?:\d+|bold|bolder|lighter)\b/i,
-  ],
-  [
-    "literal line height must use a line-height token",
-    /(?:^|[^-\w])line-height\s*:\s*(?!0(?![.\d]))\d*\.?\d+(?![\w.%])/i,
-  ],
-  [
-    "literal letter spacing must use a letter-spacing token",
-    /(?:^|[^-\w])letter-spacing\s*:\s*-?\d*\.?\d+/i,
-  ],
-  [
     "literal transition easing must use an easing token",
     /^(?!.*\banimation\b).*(?:\d*\.?\d+m?s|var\(--noobot-duration-[\w-]+\))\s+(?:ease(?:-in|-out|-in-out)?|linear|cubic-bezier\(|steps\()/i,
   ],
@@ -131,6 +124,24 @@ function inspectEmptyStyleRules(filePath, source) {
         `${path.relative(repoRoot, filePath)}:${lineNumber}: empty style rule is forbidden`,
       );
     }
+  }
+}
+
+function inspectTypography(filePath, source) {
+  const isTypographySource = typographySources.includes(filePath);
+  for (const match of source.matchAll(typographyDeclaration)) {
+    const { property, quotedValue, plainValue } = match.groups;
+    const rawValue = quotedValue ?? plainValue;
+    if (isTypographySource && property.startsWith("--")) continue;
+    const value = rawValue
+      .replace(/\s*!important\s*$/, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (allowedTypographyValue.test(value)) continue;
+    const lineNumber = source.slice(0, match.index).split(/\r?\n/).length;
+    violations.push(
+      `${path.relative(repoRoot, filePath)}:${lineNumber}: ${property} must reference a typography token from src/shared/styles/tokens/typography.css (got "${value}")`,
+    );
   }
 }
 
@@ -204,11 +215,7 @@ function inspectFile(filePath) {
     for (const [message, pattern] of checks) {
       if (!pattern.test(line)) continue;
       if (
-        (message.includes("color") ||
-          message.includes("radius") ||
-          message.includes("font size") ||
-          message.includes("font weight") ||
-          message.includes("easing")) &&
+        (message.includes("color") || message.includes("radius") || message.includes("easing")) &&
         isTokenDeclaration(filePath, line)
       )
         continue;
@@ -216,9 +223,12 @@ function inspectFile(filePath) {
     }
   });
   if (filePath.endsWith(".css") || filePath.endsWith(".vue")) {
+    inspectTypography(filePath, source);
     inspectEmptyStyleRules(filePath, source);
     inspectResponsiveBreakpoints(filePath, source);
     inspectFixedLayers(filePath, source);
+  } else if (typographyTemplateFiles.includes(filePath)) {
+    inspectTypography(filePath, source);
   }
 
   if (filePath.endsWith(".vue")) {

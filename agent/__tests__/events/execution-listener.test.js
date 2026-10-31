@@ -260,6 +260,7 @@ test("execution listener persists the canonical message fact instead of the priv
       presentationMessageId: "presentation-a",
       dialogProcessId: "dialog-a",
       tool: "read_file",
+      args: {},
       toolCallId: "call-a",
     },
   });
@@ -307,6 +308,7 @@ test("execution listener requires persistDurationMs on committed message events"
       presentationMessageId: "presentation-a",
       dialogProcessId: "dialog-a",
       tool: "read_file",
+      args: {},
       toolCallId: "call-b",
     },
   });
@@ -369,6 +371,7 @@ test("execution listener forwards transient message events without persisting th
   const durable = messageEnvelope("tool-event-a", 1, {
     eventType: "tool_call_start",
     tool: "read_file",
+    args: {},
     toolCallId: "call-a",
   });
 

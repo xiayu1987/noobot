@@ -28,6 +28,7 @@ test("concurrent repository saves allocate monotonic Turn journals without cross
   try {
     const sessionId = "concurrent-turn-journals";
     const keep = {
+      attachments: [],
       messageUid: "keep-message",
       ts: TEST_MESSAGE_TS,
       sessionId,
@@ -38,6 +39,7 @@ test("concurrent repository saves allocate monotonic Turn journals without cross
       turnScopeId: "turn-keep",
     };
     const replaced = {
+      attachments: [],
       messageUid: "replaced-message",
       ts: TEST_MESSAGE_TS,
       sessionId,
@@ -61,6 +63,7 @@ test("concurrent repository saves allocate monotonic Turn journals without cross
     );
 
     const replacement = (suffix) => ({
+      attachments: [],
       messageUid: `replacement-${suffix}`,
       ts: TEST_MESSAGE_TS,
       sessionId,

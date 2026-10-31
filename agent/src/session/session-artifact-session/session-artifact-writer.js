@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path } from "@noobot/path-resolver";
+import { SESSION_ARTIFACT_SUMMARY_SNAPSHOT_SCHEMA_VERSION } from "@noobot/session-protocol";
 import { requireCanonicalTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
 import { mkdir, readdir, rm } from "node:fs/promises";
 import { normalizeSessionEntity } from "../entities/session-entity.js";
@@ -30,7 +31,6 @@ import {
   replaceJournal,
   replaceJournalRecords,
   resolveTurnSummaryReceipts,
-  SUMMARY_SNAPSHOT_SCHEMA_VERSION,
   summarySnapshotContentHash,
   summarySnapshotIndex,
   turnArtifactRequiresRewrite,
@@ -126,7 +126,7 @@ function buildSummarySnapshotPayload({
   records,
 }) {
   return {
-    schemaVersion: SUMMARY_SNAPSHOT_SCHEMA_VERSION,
+    schemaVersion: SESSION_ARTIFACT_SUMMARY_SNAPSHOT_SCHEMA_VERSION,
     checkpointId: checkpoint.checkpointId,
     checkpointRevision: checkpoint.checkpointRevision,
     sessionId: sessionPayload.sessionId,

@@ -98,7 +98,6 @@ const {
   semanticPreviewLineCount,
   selectedNodeSessionDocs,
   displayNodeMessages,
-  nodeSessionAllMessages,
   selectedActionNodeStates,
   fetchSelectedNodeExecutionReport,
   handleOpenThinkingDetails,
@@ -146,7 +145,6 @@ const {
     :selected-action-node-states="selectedActionNodeStates"
     :selected-graph-dialog-process-id="selectedGraphDialogProcessId"
     :display-node-messages="displayNodeMessages"
-    :node-session-all-messages="nodeSessionAllMessages"
     :selected-node-session-docs="selectedNodeSessionDocs"
     :user-id="userId"
     :render-markdown="renderMarkdown"

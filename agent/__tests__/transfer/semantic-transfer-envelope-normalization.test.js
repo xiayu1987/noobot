@@ -98,11 +98,13 @@ test("tool transfer strategies read only their declared text field", async () =>
     /direct_content_required/,
   );
 
-  const resultText = await transferSemanticContent({
-    scenario: "tool",
-    strategy: "tool_result_text",
-    text: "alias",
-    identity: identity(),
-  });
-  assert.equal(resultText.toolResultText, "");
+  await assert.rejects(
+    transferSemanticContent({
+      scenario: "tool",
+      strategy: "tool_result_text",
+      text: "alias",
+      identity: identity(),
+    }),
+    /tool_result_not_text/,
+  );
 });

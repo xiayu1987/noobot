@@ -5,6 +5,7 @@
  */
 import { isFunction, isPlainObject, isObjectLike } from "@noobot/shared/value";
 import { Buffer } from "node:buffer";
+import { parseAttachmentDescriptor } from "@noobot/attachment-protocol";
 import {
   createAttachmentReference,
   createTransferEnvelope,
@@ -125,19 +126,29 @@ export async function persistTransferArtifacts({
       `semantic_transfer_attachment_cardinality_mismatch:${artifacts.length}:${Array.isArray(records) ? records.length : 0}`,
     );
   }
-  const attachments = records.map((record, index) =>
-    createAttachmentReference({
+
+  const attachments = records.map((record) =>
+    parseAttachmentDescriptor({
       identity: recordIdentity(record, ids.identity.sessionId),
+      name: record.name,
+      mimeType: record.mimeType,
+      ...(record.size === undefined ? {} : { size: record.size }),
+      ...(record.origin === undefined ? {} : { origin: record.origin }),
+    }),
+  );
+  const references = attachments.map((descriptor, index) =>
+    createAttachmentReference({
+      identity: descriptor.identity,
       role: index === 0 ? "primary" : "secondary",
-      name: safeStr(record.name) || `attachment-${index + 1}`,
-      mimeType: safeStr(record.mimeType) || DEFAULT_TRANSFER_MIME_TYPE,
-      size: Number.isSafeInteger(record.size) && record.size >= 0 ? record.size : undefined,
+      name: descriptor.name,
+      mimeType: descriptor.mimeType,
+      ...(descriptor.size === undefined ? {} : { size: descriptor.size }),
     }),
   );
   const envelope = createTransferEnvelope({
     ...ids,
     direction,
-    payload: { mode: "attachment", attachments },
+    payload: { mode: "attachment", attachments: references },
     intent: intent || { source, reason },
     meta: {
       ...meta,
@@ -148,7 +159,7 @@ export async function persistTransferArtifacts({
       ),
     },
   });
-  return { transferEnvelopes: [envelope] };
+  return { transferEnvelopes: [envelope], attachments };
 }
 
 export async function persistTransferFile({

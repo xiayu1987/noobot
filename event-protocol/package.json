@@ -13,6 +13,7 @@
     "./turn-snapshot": "./src/turn-snapshot.js",
     "./execution-query": "./src/execution-query.js",
     "./tool-presentation": "./src/tool-presentation.js",
+    "./tool-result": "./src/tool-result.js",
     "./tool-timeline": "./src/tool-timeline.js",
     "./activity-timeline": "./src/activity-timeline.js",
     "./thinking-detail-content": "./src/thinking-detail-content.js",
@@ -25,6 +26,7 @@
   "dependencies": {
     "@noobot/attachment-protocol": "file:../attachment-protocol",
     "@noobot/context-protocol": "file:../context-protocol",
+    "@noobot/file-mutation-protocol": "file:../file-mutation-protocol",
     "@noobot/security-assessment-protocol": "file:../security-assessment-protocol",
     "@noobot/shared": "file:../shared",
     "@noobot/session-protocol": "file:../session-protocol"

@@ -43,27 +43,14 @@ function resolvePatchRootInvalidHint(agentContext = {}) {
     : tTool(getRuntimeFromAgentContext(agentContext), "tools.patch_file.rootInvalidHintHost");
 }
 
-function formatDisplayPath({
-  workspacePath = "",
-  rootPath = "",
-  candidatePath = "",
-  resolvedPath = "",
-} = {}) {
-  const normalizedWorkspace = workspacePath ? path.resolve(workspacePath) : "";
-  const normalizedResolved = resolvedPath ? path.resolve(resolvedPath) : "";
-  if (
-    normalizedWorkspace &&
-    normalizedResolved &&
-    isPathWithinRoot(normalizedWorkspace, normalizedResolved)
-  ) {
+function formatDisplayPath({ workspacePath, rootPath, candidatePath, resolvedPath }) {
+  const normalizedWorkspace = path.resolve(workspacePath);
+  const normalizedResolved = path.resolve(resolvedPath);
+  if (isPathWithinRoot(normalizedWorkspace, normalizedResolved)) {
     return toWorkspaceRelativePath(normalizedWorkspace, normalizedResolved);
   }
-  const normalizedRoot = rootPath ? path.resolve(rootPath) : "";
-  if (
-    normalizedRoot &&
-    normalizedResolved &&
-    isPathWithinRoot(normalizedRoot, normalizedResolved)
-  ) {
+  const normalizedRoot = path.resolve(rootPath);
+  if (isPathWithinRoot(normalizedRoot, normalizedResolved)) {
     return toWorkspaceRelativePath(normalizedRoot, normalizedResolved);
   }
   return normalizeSlash(candidatePath);
@@ -181,8 +168,8 @@ function buildPathAttemptDetails({
       },
     ],
     hint: root
-      ? "Patch path was resolved under the requested root. Check strip/root or use a path that exists under root."
-      : "Patch paths are resolved from the current workspace root. If target files are in a child project, include that project directory in the patch path or pass root.",
+      ? "Patch path was resolved under the requested root after strip. Check strip/root or use a path that exists under root."
+      : "Patch path was resolved from the workspace root after strip. Use the complete path from read_file/search with strip 0, or pass root.",
   };
 }
 

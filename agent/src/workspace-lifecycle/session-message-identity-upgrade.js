@@ -14,6 +14,7 @@ import { parseWorkspaceSessionTree } from "@noobot/workspace-protocol/session-st
 import {
   MESSAGE_IDENTITY_STORE,
   SESSION_ARTIFACT_SCHEMA_VERSION,
+  SESSION_ARTIFACT_READ_REJECTION_CODES,
   SESSION_ERROR_CODE,
   SESSION_MESSAGE_RECORD_MIGRATION_INVALID,
   assertSessionScopeIdentity,
@@ -34,8 +35,6 @@ import {
   runAtomicSessionRepair,
 } from "@noobot/session-repair";
 import { isPlainObject } from "@noobot/shared/value";
-import { sessionMutationCoordinator } from "../session/session-mutation-coordinator.js";
-import { resolveSessionArtifactMutationLock } from "../session/session-artifact-files.js";
 import { requireStorageService } from "../session/storage-service.js";
 import {
   normalizeSessionEntity,
@@ -53,10 +52,10 @@ import {
   readAuthorityOutboxRecords,
   replaceAuthorityOutboxRecords,
 } from "../session/authority-outbox-store/outbox-journal.js";
-import { quarantineMigrationUnit } from "./migration-quarantine.js";
 import { backupRewrittenFiles } from "./session-rewrite-backup.js";
 import { PERSISTED_JSON_READ_ERROR_CODE } from "../shared/storage/json-file-reader.js";
-import { ignoreSessionProgress, walkSessionManifestDirectories } from "./session-directory-walk.js";
+import { ignoreSessionProgress } from "./session-directory-walk.js";
+import { upgradeSessionDirectories } from "./session-upgrade-driver.js";
 
 const UPGRADE_INVALID_CODE = "WORKSPACE_SESSION_MESSAGE_IDENTITY_UPGRADE_INVALID";
 const QUARANTINE_KIND = WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MESSAGE_IDENTITY;
@@ -72,6 +71,7 @@ function upgradeError(reason, details, cause) {
 
 const DATA_REJECTION_CODES = new Set([
   ...SESSION_REPAIR_DATA_REJECTION_CODES,
+  ...SESSION_ARTIFACT_READ_REJECTION_CODES,
   PERSISTED_JSON_READ_ERROR_CODE.CORRUPTED,
   SESSION_MESSAGE_RECORD_MIGRATION_INVALID,
   SESSION_ERROR_CODE.COMMAND_RECEIPT_INVALID,
@@ -255,44 +255,27 @@ export async function upgradeSessionMessageIdentity({
     throw new TypeError("session message identity upgrade requires scopedSessionRoots");
   }
   requireStorageService(storageService, "session message identity upgrade");
-  const sessions = [];
-  const quarantined = [];
-  const roots = [
-    { root: WORKSPACE_LAYOUT.SESSION_DIR, resolver: defaultScopeResolver },
-    ...scopedSessionRoots.map((root) => ({ root, resolver: scopedScopeResolver })),
-  ];
-  for (const { root, resolver } of roots) {
-    const sessionRoot = path.join(base, root);
-    const scopeFor = resolver({ base, sessionRoot });
-    for await (const sessionDir of walkSessionManifestDirectories(sessionRoot)) {
-      const relativePath = path.relative(base, sessionDir);
-      try {
-        const result = await sessionMutationCoordinator.run(
-          resolveSessionArtifactMutationLock(sessionDir),
-          () =>
-            upgradeSessionDirectory({
-              storageService,
-              base,
-              backupBase,
-              sessionDir,
-              expectScope: scopeFor(sessionDir),
-            }),
-        );
-        if (result) sessions.push(result);
-      } catch (error) {
-        const failure = asUpgradeError(error, { sessionDir: relativePath });
-        if (failure.code !== UPGRADE_INVALID_CODE) throw failure;
-        quarantined.push(
-          await quarantineMigrationUnit({
-            base,
-            kind: QUARANTINE_KIND,
-            relativePath,
-            error: failure,
-          }),
-        );
-      }
-      onSessionProcessed();
-    }
-  }
-  return { sessions, quarantined };
+  const roots = [WORKSPACE_LAYOUT.SESSION_DIR, ...scopedSessionRoots];
+  const scopeResolvers = roots.map((root, index) =>
+    (index === 0 ? defaultScopeResolver : scopedScopeResolver)({
+      base,
+      sessionRoot: path.join(base, root),
+    }),
+  );
+  return upgradeSessionDirectories({
+    base,
+    roots,
+    kind: QUARANTINE_KIND,
+    upgrade: ({ sessionDir, rootIndex }) =>
+      upgradeSessionDirectory({
+        storageService,
+        base,
+        backupBase,
+        sessionDir,
+        expectScope: scopeResolvers[rootIndex](sessionDir),
+      }),
+    quarantineCode: UPGRADE_INVALID_CODE,
+    normalizeError: (error, relativePath) => asUpgradeError(error, { sessionDir: relativePath }),
+    onSessionProcessed,
+  });
 }

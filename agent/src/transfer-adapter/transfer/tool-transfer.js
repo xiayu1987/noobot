@@ -96,10 +96,11 @@ function buildToolInputTransferMeta({
   };
 }
 
-async function buildTransferResponse({ transferEnvelopes = [] } = {}) {
-  return {
-    transferEnvelopes: Array.isArray(transferEnvelopes) ? transferEnvelopes : [],
-  };
+async function buildTransferResponse({ transferEnvelopes }) {
+  if (!Array.isArray(transferEnvelopes)) {
+    throw new TypeError("tool transfer response requires a transferEnvelopes array");
+  }
+  return { transferEnvelopes };
 }
 
 export async function transferToolOutput({
@@ -148,13 +149,8 @@ export async function transferToolOutput({
     forcePreview,
   });
 
-  const persistedTransferEnvelopes = Array.isArray(materialized?.transferEnvelopes)
-    ? materialized.transferEnvelopes
-    : [];
-  const transferEnvelopes = persistedTransferEnvelopes;
-
   return await buildTransferResponse({
-    transferEnvelopes,
+    transferEnvelopes: materialized.transferEnvelopes,
   });
 }
 
@@ -267,9 +263,7 @@ export async function transferToolInput({
     },
   });
 
-  const transferEnvelopes = persisted?.transferEnvelopes || [];
-
   return await buildTransferResponse({
-    transferEnvelopes,
+    transferEnvelopes: persisted.transferEnvelopes,
   });
 }

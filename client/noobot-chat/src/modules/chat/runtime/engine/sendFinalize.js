@@ -9,8 +9,8 @@ export function applySendErrorState({
   clearPendingInteraction,
   notify,
   translate,
-} = {}) {
-  clearPendingInteraction?.();
+}) {
+  clearPendingInteraction();
   const errorMessage = error?.message || translate("chat.unknownError");
   botMessage.error = errorMessage;
   if (!botMessage.content?.trim()) {
@@ -18,7 +18,7 @@ export function applySendErrorState({
   } else {
     botMessage.content += `\n\n> ${translate("chat.occurredError", { error: botMessage.error })}`;
   }
-  notify?.({ type: "error", message: error?.message || translate("chat.sendFailed") });
+  notify({ type: "error", message: errorMessage });
 }
 
 export function finalizeSendCleanup({ pendingInteractionRequest, interactionSubmitting }) {

@@ -62,22 +62,15 @@ function signalDockerExecution({ containerName, executionToken, executable }, si
 }
 
 async function ensureDockerContainer(built) {
-  const inspect = () => execFileAsync(built.executable, built.inspectArgs, { windowsHide: true });
-  let exists = true;
-  try {
-    await inspect();
-  } catch {
-    exists = false;
-  }
+  const listed = await execFileAsync(built.executable, built.listArgs, { windowsHide: true });
+  let exists = listed.stdout.split("\n").some((name) => name.trim() === built.containerName);
   if (exists) {
-    let mounts = [];
-    try {
-      const result = await execFileAsync(built.executable, built.inspectMountsArgs, {
-        windowsHide: true,
-      });
-      mounts = JSON.parse(String(result.stdout || "[]"));
-    } catch {
-      mounts = [];
+    const inspected = await execFileAsync(built.executable, built.inspectMountsArgs, {
+      windowsHide: true,
+    });
+    const mounts = JSON.parse(inspected.stdout);
+    if (!Array.isArray(mounts)) {
+      throw new TypeError(`docker_mounts_not_array: ${built.containerName}`);
     }
     const expected = [
       { source: built.workspaceSource, destination: built.workspaceTarget, rw: true },
@@ -101,9 +94,7 @@ async function ensureDockerContainer(built) {
       ),
     );
     if (!matches || actual.length !== expected.length) {
-      await execFileAsync(built.executable, built.removeArgs, { windowsHide: true }).catch(
-        () => undefined,
-      );
+      await execFileAsync(built.executable, built.removeArgs, { windowsHide: true });
       exists = false;
     }
   }

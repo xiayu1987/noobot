@@ -12,7 +12,9 @@ import { isPlainObject, text } from "@noobot/shared/value";
 function resolveFetchImpl(fetchImpl = null) {
   if (typeof fetchImpl === "function") return fetchImpl;
   if (typeof globalThis.fetch === "function") return globalThis.fetch.bind(globalThis);
-  throw recoverableToolError(tSystem("mcp.fetchUnavailable"));
+  throw recoverableToolError(tSystem("mcp.fetchUnavailable"), {
+    code: ERROR_CODE.RECOVERABLE_MCP_FETCH_UNAVAILABLE,
+  });
 }
 
 export function buildJsonRpcRequest(id, method, params = {}) {

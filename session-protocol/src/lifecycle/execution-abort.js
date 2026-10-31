@@ -117,15 +117,14 @@ export function assertExecutionNotAborted({ abortSignal }) {
 }
 
 export function raceExecutionAbort(promise, { abortSignal }) {
-  if (requireAbortSignal(abortSignal, "raceExecutionAbort").aborted) {
-    return Promise.reject(createExecutionAbortError({ abortSignal }));
-  }
+  requireAbortSignal(abortSignal, "raceExecutionAbort");
   let onAbort;
   const abortPromise = new Promise((_, reject) => {
     onAbort = () => reject(createExecutionAbortError({ abortSignal }));
-    abortSignal.addEventListener("abort", onAbort, { once: true });
+    if (abortSignal.aborted) onAbort();
+    else abortSignal.addEventListener("abort", onAbort, { once: true });
   });
-  return Promise.race([promise, abortPromise]).finally(() => {
+  return Promise.race([abortPromise, promise]).finally(() => {
     abortSignal.removeEventListener("abort", onAbort);
   });
 }

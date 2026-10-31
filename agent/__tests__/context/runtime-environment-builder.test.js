@@ -7,7 +7,10 @@ import test from "node:test";
 import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import assert from "node:assert/strict";
 
-import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
+import {
+  createTestRuntimeContext,
+  createTestAttachmentService,
+} from "../helpers/test-runtime-context.js";
 import { createRuntimeContext } from "../../src/runtime/runtime-context-factory.js";
 import { initializeRuntimeEnvironment } from "../../src/runtime/capabilities/runtime-capability-initializer.js";
 import {
@@ -199,7 +202,7 @@ test("initializeRuntimeEnvironment shared semantic-transfer ignores caller runti
         },
       },
     },
-    attachmentService: {
+    attachmentService: createTestAttachmentService({
       async ingestGeneratedArtifacts(payload) {
         return payload.artifacts.map((artifact) => ({
           attachmentId: "att-runtime-context-basepath",
@@ -214,7 +217,7 @@ test("initializeRuntimeEnvironment shared semantic-transfer ignores caller runti
           generationSource: payload.generationSource,
         }));
       },
-    },
+    }),
     runConfig: {
       hookManager: null,
       presentationMessageId: "message-runtime-context-basepath",

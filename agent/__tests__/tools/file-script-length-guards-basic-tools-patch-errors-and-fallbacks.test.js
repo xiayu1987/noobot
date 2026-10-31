@@ -78,3 +78,26 @@ test("patch_file: hunk 不匹配时返回带行号上下文", async () => {
   assert.match(result.nearbyContent, /2 \| two/);
   assert.match(result.nearbyContent, /3 \| three/);
 });
+
+test("patch_file: hunk beyond EOF reports totalLines without an inverted context window", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-eof-"));
+  await fs.writeFile(path.join(basePath, "a.txt"), "one\ntwo\n", "utf8");
+  const tool = createFileTool({ agentContext: buildAgentContext(basePath) }).find(
+    (item) => item?.name === "patch_file",
+  );
+  const patch = ["--- a.txt", "+++ a.txt", "@@ -40,2 +40,2 @@", " x", "-y", "+z", ""].join("\n");
+  const result = parseToolResult(
+    await tool.invoke(
+      { riskLevel: "low", format: "unified_diff", patch },
+      { signal: new AbortController().signal },
+    ),
+  );
+
+  assert.equal(result.ok, false);
+  assert.equal(result.details.line, 40);
+  assert.equal(result.totalLines, 2);
+  for (const field of ["contextStartLine", "contextEndLine", "nearbyContent"]) {
+    assert.equal(field in result, false, field);
+  }
+  await fs.rm(basePath, { recursive: true, force: true });
+});

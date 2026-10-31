@@ -103,56 +103,57 @@ export async function commitAuthorityEvent({
       const baseAggregateVersion = session.aggregateVersion;
       const occurredAt = this.now();
       const outboxSessionDir = scope.sessionDir;
-      const persistedOutbox = await readAuthorityOutbox(outboxSessionDir);
-      const outboxCheckpoint = await readAuthorityOutboxCheckpoint(outboxSessionDir);
-      const sequence = allocateAuthorityEventSequence({
-        checkpoint: outboxCheckpoint,
-        envelopes: [
-          ...persistedOutbox.map((item) => item.envelope),
-          ...session.sessionArtifactEvents,
-        ],
-        orderingDomain,
-        orderingScopeId,
+      const envelope = await withAuthorityOutboxMutation(outboxSessionDir, async () => {
+        const persistedOutbox = await readAuthorityOutbox(outboxSessionDir);
+        const outboxCheckpoint = await readAuthorityOutboxCheckpoint(outboxSessionDir);
+        const sequence = allocateAuthorityEventSequence({
+          checkpoint: outboxCheckpoint,
+          envelopes: [
+            ...persistedOutbox.map((item) => item.envelope),
+            ...session.sessionArtifactEvents,
+          ],
+          orderingDomain,
+          orderingScopeId,
+        });
+        const committedEnvelope = createEventEnvelope({
+          family,
+          schemaVersion: descriptor.schemaVersion,
+          identity: {
+            ...identity,
+            eventId: createEventId(),
+            sessionId: owner.sessionId,
+          },
+          causality,
+          ordering: {
+            ...ordering,
+            domain: orderingDomain,
+            scopeId: orderingScopeId,
+            sequence,
+            ...(isArtifact ? { revision: eventPayload.revision } : {}),
+            ...(concurrency ? { aggregateVersion: concurrency.nextAggregateVersion } : {}),
+          },
+          producer,
+          occurredAt,
+          payload: Object.freeze({ ...eventPayload }),
+        });
+        const validation = validateProtocolEvent(committedEnvelope);
+        if (!validation.valid) {
+          throw new TypeError(`invalid committed authority event: ${validation.errors.join(",")}`);
+        }
+        await appendAuthorityOutboxRecords(outboxSessionDir, [
+          authorityOutboxCommitRecord({
+            eventId: committedEnvelope.identity.eventId,
+            envelope: committedEnvelope,
+            committedAt: occurredAt,
+          }),
+        ]);
+        return committedEnvelope;
       });
-      const envelope = createEventEnvelope({
-        family,
-        schemaVersion: descriptor.schemaVersion,
-        identity: {
-          ...identity,
-          eventId: createEventId(),
-          sessionId: owner.sessionId,
-        },
-        causality,
-        ordering: {
-          ...ordering,
-          domain: orderingDomain,
-          scopeId: orderingScopeId,
-          sequence,
-          ...(isArtifact ? { revision: eventPayload.revision } : {}),
-          ...(concurrency ? { aggregateVersion: concurrency.nextAggregateVersion } : {}),
-        },
-        producer,
-        occurredAt,
-        payload: Object.freeze({ ...eventPayload }),
-      });
-      const validation = validateProtocolEvent(envelope);
-      if (!validation.valid) {
-        throw new TypeError(`invalid committed authority event: ${validation.errors.join(",")}`);
-      }
       if (isSessionArtifactEvent) {
         session.aggregateVersion = concurrency.nextAggregateVersion;
         session.sessionArtifactEvents = [...session.sessionArtifactEvents, envelope];
         session.updatedAt = occurredAt;
       }
-      await withAuthorityOutboxMutation(outboxSessionDir, () =>
-        appendAuthorityOutboxRecords(outboxSessionDir, [
-          authorityOutboxCommitRecord({
-            eventId: envelope.identity.eventId,
-            envelope,
-            committedAt: occurredAt,
-          }),
-        ]),
-      );
       if (!isSessionArtifactEvent) {
         return { committed: true, envelope };
       }

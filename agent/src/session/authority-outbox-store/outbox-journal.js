@@ -12,41 +12,17 @@ import {
   projectAuthorityOutboxJournal,
   serializeAuthorityOutboxCheckpoint,
 } from "@noobot/event-protocol/outbox";
-import { AsyncLocalStorage } from "node:async_hooks";
 import { mkdir, open, readFile, rename } from "node:fs/promises";
 import { isPlainObject, text } from "@noobot/shared/value";
+import { sessionMutationCoordinator } from "../session-mutation-coordinator.js";
+import { resolveSessionArtifactMutationLock } from "../session-artifact-files.js";
 
 export const AUTHORITY_OUTBOX_DIR = "authority-outbox";
 const AUTHORITY_OUTBOX_JOURNAL_FILE = "outbox.jsonl";
 const AUTHORITY_OUTBOX_CHECKPOINT_FILE = "outbox-checkpoint.json";
 
-const mutationTails = new Map();
-const mutationContext = new AsyncLocalStorage();
-
-export async function withAuthorityOutboxMutation(sessionDir = "", operation) {
-  const key = text(sessionDir);
-  const inheritedContext = mutationContext.getStore();
-  if (inheritedContext?.key === key && inheritedContext.active) return operation();
-  const previous = mutationTails.get(key) || Promise.resolve();
-  const runOperation = async () => {
-    const context = { key, active: true };
-    try {
-      return await mutationContext.run(context, operation);
-    } finally {
-      context.active = false;
-    }
-  };
-  const current = previous.then(runOperation, runOperation);
-  const tail = current.then(
-    () => {},
-    () => {},
-  );
-  mutationTails.set(key, tail);
-  try {
-    return await current;
-  } finally {
-    if (mutationTails.get(key) === tail) mutationTails.delete(key);
-  }
+export async function withAuthorityOutboxMutation(sessionDir, operation) {
+  return sessionMutationCoordinator.run(resolveSessionArtifactMutationLock(sessionDir), operation);
 }
 
 export function authorityOutboxDir(sessionDir = "") {

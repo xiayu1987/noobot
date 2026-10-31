@@ -202,13 +202,15 @@ test("attachment query rejects symbolic links that escape the canonical scope", 
     await rm(original.absolutePath);
     await symlink(outsidePath, original.absolutePath);
 
-    const escaped = await service.getAttachmentById({
-      userId: "u1",
-      attachmentId: saved.attachmentId,
-      sessionId: "s1",
-      attachmentSource: "user",
-    });
-    assert.equal(escaped, null);
+    await assert.rejects(
+      service.getAttachmentById({
+        userId: "u1",
+        attachmentId: saved.attachmentId,
+        sessionId: "s1",
+        attachmentSource: "user",
+      }),
+      /attachment_real_path_scope_mismatch/,
+    );
   });
 });
 
@@ -271,79 +273,6 @@ test("AttachmentService concurrent model artifact writes preserve one canonical 
     for (const record of saved) {
       assert.ok(index.attachments[record.attachmentId]);
     }
-  });
-});
-
-test("AttachmentService.resolveSourceAttachment requires the complete scoped identity", async () => {
-  await withTempDir(async (workspaceRoot) => {
-    const service = new AttachmentService({ workspaceRoot });
-    const [source] = await service.ingest({
-      userId: "u1",
-      sessionId: "s1",
-      attachmentSource: "user",
-      attachments: [
-        {
-          clientAttachmentId: "client-source",
-          name: "same-name.txt",
-          mimeType: "text/plain",
-          contentBase64: Buffer.from("source", "utf8").toString("base64"),
-        },
-      ],
-    });
-    const [otherSource] = await service.ingest({
-      userId: "u1",
-      sessionId: "s2",
-      attachmentSource: "user",
-      attachments: [
-        {
-          name: "same-name.txt",
-          mimeType: "text/plain",
-          contentBase64: Buffer.from("other session", "utf8").toString("base64"),
-        },
-      ],
-    });
-    await service.ingest({
-      userId: "u1",
-      sessionId: "s1",
-      attachmentSource: "user",
-      attachments: [
-        {
-          name: "other.txt",
-          mimeType: "text/plain",
-          contentBase64: Buffer.from("same session other", "utf8").toString("base64"),
-        },
-      ],
-    });
-
-    const byId = await service.resolveSourceAttachment({
-      userId: "u1",
-      sessionId: "s1",
-      attachmentSource: "user",
-      attachmentId: source.attachmentId,
-    });
-    const wrongSession = await service.resolveSourceAttachment({
-      userId: "u1",
-      sessionId: "s2",
-      attachmentSource: "user",
-      attachmentId: source.attachmentId,
-    });
-    const wrongSource = await service.resolveSourceAttachment({
-      userId: "u1",
-      sessionId: "s1",
-      attachmentSource: "model",
-      attachmentId: source.attachmentId,
-    });
-    const missingId = await service.resolveSourceAttachment({
-      userId: "u1",
-      sessionId: "s1",
-      attachmentId: "",
-    });
-
-    assert.equal(byId?.attachmentId, source.attachmentId);
-    assert.equal(wrongSession, null);
-    assert.equal(wrongSource, null);
-    assert.equal(missingId, null);
-    assert.notEqual(otherSource.attachmentId, source.attachmentId);
   });
 });
 

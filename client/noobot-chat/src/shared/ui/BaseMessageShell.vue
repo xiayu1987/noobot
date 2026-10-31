@@ -134,8 +134,7 @@ const { translate } = useLocale();
   max-width: 100%;
 }
 
-.base-message-content :deep(.thinking-realtime-shell),
-.base-message-content :deep(.message-status-steps) {
+.base-message-content :deep(.thinking-realtime-shell) {
   width: 100%;
   max-width: 100%;
 }

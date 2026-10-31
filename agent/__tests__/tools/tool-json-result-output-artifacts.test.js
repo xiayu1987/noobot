@@ -6,57 +6,42 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  buildToolResultPayload,
   parseToolOutputArtifacts,
   projectToolResultForModel,
+  toToolJsonResult,
 } from "../../src/tools/core/tool-json-result.js";
 import {
   attachmentTransfer,
   createTransferIdentity,
+  sourceReferenceTransfer,
   TRANSFER_REASON,
 } from "@noobot/semantic-transfer-protocol";
 
-test("failed tool results use one required result shape", () => {
-  assert.deepEqual(buildToolResultPayload({ ok: false, message: "blocked" }), {
+test("toToolJsonResult encodes protocol-valid results without filling values", () => {
+  const failure = {
     ok: false,
-    message: "blocked",
-    status: "failed",
-    error: "blocked",
-    code: "RECOVERABLE_TOOL_ERROR",
-  });
-  assert.deepEqual(
-    buildToolResultPayload({
-      ok: false,
-      status: "denied",
-      error: "out of scope",
-      code: "RECOVERABLE_PATH_OUT_OF_SCOPE",
-    }),
-    {
-      ok: false,
-      status: "denied",
-      error: "out of scope",
-      code: "RECOVERABLE_PATH_OUT_OF_SCOPE",
-    },
+    status: "denied",
+    error: "out of scope",
+    code: "RECOVERABLE_PATH_OUT_OF_SCOPE",
+  };
+  assert.equal(
+    toToolJsonResult("read_file", failure),
+    JSON.stringify({ toolName: "read_file", ...failure }),
   );
-  assert.deepEqual(
-    buildToolResultPayload({
-      ok: false,
-      code: 1,
-      stderr: "path is outside the declared input scope\n",
-    }),
-    {
-      ok: false,
-      status: "failed",
-      error: "path is outside the declared input scope",
-      code: 1,
-      stderr: "path is outside the declared input scope\n",
-    },
-  );
+});
+
+test("toToolJsonResult rejects results that violate the tool result protocol", () => {
+  assert.throws(() => toToolJsonResult("read_file", { ok: false, message: "blocked" }));
+  assert.throws(() => toToolJsonResult("read_file", { ok: false, error: "x", code: 1 }));
+  assert.throws(() => toToolJsonResult("read_file", { ok: "yes" }));
+  assert.throws(() => toToolJsonResult("read_file", "plain"));
+  assert.throws(() => toToolJsonResult("", { ok: true }), TypeError);
 });
 
 test("output artifact types have one strict representation", () => {
   assert.deepEqual(
     parseToolOutputArtifacts({
+      ok: true,
       outputArtifacts: [
         {
           type: "attachment_url",
@@ -76,6 +61,7 @@ test("output artifact types have one strict representation", () => {
 
   assert.deepEqual(
     parseToolOutputArtifacts({
+      ok: true,
       outputArtifacts: [
         {
           type: "attachment_bytes",
@@ -90,6 +76,7 @@ test("output artifact types have one strict representation", () => {
 
   assert.deepEqual(
     parseToolOutputArtifacts({
+      ok: true,
       outputArtifacts: [
         {
           type: "attachment_bytes",
@@ -110,6 +97,7 @@ test("output artifact types have one strict representation", () => {
   assert.throws(
     () =>
       parseToolOutputArtifacts({
+        ok: true,
         outputArtifacts: [
           {
             type: "attachment_bytes",
@@ -124,6 +112,7 @@ test("output artifact types have one strict representation", () => {
   assert.throws(
     () =>
       parseToolOutputArtifacts({
+        ok: true,
         outputArtifacts: [
           {
             name: "missing-type.txt",
@@ -166,6 +155,7 @@ test("model tool results expose only canonical attachment references", () => {
     JSON.parse(
       projectToolResultForModel(
         JSON.stringify({
+          ok: true,
           path: { view: "attachment", identity },
           attachments: [
             {
@@ -183,6 +173,7 @@ test("model tool results expose only canonical attachment references", () => {
       ),
     ),
     {
+      ok: true,
       path: {
         view: "attachment",
         attachmentRef: "attachment:v1:session-1/model/att-1",
@@ -209,23 +200,26 @@ test("model tool results reject mixed attachment representations", () => {
   assert.throws(
     () =>
       projectToolResultForModel(
-        JSON.stringify({ ...identity, attachmentRef: "attachment:v1:other/model/att-1" }),
+        JSON.stringify({ ok: true, ...identity, attachmentRef: "attachment:v1:other/model/att-1" }),
       ),
     /mixed_attachment_identity_representations/,
   );
   assert.throws(
     () =>
       projectToolResultForModel(
-        JSON.stringify({ identity, attachmentRef: "attachment:v1:other/model/att-1" }),
+        JSON.stringify({ ok: true, identity, attachmentRef: "attachment:v1:other/model/att-1" }),
       ),
     /mixed_attachment_identity_representations/,
   );
   assert.throws(
-    () => projectToolResultForModel(JSON.stringify({ transferEnvelopes: [], attachmentRefs: [] })),
+    () =>
+      projectToolResultForModel(
+        JSON.stringify({ ok: true, transferEnvelopes: [], attachmentRefs: [] }),
+      ),
     /mixed_attachment_transfer_representations/,
   );
   assert.throws(
-    () => projectToolResultForModel(JSON.stringify({ attachmentId: "att-1" })),
+    () => projectToolResultForModel(JSON.stringify({ ok: true, attachmentId: "att-1" })),
     /incomplete_attachment_identity/,
   );
 });
@@ -235,6 +229,7 @@ test("model tool results preserve non-attachment session identities", () => {
     JSON.parse(
       projectToolResultForModel(
         JSON.stringify({
+          ok: true,
           sessionId: "session-1",
           parentSessionId: "session-root",
           identity: {
@@ -246,6 +241,7 @@ test("model tool results preserve non-attachment session identities", () => {
       ),
     ),
     {
+      ok: true,
       sessionId: "session-1",
       parentSessionId: "session-root",
       identity: {
@@ -253,6 +249,68 @@ test("model tool results preserve non-attachment session identities", () => {
         turnScopeId: "turn-1",
         runId: "run-1",
       },
+    },
+  );
+});
+
+test("projectToolResultForModel exposes source reference envelopes to the model", () => {
+  const transferIdentity = createTransferIdentity({
+    sessionId: "session-1",
+    turnScopeId: "turn-1",
+    runId: "run-1",
+    producer: { type: "tool", id: "call-1" },
+  });
+  const intent = {
+    source: "tool",
+    reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
+    scenario: "tool",
+    strategy: "tool_output",
+  };
+  const fileEnvelope = sourceReferenceTransfer({
+    transferId: "transfer-file",
+    presentationMessageId: "message-1",
+    identity: transferIdentity,
+    direction: "output",
+    intent,
+    reference: {
+      address: "/ws/big.txt",
+      name: "big.txt",
+      startLine: 1,
+      endLine: 400,
+      totalLines: 20000,
+    },
+  });
+  const attachmentEnvelope = sourceReferenceTransfer({
+    transferId: "transfer-attachment",
+    presentationMessageId: "message-1",
+    identity: transferIdentity,
+    direction: "output",
+    intent,
+    reference: {
+      address: { attachmentId: "att-1", sessionId: "session-1", attachmentSource: "model" },
+      name: "r.txt",
+      startLine: 1,
+      endLine: 10,
+      totalLines: 10,
+    },
+  });
+  assert.deepEqual(
+    JSON.parse(
+      projectToolResultForModel(
+        JSON.stringify({ ok: true, transferEnvelopes: [fileEnvelope, attachmentEnvelope] }),
+      ),
+    ),
+    {
+      ok: true,
+      sourceReferences: [
+        { filePath: "/ws/big.txt", startLine: 1, endLine: 400, totalLines: 20000 },
+        {
+          attachmentRef: "attachment:v1:session-1/model/att-1",
+          startLine: 1,
+          endLine: 10,
+          totalLines: 10,
+        },
+      ],
     },
   );
 });

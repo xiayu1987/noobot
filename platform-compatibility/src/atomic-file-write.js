@@ -52,3 +52,11 @@ export async function writeFileAtomic({
     throw error;
   }
 }
+
+export async function writeFileAtomicCreatingParents({ mkdir, ...options } = {}) {
+  if (!isFunction(mkdir)) {
+    throw new TypeError("atomic file write with parents requires a mkdir operation");
+  }
+  await mkdir(path.dirname(options.filePath), { recursive: true });
+  await writeFileAtomic(options);
+}

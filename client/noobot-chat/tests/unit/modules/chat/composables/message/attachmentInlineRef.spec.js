@@ -4,8 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { useMarkdownRenderer } from "../../../../../../src/modules/chat/composables/message/useMarkdownRenderer.js";
+import {
+  outOfSessionRenderContext,
+  useMarkdownRenderer,
+} from "../../../../../../src/modules/chat/composables/message/useMarkdownRenderer.js";
 import { buildAttachmentRefIndex } from "../../../../../../src/modules/chat/composables/message/attachmentInlineRefPlugin.js";
+import { translateMessageKey } from "../../../../../../src/shared/i18n/messageCatalog.js";
+
+const translate = (key, params) => translateMessageKey("en-US", key, params);
 
 const ATTACHMENT_ITEM = {
   attachmentId: "a1",
@@ -23,7 +29,13 @@ describe("attachment inline ref rendering", () => {
   it("renders a bare ref as a downloadable chip", () => {
     const { renderMarkdown } = useMarkdownRenderer();
 
-    const html = renderMarkdown(`见 ${REF} 附件`, { attachmentRefIndex: buildIndex() });
+    const html = renderMarkdown(`见 ${REF} 附件`, {
+      attachmentRefIndex: buildIndex(),
+      linkSnapshots: [],
+      messageIndex: 0,
+      workspaceRootDirectory: null,
+      translate,
+    });
 
     expect(html).toContain("noobot-attachment-chip");
     expect(html).toContain('href="#"');
@@ -35,7 +47,13 @@ describe("attachment inline ref rendering", () => {
   it("takes over markdown links using the attachment scheme", () => {
     const { renderMarkdown } = useMarkdownRenderer();
 
-    const html = renderMarkdown(`[下载报告](${REF})`, { attachmentRefIndex: buildIndex() });
+    const html = renderMarkdown(`[下载报告](${REF})`, {
+      attachmentRefIndex: buildIndex(),
+      linkSnapshots: [],
+      messageIndex: 0,
+      workspaceRootDirectory: null,
+      translate,
+    });
 
     expect(html).toContain("noobot-attachment-chip");
     expect(html).not.toContain("noobot-attachment-chip--missing");
@@ -48,7 +66,13 @@ describe("attachment inline ref rendering", () => {
   it("renders a disabled chip when the ref is not in the authoritative set", () => {
     const { renderMarkdown } = useMarkdownRenderer();
 
-    const html = renderMarkdown(REF, { attachmentRefIndex: buildIndex([]) });
+    const html = renderMarkdown(REF, {
+      attachmentRefIndex: buildIndex([]),
+      linkSnapshots: [],
+      messageIndex: 0,
+      workspaceRootDirectory: null,
+      translate,
+    });
 
     expect(html).toContain("noobot-attachment-chip--missing");
     expect(html).toContain("attachment_not_available");
@@ -58,17 +82,23 @@ describe("attachment inline ref rendering", () => {
   it("leaves malformed refs as plain text without a link", () => {
     const { renderMarkdown } = useMarkdownRenderer();
 
-    const html = renderMarkdown("attachment:v1:broken", { attachmentRefIndex: buildIndex() });
+    const html = renderMarkdown("attachment:v1:broken", {
+      attachmentRefIndex: buildIndex(),
+      linkSnapshots: [],
+      messageIndex: 0,
+      workspaceRootDirectory: null,
+      translate,
+    });
 
     expect(html).toContain("attachment:v1:broken");
     expect(html).not.toContain("noobot-attachment-chip");
     expect(html).not.toContain("<a ");
   });
 
-  it("degrades to a disabled chip when no index is provided", () => {
+  it("renders a disabled chip for content outside a session", () => {
     const { renderMarkdown } = useMarkdownRenderer();
 
-    const html = renderMarkdown(REF);
+    const html = renderMarkdown(REF, outOfSessionRenderContext(translate));
 
     expect(html).toContain("noobot-attachment-chip--missing");
     expect(html).not.toContain("<a ");
@@ -83,10 +113,39 @@ describe("attachment inline ref rendering", () => {
         REF,
         '<<<NOOBOT_COLLAPSE:end kind="detail">>>',
       ].join("\n"),
-      { attachmentRefIndex: buildIndex() },
+      {
+        attachmentRefIndex: buildIndex(),
+        linkSnapshots: [],
+        messageIndex: 0,
+        workspaceRootDirectory: null,
+        translate,
+      },
     );
 
     expect(html).toContain("noobot-attachment-chip");
     expect(html).toContain("报告.pdf");
+  });
+
+  it("rejects a render call without an explicit link context", () => {
+    const { renderMarkdown } = useMarkdownRenderer();
+
+    expect(() => renderMarkdown(REF)).toThrow(TypeError);
+    expect(() => renderMarkdown(REF, { attachmentRefIndex: null })).toThrow(
+      "renderMarkdown requires linkSnapshots: array",
+    );
+    expect(() => renderMarkdown(REF, { attachmentRefIndex: null, linkSnapshots: [] })).toThrow(
+      "renderMarkdown requires messageIndex: non-negative integer",
+    );
+    expect(() =>
+      renderMarkdown(REF, { attachmentRefIndex: null, linkSnapshots: [], messageIndex: 0 }),
+    ).toThrow("renderMarkdown requires workspaceRootDirectory: string | null");
+    expect(() =>
+      renderMarkdown(REF, {
+        attachmentRefIndex: null,
+        linkSnapshots: [],
+        messageIndex: 0,
+        workspaceRootDirectory: null,
+      }),
+    ).toThrow("renderMarkdown requires translate: function");
   });
 });

@@ -17,6 +17,18 @@ import { isCanonicalText, text } from "@noobot/shared/value";
 
 const DEFAULT_API_KEY_TTL_MS = TIME_THRESHOLDS.service.apiKeyTtlMs;
 
+export const USER_SCOPE_POLICY = Object.freeze({
+  ADMINISTRABLE: "administrable",
+  OWNER_ONLY: "owner_only",
+});
+
+const USER_SCOPE_POLICIES = new Set(Object.values(USER_SCOPE_POLICY));
+
+function assertUserScopePolicy(policy) {
+  if (!USER_SCOPE_POLICIES.has(policy)) throw new TypeError(`unknown user scope policy: ${policy}`);
+  return policy;
+}
+
 export function createAuthService({
   initialApiKeyTtlMs = DEFAULT_API_KEY_TTL_MS,
   translateText,
@@ -84,8 +96,9 @@ export function createAuthService({
     return authInfo;
   }
 
-  function isForbiddenUserScope(authInfo, requestUserId) {
-    if (isSuperAdminRole(authInfo.role)) return false;
+  function isForbiddenUserScope(authInfo, requestUserId, policy) {
+    assertUserScopePolicy(policy);
+    if (policy === USER_SCOPE_POLICY.ADMINISTRABLE && isSuperAdminRole(authInfo.role)) return false;
     return authInfo.userId !== requestUserId;
   }
 
@@ -101,7 +114,11 @@ export function createAuthService({
     const requestUserIds = [req.body?.userId, req.query?.userId]
       .map((value) => text(value))
       .filter(Boolean);
-    if (requestUserIds.some((requestUserId) => isForbiddenUserScope(authInfo, requestUserId))) {
+    if (
+      requestUserIds.some((requestUserId) =>
+        isForbiddenUserScope(authInfo, requestUserId, USER_SCOPE_POLICY.ADMINISTRABLE),
+      )
+    ) {
       res.status(HTTP_STATUS.FORBIDDEN).json({
         ok: false,
         error: translateText("auth.forbiddenUserScope", req.locale),
@@ -111,22 +128,25 @@ export function createAuthService({
     next();
   }
 
-  function enforceUserScopeParam(req, res, next, userId) {
-    const authInfo = req.auth;
-    if (!authInfo) {
-      res
-        .status(HTTP_STATUS.UNAUTHORIZED)
-        .json({ ok: false, error: translateText("auth.missingApiKey", req.locale) });
-      return;
-    }
-    if (isForbiddenUserScope(authInfo, text(userId))) {
-      res.status(HTTP_STATUS.FORBIDDEN).json({
-        ok: false,
-        error: translateText("auth.forbiddenUserScope", req.locale),
-      });
-      return;
-    }
-    next();
+  function createUserScopeParam(policy) {
+    assertUserScopePolicy(policy);
+    return function enforceUserScopeParam(req, res, next, userId) {
+      const authInfo = req.auth;
+      if (!authInfo) {
+        res
+          .status(HTTP_STATUS.UNAUTHORIZED)
+          .json({ ok: false, error: translateText("auth.missingApiKey", req.locale) });
+        return;
+      }
+      if (isForbiddenUserScope(authInfo, text(userId), policy)) {
+        res.status(HTTP_STATUS.FORBIDDEN).json({
+          ok: false,
+          error: translateText("auth.forbiddenUserScope", req.locale),
+        });
+        return;
+      }
+      next();
+    };
   }
 
   function requireSuperAdmin(req, res, next) {
@@ -147,7 +167,7 @@ export function createAuthService({
     resolveAuthByApiKey,
     isForbiddenUserScope,
     requireApiKey,
-    enforceUserScopeParam,
+    createUserScopeParam,
     requireSuperAdmin,
   };
 }

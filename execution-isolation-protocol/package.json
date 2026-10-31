@@ -8,6 +8,7 @@
     ".": "./src/index.js",
     "./execution-views": "./src/execution-views.js",
     "./native-script": "./src/native-script.js",
+    "./script-outcome": "./src/script-outcome.js",
     "./package.json": "./package.json"
   },
   "scripts": {

@@ -13,6 +13,7 @@ import {
   buildAgentContext,
   parseToolResult,
 } from "./helpers/file-script-length-guards-helper.js";
+import { createTestAttachmentService } from "../helpers/test-runtime-context.js";
 
 test("read_file: reads a model attachment through its canonical identity", async () => {
   const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-read-attachment-"));
@@ -26,7 +27,7 @@ test("read_file: reads a model attachment through its canonical identity", async
   };
   const agentContext = buildAgentContext(workspacePath, "user", {
     runtime: {
-      attachmentService: {
+      attachmentService: createTestAttachmentService({
         async getAttachmentById(request) {
           assert.deepEqual(request, { userId: "user", ...identity });
           return {
@@ -37,7 +38,7 @@ test("read_file: reads a model attachment through its canonical identity", async
             size: 14,
           };
         },
-      },
+      }),
     },
   });
   const readTool = createFileTool({ agentContext }).find((item) => item?.name === "read_file");

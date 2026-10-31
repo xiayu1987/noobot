@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { downloadWorkspaceFileApi, getWorkspaceFileApi } from "../chat/chatApi.js";
+import { getWorkspaceFileApi } from "../chat/chatApi.js";
 import { requireAuthenticatedFetcher } from "../../http/authenticatedHttpService.js";
 
 function fetcherOptions() {
@@ -16,8 +16,5 @@ export const attachmentService = Object.freeze({
   },
   getWorkspaceFile(params = {}) {
     return getWorkspaceFileApi(params, fetcherOptions());
-  },
-  downloadWorkspaceFile(params = {}) {
-    return downloadWorkspaceFileApi(params, fetcherOptions());
   },
 });

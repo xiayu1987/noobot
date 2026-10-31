@@ -20,6 +20,8 @@ describe("useReconnectReplay", () => {
     ];
 
     await api.applyCanonicalMessageEvent("thinking", {
+      activityId: "activity-l22",
+      activityKind: "model_analysis",
       sessionId: "s-1",
       dialogProcessId: "dp-1",
       turnScopeId: "turn-dp-1",
@@ -27,6 +29,8 @@ describe("useReconnectReplay", () => {
       text: "C",
     });
     await api.applyCanonicalMessageEvent("thinking", {
+      activityId: "activity-l29",
+      activityKind: "model_analysis",
       sessionId: "s-1",
       dialogProcessId: "dp-1",
       turnScopeId: "turn-dp-1",
@@ -34,6 +38,8 @@ describe("useReconnectReplay", () => {
       text: "A",
     });
     await api.applyCanonicalMessageEvent("thinking", {
+      activityId: "activity-l36",
+      activityKind: "model_analysis",
       sessionId: "s-1",
       dialogProcessId: "dp-1",
       turnScopeId: "turn-dp-1",
@@ -41,6 +47,8 @@ describe("useReconnectReplay", () => {
       text: "B",
     });
     await api.applyCanonicalMessageEvent("thinking", {
+      activityId: "activity-l43",
+      activityKind: "model_analysis",
       sessionId: "s-1",
       dialogProcessId: "dp-1",
       turnScopeId: "turn-dp-1",
@@ -130,6 +138,8 @@ describe("useReconnectReplay", () => {
     ];
 
     await api.applyCanonicalMessageEvent("thinking", {
+      activityId: "activity-l132",
+      activityKind: "model_analysis",
       sessionId: "s-1",
       dialogProcessId: "dp-boundary",
       turnScopeId: "turn-boundary",
@@ -137,6 +147,8 @@ describe("useReconnectReplay", () => {
       text: "thinking once",
     });
     await api.applyCanonicalMessageEvent("thinking", {
+      activityId: "activity-l139",
+      activityKind: "model_analysis",
       sessionId: "s-1",
       dialogProcessId: "dp-boundary",
       turnScopeId: "turn-boundary",

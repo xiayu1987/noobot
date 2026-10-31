@@ -3,34 +3,28 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-function formatHint(endpointCfg = {}) {
-  return {
-    queryString: endpointCfg?.query_string_format || '{"city":"Chongqing","format":"j1"}',
-    body: endpointCfg?.body_format || "{}",
-  };
-}
 
 function firstEntry(list) {
-  return Array.isArray(list) ? list[0] || {} : {};
-}
-
-function toText(value) {
-  return String(value || "");
+  if (!Array.isArray(list) || list.length === 0) return {};
+  return list[0];
 }
 
 function firstLabel(list) {
-  return toText(list?.[0]?.value);
+  return String(firstEntry(list).value ?? "");
 }
 
 function pickTextFields(source, mapping) {
   return Object.fromEntries(
-    Object.entries(mapping).map(([outputKey, sourceKey]) => [outputKey, toText(source[sourceKey])]),
+    Object.entries(mapping).map(([outputKey, sourceKey]) => [
+      outputKey,
+      String(source[sourceKey] ?? ""),
+    ]),
   );
 }
 
 function pickLocation(nearest, city) {
   return {
-    query_city: toText(city),
+    query_city: city,
     area: firstLabel(nearest.areaName),
     region: firstLabel(nearest.region),
     country: firstLabel(nearest.country),
@@ -59,7 +53,6 @@ function pickCurrent(current) {
 }
 
 function pickToday(today) {
-  const astronomy = firstEntry(today.astronomy);
   return {
     ...pickTextFields(today, {
       date: "date",
@@ -67,49 +60,74 @@ function pickToday(today) {
       min_temp_c: "mintempC",
       avg_temp_c: "avgtempC",
     }),
-    ...pickTextFields(astronomy, { sunrise: "sunrise", sunset: "sunset" }),
+    ...pickTextFields(firstEntry(today.astronomy), { sunrise: "sunrise", sunset: "sunset" }),
   };
 }
 
-function pickWeatherSummary(raw = {}, city = "") {
+function pickWeatherSummary(raw, city) {
   return {
-    location: pickLocation(firstEntry(raw?.nearest_area), city),
-    current: pickCurrent(firstEntry(raw?.current_condition)),
-    today: pickToday(firstEntry(raw?.weather)),
+    location: pickLocation(firstEntry(raw.nearest_area), city),
+    current: pickCurrent(firstEntry(raw.current_condition)),
+    today: pickToday(firstEntry(raw.weather)),
   };
+}
+
+function inputInvalid(failureCode, error, endpointCfg) {
+  return {
+    ok: false,
+    error,
+    code: failureCode.INPUT_INVALID,
+    output: {
+      expectedFormat: {
+        queryString: String(endpointCfg.query_string_format ?? ""),
+        body: String(endpointCfg.body_format ?? ""),
+      },
+    },
+  };
+}
+
+function resolveOutputFormat(customParam, endpointCfg) {
+  const fromParam = String(customParam ?? "").trim();
+  if (fromParam) return fromParam;
+  return String(endpointCfg.custom_param_format ?? "").trim();
 }
 
 export default async function weatherServiceHandler({
   runtime,
+  failureCode,
   endpointCfg,
-  custom_param = "",
-  queryString = {},
-  body = {},
+  custom_param,
+  queryString,
 }) {
-  const fetcher = runtime?.sharedTools?.fetch;
-  if (typeof fetcher !== "function") {
+  const city = queryString === undefined ? "" : String(queryString.city ?? "").trim();
+  if (!city) return inputInvalid(failureCode, "queryString.city is required", endpointCfg);
+  const outputFormat = resolveOutputFormat(custom_param, endpointCfg);
+  if (!outputFormat) {
+    return inputInvalid(
+      failureCode,
+      "custom_param or endpoint custom_param_format is required",
+      endpointCfg,
+    );
+  }
+  const baseUrl = String(endpointCfg.url).trim().replace(/\/+$/, "");
+  const targetUrl = `${baseUrl}/${encodeURIComponent(city)}?format=${encodeURIComponent(outputFormat)}`;
+  const response = await runtime.sharedTools.fetch(targetUrl, { method: "GET" });
+  const request = { city, format: outputFormat, url: targetUrl };
+  if (!response.ok) {
     return {
       ok: false,
-      error: "fetch missing in runtime.sharedTools",
+      error: `weather upstream responded ${response.status} ${response.statusText}`.trim(),
+      code: failureCode.UPSTREAM_FAILED,
+      output: { httpStatus: response.status, request, body: await response.text() },
     };
   }
-  const hint = formatHint(endpointCfg);
-  const city = String(queryString?.city || body?.city || "Chongqing").trim() || "Chongqing";
-  const outputFormat =
-    String(custom_param || endpointCfg?.custom_param_format || "j1").trim() || "j1";
-  const baseUrl = String(endpointCfg?.url || "https://wttr.in").trim();
-  const targetUrl = `${baseUrl.replace(/\/+$/, "")}/${encodeURIComponent(city)}?format=${encodeURIComponent(outputFormat)}`;
-  const response = await fetcher(targetUrl, { method: "GET" });
-  const rawData = await response.json();
-  const data = pickWeatherSummary(rawData, city);
-
   return {
-    ok: response.ok,
-    status: response.status,
-    statusText: response.statusText,
-    expectedFormat: hint,
-    output_format: outputFormat,
-    request: { city, format: outputFormat, url: targetUrl },
-    data,
+    ok: true,
+    output: {
+      httpStatus: response.status,
+      output_format: outputFormat,
+      request,
+      data: pickWeatherSummary(await response.json(), city),
+    },
   };
 }

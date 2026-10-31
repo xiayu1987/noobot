@@ -188,7 +188,7 @@ export async function replaceSessionTurnApi(
     turnScopeId = "",
     expectedAggregateVersion = undefined,
     commandId = "",
-    attachments = undefined,
+    attachments,
   },
   { fetcher },
 ) {
@@ -202,7 +202,7 @@ export async function replaceSessionTurnApi(
       anchor,
       newContent: text(newContent),
       turnScopeId: text(turnScopeId),
-      ...(Array.isArray(attachments) ? { attachments } : {}),
+      attachments,
     },
   });
   return runFetch(
@@ -339,23 +339,22 @@ export async function putWorkspaceFileApi({ userId = "", path = "", content = ""
 }
 
 async function getWorkspaceFileMutationApi(
-  { userId = "", sessionId = "", sessionScope = null, mutationId = "", allWorkspace = false },
+  { userId = "", sessionId = "", sessionScope = null, mutationId = "", version = null },
   artifact,
   { fetcher },
 ) {
   const runFetch = requireFetcher(fetcher);
-  const prefix = allWorkspace
-    ? "/api/internal/admin/workspace-all"
-    : `/api/internal/workspace/${encodeURIComponent(userId)}`;
   const query = buildQueryString({
     sessionId,
     parentSessionId: sessionScope?.parentSessionId,
     scopeId: sessionScope?.scopeId,
     relativeDir: sessionScope?.relativeDir,
     allowedRoot: sessionScope?.allowedRoot,
+    revision: version?.revision,
+    afterSha256: version?.afterSha256,
   });
   return runFetch(
-    `${prefix}/file-mutations/${encodeURIComponent(mutationId)}/${artifact}${query ? `?${query}` : ""}`,
+    `/api/internal/workspace/${encodeURIComponent(userId)}/file-mutations/${encodeURIComponent(mutationId)}/${artifact}${query ? `?${query}` : ""}`,
   );
 }
 
@@ -365,6 +364,10 @@ export async function getWorkspaceFileMutationDiffApi(request, options) {
 
 export async function getWorkspaceFileMutationFileApi(request, options) {
   return getWorkspaceFileMutationApi(request, "file", options);
+}
+
+export async function downloadWorkspaceFileMutationApi(request, options) {
+  return getWorkspaceFileMutationApi(request, "download", options);
 }
 
 export async function getRegularUsersApi({ fetcher }) {

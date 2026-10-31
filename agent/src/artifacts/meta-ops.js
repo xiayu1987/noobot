@@ -158,9 +158,7 @@ export function normalizeAttachmentMetas(attachmentMetas = []) {
         relativePath: safeStr(attachmentItem.relativePath),
         sandboxPath: safeStr(attachmentItem.sandboxPath),
         generationSource: safeStr(attachmentItem.generationSource),
-        ...(safeStr(attachmentItem?.sourcePath)
-          ? { sourcePath: safeStr(attachmentItem.sourcePath) }
-          : {}),
+        ...(attachmentItem.origin === undefined ? {} : { origin: attachmentItem.origin }),
       };
       if (!normalized.attachmentId) delete normalized.attachmentId;
       if (!normalized.clientAttachmentId) delete normalized.clientAttachmentId;
@@ -207,9 +205,7 @@ export function mapAttachmentRecordsToMetas(records = []) {
       transferFilePath: safeStr(item?.transferFilePath),
       generatedByModel: item?.generatedByModel === true,
       generationSource: safeStr(canonicalMeta.generationSource),
-      ...(safeStr(canonicalMeta?.sourcePath)
-        ? { sourcePath: safeStr(canonicalMeta.sourcePath) }
-        : {}),
+      ...(canonicalMeta.origin === undefined ? {} : { origin: canonicalMeta.origin }),
       ...(owner ? { owner } : {}),
       ...(turnScope ? { turnScope } : {}),
       relations: Array.isArray(item?.relations) ? item.relations : [],

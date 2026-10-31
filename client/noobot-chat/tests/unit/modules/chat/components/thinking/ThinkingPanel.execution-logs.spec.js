@@ -5,6 +5,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mountThinkingPanel } from "./ThinkingPanel.test-helpers.js";
+import { selectTaskCheckReceipts } from "../../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
 import { clearTurnUiState } from "../../../../../../src/modules/chat/runtime/engine/turnUiStore.js";
 
 function toolTimeline(count = 1, prefix = "cmd") {
@@ -27,6 +28,7 @@ function toolTimeline(count = 1, prefix = "cmd") {
         authority: "authoritative",
         timestamp,
       },
+      success: true,
       resultEvent: {
         eventId: `result-event-${index + 1}`,
         sequence: sequence + 1,
@@ -57,6 +59,7 @@ function taskCheckTimeline(abstract = "目标未漂移") {
       toolCallId: "task-check-1",
       tool: "task_check",
       status: "completed",
+      success: true,
       args: { checkContent: "NOOBOT_TASK_CHECK/1" },
       result: output,
       call: {
@@ -115,17 +118,14 @@ describe("ThinkingPanel canonical execution timeline", () => {
     expect(block.text()).not.toContain("guidance_analysis_response");
   });
 
-  it("does not render task_check data that violates the canonical receipt", () => {
+  it("rejects a successful task_check result that violates the canonical receipt", () => {
     const timeline = taskCheckTimeline();
     const payload = JSON.parse(timeline[0].result);
     payload.summary.details = "not allowed in receipt";
     timeline[0].result = JSON.stringify(payload);
-    const wrapper = mountThinkingPanel({
-      role: "assistant",
-      pending: false,
-      toolTimeline: timeline,
-    });
-    expect(wrapper.find('[data-thinking-block="task-check"]').exists()).toBe(false);
+    expect(() => selectTaskCheckReceipts({ toolTimeline: timeline })).toThrow(
+      /NOOBOT_TASK_CHECK\/1 receipt/,
+    );
   });
 
   it("reacts to canonical timeline increments after refresh", async () => {

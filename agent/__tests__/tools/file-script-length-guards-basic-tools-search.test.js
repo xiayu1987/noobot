@@ -13,6 +13,7 @@ import {
   buildAgentContext,
   parseToolResult,
 } from "./helpers/file-script-length-guards-helper.js";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
 test("search: 支持搜索文件和文本", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-search-"));
@@ -123,7 +124,11 @@ test("search: global sandbox mount is searched through its logical target", asyn
 
   assert.equal(result.ok, true);
   assert.equal(result.matches.length, 1);
-  assert.deepEqual(result.matches[0].path, { view: "workspace", path: "/shared-code/src/a.js" });
+  assert.deepEqual(result.matches[0].path, {
+    view: "mount",
+    mount: "/shared-code",
+    path: "src/a.js",
+  });
 });
 
 test("search: query schema rejects an empty string before tool execution", async () => {
@@ -164,4 +169,40 @@ test("search: files search rejects promptly when runtime abort signal is already
       error?.name === "AbortError" ||
       /stop requested|aborted/i.test(String(error?.message || error)),
   );
+});
+
+test("search: source=text 缺少 text 时抛出可恢复的输入错误", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-search-empty-"));
+  const tools = createFileTool({ agentContext: buildAgentContext(basePath) });
+  const tool = tools.find((item) => item?.name === "search");
+
+  await assert.rejects(
+    () =>
+      tool.invoke(
+        { riskLevel: "low", source: "text", query: "beta" },
+        { signal: new AbortController().signal },
+      ),
+    (error) => error.code === "RECOVERABLE_INVALID_INPUT" && error.details.field === "text",
+  );
+});
+
+test("read_file and search schemas reject numeric inputs beyond the shared tool IO limits", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-schema-limits-"));
+  const tools = createFileTool({ agentContext: buildAgentContext(basePath) });
+  const schemaOf = (name) => tools.find((item) => item?.name === name).schema;
+  const { toolIO } = QUANTITY_THRESHOLDS;
+  const cases = [
+    ["read_file", { filePath: "a.txt", maxLines: toolIO.readMaxLinesLimit }, "maxLines"],
+    ["search", { query: "a", maxResults: toolIO.searchMaxResultsLimit }, "maxResults"],
+    ["search", { query: "a", contextLines: toolIO.searchContextLinesLimit }, "contextLines"],
+  ];
+  for (const [name, input, field] of cases) {
+    const schema = schemaOf(name);
+    assert.equal(schema.safeParse({ riskLevel: "low", ...input }).success, true, field);
+    const over = { riskLevel: "low", ...input, [field]: input[field] + 1 };
+    const parsed = schema.safeParse(over);
+    assert.equal(parsed.success, false, field);
+    assert.deepEqual(parsed.error.issues[0].path, [field]);
+  }
+  await fs.rm(basePath, { recursive: true, force: true });
 });

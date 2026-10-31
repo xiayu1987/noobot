@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import {
+  RUNTIME_ATTACHMENT_SERVICE_METHODS,
   RUNTIME_CONTEXT_INPUT_FIELDS,
   createRuntimeContext,
 } from "../../src/runtime/runtime-context-factory.js";
@@ -21,14 +22,33 @@ export const TEST_RUNTIME_IDENTITY = Object.freeze({
   caller: SESSION_CALLER.USER,
 });
 
+export function createTestAttachmentService(implementations = {}) {
+  const unknown = Object.keys(implementations).filter(
+    (method) => !RUNTIME_ATTACHMENT_SERVICE_METHODS.includes(method),
+  );
+  if (unknown.length) {
+    throw new TypeError(`createTestAttachmentService: unknown method ${unknown.join(",")}`);
+  }
+  return Object.fromEntries(
+    RUNTIME_ATTACHMENT_SERVICE_METHODS.map((method) => [
+      method,
+      implementations[method] ||
+        (async () => {
+          throw new Error(`test attachment service ${method} is not stubbed`);
+        }),
+    ]),
+  );
+}
+
 function createDefaultRuntimeContextInput() {
   return {
     basePath: "",
+    workspaceRootDirectory: "/noobot-test/workspace/u-test",
     globalConfig: { ...TEST_MODEL_GLOBAL_CONFIG },
     userConfig: {},
     eventListener: null,
     sessionManager: null,
-    attachmentService: null,
+    attachmentService: createTestAttachmentService(),
     botManager: null,
     userInteractionBridge: null,
     abortSignal: new AbortController().signal,

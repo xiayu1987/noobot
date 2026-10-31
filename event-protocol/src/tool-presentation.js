@@ -5,17 +5,30 @@
  */
 
 import { collapsedText as text } from "./normalize.js";
-import { isPlainObject, isObjectLike } from "@noobot/shared/value";
+import { isPlainObject } from "@noobot/shared/value";
+import { assertToolResultObject, decodeToolResultText } from "./tool-result.js";
 
-function structuredDetail(value) {
-  if (isPlainObject(value)) return value;
-  if (typeof value !== "string") return {};
-  try {
-    const parsed = JSON.parse(value);
-    return isPlainObject(parsed) ? parsed : {};
-  } catch {
-    return {};
+function structuredDetail(detail, result) {
+  if (result) {
+    return typeof detail === "string"
+      ? decodeToolResultText(detail)
+      : assertToolResultObject(detail);
   }
+  if (!isPlainObject(detail)) throw new TypeError("tool call arguments must be an object");
+  return detail;
+}
+
+function requiredToolName(tool) {
+  const toolName = text(tool);
+  if (!toolName) throw new TypeError("tool presentation requires a tool name");
+  return toolName;
+}
+
+function assertMaxLength(maxLength) {
+  if (!Number.isInteger(maxLength) || maxLength < 1) {
+    throw new TypeError("tool presentation maxLength must be a positive integer");
+  }
+  return maxLength;
 }
 
 function compact(value, maxLength) {
@@ -24,49 +37,43 @@ function compact(value, maxLength) {
 }
 
 function argumentDisplay(value) {
-  if (value === undefined || value === null) return "";
   if (["string", "number", "boolean"].includes(typeof value)) return text(value);
-  try {
-    return text(JSON.stringify(value));
-  } catch {
-    return "";
-  }
+  return text(JSON.stringify(value));
 }
 
-function attachmentDisplay(value = {}) {
-  if (!isPlainObject(value)) return "";
-  const attachmentId = text(value.attachmentId);
-  return attachmentId ? `attachment:${attachmentId}` : "";
+const TOOL_PATH_VIEW = Object.freeze({
+  WORKSPACE: "workspace",
+  HOST: "host",
+  MOUNT: "mount",
+  ATTACHMENT: "attachment",
+});
+
+function requiredText(value, field) {
+  const normalized = text(value);
+  if (!normalized) throw new TypeError(`tool path reference requires ${field}`);
+  return normalized;
 }
 
-export function projectToolFileDisplay(value) {
-  if (typeof value === "string") return value.trim();
-  if (!isPlainObject(value)) return "";
-
-  if (isObjectLike(value.logical)) {
-    const logicalPath = projectToolFileDisplay(value.logical);
-    if (logicalPath) return logicalPath;
+function toolPathRefDisplay(ref) {
+  if (!isPlainObject(ref)) throw new TypeError("tool path reference must be an object");
+  if (ref.view === TOOL_PATH_VIEW.WORKSPACE || ref.view === TOOL_PATH_VIEW.HOST) {
+    return requiredText(ref.path, "path");
   }
-  if (isObjectLike(value.path)) {
-    const nestedPath = projectToolFileDisplay(value.path);
-    if (nestedPath) return nestedPath;
+  if (ref.view === TOOL_PATH_VIEW.MOUNT) {
+    return `${requiredText(ref.mount, "mount")}/${requiredText(ref.path, "path")}`;
   }
-
-  const path = typeof value.path === "string" ? value.path.trim() : "";
-  if (path) return path;
-  for (const identity of [value.identity, value.attachment, value]) {
-    const attachment = attachmentDisplay(identity);
-    if (attachment) return attachment;
-  }
-  return text(value.fileName || value.name);
+  throw new TypeError(`unsupported tool path reference view: ${String(ref.view)}`);
 }
 
-function firstFileDisplay(...values) {
-  for (const value of values) {
-    const projected = projectToolFileDisplay(value);
-    if (projected) return projected;
+function fileResultDisplay(value) {
+  if (isPlainObject(value.path) && value.path.view === TOOL_PATH_VIEW.ATTACHMENT) {
+    return requiredText(value.fileName, "fileName");
   }
-  return "";
+  return toolPathRefDisplay(value.path);
+}
+
+function optionalToolPathRefDisplay(value) {
+  return value === undefined ? "" : toolPathRefDisplay(value);
 }
 
 function attachmentNames(value = {}) {
@@ -84,7 +91,6 @@ function attachmentNames(value = {}) {
 
 function nativeScriptSummary(value, result) {
   if (result) {
-    if (value.error) return text(value.error);
     const names = attachmentNames(value);
     const fileCount = Number(value.output_file_count);
     const bytes = Number(value.output_bytes);
@@ -108,82 +114,63 @@ function nativeScriptSummary(value, result) {
   return [inputSummary, args].filter(Boolean).join(" · ");
 }
 
+function patchChanges(value) {
+  if (!Array.isArray(value.changes) || !value.changes.length) {
+    throw new TypeError("patch_file result requires a non-empty changes array");
+  }
+  return value.changes;
+}
+
 function patchSummary(value, result) {
   if (result) {
-    if (value.error) return text(value.error);
-    const changedFiles = Array.isArray(value.changes)
-      ? value.changes
-      : Array.isArray(value.changedFiles)
-        ? value.changedFiles
-        : [];
-    const target = firstFileDisplay(changedFiles[0]?.path || changedFiles[0], value.root);
+    const target = toolPathRefDisplay(patchChanges(value)[0].path);
     return [target, value.dryRun === true ? "dry-run" : ""].filter(Boolean).join(" · ");
   }
-  return [
-    firstFileDisplay(value.root),
-    text(value.format),
-    value.dryRun === true ? "dry-run" : "apply",
-  ]
+  return [text(value.root), text(value.format), value.dryRun === true ? "dry-run" : "apply"]
     .filter(Boolean)
     .join(" · ");
 }
 
-export function projectToolOperationSubject(
-  tool = "",
-  detail,
-  { result = false, maxLength = 96 } = {},
-) {
-  const toolName = text(tool) || "tool";
-  const value = structuredDetail(detail);
+export function projectToolOperationSubject(tool, detail, { result = false, maxLength = 96 } = {}) {
+  const toolName = requiredToolName(tool);
+  const limit = assertMaxLength(maxLength);
+  const value = structuredDetail(detail, result);
   let subject = "";
 
-  if (["write_file", "read_file"].includes(toolName)) {
-    subject =
-      result && value.error
-        ? text(value.error)
-        : firstFileDisplay(value.path, value.filePath, value.fileName);
+  if (result && value.overflowed === true) {
+    subject = text(value.message);
+  } else if (result && value.ok === false) {
+    subject = text(value.error);
+  } else if (["write_file", "read_file"].includes(toolName)) {
+    subject = result ? fileResultDisplay(value) : text(value.filePath);
   } else if (toolName === "patch_file") {
     subject = patchSummary(value, result);
   } else if (["execute_script", "execute_command"].includes(toolName)) {
-    subject =
-      result && value.error
-        ? text(value.error)
-        : text(result ? value.stdout : value.command || value.script);
+    subject = text(result ? value.stdout : value.command || value.script);
   } else if (toolName === "execute_native_script") {
     subject = nativeScriptSummary(value, result);
   } else if (toolName === "search") {
-    subject =
-      result && value.error
-        ? text(value.error)
-        : [
-            value.query,
-            firstFileDisplay(value.path, value.source),
-            Array.isArray(value.matches) ? `${value.matches.length} matches` : "",
-          ]
-            .filter(Boolean)
-            .join(" · ");
+    subject = [
+      value.query,
+      result ? optionalToolPathRefDisplay(value.path) : text(value.path),
+      Array.isArray(value.matches) ? `${value.matches.length} matches` : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
   } else if (toolName === "list_skills") {
     subject =
       value.parentSkill || (Array.isArray(value.items) ? `${value.items.length} items` : "");
   } else if (toolName === "user_interaction") {
     subject = value.content || value.message;
   } else {
-    subject =
-      result && value.error
-        ? value.error
-        : firstFileDisplay(value.filePath, value.path, value.fileName, value.resolvedPath) ||
-          value.command ||
-          value.query ||
-          value.content ||
-          value.message ||
-          value.stdout;
+    subject = value.command || value.query || value.content || value.message || value.stdout;
   }
 
-  return compact(subject, Math.max(1, Number(maxLength) || 96));
+  return compact(subject, limit);
 }
 
-export function projectToolOperationSummary(tool = "", detail, options = {}) {
-  const toolName = text(tool) || "tool";
+export function projectToolOperationSummary(tool, detail, options = {}) {
+  const toolName = requiredToolName(tool);
   const subject = projectToolOperationSubject(toolName, detail, options);
   return subject ? `${toolName} · ${subject}` : toolName;
 }

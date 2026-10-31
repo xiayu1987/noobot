@@ -114,10 +114,6 @@ export function useWorkflowNodeMessages({
     { immediate: true },
   );
 
-  const nodeSessionAllMessages = computed(() =>
-    selectedNodeMessages.value.map((messageItem) => buildNodeViewMessage(messageItem)),
-  );
-
   const selectedActionNodeStates = computed(() => {
     const nodeItem = selectedRuntimeNode.value || selectedNode.value || {};
     return Array.isArray(nodeItem?.actionNodeStates) ? nodeItem.actionNodeStates : [];
@@ -150,7 +146,6 @@ export function useWorkflowNodeMessages({
   return {
     selectedNodeSessionDocs,
     displayNodeMessages,
-    nodeSessionAllMessages,
     selectedActionNodeStates,
   };
 }

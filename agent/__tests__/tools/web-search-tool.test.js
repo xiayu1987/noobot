@@ -179,8 +179,6 @@ test("do_search_web: search_engine 模式直接请求搜索引擎地址", async 
     assert.equal(capturedUrl, "http://search.local/search?q=noobot");
     assert.equal(capturedOptions.method, "GET");
     assert.equal(capturedOptions.signal, abortController.signal);
-    assert.equal(result.ok, true);
-    assert.equal(result.statusCode, 200);
     assert.deepEqual(result.data, { results: [{ title: "Noobot" }] });
   } finally {
     globalThis.fetch = originalFetch;
@@ -231,4 +229,33 @@ test("do_search_web: model_web_search 未显式声明模型时失败，不回退
   );
   assert.equal(invoked, false);
   assert.match(output, /model_web_search\.model is required/);
+});
+
+test("do_search_web: search_engine 非 2xx 响应抛带码错误并携带 httpStatus", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ message: "rate limited" }), {
+      status: 429,
+      headers: { "content-type": "application/json" },
+    });
+  try {
+    await assert.rejects(
+      () =>
+        searchWithSearchEngine({
+          runtime: {},
+          toolCfg: {
+            enabled: true,
+            mode: "search_engine",
+            endpoints: { search: { url: "http://search.local/search", body_format: "{}" } },
+          },
+          query: "noobot",
+        }),
+      (error) =>
+        error.code === "RECOVERABLE_WEB_SEARCH_HTTP_ERROR" &&
+        error.fatal === false &&
+        error.details.httpStatus === 429,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

@@ -15,9 +15,9 @@ export const READ_FILE_MANUAL = {
       filePath:
         "File path, or an attachmentRef from the context. Relative paths resolve against the current user workspace root.",
       startLine: "Start line, 1-based, optional. Omit to start from the first line.",
-      endLine: "End line, 1-based, optional. Omit to read up to the maxLines limit.",
-      maxLines:
-        "Maximum lines returned, default 1000. Prevents a huge file from flooding the context.",
+      endLine:
+        "End line, 1-based, optional. Omit to read up to the maxLines limit; a value past the end of file stops at the last line.",
+      maxLines: "Maximum lines returned; prevents a huge file from flooding the context.",
       includeLineNumbers:
         "Whether returned content carries line numbers. Enable it before writing a patch so context can be verified.",
       riskLevel:
@@ -25,7 +25,7 @@ export const READ_FILE_MANUAL = {
     },
     notes: [
       "Text files only. Use multimodal_parse for images, audio, video, and binary documents.",
-      "The response carries totalLines, truncated, and hasMore, so you can tell whether another segment is needed.",
+      "The response carries totalLines and hasMore; read the next segment while hasMore is true.",
       "For very large files, locate matches with search first, then read the relevant ranges instead of pulling the whole file.",
       "The current path policy does not allow file tools to follow symbolic links.",
     ],

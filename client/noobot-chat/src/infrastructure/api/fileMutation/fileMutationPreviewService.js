@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import {
+  downloadWorkspaceFileMutationApi,
   getWorkspaceFileMutationDiffApi,
   getWorkspaceFileMutationFileApi,
 } from "../chat/chatApi.js";
@@ -39,19 +40,25 @@ export const fileMutationPreviewService = Object.freeze({
     if (!data?.ok) throw new Error(data?.error || "file diff not found");
     return data;
   },
-  async downloadFile({
-    userId = "",
-    sessionId = "",
-    sessionScope = null,
-    mutationId = "",
-    fileName = "",
-  } = {}) {
-    const data = await getMutationFile({ userId, sessionId, sessionScope, mutationId });
-    const content = String(data?.content || "");
-    const name =
-      String(fileName || data?.path || "download")
-        .split(/[\\/]/)
-        .at(-1) || "download";
-    await saveFileBlob(new Blob([content], { type: "text/plain;charset=utf-8" }), name);
+
+  async downloadFile({ userId = "", sessionId = "", mutationRef } = {}) {
+    const response = await downloadWorkspaceFileMutationApi(
+      {
+        userId,
+        sessionId,
+        sessionScope: mutationRef.sessionScope,
+        mutationId: mutationRef.mutationId,
+        version: { revision: mutationRef.revision, afterSha256: mutationRef.afterSha256 },
+      },
+      { fetcher: requireAuthenticatedFetcher() },
+    );
+    if (!response.ok) {
+      const data = await response.json();
+      const error = new Error(data.error);
+      error.code = data.errorCode;
+      error.statusCode = response.status;
+      throw error;
+    }
+    await saveFileBlob(await response.blob(), mutationRef.fileName);
   },
 });

@@ -8,6 +8,7 @@ import { MESSAGE_IDENTITY_FIELD } from "../identity/message-identity.js";
 import { isNaturalDialogUserMessage } from "../message-entity-contract.js";
 import {
   MESSAGE_RECORD_REMOVED_FIELDS,
+  judgeMessageFieldRemoval,
   messageFieldRemovalsFor,
   messageFieldRenamesFor,
   messageRecordIdentityFieldsFor,
@@ -83,15 +84,9 @@ function applyRecordRename(source, next, rename) {
 }
 
 function applyRecordRemoval(source, next, removal) {
-  if (!Object.hasOwn(source, removal.field)) return false;
-  if (!roleMatches(removal, source.role)) return false;
-  const value = source[removal.field];
-  if (removal.duplicateOf !== null && !duplicates(source, value, removal.duplicateOf)) {
-    throw recordMigrationError("removal_not_duplicate", removal.field);
-  }
-  if (removal.consistentWith !== null && !removal.consistentWith(value, source)) {
-    throw recordMigrationError("removal_inconsistent", removal.field);
-  }
+  const judgment = judgeMessageFieldRemoval(source, text(source.role), removal);
+  if (judgment.rejection) throw recordMigrationError(judgment.rejection, removal.field);
+  if (!judgment.remove) return false;
   delete next[removal.field];
   return true;
 }
@@ -108,9 +103,6 @@ export function migrateSessionMessageRecordIdentity(record, store) {
   for (const removal of messageFieldRemovalsFor(store)) {
     if (handled.has(removal.field)) continue;
     if (applyRecordRemoval(record, next, removal)) handled.add(removal.field);
-  }
-  for (const field of MESSAGE_RECORD_REMOVED_FIELDS) {
-    if (Object.hasOwn(next, field)) throw recordMigrationError("unmapped_field", field);
   }
   return { record: next, changed: handled.size > 0 };
 }

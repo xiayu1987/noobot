@@ -292,9 +292,12 @@ function isHarnessStepModelDisabled(stepKey = "") {
 }
 
 .plugin-capability-toggle :deep(.el-radio-button__inner) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   height: 28px;
-  line-height: 26px;
+  line-height: var(--noobot-line-height-none);
   padding-top: 0;
   padding-bottom: 0;
   padding-left: var(--noobot-space-xs);

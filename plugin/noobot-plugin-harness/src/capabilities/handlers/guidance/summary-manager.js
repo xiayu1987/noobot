@@ -77,7 +77,7 @@ export function recordSummaryTransferEnvelopes(ctx = {}, transferPayload = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return [];
   const { bucket } = holder;
-  const envelopes = normalizeTransferEnvelopes(transferPayload?.transferEnvelopes || []).filter(
+  const envelopes = normalizeTransferEnvelopes(transferPayload.transferEnvelopes).filter(
     (envelope) => envelope.payload.mode === "attachment",
   );
   bucket.summaryTransferEnvelopes = mergeTransferEnvelopes(

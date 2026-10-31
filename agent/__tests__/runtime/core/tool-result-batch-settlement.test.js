@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { initializeCurrentTurnMessageEventProjection } from "../../../src/events/current-turn-message-event-projection.js";
+import { fatalSystemError } from "../../../src/shared/errors/index.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -326,7 +327,7 @@ test("settleToolCallInTurn rejected fatal path reports elapsed durationMs on too
   const runtime = createRuntime();
   const events = [];
   runtime.eventListener = { onEvent: (event) => events.push(event) };
-  const fatalError = Object.assign(new Error("fatal tool failure"), { code: "FATAL_TEST" });
+  const fatalError = fatalSystemError("fatal tool failure", { code: "FATAL_TEST" });
 
   const settlement = await settleToolCallInTurn({
     call: { id: "call-fatal", name: "execute_script", args: {} },

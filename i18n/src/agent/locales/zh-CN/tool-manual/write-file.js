@@ -6,7 +6,7 @@
 
 export const WRITE_FILE_MANUAL = {
   write_file: {
-    summary: "写入工作区文本文件，返回逻辑路径、资源身份与写入时的附件快照。",
+    summary: "写入工作区文本文件，返回文件路径与写入时的变更快照。",
     usage: ["write_file({ filePath, content, overwrite, riskLevel })"],
     params: {
       filePath: "文件路径。相对路径基于当前用户工作区根目录。",
@@ -16,7 +16,7 @@ export const WRITE_FILE_MANUAL = {
     },
     notes: [
       "写入是全量覆盖，不是追加。修改既有文件优先用 patch_file，避免整文件重写丢失未读内容。",
-      "返回的附件快照是写入那一刻的副本，后续再改同一文件不会改变已有快照。",
+      "返回的变更快照是写入那一刻的副本，后续再改同一文件不会改变已有快照。回复中链接该文件时照抄结果里的路径。",
       "单次调用需控制输出规模。大文件先写骨架，再分批补充，每批不超过约 50 行。",
     ],
     pitfalls: [

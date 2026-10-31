@@ -8,20 +8,13 @@ import {
   dedupeAttachmentsByIdentity,
   parseAttachmentRelations,
   projectAttachmentIdentity,
+  requireNonEmptyString,
+  requirePlainObject,
 } from "@noobot/attachment-protocol";
 import { isPlainObject, text } from "@noobot/shared/value";
 
-function validatedEnvelopes(value) {
-  const source =
-    isPlainObject(value) && Array.isArray(value.transferEnvelopes)
-      ? value.transferEnvelopes
-      : value;
-  return normalizeTransferEnvelopes(source);
-}
-
-function compactAttachmentRef(reference = {}) {
-  if (!isPlainObject(reference) || !isPlainObject(reference.identity)) return null;
-  const envelopeRef = {
+function compactAttachmentRef(reference) {
+  return {
     identity: reference.identity,
     ...(reference.role ? { role: reference.role } : {}),
     ...(reference.name ? { name: reference.name } : {}),
@@ -29,15 +22,13 @@ function compactAttachmentRef(reference = {}) {
     ...(reference.size === undefined ? {} : { size: reference.size }),
     ...(reference.preview === undefined ? {} : { preview: reference.preview }),
   };
-  return envelopeRef;
 }
 
-export function compactSessionAttachmentRef(reference = {}) {
-  if (!isPlainObject(reference)) return null;
+function compactSessionAttachmentRef(reference) {
+  requirePlainObject(reference, "invalid_session_attachment");
   const identity = projectAttachmentIdentity(reference);
-  const name = text(reference.name);
-  const mimeType = text(reference.mimeType);
-  if (!name || !mimeType) return null;
+  const name = requireNonEmptyString(reference.name, "invalid_attachment_name");
+  const mimeType = requireNonEmptyString(reference.mimeType, "invalid_attachment_mime_type");
   const output = { ...identity, name, mimeType };
   for (const key of [
     "size",
@@ -46,7 +37,7 @@ export function compactSessionAttachmentRef(reference = {}) {
     "path",
     "previewUrl",
     "downloadUrl",
-    "sourcePath",
+    "origin",
     "generationSource",
   ]) {
     if (reference[key] !== undefined && reference[key] !== null && reference[key] !== "")
@@ -62,15 +53,12 @@ export function compactSessionAttachmentRef(reference = {}) {
   return output;
 }
 
-export function dedupeSessionAttachmentRefs(refs = []) {
-  return dedupeAttachmentsByIdentity(
-    (Array.isArray(refs) ? refs : []).map(compactSessionAttachmentRef).filter(Boolean),
-  );
+export function dedupeSessionAttachmentRefs(refs) {
+  if (!Array.isArray(refs)) throw new TypeError("session attachments must be an array");
+  return dedupeAttachmentsByIdentity(refs.map(compactSessionAttachmentRef));
 }
 
-function compactTransferEnvelope(envelope = {}) {
-  const validated = validatedEnvelopes(envelope)[0];
-  if (!validated) return null;
+function compactTransferEnvelope(validated) {
   const output = {
     protocol: validated.protocol,
     version: validated.version,
@@ -91,22 +79,15 @@ function compactTransferEnvelope(envelope = {}) {
   return output;
 }
 
-export function compactTransferEnvelopes(envelopes = []) {
-  return validatedEnvelopes(envelopes).map((envelope) => compactTransferEnvelope(envelope));
+export function compactTransferEnvelopes(envelopes) {
+  return normalizeTransferEnvelopes(envelopes).map(compactTransferEnvelope);
 }
 
-export function collectAttachmentRefsFromTransferEnvelopes(envelopes = []) {
+export function collectAttachmentRefsFromTransferEnvelopes(envelopes) {
   return dedupeAttachmentsByIdentity(
     compactTransferEnvelopes(envelopes).flatMap((envelope) =>
       envelope.payload.mode === "attachment" ? envelope.payload.attachments : [],
     ),
-    (reference) => reference.identity,
-  );
-}
-
-export function dedupeAttachmentRefs(refs = []) {
-  return dedupeAttachmentsByIdentity(
-    (Array.isArray(refs) ? refs : []).map(compactAttachmentRef).filter(Boolean),
     (reference) => reference.identity,
   );
 }

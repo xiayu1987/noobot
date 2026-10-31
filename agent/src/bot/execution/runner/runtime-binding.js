@@ -115,6 +115,7 @@ export async function bindAgentDispatchRuntime({
           role: "assistant",
           type: "message",
           chatPresentation: true,
+          workspaceRootDirectory: dispatchRuntime.workspaceRootDirectory,
           content: "",
           attachments: [],
         },

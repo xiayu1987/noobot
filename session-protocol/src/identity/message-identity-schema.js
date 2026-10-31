@@ -27,7 +27,7 @@ export const MESSAGE_IDENTITY_STORE = Object.freeze({
 });
 
 export const MESSAGE_IDENTITY_STORE_POLICY = Object.freeze({
-  rebuilt: Object.freeze(["session-summary"]),
+  rebuilt: Object.freeze(["session-summary", "session-summary-details"]),
   frozen: Object.freeze(["events", "execution-events", "debug-*"]),
 });
 
@@ -151,7 +151,7 @@ export const MESSAGE_FIELD_REMOVALS = Object.freeze([
     duplicateOf: ["messageUid"],
     reason: MESSAGE_REMOVAL_REASON.DUPLICATE,
   }),
-  removal("userMetaMaterialized", RECORD_STORES, {
+  removal("userMetaMaterialized", [...RECORD_STORES, STORE.MODEL_CONTEXT_SNAPSHOT], {
     roles: ["user"],
     consistentWith: (value, record) => value === (record.messageOrigin === "natural"),
     reason: MESSAGE_REMOVAL_REASON.DUPLICATE,
@@ -254,6 +254,36 @@ export function messagePathRulesFor(store) {
 
 export function messageFieldRemovalsFor(store) {
   return MESSAGE_FIELD_REMOVALS.filter((entry) => entry.stores.includes(store));
+}
+
+export const MESSAGE_FIELD_REMOVAL_REJECTION = Object.freeze({
+  ROLE_MISMATCH: "removal_role_mismatch",
+  NOT_DUPLICATE: "removal_not_duplicate",
+  INCONSISTENT: "removal_inconsistent",
+});
+
+const REMOVAL_JUDGMENT = Object.freeze({
+  ABSENT: Object.freeze({ remove: false, rejection: null }),
+  REMOVE: Object.freeze({ remove: true, rejection: null }),
+});
+
+function removalRejected(rejection) {
+  return Object.freeze({ remove: false, rejection });
+}
+
+export function judgeMessageFieldRemoval(source, role, entry) {
+  if (!Object.hasOwn(source, entry.field)) return REMOVAL_JUDGMENT.ABSENT;
+  const value = source[entry.field];
+  if (entry.roles !== null && !entry.roles.includes(role)) {
+    return removalRejected(MESSAGE_FIELD_REMOVAL_REJECTION.ROLE_MISMATCH);
+  }
+  if (entry.duplicateOf !== null && !entry.duplicateOf.some((key) => source[key] === value)) {
+    return removalRejected(MESSAGE_FIELD_REMOVAL_REJECTION.NOT_DUPLICATE);
+  }
+  if (entry.consistentWith !== null && !entry.consistentWith(value, source)) {
+    return removalRejected(MESSAGE_FIELD_REMOVAL_REJECTION.INCONSISTENT);
+  }
+  return REMOVAL_JUDGMENT.REMOVE;
 }
 
 export const MESSAGE_RECORD_REMOVED_FIELDS = Object.freeze([

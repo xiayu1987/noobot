@@ -20,7 +20,6 @@ import {
   openAttachmentStream,
   readAttachmentContent,
   readAttachmentMetas,
-  resolveSourceAttachment,
 } from "./attachment-service-query.js";
 
 export class AttachmentService {
@@ -58,10 +57,6 @@ export class AttachmentService {
 
   async readAttachmentMetas({ userId, sessionId = "", attachmentSource = "" } = {}) {
     return readAttachmentMetas(this, { userId, sessionId, attachmentSource });
-  }
-
-  async resolveSourceAttachment(payload = {}) {
-    return resolveSourceAttachment(this, payload);
   }
 
   async readAttachmentContent({ userId, attachmentId, sessionId = "", attachmentSource = "" }) {

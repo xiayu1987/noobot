@@ -10,7 +10,7 @@ export const PATCH_FILE_MANUAL = {
     usage: ["patch_file({ patch, strip, root, dryRun, riskLevel, format })"],
     params: {
       patch: "补丁内容。必须使用 read_file 或 search 返回的完整 path 与精确上下文，不要改写路径。",
-      strip: "路径前缀剥离层数。补丁含 a/ 或 b/ 前缀时设 1，使用完整 path 时设 0。",
+      strip: "路径前缀剥离层数，默认 0。仅补丁带 a/、b/ 前缀时设 1。",
       root: "通常省略。填写时只能是工作区相对子目录，不能是绝对路径或 .. 。",
       dryRun: "只验证不写入，用于先确认补丁能否命中。",
       format: "补丁格式，省略时按内容识别。显式格式与内容不一致会被拒绝。",
@@ -18,14 +18,13 @@ export const PATCH_FILE_MANUAL = {
     },
     notes: [
       "这是修改既有文件的首选手段，优先使用精确上下文补丁，避免手算 unified diff 行数。",
-      "补丁失败时先重新 read_file 拿到当前真实内容再改，不要在旧上下文上反复试。",
+      "补丁失败时先重新 read_file 拿到当前真实内容再改，不要在旧上下文上反复试。失败结果带 totalLines；失配行在文件范围内时另带 nearbyContent。",
       "文件经其他工具或格式化器修改后仍可继续打补丁。file_mutation_conflict 表示本次补丁读取后文件又发生变化，需要重新读取并重建补丁。聚合 diff 展示本轮文件的总体变化；aggregate.externalChangeCount 标识其中观察到的外部修改次数。",
       "同一文件多处改动可放在一个补丁里，减少往返。",
       "changes[].action 表示补丁声明的意图（write 或 delete），不代表已经落盘；判断是否真的写入要看 changes[].mutation 与顶层 mutations 是否为空。dryRun 时 action 仍是 write 而 mutation 恒为 null。",
     ],
     pitfalls: [
-      "root 要省略就整个不传该字段，传空字符串会被当成字面路径而报文件不存在。",
-      "使用完整 path 时 strip 必须为 0，沿用默认 1 会把首层目录剥掉导致找不到文件。",
+      "完整 path 不要再设 strip，否则首层目录被剥掉导致找不到文件。",
       "补丁上下文必须与磁盘完全一致，凭记忆拼写的上下文几乎一定失败。",
     ],
   },

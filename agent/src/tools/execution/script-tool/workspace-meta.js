@@ -45,9 +45,9 @@ export function buildScriptExecutionMeta({ executionPolicy = {} } = {}) {
   });
 }
 
-async function buildBackgroundOutputArtifact({ filePath = "", name = "", role = "" } = {}) {
-  const bytes = await readFile(filePath).catch(() => Buffer.alloc(0));
-  if (!bytes.length) return null;
+async function buildBackgroundOutputArtifact({ filePath, byteLength, name, role }) {
+  if (byteLength === 0) return null;
+  const bytes = await readFile(filePath);
   return {
     name,
     mimeType: "text/plain",
@@ -56,15 +56,17 @@ async function buildBackgroundOutputArtifact({ filePath = "", name = "", role = 
   };
 }
 
-async function persistBackgroundScriptOutput({ runtime = {}, result = {}, identity = null } = {}) {
+async function persistBackgroundScriptOutput({ runtime, result, identity }) {
   const artifacts = [
     await buildBackgroundOutputArtifact({
       filePath: result.stdoutPath,
+      byteLength: result.stdoutBytes,
       name: "execute-script-stdout.txt",
       role: "stdout",
     }),
     await buildBackgroundOutputArtifact({
       filePath: result.stderrPath,
+      byteLength: result.stderrBytes,
       name: "execute-script-stderr.txt",
       role: "stderr",
     }),
@@ -88,35 +90,35 @@ async function persistBackgroundScriptOutput({ runtime = {}, result = {}, identi
   });
 }
 
-export async function toolFileBackedExecResult(mode, r = {}, extra = {}, options = {}) {
-  const { runtime } = options;
+export async function toolFileBackedExecResult(mode, r, extra, options) {
+  const { runtime, identity, outputFileEnvelopes, outputResources } = options;
   const persisted = await persistBackgroundScriptOutput({
     runtime,
     result: r,
-    identity: options?.identity,
+    identity,
   });
   const transferEnvelopes = [
-    ...(persisted?.transferEnvelopes || []),
-    ...(Array.isArray(options?.outputFileEnvelopes) ? options.outputFileEnvelopes : []),
+    ...(persisted ? persisted.transferEnvelopes : []),
+    ...outputFileEnvelopes,
   ];
+  const { ok, termination, exitCode, signal, code, error, outputLimitExceeded, outputLimitBytes } =
+    r;
   return toToolJsonResult(EXECUTE_SCRIPT_TOOL_NAME, {
-    ok: Number(r?.code || 0) === 0,
+    ok,
     mode,
     executionMode: SCRIPT_EXECUTION_MODE.BACKGROUND,
     ...extra,
-    code: Number(r?.code || 0),
+    termination,
+    ...(exitCode !== undefined ? { exitCode } : {}),
+    ...(signal !== undefined ? { signal } : {}),
+    ...(ok ? {} : { code, error }),
     ...buildOutputTransferDeclaration({
       reason: TRANSFER_REASON.EXECUTE_SCRIPT_BACKGROUND,
       transferEnvelopes,
-      outputLimitExceeded: r?.outputLimitExceeded === true,
-      outputLimitBytes: Number(r?.outputLimitBytes || 0),
+      outputLimitExceeded: outputLimitExceeded === true,
+      outputLimitBytes,
     }),
-    ...(r?.outputLimitExceeded === true
-      ? {
-          outputLimitExceeded: true,
-          outputLimitBytes: Number(r?.outputLimitBytes || 0),
-        }
-      : {}),
-    ...(r?.signal ? { signal: r.signal } : {}),
+    ...(outputLimitExceeded ? { outputLimitExceeded, outputLimitBytes } : {}),
+    ...(outputResources.length ? { outputResources } : {}),
   });
 }

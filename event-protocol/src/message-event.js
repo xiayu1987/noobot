@@ -7,10 +7,9 @@ import {
   normalizeSecurityRiskLevel,
   validateSecurityAssessment,
 } from "@noobot/security-assessment-protocol";
-import {
-  isThinkingDetailContentFact,
-  validateUserInterjectionFact,
-} from "./thinking-detail-content-fact.js";
+import { isMutationRef } from "@noobot/file-mutation-protocol";
+import { validateUserInterjectionFact } from "./thinking-detail-content-fact.js";
+import { decodeToolResultText, isToolResultError } from "./tool-result.js";
 import { MESSAGE_REMOVED_FIELD_NAME } from "@noobot/session-protocol";
 import { isCanonicalText, isPlainObject, text } from "@noobot/shared/value";
 
@@ -76,8 +75,8 @@ export const MODEL_MESSAGE_SCOPED_EVENT_TYPES = Object.freeze(
   ]),
 );
 
-export function resolveMessageEventModelMessageId(value = {}) {
-  return text(value?.modelMessageId);
+export function resolveMessageEventModelMessageId(value) {
+  return text(value.modelMessageId);
 }
 
 const AUTHORITATIVE_FINAL_CONTENT_EVENT_TYPES = Object.freeze(
@@ -201,10 +200,15 @@ function requireEventText(value) {
   return typeof value?.text === "string" ? [] : ["missing_text"];
 }
 
-function validateActivityDelta(value) {
+function validateActivityIdentity(value) {
   const errors = requireEventText(value);
   if (!text(value?.activityId)) errors.push("missing_activity_id");
   if (!text(value?.activityKind)) errors.push("missing_activity_kind");
+  return errors;
+}
+
+function validateActivityDelta(value) {
+  const errors = validateActivityIdentity(value);
   if (!ACTIVITY_EVENT_TYPES.has(text(value?.activityEventType))) {
     errors.push("invalid_activity_event_type");
   }
@@ -226,19 +230,43 @@ function validateToolCallStart(value) {
   const errors = [];
   if (!text(value?.tool)) errors.push("missing_tool");
   if (!text(value?.toolCallId)) errors.push("missing_tool_call_id");
-  if (value?.args !== undefined && !isPlainObject(value.args)) errors.push("invalid_tool_args");
+  if (!isPlainObject(value?.args)) errors.push("invalid_tool_args");
   return [...errors, ...validateToolSecurityAssessment(value)];
+}
+
+const TOOL_CALL_END_OPTIONAL_LISTS = Object.freeze([
+  { field: "resourceRefs", code: "invalid_resource_refs", isItem: () => true },
+  { field: "transferEnvelopes", code: "invalid_transfer_envelopes", isItem: () => true },
+  { field: "mutationRefs", code: "invalid_mutation_refs", isItem: isMutationRef },
+]);
+
+function validateToolCallEndLists(value) {
+  return TOOL_CALL_END_OPTIONAL_LISTS.filter(({ field, isItem }) => {
+    const list = value?.[field];
+    return list !== undefined && !(Array.isArray(list) && list.every(isItem));
+  }).map(({ code }) => code);
+}
+
+function isDecodableToolResult(value) {
+  try {
+    decodeToolResultText(value);
+    return true;
+  } catch (error) {
+    if (isToolResultError(error)) return false;
+    throw error;
+  }
 }
 
 function validateToolCallEnd(value) {
   const errors = [];
+  if (!text(value?.tool)) errors.push("missing_tool");
   if (!text(value?.toolCallId)) errors.push("missing_tool_call_id");
-  if (!("result" in (value || {}))) errors.push("missing_tool_result");
+  if (!isDecodableToolResult(value?.result)) errors.push("invalid_tool_result");
   if (typeof value?.success !== "boolean") errors.push("missing_tool_success");
   if (!Number.isFinite(value?.durationMs) || value.durationMs < 0) {
     errors.push("invalid_tool_duration");
   }
-  return [...errors, ...validateToolSecurityAssessment(value)];
+  return [...errors, ...validateToolCallEndLists(value), ...validateToolSecurityAssessment(value)];
 }
 
 function validateEventTypeFields(value, eventType) {
@@ -254,7 +282,7 @@ function validateEventTypeFields(value, eventType) {
   if (eventType === MESSAGE_EVENT_TYPE.AUTHORITATIVE_FINAL_CONTENT) {
     errors.push(...validateFinalContentCollections(value));
   }
-  if (ACTIVITY_EVENT_TYPES.has(eventType)) errors.push(...requireEventText(value));
+  if (ACTIVITY_EVENT_TYPES.has(eventType)) errors.push(...validateActivityIdentity(value));
   if (eventType === MESSAGE_EVENT_TYPE.USER_INTERJECTION) {
     errors.push(...validateUserInterjectionFact(value.contentFact));
   }
@@ -298,85 +326,38 @@ export function assertMessageEventPayload(value = {}) {
   return value;
 }
 
-export function projectMessageEventContent(event = {}) {
-  const eventType = text(event?.eventType);
+export function projectMessageEventContent(event) {
+  const { eventType } = event;
   if (eventType === MESSAGE_EVENT_TYPE.LLM_DELTA) {
-    return Object.freeze({
-      effect: MESSAGE_CONTENT_EFFECT.APPEND,
-      content: typeof event?.text === "string" ? event.text : "",
-    });
+    return Object.freeze({ effect: MESSAGE_CONTENT_EFFECT.APPEND, content: event.text });
   }
   if (REPLACE_MESSAGE_CONTENT_EVENT_TYPES.has(eventType)) {
-    return Object.freeze({
-      effect: MESSAGE_CONTENT_EFFECT.REPLACE,
-      content: typeof event?.text === "string" ? event.text : "",
-    });
+    return Object.freeze({ effect: MESSAGE_CONTENT_EFFECT.REPLACE, content: event.text });
   }
   return Object.freeze({ effect: MESSAGE_CONTENT_EFFECT.NONE, content: "" });
 }
 
-export function projectMessageEventMetadata(event = {}) {
+export function projectMessageEventMetadata(event) {
   const metadata = {};
-  const modelAlias = text(event?.modelAlias);
-  const modelName = text(event?.modelName);
+  const modelAlias = text(event.modelAlias);
+  const modelName = text(event.modelName);
   if (modelAlias) metadata.modelAlias = modelAlias;
   if (modelName) metadata.modelName = modelName;
   return Object.freeze(metadata);
 }
 
-export function projectUserInterjectionContentFact(event = {}) {
-  if (
-    text(event?.eventType) !== MESSAGE_EVENT_TYPE.USER_INTERJECTION ||
-    !isThinkingDetailContentFact(event?.contentFact)
-  ) {
-    return null;
-  }
-  return event.contentFact;
-}
-
-export function projectAuthoritativeFinalMessage(event = {}) {
+export function projectAuthoritativeFinalMessage(event) {
   if (!isAuthoritativeFinalContentEvent(event)) return Object.freeze({});
-  const projection = {
-    content: typeof event?.text === "string" ? event.text : "",
-  };
-  if (Array.isArray(event?.attachments) && event.attachments.length > 0) {
+  const projection = { content: event.text };
+  if (Array.isArray(event.attachments) && event.attachments.length > 0) {
     projection.attachments = Object.freeze([...event.attachments]);
   }
-  if (Array.isArray(event?.transferEnvelopes) && event.transferEnvelopes.length > 0) {
+  if (Array.isArray(event.transferEnvelopes) && event.transferEnvelopes.length > 0) {
     projection.transferEnvelopes = Object.freeze([...event.transferEnvelopes]);
   }
   return Object.freeze(projection);
 }
 
-export function isAuthoritativeFinalContentEvent(event = {}) {
-  const eventType = text(event?.eventType);
-  return AUTHORITATIVE_FINAL_CONTENT_EVENT_TYPES.has(eventType);
-}
-
-export function projectMessageEventToolFacets(event = {}) {
-  const eventType = text(event?.eventType);
-  const toolCallId = text(event?.toolCallId);
-  const assessedRiskLevel = normalizeSecurityRiskLevel(
-    event?.securityAssessment?.effectiveRiskLevel,
-  );
-  const toolCall =
-    eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_START && text(event?.tool)
-      ? {
-          id: toolCallId,
-          name: text(event.tool),
-          args: isPlainObject(event?.args) ? event.args : {},
-          ...(assessedRiskLevel ? { riskLevel: assessedRiskLevel } : {}),
-        }
-      : undefined;
-  const toolResult =
-    eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_END && event?.result !== undefined
-      ? {
-          toolCallId,
-          name: text(event?.tool),
-          output: event.result,
-          success: event.success,
-          ...(assessedRiskLevel ? { riskLevel: assessedRiskLevel } : {}),
-        }
-      : undefined;
-  return Object.freeze({ toolCall, toolResult });
+export function isAuthoritativeFinalContentEvent(event) {
+  return AUTHORITATIVE_FINAL_CONTENT_EVENT_TYPES.has(event.eventType);
 }

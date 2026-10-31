@@ -6,8 +6,7 @@
 
 export const WRITE_FILE_MANUAL = {
   write_file: {
-    summary:
-      "Write a workspace text file, returning its logical path, resource identity, and a write-time attachment snapshot.",
+    summary: "Write a workspace text file, returning its path and a write-time mutation snapshot.",
     usage: ["write_file({ filePath, content, overwrite, riskLevel })"],
     params: {
       filePath: "File path. Relative paths resolve against the current user workspace root.",
@@ -19,7 +18,7 @@ export const WRITE_FILE_MANUAL = {
     },
     notes: [
       "Writing replaces the whole file rather than appending. Prefer patch_file for existing files so unread content is not lost.",
-      "The returned attachment snapshot is a copy taken at write time; later edits to the same file leave existing snapshots untouched.",
+      "The returned mutation snapshot is a copy taken at write time; later edits to the same file leave existing snapshots untouched. To link the file in a reply, copy the result path verbatim.",
       "Keep each call modest in size. For large files, write a skeleton first and then extend in batches of about 50 lines.",
     ],
     pitfalls: [

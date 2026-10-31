@@ -20,6 +20,11 @@ export const WORKSPACE_LAYOUT_UPGRADE_OWNER = Object.freeze({
   SESSION_MESSAGE_IDENTITY: "session-message-identity",
   EXECUTION_EVENT_INDEX: "execution-event-index",
   SESSION_TASK_ARTIFACT: "session-task-artifact",
+  SESSION_MUTATION_REFS: "session-mutation-refs",
+  SESSION_ACTIVITY_TIMELINE: "session-activity-timeline",
+  SESSION_TOOL_RESULT: "session-tool-result",
+  SESSION_SCRIPT_EXIT_CODE: "session-script-exit-code",
+  SESSION_LEGACY_MCP_RESULT: "session-legacy-mcp-result",
 });
 
 export const WORKSPACE_LAYOUT_UPGRADES = Object.freeze([
@@ -107,6 +112,36 @@ export const WORKSPACE_LAYOUT_UPGRADES = Object.freeze([
     id: "session-task-artifact-retired-v18",
     toVersion: 18,
     owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_TASK_ARTIFACT,
+  }),
+  Object.freeze({
+    id: "model-context-snapshot-v19",
+    toVersion: 19,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.MODEL_CONTEXT_SNAPSHOT,
+  }),
+  Object.freeze({
+    id: "session-mutation-refs-v20",
+    toVersion: 20,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MUTATION_REFS,
+  }),
+  Object.freeze({
+    id: "session-activity-timeline-v21",
+    toVersion: 21,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_ACTIVITY_TIMELINE,
+  }),
+  Object.freeze({
+    id: "session-tool-result-v22",
+    toVersion: 22,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_TOOL_RESULT,
+  }),
+  Object.freeze({
+    id: "session-script-exit-code-v23",
+    toVersion: 23,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_SCRIPT_EXIT_CODE,
+  }),
+  Object.freeze({
+    id: "session-legacy-mcp-result-v24",
+    toVersion: 24,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_LEGACY_MCP_RESULT,
   }),
 ]);
 

@@ -13,6 +13,7 @@ import {
   isSandboxExecutionView,
 } from "./execution-views.js";
 import { isPlainObject, text } from "@noobot/shared/value";
+import { LOCATOR_ERROR_CODE, LocatorError, normalizeMountPath } from "@noobot/shared/locator";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 export {
@@ -145,20 +146,24 @@ function isAbsoluteHostPath(value) {
   );
 }
 
+const MOUNT_TARGET_ERROR = Object.freeze({
+  [LOCATOR_ERROR_CODE.MOUNT_NOT_POSIX_ABSOLUTE]: "must be an absolute container path",
+  [LOCATOR_ERROR_CODE.INVALID_SEGMENT]: "cannot contain '..'",
+
+  [LOCATOR_ERROR_CODE.INVALID_PATH]: "cannot replace the managed workspace mount",
+});
+
 function normalizeMountTarget(value, field) {
-  const source = requiredString(value, field);
-  if (!source.startsWith("/") || source.includes("\\")) {
-    throw new Error(`${field} must be an absolute container path`);
+  let target;
+  try {
+    target = normalizeMountPath(requiredString(value, field));
+  } catch (error) {
+    if (!(error instanceof LocatorError)) throw error;
+    const reason = MOUNT_TARGET_ERROR[error.code];
+    if (!reason) throw error;
+    throw new Error(`${field} ${reason}`, { cause: error });
   }
-  const segments = [];
-  for (const segment of source.split("/")) {
-    if (!segment || segment === ".") continue;
-    if (segment === "..") throw new Error(`${field} cannot contain '..'`);
-    segments.push(segment);
-  }
-  const target = `/${segments.join("/")}`;
   if (
-    target === "/" ||
     target === WORKSPACE_SANDBOX_PATHS.ROOT ||
     target.startsWith(`${WORKSPACE_SANDBOX_PATHS.ROOT}/`)
   ) {

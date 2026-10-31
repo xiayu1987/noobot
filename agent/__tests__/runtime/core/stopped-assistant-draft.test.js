@@ -59,7 +59,7 @@ test("a stop during streaming materializes the visible draft under the real mode
   assert.equal(message.presentationMessageId, "pm_presentation");
   assert.equal(message.role, "assistant");
   assert.equal(message.content, "partial answer");
-  assert.deepEqual(message.tool_calls, []);
+  assert.equal(Object.hasOwn(message, "tool_calls"), false);
   assert.equal(message.chatPresentation, true);
   assert.equal(message.modelAlias, "alias");
   assert.equal(runtime.persisted, 1);
@@ -76,6 +76,7 @@ test("a stop after the model message committed does not materialize it again", a
     runtime,
   }).pushAssistantMessage({
     content: "complete answer",
+    type: "message",
     modelMessageId,
     messageUid: "sm_committed",
     presentationMessageId: "pm_presentation",

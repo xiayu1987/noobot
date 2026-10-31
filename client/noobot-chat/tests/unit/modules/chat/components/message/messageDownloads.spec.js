@@ -3,6 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import {
+  completedToolTimelineItem,
+  toolResultText,
+} from "../../../../helpers/toolTimelineFixture.js";
 import { Blob as NodeBlob } from "node:buffer";
 import { mount, flushPromises } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -26,13 +30,68 @@ const attachment = {
 const ref = "attachment:v1:report-session/model/report-id";
 const wrappers = [];
 
-async function mountMessage(content, attachments = [attachment], userId = "admin") {
+function resourceRef(source, path, extra = {}) {
+  return {
+    version: 1,
+    resourceId: `res_${source}${path.length}`,
+    kind: "file",
+    owner: "tool",
+    source,
+    logical: { view: source, path },
+    attachment: null,
+    size: 1,
+    mimeType: "application/octet-stream",
+    capabilities: { read: true, write: false, scriptInput: false },
+    ...extra,
+  };
+}
+
+function attachmentResource(item, originPath) {
+  const { attachmentId, sessionId, attachmentSource } = item;
+  return resourceRef("attachment", item.name, {
+    attachment: { attachmentId, sessionId, attachmentSource },
+    origin: { view: "host", path: originPath },
+  });
+}
+
+async function mountMessage(
+  content,
+  attachments = [attachment],
+  userId = "admin",
+  resourceRefs = [],
+  mutationRefs = [],
+) {
+  const toolTimeline =
+    resourceRefs.length || mutationRefs.length
+      ? [
+          completedToolTimelineItem({
+            toolCallId: "download-tool-1",
+            tool: "write_file",
+            args: { filePath: "report.md" },
+            result: toolResultText({
+              ok: true,
+              path: { view: "workspace", path: "report.md" },
+              fileName: "report.md",
+            }),
+            success: true,
+            call: { eventId: "download-call-1", sequence: 1 },
+            resultEvent: { eventId: "download-result-1", sequence: 2, resourceRefs, mutationRefs },
+          }),
+        ]
+      : [];
+  const messageItem = {
+    id: "download-message",
+    role: "assistant",
+    content,
+    attachments,
+    toolTimeline,
+  };
   const wrapper = mount(SharedChatMessageItem, {
     props: {
       userId,
       currentTurn: true,
-      messageItem: { id: "download-message", role: "assistant", content, attachments },
-      allMessages: [],
+      messageItem,
+      allMessages: [messageItem],
       sessionDocs: [],
       renderMarkdown: useMarkdownRenderer().renderMarkdown,
       formatTime: String,
@@ -105,14 +164,13 @@ describe("main message download clicks", () => {
       .mockResolvedValue({ ok: true, blob: async () => new NodeBlob(["data"]) });
     configureAuthenticatedFetcher(fetcher);
     const wrapper = await mountMessage("生成中");
-    await wrapper.setProps({
-      messageItem: {
-        presentationMessageId: "download-message",
-        role: "assistant",
-        content: ref,
-        attachments: [attachment],
-      },
-    });
+    const streamedMessage = {
+      presentationMessageId: "download-message",
+      role: "assistant",
+      content: ref,
+      attachments: [attachment],
+    };
+    await wrapper.setProps({ messageItem: streamedMessage, allMessages: [streamedMessage] });
     const link = wrapper.get(".base-markdown-content a");
     const event = new MouseEvent("auxclick", { button: 1, bubbles: true, cancelable: true });
     link.element.dispatchEvent(event);
@@ -135,12 +193,13 @@ describe("main message download clicks", () => {
     const fetcher = vi.fn().mockResolvedValue({
       ok: true,
       headers: new Headers(),
-      blob: async () => new NodeBlob(["workspace file"]),
+      blob: async () => new NodeBlob(["attachment file"]),
     });
     configureAuthenticatedFetcher(fetcher);
-    const sourcePath = "/home/xiayu/projects/noobot/workspace/admin/runtime/fixture.txt";
-    const wrapper = await mountMessage(`[下载](<${sourcePath}>)`, [
-      { ...attachment, name: "fixture.txt", sourcePath },
+    const originPath = "D:/工作/ai_dept_plan/fixture.txt";
+    const item = { ...attachment, name: "fixture.txt" };
+    const wrapper = await mountMessage(`[下载](<${originPath}>)`, [item], "admin", [
+      attachmentResource(item, originPath),
     ]);
     await wrapper.get(".base-markdown-content a").trigger("click");
     await flushPromises();
@@ -150,7 +209,7 @@ describe("main message download clicks", () => {
     );
     expect(saveDownload).toHaveBeenCalledTimes(1);
     expect(saveDownload.mock.calls[0][0].fileName).toBe("fixture.txt");
-    expect(new TextDecoder().decode(saveDownload.mock.calls[0][0].bytes)).toBe("workspace file");
+    expect(new TextDecoder().decode(saveDownload.mock.calls[0][0].bytes)).toBe("attachment file");
   });
 
   it.each(["browser", "desktop"])(
@@ -171,12 +230,12 @@ describe("main message download clicks", () => {
         sessionId: "report-session",
         attachmentSource: "model",
         name,
-        sourcePath: `${directory}/${name}`,
       }));
       const wrapper = await mountMessage(
         `[smoke.txt](<${directory}/smoke.txt>) 和 [完整测试报告 report.md](<${directory}/report.md>)`,
         files,
         "xiayu",
+        files.map((file) => attachmentResource(file, `${directory}/${file.name}`)),
       );
       const location = window.location.href;
       const links = wrapper.findAll(".base-markdown-content a");
@@ -196,6 +255,41 @@ describe("main message download clicks", () => {
     },
   );
 
+  it("downloads a workspace link as the mutation snapshot the message saw", async () => {
+    const saveDownload = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("noobotDesktop", { saveDownload });
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      blob: async () => new NodeBlob(["snapshot file"]),
+    });
+    configureAuthenticatedFetcher(fetcher);
+    const mutationRef = {
+      mutationId: "mutation-id",
+      revision: 2,
+      operation: "replace",
+      locator: { view: "workspace", path: "runtime/报告.txt" },
+      fileName: "报告.txt",
+      beforeSha256: "b".repeat(64),
+      afterSha256: "c".repeat(64),
+      size: 13,
+      additions: 1,
+      deletions: 0,
+      snapshot: "available",
+    };
+    const wrapper = await mountMessage("[报告](runtime/报告.txt)", [], "admin", [], [mutationRef]);
+    await wrapper.get(".base-markdown-content a[data-noobot-mutation-ref]").trigger("click");
+    await flushPromises();
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    const request = new URL(fetcher.mock.calls[0][0], window.location.origin);
+    expect(request.pathname).toBe(
+      "/api/internal/workspace/admin/file-mutations/mutation-id/download",
+    );
+    expect(request.searchParams.get("revision")).toBe("2");
+    expect(request.searchParams.get("afterSha256")).toBe("c".repeat(64));
+    expect(saveDownload.mock.calls[0][0].fileName).toBe("报告.txt");
+    expect(new TextDecoder().decode(saveDownload.mock.calls[0][0].bytes)).toBe("snapshot file");
+  });
+
   it("renders an unregistered Windows path as a disabled chip and sends no request", async () => {
     const fetcher = vi.fn();
     configureAuthenticatedFetcher(fetcher);
@@ -206,29 +300,62 @@ describe("main message download clicks", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
-  it("saves generated file snapshots through the desktop save service", async () => {
+  it("saves the version-bound raw snapshot under the MutationRef file name", async () => {
     vi.stubGlobal("Blob", NodeBlob);
     const saveDownload = vi.fn().mockResolvedValue({ ok: true });
     vi.stubGlobal("noobotDesktop", { saveDownload });
+    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff]);
     const fetcher = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({
-        ok: true,
-        path: "runtime/generated.txt",
-        content: "generated contents",
-      }),
+      blob: async () => new NodeBlob([bytes], { type: "image/png" }),
     });
     configureAuthenticatedFetcher(fetcher);
     await fileMutationPreviewService.downloadFile({
       userId: "admin",
       sessionId: "report-session",
-      mutationId: "mutation-id",
+      mutationRef: {
+        mutationId: "mutation-id",
+        revision: 2,
+        fileName: "图表.png",
+        afterSha256: "c".repeat(64),
+      },
     });
+    const url = String(fetcher.mock.calls[0][0]);
+    expect(url).toContain("/api/internal/workspace/admin/file-mutations/mutation-id/download?");
+    expect(url).toContain("revision=2");
+    expect(url).toContain(`afterSha256=${"c".repeat(64)}`);
     expect(saveDownload).toHaveBeenCalledTimes(1);
-    expect(saveDownload.mock.calls[0][0].fileName).toBe("generated.txt");
-    expect(new TextDecoder().decode(saveDownload.mock.calls[0][0].bytes)).toBe(
-      "generated contents",
-    );
+    expect(saveDownload.mock.calls[0][0].fileName).toBe("图表.png");
+    expect(new Uint8Array(saveDownload.mock.calls[0][0].bytes)).toEqual(bytes);
     expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
+  });
+
+  it("throws the protocol error code when the snapshot version was overwritten", async () => {
+    const saveDownload = vi.fn();
+    vi.stubGlobal("noobotDesktop", { saveDownload });
+    configureAuthenticatedFetcher(
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: async () => ({
+          ok: false,
+          error: "overwritten",
+          errorCode: "snapshot_overwritten",
+        }),
+      }),
+    );
+    await expect(
+      fileMutationPreviewService.downloadFile({
+        userId: "admin",
+        sessionId: "report-session",
+        mutationRef: {
+          mutationId: "mutation-id",
+          revision: 1,
+          fileName: "a.txt",
+          afterSha256: "d".repeat(64),
+        },
+      }),
+    ).rejects.toMatchObject({ code: "snapshot_overwritten", statusCode: 409 });
+    expect(saveDownload).not.toHaveBeenCalled();
   });
 });

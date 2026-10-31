@@ -4,7 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { resolveScopedArtifactPath } from "@noobot/path-resolver";
-import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
+import {
+  SESSION_ERROR_CODE,
+  SESSION_ARTIFACT_SUMMARY_SNAPSHOT_SCHEMA_VERSION,
+} from "@noobot/session-protocol";
 import { deepFreeze } from "@noobot/shared/deep-freeze";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { isPlainObject } from "@noobot/shared/value";
@@ -13,7 +16,6 @@ import { isMissingPersistencePathError } from "../../shared/storage/json-file-re
 import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
 import { readJsonWithStorage } from "./artifact-json-io.js";
 import {
-  SUMMARY_SNAPSHOT_SCHEMA_VERSION,
   assertIncrementalJournalRecords,
   journalPath,
   readJournalRecordRange,
@@ -58,7 +60,7 @@ async function readVerifiedSnapshot({ storageService, sessionDir, index, previou
   const payload = await readJsonWithStorage({ storageService, artifactPath });
   if (
     !isPlainObject(payload) ||
-    payload.schemaVersion !== SUMMARY_SNAPSHOT_SCHEMA_VERSION ||
+    payload.schemaVersion !== SESSION_ARTIFACT_SUMMARY_SNAPSHOT_SCHEMA_VERSION ||
     !Array.isArray(payload.records) ||
     Object.hasOwn(payload, "messages") ||
     payload.previousCheckpointHash !== previousCheckpointHash ||

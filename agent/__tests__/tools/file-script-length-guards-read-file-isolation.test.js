@@ -492,8 +492,9 @@ test("read_file: global sandbox mounts extend the logical workspace view", async
   assert.equal(result.ok, true);
   assert.equal(result.content, "1 | project-mounted-ok");
   assert.deepEqual(result.path, {
-    view: "workspace",
-    path: "/project/agent/src/tools/execution/file-tool.js",
+    view: "mount",
+    mount: "/project",
+    path: "agent/src/tools/execution/file-tool.js",
   });
 });
 
@@ -642,6 +643,20 @@ test("read_file: 起始行超过 EOF 时返回明确范围错误而不是最后�
   await assert.rejects(
     () =>
       tool.invoke(
+        { riskLevel: "low", filePath: "lines.txt", startLine: 20 },
+        { signal: new AbortController().signal },
+      ),
+    (error) => {
+      assert.equal(error?.code, "RECOVERABLE_LINE_RANGE_OUT_OF_BOUNDS");
+      assert.equal(Object.hasOwn(error?.details, "requestedEndLine"), false);
+      assert.equal(error?.details?.requestedStartLine, 20);
+      return true;
+    },
+  );
+
+  await assert.rejects(
+    () =>
+      tool.invoke(
         {
           riskLevel: "low",
           filePath: "lines.txt",
@@ -678,12 +693,12 @@ test("read_file: 默认读取行数阈值为 1000", async () => {
   assert.equal(result.startLine, 1);
   assert.equal(result.endLine, 1000);
   assert.equal(result.totalLines, 1001);
-  assert.equal(result.truncated, true);
+  assert.equal(result.hasMore, true);
   assert.equal(result.content.split("\n").length, 1000);
   assert.equal(result.content.endsWith("line-1000"), true);
 });
 
-test("read_file: endLine 超过 EOF 但内容完整时不标记 truncated", async () => {
+test("read_file: endLine 超过 EOF 但内容完整时 hasMore 为 false", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-read-complete-range-"));
   await fs.writeFile(path.join(basePath, "short.txt"), "line01\nline02\nline03\n", "utf8");
   const agentContext = buildAgentContext(basePath, "u-test", {
@@ -717,6 +732,6 @@ test("read_file: endLine 超过 EOF 但内容完整时不标记 truncated", asyn
   assert.equal(result.content, "line01\nline02\nline03");
   assert.equal(result.endLine, 3);
   assert.equal(result.totalLines, 3);
-  assert.equal(result.truncated, false);
   assert.equal(result.hasMore, false);
+  assert.equal(Object.hasOwn(result, "truncated"), false);
 });

@@ -13,14 +13,9 @@ import {
 import { useLocale } from "../../../../shared/i18n/useLocale.js";
 import { triggerBlobDownload } from "./useMessagePreview/file-access-log.js";
 import { handleCopyMarkdown } from "./useMessagePreview/markdown-copy.js";
-import {
-  createAttachmentPreviewState,
-  createFilePreviewState,
-} from "./useMessagePreview/preview-state.js";
-import { createFileDownloadController } from "./useMessagePreview/file-download-controller.js";
-import { createFilePreviewController } from "./useMessagePreview/file-preview-controller.js";
+import { createAttachmentPreviewState } from "./useMessagePreview/preview-state.js";
 import { createAttachmentPreviewController } from "./useMessagePreview/attachment-preview-controller.js";
-import { canPreviewFileItem } from "./useMessagePreview/file-preview-capabilities.js";
+import { outOfSessionRenderContext } from "./useMarkdownRenderer.js";
 import { requireFunctionDependencies, text } from "@noobot/shared/value";
 
 export function useMessagePreview({
@@ -32,22 +27,7 @@ export function useMessagePreview({
 }) {
   requireFunctionDependencies("useMessagePreview", { isImageMime, renderMarkdown, notify });
   const { translate } = useLocale();
-  const filePreview = createFilePreviewState();
   const attachmentPreview = createAttachmentPreviewState();
-  const { onDownloadFile } = createFileDownloadController({
-    userId,
-    attachmentService,
-    translate,
-    notify,
-  });
-  const { openFilePreview } = createFilePreviewController({
-    userId,
-    attachmentService,
-    translate,
-    notify,
-    isImageMime,
-    filePreview,
-  });
   const attachmentController = createAttachmentPreviewController({
     userId,
     attachmentService,
@@ -56,7 +36,7 @@ export function useMessagePreview({
     isImageMime,
     attachmentPreview,
   });
-  const downloadController = createAttachmentDownloadController({
+  const downloadController = createDownloadController({
     userId,
     attachmentService,
     translate,
@@ -66,37 +46,24 @@ export function useMessagePreview({
     translate,
     notify,
     renderMarkdown,
-    filePreview: filePreview.state,
     attachmentPreview: attachmentPreview.state,
   });
 
   onBeforeUnmount(() => {
-    filePreview.cleanupImageUrl();
     attachmentPreview.reset();
   });
 
   return {
-    ...projectPreviewState(filePreview.state, attachmentPreview.state),
+    ...projectPreviewState(attachmentPreview.state),
     ...attachmentController,
     ...downloadController,
     ...copyController,
-    canPreviewFile: (fileItem = {}) => canPreviewFileItem(fileItem, userId, isImageMime),
-    openFilePreview,
-    closePreviewDialog: filePreview.reset,
     closeAttachmentPreview: attachmentPreview.reset,
-    onDownloadFile,
   };
 }
 
-function projectPreviewState(filePreview, attachmentPreview) {
+function projectPreviewState(attachmentPreview) {
   return {
-    previewVisible: filePreview.visible,
-    previewLoading: filePreview.loading,
-    previewError: filePreview.error,
-    previewFileName: filePreview.fileName,
-    previewMode: filePreview.mode,
-    previewTextContent: filePreview.textContent,
-    previewImageUrl: filePreview.imageUrl,
     attachmentPreviewVisible: attachmentPreview.visible,
     attachmentPreviewType: attachmentPreview.type,
     attachmentPreviewUrl: attachmentPreview.url,
@@ -107,46 +74,46 @@ function projectPreviewState(filePreview, attachmentPreview) {
   };
 }
 
-function createAttachmentDownloadController({ userId, attachmentService, translate, notify }) {
-  async function downloadFromUrl(url, fileName) {
-    if (!url) return;
+function createDownloadController({ userId, attachmentService, translate, notify }) {
+  function assertOk(response) {
+    if (!response?.ok) {
+      throw new Error(translate("message.downloadFailedHttp", { status: response?.status }));
+    }
+  }
+  async function runDownload(task) {
     try {
-      const response = await attachmentService.fetchUrl(url);
-      if (!response?.ok) {
-        throw new Error(
-          translate("message.downloadFailedHttp", { status: response?.status || 500 }),
-        );
-      }
-      await triggerBlobDownload(await response.blob(), fileName);
+      await task();
     } catch (error) {
       notify({ type: "error", message: error?.message || translate("message.downloadFailed") });
     }
   }
+  async function downloadFromUrl(url, fileName) {
+    const response = await attachmentService.fetchUrl(url);
+    assertOk(response);
+    await triggerBlobDownload(await response.blob(), fileName);
+  }
   const options = () => ({ userId: text(userId) });
   return {
-    async onDownloadAttachment(item = {}) {
-      await downloadFromUrl(
-        resolveAttachmentAccessMeta(item, options()).url,
-        item.name || "attachment",
+    onDownloadAttachment(item = {}) {
+      return runDownload(() =>
+        downloadFromUrl(resolveAttachmentAccessMeta(item, options()).url, item.name),
       );
     },
-    async onDownloadParsedResult(item = {}) {
-      const parsedItem = buildParsedResultPreviewItem(item);
-      await downloadFromUrl(
-        resolveParsedResultAccessMeta(item, options())?.url || "",
-        parsedItem?.name || translate("message.parsedResultDefaultName"),
-      );
+    onDownloadParsedResult(item = {}) {
+      return runDownload(async () => {
+        const meta = resolveParsedResultAccessMeta(item, options());
+        if (!meta) throw new Error(translate("message.downloadFailed"));
+        const parsedItem = buildParsedResultPreviewItem(item);
+        await downloadFromUrl(
+          meta.url,
+          parsedItem?.name || translate("message.parsedResultDefaultName"),
+        );
+      });
     },
   };
 }
 
-function createMarkdownCopyController({
-  translate,
-  notify,
-  renderMarkdown,
-  filePreview,
-  attachmentPreview,
-}) {
+function createMarkdownCopyController({ translate, notify, renderMarkdown, attachmentPreview }) {
   const copyRich = (markdownText, renderOptions) =>
     handleCopyMarkdown({
       markdownText,
@@ -158,12 +125,23 @@ function createMarkdownCopyController({
   const copyText = (markdownText) =>
     handleCopyMarkdown({ markdownText, html: "", translate, notify, rich: false });
   return {
-    onCopyMarkdownRich: () => copyRich(filePreview.textContent.value),
-    onCopyMarkdownText: () => copyText(filePreview.textContent.value),
-    onCopyAttachmentMarkdownRich: () => copyRich(attachmentPreview.textContent.value),
+    onCopyAttachmentMarkdownRich: () =>
+      copyRich(attachmentPreview.textContent.value, outOfSessionRenderContext(translate)),
     onCopyAttachmentMarkdownText: () => copyText(attachmentPreview.textContent.value),
-    onCopyMessageMarkdownRich: ({ textContent, attachmentRefIndex }) =>
-      copyRich(textContent, { attachmentRefIndex }),
+    onCopyMessageMarkdownRich: ({
+      textContent,
+      attachmentRefIndex,
+      linkSnapshots,
+      messageIndex,
+      workspaceRootDirectory,
+    }) =>
+      copyRich(textContent, {
+        attachmentRefIndex,
+        linkSnapshots,
+        messageIndex,
+        workspaceRootDirectory,
+        translate,
+      }),
     onCopyMessageMarkdownText: (textContent) => copyText(textContent),
   };
 }

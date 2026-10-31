@@ -5,7 +5,6 @@
  */
 
 import { WORKFLOW_ATTACHMENT_SCOPE } from "../constants.js";
-import { resolveWorkflowAgentContext } from "./runtime.js";
 import {
   attachmentIdentityKey,
   parseAttachmentIdentityRef,
@@ -29,32 +28,27 @@ export function mergeAttachmentReferences(existing = [], incoming = []) {
 }
 
 export function resolveWorkflowInputAttachments(ctx = {}) {
-  const agentContext = resolveWorkflowAgentContext(ctx);
-  const candidates = [
-    ctx?.attachments,
-    ctx?.userMessageAttachments,
-    agentContext?.bindings?.runtime?.userMessageAttachments,
-  ];
-  for (const candidate of candidates) {
-    if (Array.isArray(candidate) && candidate.length) return candidate;
+  const attachments = ctx.userMessageAttachments;
+  if (!Array.isArray(attachments)) {
+    throw new TypeError("workflow dispatch context requires userMessageAttachments array");
   }
-  return [];
+  for (const attachment of attachments) projectAttachmentIdentity(attachment);
+  return attachments;
 }
 
-function normalizeAttachmentRefs(input = []) {
-  const source = Array.isArray(input) ? input : String(input || "").split(/[,;，；]/);
-  return source.map((item) => text(item)).filter(Boolean);
+function requireAttachmentRefs(refs) {
+  if (!Array.isArray(refs)) throw new TypeError("workflow node attachments must be an array");
+  return refs;
 }
 
 function isAllUserAttachmentRef(ref = "") {
   return text(ref) === WORKFLOW_ATTACHMENT_SCOPE.USER_ALL;
 }
 
-export function resolveNodeInputAttachments({ ctx = {}, semanticNode = {} } = {}) {
-  const userAttachments = resolveWorkflowInputAttachments(ctx);
-  if (!userAttachments.length) return [];
-  const refs = normalizeAttachmentRefs(semanticNode?.attachments || []);
+export function resolveNodeInputAttachments({ ctx, semanticNode }) {
+  const refs = requireAttachmentRefs(semanticNode.attachments ?? []);
   if (!refs.length) return [];
+  const userAttachments = resolveWorkflowInputAttachments(ctx);
   if (refs.some(isAllUserAttachmentRef)) return userAttachments;
   const attachmentsByIdentity = new Map(
     userAttachments.map((attachment) => [

@@ -47,9 +47,11 @@ test("session save refreshes the display projection with live activity timeline"
     session.messages = canonicalMessages(
       [
         {
+          attachments: [],
           role: "assistant",
           modelMessageId: "mm_session_repository_bound_1",
           type: "tool_call",
+          tool_calls: [{ id: "call-1", name: "read_file", args: {}, type: "tool_call" }],
           content: "",
           chatPresentation: false,
           presentationMessageId: "presentation-live",
@@ -124,7 +126,7 @@ test("session save leaves the display summary to the revision-checked projection
       persistenceContext: repository.treePersistenceContext(userId, "single-summary-write"),
     });
     session.messages = canonicalMessages(
-      [{ role: "user", messageOrigin: "natural", content: "one durable update" }],
+      [{ attachments: [], role: "user", messageOrigin: "natural", content: "one durable update" }],
       "single-summary-write",
       "single_write",
     );
@@ -163,6 +165,7 @@ test("summary checkpoint receipts survive turn-journal persistence with historic
     });
     session.messages = [
       {
+        attachments: [],
         messageUid: "sm_historical",
         ts: TEST_MESSAGE_TS,
         sessionId,
@@ -174,6 +177,7 @@ test("summary checkpoint receipts survive turn-journal persistence with historic
         turnScopeId: "turn-old",
       },
       {
+        attachments: [],
         messageUid: "sm_current",
         ts: TEST_MESSAGE_TS,
         sessionId,
@@ -288,12 +292,12 @@ test("concurrent saves for different sessions preserve every sessions summary en
       }),
     ]);
     sessionA.messages = canonicalMessages(
-      [{ role: "user", messageOrigin: "natural", content: "updated A" }],
+      [{ attachments: [], role: "user", messageOrigin: "natural", content: "updated A" }],
       "A",
       "concurrent_a",
     );
     sessionB.messages = canonicalMessages(
-      [{ role: "user", messageOrigin: "natural", content: "updated B" }],
+      [{ attachments: [], role: "user", messageOrigin: "natural", content: "updated B" }],
       "B",
       "concurrent_b",
     );

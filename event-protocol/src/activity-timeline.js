@@ -4,7 +4,6 @@
  */
 
 import { isPlainObject, text } from "@noobot/shared/value";
-import { EVENT_FAMILY, validateProtocolEvent } from "./event-registry.js";
 import {
   ACTIVITY_EVENT_TYPES,
   MESSAGE_EVENT_TYPE,
@@ -15,7 +14,7 @@ const ACTIVITY_WIRE_EVENT_TYPES = Object.freeze(
   new Set([...ACTIVITY_EVENT_TYPES, MESSAGE_EVENT_TYPE.ACTIVITY_DELTA]),
 );
 
-const ACTIVITY_TIMELINE_FACT_FIELDS = Object.freeze(
+export const ACTIVITY_TIMELINE_FACT_FIELDS = Object.freeze(
   new Set([
     "eventId",
     "eventType",
@@ -38,20 +37,15 @@ const ACTIVITY_TIMELINE_FACT_FIELDS = Object.freeze(
   ]),
 );
 
-export function isCanonicalActivityMessageEvent(envelope = {}) {
-  const validation = validateProtocolEvent(envelope);
-  return Boolean(
-    validation.valid &&
-    validation.descriptor?.family === EVENT_FAMILY.MESSAGE_TIMELINE &&
-    ACTIVITY_WIRE_EVENT_TYPES.has(text(envelope?.payload?.eventType)),
-  );
+export function isCanonicalActivityMessageEvent(envelope) {
+  return ACTIVITY_WIRE_EVENT_TYPES.has(envelope.payload.eventType);
 }
 
-export function isDurableActivityMessageEvent(envelope = {}) {
+export function isDurableActivityMessageEvent(envelope) {
   return isCanonicalActivityMessageEvent(envelope) && !isTransientMessageEvent(envelope);
 }
 
-export function projectCanonicalActivityTimelineEvent(envelope = {}, { position = 1 } = {}) {
+export function projectCanonicalActivityTimelineEvent(envelope, { position = 1 } = {}) {
   if (!isCanonicalActivityMessageEvent(envelope)) return null;
   const { identity, ordering, payload } = envelope;
   const isDelta = isTransientMessageEvent(envelope);
@@ -81,7 +75,7 @@ export function projectCanonicalActivityTimelineEvent(envelope = {}, { position 
 
 function insertBySequence(timeline, fact) {
   let index = timeline.length;
-  while (index > 0 && Number(timeline[index - 1]?.sequence || 0) > Number(fact.sequence)) {
+  while (index > 0 && timeline[index - 1].sequence > fact.sequence) {
     index -= 1;
   }
   timeline.splice(index, 0, fact);
@@ -90,43 +84,38 @@ function insertBySequence(timeline, fact) {
 
 function replaceSameEventFact(next, sameEventIndex, envelope, isDelta) {
   if (isDelta) return next;
-  const replacement = projectCanonicalActivityTimelineEvent(envelope);
-  if (!replacement) return next;
   next.splice(sameEventIndex, 1);
-  return insertBySequence(next, replacement);
+  return insertBySequence(next, projectCanonicalActivityTimelineEvent(envelope));
 }
 
 function mergeActivityFact(next, envelope, isDelta) {
-  const activityId = text(envelope?.payload?.activityId);
-  const activityIndex = activityId
-    ? next.findIndex((item) => text(item?.activityId) === activityId)
-    : -1;
+  const activityId = text(envelope.payload.activityId);
+  const activityIndex = activityId ? next.findIndex((item) => item.activityId === activityId) : -1;
   const previous = activityIndex >= 0 ? next[activityIndex] : null;
-  const tail = Number(next[next.length - 1]?.sequence || 0);
+  const tail = next.length ? next[next.length - 1].sequence : 0;
   const fact = projectCanonicalActivityTimelineEvent(envelope, {
-    position: previous ? Number(previous.sequence) : tail,
+    position: previous ? previous.sequence : tail,
   });
-  if (!fact) return next;
   if (!previous) return insertBySequence(next, fact);
 
   next.splice(activityIndex, 1);
   return insertBySequence(
     next,
-    isDelta ? Object.freeze({ ...fact, text: `${String(previous.text || "")}${fact.text}` }) : fact,
+    isDelta ? Object.freeze({ ...fact, text: `${previous.text}${fact.text}` }) : fact,
   );
 }
 
-export function reduceCanonicalActivityTimeline(timeline = [], envelope = {}) {
-  const next = Array.isArray(timeline) ? [...timeline] : [];
+export function reduceCanonicalActivityTimeline(timeline, envelope) {
+  const next = [...timeline];
   if (!isCanonicalActivityMessageEvent(envelope)) return next;
-  const eventId = text(envelope?.identity?.eventId);
+  const eventId = envelope.identity.eventId;
   const isDelta = isTransientMessageEvent(envelope);
-  const sameEventIndex = next.findIndex((item) => text(item?.eventId) === eventId);
+  const sameEventIndex = next.findIndex((item) => item.eventId === eventId);
   if (sameEventIndex >= 0) return replaceSameEventFact(next, sameEventIndex, envelope, isDelta);
   return mergeActivityFact(next, envelope, isDelta);
 }
 
-export function isCanonicalActivityTimelineFact(value = {}) {
+export function isCanonicalActivityTimelineFact(value) {
   return Boolean(
     isPlainObject(value) &&
     text(value.eventId) &&
@@ -160,6 +149,10 @@ export function mergeCanonicalActivityTimelines(...timelines) {
   return [...byIdentity.values()].sort((left, right) => left.sequence - right.sequence);
 }
 
-export function selectCanonicalActivityTimeline(message = {}) {
-  return mergeCanonicalActivityTimelines(message?.activityTimeline || []);
+export function selectMessageActivityTimeline(message) {
+  return message.activityTimeline ?? [];
+}
+
+export function selectCanonicalActivityTimeline(message) {
+  return mergeCanonicalActivityTimelines(selectMessageActivityTimeline(message));
 }

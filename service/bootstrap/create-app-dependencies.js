@@ -12,7 +12,7 @@ import {
   DEFAULT_LOCALE,
 } from "noobot-i18n/service";
 import { BACKEND_I18N } from "noobot-i18n/service/backend-messages";
-import { createAuthService } from "../services/auth-service.js";
+import { createAuthService, USER_SCOPE_POLICY } from "../services/auth-service.js";
 import { createChatRunService } from "../services/chat-run-service.js";
 import { createConfigParamsService } from "../services/config-params-service.js";
 import { createConfigScopeService } from "../services/config-scope-service.js";
@@ -87,11 +87,12 @@ export async function createAppDependencies({
     setApiKeyTtlMs,
     issueApiKey,
     resolveAuthByApiKey,
-    isForbiddenUserScope,
     requireApiKey,
-    enforceUserScopeParam,
+    createUserScopeParam,
     requireSuperAdmin,
   } = authService;
+  const administrableUserScopeParam = createUserScopeParam(USER_SCOPE_POLICY.ADMINISTRABLE);
+  const ownerOnlyUserScopeParam = createUserScopeParam(USER_SCOPE_POLICY.OWNER_ONLY);
 
   const { mapAgentRunCommand } = createChatRunService({
     normalizeLocale,
@@ -162,7 +163,6 @@ export async function createAppDependencies({
     translateText,
     mapAgentRunCommand,
     resolveAuthByApiKey,
-    isForbiddenUserScope,
     workspaceRootPath,
     getBot: () => bot,
     getGlobalConfig: () => globalConfig,
@@ -180,7 +180,8 @@ export async function createAppDependencies({
       normalizeWorkspaceUsersConfig,
       requireSuperAdmin,
       requireApiKey,
-      enforceUserScopeParam,
+      administrableUserScopeParam,
+      ownerOnlyUserScopeParam,
       resolveAuthByApiKey,
       resolveConfigParamScope,
       readScopedConfigParams,

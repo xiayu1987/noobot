@@ -10,8 +10,13 @@ import {
 } from "@noobot/path-resolver";
 import { tool as structuredTool } from "@langchain/core/tools";
 import { z } from "zod";
-import { FILE_MUTATION_PROTOCOL, FILE_MUTATION_VERSION } from "@noobot/file-mutation-protocol";
-import { recoverableToolError } from "../../shared/errors/index.js";
+import {
+  FILE_MUTATION_ERROR_CODE,
+  FILE_MUTATION_PROTOCOL,
+  FILE_MUTATION_VERSION,
+  createFileMutationError,
+} from "@noobot/file-mutation-protocol";
+import { ERROR_LEVEL, recoverableToolError } from "../../shared/errors/index.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { projectToolPathRef } from "../core/check-tool-input.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
@@ -32,7 +37,7 @@ import {
   buildLineNumberedNearbyContent,
   buildPatchFieldDescription,
   resolveFileResourceRiskScope,
-  mutationLogicalPath,
+  mutationLocator,
   resolveRuntimeFileMutationRoot,
 } from "./file-tool-shared.js";
 import { confirmToolOperation, createRiskLevelSchema } from "./tool-risk.js";
@@ -49,14 +54,13 @@ function buildPatchFailurePayload({ error, original, pathRef }) {
     ok: false,
     code: error.code,
     error: error.message,
-    message: error.message,
     path: projectToolPathRef(pathRef),
     details,
-    ...buildLineNumberedNearbyContent(original, details.line, 3),
+    ...buildLineNumberedNearbyContent(original, details.line),
   };
 }
 
-function resolvePatchProtocol({ format = "", patch = "", strip = 1 } = {}) {
+function resolvePatchProtocol({ format, patch, strip }) {
   const requestedFormat = text(format);
   const trimmedPatch = String(patch || "").trimStart();
   const detectedFormat = trimmedPatch.startsWith("*** Begin Patch")
@@ -71,13 +75,7 @@ function resolvePatchProtocol({ format = "", patch = "", strip = 1 } = {}) {
   return { format: requestedFormat || detectedFormat, strip };
 }
 
-async function preparePatchExecution({
-  format = "",
-  patch = "",
-  strip = 1,
-  root = "",
-  agentContext = {},
-} = {}) {
+async function preparePatchExecution({ format, patch, strip, root, agentContext }) {
   const protocol = resolvePatchProtocol({ format, patch, strip });
   const parsed =
     protocol.format === "apply_patch"
@@ -102,8 +100,10 @@ function buildPatchSchema(agentContext, runtime) {
     strip: z
       .number()
       .int()
+      .min(0)
+      .max(10)
       .optional()
-      .default(1)
+      .default(0)
       .describe(tTool(runtime, "tools.patch_file.fieldStrip")),
     root: z
       .string()
@@ -173,6 +173,7 @@ async function buildPatchPlans({ targets, normalizedFormat, workspaceIo }) {
           ? applyUnifiedHunks(original, item.hunks)
           : applySearchHunks(original, item.hunks);
     } catch (error) {
+      if (error?.level !== ERROR_LEVEL.RECOVERABLE) throw error;
       return {
         failure: toToolJsonResult(
           TOOL_NAME.PATCH_FILE,
@@ -207,46 +208,35 @@ async function applyPatchMutations({
   mutationScopeId,
 }) {
   const mutations = [];
-  const mutationByPath = new Map();
   const committed = [];
   const mutationRoot = resolveRuntimeFileMutationRoot(runtime);
+  const commitPlan = async (plan, operationFields) => {
+    const rollbackState = {};
+    const mutation = await applyFileMutation({
+      filePath: plan.filePath,
+      locator: mutationLocator(plan.pathRef),
+      expectedSha256: plan.expectedSha256,
+      mutationRoot,
+      sessionScope: runtime.systemRuntime.persistenceScope,
+      rollbackState,
+      writeText: (target, value) => workspaceIo.writeText(target, value),
+      removeFile: (target) => workspaceIo.remove(target),
+      ...operationFields,
+    });
+    mutations.push(mutation);
+    committed.push({ mutation, plan, rollbackState });
+  };
   try {
     for (const plan of writePlans) {
-      const rollbackState = {};
-      const mutation = await applyFileMutation({
-        filePath: plan.filePath,
-        logicalPath: mutationLogicalPath(plan.pathRef),
-        content: plan.content,
+      await commitPlan(plan, {
         operation: "update",
-        expectedSha256: plan.expectedSha256,
+        content: plan.content,
         scopeId: mutationScopeId,
-        mutationRoot,
-        sessionScope: runtime.systemRuntime.persistenceScope,
-        rollbackState,
-        writeText: (target, value) => workspaceIo.writeText(target, value),
-        removeFile: (target) => workspaceIo.remove(target),
       });
-      mutations.push(mutation);
-      mutationByPath.set(plan.filePath, mutation);
-      committed.push({ mutation, plan, rollbackState });
     }
     for (const plan of deletePlans) {
       if (writePlans.some((item) => item.filePath === plan.filePath)) continue;
-      const rollbackState = {};
-      const mutation = await applyFileMutation({
-        filePath: plan.filePath,
-        logicalPath: mutationLogicalPath(plan.pathRef),
-        operation: "delete",
-        expectedSha256: plan.expectedSha256,
-        mutationRoot,
-        sessionScope: runtime.systemRuntime.persistenceScope,
-        rollbackState,
-        writeText: (target, value) => workspaceIo.writeText(target, value),
-        removeFile: (target) => workspaceIo.remove(target),
-      });
-      mutations.push(mutation);
-      mutationByPath.set(plan.filePath, mutation);
-      committed.push({ mutation, plan, rollbackState });
+      await commitPlan(plan, { operation: "delete" });
     }
   } catch (error) {
     const rollbackErrors = [];
@@ -262,19 +252,21 @@ async function applyPatchMutations({
         });
       } catch (rollbackError) {
         rollbackErrors.push({
-          path: mutationLogicalPath(plan.pathRef),
+          path: mutationLocator(plan.pathRef).path,
           error: rollbackError.message,
         });
       }
     }
     if (rollbackErrors.length) {
-      error.code = "file_mutation_rollback_conflict";
-      error.message = `patch failed and some files could not be rolled back; read the affected files before retrying: ${error.message}`;
-      error.details = { ...error.details, rollbackErrors };
+      throw createFileMutationError(
+        FILE_MUTATION_ERROR_CODE.ROLLBACK_CONFLICT,
+        `patch failed and some files could not be rolled back; read the affected files before retrying: ${error.message}`,
+        { cause: error, details: { ...error.details, rollbackErrors } },
+      );
     }
     throw error;
   }
-  return { mutations, mutationByPath };
+  return mutations.flatMap((item) => item.mutations);
 }
 
 async function registerPatchResources({ agentContext, writePlans, dryRun }) {
@@ -299,9 +291,8 @@ function buildPatchResult({
   runtime,
   writePlans,
   deletePlans,
-  mutationByPath,
   mutations,
-  resources,
+  outputResources,
 }) {
   return toToolJsonResult(TOOL_NAME.PATCH_FILE, {
     ok: true,
@@ -317,16 +308,14 @@ function buildPatchResult({
       ...writePlans.map((item) => ({
         path: projectToolPathRef(item.pathRef),
         action: "write",
-        mutation: mutationByPath.get(item.filePath)?.mutations?.[0] || null,
       })),
       ...deletePlans.map((item) => ({
         path: projectToolPathRef(item.pathRef),
         action: "delete",
-        mutation: mutationByPath.get(item.filePath)?.mutations?.[0] || null,
       })),
     ],
-    mutations: mutations.flatMap((item) => item.mutations || []),
-    resources,
+    mutations,
+    outputResources,
   });
 }
 
@@ -378,7 +367,7 @@ async function runPatchFile({ agentContext, runtime, workspaceIo, mutationScopeI
       });
       if (plans.failure) return { plans };
       const mutations = dryRun
-        ? { mutations: [], mutationByPath: new Map() }
+        ? []
         : await applyPatchMutations({
             ...plans,
             runtime,
@@ -389,7 +378,7 @@ async function runPatchFile({ agentContext, runtime, workspaceIo, mutationScopeI
     },
   );
   if (plans.failure) return plans.failure;
-  const resources = await registerPatchResources({
+  const outputResources = await registerPatchResources({
     agentContext,
     writePlans: plans.writePlans,
     dryRun,
@@ -401,8 +390,8 @@ async function runPatchFile({ agentContext, runtime, workspaceIo, mutationScopeI
     resolvedRoot: prepared.root,
     runtime,
     ...plans,
-    ...mutations,
-    resources,
+    mutations,
+    outputResources,
   });
 }
 

@@ -61,7 +61,11 @@ test("execute_script: ordinary users require sandbox isolation", async () => {
 });
 import { run, runFileBacked } from "../../src/tools/execution/script-tool/process-exec.js";
 import { enqueueDockerContainerTask } from "../../src/tools/execution/script-tool/docker-queue.js";
-import { resolveToolExecutionPolicy } from "@noobot/execution-isolation-protocol";
+import {
+  resolveToolExecutionPolicy,
+  SCRIPT_FAILURE_CODE,
+} from "@noobot/execution-isolation-protocol";
+import { createTestAttachmentService } from "../helpers/test-runtime-context.js";
 
 const TEST_TRANSFER_IDENTITY = Object.freeze({
   transferId: "transfer:test:execute-script:output",
@@ -103,10 +107,12 @@ test("execute_script: command 超过 semantic-transfer 阈值时保存附件并�
   const result = parseToolResult(runnerResult.toolResultText);
 
   assert.equal(invoked, false);
-  assert.equal(runnerResult.success, true);
+  assert.equal(runnerResult.success, false);
+  assert.equal(runnerResult.failureReason, "tool_input_overflow");
   assert.equal(result.toolName, "execute_script");
   assert.equal(result.ok, false);
-  assert.equal(result.message, "脚本内容过长，请分批执行或拆分脚本/文本后重试");
+  assert.equal(result.code, "RECOVERABLE_TOOL_INPUT_OVERFLOW");
+  assert.equal(result.error, "脚本内容过长，请分批执行或拆分脚本/文本后重试");
   assert.equal(Array.isArray(result.transferEnvelopes), true);
   assert.equal(result.transferEnvelopes.length, 1);
   assert.equal(result.transferEnvelopes[0].version, TRANSFER_VERSION);
@@ -215,7 +221,8 @@ test("execute_script: foreground 模式保留 shell 管道、stderr 与非零退
     }),
   );
   assert.equal(failResult.ok, false);
-  assert.equal(failResult.code, 7);
+  assert.equal(failResult.code, SCRIPT_FAILURE_CODE.exited);
+  assert.equal(failResult.exitCode, 7);
   assert.equal(failResult.stdout, "partial");
   assert.equal(failResult.stderr.trim(), "boom");
 });
@@ -278,7 +285,7 @@ test("execute_script: output artifact limit returns a settled tool failure", asy
   );
 
   assert.equal(result.ok, false);
-  assert.equal(result.code, 125);
+  assert.equal(result.code, SCRIPT_FAILURE_CODE.output_limit);
   assert.equal(result.outputLimitExceeded, true);
   assert.equal(result.outputLimitBytes, maxOutputBytes);
   assert.match(result.message, /execution was terminated/i);
@@ -288,7 +295,7 @@ test("execute_script: output artifact limit returns a settled tool failure", asy
 test("execute_script: background 模式将 stdout/stderr 交给附件层并返回 V2 身份", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-background-mode-"));
   const savedArtifacts = [];
-  const attachmentService = {
+  const attachmentService = createTestAttachmentService({
     async ingestGeneratedArtifacts(payload = {}) {
       return (Array.isArray(payload.artifacts) ? payload.artifacts : []).map(
         (artifact = {}, index) => {
@@ -311,7 +318,7 @@ test("execute_script: background 模式将 stdout/stderr 交给附件层并返�
         },
       );
     },
-  };
+  });
   const agentContext = buildHostScriptAgentContext(basePath, "primary-user", {
     runtime: {
       globalConfig: { security: { executionIsolation: { mode: "host" } } },
@@ -355,7 +362,7 @@ test("execute_script: 大 stdout 通过 foreground 原文件 semantic-transfer �
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-large-transfer-"));
   const outputLength = 1024 * 1024 + 12345;
   const savedArtifacts = [];
-  const attachmentService = {
+  const attachmentService = createTestAttachmentService({
     async ingestGeneratedArtifacts(payload = {}) {
       return (Array.isArray(payload.artifacts) ? payload.artifacts : []).map(
         (artifact = {}, index) => {
@@ -378,7 +385,7 @@ test("execute_script: 大 stdout 通过 foreground 原文件 semantic-transfer �
         },
       );
     },
-  };
+  });
   const agentContext = buildHostScriptAgentContext(basePath, "primary-user", {
     identity: { sessionId: "s-script-large-output", rootSessionId: "s-script-large-output" },
     runtime: {
@@ -429,9 +436,9 @@ test("execute_script: foreground timeout terminates the process group and settle
     generatedDataRoot: cwd,
   });
 
-  assert.equal(result.code, 124);
+  assert.equal(result.code, SCRIPT_FAILURE_CODE.timeout);
   assert.ok(Date.now() - startedAt < 4000);
-  assert.match(result.stderr, /timed out after 50ms/);
+  assert.match(result.error, /timed out after 50ms/);
 });
 
 test("execute_script: foreground timeout settles when an escaped descendant retains the output pipes", async (t) => {
@@ -443,8 +450,8 @@ test("execute_script: foreground timeout settles when an escaped descendant reta
     generatedDataRoot: cwd,
   });
 
-  assert.equal(result.code, 124);
-  assert.match(result.stderr, /timed out after 50ms/);
+  assert.equal(result.code, SCRIPT_FAILURE_CODE.timeout);
+  assert.match(result.error, /timed out after 50ms/);
   assert.ok(Date.now() - startedAt < 30000);
 });
 
@@ -461,11 +468,11 @@ test("execute_script: foreground output limit terminates the process group and s
     { generatedDataRoot: cwd },
   );
 
-  assert.equal(result.code, 125);
+  assert.equal(result.code, SCRIPT_FAILURE_CODE.output_limit);
   assert.equal(result.outputLimitExceeded, true);
   assert.equal(result.outputLimitBytes, maxOutputBytes);
   assert.equal(result.stdoutBytes, maxOutputBytes);
-  assert.match(result.stderr, /output exceeded.*bytes/i);
+  assert.match(result.error, /output exceeded.*bytes/i);
 });
 
 test("execute_script: background output limit terminates the process group and settles", async (t) => {
@@ -481,11 +488,11 @@ test("execute_script: background output limit terminates the process group and s
     { generatedDataRoot: cwd },
   );
 
-  assert.equal(result.code, 125);
+  assert.equal(result.code, SCRIPT_FAILURE_CODE.output_limit);
   assert.equal(result.outputLimitExceeded, true);
   assert.equal(result.outputLimitBytes, maxOutputBytes);
   assert.equal(result.stdoutBytes, maxOutputBytes);
-  assert.match(await fs.readFile(result.stderrPath, "utf8"), /output exceeded.*bytes/i);
+  assert.match(result.error, /output exceeded.*bytes/i);
 });
 
 test("execute_script: foreground abort terminates the process group and settles", async (t) => {
@@ -509,10 +516,10 @@ test("execute_script: foreground abort terminates the process group and settles"
   setTimeout(() => controller.abort(), 50);
   const result = await pending;
 
-  assert.equal(result.code, 130);
+  assert.equal(result.code, SCRIPT_FAILURE_CODE.aborted);
   assert.equal(terminationHookCalls, 1);
   assert.ok(Date.now() - startedAt < 4000);
-  assert.match(result.stderr, /command aborted/);
+  assert.match(result.error, /command aborted/);
 });
 
 test("execute_script: aborted Docker queue entry never starts after lock release", async () => {

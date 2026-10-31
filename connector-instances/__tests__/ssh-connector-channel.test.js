@@ -24,17 +24,23 @@ test("ssh output parser extracts body and real exit code with PTY noise", () => 
     `__NOOBOT_BEGIN_${TOKEN}__\r\n\x1b[?2004luid=0(root)\r\nhost\r\n` +
     `\r\n__NOOBOT_DONE_${TOKEN}__0\r\n`;
   assert.deepEqual(parseSshCommandOutput(raw, TOKEN), {
-    ok: true,
-    code: 0,
+    exitCode: 0,
     stdout: "uid=0(root)\nhost",
   });
 });
 
 test("ssh output parser reports non-zero exit code", () => {
   const raw = `__NOOBOT_BEGIN_${TOKEN}__\r\n\r\n__NOOBOT_DONE_${TOKEN}__127\r\n`;
-  assert.deepEqual(parseSshCommandOutput(raw, TOKEN), { ok: false, code: 127, stdout: "" });
+  assert.deepEqual(parseSshCommandOutput(raw, TOKEN), { exitCode: 127, stdout: "" });
 });
 
 test("ssh output parser waits for exit code line ending", () => {
   assert.equal(parseSshCommandOutput(`__NOOBOT_DONE_${TOKEN}__0`, TOKEN), null);
+});
+
+test("ssh output parser rejects a malformed exit code instead of guessing", () => {
+  assert.throws(
+    () => parseSshCommandOutput(`__NOOBOT_DONE_${TOKEN}__abc\n`, TOKEN),
+    /exit code is invalid/,
+  );
 });

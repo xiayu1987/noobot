@@ -171,7 +171,6 @@ test("execution queries expose authoritative snapshot, children and tree envelop
     webSocket: { close() {} },
     sendEvent: (event, data) => sent.push({ event, data }),
     resolveBot: () => bot,
-    isForbiddenUserScope: () => false,
   });
   await handler(
     JSON.stringify(

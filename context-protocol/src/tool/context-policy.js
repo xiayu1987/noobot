@@ -5,6 +5,7 @@
  */
 
 import { isPlainObject, text } from "@noobot/shared/value";
+import { validateModelToolCall } from "@noobot/model-protocol/validation";
 import { readContextMessageValue } from "../message/codec.js";
 
 const TOOL_SEMANTIC_CLASS = Object.freeze({
@@ -68,4 +69,14 @@ export function projectToolContextPolicy(target = {}, source = null) {
 export function projectToolDefinitionContextPolicy(call = {}, toolDefinition = null) {
   const contextPolicy = resolveToolDefinitionContextPolicy(toolDefinition);
   return contextPolicy ? { ...call, contextPolicy } : call;
+}
+
+export function validateRuntimeToolCall(value, path = "runtime tool call") {
+  if (!isPlainObject(value)) throw new TypeError(`${path} must be an object`);
+  const { contextPolicy, ...modelCall } = value;
+  validateModelToolCall(modelCall, path);
+  if (contextPolicy !== undefined && !normalizeToolContextPolicy(contextPolicy)) {
+    throw new TypeError(`${path}.contextPolicy is invalid`);
+  }
+  return value;
 }

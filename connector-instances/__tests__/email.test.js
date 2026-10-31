@@ -5,6 +5,7 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
+import { CONNECTOR_FAILURE_CODE } from "@noobot/connector-protocol";
 import { createImapClient, normalizeEmailConnectionInfo } from "../src/email/connection.js";
 import { readEmailSourceBuffer } from "../src/email/read-email.js";
 import { executeEmailOperation } from "../src/email/email-connector-channel.js";
@@ -34,13 +35,28 @@ test("email connection normalization rejects incomplete credentials and hosts", 
 });
 
 test("email operation rejects unknown operations without network access", async () => {
-  const result = await executeEmailOperation({ operation: "delete" });
+  const result = await executeEmailOperation({
+    operation: "delete",
+    input: {},
+    connectionInfo: {},
+  });
   assert.deepEqual(result, {
     ok: false,
-    code: 1,
-    stdout: "",
-    stderr: "Email operation is invalid",
+    code: CONNECTOR_FAILURE_CODE.INPUT_INVALID,
+    error: "Email operation is invalid",
   });
+  assert.deepEqual(
+    await executeEmailOperation({ operation: "toString", input: {}, connectionInfo: {} }),
+    result,
+  );
+  assert.deepEqual(
+    await executeEmailOperation({ operation: "list", input: "x", connectionInfo: {} }),
+    {
+      ok: false,
+      code: CONNECTOR_FAILURE_CODE.INPUT_INVALID,
+      error: "Email input must be an object",
+    },
+  );
 });
 
 test("email source buffer normalizes every supported source shape", async () => {

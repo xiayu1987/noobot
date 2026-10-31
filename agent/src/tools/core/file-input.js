@@ -9,10 +9,10 @@ import {
   parseAttachmentIdentityRef,
 } from "@noobot/attachment-protocol";
 import { filePath as path, resolvePathRef } from "@noobot/path-resolver";
-import { stat } from "node:fs/promises";
 import { z } from "zod";
 import { resolveCanonicalSourceAttachment } from "../../artifacts/index.js";
 import { getBasePathFromAgentContext } from "../../context/agent-context-accessor.js";
+import { exists as pathExists } from "../execution/file-utils.js";
 import { resolveAuthorizedUserWorkspaceFilePath } from "./check-tool-input.js";
 import { registerResource } from "./resource-broker.js";
 import { text } from "@noobot/shared/value";
@@ -58,9 +58,10 @@ export async function resolveFileInput({
       agentContext,
     });
     if (!sourceAttachmentMeta) throw new Error("attachment not found for the supplied identity");
-    const executionPath = text(sourceAttachmentMeta.absolutePath || sourceAttachmentMeta.path);
-    if (!executionPath) throw new Error("attachment has no execution path");
-    authorizationInput = path.relative(getBasePathFromAgentContext(agentContext), executionPath);
+    authorizationInput = path.relative(
+      getBasePathFromAgentContext(agentContext),
+      sourceAttachmentMeta.absolutePath,
+    );
   }
 
   const resolution = await resolveAuthorizedUserWorkspaceFilePath({
@@ -72,7 +73,7 @@ export async function resolveFileInput({
   });
   const executionPath = resolution.executionPath;
   const resourcePath = resolution.resourcePath;
-  if (!mustExist && !(await stat(executionPath).catch(() => null))) {
+  if (!mustExist && !(await pathExists(executionPath))) {
     return {
       executionPath,
       resourcePath,
@@ -85,7 +86,6 @@ export async function resolveFileInput({
   const resourceRef = await registerResource({
     agentContext,
     executionPath,
-    source: sourceAttachmentMeta ? "attachment" : "workspace",
     attachment: sourceAttachmentMeta ? attachmentIdentity : null,
     logicalPath: sourceAttachmentMeta?.name || path.basename(executionPath),
     logicalPathRef: sourceAttachmentMeta ? null : resolution.pathRef,

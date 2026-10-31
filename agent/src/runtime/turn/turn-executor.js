@@ -501,7 +501,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       ...(ai?.usage ? { usage: ai.usage } : {}),
     },
     type: calls.length ? "tool_call" : "message",
-    toolCalls: calls.length ? formatToolCallsForStorage(calls) : [],
+    ...(calls.length ? { toolCalls: formatToolCallsForStorage(calls) } : {}),
     modelAlias: currentModelInfo.modelAlias,
     modelName: currentModelInfo.modelName,
     modelMessageId,

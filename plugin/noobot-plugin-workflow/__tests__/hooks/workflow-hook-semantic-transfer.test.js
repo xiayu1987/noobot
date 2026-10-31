@@ -82,6 +82,7 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
     dialogProcessId: "d1",
     turnScopeId: "root-turn-1",
     userMessage: "请给我一个审批工作流",
+    userMessageAttachments: [],
     runConfig: {
       locale: "zh-CN",
       streaming: false,
@@ -300,6 +301,7 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
     sessionId: "s1",
     dialogProcessId: "d1",
     userMessage: "请给我一个语义传递工作流",
+    userMessageAttachments: [],
     runConfig: { locale: "zh-CN", streaming: false },
     agentContext: {
       bindings: {
@@ -406,6 +408,7 @@ test("workflow hook routes final attachment summary composition through semantic
     sessionId: "s1",
     dialogProcessId: "d1",
     userMessage: "请给我一个语义传递工作流",
+    userMessageAttachments: [],
     runConfig: { locale: "zh-CN", streaming: false },
     agentContext: {
       bindings: {

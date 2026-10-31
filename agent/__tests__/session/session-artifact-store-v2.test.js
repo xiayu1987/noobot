@@ -98,7 +98,7 @@ test("session turns preserve non-contiguous scopes without reordering and reject
       { role: "assistant", presentationMessageId: "pm_fx2", content: "a answer", turnScopeId: "a" },
       { role: "user", messageOrigin: "natural", content: "b", turnScopeId: "b" },
       { role: "assistant", presentationMessageId: "pm_fx2", content: "a again", turnScopeId: "a" },
-    ];
+    ].map((message) => ({ ...message, attachments: [] }));
     await writeSessionArtifact({
       sessionDir: root,
       sessionPayload: {
@@ -155,6 +155,7 @@ test("session turns preserve non-contiguous scopes without reordering and reject
               role: "user",
               messageOrigin: "natural",
               content: "invalid",
+              attachments: [],
             },
           ],
         },

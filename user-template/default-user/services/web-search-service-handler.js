@@ -3,25 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-function resolveLocale(runtime = null) {
-  const localeText = String(runtime?.systemRuntime?.config?.locale || runtime?.locale || "")
-    .trim()
-    .toLowerCase();
-  return localeText.startsWith("en") ? "en-US" : "zh-CN";
-}
 
-const WEB_SEARCH_I18N = {
-  fetchMissing: {
-    "zh-CN": "runtime.sharedTools 中缺少 fetch",
-    "en-US": "fetch missing in runtime.sharedTools",
-  },
+const WEB_SEARCH_I18N = Object.freeze({
   bodyFormatInvalid: {
     "zh-CN": "body 格式错误：此服务不接受 body，请使用 queryString。",
     "en-US": "Invalid body format: this service does not accept body, use queryString.",
   },
   queryStringMissingSearch: {
-    "zh-CN": "queryString 格式错误：缺少 search（或 q）。",
-    "en-US": "Invalid queryString format: missing search (or q).",
+    "zh-CN": "queryString 格式错误：缺少 search。",
+    "en-US": "Invalid queryString format: missing search.",
   },
   customParamInvalidUrl: {
     "zh-CN": "custom_param 必须是有效的实例 URL",
@@ -31,329 +21,215 @@ const WEB_SEARCH_I18N = {
     "zh-CN": "custom_param 不在 SEARX 实例列表中",
     "en-US": "custom_param is not in the SEARX instance list",
   },
-  searxInstanceSourceLabel: {
-    "zh-CN": "SEARX 实例来源地址",
-    "en-US": "SEARX instance source URL",
+  upstreamRejected: {
+    "zh-CN": "搜索服务拒绝了请求",
+    "en-US": "The search provider rejected the request",
   },
-  hintKeyword: {
-    "zh-CN": "关键词",
-    "en-US": "keyword",
+  allProvidersFailed: {
+    "zh-CN": "主搜索服务与所有备用实例均不可用",
+    "en-US": "The primary provider and all fallback instances are unavailable",
   },
   resultContentLimited: {
     "zh-CN": "搜索内容有限，请减少关键字，扩大范围搜索",
     "en-US": "Limited search content. Please reduce keywords and broaden your search scope.",
   },
-};
+});
 
-function tWebSearch(locale = "zh-CN", key = "") {
-  const row = WEB_SEARCH_I18N[String(key || "").trim()] || {};
-  return String(row[locale] || row["zh-CN"] || row["en-US"] || String(key || "").trim());
-}
-
-function formatHint(endpointCfg = {}, locale = "zh-CN") {
-  return {
-    queryString: endpointCfg?.query_string_format || `search=${tWebSearch(locale, "hintKeyword")}`,
-    body: endpointCfg?.body_format || "{}",
-  };
-}
-
-const DEFAULT_SEARX_INSTANCES = ["https://searx.be"];
 const SEARX_INSTANCES_YAML_URL =
   "https://raw.githubusercontent.com/searxng/searx-instances/master/searxinstances/instances.yml";
 const REMOTE_INSTANCE_CACHE_TTL_MS = 60 * 60 * 1000;
-let remoteInstanceCache = {
-  fetchedAt: 0,
-  instances: [],
-};
+const LIMITED_CONTENT_CHARS = 2000;
+let remoteInstanceCache = null;
 
-function parseSearxInstancesYaml(text = "") {
-  const lines = String(text || "").split(/\r?\n/);
-  const out = [];
-  for (const raw of lines) {
-    const line = String(raw || "").trim();
-    if (!line || line.startsWith("#")) continue;
-    const matched = line.match(/^(https?:\/\/.+):\s*\{\s*\}\s*$/);
-    if (!matched?.[1]) continue;
-    try {
-      const normalized = new URL(matched[1]).toString().replace(/\/+$/, "");
-      if (!out.includes(normalized)) out.push(normalized);
-    } catch (error) {
-      console.warn("[web-search] invalid instance URL in remote registry", error);
-    }
-  }
-  return out;
+function tWebSearch(locale, key) {
+  const message = WEB_SEARCH_I18N[key][locale];
+  if (typeof message !== "string") throw new TypeError(`web-search text missing: ${key}.${locale}`);
+  return message;
 }
 
-function normalizeInstanceList(list = []) {
-  const out = [];
-  for (const item of Array.isArray(list) ? list : []) {
-    try {
-      const normalized = new URL(String(item || "").trim()).toString().replace(/\/+$/, "");
-      if (normalized && !out.includes(normalized)) out.push(normalized);
-    } catch (error) {
-      console.warn("[web-search] invalid configured instance URL", error);
-    }
-  }
-  return out;
+function normalizeInstanceUrl(value) {
+  return new URL(String(value).trim()).toString().replace(/\/+$/, "");
 }
 
-async function getRemoteSearxInstances(fetcher) {
+function failure(code, error, output) {
+  return { ok: false, error, code, output };
+}
+
+function errorText(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function parseSearxInstancesYaml(yamlText) {
+  const out = new Set();
+  for (const line of yamlText.split(/\r?\n/)) {
+    const matched = line.trim().match(/^(https?:\/\/.+):\s*\{\s*\}\s*$/);
+    if (matched) out.add(normalizeInstanceUrl(matched[1]));
+  }
+  return [...out];
+}
+
+async function loadRemoteInstances(fetcher, registryAttempt) {
   const now = Date.now();
-  if (
-    Array.isArray(remoteInstanceCache.instances) &&
-    remoteInstanceCache.instances.length &&
-    now - Number(remoteInstanceCache.fetchedAt || 0) < REMOTE_INSTANCE_CACHE_TTL_MS
-  ) {
+  if (remoteInstanceCache && now - remoteInstanceCache.fetchedAt < REMOTE_INSTANCE_CACHE_TTL_MS) {
     return remoteInstanceCache.instances;
   }
   try {
     const res = await fetcher(SEARX_INSTANCES_YAML_URL, { method: "GET" });
-    if (!res.ok) return [];
-    const yamlText = await res.text();
-    const parsed = parseSearxInstancesYaml(yamlText);
-    if (!parsed.length) return [];
-    remoteInstanceCache = {
-      fetchedAt: now,
-      instances: parsed,
-    };
-    return parsed;
+    if (!res.ok) {
+      registryAttempt.error = `registry responded ${res.status}`;
+      return [];
+    }
+    const instances = parseSearxInstancesYaml(await res.text());
+    remoteInstanceCache = { fetchedAt: now, instances };
+    return instances;
   } catch (error) {
-    console.warn("[web-search] remote instance registry unavailable", error);
+    registryAttempt.error = errorText(error);
     return [];
   }
 }
 
-async function parseResponseData(
-  res,
-  { textCleaner = null, requestUrl = "", locale = "zh-CN" } = {},
-) {
-  const contentType = res.headers.get("content-type") || "";
-  const isJson = contentType.includes("application/json");
-  if (isJson) return await res.json();
-  const text = await res.text();
-  const cleaned = textCleaner?.cleanAny
-    ? textCleaner.cleanAny(text, { contentType, url: requestUrl })
-    : text;
-
-  const cleanedText = String(cleaned || "");
-  const appendLimitedHint = cleanedText.length < 2000;
-  const finalText = appendLimitedHint
-    ? `${cleanedText}
-
-${tWebSearch(locale, "resultContentLimited")}`
-    : cleanedText;
-
-  if (cleaned === text) return finalText;
+async function readResponseData(res, { textCleaner, requestUrl, locale }) {
+  const contentType = String(res.headers.get("content-type") ?? "");
+  if (contentType.includes("application/json")) return await res.json();
+  const raw = await res.text();
+  const cleaned = String(textCleaner.cleanAny(raw, { contentType, url: requestUrl }));
+  const finalText =
+    cleaned.length < LIMITED_CONTENT_CHARS
+      ? `${cleaned}\n\n${tWebSearch(locale, "resultContentLimited")}`
+      : cleaned;
   return {
     type: "cleaned_text",
     text: finalText,
-    original_length: text.length,
+    original_length: raw.length,
     cleaned_length: finalText.length,
     content_type: contentType,
   };
 }
 
-async function requestWithFallback({
-  fetcher,
-  textCleaner = null,
-  primaryUrl = "",
-  reqHeaders = {},
-  query = "",
-  customParam = "",
-  fallbackInstances = [],
-  locale = "zh-CN",
-}) {
-  const attemptedFallbackUrls = [];
+async function attemptRequest({ fetcher, url, headers, attempts, readOptions }) {
+  const attempt = { url };
+  attempts.push(attempt);
   try {
-    const res = await fetcher(primaryUrl, {
-      method: "GET",
-      headers: reqHeaders,
-    });
-    if (res.ok) {
-      return {
-        ok: true,
-        status: res.status,
-        statusText: res.statusText,
-        data: await parseResponseData(res, {
-          textCleaner,
-          requestUrl: primaryUrl,
-          locale,
-        }),
-        source: "primary",
-      };
-    }
-    if (res.status >= 400 && res.status < 500) {
-      return {
-        ok: false,
-        status: res.status,
-        statusText: res.statusText,
-        data: await parseResponseData(res, {
-          textCleaner,
-          requestUrl: primaryUrl,
-          locale,
-        }),
-        source: "primary",
-      };
-    }
+    const res = await fetcher(url, { method: "GET", headers });
+    attempt.httpStatus = res.status;
+    const data = await readResponseData(res, { ...readOptions, requestUrl: url });
+    return { res, data };
   } catch (error) {
-    console.warn("[web-search] primary provider request failed", error);
+    attempt.error = errorText(error);
+    return null;
   }
+}
 
-  const normalizedCustomParam = String(customParam || "").trim();
-  let candidateInstances = [...fallbackInstances];
-  if (normalizedCustomParam) {
-    let normalizedUrl = "";
-    try {
-      normalizedUrl = new URL(normalizedCustomParam).toString().replace(/\/+$/, "");
-    } catch (error) {
-      console.warn("[web-search] invalid custom fallback instance", {
-        customParam: normalizedCustomParam,
-        error,
-      });
-      return {
-        ok: false,
-        status: 0,
-        statusText: "invalid_custom_param",
-        error: tWebSearch(locale, "customParamInvalidUrl"),
-        data: null,
-        source: "fallback_failed",
-        attemptedFallbackUrls,
-      };
-    }
-    if (!fallbackInstances.includes(normalizedUrl)) {
-      return {
-        ok: false,
-        status: 0,
-        statusText: "invalid_custom_param_instance",
-        error: tWebSearch(locale, "customParamNotInInstances"),
-        data: null,
-        source: "fallback_failed",
-        attemptedFallbackUrls,
-      };
-    }
-    candidateInstances = [normalizedUrl];
+function resolveCandidateInstances({ failureCode, customParam, instances, locale, attempts }) {
+  const requested = String(customParam ?? "").trim();
+  if (!requested) return { candidates: instances };
+  let normalized;
+  try {
+    normalized = normalizeInstanceUrl(requested);
+  } catch (error) {
+    return {
+      failure: failure(failureCode.INPUT_INVALID, tWebSearch(locale, "customParamInvalidUrl"), {
+        attempts,
+        cause: errorText(error),
+      }),
+    };
   }
-
-  for (const base of candidateInstances) {
-    try {
-      const target = new URL("/search", String(base).replace(/\/+$/, "/"));
-      target.searchParams.set("q", query);
-      target.searchParams.set("format", "json");
-      attemptedFallbackUrls.push(target.toString());
-      const res = await fetcher(target.toString(), { method: "GET" });
-      const data = await parseResponseData(res, {
-        textCleaner,
-        requestUrl: target.toString(),
-        locale,
-      });
-      if (res.ok) {
-        return {
-          ok: true,
-          status: res.status,
-          statusText: res.statusText,
-          data,
-          source: "searx_fallback",
-          fallbackUrl: target.toString(),
-          attemptedFallbackUrls,
-        };
-      }
-    } catch (error) {
-      console.warn("[web-search] fallback provider request failed", { base, error });
-    }
+  if (!instances.includes(normalized)) {
+    return {
+      failure: failure(failureCode.INPUT_INVALID, tWebSearch(locale, "customParamNotInInstances"), {
+        attempts,
+      }),
+    };
   }
+  return { candidates: [normalized] };
+}
 
-  return {
-    ok: false,
-    status: 0,
-    statusText: "service_unreachable",
-    data: null,
-    source: "fallback_failed",
-    attemptedFallbackUrls,
-  };
+function fallbackSearchUrl(base, query) {
+  const target = new URL("/search", `${base}/`);
+  target.searchParams.set("q", query);
+  target.searchParams.set("format", "json");
+  return target.toString();
+}
+
+function success({ res, data }, extra) {
+  return { ok: true, output: { httpStatus: res.status, ...extra, data } };
+}
+
+function primaryRequestUrl(endpointCfg, query) {
+  const url = new URL(String(endpointCfg.url));
+  url.searchParams.set("q", query);
+  url.searchParams.set("format", String(endpointCfg.custom_param_format).trim());
+  return url.toString();
+}
+
+function inputFailure(failureCode, locale, key, endpointCfg) {
+  return failure(failureCode.INPUT_INVALID, tWebSearch(locale, key), {
+    expectedFormat: {
+      queryString: String(endpointCfg.query_string_format ?? ""),
+      body: String(endpointCfg.body_format ?? ""),
+    },
+  });
 }
 
 export default async function webSearchServiceHandler({
   runtime,
+  locale,
+  failureCode,
   endpointCfg,
   serviceCfg,
-  custom_param = "",
-  queryString = {},
+  custom_param,
+  queryString,
   body,
 }) {
-  const locale = resolveLocale(runtime);
-  const fetcher = runtime?.sharedTools?.fetch;
-  if (typeof fetcher !== "function") {
-    return {
-      ok: false,
-      error: tWebSearch(locale, "fetchMissing"),
-    };
-  }
-  const textCleaner = runtime?.sharedTools?.textCleaner || null;
-  const hint = formatHint(endpointCfg, locale);
-  if (body !== undefined && body !== null && String(body).trim() !== "") {
-    return {
-      ok: false,
-      error: tWebSearch(locale, "bodyFormatInvalid"),
-      expectedFormat: hint,
-    };
-  }
+  if (body !== undefined)
+    return inputFailure(failureCode, locale, "bodyFormatInvalid", endpointCfg);
+  const query = queryString === undefined ? "" : String(queryString.search ?? "").trim();
+  if (!query) return inputFailure(failureCode, locale, "queryStringMissingSearch", endpointCfg);
 
-  const search = String(queryString?.search || queryString?.q || "").trim();
-  const outputFormat = String(endpointCfg?.custom_param_format || "json").trim() || "json";
-  if (!search) {
-    return {
-      ok: false,
-      error: tWebSearch(locale, "queryStringMissingSearch"),
-      expectedFormat: hint,
-    };
-  }
-
-  const url = new URL(String(endpointCfg.url || ""));
-  url.searchParams.set("q", search);
-  url.searchParams.set("format", outputFormat);
-
-  const reqHeaders = {};
-  const apiKey = String(serviceCfg?.api_key || "").trim();
-  if (apiKey) reqHeaders.Authorization = `Bearer ${apiKey}`;
-
-  const fallbackInstancesFromConfig = normalizeInstanceList(
-    Array.isArray(serviceCfg?.fallback_instances)
-      ? serviceCfg.fallback_instances
-      : DEFAULT_SEARX_INSTANCES,
-  );
-  const remoteInstances = await getRemoteSearxInstances(fetcher);
-  const fallbackInstances = normalizeInstanceList([
-    ...(remoteInstances || []),
-    ...fallbackInstancesFromConfig,
-  ]);
-  const result = await requestWithFallback({
+  const fetcher = runtime.sharedTools.fetch;
+  const readOptions = { textCleaner: runtime.sharedTools.textCleaner, locale };
+  const headers = serviceCfg.api_key ? { Authorization: `Bearer ${serviceCfg.api_key}` } : {};
+  const attempts = [];
+  const primary = await attemptRequest({
     fetcher,
-    textCleaner,
-    primaryUrl: url.toString(),
-    reqHeaders,
-    query: search,
-    customParam: custom_param,
-    fallbackInstances,
-    locale,
+    url: primaryRequestUrl(endpointCfg, query),
+    headers,
+    attempts,
+    readOptions,
   });
+  if (primary?.res.ok) return success(primary, { source: "primary" });
+  if (primary && primary.res.status >= 400 && primary.res.status < 500) {
+    return failure(failureCode.UPSTREAM_FAILED, tWebSearch(locale, "upstreamRejected"), {
+      httpStatus: primary.res.status,
+      attempts,
+      data: primary.data,
+    });
+  }
 
-  return {
-    ok: result.ok,
-    status: result.status,
-    statusText: result.statusText,
-    source: result.source,
-    output_format: outputFormat,
-    ...(result.source !== "primary"
-      ? {
-          searx_instances_source: {
-            type: "searx_instances_source_url",
-            label: tWebSearch(locale, "searxInstanceSourceLabel"),
-            url: SEARX_INSTANCES_YAML_URL,
-          },
-          fallback_attempted_urls: result.attemptedFallbackUrls || [],
-        }
-      : {}),
-    ...(result.fallbackUrl ? { fallbackUrl: result.fallbackUrl } : {}),
-    data: result.data,
-  };
+  const registryAttempt = { url: SEARX_INSTANCES_YAML_URL };
+  attempts.push(registryAttempt);
+  const instances = await loadRemoteInstances(fetcher, registryAttempt);
+  const resolved = resolveCandidateInstances({
+    failureCode,
+    customParam: custom_param,
+    instances,
+    locale,
+    attempts,
+  });
+  if (resolved.failure) return resolved.failure;
+  for (const base of resolved.candidates) {
+    const url = fallbackSearchUrl(base, query);
+    const outcome = await attemptRequest({ fetcher, url, headers: {}, attempts, readOptions });
+    if (outcome?.res.ok) {
+      return success(outcome, {
+        source: "searx_fallback",
+        fallbackUrl: url,
+        searxInstancesSource: SEARX_INSTANCES_YAML_URL,
+        attempts,
+      });
+    }
+  }
+  return failure(failureCode.UPSTREAM_UNREACHABLE, tWebSearch(locale, "allProvidersFailed"), {
+    attempts,
+  });
 }

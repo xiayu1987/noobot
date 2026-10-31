@@ -34,13 +34,11 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.help.command.attachs": "会话附件清单，--id 查单个附件明细，--source 按来源过滤。",
       "tools.help.command.isolation": "执行隔离模式与本会话可用工具的执行面分类。",
       "tools.help.command.models": "当前使用中的模型与本会话可用模型清单及其多模态能力。",
-      "tools.help.manualNotFound": "该工具没有详细说明，其 schema 描述已是完整说明",
       "tools.help.toolNotAvailable":
         "该工具已注册但未在本会话装配，当前不可调用；请从 toolNames 中选择",
       "tools.help.unknownTool": "工具名不存在，请从可查询清单中选择",
       "tools.help.experienceHint": "以下为经验记忆路径，需再用 read_file 或 search 读取具体内容。",
       "tools.help.memoryHint": "以下为记忆与摘要路径，需再用 read_file 或 search 读取具体内容。",
-      "tools.help.attachmentServiceMissing": "附件服务未装配，无法查询附件",
       "tools.help.unknownAttachmentSource": "附件来源不存在，请从 attachmentSources 中选择",
       "tools.help.attachmentNotFound": "附件不存在或不属于当前会话",
       "tools.help.parseError.unknown_command": "命令不存在，请从 commands 中选择",

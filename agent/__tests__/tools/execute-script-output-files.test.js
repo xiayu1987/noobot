@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeSourcePath } from "@noobot/attachment-protocol";
+import { createLocator } from "@noobot/shared/locator";
 import { ERROR_CODE } from "../../src/shared/errors/constants.js";
 import {
   test,
@@ -16,6 +16,7 @@ import {
   parseToolResult,
   buildAttachmentService,
 } from "./helpers/file-script-length-guards-helper.js";
+import { createTestAttachmentService } from "../helpers/test-runtime-context.js";
 
 const TEST_TRANSFER_IDENTITY = Object.freeze({
   transferId: "transfer:test:execute-script:output-files",
@@ -46,12 +47,12 @@ function buildCapturingAttachmentService() {
   const base = buildAttachmentService();
   return {
     captured,
-    service: {
+    service: createTestAttachmentService({
       async ingestGeneratedArtifacts(payload = {}) {
         captured.push(...(Array.isArray(payload.artifacts) ? payload.artifacts : []));
         return base.ingestGeneratedArtifacts(payload);
       },
-    },
+    }),
   };
 }
 
@@ -59,7 +60,7 @@ function invokeScript(tool, args) {
   return tool.invoke(args, { configurable: { transferIdentity: TEST_TRANSFER_IDENTITY } });
 }
 
-test("execute_script: outputFiles 登记为附件并写入规范化 sourcePath", async () => {
+test("execute_script: outputFiles 登记为附件并写入规范化 origin", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-output-files-"));
   const { captured, service } = buildCapturingAttachmentService();
   const tool = buildHostTool(basePath, service);
@@ -76,10 +77,36 @@ test("execute_script: outputFiles 登记为附件并写入规范化 sourcePath",
   assert.equal(result.ok, true);
   assert.equal(Array.isArray(result.transferEnvelopes), true);
   assert.ok(result.transferEnvelopes.length >= 1);
+  assert.equal("outputResources" in result, true);
+  assert.equal(result.outputResources.length, 1);
+  assert.equal(result.outputResources[0].source, "attachment");
   assert.equal(captured.length, 1);
   assert.equal(captured[0].name, "report.xlsx");
-  assert.equal(captured[0].sourcePath, normalizeSourcePath(filePath));
+
+  assert.deepEqual(captured[0].origin, { view: "workspace", path: "report.xlsx" });
+  assert.deepEqual(result.outputResources[0].origin, captured[0].origin);
   assert.equal(Buffer.from(captured[0].contentBase64, "base64").toString(), "data");
+});
+
+test("execute_script: 超管工作区外的 outputFiles 以 host locator 记录 origin", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-output-host-"));
+  const outside = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-output-host-out-"));
+  const { captured, service } = buildCapturingAttachmentService();
+  const tool = buildHostTool(basePath, service);
+  const filePath = path.join(outside, "report.xlsx");
+
+  const result = parseToolResult(
+    await invokeScript(tool, {
+      command: `printf 'data' > "${filePath}"`,
+      riskLevel: "low",
+      outputFiles: [filePath],
+    }),
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(captured.length, 1);
+  assert.deepEqual(captured[0].origin, createLocator({ view: "host", path: filePath }));
+  assert.deepEqual(result.outputResources[0].origin, captured[0].origin);
 });
 
 test("execute_script: outputFiles 声明不存在的文件时明确失败且不登记", async () => {

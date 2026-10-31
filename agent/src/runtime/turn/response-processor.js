@@ -84,7 +84,9 @@ export async function processToolResults({
       await stateCommitter.pushToolResult({
         call,
         toolResultText,
-        transferEnvelopes: toolCallResult?.transferEnvelopes || [],
+        transferEnvelopes: toolCallResult.transferEnvelopes,
+        resourceRefs: toolCallResult.resourceRefs,
+        mutationRefs: toolCallResult.mutationRefs,
       });
       updateToolFailureState({ modelState, toolCallResult });
     }

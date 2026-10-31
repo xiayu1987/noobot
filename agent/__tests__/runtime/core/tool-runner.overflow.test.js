@@ -17,7 +17,10 @@ import {
   getPrimaryTransferAttachment,
 } from "./tool-runner.test-helpers.js";
 import { AttachmentService } from "../../../src/artifacts/service/attachment-service.js";
-import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
+import {
+  createTestRuntimeContext,
+  createTestAttachmentService,
+} from "../../helpers/test-runtime-context.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 function withAttachmentService(options) {
@@ -212,9 +215,6 @@ test("executeToolCall task_summary returns transfer metadata without phase summa
           contentHash: "sha256:0123456789abcdef",
         },
         message: "请根据小结后的状态、摘要和下一步处理后续流程。",
-        phaseSummary: summaryContent,
-        summarizedMessages: { currentTurn: 3 },
-        extraField: "should be omitted for task_summary",
       }),
   };
   const runtime = createTestRuntimeContext({
@@ -226,7 +226,7 @@ test("executeToolCall task_summary returns transfer metadata without phase summa
       turnScopeId: "turn-call_task_summary_transfer",
       caller: SESSION_CALLER.USER,
     },
-    attachmentService: {
+    attachmentService: createTestAttachmentService({
       async ingestGeneratedArtifacts(payload) {
         return payload.artifacts.map((artifact, index) => ({
           attachmentId: `task-summary-runner-${index + 1}`,
@@ -241,7 +241,7 @@ test("executeToolCall task_summary returns transfer metadata without phase summa
           generationSource: payload.generationSource,
         }));
       },
-    },
+    }),
   });
 
   const result = await executeToolCall({
@@ -275,7 +275,6 @@ test("executeToolCall task_summary returns transfer metadata without phase summa
     contentHash: "sha256:0123456789abcdef",
   });
   assert.equal(payload.phaseSummary, undefined);
-  assert.equal(payload.extraField, undefined);
   assert.equal(payload.toolInputOverflow, undefined);
   assert.equal(payload.transferFiles, undefined);
   assert.equal(Array.isArray(payload.attachmentRefs), true);
@@ -337,4 +336,57 @@ test("executeToolCall: overflow result never exposes sandbox or host paths", asy
   assert.equal(JSON.stringify(overflowEnvelope).includes("filePath"), false);
   assert.equal(JSON.stringify(overflowEnvelope).includes("sandboxPath"), false);
   assert.equal(JSON.stringify(overflowEnvelope).includes("hostPath"), false);
+});
+
+test("executeToolCall: an overflowed failure keeps the original failure contract", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-tool-overflow-failure-"));
+  const sessionIdentity = {
+    userId: "user-call_overflow_failure",
+    sessionId: "session-overflow-failure",
+    parentSessionId: "",
+    dialogProcessId: "dialog-call_overflow_failure",
+    turnScopeId: "turn-call_overflow_failure",
+  };
+  const identity = {
+    ...sessionIdentity,
+    rootSessionId: "session-overflow-failure",
+    runId: "run-call_overflow_failure",
+    presentationMessageId: "message-call_overflow_failure",
+  };
+  const tool = {
+    invoke: async () =>
+      JSON.stringify({
+        toolName: "demo_tool",
+        ok: false,
+        code: "RECOVERABLE_DEMO_FAILURE",
+        error: "demo failed",
+        stderr: "e".repeat(500),
+      }),
+  };
+
+  const result = await executeToolCall({
+    call: { id: "call_overflow_failure", name: "demo_tool", args: {} },
+    identity,
+    tool,
+    turn: 1,
+    runtime: withAttachmentService({
+      identity: { ...sessionIdentity, caller: SESSION_CALLER.USER },
+      basePath,
+      globalConfig: {
+        workspaceRoot: basePath,
+        tools: { maxToolResultChars: 120 },
+        security: {
+          executionIsolation: { mode: "sandbox", sandbox: { provider: "docker", scope: "global" } },
+        },
+      },
+      userConfig: {},
+    }),
+  });
+
+  const payload = JSON.parse(result.toolResultText);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.overflowed, true);
+  assert.equal(payload.code, "RECOVERABLE_DEMO_FAILURE");
+  assert.equal(payload.error, "demo failed");
+  assert.equal(result.transferEnvelopes.length, 1);
 });

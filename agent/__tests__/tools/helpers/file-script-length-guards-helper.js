@@ -25,6 +25,7 @@ import {
 } from "../../helpers/agent-execution-scope.js";
 import {
   TEST_RUNTIME_IDENTITY,
+  createTestAttachmentService,
   createTestRuntimeContext,
 } from "../../helpers/test-runtime-context.js";
 
@@ -99,7 +100,7 @@ function parseToolResult(raw = "") {
 }
 
 function buildAttachmentService() {
-  return {
+  return createTestAttachmentService({
     async ingestGeneratedArtifacts(payload = {}) {
       return (Array.isArray(payload.artifacts) ? payload.artifacts : []).map(
         (artifact = {}, index) => ({
@@ -113,11 +114,11 @@ function buildAttachmentService() {
           relativePath: `runtime/attach/${artifact.name}`,
           generatedByModel: true,
           generationSource: payload.generationSource,
-          sourcePath: artifact.sourcePath,
+          origin: artifact.origin,
         }),
       );
     },
-  };
+  });
 }
 
 export {

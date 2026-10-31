@@ -130,9 +130,9 @@ export async function persistModelGeneratedArtifacts({
   dialogProcessId = "",
   modelMessageId = "",
 }) {
-  const attachmentService = runtime?.attachmentService || null;
-  const userId = text(runtime?.systemRuntime?.userId);
-  if (!attachmentService || !userId) return [];
+  const { attachmentService } = runtime;
+  const userId = text(runtime.systemRuntime.userId);
+  if (!userId) throw new TypeError("persistModelGeneratedArtifacts requires systemRuntime.userId");
   const fetchImpl = runtime.sharedTools.fetch;
   const localMediaCandidates = extractGeneratedMediaCandidates(aiContent);
   const remoteMediaCandidates = [];

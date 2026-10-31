@@ -134,16 +134,15 @@ describe("buildSessionDetailProjection", () => {
                 toolCallId: "call-artifacts",
                 tool: "write_file",
                 status: "completed",
+                args: { filePath: "notes.txt" },
+                result: {
+                  ok: true,
+                  path: { view: "workspace", path: "notes.txt" },
+                  fileName: "notes.txt",
+                },
+                success: true,
                 resultEvent: {
                   eventId: "event-artifacts",
-                  attachments: [
-                    {
-                      attachmentId: "attachment-artifacts",
-                      sessionId: "session-artifacts",
-                      attachmentSource: "test",
-                      name: "stdout.txt",
-                    },
-                  ],
                   log: {
                     event: "tool_result",
                     type: "tool_result",
@@ -162,8 +161,8 @@ describe("buildSessionDetailProjection", () => {
     expect(projection.messages).toHaveLength(1);
     expect(selectCompletedToolArtifacts(projection.messages[0])).toMatchObject({
       resultCount: 1,
-      attachments: [{ attachmentId: "attachment-artifacts", name: "stdout.txt" }],
     });
+    expect(selectCompletedToolArtifacts(projection.messages[0])).not.toHaveProperty("attachments");
     expect(selectCompletedToolArtifacts(projection.messages[0])).not.toHaveProperty("writtenFiles");
   });
 });

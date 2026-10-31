@@ -77,7 +77,7 @@ test("buildContextMessageBlocks replays 71ad4373 stopped snapshot without tool o
           { id: toolCallIds[0], name: "execute_script", args: { command: "echo test" } },
         ],
       }),
-      tool({ tool_call_id: toolCallIds[0], content: "execute_script result" }),
+      tool({ tool_call_id: toolCallIds[0], content: '{"toolName":"execute_script","ok":true}' }),
       human({
         content: "[来自harness外部模型输出/guidance]\nwrite_file 成功，接下来读回验证内容。",
       }),
@@ -85,13 +85,13 @@ test("buildContextMessageBlocks replays 71ad4373 stopped snapshot without tool o
         content: "",
         tool_calls: [{ id: toolCallIds[1], name: "write_file", args: { filePath: "hello.txt" } }],
       }),
-      tool({ tool_call_id: toolCallIds[1], content: "write_file result" }),
+      tool({ tool_call_id: toolCallIds[1], content: '{"toolName":"write_file","ok":true}' }),
       human({ content: "[来自harness外部模型输出/guidance]\n现在读回文件。" }),
       assistant({
         content: "",
         tool_calls: [{ id: toolCallIds[2], name: "read_file", args: { filePath: "hello.txt" } }],
       }),
-      tool({ tool_call_id: toolCallIds[2], content: "read_file result" }),
+      tool({ tool_call_id: toolCallIds[2], content: '{"toolName":"read_file","ok":true}' }),
     ],
   );
 
@@ -290,7 +290,7 @@ test("buildContextMessageBlocks rebuilds user_meta on first continue from 4c1898
         content: "",
         tool_calls: [{ id: toolCallId, name: "write_file", args: { filePath: "hello.txt" } }],
       }),
-      tool({ tool_call_id: toolCallId, content: "write_file result" }),
+      tool({ tool_call_id: toolCallId, content: '{"toolName":"write_file","ok":true}' }),
     ],
   );
 

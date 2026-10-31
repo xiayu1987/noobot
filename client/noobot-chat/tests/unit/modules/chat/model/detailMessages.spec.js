@@ -12,6 +12,7 @@ import {
 import { buildViewMessage } from "../../../../../src/modules/chat/model/messageModel.js";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { selectToolTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
+import { completedToolTimelineItem, toolResultText } from "../../../helpers/toolTimelineFixture.js";
 import { TRANSFER_VERSION, TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 
 describe("detailMessages", () => {
@@ -435,26 +436,24 @@ describe("detailMessages", () => {
             payload: { workflowRunId: "run-1", nodeSessions: [{ nodeId: "node-1" }] },
           },
           toolTimeline: [
-            {
-              key: "call:completed-tool",
+            completedToolTimelineItem({
               toolCallId: "completed-tool",
-              status: "completed",
+              tool: "read_file",
+              args: { filePath: "report.md" },
+              result: toolResultText({
+                ok: true,
+                path: { view: "workspace", path: "report.md" },
+                fileName: "report.md",
+              }),
+              success: true,
               resultEvent: {
                 eventId: "completed-tool-result",
                 sequence: 1,
                 sequenceScopeId: "message-1",
                 sequenceDomain: "message-event",
                 authority: "authoritative",
-                attachments: [
-                  {
-                    attachmentId: "completed-tool-1",
-                    sessionId: "root-session",
-                    attachmentSource: "test",
-                    name: "completed-tool.md",
-                  },
-                ],
               },
-            },
+            }),
           ],
         },
       ],
@@ -468,16 +467,8 @@ describe("detailMessages", () => {
       "plugin-transfer-1",
       "node-result-1",
       "node-session-1",
-      "completed-tool-1",
     ]);
-    expect(selectToolTimelineLogs(normalizedMessages[0])[0].attachments).toEqual([
-      {
-        attachmentId: "completed-tool-1",
-        sessionId: "root-session",
-        attachmentSource: "test",
-        name: "completed-tool.md",
-      },
-    ]);
+    expect(selectToolTimelineLogs(normalizedMessages[0])[0]).not.toHaveProperty("attachments");
   });
   it("keeps same-turn assistant thinking timing out of reloaded messages", () => {
     const startedAt = "2026-06-22T10:00:05.000Z";

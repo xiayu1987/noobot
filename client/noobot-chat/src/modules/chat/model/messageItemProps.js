@@ -5,7 +5,6 @@
  */
 
 export const sharedMessageRenderProps = {
-  allMessages: { type: Array, default: () => [] },
   sessionDocs: { type: Array, default: () => [] },
   userId: { type: String, default: "" },
   renderMarkdown: { type: Function, required: true },
@@ -23,15 +22,10 @@ export const sharedMessageRenderProps = {
     type: String,
     default: "attachment-preview-dialog",
   },
-  filePreviewDialogClass: {
-    type: String,
-    default: "generated-file-preview-dialog",
-  },
 };
 
 export const chatMessageItemProps = {
   messageItem: { type: Object, required: true },
+  allMessages: { type: Array, required: true },
   ...sharedMessageRenderProps,
-  currentTurn: { type: Boolean, default: false },
-  hideHeader: { type: Boolean, default: false },
 };

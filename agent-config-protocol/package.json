@@ -7,7 +7,8 @@
   "exports": {
     ".": "./src/index.js",
     "./enums": "./src/enums.js",
-    "./tool-policy": "./src/policy/tool-policy.js"
+    "./tool-policy": "./src/policy/tool-policy.js",
+    "./service-handler": "./src/contract/service-handler.js"
   },
   "scripts": {
     "test": "node ../scripts/run-with-isolated-tmp.mjs node --test __tests__/*.test.js"

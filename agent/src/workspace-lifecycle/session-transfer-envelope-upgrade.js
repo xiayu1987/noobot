@@ -11,6 +11,7 @@ import { assertTurnJournalBoundary, splitTurnSnapshotIndexes } from "@noobot/ses
 import {
   SESSION_ARTIFACT_CHECKPOINT_RECORDS_SCHEMA_VERSION,
   SESSION_ARTIFACT_MANIFEST_SNAPSHOT_INDEX_SCHEMA_VERSION,
+  SESSION_ARTIFACT_SUMMARY_SNAPSHOT_SCHEMA_VERSION,
   resolveSessionArtifactSchemaVersion,
 } from "@noobot/session-protocol";
 import {
@@ -27,19 +28,14 @@ import {
   upgradeTransferEnvelopesInValue,
 } from "@noobot/semantic-transfer-protocol";
 import { writeFileAtomic } from "../shared/storage/atomic-file-write.js";
-import { sessionMutationCoordinator } from "../session/session-mutation-coordinator.js";
-import {
-  SESSION_ARTIFACT_FILE_NAMES,
-  resolveSessionArtifactMutationLock,
-} from "../session/session-artifact-files.js";
+import { SESSION_ARTIFACT_FILE_NAMES } from "../session/session-artifact-files.js";
 import { AUTHORITY_OUTBOX_DIR } from "../session/authority-outbox-store/outbox-journal.js";
 import {
-  SUMMARY_SNAPSHOT_SCHEMA_VERSION,
   journalPath,
   messageHash,
 } from "../session/session-artifact-session/turn-journal-store.js";
-import { quarantineMigrationUnit } from "./migration-quarantine.js";
-import { ignoreSessionProgress, walkSessionManifestDirectories } from "./session-directory-walk.js";
+import { ignoreSessionProgress } from "./session-directory-walk.js";
+import { upgradeSessionDirectories } from "./session-upgrade-driver.js";
 
 const UPGRADE_INVALID_CODE = "WORKSPACE_SESSION_TRANSFER_ENVELOPE_UPGRADE_INVALID";
 const QUARANTINE_KIND = WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_TRANSFER_ENVELOPE;
@@ -272,7 +268,7 @@ async function upgradeTurnSnapshots({ sessionDir, indexes, schemaVersion, hashMa
     if (text === null) throw upgradeError("snapshot_missing", { filePath });
     const payload = parseJson(text, filePath);
     if (
-      Number(payload?.schemaVersion) !== SUMMARY_SNAPSHOT_SCHEMA_VERSION ||
+      Number(payload?.schemaVersion) !== SESSION_ARTIFACT_SUMMARY_SNAPSHOT_SCHEMA_VERSION ||
       !Array.isArray(payload.records) ||
       contentHash(payload) !== index.contentHash ||
       payload.previousCheckpointHash !== previousOld
@@ -334,53 +330,6 @@ function documentFormat(name) {
   if (name.endsWith(".jsonl")) return TRANSFER_DOCUMENT_FORMAT.JSONL;
   if (name.endsWith(".json")) return TRANSFER_DOCUMENT_FORMAT.JSON;
   return null;
-}
-
-async function upgradeSummaryDetails(sessionDir, stage) {
-  const dirName = SESSION_ARTIFACT_FILE_NAMES.sessionSummaryDetailsDir;
-  const refs = new Map();
-  for (const entry of await listEntries(path.join(sessionDir, dirName))) {
-    if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
-    const filePath = path.join(sessionDir, dirName, entry.name);
-    const text = await readTextOrNull(filePath);
-    const result = upgradeValue(parseJson(text, filePath), filePath);
-    if (!result.upgraded) continue;
-    stage(filePath, jsonText(result.value));
-    refs.set(`${dirName}/${entry.name}`, {
-      from: contentHash(parseJson(text, filePath)),
-      to: contentHash(result.value),
-    });
-  }
-  return refs;
-}
-
-function syncThinkingDetailRef(message, detailRefs, filePath) {
-  const ref = message?.thinkingDetailRef;
-  const change = ref && detailRefs.get(ref.file);
-  if (!change) return message;
-  if (ref.contentHash !== change.from) {
-    throw upgradeError("summary_detail_ref_mismatch", { filePath, file: ref.file });
-  }
-  return { ...message, thinkingDetailRef: { ...ref, contentHash: change.to } };
-}
-
-async function upgradeSessionSummary({ sessionDir, detailRefs, stage }) {
-  const filePath = path.join(sessionDir, SESSION_ARTIFACT_FILE_NAMES.sessionSummary);
-  const text = await readTextOrNull(filePath);
-  if (text === null) return false;
-  const payload = parseJson(text, filePath);
-  const result = upgradeValue(payload, filePath);
-  const next = Array.isArray(result.value?.messages)
-    ? {
-        ...result.value,
-        messages: result.value.messages.map((message) =>
-          syncThinkingDetailRef(message, detailRefs, filePath),
-        ),
-      }
-    : result.value;
-  if (JSON.stringify(next) === JSON.stringify(payload)) return false;
-  stage(filePath, jsonText(next));
-  return true;
 }
 
 const PLAIN_DOCUMENT_DIRECTORIES = Object.freeze([RUNTIME_EVENTS_DIR, AUTHORITY_OUTBOX_DIR]);
@@ -493,8 +442,6 @@ async function upgradeSessionDirectory({ base, backupBase, sessionDir }) {
     ? { ...previousManifest, turnOrder: turns.turnOrder }
     : previousManifest;
   if (turns.changed) stage(manifestPath, jsonText(manifest));
-  const detailRefs = await upgradeSummaryDetails(sessionDir, stage);
-  await upgradeSessionSummary({ sessionDir, detailRefs, stage });
   const plain = await upgradePlainDocuments(sessionDir, stage);
   const meta = await upgradeDocumentFile(
     path.join(sessionDir, SESSION_ARTIFACT_FILE_NAMES.meta),
@@ -524,29 +471,13 @@ export async function upgradeSessionTransferEnvelopes({
   if (!Array.isArray(scopedSessionRoots) || !scopedSessionRoots.length) {
     throw new TypeError("session transfer envelope upgrade requires scopedSessionRoots");
   }
-  const sessions = [];
-  const quarantined = [];
-  for (const root of [WORKSPACE_LAYOUT.SESSION_DIR, ...scopedSessionRoots]) {
-    for await (const sessionDir of walkSessionManifestDirectories(path.join(base, root))) {
-      try {
-        const result = await sessionMutationCoordinator.run(
-          resolveSessionArtifactMutationLock(sessionDir),
-          () => upgradeSessionDirectory({ base, backupBase, sessionDir }),
-        );
-        if (result) sessions.push(result);
-      } catch (error) {
-        if (error?.code !== UPGRADE_INVALID_CODE) throw error;
-        quarantined.push(
-          await quarantineMigrationUnit({
-            base,
-            kind: QUARANTINE_KIND,
-            relativePath: path.relative(base, sessionDir),
-            error,
-          }),
-        );
-      }
-      onSessionProcessed();
-    }
-  }
-  return { sessions, quarantined };
+  return upgradeSessionDirectories({
+    base,
+    roots: [WORKSPACE_LAYOUT.SESSION_DIR, ...scopedSessionRoots],
+    kind: QUARANTINE_KIND,
+    upgrade: ({ sessionDir }) => upgradeSessionDirectory({ base, backupBase, sessionDir }),
+    quarantineCode: UPGRADE_INVALID_CODE,
+    normalizeError: (error) => error,
+    onSessionProcessed,
+  });
 }

@@ -6,9 +6,15 @@
 import {
   isInjectedSessionMessageRecord,
   projectSessionMessageRecordIdentity,
+  TOOL_CALL_MESSAGE_TYPE,
+  TOOL_RESULT_MESSAGE_TYPE,
 } from "@noobot/session-protocol";
 import { projectToolOperationSummary } from "@noobot/event-protocol/tool-presentation";
 import { selectCanonicalActivityTimeline } from "@noobot/event-protocol/activity-timeline";
+import {
+  projectTaskCheckReceipt,
+  requireCanonicalToolTimelineIdentity,
+} from "@noobot/event-protocol/tool-timeline";
 import {
   pickLightAttachments,
   pickLightPluginMeta,
@@ -18,8 +24,8 @@ import { text, isPlainObject } from "@noobot/shared/value";
 
 const REQUIRED_MESSAGE_SUMMARY_KEYS = new Set(["turnScopeId", "content"]);
 
-export function compactThinkingTimeline(items = []) {
-  const compactFact = (fact = {}, summary = "", result = null) => ({
+export function compactThinkingTimeline(items) {
+  const compactFact = (fact, summary) => ({
     eventId: text(fact.eventId),
     sequence: fact.sequence,
     ...(text(fact.timestamp) ? { timestamp: String(fact.timestamp).trim() } : {}),
@@ -29,36 +35,41 @@ export function compactThinkingTimeline(items = []) {
     ...(text(fact.sessionId) ? { sessionId: String(fact.sessionId).trim() } : {}),
     ...(text(fact.dialogProcessId) ? { dialogProcessId: String(fact.dialogProcessId).trim() } : {}),
     ...(text(fact.turnScopeId) ? { turnScopeId: String(fact.turnScopeId).trim() } : {}),
-    ...(Array.isArray(fact.attachments) && fact.attachments.length
-      ? { attachments: fact.attachments }
+    ...(Array.isArray(fact.resourceRefs) && fact.resourceRefs.length
+      ? { resourceRefs: fact.resourceRefs }
       : {}),
-    ...(result ? { result } : {}),
-    ...(summary ? { summary } : {}),
+    ...(Array.isArray(fact.mutationRefs) && fact.mutationRefs.length
+      ? { mutationRefs: fact.mutationRefs }
+      : {}),
+    summary,
   });
-  return (Array.isArray(items) ? items : []).map((item = {}) => ({
-    key: text(item.key || item.toolCallId),
-    toolCallId: text(item.toolCallId),
-    tool: text(item.tool),
-    status: text(item.status),
-    ...(text(item.riskLevel) ? { riskLevel: String(item.riskLevel).trim() } : {}),
-    ...(item.call
-      ? {
-          call: compactFact(
-            item.call,
-            projectToolOperationSummary(item.tool, item.args, { result: false }),
-          ),
-        }
-      : {}),
-    ...(item.resultEvent
-      ? {
-          result: item.result,
-          resultEvent: compactFact(
-            item.resultEvent,
-            projectToolOperationSummary(item.tool, item.result, { result: true }),
-          ),
-        }
-      : {}),
-  }));
+  return items.map((item) => {
+    const taskCheckReceipt = projectTaskCheckReceipt(item);
+    return {
+      ...requireCanonicalToolTimelineIdentity(item),
+      tool: item.tool,
+      status: item.status,
+      ...(item.resultEvent ? { success: item.success } : {}),
+      ...(text(item.riskLevel) ? { riskLevel: String(item.riskLevel).trim() } : {}),
+      ...(item.call
+        ? {
+            call: compactFact(
+              item.call,
+              projectToolOperationSummary(item.tool, item.args, { result: false }),
+            ),
+          }
+        : {}),
+      ...(item.resultEvent
+        ? {
+            resultEvent: compactFact(
+              item.resultEvent,
+              projectToolOperationSummary(item.tool, item.result, { result: true }),
+            ),
+          }
+        : {}),
+      ...(taskCheckReceipt ? { taskCheckReceipt } : {}),
+    };
+  });
 }
 
 function compactMessageSummary(summary = {}) {
@@ -90,6 +101,7 @@ export function buildMessageSummary(message = {}) {
     "injectedMessageType",
     "messageOrigin",
     "chatPresentation",
+    "workspaceRootDirectory",
     "isMonotonic",
     "pluginMessage",
     "tool_call_id",
@@ -103,7 +115,7 @@ export function buildMessageSummary(message = {}) {
 }
 
 const DISPLAY_ROLES = new Set(["user", "assistant"]);
-const TOOL_MESSAGE_TYPES = new Set(["tool_call", "tool_result"]);
+const TOOL_MESSAGE_TYPES = new Set([TOOL_CALL_MESSAGE_TYPE, TOOL_RESULT_MESSAGE_TYPE]);
 const DISPLAY_PASSTHROUGH_KEYS = ["pluginMessage", "done", "pending", "error"];
 
 function readDisplayRole(message) {
@@ -139,8 +151,7 @@ function projectDisplayToolCalls(toolCalls) {
 }
 
 function applyDisplayMetadata(summary, message) {
-  const attachments = pickLightAttachments(message);
-  if (attachments.length) summary.attachments = attachments;
+  summary.attachments = pickLightAttachments(message);
   for (const key of DISPLAY_PASSTHROUGH_KEYS) {
     if (message[key] !== undefined) summary[key] = message[key];
   }

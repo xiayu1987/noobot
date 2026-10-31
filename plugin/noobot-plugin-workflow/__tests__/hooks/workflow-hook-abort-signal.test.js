@@ -74,6 +74,7 @@ test("workflow hook aborts node sub-session when parent stop signal fires", asyn
           sessionId: "s1",
           dialogProcessId: "d1",
           userMessage: "请执行一个工作流",
+          userMessageAttachments: [],
           runConfig: { locale: "zh-CN" },
         }),
         { signal: abortController.signal },
@@ -146,6 +147,7 @@ test("workflow waits for every parallel node sub-session to stop before planner 
     sessionId: "s1",
     dialogProcessId: "d1",
     userMessage: "请并行执行工作流",
+    userMessageAttachments: [],
     runConfig: { locale: "zh-CN" },
   });
   await assert.rejects(

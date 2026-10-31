@@ -322,7 +322,7 @@ defineExpose({ focusTextarea });
   font-weight: var(--noobot-font-weight-semibold);
   padding: 0 var(--noobot-space-sm);
   height: 26px;
-  line-height: 26px;
+  line-height: var(--noobot-line-height-none);
   white-space: nowrap;
   background: transparent;
   border-color: transparent;

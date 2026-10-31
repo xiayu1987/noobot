@@ -28,6 +28,9 @@ import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 import { TEST_STORAGE_SERVICE } from "../helpers/storage-service.js";
 import { buildPersistedDisplaySummary } from "./session-artifact-store-v2.test-helpers.js";
+import { canonicalToolTimelineItem } from "./session-repository-boundary.summaries.fixtures.js";
+
+const EXECUTE_SCRIPT_RESULT = JSON.stringify({ ok: true, status: "completed", stdout: "done" });
 
 async function withTempWorkspace(fn) {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-session-boundary-"));
@@ -154,6 +157,7 @@ test("session display summary derives attachments from transfer envelopes", asyn
     aggregateVersion: 0,
     messages: [
       {
+        attachments: [],
         role: "assistant",
         presentationMessageId: "pm_fx1",
         modelMessageId: "mm_session_repository_bound_1",
@@ -202,7 +206,7 @@ test("session display summary derives attachments from transfer envelopes", asyn
   });
 
   assert.equal(summary.stats.attachmentCount, 1);
-  assert.equal(summary.messages[0].attachments, undefined);
+  assert.deepEqual(summary.messages[0].attachments, []);
   assert.equal(
     summary.messages[0].transferEnvelopes[0].payload.attachments[0].identity.attachmentId,
     "att-transfer-1",
@@ -215,6 +219,7 @@ test("session display summary binds completed tool artifacts to one explicit ass
     aggregateVersion: 0,
     messages: [
       {
+        attachments: [],
         modelMessageId: "assistant-one",
         presentationMessageId: "assistant-one",
         role: "assistant",
@@ -222,16 +227,19 @@ test("session display summary binds completed tool artifacts to one explicit ass
         turnScopeId: "turn-one",
         dialogProcessId: "dialog-one",
         toolTimeline: [
-          {
-            key: "call:call-one",
+          canonicalToolTimelineItem({
             toolCallId: "call-one",
             tool: "execute_script",
-            status: "completed",
+            args: { command: "echo done" },
+            call: { eventId: "call-event-one" },
+            result: EXECUTE_SCRIPT_RESULT,
+            success: true,
             resultEvent: { eventId: "event-one" },
-          },
+          }),
         ],
       },
       {
+        attachments: [],
         modelMessageId: "assistant-two",
         presentationMessageId: "assistant-two",
         role: "assistant",
@@ -240,9 +248,10 @@ test("session display summary binds completed tool artifacts to one explicit ass
         dialogProcessId: "dialog-two",
       },
       {
+        attachments: [],
         role: "tool",
         presentationMessageId: "assistant-one",
-        content: "",
+        content: EXECUTE_SCRIPT_RESULT,
         type: "tool_result",
         tool_call_id: "call-one",
         toolName: "execute_script",
@@ -295,9 +304,10 @@ test("session display summary binds completed tool artifacts to one explicit ass
   assert.equal("toolLogSummaries" in summary, false);
   assert.equal(first.toolTimeline.length, 1);
   assert.equal(
-    first.toolTimeline[0].resultEvent.attachments[0].identity.attachmentId,
+    first.transferEnvelopes[0].payload.attachments[0].identity.attachmentId,
     "artifact-one",
   );
+  assert.equal("attachments" in first.toolTimeline[0].resultEvent, false);
   assert.equal("writtenFiles" in first.toolTimeline[0].resultEvent, false);
   assert.equal(first.toolTimeline[0].tool, "execute_script");
   assert.equal(first.toolTimeline[0].resultEvent.timestamp, "2026-01-01T00:00:00.000Z");
@@ -307,12 +317,108 @@ test("session display summary binds completed tool artifacts to one explicit ass
   assert.equal(summary.stats.attachmentCount, 1);
 });
 
+function toolArtifactEnvelope(attachmentName) {
+  return {
+    protocol: "noobot.semantic-transfer",
+    version: TRANSFER_VERSION,
+    transferId: "transfer:assistant-dup:tool:shared:output:tool_result_text:artifact",
+    presentationMessageId: "assistant-dup",
+    identity: {
+      sessionId: "s-transfer-dup",
+      turnScopeId: "turn-dup",
+      runId: "run-dup",
+      producer: { type: "tool", id: "shared" },
+    },
+    direction: "output",
+    payload: {
+      mode: "attachment",
+      attachments: [
+        {
+          identity: {
+            attachmentId: "artifact-dup",
+            sessionId: "s-transfer-dup",
+            attachmentSource: "tool",
+          },
+          role: "primary",
+          name: attachmentName,
+          mimeType: "text/plain",
+        },
+      ],
+    },
+    intent: {
+      source: "tool",
+      reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
+      scenario: "tool",
+      strategy: "tool_result_text",
+    },
+    meta: { persisted: true },
+  };
+}
+
+function transferDupSession(secondEnvelope) {
+  const toolMessage = (callId, envelope) => ({
+    attachments: [],
+    role: "tool",
+    presentationMessageId: "assistant-dup",
+    content: EXECUTE_SCRIPT_RESULT,
+    type: "tool_result",
+    tool_call_id: callId,
+    toolName: "execute_script",
+    ts: "2026-01-01T00:00:00.000Z",
+    turnScopeId: "turn-dup",
+    dialogProcessId: "dialog-dup",
+    transferEnvelopes: [envelope],
+  });
+  const first = toolArtifactEnvelope("stdout.txt");
+  return buildPersistedDisplaySummary({
+    sessionId: "s-transfer-dup",
+    aggregateVersion: 0,
+    messages: [
+      {
+        attachments: [],
+        modelMessageId: "assistant-dup",
+        presentationMessageId: "assistant-dup",
+        role: "assistant",
+        content: "result",
+        turnScopeId: "turn-dup",
+        dialogProcessId: "dialog-dup",
+      },
+      toolMessage("call-a", first),
+      toolMessage("call-b", secondEnvelope(first)),
+    ],
+  });
+}
+
+test("history projection merges an identical transferId once", async () => {
+  const summary = await transferDupSession((first) => structuredClone(first));
+  const presentation = summary.messages.find(
+    (item) => item.presentationMessageId === "assistant-dup",
+  );
+  assert.equal(presentation.transferEnvelopes.length, 1);
+  assert.equal(summary.stats.attachmentCount, 1);
+});
+
+test("history projection isolates a transferId conflict to its presentation message", async () => {
+  const summary = await transferDupSession(() => toolArtifactEnvelope("other.txt"));
+  const presentation = summary.messages.find(
+    (item) => item.presentationMessageId === "assistant-dup",
+  );
+  assert.equal(presentation.toolArtifactConflict, "transfer_identity_conflict");
+  assert.equal(presentation.content, "result");
+  assert.equal(presentation.toolTimeline, undefined);
+  assert.equal(presentation.transferEnvelopes, undefined);
+  assert.equal(summary.stats.displayToolLogCount, 0);
+  assert.equal(summary.stats.conflictedToolArtifactCount, 2);
+  assert.equal(summary.stats.attachmentCount, 0);
+});
+
 test("session display summary does not guess ownership for an unmatched tool artifact turn", async () => {
   const summary = await buildPersistedDisplaySummary({
     sessionId: "s-unmatched-artifact",
     aggregateVersion: 0,
     messages: [
       {
+        attachments: [],
         role: "assistant",
         presentationMessageId: "pm_fx3",
         modelMessageId: "mm_session_repository_bound_2",
@@ -321,9 +427,10 @@ test("session display summary does not guess ownership for an unmatched tool art
         dialogProcessId: "dialog-one",
       },
       {
+        attachments: [],
         role: "tool",
         presentationMessageId: "pm_fx4",
-        content: "",
+        content: EXECUTE_SCRIPT_RESULT,
         type: "tool_result",
         tool_call_id: "call-other",
         turnScopeId: "turn-other",
@@ -412,6 +519,7 @@ test("session artifact persistence should normalize attachment fields before wri
             attachment_metas: [{ attachmentId: "att-legacy-snake" }],
           },
           {
+            attachments: [],
             messageUid: "sm_attachment_assistant",
             ts: TEST_MESSAGE_TS,
             sessionId: "s-attachments",
@@ -442,7 +550,7 @@ test("session artifact persistence should normalize attachment fields before wri
     assert.equal(sessionJson.includes("attachment_metas"), false);
     assert.equal(persistedSummary.depth, undefined);
     assert.equal(persistedSummary.messages[0].attachments[0].attachmentId, "att-canonical");
-    assert.equal("attachments" in persistedSummary.messages[1], false);
+    assert.deepEqual(persistedSummary.messages[1].attachments, []);
     assert.equal(summaryJson.includes("attachmentMetas"), false);
     assert.equal(summaryJson.includes("attachment_metas"), false);
   });

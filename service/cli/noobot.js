@@ -156,7 +156,6 @@ export async function runCli({
       userId: invocation.userId,
       superUserId: resolveConfiguredSuperUserId(appDependencies.getGlobalConfig()),
       superAdminRole: SUPER_ADMIN_ROLE,
-      isForbiddenUserScope: appDependencies.isForbiddenUserScope,
     });
     if (invocation.action === CLI_ACTION.SESSIONS) {
       return await listSessions({

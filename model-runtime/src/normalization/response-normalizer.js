@@ -4,6 +4,7 @@
  */
 
 import { isPlainObject, text } from "@noobot/shared/value";
+import { validateModelToolCall } from "@noobot/model-protocol";
 
 const THINK_OPEN = "<think>";
 const THINK_CLOSE = "</think>";
@@ -57,16 +58,38 @@ export function resolveFinishReason(response) {
   return text(response.response_metadata?.finish_reason).toLowerCase();
 }
 
-export function normalizeToolCalls(response) {
-  if (!Array.isArray(response.tool_calls)) return [];
-  return response.tool_calls.map((call) => ({
-    id: text(call.id),
-    name: text(call.name),
-    args: call.args,
-  }));
+function rawToolCalls(response) {
+  return [
+    ...(Array.isArray(response.tool_calls) ? response.tool_calls : []),
+    ...(Array.isArray(response.invalid_tool_calls) ? response.invalid_tool_calls : []),
+  ];
+}
+
+export function classifyToolCalls(response) {
+  const toolCalls = [];
+  const invalidToolCalls = [];
+  rawToolCalls(response).forEach((call, index) => {
+    const projected = { id: text(call?.id), name: text(call?.name), args: call?.args };
+    try {
+      toolCalls.push(validateModelToolCall(projected, `model tool call[${index}]`));
+    } catch (error) {
+      invalidToolCalls.push({
+        index,
+        id: projected.id,
+        name: projected.name,
+        reason: String(error?.message || error),
+      });
+    }
+  });
+  return { toolCalls, invalidToolCalls };
 }
 
 export function normalizeModelOutput(response) {
+  return normalizeModelResponse(response).output;
+}
+
+export function normalizeModelResponse(response) {
+  const { toolCalls, invalidToolCalls } = classifyToolCalls(response);
   const responseOutput = Array.isArray(response.response_metadata?.output)
     ? response.response_metadata.output
     : null;
@@ -74,15 +97,18 @@ export function normalizeModelOutput(response) {
     ? response.additional_kwargs.reasoning
     : null;
   return Object.freeze({
-    ...(typeof response.content === "string" || Array.isArray(response.content)
-      ? { content: response.content }
-      : {}),
-    ...(responseOutput ? { responseOutput } : {}),
-    ...(responseReasoning ? { responseReasoning } : {}),
-    text: extractResponseText(response),
-    reasoning: extractReasoningText(response),
-    toolCalls: normalizeToolCalls(response),
-    finishReason: resolveFinishReason(response),
-    usage: Object.freeze({ ...response.usage_metadata }),
+    output: Object.freeze({
+      ...(typeof response.content === "string" || Array.isArray(response.content)
+        ? { content: response.content }
+        : {}),
+      ...(responseOutput ? { responseOutput } : {}),
+      ...(responseReasoning ? { responseReasoning } : {}),
+      text: extractResponseText(response),
+      reasoning: extractReasoningText(response),
+      toolCalls,
+      finishReason: resolveFinishReason(response),
+      usage: Object.freeze({ ...response.usage_metadata }),
+    }),
+    invalidToolCalls: Object.freeze(invalidToolCalls),
   });
 }

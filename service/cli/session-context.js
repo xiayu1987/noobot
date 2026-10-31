@@ -36,12 +36,10 @@ export function splitStartupArgs(argv = []) {
   return { startupArgs, cliArgs };
 }
 
-export function resolveCliAuthInfo({ userId, superUserId, superAdminRole, isForbiddenUserScope }) {
+export function resolveCliAuthInfo({ userId, superUserId, superAdminRole }) {
   const admin = { userId: superUserId, role: superAdminRole };
   if (!superUserId) throw new CliUsageError("no super admin user is configured");
   if (!userId || userId === superUserId) return admin;
-  if (isForbiddenUserScope(admin, userId))
-    throw new CliUsageError(`user scope forbidden: ${userId}`);
   return { userId, role: "user" };
 }
 

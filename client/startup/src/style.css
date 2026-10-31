@@ -51,6 +51,9 @@
   --startup-letter-spacing-tight: -0.04em;
   --startup-letter-spacing-none: 0;
   --startup-letter-spacing-wide: 0.02em;
+  --startup-font-sans: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  --startup-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --startup-line-height-log: 1.55;
   --startup-focus-ring: 0 0 0 1px color-mix(in srgb, var(--startup-color-sky-300) 48%, transparent);
   --startup-popper-shadow: 0 12px 28px
     color-mix(in srgb, var(--startup-color-ink-950) 42%, transparent);
@@ -78,7 +81,7 @@
   --startup-accent-border: color-mix(in srgb, var(--startup-color-sky-300) 18%, transparent);
   --startup-scrollbar: color-mix(in srgb, var(--startup-color-slate-400) 35%, transparent);
   color-scheme: dark;
-  font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  font-family: var(--startup-font-sans);
   background: var(--startup-bg-root);
 }
 * {
@@ -419,13 +422,9 @@ pre {
   margin: 0;
   padding: var(--startup-space-2xl);
   color: var(--startup-text-muted);
-  font:
-    var(--startup-font-size-sm)/1.55 ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    Consolas,
-    "Liberation Mono",
-    monospace;
+  font-family: var(--startup-font-mono);
+  font-size: var(--startup-font-size-sm);
+  line-height: var(--startup-line-height-log);
   scrollbar-color: var(--startup-scrollbar) transparent;
 }
 @keyframes spin {

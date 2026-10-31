@@ -44,7 +44,7 @@ const collapseValue = computed({
 
 .base-thinking-collapse :deep(.el-collapse-item__header) {
   height: 36px;
-  line-height: 36px;
+  line-height: var(--noobot-line-height-none);
   background: transparent;
   border-bottom: none;
   padding: 0 0 0 var(--noobot-space-xs);

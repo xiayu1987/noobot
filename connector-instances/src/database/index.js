@@ -3,6 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { CONNECTOR_FAILURE_CODE } from "@noobot/connector-protocol";
+import { connectorFailure } from "../channel-result.js";
 import { executePostgresCommand, releasePostgresConnection } from "./postgres-connector-channel.js";
 import { executeMysqlCommand, releaseMysqlConnection } from "./mysql-connector-channel.js";
 import { executeSqliteCommand, releaseSqliteConnection } from "./sqlite-connector-channel.js";
@@ -63,14 +65,12 @@ function shouldBlockUnsafeSql(command = "") {
   return !/\bwhere\b/.test(compactSql);
 }
 
-export async function executeSafeDatabaseCommand({ command = "", execute } = {}) {
+export async function executeSafeDatabaseCommand({ command, execute }) {
   if (shouldBlockUnsafeSql(command)) {
-    return {
-      ok: false,
-      code: 400,
-      stdout: "",
-      stderr: "unsafe sql blocked: SELECT/UPDATE/DELETE must include WHERE condition",
-    };
+    return connectorFailure(
+      CONNECTOR_FAILURE_CODE.INPUT_INVALID,
+      "unsafe sql blocked: SELECT/UPDATE/DELETE must include WHERE condition",
+    );
   }
   return execute(command);
 }

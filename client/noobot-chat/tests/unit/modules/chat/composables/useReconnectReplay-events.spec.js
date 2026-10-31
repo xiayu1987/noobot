@@ -94,6 +94,8 @@ describe("useReconnectReplay", () => {
     ];
 
     await api.applyCanonicalMessageEvent("thinking", {
+      activityId: "activity-l96",
+      activityKind: "model_analysis",
       sessionId: "s-1",
       dialogProcessId: "dp-t",
       seq: 1,

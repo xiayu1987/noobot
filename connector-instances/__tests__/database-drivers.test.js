@@ -8,6 +8,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { CONNECTOR_FAILURE_CODE } from "@noobot/connector-protocol";
 import { createRequire } from "node:module";
 import { executeSqliteCommand, releaseSqliteConnection } from "../src/database/index.js";
 
@@ -33,6 +34,41 @@ test("SQLite driver executes a query through its bundled native binding", async 
     channelKey: databaseFile,
   });
 
-  assert.equal(result.ok, true, result.stderr);
-  assert.deepEqual(JSON.parse(result.stdout), [{ value: 42 }]);
+  assert.equal(result.ok, true, result.error);
+  assert.deepEqual(JSON.parse(result.output.stdout), [{ value: 42 }]);
+});
+
+test("SQLite driver opens the configured file_path, not the channel key", async (context) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-sqlite-path-"));
+  const databaseFile = path.join(directory, "configured.db");
+  const channelKey = "owner::connector-id";
+  context.after(async () => {
+    releaseSqliteConnection(channelKey);
+    await fs.rm(directory, { recursive: true, force: true });
+  });
+
+  const result = await executeSqliteCommand({
+    command: "CREATE TABLE marker (id INTEGER)",
+    connectionInfo: { file_path: databaseFile },
+    channelKey,
+  });
+
+  assert.equal(result.ok, true, result.error);
+  assert.equal((await fs.stat(databaseFile)).isFile(), true);
+  await assert.rejects(fs.stat(path.resolve(channelKey)), { code: "ENOENT" });
+});
+
+test("SQLite driver reports named failures for invalid input and config", async () => {
+  assert.deepEqual(
+    await executeSqliteCommand({ command: "", connectionInfo: {}, channelKey: "k" }),
+    { ok: false, code: CONNECTOR_FAILURE_CODE.INPUT_INVALID, error: "sqlite command required" },
+  );
+  assert.deepEqual(
+    await executeSqliteCommand({ command: "SELECT 1", connectionInfo: {}, channelKey: "k" }),
+    {
+      ok: false,
+      code: CONNECTOR_FAILURE_CODE.CONFIG_INVALID,
+      error: "sqlite file_path is required",
+    },
+  );
 });

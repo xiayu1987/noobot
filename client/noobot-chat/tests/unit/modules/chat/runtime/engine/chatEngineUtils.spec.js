@@ -15,7 +15,11 @@ function timelineLogs({ success = true } = {}) {
         toolCallId: "call-1",
         tool: "read_file",
         args: { filePath: "/project/package.json" },
-        result: "{}",
+        result: JSON.stringify({
+          ok: true,
+          path: { view: "host", path: "/project/package.json" },
+          fileName: "package.json",
+        }),
         success,
         call: { eventId: "evt-call", sequence: 1 },
         resultEvent: { eventId: "evt-result", sequence: 2 },

@@ -5,10 +5,17 @@
  */
 import { isPlainObject, text } from "@noobot/shared/value";
 import { Buffer } from "node:buffer";
+import {
+  assertToolResultObject,
+  decodeToolResultText,
+  encodeToolResultObject,
+} from "@noobot/event-protocol/tool-result";
 import { formatAttachmentIdentityRef } from "@noobot/attachment-protocol";
-import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
+import {
+  getTransferSourceReferences,
+  normalizeTransferEnvelopes,
+} from "@noobot/semantic-transfer-protocol";
 import { projectAttachmentMetaForModel } from "../../artifacts/meta-ops.js";
-import { ERROR_CODE } from "../../shared/errors/constants.js";
 
 function isCanonicalBase64(value = "") {
   const normalized = text(value);
@@ -16,33 +23,12 @@ function isCanonicalBase64(value = "") {
   return Buffer.from(normalized, "base64").toString("base64") === normalized;
 }
 
-const COMMON_RESULT_FIELDS = [
-  "ok",
-  "status",
-  "error",
-  "message",
-  "summary",
-  "sessionId",
-  "parentSessionId",
-  "parentDialogProcessId",
-  "dialogProcessId",
-  "tools",
-];
-
 const OUTPUT_ARTIFACT_FIELDS = new Set(["type", "name", "mimeType", "content", "contentBase64"]);
 
-export function parseToolOutputArtifacts(value = null) {
-  const source =
-    typeof value === "string"
-      ? (() => {
-          try {
-            return JSON.parse(value);
-          } catch {
-            return null;
-          }
-        })()
-      : value;
-  if (!isPlainObject(source) || !Array.isArray(source.outputArtifacts)) return [];
+export function parseToolOutputArtifacts(resultObject) {
+  const source = assertToolResultObject(resultObject);
+  if (source.outputArtifacts === undefined) return [];
+  if (!Array.isArray(source.outputArtifacts)) throw new Error("invalid_tool_output_artifacts");
   return source.outputArtifacts.map((artifact, index) => {
     if (!isPlainObject(artifact)) throw new Error("invalid_tool_output_artifact");
     for (const key of Object.keys(artifact)) {
@@ -80,18 +66,10 @@ export function parseToolOutputArtifacts(value = null) {
   });
 }
 
-export function stripToolOutputArtifacts(toolResultText = "") {
-  let source;
-  try {
-    source = JSON.parse(String(toolResultText || ""));
-  } catch {
-    return String(toolResultText || "");
-  }
-  if (!isPlainObject(source) || !Object.hasOwn(source, "outputArtifacts")) {
-    return String(toolResultText || "");
-  }
-  const { outputArtifacts: _outputArtifacts, ...publicResult } = source;
-  return JSON.stringify(publicResult);
+export function stripToolOutputArtifacts(resultObject) {
+  const { outputArtifacts: _outputArtifacts, ...publicResult } =
+    assertToolResultObject(resultObject);
+  return publicResult;
 }
 
 function projectCanonicalAttachmentFields(value) {
@@ -120,14 +98,19 @@ function attachmentRefsFromTransferEnvelopes(value) {
   return Array.from(new Set(refs));
 }
 
-export function projectToolResultForModel(toolResultText = "") {
-  let source;
-  try {
-    source = JSON.parse(String(toolResultText || ""));
-  } catch {
-    return String(toolResultText || "");
-  }
-  if (!isPlainObject(source)) return String(toolResultText || "");
+function sourceReferencesFromTransferEnvelopes(value) {
+  return getTransferSourceReferences(value).map(({ address, startLine, endLine, totalLines }) => ({
+    ...(typeof address === "string"
+      ? { filePath: address }
+      : { attachmentRef: formatAttachmentIdentityRef(address) }),
+    startLine,
+    endLine,
+    totalLines,
+  }));
+}
+
+export function projectToolResultForModel(toolResultText) {
+  const source = decodeToolResultText(toolResultText);
   const visit = (value) => {
     if (Array.isArray(value)) return value.map(visit);
     if (!isPlainObject(value)) return value;
@@ -141,10 +124,19 @@ export function projectToolResultForModel(toolResultText = "") {
     }
     const out = {};
     for (const [key, child] of Object.entries(value)) {
-      if (key === "resources" || key === "input_resources" || key === "resourceId") continue;
+      if (
+        key === "resources" ||
+        key === "input_resources" ||
+        key === "outputResources" ||
+        key === "resourceId"
+      ) {
+        continue;
+      }
       if (key === "transferEnvelopes") {
         const attachmentRefs = attachmentRefsFromTransferEnvelopes(child);
         if (attachmentRefs.length) out.attachmentRefs = attachmentRefs;
+        const sourceReferences = sourceReferencesFromTransferEnvelopes(child);
+        if (sourceReferences.length) out.sourceReferences = sourceReferences;
         continue;
       }
       if (key === "identity") {
@@ -161,64 +153,8 @@ export function projectToolResultForModel(toolResultText = "") {
   return JSON.stringify(visit(source));
 }
 
-function normalizeCommonFieldValue(key, value) {
-  if (value === undefined || value === null) return undefined;
-  if (key === "ok") return Boolean(value);
-  if (key === "status" && (typeof value === "string" || typeof value === "number")) {
-    return value;
-  }
-  if (
-    key === "error" ||
-    key === "message" ||
-    key === "sessionId" ||
-    key === "parentSessionId" ||
-    key === "parentDialogProcessId" ||
-    key === "dialogProcessId"
-  ) {
-    const normalized = text(value);
-    return normalized || undefined;
-  }
-  if (key === "tools") {
-    if (!Array.isArray(value)) return undefined;
-    const list = Array.from(new Set(value.map((item) => text(item)).filter(Boolean)));
-    return list.length ? list : undefined;
-  }
-  if (key === "summary") {
-    return isPlainObject(value) ? value : undefined;
-  }
-  return value;
-}
-
-export function buildToolResultPayload(payload = {}) {
-  const src = isPlainObject(payload) ? payload : { data: payload };
-  const out = {};
-  for (const field of COMMON_RESULT_FIELDS) {
-    const normalized = normalizeCommonFieldValue(field, src[field]);
-    if (normalized !== undefined) out[field] = normalized;
-  }
-  for (const [key, value] of Object.entries(src)) {
-    if (COMMON_RESULT_FIELDS.includes(key)) continue;
-    if (value === undefined) continue;
-    out[key] = value;
-  }
-  if (out.ok === false) {
-    if (out.status === undefined) out.status = "failed";
-    if (out.error === undefined) {
-      out.error = out.message || text(out.stderr) || "tool execution failed";
-    }
-    if (out.code === undefined) out.code = ERROR_CODE.RECOVERABLE_TOOL_ERROR;
-  }
-  return out;
-}
-
-export function toToolJsonResult(toolName, payload = {}, pretty = false) {
-  const normalizedPayload = buildToolResultPayload(payload);
-  return JSON.stringify(
-    {
-      toolName: text(toolName),
-      ...normalizedPayload,
-    },
-    null,
-    pretty ? 2 : 0,
-  );
+export function toToolJsonResult(toolName, payload) {
+  const name = text(toolName);
+  if (!name) throw new TypeError("tool result requires toolName");
+  return encodeToolResultObject({ toolName: name, ...assertToolResultObject(payload) });
 }

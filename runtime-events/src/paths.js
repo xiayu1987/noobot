@@ -43,8 +43,12 @@ function resolveRuntimeEventDir(record, config, sessionDir) {
 export function resolveRuntimeEventFile(record, config, { sessionDir = "" } = {}) {
   return path.join(
     resolveRuntimeEventDir(record, config, sessionDir),
-    `${resolveRuntimeEventFileCategory(record)}.jsonl`,
+    resolveRuntimeEventFileName(record),
   );
+}
+
+export function resolveRuntimeEventFileName(record) {
+  return `${resolveRuntimeEventFileCategory(record)}.jsonl`;
 }
 
 function resolveRuntimeEventFileCategory(record = {}) {

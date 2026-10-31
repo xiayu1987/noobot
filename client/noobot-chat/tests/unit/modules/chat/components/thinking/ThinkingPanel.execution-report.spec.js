@@ -55,6 +55,7 @@ const finishedMessage = {
         authority: "authoritative",
         timestamp: "2026-07-25T01:00:00.000Z",
       },
+      success: true,
       resultEvent: {
         eventId: "result-event-1",
         sequence: 2,

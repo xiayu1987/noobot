@@ -8,107 +8,56 @@ import { filePath as path } from "@noobot/path-resolver";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
 export const DEFAULT_READ_MAX_LINES = QUANTITY_THRESHOLDS.toolIO.readMaxLines;
+export const READ_MAX_LINES_LIMIT = QUANTITY_THRESHOLDS.toolIO.readMaxLinesLimit;
 export const DEFAULT_SEARCH_MAX_RESULTS = QUANTITY_THRESHOLDS.toolIO.searchMaxResults;
+export const SEARCH_MAX_RESULTS_LIMIT = QUANTITY_THRESHOLDS.toolIO.searchMaxResultsLimit;
 export const DEFAULT_SEARCH_CONTEXT_LINES = QUANTITY_THRESHOLDS.toolIO.searchContextLines;
-export const DEFAULT_MAX_SEARCH_FILES = QUANTITY_THRESHOLDS.toolIO.searchMaxFiles;
-export const DEFAULT_SEARCH_EXCLUDED_DIRS = new Set([
-  ".git",
-  "node_modules",
-  ".pm2",
-  "dist",
-  "build",
-  "coverage",
-]);
+export const SEARCH_CONTEXT_LINES_LIMIT = QUANTITY_THRESHOLDS.toolIO.searchContextLinesLimit;
+export const PATCH_FAILURE_CONTEXT_RADIUS = QUANTITY_THRESHOLDS.toolIO.patchFailureContextRadius;
 
-export function toPositiveInt(value, fallback, min = 1, max = Number.MAX_SAFE_INTEGER) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return fallback;
-  return Math.min(max, Math.max(min, Math.floor(parsed)));
+export function splitLines(content) {
+  return content.split(/\r?\n/);
 }
 
-export function splitLines(content = "") {
-  return String(content || "").split(/\r?\n/);
-}
-
-export function formatLinesWithNumbers(lines = [], startLine = 1) {
+export function formatLinesWithNumbers(lines, startLine) {
   return lines.map((lineText, index) => `${startLine + index} | ${lineText}`).join("\n");
 }
 
-export function escapeRegExp(value = "") {
-  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+export function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-export function normalizeSlash(value = "") {
-  return String(value || "").replaceAll("\\", "/");
+export function normalizeSlash(value) {
+  return value.replaceAll("\\", "/");
 }
 
-export function toWorkspaceRelativePath(workspacePath = "", targetPath = "") {
+export function toWorkspaceRelativePath(workspacePath, targetPath) {
   return normalizeSlash(path.relative(workspacePath, targetPath));
 }
 
-export function isForbiddenWorkspaceRelativePath(relativePath = "") {
+export function isForbiddenWorkspaceRelativePath(relativePath) {
   return normalizeSlash(relativePath)
     .split("/")
     .filter(Boolean)
     .some((segment) => segment === ".git");
 }
 
-export function isOutsideWorkspaceRelativePath(relativePath = "") {
+export function isOutsideWorkspaceRelativePath(relativePath) {
   const normalized = normalizeSlash(relativePath);
   if (path.isAbsolute(normalized) || /^[A-Za-z]:\//.test(normalized)) return true;
   return normalized.split("/")[0] === "..";
 }
 
-function globToRegExp(glob = "") {
-  const normalized = normalizeSlash(glob).trim();
-  if (!normalized) return null;
-  let out = "^";
-  for (let i = 0; i < normalized.length; i += 1) {
-    const ch = normalized[i];
-    const next = normalized[i + 1];
-    if (ch === "*" && next === "*") {
-      out += ".*";
-      i += 1;
-    } else if (ch === "*") {
-      out += "[^/]*";
-    } else if (ch === "?") {
-      out += "[^/]";
-    } else {
-      out += escapeRegExp(ch);
-    }
-  }
-  out += "$";
-  return new RegExp(out);
+export function normalizeRgPathToRoot({ rootPath, rgPath }) {
+  return toWorkspaceRelativePath(rootPath, path.resolve(rootPath, rgPath));
 }
 
-export function matchesGlob(relativePath = "", glob = "") {
-  const normalizedGlob = normalizeSlash(glob).trim();
-  if (!normalizedGlob) return true;
-  const normalizedPath = normalizeSlash(relativePath);
-  const fileName = normalizedPath.split("/").at(-1) || "";
-  const matcher = globToRegExp(normalizedGlob);
-  if (!matcher) return true;
-  return matcher.test(normalizedPath) || matcher.test(fileName);
-}
-
-export function toTextLine(value = "") {
-  return String(value || "").replace(/\r?\n$/, "");
-}
-
-export function normalizeRgPathToWorkspace({
-  rootPath = "",
-  workspacePath = "",
-  rgPath = "",
-} = {}) {
-  const absolutePath = path.resolve(rootPath, String(rgPath || ""));
-  return toWorkspaceRelativePath(workspacePath, absolutePath);
-}
-
-export async function exists(filePath = "") {
+export async function exists(filePath) {
   try {
     await access(filePath);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw error;
   }
 }

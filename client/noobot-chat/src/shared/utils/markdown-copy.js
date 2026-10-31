@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { text } from "@noobot/shared/value";
+import TYPOGRAPHY_TOKENS from "../styles/tokens/typography.css?raw";
 
 export const MARKDOWN_COPY_ERROR_CODES = Object.freeze({
   noCopyableContent: "noCopyableContent",
@@ -42,6 +43,7 @@ function stripBackgroundStylesFromHtml(htmlContent = "") {
 }
 
 const MARKDOWN_EXPORT_TOKENS = `
+${TYPOGRAPHY_TOKENS}
     :root {
       --noobot-base-white: #ffffff;
       --noobot-base-blue-400: #3b82f6;
@@ -58,11 +60,6 @@ const MARKDOWN_EXPORT_TOKENS = `
       --noobot-base-red-100: color-mix(in srgb, var(--noobot-base-red-500) 8%, var(--noobot-base-white));
       --noobot-base-red-200: color-mix(in srgb, var(--noobot-base-red-500) 24%, var(--noobot-base-white));
       --noobot-base-rose-50: var(--noobot-base-red-100);
-      --noobot-font-size-sm: 13px;
-      --noobot-font-size-md: 14px;
-      --noobot-font-size-lg: 16px;
-      --noobot-line-height-body: 1.6;
-      --noobot-line-height-loose: 1.7;
       --noobot-radius-xs: 8px;
       --noobot-radius-sm: 10px;
     }
@@ -108,7 +105,7 @@ function applyInlineStylesForCopy(htmlContent = "") {
       color: "var(--noobot-base-slate-900)",
       padding: "2px 6px",
       "border-radius": "var(--noobot-radius-xs)",
-      "font-family": "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+      "font-family": "var(--noobot-font-mono)",
     });
   });
   wrapper.querySelectorAll("pre code").forEach((elementNode) => {
@@ -132,7 +129,10 @@ function applyInlineStylesForCopy(htmlContent = "") {
     });
   });
   wrapper.querySelectorAll("th").forEach((elementNode) => {
-    setStyle(elementNode, { background: "var(--noobot-base-indigo-50)", "font-weight": "600" });
+    setStyle(elementNode, {
+      background: "var(--noobot-base-indigo-50)",
+      "font-weight": "var(--noobot-font-weight-semibold)",
+    });
   });
   wrapper.querySelectorAll("ul, ol").forEach((elementNode) => {
     setStyle(elementNode, { margin: "8px 0 12px 20px", "padding-left": "16px" });
@@ -177,16 +177,16 @@ ${MARKDOWN_EXPORT_TOKENS}
     a { color: var(--noobot-base-blue-600); text-decoration: none; }
     a:hover { text-decoration: underline; }
     pre { background: var(--noobot-base-slate-50); color: var(--noobot-base-slate-900); border: 1px solid var(--noobot-base-slate-200); border-radius: var(--noobot-radius-xs); padding: 12px; overflow-x: auto; margin: 12px 0; }
-    code { background: var(--noobot-base-slate-100); color: var(--noobot-base-slate-900); padding: 2px 6px; border-radius: var(--noobot-radius-xs); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    code { background: var(--noobot-base-slate-100); color: var(--noobot-base-slate-900); padding: 2px 6px; border-radius: var(--noobot-radius-xs); font-family: var(--noobot-font-mono); }
     pre code { background: transparent; padding: 0; }
     table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: var(--noobot-font-size-md); border: 1px solid var(--noobot-base-slate-200); }
     th, td { border: 1px solid var(--noobot-base-slate-200); padding: 8px 10px; text-align: left; vertical-align: top; }
-    th { background: var(--noobot-base-indigo-50); font-weight: 600; }
+    th { background: var(--noobot-base-indigo-50); font-weight: var(--noobot-font-weight-semibold); }
     tr:nth-child(even) td { background: var(--noobot-base-slate-50); }
     ul, ol { margin: 8px 0 12px 20px; padding-left: 16px; }
     li { margin: 4px 0; line-height: var(--noobot-line-height-loose); }
     ul li::marker { color: var(--noobot-base-blue-400); }
-    ol li::marker { color: var(--noobot-base-blue-400); font-weight: 600; }
+    ol li::marker { color: var(--noobot-base-blue-400); font-weight: var(--noobot-font-weight-semibold); }
     .mermaid { margin: 12px 0; padding: 10px; border: 1px solid var(--noobot-base-slate-200); border-radius: var(--noobot-radius-xs); background: var(--noobot-base-white); overflow-x: auto; max-width: 760px; }
     .mermaid svg { width: 100%; max-width: 760px; height: auto; display: block; }
     .mermaid-render-error { color: var(--noobot-base-red-500); background: var(--noobot-base-rose-50); border: 1px solid var(--noobot-base-red-200); border-radius: var(--noobot-radius-xs); padding: 10px; white-space: pre-wrap; }
@@ -245,23 +245,23 @@ export function copyMarkdownRichAsHtmlPage({ html, markdownText }) {
       <style>
         .markdown-export-container {
           color: var(--noobot-base-slate-800); font-size: var(--noobot-font-size-lg); line-height: var(--noobot-line-height-loose); word-wrap: break-word;
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+          font-family: var(--noobot-font-sans);
           padding: 20px; max-width: 900px; margin: 0 auto;
         }
         .markdown-export-container p { margin-top: 0; margin-bottom: 16px; }
         .markdown-export-container a { color: var(--noobot-base-blue-500); text-decoration: none; }
         .markdown-export-container hr { height: 1px; margin: 24px 0; background-color: var(--noobot-base-slate-200); border: 0; }
-        .markdown-export-container h1, .markdown-export-container h2, .markdown-export-container h3, .markdown-export-container h4 { margin-top: 24px; margin-bottom: 16px; font-weight: 600; color: var(--noobot-base-slate-900); }
+        .markdown-export-container h1, .markdown-export-container h2, .markdown-export-container h3, .markdown-export-container h4 { margin-top: 24px; margin-bottom: 16px; font-weight: var(--noobot-font-weight-semibold); color: var(--noobot-base-slate-900); }
         .markdown-export-container h1 { font-size: var(--noobot-font-size-lg); border-bottom: 1px solid var(--noobot-base-slate-200); padding-bottom: 0.3em; }
         .markdown-export-container h2 { font-size: var(--noobot-font-size-lg); border-bottom: 1px solid var(--noobot-base-slate-200); padding-bottom: 0.3em; }
         .markdown-export-container blockquote { margin: 16px 0; padding: 12px 16px; color: var(--noobot-base-slate-500); background-color: var(--noobot-base-slate-50); border-left: 4px solid var(--noobot-base-slate-200); font-style: italic; }
         .markdown-export-container ul, .markdown-export-container ol { margin-bottom: 16px; padding-left: 2em; }
-        .markdown-export-container code { background-color: var(--noobot-base-slate-100); color: var(--noobot-base-red-500); padding: 0.2em 0.4em; border-radius: var(--noobot-radius-xs); font-family: monospace; font-size: var(--noobot-font-size-sm); }
+        .markdown-export-container code { background-color: var(--noobot-base-slate-100); color: var(--noobot-base-red-500); padding: 0.2em 0.4em; border-radius: var(--noobot-radius-xs); font-family: var(--noobot-font-mono); font-size: var(--noobot-font-size-sm); }
         .markdown-export-container pre { background-color: var(--noobot-base-slate-800); color: var(--noobot-base-slate-200); border-radius: var(--noobot-radius-xs); padding: 16px; overflow-x: auto; }
         .markdown-export-container pre code { background-color: transparent; color: inherit; padding: 0; }
         .markdown-export-container table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
         .markdown-export-container th, .markdown-export-container td { border: 1px solid var(--noobot-base-slate-200); padding: 10px 14px; text-align: left; }
-        .markdown-export-container th { background-color: var(--noobot-base-slate-100); font-weight: 600; }
+        .markdown-export-container th { background-color: var(--noobot-base-slate-100); font-weight: var(--noobot-font-weight-semibold); }
         .markdown-export-container .mermaid { margin: 20px 0; padding: 16px; border: 1px solid var(--noobot-base-slate-200); border-radius: var(--noobot-radius-xs); background: var(--noobot-base-white); overflow-x: auto; text-align: center; max-width: 760px; }
         .markdown-export-container .mermaid svg { width: 100%; max-width: 760px; height: auto; display: block; margin: 0 auto; }
       </style>

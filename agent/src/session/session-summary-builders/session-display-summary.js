@@ -23,7 +23,7 @@ import {
   TURN_SNAPSHOT_TERMINAL_LIMIT,
 } from "@noobot/session-protocol/turn-lifecycle";
 
-export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 34;
+export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 37;
 
 function isValidTransferEnvelopeList(value) {
   return (

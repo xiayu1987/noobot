@@ -12,7 +12,10 @@ import {
   buildModelAttachment,
   createMultimodalParseTool,
 } from "../../src/tools/ai-models/multimodal-parse-tool.js";
-import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
+import {
+  createTestRuntimeContext,
+  createTestAttachmentService,
+} from "../helpers/test-runtime-context.js";
 import { createModelContext } from "@noobot/context-protocol/assembly/hook-context";
 import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
@@ -148,14 +151,15 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
       },
       modelSpec: null,
     }),
-    attachmentService: {
+    attachmentService: createTestAttachmentService({
       async getAttachmentById(request) {
-        return runtime.userMessageAttachments.find(
+        const record = runtime.userMessageAttachments.find(
           (attachment) =>
             attachment.attachmentId === request.attachmentId &&
             attachment.sessionId === request.sessionId &&
             attachment.attachmentSource === request.attachmentSource,
         );
+        return record ? { ...record, absolutePath: record.path } : null;
       },
       async ingestGeneratedArtifacts(request) {
         ingestRequest = request;
@@ -194,7 +198,7 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
           ],
         };
       },
-    },
+    }),
     sessionManager: {
       async commitAuthorityEvent(request) {
         authorityRequests.push(request);
@@ -331,7 +335,7 @@ test("multimodal_parse parses a workspace file without source-attachment backwri
         },
         modelSpec: null,
       }),
-      attachmentService: {
+      attachmentService: createTestAttachmentService({
         async ingestGeneratedArtifacts(request) {
           return [
             {
@@ -349,7 +353,7 @@ test("multimodal_parse parses a workspace file without source-attachment backwri
         async linkParsedResultToAttachment() {
           linkCalled = true;
         },
-      },
+      }),
     }),
   );
   const [tool] = createMultimodalParseTool({ agentContext });
@@ -434,7 +438,7 @@ test("multimodal_parse passes audio and video files to the configured model", as
         },
         modelSpec: null,
       }),
-      attachmentService: {
+      attachmentService: createTestAttachmentService({
         async ingestGeneratedArtifacts(request) {
           return [
             {
@@ -449,7 +453,7 @@ test("multimodal_parse passes audio and video files to the configured model", as
             },
           ];
         },
-      },
+      }),
     }),
   );
   const [tool] = createMultimodalParseTool({ agentContext });
@@ -593,7 +597,7 @@ test("multimodal_parse uses the configured modality default instead of the runti
         },
         modelSpec: null,
       }),
-      attachmentService: {
+      attachmentService: createTestAttachmentService({
         async ingestGeneratedArtifacts(request) {
           return [
             {
@@ -608,7 +612,7 @@ test("multimodal_parse uses the configured modality default instead of the runti
             },
           ];
         },
-      },
+      }),
     }),
   );
   const [tool] = createMultimodalParseTool({ agentContext });

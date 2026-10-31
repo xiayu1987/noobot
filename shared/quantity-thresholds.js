@@ -28,11 +28,17 @@ export const QUANTITY_THRESHOLDS = deepFreeze({
   toolIO: {
     readMaxLines: 1000,
 
+    readMaxLinesLimit: 5000,
+
     searchMaxResults: QUANTITY_TIERS.standardBatch,
+
+    searchMaxResultsLimit: 500,
 
     searchContextLines: QUANTITY_TIERS.localContext,
 
-    searchMaxFiles: 2000,
+    searchContextLinesLimit: 20,
+
+    patchFailureContextRadius: QUANTITY_TIERS.shallowDepth,
   },
 
   diagnostics: {

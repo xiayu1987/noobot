@@ -7,7 +7,7 @@ import MarkdownIt from "markdown-it";
 import { provideExtensionValues } from "../../../../extensions/extension-registry.js";
 import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
 import { attachmentInlineRefPlugin } from "./attachmentInlineRefPlugin.js";
-import { text } from "@noobot/shared/value";
+import { isFunction, text } from "@noobot/shared/value";
 
 const MERMAID_PREFIXES = [
   "graph ",
@@ -107,6 +107,37 @@ function parseMarkerAttributes(input = "") {
   return attrs;
 }
 
+export function outOfSessionRenderContext(translate) {
+  return {
+    attachmentRefIndex: null,
+    linkSnapshots: [],
+    messageIndex: 0,
+    workspaceRootDirectory: null,
+    translate,
+  };
+}
+
+function assertRenderContext(renderContext) {
+  const { attachmentRefIndex, linkSnapshots, messageIndex, workspaceRootDirectory, translate } =
+    renderContext ?? {};
+  if (attachmentRefIndex !== null && !(attachmentRefIndex instanceof Map)) {
+    throw new TypeError("renderMarkdown requires attachmentRefIndex: Map | null");
+  }
+  if (!Array.isArray(linkSnapshots)) {
+    throw new TypeError("renderMarkdown requires linkSnapshots: array");
+  }
+  if (!Number.isInteger(messageIndex) || messageIndex < 0) {
+    throw new TypeError("renderMarkdown requires messageIndex: non-negative integer");
+  }
+  if (workspaceRootDirectory !== null && typeof workspaceRootDirectory !== "string") {
+    throw new TypeError("renderMarkdown requires workspaceRootDirectory: string | null");
+  }
+  if (!isFunction(translate)) {
+    throw new TypeError("renderMarkdown requires translate: function");
+  }
+  return { attachmentRefIndex, linkSnapshots, messageIndex, workspaceRootDirectory, translate };
+}
+
 function renderMarkdownSegment(inputText = "", renderEnv = {}) {
   const content = String(inputText || "");
   if (!content.trim()) return "";
@@ -203,8 +234,11 @@ function renderCollapsibleMarkdown(rawText = "", renderEnv = {}) {
 }
 
 export function useMarkdownRenderer() {
-  function renderMarkdown(inputText, { attachmentRefIndex = null } = {}) {
-    return renderCollapsibleMarkdown(inputText || "", { attachmentRefIndex });
+  function renderMarkdown(inputText, renderContext) {
+    if (typeof inputText !== "string") {
+      throw new TypeError("renderMarkdown requires markdown text: string");
+    }
+    return renderCollapsibleMarkdown(inputText, assertRenderContext(renderContext));
   }
 
   return {

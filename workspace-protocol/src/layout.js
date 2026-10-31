@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-export const WORKSPACE_LAYOUT_VERSION = 18;
+export const WORKSPACE_LAYOUT_VERSION = 24;
 
 export const WORKSPACE_ROOT_LAYOUT = Object.freeze({
   USERS_FILE: "user.json",

@@ -5,6 +5,10 @@
  */
 import { compactThinkingTimeline } from "./message-summary-projection.js";
 import { buildToolArtifactTimelineProjection } from "./turn-artifact-projection.js";
+import {
+  isTransferIdentityConflict,
+  mergeTransferEnvelopes,
+} from "@noobot/semantic-transfer-protocol";
 import { text } from "@noobot/shared/value";
 
 function selectArtifactPresentation(displayMessages, sessionId, routeKey, toolTimeline) {
@@ -33,6 +37,13 @@ function mergeArtifactTimeline(presentation, toolTimeline) {
   const canonicalByKey = new Map(
     canonicalTimeline.map((item, index) => [text(item?.key || item?.toolCallId), index]),
   );
+  const toolEnvelopes = toolTimeline.flatMap((artifact) => artifact.transferEnvelopes);
+  if (toolEnvelopes.length) {
+    presentation.transferEnvelopes = mergeTransferEnvelopes(
+      Array.isArray(presentation.transferEnvelopes) ? presentation.transferEnvelopes : [],
+      toolEnvelopes,
+    );
+  }
   for (const artifact of toolTimeline) {
     const compactArtifact = compactThinkingTimeline([artifact])[0];
     const key = text(artifact?.key || artifact?.toolCallId);
@@ -58,6 +69,7 @@ export function attachSessionToolArtifacts(session, displayMessages, sessionId) 
     buildToolArtifactTimelineProjection(session);
   let assignedToolArtifactCount = 0;
   let unassignedToolArtifactCount = 0;
+  let conflictedToolArtifactCount = 0;
   for (const [routeKey, toolTimeline] of timelineByRoute) {
     const presentation = selectArtifactPresentation(
       displayMessages,
@@ -69,8 +81,20 @@ export function attachSessionToolArtifacts(session, displayMessages, sessionId) 
       unassignedToolArtifactCount += toolTimeline.length;
       continue;
     }
-    mergeArtifactTimeline(presentation, toolTimeline);
+    try {
+      mergeArtifactTimeline(presentation, toolTimeline);
+    } catch (error) {
+      if (!isTransferIdentityConflict(error)) throw error;
+      presentation.toolArtifactConflict = error.code;
+      conflictedToolArtifactCount += toolTimeline.length;
+      continue;
+    }
     assignedToolArtifactCount += toolTimeline.length;
   }
-  return { toolLogCount, assignedToolArtifactCount, unassignedToolArtifactCount };
+  return {
+    toolLogCount,
+    assignedToolArtifactCount,
+    unassignedToolArtifactCount,
+    conflictedToolArtifactCount,
+  };
 }

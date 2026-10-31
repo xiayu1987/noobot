@@ -9,7 +9,7 @@ import { canonicalAttachmentIdentities, createCommandRequestHash } from "./comma
 export function createTurnAttachmentBindFingerprint({
   turnScopeId = "",
   messageUid = "",
-  attachments = [],
+  attachments,
 } = {}) {
   return createCommandRequestHash({
     type: "session.turn.attachments.bind",

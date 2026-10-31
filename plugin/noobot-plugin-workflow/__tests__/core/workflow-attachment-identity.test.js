@@ -41,14 +41,14 @@ test("workflow attachment merge isolates equal ids across session and source", (
 test("workflow node refs resolve only complete canonical attachment identities", () => {
   const attachments = [base];
   const resolved = resolveNodeInputAttachments({
-    ctx: { attachments },
+    ctx: { userMessageAttachments: attachments },
     semanticNode: { attachments: [formatAttachmentIdentityRef(baseIdentity)] },
   });
   assert.deepEqual(resolved, [base]);
   assert.throws(
     () =>
       resolveNodeInputAttachments({
-        ctx: { attachments },
+        ctx: { userMessageAttachments: attachments },
         semanticNode: { attachments: ["shared"] },
       }),
     /invalid_attachment_identity_ref_prefix/,
@@ -56,7 +56,7 @@ test("workflow node refs resolve only complete canonical attachment identities",
   assert.throws(
     () =>
       resolveNodeInputAttachments({
-        ctx: { attachments },
+        ctx: { userMessageAttachments: attachments },
         semanticNode: {
           attachments: [formatAttachmentIdentityRef({ ...baseIdentity, sessionId: "session-b" })],
         },
@@ -73,7 +73,7 @@ test("workflow attachment operations reject incomplete identity", () => {
   assert.throws(
     () =>
       resolveNodeInputAttachments({
-        ctx: { attachments: [{ attachmentId: "shared", attachmentSource: "user" }] },
+        ctx: { userMessageAttachments: [{ attachmentId: "shared", attachmentSource: "user" }] },
         semanticNode: { attachments: [formatAttachmentIdentityRef(baseIdentity)] },
       }),
     /invalid_attachment_session_id/,

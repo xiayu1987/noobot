@@ -5,7 +5,6 @@
  */
 import { mergeAttachments } from "./dialogProcessChain.js";
 import { getMessageTransferAttachments } from "./transferEnvelopes.js";
-import { selectCompletedToolArtifacts } from "../runtime/engine/toolTimeline.js";
 
 function normalizeArray(value) {
   return Array.isArray(value) ? value : [];
@@ -14,10 +13,8 @@ function normalizeArray(value) {
 function getMessageAttachments(messageItem = {}) {
   const sourceAttachments = Array.isArray(messageItem?.attachments) ? messageItem.attachments : [];
   const transferAttachments = getMessageTransferAttachments(messageItem);
-  const toolTimelineAttachments = selectCompletedToolArtifacts(messageItem).attachments;
-  const derivedAttachments = mergeAttachments(transferAttachments, toolTimelineAttachments);
-  return derivedAttachments.length
-    ? mergeAttachments(derivedAttachments, sourceAttachments)
+  return transferAttachments.length
+    ? mergeAttachments(transferAttachments, sourceAttachments)
     : sourceAttachments;
 }
 

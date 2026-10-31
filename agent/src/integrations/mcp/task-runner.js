@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
-import { recoverableToolError } from "../../shared/errors/index.js";
+import { ERROR_CODE, recoverableToolError } from "../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { getMcpServerByName, createMcpClient } from "./client-factory.js";
 import { buildLangChainMcpTools } from "./tool-adapter.js";
@@ -15,6 +15,7 @@ import { ACTIVITY_KIND, MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/messag
 import { createModelActivity } from "../../models/runtime/model-manager.js";
 import { requireRuntimeModelHost } from "../../runtime/model-port-host.js";
 import { text } from "@noobot/shared/value";
+import { decodeToolResultText, encodeToolResultObject } from "@noobot/event-protocol/tool-result";
 
 export async function createMcpAgentTools({
   globalConfig = {},
@@ -25,9 +26,9 @@ export async function createMcpAgentTools({
 }) {
   const server = getMcpServerByName({ globalConfig, userConfig, mcpName });
   if (!server) {
-    throw recoverableToolError(
-      `${tSystem("mcp.serverNotFoundOrInactive")}: ${String(mcpName || "")}`,
-    );
+    throw recoverableToolError(`${tSystem("mcp.serverNotFoundOrInactive")}: ${mcpName}`, {
+      code: ERROR_CODE.RECOVERABLE_MCP_SERVER_NOT_FOUND,
+    });
   }
   const client = createMcpClient({ server, signal, fetchImpl });
   await client.initialize();
@@ -53,13 +54,15 @@ export async function executeMcpTask({
 }) {
   const normalizedTask = text(task);
   if (!normalizedTask) {
-    throw recoverableToolError(tSystem("common.taskRequired"));
+    throw recoverableToolError(tSystem("common.taskRequired"), {
+      code: ERROR_CODE.RECOVERABLE_MCP_TASK_REQUIRED,
+    });
   }
   const server = getMcpServerByName({ globalConfig, userConfig, mcpName });
   if (!server) {
-    throw recoverableToolError(
-      `${tSystem("mcp.serverNotFoundOrInactive")}: ${String(mcpName || "")}`,
-    );
+    throw recoverableToolError(`${tSystem("mcp.serverNotFoundOrInactive")}: ${mcpName}`, {
+      code: ERROR_CODE.RECOVERABLE_MCP_SERVER_NOT_FOUND,
+    });
   }
 
   const { tools: langchainTools, toolNames } = await createMcpAgentTools({
@@ -136,23 +139,28 @@ export async function executeMcpTask({
       const tool = toolMap.get(text(call?.name));
       if (!tool) {
         const notFoundMsg = `${tSystem("mcp.toolNotFound")}: ${String(call?.name || "")}`;
-        traces.push({ tool: call?.name || "", args: call?.args || {}, result: notFoundMsg });
-        messages.push(new ToolMessage({ tool_call_id: call?.id || "", content: notFoundMsg }));
+        const notFoundResult = encodeToolResultObject({
+          ok: false,
+          code: ERROR_CODE.RECOVERABLE_MCP_TOOL_NOT_FOUND,
+          error: notFoundMsg,
+        });
+        traces.push({ tool: call?.name || "", args: call?.args || {}, result: notFoundResult });
+        messages.push(new ToolMessage({ tool_call_id: call?.id || "", content: notFoundResult }));
         continue;
       }
       const result = await tool.invoke(call?.args || {}, {
         signal: signal || undefined,
       });
-      const resultText = typeof result === "string" ? result : JSON.stringify(result);
+      decodeToolResultText(result);
       traces.push({
         tool: call?.name || "",
         args: call?.args || {},
-        result: String(resultText).slice(0, LENGTH_THRESHOLDS.display.mcpTaskResultPreviewChars),
+        result: result.slice(0, LENGTH_THRESHOLDS.display.mcpTaskResultPreviewChars),
       });
       messages.push(
         new ToolMessage({
           tool_call_id: call?.id || "",
-          content: String(resultText),
+          content: result,
         }),
       );
     }

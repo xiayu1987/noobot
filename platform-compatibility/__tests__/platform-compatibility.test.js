@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -25,6 +25,7 @@ import {
   terminateProcessTree,
   usesDetachedProcessGroup,
   writeFileAtomic,
+  writeFileAtomicCreatingParents,
 } from "../src/index.js";
 
 test("platform aliases normalize to one canonical identity", () => {
@@ -189,4 +190,36 @@ test("atomic write keeps a fixed-length temporary name for long target names", a
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("workspace atomic write creates missing parent directories without leaving temporary files", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "atomic-write-parents-"));
+  const target = path.join(directory, "docs", "nested", "报告.md");
+  try {
+    await writeFileAtomicCreatingParents({
+      filePath: target,
+      content: "中文\n",
+      mkdir,
+      writeFile,
+      rename,
+      remove: rm,
+    });
+    assert.equal(await readFile(target, "utf8"), "中文\n");
+    assert.deepEqual(await readdir(path.dirname(target)), ["报告.md"]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("workspace atomic write requires an injected mkdir operation", async () => {
+  await assert.rejects(
+    writeFileAtomicCreatingParents({
+      filePath: path.join(tmpdir(), "never-written.txt"),
+      content: "",
+      writeFile,
+      rename,
+      remove: rm,
+    }),
+    TypeError,
+  );
 });

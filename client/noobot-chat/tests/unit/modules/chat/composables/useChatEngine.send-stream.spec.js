@@ -271,17 +271,6 @@ describe("useChatEngine.send-stream", () => {
 
   it("ignores another session in-flight run state while sending and finalizing the active session", async () => {
     const stream = vi.fn(async (payload, onEvent) => {
-      onEvent({
-        event: "message",
-        data: {
-          sessionId: "s-active-send",
-          dialogProcessId: "dp-active-send",
-          event: "tool_call",
-          type: "tool_call",
-          category: "tool",
-          text: "running tool",
-        },
-      });
       emitAuthorityProcessing(onEvent, {
         sessionId: "s-active-send",
         turnScopeId: payload.identity.turnScopeId,
@@ -320,7 +309,7 @@ describe("useChatEngine.send-stream", () => {
     expect(activeTurnRuntime.value?.sessionId).toBe(activeSession.value.sessionId);
   });
 
-  it("does not infer assistant identity from non-canonical stream events without turnScopeId", async () => {
+  it("fails the stream on non-canonical events without turnScopeId and never infers identity from them", async () => {
     const stream = vi.fn(async (payload, onEvent) => {
       onEvent({
         event: "message",
@@ -349,7 +338,7 @@ describe("useChatEngine.send-stream", () => {
       assistant.content = "final without frontend turn scope";
       assistant.pending = false;
     });
-    const { engine, activeSession, activeTurnRuntime, sending } = createHarness({
+    const { engine, activeSession, sending } = createHarness({
       sessionId: "s-missing-turn",
       stream,
       deps: {
@@ -360,13 +349,11 @@ describe("useChatEngine.send-stream", () => {
     const result = await engine.send(SEND_REQUEST);
 
     const assistant = assistantMessage(activeSession);
-    expect(result).toBe(true);
+    expect(result).toBe(false);
     expect(assistant.dialogProcessId).toBeUndefined();
     expect(selectToolTimelineLogs(assistant)).toEqual([]);
-    await vi.waitFor(() => expect(sending.value).toBe(false));
-    expect(activeTurnRuntime.value?.sessionId).toBe(activeSession.value.sessionId);
-    expect(activeTurnRuntime.value.turnScopeId).toBeTruthy();
-    expect(activeTurnRuntime.value.turnScopeId).toBeTruthy();
+    expect(applySessionDetail).not.toHaveBeenCalled();
+    expect(sending.value).toBe(true);
   });
 
   it("stream end without an authoritative terminal keeps the Turn locked", async () => {

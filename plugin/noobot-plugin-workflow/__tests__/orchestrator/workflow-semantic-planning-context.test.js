@@ -115,6 +115,7 @@ test("workflow semantic planning passes conversation context before current user
       sessionId: "s1",
       dialogProcessId: "d1",
       userMessage: "请基于前文生成工作流",
+      userMessageAttachments: [],
       runConfig: { locale: "zh-CN" },
       modelContext: createModelContext({
         messageBlocks: {
@@ -206,6 +207,7 @@ test("workflow semantic planning uses the authoritative resolver when the flat p
       sessionId: "s1",
       dialogProcessId: "d1",
       userMessage: "请根据上下文继续生成工作流",
+      userMessageAttachments: [],
       runConfig: { locale: "zh-CN" },
       modelContext: createModelContext({
         messageBlocks: {
@@ -286,6 +288,7 @@ test("workflow semantic planning includes current available tools like harness p
       sessionId: "s1",
       dialogProcessId: "d1",
       userMessage: "查资料并生成报告",
+      userMessageAttachments: [],
       runConfig: { locale: "zh-CN" },
       agentContext: {
         payload: {
@@ -367,6 +370,7 @@ test("workflow semantic planning reads available tools from the canonical agentC
       sessionId: "s1",
       dialogProcessId: "d1",
       userMessage: "查资料并生成报告",
+      userMessageAttachments: [],
       runConfig: { locale: "zh-CN" },
       agentContext: {
         payload: {
@@ -443,6 +447,7 @@ test("workflow semantic planning reads authoritative modelContext history", asyn
       sessionId: "s1",
       dialogProcessId: "d1",
       userMessage: "请结合上下文生成工作流",
+      userMessageAttachments: [],
       runConfig: { locale: "zh-CN" },
       contextProtocolVersion: 3,
       modelContext: {

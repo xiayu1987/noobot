@@ -4,28 +4,31 @@
  * SPDX-License-Identifier: MIT
  */
 import { randomUUID } from "node:crypto";
-import { text, isFunction } from "@noobot/shared/value";
+import { CONNECTOR_FAILURE_CODE } from "@noobot/connector-protocol";
+import { isPlainObject, text } from "@noobot/shared/value";
+import {
+  commandOutput,
+  connectorFailure,
+  errorMessage,
+  loadDriverModule,
+} from "../channel-result.js";
 
 const SSH_COMMAND_TIMEOUT_MS = 30000;
 
-function resolveSshConnection(connectionInfo = {}) {
-  const source = connectionInfo && typeof connectionInfo === "object" ? connectionInfo : {};
+const SSH_DEFAULT_PORT = 22;
+
+function resolveSshConnection(connectionInfo) {
+  if (!isPlainObject(connectionInfo)) {
+    throw new TypeError("ssh connector connectionInfo must be an object");
+  }
+  const source = connectionInfo;
   return {
     host: text(source.host),
-    port: Number(source.port || 22),
+    port: source.port === undefined || source.port === "" ? SSH_DEFAULT_PORT : Number(source.port),
     username: text(source.username),
-    password: String(source.password || ""),
+    password: source.password === undefined ? "" : String(source.password),
     timeoutMs: SSH_COMMAND_TIMEOUT_MS,
   };
-}
-
-async function importSsh2() {
-  try {
-    const mod = await import("ssh2");
-    return mod?.default || mod;
-  } catch {
-    return null;
-  }
 }
 
 const sshShellStates = new Map();
@@ -52,7 +55,7 @@ function resetSshState(key = "", expectedState = null) {
   if (failures.length) throw new AggregateError(failures, "SSH channel cleanup failed");
 }
 
-async function ensureSshShellState({ channelKey = "", connectionInfo = {} } = {}) {
+async function ensureSshShellState({ channelKey, conn, Client }) {
   const key = requireChannelKey(channelKey);
   const cached = sshShellStates.get(key);
   if (cached?.ready === true && cached?.client && cached?.stream) {
@@ -60,17 +63,6 @@ async function ensureSshShellState({ channelKey = "", connectionInfo = {} } = {}
   }
   if (cached?.readyPromise) {
     return cached.readyPromise;
-  }
-
-  const conn = resolveSshConnection(connectionInfo);
-  if (!conn.host || !conn.username || !conn.password) {
-    throw new Error("SSH host, username and password are required");
-  }
-
-  const ssh2 = await importSsh2();
-  const Client = ssh2?.Client;
-  if (!isFunction(Client)) {
-    throw new Error("ssh2 is not installed");
   }
 
   const state = {
@@ -132,22 +124,23 @@ function buildCommandEnvelope(command = "", token = "") {
   ].join("\n");
 }
 
-export function parseSshCommandOutput(raw = "", token = "") {
-  const inputText = String(raw || "");
+export function parseSshCommandOutput(raw, token) {
   const beginMarker = `__NOOBOT_BEGIN_${token}__`;
   const doneMarker = `__NOOBOT_DONE_${token}__`;
-  const doneIndex = inputText.indexOf(doneMarker);
+  const doneIndex = raw.indexOf(doneMarker);
   if (doneIndex < 0) return null;
-  const suffix = inputText.slice(doneIndex + doneMarker.length);
+  const suffix = raw.slice(doneIndex + doneMarker.length);
   const lineEnd = suffix.search(/\r?\n/);
   if (lineEnd < 0) return null;
-  const code = Number.parseInt(suffix.slice(0, lineEnd).trim(), 10);
-  const beginIndex = inputText.lastIndexOf(beginMarker, doneIndex);
+  const exitText = suffix.slice(0, lineEnd).trim();
+  if (!/^\d+$/.test(exitText)) {
+    throw new TypeError(`ssh command envelope exit code is invalid: ${exitText}`);
+  }
+  const beginIndex = raw.lastIndexOf(beginMarker, doneIndex);
   const bodyStart = beginIndex < 0 ? 0 : beginIndex + beginMarker.length;
   return {
-    ok: code === 0,
-    code: Number.isFinite(code) ? code : 1,
-    stdout: inputText
+    exitCode: Number(exitText),
+    stdout: raw
       .slice(bodyStart, doneIndex)
       .replace(ANSI_ESCAPE_PATTERN, "")
       .replace(/\r/g, "")
@@ -155,9 +148,9 @@ export function parseSshCommandOutput(raw = "", token = "") {
   };
 }
 
-function runSshCommand(state, command = "", timeoutMs = SSH_COMMAND_TIMEOUT_MS) {
+function runSshCommand(state, command, timeoutMs) {
   return new Promise((resolve, reject) => {
-    if (!state?.stream || !state?.ready) {
+    if (!state.stream || !state.ready) {
       reject(new Error("ssh shell not ready"));
       return;
     }
@@ -167,33 +160,38 @@ function runSshCommand(state, command = "", timeoutMs = SSH_COMMAND_TIMEOUT_MS) 
     const stream = state.stream;
     let settled = false;
     let timer = null;
-    const done = (result = null, error = null) => {
+    const done = (result, error) => {
       if (settled) return;
       settled = true;
       if (timer) clearTimeout(timer);
-      stream?.off("data", onStdout);
-      stream?.stderr?.off?.("data", onStderr);
+      stream.off("data", onStdout);
+      stream.stderr.off("data", onStderr);
       if (error) reject(error);
       else resolve(result);
     };
     const onStdout = (chunk) => {
-      stdout += String(chunk || "");
-      const parsed = parseSshCommandOutput(stdout, token);
+      stdout += chunk.toString();
+      let parsed = null;
+      try {
+        parsed = parseSshCommandOutput(stdout, token);
+      } catch (error) {
+        done(null, error);
+        return;
+      }
       if (!parsed) return;
-      done({ ...parsed, stderr: text(stderr) });
+      done({ ...parsed, stderr: stderr.trim() });
     };
     const onStderr = (chunk) => {
-      stderr += String(chunk || "");
+      stderr += chunk.toString();
     };
 
-    const effectiveTimeoutMs = Number(timeoutMs);
     timer = setTimeout(() => {
-      done(null, new Error(`ssh command timeout after ${effectiveTimeoutMs}ms`));
+      done(null, new Error(`ssh command timeout after ${timeoutMs}ms`));
       resetSshState(state.key, state);
-    }, effectiveTimeoutMs);
+    }, timeoutMs);
 
     stream.on("data", onStdout);
-    stream.stderr?.on?.("data", onStderr);
+    stream.stderr.on("data", onStderr);
     try {
       stream.write(buildCommandEnvelope(command, token), (error) => {
         if (error) done(null, error);
@@ -204,35 +202,38 @@ function runSshCommand(state, command = "", timeoutMs = SSH_COMMAND_TIMEOUT_MS) 
   });
 }
 
-export async function executeSshCommand({
-  command = "",
-  connectionInfo = {},
-  channelKey = "",
-} = {}) {
-  const cmd = text(command);
-  if (!cmd) {
-    return { ok: false, code: 400, stdout: "", stderr: "ssh command required" };
-  }
+function sshCommandResult({ exitCode, stdout, stderr }) {
+  const output = { stdout, stderr, exitCode };
+  if (exitCode === 0) return commandOutput(output);
+  return connectorFailure(
+    CONNECTOR_FAILURE_CODE.EXECUTION_FAILED,
+    `ssh command exited with code ${exitCode}`,
+    output,
+  );
+}
 
+export async function executeSshCommand({ command, connectionInfo, channelKey }) {
+  const cmd = text(command);
+  if (!cmd) return connectorFailure(CONNECTOR_FAILURE_CODE.INPUT_INVALID, "ssh command required");
+  const conn = resolveSshConnection(connectionInfo);
+  if (!conn.host || !conn.username || !conn.password) {
+    return connectorFailure(
+      CONNECTOR_FAILURE_CODE.CONFIG_INVALID,
+      "SSH host, username and password are required",
+    );
+  }
+  const loaded = await loadDriverModule("ssh2");
+  if (!loaded.ok) return loaded.failure;
   try {
-    const conn = resolveSshConnection(connectionInfo);
-    const state = await ensureSshShellState({
-      channelKey,
-      connectionInfo: conn,
-    });
+    const state = await ensureSshShellState({ channelKey, conn, Client: loaded.driver.Client });
     state.lastUsedAt = Date.now();
     const run = () => runSshCommand(state, cmd, conn.timeoutMs);
     state.queue = state.queue.then(run, run);
     const result = await state.queue;
     state.lastUsedAt = Date.now();
-    return result;
+    return sshCommandResult(result);
   } catch (error) {
-    return {
-      ok: false,
-      code: 1,
-      stdout: "",
-      stderr: String(error?.message || error || "ssh command failed"),
-    };
+    return connectorFailure(CONNECTOR_FAILURE_CODE.EXECUTION_FAILED, errorMessage(error));
   }
 }
 

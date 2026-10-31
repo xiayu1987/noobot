@@ -6,7 +6,6 @@
 import { normalizePathForPlatform } from "@noobot/path-resolver";
 import { recoverableToolError } from "../../../shared/errors/index.js";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
-import { toPositiveInt } from "../file-utils.js";
 import { text } from "@noobot/shared/value";
 
 const UNIFIED_ABSENT_PATH = "/dev/null";
@@ -85,15 +84,20 @@ function parseApplyPatchHunk(lines, startIndex) {
   return { index, hunk: { lines: hunkLines } };
 }
 
-function stripDiffPath(rawPath = "", strip = 1) {
+function stripDiffPath(rawPath, strip) {
   const pathToken = text(rawPath).split(/\s+/)[0] || "";
   const normalizedPath = normalizePatchPathInput(pathToken);
   if (!normalizedPath || normalizedPath === UNIFIED_ABSENT_PATH) return normalizedPath;
   if (isAbsoluteDiffPath(pathToken)) return normalizedPath;
 
   const parts = pathToken.replaceAll("\\", "/").split("/").filter(Boolean);
-  const stripCount = toPositiveInt(strip, 1, 0, 10);
-  return normalizePatchPathInput(parts.slice(stripCount).join("/") || pathToken);
+  if (strip >= parts.length) {
+    throw recoverableToolError(`strip ${strip} removes the whole diff path: ${pathToken}`, {
+      code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
+      details: { field: "strip", strip, path: pathToken },
+    });
+  }
+  return normalizePatchPathInput(parts.slice(strip).join("/"));
 }
 
 function isAbsoluteDiffPath(value = "") {
@@ -113,7 +117,7 @@ function normalizePatchText(patch = "") {
   return fenced ? fenced[1] : inputText;
 }
 
-export function parseUnifiedDiff(patch = "", strip = 1) {
+export function parseUnifiedDiff(patch, strip) {
   const lines = normalizePatchText(patch).split("\n");
   const filePatches = [];
   let i = 0;

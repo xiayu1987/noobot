@@ -116,6 +116,10 @@ test("conflicting or unprovable legacy values are rejected", () => {
     "removal_inconsistent",
   );
   rejects({ role: "tool", messageUid: "sm_t", id: "other" }, "removal_not_duplicate");
-  rejects({ role: "assistant", messageUid: "sm_a", userMetaMaterialized: false }, "unmapped_field");
+  rejects(
+    { role: "assistant", messageUid: "sm_a", userMetaMaterialized: false },
+    "removal_role_mismatch",
+  );
+  rejects({ role: "", messageUid: "sm_x", [LEGACY_MESSAGE_ID]: "sm_x" }, "removal_role_mismatch");
   rejects(null, "record_not_object");
 });

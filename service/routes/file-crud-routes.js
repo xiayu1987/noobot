@@ -5,12 +5,19 @@
  */
 import path from "node:path";
 import { mkdir, open, rename, rm, stat, writeFile } from "node:fs/promises";
-import { writeFileAtomic } from "@noobot/platform-compatibility/atomic-file-write";
-import { applyFileMutation, readFileMutation } from "noobot-agent/file-mutation-service";
+import { writeFileAtomicCreatingParents } from "@noobot/platform-compatibility/atomic-file-write";
 import {
+  applyFileMutation,
+  readFileMutation,
+  readFileMutationDownload,
+} from "noobot-agent/file-mutation-service";
+import {
+  createFileMutationLocator,
   createFileMutationDiffPreview,
   createFileMutationFilePreview,
+  decodeFileMutationDownloadRequest,
 } from "@noobot/file-mutation-protocol";
+import { resolveMimeTypeFromFileName } from "@noobot/attachment-protocol/mime";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { safeJoin } from "#agent/utils";
 import {
@@ -19,6 +26,7 @@ import {
   createJsonRouteWrapper,
   decodeRequestInput,
 } from "./route-wrapper.js";
+import { buildContentDisposition } from "./content-disposition.js";
 import { recordFileAccessDebug } from "../runtime-events/file-access-debug.js";
 import { text, isFunction } from "@noobot/shared/value";
 
@@ -126,6 +134,11 @@ export function registerFileCrudRoutes(
     return decodeRequestInput(() => safeJoin(root, normalizedPath));
   };
 
+  const resolveRequestMutationLocator = (req, requestedPath, absolutePath) =>
+    isAbsolutePathAllowed(req) && path.isAbsolute(requestedPath)
+      ? createFileMutationLocator({ view: "host", path: absolutePath })
+      : createFileMutationLocator({ view: "workspace", path: requestedPath });
+
   const resolveRequestMutationRoot = async (req, root) => {
     if (!isFunction(resolveMutationRoot)) {
       throw new Error("file mutation session scope resolver is required");
@@ -220,9 +233,10 @@ export function registerFileCrudRoutes(
         const root = await resolveRootPath(req);
         const absolutePath = resolveRequestFilePath(req, root, relativePath);
         const writeText = (target, value) =>
-          writeFileAtomic({
+          writeFileAtomicCreatingParents({
             filePath: target,
             content: value,
+            mkdir,
             writeFile,
             rename,
             remove: rm,
@@ -230,11 +244,10 @@ export function registerFileCrudRoutes(
         const result = trackMutations
           ? await applyFileMutation({
               filePath: absolutePath,
-              logicalPath: relativePath,
+              locator: resolveRequestMutationLocator(req, relativePath, absolutePath),
               content,
               operation: "replace",
               mutationRoot: await resolveRequestMutationRoot(req, root),
-
               sessionScope: null,
               writeText,
             })
@@ -282,6 +295,31 @@ export function registerFileCrudRoutes(
           res.json(createFileMutationFilePreview(mutation));
         },
         { fallbackErrorKey: keys.readFailed },
+      ),
+    );
+
+    app.get(
+      `${routePrefix}/file-mutations/:mutationId/download`,
+      ...middlewares,
+      jsonRoute(
+        async (req, res) => {
+          const { revision, afterSha256 } = decodeFileMutationDownloadRequest(req.query);
+          const root = await resolveRootPath(req);
+          const download = await readFileMutationDownload({
+            mutationRoot: await resolveRequestMutationRoot(req, root),
+            mutationId: req.params.mutationId,
+            revision,
+            afterSha256,
+          });
+          res.setHeader("Content-Type", resolveMimeTypeFromFileName(download.fileName));
+          res.setHeader(
+            "Content-Disposition",
+            buildContentDisposition("attachment", download.fileName),
+          );
+          res.setHeader("Content-Length", String(download.content.length));
+          res.end(download.content);
+        },
+        { fallbackErrorKey: keys.downloadFailed },
       ),
     );
   }

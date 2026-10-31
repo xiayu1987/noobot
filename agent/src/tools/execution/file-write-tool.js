@@ -12,7 +12,7 @@ import { toToolJsonResult } from "../core/tool-json-result.js";
 import { registerResource } from "../core/resource-broker.js";
 import { createFileSourceSchema, resolveFileInput } from "../core/file-input.js";
 import { tTool } from "../core/tool-i18n.js";
-import { TOOL_NAME, TOOL_RESULT_STATE } from "../constants/index.js";
+import { TOOL_NAME } from "../constants/index.js";
 import {
   RESOURCE_OPERATION,
   SECURITY_EVIDENCE_SOURCE,
@@ -23,7 +23,7 @@ import { applyFileMutation } from "./file-mutation-service.js";
 import {
   buildFileToolDescription,
   resolveFileResourceRiskScope,
-  mutationLogicalPath,
+  mutationLocator,
   resolveRuntimeFileMutationRoot,
   resourceFileName,
 } from "./file-tool-shared.js";
@@ -69,14 +69,13 @@ export function createWriteFileTool({ agentContext, runtime, workspaceIo }) {
           ok: false,
           code: ERROR_CODE.RECOVERABLE_FILE_ALREADY_EXISTS,
           error: message,
-          message,
           path: projectToolPathRef(pathRef),
           fileName: path.basename(resolvedPath),
         });
       }
       const mutation = await applyFileMutation({
         filePath: resolvedPath,
-        logicalPath: mutationLogicalPath(pathRef),
+        locator: mutationLocator(pathRef),
         content,
         operation: "replace",
         mutationRoot: resolveRuntimeFileMutationRoot(runtime),
@@ -91,10 +90,9 @@ export function createWriteFileTool({ agentContext, runtime, workspaceIo }) {
       });
       return toToolJsonResult(TOOL_NAME.WRITE_FILE, {
         ...mutation,
-        state: TOOL_RESULT_STATE.OK,
         path: projectToolPathRef(pathRef),
         fileName: resourceFileName(resource),
-        resources: [resource],
+        outputResources: [resource],
       });
     },
     {

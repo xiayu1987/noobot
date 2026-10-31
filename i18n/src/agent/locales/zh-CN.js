@@ -19,19 +19,14 @@ export default {
   "tools.input.tooLong": "工具输入内容过长，已保存为附件",
   "tools.search.textTooLong": "搜索文本过长，请分批搜索",
   "tools.patch.patchContentTooLong": "补丁内容过长，请分批应用或拆分 patch 后重试",
-  "tools.result.toolResultOverflow": (params = {}) =>
-    `工具返回内容过长(${Number(params.measuredLength || 0)}字符)，已保存为附件，请按返回的 transfer 信息分批读取。`,
+  "tools.result.toolResultOverflow": ({ measuredLength }) =>
+    `工具返回内容过长(${measuredLength}字符)，已保存为附件，请按返回的 transfer 信息分批读取。`,
   "tools.result.readFileSourceReferenceOverflow":
     "read_file 结果过长，已保留源文件引用，请按源文件地址和行范围继续读取。",
-  "tools.file.readDescriptionWithLineNumbers": "读取文本文件内容（默认带行号）。",
   "tools.file.workspaceRelativePathRule": "相对路径统一基于当前用户工作区根目录。",
   "tools.file.symbolicLinkRule": "当前路径策略不允许文件工具使用符号链接。",
-  "tools.file.readStartLineField": "起始行（1-based）。",
-  "tools.file.readEndLineField": "结束行（1-based）。",
-  "tools.file.readIncludeLineNumbersField": "content 是否带行号。",
-  "tools.file.readMaxLinesField": "最大返回行数。",
-  "tools.file.readLineRangeOutOfBounds": (params = {}) =>
-    `读取行范围无效：请求 ${Number(params.startLine || 0)}-${Number(params.endLine || 0)}，文件共 ${Number(params.totalLines || 0)} 行`,
+  "tools.file.readLineRangeOutOfBounds": ({ startLine, endLine, totalLines }) =>
+    `读取行范围无效：请求 ${startLine}-${endLine ?? "末尾"}，文件共 ${totalLines} 行`,
   "tools.file.pathErrorRequired": (params = {}) => `必须提供 ${String(params.field || "filePath")}`,
   "tools.file.pathErrorHostAbsoluteNotAllowed": "当前身份不允许访问宿主绝对路径。",
   "tools.file.pathErrorSandboxNotAllowed": "当前执行视角不接受沙箱绝对路径。",

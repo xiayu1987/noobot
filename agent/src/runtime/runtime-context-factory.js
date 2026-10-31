@@ -11,12 +11,13 @@ import {
   createHookRuntimeIdentity,
 } from "@noobot/hook-protocol/runtime-identity";
 import { AGENT_CONTEXT_IDENTITY_SHAPE } from "@noobot/context-protocol/agent-context/schema";
-import { isPlainObject } from "@noobot/shared/value";
+import { isCanonicalText, isFunction, isPlainObject } from "@noobot/shared/value";
 import { createMainFlowControlState } from "./main-flow-control.js";
 import { createMessageEventStreamState } from "../events/message-event-stream.js";
 
 export const RUNTIME_CONTEXT_INPUT_FIELDS = Object.freeze([
   "basePath",
+  "workspaceRootDirectory",
   "globalConfig",
   "userConfig",
   "eventListener",
@@ -45,6 +46,15 @@ const RUNTIME_CONTEXT_PLAIN_OBJECT_FIELDS = Object.freeze([
   "systemRuntime",
   "sharedTools",
 ]);
+export const RUNTIME_ATTACHMENT_SERVICE_METHODS = Object.freeze([
+  "getAttachmentById",
+  "readAttachmentMetas",
+  "readAttachmentContent",
+  "openAttachmentStream",
+  "ingest",
+  "ingestGeneratedArtifacts",
+  "linkParsedResultToAttachment",
+]);
 
 function assertRuntimeContextInput(input) {
   if (!isPlainObject(input)) throw new TypeError("createRuntimeContext requires an input object");
@@ -57,6 +67,10 @@ function assertRuntimeContextInput(input) {
       throw new TypeError(`createRuntimeContext ${field} must be a string`);
     }
   }
+
+  if (!isCanonicalText(input.workspaceRootDirectory)) {
+    throw new TypeError("createRuntimeContext workspaceRootDirectory must be canonical text");
+  }
   for (const field of RUNTIME_CONTEXT_PLAIN_OBJECT_FIELDS) {
     if (!isPlainObject(input[field])) {
       throw new TypeError(`createRuntimeContext ${field} must be a plain object`);
@@ -64,6 +78,14 @@ function assertRuntimeContextInput(input) {
   }
   if (!Array.isArray(input.userMessageAttachments)) {
     throw new TypeError("createRuntimeContext userMessageAttachments must be an array");
+  }
+  const missingAttachmentMethods = RUNTIME_ATTACHMENT_SERVICE_METHODS.filter(
+    (method) => !isFunction(input.attachmentService?.[method]),
+  );
+  if (missingAttachmentMethods.length) {
+    throw new TypeError(
+      `createRuntimeContext attachmentService requires: ${missingAttachmentMethods.join(",")}`,
+    );
   }
   const envelopeOnly = ENVELOPE_ONLY_IDENTITY_FIELDS.filter((field) =>
     Object.hasOwn(input.systemRuntime, field),
@@ -90,6 +112,7 @@ export function createRuntimeContext(input) {
   input.systemRuntime.messageEventStream = createMessageEventStreamState();
   return {
     basePath: input.basePath,
+    workspaceRootDirectory: input.workspaceRootDirectory,
     globalConfig: input.globalConfig,
     userConfig: input.userConfig,
     eventListener: input.eventListener,

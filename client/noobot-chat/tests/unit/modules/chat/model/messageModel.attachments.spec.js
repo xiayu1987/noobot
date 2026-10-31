@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
+import { TRANSFER_REASON, TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import { buildViewMessage } from "../../../../../src/modules/chat/model/messageModel.js";
 
 describe("messageModel attachment normalization", () => {
@@ -63,7 +64,7 @@ describe("messageModel attachment normalization", () => {
     );
   });
 
-  it("projects canonical tool result attachments that carry protocol nested identity", () => {
+  it("projects tool output attachments from message-level transfer envelopes", () => {
     const viewMessage = buildViewMessage(
       {
         role: "assistant",
@@ -71,11 +72,21 @@ describe("messageModel attachment normalization", () => {
         sessionId: "session-a",
         dialogProcessId: "dp-a",
         turnScopeId: "turn-a",
-        toolTimeline: [
+        transferEnvelopes: [
           {
-            tool: "write_file",
-            status: "completed",
-            resultEvent: {
+            protocol: "noobot.semantic-transfer",
+            version: TRANSFER_VERSION,
+            transferId: "transfer:assistant-a:tool:call-a:output",
+            presentationMessageId: "assistant-a",
+            identity: {
+              sessionId: "session-a",
+              turnScopeId: "turn-a",
+              runId: "run-a",
+              producer: { type: "tool", id: "call-a" },
+            },
+            direction: "output",
+            payload: {
+              mode: "attachment",
               attachments: [
                 {
                   identity: {
@@ -90,7 +101,17 @@ describe("messageModel attachment normalization", () => {
                 },
               ],
             },
+            intent: {
+              source: "tool",
+              reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
+              scenario: "tool",
+              strategy: "tool_result_text",
+            },
+            meta: {},
           },
+        ],
+        toolTimeline: [
+          { tool: "execute_script", status: "completed", resultEvent: { eventId: "result-a" } },
         ],
       },
       { sessionId: "session-a", userId: "admin" },

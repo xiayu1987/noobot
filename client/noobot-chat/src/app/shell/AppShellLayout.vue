@@ -542,8 +542,6 @@ defineExpose({
   min-height: 0;
   width: 100%;
   background-color: var(--noobot-surface-sidebar);
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   overflow: hidden;
   color: var(--noobot-text-main);
   position: relative;

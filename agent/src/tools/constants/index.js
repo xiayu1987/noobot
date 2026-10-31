@@ -5,6 +5,7 @@
  */
 
 export { WEB_SEARCH_MODE } from "@noobot/agent-config-protocol";
+import { TASK_CHECK_TOOL_NAME } from "@noobot/context-protocol/task/check-receipt";
 
 export const TOOL_POLICY_MODE = Object.freeze({
   CUSTOM_ONLY: "custom_only",
@@ -27,25 +28,11 @@ export const TOOL_NAME = Object.freeze({
   MULTIMODAL_GENERATE: "multimodal_generate",
   MULTIMODAL_PARSE: "multimodal_parse",
   TASK_SUMMARY: "task_summary",
-  TASK_CHECK: "task_check",
+  TASK_CHECK: TASK_CHECK_TOOL_NAME,
   HELP: "help",
 });
 
 export const CONTROL_TOOL_NAMES = Object.freeze([TOOL_NAME.TASK_SUMMARY, TOOL_NAME.TASK_CHECK]);
-
-export const TOOL_RESULT_STATE = Object.freeze({
-  OK: "OK",
-});
-
-export const TOOL_RESULT_STATUS = Object.freeze({
-  RUNNING: "running",
-  COMPLETED: "completed",
-  FAILED: "failed",
-  PARTIAL_FAILED: "partial_failed",
-  FINALIZE: "finalize",
-  OK: "ok",
-  ERROR: "error",
-});
 
 export const ARTIFACT_GENERATION_SOURCE = Object.freeze({
   MULTIMODAL_GENERATE_TOOL: "multimodal_generate_tool",

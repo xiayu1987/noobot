@@ -100,7 +100,6 @@ test("auth defaults to configured super admin; --user runs as that user", () => 
   const base = {
     superUserId: "admin",
     superAdminRole: "super_admin",
-    isForbiddenUserScope: () => false,
   };
   assert.deepEqual(resolveCliAuthInfo({ ...base, userId: "" }), {
     userId: "admin",
@@ -111,10 +110,6 @@ test("auth defaults to configured super admin; --user runs as that user", () => 
     role: "user",
   });
   assert.throws(() => resolveCliAuthInfo({ ...base, superUserId: "" }), CliUsageError);
-  assert.throws(
-    () => resolveCliAuthInfo({ ...base, userId: "bob", isForbiddenUserScope: () => true }),
-    /forbidden/,
-  );
 });
 
 test("session target: new, -c latest, -r existing", async () => {

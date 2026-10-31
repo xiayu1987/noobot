@@ -17,6 +17,8 @@ import { SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION } from "../../src/session/sessio
 import {
   withTempWorkspace,
   canonicalActivity,
+  canonicalToolTimelineItem,
+  fileToolResultText,
   canonicalMessages,
 } from "./session-repository-boundary.summaries.fixtures.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
@@ -115,11 +117,13 @@ test("session display summary should keep chat view lightweight and rebuild stal
           ],
         },
         {
+          attachments: [],
           role: "system",
           injectedMessage: true,
           content: "injected secret should not be in summary",
         },
         {
+          attachments: [],
           modelMessageId: "a1",
           presentationMessageId: "a1",
           role: "assistant",
@@ -138,19 +142,23 @@ test("session display summary should keep chat view lightweight and rebuild stal
             }),
           ],
           toolTimeline: [
-            {
-              key: "call:call-1",
+            canonicalToolTimelineItem({
               toolCallId: "call-1",
-              status: "completed",
+              tool: "read_file",
+              args: { filePath: "notes.txt" },
               call: { eventId: "tool-call-1" },
+              result: fileToolResultText("notes.txt", { content: "notes" }),
+              success: true,
               resultEvent: { eventId: "tool-result-1" },
-            },
+            }),
           ],
+          type: "tool_call",
           tool_calls: [
             { id: "call-1", function: { name: "write_file", arguments: { path: "/tmp/a" } } },
           ],
           rawMessages: [
             {
+              attachments: [],
               role: "assistant",
               presentationMessageId: "pm_fx1",
               modelMessageId: "mm_session_repository_bound_1",
@@ -178,6 +186,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
           ],
         },
         {
+          attachments: [],
           role: "tool",
           presentationMessageId: "a1",
           type: "tool_result",
@@ -192,6 +201,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
           }),
         },
         {
+          attachments: [],
           role: "tool",
           presentationMessageId: "pm_fx4",
           type: "tool_result",
@@ -199,6 +209,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
           content: "ordinary tool result should not be in summary".repeat(20),
         },
         {
+          attachments: [],
           modelMessageId: "w1",
           role: "assistant",
           type: "workflow",
@@ -251,6 +262,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
           transferEnvelopes: [workflowTransferEnvelope],
         },
         {
+          attachments: [],
           userMessageId: "u2",
           role: "user",
           messageOrigin: "natural",
@@ -259,6 +271,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
           content: "run tool only thinking details",
         },
         {
+          attachments: [],
           modelMessageId: "tool-display-assistant",
           presentationMessageId: "tool-display-assistant",
           role: "assistant",
@@ -266,22 +279,25 @@ test("session display summary should keep chat view lightweight and rebuild stal
           dialogProcessId: "dp-tool-only",
           content: "tool only final answer",
           toolTimeline: [
-            {
-              key: "call:tool-only-1",
+            canonicalToolTimelineItem({
               toolCallId: "tool-only-1",
-              status: "running",
+              tool: "read_file",
+              args: { filePath: "a.txt" },
               call: { eventId: "tool-only-call-1" },
-            },
-            {
-              key: "call:tool-only-2",
+            }),
+            canonicalToolTimelineItem({
               toolCallId: "tool-only-2",
-              status: "completed",
+              tool: "read_file",
+              args: { filePath: "b.txt" },
               call: { eventId: "tool-only-call-2" },
+              result: fileToolResultText("b.txt", { content: "b" }),
+              success: true,
               resultEvent: { eventId: "tool-only-result-2" },
-            },
+            }),
           ],
         },
         {
+          attachments: [],
           role: "assistant",
           presentationMessageId: "pm_fx5",
           modelMessageId: "mm_session_repository_bound_2",
@@ -293,6 +309,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
           ],
         },
         {
+          attachments: [],
           role: "tool",
           presentationMessageId: "pm_fx6",
           type: "tool_result",

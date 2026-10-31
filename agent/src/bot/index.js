@@ -98,9 +98,9 @@ export class BotManager {
   async replaceSessionTurn(payload = {}) {
     const userId = text(payload?.userId);
     const sessionId = text(payload?.sessionId);
-    const attachments = Array.isArray(payload?.attachments) ? payload.attachments : undefined;
+    const { attachments } = payload;
     let canonicalAttachments = attachments;
-    if (attachments?.length) {
+    if (attachments.length) {
       await this.ensureUserWorkspace(userId);
       canonicalAttachments = await resolveAttachments({
         attachmentService: this.attach,
@@ -109,10 +109,7 @@ export class BotManager {
         sessionId,
       });
     }
-    return this.session.replaceTurn({
-      ...payload,
-      ...(canonicalAttachments !== undefined ? { attachments: canonicalAttachments } : {}),
-    });
+    return this.session.replaceTurn({ ...payload, attachments: canonicalAttachments });
   }
 
   getAttachmentById({ userId, attachmentId, sessionId = "", attachmentSource = "" }) {

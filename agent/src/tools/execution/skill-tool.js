@@ -16,6 +16,7 @@ import { createWorkspaceIoExecutor } from "../core/workspace-io-executor.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { TOOL_NAME } from "../constants/index.js";
+import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { resolveToolExecutionPolicy } from "@noobot/execution-isolation-protocol";
 import { text } from "@noobot/shared/value";
 
@@ -41,7 +42,7 @@ async function resolveSkillPath({ filePath, skillRoot, agentContext }) {
 }
 
 function isMissingFileError(error) {
-  return error?.code === "RECOVERABLE_FILE_NOT_FOUND";
+  return error?.code === ERROR_CODE.RECOVERABLE_FILE_NOT_FOUND;
 }
 
 export function createSkillTool({ agentContext }) {
@@ -117,7 +118,7 @@ export function createSkillTool({ agentContext }) {
         }
       }
 
-      return toToolJsonResult(TOOL_NAME.LIST_SKILLS, { ok: true, items, resources }, true);
+      return toToolJsonResult(TOOL_NAME.LIST_SKILLS, { ok: true, items, resources });
     },
     {
       name: TOOL_NAME.LIST_SKILLS,

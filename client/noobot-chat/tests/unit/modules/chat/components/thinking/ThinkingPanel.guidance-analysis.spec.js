@@ -126,6 +126,9 @@ describe("ThinkingPanel canonical analysis timeline", () => {
     const toolTimeline = Array.from({ length: 2000 }, (_, index) => ({
       key: `call:tool-${index}`,
       toolCallId: `tool-${index}`,
+      tool: "read_file",
+      args: { filePath: `docs/tool-${index}.md` },
+      riskLevel: "",
       status: "running",
       call: {
         eventId: `tool-event-${index}`,
@@ -134,7 +137,6 @@ describe("ThinkingPanel canonical analysis timeline", () => {
         sequenceDomain: "message-event",
         authority: "authoritative",
         timestamp: `2026-07-25T01:00:00.${String(index % 1000).padStart(3, "0")}Z`,
-        log: { event: "tool_call", type: "tool_call", text: `tool ${index}` },
       },
     }));
     const wrapper = mountThinkingPanel(

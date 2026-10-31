@@ -123,7 +123,7 @@ export function registerLogWebSocketServer(
         logDiagnostic("received", { count: events.length });
         const records = events.map((item) => ({
           ...item,
-          userId: request.auth?.userId || item.userId,
+          userId: request.auth.userId,
         }));
 
         for (const record of records) normalizeRuntimeEventEnvelope(record);

@@ -28,21 +28,9 @@ import {
 import { mergeSessionDeletionIds } from "@noobot/hook-protocol";
 import { pipeline } from "node:stream/promises";
 import { text } from "@noobot/shared/value";
+import { buildContentDisposition } from "./content-disposition.js";
 
 const HTTP_SESSION_PERSISTENCE_SCOPE = null;
-
-function buildContentDisposition(type, fileName) {
-  const name = String(fileName);
-  const encoded = encodeURIComponent(name).replace(
-    /['()*]/g,
-    (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
-  );
-  const fallback = Array.from(name, (char) => {
-    const code = char.charCodeAt(0);
-    return code < 32 || code > 126 || [34, 37, 92].includes(code) ? "_" : char;
-  }).join("");
-  return `${type}; filename="${fallback}"; filename*=UTF-8''${encoded}`;
-}
 
 function decodeSessionCommand(body, { type, userId, sessionId }) {
   const command = decodeRequestInput(() => assertSessionCommand(body));
@@ -335,10 +323,9 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
       turnScopeId: text(command.payload.turnScopeId),
       expectedAggregateVersion: command.expectedAggregateVersion,
       commandId: command.commandId,
+      attachments: command.payload.attachments,
       persistenceScope: HTTP_SESSION_PERSISTENCE_SCOPE,
     };
-    if (Array.isArray(command.payload.attachments))
-      payload.attachments = command.payload.attachments;
     const response = requireTurnReplaceResponse(await bot.replaceSessionTurn(payload));
     const commit = response.turnReplacement;
     const lifecycleSnapshot = selectMainSessionDetailEntry(response.detail).turnLifecycleSnapshot;

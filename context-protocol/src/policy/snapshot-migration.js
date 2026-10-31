@@ -15,6 +15,8 @@ import {
 import {
   MESSAGE_IDENTITY_STORE,
   MESSAGE_REMOVED_FIELD_NAME,
+  judgeMessageFieldRemoval,
+  messageFieldRemovalsFor,
   messageFieldRenamesFor,
 } from "@noobot/session-protocol/message-identity-schema";
 import { isPlainObject, text } from "@noobot/shared/value";
@@ -287,6 +289,45 @@ function migrateSnapshotV4(snapshot) {
   };
 }
 
+const V6_FIELD_REMOVALS = messageFieldRemovalsFor(MESSAGE_IDENTITY_STORE.MODEL_CONTEXT_SNAPSHOT);
+
+function migrateV5Message(message, at) {
+  if (!isPlainObject(message)) throw unmappable(5, "message_not_object", { at });
+  const metadata = isPlainObject(message.additional_kwargs) ? message.additional_kwargs : {};
+  const role = V3_RAW_ROLE_BY_TYPE[message.type];
+  if (!role) throw unmappable(5, "message_type_unknown", { at, type: message.type });
+  const next = { ...metadata };
+  for (const removal of V6_FIELD_REMOVALS) {
+    const judgment = judgeMessageFieldRemoval(metadata, role, removal);
+    if (judgment.rejection) {
+      throw unmappable(5, judgment.rejection, { at, field: removal.field, role });
+    }
+    if (judgment.remove) delete next[removal.field];
+  }
+  return { ...message, additional_kwargs: next };
+}
+
+function migrateSnapshotV5(snapshot) {
+  if (!isPlainObject(snapshot?.messageBlocks)) throw unmappable(5, "message_blocks_missing");
+  const messageBlocks = {};
+  for (const block of SNAPSHOT_BLOCKS) {
+    const messages = snapshot.messageBlocks[block];
+    if (!Array.isArray(messages)) throw unmappable(5, "message_block_missing", { block });
+    messageBlocks[block] = messages.map((message, index) =>
+      migrateV5Message(message, `${block}[${index}]`),
+    );
+  }
+  if (!sameJson(snapshot.messages, composeMessagesFromBlocks(snapshot.messageBlocks))) {
+    throw unmappable(5, "messages_not_composed_from_blocks");
+  }
+  return {
+    ...snapshot,
+    version: 6,
+    messageBlocks,
+    messages: composeMessagesFromBlocks(messageBlocks),
+  };
+}
+
 export const MODEL_CONTEXT_SNAPSHOT_VERSION_CHAIN = defineVersionChain({
   kind: MODEL_CONTEXT_SNAPSHOT_MIGRATION_KIND,
   currentVersion: SNAPSHOT_VERSION,
@@ -294,6 +335,7 @@ export const MODEL_CONTEXT_SNAPSHOT_VERSION_CHAIN = defineVersionChain({
   steps: [
     { from: 3, to: 4, migrate: migrateSnapshotV3 },
     { from: 4, to: 5, migrate: migrateSnapshotV4 },
+    { from: 5, to: 6, migrate: migrateSnapshotV5 },
   ],
 });
 

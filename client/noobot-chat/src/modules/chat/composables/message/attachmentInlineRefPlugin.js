@@ -10,8 +10,12 @@ import {
   parseAttachmentIdentityRef,
   projectAttachmentIdentity,
 } from "@noobot/attachment-protocol/identity";
-import { resolveLinkedAttachment } from "@noobot/attachment-protocol";
-import { isAbsolutePathForPlatform } from "@noobot/path-resolver/syntax";
+import {
+  isFileLinkHref,
+  mutationLinkRef,
+  RESOURCE_LINK_STATUS,
+  resolveLinkedResource,
+} from "@noobot/path-resolver/resource-link";
 import { text } from "@noobot/shared/value";
 
 const ATTACHMENT_INLINE_TOKEN = "noobot_attachment_ref";
@@ -55,37 +59,75 @@ export function buildAttachmentRefIndex(attachmentItems = []) {
     }
     index.set(attachmentIdentityKey(identity), {
       ...identity,
-      name: text(attachmentItem?.name || attachmentItem?.fileName),
-      ...(text(attachmentItem?.sourcePath) ? { sourcePath: text(attachmentItem.sourcePath) } : {}),
+      name: text(attachmentItem.name),
     });
   }
   return index;
 }
 
 function lookupAttachment(env, identity) {
-  const index = env?.attachmentRefIndex;
-  if (!(index instanceof Map)) return null;
+  const index = env.attachmentRefIndex;
+  if (index === null) return null;
   return index.get(attachmentIdentityKey(identity)) || null;
 }
 
-function renderResolvedChip({ ref, label }) {
+function supersededAttributes(superseded) {
+  if (!superseded) return "";
+  return ' data-noobot-link-superseded="true"';
+}
+
+function chipTitle(env, title, superseded) {
+  return superseded ? `${title} · ${env.translate("message.fileLinkSuperseded")}` : title;
+}
+
+function renderResolvedChip(env, { ref, label, superseded }) {
   return [
     '<a class="noobot-attachment-chip" href="#" role="button"',
-    ` data-noobot-attachment-ref="${escapeHtmlAttribute(ref)}" title="${escapeHtmlAttribute(label)}">`,
+    ` data-noobot-attachment-ref="${escapeHtmlAttribute(ref)}"${supersededAttributes(superseded)}`,
+    ` title="${escapeHtmlAttribute(chipTitle(env, label, superseded))}">`,
     `<span class="noobot-attachment-chip__icon" aria-hidden="true">📎</span>`,
     `<span class="noobot-attachment-chip__name">${escapeHtmlAttribute(label)}</span>`,
     "</a>",
   ].join("");
 }
 
-function renderMissingChip({ label, reason }) {
+function renderMutationChip(env, { mutationRef, label, superseded }) {
+  return [
+    '<a class="noobot-attachment-chip" href="#" role="button"',
+    ` data-noobot-mutation-ref="${escapeHtmlAttribute(mutationLinkRef(mutationRef))}"`,
+    supersededAttributes(superseded),
+    ` title="${escapeHtmlAttribute(chipTitle(env, mutationRef.fileName, superseded))}">`,
+    `<span class="noobot-attachment-chip__icon" aria-hidden="true">📄</span>`,
+    `<span class="noobot-attachment-chip__name">${escapeHtmlAttribute(label)}</span>`,
+    "</a>",
+  ].join("");
+}
+
+function renderMissingChip(env, { label, reason }) {
   return [
     `<span class="noobot-attachment-chip noobot-attachment-chip--missing"`,
     ` data-attachment-missing-reason="${escapeHtmlAttribute(reason)}"`,
-    ` title="${escapeHtmlAttribute(reason)}">`,
+    ` title="${escapeHtmlAttribute(env.translate(`message.fileLinkUnavailable.${reason}`))}">`,
     `<span class="noobot-attachment-chip__icon" aria-hidden="true">📎</span>`,
     `<span class="noobot-attachment-chip__name">${escapeHtmlAttribute(label)}</span>`,
     "</span>",
+  ].join("");
+}
+
+function renderLatestChip(env, latest) {
+  if (!latest) return "";
+  if (latest.identity && !lookupAttachment(env, latest.identity)) return "";
+  const dataAttribute = latest.mutationRef
+    ? ` data-noobot-mutation-ref="${escapeHtmlAttribute(mutationLinkRef(latest.mutationRef))}"`
+    : ` data-noobot-attachment-ref="${escapeHtmlAttribute(latest.ref)}"`;
+  const label = env.translate("message.fileLinkLatest");
+  return [
+    '<a class="noobot-attachment-chip noobot-attachment-chip--latest" href="#" role="button"',
+    dataAttribute,
+    ` title="${escapeHtmlAttribute(label)}">`,
+    `<span class="noobot-attachment-chip__icon" aria-hidden="true">↻</span>`,
+    `<span class="noobot-attachment-chip__name">${escapeHtmlAttribute(label)}</span>`,
+    "</a>",
   ].join("");
 }
 
@@ -136,49 +178,33 @@ function rewriteAttachmentTextTokens(state) {
   }
 }
 
-function isFileLinkHref(href) {
-  if (!href || href.startsWith("#") || href.startsWith("//")) return false;
-  return !/^[a-z][a-z0-9+.-]*:/i.test(href) || isAbsolutePathForPlatform(href);
-}
-
-function sourcePathDescriptors(env) {
-  const index = env?.attachmentRefIndex;
-  if (!(index instanceof Map)) return [];
-  return [...index.values()]
-    .filter((entry) => entry.sourcePath)
-    .map((entry) => ({
-      identity: {
-        attachmentId: entry.attachmentId,
-        sessionId: entry.sessionId,
-        attachmentSource: entry.attachmentSource,
-      },
-      sourcePath: entry.sourcePath,
-    }));
-}
-
-function decodeLinkPath(href) {
-  try {
-    return decodeURIComponent(href);
-  } catch {
-    return null;
+function downloadableTarget(linked) {
+  if (linked.status === RESOURCE_LINK_STATUS.MUTATION) {
+    return { mutationRef: linked.mutationRef, superseded: linked.superseded };
   }
+  if (linked.status === RESOURCE_LINK_STATUS.ATTACHMENT) {
+    return {
+      ref: formatAttachmentIdentityRef(linked.identity),
+      identity: linked.identity,
+      superseded: linked.superseded,
+    };
+  }
+  return null;
 }
 
 function resolveLinkTarget(href, env) {
   if (href.startsWith(ATTACHMENT_IDENTITY_REF_PREFIX)) {
     const identity = resolveIdentity(href);
-    return identity ? { ref: href, identity } : null;
+    return identity ? { ref: href, identity, superseded: false } : null;
   }
   if (!isFileLinkHref(href)) return null;
-  const path = decodeLinkPath(href);
-  const linked =
-    path === null
-      ? { status: "unregistered" }
-      : resolveLinkedAttachment(path, sourcePathDescriptors(env));
-  if (linked.status === "bound") {
-    return { ref: formatAttachmentIdentityRef(linked.identity), identity: linked.identity };
-  }
-  return { unregistered: true, href };
+  const linked = resolveLinkedResource(href, env.linkSnapshots, {
+    messageIndex: env.messageIndex,
+    workspaceRootDirectory: env.workspaceRootDirectory,
+  });
+  const latest = linked.latest ? downloadableTarget(linked.latest) : null;
+  const target = downloadableTarget(linked) || { unavailableReason: linked.reason, href };
+  return { ...target, latest };
 }
 
 function rewriteAttachmentLinkTokens(state) {
@@ -217,26 +243,40 @@ function rewriteAttachmentLinkTokens(state) {
 
 function renderAttachmentToken(tokens, idx, _options, env) {
   const meta = tokens[idx]?.meta || {};
-  const { identity, ref, label } = meta;
-  if (meta.unregistered) {
-    return renderMissingChip({ label: label || meta.href, reason: "attachment_not_registered" });
+  return renderPrimaryChip(env, meta) + renderLatestChip(env, meta.latest || null);
+}
+
+function renderPrimaryChip(env, meta) {
+  const { identity, ref, label, superseded } = meta;
+  if (meta.unavailableReason) {
+    return renderMissingChip(env, { label: label || meta.href, reason: meta.unavailableReason });
+  }
+  if (meta.mutationRef) {
+    return renderMutationChip(env, {
+      mutationRef: meta.mutationRef,
+      label: label || meta.mutationRef.fileName,
+      superseded,
+    });
   }
   if (!identity) return escapeHtmlAttribute(ref || "");
 
   const matched = lookupAttachment(env, identity);
   if (!matched) {
-    return renderMissingChip({
+    return renderMissingChip(env, {
       label: label || identity.attachmentId,
       reason: "attachment_not_available",
     });
   }
-  return renderResolvedChip({
+  return renderResolvedChip(env, {
     ref,
     label: label || matched.name || identity.attachmentId,
+    superseded: superseded === true,
   });
 }
 
 export function attachmentInlineRefPlugin(md) {
+  const validateLink = md.validateLink.bind(md);
+  md.validateLink = (url) => isFileLinkHref(url) || validateLink(url);
   md.core.ruler.push(`${ATTACHMENT_INLINE_TOKEN}_links`, rewriteAttachmentLinkTokens);
   md.core.ruler.push(`${ATTACHMENT_INLINE_TOKEN}_text`, rewriteAttachmentTextTokens);
   md.renderer.rules[ATTACHMENT_INLINE_TOKEN] = renderAttachmentToken;

@@ -119,7 +119,7 @@ export const INVOCATION_TOOL_SCHEMA = {
       },
       outputFiles: {
         key: "tools.script.fieldOutputFiles",
-        text: "Absolute paths of deliverable output files, written in this tool's execution view. After the command runs they are registered as attachment snapshots and the result returns attachment references; cite the attachment in your reply, since undeclared files cannot be downloaded.",
+        text: "Absolute paths of deliverable output files, written in this tool's execution view. After the command runs they are registered as attachment snapshots and the result returns attachment references; link the file in your reply by copying the returned attachment reference verbatim, since undeclared files cannot be downloaded.",
       },
       riskLevel: {
         key: "tools.script.fieldRiskLevel",

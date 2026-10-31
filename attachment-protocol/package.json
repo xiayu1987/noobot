@@ -12,6 +12,7 @@
     "./lifecycle": "./src/lifecycle/index.js",
     "./persistence": "./src/persistence/index.js",
     "./mime": "./src/mime.js",
+    "./errors": "./src/errors.js",
     "./package.json": "./package.json"
   },
   "scripts": {

@@ -17,7 +17,10 @@ import {
 import { saveStoppedModelMessageSnapshot } from "../../src/runtime/resume/model-message-snapshot-store.js";
 import { initializeSessionTree, persistSession } from "../helpers/runtime-events-env.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
-import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
+import {
+  createTestRuntimeContext,
+  createTestAttachmentService,
+} from "../helpers/test-runtime-context.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { readContextMessageValue } from "@noobot/context-protocol/message/codec";
 
@@ -190,11 +193,11 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
   };
   const captured = [];
   const contextBuilder = {
-    attachmentService: {
+    attachmentService: createTestAttachmentService({
       async ingest() {
         throw new Error("fixture has no raw attachments");
       },
-    },
+    }),
     async buildExistingSessionContext() {
       throw new Error("stopped resume must not rebuild Context from Session history");
     },
@@ -265,7 +268,7 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
 
 test("prepareTurnInput ingests raw attachments once and keeps canonical ones as-is", async () => {
   const ingestCalls = [];
-  const attachmentService = {
+  const attachmentService = createTestAttachmentService({
     async ingest(payload) {
       ingestCalls.push(payload);
       return [
@@ -279,7 +282,7 @@ test("prepareTurnInput ingests raw attachments once and keeps canonical ones as-
         },
       ];
     },
-  };
+  });
 
   const { userMessageAttachments: attachments } = await prepareTurnInput({
     attachmentService,
@@ -357,11 +360,11 @@ test("stopped snapshot resume restores turn progress onto the live system runtim
     },
   };
   const contextBuilder = {
-    attachmentService: {
+    attachmentService: createTestAttachmentService({
       async ingest() {
         throw new Error("fixture has no raw attachments");
       },
-    },
+    }),
     async buildAgentContext() {
       return createTestAgentExecutionScope(createTestRuntimeContext({ systemRuntime }));
     },

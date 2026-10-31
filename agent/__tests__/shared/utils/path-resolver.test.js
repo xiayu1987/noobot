@@ -346,10 +346,11 @@ test("sandbox mount targets are shared by all file-related tools through global 
     sandboxProject.resolvedPath,
     "/host/projects/noobot/client/noobot-chat/src/app/App.vue",
   );
-  assert.equal(sandboxProject.logicalPath, "/project/client/noobot-chat/src/app/App.vue");
-  assert.equal(sandboxProject.executionRoot, "/host/projects/noobot");
-  assert.equal(sandboxProject.mountTarget, "/project");
-  assert.equal(sandboxProject.mountReadOnly, true);
+  assert.deepEqual(sandboxProject.mountPathRef, {
+    view: "mount",
+    mount: "/project",
+    path: "client/noobot-chat/src/app/App.vue",
+  });
 
   const arbitraryMount = resolveToolInputPath({
     inputPath: "/shared-assets/images/a.png",
@@ -374,7 +375,11 @@ test("sandbox mount targets are shared by all file-related tools through global 
   });
   assert.equal(arbitraryMount.ok, true);
   assert.equal(arbitraryMount.resolvedPath, "/host/assets/images/a.png");
-  assert.equal(arbitraryMount.logicalPath, "/shared-assets/images/a.png");
+  assert.deepEqual(arbitraryMount.mountPathRef, {
+    view: "mount",
+    mount: "/shared-assets",
+    path: "images/a.png",
+  });
 });
 
 test("sandbox paths require an explicit sandbox-capable caller", () => {

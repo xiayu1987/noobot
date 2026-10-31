@@ -193,6 +193,12 @@ test("layout upgrades run every step above the installed version and end at the 
       "session-retired-task-fields-v16",
       "execution-event-index-v3-v17",
       "session-task-artifact-retired-v18",
+      "model-context-snapshot-v19",
+      "session-mutation-refs-v20",
+      "session-activity-timeline-v21",
+      "session-tool-result-v22",
+      "session-script-exit-code-v23",
+      "session-legacy-mcp-result-v24",
     ],
   );
   assert.deepEqual(
@@ -213,6 +219,12 @@ test("layout upgrades run every step above the installed version and end at the 
       "session-retired-task-fields-v16",
       "execution-event-index-v3-v17",
       "session-task-artifact-retired-v18",
+      "model-context-snapshot-v19",
+      "session-mutation-refs-v20",
+      "session-activity-timeline-v21",
+      "session-tool-result-v22",
+      "session-script-exit-code-v23",
+      "session-legacy-mcp-result-v24",
     ],
   );
   assert.deepEqual(planWorkspaceLayoutUpgrades({ installedVersion: WORKSPACE_LAYOUT_VERSION }), []);

@@ -233,6 +233,7 @@ export function createBaseContext(overrides = {}) {
     sessionId: "s1",
     dialogProcessId: "d1",
     userMessage: "请执行一个工作流",
+    userMessageAttachments: [],
     runConfig: { locale: "zh-CN" },
     ...overrides,
   };

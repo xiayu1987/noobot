@@ -8,7 +8,12 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { run, runFileBacked } from "../../src/tools/execution/script-tool/process-exec.js";
+import { SCRIPT_FAILURE_CODE } from "@noobot/execution-isolation-protocol";
+import {
+  hasCommand,
+  run,
+  runFileBacked,
+} from "../../src/tools/execution/script-tool/process-exec.js";
 
 const MISSING_COMMAND = "noobot-missing-command-for-process-exec-test";
 
@@ -31,7 +36,15 @@ test("run returns exit code and inline output, then removes its output dir", asy
   const result = await run("printf out; printf err >&2; exit 3", root, 5000, null, {
     generatedDataRoot: root,
   });
-  assert.deepEqual(result, { code: 3, stdout: "out", stderr: "err" });
+  assert.deepEqual(result, {
+    ok: false,
+    termination: "exited",
+    exitCode: 3,
+    code: SCRIPT_FAILURE_CODE.exited,
+    error: "script exited with code 3",
+    stdout: "out",
+    stderr: "err",
+  });
   const foregroundDir = path.join(root, ".execute-script-foreground");
   assert.deepEqual(await fs.readdir(foregroundDir), []);
 });
@@ -45,17 +58,27 @@ test("run passes object command args without shell interpretation", async (t) =>
     null,
     { generatedDataRoot: root },
   );
-  assert.deepEqual(result, { code: 0, stdout: "a b;$x", stderr: "" });
+  assert.deepEqual(result, {
+    ok: true,
+    termination: "exited",
+    exitCode: 0,
+    stdout: "a b;$x",
+    stderr: "",
+  });
 });
 
-test("run reports spawn failures through code and stderr", async (t) => {
+test("run reports spawn failures as a failed outcome without an exit code", async (t) => {
   const root = await createRoot(t);
   const result = await run({ command: MISSING_COMMAND }, root, 5000, null, {
     generatedDataRoot: root,
   });
-  assert.equal(result.code, -2);
+  assert.equal(result.ok, false);
+  assert.equal(result.termination, "spawn_failed");
+  assert.equal(result.code, SCRIPT_FAILURE_CODE.spawn_failed);
+  assert.equal(result.exitCode, undefined);
+  assert.equal(result.error, `spawn ${MISSING_COMMAND} ENOENT`);
   assert.equal(result.stdout, "");
-  assert.equal(result.stderr, `spawn ${MISSING_COMMAND} ENOENT`);
+  assert.equal(result.stderr, "");
 });
 
 test("run rejects object commands without an executable", async (t) => {
@@ -72,7 +95,9 @@ test("runFileBacked keeps output files and reports their sizes", async (t) => {
   const result = await runFileBacked("printf out; printf err >&2; exit 2", root, 5000, null, {
     generatedDataRoot: root,
   });
-  assert.equal(result.code, 2);
+  assert.equal(result.ok, false);
+  assert.equal(result.exitCode, 2);
+  assert.equal(result.code, SCRIPT_FAILURE_CODE.exited);
   assert.equal(result.stdoutBytes, 3);
   assert.equal(result.stderrBytes, 3);
   assert.equal(result.signal, undefined);
@@ -81,27 +106,28 @@ test("runFileBacked keeps output files and reports their sizes", async (t) => {
   assert.deepEqual(await readOutputs(result), { stdout: "out", stderr: "err" });
 });
 
-test("runFileBacked writes spawn failure message into the stderr file", async (t) => {
+test("runFileBacked reports spawn failure through the outcome, not the stderr file", async (t) => {
   const root = await createRoot(t);
   const result = await runFileBacked({ command: MISSING_COMMAND }, root, 5000, null, {
     generatedDataRoot: root,
   });
-  const expected = `spawn ${MISSING_COMMAND} ENOENT`;
-  assert.equal(result.code, -2);
+  assert.equal(result.code, SCRIPT_FAILURE_CODE.spawn_failed);
+  assert.equal(result.exitCode, undefined);
+  assert.equal(result.error, `spawn ${MISSING_COMMAND} ENOENT`);
   assert.equal(result.stdoutBytes, 0);
-  assert.equal(result.stderrBytes, Buffer.byteLength(expected));
-  assert.deepEqual(await readOutputs(result), { stdout: "", stderr: expected });
+  assert.equal(result.stderrBytes, 0);
 });
 
-test("runFileBacked writes timeout message and returns 124", async (t) => {
+test("runFileBacked reports timeout through the protocol outcome", async (t) => {
   if (process.platform === "win32") return t.skip("POSIX process-group semantics");
   const root = await createRoot(t);
   const result = await runFileBacked("sleep 5", root, 50, null, { generatedDataRoot: root });
-  assert.equal(result.code, 124);
-  assert.equal((await readOutputs(result)).stderr, "command timed out after 50ms");
+  assert.equal(result.code, SCRIPT_FAILURE_CODE.timeout);
+  assert.equal(result.error, "command timed out after 50ms");
+  assert.equal((await readOutputs(result)).stderr, "");
 });
 
-test("runFileBacked with a pre-aborted signal writes abort message and returns 130", async (t) => {
+test("runFileBacked with a pre-aborted signal reports an aborted outcome", async (t) => {
   if (process.platform === "win32") return t.skip("POSIX process-group semantics");
   const root = await createRoot(t);
   const controller = new AbortController();
@@ -109,8 +135,8 @@ test("runFileBacked with a pre-aborted signal writes abort message and returns 1
   const result = await runFileBacked("sleep 5", root, 5000, controller.signal, {
     generatedDataRoot: root,
   });
-  assert.equal(result.code, 130);
-  assert.equal((await readOutputs(result)).stderr, "command aborted");
+  assert.equal(result.code, SCRIPT_FAILURE_CODE.aborted);
+  assert.equal(result.error, "command aborted");
 });
 
 test("runFileBacked keeps existing stderr instead of overwriting it on timeout", async (t) => {
@@ -119,6 +145,18 @@ test("runFileBacked keeps existing stderr instead of overwriting it on timeout",
   const result = await runFileBacked("printf early >&2; sleep 5", root, 300, null, {
     generatedDataRoot: root,
   });
-  assert.equal(result.code, 124);
+  assert.equal(result.code, SCRIPT_FAILURE_CODE.timeout);
   assert.equal((await readOutputs(result)).stderr, "early");
+});
+
+test("hasCommand distinguishes installed, missing and failed lookups", async (t) => {
+  if (process.platform === "win32") return t.skip("POSIX lookup executable");
+  assert.equal(await hasCommand("node"), true);
+  assert.equal(await hasCommand(MISSING_COMMAND), false);
+  const originalPath = process.env.PATH;
+  process.env.PATH = "";
+  t.after(() => {
+    process.env.PATH = originalPath;
+  });
+  await assert.rejects(() => hasCommand("node"), { code: "ENOENT" });
 });

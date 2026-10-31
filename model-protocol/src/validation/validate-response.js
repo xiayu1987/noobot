@@ -53,7 +53,7 @@ function rejectUnknownKeys(value, allowedKeys, path) {
     throw new TypeError(`${path} contains unsupported fields: ${unknown.join(", ")}`);
 }
 
-function validateToolCall(value, path) {
+export function validateModelToolCall(value, path = "model tool call") {
   const call = requirePlainObject(value, path);
   rejectUnknownKeys(call, TOOL_CALL_KEYS, path);
   if (typeof call.id !== "string") throw new TypeError(`${path}.id must be a string`);
@@ -76,7 +76,9 @@ function validateOutput(value, path = "model response.output") {
     if (typeof output[key] !== "string") throw new TypeError(`${path}.${key} must be a string`);
   }
   if (!Array.isArray(output.toolCalls)) throw new TypeError(`${path}.toolCalls must be an array`);
-  output.toolCalls.forEach((call, index) => validateToolCall(call, `${path}.toolCalls[${index}]`));
+  output.toolCalls.forEach((call, index) =>
+    validateModelToolCall(call, `${path}.toolCalls[${index}]`),
+  );
   requirePlainObject(output.usage, `${path}.usage`);
   if (output.responseOutput !== undefined && !Array.isArray(output.responseOutput)) {
     throw new TypeError(`${path}.responseOutput must be an array`);

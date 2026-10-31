@@ -12,11 +12,12 @@ import {
   identity,
   transferSemanticContent,
 } from "./helpers/semantic-transfer-helper.js";
+import { createTestAttachmentService } from "../helpers/test-runtime-context.js";
 
 function runtime() {
   return {
     systemRuntime: { userId: "u1", sessionId: "session-test-1" },
-    attachmentService: {
+    attachmentService: createTestAttachmentService({
       async ingestGeneratedArtifacts({ artifacts, sessionId, attachmentSource }) {
         return artifacts.map((artifact, index) => ({
           attachmentId: `tool-input-${index + 1}`,
@@ -27,7 +28,7 @@ function runtime() {
           size: Buffer.from(artifact.contentBase64, "base64").length,
         }));
       },
-    },
+    }),
   };
 }
 

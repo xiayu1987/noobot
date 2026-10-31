@@ -47,20 +47,16 @@ export function useWorkflowMessageCardState(props, emit, translate) {
     },
   );
 
-  const {
-    selectedNodeSessionDocs,
-    displayNodeMessages,
-    nodeSessionAllMessages,
-    selectedActionNodeStates,
-  } = useWorkflowNodeMessages({
-    props,
-    selectedNode,
-    selectedRuntimeNode,
-    selectedNodeMessages,
-    selectedNodeSessionMetadata,
-    selectedNodeSessionId,
-    runningPlaceholderViewModel,
-  });
+  const { selectedNodeSessionDocs, displayNodeMessages, selectedActionNodeStates } =
+    useWorkflowNodeMessages({
+      props,
+      selectedNode,
+      selectedRuntimeNode,
+      selectedNodeMessages,
+      selectedNodeSessionMetadata,
+      selectedNodeSessionId,
+      runningPlaceholderViewModel,
+    });
 
   const {
     fetchSelectedNodeExecutionReport,
@@ -122,7 +118,6 @@ export function useWorkflowMessageCardState(props, emit, translate) {
     semanticPreviewLineCount,
     selectedNodeSessionDocs,
     displayNodeMessages,
-    nodeSessionAllMessages,
     selectedActionNodeStates,
     fetchSelectedNodeExecutionReport,
     handleOpenThinkingDetails,

@@ -20,7 +20,23 @@ import {
   readSessionTurn,
   writeSessionArtifact,
 } from "../../src/session/session-artifact-store.js";
-import { canonicalActivity } from "./session-repository-boundary.summaries.fixtures.js";
+import {
+  canonicalActivity,
+  canonicalToolTimelineItem,
+  fileToolResultText,
+} from "./session-repository-boundary.summaries.fixtures.js";
+
+function completedReadTool(toolCallId, { call, resultEvent }) {
+  return canonicalToolTimelineItem({
+    toolCallId,
+    tool: "read_file",
+    args: { filePath: `${toolCallId}.txt` },
+    call,
+    result: fileToolResultText(`${toolCallId}.txt`, { content: toolCallId }),
+    success: true,
+    resultEvent,
+  });
+}
 import {
   applySessionMessageFacts,
   createTestSessionRequiredFields,
@@ -53,15 +69,22 @@ test("thinking detail message carries its Turn identity without duplicating scop
       dialogProcessId: "dialog-detail",
       messages: [
         {
+          attachments: [],
           messageUid: "final-assistant-source",
           ts: TEST_MESSAGE_TS,
           role: "assistant",
           presentationMessageId: "pm_turn_detail",
           modelMessageId: "mm_session_thinking_detail__1",
           type: "message",
-          toolTimeline: [{ key: "call:one" }],
+          toolTimeline: [
+            completedReadTool("one", {
+              call: { eventId: "call-one" },
+              resultEvent: { eventId: "result-one" },
+            }),
+          ],
         },
         {
+          attachments: [],
           messageUid: "guidance-source",
           ts: TEST_MESSAGE_TS,
           role: "assistant",
@@ -118,6 +141,7 @@ test("thinking detail projects only activity facts, not assistant tool-call cont
       dialogProcessId: "content-dialog",
       messages: [
         {
+          attachments: [],
           messageUid: "assistant-tool-source",
           ts: TEST_MESSAGE_TS,
           modelMessageId: "presentation-content",
@@ -125,7 +149,12 @@ test("thinking detail projects only activity facts, not assistant tool-call cont
           type: "tool_call",
           presentationMessageId: "presentation-content",
           content: "先确认当前真实状态。",
-          toolTimeline: [{ key: "call:one" }],
+          toolTimeline: [
+            completedReadTool("one", {
+              call: { eventId: "call-one" },
+              resultEvent: { eventId: "result-one" },
+            }),
+          ],
           activityTimeline: [
             canonicalActivity({
               eventId: "model-content-event",
@@ -138,6 +167,7 @@ test("thinking detail projects only activity facts, not assistant tool-call cont
           ],
         },
         {
+          attachments: [],
           messageUid: "control-source",
           ts: TEST_MESSAGE_TS,
           role: "user",
@@ -147,6 +177,7 @@ test("thinking detail projects only activity facts, not assistant tool-call cont
           content: "hidden control prompt",
         },
         {
+          attachments: [],
           messageUid: "final-source",
           ts: TEST_MESSAGE_TS,
           role: "assistant",
@@ -175,25 +206,38 @@ test("thinking detail projects the complete Turn timeline onto the Turn presenta
       dialogProcessId: "dialog-workflow-node",
       messages: [
         {
+          attachments: [],
           messageUid: "sm-tool-call-message",
           ts: TEST_MESSAGE_TS,
           role: "assistant",
           presentationMessageId: "final-assistant",
           modelMessageId: "mm_session_thinking_detail__4",
           type: "tool_call",
-          toolTimeline: [{ key: "call:one", status: "running", call: { eventId: "call-start" } }],
+          toolTimeline: [
+            canonicalToolTimelineItem({
+              toolCallId: "one",
+              tool: "read_file",
+              args: { filePath: "one.txt" },
+              call: { eventId: "call-start" },
+            }),
+          ],
         },
         {
+          attachments: [],
           messageUid: "sm-tool-result-message",
           ts: TEST_MESSAGE_TS,
           role: "tool",
           presentationMessageId: "final-assistant",
           type: "tool_result",
           toolTimeline: [
-            { key: "call:one", status: "completed", resultEvent: { eventId: "call-end" } },
+            completedReadTool("one", {
+              call: { eventId: "call-start" },
+              resultEvent: { eventId: "call-end" },
+            }),
           ],
         },
         {
+          attachments: [],
           messageUid: "sm-final-assistant",
           ts: TEST_MESSAGE_TS,
           role: "assistant",
@@ -232,6 +276,7 @@ test("thinking detail revision is the committed Turn journal position", () => {
     dialogProcessId: "revision-dialog",
     messages: [
       {
+        attachments: [],
         role: "assistant",
         presentationMessageId: "pm_fx7",
         modelMessageId: "mm_session_thinking_detail__6",
@@ -259,8 +304,18 @@ test("thinking detail rejects a Turn whose records carry conflicting presentatio
           turnScopeId: "conflict-turn",
           dialogProcessId: "conflict-dialog",
           messages: [
-            { role: "assistant", presentationMessageId: "pm_one", type: "message" },
-            { role: "assistant", presentationMessageId: "pm_two", type: "message" },
+            {
+              attachments: [],
+              role: "assistant",
+              presentationMessageId: "pm_one",
+              type: "message",
+            },
+            {
+              attachments: [],
+              role: "assistant",
+              presentationMessageId: "pm_two",
+              type: "message",
+            },
           ],
         }),
       ),
@@ -276,6 +331,7 @@ test("stopped Turn detail uses the persisted presentation identity without a fin
       dialogProcessId: "stopped-dialog",
       messages: [
         {
+          attachments: [],
           messageUid: "sm-tool-call-message",
           ts: TEST_MESSAGE_TS,
           role: "assistant",
@@ -284,12 +340,10 @@ test("stopped Turn detail uses the persisted presentation identity without a fin
           chatPresentation: false,
           presentationMessageId: "stopped-presentation",
           toolTimeline: [
-            {
-              key: "call:one",
-              toolCallId: "one",
+            completedReadTool("one", {
               call: { eventId: "call-one" },
               resultEvent: { eventId: "result-one" },
-            },
+            }),
           ],
         },
       ],
@@ -309,42 +363,41 @@ test("stopped Turn detail uses the persisted presentation identity without a fin
 test("session summary references canonical thinking detail without copying its timeline", async () => {
   const messages = [
     {
+      attachments: [],
       modelMessageId: "tool-call-one",
       role: "assistant",
       presentationMessageId: "final-assistant",
       type: "tool_call",
+      tool_calls: [{ id: "one", name: "read_file", args: {}, type: "tool_call" }],
       content: "",
       turnScopeId: "workflow-node:turn-2",
       dialogProcessId: "dialog-workflow-node",
       toolTimeline: [
-        {
-          key: "call:one",
-          toolCallId: "one",
-          status: "completed",
+        completedReadTool("one", {
           call: { eventId: "call-one" },
           resultEvent: { eventId: "result-one" },
-        },
+        }),
       ],
     },
     {
+      attachments: [],
       modelMessageId: "tool-call-two",
       role: "assistant",
       presentationMessageId: "final-assistant",
       type: "tool_call",
+      tool_calls: [{ id: "two", name: "read_file", args: {}, type: "tool_call" }],
       content: "",
       turnScopeId: "workflow-node:turn-2",
       dialogProcessId: "dialog-workflow-node",
       toolTimeline: [
-        {
-          key: "call:two",
-          toolCallId: "two",
-          status: "completed",
+        completedReadTool("two", {
           call: { eventId: "call-two" },
           resultEvent: { eventId: "result-two" },
-        },
+        }),
       ],
     },
     {
+      attachments: [],
       modelMessageId: "final-assistant",
       presentationMessageId: "final-assistant",
       role: "assistant",
@@ -388,6 +441,7 @@ test("session summary does not copy large tool payloads retained by thinking det
   const largePayload = "x".repeat(512 * 1024);
   const messages = [
     {
+      attachments: [],
       messageUid: "sm-final-assistant",
       ts: TEST_MESSAGE_TS,
       role: "assistant",
@@ -397,13 +451,15 @@ test("session summary does not copy large tool payloads retained by thinking det
       turnScopeId: "turn-large-detail",
       content: "done",
       toolTimeline: [
-        {
-          key: "call:large",
+        canonicalToolTimelineItem({
           toolCallId: "large",
-          status: "completed",
-          call: { arguments: largePayload },
-          resultEvent: { output: largePayload },
-        },
+          tool: "write_file",
+          args: { filePath: "large.txt", content: largePayload },
+          call: { eventId: "call-large" },
+          result: fileToolResultText("large.txt", { content: largePayload }),
+          success: true,
+          resultEvent: { eventId: "result-large" },
+        }),
       ],
     },
   ];
@@ -425,8 +481,8 @@ test("session summary does not copy large tool payloads retained by thinking det
   assert.equal(JSON.stringify(summary).includes(largePayload), false);
   assert.equal(Object.hasOwn(summary.messages[0], "thinkingDetailCount"), false);
   assert.equal(countCanonicalThinkingDetailEvents(summary.messages[0]), 2);
-  assert.equal(detail.messageItem.toolTimeline[0].call.arguments, largePayload);
-  assert.equal(detail.messageItem.toolTimeline[0].resultEvent.output, largePayload);
+  assert.equal(detail.messageItem.toolTimeline[0].args.content, largePayload);
+  assert.equal(JSON.parse(detail.messageItem.toolTimeline[0].result).content, largePayload);
   assert.equal(Object.hasOwn(detail, "allMessages"), false);
 });
 
@@ -452,6 +508,7 @@ test("thinking detail storage lookup reads exactly one canonical Turn journal", 
         aggregateVersion: 0,
         messages: [
           {
+            attachments: [],
             messageUid: "sm-one",
             ts: TEST_MESSAGE_TS,
             sessionId: "scoped-session",
@@ -462,9 +519,15 @@ test("thinking detail storage lookup reads exactly one canonical Turn journal", 
             turnScopeId: "turn-one",
             dialogProcessId: "dialog-one",
             content: "one",
-            toolTimeline: [{ key: "call:one", status: "completed" }],
+            toolTimeline: [
+              completedReadTool("one", {
+                call: { eventId: "call-one" },
+                resultEvent: { eventId: "result-one" },
+              }),
+            ],
           },
           {
+            attachments: [],
             messageUid: "sm-two",
             ts: TEST_MESSAGE_TS,
             sessionId: "scoped-session",
@@ -475,7 +538,12 @@ test("thinking detail storage lookup reads exactly one canonical Turn journal", 
             turnScopeId: "turn-two",
             dialogProcessId: "dialog-two",
             content: "two",
-            toolTimeline: [{ key: "call:two", status: "completed" }],
+            toolTimeline: [
+              completedReadTool("two", {
+                call: { eventId: "call-two" },
+                resultEvent: { eventId: "result-two" },
+              }),
+            ],
           },
         ],
       }),

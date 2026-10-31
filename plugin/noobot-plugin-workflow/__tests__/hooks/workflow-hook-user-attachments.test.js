@@ -71,7 +71,7 @@ test("workflow hook passes planned user attachments to node sub-session", async 
       sessionId: "s-input-att",
       dialogProcessId: "d-input-att",
       userMessage: "请基于附件规划并执行",
-      attachments: [
+      userMessageAttachments: [
         {
           attachmentId: "att-user-1",
           sessionId: "s-input-att",

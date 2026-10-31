@@ -13,6 +13,7 @@ import { createNativeScriptTool } from "../../src/tools/execution/native-script-
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import { IDENTITY, createRuntime } from "./native-script-tool.fixtures.js";
 import { resolveFileInput } from "../../src/tools/core/file-input.js";
+import { createTestAttachmentService } from "../helpers/test-runtime-context.js";
 
 test("execute_native_script resolves a canonical attachment reference", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-attachment-input-"));
@@ -28,7 +29,7 @@ test("execute_native_script resolves a canonical attachment reference", async ()
   await fs.mkdir(path.dirname(attachmentPath), { recursive: true });
   await fs.writeFile(attachmentPath, "attachment source", "utf8");
   const runtime = createRuntime(basePath, {
-    attachmentService: {
+    attachmentService: createTestAttachmentService({
       async getAttachmentById(identity) {
         assert.deepEqual(identity, {
           userId: "admin",
@@ -53,7 +54,7 @@ test("execute_native_script resolves a canonical attachment reference", async ()
           size: Buffer.from(artifact.contentBase64, "base64").length,
         }));
       },
-    },
+    }),
   });
   const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
   const result = JSON.parse(
@@ -118,7 +119,7 @@ test("execute_native_script accepts a logical workspace path", async () => {
   const inputPath = path.join(basePath, "resource-input.txt");
   await fs.writeFile(inputPath, "resource identity", "utf8");
   const runtime = createRuntime(basePath, {
-    attachmentService: {
+    attachmentService: createTestAttachmentService({
       async ingestGeneratedArtifacts(request) {
         return request.artifacts.map((artifact, index) => ({
           attachmentId: `resource-output-${index}`,
@@ -129,7 +130,7 @@ test("execute_native_script accepts a logical workspace path", async () => {
           size: Buffer.from(artifact.contentBase64, "base64").length,
         }));
       },
-    },
+    }),
   });
   const scope = createTestAgentExecutionScope(runtime);
   const [tool] = createNativeScriptTool({ agentContext: scope });
@@ -147,8 +148,8 @@ await files.writeText(target, await files.readText(input));
     ),
   );
   assert.equal(result.ok, true, JSON.stringify(result));
-  assert.equal(result.resources.length, 1);
-  assert.equal(result.resources[0].source, "attachment");
+  assert.equal(result.outputResources.length, 1);
+  assert.equal(result.outputResources[0].source, "attachment");
 });
 
 test("execute_native_script projects a sandbox workspace path into task-local input", async () => {
@@ -164,7 +165,7 @@ test("execute_native_script projects a sandbox workspace path into task-local in
         },
       },
     },
-    attachmentService: {
+    attachmentService: createTestAttachmentService({
       async ingestGeneratedArtifacts(request) {
         return request.artifacts.map((artifact, index) => ({
           attachmentId: `sandbox-output-${index}`,
@@ -175,7 +176,7 @@ test("execute_native_script projects a sandbox workspace path into task-local in
           size: Buffer.from(artifact.contentBase64, "base64").length,
         }));
       },
-    },
+    }),
   });
   const [tool] = createNativeScriptTool({
     agentContext: createTestAgentExecutionScope(runtime),
@@ -216,7 +217,7 @@ test("execute_native_script projects a global sandbox mount into task-local inpu
         },
       },
     },
-    attachmentService: {
+    attachmentService: createTestAttachmentService({
       async ingestGeneratedArtifacts(request) {
         return request.artifacts.map((artifact, index) => ({
           attachmentId: `mounted-output-${index}`,
@@ -227,7 +228,7 @@ test("execute_native_script projects a global sandbox mount into task-local inpu
           size: Buffer.from(artifact.contentBase64, "base64").length,
         }));
       },
-    },
+    }),
   });
   const [tool] = createNativeScriptTool({
     agentContext: createTestAgentExecutionScope(runtime),

@@ -30,6 +30,11 @@ import { upgradeModelContextSnapshots } from "./model-context-snapshot-upgrade.j
 import { upgradeSessionMessageIdentity } from "./session-message-identity-upgrade.js";
 import { upgradeExecutionEventIndexes } from "./execution-event-index-upgrade.js";
 import { retireSessionTaskArtifacts } from "./session-task-artifact-retirement.js";
+import { upgradeSessionMutationRefs } from "./session-mutation-refs-upgrade.js";
+import { upgradeSessionActivityTimeline } from "./session-activity-timeline-upgrade.js";
+import { upgradeSessionToolResults } from "./session-tool-result-upgrade.js";
+import { upgradeSessionScriptExitCodes } from "./session-script-exit-code-upgrade.js";
+import { upgradeSessionLegacyMcpResults } from "./session-legacy-mcp-result-upgrade.js";
 import { releaseQuarantinedUnits } from "./migration-quarantine.js";
 import { ignoreSessionProgress } from "./session-directory-walk.js";
 
@@ -41,6 +46,11 @@ const LAYOUT_UPGRADE_HANDLERS = Object.freeze({
   [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MESSAGE_IDENTITY]: upgradeSessionMessageIdentity,
   [WORKSPACE_LAYOUT_UPGRADE_OWNER.EXECUTION_EVENT_INDEX]: upgradeExecutionEventIndexes,
   [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_TASK_ARTIFACT]: retireSessionTaskArtifacts,
+  [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MUTATION_REFS]: upgradeSessionMutationRefs,
+  [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_ACTIVITY_TIMELINE]: upgradeSessionActivityTimeline,
+  [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_TOOL_RESULT]: upgradeSessionToolResults,
+  [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_SCRIPT_EXIT_CODE]: upgradeSessionScriptExitCodes,
+  [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_LEGACY_MCP_RESULT]: upgradeSessionLegacyMcpResults,
 });
 
 const QUARANTINE_RETRY_OWNERS = Object.freeze([
@@ -49,6 +59,11 @@ const QUARANTINE_RETRY_OWNERS = Object.freeze([
   WORKSPACE_LAYOUT_UPGRADE_OWNER.MODEL_CONTEXT_SNAPSHOT,
   WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MESSAGE_IDENTITY,
   WORKSPACE_LAYOUT_UPGRADE_OWNER.EXECUTION_EVENT_INDEX,
+  WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MUTATION_REFS,
+  WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_ACTIVITY_TIMELINE,
+  WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_TOOL_RESULT,
+  WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_SCRIPT_EXIT_CODE,
+  WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_LEGACY_MCP_RESULT,
 ]);
 
 const retriedQuarantines = new Set();

@@ -16,9 +16,9 @@ import { tTool } from "../core/tool-i18n.js";
 import { TOOL_NAME } from "../constants/index.js";
 import {
   DEFAULT_READ_MAX_LINES,
+  READ_MAX_LINES_LIMIT,
   formatLinesWithNumbers,
   splitLines,
-  toPositiveInt,
 } from "./file-utils.js";
 import {
   RESOURCE_OPERATION,
@@ -34,14 +34,7 @@ import {
 
 export function createReadFileTool({ agentContext, runtime, workspaceIo }) {
   return structuredTool(
-    async ({
-      filePath,
-      startLine,
-      endLine,
-      includeLineNumbers = true,
-      maxLines = DEFAULT_READ_MAX_LINES,
-      riskLevel,
-    }) => {
+    async ({ filePath, startLine, endLine, includeLineNumbers, maxLines, riskLevel }) => {
       if (typeof filePath === "string")
         assertValidFileNameFromPath({ filePath, fieldName: "filePath", agentContext });
       const resolvedInput = await resolveFileInput({
@@ -81,46 +74,40 @@ export function createReadFileTool({ agentContext, runtime, workspaceIo }) {
           details: { field: "filePath", path: projectToolPathRef(pathRef) },
         });
       }
-      const hasRange = Number.isFinite(Number(startLine)) || Number.isFinite(Number(endLine));
       const rawContent = await workspaceIo.readText(resolvedPath);
       const allLines = splitLines(rawContent);
       if (rawContent.endsWith("\n")) allLines.pop();
       const totalLines = allLines.length;
-      const requestedStart = Number.isFinite(Number(startLine)) ? Number(startLine) : 1;
-      const requestedEnd = Number.isFinite(Number(endLine)) ? Number(endLine) : totalLines;
+      const requestedEnd = endLine ?? totalLines;
       const rangeError =
-        Number.isFinite(Number(startLine)) && requestedStart > Math.max(1, totalLines)
+        startLine > Math.max(1, totalLines)
           ? { field: "startLine", reason: "start_line_after_eof" }
-          : Number.isFinite(Number(endLine)) && requestedEnd < requestedStart
+          : requestedEnd < startLine
             ? { field: "endLine", reason: "end_line_before_start_line" }
             : null;
       if (rangeError) {
         throw recoverableToolError(
           tTool(runtime, "tools.file.readLineRangeOutOfBounds", {
-            startLine: requestedStart,
-            endLine: requestedEnd,
+            startLine,
+            endLine,
             totalLines,
           }),
           {
             code: ERROR_CODE.RECOVERABLE_LINE_RANGE_OUT_OF_BOUNDS,
             details: {
               ...rangeError,
-              requestedStartLine: requestedStart,
-              requestedEndLine: requestedEnd,
+              requestedStartLine: startLine,
+              ...(endLine === undefined ? {} : { requestedEndLine: endLine }),
               totalLines,
             },
           },
         );
       }
-      const start = requestedStart;
-      const lineLimit = toPositiveInt(maxLines, DEFAULT_READ_MAX_LINES, 1, 5000);
-      const end = Math.min(Math.max(start, requestedEnd), start + lineLimit - 1, totalLines);
-      const selectedLines = allLines.slice(start - 1, end);
+      const end = Math.min(requestedEnd, startLine + maxLines - 1, totalLines);
+      const selectedLines = allLines.slice(startLine - 1, end);
       const content = includeLineNumbers
-        ? formatLinesWithNumbers(selectedLines, start)
+        ? formatLinesWithNumbers(selectedLines, startLine)
         : selectedLines.join("\n");
-      const readableEnd = Math.min(requestedEnd, totalLines);
-      const truncated = end < readableEnd || (hasRange && requestedEnd < totalLines);
       const resource =
         resolvedInput.resourceRef ||
         (await registerResource({
@@ -134,11 +121,10 @@ export function createReadFileTool({ agentContext, runtime, workspaceIo }) {
         path: projectToolPathRef(pathRef),
         fileName: resourceFileName(resource),
         resources: [resource],
-        startLine: start,
+        startLine,
         endLine: end,
         totalLines,
-        includeLineNumbers: includeLineNumbers !== false,
-        truncated,
+        includeLineNumbers,
         hasMore: end < totalLines,
         content,
       });
@@ -146,7 +132,7 @@ export function createReadFileTool({ agentContext, runtime, workspaceIo }) {
     {
       name: TOOL_NAME.READ_FILE,
       metadata: { pathContract: TOOL_PATH_CONTRACTS.fileRead },
-      description: buildFileToolDescription(runtime, "tools.file.readDescriptionWithLineNumbers"),
+      description: buildFileToolDescription(runtime, "tools.file.readDescription"),
       schema: z.object({
         filePath: createFileSourceSchema({
           filePathDescription: tTool(runtime, "tools.file.readFilePathField"),
@@ -156,6 +142,7 @@ export function createReadFileTool({ agentContext, runtime, workspaceIo }) {
           .int()
           .min(1)
           .optional()
+          .default(1)
           .describe(tTool(runtime, "tools.file.readStartLineField")),
         endLine: z
           .number()
@@ -171,6 +158,8 @@ export function createReadFileTool({ agentContext, runtime, workspaceIo }) {
         maxLines: z
           .number()
           .int()
+          .min(1)
+          .max(READ_MAX_LINES_LIMIT)
           .optional()
           .default(DEFAULT_READ_MAX_LINES)
           .describe(tTool(runtime, "tools.file.readMaxLinesField")),

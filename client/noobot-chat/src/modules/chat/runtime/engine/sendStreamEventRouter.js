@@ -131,6 +131,15 @@ function routeAuthoritativeRuntimeEvent({
   return routed;
 }
 
+export const PROTOCOL_ENVELOPE_REJECTED_CODE = "PROTOCOL_ENVELOPE_REJECTED";
+
+function createProtocolEnvelopeRejectedError(channelEvent, errors) {
+  const error = new Error(`protocol envelope rejected: ${channelEvent} (${errors.join(", ")})`);
+  error.code = PROTOCOL_ENVELOPE_REJECTED_CODE;
+  error.details = { channelEvent, errors };
+  return error;
+}
+
 export function createSendStreamEventHandler(context) {
   const {
     activeSession,
@@ -167,7 +176,8 @@ export function createSendStreamEventHandler(context) {
         turnScopeId,
         data: { channelEvent: event, errors: rejected.errors },
       });
-      return;
+
+      throw createProtocolEnvelopeRejectedError(event, rejected.errors);
     }
     const authoritativeEvent = protocolEnvelope;
     logStreamEvent(

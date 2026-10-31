@@ -8,10 +8,15 @@ import { createWriteStream } from "node:fs";
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { filePath as path } from "@noobot/path-resolver";
-import { SCRIPT_EXECUTION_MODE, SCRIPT_RESULT_CODE } from "./constants.js";
+import { SCRIPT_EXECUTION_MODE } from "./constants.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-import { resolveCommandShell, TOOL_EXECUTION_VIEW } from "@noobot/execution-isolation-protocol";
+import {
+  projectScriptOutcome,
+  resolveCommandShell,
+  resolveScriptTermination,
+  TOOL_EXECUTION_VIEW,
+} from "@noobot/execution-isolation-protocol";
 import { resolveSessionGeneratedDataRoot } from "../../../session/session-generated-data.js";
 import {
   decodeCommandOutput,
@@ -165,11 +170,13 @@ async function finalizeOutputFiles(files) {
     normalizeCommandOutputFile(files.stdoutPath),
     normalizeCommandOutputFile(files.stderrPath),
   ]);
-  const stdoutStat = await stat(files.stdoutPath).catch(() => ({ size: 0 }));
-  const stderrStat = await stat(files.stderrPath).catch(() => ({ size: 0 }));
+  const [stdoutStat, stderrStat] = await Promise.all([
+    stat(files.stdoutPath),
+    stat(files.stderrPath),
+  ]);
   return {
-    stdoutBytes: Number(stdoutStat?.size || 0),
-    stderrBytes: Number(stderrStat?.size || 0),
+    stdoutBytes: stdoutStat.size,
+    stderrBytes: stderrStat.size,
   };
 }
 
@@ -192,20 +199,33 @@ function startTermination(child, files, abortSignal, timeoutMs, options, onSettl
 }
 
 function resolveTerminationMessage(termination, spawnError, timeoutMs) {
-  if (spawnError?.message) return spawnError.message;
+  if (spawnError) return spawnError.message;
   if (termination.outputLimitExceeded) {
     return `command output exceeded ${OUTPUT_ARTIFACT_MAX_BYTES} bytes`;
   }
-  if (termination.timedOut) return `command timed out after ${Number(timeoutMs)}ms`;
-  return termination.aborted ? "command aborted" : "";
+  if (termination.timedOut) return `command timed out after ${timeoutMs}ms`;
+  if (termination.aborted) return "command aborted";
+  return undefined;
 }
 
-function resolveResultCode(termination, code, spawnError) {
-  if (termination.outputLimitExceeded) return SCRIPT_RESULT_CODE.OUTPUT_LIMIT_EXCEEDED;
-  if (termination.timedOut) return 124;
-  if (termination.aborted) return 130;
-  if (Number.isFinite(Number(code))) return Number(code);
-  return Number(spawnError?.code || 0) || 0;
+function resolveProcessOutcome({ termination, code, signal, spawnError, timeoutMs }) {
+  const exitCode = spawnError || code === null ? null : code;
+  const observedSignal = spawnError || !signal ? null : signal;
+  const terminationKind = resolveScriptTermination({
+    timedOut: termination.timedOut,
+    aborted: termination.aborted,
+    outputLimitExceeded: termination.outputLimitExceeded,
+    spawnFailed: Boolean(spawnError),
+    protocolViolated: false,
+    exitCode,
+    signal: observedSignal,
+  });
+  return projectScriptOutcome({
+    termination: terminationKind,
+    exitCode,
+    signal: observedSignal,
+    message: resolveTerminationMessage(termination, spawnError, timeoutMs),
+  });
 }
 
 function pickOutputLimitFields(termination) {
@@ -267,10 +287,9 @@ export async function run(cmd, cwd, timeoutMs, abortSignal = null, options = {})
           outputOverflow ? stderrBuffer.subarray(0, FOREGROUND_PREVIEW_BYTES) : stderrBuffer,
         );
         const result = {
-          code: resolveResultCode(termination, code, spawnError),
+          ...resolveProcessOutcome({ termination, code, signal, spawnError, timeoutMs }),
           stdout,
-          stderr: rawStderr || resolveTerminationMessage(termination, spawnError, timeoutMs),
-          ...(signal ? { signal } : {}),
+          stderr: rawStderr,
           ...pickOutputLimitFields(termination),
           ...(outputOverflow
             ? {
@@ -282,8 +301,7 @@ export async function run(cmd, cwd, timeoutMs, abortSignal = null, options = {})
               }
             : {}),
         };
-        if (!outputOverflow)
-          await rm(files.outputDir, { recursive: true, force: true }).catch(() => undefined);
+        if (!outputOverflow) await rm(files.outputDir, { recursive: true, force: true });
         return result;
       };
       void finalize().then(resolve, reject);
@@ -373,21 +391,9 @@ export async function runFileBacked(cmd, cwd, timeoutMs, abortSignal = null, opt
         } catch (error) {
           spawnError ||= error;
         }
-        if (
-          spawnError ||
-          termination.outputLimitExceeded ||
-          termination.timedOut ||
-          termination.aborted
-        ) {
-          const fallbackMessage =
-            resolveTerminationMessage(termination, spawnError, timeoutMs) || "command aborted";
-          const existingStderr = await readFile(files.stderrPath, "utf8").catch(() => "");
-          if (!existingStderr) await writeFile(files.stderrPath, fallbackMessage, "utf8");
-        }
         const { stdoutBytes, stderrBytes } = await finalizeOutputFiles(files);
         return {
-          code: resolveResultCode(termination, code, spawnError),
-          ...(signal ? { signal } : {}),
+          ...resolveProcessOutcome({ termination, code, signal, spawnError, timeoutMs }),
           ...pickOutputLimitFields(termination),
           stdoutPath: files.stdoutPath,
           stderrPath: files.stderrPath,
@@ -401,16 +407,15 @@ export async function runFileBacked(cmd, cwd, timeoutMs, abortSignal = null, opt
   });
 }
 
-export function hasCommand(commandName = "") {
-  return new Promise((resolve) => {
-    const normalizedCommandName = text(commandName);
-    if (!normalizedCommandName) {
-      resolve(false);
-      return;
-    }
+const COMMAND_LOOKUP_NOT_FOUND_EXIT_CODE = 1;
+
+export function hasCommand(commandName) {
+  return new Promise((resolve, reject) => {
     const lookupCommand = resolveCommandLookupExecutable(process.platform);
-    execFile(lookupCommand, [normalizedCommandName], { windowsHide: true }, (error) => {
-      resolve(!error);
+    execFile(lookupCommand, [commandName], { windowsHide: true }, (error) => {
+      if (!error) resolve(true);
+      else if (error.code === COMMAND_LOOKUP_NOT_FOUND_EXIT_CODE) resolve(false);
+      else reject(error);
     });
   });
 }

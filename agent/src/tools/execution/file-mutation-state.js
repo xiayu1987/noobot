@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import { readFile, realpath } from "node:fs/promises";
 import os from "node:os";
 import { filePath as path } from "@noobot/path-resolver";
+import { FILE_MUTATION_ERROR_CODE, createFileMutationError } from "@noobot/file-mutation-protocol";
 import { FileMutationCoordinator } from "../../shared/storage/file-mutation-coordinator.js";
 
 const coordinator = new FileMutationCoordinator({
@@ -27,13 +28,11 @@ export async function assertFileMutationVersion(filePath, expectedSha256) {
       throw error;
     });
   if (actualSha256 === expectedSha256) return;
-  const error = new Error(
+  throw createFileMutationError(
+    FILE_MUTATION_ERROR_CODE.CONFLICT,
     `file changed since it was loaded: ${filePath}; read the file again and rebuild the patch`,
+    { details: { filePath, expectedSha256, actualSha256 } },
   );
-  error.code = "file_mutation_conflict";
-  error.statusCode = 409;
-  error.details = { filePath, expectedSha256, actualSha256 };
-  throw error;
 }
 
 async function canonicalFilePath(filePath) {

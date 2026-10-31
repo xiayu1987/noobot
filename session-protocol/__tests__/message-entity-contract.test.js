@@ -41,6 +41,41 @@ test("non-dialog messages must not carry messageOrigin", () => {
   assert.deepEqual(collectSessionMessageEntityErrors({ ...base, role: "tool" }), []);
 });
 
+test("tool_calls belong only to tool_call messages and are never empty", () => {
+  const call = { id: "call-1", name: "read_file", args: {}, type: "tool_call" };
+  assert.deepEqual(
+    collectSessionMessageEntityErrors({
+      ...base,
+      role: "assistant",
+      type: "tool_call",
+      tool_calls: [call],
+    }),
+    [],
+  );
+  for (const tool_calls of [undefined, null, []]) {
+    assert.deepEqual(
+      collectSessionMessageEntityErrors({
+        ...base,
+        role: "assistant",
+        type: "tool_call",
+        tool_calls,
+      }),
+      ["tool_calls_required"],
+    );
+  }
+  for (const tool_calls of [[], [call], null]) {
+    assert.deepEqual(
+      collectSessionMessageEntityErrors({
+        ...base,
+        role: "assistant",
+        type: "message",
+        tool_calls,
+      }),
+      ["tool_calls_forbidden"],
+    );
+  }
+});
+
 test("content is a string and attachments is always an array", () => {
   assert.throws(
     () => assertSessionMessageEntity({ role: "assistant", content: null }),

@@ -308,11 +308,11 @@ async function resolveWorkflowTransferParts({
   };
 }
 
-function pickNonEmptyTimelines(messageEventProjection = {}) {
+function pickNonEmptyTimelines(messageEventProjection) {
   const timelines = {};
   for (const key of ["activityTimeline", "toolTimeline"]) {
     const timeline = messageEventProjection[key];
-    if (Array.isArray(timeline) && timeline.length) timelines[key] = timeline;
+    if (timeline.length) timelines[key] = timeline;
   }
   return timelines;
 }

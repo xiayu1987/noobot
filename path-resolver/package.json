@@ -7,13 +7,16 @@
   "exports": {
     ".": "./src/index.js",
     "./syntax": "./src/path-syntax.js",
+    "./resource-link": "./src/resource-link.js",
     "./package.json": "./package.json"
   },
   "scripts": {
     "test": "node ../scripts/run-with-isolated-tmp.mjs node --test __tests__/*.test.js"
   },
   "dependencies": {
+    "@noobot/attachment-protocol": "file:../attachment-protocol",
     "@noobot/execution-isolation-protocol": "file:../execution-isolation-protocol",
+    "@noobot/file-mutation-protocol": "file:../file-mutation-protocol",
     "@noobot/platform-compatibility": "file:../platform-compatibility",
     "@noobot/shared": "file:../shared"
   }

@@ -371,7 +371,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
   assert.equal(finalAssistantTurn.modelAlias, "anthropic");
   assert.equal(finalAssistantTurn.modelName, "gpt-4.1-mini");
   assert.equal(finalAssistantTurn.attachments?.[0]?.attachmentId, "att-out-1");
-  assert.equal(finalAssistantTurn.transferEnvelopes, undefined);
+  assert.deepEqual(finalAssistantTurn.transferEnvelopes, []);
 
   assert.equal(result.answer, "已切换模型并生成附件");
   assert.equal(Array.isArray(result.messages), true);

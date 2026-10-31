@@ -8,6 +8,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createStateCommitter } from "../../../src/runtime/tool-execution/state-committer.js";
+import { ERROR_CODE } from "../../../src/shared/errors/constants.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { bindAssistantMessageEventStream } from "../../../src/events/message-event-stream.js";
 import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
@@ -21,6 +22,8 @@ import {
   FLOW_CONTROL_ROLE,
   createFlowControlContextPolicy,
 } from "@noobot/context-protocol/tool/context-policy";
+
+const STORE_TOOL_RESULT_TEXT = JSON.stringify({ toolName: "demo_tool", ok: true });
 
 function createInMemoryTurnStore() {
   return {
@@ -119,6 +122,7 @@ test("state-committer emits before/after hooks for assistant message commit", as
 
   await committer.pushAssistantMessage({
     content: "hello",
+    type: "message",
     messageUid: createMessageUid(),
     modelAlias: "alias_x",
     modelName: "model_x",
@@ -146,12 +150,14 @@ test("state-committer keeps one canonical assistant presentation per Turn", asyn
 
   await committer.pushAssistantMessage({
     content: "first",
+    type: "message",
     messageUid: createMessageUid(),
     presentationMessageId: "presentation-canonical",
     chatPresentation: true,
   });
   await committer.pushAssistantMessage({
     content: "second",
+    type: "message",
     messageUid: createMessageUid(),
     presentationMessageId: "presentation-canonical",
     chatPresentation: true,
@@ -160,6 +166,11 @@ test("state-committer keeps one canonical assistant presentation per Turn", asyn
   assert.deepEqual(
     turnMessageStore.items.map((message) => message.chatPresentation),
     [false, true],
+  );
+
+  assert.deepEqual(
+    turnMessageStore.items.map((message) => message.workspaceRootDirectory),
+    [undefined, runtime.workspaceRootDirectory],
   );
 });
 
@@ -201,7 +212,10 @@ test("state-committer emits before/after hooks for tool result commit", async ()
   const contextPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE);
   await committer.pushToolResult({
     call: { id: "call_1", name: "demo_tool", args: { x: 1 }, contextPolicy },
-    toolResultText: "original_tool_result",
+    toolResultText: JSON.stringify({ toolName: "demo_tool", ok: true }),
+    transferEnvelopes: [],
+    resourceRefs: [],
+    mutationRefs: [],
   });
 
   assert.deepEqual(hookCalls, ["before:tool_result", "after:tool_result"]);
@@ -255,7 +269,17 @@ test("state-committer completes tool result hooks and commit after the parent Tu
   });
   await committer.pushToolResult({
     call: { id: "call_stopped", name: "execute_script", args: {} },
-    toolResultText: JSON.stringify({ ok: false, status: "aborted" }),
+    toolResultText: JSON.stringify({
+      toolName: "execute_script",
+      ok: false,
+      status: "aborted",
+      code: ERROR_CODE.RECOVERABLE_USER_CANCELLED,
+      error: "user stop action",
+      stopType: "user_stop",
+    }),
+    transferEnvelopes: [],
+    resourceRefs: [],
+    mutationRefs: [],
   });
 
   assert.deepEqual(hookCalls, ["before:false", "after:false"]);
@@ -292,10 +316,14 @@ test("state-committer checkpoints assistant and tool records with presentation i
     messageUid: createMessageUid(),
     presentationMessageId: "msg_chat_checkpoint",
     type: "tool_call",
+    toolCalls: [{ id: "call_checkpoint", name: "demo_tool", args: {} }],
   });
   await committer.pushToolResult({
     call: { id: "call_checkpoint", name: "demo_tool" },
-    toolResultText: "done",
+    toolResultText: JSON.stringify({ toolName: "demo_tool", ok: true }),
+    transferEnvelopes: [],
+    resourceRefs: [],
+    mutationRefs: [],
   });
 
   assert.equal(checkpointCount, 2);
@@ -325,11 +353,14 @@ test("state-committer writes tool result through message store when holder is pr
 
   await committer.pushToolResult({
     call: { id: "call_store", name: "demo_tool", args: {} },
-    toolResultText: "store_tool_result",
+    toolResultText: STORE_TOOL_RESULT_TEXT,
+    transferEnvelopes: [],
+    resourceRefs: [],
+    mutationRefs: [],
   });
 
   assert.equal(modelContext.messages.length, 1);
-  assert.equal(modelContext.messages[0]?.content, "store_tool_result");
+  assert.equal(modelContext.messages[0]?.content, STORE_TOOL_RESULT_TEXT);
   assert.equal(modelContext.messageBlocks.incremental[0], modelContext.messages[0]);
   assert.equal(
     resolveContextMessageKey(modelContext.messages[0]),
@@ -341,7 +372,7 @@ test("state-committer writes tool result through message store when holder is pr
     "dp_store_tool",
   );
   assert.equal(readContextMessageValue(modelContext.messages[0], "turnScopeId"), "turn-store-tool");
-  assert.equal(turnMessageStore.items[0]?.content, "store_tool_result");
+  assert.equal(turnMessageStore.items[0]?.content, STORE_TOOL_RESULT_TEXT);
 });
 
 test("state-committer stores compact LLM-facing tool result content", async () => {
@@ -396,6 +427,8 @@ test("state-committer stores compact LLM-facing tool result content", async () =
     call: { id: "call_compact", name: "multimodal_generate", args: {} },
     toolResultText: JSON.stringify({ toolName: "multimodal_generate", ok: true }),
     transferEnvelopes: [envelope],
+    resourceRefs: [],
+    mutationRefs: [],
   });
 
   const payload = JSON.parse(messages[0].content);
@@ -440,8 +473,10 @@ test("state-committer persists transferEnvelopes only", async () => {
 
   await committer.pushToolResult({
     call: { id: "call_legacy_transfer", name: "legacy_transfer_tool", args: {} },
-    toolResultText: "tool result",
+    toolResultText: JSON.stringify({ toolName: "legacy_transfer_tool", ok: true }),
     transferEnvelopes: [envelope],
+    resourceRefs: [],
+    mutationRefs: [],
   });
 
   assert.equal("transferResult" in turnMessageStore.items[0], false);

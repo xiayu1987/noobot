@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { decodeToolResultText } from "@noobot/event-protocol/tool-result";
 import { executeMcpTask } from "../../../src/integrations/mcp/task-runner.js";
 import { createTestModelHost } from "../../helpers/test-model-host.js";
 import { TEST_RUN_PREFERENCES } from "../../helpers/run-preferences.js";
@@ -57,17 +58,25 @@ function createMcpFetch() {
         },
       });
     }
+    if (body?.method === "tools/call") {
+      return createJsonResponse({
+        jsonrpc: "2.0",
+        id: body.id,
+        result: { content: [{ type: "text", text: "fake result" }] },
+      });
+    }
     return createJsonResponse({ jsonrpc: "2.0", id: body.id, result: {} });
   };
 }
 
-function createFakeModelPort() {
+function createFakeModelPort(scriptedToolCalls = []) {
   const invocations = [];
   return {
     invocations,
     async invoke(request) {
       invocations.push(request);
-      return { output: { text: "done", toolCalls: [] } };
+      const toolCalls = invocations.length === 1 ? scriptedToolCalls : [];
+      return { output: { text: "done", toolCalls } };
     },
   };
 }
@@ -141,4 +150,42 @@ test("executeMcpTask preserves the explicitly selected OpenAI-compatible ModelSp
   assert.equal(result.ok, true);
   assert.equal(modelPort.invocations[0].model, OPENAI_MODEL);
   assert.equal(modelPort.invocations[0].invocation.flow, "mcp.task");
+});
+
+async function runScriptedTask(toolCalls) {
+  const modelPort = createFakeModelPort(toolCalls);
+  const result = await executeMcpTask({
+    globalConfig: createGlobalConfig(),
+    mcpName: "fake",
+    task: "do it",
+    fetchImpl: createMcpFetch(),
+    runtime: {
+      runConfig: { ...TEST_RUN_PREFERENCES },
+      modelHost: createTestModelHost({ modelPort, modelSpec: QWEN_MODEL }),
+    },
+  });
+  return { result, modelPort };
+}
+
+test("executeMcpTask encodes a missing MCP tool as a protocol failure result", async () => {
+  const { result } = await runScriptedTask([{ id: "call-1", name: "missing_tool", args: {} }]);
+
+  const decoded = decodeToolResultText(result.traces[0].result);
+  assert.equal(decoded.ok, false);
+  assert.equal(decoded.code, "RECOVERABLE_MCP_TOOL_NOT_FOUND");
+  assert.match(decoded.error, /missing_tool/);
+});
+
+test("executeMcpTask forwards MCP tool results as protocol objects", async () => {
+  const { result, modelPort } = await runScriptedTask([
+    { id: "call-1", name: "fake_mcp_tool", args: {} },
+  ]);
+
+  const decoded = decodeToolResultText(result.traces[0].result);
+  assert.equal(decoded.ok, true);
+  assert.deepEqual(decoded.content, [{ type: "text", text: "fake result" }]);
+  const toolMessage = modelPort.invocations[1].messages.find(
+    (message) => message.tool_call_id === "call-1",
+  );
+  assert.equal(toolMessage.content, result.traces[0].result);
 });

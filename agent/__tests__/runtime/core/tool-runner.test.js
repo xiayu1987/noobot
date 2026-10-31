@@ -16,8 +16,43 @@ import {
   findCommittedMessagePayload,
   getPrimaryTransferAttachment,
 } from "./tool-runner.test-helpers.js";
-import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
+import {
+  createTestRuntimeContext,
+  createTestAttachmentService,
+} from "../../helpers/test-runtime-context.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import {
+  assertMutationRef,
+  createFileDiff,
+  createFileMutationResult,
+} from "@noobot/file-mutation-protocol";
+
+const MUTATION_ID = "11111111-1111-4111-8111-111111111111";
+
+function committedMutationResult() {
+  return createFileMutationResult({
+    id: MUTATION_ID,
+    operation: "update",
+    locator: { view: "workspace", path: "src/example.js" },
+    fileName: "example.js",
+    before: {
+      exists: true,
+      isText: true,
+      size: 4,
+      sha256: "before",
+      snapshotRef: { mutationId: MUTATION_ID, section: "before" },
+    },
+    after: {
+      exists: true,
+      isText: true,
+      size: 4,
+      sha256: "after",
+      snapshotRef: { mutationId: MUTATION_ID, section: "after" },
+    },
+    diff: createFileDiff("old\n", "new\n"),
+    sessionScope: null,
+  });
+}
 
 test("executeToolCall gives tools an output transfer identity named after the canonical tool", async () => {
   let identity = null;
@@ -34,7 +69,7 @@ test("executeToolCall gives tools an output transfer identity named after the ca
   assert.equal(identity.transferId.includes(":output:execute_script"), false);
 });
 
-test("executeToolCall keeps resource identity internal to the runtime result", async () => {
+test("executeToolCall keeps read resources internal and out of resourceRefs", async () => {
   const result = await executeToolCall({
     call: { id: "call-resource", name: "read_file", args: {} },
     tool: {
@@ -50,7 +85,41 @@ test("executeToolCall keeps resource identity internal to the runtime result", a
   const publicResult = JSON.parse(result.toolResultText);
   assert.equal(publicResult.resolvedPath, "src/index.js");
   assert.equal("resources" in publicResult, false);
-  assert.equal(result.internalResources[0].resourceId, "res_internal");
+  assert.deepEqual(result.resourceRefs, []);
+});
+
+test("executeToolCall promotes only declared outputResources into resourceRefs", async () => {
+  const result = await executeToolCall({
+    call: { id: "call-output", name: "write_file", args: {} },
+    tool: {
+      invoke: async () =>
+        JSON.stringify({
+          toolName: "write_file",
+          ok: true,
+          resources: [{ resourceId: "res_read", source: "workspace" }],
+          outputResources: [{ resourceId: "res_written", source: "workspace" }],
+        }),
+    },
+  });
+  const publicResult = JSON.parse(result.toolResultText);
+  assert.equal("outputResources" in publicResult, false);
+  assert.deepEqual(
+    result.resourceRefs.map((item) => item.resourceId),
+    ["res_written"],
+  );
+});
+
+test("executeToolCall rejects a non-array outputResources declaration", async () => {
+  await assert.rejects(
+    executeToolCall({
+      call: { id: "call-bad-output", name: "write_file", args: {} },
+      tool: {
+        invoke: async () =>
+          JSON.stringify({ toolName: "write_file", ok: true, outputResources: { bad: true } }),
+      },
+    }),
+    /outputResources must be an array/,
+  );
 });
 
 test("executeToolCall does not promote ordinary tool attachments into semantic transfer", async () => {
@@ -157,7 +226,7 @@ test("executeToolCall extracts strict V2 transfer envelopes from JSON tool resul
 test("executeToolCall materializes outputArtifacts through the single transfer outlet", async () => {
   const call = { id: "call_output_artifact", name: "write_file", args: {} };
   const runtime = createTestRuntimeContext({
-    attachmentService: {
+    attachmentService: createTestAttachmentService({
       async ingestGeneratedArtifacts(payload = {}) {
         return payload.artifacts.map((artifact, index) => ({
           attachmentId: `att-output-${index + 1}`,
@@ -168,7 +237,7 @@ test("executeToolCall materializes outputArtifacts through the single transfer o
           size: Buffer.from(artifact.contentBase64, "base64").length,
         }));
       },
-    },
+    }),
   });
   const result = await executeToolCall({
     call,
@@ -205,12 +274,12 @@ test("executeToolCall rejects output artifact types that differ from the registe
   const result = await executeToolCall({
     call: { id: "call_output_type_mismatch", name: "write_file", args: {} },
     runtime: createTestRuntimeContext({
-      attachmentService: {
+      attachmentService: createTestAttachmentService({
         async ingestGeneratedArtifacts() {
           persisted = true;
           return [];
         },
-      },
+      }),
     }),
     tool: {
       invoke: async () => ({
@@ -423,7 +492,7 @@ test("executeToolCall assigns the canonical invoke code when a thrown error has 
 
   const payload = JSON.parse(result.toolResultText);
   assert.equal(payload.ok, false);
-  assert.equal(payload.status, "failed");
+  assert.equal(Object.hasOwn(payload, "status"), false);
   assert.equal(payload.code, "RECOVERABLE_TOOL_INVOKE_ERROR");
   assert.equal(payload.error, "uncoded failure");
 });
@@ -640,7 +709,7 @@ test("executeToolCall classifies an uncoded invoke error as retryable, matching 
     call: { id: "call-uncoded-class", name: "read_file", args: {} },
     tool: {
       invoke: async () => {
-        throw new Error("Received tool input did not match expected schema");
+        throw new Error("uncoded invoke failure");
       },
     },
     runtime: createTestRuntimeContext({
@@ -670,4 +739,77 @@ test("executeToolCall keeps a plain-object throw message non-empty", async () =>
   const payload = JSON.parse(result.toolResultText);
   assert.equal(payload.code, "RECOVERABLE_TOOL_INVOKE_ERROR");
   assert.equal(payload.error, "[object Object]");
+});
+
+test("executeToolCall publishes mutationRefs for a committed file mutation", async () => {
+  const result = await executeToolCall({
+    call: { id: "call-mutation-ok", name: "write_file", args: {} },
+    tool: { invoke: async () => JSON.stringify(committedMutationResult()) },
+  });
+  assert.equal(result.success, true);
+  assert.equal(result.mutationRefs.length, 1);
+  const [ref] = result.mutationRefs;
+  assertMutationRef(ref);
+  assert.equal(ref.mutationId, MUTATION_ID);
+  assert.deepEqual(ref.locator, { view: "workspace", path: "src/example.js" });
+  assert.equal(ref.snapshot, "available");
+});
+
+test("executeToolCall publishes no mutationRefs when the call fails", async () => {
+  const okFalse = await executeToolCall({
+    call: { id: "call-mutation-ok-false", name: "patch_file", args: {} },
+    tool: {
+      invoke: async () => JSON.stringify({ ...committedMutationResult(), ok: false }),
+    },
+  });
+  assert.equal(okFalse.success, false);
+  assert.deepEqual(okFalse.mutationRefs, []);
+
+  const thrown = await executeToolCall({
+    call: { id: "call-mutation-throw", name: "patch_file", args: {} },
+    tool: {
+      invoke: async () => {
+        throw new Error("patch rolled back");
+      },
+    },
+  });
+  assert.equal(thrown.success, false);
+  assert.deepEqual(thrown.mutationRefs, []);
+});
+
+test("canonical tool_call_end carries validated mutationRefs", async () => {
+  const events = [];
+  await executeToolCall({
+    call: { id: "call-mutation-event", name: "write_file", args: {} },
+    tool: { invoke: async () => JSON.stringify(committedMutationResult()) },
+    runtime: createTestRuntimeContext({
+      eventListener: { onEvent: (event) => events.push(event) },
+    }),
+  });
+  const completed = findCommittedMessagePayload(events, "tool_call_end");
+  assert.equal(completed?.success, true);
+  assert.equal(completed.mutationRefs.length, 1);
+  assertMutationRef(completed.mutationRefs[0]);
+  assert.equal(completed.mutationRefs[0].mutationId, MUTATION_ID);
+});
+
+test("executeToolCall maps schema validation failures to RECOVERABLE_INVALID_INPUT", async () => {
+  const { tool: structuredTool } = await import("@langchain/core/tools");
+  const schemaTool = structuredTool(async () => "unreachable", {
+    name: "demo_schema_tool",
+    description: "demo",
+    schema: z.object({ query: z.string().min(1) }),
+  });
+  const result = await executeToolCall({
+    call: { id: "call-schema-invalid", name: "demo_schema_tool", args: { query: "" } },
+    tool: schemaTool,
+    turn: 1,
+  });
+
+  const payload = JSON.parse(result.toolResultText);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.code, "RECOVERABLE_INVALID_INPUT");
+  assert.match(payload.error, /did not match expected schema/);
+  assert.match(payload.error, /query/);
+  assert.equal(result.success, false);
 });

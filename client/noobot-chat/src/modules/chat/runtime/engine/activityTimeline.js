@@ -6,14 +6,9 @@
 
 import {
   mergeCanonicalActivityTimelines,
-  reduceCanonicalActivityTimeline,
   selectCanonicalActivityTimeline,
 } from "@noobot/event-protocol/activity-timeline";
 import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
-
-export function reduceActivityTimeline(timeline = [], envelope = {}) {
-  return reduceCanonicalActivityTimeline(timeline, envelope);
-}
 
 export function mergeActivityTimelines(...timelines) {
   return mergeCanonicalActivityTimelines(...timelines);

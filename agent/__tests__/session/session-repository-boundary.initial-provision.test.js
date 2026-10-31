@@ -323,7 +323,15 @@ test("appendTurns cannot implicitly create a missing Session", async () => {
       userId: "u1",
       sessionId: "session-1",
       persistenceScope: null,
-      turns: [{ role: "user", content: "must be provisioned first", turnScopeId: "turn-1" }],
+      turns: [
+        {
+          attachments: [],
+          transferEnvelopes: [],
+          role: "user",
+          content: "must be provisioned first",
+          turnScopeId: "turn-1",
+        },
+      ],
     });
     assert.deepEqual(result, { appended: false, reason: "session_not_found", turns: [] });
     assert.equal(await exists(scope.sessionFile), false);
@@ -353,6 +361,8 @@ test("getSessionTurns reads from the same scoped persistence location used by ap
       persistenceScope,
       turns: [
         {
+          attachments: [],
+          transferEnvelopes: [],
           role: "assistant",
           presentationMessageId: "pm_fx1",
           messageUid: "sm-child-1",

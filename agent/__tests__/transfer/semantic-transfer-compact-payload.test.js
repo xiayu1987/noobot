@@ -43,10 +43,14 @@ test("compact model view retains only V2 transfer envelopes and canonical attach
   });
   const compacted = JSON.parse(
     compactToolResultTextForModel(
-      JSON.stringify({ toolName: "tool", transferEnvelopes: [envelope] }),
+      JSON.stringify({ toolName: "tool", ok: true, transferEnvelopes: [envelope] }),
     ),
   );
-  assert.deepEqual(Object.keys(compacted), ["toolName", "transferEnvelopes"]);
+  assert.deepEqual(Object.keys(compacted), ["toolName", "ok", "transferEnvelopes"]);
+  assert.throws(
+    () => compactToolResultTextForModel(JSON.stringify({ toolName: "tool" })),
+    /tool_result_ok_not_boolean/,
+  );
   assert.deepEqual(
     compacted.transferEnvelopes[0].payload.attachments[0].identity,
     attachment("att-1").identity,

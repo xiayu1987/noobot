@@ -8,60 +8,45 @@ import { TOOL_SCHEMA_BY_TOOL as enToolSchemaByTool } from "noobot-i18n/agent/loc
 import { TOOL_MANUAL_BY_TOOL as zhToolManualByTool } from "noobot-i18n/agent/locales/zh-CN/tool-manual";
 import { TOOL_MANUAL_BY_TOOL as enToolManualByTool } from "noobot-i18n/agent/locales/en-US/tool-manual";
 import { resolveToolLocale } from "./tool-i18n.js";
-import { text } from "@noobot/shared/value";
 
 const TOOL_SCHEMA_I18N = Object.freeze({
-  "zh-CN": Object.freeze(zhToolSchemaByTool || {}),
-  "en-US": Object.freeze(enToolSchemaByTool || {}),
+  "zh-CN": Object.freeze(zhToolSchemaByTool),
+  "en-US": Object.freeze(enToolSchemaByTool),
 });
 
 const TOOL_MANUAL_I18N = Object.freeze({
-  "zh-CN": Object.freeze(zhToolManualByTool || {}),
-  "en-US": Object.freeze(enToolManualByTool || {}),
+  "zh-CN": Object.freeze(zhToolManualByTool),
+  "en-US": Object.freeze(enToolManualByTool),
 });
 
-function resolveToolSchema(toolName = "") {
-  const localeSchemas =
-    TOOL_SCHEMA_I18N["zh-CN"] && typeof TOOL_SCHEMA_I18N["zh-CN"] === "object"
-      ? TOOL_SCHEMA_I18N["zh-CN"]
-      : {};
-  const schema = localeSchemas[text(toolName)];
-  if (!schema) {
-    throw new Error(`tool schema i18n not configured: ${text(toolName)}`);
-  }
-  return schema;
-}
-
-function resolveLocaleToolSchemaMap(runtime = {}) {
+function resolveLocaleEntry(catalog, runtime, toolName, kind) {
   const locale = resolveToolLocale(runtime);
-  return locale === "en-US" ? TOOL_SCHEMA_I18N["en-US"] : TOOL_SCHEMA_I18N["zh-CN"];
-}
-
-function resolveLocaleToolManualMap(runtime = {}) {
-  const locale = resolveToolLocale(runtime);
-  return locale === "en-US" ? TOOL_MANUAL_I18N["en-US"] : TOOL_MANUAL_I18N["zh-CN"];
-}
-
-export function tToolManual(runtime = {}, toolName = "") {
-  const normalizedToolName = text(toolName);
-  const manual =
-    resolveLocaleToolManualMap(runtime)?.[normalizedToolName] ||
-    TOOL_MANUAL_I18N["zh-CN"]?.[normalizedToolName];
-  return manual || null;
-}
-
-export function tToolDescription(runtime = {}, toolName = "") {
-  const schema =
-    resolveLocaleToolSchemaMap(runtime)?.[text(toolName)] || resolveToolSchema(toolName);
-  return text(schema?.description?.text);
-}
-
-export function tToolParamDescription(runtime = {}, toolName = "", paramName = "") {
-  const schema =
-    resolveLocaleToolSchemaMap(runtime)?.[text(toolName)] || resolveToolSchema(toolName);
-  const normalizedText = schema?.params?.[text(paramName)]?.text;
-  if (!normalizedText) {
-    throw new Error(`tool param schema i18n not configured: ${text(toolName)}.${text(paramName)}`);
+  const entry = catalog[locale]?.[toolName];
+  if (!entry) {
+    throw new Error(`tool ${kind} i18n not configured: ${locale}.${toolName}`);
   }
-  return String(normalizedText).trim();
+  return entry;
+}
+
+export function tToolManual(runtime, toolName) {
+  return resolveLocaleEntry(TOOL_MANUAL_I18N, runtime, toolName, "manual");
+}
+
+export function tToolDescription(runtime, toolName) {
+  const descriptionText = resolveLocaleEntry(TOOL_SCHEMA_I18N, runtime, toolName, "schema")
+    .description?.text;
+  if (!descriptionText) {
+    throw new Error(`tool description i18n not configured: ${toolName}`);
+  }
+  return descriptionText;
+}
+
+export function tToolParamDescription(runtime, toolName, paramName) {
+  const paramText = resolveLocaleEntry(TOOL_SCHEMA_I18N, runtime, toolName, "schema").params?.[
+    paramName
+  ]?.text;
+  if (!paramText) {
+    throw new Error(`tool param schema i18n not configured: ${toolName}.${paramName}`);
+  }
+  return paramText;
 }

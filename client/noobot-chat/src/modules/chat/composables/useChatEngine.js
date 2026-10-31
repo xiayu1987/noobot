@@ -84,6 +84,7 @@ export function useChatEngine({
   requireFunctionDependencies("useChatEngine", {
     requestTurnNavigation,
     notify,
+    clearPendingInteraction,
     onConversationState,
     applyTurnRuntimeEvent,
     logSession: sessionLogWebSocketClient.log,

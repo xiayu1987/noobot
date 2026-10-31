@@ -34,7 +34,17 @@ test("appendTurns from continuations spawned inside a session lock keeps every m
       userId: USER_ID,
       sessionId: SESSION_ID,
       persistenceScope: null,
-      turns: [{ ...TURN, role: "user", messageOrigin: "natural", messageUid, content: messageUid }],
+      turns: [
+        {
+          attachments: [],
+          transferEnvelopes: [],
+          ...TURN,
+          role: "user",
+          messageOrigin: "natural",
+          messageUid,
+          content: messageUid,
+        },
+      ],
     });
   await append("sm_seed");
 

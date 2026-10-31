@@ -24,6 +24,7 @@ describe("2. 字段对齐测试", () => {
   describe("normalizeMessageEntity 字段对齐", () => {
     it("assistant 记录保留按角色的 modelMessageId，不产生 messageId", () => {
       const normalized = normalizeMessageEntity({
+        attachments: [],
         role: "assistant",
         presentationMessageId: "pm_fx1",
         content: "hello",
@@ -40,6 +41,7 @@ describe("2. 字段对齐测试", () => {
       assert.throws(
         () =>
           normalizeMessageEntity({
+            attachments: [],
             role: "assistant",
             presentationMessageId: "pm_fx2",
             content: "hello",
@@ -54,6 +56,7 @@ describe("2. 字段对齐测试", () => {
     });
     it("user 只有 messageUid 时不派生任何 messageId", () => {
       const normalized = normalizeMessageEntity({
+        attachments: [],
         role: "user",
         messageOrigin: "natural",
         content: "legacy user message",
@@ -68,6 +71,7 @@ describe("2. 字段对齐测试", () => {
     });
     it("应包含 role, content, type, ts 等核心字段", () => {
       const raw = {
+        attachments: [],
         sessionId: "s_fixture",
         messageUid: "sm_fixture_4",
         ts: TEST_MESSAGE_TS,
@@ -88,6 +92,7 @@ describe("2. 字段对齐测试", () => {
         assert.throws(
           () =>
             normalizeMessageEntity({
+              attachments: [],
               sessionId: "s_fixture",
               messageUid: "sm_fixture_5",
               role: "user",
@@ -104,6 +109,7 @@ describe("2. 字段对齐测试", () => {
       assert.throws(
         () =>
           normalizeMessageEntity({
+            attachments: [],
             sessionId: "s_fixture",
             messageUid: "sm_fixture_6",
             modelMessageId: "mm_fixture_6",
@@ -115,8 +121,9 @@ describe("2. 字段对齐测试", () => {
       );
     });
 
-    it("tool_calls 字段在 type=tool_call 时应保证为数组", () => {
+    it("type=tool_call 缺少 tool_calls 时实体拒收", () => {
       const raw = {
+        attachments: [],
         sessionId: "s_fixture",
         messageUid: "sm_fixture_7",
         ts: TEST_MESSAGE_TS,
@@ -126,13 +133,16 @@ describe("2. 字段对齐测试", () => {
         type: "tool_call",
         content: "",
       };
-      const normalized = normalizeMessageEntity(raw);
-      assert.ok(Array.isArray(normalized.tool_calls), "tool_call 类型应保证 tool_calls 为数组");
+      assert.throws(
+        () => normalizeMessageEntity(raw),
+        (error) => error.validationErrors?.includes("tool_calls_required"),
+      );
     });
 
     it("流程控制分类快照在调用和结果实体中保持一致", () => {
       const contextPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE);
       const call = normalizeMessageEntity({
+        attachments: [],
         sessionId: "s_fixture",
         messageUid: "sm_fixture_8",
         ts: TEST_MESSAGE_TS,
@@ -144,6 +154,7 @@ describe("2. 字段对齐测试", () => {
         tool_calls: [{ id: "call-1", function: { name: "control" }, contextPolicy }],
       });
       const result = normalizeMessageEntity({
+        attachments: [],
         sessionId: "s_fixture",
         messageUid: "sm_fixture_9",
         ts: TEST_MESSAGE_TS,
@@ -162,6 +173,7 @@ describe("2. 字段对齐测试", () => {
 
     it("summarized 字段默认应为 false", () => {
       const raw = {
+        attachments: [],
         sessionId: "s_fixture",
         messageUid: "sm_fixture_10",
         ts: TEST_MESSAGE_TS,
@@ -175,6 +187,7 @@ describe("2. 字段对齐测试", () => {
 
     it("assistant 协议内容块必须落盘以支持 thinking/tool 轮次恢复", () => {
       const raw1 = {
+        attachments: [],
         sessionId: "s_fixture",
         messageUid: "sm_fixture_11",
         ts: TEST_MESSAGE_TS,
@@ -187,6 +200,7 @@ describe("2. 字段对齐测试", () => {
       assert.ok(!("rawModelContent" in n1), "string rawModelContent 默认不落盘");
 
       const rawSig = {
+        attachments: [],
         sessionId: "s_fixture",
         messageUid: "sm_fixture_12",
         ts: TEST_MESSAGE_TS,
@@ -201,6 +215,7 @@ describe("2. 字段对齐测试", () => {
       assert.notEqual(nSig.rawModelContent, rawSig.rawModelContent);
 
       const raw2 = {
+        attachments: [],
         sessionId: "s_fixture",
         messageUid: "sm_fixture_13",
         ts: TEST_MESSAGE_TS,
@@ -215,6 +230,7 @@ describe("2. 字段对齐测试", () => {
 
     it("仅 OpenAI Responses 协议字段落盘，诊断字段不落盘", () => {
       const raw1 = {
+        attachments: [],
         sessionId: "s_fixture",
         messageUid: "sm_fixture_14",
         ts: TEST_MESSAGE_TS,
@@ -240,6 +256,7 @@ describe("2. 字段对齐测试", () => {
       });
 
       const raw2 = {
+        attachments: [],
         sessionId: "s_fixture",
         messageUid: "sm_fixture_15",
         ts: TEST_MESSAGE_TS,
@@ -348,6 +365,7 @@ describe("3. Session 字段完整性测试", () => {
 
     it("Message 实体应包含 role, content, type, ts, summarized", () => {
       const message = normalizeMessageEntity({
+        attachments: [],
         sessionId: "s_fixture",
         messageUid: "sm_fixture_16",
         role: "user",

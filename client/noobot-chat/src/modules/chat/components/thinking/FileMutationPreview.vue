@@ -9,6 +9,7 @@ import { DocumentAdd, Download, EditPen } from "@element-plus/icons-vue";
 import { BaseFileCardList } from "../../../../shared/public-api/ui.js";
 import MutationDiffSplit from "./MutationDiffSplit.vue";
 import { text, isFunction } from "@noobot/shared/value";
+import { locatorDisplayPath } from "@noobot/shared/locator";
 import "../../../../shared/ui/file-card-common.css";
 import "../../../../shared/ui/file-mutation-preview-common.css";
 
@@ -31,22 +32,28 @@ const diff = ref(null);
 const error = ref("");
 const loading = ref(false);
 let requestGeneration = 0;
+
 const selectedMutation = computed(() => props.mutations[selectedIndex.value] || null);
-const mutationId = computed(() => text(selectedMutation.value?.id));
+const mutationId = computed(() => text(selectedMutation.value?.mutationId));
 const mutationIcon = computed(() => (props.previewKind === "diff" ? EditPen : DocumentAdd));
 function translateOperation(operation = "") {
   const normalized = text(operation).toLowerCase();
   return props.translate(`message.mutationOperationType.${normalized}`);
 }
-function mutationSummary(mutation = {}) {
-  return `${translateOperation(mutation.operation)} · +${mutation.diff?.additions || 0} / -${mutation.diff?.deletions || 0}`;
+
+function mutationLineCounts(mutation) {
+  if (mutation.additions === null) return props.translate("message.mutationBinaryDiff");
+  return `+${mutation.additions} / -${mutation.deletions}`;
+}
+function mutationSummary(mutation) {
+  return `${translateOperation(mutation.operation)} · ${mutationLineCounts(mutation)}`;
 }
 
 async function loadTab(tab) {
   const mutation = selectedMutation.value;
   if (!mutation) return;
   const generation = ++requestGeneration;
-  const requestedMutationId = text(mutation.id);
+  const requestedMutationId = mutation.mutationId;
   const requestedSessionId = props.sessionId;
   const requestedSessionScope = mutation.sessionScope;
   loading.value = true;
@@ -63,7 +70,8 @@ async function loadTab(tab) {
         mutationId: requestedMutationId,
       });
       if (generation !== requestGeneration) return;
-      diff.value = payload.diff || payload;
+
+      diff.value = payload.diff;
     } else if (tab === tabs.FILE) {
       if (!isFunction(props.service?.getFile)) {
         throw new Error(props.translate("message.mutationFileServiceUnavailable"));
@@ -75,7 +83,11 @@ async function loadTab(tab) {
         mutationId: requestedMutationId,
       });
       if (generation !== requestGeneration) return;
-      fileContent.value = String(payload.content || "");
+
+      fileContent.value =
+        payload.content === null
+          ? props.translate(`message.mutationSnapshotState.${payload.snapshot}`)
+          : payload.content;
     }
   } catch (loadError) {
     if (generation !== requestGeneration) return;
@@ -111,7 +123,7 @@ async function openCompactPreview(mutation) {
     <BaseFileCardList v-if="compact">
       <div
         v-for="mutation in mutations"
-        :key="mutation.id"
+        :key="mutation.mutationId"
         class="mutation-file-item base-file-card noobot-flat-card"
         role="button"
         tabindex="0"
@@ -124,14 +136,17 @@ async function openCompactPreview(mutation) {
         </span>
         <span class="file-meta">
           <span class="file-name-row">
-            <span class="file-name" :title="mutation.path">{{ mutation.path }}</span>
+            <span class="file-name" :title="locatorDisplayPath(mutation.locator)">{{
+              mutation.fileName
+            }}</span>
           </span>
           <div class="file-size">{{ mutationSummary(mutation) }}</div>
         </span>
         <button
           type="button"
           class="attachment-download-btn noobot-icon-button noobot-flat-icon-btn"
-          :title="translate('message.downloadFile', { name: mutation.path || '' })"
+          :title="translate('message.downloadFile', { name: mutation.fileName })"
+          :disabled="mutation.snapshot !== 'available'"
           @click.stop="emit('download', mutation)"
         >
           <el-icon><Download /></el-icon>
@@ -148,8 +163,8 @@ async function openCompactPreview(mutation) {
       >
         <el-option
           v-for="(mutation, index) in mutations"
-          :key="mutation.id"
-          :label="mutation.path"
+          :key="mutation.mutationId"
+          :label="locatorDisplayPath(mutation.locator)"
           :value="index"
         />
       </el-select>
@@ -163,29 +178,32 @@ async function openCompactPreview(mutation) {
           <el-skeleton v-if="loading" :rows="5" animated />
           <el-alert v-else-if="error" :title="error" type="error" :closable="false" />
           <MutationDiffSplit v-else-if="diff" :diff="diff" :translate="translate" />
-          <el-empty v-else :description="translate('message.mutationNoDiff')" :image-size="64" />
+          <el-empty
+            v-else
+            :description="translate('message.mutationBinaryDiff')"
+            :image-size="64"
+          />
         </el-tab-pane>
         <el-tab-pane :label="translate('message.mutationPreviewMetadata')" :name="tabs.METADATA">
           <el-descriptions v-if="selectedMutation" :column="1" border>
             <el-descriptions-item :label="translate('message.mutationId')">{{
-              selectedMutation.id
+              selectedMutation.mutationId
             }}</el-descriptions-item>
             <el-descriptions-item :label="translate('message.mutationPath')">{{
-              selectedMutation.path
+              locatorDisplayPath(selectedMutation.locator)
             }}</el-descriptions-item>
             <el-descriptions-item :label="translate('message.mutationOperation')">{{
               translateOperation(selectedMutation.operation)
             }}</el-descriptions-item>
             <el-descriptions-item :label="translate('message.mutationBeforeHash')">{{
-              selectedMutation.before?.sha256 || translate("message.mutationMissingFile")
+              selectedMutation.beforeSha256 ?? translate("message.mutationMissingFile")
             }}</el-descriptions-item>
             <el-descriptions-item :label="translate('message.mutationAfterHash')">{{
-              selectedMutation.after?.sha256 || ""
+              selectedMutation.afterSha256 ?? translate("message.mutationSnapshotState.deleted")
             }}</el-descriptions-item>
-            <el-descriptions-item :label="translate('message.mutationChangedLines')"
-              >{{ selectedMutation.diff?.additions || 0 }} /
-              {{ selectedMutation.diff?.deletions || 0 }}</el-descriptions-item
-            >
+            <el-descriptions-item :label="translate('message.mutationChangedLines')">{{
+              mutationLineCounts(selectedMutation)
+            }}</el-descriptions-item>
           </el-descriptions>
         </el-tab-pane>
       </el-tabs>

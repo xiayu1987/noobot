@@ -12,6 +12,7 @@ import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
 test("normalizeMessageEntity preserves the canonical internal control message type", () => {
   const normalized = normalizeMessageEntity({
+    attachments: [],
     sessionId: "s_fixture",
     messageUid: "sm_fixture_17",
     ts: TEST_MESSAGE_TS,
@@ -32,6 +33,7 @@ test("normalizeMessageEntity preserves the canonical internal control message ty
 
 test("normalizeMessageEntity preserves canonical user interjection ordering", () => {
   const normalized = normalizeMessageEntity({
+    attachments: [],
     sessionId: "s_fixture",
     messageUid: "sm_fixture_18",
     role: "user",
@@ -49,6 +51,7 @@ test("normalizeMessageEntity preserves canonical user interjection ordering", ()
 
 test("normalizeMessageEntity persists assistant protocol blocks but not diagnostics", () => {
   const normalized = normalizeMessageEntity({
+    attachments: [],
     sessionId: "s_fixture",
     messageUid: "sm_fixture_19",
     ts: TEST_MESSAGE_TS,
@@ -115,6 +118,7 @@ test("normalizeMessageEntity persists compact transferEnvelopes", () => {
     meta: { persisted: true },
   };
   const normalized = normalizeMessageEntity({
+    attachments: [],
     sessionId: "s_fixture",
     messageUid: "sm_fixture_20",
     ts: TEST_MESSAGE_TS,
@@ -136,6 +140,7 @@ test("normalizeMessageEntity rejects invalid transferEnvelopes", () => {
   assert.throws(
     () =>
       normalizeMessageEntity({
+        attachments: [],
         sessionId: "s_fixture",
         messageUid: "sm_fixture_21",
         ts: TEST_MESSAGE_TS,
@@ -151,6 +156,7 @@ test("normalizeMessageEntity rejects invalid transferEnvelopes", () => {
 
 test("normalizeMessageEntity always projects attachments as an array", () => {
   const withoutAttachments = normalizeMessageEntity({
+    attachments: [],
     sessionId: "s_fixture",
     messageUid: "sm_fixture_22",
     ts: TEST_MESSAGE_TS,
@@ -230,7 +236,7 @@ test("normalizeMessageEntity preserves user attachment source fields for history
         relativePath: "runtime/attach/scoped/s-source/user/source.md",
         sandboxPath: "/workspace/primary-user/runtime/attach/scoped/s-source/user/source.md",
         size: 42,
-        sourcePath: "D:/work/source.md",
+        origin: { view: "host", path: "D:/work/source.md" },
         isSandbox: true,
         raw: "drop",
       },
@@ -248,7 +254,7 @@ test("normalizeMessageEntity preserves user attachment source fields for history
       relativePath: "runtime/attach/scoped/s-source/user/source.md",
       sandboxPath: "/workspace/primary-user/runtime/attach/scoped/s-source/user/source.md",
       path: "/workspace/primary-user/runtime/attach/scoped/s-source/user/source.md",
-      sourcePath: "D:/work/source.md",
+      origin: { view: "host", path: "D:/work/source.md" },
     },
   ]);
   assert.equal("raw" in normalized.attachments[0], false);
@@ -257,6 +263,7 @@ test("normalizeMessageEntity preserves user attachment source fields for history
 
 test("normalizeMessageEntity preserves message-scoped user identity for history rebuild", () => {
   const normalized = normalizeMessageEntity({
+    attachments: [],
     role: "user",
     messageUid: "sm_history",
     ts: TEST_MESSAGE_TS,
@@ -292,6 +299,7 @@ test("normalizeMessageEntity ignores legacy attachment mirror fields", () => {
       role: "user",
       messageOrigin: "natural",
       content: "camel",
+      attachments: [],
       attachmentMetas: camelAttachments,
     }).attachments,
     [],
@@ -304,6 +312,7 @@ test("normalizeMessageEntity ignores legacy attachment mirror fields", () => {
       role: "user",
       messageOrigin: "natural",
       content: "snake",
+      attachments: [],
       attachment_metas: snakeAttachments,
     }).attachments,
     [],
@@ -312,6 +321,7 @@ test("normalizeMessageEntity ignores legacy attachment mirror fields", () => {
 
 test("normalizeMessageEntity drops thinking timing fields owned by turn facts", () => {
   const normalized = normalizeMessageEntity({
+    attachments: [],
     sessionId: "s_fixture",
     messageUid: "sm_fixture_29",
     ts: TEST_MESSAGE_TS,

@@ -3,7 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filePath as path, PATH_CAPABILITIES, TOOL_PATH_CONTRACTS } from "@noobot/path-resolver";
+import {
+  filePath as path,
+  PATH_CAPABILITIES,
+  PATH_ENTRY_KIND,
+  TOOL_PATH_CONTRACTS,
+} from "@noobot/path-resolver";
 import { tool as structuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import {
@@ -11,21 +16,18 @@ import {
   resolveAuthorizedUserWorkspaceFilePath,
 } from "../core/check-tool-input.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
+import { recoverableToolError } from "../../shared/errors/index.js";
+import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { registerResource } from "../core/resource-broker.js";
 import { tTool } from "../core/tool-i18n.js";
 import { TOOL_NAME } from "../constants/index.js";
 import {
-  DEFAULT_MAX_SEARCH_FILES,
   DEFAULT_SEARCH_CONTEXT_LINES,
   DEFAULT_SEARCH_MAX_RESULTS,
-  toPositiveInt,
+  SEARCH_CONTEXT_LINES_LIMIT,
+  SEARCH_MAX_RESULTS_LIMIT,
 } from "./file-utils.js";
-import {
-  collectSearchFiles,
-  hasRipgrep,
-  searchFilesWithRipgrep,
-  searchInText,
-} from "./file-search.js";
+import { searchFilesWithRipgrep, searchInText } from "./file-search.js";
 import {
   RESOURCE_OPERATION,
   RESOURCE_SCOPE,
@@ -34,8 +36,6 @@ import {
 } from "@noobot/security-assessment-protocol";
 import { confirmToolOperation, createRiskLevelSchema } from "./tool-risk.js";
 import { buildFileToolDescription, resolveFileResourceRiskScope } from "./file-tool-shared.js";
-import { text } from "@noobot/shared/value";
-import { assertNotAborted, isAbortError } from "../../shared/utils/error-utils.js";
 
 function buildSearchSchema(runtime) {
   return z.object({
@@ -55,18 +55,22 @@ function buildSearchSchema(runtime) {
       .optional()
       .default(false)
       .describe(tTool(runtime, "tools.search.fieldCaseSensitive")),
-    path: z.string().optional().describe(tTool(runtime, "tools.search.fieldPath")),
-    glob: z.string().optional().describe(tTool(runtime, "tools.search.fieldGlob")),
+    path: z.string().optional().default(".").describe(tTool(runtime, "tools.search.fieldPath")),
+    glob: z.string().optional().default("").describe(tTool(runtime, "tools.search.fieldGlob")),
     text: z.string().optional().describe(tTool(runtime, "tools.search.fieldText")),
     contextLines: z
       .number()
       .int()
+      .min(0)
+      .max(SEARCH_CONTEXT_LINES_LIMIT)
       .optional()
       .default(DEFAULT_SEARCH_CONTEXT_LINES)
       .describe(tTool(runtime, "tools.search.fieldContextLines")),
     maxResults: z
       .number()
       .int()
+      .min(1)
+      .max(SEARCH_MAX_RESULTS_LIMIT)
       .optional()
       .default(DEFAULT_SEARCH_MAX_RESULTS)
       .describe(tTool(runtime, "tools.search.fieldMaxResults")),
@@ -101,7 +105,7 @@ async function searchTextSource({
     reason: "The model-declared risk and server-classified risk are combined at the highest level.",
   });
   const result = searchInText({
-    text: String(inputText || ""),
+    text: inputText,
     query,
     isRegex,
     caseSensitive,
@@ -117,58 +121,36 @@ async function searchTextSource({
   });
 }
 
-async function collectFallbackMatches({
-  rootPath,
-  workspacePath,
-  glob,
-  query,
-  isRegex,
-  caseSensitive,
-  contextLines,
-  maxCount,
-  abortSignal,
-  workspaceIo,
-}) {
-  const files = await collectSearchFiles({
-    rootPath,
-    workspacePath,
-    glob,
-    maxFiles: DEFAULT_MAX_SEARCH_FILES,
-    abortSignal,
-  });
-  const matches = [];
-  for (const file of files) {
-    assertNotAborted(abortSignal);
-    if (matches.length >= maxCount) break;
-    let content = "";
-    try {
-      content = await workspaceIo.readText(file.filePath);
-    } catch {
-      continue;
-    }
-    const result = searchInText({
-      text: content,
-      query,
-      isRegex,
-      caseSensitive,
-      contextLines,
-      maxResults: maxCount - matches.length,
-      filePath: file.relativePath,
-    });
-    matches.push(...result.matches);
-  }
-  return { matches, truncated: matches.length >= maxCount };
+function logicalSearchPath(pathRef) {
+  return pathRef.view === "mount" ? path.join(pathRef.mount, pathRef.path) : pathRef.path;
 }
 
-async function resolveSearchMatches({ matches, searchRoot, searchPathRef, agentContext }) {
+function resolveSearchScope(searchResolution, runtime) {
+  const { entryKind, executionPath, pathRef } = searchResolution;
+  const logicalPath = logicalSearchPath(pathRef);
+  if (entryKind === PATH_ENTRY_KIND.DIRECTORY) {
+    return { rootPath: executionPath, target: ".", logicalBase: logicalPath };
+  }
+  if (entryKind === PATH_ENTRY_KIND.FILE) {
+    return {
+      rootPath: path.dirname(executionPath),
+      target: path.basename(executionPath),
+      logicalBase: path.dirname(logicalPath),
+    };
+  }
+  throw recoverableToolError(tTool(runtime, "tools.search.pathKindUnsupported"), {
+    code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
+    details: { field: "path", entryKind },
+  });
+}
+
+async function resolveSearchMatches({ matches, scope, searchPathRef, agentContext }) {
   const resolvedMatches = await Promise.all(
     matches.map(async (match) => {
-      const relativeMatchPath = text(match?.filePath);
       const matchedPath =
         searchPathRef.view === "host"
-          ? path.resolve(searchRoot, relativeMatchPath)
-          : path.join(searchPathRef.path, relativeMatchPath);
-      if (!matchedPath) return { match, resolution: null };
+          ? path.resolve(scope.rootPath, match.filePath)
+          : path.join(scope.logicalBase, match.filePath);
       const resolution = await resolveAuthorizedUserWorkspaceFilePath({
         filePath: matchedPath,
         agentContext,
@@ -181,22 +163,17 @@ async function resolveSearchMatches({ matches, searchRoot, searchPathRef, agentC
   );
   const publicMatches = resolvedMatches.map(({ match, resolution }) => {
     const { filePath: _internalFilePath, ...publicMatch } = match;
-    return {
-      ...publicMatch,
-      ...(resolution ? { path: projectToolPathRef(resolution.pathRef) } : {}),
-    };
+    return { ...publicMatch, path: projectToolPathRef(resolution.pathRef) };
   });
   const resources = await Promise.all(
-    resolvedMatches
-      .filter(({ resolution }) => resolution)
-      .map(({ resolution }) =>
-        registerResource({
-          agentContext,
-          executionPath: resolution.executionPath,
-          logicalPathRef: resolution.pathRef,
-          capabilities: { read: true, write: false, scriptInput: true },
-        }),
-      ),
+    resolvedMatches.map(({ resolution }) =>
+      registerResource({
+        agentContext,
+        executionPath: resolution.executionPath,
+        logicalPathRef: resolution.pathRef,
+        capabilities: { read: true, write: false, scriptInput: true },
+      }),
+    ),
   );
   return { matches: publicMatches, resources };
 }
@@ -204,7 +181,6 @@ async function resolveSearchMatches({ matches, searchRoot, searchPathRef, agentC
 async function searchFilesSource({
   agentContext,
   runtime,
-  workspaceIo,
   abortSignal,
   inputPath,
   query,
@@ -216,13 +192,13 @@ async function searchFilesSource({
   riskLevel,
 }) {
   const searchResolution = await resolveAuthorizedUserWorkspaceFilePath({
-    filePath: inputPath || ".",
+    filePath: inputPath,
     agentContext,
     fieldName: "path",
     mustExist: true,
     capability: PATH_CAPABILITIES.FILE_SEARCH,
   });
-  const searchRoot = searchResolution.executionPath;
+  const scope = resolveSearchScope(searchResolution, runtime);
   const searchResourcePath = searchResolution.resourcePath;
   const searchPathRef = searchResolution.pathRef;
   await confirmToolOperation({
@@ -246,42 +222,20 @@ async function searchFilesSource({
     reason: "The final normalized resource requires confirmation under the server path policy.",
   });
 
-  const searchProjectionRoot = searchRoot;
-  const maxCount = toPositiveInt(maxResults, DEFAULT_SEARCH_MAX_RESULTS, 1, 500);
-  let result = null;
-  if (await hasRipgrep()) {
-    try {
-      result = await searchFilesWithRipgrep({
-        rootPath: searchRoot,
-        workspacePath: searchProjectionRoot,
-        query,
-        isRegex,
-        caseSensitive,
-        glob,
-        contextLines,
-        maxResults: maxCount,
-        abortSignal,
-      });
-    } catch (error) {
-      if (isAbortError(error, abortSignal)) throw error;
-      result = null;
-    }
-  }
-  result ||= await collectFallbackMatches({
-    rootPath: searchRoot,
-    workspacePath: searchProjectionRoot,
-    glob,
+  const result = await searchFilesWithRipgrep({
+    rootPath: scope.rootPath,
+    target: scope.target,
     query,
     isRegex,
     caseSensitive,
+    glob,
     contextLines,
-    maxCount,
+    maxResults,
     abortSignal,
-    workspaceIo,
   });
   const resolved = await resolveSearchMatches({
-    matches: result.matches || [],
-    searchRoot,
+    matches: result.matches,
+    scope,
     searchPathRef,
     agentContext,
   });
@@ -290,44 +244,36 @@ async function searchFilesSource({
     source: "files",
     query,
     path: projectToolPathRef(searchPathRef),
-    glob: String(glob || ""),
+    glob,
     ...resolved,
-    truncated: result.truncated === true,
+    truncated: result.truncated,
   });
 }
 
-async function runSearch({ agentContext, runtime, workspaceIo, args, abortSignal }) {
+async function runSearch({ agentContext, runtime, args, abortSignal }) {
   const {
-    source = "files",
+    source,
     query,
-    isRegex = false,
-    caseSensitive = false,
-    path: inputPath = ".",
-    glob = "",
-    text: inputText = "",
-    contextLines = DEFAULT_SEARCH_CONTEXT_LINES,
-    maxResults = DEFAULT_SEARCH_MAX_RESULTS,
+    isRegex,
+    caseSensitive,
+    path: inputPath,
+    glob,
+    text: inputText,
+    contextLines,
+    maxResults,
     riskLevel,
   } = args;
-  const normalizedSource = (text(source) || "files") === "text" ? "text" : "files";
-  const normalizedQuery = String(query || "");
-  if (!normalizedQuery) {
-    return toToolJsonResult(TOOL_NAME.SEARCH, {
-      ok: false,
-      message: tTool(runtime, "tools.search.queryRequired"),
-    });
-  }
-  if (normalizedSource === "text") {
-    if (!String(inputText || "")) {
-      return toToolJsonResult(TOOL_NAME.SEARCH, {
-        ok: false,
-        message: tTool(runtime, "tools.search.textRequired"),
+  if (source === "text") {
+    if (!inputText) {
+      throw recoverableToolError(tTool(runtime, "tools.search.textRequired"), {
+        code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
+        details: { field: "text" },
       });
     }
     return searchTextSource({
       agentContext,
       runtime,
-      query: normalizedQuery,
+      query,
       text: inputText,
       isRegex,
       caseSensitive,
@@ -339,10 +285,9 @@ async function runSearch({ agentContext, runtime, workspaceIo, args, abortSignal
   return searchFilesSource({
     agentContext,
     runtime,
-    workspaceIo,
     abortSignal,
     inputPath,
-    query: normalizedQuery,
+    query,
     isRegex,
     caseSensitive,
     glob,
@@ -352,10 +297,10 @@ async function runSearch({ agentContext, runtime, workspaceIo, args, abortSignal
   });
 }
 
-export function createSearchTool({ agentContext, runtime, workspaceIo }) {
+export function createSearchTool({ agentContext, runtime }) {
   return structuredTool(
     (args, toolConfig) =>
-      runSearch({ agentContext, runtime, workspaceIo, args, abortSignal: toolConfig.signal }),
+      runSearch({ agentContext, runtime, args, abortSignal: toolConfig.signal }),
     {
       name: TOOL_NAME.SEARCH,
       metadata: { pathContract: TOOL_PATH_CONTRACTS.fileSearch },

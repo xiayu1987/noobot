@@ -21,7 +21,7 @@ import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tToolDescription, tToolParamDescription } from "../core/tool-schema-i18n.js";
-import { ARTIFACT_GENERATION_SOURCE, TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
+import { ARTIFACT_GENERATION_SOURCE, TOOL_NAME } from "../constants/index.js";
 import { text } from "@noobot/shared/value";
 
 function assertSelectedConnector(selectedConnectorIds = [], connectorId = "") {
@@ -37,8 +37,8 @@ function assertSelectedConnector(selectedConnectorIds = [], connectorId = "") {
 function createArtifactSink(runtime = {}) {
   const userId = text(runtime?.systemRuntime?.userId);
   const sessionId = text(runtime?.systemRuntime?.sessionId);
-  const attachmentService = runtime?.attachmentService || null;
-  if (!userId || !sessionId || !attachmentService) return null;
+  const { attachmentService } = runtime;
+  if (!userId || !sessionId) return null;
   return async (artifacts = [], options = {}) => {
     if (!Array.isArray(artifacts) || !artifacts.length) return [];
     const generationSource =
@@ -92,17 +92,12 @@ export function createConnectorAccessTool({ agentContext }) {
             abortSignal: toolConfig.signal,
           },
         });
-        return toToolJsonResult(
-          TOOL_NAME.ACCESS_CONNECTOR,
-          {
-            ...result,
-            status: result.ok ? TOOL_RESULT_STATUS.COMPLETED : TOOL_RESULT_STATUS.FAILED,
-          },
-          true,
-        );
+        return toToolJsonResult(TOOL_NAME.ACCESS_CONNECTOR, result);
       } catch (error) {
-        throw recoverableToolError(error?.message || String(error), {
-          code: String(error?.code || ERROR_CODE.RECOVERABLE_PROCESS_CONNECTOR_FAILED),
+        if (!(error instanceof Error)) throw error;
+        throw recoverableToolError(error.message, {
+          code: ERROR_CODE.RECOVERABLE_PROCESS_CONNECTOR_FAILED,
+          cause: error,
         });
       }
     },

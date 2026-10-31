@@ -12,6 +12,7 @@ import { createNativeScriptTool } from "../../src/tools/execution/native-script-
 import { createPendingInteractionClock } from "../../src/tools/execution/native-script-ipc.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import { IDENTITY, createRuntime } from "./native-script-tool.fixtures.js";
+import { SCRIPT_FAILURE_CODE } from "@noobot/execution-isolation-protocol";
 
 function createClockProbe() {
   const events = [];
@@ -139,7 +140,9 @@ test("ui.waitForUser surfaces a cancelled interaction as a script failure", asyn
   });
 
   assert.equal(result.ok, false);
-  assert.match(String(result.error || result.stderr), /cancelled/);
+  assert.equal(result.code, SCRIPT_FAILURE_CODE.exited);
+  assert.equal(result.exitCode, 1);
+  assert.match(result.stderr, /cancelled/);
 });
 
 test("ui.waitForUser fails when no interaction bridge is available", async () => {
@@ -149,7 +152,9 @@ test("ui.waitForUser fails when no interaction bridge is available", async () =>
   });
 
   assert.equal(result.ok, false);
-  assert.match(String(result.error || result.stderr), /interaction bridge is unavailable/);
+  assert.equal(result.code, SCRIPT_FAILURE_CODE.exited);
+  assert.equal(result.exitCode, 1);
+  assert.match(result.stderr, /interaction bridge is unavailable/);
 });
 
 test("ui.waitForUser resolves a plain bridge answer into a response field", async () => {
@@ -232,7 +237,9 @@ test("ui.waitForUser fails loudly when a declared field has no name", async () =
   });
 
   assert.equal(result.ok, false, JSON.stringify(result));
-  assert.match(String(result.error || result.stderr), /name/);
+  assert.equal(result.code, SCRIPT_FAILURE_CODE.exited);
+  assert.equal(result.exitCode, 1);
+  assert.match(result.stderr, /name/);
   assert.deepEqual(requests, [], "an invalid declaration must not reach the interaction bridge");
 });
 
@@ -247,7 +254,9 @@ test("ui.waitForUser rejects a fields payload that is neither an array nor a wra
   });
 
   assert.equal(result.ok, false, JSON.stringify(result));
-  assert.match(String(result.error || result.stderr), /fields/);
+  assert.equal(result.code, SCRIPT_FAILURE_CODE.exited);
+  assert.equal(result.exitCode, 1);
+  assert.match(result.stderr, /fields/);
 });
 
 test("browser.closeProfile defaults to the default profile name", async () => {
@@ -268,7 +277,9 @@ test("browser.closeProfile rejects a traversing profile name", async () => {
   });
 
   assert.equal(result.ok, false);
-  assert.match(String(result.error || result.stderr), /profile name is not allowed/);
+  assert.equal(result.code, SCRIPT_FAILURE_CODE.exited);
+  assert.equal(result.exitCode, 1);
+  assert.match(result.stderr, /profile name is not allowed/);
 });
 
 test("browser.closeProfile fails when the script has no profile owner", async () => {
@@ -279,5 +290,7 @@ test("browser.closeProfile fails when the script has no profile owner", async ()
   });
 
   assert.equal(result.ok, false);
-  assert.match(String(result.error || result.stderr), /profile owner is unavailable/);
+  assert.equal(result.code, SCRIPT_FAILURE_CODE.exited);
+  assert.equal(result.exitCode, 1);
+  assert.match(result.stderr, /profile owner is unavailable/);
 });

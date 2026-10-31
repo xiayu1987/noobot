@@ -19,6 +19,7 @@ function buildMessageContentFacet(canonicalMessage = {}) {
     ...pickOwnFields(canonicalMessage, [
       "type",
       "chatPresentation",
+      "workspaceRootDirectory",
       "tool_call_id",
       "thinking",
       "toolCall",
@@ -46,6 +47,7 @@ function buildMessageTimelineFacet(canonicalMessage = {}) {
 
 const MESSAGE_STATUS_FIELDS = Object.freeze([
   "error",
+  "toolArtifactConflict",
   "pending",
   "synthetic",
   "placeholder",

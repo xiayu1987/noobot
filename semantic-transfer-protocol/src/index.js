@@ -16,6 +16,7 @@ import {
   TRANSFER_VERSION,
   TRANSFER_DIRECTION,
   TRANSFER_MODE,
+  TRANSFER_ERROR_CODE,
 } from "./constants.js";
 export * from "./registry.js";
 export * from "./policy.js";
@@ -50,6 +51,7 @@ const SOURCE_REFERENCE_KEYS = new Set([
   "size",
   "startLine",
   "endLine",
+  "totalLines",
 ]);
 const FORBIDDEN_PATH_KEYS = new Set([
   "path",
@@ -202,11 +204,12 @@ export function directTransfer({ content, ...options } = {}) {
   });
 }
 export function attachmentTransfer({ attachments, ...options } = {}) {
+  if (!Array.isArray(attachments)) throw new Error("invalid_attachment_transfer_attachments");
   return createTransferEnvelope({
     ...options,
     payload: {
       mode: TRANSFER_MODE.ATTACHMENT,
-      attachments: (Array.isArray(attachments) ? attachments : []).map(createAttachmentReference),
+      attachments: attachments.map(createAttachmentReference),
     },
   });
 }
@@ -330,6 +333,19 @@ function protocolValueKey(value) {
   return JSON.stringify(stableProtocolValue(value));
 }
 
+function identityConflictError(code, identityKey) {
+  const error = new Error(`${code}:${identityKey}`);
+  error.code = code;
+  return error;
+}
+
+export function isTransferIdentityConflict(error) {
+  return (
+    error?.code === TRANSFER_ERROR_CODE.IDENTITY_CONFLICT ||
+    error?.code === TRANSFER_ERROR_CODE.ATTACHMENT_IDENTITY_CONFLICT
+  );
+}
+
 export function mergeTransferEnvelopes(...values) {
   const result = [];
   const identities = new Map();
@@ -343,7 +359,7 @@ export function mergeTransferEnvelopes(...values) {
         identities.set(identityKey, contentKey);
         result.push(envelope);
       } else if (existingContentKey !== contentKey) {
-        throw new Error(`transfer_identity_conflict:${identityKey}`);
+        throw identityConflictError(TRANSFER_ERROR_CODE.IDENTITY_CONFLICT, identityKey);
       }
     }
   }
@@ -367,10 +383,18 @@ export function getTransferAttachmentReferences(value = null) {
         identities.set(identityKey, contentKey);
         result.push(reference);
       } else if (existingContentKey !== contentKey) {
-        throw new Error(`transfer_attachment_identity_conflict:${identityKey}`);
+        throw identityConflictError(TRANSFER_ERROR_CODE.ATTACHMENT_IDENTITY_CONFLICT, identityKey);
       }
     }
   }
   return Object.freeze(result);
+}
+
+export function getTransferSourceReferences(value = null) {
+  return Object.freeze(
+    normalizeTransferEnvelopes(value)
+      .filter((envelope) => envelope.payload.mode === TRANSFER_MODE.SOURCE_REFERENCE)
+      .map((envelope) => envelope.payload.reference),
+  );
 }
 export { attachmentIdentityKey };

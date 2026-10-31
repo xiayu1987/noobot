@@ -171,7 +171,7 @@ function buildReplacementUserMessage(replacedUserMessage, fields, nowValue) {
     pending: false,
     done: true,
     ts: nowValue,
-    ...(nextAttachments !== undefined ? { attachments: nextAttachments } : {}),
+    attachments: nextAttachments,
   });
 }
 
@@ -271,7 +271,7 @@ export async function replaceTurn({
   turnScopeId = "",
   expectedAggregateVersion = null,
   commandId = "",
-  attachments = undefined,
+  attachments,
 } = {}) {
   const normalizedNewContent = text(newContent);
   if (!normalizedNewContent) throw badRequest("newContent is required");

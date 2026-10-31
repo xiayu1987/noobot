@@ -53,7 +53,7 @@ export function createDetachedSubSessionRunner({
   configService = null,
   sessionRunner = null,
   session = null,
-  attachmentService = null,
+  attachmentService,
   mergeRunConfigPluginPolicy = null,
   prepareRunConfig = null,
   now = () => new Date().toISOString(),

@@ -49,6 +49,7 @@ test("session save keeps thinking timing out of messages and projects finish fro
     });
     session.messages = [
       {
+        attachments: [],
         messageUid: "sm_thinking_user",
         ts: TEST_MESSAGE_TS,
         sessionId: "S",
@@ -59,6 +60,7 @@ test("session save keeps thinking timing out of messages and projects finish fro
         dialogProcessId: "dp-1",
       },
       {
+        attachments: [],
         messageUid: "sm_thinking_assistant_1",
         ts: TEST_MESSAGE_TS,
         sessionId: "S",
@@ -71,6 +73,7 @@ test("session save keeps thinking timing out of messages and projects finish fro
         dialogProcessId: "dp-1",
       },
       {
+        attachments: [],
         messageUid: "sm_thinking_assistant_2",
         ts: TEST_MESSAGE_TS,
         sessionId: "S",
@@ -156,6 +159,7 @@ test("session save keeps the model loop round on persisted turn timings", async 
     });
     session.messages = [
       {
+        attachments: [],
         messageUid: "sm_round_user",
         ts: TEST_MESSAGE_TS,
         sessionId: "S",
@@ -166,6 +170,7 @@ test("session save keeps the model loop round on persisted turn timings", async 
         dialogProcessId: "dp-1",
       },
       {
+        attachments: [],
         messageUid: "sm_round_assistant",
         ts: TEST_MESSAGE_TS,
         sessionId: "S",

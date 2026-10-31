@@ -240,6 +240,39 @@ test("log-websocket-server: reliable write failures return error and never ACK",
   }
 });
 
+test("log-websocket-server: records are owned by the authenticated user, not the client-supplied userId", async () => {
+  const writes = [];
+  const server = createServer((_req, res) => res.end("not-found"));
+  const registered = registerLogWebSocketServer(server, {
+    resolveAuthByApiKey: () => ({ userId: "u1" }),
+    writeLogEvent: async (event) => {
+      writes.push(event);
+      return { ok: true };
+    },
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const messages = await sendLogWs({
+      port: server.address().port,
+      payload: {
+        source: "client",
+        scope: "session",
+        category: "state",
+        event: "state.spoofed",
+        sessionId: "s-spoofed",
+        userId: "u2",
+      },
+    });
+    assert.equal(messages.at(-1)?.event, "ack");
+    assert.deepEqual(
+      writes.map(({ userId }) => userId),
+      ["u1"],
+    );
+  } finally {
+    await closeLogServer(server, registered);
+  }
+});
+
 test("log-websocket-server: batches containing a record without category return error and never ACK", () =>
   withRuntimeEventsRoot("noobot-session-logs-", async (workspaceRoot) => {
     await initializeSessionTree(workspaceRoot, "u1");
@@ -351,7 +384,6 @@ test("log-websocket-server: works when chat websocket server is registered first
       getBot: () => ({ runSession: async () => ({}) }),
       resolveRequestLocale: () => "zh-CN",
       resolveAuthByApiKey: () => ({ userId: "u1" }),
-      isForbiddenUserScope: () => false,
       normalizeRunConfig: (config = {}) => config || {},
       normalizeLocale: (locale = "") => String(locale || "zh-CN"),
       defaultLocale: "zh-CN",

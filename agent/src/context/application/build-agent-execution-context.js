@@ -37,6 +37,7 @@ export async function buildAgentExecutionContext({
 }) {
   const runtime = createRuntimeContext({
     basePath: runtimeBasePath,
+    workspaceRootDirectory: staticInfo.basePath,
     globalConfig,
     userConfig,
     eventListener,

@@ -6,10 +6,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import express from "express";
+import { SUPER_ADMIN_ROLE } from "#agent/utils";
 import { registerConnectorRoutes } from "../../routes/connectors-routes.js";
+import { createAuthService, USER_SCOPE_POLICY } from "../../services/auth-service.js";
 import { withTestServer } from "./session-routes.helpers.js";
 
-function createHarness() {
+function createHarness({ auth = { userId: "alice", role: "user" } } = {}) {
   const catalog = [
     {
       instanceType: "builtin.database.postgres",
@@ -111,13 +113,18 @@ function createHarness() {
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
-    req.auth = { userId: "alice", role: "user" };
+    req.auth = auth;
     next();
   });
+  const { createUserScopeParam } = createAuthService({ translateText: (key) => key });
+  const administrableUserScopeParam = createUserScopeParam(USER_SCOPE_POLICY.ADMINISTRABLE);
+
+  app.param("userId", administrableUserScopeParam);
   registerConnectorRoutes(app, {
     bot,
     connectorRuntime,
     translateText: (key) => key,
+    ownerOnlyUserScopeParam: createUserScopeParam(USER_SCOPE_POLICY.OWNER_ONLY),
   });
   return { app, records, runtime, selections, catalog, lifecycleCalls, bot, connectorRuntime };
 }
@@ -131,14 +138,35 @@ test("connector catalog exposes only runtime-registered instance definitions", a
   });
 });
 
-test("connector routes reject access outside the authenticated owner", async () => {
+test("connector routes reject another user with the unified user scope error", async () => {
   const { app } = createHarness();
   await withTestServer(app, async (baseUrl) => {
     const response = await fetch(`${baseUrl}/internal/connectors/bob`);
     const payload = await response.json();
     assert.equal(response.status, 403);
-    assert.equal(payload.errorCode, "connector_owner_mismatch");
+    assert.equal(payload.error, "auth.forbiddenUserScope");
   });
+});
+
+test("connector routes are OWNER_ONLY: super admin cannot access another user's connectors", async () => {
+  const { app } = createHarness({ auth: { userId: "admin", role: SUPER_ADMIN_ROLE } });
+  await withTestServer(app, async (baseUrl) => {
+    for (const path of ["/alice", "/alice/sessions/root-a", "/alice/con_db/connect"]) {
+      const method = path.endsWith("/connect") ? "POST" : "GET";
+      const response = await fetch(`${baseUrl}/internal/connectors${path}`, { method });
+      assert.equal(response.status, 403, path);
+      assert.equal((await response.json()).error, "auth.forbiddenUserScope");
+    }
+    const catalog = await fetch(`${baseUrl}/internal/connectors/catalog`);
+    assert.equal(catalog.status, 200);
+  });
+});
+
+test("connector routes require the owner-only guard", () => {
+  assert.throws(
+    () => registerConnectorRoutes(express(), { bot: {}, connectorRuntime: {} }),
+    /ownerOnlyUserScopeParam/,
+  );
 });
 
 test("connector routes expose public metadata without credentials", async () => {

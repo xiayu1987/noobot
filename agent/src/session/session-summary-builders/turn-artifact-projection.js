@@ -3,11 +3,19 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { collectAttachmentRefsFromTransferEnvelopes } from "../transfer-attachment-refs.js";
+import { compactTransferEnvelopes } from "../transfer-attachment-refs.js";
 import { selectPresentedSessionLifecycleTurns } from "../session-turn-read-model.js";
 import { text } from "@noobot/shared/value";
+import { TOOL_CALL_MESSAGE_TYPE, TOOL_RESULT_MESSAGE_TYPE } from "@noobot/session-protocol";
+import { decodeToolResultText } from "@noobot/event-protocol/tool-result";
+import { resolveCanonicalToolTimelineStatus } from "@noobot/event-protocol/tool-timeline";
 
-const items = (value) => (Array.isArray(value) ? value : []);
+function toolResultFacts(message, field) {
+  const value = message[field];
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new TypeError(`tool result ${field} must be an array`);
+  return value;
+}
 
 function buildLifecycleTurnPresentation(turn) {
   const turnScopeId = text(turn?.turnScopeId);
@@ -21,6 +29,7 @@ function buildLifecycleTurnPresentation(turn) {
     role: "assistant",
     type: "message",
     content: "",
+    attachments: [],
     turnScopeId,
     dialogProcessId: text(turn.dialogProcessId),
     chatPresentation: true,
@@ -61,27 +70,31 @@ function messageArtifactIdentity(message = {}, context) {
 }
 
 function collectToolCalls(message, context) {
-  const role = text(message?.role);
-  const type = text(message?.type);
-  if (type !== "tool_call" && (role !== "assistant" || !Array.isArray(message?.tool_calls))) return;
-  context.totalCount += items(message?.tool_calls).length;
+  if (message.type !== TOOL_CALL_MESSAGE_TYPE) return;
+  context.totalCount += message.tool_calls.length;
 }
 
 function collectToolResult(message, context) {
-  const role = text(message?.role);
-  const type = text(message?.type);
-  if (role !== "tool" && type !== "tool_result") return;
+  if (message.type !== TOOL_RESULT_MESSAGE_TYPE) return;
   context.totalCount += 1;
   const toolCallId = text(message?.tool_call_id);
   const callKey = context.callKeyOf(message, toolCallId);
-  const attachments = collectAttachmentRefsFromTransferEnvelopes(message?.transferEnvelopes);
-  if (!callKey || !attachments.length) return;
+  const transferEnvelopes = compactTransferEnvelopes(toolResultFacts(message, "transferEnvelopes"));
+  const resourceRefs = toolResultFacts(message, "resourceRefs");
+  const mutationRefs = toolResultFacts(message, "mutationRefs");
+  if (!callKey || (!transferEnvelopes.length && !resourceRefs.length && !mutationRefs.length)) {
+    return;
+  }
   context.artifactByCallId.set(callKey, {
     toolCallId,
     toolName: text(message.toolName),
     timestamp: text(message.ts),
+    result: message.content,
+    success: decodeToolResultText(message.content).ok,
     ...messageArtifactIdentity(message, context),
-    attachments,
+    transferEnvelopes,
+    resourceRefs,
+    mutationRefs,
   });
 }
 
@@ -92,19 +105,23 @@ function buildTimelineByRoute(context) {
     if (!routeKey) continue;
     const resultEvent = {
       timestamp: artifact.timestamp,
-      attachments: artifact.attachments,
+      ...(artifact.resourceRefs.length ? { resourceRefs: artifact.resourceRefs } : {}),
+      ...(artifact.mutationRefs.length ? { mutationRefs: artifact.mutationRefs } : {}),
       sessionId: context.sessionId,
       dialogProcessId: artifact.dialogProcessId,
       turnScopeId: artifact.turnScopeId,
     };
     const timeline = timelineByRoute.get(routeKey) || [];
-    timeline.push({
+    const entry = {
       key: `call:${artifact.toolCallId}`,
       toolCallId: artifact.toolCallId,
       tool: artifact.toolName,
-      status: "completed",
+      result: artifact.result,
+      success: artifact.success,
       resultEvent,
-    });
+      transferEnvelopes: artifact.transferEnvelopes,
+    };
+    timeline.push({ ...entry, status: resolveCanonicalToolTimelineStatus(entry) });
     timelineByRoute.set(routeKey, timeline);
   }
   return timelineByRoute;

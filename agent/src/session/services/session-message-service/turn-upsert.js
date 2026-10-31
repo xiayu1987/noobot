@@ -13,7 +13,6 @@ import {
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import { normalizeMessageEntity } from "../../entities/message-entity.js";
 import { registerSessionMessageFacts } from "../../entities/session-message-facts.js";
-import { getTransferAttachments } from "../../../transfer-adapter/storage/consumer.js";
 import { dedupeAttachments } from "./attachment-helpers.js";
 import { isPlainObject, text } from "@noobot/shared/value";
 
@@ -49,6 +48,9 @@ function buildTurnEntity(service, resolvedParentSessionId, input) {
     ...optionalStringField("userMessageId", input.userMessageId),
     ...optionalStringField("presentationMessageId", input.presentationMessageId),
     ...(chatPresentation === undefined ? {} : { chatPresentation }),
+    ...(input.workspaceRootDirectory === undefined
+      ? {}
+      : { workspaceRootDirectory: input.workspaceRootDirectory }),
     content: input.content,
     type: input.type || "",
     userName: resolveUserName(input),
@@ -60,6 +62,9 @@ function buildTurnEntity(service, resolvedParentSessionId, input) {
     modelAlias: normalizedString(input.modelAlias),
     modelName: normalizedString(input.modelName),
     ...(contextPolicy ? { contextPolicy } : {}),
+    ...(input.tool_call_id ? { tool_call_id: input.tool_call_id } : {}),
+    ...(input.toolName ? { toolName: input.toolName } : {}),
+    ...(Object.hasOwn(input, "tool_calls") ? { tool_calls: input.tool_calls } : {}),
     summarized: input.summarized === true,
     rawModelContent: input.rawModelContent ?? null,
     modelAdditionalKwargs: input.modelAdditionalKwargs ?? null,
@@ -77,33 +82,18 @@ function buildTurnEntity(service, resolvedParentSessionId, input) {
     ...pickMessageOriginField(input),
     pluginMessage: input.pluginMessage === true,
     pluginMeta: resolvePluginMeta(input.pluginMeta),
-    transferEnvelopes: Array.isArray(input.transferEnvelopes) ? input.transferEnvelopes : [],
+    transferEnvelopes: input.transferEnvelopes,
+    attachments: resolveTurnAttachments(input),
     ts: input.ts === undefined ? service.now() : input.ts,
   });
 }
 
-function applyToolFields(turn, input) {
-  if (input.tool_call_id) turn.tool_call_id = input.tool_call_id;
-  if (input.toolName) turn.toolName = normalizedString(input.toolName);
-  if (Array.isArray(input.tool_calls) && input.tool_calls.length) {
-    turn.tool_calls = input.tool_calls;
+function resolveTurnAttachments(input) {
+  if (!Array.isArray(input.attachments) || !Array.isArray(input.transferEnvelopes)) {
+    throw new TypeError("session turn attachments and transferEnvelopes must be arrays");
   }
-}
-
-function resolvePreferredAttachments(turn, input) {
-  const transferEnvelopes = [
-    ...(Array.isArray(input.transferEnvelopes) ? input.transferEnvelopes : []),
-    ...(Array.isArray(turn?.transferEnvelopes) ? turn.transferEnvelopes : []),
-  ].filter(Boolean);
-  const transferAttachments = getTransferAttachments(transferEnvelopes);
-  if (Array.isArray(turn?.transferEnvelopes) && turn.transferEnvelopes.length) return [];
-  if (transferAttachments.length) return dedupeAttachments(transferAttachments);
-  return Array.isArray(input.attachments) ? input.attachments : [];
-}
-
-function applyAttachments(turn, input) {
-  const attachments = resolvePreferredAttachments(turn, input);
-  if (attachments.length) turn.attachments = attachments;
+  if (input.transferEnvelopes.length) return [];
+  return dedupeAttachments(input.attachments);
 }
 
 function createIdentityError(message, code) {
@@ -176,8 +166,6 @@ function updateSessionMetadata(service, session) {
 
 export function upsertTurnInSession(service, session, resolvedParentSessionId, input = {}) {
   const turn = buildTurnEntity(service, resolvedParentSessionId, input);
-  applyToolFields(turn, input);
-  applyAttachments(turn, input);
   const persistedTurn = persistTurn(session.messages, turn);
   registerSessionMessageFacts(session, persistedTurn);
   updateSessionMetadata(service, session);

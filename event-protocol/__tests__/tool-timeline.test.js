@@ -11,6 +11,7 @@ import {
   countCanonicalThinkingDetailEvents,
   countCanonicalToolTimelineEvents,
   reduceCanonicalToolTimeline,
+  requireCanonicalToolTimelineIdentity,
   resolveCanonicalToolTimelineStatus,
 } from "../src/tool-timeline.js";
 import { projectCanonicalActivityTimelineEvent } from "../src/activity-timeline.js";
@@ -181,4 +182,122 @@ test("canonical realtime application remains linear for long tool runs", () => {
   assert.equal(timeline.length, 5000);
   assert.equal(indexByKey.size, 5000);
   assert.ok(elapsedMs < 1000, `5000 incremental events took ${elapsedMs.toFixed(1)}ms`);
+});
+
+test("canonical tool timeline carries tool_call_end resourceRefs into resultEvent", () => {
+  const resourceRefs = [
+    { resourceId: "res_1", source: "workspace", logical: { view: "workspace", path: "a.txt" } },
+  ];
+  const timeline = reduceCanonicalToolTimeline(
+    [],
+    event("tool_call_end", 2, { result: "{}", success: true, resourceRefs }),
+  );
+  assert.deepEqual(timeline[0].resultEvent.resourceRefs, resourceRefs);
+  const empty = reduceCanonicalToolTimeline(
+    [],
+    event("tool_call_end", 3, { result: "{}", success: true }),
+  );
+  assert.equal("resourceRefs" in empty[0].resultEvent, false);
+});
+
+test("canonical tool timeline carries tool_call_end mutationRefs into resultEvent", () => {
+  const mutationRefs = [{ mutationId: "m_1", revision: 1 }];
+  const timeline = reduceCanonicalToolTimeline(
+    [],
+    event("tool_call_end", 2, { result: "{}", success: true, mutationRefs }),
+  );
+  assert.deepEqual(timeline[0].resultEvent.mutationRefs, mutationRefs);
+  const empty = reduceCanonicalToolTimeline(
+    [],
+    event("tool_call_end", 3, { result: "{}", success: true, mutationRefs: [] }),
+  );
+  assert.equal("mutationRefs" in empty[0].resultEvent, false);
+});
+
+test("tool timeline identity accepts only the reducer-written key call:<toolCallId>", () => {
+  assert.deepEqual(
+    requireCanonicalToolTimelineIdentity({ key: "call:a", toolCallId: "a", tool: "read_file" }),
+    { key: "call:a", toolCallId: "a" },
+  );
+  for (const item of [
+    { key: "call:a" },
+    { toolCallId: "a" },
+    { key: "call:b", toolCallId: "a" },
+    { key: "a", toolCallId: "a" },
+    { key: "call:", toolCallId: "" },
+    { key: "call:1", toolCallId: 1 },
+  ]) {
+    assert.throws(() => requireCanonicalToolTimelineIdentity(item), TypeError);
+  }
+});
+
+const taskCheckReceiptFixture = Object.freeze({
+  state: "CONTINUE",
+  abstract: "abstract",
+  nextAction: "next",
+  contentHash: `sha256:${"a".repeat(64)}`,
+});
+
+function taskCheckEntry(overrides = {}) {
+  return {
+    key: "call:tc-1",
+    toolCallId: "tc-1",
+    tool: "task_check",
+    success: true,
+    resultEvent: { eventId: "e-1", timestamp: "2026-01-01T00:00:00.000Z" },
+    result: JSON.stringify({
+      ok: true,
+      toolName: "task_check",
+      protocolVersion: 1,
+      summary: taskCheckReceiptFixture,
+    }),
+    ...overrides,
+  };
+}
+
+test("projectTaskCheckReceipt parses a successful task_check result", async () => {
+  const { projectTaskCheckReceipt } = await import("../src/tool-timeline.js");
+  assert.deepEqual(
+    { ...projectTaskCheckReceipt(taskCheckEntry()) },
+    { ...taskCheckReceiptFixture },
+  );
+});
+
+test("projectTaskCheckReceipt returns null for non task_check, running or failed entries", async () => {
+  const { projectTaskCheckReceipt } = await import("../src/tool-timeline.js");
+  assert.equal(projectTaskCheckReceipt(taskCheckEntry({ tool: "read_file" })), null);
+  assert.equal(projectTaskCheckReceipt(taskCheckEntry({ resultEvent: undefined })), null);
+  assert.equal(projectTaskCheckReceipt(taskCheckEntry({ success: false })), null);
+});
+
+test("projectTaskCheckReceipt rejects successful results that break the task_check protocol", async () => {
+  const { projectTaskCheckReceipt } = await import("../src/tool-timeline.js");
+  assert.throws(() => projectTaskCheckReceipt(taskCheckEntry({ result: "plain" })));
+  assert.throws(
+    () =>
+      projectTaskCheckReceipt(
+        taskCheckEntry({ result: JSON.stringify({ ok: true, protocolVersion: 2, summary: {} }) }),
+      ),
+    /protocolVersion/,
+  );
+  assert.throws(
+    () =>
+      projectTaskCheckReceipt(
+        taskCheckEntry({
+          result: JSON.stringify({ ok: true, protocolVersion: 1, summary: { state: "X" } }),
+        }),
+      ),
+    /NOOBOT_TASK_CHECK/,
+  );
+});
+
+test("selectTaskCheckReceipt reads the projected receipt from compacted summary entries", async () => {
+  const { selectTaskCheckReceipt } = await import("../src/tool-timeline.js");
+  const { result: _result, ...compacted } = taskCheckEntry();
+  assert.equal(selectTaskCheckReceipt(compacted), null);
+  assert.deepEqual(
+    selectTaskCheckReceipt({ ...compacted, taskCheckReceipt: taskCheckReceiptFixture }),
+    taskCheckReceiptFixture,
+  );
+  assert.deepEqual({ ...selectTaskCheckReceipt(taskCheckEntry()) }, { ...taskCheckReceiptFixture });
 });

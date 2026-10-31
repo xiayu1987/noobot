@@ -12,7 +12,7 @@ import {
 } from "./platform.js";
 import { SANDBOX_MOUNT_KIND, resolveSandboxMount } from "./sandbox-mapping.js";
 import { WORKSPACE_SANDBOX_PATHS } from "@noobot/execution-isolation-protocol";
-import { isPathWithinRoot } from "./path-contract.js";
+import { PATH_REF_VIEWS, isPathWithinRoot, resolvePathRef } from "./path-contract.js";
 import { text } from "@noobot/shared/value";
 
 const VIRTUAL_TOOL_PATH_ROOTS = new Set(["project", "workspace", "workdir", "repo", "repository"]);
@@ -106,12 +106,13 @@ function projectSandboxMount(mountedPath) {
     error: "",
   };
   if (mountedPath.kind === SANDBOX_MOUNT_KIND.WORKSPACE) return resolved;
+
+  const relative = mountedPath.sandboxPath.slice(mountedPath.target.length).replace(/^\/+/, "");
   return {
     ...resolved,
-    logicalPath: mountedPath.sandboxPath,
-    executionRoot: mountedPath.source,
-    mountTarget: mountedPath.target,
-    mountReadOnly: mountedPath.readOnly,
+    mountPathRef: resolvePathRef({
+      input: { view: PATH_REF_VIEWS.MOUNT, mount: mountedPath.target, path: relative || "." },
+    }),
   };
 }
 

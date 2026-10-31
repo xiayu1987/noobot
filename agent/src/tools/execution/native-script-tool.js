@@ -36,7 +36,9 @@ import {
   NATIVE_SCRIPT_RESULT_FIELD,
 } from "@noobot/execution-isolation-protocol/native-script";
 import {
+  projectScriptOutcome,
   projectToolExecutionMeta,
+  resolveScriptTermination,
   resolveToolExecutionPolicy,
 } from "@noobot/execution-isolation-protocol";
 import {
@@ -149,6 +151,13 @@ function validateScriptBody(value) {
   return body;
 }
 
+function resolveNativeTerminationMessage({ spawnError, protocolError, timedOut, timeoutMs }) {
+  if (spawnError) return spawnError.message;
+  if (protocolError) return protocolError;
+  if (timedOut) return `native script timed out after ${timeoutMs}ms`;
+  return "native script aborted";
+}
+
 function runGeneratedScript({ scriptPath, cwd, env, timeoutMs, abortSignal, ipcHandlers = {} }) {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [scriptPath], {
@@ -233,7 +242,8 @@ function runGeneratedScript({ scriptPath, cwd, env, timeoutMs, abortSignal, ipcH
         child.send({ type: resultChannel, requestId: message.requestId, ...response });
       }
     });
-    const settle = async ({ code = 1, signal = "", spawnError = null } = {}) => {
+    let spawnError = null;
+    const settle = async (code, signal) => {
       if (settled) return;
       settled = true;
       if (timer) clearTimeout(timer);
@@ -241,24 +251,42 @@ function runGeneratedScript({ scriptPath, cwd, env, timeoutMs, abortSignal, ipcH
       if (forceKillTimer) clearTimeout(forceKillTimer);
       abortSignal?.removeEventListener?.("abort", onAbort);
       await terminationPromise;
-      if (spawnError) capture(stderr, Buffer.from(spawnError.message || String(spawnError)));
-      const exitCode = timedOut ? 124 : aborted ? 130 : Number(code || 0);
-      if (exitCode === 0 && !scriptResult) {
+      const exitCode = spawnError || code === null ? null : code;
+      const observedSignal = spawnError || !signal ? null : signal;
+      if (!spawnError && !timedOut && !aborted && exitCode === 0 && !scriptResult) {
         protocolError = "native script execution result is missing";
       }
-      if (protocolError) capture(stderr, Buffer.from(`${protocolError}\n`));
+      const outcome = projectScriptOutcome({
+        termination: resolveScriptTermination({
+          timedOut,
+          aborted,
+          outputLimitExceeded: false,
+          spawnFailed: Boolean(spawnError),
+          protocolViolated: Boolean(protocolError),
+          exitCode,
+          signal: observedSignal,
+        }),
+        exitCode,
+        signal: observedSignal,
+        message: resolveNativeTerminationMessage({
+          spawnError,
+          protocolError,
+          timedOut,
+          timeoutMs,
+        }),
+      });
       resolve({
-        code: protocolError ? 1 : exitCode,
-        signal: signal || "",
+        outcome,
         stdout: Buffer.concat(stdout).toString("utf8"),
         stderr: Buffer.concat(stderr).toString("utf8"),
         scriptResult,
       });
     };
-    child.on("error", (error) =>
-      settle({ code: Number(error?.errno || 1) || 1, spawnError: error }),
-    );
-    child.on("close", (code, signal) => settle({ code, signal }));
+
+    child.on("error", (error) => {
+      spawnError = error;
+    });
+    child.on("close", (code, signal) => settle(code, signal));
   });
 }
 
@@ -373,7 +401,7 @@ async function measureNativeOutputs(outputRoot, succeeded) {
 }
 
 async function persistNativeOutputs({ runtime, agentContext, identity, outputRoot, outputFiles }) {
-  if (!outputFiles.length) return { transferEnvelopes: [], resources: [] };
+  if (!outputFiles.length) return { transferEnvelopes: [], outputResources: [] };
   const artifacts = await Promise.all(
     outputFiles.map(async (relative) => ({
       name: relative.split(path.sep).join("__"),
@@ -382,7 +410,7 @@ async function persistNativeOutputs({ runtime, agentContext, identity, outputRoo
       meta: { virtualPath: createTaskPath({ kind: TASK_PATH_KINDS.OUTPUT, relative }) },
     })),
   );
-  const { transferEnvelopes } = await persistTransferArtifacts({
+  const { transferEnvelopes, attachments } = await persistTransferArtifacts({
     runtime,
     artifacts,
     attachmentSource: ATTACHMENT_SOURCE.MODEL,
@@ -399,7 +427,7 @@ async function persistNativeOutputs({ runtime, agentContext, identity, outputRoo
   });
   return {
     transferEnvelopes,
-    resources: registerTransferAttachmentResources({ agentContext, transferEnvelopes }),
+    outputResources: registerTransferAttachmentResources({ agentContext, attachments }),
   };
 }
 
@@ -412,12 +440,11 @@ function projectNativeSuccess({
   persisted,
   inputResources,
 }) {
-  const succeeded = result.code === 0;
+  const { outcome } = result;
   return {
-    ok: succeeded,
-    status: succeeded ? "completed" : "failed",
+    ...outcome,
+    status: outcome.ok ? "completed" : "failed",
     execution,
-    code: result.code,
     stdout: projectNativeOutput(result.stdout, roots),
     stderr: projectNativeOutput(result.stderr, roots),
     ...(result.scriptResult?.present
@@ -426,24 +453,8 @@ function projectNativeSuccess({
     output_file_count: outputFiles.length,
     output_bytes: outputBytes,
     transferEnvelopes: persisted.transferEnvelopes,
-    resources: persisted.resources,
+    outputResources: persisted.outputResources,
     input_resources: inputResources,
-  };
-}
-
-function projectNativeFailure({ error, execution, roots }) {
-  return {
-    ok: false,
-    status: "failed",
-    execution,
-    code: Number(error?.code || 1) || 1,
-    stdout: projectNativeOutput(error?.stdout || "", roots),
-    stderr: projectNativeOutput(error?.message || String(error || "native script failed"), roots),
-    output_file_count: 0,
-    output_bytes: 0,
-    transferEnvelopes: [],
-    resources: [],
-    input_resources: [],
   };
 }
 
@@ -497,6 +508,7 @@ export function createNativeScriptTool({ agentContext }) {
       ]);
       let resultPayload;
       let cleanup = null;
+
       try {
         const { inputMap, inputResources } = await stageNativeInputs({
           inputs,
@@ -534,7 +546,7 @@ export function createNativeScriptTool({ agentContext }) {
         });
         const { outputFiles, outputBytes } = await measureNativeOutputs(
           roots.outputRoot,
-          result.code === 0,
+          result.outcome.ok,
         );
         const persisted = await persistNativeOutputs({
           runtime,
@@ -552,8 +564,6 @@ export function createNativeScriptTool({ agentContext }) {
           persisted,
           inputResources,
         });
-      } catch (error) {
-        resultPayload = projectNativeFailure({ error, execution, roots });
       } finally {
         cleanup = await cleanupNativeTask([taskRoot, roots.tempRoot]);
       }

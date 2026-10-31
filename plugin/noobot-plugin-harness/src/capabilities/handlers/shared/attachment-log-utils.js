@@ -24,7 +24,7 @@ import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 const SHARED_EVENTS = WORKFLOW_PARAMS.logging.events.shared;
 export function normalizeTransferPayload(payload = {}) {
   const source = isPlainObject(payload) ? payload : {};
-  const transferEnvelopes = normalizeTransferEnvelopes(source.transferEnvelopes || []);
+  const transferEnvelopes = normalizeTransferEnvelopes(source.transferEnvelopes);
   return {
     transferEnvelopes,
   };

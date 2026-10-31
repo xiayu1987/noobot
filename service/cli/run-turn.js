@@ -16,7 +16,7 @@ import {
   createTurnStopCommand,
 } from "@noobot/agent-transport-protocol";
 import { CLI_ACTION } from "./cli-args.js";
-import { createTurnTracker, readInteractionRequest } from "./turn-events.js";
+import { createTurnTracker, readCliTurnEvent, readInteractionRequest } from "./turn-events.js";
 import { classifyInteractionRequest } from "./interaction-prompt.js";
 
 export const CLI_EXIT_CODE = Object.freeze({
@@ -33,6 +33,7 @@ export const CLIENT_CLOSE_REASON = Object.freeze({
   INTERRUPTED: "client_interrupted",
   INTERACTION_UNAVAILABLE: "client_interaction_unavailable",
   INTERACTION_FAILED: "client_interaction_failed",
+  PROTOCOL_EVENT_REJECTED: "client_protocol_event_rejected",
 });
 
 export function createCliTurnIdentity({ sessionId }) {
@@ -139,9 +140,16 @@ export async function runCliTurn({
   }
 
   function onEvent(packet) {
-    tracker.apply(packet);
-    renderer.event(packet);
-    const request = readInteractionRequest(packet);
+    const turnEvent = readCliTurnEvent(packet);
+    if (turnEvent && !turnEvent.valid) {
+      renderer.notice(`protocol event rejected: ${turnEvent.event} ${turnEvent.errors.join(",")}`);
+      connection.close(CLIENT_CLOSE_REASON.PROTOCOL_EVENT_REJECTED);
+      return;
+    }
+    renderer.event(packet, turnEvent);
+    if (!turnEvent) return;
+    tracker.apply(turnEvent);
+    const request = readInteractionRequest(turnEvent);
     if (!request) return;
     answerInteraction(request).catch((error) => {
       renderer.notice(`interaction failed: ${error.message}`);

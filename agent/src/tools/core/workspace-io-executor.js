@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { mkdir, readFile, readdir, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
-import { filePath as path } from "@noobot/path-resolver";
 import {
   TOOL_EXECUTION_CLASS,
   TOOL_EXECUTION_VIEW,
@@ -12,7 +11,7 @@ import {
 } from "@noobot/execution-isolation-protocol";
 import {
   ATOMIC_RENAME_RETRY_DELAYS_MS,
-  writeFileAtomic,
+  writeFileAtomicCreatingParents,
 } from "../../shared/storage/atomic-file-write.js";
 
 export function createWorkspaceIoExecutor({
@@ -45,10 +44,10 @@ export function createWorkspaceIoExecutor({
     readText: (filePath) => operations.readFile(filePath, "utf8"),
     readBuffer: (filePath) => operations.readFile(filePath),
     async writeText(filePath, content) {
-      await operations.mkdir(path.dirname(filePath), { recursive: true });
-      await writeFileAtomic({
+      await writeFileAtomicCreatingParents({
         filePath,
         content,
+        mkdir: operations.mkdir,
         writeFile: operations.writeFile,
         rename: operations.rename,
         remove: operations.rm,

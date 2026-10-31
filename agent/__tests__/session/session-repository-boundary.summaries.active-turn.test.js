@@ -27,6 +27,7 @@ test("session display summary materializes the active Turn presentation in the z
     aggregateVersion: 0,
     messages: [
       {
+        attachments: [],
         role: "user",
         type: "message",
         content: "resend request",
@@ -90,6 +91,7 @@ test("session display summary materializes stopped Turn details on its stable pr
     aggregateVersion: 0,
     messages: [
       {
+        attachments: [],
         role: "user",
         messageOrigin: "natural",
         type: "message",
@@ -99,9 +101,11 @@ test("session display summary materializes stopped Turn details on its stable pr
         dialogProcessId: "dialog-stopped",
       },
       {
+        attachments: [],
         role: "assistant",
         modelMessageId: "mm_session_repository_bound_1",
         type: "tool_call",
+        tool_calls: [{ id: "stopped", name: "read_file", args: {}, type: "tool_call" }],
         content: "",
         chatPresentation: false,
         presentationMessageId: "presentation-stopped",
@@ -111,7 +115,17 @@ test("session display summary materializes stopped Turn details on its stable pr
           {
             key: "call:stopped",
             toolCallId: "stopped",
+            tool: "read_file",
+            args: {},
             call: { eventId: "call-stopped", sequence: 1 },
+            result: JSON.stringify({
+              ok: false,
+              status: "aborted",
+              code: "RECOVERABLE_USER_CANCELLED",
+              error: "user stop action",
+              stopType: "user_stop",
+            }),
+            success: false,
             resultEvent: { eventId: "result-stopped", sequence: 2 },
           },
         ],
@@ -166,6 +180,7 @@ test("Session Detail exposes canonical active Turn messages", async () => {
     session.messages = canonicalMessages(
       [
         {
+          attachments: [],
           userMessageId: "user-active-full",
           messageUid: "user-active-full",
           ts: TEST_MESSAGE_TS,
@@ -234,8 +249,10 @@ test("active Turn summary carries its authoritative thinking timelines", async (
     aggregateVersion: 0,
     messages: [
       {
+        attachments: [],
         role: "assistant",
         type: "tool_call",
+        tool_calls: [{ id: "active-tool", name: "read_file", args: {}, type: "tool_call" }],
         content: "",
         chatPresentation: false,
         modelMessageId: "source-tool-message",
@@ -247,6 +264,7 @@ test("active Turn summary carries its authoritative thinking timelines", async (
             key: "call:active-tool",
             toolCallId: "active-tool",
             tool: "read_file",
+            args: {},
             call: { eventId: "tool-start" },
           },
         ],
@@ -262,8 +280,10 @@ test("active Turn summary carries its authoritative thinking timelines", async (
         ],
       },
       {
+        attachments: [],
         role: "assistant",
         type: "tool_call",
+        tool_calls: [{ id: "active-tool-2", name: "read_file", args: {}, type: "tool_call" }],
         content: "",
         chatPresentation: false,
         modelMessageId: "source-tool-message-2",
@@ -275,6 +295,7 @@ test("active Turn summary carries its authoritative thinking timelines", async (
             key: "call:active-tool-2",
             toolCallId: "active-tool-2",
             tool: "search",
+            args: {},
             call: { eventId: "tool-start-2" },
           },
         ],

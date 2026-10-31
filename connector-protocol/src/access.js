@@ -38,19 +38,66 @@ export function normalizeConnectorAccessContext(context = {}) {
   });
 }
 
-export function normalizeConnectorAccessResult(result = {}) {
-  const source = objectValue(result, "connector result");
-  if (typeof source.ok !== "boolean") throw new TypeError("connector result ok must be boolean");
-  const attachments = source.attachments ?? [];
-  if (!Array.isArray(attachments))
-    throw new TypeError("connector result attachments must be an array");
+export const CONNECTOR_FAILURE_CODE = Object.freeze({
+  INPUT_INVALID: "connector_input_invalid",
+  CONFIG_INVALID: "connector_config_invalid",
+  DEPENDENCY_MISSING: "connector_dependency_missing",
+  ABORTED: "connector_aborted",
+  EXECUTION_FAILED: "connector_execution_failed",
+  CONNECT_FAILED: "connector_connect_failed",
+});
+
+const CONNECTOR_FAILURE_CODES = new Set(Object.values(CONNECTOR_FAILURE_CODE));
+const ACCESS_SHAPE = Object.freeze({
+  label: "connector result",
+  successKeys: new Set(["ok", "output"]),
+  failureKeys: new Set(["ok", "error", "code", "output"]),
+  hasOutput: true,
+});
+const HEALTH_SHAPE = Object.freeze({
+  label: "connector health",
+  successKeys: new Set(["ok"]),
+  failureKeys: new Set(["ok", "error", "code"]),
+  hasOutput: false,
+});
+
+function rejectUnknownKeys(source, allowed, label) {
+  for (const key of Object.keys(source)) {
+    if (!allowed.has(key)) throw new TypeError(`${label} contains unsupported field: ${key}`);
+  }
+}
+
+function frozenOutput(source, label) {
+  return Object.freeze({ ...objectValue(source.output, `${label} output`) });
+}
+
+function normalizeConnectorOutcome(result, shape) {
+  const { label } = shape;
+  const source = objectValue(result, label);
+  if (typeof source.ok !== "boolean") throw new TypeError(`${label} ok must be boolean`);
+  if (source.ok) {
+    rejectUnknownKeys(source, shape.successKeys, label);
+    return Object.freeze(
+      shape.hasOutput ? { ok: true, output: frozenOutput(source, label) } : { ok: true },
+    );
+  }
+  rejectUnknownKeys(source, shape.failureKeys, label);
+  if (!text(source.error)) throw new TypeError(`${label} failure error is required`);
+  if (!CONNECTOR_FAILURE_CODES.has(source.code)) {
+    throw new TypeError(`${label} failure code is invalid: ${source.code}`);
+  }
   return Object.freeze({
-    ok: source.ok,
-    status: String(source.status || (source.ok ? "completed" : "failed")).trim(),
-    output: Object.freeze({ ...objectValue(source.output ?? {}, "connector result output") }),
-    attachments: Object.freeze([...attachments]),
-    diagnostics: Object.freeze({
-      ...objectValue(source.diagnostics ?? {}, "connector result diagnostics"),
-    }),
+    ok: false,
+    error: source.error,
+    code: source.code,
+    ...(source.output === undefined ? {} : { output: frozenOutput(source, label) }),
   });
+}
+
+export function normalizeConnectorAccessResult(result) {
+  return normalizeConnectorOutcome(result, ACCESS_SHAPE);
+}
+
+export function normalizeConnectorHealthResult(result) {
+  return normalizeConnectorOutcome(result, HEALTH_SHAPE);
 }

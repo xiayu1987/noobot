@@ -25,7 +25,7 @@ import { requireRuntimeModelHost } from "../../runtime/model-port-host.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { MIME_TYPE } from "@noobot/attachment-protocol/mime";
-import { TOOL_CALL_MODE, TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
+import { TOOL_CALL_MODE, TOOL_NAME } from "../constants/index.js";
 import { text } from "@noobot/shared/value";
 
 const MULTIMODAL_FLOW_NAME = "agent.multimodal_generate";
@@ -346,7 +346,6 @@ async function generateImages(input, deps, state) {
     TOOL_NAME.MULTIMODAL_GENERATE,
     {
       ok: true,
-      status: TOOL_RESULT_STATUS.COMPLETED,
       callMode: TOOL_CALL_MODE.MULTIMODAL_GENERATION,
       modelAlias: trimmedText(state.resolvedModelSpec?.alias),
       model: trimmedText(state.resolvedModelSpec?.model),

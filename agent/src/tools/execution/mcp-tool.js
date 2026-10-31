@@ -21,12 +21,7 @@ import { tTool } from "../core/tool-i18n.js";
 import { isAbortError } from "../../shared/utils/error-utils.js";
 import { createAgentDetachedSubSessionStrategy } from "../../bot/session/detached-subsession-strategy.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
-import {
-  TOOL_POLICY_MODE,
-  TOOL_EVENT_NAME,
-  TOOL_NAME,
-  TOOL_RESULT_STATUS,
-} from "../constants/index.js";
+import { TOOL_POLICY_MODE, TOOL_EVENT_NAME, TOOL_NAME } from "../constants/index.js";
 import { text, isFunction } from "@noobot/shared/value";
 
 function buildMcpTaskResult({ detachedRun, mcpName, parentSessionId, mcpToolset }) {
@@ -37,7 +32,6 @@ function buildMcpTaskResult({ detachedRun, mcpName, parentSessionId, mcpToolset 
     {
       ok: true,
       mcpName,
-      status: TOOL_RESULT_STATUS.COMPLETED,
       sessionId: detachedRun.sessionId,
       parentSessionId,
       tools: mcpToolset.toolNames,
@@ -113,6 +107,7 @@ async function runMcpTask({
   const detachedRun = await runtime.botManager.runDetachedSubSession({
     parentExecutionScope: agentContext,
     message: `${tTool(runtime, "bot.taskPrefix")}: ${input.task}`,
+    attachments: [],
     eventListener: runtime.eventListener,
     abortSignal,
     strategy: createAgentDetachedSubSessionStrategy({

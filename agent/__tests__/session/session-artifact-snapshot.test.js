@@ -97,6 +97,7 @@ test("snapshot rejects a completed turn whose summary marks need canonical repai
           role: "assistant",
           content: "",
           chatPresentation: false,
+          type: "tool_call",
           tool_calls: [{ id: "call-1", type: "function", function: { name: "read_file" } }],
           ...turn,
         },

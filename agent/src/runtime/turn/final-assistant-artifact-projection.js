@@ -4,16 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 import { getTransferAttachments } from "../../transfer-adapter/storage/consumer.js";
-import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
+import { TRANSFER_REASON, normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 import {
-  compactSessionAttachmentRef,
   compactTransferEnvelopes,
   dedupeSessionAttachmentRefs,
 } from "../../session/transfer-attachment-refs.js";
 import { isPlainObject, text } from "@noobot/shared/value";
 
-const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set(["tool_result_overflow"]);
+const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set([TRANSFER_REASON.TOOL_RESULT_OVERFLOW]);
 
 function shouldPromoteAttachmentToAssistant(attachmentItem = {}) {
   if (!isPlainObject(attachmentItem)) return false;
@@ -28,25 +27,17 @@ function shouldPromoteAttachmentToAssistant(attachmentItem = {}) {
 }
 
 function resolveTransferEnvelopesFromMessage(messageItem = {}) {
-  return Array.isArray(messageItem?.transferEnvelopes)
-    ? messageItem.transferEnvelopes.filter(isPlainObject)
-    : [];
+  return normalizeTransferEnvelopes(messageItem.transferEnvelopes);
 }
 
-function resolveAttachmentsFromMessage(messageItem = {}) {
-  return Array.isArray(messageItem?.attachments) ? messageItem.attachments : [];
+function resolveAttachmentsFromMessage(messageItem) {
+  const attachments = messageItem.attachments ?? [];
+  if (!Array.isArray(attachments)) throw new TypeError("session attachments must be an array");
+  return attachments;
 }
 
 function dedupeTransferEnvelopes(envelopes = []) {
   return normalizeTransferEnvelopes(compactTransferEnvelopes(envelopes));
-}
-
-function dedupeAttachments(attachments = []) {
-  return dedupeSessionAttachmentRefs(
-    (Array.isArray(attachments) ? attachments : [])
-      .map((attachment) => compactSessionAttachmentRef(attachment))
-      .filter(Boolean),
-  );
 }
 
 function shouldPromoteTransferEnvelope(envelope = {}) {
@@ -71,7 +62,7 @@ export function projectGeneratedArtifactsToFinalAssistant(messages = []) {
       resolveTransferEnvelopesFromMessage(messageItem).filter(shouldPromoteTransferEnvelope),
     ),
   );
-  const attachments = dedupeAttachments(
+  const attachments = dedupeSessionAttachmentRefs(
     sourceMessages.flatMap((messageItem = {}) =>
       resolveTransferEnvelopesFromMessage(messageItem).length
         ? []
@@ -99,7 +90,7 @@ export function projectGeneratedArtifactsToFinalAssistant(messages = []) {
     ...resolveTransferEnvelopesFromMessage(finalAssistant),
     ...transferEnvelopes,
   ]);
-  const mergedAttachments = dedupeAttachments([
+  const mergedAttachments = dedupeSessionAttachmentRefs([
     ...resolveAttachmentsFromMessage(finalAssistant),
     ...attachments,
   ]);

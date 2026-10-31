@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { mergeConfig, normalizeMcpServerType } from "@noobot/agent-config-protocol";
-import { recoverableToolError } from "../../shared/errors/index.js";
+import { ERROR_CODE, recoverableToolError } from "../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { StreamableHttpMcpClient } from "./clients/streamable-http.js";
 import { SseMcpClient } from "./clients/sse.js";
@@ -23,7 +23,9 @@ export function getMcpServerByName({ globalConfig = {}, userConfig = {}, mcpName
   const resolvedHeaders = isPlainObject(server?.headers) ? { ...server.headers } : {};
   const authHeader = text(resolvedHeaders?.Authorization);
   if (/^Bearer\s*$/i.test(authHeader)) {
-    throw recoverableToolError(`${tSystem("mcp.authHeaderEmptyAfterResolve")}: ${name}`);
+    throw recoverableToolError(`${tSystem("mcp.authHeaderEmptyAfterResolve")}: ${name}`, {
+      code: ERROR_CODE.RECOVERABLE_MCP_AUTH_HEADER_EMPTY,
+    });
   }
   return { name, ...server, type: serverType, headers: resolvedHeaders };
 }

@@ -307,6 +307,8 @@ describe("applyReconnectEventReplay", () => {
     const envelope = canonicalMessageEvent({
       eventId: "workflow-child-1",
       eventType: "thinking",
+      activityId: "activity-l309",
+      activityKind: "model_analysis",
       sessionId: "child-session-1",
       turnScopeId: "workflow-node:node-1",
       presentationMessageId: "child-message-1",

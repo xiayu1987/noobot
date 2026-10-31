@@ -55,6 +55,11 @@ export function validateSessionCommand(command = {}) {
   if (!Number.isInteger(command.expectedAggregateVersion) || command.expectedAggregateVersion < 0)
     errors.push("invalid_expected_aggregate_version");
   if (!isPlainObject(command.payload)) errors.push("invalid_payload");
+  else if (
+    command.type === SESSION_COMMAND.TURN_REPLACE &&
+    !Array.isArray(command.payload.attachments)
+  )
+    errors.push("invalid_payload_attachments");
   return { valid: errors.length === 0, errors };
 }
 

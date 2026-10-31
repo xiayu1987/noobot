@@ -16,8 +16,6 @@ export function dedupeAttachments(attachments = []) {
   return dedupeAttachmentsByIdentity(attachments);
 }
 
-export function normalizeIncomingAttachmentsForSessionMessage(incomingAttachments = []) {
-  if (!Array.isArray(incomingAttachments)) return undefined;
-  if (incomingAttachments.length === 0) return [];
-  return dedupeAttachmentsByIdentity(incomingAttachments);
+export function normalizeIncomingAttachmentsForSessionMessage(incomingAttachments) {
+  return dedupeAttachments(incomingAttachments);
 }

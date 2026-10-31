@@ -10,7 +10,10 @@ import os from "node:os";
 import path from "node:path";
 import { createNativeScriptTool } from "../../src/tools/execution/native-script-tool.js";
 import { tToolManual } from "../../src/tools/core/tool-schema-i18n.js";
-import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
+import {
+  createTestRuntimeContext,
+  createTestAttachmentService,
+} from "../helpers/test-runtime-context.js";
 import { isNativeScriptExecutionResult } from "../../src/tools/execution/native-script-ipc.js";
 import {
   NATIVE_SCRIPT_FORBIDDEN_IDENTIFIERS,
@@ -21,6 +24,7 @@ import {
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import { IDENTITY, createRuntime, hasChromiumCapability } from "./native-script-tool.fixtures.js";
 import { closeAllBrowserSessions } from "../../src/tools/execution/browser-session-registry.js";
+import { SCRIPT_FAILURE_CODE } from "@noobot/execution-isolation-protocol";
 
 after(closeAllBrowserSessions);
 
@@ -54,7 +58,7 @@ test("execute_native_script rejects host runtime escape syntax before execution"
 test("execute_native_script reports the source location of forbidden dynamic property access", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-script-location-"));
   const runtime = createRuntime(basePath, {
-    attachmentService: {
+    attachmentService: createTestAttachmentService({
       async ingestGeneratedArtifacts(request) {
         return request.artifacts.map((artifact, index) => ({
           attachmentId: `resource-output-${index}`,
@@ -65,7 +69,7 @@ test("execute_native_script reports the source location of forbidden dynamic pro
           size: Buffer.from(artifact.contentBase64, "base64").length,
         }));
       },
-    },
+    }),
   });
   const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
 
@@ -202,8 +206,9 @@ await files.writeText(target, "must not exist");
   );
 
   assert.equal(result.ok, false);
+  assert.equal(result.code, SCRIPT_FAILURE_CODE.exited);
+  assert.equal(result.exitCode, 1);
   assert.match(result.stderr, /output path must be a safe relative path without parent traversal/);
-  assert.equal(result.error, result.stderr.trim());
   await assert.rejects(fs.access(path.join(parentPath, "unauthorized-parent")));
 });
 
@@ -284,12 +289,12 @@ test("execute_native_script discards formal outputs when the script fails", asyn
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-failed-output-"));
   let persistCalls = 0;
   const runtime = createRuntime(basePath, {
-    attachmentService: {
+    attachmentService: createTestAttachmentService({
       async ingestGeneratedArtifacts() {
         persistCalls += 1;
         return [];
       },
-    },
+    }),
   });
   const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
   const result = JSON.parse(

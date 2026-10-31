@@ -19,7 +19,6 @@ import {
   isAuthoritativeFinalContentEvent,
   isHostActivity,
   projectMessageEventContent,
-  projectMessageEventToolFacets,
   projectTurnPresentation,
   resolveMessageEventPresentationId,
   resolveMessageViewKey,
@@ -27,8 +26,14 @@ import {
 } from "@noobot/event-protocol/message-event";
 import { EVENT_FAMILY, validateProtocolEvent } from "../src/event-registry.js";
 import { MESSAGE_REMOVED_FIELD_NAME } from "@noobot/session-protocol";
+import {
+  createFileDiff,
+  createFileMutationResult,
+  projectMutationRefs,
+} from "@noobot/file-mutation-protocol";
 
 const LEGACY_MESSAGE_ID = MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID;
+const OK_RESULT = JSON.stringify({ ok: true });
 
 function payload(overrides = {}) {
   return {
@@ -37,6 +42,7 @@ function payload(overrides = {}) {
     dialogProcessId: "dialog-1",
     tool: "read_file",
     toolCallId: "call-1",
+    args: {},
     ...overrides,
   };
 }
@@ -314,7 +320,7 @@ test("turn presentation atomically declares canonical user and assistant entitie
   );
 });
 
-test("message payload validates and projects tool facts", () => {
+test("message payload validates tool facts", () => {
   assert.deepEqual(validateMessageEventPayload(payload({ args: {} })), { valid: true, errors: [] });
   assert.deepEqual(
     validateMessageEventPayload(
@@ -322,34 +328,37 @@ test("message payload validates and projects tool facts", () => {
     ),
     { valid: true, errors: [] },
   );
-  const started = projectMessageEventToolFacets(
-    payload({ args: { filePath: "notes.txt" }, toolCallId: "call-1" }),
-  );
-  assert.deepEqual(started.toolCall, {
-    id: "call-1",
-    name: "read_file",
-    args: { filePath: "notes.txt" },
-  });
   const endedPayload = payload({
     eventType: MESSAGE_EVENT_TYPE.TOOL_CALL_END,
-    result: "body",
+    result: OK_RESULT,
     success: true,
     durationMs: 5,
   });
   assert.deepEqual(validateMessageEventPayload(endedPayload), { valid: true, errors: [] });
-  assert.deepEqual(projectMessageEventToolFacets(endedPayload).toolResult, {
-    toolCallId: "call-1",
-    name: "read_file",
-    output: "body",
-    success: true,
-  });
+  assert.deepEqual(validateMessageEventPayload({ ...endedPayload, tool: undefined }).errors, [
+    "missing_tool",
+  ]);
+  for (const args of [undefined, null, "{}", []]) {
+    assert.deepEqual(validateMessageEventPayload(payload({ args })).errors, ["invalid_tool_args"]);
+  }
+  for (const result of [
+    undefined,
+    "body",
+    JSON.stringify({ data: 1 }),
+    JSON.stringify([]),
+    { ok: true },
+  ]) {
+    assert.deepEqual(validateMessageEventPayload({ ...endedPayload, result }).errors, [
+      "invalid_tool_result",
+    ]);
+  }
 });
 
 test("tool_call_end requires a finite non-negative durationMs", () => {
   const ended = (fields) =>
     payload({
       eventType: MESSAGE_EVENT_TYPE.TOOL_CALL_END,
-      result: "body",
+      result: OK_RESULT,
       success: true,
       ...fields,
     });
@@ -364,10 +373,91 @@ test("tool_call_end requires a finite non-negative durationMs", () => {
   }
 });
 
+test("tool_call_end accepts resourceRefs arrays and rejects other shapes", () => {
+  const ended = (fields) =>
+    payload({
+      eventType: MESSAGE_EVENT_TYPE.TOOL_CALL_END,
+      result: OK_RESULT,
+      success: true,
+      durationMs: 1,
+      ...fields,
+    });
+  assert.equal(validateMessageEventPayload(ended({ resourceRefs: [] })).valid, true);
+  for (const resourceRefs of [{}, "res_1", null]) {
+    assert.deepEqual(validateMessageEventPayload(ended({ resourceRefs })).errors, [
+      "invalid_resource_refs",
+    ]);
+  }
+});
+
+function validMutationRef() {
+  const id = "11111111-1111-4111-8111-111111111111";
+  const meta = (section, sha256) => ({
+    exists: true,
+    isText: true,
+    size: 4,
+    sha256,
+    snapshotRef: { mutationId: id, section },
+  });
+  const [ref] = projectMutationRefs(
+    createFileMutationResult({
+      id,
+      operation: "update",
+      locator: { view: "workspace", path: "src/example.js" },
+      fileName: "example.js",
+      before: meta("before", "before"),
+      after: meta("after", "after"),
+      diff: createFileDiff("old\n", "new\n"),
+      sessionScope: null,
+    }),
+  );
+  return ref;
+}
+
+test("tool_call_end accepts canonical mutationRefs and rejects other shapes", () => {
+  const ended = (fields) =>
+    payload({
+      eventType: MESSAGE_EVENT_TYPE.TOOL_CALL_END,
+      result: OK_RESULT,
+      success: true,
+      durationMs: 1,
+      ...fields,
+    });
+  assert.equal(validateMessageEventPayload(ended({ mutationRefs: [] })).valid, true);
+  assert.equal(
+    validateMessageEventPayload(ended({ mutationRefs: [validMutationRef()] })).valid,
+    true,
+  );
+  const broken = { ...validMutationRef(), revision: 0 };
+  for (const mutationRefs of [{}, null, "m_1", [broken], [{ mutationId: "m_1" }]]) {
+    assert.deepEqual(validateMessageEventPayload(ended({ mutationRefs })).errors, [
+      "invalid_mutation_refs",
+    ]);
+  }
+});
+
+test("tool_call_end requires transferEnvelopes to be an array when present", () => {
+  const ended = (fields) =>
+    payload({
+      eventType: MESSAGE_EVENT_TYPE.TOOL_CALL_END,
+      result: OK_RESULT,
+      success: true,
+      durationMs: 1,
+      ...fields,
+    });
+  assert.equal(validateMessageEventPayload(ended({})).valid, true);
+  assert.equal(validateMessageEventPayload(ended({ transferEnvelopes: [] })).valid, true);
+  for (const transferEnvelopes of [{}, null, "envelope"]) {
+    assert.deepEqual(validateMessageEventPayload(ended({ transferEnvelopes })).errors, [
+      "invalid_transfer_envelopes",
+    ]);
+  }
+});
+
 test("message payload rejects nested and aliased tool facts", () => {
   const noncanonical = payload({
     eventType: MESSAGE_EVENT_TYPE.TOOL_CALL_END,
-    result: { ok: true },
+    result: OK_RESULT,
     success: false,
     durationMs: 5,
     toolResult: { tool_call_id: "call-1", output: { ok: true }, success: true },
@@ -386,6 +476,8 @@ test("message activity payload rejects presentation aliases and preserves an exp
         tool: undefined,
         toolCallId: undefined,
         text: "analysis",
+        activityId: "activity-1",
+        activityKind: "guidance_analysis",
         event: "guidance_analysis_response",
         type: "guidance_analysis",
         rawEvent: "plugin_capability_response",
@@ -400,6 +492,7 @@ test("message activity payload rejects presentation aliases and preserves an exp
         tool: undefined,
         toolCallId: undefined,
         text: "analysis",
+        activityId: "activity-1",
         activityKind: "guidance_analysis",
       }),
     ),
@@ -407,7 +500,21 @@ test("message activity payload rejects presentation aliases and preserves an exp
   );
 });
 
-test("message payload validates and projects canonical tool risk", () => {
+test("durable activity payload requires activity identity", () => {
+  for (const eventType of [MESSAGE_EVENT_TYPE.THINKING, MESSAGE_EVENT_TYPE.MODEL_ANALYSIS]) {
+    const base = { eventType, tool: undefined, toolCallId: undefined, text: "analysis" };
+    assert.deepEqual(
+      validateMessageEventPayload(payload({ ...base, activityKind: "guidance_analysis" })).errors,
+      ["missing_activity_id"],
+    );
+    assert.deepEqual(
+      validateMessageEventPayload(payload({ ...base, activityId: "activity-1" })).errors,
+      ["missing_activity_kind"],
+    );
+  }
+});
+
+test("message payload validates canonical tool risk", () => {
   const securityAssessment = createSecurityAssessment({
     toolName: "read_file",
     args: { riskLevel: "low" },
@@ -419,7 +526,7 @@ test("message payload validates and projects canonical tool risk", () => {
   const started = payload({ riskLevel: "low", securityAssessment });
   const ended = payload({
     eventType: MESSAGE_EVENT_TYPE.TOOL_CALL_END,
-    result: { ok: true },
+    result: OK_RESULT,
     success: true,
     durationMs: 5,
     riskLevel: "high",
@@ -427,8 +534,6 @@ test("message payload validates and projects canonical tool risk", () => {
   });
   assert.deepEqual(validateMessageEventPayload(started), { valid: true, errors: [] });
   assert.deepEqual(validateMessageEventPayload(ended), { valid: true, errors: [] });
-  assert.equal(projectMessageEventToolFacets(started).toolCall.riskLevel, "low");
-  assert.equal(projectMessageEventToolFacets(ended).toolResult.riskLevel, "high");
 });
 
 test("isHostActivity accepts empty and host kinds and rejects plugin kinds", () => {

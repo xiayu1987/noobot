@@ -8,12 +8,28 @@ export const FILE_TOOL_SCHEMA = {
   read_file: {
     description: {
       key: "tools.file.readDescription",
-      text: "Read text file content. Input filePath. Returns file text result.",
+      text: "Read text file content (line numbers enabled by default).",
     },
     params: {
       filePath: {
         key: "tools.file.readFilePathField",
         text: "File path.",
+      },
+      startLine: {
+        key: "tools.file.readStartLineField",
+        text: "Start line (1-based); a start past the end of file is an error.",
+      },
+      endLine: {
+        key: "tools.file.readEndLineField",
+        text: "End line (1-based); a value past the end of file stops at the last line.",
+      },
+      includeLineNumbers: {
+        key: "tools.file.readIncludeLineNumbersField",
+        text: "Whether content includes line numbers.",
+      },
+      maxLines: {
+        key: "tools.file.readMaxLinesField",
+        text: "Maximum returned lines; hasMore is true when lines remain.",
       },
     },
     texts: {},
@@ -21,7 +37,7 @@ export const FILE_TOOL_SCHEMA = {
   write_file: {
     description: {
       key: "tools.file.writeDescription",
-      text: "Write a workspace text file. Returns its logical path, resource identity, and an attachment snapshot taken at write time; later workspace edits do not change an existing snapshot.",
+      text: "Write a workspace text file. Returns the file path and a mutation snapshot taken at write time; later edits do not change an existing snapshot. To link the file in a reply, copy the result path verbatim (workspace: relative path; host: absolute path; mount: mount path plus relative path).",
     },
     params: {
       content: {
@@ -59,7 +75,7 @@ export const FILE_TOOL_SCHEMA = {
       },
       path: {
         key: "tools.search.fieldPath",
-        text: "Path for file search. Only applies when source=files; ignored when source=text.",
+        text: "File or directory to search. Only applies when source=files; ignored when source=text.",
       },
       glob: {
         key: "tools.search.fieldGlob",
@@ -83,8 +99,8 @@ export const FILE_TOOL_SCHEMA = {
       },
     },
     texts: {
-      "tools.search.queryRequired": "A non-empty search keyword or regex is required.",
       "tools.search.textRequired": "When source=text, a non-empty text to search is required.",
+      "tools.search.pathKindUnsupported": "path must be a file or directory.",
     },
   },
   patch_file: {
@@ -103,7 +119,7 @@ export const FILE_TOOL_SCHEMA = {
       },
       strip: {
         key: "tools.patch_file.fieldStrip",
-        text: "Set strip only for a/ or b/ prefixes; use 0 with a complete path.",
+        text: "Default 0; set 1 only for a/ or b/ prefixes.",
       },
       root: {
         key: "tools.patch_file.fieldRoot",

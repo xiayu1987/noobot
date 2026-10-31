@@ -5,3 +5,4 @@
 import "./runtime-adapter-cases.js";
 import "./runtime-executor-cases.js";
 import "./runtime-normalization-cases.js";
+import "./runtime-response-cases.js";

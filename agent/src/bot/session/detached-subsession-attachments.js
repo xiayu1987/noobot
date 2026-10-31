@@ -3,27 +3,28 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
-import { text, isFunction } from "@noobot/shared/value";
+import { ATTACHMENT_SOURCE, projectAttachmentIdentity } from "@noobot/attachment-protocol";
+import { text } from "@noobot/shared/value";
 
 export async function transferCanonicalAttachmentsToSubSession({
-  attachmentService = null,
-  userId = "",
-  parentSessionId = "",
-  subSessionId = "",
-  attachments = [],
-} = {}) {
-  const source = Array.isArray(attachments) ? attachments : [];
-  if (!source.length) return [];
+  attachmentService,
+  userId,
+  parentSessionId,
+  subSessionId,
+  attachments,
+}) {
+  if (!Array.isArray(attachments)) {
+    throw new TypeError("detached sub-session attachments must be an array");
+  }
   const output = [];
-  for (const attachment of source) {
+  for (const attachment of attachments) {
     output.push(
       await transferCanonicalAttachment({
         attachmentService,
         userId,
         parentSessionId,
         subSessionId,
-        attachment,
+        identity: projectAttachmentIdentity(attachment),
       }),
     );
   }
@@ -35,69 +36,34 @@ async function transferCanonicalAttachment({
   userId,
   parentSessionId,
   subSessionId,
-  attachment,
+  identity,
 }) {
-  const attachmentId = text(attachment?.attachmentId);
-  const path = text(attachment?.path);
-  if (!attachmentId || !path) return attachment;
-  const attachmentSessionId = text(attachment?.sessionId);
-  if (attachmentSessionId === subSessionId) return attachment;
-  assertParentAttachmentOwnership(attachmentSessionId, parentSessionId);
-  assertCanonicalAttachmentService(attachmentService);
-  const attachmentSource = text(attachment?.attachmentSource) || ATTACHMENT_SOURCE.USER;
-  const parentRecord = await attachmentService.getAttachmentById({
-    userId,
-    attachmentId,
-    sessionId: parentSessionId,
-    attachmentSource,
-  });
-  assertParentAttachmentRecord(parentRecord);
-  const sourceContent = await attachmentService.readAttachmentContent({
-    userId,
-    attachmentId,
-    sessionId: parentSessionId,
-    attachmentSource,
-  });
-  assertParentAttachmentContent(sourceContent);
+  if (identity.sessionId !== parentSessionId) {
+    throw new Error("detached sub-session attachment must belong to its parent session");
+  }
+  const query = { userId, ...identity };
+  const parentRecord = await attachmentService.getAttachmentById(query);
+  if (!parentRecord) {
+    throw new Error("detached sub-session source attachment does not exist in its parent session");
+  }
+  const sourceContent = await attachmentService.readAttachmentContent(query);
+  if (!sourceContent?.content) {
+    throw new Error("detached sub-session source attachment content is unavailable");
+  }
   const [transferred] = await attachmentService.ingest({
     userId,
     sessionId: subSessionId,
     attachmentSource: ATTACHMENT_SOURCE.USER,
-    attachments: [createTransferredAttachment(attachment, parentRecord, sourceContent)],
+    attachments: [
+      {
+        name: parentRecord.name,
+        mimeType: parentRecord.mimeType,
+        contentBase64: sourceContent.content.toString("base64"),
+      },
+    ],
   });
-  if (!transferred || text(transferred?.sessionId) !== subSessionId) {
+  if (text(transferred?.sessionId) !== subSessionId) {
     throw new Error("detached sub-session attachment transfer did not create child ownership");
   }
   return transferred;
-}
-
-function assertParentAttachmentOwnership(attachmentSessionId, parentSessionId) {
-  if (attachmentSessionId === parentSessionId) return;
-  throw new Error("detached sub-session attachment must belong to its parent session");
-}
-
-function assertParentAttachmentRecord(parentRecord) {
-  if (parentRecord) return;
-  throw new Error("detached sub-session source attachment does not exist in its parent session");
-}
-
-function assertParentAttachmentContent(sourceContent) {
-  if (sourceContent?.content) return;
-  throw new Error("detached sub-session source attachment content is unavailable");
-}
-
-function assertCanonicalAttachmentService(attachmentService) {
-  const requiredMethods = ["getAttachmentById", "readAttachmentContent", "ingest"];
-  if (requiredMethods.every((method) => isFunction(attachmentService?.[method]))) return;
-  throw new Error("detached sub-session canonical attachment transfer requires AttachmentService");
-}
-
-function createTransferredAttachment(attachment, parentRecord, sourceContent) {
-  return {
-    name: String(parentRecord?.name || attachment?.name || "attachment").trim(),
-    mimeType: String(
-      parentRecord?.mimeType || attachment?.mimeType || "application/octet-stream",
-    ).trim(),
-    contentBase64: sourceContent.content.toString("base64"),
-  };
 }

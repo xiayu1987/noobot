@@ -95,7 +95,7 @@ test("restored checkpoint tool results retain policy in history and close summar
     },
     {
       role: "tool",
-      content: "summary persisted",
+      content: JSON.stringify({ toolName: "task_summary", ok: true }),
       messageUid: "summary-result",
       dialogProcessId,
       tool_call_id: "summary-1",
@@ -116,7 +116,7 @@ test("restored checkpoint tool results retain policy in history and close summar
     },
     {
       role: "tool",
-      content: "check persisted",
+      content: JSON.stringify({ toolName: "task_check", ok: true }),
       messageUid: "check-result",
       dialogProcessId,
       tool_call_id: "check-1",

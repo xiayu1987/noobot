@@ -12,9 +12,15 @@ function toolTimeline() {
     {
       key: "call:call-1",
       toolCallId: "call-1",
+      tool: "read_file",
       status: "completed",
-      args: { path: "README.md" },
-      result: { ok: true },
+      success: true,
+      args: { filePath: "README.md" },
+      result: JSON.stringify({
+        ok: true,
+        path: { view: "workspace", path: "README.md" },
+        fileName: "README.md",
+      }),
       call: {
         eventId: "call-1",
         sequence: 1,
@@ -22,7 +28,6 @@ function toolTimeline() {
         sequenceDomain: "message-event",
         authority: "authoritative",
         timestamp: "2026-07-29T01:00:00.000Z",
-        log: { event: "tool_call", type: "tool_call", toolCallId: "call-1", text: "read_file" },
       },
       resultEvent: {
         eventId: "result-1",
@@ -31,12 +36,6 @@ function toolTimeline() {
         sequenceDomain: "message-event",
         authority: "authoritative",
         timestamp: "2026-07-29T01:00:01.000Z",
-        log: {
-          event: "tool_result",
-          type: "tool_result",
-          toolCallId: "call-1",
-          text: "read_file done",
-        },
       },
     },
   ];
@@ -49,6 +48,7 @@ function taskCheckTimeline(abstract = "verified current step") {
       toolCallId: "task-check-1",
       tool: "task_check",
       status: "completed",
+      success: true,
       args: { checkContent: "NOOBOT_TASK_CHECK/1" },
       result: JSON.stringify({
         toolName: "task_check",
@@ -135,7 +135,7 @@ describe("ThinkingPanel canonical details", () => {
       wrapper.vm
         .groupExecutionLogs(wrapper.props("messageItem"))[0]
         .items.map((item) => item.detailValue),
-    ).toEqual([{ path: "README.md" }, { ok: true }]);
+    ).toEqual([toolTimeline()[0].args, toolTimeline()[0].result]);
     expect(wrapper.find(".thinking-detail-drawer").exists()).toBe(false);
   });
 
@@ -144,7 +144,12 @@ describe("ThinkingPanel canonical details", () => {
     failedTimeline[0] = {
       ...failedTimeline[0],
       status: "failed",
-      result: { ok: false, error: "access denied" },
+      success: false,
+      result: JSON.stringify({
+        ok: false,
+        error: "access denied",
+        code: "RECOVERABLE_ACCESS_DENIED",
+      }),
     };
     const wrapper = mountThinkingPanel(
       {
@@ -181,8 +186,12 @@ describe("ThinkingPanel canonical details", () => {
         key: `call:${toolCallId}`,
         toolCallId,
         tool: "read_file",
-        args: { path: `file-${index}.txt` },
-        result: { ok: true, index },
+        args: { filePath: `file-${index}.txt` },
+        result: {
+          ok: true,
+          path: { view: "workspace", path: `file-${index}.txt` },
+          fileName: `file-${index}.txt`,
+        },
         call: {
           eventId: `long-call-event-${index}`,
           sequence,
@@ -190,6 +199,7 @@ describe("ThinkingPanel canonical details", () => {
           sequenceDomain: "message-event",
           authority: "authoritative",
         },
+        success: true,
         resultEvent: {
           eventId: `long-result-event-${index}`,
           sequence: sequence + 1,

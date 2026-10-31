@@ -91,6 +91,7 @@ test("SessionMessageService.appendTurns persists transferEnvelopes", async () =>
     sessionId: "s1",
     turns: [
       {
+        attachments: [],
         messageUid: "sm_done",
         role: "assistant",
         presentationMessageId: "pm_fx1",
@@ -153,6 +154,8 @@ test("SessionMessageService.appendTurns leaves turnTimings to the timing fact wr
     sessionId: "s1",
     turns: [
       {
+        attachments: [],
+        transferEnvelopes: [],
         messageUid: "sm_done",
         role: "assistant",
         presentationMessageId: "pm_fx2",
@@ -241,6 +244,8 @@ test("SessionMessageService.deleteFromMessage prunes orphan turnTimings", async 
     aggregateVersion: 1,
     messages: [
       {
+        attachments: [],
+        transferEnvelopes: [],
         role: "assistant",
         presentationMessageId: "pm_fx4",
         modelMessageId: "mm_session_message_service__4",
@@ -249,6 +254,8 @@ test("SessionMessageService.deleteFromMessage prunes orphan turnTimings", async 
         dialogProcessId: "dp-keep",
       },
       {
+        attachments: [],
+        transferEnvelopes: [],
         role: "user",
         messageOrigin: "natural",
         content: "hi",
@@ -317,6 +324,8 @@ test("SessionMessageService.replaceTurn prunes replaced turnTimings", async () =
     aggregateVersion: 1,
     messages: [
       {
+        attachments: [],
+        transferEnvelopes: [],
         sessionId: "s1",
         role: "user",
         messageOrigin: "natural",
@@ -325,6 +334,8 @@ test("SessionMessageService.replaceTurn prunes replaced turnTimings", async () =
         dialogProcessId: "dp-keep",
       },
       {
+        attachments: [],
+        transferEnvelopes: [],
         sessionId: "s1",
         role: "assistant",
         presentationMessageId: "pm_fx5",
@@ -371,6 +382,7 @@ test("SessionMessageService.replaceTurn prunes replaced turnTimings", async () =
   });
 
   await service.replaceTurn({
+    attachments: [],
     userId: "u1",
     sessionId: "s1",
     anchor: { turnScopeId: "turn-old" },

@@ -38,7 +38,7 @@ async function executeCapabilityTool({
     turn,
     toolStartedAtMs: Date.now(),
   });
-  return String(result?.toolResultText || "");
+  return result.toolResultText;
 }
 
 export async function runCapabilityToolTurns({

@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { resolveFinishReason } from "../normalization/response-normalizer.js";
-export function isToolCallStreamingMismatch(response = {}, toolCalls = []) {
-  return !toolCalls.length && resolveFinishReason(response) === "tool_calls";
+export function isToolCallStreamingMismatch(response, { toolCalls, invalidToolCalls }) {
+  if (!Array.isArray(toolCalls) || !Array.isArray(invalidToolCalls)) {
+    throw new TypeError("tool call mismatch classification requires classified tool calls");
+  }
+  if (toolCalls.length || invalidToolCalls.length) return false;
+  return resolveFinishReason(response) === "tool_calls";
 }

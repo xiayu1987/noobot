@@ -7,6 +7,7 @@
 import os from "node:os";
 import path from "node:path";
 import { access, mkdtemp, rm } from "node:fs/promises";
+import { resolveCanonicalToolTimelineStatus } from "@noobot/event-protocol/tool-timeline";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
 export async function withTempWorkspace(fn) {
@@ -47,6 +48,28 @@ export function canonicalMessages(messages, sessionId, namespace = "summary") {
       ...message,
     };
   });
+}
+
+export function fileToolResultText(filePath, extra) {
+  return JSON.stringify({
+    ok: true,
+    path: { view: "workspace", path: filePath },
+    fileName: path.basename(filePath),
+    ...extra,
+  });
+}
+
+export function canonicalToolTimelineItem(fields) {
+  const { toolCallId, tool, args, call } = fields;
+  const base = { key: `call:${toolCallId}`, toolCallId, tool, args, call, riskLevel: "" };
+  if (!Object.hasOwn(fields, "resultEvent")) return { ...base, status: "running" };
+  const entry = {
+    ...base,
+    result: fields.result,
+    success: fields.success,
+    resultEvent: fields.resultEvent,
+  };
+  return { ...entry, status: resolveCanonicalToolTimelineStatus(entry) };
 }
 
 export function canonicalActivity({

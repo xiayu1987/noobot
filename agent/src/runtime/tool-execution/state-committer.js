@@ -22,6 +22,9 @@ import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-
 import {
   assertCanonicalAssistantPresentation,
   canonicalAssistantPresentationIdentity,
+  MESSAGE_TYPE,
+  TOOL_CALL_MESSAGE_TYPE,
+  TOOL_RESULT_MESSAGE_TYPE,
 } from "@noobot/session-protocol";
 import { isPlainObject, text, isFunction } from "@noobot/shared/value";
 
@@ -55,8 +58,8 @@ export function createStateCommitter({
       rawModelContent = null,
       modelAdditionalKwargs = null,
       modelResponseMetadata = null,
-      type = "message",
-      toolCalls = [],
+      type,
+      toolCalls,
       modelAlias = "",
       modelName = "",
       modelMessageId = "",
@@ -72,12 +75,20 @@ export function createStateCommitter({
       const pendingProjection = runtime.materializePendingCurrentTurnMessageEvents({
         modelMessageId,
       });
-      const canonicalActivityTimeline = Array.isArray(pendingProjection.activityTimeline)
-        ? pendingProjection.activityTimeline
-        : [];
       const canonicalMessageUid = text(messageUid);
       if (!canonicalMessageUid) {
         throw new TypeError("assistant message commit requires messageUid");
+      }
+      if (type !== MESSAGE_TYPE && type !== TOOL_CALL_MESSAGE_TYPE) {
+        throw new TypeError("assistant message commit requires type message or tool_call");
+      }
+      if (
+        (type === TOOL_CALL_MESSAGE_TYPE) !==
+        (Array.isArray(toolCalls) && toolCalls.length > 0)
+      ) {
+        throw new TypeError(
+          "assistant tool_call commit requires non-empty toolCalls, and only tool_call",
+        );
       }
       const assistantMessage = {
         messageUid: canonicalMessageUid,
@@ -87,17 +98,20 @@ export function createStateCommitter({
         type,
         dialogProcessId,
         ...(ownership.turnScopeId ? { turnScopeId: ownership.turnScopeId } : {}),
-        tool_calls: Array.isArray(toolCalls) ? toolCalls : [],
+        ...(type === TOOL_CALL_MESSAGE_TYPE ? { tool_calls: toolCalls } : {}),
         modelAlias: text(modelAlias),
         modelName: text(modelName),
         presentationMessageId: text(presentationMessageId),
         chatPresentation: chatPresentation === true,
+        ...(chatPresentation === true
+          ? { workspaceRootDirectory: runtime.workspaceRootDirectory }
+          : {}),
         ...(Array.isArray(transferEnvelopes) && transferEnvelopes.length
           ? { transferEnvelopes }
           : {}),
         ...(Array.isArray(attachments) && attachments.length ? { attachments } : {}),
-        ...(canonicalActivityTimeline.length
-          ? { activityTimeline: canonicalActivityTimeline }
+        ...(pendingProjection.activityTimeline.length
+          ? { activityTimeline: pendingProjection.activityTimeline }
           : {}),
         ...(pendingProjection.toolTimeline.length
           ? { toolTimeline: pendingProjection.toolTimeline }
@@ -127,7 +141,7 @@ export function createStateCommitter({
         }
         const incomingPresentation = canonicalAssistantPresentationIdentity(assistantMessage);
         turnMessageStore.updateWhere(
-          { chatPresentation: false },
+          { chatPresentation: false, workspaceRootDirectory: undefined },
           (message) =>
             canonicalAssistantPresentationIdentity(message)?.turnScopeId ===
             incomingPresentation.turnScopeId,
@@ -149,8 +163,23 @@ export function createStateCommitter({
         }),
       });
     },
-    async pushToolResult({ call = {}, toolResultText = "", transferEnvelopes = [] } = {}) {
+    async pushToolResult({
+      call = {},
+      toolResultText = "",
+      transferEnvelopes,
+      resourceRefs,
+      mutationRefs,
+    } = {}) {
       const resolvedCallId = text(call.id);
+      for (const [field, value] of Object.entries({
+        transferEnvelopes,
+        resourceRefs,
+        mutationRefs,
+      })) {
+        if (!Array.isArray(value)) {
+          throw new TypeError(`tool result commit requires a ${field} array`);
+        }
+      }
       const resolvedCallName = text(call.name);
       const compactedToolResultText = compactToolResultTextForModel(toolResultText);
       const messageUid = createMessageUid();
@@ -159,7 +188,7 @@ export function createStateCommitter({
         messageUid,
         role: "tool",
         content: compactedToolResultText,
-        type: "tool_result",
+        type: TOOL_RESULT_MESSAGE_TYPE,
         dialogProcessId,
         ...(ownership.turnScopeId ? { turnScopeId: ownership.turnScopeId } : {}),
         tool_call_id: resolvedCallId,
@@ -167,9 +196,9 @@ export function createStateCommitter({
         ...(contextPolicy ? { contextPolicy } : {}),
         presentationMessageId: currentAssistantPresentationMessageId(runtime),
       };
-      if (Array.isArray(transferEnvelopes) && transferEnvelopes.length) {
-        toolResultPayload.transferEnvelopes = transferEnvelopes;
-      }
+      if (transferEnvelopes.length) toolResultPayload.transferEnvelopes = transferEnvelopes;
+      if (resourceRefs.length) toolResultPayload.resourceRefs = resourceRefs;
+      if (mutationRefs.length) toolResultPayload.mutationRefs = mutationRefs;
       await runAgentRuntimeHook({
         runtime,
         point: HOOK_POINT.AGENT.BEFORE_STATE_COMMIT,

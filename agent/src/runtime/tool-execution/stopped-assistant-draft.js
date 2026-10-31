@@ -19,7 +19,6 @@ export async function materializeStoppedAssistantDraft(runtime = {}) {
   await createStateCommitter({ turnMessageStore, runtime }).pushAssistantMessage({
     content: draft.content,
     type: "message",
-    toolCalls: [],
     modelAlias: draft.modelAlias,
     modelName: draft.modelName,
     modelMessageId: draft.modelMessageId,

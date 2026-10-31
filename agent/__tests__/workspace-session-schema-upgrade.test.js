@@ -50,6 +50,7 @@ async function saveCheckpointedSession(sessionRepo, sessionId) {
       ? { messageOrigin: MESSAGE_ORIGIN.NATURAL }
       : { modelMessageId: `mm_${messageUid}`, presentationMessageId: "pm_active" }),
     content: messageUid,
+    attachments: [],
     dialogProcessId: "dialog-active",
     turnScopeId: "active",
     ts,
@@ -176,6 +177,7 @@ async function saveCompletedTurnWithRejectedBatch(sessionRepo, sessionId) {
     modelMessageId: `mm_${messageUid}`,
     presentationMessageId: "pm_done",
     content: "",
+    attachments: [],
     ...turn,
     ...extra,
   });
@@ -194,6 +196,7 @@ async function saveCompletedTurnWithRejectedBatch(sessionRepo, sessionId) {
       messageOrigin: "natural",
       userMessageId: "um_done",
       content: "go",
+      attachments: [],
       ...turn,
     },
     toolCall("m2", "call-ok", "read_file"),
@@ -204,6 +207,7 @@ async function saveCompletedTurnWithRejectedBatch(sessionRepo, sessionId) {
       type: "tool_result",
       presentationMessageId: "pm_done",
       content: "file",
+      attachments: [],
       tool_call_id: "call-ok",
       toolName: "read_file",
       ...turn,

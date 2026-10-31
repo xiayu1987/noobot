@@ -12,6 +12,7 @@ import {
   materializeOutputResult,
   persistTransferFile,
 } from "./helpers/semantic-transfer-helper.js";
+import { createTestAttachmentService } from "../helpers/test-runtime-context.js";
 
 test("materializeOutputResult creates direct V2 envelope below the threshold", async () => {
   const result = await materializeOutputResult({
@@ -44,11 +45,11 @@ test("materializeOutputResult does not silently fall back when attachment persis
   );
 });
 
-test("persistTransferFile returns only V2 transfer envelopes", async () => {
+test("persistTransferFile returns V2 transfer envelopes and path-free descriptors", async () => {
   const result = await persistTransferFile({
     runtime: {
       systemRuntime: { userId: "u1" },
-      attachmentService: {
+      attachmentService: createTestAttachmentService({
         async ingestGeneratedArtifacts({ artifacts, sessionId, attachmentSource }) {
           return artifacts.map((artifact) => ({
             attachmentId: "att-bin-1",
@@ -59,7 +60,7 @@ test("persistTransferFile returns only V2 transfer envelopes", async () => {
             size: 3,
           }));
         },
-      },
+      }),
     },
     sessionId: "session-test-1",
     name: "a.bin",
@@ -73,11 +74,16 @@ test("persistTransferFile returns only V2 transfer envelopes", async () => {
       strategy: "tool_output",
     },
   });
-  assertTransferProtocolOnly(assert, result);
+  assert.deepEqual(Object.keys(result).sort(), ["attachments", "transferEnvelopes"]);
+  assertTransferProtocolOnly(assert, { transferEnvelopes: result.transferEnvelopes });
   const envelope = result.transferEnvelopes[0];
   assert.equal(envelope.payload.mode, "attachment");
   assert.equal(envelope.payload.attachments[0].identity.attachmentId, "att-bin-1");
   assert.equal("path" in envelope, false);
   assert.equal("filePath" in envelope, false);
   assert.equal("attachmentMeta" in envelope, false);
+  assert.equal(result.attachments.length, 1);
+  assert.equal(result.attachments[0].identity.attachmentId, "att-bin-1");
+  assert.equal("origin" in result.attachments[0], false);
+  assert.equal("path" in result.attachments[0], false);
 });

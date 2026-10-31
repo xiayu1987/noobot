@@ -55,6 +55,7 @@ test("renameSession should persist custom title to full, display summary and ses
     });
     session.messages = [
       {
+        attachments: [],
         messageUid: "sm_rename_user",
         ts: TEST_MESSAGE_TS,
         sessionId: "A",

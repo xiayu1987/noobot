@@ -10,19 +10,19 @@ export function createRenderer(format, { stdout = process.stdout, stderr = proce
   const writeLine = (stream, value) => stream.write(`${JSON.stringify(value)}\n`);
 
   return {
-    event(packet) {
+    event(packet, turnEvent) {
       if (format === "stream-json") {
         writeLine(stdout, packet);
         return;
       }
-      if (format !== "text") return;
-      const delta = readMessageDelta(packet);
+      if (format !== "text" || !turnEvent) return;
+      const delta = readMessageDelta(turnEvent);
       if (delta) {
         streamedAny = true;
         stdout.write(delta);
         return;
       }
-      const tool = readToolFrame(packet);
+      const tool = readToolFrame(turnEvent);
       if (tool?.phase === "start") stderr.write(`\n[tool] ${tool.name}\n`);
       else if (tool?.phase === "end" && !tool.success) stderr.write(`[tool] ${tool.name} failed\n`);
     },

@@ -12,6 +12,3 @@ export const SCRIPT_EXECUTION_MODE = Object.freeze({
   FOREGROUND: "foreground",
   BACKGROUND: "background",
 });
-export const SCRIPT_RESULT_CODE = Object.freeze({
-  OUTPUT_LIMIT_EXCEEDED: 125,
-});

@@ -56,9 +56,14 @@ test("session summaries should be maintained and rebuilt for list API", async ()
     });
     sessionB.messages = canonicalMessages(
       [
-        { role: "system", content: "ignored" },
-        { role: "user", messageOrigin: "natural", content: "1234567890123456789012345" },
-        { role: "assistant", content: "done", attachmentMetas: [{ id: "big" }] },
+        { attachments: [], role: "system", content: "ignored" },
+        {
+          attachments: [],
+          role: "user",
+          messageOrigin: "natural",
+          content: "1234567890123456789012345",
+        },
+        { attachments: [], role: "assistant", content: "done", attachmentMetas: [{ id: "big" }] },
       ],
       "B",
       "list_b",
@@ -439,6 +444,7 @@ test("deleting one session does not invalidate another session display summary",
     });
     kept.messages = [
       {
+        attachments: [],
         messageUid: "sm-kept-user",
         ts: TEST_MESSAGE_TS,
         sessionId: "kept",

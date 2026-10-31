@@ -225,3 +225,36 @@ test("runtime migrates a legacy plaintext registry only after user key unlock", 
   );
   assert.equal(calls[1].payload.connectors[0].sealedParameters.parameters.token, "plain-secret");
 });
+
+test("runtime records named health failures as connector errorCode", async () => {
+  const runtime = new ConnectorRuntime({
+    repository: repository(),
+    secretStore: secretStore(),
+    workspaceRoot: "/workspace",
+  });
+  runtime.register({
+    definition: createConnectorInstanceDefinition({
+      instanceType: "test.down",
+      type: "terminal",
+      subType: "down",
+      fields: [],
+      operations: [executeOperation()],
+    }),
+    accessCancellation: CONNECTOR_ACCESS_CANCELLATION.NOT_CANCELLABLE,
+    create: async () => ({}),
+    health: async () => ({ ok: false, code: "connector_connect_failed", error: "refused" }),
+    access: async () => ({ ok: true, output: {} }),
+    dispose: async () => {},
+  });
+  const record = await runtime.createConnector({
+    userId: "u1",
+    name: "down",
+    instanceType: "test.down",
+    parameters: {},
+  });
+  const connection = await runtime.connect({ userId: "u1", connectorId: record.connectorId });
+  assert.equal(connection.connected, false);
+  assert.equal(connection.connector.status, "error");
+  assert.equal(connection.connector.errorCode, "connector_connect_failed");
+  assert.equal(connection.connector.statusMessage, "refused");
+});

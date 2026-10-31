@@ -74,6 +74,7 @@ test("session detail derives transfer envelopes from the canonical Session", asy
     session.messages = canonicalMessages(
       [
         {
+          attachments: [],
           role: "assistant",
           presentationMessageId: "pm_fx1",
           content: "parsed",

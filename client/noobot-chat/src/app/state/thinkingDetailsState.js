@@ -7,7 +7,7 @@ import {
   getMessageRole,
   isAssistantWithoutTurnScope,
 } from "../../modules/chat/model/messageIdentity.js";
-import { hasToolTimeline } from "../../modules/chat/runtime/engine/toolTimeline.js";
+import { selectMessageToolTimeline } from "@noobot/event-protocol/tool-timeline";
 import { selectThinkingDetailCount } from "../../modules/chat/model/thinkingDetailCount.js";
 
 export function getThinkingDetailsCount(messageItem = {}) {
@@ -31,7 +31,7 @@ export function resolveFallbackThinkingDetailsPayload(activeSession) {
       (item = {}) =>
         getMessageRole(item) === "assistant" &&
         !isAssistantWithoutTurnScope(item) &&
-        (item?.pending || hasToolTimeline(item) || hasThinkingDetails(item)),
+        (item?.pending || selectMessageToolTimeline(item).length > 0 || hasThinkingDetails(item)),
     );
   return { messageItem: messageItem || null };
 }

@@ -180,7 +180,7 @@ describe("reconnect authoritative message event replay", () => {
     const end = authoritative("tool_call_end", 2, {
       tool: "read_file",
       toolCallId: "call-1",
-      result: { ok: true },
+      result: { ok: true, path: { view: "workspace", path: "notes.txt" }, fileName: "notes.txt" },
       success: true,
     });
 
@@ -318,7 +318,7 @@ describe("reconnect authoritative message event replay", () => {
       authoritative("tool_call_end", 3, {
         tool: "read_file",
         toolCallId: "call-1",
-        result: { ok: true },
+        result: { ok: true, path: { view: "workspace", path: "notes.txt" }, fileName: "notes.txt" },
         success: true,
       }),
       authoritative("llm_delta", 4, { text: "world" }),
@@ -412,7 +412,7 @@ describe("reconnect authoritative message event replay", () => {
       authoritative("tool_call_end", 3, {
         tool: "read_file",
         toolCallId: "call-1",
-        result: { ok: true },
+        result: { ok: true, path: { view: "workspace", path: "notes.txt" }, fileName: "notes.txt" },
         success: true,
       }),
       authoritative("llm_delta", 4, { text: "B" }),

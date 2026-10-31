@@ -15,9 +15,10 @@ export function createCommandRequestHash(value = {}) {
   return bytesToHex(sha256(utf8ToBytes(canonicalizeCommandRequest(value))));
 }
 
-export function canonicalAttachmentIdentities(attachments = []) {
-  return (Array.isArray(attachments) ? attachments : [])
-    .map((item = {}) => ({
+export function canonicalAttachmentIdentities(attachments) {
+  if (!Array.isArray(attachments)) throw new TypeError("command attachments must be an array");
+  return attachments
+    .map((item) => ({
       attachmentId: text(item.attachmentId),
       sessionId: text(item.sessionId),
       attachmentSource: text(item.attachmentSource),

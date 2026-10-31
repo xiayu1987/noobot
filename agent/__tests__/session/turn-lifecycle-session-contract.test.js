@@ -296,6 +296,7 @@ test("noncanonical terminal snapshots are discarded without mutating Turns", () 
           turnScopeId: "t1",
           terminalStatus: { status: "completed", reason: "run_completed" },
           messages: Array.from({ length: 100 }, (_, index) => ({
+            attachments: [],
             role: "assistant",
             modelMessageId: "mm_turn_lifecycle_session_c_1",
             content: `large-${index}`,

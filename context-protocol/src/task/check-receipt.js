@@ -7,6 +7,7 @@
 import { TASK_PROTOCOL_STATE, parseTaskProtocolReceipt } from "./receipt-contract.js";
 
 export const TASK_CHECK_PROTOCOL_VERSION = 1;
+export const TASK_CHECK_TOOL_NAME = "task_check";
 export const TASK_CHECK_STATE = TASK_PROTOCOL_STATE;
 
 function receiptError(message) {

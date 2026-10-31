@@ -17,6 +17,7 @@ import {
   hasFfmpegCapabilities,
   hasLibreOfficeCapability,
 } from "./native-script-tool.fixtures.js";
+import { createTestAttachmentService } from "../helpers/test-runtime-context.js";
 
 test("execute_native_script resolves FFmpeg output tokens into collected binary attachments", async (t) => {
   if (!(await hasFfmpegCapabilities())) {
@@ -26,7 +27,7 @@ test("execute_native_script resolves FFmpeg output tokens into collected binary 
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-ffmpeg-"));
   let persistedRequest = null;
   const runtime = createRuntime(basePath, {
-    attachmentService: {
+    attachmentService: createTestAttachmentService({
       async ingestGeneratedArtifacts(request) {
         persistedRequest = request;
         return request.artifacts.map((artifact, index) => ({
@@ -38,7 +39,7 @@ test("execute_native_script resolves FFmpeg output tokens into collected binary 
           size: Buffer.from(artifact.contentBase64, "base64").length,
         }));
       },
-    },
+    }),
   });
   const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
   const result = JSON.parse(
@@ -106,7 +107,7 @@ test("execute_native_script converts a declared input token with LibreOffice", a
   );
   let persistedRequest = null;
   const runtime = createRuntime(basePath, {
-    attachmentService: {
+    attachmentService: createTestAttachmentService({
       async ingestGeneratedArtifacts(request) {
         persistedRequest = request;
         return request.artifacts.map((artifact, index) => ({
@@ -118,7 +119,7 @@ test("execute_native_script converts a declared input token with LibreOffice", a
           size: Buffer.from(artifact.contentBase64, "base64").length,
         }));
       },
-    },
+    }),
   });
   const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
   const result = JSON.parse(
@@ -154,7 +155,7 @@ test("execute_native_script converts a same-task output token with LibreOffice",
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-libreoffice-output-"));
   let persistedRequest = null;
   const runtime = createRuntime(basePath, {
-    attachmentService: {
+    attachmentService: createTestAttachmentService({
       async ingestGeneratedArtifacts(request) {
         persistedRequest = request;
         return request.artifacts.map((artifact, index) => ({
@@ -166,7 +167,7 @@ test("execute_native_script converts a same-task output token with LibreOffice",
           size: Buffer.from(artifact.contentBase64, "base64").length,
         }));
       },
-    },
+    }),
   });
   const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
   const result = JSON.parse(

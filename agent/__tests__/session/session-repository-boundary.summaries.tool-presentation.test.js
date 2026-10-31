@@ -10,11 +10,7 @@ import assert from "node:assert/strict";
 import { buildPersistedDisplaySummary } from "./session-artifact-store-v2.test-helpers.js";
 
 test("session summary projects attachment identities without object stringification", async () => {
-  const attachmentIdentity = {
-    attachmentId: "att-summary-1",
-    sessionId: "summary-session",
-    attachmentSource: "model",
-  };
+  const attachmentRef = "attachment:v1:summary-session/model/att-summary-1";
   const summary = await buildPersistedDisplaySummary({
     sessionId: "summary-session",
     aggregateVersion: 0,
@@ -35,11 +31,11 @@ test("session summary projects attachment identities without object stringificat
             toolCallId: "read-1",
             tool: "read_file",
             status: "completed",
-            args: { filePath: attachmentIdentity },
+            args: { filePath: attachmentRef },
             result: JSON.stringify({
               toolName: "read_file",
               ok: true,
-              path: { view: "attachment", identity: attachmentIdentity },
+              path: { view: "attachment", attachmentRef },
               fileName: "report.json",
             }),
             call: { eventId: "call-event" },
@@ -51,8 +47,8 @@ test("session summary projects attachment identities without object stringificat
   });
 
   const timeline = summary.messages[0].toolTimeline[0];
-  assert.equal(timeline.call.summary, "read_file · attachment:att-summary-1");
-  assert.equal(timeline.resultEvent.summary, "read_file · attachment:att-summary-1");
+  assert.equal(timeline.call.summary, `read_file · ${attachmentRef}`);
+  assert.equal(timeline.resultEvent.summary, "read_file · report.json");
   assert.doesNotMatch(JSON.stringify(timeline), /\[object Object\]/);
 });
 

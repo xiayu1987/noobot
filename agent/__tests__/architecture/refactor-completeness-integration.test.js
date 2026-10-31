@@ -87,6 +87,7 @@ describe("8. 综合集成测试", () => {
 
     it("Session 实体规范化后字段应与落盘结构对齐", () => {
       const rawMsg = {
+        attachments: [],
         sessionId: "s_fixture",
         messageUid: "sm_integration_user",
         role: "user",

@@ -131,7 +131,11 @@ test("message events commit with the execution-bound persistence scope", async (
   };
 
   beginAssistantMessageEventStream(runtime, { turn: 0 });
-  await emitMessageEvent({ onEvent() {} }, runtime, "thinking", { text: "token" });
+  await emitMessageEvent({ onEvent() {} }, runtime, "thinking", {
+    activityId: "activity-token",
+    activityKind: "guidance_analysis",
+    text: "token",
+  });
 
   assert.equal(committed.persistenceScope, persistenceScope);
   assert.equal(Object.hasOwn(committed, "persistenceContext"), false);
@@ -161,10 +165,22 @@ test("one Turn Aggregate owns a contiguous event sequence across model messages"
   const runtime = runtimeForTurn();
   const listener = { onEvent() {} };
   const firstMessageId = beginAssistantMessageEventStream(runtime, { turn: 0 });
-  const first = await emitMessageEvent(listener, runtime, "thinking", { text: "first" });
-  const second = await emitMessageEvent(listener, runtime, "thinking", { text: "second" });
+  const first = await emitMessageEvent(listener, runtime, "thinking", {
+    activityId: "activity-first",
+    activityKind: "guidance_analysis",
+    text: "first",
+  });
+  const second = await emitMessageEvent(listener, runtime, "thinking", {
+    activityId: "activity-second",
+    activityKind: "guidance_analysis",
+    text: "second",
+  });
   const nextMessageId = beginAssistantMessageEventStream(runtime, { turn: 0 });
-  const next = await emitMessageEvent(listener, runtime, "thinking", { text: "next" });
+  const next = await emitMessageEvent(listener, runtime, "thinking", {
+    activityId: "activity-next",
+    activityKind: "guidance_analysis",
+    text: "next",
+  });
 
   assert.notEqual(nextMessageId, firstMessageId);
   assert.deepEqual(
@@ -178,9 +194,17 @@ test("one Turn Aggregate owns a contiguous event sequence across model messages"
 test("model streams keep independent identities while sharing the run presentation identity", async () => {
   const runtime = runtimeForTurn({ presentationMessageId: "msg_preallocated" });
   const firstMessageId = beginAssistantMessageEventStream(runtime, { turn: 0 });
-  const first = await emitMessageEvent({ onEvent() {} }, runtime, "thinking", { text: "first" });
+  const first = await emitMessageEvent({ onEvent() {} }, runtime, "thinking", {
+    activityId: "activity-first",
+    activityKind: "guidance_analysis",
+    text: "first",
+  });
   const nextMessageId = beginAssistantMessageEventStream(runtime, { turn: 0 });
-  const next = await emitMessageEvent({ onEvent() {} }, runtime, "thinking", { text: "next" });
+  const next = await emitMessageEvent({ onEvent() {} }, runtime, "thinking", {
+    activityId: "activity-next",
+    activityKind: "guidance_analysis",
+    text: "next",
+  });
 
   assert.notEqual(nextMessageId, firstMessageId);
   assert.equal(Object.hasOwn(first.identity, "messageId"), false);
@@ -339,7 +363,11 @@ test("transient message events bypass the authority commit and take no sequence"
       text: "token",
     },
   );
-  const durable = await emitMessageEvent({ onEvent() {} }, runtime, "thinking", { text: "done" });
+  const durable = await emitMessageEvent({ onEvent() {} }, runtime, "thinking", {
+    activityId: "activity-done",
+    activityKind: "guidance_analysis",
+    text: "done",
+  });
 
   assert.equal(commits, 1);
   assert.equal(delta.ordering.sequence, 0);

@@ -60,8 +60,12 @@ vi.mock("../../../../../../src/shared/public-api/ui.js", async () => {
     }),
     BaseMessageErrorAlert: defineComponent({
       name: "BaseMessageErrorAlert",
-      setup() {
-        return () => null;
+      props: { error: { type: String, default: "" } },
+      setup(props) {
+        return () =>
+          props.error
+            ? h("div", { class: "BaseMessageErrorAlert-stub", "data-error": props.error })
+            : null;
       },
     }),
     BaseMessageShell: defineComponent({
@@ -170,23 +174,22 @@ function mountItem(props = {}) {
   const pinia = createPinia();
   setActivePinia(pinia);
   storeSetup?.(useChatStore(pinia));
+  const messageItem = componentProps.messageItem || {
+    presentationMessageId: "msg-1",
+    role: "assistant",
+    content: "hello",
+    attachments: [
+      {
+        attachmentId: "att-1",
+        sessionId: "test-session",
+        attachmentSource: "test",
+        name: "a.txt",
+        size: 12,
+      },
+    ],
+  };
   return mount(SharedChatMessageItem, {
     props: {
-      messageItem: {
-        presentationMessageId: "msg-1",
-        role: "assistant",
-        content: "hello",
-        attachments: [
-          {
-            attachmentId: "att-1",
-            sessionId: "test-session",
-            attachmentSource: "test",
-            name: "a.txt",
-            size: 12,
-          },
-        ],
-      },
-      allMessages: [],
       sessionDocs: [],
       userId: "u1",
       renderMarkdown: (content = "") => String(content || ""),
@@ -196,6 +199,8 @@ function mountItem(props = {}) {
       stopExecution: async () => true,
       fetchExecutionReport: async () => null,
       ...componentProps,
+      messageItem,
+      allMessages: componentProps.allMessages || [messageItem],
     },
     global: {
       plugins: [pinia],
@@ -222,7 +227,7 @@ describe("SharedChatMessageItem", () => {
     const wrapper = mountItem();
     const previewDialogs = [...document.body.querySelectorAll("el-dialog-stub")];
 
-    expect(previewDialogs).toHaveLength(2);
+    expect(previewDialogs).toHaveLength(1);
     for (const previewDialog of previewDialogs) {
       expect(wrapper.element.contains(previewDialog)).toBe(false);
       expect(previewDialog.hasAttribute("fullscreen")).toBe(false);
@@ -769,6 +774,23 @@ describe("SharedChatMessageItem", () => {
     const wrapper = mountItem({ hideHeader: true });
 
     expect(wrapper.find(".BaseMessageShell-stub").attributes("data-hide-header")).toBe("true");
+  });
+
+  it("shows a dedicated alert when the message's tool artifacts conflict", () => {
+    const plain = mountItem();
+    expect(plain.find(".BaseMessageErrorAlert-stub").exists()).toBe(false);
+    const wrapper = mountItem({
+      messageItem: {
+        presentationMessageId: "msg-conflict",
+        role: "assistant",
+        content: "result",
+        toolArtifactConflict: "transfer_identity_conflict",
+      },
+    });
+    const alerts = wrapper.findAll(".BaseMessageErrorAlert-stub");
+    expect(alerts.map((alert) => alert.attributes("data-error"))).toEqual([
+      "message.toolArtifactConflict",
+    ]);
   });
 
   it("renders artifact tabs as an accessible tablist with the first available tab active", () => {

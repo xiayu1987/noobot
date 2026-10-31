@@ -582,3 +582,89 @@ test("non-chat operations execute only through the resolved provider adapter", a
     /provider adapter openai-compatible does not support operation: web_search/,
   );
 });
+
+function createInvalidToolCallAdapter(invalidAttempts) {
+  const streamingAttempts = [];
+  const state = { calls: 0 };
+  const adapter = {
+    id: "openai-compatible",
+    classifyError: () => ({ retryable: false }),
+    bindTools: ({ client }) => client,
+    prepareMessages: ({ messages }) => messages,
+    createClient: ({ streaming }) => {
+      streamingAttempts.push(streaming);
+      return {
+        invoke: async () => {
+          state.calls += 1;
+          return state.calls <= invalidAttempts
+            ? {
+                content: "",
+                tool_calls: [{ id: "call_1", name: "execute_script", args: "{unparsable" }],
+                response_metadata: { finish_reason: "tool_calls" },
+              }
+            : {
+                content: "",
+                tool_calls: [{ id: "call_1", name: "execute_script", args: {} }],
+                response_metadata: { finish_reason: "tool_calls" },
+              };
+        },
+      };
+    },
+  };
+  return { adapter, state, streamingAttempts };
+}
+
+test("invalid tool calls recover through a streaming downgrade retry", async () => {
+  const { adapter, state, streamingAttempts } = createInvalidToolCallAdapter(1);
+  const port = createModelRequestExecutor({
+    registry: { resolve: () => adapter },
+    credentialPort: { resolve: () => "secret" },
+  });
+
+  const response = await port.invoke({
+    invocation,
+    model,
+    messages: [],
+    tools: [sdkTool],
+    options: { streaming: true },
+    policies: { retry: { toolCallMismatch: { maxAttempts: 1, downgradeStreaming: true } } },
+  });
+
+  assert.equal(state.calls, 2);
+  assert.deepEqual(streamingAttempts, [true, false]);
+  assert.deepEqual(
+    response.execution.attempts.map(({ status, kind }) => ({ status, kind })),
+    [
+      { status: "retry", kind: "tool_call_invalid" },
+      { status: "completed", kind: "response" },
+    ],
+  );
+  assert.equal(response.output.toolCalls[0].id, "call_1");
+});
+
+test("non-streaming invalid tool calls fail with a typed error instead of being dropped", async () => {
+  const { adapter, state, streamingAttempts } = createInvalidToolCallAdapter(Infinity);
+  const port = createModelRequestExecutor({
+    registry: { resolve: () => adapter },
+    credentialPort: { resolve: () => "secret" },
+  });
+
+  await assert.rejects(
+    port.invoke({
+      invocation,
+      model,
+      messages: [],
+      tools: [sdkTool],
+      options: { streaming: false },
+      policies: { retry: { toolCallMismatch: { maxAttempts: 1, downgradeStreaming: true } } },
+    }),
+    (error) =>
+      error?.code === "MODEL_TOOL_CALL_INVALID" &&
+      error?.kind === MODEL_ERROR_KIND.TOOL_CALL_INVALID &&
+      error?.details?.attemptCount === 1 &&
+      error.details.invalidToolCalls.length === 1 &&
+      error.details.invalidToolCalls[0].name === "execute_script",
+  );
+  assert.equal(state.calls, 1);
+  assert.deepEqual(streamingAttempts, [false]);
+});

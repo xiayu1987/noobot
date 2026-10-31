@@ -9,11 +9,14 @@ import {
   assertConnectorAccessPort,
   assertConnectorInstanceImplementation,
   CONNECTOR_ACCESS_CANCELLATION,
+  CONNECTOR_FAILURE_CODE,
   connectorField,
   connectorOperation,
   createConnectorSecretAad,
   createConnectorInstanceDefinition,
   normalizeConnectorAccessContext,
+  normalizeConnectorAccessResult,
+  normalizeConnectorHealthResult,
   normalizeConnectorParameters,
   normalizeConnectorSecretEnvelope,
   normalizeSelectedConnectorIds,
@@ -189,4 +192,73 @@ test("connector implementations must declare their access cancellation semantics
     const implementation = { ...base, accessCancellation: semantics };
     assert.equal(assertConnectorInstanceImplementation(implementation), implementation);
   }
+});
+
+test("connector access results carry output on success and a named failure on error", () => {
+  assert.deepEqual(normalizeConnectorAccessResult({ ok: true, output: { stdout: "x" } }), {
+    ok: true,
+    output: { stdout: "x" },
+  });
+  assert.deepEqual(
+    normalizeConnectorAccessResult({
+      ok: false,
+      error: "boom",
+      code: CONNECTOR_FAILURE_CODE.EXECUTION_FAILED,
+      output: { exitCode: 2 },
+    }),
+    {
+      ok: false,
+      error: "boom",
+      code: CONNECTOR_FAILURE_CODE.EXECUTION_FAILED,
+      output: { exitCode: 2 },
+    },
+  );
+  assert.throws(() => normalizeConnectorAccessResult({ ok: true }), /output must be an object/);
+  assert.throws(() => normalizeConnectorAccessResult(undefined), /must be an object/);
+  assert.throws(
+    () => normalizeConnectorAccessResult({ ok: "yes", output: {} }),
+    /ok must be boolean/,
+  );
+  assert.throws(
+    () => normalizeConnectorAccessResult({ ok: true, output: {}, status: "completed" }),
+    /unsupported field: status/,
+  );
+  assert.throws(
+    () => normalizeConnectorAccessResult({ ok: false, code: CONNECTOR_FAILURE_CODE.ABORTED }),
+    /failure error is required/,
+  );
+  assert.throws(
+    () => normalizeConnectorAccessResult({ ok: false, error: "boom", code: 400 }),
+    /failure code is invalid/,
+  );
+  assert.throws(
+    () =>
+      normalizeConnectorAccessResult({
+        ok: false,
+        error: "boom",
+        code: CONNECTOR_FAILURE_CODE.ABORTED,
+        diagnostics: {},
+      }),
+    /unsupported field: diagnostics/,
+  );
+});
+
+test("connector health results carry no output and a named failure on error", () => {
+  assert.deepEqual(normalizeConnectorHealthResult({ ok: true }), { ok: true });
+  assert.deepEqual(
+    normalizeConnectorHealthResult({
+      ok: false,
+      error: "refused",
+      code: CONNECTOR_FAILURE_CODE.CONNECT_FAILED,
+    }),
+    { ok: false, error: "refused", code: CONNECTOR_FAILURE_CODE.CONNECT_FAILED },
+  );
+  assert.throws(
+    () => normalizeConnectorHealthResult({ ok: true, output: {} }),
+    /unsupported field: output/,
+  );
+  assert.throws(
+    () => normalizeConnectorHealthResult({ ok: false, error: "x", code: 1 }),
+    /failure code is invalid/,
+  );
 });

@@ -72,3 +72,11 @@ export function resolveSandboxMount({ sandboxPath, runtime }) {
         : `${mapping.source}${normalizedPath.slice(mapping.target.length)}`,
   });
 }
+
+export function resolveConfiguredSandboxMounts(runtime) {
+  return Object.freeze(
+    resolveSandboxMountTable(runtime)
+      .filter((item) => item.kind === SANDBOX_MOUNT_KIND.CONFIGURED)
+      .map(({ source, target, readOnly }) => Object.freeze({ source, target, readOnly })),
+  );
+}

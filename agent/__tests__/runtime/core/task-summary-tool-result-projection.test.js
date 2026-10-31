@@ -7,7 +7,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { executeToolCall } from "./tool-runner.test-helpers.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
-import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
+import {
+  createTestRuntimeContext,
+  createTestAttachmentService,
+} from "../../helpers/test-runtime-context.js";
 
 test("executeToolCall task_summary preserves recovery diagnostics", async () => {
   const summaryContent = "NOOBOT_TASK_SUMMARY/1\n[STATE]\nCONTINUE";
@@ -20,7 +23,7 @@ test("executeToolCall task_summary preserves recovery diagnostics", async () => 
       turnScopeId: "turn-call_task_summary_invalid",
       caller: SESSION_CALLER.USER,
     },
-    attachmentService: {
+    attachmentService: createTestAttachmentService({
       async ingestGeneratedArtifacts(payload) {
         return payload.artifacts.map((artifact, index) => ({
           attachmentId: `task-summary-invalid-${index + 1}`,
@@ -34,7 +37,7 @@ test("executeToolCall task_summary preserves recovery diagnostics", async () => 
           generationSource: payload.generationSource,
         }));
       },
-    },
+    }),
   });
   const result = await executeToolCall({
     call: {

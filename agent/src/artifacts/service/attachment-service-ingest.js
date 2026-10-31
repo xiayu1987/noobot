@@ -53,7 +53,7 @@ export async function saveAttachmentRecord({
   dialogProcessId = "",
   clientAttachmentId = "",
   contentSha256 = "",
-  sourcePath = "",
+  origin,
 }) {
   const attachmentId = uuidv4();
   const extension = normalizeExtension(name, mimeType);
@@ -80,7 +80,7 @@ export async function saveAttachmentRecord({
     turnScope,
     turnScopeId,
     dialogProcessId,
-    sourcePath,
+    origin,
   });
 
   attachmentIndex.attachments[attachmentId] = record;
@@ -245,7 +245,7 @@ export async function ingestGeneratedArtifacts(
         turnScope: isPlainObject(item?.turnScope) ? item.turnScope : turnScope,
         turnScopeId: safeStr(item?.turnScopeId || turnScopeId),
         dialogProcessId: safeStr(item?.dialogProcessId || dialogProcessId),
-        sourcePath: safeStr(item?.sourcePath),
+        origin: item?.origin,
       });
       saved.push(record);
     }

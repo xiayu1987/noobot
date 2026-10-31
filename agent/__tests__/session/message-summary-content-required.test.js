@@ -11,12 +11,18 @@ import {
 } from "../../src/session/session-summary-builders/message-summary-projection.js";
 
 test("message summary keeps empty string content instead of dropping the field", () => {
-  const summary = buildMessageSummary({ role: "assistant", type: "message", content: "" });
+  const summary = buildMessageSummary({
+    attachments: [],
+    role: "assistant",
+    type: "message",
+    content: "",
+  });
   assert.equal(summary.content, "");
 });
 
 test("display summary of a mid-turn tool_call assistant message keeps string content", () => {
   const summary = buildDisplayMessageSummary({
+    attachments: [],
     role: "assistant",
     type: "message",
     chatPresentation: true,
@@ -29,6 +35,7 @@ test("display summary of a mid-turn tool_call assistant message keeps string con
 
 test("display summary of a tool_call promoted by activity keeps empty string content", () => {
   const summary = buildDisplayMessageSummary({
+    attachments: [],
     role: "assistant",
     type: "tool_call",
     content: "",

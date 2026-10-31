@@ -72,7 +72,15 @@ export function buildDockerCommand({ basePath, userId, command, isolation, workd
   return {
     executable: resolveSandboxProviderExecutable(provider),
     createArgs,
-    inspectArgs: ["container", "inspect", containerName],
+    listArgs: [
+      "container",
+      "ls",
+      "--all",
+      "--filter",
+      `name=^${containerName}$`,
+      "--format",
+      "{{.Names}}",
+    ],
     inspectMountsArgs: ["inspect", "--format", "{{json .Mounts}}", containerName],
     removeArgs: ["rm", "-f", containerName],
     startArgs: ["start", containerName],

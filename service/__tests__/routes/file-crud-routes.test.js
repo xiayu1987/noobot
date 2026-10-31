@@ -311,6 +311,86 @@ test("file-crud-routes: mutation file endpoint returns the persisted after snaps
   }
 });
 
+test("file-crud-routes: mutation download endpoint serves the bound snapshot bytes", async () => {
+  const app = express();
+  app.use(express.json());
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-file-crud-mutation-download-"));
+  registerFileCrudRoutes(app, {
+    routePrefix: "/internal/workspace/:userId",
+    resolveRootPath: () => tempRoot,
+    buildWorkspaceTree: async () => ({ name: "root", children: [] }),
+    translateText: (key) => key,
+    trackMutations: true,
+    readMutations: true,
+    resolveMutationRoot: (req) => path.join(tempRoot, "runtime", "session", req.query.sessionId),
+  });
+  try {
+    await withTestServer(app, async (baseUrl) => {
+      const content = "中文 snapshot\n";
+      const writeResponse = await fetch(`${baseUrl}/internal/workspace/admin/file?sessionId=s1`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ path: "docs/报告.md", content }),
+      });
+      const writePayload = await writeResponse.json();
+      assert.equal(writeResponse.status, 200);
+      const [mutation] = writePayload.mutations;
+      await writeFile(path.join(tempRoot, "docs", "报告.md"), "later-version\n", "utf8");
+      const downloadUrl = (id, query) =>
+        `${baseUrl}/internal/workspace/admin/file-mutations/${encodeURIComponent(id)}/download?sessionId=s1&${query}`;
+      const validQuery = `revision=1&afterSha256=${mutation.after.sha256}`;
+
+      const response = await fetch(downloadUrl(mutation.id, validQuery));
+      assert.equal(response.status, 200);
+      assert.deepEqual(Buffer.from(await response.arrayBuffer()), Buffer.from(content, "utf8"));
+      assert.match(response.headers.get("content-type"), /^text\/markdown/);
+      assert.equal(
+        response.headers.get("content-disposition"),
+        `attachment; filename="__.md"; filename*=UTF-8''${encodeURIComponent("报告.md")}`,
+      );
+
+      const expectError = async (url, status, errorCode) => {
+        const errorResponse = await fetch(url);
+        const payload = await errorResponse.json();
+        assert.equal(errorResponse.status, status, url);
+        assert.equal(payload.errorCode, errorCode, url);
+      };
+      await expectError(
+        downloadUrl("22222222-2222-4222-8222-222222222222", validQuery),
+        404,
+        "file_mutation_not_found",
+      );
+      await expectError(
+        downloadUrl("not-a-mutation-id", validQuery),
+        400,
+        "file_mutation_invalid_id",
+      );
+      await expectError(
+        downloadUrl(mutation.id, `revision=1.0&afterSha256=${mutation.after.sha256}`),
+        400,
+        "file_mutation_invalid_download_request",
+      );
+      await expectError(
+        downloadUrl(mutation.id, "revision=1"),
+        400,
+        "file_mutation_invalid_download_request",
+      );
+      await expectError(
+        downloadUrl(mutation.id, `revision=2&afterSha256=${mutation.after.sha256}`),
+        409,
+        "snapshot_overwritten",
+      );
+      await expectError(
+        downloadUrl(mutation.id, `revision=1&afterSha256=${"0".repeat(64)}`),
+        409,
+        "snapshot_overwritten",
+      );
+    });
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test("file-crud-routes: mutation read routes are absent when not enabled", async () => {
   const app = express();
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-file-crud-no-mutation-read-"));
@@ -326,6 +406,10 @@ test("file-crud-routes: mutation read routes are absent when not enabled", async
         `${baseUrl}/internal/admin/workspace-all/file-mutations/11111111-1111-4111-8111-111111111111/file`,
       );
       assert.equal(response.status, 404);
+      const downloadResponse = await fetch(
+        `${baseUrl}/internal/admin/workspace-all/file-mutations/11111111-1111-4111-8111-111111111111/download?revision=1&afterSha256=${"0".repeat(64)}`,
+      );
+      assert.equal(downloadResponse.status, 404);
     });
   } finally {
     await rm(tempRoot, { recursive: true, force: true });

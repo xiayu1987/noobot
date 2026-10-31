@@ -4,44 +4,46 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { ERROR_CODE } from "./constants.js";
+import { isPlainObject } from "@noobot/shared/value";
+
+export const ERROR_LEVEL = Object.freeze({
+  FATAL: "fatal",
+  RECOVERABLE: "recoverable",
+});
+
+const ERROR_LEVELS = new Set(Object.values(ERROR_LEVEL));
+
 export class NoobotError extends Error {
-  constructor(
-    message = "",
-    { code = ERROR_CODE.NOOBOT_ERROR, level = "recoverable", cause = undefined, details = {} } = {},
-  ) {
-    super(String(message || ""));
+  constructor(message, { code, level, cause, details } = {}) {
+    if (typeof code !== "string" || !code.trim()) {
+      throw new TypeError("NoobotError code must be a non-empty string");
+    }
+    if (!ERROR_LEVELS.has(level)) {
+      throw new TypeError(`NoobotError level must be one of: ${[...ERROR_LEVELS].join(", ")}`);
+    }
+    if (details !== undefined && !isPlainObject(details)) {
+      throw new TypeError("NoobotError details must be a plain object");
+    }
+    super(String(message));
     this.name = "NoobotError";
-    this.code = String(code || ERROR_CODE.NOOBOT_ERROR);
-    this.level = level === "fatal" ? "fatal" : "recoverable";
-    this.fatal = this.level === "fatal";
-    this.details = details && typeof details === "object" ? details : {};
+    this.code = code;
+    this.level = level;
+    this.fatal = level === ERROR_LEVEL.FATAL;
+    this.details = details === undefined ? {} : details;
     if (cause !== undefined) this.cause = cause;
   }
 }
 
-export function fatalSystemError(message, options = {}) {
-  return new NoobotError(message, {
-    ...options,
-    level: "fatal",
-    code: options?.code || ERROR_CODE.FATAL_SYSTEM_ERROR,
-  });
+export function fatalSystemError(message, options) {
+  return new NoobotError(message, { ...options, level: ERROR_LEVEL.FATAL });
 }
 
-export function recoverableToolError(message, options = {}) {
-  return new NoobotError(message, {
-    ...options,
-    level: "recoverable",
-    code: options?.code || ERROR_CODE.RECOVERABLE_TOOL_ERROR,
-  });
+export function recoverableToolError(message, options) {
+  return new NoobotError(message, { ...options, level: ERROR_LEVEL.RECOVERABLE });
 }
 
 export function isFatalError(error) {
-  return Boolean(
-    error?.fatal ||
-    String(error?.level || "").toLowerCase() === "fatal" ||
-    String(error?.code || "").startsWith("FATAL_"),
-  );
+  return error instanceof NoobotError && error.fatal;
 }
 
 export * from "./execution-failure.js";

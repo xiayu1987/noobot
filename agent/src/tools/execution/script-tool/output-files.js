@@ -4,16 +4,18 @@
  * SPDX-License-Identifier: MIT
  */
 import { readFile } from "node:fs/promises";
-import { ATTACHMENT_SOURCE, normalizeSourcePath } from "@noobot/attachment-protocol";
+import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 import { resolveMimeTypeFromFileName } from "@noobot/attachment-protocol/mime";
 import { resolveAttachmentPolicy } from "@noobot/agent-config-protocol";
 import { PATH_CAPABILITIES, filePath as path } from "@noobot/path-resolver";
+import { createLocator } from "@noobot/shared/locator";
 import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { recoverableToolError } from "../../../shared/errors/index.js";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { persistTransferArtifacts } from "../../../transfer-adapter/index.js";
 import { resolveAuthorizedUserWorkspaceFilePath } from "../../core/check-tool-input.js";
+import { registerTransferAttachmentResources } from "../../core/resource-broker.js";
 
 function assertWithinLimit({ value, limit, code, message, details }) {
   if (value <= limit) return;
@@ -22,7 +24,6 @@ function assertWithinLimit({ value, limit, code, message, details }) {
 
 export async function assertScriptOutputFilesAuthorized({ agentContext, outputFiles = [] } = {}) {
   for (const declaredPath of outputFiles) {
-    normalizeSourcePath(declaredPath);
     await resolveAuthorizedUserWorkspaceFilePath({
       filePath: declaredPath,
       agentContext,
@@ -39,7 +40,7 @@ export async function persistScriptOutputFiles({
   identity,
   outputFiles = [],
 } = {}) {
-  if (!outputFiles.length) return [];
+  if (!outputFiles.length) return { transferEnvelopes: [], outputResources: [] };
   const policy = resolveAttachmentPolicy(runtime.globalConfig);
   assertWithinLimit({
     value: outputFiles.length,
@@ -51,7 +52,6 @@ export async function persistScriptOutputFiles({
   const artifacts = [];
   let totalBytes = 0;
   for (const declaredPath of outputFiles) {
-    const sourcePath = normalizeSourcePath(declaredPath);
     const resolution = await resolveAuthorizedUserWorkspaceFilePath({
       filePath: declaredPath,
       agentContext,
@@ -59,6 +59,8 @@ export async function persistScriptOutputFiles({
       mustExist: true,
       capability: PATH_CAPABILITIES.SCRIPT_OUTPUT,
     });
+
+    const origin = createLocator(resolution.pathRef);
     const bytes = await readFile(resolution.resourcePath);
     const name = path.basename(resolution.executionPath);
     assertWithinLimit({
@@ -84,7 +86,7 @@ export async function persistScriptOutputFiles({
       name,
       mimeType: resolveMimeTypeFromFileName(name),
       contentBase64: bytes.toString("base64"),
-      sourcePath,
+      origin,
       meta: { role: "output_file" },
     });
   }
@@ -104,5 +106,11 @@ export async function persistScriptOutputFiles({
     },
     meta: { contentOmitted: true },
   });
-  return persisted.transferEnvelopes;
+  return {
+    transferEnvelopes: persisted.transferEnvelopes,
+    outputResources: registerTransferAttachmentResources({
+      agentContext,
+      attachments: persisted.attachments,
+    }),
+  };
 }

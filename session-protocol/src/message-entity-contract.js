@@ -13,6 +13,10 @@ const MESSAGE_ORIGIN_VALUES = new Set(Object.values(MESSAGE_ORIGIN));
 
 export const SESSION_MESSAGE_ENTITY_INVALID = "SESSION_MESSAGE_ENTITY_INVALID";
 
+export const MESSAGE_TYPE = "message";
+export const TOOL_CALL_MESSAGE_TYPE = "tool_call";
+export const TOOL_RESULT_MESSAGE_TYPE = "tool_result";
+
 export function isMessageOrigin(value) {
   return MESSAGE_ORIGIN_VALUES.has(value);
 }
@@ -36,6 +40,13 @@ export function collectSessionMessageEntityErrors(record) {
     if (!isMessageOrigin(record.messageOrigin)) errors.push("message_origin_required");
   } else if (Object.hasOwn(record, "messageOrigin")) {
     errors.push("message_origin_forbidden");
+  }
+  if (record.type === TOOL_CALL_MESSAGE_TYPE) {
+    if (!Array.isArray(record.tool_calls) || !record.tool_calls.length) {
+      errors.push("tool_calls_required");
+    }
+  } else if (Object.hasOwn(record, "tool_calls")) {
+    errors.push("tool_calls_forbidden");
   }
   return errors;
 }

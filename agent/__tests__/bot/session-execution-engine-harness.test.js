@@ -5,7 +5,10 @@
  */
 import { createEmptyTurnSummaryCheckpointState } from "@noobot/context-protocol/policy/summary";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
-import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
+import {
+  createTestAttachmentService,
+  createTestRuntimeContext,
+} from "../helpers/test-runtime-context.js";
 import { stubModelTransport, TEST_MODEL_GLOBAL_CONFIG } from "../helpers/test-model-config.js";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -404,11 +407,11 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
       async captureDialogToShortMemory() {},
       async maybeSummarize() {},
     },
-    attach: {
+    attach: createTestAttachmentService({
       async ingest() {
         throw new Error("harness smoke run carries no raw attachments");
       },
-    },
+    }),
     skill: {
       async listSkills() {
         return [];
@@ -655,11 +658,15 @@ test("harness records tool call and state commit hook artifacts", async () => {
   });
   await committer.pushAssistantMessage({
     content: "assistant committed",
+    type: "message",
     messageUid: createMessageUid(),
   });
   await committer.pushToolResult({
     call: successCall,
     toolResultText: successResult.toolResultText,
+    transferEnvelopes: successResult.transferEnvelopes,
+    resourceRefs: successResult.resourceRefs,
+    mutationRefs: successResult.mutationRefs,
   });
 
   const runDir = path.join(

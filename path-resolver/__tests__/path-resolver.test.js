@@ -32,6 +32,7 @@ import {
   resolvePathRef,
   resolveToolInputPath,
   resolveSandboxMount,
+  resolveConfiguredSandboxMounts,
   SANDBOX_MOUNT_KIND,
   TOOL_PATH_CONTRACTS,
 } from "../src/index.js";
@@ -137,8 +138,7 @@ test("resolveToolInputPath authorizes workspace mount paths as host workspace pa
   });
   assert.equal(result.ok, true);
   assert.equal(result.resolvedPath, "/srv/workspaces/u1/runtime/a.txt");
-  assert.equal(result.mountTarget, undefined);
-  assert.equal(result.executionRoot, undefined);
+  assert.equal(result.mountPathRef, undefined);
   const mounted = resolveToolInputPath({
     inputPath: "/data/assets/a.png",
     runtime: mountRuntime,
@@ -146,8 +146,20 @@ test("resolveToolInputPath authorizes workspace mount paths as host workspace pa
     allowHostAbsolute: true,
     allowSandbox: true,
   });
-  assert.equal(mounted.mountTarget, "/data/assets");
-  assert.equal(mounted.executionRoot, "/srv/assets");
+  assert.deepEqual(mounted.mountPathRef, { view: "mount", mount: "/data/assets", path: "a.png" });
+  assert.equal(mounted.resolvedPath, "/srv/assets/a.png");
+  const mountRoot = resolveToolInputPath({
+    inputPath: "/data/assets",
+    runtime: mountRuntime,
+    workspacePath: mountRuntime.basePath,
+    allowSandbox: true,
+  });
+  assert.deepEqual(mountRoot.mountPathRef, { view: "mount", mount: "/data/assets", path: "." });
+  assert.deepEqual(
+    resolveConfiguredSandboxMounts(mountRuntime).map((item) => item.target),
+    ["/data", "/data/assets"],
+  );
+  assert.deepEqual(resolveConfiguredSandboxMounts({ ...mountRuntime, globalConfig: {} }), []);
 });
 
 test("normalizes cross-platform path syntax through the protocol", () => {
@@ -313,9 +325,9 @@ test("built-in path policy is complete and aligned with every tool contract", ()
     audit: "execution",
   });
   for (const contract of Object.values(TOOL_PATH_CONTRACTS)) {
-    assert.deepEqual(
-      BUILTIN_PATH_POLICY.capabilities[contract.capability].acceptedViews,
+    assert.equal(
       contract.accepted,
+      BUILTIN_PATH_POLICY.capabilities[contract.capability].acceptedViews,
     );
   }
 });
@@ -407,7 +419,7 @@ test("path policy recursively applies only the canonical override", () => {
   assert.equal(policy.roles.regularUser.workspace.others, "read_only");
   assert.deepEqual(policy.roles.superAdmin.host.allowedRoots, ["/srv/shared"]);
   assert.deepEqual(policy.roles.superAdmin.host.deniedRoots, ["/proc", "/sys", "/dev"]);
-  assert.deepEqual(policy.capabilities["file.read"].acceptedViews, ["workspace", "host"]);
+  assert.deepEqual(policy.capabilities["file.read"].acceptedViews, ["workspace", "mount", "host"]);
   assert.equal(policy.capabilities["file.read"].hostRequiresRole, "deny");
   assert.equal(policy.capabilities["file.write"].hostRequiresRole, "super_admin");
   assert.equal(policy.display.fileTools, "none");
@@ -579,4 +591,99 @@ test("path policy expands host access only for super administrators", () => {
     }).allowed,
     true,
   );
+});
+
+test("mount path authorization is decided only by the configured mount table", () => {
+  const pathPolicy = resolvePathPolicy({});
+  const principal = { userId: "u1", role: "regular_user" };
+  const mounts = [
+    { source: "/srv/shared", target: "/shared-write", readOnly: false },
+    { source: "/srv/assets", target: "/assets", readOnly: true },
+  ];
+  const authorize = (input, capability, executionPath) =>
+    authorizePathRef({
+      pathRef: resolvePathRef({ input: { view: "mount", ...input } }),
+      principal,
+      capability,
+      pathPolicy,
+      executionPath,
+      mounts,
+    });
+
+  const allowed = authorize(
+    { mount: "/shared-write", path: "out/result.txt" },
+    "file.write",
+    "/srv/shared/out/result.txt",
+  );
+  assert.equal(allowed.allowed, true);
+  assert.equal(allowed.policy, "mount_access");
+  assert.deepEqual(allowed.pathRef, {
+    view: "mount",
+    mount: "/shared-write",
+    path: "out/result.txt",
+  });
+
+  assert.equal(
+    authorize({ mount: "/shared-write", path: "." }, "file.read", "/srv/shared").allowed,
+    true,
+  );
+  assert.equal(
+    authorize({ mount: "/unknown", path: "a.txt" }, "file.read", "/srv/unknown/a.txt").code,
+    "mount_not_configured",
+  );
+  assert.equal(
+    authorize({ mount: "/shared-write", path: "a.txt" }, "file.read", "/srv/other/a.txt").code,
+    "mount_path_out_of_scope",
+  );
+  assert.equal(
+    authorize({ mount: "/assets", path: "a.png" }, "file.write", "/srv/assets/a.png").code,
+    "mount_read_only",
+  );
+  assert.equal(
+    authorize({ mount: "/assets", path: "a.png" }, "file.patch", "/srv/assets/a.png").code,
+    "mount_read_only",
+  );
+  assert.equal(
+    authorize({ mount: "/assets", path: "a.png" }, "script.output", "/srv/assets/a.png").code,
+    "mount_read_only",
+  );
+  assert.equal(
+    authorize({ mount: "/assets", path: "a.png" }, "file.read", "/srv/assets/a.png").allowed,
+    true,
+  );
+  assert.throws(
+    () => authorize({ mount: "/shared-write", path: "a.txt" }, "file.read", "relative/a.txt"),
+    /absolute execution path/,
+  );
+});
+
+test(
+  "mount source containment uses Windows path semantics on a Windows host",
+  { skip: process.platform !== "win32" },
+  () => {
+    const authorize = (executionPath) =>
+      authorizePathRef({
+        pathRef: resolvePathRef({ input: { view: "mount", mount: "/win-data", path: "x.txt" } }),
+        principal: { userId: "u1", role: "regular_user" },
+        capability: "file.read",
+        pathPolicy: resolvePathPolicy({}),
+        executionPath,
+        mounts: [{ source: "C:\\data", target: "/win-data", readOnly: false }],
+      });
+    assert.equal(authorize("c:/data/x.txt").allowed, true);
+    assert.equal(authorize("C:\\other\\x.txt").code, "mount_path_out_of_scope");
+  },
+);
+
+test("workspace authorization no longer admits paths outside the workspace root", () => {
+  const result = authorizePathRef({
+    pathRef: resolvePathRef({ input: { view: "workspace", path: "a.txt" } }),
+    principal: { userId: "u1", role: "regular_user" },
+    capability: "file.write",
+    pathPolicy: resolvePathPolicy({}),
+    executionPath: "/srv/shared/a.txt",
+    workspaceRoot: "/workspace/u1",
+    mounts: [{ source: "/srv/shared", target: "/shared-write", readOnly: false }],
+  });
+  assert.equal(result.code, "workspace_path_out_of_scope");
 });

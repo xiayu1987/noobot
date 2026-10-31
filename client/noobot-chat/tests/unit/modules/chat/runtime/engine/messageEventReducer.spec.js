@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { selectMessageToolTimeline } from "@noobot/event-protocol/tool-timeline";
 import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import { describe, expect, it } from "vitest";
 import {
@@ -11,7 +12,6 @@ import {
 } from "../../../../../../src/modules/chat/runtime/engine/messageEventReducer.js";
 import {
   selectCompletedToolArtifacts,
-  selectToolTimeline,
   selectToolTimelineLogs,
 } from "../../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
 import { selectActivityTimelineLogs } from "../../../../../../src/modules/chat/runtime/engine/activityTimeline.js";
@@ -42,6 +42,16 @@ function message(overrides = {}) {
 
 const reduce = (targetMessage, envelope) =>
   reduceMessageEvent({ targetMessage, state: targetMessage.messageEventState, event: envelope });
+
+function fileResult(path) {
+  return { ok: true, path: { view: "workspace", path }, fileName: path.split("/").pop() };
+}
+
+function patchResult(path) {
+  return { ok: true, changes: [{ path: { view: "workspace", path }, action: "write" }] };
+}
+
+const READ_RESULT = fileResult("docs/readme.md");
 
 describe("reduceMessageEvent", () => {
   it("reduces an authoritative user interjection event into the thinking timeline", () => {
@@ -94,17 +104,18 @@ describe("reduceMessageEvent", () => {
           eventId: "evt-2",
           eventType: "tool_call_end",
           sequence: 2,
-          result: { ok: true },
+          result: READ_RESULT,
           success: true,
         }),
       ).result,
     ).toBe(MESSAGE_EVENT_REDUCE_RESULT.APPLIED);
     expect(selectToolTimelineLogs(target)[1]).toMatchObject({
       type: "tool_result",
-      result: { ok: true },
-      detailText: '{\n  "ok": true\n}',
+      text: "read_file · docs/readme.md",
+      result: READ_RESULT,
+      detailText: JSON.stringify(READ_RESULT, null, 2),
     });
-    expect(selectToolTimeline(target)).toHaveLength(1);
+    expect(selectMessageToolTimeline(target)).toHaveLength(1);
     expect(
       reduce(
         target,
@@ -123,12 +134,15 @@ describe("reduceMessageEvent", () => {
         eventId: "evt-failed",
         eventType: "tool_call_end",
         sequence: 2,
-        result: { ok: false, error: "not found" },
+        result: { ok: false, error: "not found", code: "FILE_NOT_FOUND" },
         success: false,
       }),
     );
 
-    expect(selectToolTimeline(target)[0]).toMatchObject({ success: false, status: "failed" });
+    expect(selectMessageToolTimeline(target)[0]).toMatchObject({
+      success: false,
+      status: "failed",
+    });
     expect(selectToolTimelineLogs(target)[1]).toMatchObject({
       success: false,
       status: "failed",
@@ -136,25 +150,28 @@ describe("reduceMessageEvent", () => {
     });
   });
 
-  it("projects object file references through one display protocol", () => {
+  it("projects attachment file results by their file name", () => {
     const target = message();
+    reduce(target, event({ args: { filePath: "attachment:att-live-file" } }));
     reduce(
       target,
       event({
-        args: {
-          filePath: {
-            view: "attachment",
-            identity: {
-              attachmentId: "att-live-file",
-              sessionId: "session-1",
-              attachmentSource: "user",
-            },
-          },
+        eventId: "evt-attachment-result",
+        eventType: "tool_call_end",
+        sequence: 2,
+        result: {
+          ok: true,
+          path: { view: "attachment", attachmentRef: "attachment:att-live-file" },
+          fileName: "report.pdf",
         },
+        success: true,
       }),
     );
 
-    expect(selectToolTimelineLogs(target)[0].text).toBe("read_file · attachment:att-live-file");
+    expect(selectToolTimelineLogs(target).map((item) => item.text)).toEqual([
+      "read_file · attachment:att-live-file",
+      "read_file · report.pdf",
+    ]);
   });
 
   it("uses the canonical presentation protocol for patch and native script summaries", () => {
@@ -182,6 +199,7 @@ describe("reduceMessageEvent", () => {
             transferEnvelopes: [{ payload: { attachments: [{ name: "result.txt" }] } }],
           },
           call: { eventId: "evt-native-call", sequence: 2 },
+          success: true,
           resultEvent: { eventId: "evt-native-result", sequence: 3 },
         },
       ],
@@ -225,7 +243,7 @@ describe("reduceMessageEvent", () => {
         sequence: 2,
         tool: "write_file",
         toolCallId: "call-risk",
-        result: { ok: true },
+        result: fileResult("notes.txt"),
         success: true,
         riskLevel: "high",
         securityAssessment: raisedAssessment,
@@ -339,6 +357,7 @@ describe("reduceMessageEvent", () => {
             sequenceDomain: "message-event",
             log: { event: "tool_call", type: "tool_call", text: "execute_script" },
           },
+          success: true,
           resultEvent: {
             sequence: 2,
             sequenceScopeId: "source-message-1",
@@ -506,7 +525,7 @@ describe("reduceMessageEvent", () => {
         eventId: "evt-tool-end",
         eventType: "tool_call_end",
         sequence: 2,
-        result: { ok: true },
+        result: READ_RESULT,
         success: true,
         writtenFiles: [
           {
@@ -532,103 +551,99 @@ describe("reduceMessageEvent", () => {
     expect(selectCompletedToolArtifacts(target)).toEqual(
       expect.objectContaining({
         resultCount: 1,
-        attachments: [],
       }),
     );
     expect(selectCompletedToolArtifacts(target)).not.toHaveProperty("writtenFiles");
   });
 
-  it("only exposes tool result attachments with the canonical identity triple", () => {
-    const artifacts = selectCompletedToolArtifacts({
-      toolTimeline: [
-        {
-          resultEvent: {
-            attachments: [
-              { name: "stdout.txt", path: "/tmp/stdout.txt" },
-              {
-                attachmentId: "attachment-1",
-                sessionId: "session-1",
-                attachmentSource: "model",
-                name: "result.json",
-              },
-            ],
-          },
-        },
-      ],
-    });
+  function mutationRef(overrides = {}) {
+    return {
+      mutationId: "mutation-1",
+      revision: 1,
+      operation: "update",
+      locator: { view: "workspace", path: "docs/one.txt" },
+      fileName: "one.txt",
+      beforeSha256: "a".repeat(64),
+      afterSha256: "b".repeat(64),
+      size: 3,
+      additions: 1,
+      deletions: 0,
+      snapshot: "available",
+      ...overrides,
+    };
+  }
 
-    expect(artifacts.attachments).toEqual([
-      expect.objectContaining({ attachmentId: "attachment-1" }),
-    ]);
-  });
-
-  it("projects every file mutation from a batch tool result", () => {
+  it("projects every file mutation from resultEvent.mutationRefs, ignoring result text", () => {
+    const first = mutationRef();
+    const second = mutationRef({ mutationId: "mutation-2", fileName: "two.txt" });
     expect(
       selectCompletedToolArtifacts({
         toolTimeline: [
           {
             tool: "patch_file",
             toolCallId: "call-patch",
-            resultEvent: { eventId: "result-patch" },
-            result: JSON.stringify({
-              protocol: "noobot.file-mutation-result",
-              mutations: [
-                { id: "mutation-1", path: "one.txt" },
-                { id: "mutation-2", path: "two.txt" },
-              ],
-            }),
+            success: true,
+            resultEvent: { eventId: "result-patch", mutationRefs: [first, second] },
+            result: JSON.stringify(patchResult("ignored.txt")),
           },
         ],
       }).mutations,
-    ).toEqual([
-      { id: "mutation-1", path: "one.txt" },
-      { id: "mutation-2", path: "two.txt" },
-    ]);
+    ).toEqual([first, second]);
   });
 
   it("keeps write and patch mutations in their canonical tool groups", () => {
+    const written = mutationRef({ mutationId: "write-1", operation: "create" });
+    const patched = mutationRef({ mutationId: "patch-1" });
     const artifacts = selectCompletedToolArtifacts({
       toolTimeline: [
         {
           tool: "write_file",
-          resultEvent: { eventId: "result-write" },
-          result: JSON.stringify({ mutations: [{ id: "write-1", path: "new.txt" }] }),
+          result: fileResult("docs/one.txt"),
+          success: true,
+          resultEvent: { eventId: "result-write", mutationRefs: [written] },
         },
         {
           tool: "patch_file",
-          resultEvent: { eventId: "result-patch" },
-          result: JSON.stringify({ mutations: [{ id: "patch-1", path: "changed.txt" }] }),
+          result: patchResult("docs/one.txt"),
+          success: true,
+          resultEvent: { eventId: "result-patch", mutationRefs: [patched] },
+        },
+        {
+          tool: "read_file",
+          result: READ_RESULT,
+          success: true,
+          resultEvent: { eventId: "result-read" },
         },
       ],
     });
 
-    expect(artifacts.writeMutations).toEqual([{ id: "write-1", path: "new.txt" }]);
-    expect(artifacts.patchMutations).toEqual([{ id: "patch-1", path: "changed.txt" }]);
+    expect(artifacts.writeMutations).toEqual([written]);
+    expect(artifacts.patchMutations).toEqual([patched]);
   });
 
   it("projects one latest mutation fact for repeated aggregate results", () => {
+    const latest = mutationRef({ mutationId: "aggregate-1", revision: 2 });
     const artifacts = selectCompletedToolArtifacts({
       toolTimeline: [
         {
           tool: "patch_file",
-          resultEvent: { eventId: "result-patch-1" },
-          result: JSON.stringify({
-            mutations: [{ id: "aggregate-1", path: "changed.txt", aggregate: { revision: 1 } }],
-          }),
+          result: patchResult("docs/one.txt"),
+          success: true,
+          resultEvent: {
+            eventId: "result-patch-1",
+            mutationRefs: [mutationRef({ mutationId: "aggregate-1" })],
+          },
         },
         {
           tool: "patch_file",
-          resultEvent: { eventId: "result-patch-2" },
-          result: JSON.stringify({
-            mutations: [{ id: "aggregate-1", path: "changed.txt", aggregate: { revision: 2 } }],
-          }),
+          result: patchResult("docs/one.txt"),
+          success: true,
+          resultEvent: { eventId: "result-patch-2", mutationRefs: [latest] },
         },
       ],
     });
 
-    expect(artifacts.patchMutations).toEqual([
-      { id: "aggregate-1", path: "changed.txt", aggregate: { revision: 2 } },
-    ]);
+    expect(artifacts.patchMutations).toEqual([latest]);
   });
 
   it("keeps authoritative final content immutable against later deltas", () => {
@@ -661,10 +676,7 @@ describe("reduceMessageEvent", () => {
     expect(target.messageEventState.lastSequence).toBe(1);
   });
 
-  it("rejects invalid events and identity conflicts", () => {
-    expect(reduce(message(), event({ toolCallId: "" })).result).toBe(
-      MESSAGE_EVENT_REDUCE_RESULT.INVALID,
-    );
+  it("rejects identity conflicts", () => {
     expect(reduce(message({ presentationMessageId: "other" }), event()).result).toBe(
       MESSAGE_EVENT_REDUCE_RESULT.MESSAGE_IDENTITY_CONFLICT,
     );

@@ -6,6 +6,7 @@
 import { computed } from "vue";
 import { mergeAttachments } from "../../model/dialogProcessChain.js";
 import {
+  findMessageIdentityIndex,
   getMessageRole,
   getMessageSessionId,
   getMessageDialogProcessId,
@@ -17,6 +18,7 @@ import { SESSION_RUN_MESSAGE_RUNTIME_MARK } from "../../runtime/sessionRunStateM
 import { logStateMachineDebug } from "../../../debug/loggers/stateMachineLogger.js";
 import { logWorkflowDiagnostics } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
 import { resolveParsedResultRelation } from "../../../../infrastructure/api/attachments/attachmentAccess.js";
+import { selectToolLinkSnapshots } from "../../runtime/engine/toolTimeline.js";
 import { isPlainObject, text } from "@noobot/shared/value";
 
 function getMessageAttachments(messageItem = {}) {
@@ -90,10 +92,7 @@ function isFreshPendingAssistant(messageItem = {}) {
 
 function logDisplayedAttachmentsSummary({
   messageItem = {},
-  baseAttachmentsCount = 0,
-  toolLogAttachmentsCount = 0,
   displayedAttachmentsCount = 0,
-  canUseAssociatedTurnArtifacts = false,
   freshPendingAssistant = false,
 } = {}) {
   logStateMachineDebug("messageFiles.attachments.displayed", () => ({
@@ -105,43 +104,62 @@ function logDisplayedAttachmentsSummary({
     hasRuntimeMark: Boolean(
       messageItem?.[SESSION_RUN_MESSAGE_RUNTIME_MARK] || messageItem?.runtimeMark,
     ),
-    baseAttachmentsCount,
-    toolLogAttachmentsCount,
     displayedAttachmentsCount,
-    canUseAssociatedTurnArtifacts,
     isFreshPendingAssistant: freshPendingAssistant,
   }));
 }
 
-export function collectSessionAttachments(
-  allMessages = [],
-  messageItem = {},
-  displayedAttachments = [],
-) {
-  const messages = Array.isArray(allMessages) ? allMessages : [];
-  const position = messages.indexOf(messageItem);
-  const preceding = position < 0 ? [] : messages.slice(0, position);
+function precedingAssistantMessages(allMessages, messageItem) {
+  const position = findMessageIdentityIndex(messageItem, allMessages);
+  if (position < 0) {
+    throw new Error("message_not_in_session_messages");
+  }
+  return allMessages
+    .slice(0, position)
+    .filter((candidate) => getMessageRole(candidate) === "assistant");
+}
+
+export function collectSessionAttachments(allMessages, messageItem, displayedAttachments) {
   return mergeAttachments(
-    preceding
-      .filter((candidate) => getMessageRole(candidate) === "assistant")
-      .flatMap((candidate) => getMessageAttachments(candidate)),
+    precedingAssistantMessages(allMessages, messageItem).flatMap((candidate) =>
+      getMessageAttachments(candidate),
+    ),
     displayedAttachments,
   );
 }
 
-export function useMessageFiles({ getMessageItem = () => ({}), getAllMessages = () => [] } = {}) {
+export function sessionMessageIndex(allMessages, messageItem) {
+  const position = findMessageIdentityIndex(messageItem, allMessages);
+  if (position < 0) throw new Error("message_not_in_session_messages");
+  return position;
+}
+
+export function collectSessionLinkSnapshots(allMessages) {
+  return allMessages.flatMap((candidate, messageIndex) =>
+    getMessageRole(candidate) === "assistant"
+      ? selectToolLinkSnapshots(candidate, messageIndex)
+      : [],
+  );
+}
+
+function isSameTurnSiblingAssistant(candidate, messageItem, sessionId, turnScopeId) {
+  return (
+    candidate !== messageItem &&
+    getMessageRole(candidate) === "assistant" &&
+    getMessageSessionId(candidate) === sessionId &&
+    getMessageTurnScopeId(candidate) === turnScopeId
+  );
+}
+
+export function useMessageFiles({ getMessageItem, getAllMessages }) {
   const displayedAttachments = computed(() => {
-    const messageItem = getMessageItem() || {};
+    const messageItem = getMessageItem();
     const sessionId = getMessageSessionId(messageItem);
     const turnScopeId = getMessageTurnScopeId(messageItem);
     const sameTurnMessages =
       getMessageRole(messageItem) === "assistant" && sessionId && turnScopeId
-        ? (Array.isArray(getAllMessages?.()) ? getAllMessages() : []).filter(
-            (candidate) =>
-              candidate !== messageItem &&
-              getMessageRole(candidate) === "assistant" &&
-              getMessageSessionId(candidate) === sessionId &&
-              getMessageTurnScopeId(candidate) === turnScopeId,
+        ? getAllMessages().filter((candidate) =>
+            isSameTurnSiblingAssistant(candidate, messageItem, sessionId, turnScopeId),
           )
         : [];
     const turnAttachments = sameTurnMessages.reduce(
@@ -155,11 +173,10 @@ export function useMessageFiles({ getMessageItem = () => ({}), getAllMessages = 
       messageItem,
     );
     const freshPendingAssistant = isFreshPendingAssistant(messageItem);
-    const result = sourceAttachments;
     logWorkflowDiagnostics("frontend.workflowRender.displayedAttachmentsProjected", () => ({
       ...getMessageScopeIdentity(messageItem),
       role: getMessageRole(messageItem),
-      attachments: result.map((attachment) => ({
+      attachments: sourceAttachments.map((attachment) => ({
         attachmentId: text(attachment?.attachmentId),
         clientAttachmentId: text(attachment?.clientAttachmentId),
         sessionId: text(attachment?.sessionId),
@@ -169,13 +186,10 @@ export function useMessageFiles({ getMessageItem = () => ({}), getAllMessages = 
     }));
     logDisplayedAttachmentsSummary({
       messageItem,
-      baseAttachmentsCount: sourceAttachments.length,
-      toolLogAttachmentsCount: 0,
-      displayedAttachmentsCount: result.length,
-      canUseAssociatedTurnArtifacts: false,
+      displayedAttachmentsCount: sourceAttachments.length,
       freshPendingAssistant,
     });
-    return result;
+    return sourceAttachments;
   });
 
   return {

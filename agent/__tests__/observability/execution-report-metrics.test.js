@@ -64,7 +64,7 @@ test("summarizeExecutionMetrics pairs tool calls by id and uses end risk level",
       persistDurationMs: 70,
       riskLevel: "critical",
     }),
-    log("tool_call_start", 7, { tool: "search", toolCallId: "c" }),
+    log("tool_call_start", 7, { tool: "search", toolCallId: "c", args: {} }),
   ]);
   assert.deepEqual(metrics.tools.toolStats, {
     read_file: { calls: 1, failures: 0, timedCount: 1, totalDurationMs: 2000, maxDurationMs: 2000 },
@@ -95,7 +95,7 @@ test("summarizeExecutionMetrics pairs tool calls by id and uses end risk level",
 
 test("summarizeExecutionMetrics counts one failure per toolCallId despite extra error logs", () => {
   const metrics = summarizeExecutionMetrics([
-    log("tool_call_start", 0, { tool: "execute_script", toolCallId: "x" }),
+    log("tool_call_start", 0, { tool: "execute_script", toolCallId: "x", args: {} }),
     log("tool_error", 1, { tool: "execute_script", toolCallId: "x", message: "boom" }),
     log("tool_call_end", 2, {
       tool: "execute_script",

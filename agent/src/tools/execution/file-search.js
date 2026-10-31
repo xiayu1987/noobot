@@ -3,38 +3,24 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { lstat, readdir } from "node:fs/promises";
-import { execFile as execFileCallback, spawn } from "node:child_process";
-import { filePath as path } from "@noobot/path-resolver";
-import { promisify } from "node:util";
-import { recoverableToolError } from "../../shared/errors/index.js";
+import { spawn } from "node:child_process";
+import { rgPath } from "@vscode/ripgrep";
+import { fatalSystemError, recoverableToolError } from "../../shared/errors/index.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import {
-  DEFAULT_MAX_SEARCH_FILES,
-  DEFAULT_SEARCH_CONTEXT_LINES,
-  DEFAULT_SEARCH_EXCLUDED_DIRS,
-  DEFAULT_SEARCH_MAX_RESULTS,
   escapeRegExp,
   isForbiddenWorkspaceRelativePath,
   isOutsideWorkspaceRelativePath,
-  matchesGlob,
-  normalizeRgPathToWorkspace,
+  normalizeRgPathToRoot,
   splitLines,
-  toPositiveInt,
-  toTextLine,
-  toWorkspaceRelativePath,
 } from "./file-utils.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject } from "@noobot/shared/value";
 import { assertNotAborted } from "../../shared/utils/error-utils.js";
 
-const execFile = promisify(execFileCallback);
-let ripgrepPathPromise = null;
-
-function buildSearchMatcher({ query = "", isRegex = false, caseSensitive = false } = {}) {
-  const source = String(query || "");
+function buildSearchMatcher({ query, isRegex, caseSensitive }) {
   const flags = caseSensitive ? "g" : "gi";
   try {
-    return new RegExp(isRegex ? source : escapeRegExp(source), flags);
+    return new RegExp(isRegex ? query : escapeRegExp(query), flags);
   } catch (error) {
     throw recoverableToolError(`invalid search regex: ${error?.message || String(error)}`, {
       code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
@@ -44,32 +30,33 @@ function buildSearchMatcher({ query = "", isRegex = false, caseSensitive = false
 }
 
 export function searchInText({
-  text: inputText = "",
-  query = "",
-  isRegex = false,
-  caseSensitive = false,
-  contextLines = DEFAULT_SEARCH_CONTEXT_LINES,
-  maxResults = DEFAULT_SEARCH_MAX_RESULTS,
-  filePath = "",
-} = {}) {
+  text: inputText,
+  query,
+  isRegex,
+  caseSensitive,
+  contextLines,
+  maxResults,
+}) {
   const matcher = buildSearchMatcher({ query, isRegex, caseSensitive });
   const lines = splitLines(inputText);
-  if (String(inputText || "").endsWith("\n")) lines.pop();
+  if (inputText.endsWith("\n")) lines.pop();
   const matches = [];
-  const contextCount = toPositiveInt(contextLines, DEFAULT_SEARCH_CONTEXT_LINES, 0, 20);
-  const maxCount = toPositiveInt(maxResults, DEFAULT_SEARCH_MAX_RESULTS, 1, 500);
+  let truncated = false;
 
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
     const lineText = lines[lineIndex];
     matcher.lastIndex = 0;
     const hit = matcher.exec(lineText);
     if (!hit) continue;
-    const beforeStart = Math.max(0, lineIndex - contextCount);
-    const afterEnd = Math.min(lines.length - 1, lineIndex + contextCount);
+    if (matches.length === maxResults) {
+      truncated = true;
+      break;
+    }
+    const beforeStart = Math.max(0, lineIndex - contextLines);
+    const afterEnd = Math.min(lines.length - 1, lineIndex + contextLines);
     matches.push({
-      ...(filePath ? { filePath } : {}),
       line: lineIndex + 1,
-      column: Number(hit.index || 0) + 1,
+      column: hit.index + 1,
       text: lineText,
       before: lines.slice(beforeStart, lineIndex).map((item, offset) => ({
         line: beforeStart + offset + 1,
@@ -80,123 +67,50 @@ export function searchInText({
         text: item,
       })),
     });
-    if (matches.length >= maxCount) break;
   }
-  return {
-    matches,
-    truncated: matches.length >= maxCount,
-  };
+  return { matches, truncated };
 }
 
-export async function collectSearchFiles({
-  rootPath = "",
-  workspacePath = "",
-  glob = "",
-  maxFiles = DEFAULT_MAX_SEARCH_FILES,
-  abortSignal,
-} = {}) {
-  const files = [];
-  async function walk(currentPath) {
-    assertNotAborted(abortSignal);
-    if (files.length >= maxFiles) return;
-    let entryStat;
-    try {
-      entryStat = await lstat(currentPath);
-    } catch {
-      return;
-    }
-    if (entryStat.isSymbolicLink()) return;
-    const rel = toWorkspaceRelativePath(workspacePath, currentPath);
-    if (rel && isForbiddenWorkspaceRelativePath(rel)) return;
-    if (entryStat.isDirectory()) {
-      const base = path.basename(currentPath);
-      if (DEFAULT_SEARCH_EXCLUDED_DIRS.has(base)) return;
-      let entries = [];
-      try {
-        entries = await readdir(currentPath, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      for (const entry of entries) {
-        if (files.length >= maxFiles) break;
-        await walk(path.join(currentPath, entry.name));
-      }
-      return;
-    }
-    if (!entryStat.isFile()) return;
-    if (!matchesGlob(rel || path.basename(currentPath), glob)) return;
-    files.push({ filePath: currentPath, relativePath: rel });
-  }
-  await walk(rootPath);
-  return files;
-}
-
-async function probeRipgrepPath(candidate) {
-  if (!candidate) return "";
-  try {
-    await execFile(candidate, ["--version"]);
-    return candidate;
-  } catch {
-    return "";
-  }
-}
-
-async function resolveBundledRipgrepPath() {
-  try {
-    const module = await import("@vscode/ripgrep");
-    return String(module?.rgPath || "");
-  } catch {
-    return "";
-  }
-}
-
-async function resolveRipgrepPath() {
-  if (!ripgrepPathPromise) {
-    ripgrepPathPromise = (async () => {
-      const bundledPath = await probeRipgrepPath(await resolveBundledRipgrepPath());
-      if (bundledPath) return bundledPath;
-      return probeRipgrepPath("rg");
-    })();
-  }
-  return ripgrepPathPromise;
-}
-
-export async function hasRipgrep() {
-  return Boolean(await resolveRipgrepPath());
-}
-
-function runRipgrepSearch({ ripgrepPath, args, rootPath, maxCount, abortSignal }) {
+function runRipgrepSearch({ args, rootPath, maxResults, abortSignal }) {
   return new Promise((resolve, reject) => {
-    const child = spawn(ripgrepPath, args, {
+    const child = spawn(rgPath, args, {
       cwd: rootPath,
       windowsHide: true,
       signal: abortSignal,
     });
-    const lines = [];
+    const events = [];
     let pending = "";
     let matchCount = 0;
-    let stoppedAtLimit = false;
+    let truncated = false;
     let stderr = "";
+    let parseError = null;
 
     const consumeLine = (line) => {
-      if (!line) return;
-      lines.push(line);
+      if (!line || truncated || parseError) return;
+      let event;
       try {
-        if (JSON.parse(line)?.type === "match") matchCount += 1;
-      } catch {
-        void 0;
-      }
-      if (matchCount >= maxCount && !stoppedAtLimit) {
-        stoppedAtLimit = true;
+        event = decodeRipgrepEvent(line);
+        if (event) event.filePath = toSearchRootRelativePath(rootPath, event.filePathRaw);
+      } catch (error) {
+        parseError = error;
         child.kill();
+        return;
       }
+      if (!event) return;
+      if (event.type === "match" && matchCount === maxResults) {
+        truncated = true;
+        child.kill();
+        return;
+      }
+      if (event.type === "match") matchCount += 1;
+      events.push(event);
     };
 
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
       pending += chunk;
       const completeLines = pending.split(/\r?\n/);
-      pending = completeLines.pop() || "";
+      pending = completeLines.pop();
       for (const line of completeLines) consumeLine(line);
     });
     child.stderr.setEncoding("utf8");
@@ -208,16 +122,21 @@ function runRipgrepSearch({ ripgrepPath, args, rootPath, maxCount, abortSignal }
       else reject(error);
     });
     child.on("close", (code) => {
-      consumeLine(pending);
       if (abortSignal.aborted) {
         reject(abortSignal.reason);
         return;
       }
-      if (!stoppedAtLimit && code !== 0 && code !== 1) {
-        reject(new Error(stderr.trim() || `ripgrep exited with code ${code}`));
+      if (parseError) {
+        reject(parseError);
         return;
       }
-      resolve({ stdout: lines.join("\n"), stoppedAtLimit });
+      if (!truncated && code !== 0 && code !== 1) {
+        reject(new Error(`ripgrep exited with code ${code}: ${stderr.trim()}`));
+        return;
+      }
+      consumeLine(pending);
+      if (parseError) reject(parseError);
+      else resolve({ events, truncated });
     });
   });
 }
@@ -231,74 +150,90 @@ const RIPGREP_EXCLUDED_GLOBS = [
   "!**/coverage/**",
 ];
 
-async function requireRipgrepPath() {
-  const ripgrepPath = await resolveRipgrepPath();
-  if (ripgrepPath) return ripgrepPath;
-  const error = new Error("ripgrep executable is not available");
-  error.code = "ENOENT";
-  throw error;
-}
-
-function buildRipgrepArgs({ query, isRegex, caseSensitive, glob, contextCount }) {
+function buildRipgrepArgs({ query, target, isRegex, caseSensitive, glob, contextLines }) {
   const args = ["--json", "--line-number", "--column"];
   for (const excluded of RIPGREP_EXCLUDED_GLOBS) args.push("--glob", excluded);
-  if (contextCount > 0) args.push("--context", String(contextCount));
+  if (contextLines > 0) args.push("--context", String(contextLines));
   if (!caseSensitive) args.push("-i");
   if (!isRegex) args.push("-F");
-  const normalizedGlob = text(glob);
-  if (normalizedGlob) args.push("--glob", normalizedGlob);
-  args.push("--", text(query), ".");
+  if (glob) args.push("--glob", glob);
+  args.push("--", query, target);
   return args;
 }
 
-function parseRipgrepEventLine(line) {
+const RIPGREP_LINE_EVENT_TYPES = new Set(["match", "context"]);
+const RIPGREP_CONTROL_EVENT_TYPES = new Set(["begin", "end", "summary"]);
+
+function invalidRipgrepOutput(reason, cause) {
+  return fatalSystemError(`ripgrep output violates --json protocol: ${reason}`, {
+    code: ERROR_CODE.FATAL_RIPGREP_OUTPUT_INVALID,
+    details: { reason },
+    ...(cause === undefined ? {} : { cause }),
+  });
+}
+
+function decodeRipgrepData(field, value) {
+  if (!isPlainObject(value)) throw invalidRipgrepOutput(`${field} must be an object`);
+  if (typeof value.text === "string") return value.text;
+  if (typeof value.bytes === "string") return Buffer.from(value.bytes, "base64").toString("utf8");
+  throw invalidRipgrepOutput(`${field} must carry text or bytes`);
+}
+
+function decodeSubmatchColumn(submatches) {
+  if (!Array.isArray(submatches) || !submatches.length) {
+    throw invalidRipgrepOutput("match event requires submatches");
+  }
+  const { start } = submatches[0];
+  if (!Number.isSafeInteger(start) || start < 0) {
+    throw invalidRipgrepOutput("submatch start must be a non-negative integer");
+  }
+  return start + 1;
+}
+
+export function decodeRipgrepEvent(line) {
+  let event;
   try {
-    return JSON.parse(line);
-  } catch {
-    return null;
+    event = JSON.parse(line);
+  } catch (error) {
+    throw invalidRipgrepOutput("line is not JSON", error);
   }
-}
-
-function readRipgrepLine(data = {}) {
-  const lineNumber = Number(data?.line_number || 0);
-  if (!Number.isFinite(lineNumber) || lineNumber <= 0) return null;
-  return { lineNumber, lineText: toTextLine(data?.lines?.text || "") };
-}
-
-function firstSubmatchColumn(data = {}) {
-  const firstSubmatch =
-    Array.isArray(data?.submatches) && data.submatches.length ? data.submatches[0] : {};
-  return Number(firstSubmatch?.start || 0) + 1;
-}
-
-function recordRipgrepEvent(event, rawMatches, contextByFile) {
-  const type = text(event?.type);
-  const data = event?.data && typeof event.data === "object" ? event.data : {};
-  const filePathRaw = text(data?.path?.text);
-  if (!filePathRaw || (type !== "match" && type !== "context")) return;
-  const entry = readRipgrepLine(data);
-  if (!entry) return;
-  if (type === "match") {
-    rawMatches.push({
-      filePathRaw,
-      line: entry.lineNumber,
-      column: firstSubmatchColumn(data),
-      text: entry.lineText,
-    });
-    return;
+  if (!isPlainObject(event)) throw invalidRipgrepOutput("event must be an object");
+  if (RIPGREP_CONTROL_EVENT_TYPES.has(event.type)) return null;
+  if (!RIPGREP_LINE_EVENT_TYPES.has(event.type)) {
+    throw invalidRipgrepOutput(`unknown event type ${JSON.stringify(event.type)}`);
   }
-  const fileMap = contextByFile.get(filePathRaw) || new Map();
-  fileMap.set(entry.lineNumber, entry.lineText);
-  contextByFile.set(filePathRaw, fileMap);
+  const { data } = event;
+  if (!isPlainObject(data)) throw invalidRipgrepOutput("event data must be an object");
+  if (!Number.isSafeInteger(data.line_number) || data.line_number < 1) {
+    throw invalidRipgrepOutput("line_number must be a positive integer");
+  }
+  return {
+    type: event.type,
+    filePathRaw: decodeRipgrepData("path", data.path),
+    line: data.line_number,
+    text: decodeRipgrepData("lines", data.lines).replace(/\r?\n$/, ""),
+    ...(event.type === "match" ? { column: decodeSubmatchColumn(data.submatches) } : {}),
+  };
 }
 
-function parseRipgrepEvents(stdout = "") {
+export function toSearchRootRelativePath(rootPath, rgFilePath) {
+  const relativePath = normalizeRgPathToRoot({ rootPath, rgPath: rgFilePath });
+  if (isOutsideWorkspaceRelativePath(relativePath)) {
+    throw invalidRipgrepOutput(`path escapes search root: ${rgFilePath}`);
+  }
+  if (isForbiddenWorkspaceRelativePath(relativePath)) {
+    throw invalidRipgrepOutput(`path is in a forbidden directory: ${rgFilePath}`);
+  }
+  return relativePath;
+}
+
+function collectRipgrepEvents(events) {
   const rawMatches = [];
   const contextByFile = new Map();
-  for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
-    const event = parseRipgrepEventLine(line);
-    if (event === null) continue;
-    recordRipgrepEvent(event, rawMatches, contextByFile);
+  for (const event of events) {
+    if (!contextByFile.has(event.filePathRaw)) contextByFile.set(event.filePathRaw, new Map());
+    if (event.type === "match") rawMatches.push(event);
+    else contextByFile.get(event.filePathRaw).set(event.line, event.text);
   }
   return { rawMatches, contextByFile };
 }
@@ -312,79 +247,47 @@ function collectContextLines(fileContextMap, fromLine, toLine) {
   return collected;
 }
 
-function assembleRipgrepMatches({
-  rawMatches,
-  contextByFile,
-  rootPath,
-  workspacePath,
-  contextCount,
-  maxCount,
-}) {
-  const matches = [];
-  for (const item of rawMatches) {
-    if (matches.length >= maxCount) break;
-    const relativePath = normalizeRgPathToWorkspace({
-      rootPath,
-      workspacePath,
-      rgPath: item.filePathRaw,
-    });
-    if (
-      !relativePath ||
-      isOutsideWorkspaceRelativePath(relativePath) ||
-      isForbiddenWorkspaceRelativePath(relativePath)
-    ) {
-      continue;
-    }
-    const fileContextMap = contextByFile.get(item.filePathRaw) || new Map();
-    matches.push({
-      filePath: relativePath,
+function assembleRipgrepMatches({ rawMatches, contextByFile, contextLines }) {
+  return rawMatches.map((item) => {
+    const fileContextMap = contextByFile.get(item.filePathRaw);
+    return {
+      filePath: item.filePath,
       line: item.line,
       column: item.column,
       text: item.text,
-      before: collectContextLines(fileContextMap, item.line - contextCount, item.line - 1),
-      after: collectContextLines(fileContextMap, item.line + 1, item.line + contextCount),
-    });
-  }
-  return matches;
+      before: collectContextLines(fileContextMap, item.line - contextLines, item.line - 1),
+      after: collectContextLines(fileContextMap, item.line + 1, item.line + contextLines),
+    };
+  });
 }
 
 export async function searchFilesWithRipgrep({
-  rootPath = "",
-  workspacePath = "",
-  query = "",
-  isRegex = false,
-  caseSensitive = false,
-  glob = "",
-  contextLines = DEFAULT_SEARCH_CONTEXT_LINES,
-  maxResults = DEFAULT_SEARCH_MAX_RESULTS,
+  rootPath,
+  target,
+  query,
+  isRegex,
+  caseSensitive,
+  glob,
+  contextLines,
+  maxResults,
   abortSignal,
-} = {}) {
+}) {
   assertNotAborted(abortSignal);
-  const ripgrepPath = await requireRipgrepPath();
-  const contextCount = toPositiveInt(contextLines, DEFAULT_SEARCH_CONTEXT_LINES, 0, 20);
-  const maxCount = toPositiveInt(maxResults, DEFAULT_SEARCH_MAX_RESULTS, 1, 500);
-  const args = buildRipgrepArgs({ query, isRegex, caseSensitive, glob, contextCount });
-  const { stdout, stoppedAtLimit } = await runRipgrepSearch({
-    ripgrepPath,
+  if (typeof target !== "string" || !target) {
+    throw fatalSystemError("search target must be a non-empty string", {
+      code: ERROR_CODE.FATAL_SEARCH_TARGET_INVALID,
+    });
+  }
+  const args = buildRipgrepArgs({ query, target, isRegex, caseSensitive, glob, contextLines });
+  const { events, truncated } = await runRipgrepSearch({
     args,
     rootPath,
-    maxCount,
+    maxResults,
     abortSignal,
   });
-  if (!stdout.trim()) {
-    return { matches: [], truncated: false };
-  }
-  const { rawMatches, contextByFile } = parseRipgrepEvents(stdout);
-  const matches = assembleRipgrepMatches({
-    rawMatches,
-    contextByFile,
-    rootPath,
-    workspacePath,
-    contextCount,
-    maxCount,
-  });
+  const { rawMatches, contextByFile } = collectRipgrepEvents(events);
   return {
-    matches,
-    truncated: stoppedAtLimit || rawMatches.length > maxCount || matches.length >= maxCount,
+    matches: assembleRipgrepMatches({ rawMatches, contextByFile, contextLines }),
+    truncated,
   };
 }

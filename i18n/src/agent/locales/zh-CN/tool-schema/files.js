@@ -8,12 +8,28 @@ export const FILE_TOOL_SCHEMA = {
   read_file: {
     description: {
       key: "tools.file.readDescription",
-      text: "读取文本文件内容。输入 filePath。返回文件文本结果。",
+      text: "读取文本文件内容（默认带行号）。",
     },
     params: {
       filePath: {
         key: "tools.file.readFilePathField",
         text: "文件路径。",
+      },
+      startLine: {
+        key: "tools.file.readStartLineField",
+        text: "起始行（1-based），超过文件末尾会报错。",
+      },
+      endLine: {
+        key: "tools.file.readEndLineField",
+        text: "结束行（1-based），超过文件末尾按末尾截止。",
+      },
+      includeLineNumbers: {
+        key: "tools.file.readIncludeLineNumbersField",
+        text: "content 是否带行号。",
+      },
+      maxLines: {
+        key: "tools.file.readMaxLinesField",
+        text: "最大返回行数；未读完时 hasMore 为 true。",
       },
     },
     texts: {},
@@ -21,7 +37,7 @@ export const FILE_TOOL_SCHEMA = {
   write_file: {
     description: {
       key: "tools.file.writeDescription",
-      text: "写入 workspace 文本文件。返回逻辑路径、资源身份和写入时的附件快照；后续修改 workspace 文件不会改变既有附件快照。",
+      text: "写入 workspace 文本文件。返回文件路径和写入时的变更快照；后续修改不会改变既有快照。回复中链接该文件时照抄结果里的 path（workspace 为相对路径、host 为绝对路径、mount 为挂载路径加相对路径）。",
     },
     params: {
       content: {
@@ -59,7 +75,7 @@ export const FILE_TOOL_SCHEMA = {
       },
       path: {
         key: "tools.search.fieldPath",
-        text: "文件搜索路径；仅 source=files 时生效，source=text 时该字段不参与检索。",
+        text: "搜索的文件或目录；仅 source=files 时生效，source=text 时该字段不参与检索。",
       },
       glob: {
         key: "tools.search.fieldGlob",
@@ -83,9 +99,9 @@ export const FILE_TOOL_SCHEMA = {
       },
     },
     texts: {
-      "tools.search.queryRequired": "必须提供非空的搜索关键词或正则。",
       "tools.search.textRequired":
         "source=text 时必须提供非空的 text；如需按路径搜索请改用 source=files。",
+      "tools.search.pathKindUnsupported": "path 必须是文件或目录。",
     },
   },
   patch_file: {
@@ -104,7 +120,7 @@ export const FILE_TOOL_SCHEMA = {
       },
       strip: {
         key: "tools.patch_file.fieldStrip",
-        text: "路径含 a/、b/ 前缀时才设置对应 strip；使用完整 path 时设为 0。",
+        text: "默认 0；仅路径带 a/、b/ 前缀时设 1。",
       },
       root: {
         key: "tools.patch_file.fieldRoot",

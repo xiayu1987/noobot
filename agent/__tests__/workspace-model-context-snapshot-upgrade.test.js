@@ -146,6 +146,45 @@ test("snapshot upgrade splits v4 joined identities on disk", async (t) => {
   assert.equal(JSON.parse(await readFile(path.join(backupBase, v4Path), "utf8")).version, 4);
 });
 
+test("snapshot upgrade drops v5 userMetaMaterialized on disk", async (t) => {
+  const base = await createWorkspace(t);
+  const backupBase = path.join(base, "backup");
+  const v5Path = `${SNAPSHOT_DIR}/dp-1__client-turn_t-1.json`;
+  const user = {
+    type: "human",
+    content: "hi",
+    additional_kwargs: {
+      messageUid: "sm_user",
+      messageOrigin: "natural",
+      userMetaMaterialized: true,
+    },
+  };
+  await writeFile(
+    path.join(base, v5Path),
+    JSON.stringify({
+      ...v3Snapshot(5),
+      messageBlocks: { system: [], history: [user], incremental: [] },
+      messages: [user],
+    }),
+  );
+
+  const result = await upgradeModelContextSnapshots({
+    base,
+    backupBase,
+    scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS,
+  });
+
+  assert.deepEqual(result.quarantined, []);
+  assert.deepEqual(
+    result.migrated.map(({ fromVersion, toVersion }) => ({ fromVersion, toVersion })),
+    [{ fromVersion: 5, toVersion: SNAPSHOT_VERSION }],
+  );
+  const migrated = JSON.parse(await readFile(path.join(base, v5Path), "utf8"));
+  assert.equal(migrated.version, SNAPSHOT_VERSION);
+  assert.equal("userMetaMaterialized" in migrated.messages[0].additional_kwargs, false);
+  assert.equal(JSON.parse(await readFile(path.join(backupBase, v5Path), "utf8")).version, 5);
+});
+
 test("snapshot upgrade leaves current snapshots untouched", async (t) => {
   const base = await createWorkspace(t);
   const filePath = path.join(base, SNAPSHOT_DIR, "dp-1__client-turn_t-1.json");

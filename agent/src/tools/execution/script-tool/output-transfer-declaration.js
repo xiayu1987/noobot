@@ -12,21 +12,21 @@ const OUTPUT_TRANSFER_MESSAGE = Object.freeze({
     "Command output exceeded the inline limit; the inlined stdout/stderr are truncated previews and the full output was transferred to the returned attachments. Read the complete output through the returned attachment references.",
 });
 
-function resolveMessage({ reason = "", outputLimitExceeded = false, outputLimitBytes = 0 } = {}) {
+function resolveMessage(reason, outputLimitExceeded, outputLimitBytes) {
   const base = OUTPUT_TRANSFER_MESSAGE[reason];
   if (!base) throw new Error(`unsupported_output_transfer_reason:${reason}`);
-  if (outputLimitExceeded !== true) return base;
-  return `Command output exceeded ${Number(outputLimitBytes || 0)} bytes and execution was terminated; ${base}`;
+  if (!outputLimitExceeded) return base;
+  return `Command output exceeded ${outputLimitBytes} bytes and execution was terminated; ${base}`;
 }
 
 export function buildOutputTransferDeclaration({
-  reason = "",
-  transferEnvelopes = [],
-  outputLimitExceeded = false,
-  outputLimitBytes = 0,
-} = {}) {
+  reason,
+  transferEnvelopes,
+  outputLimitExceeded,
+  outputLimitBytes,
+}) {
   return {
-    message: resolveMessage({ reason, outputLimitExceeded, outputLimitBytes }),
+    message: resolveMessage(reason, outputLimitExceeded, outputLimitBytes),
     outputDelivery: TRANSFER_RESULT_STATUS.FILE,
     outputTransferReason: reason,
     transferEnvelopes,

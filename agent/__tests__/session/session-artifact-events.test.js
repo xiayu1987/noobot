@@ -344,3 +344,64 @@ test("authority event commit rejects non-canonical owner, ordering and unknown f
   }
   assert.equal(mutations, 0);
 });
+
+test("concurrent authority event commits allocate sequences inside one outbox lock", async () => {
+  const sessionDir = mkdtempSync(path.join(os.tmpdir(), "noobot-artifact-outbox-"));
+  const session = {
+    ...createTestSessionRequiredFields(),
+    sessionId: "session-1",
+    parentSessionId: "",
+    aggregateVersion: 0,
+    messages: [],
+    sessionArtifactEvents: [],
+  };
+  const repo = {
+    async withSessionMutation(_u, _s, operation) {
+      return operation(await this.locateSessionScope());
+    },
+    async locateSessionScope() {
+      return { resolvedParentSessionId: "", sessionDir };
+    },
+    async findById() {
+      return structuredClone(session);
+    },
+    async save() {
+      return true;
+    },
+  };
+  const service = new SessionMessageService({
+    sessionRepo: repo,
+    now: () => "2026-08-29T00:00:00.000Z",
+  });
+  const commit = () =>
+    service.commitAuthorityEvent({
+      userId: "admin",
+      sessionId: "session-1",
+      family: EVENT_FAMILY.PLUGIN_ARTIFACT,
+      schemaVersion: PLUGIN_ARTIFACT_SCHEMA_VERSION,
+      causality: {},
+      identity: { eventType: PLUGIN_ARTIFACT_EVENT, turnScopeId: "turn-1" },
+      ordering: {
+        domain: PLUGIN_ARTIFACT_SEQUENCE_DOMAIN,
+        scopeId: "session-1:character:character.animation:session-animation",
+      },
+      producer: { type: "plugin", id: "character" },
+      payload: {
+        pluginId: "character",
+        artifactType: "character.animation",
+        artifactId: "session-animation",
+        operation: "created",
+        revision: 1,
+        baseRevision: null,
+        data: { protocol, assets: [] },
+      },
+    });
+
+  const results = await Promise.all([commit(), commit(), commit()]);
+
+  const sequences = results
+    .map((result) => result.envelope.ordering.sequence)
+    .sort((a, b) => a - b);
+  assert.deepEqual(sequences, [1, 2, 3]);
+  assert.equal((await readAuthorityOutbox(sessionDir)).length, 3);
+});

@@ -1,0 +1,47 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+
+:root {
+  --noobot-font-sans:
+    Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  --noobot-font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+    monospace;
+
+  --noobot-font-size-2xs: 10px;
+  --noobot-font-size-xs: 12px;
+  --noobot-font-size-sm: 13px;
+  --noobot-font-size-md: 14px;
+  --noobot-font-size-lg: 16px;
+
+  --noobot-font-weight-regular: 400;
+  --noobot-font-weight-medium: 500;
+  --noobot-font-weight-semibold: 600;
+  --noobot-font-weight-bold: 700;
+
+  --noobot-line-height-none: 1;
+  --noobot-line-height-compact: 1.2;
+  --noobot-line-height-tight: 1.3;
+  --noobot-line-height-balanced: 1.4;
+  --noobot-line-height-comfortable: 1.5;
+  --noobot-line-height-body: 1.6;
+  --noobot-line-height-loose: 1.7;
+
+  --noobot-letter-spacing-none: 0;
+  --noobot-letter-spacing-subtle: 0.01em;
+  --noobot-letter-spacing-wide: 0.04em;
+  --noobot-letter-spacing-caps: 0.5px;
+  --noobot-letter-spacing-caps-wide: 0.65px;
+
+  --noobot-btn-font-weight: var(--noobot-font-weight-semibold);
+  --noobot-msg-avatar-font-size: var(--noobot-font-size-sm);
+  --noobot-msg-meta-font-size: var(--noobot-font-size-sm);
+  --noobot-msg-file-size-font-size: var(--noobot-font-size-xs);
+  --noobot-msg-caption-font-size: var(--noobot-font-size-md);
+  --noobot-msg-font-size: var(--noobot-font-size-lg);
+  --noobot-msg-line-height: var(--noobot-line-height-body);
+  --noobot-thinking-status-font-size: var(--noobot-font-size-2xs);
+}

@@ -283,3 +283,59 @@ test("summarized true moves into metadata", () => {
   const { document } = migrateModelContextSnapshot(v3Snapshot({ history: [message] }));
   assert.equal(document.messageBlocks.history[0].additional_kwargs.summarized, true);
 });
+
+function v5Snapshot({ system = [], history = [], incremental = [] }) {
+  return {
+    ...v4Snapshot({ system, history, incremental }),
+    version: 5,
+  };
+}
+
+function v5User(metadata) {
+  return { type: "human", content: "hi", additional_kwargs: { messageUid: "sm_u", ...metadata } };
+}
+
+test("v5 snapshot drops userMetaMaterialized consistent with messageOrigin", () => {
+  const natural = v5User({ messageOrigin: "natural", userMetaMaterialized: true });
+  const internal = {
+    ...v5User({ messageOrigin: "internal", userMetaMaterialized: false }),
+    additional_kwargs: {
+      messageUid: "sm_i",
+      messageOrigin: "internal",
+      userMetaMaterialized: false,
+    },
+  };
+  const { document, fromVersion, toVersion } = migrateModelContextSnapshot(
+    v5Snapshot({ history: [natural], incremental: [internal] }),
+  );
+  assert.deepEqual({ fromVersion, toVersion }, { fromVersion: 5, toVersion: SNAPSHOT_VERSION });
+  assert.deepEqual(document.messageBlocks.history[0].additional_kwargs, {
+    messageUid: "sm_u",
+    messageOrigin: "natural",
+  });
+  assert.deepEqual(document.messageBlocks.incremental[0].additional_kwargs, {
+    messageUid: "sm_i",
+    messageOrigin: "internal",
+  });
+  assert.deepEqual(document.messages, [
+    ...document.messageBlocks.history,
+    ...document.messageBlocks.incremental,
+  ]);
+  assert.doesNotThrow(() => hydrateModelContextSnapshot(document, identity));
+});
+
+test("v5 userMetaMaterialized inconsistent with messageOrigin is unmappable", () => {
+  const message = v5User({ messageOrigin: "internal", userMetaMaterialized: true });
+  assert.throws(
+    () => migrateModelContextSnapshot(v5Snapshot({ history: [message] })),
+    rejection("removal_inconsistent"),
+  );
+});
+
+test("v5 userMetaMaterialized on a non user message is unmappable", () => {
+  const message = { type: "ai", content: "x", additional_kwargs: { userMetaMaterialized: true } };
+  assert.throws(
+    () => migrateModelContextSnapshot(v5Snapshot({ history: [message] })),
+    rejection("removal_role_mismatch"),
+  );
+});

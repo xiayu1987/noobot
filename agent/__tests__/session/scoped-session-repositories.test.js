@@ -202,6 +202,8 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
       persistenceScope: access.persistenceScope,
       turns: [
         {
+          attachments: [],
+          transferEnvelopes: [],
           messageUid: "sm_node_task",
           role: "user",
           messageOrigin: "internal",
@@ -215,6 +217,8 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
       ...turnIdentity,
       messages: [
         {
+          attachments: [],
+          transferEnvelopes: [],
           messageUid: "sm_tool_call",
           role: "assistant",
           presentationMessageId: "pm_fx1",
@@ -224,6 +228,8 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
           tool_calls: [{ id: "call-1", function: { name: "read_file", arguments: "{}" } }],
         },
         {
+          attachments: [],
+          transferEnvelopes: [],
           messageUid: "sm_tool_result",
           role: "tool",
           presentationMessageId: "pm_fx1",
@@ -232,6 +238,8 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
           tool_call_id: "call-1",
         },
         {
+          attachments: [],
+          transferEnvelopes: [],
           messageUid: "sm_done",
           role: "assistant",
           presentationMessageId: "pm_fx1",

@@ -4,8 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { compactTransferEnvelopes } from "../transfer-attachment-refs.js";
+import {
+  compactTransferEnvelopes,
+  dedupeSessionAttachmentRefs,
+} from "../transfer-attachment-refs.js";
 import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
+import { projectResourceRef } from "@noobot/path-resolver";
+import { assertMutationRef } from "@noobot/file-mutation-protocol";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import {
   assertSessionMessageEntity,
@@ -14,48 +19,10 @@ import {
   projectSessionMessageRecordIdentity,
   resolveSessionMessageRecordDialogProcessId,
 } from "@noobot/session-protocol";
-import { copyPresentFields } from "./entity-primitives.js";
-import {
-  dedupeAttachmentsByIdentity,
-  parseAttachmentRelations,
-  projectAttachmentIdentity,
-} from "@noobot/attachment-protocol";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isCanonicalText, isPlainObject, text } from "@noobot/shared/value";
 
-function normalizeTransferEnvelopesFromMessage(message = {}) {
-  return normalizeTransferEnvelopes(compactTransferEnvelopes(message?.transferEnvelopes || []));
-}
-
-function normalizeSessionAttachment(item = {}) {
-  if (!isPlainObject(item)) return null;
-  const identity = projectAttachmentIdentity(item);
-  const name = text(item.name);
-  const mimeType = text(item.mimeType);
-  if (!name || !mimeType) return null;
-  const normalized = { ...identity, name, mimeType };
-  copyPresentFields(normalized, item, [
-    "size",
-    "relativePath",
-    "sandboxPath",
-    "path",
-    "previewUrl",
-    "downloadUrl",
-    "sourcePath",
-    "generationSource",
-  ]);
-  const relations = parseAttachmentRelations(item.relations);
-  if (relations.length) normalized.relations = relations;
-  const owner = normalizeAttachmentOwner(item.owner);
-  if (owner) normalized.owner = owner;
-  return normalized;
-}
-
-function normalizeAttachmentOwner(owner = null) {
-  if (!isPlainObject(owner)) return null;
-  const type = text(owner.type);
-  const id = text(owner.id);
-  if (!type && !id) return null;
-  return { ...(type ? { type } : {}), ...(id ? { id } : {}) };
+function normalizeTransferEnvelopesFromMessage(message) {
+  return normalizeTransferEnvelopes(compactTransferEnvelopes(message.transferEnvelopes));
 }
 
 function createBaseMessageEntity(message) {
@@ -80,6 +47,24 @@ function applyMessageArtifacts(target, message, attachments) {
   target.attachments = attachments;
   const transferEnvelopes = normalizeTransferEnvelopesFromMessage(message);
   if (transferEnvelopes.length) target.transferEnvelopes = transferEnvelopes;
+  applyMessageMutationRefs(target, message);
+  if (message?.resourceRefs === undefined) return;
+  if (!Array.isArray(message.resourceRefs)) {
+    throw new TypeError("session message resourceRefs must be an array");
+  }
+  if (message.resourceRefs.length) {
+    target.resourceRefs = message.resourceRefs.map((item) => projectResourceRef(item));
+  }
+}
+
+function applyMessageMutationRefs(target, message) {
+  if (message?.mutationRefs === undefined) return;
+  if (!Array.isArray(message.mutationRefs)) {
+    throw new TypeError("session message mutationRefs must be an array");
+  }
+  if (message.mutationRefs.length) {
+    target.mutationRefs = message.mutationRefs.map((item) => assertMutationRef(item));
+  }
 }
 
 function applyMessageInjection(target, message) {
@@ -122,6 +107,19 @@ function applyChatPresentation(target, message) {
   }
 }
 
+function applyWorkspaceRootDirectory(target, message) {
+  if (message?.workspaceRootDirectory === undefined) return;
+  if (!isCanonicalText(message.workspaceRootDirectory)) {
+    throw new TypeError("session message workspaceRootDirectory must be canonical text");
+  }
+  if (target.role !== "assistant" || target.chatPresentation !== true) {
+    throw new TypeError(
+      "workspaceRootDirectory is only allowed on assistant presentation messages",
+    );
+  }
+  target.workspaceRootDirectory = message.workspaceRootDirectory;
+}
+
 function applyMessageTimelines(target, message) {
   if (Array.isArray(message?.activityTimeline)) target.activityTimeline = message.activityTimeline;
   if (Array.isArray(message?.toolTimeline)) target.toolTimeline = message.toolTimeline;
@@ -136,6 +134,7 @@ function applyMessagePresentation(target, message) {
   applyUserMetaParsedResults(target, message);
   applyPresentationIdentity(target, message);
   applyChatPresentation(target, message);
+  applyWorkspaceRootDirectory(target, message);
   applyMessageTimelines(target, message);
   applyMessageMonotonicity(target, message);
 }
@@ -198,17 +197,11 @@ function applyMessageToolFields(target, message) {
   if (toolCallId) target.tool_call_id = toolCallId;
   if (toolName) target.toolName = toolName;
   if (contextPolicy) target.contextPolicy = contextPolicy;
-  if (Array.isArray(message?.tool_calls)) target.tool_calls = message.tool_calls;
-  if (target.type === "tool_call" && !Array.isArray(target.tool_calls)) target.tool_calls = [];
+  if (Object.hasOwn(message, "tool_calls")) target.tool_calls = message.tool_calls;
 }
 
 export function normalizeMessageEntity(message) {
-  const normalizedAttachments = Array.isArray(message?.attachments)
-    ? dedupeAttachmentsByIdentity(
-        message.attachments.map(normalizeSessionAttachment).filter(Boolean),
-      )
-    : [];
-
+  const normalizedAttachments = dedupeSessionAttachmentRefs(message.attachments);
   const identity = projectSessionMessageRecordIdentity(assertSessionMessageRecordIdentity(message));
   const normalizedMessage = Object.assign(createBaseMessageEntity(message), identity);
   const turnCommit = normalizeTurnCommitMetadata(message?.turnCommit);

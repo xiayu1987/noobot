@@ -86,7 +86,7 @@ describe("stream event log routing", () => {
   });
 
   it.each(["done", "user_stopped", "error"])(
-    "rejects retired non-envelope live event %s with an explicit transport warning",
+    "rejects retired non-envelope live event %s by failing the stream with a coded error",
     (event) => {
       const logSessionEvent = vi.fn();
       const applyTurnLifecycleEnvelope = vi.fn();
@@ -97,7 +97,12 @@ describe("stream event log routing", () => {
         turnScopeId: "turn-1",
       });
 
-      expect(handle({ event, data: { sessionId: "s-1", turnScopeId: "turn-1" } })).toBeUndefined();
+      expect(() => handle({ event, data: { sessionId: "s-1", turnScopeId: "turn-1" } })).toThrow(
+        expect.objectContaining({
+          code: "PROTOCOL_ENVELOPE_REJECTED",
+          details: { channelEvent: event, errors: ["unregistered_non_envelope_event"] },
+        }),
+      );
       expect(logSessionEvent).toHaveBeenCalledTimes(1);
       expect(logSessionEvent).toHaveBeenCalledWith(
         expect.objectContaining({

@@ -107,6 +107,7 @@ test("workflow hook fails the parent workflow and stops downstream after a sub-a
     sessionId: "s-failed-step",
     dialogProcessId: "d-failed-step",
     userMessage: "请运行失败继续流程",
+    userMessageAttachments: [],
     runConfig: { locale: "zh-CN" },
   };
   const outcome = await beforeDispatch.handler(beforeContext, createTestHookInvocation());
@@ -193,6 +194,7 @@ test("workflow hook stops all fan-out downstream nodes after their upstream node
     sessionId: "s-failure-fanout",
     dialogProcessId: "d-failure-fanout",
     userMessage: "请运行失败传播流程",
+    userMessageAttachments: [],
     runConfig: { locale: "zh-CN" },
   };
   const outcome = await beforeDispatch.handler(ctx, createTestHookInvocation());
@@ -281,6 +283,7 @@ test("workflow hook does not execute a merge downstream node after an upstream b
     sessionId: "s-failure-merge",
     dialogProcessId: "d-failure-merge",
     userMessage: "请运行失败传播流程",
+    userMessageAttachments: [],
     runConfig: { locale: "zh-CN" },
   };
   const outcome = await beforeDispatch.handler(ctx, createTestHookInvocation());
@@ -373,6 +376,7 @@ test("workflow hook does not execute any post-merge fan-out node after an upstre
     sessionId: "s-failure-multi",
     dialogProcessId: "d-failure-multi",
     userMessage: "请运行失败传播流程",
+    userMessageAttachments: [],
     runConfig: { locale: "zh-CN" },
   };
   const outcome = await beforeDispatch.handler(ctx, createTestHookInvocation());
@@ -425,6 +429,7 @@ test("workflow hook commits FAILED for a node whose sub-session throws without a
     sessionId: "s-failure-no-lifecycle",
     dialogProcessId: "d-failure-no-lifecycle",
     userMessage: "请运行失败传播流程",
+    userMessageAttachments: [],
     runConfig: { locale: "zh-CN" },
   };
   await getBeforeDispatch(hookManager).handler(ctx, createTestHookInvocation());

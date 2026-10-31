@@ -101,7 +101,7 @@ test("normalizeAttachmentMetas accepts only canonical attachment fields", () => 
       path: "/tmp/canonical.txt",
       relativePath: "runtime/canonical.txt",
       sandboxPath: "/workspace/canonical.txt",
-      sourcePath: "D:/work/canonical.txt",
+      origin: { view: "host", path: "D:/work/canonical.txt" },
       isSandbox: true,
       generationSource: "semantic_transfer_tool_output",
     },
@@ -119,7 +119,7 @@ test("normalizeAttachmentMetas accepts only canonical attachment fields", () => 
     path: "/tmp/canonical.txt",
     relativePath: "runtime/canonical.txt",
     sandboxPath: "/workspace/canonical.txt",
-    sourcePath: "D:/work/canonical.txt",
+    origin: { view: "host", path: "D:/work/canonical.txt" },
     generationSource: "semantic_transfer_tool_output",
   });
   assert.throws(
@@ -158,7 +158,7 @@ test("mapAttachmentRecordsToMetas projects canonical runtime records without inf
       path: "/tmp/result.md",
       relativePath: "runtime/result.md",
       sandboxPath: "/workspace/result.md",
-      sourcePath: "D:/work/result.md",
+      origin: { view: "host", path: "D:/work/result.md" },
       isSandbox: false,
       generationSource: "semantic_transfer_tool_output",
       relations: [
@@ -182,7 +182,7 @@ test("mapAttachmentRecordsToMetas projects canonical runtime records without inf
   assert.equal(meta.path, "/tmp/result.md");
   assert.equal(meta.relativePath, "runtime/result.md");
   assert.equal(meta.sandboxPath, "/workspace/result.md");
-  assert.equal(meta.sourcePath, "D:/work/result.md");
+  assert.deepEqual(meta.origin, { view: "host", path: "D:/work/result.md" });
   assert.equal("isSandbox" in meta, false);
   assert.equal(meta.generationSource, "semantic_transfer_tool_output");
   assert.deepEqual(meta.relations, [

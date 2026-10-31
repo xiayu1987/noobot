@@ -49,7 +49,15 @@ test("buildDockerCommand validates mounts through docker inspect template equali
     "sleep",
     "infinity",
   ]);
-  assert.deepEqual(built.inspectArgs, ["container", "inspect", "noobot-script-sandbox"]);
+  assert.deepEqual(built.listArgs, [
+    "container",
+    "ls",
+    "--all",
+    "--filter",
+    "name=^noobot-script-sandbox$",
+    "--format",
+    "{{.Names}}",
+  ]);
   assert.deepEqual(built.startArgs, ["start", "noobot-script-sandbox"]);
   assert.equal(built.execArgs[0], "exec");
   assert.equal(built.execArgs[7], "noobot-script-sandbox");

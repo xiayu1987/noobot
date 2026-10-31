@@ -11,17 +11,19 @@ import {
   projectAuthoritativeFinalMessage,
   projectMessageEventContent,
   projectMessageEventMetadata,
-  projectUserInterjectionContentFact,
   resolveMessageEventPresentationId,
 } from "@noobot/event-protocol/message-event";
 import { reduceThinkingDetailContentTimelines } from "@noobot/event-protocol/thinking-detail-content";
-import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 import {
   appendConsumedMessageEvent,
   hasConsumedMessageEvent,
 } from "../../model/messageEventState.js";
 import { reduceToolTimeline, selectToolTimelineLogs } from "./toolTimeline.js";
-import { reduceActivityTimeline } from "./activityTimeline.js";
+import {
+  reduceCanonicalActivityTimeline,
+  selectMessageActivityTimeline,
+} from "@noobot/event-protocol/activity-timeline";
+import { selectMessageToolTimeline } from "@noobot/event-protocol/tool-timeline";
 import {
   logToolLogWindowDebug,
   summarizeToolLogWindow,
@@ -36,7 +38,6 @@ export const MESSAGE_EVENT_REDUCE_RESULT = Object.freeze({
   DUPLICATE: "duplicate",
   STALE: "stale",
   SEQUENCE_GAP: "sequence_gap",
-  INVALID: "invalid",
   MESSAGE_IDENTITY_CONFLICT: "message_identity_conflict",
   FINAL_CONTENT_LOCKED: "final_content_locked",
 });
@@ -57,10 +58,6 @@ function finalizeAppliedMessageEvent({ targetMessage, event, state, sequence, tr
 }
 
 export function reduceMessageEvent({ targetMessage, state, event }) {
-  const validation = validateProtocolEvent(event);
-  if (!validation.valid || validation.descriptor?.family !== EVENT_FAMILY.MESSAGE_TIMELINE) {
-    return { result: MESSAGE_EVENT_REDUCE_RESULT.INVALID, errors: validation.errors };
-  }
   if (conflicts(targetMessage, event))
     return { result: MESSAGE_EVENT_REDUCE_RESULT.MESSAGE_IDENTITY_CONFLICT };
 
@@ -79,13 +76,9 @@ export function reduceMessageEvent({ targetMessage, state, event }) {
   }
 
   if (event.payload.eventType === MESSAGE_EVENT_TYPE.USER_INTERJECTION) {
-    const contentFact = projectUserInterjectionContentFact(event.payload);
-    if (!contentFact) {
-      return { result: MESSAGE_EVENT_REDUCE_RESULT.INVALID };
-    }
     targetMessage.thinkingContentTimeline = reduceThinkingDetailContentTimelines(
       targetMessage.thinkingContentTimeline,
-      [contentFact],
+      [event.payload.contentFact],
     );
     targetMessage.hasThinkingDetails = true;
     return finalizeAppliedMessageEvent({ targetMessage, event, state, sequence });
@@ -141,7 +134,10 @@ export function reduceMessageEvent({ targetMessage, state, event }) {
         previousLastSequence: lastSequence,
       }));
     }
-    targetMessage.toolTimeline = reduceToolTimeline(targetMessage.toolTimeline, event);
+    targetMessage.toolTimeline = reduceToolTimeline(
+      selectMessageToolTimeline(targetMessage),
+      event,
+    );
     if (
       event.payload.eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_END &&
       Array.isArray(event.payload.transferEnvelopes) &&
@@ -154,7 +150,10 @@ export function reduceMessageEvent({ targetMessage, state, event }) {
       );
       targetMessage.attachments = getMessageAttachments(targetMessage);
     }
-    targetMessage.activityTimeline = reduceActivityTimeline(targetMessage.activityTimeline, event);
+    targetMessage.activityTimeline = reduceCanonicalActivityTimeline(
+      selectMessageActivityTimeline(targetMessage),
+      event,
+    );
     if (
       [MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END].includes(
         event.payload.eventType,
@@ -165,7 +164,7 @@ export function reduceMessageEvent({ targetMessage, state, event }) {
         dialogProcessId: event.payload.dialogProcessId,
         turnScopeId: event.identity.turnScopeId,
         appliedSequence: sequence,
-        timelineEntryCount: targetMessage.toolTimeline?.length || 0,
+        timelineEntryCount: targetMessage.toolTimeline.length,
         timelineLogs: summarizeToolLogWindow(selectToolTimelineLogs(targetMessage)),
       }));
     }

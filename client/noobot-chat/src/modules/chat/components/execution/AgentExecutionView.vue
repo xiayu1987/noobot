@@ -60,7 +60,7 @@ function isCurrentAssistantMessage(messageItem = {}, messageIndex = 0) {
       <SharedChatMessageItem
         :message-item="messageItem"
         :current-turn="isCurrentAssistantMessage(messageItem, messageIndex)"
-        :all-messages="allMessages"
+        :all-messages="messages"
         :session-docs="sessionDocs"
         :user-id="userId"
         :render-markdown="renderMarkdown"
@@ -73,7 +73,6 @@ function isCurrentAssistantMessage(messageItem = {}, messageIndex = 0) {
         :stop-execution="stopExecution"
         :fetch-execution-report="fetchExecutionReport"
         :attachment-preview-dialog-class="attachmentPreviewDialogClass"
-        :file-preview-dialog-class="filePreviewDialogClass"
         @open-thinking-details="openThinkingDetails($event, messageItem)"
       />
     </div>

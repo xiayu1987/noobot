@@ -245,7 +245,6 @@ export async function dispatchAgentTurn({
       ...baseContext,
       agentContext: runtimeAgentContext,
       modelContext: dispatchModelContext,
-      attachments: userMessageAttachments,
       userMessageAttachments,
       eventListener: runtimeEventListener,
       claimAgentDispatch: claim,

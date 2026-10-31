@@ -24,6 +24,7 @@ const props = defineProps({
   previewMode: { type: String, default: "text" },
   previewTextContent: { type: String, default: "" },
   previewImageUrl: { type: String, default: "" },
+
   renderMarkdown: { type: Function, required: true },
 });
 

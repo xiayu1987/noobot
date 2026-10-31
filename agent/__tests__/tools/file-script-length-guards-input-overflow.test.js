@@ -52,10 +52,12 @@ test("search: text 输入超过上限时由 semantic-transfer 保存附件并直
   const result = parseToolResult(runnerResult.toolResultText);
 
   assert.equal(invoked, false);
-  assert.equal(runnerResult.success, true);
+  assert.equal(runnerResult.success, false);
+  assert.equal(runnerResult.failureReason, "tool_input_overflow");
   assert.equal(result.toolName, "search");
   assert.equal(result.ok, false);
-  assert.equal(result.message, "搜索文本过长，请分批搜索");
+  assert.equal(result.code, "RECOVERABLE_TOOL_INPUT_OVERFLOW");
+  assert.equal(result.error, "搜索文本过长，请分批搜索");
   assert.equal(Array.isArray(result.transferEnvelopes), true);
   assert.equal(result.transferEnvelopes.length, 1);
   assert.equal(result.transferEnvelopes[0].version, TRANSFER_VERSION);
@@ -104,10 +106,12 @@ test("patch_file: patch 超过 semantic-transfer 阈值时保存附件并直接�
   const result = parseToolResult(runnerResult.toolResultText);
 
   assert.equal(invoked, false);
-  assert.equal(runnerResult.success, true);
+  assert.equal(runnerResult.success, false);
+  assert.equal(runnerResult.failureReason, "tool_input_overflow");
   assert.equal(result.toolName, "patch_file");
   assert.equal(result.ok, false);
-  assert.equal(result.message, "补丁内容过长，请分批应用或拆分 patch 后重试");
+  assert.equal(result.code, "RECOVERABLE_TOOL_INPUT_OVERFLOW");
+  assert.equal(result.error, "补丁内容过长，请分批应用或拆分 patch 后重试");
   assert.equal(Array.isArray(result.transferEnvelopes), true);
   assert.equal(result.transferEnvelopes.length, 1);
   assert.equal(result.transferEnvelopes[0].version, TRANSFER_VERSION);

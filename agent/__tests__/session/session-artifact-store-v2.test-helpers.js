@@ -74,6 +74,7 @@ export function canonicalMessages(messages, sessionId) {
       sessionId,
       messageUid: `sm_fixture_${index + 1}`,
       ts: TEST_MESSAGE_TS,
+      attachments: [],
       ...roleIdentityOf(message, index, turnScopeId),
       ...entityContractOf(message),
       dialogProcessId: `dialog-${turnScopeId}`,

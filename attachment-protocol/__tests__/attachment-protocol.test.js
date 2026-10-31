@@ -22,9 +22,7 @@ import {
   ATTACHMENT_RECORD_VERSION,
   ATTACHMENT_RELATION_TYPE,
   mergeAttachmentsByIdentity,
-  normalizeSourcePath,
   reduceAttachmentLifecycle,
-  resolveLinkedAttachment,
   validateAttachmentLifecycleEvent,
 } from "../src/index.js";
 import { DEFAULT_MIME_TYPE, resolveMimeTypeFromFileName } from "../src/mime.js";
@@ -294,99 +292,30 @@ test("attachment event identity has its own generator", () => {
   assert.notEqual(first, createAttachmentEventId());
 });
 
-test("normalizeSourcePath unifies separators, drive letter case and file URIs", () => {
-  const expected = "D:/work/report.xlsx";
-  assert.equal(normalizeSourcePath("D:\\work\\report.xlsx"), expected);
-  assert.equal(normalizeSourcePath("d:/work/report.xlsx"), expected);
-  assert.equal(normalizeSourcePath("file:///D:/work/report.xlsx"), expected);
-  assert.equal(normalizeSourcePath("D://work//report.xlsx"), expected);
-  assert.equal(normalizeSourcePath("/home/u/Report.xlsx"), "/home/u/Report.xlsx");
-  assert.notEqual(
-    normalizeSourcePath("/home/u/Report.xlsx"),
-    normalizeSourcePath("/home/u/report.xlsx"),
-  );
-});
-
-test("normalizeSourcePath rejects relative paths, dot segments, UNC and bad encodings", () => {
-  assert.throws(
-    () => normalizeSourcePath("work/report.xlsx"),
-    /attachment_source_path_not_absolute/,
-  );
-  assert.throws(
-    () => normalizeSourcePath("/home/../etc/passwd"),
-    /invalid_attachment_source_path_segment/,
-  );
-  assert.throws(
-    () => normalizeSourcePath("//server/share/a.txt"),
-    /unsupported_attachment_source_path_unc/,
-  );
-  assert.throws(
-    () => normalizeSourcePath("file:///%E0%A4%A"),
-    /invalid_attachment_source_path_encoding/,
-  );
-  assert.throws(() => normalizeSourcePath("/"), /invalid_attachment_source_path/);
-  assert.throws(() => normalizeSourcePath(""), /invalid_attachment_source_path/);
-});
-
-test("descriptor accepts only a canonical sourcePath", () => {
-  const parsed = parseAttachmentDescriptor({ ...descriptor(), sourcePath: "D:/work/report.xlsx" });
-  assert.equal(parsed.sourcePath, "D:/work/report.xlsx");
-  assert.equal("sourcePath" in parseAttachmentDescriptor(descriptor()), false);
-  assert.throws(
-    () => parseAttachmentDescriptor({ ...descriptor(), sourcePath: "d:\\work\\report.xlsx" }),
-    /non_canonical_attachment_source_path/,
-  );
-  assert.throws(
-    () => parseAttachmentDescriptor({ ...descriptor(), sourcePath: "work/report.xlsx" }),
-    /attachment_source_path_not_absolute/,
-  );
-});
-
-test("resolveLinkedAttachment binds a registered path and takes the latest registration", () => {
-  const older = {
-    identity: { ...identity, attachmentId: "att-old" },
-    sourcePath: "D:/work/report.xlsx",
-  };
-  const newer = {
-    identity: { ...identity, attachmentId: "att-new" },
-    sourcePath: "D:/work/report.xlsx",
-  };
-  const other = {
-    identity: { ...identity, attachmentId: "att-other" },
-    sourcePath: "D:/work/other.xlsx",
-  };
-  for (const href of [
+test("descriptor accepts only a canonical origin locator", () => {
+  const origin = { view: "host", path: "D:/work/report.xlsx" };
+  const parsed = parseAttachmentDescriptor({ ...descriptor(), origin });
+  assert.deepEqual(parsed.origin, origin);
+  assert.equal(Object.isFrozen(parsed.origin), true);
+  const mounted = { view: "mount", mount: "/shared", path: "out/a.txt" };
+  assert.deepEqual(parseAttachmentDescriptor({ ...descriptor(), origin: mounted }).origin, mounted);
+  assert.equal("origin" in parseAttachmentDescriptor(descriptor()), false);
+  for (const origin of [
+    { view: "host", path: "d:\\work\\report.xlsx" },
+    { view: "host", path: "work/report.xlsx" },
+    { view: "workspace", path: "/abs.txt" },
+    { view: "host", path: "/a.txt", owner: "u1" },
+    { view: "attachment", path: "a.txt" },
     "D:/work/report.xlsx",
-    "d:\\work\\report.xlsx",
-    "file:///d:/work/report.xlsx",
   ]) {
-    assert.deepEqual(resolveLinkedAttachment(href, [older, newer, other]), {
-      status: "bound",
-      identity: newer.identity,
-    });
+    assert.throws(
+      () => parseAttachmentDescriptor({ ...descriptor(), origin }),
+      /invalid_attachment_origin/,
+      JSON.stringify(origin),
+    );
   }
-  assert.deepEqual(
-    resolveLinkedAttachment("D:/work/report.xlsx", [newer, older]).identity,
-    older.identity,
-  );
-});
-
-test("resolveLinkedAttachment reports unregistered paths explicitly", () => {
-  const registered = { identity, sourcePath: "D:/work/report.xlsx" };
-  assert.deepEqual(resolveLinkedAttachment("D:/work/other.xlsx", [registered]), {
-    status: "unregistered",
-    href: "D:/work/other.xlsx",
-  });
-  assert.deepEqual(resolveLinkedAttachment("relative/report.xlsx", [registered]), {
-    status: "unregistered",
-    href: "relative/report.xlsx",
-  });
-  assert.deepEqual(resolveLinkedAttachment("D:/work/report.xlsx", []), {
-    status: "unregistered",
-    href: "D:/work/report.xlsx",
-  });
   assert.throws(
-    () => resolveLinkedAttachment("D:/work/report.xlsx", null),
-    /invalid_attachment_descriptors/,
+    () => parseAttachmentDescriptor({ ...descriptor(), sourcePath: "D:/work/report.xlsx" }),
+    /unknown_attachment_descriptor_field/,
   );
 });

@@ -9,6 +9,7 @@ import { parseTaskProtocolContent } from "./protocol-content-parser.js";
 
 export {
   TASK_CHECK_PROTOCOL_VERSION,
+  TASK_CHECK_TOOL_NAME,
   TASK_CHECK_STATE,
   parseTaskCheckReceipt,
 } from "./check-receipt.js";

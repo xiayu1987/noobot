@@ -12,25 +12,25 @@ import { buildOutputTransferDeclaration } from "./output-transfer-declaration.js
 import { persistTransferArtifacts } from "../../../transfer-adapter/index.js";
 import { readFile } from "node:fs/promises";
 
-function formatCommandOutputWithLineNumbers(value = "") {
-  const inputText = String(value || "");
-  if (!inputText) return "";
-  const lines = splitLines(inputText);
-  if (inputText.endsWith("\n")) lines.pop();
+function formatCommandOutputWithLineNumbers(output) {
+  if (!output) return "";
+  const lines = splitLines(output);
+  if (output.endsWith("\n")) lines.pop();
   return formatLinesWithNumbers(lines, 1);
 }
 
-function normalizeExecOutput(r = {}, { includeLineNumbers = false } = {}) {
-  if (includeLineNumbers !== true) return r;
+function normalizeExecOutput(result, includeLineNumbers) {
+  if (!includeLineNumbers) return result;
   return {
-    ...r,
-    stdout: formatCommandOutputWithLineNumbers(r?.stdout || ""),
-    stderr: formatCommandOutputWithLineNumbers(r?.stderr || ""),
+    ...result,
+    stdout: formatCommandOutputWithLineNumbers(result.stdout),
+    stderr: formatCommandOutputWithLineNumbers(result.stderr),
   };
 }
 
-export async function toolExecResult(mode, r = {}, extra = {}, options = {}) {
-  const includeLineNumbers = options?.includeLineNumbers === true;
+export async function toolExecResult(mode, r, extra, options) {
+  const { runtime, identity, outputFileEnvelopes, outputResources } = options;
+  const includeLineNumbers = options.includeLineNumbers === true;
   const {
     stdoutPath: _stdoutPath,
     stderrPath: _stderrPath,
@@ -38,22 +38,18 @@ export async function toolExecResult(mode, r = {}, extra = {}, options = {}) {
     stderrBytes: _stderrBytes,
     outputOverflow: _outputOverflow,
     ...publicResult
-  } = r || {};
-  const normalizedResult = normalizeExecOutput(publicResult, { includeLineNumbers });
-  const { runtime } = options;
-  const outputFileEnvelopes = Array.isArray(options?.outputFileEnvelopes)
-    ? options.outputFileEnvelopes
-    : [];
+  } = r;
+  const normalizedResult = normalizeExecOutput(publicResult, includeLineNumbers);
   const overflowFiles =
-    r?.outputOverflow === true
+    r.outputOverflow === true
       ? [
           { role: "stdout", filePath: r.stdoutPath, bytes: r.stdoutBytes },
           { role: "stderr", filePath: r.stderrPath, bytes: r.stderrBytes },
-        ].filter((item) => Number(item.bytes || 0) > 0)
+        ].filter((item) => item.bytes > 0)
       : [];
   let transferEnvelopes = [];
   if (overflowFiles.length) {
-    if (!options?.identity) throw new Error("semantic_transfer_script_identity_required");
+    if (!identity) throw new Error("semantic_transfer_script_identity_required");
     const artifacts = await Promise.all(
       overflowFiles.map(async (item) => ({
         name: `execute-script-${item.role}.txt`,
@@ -69,7 +65,7 @@ export async function toolExecResult(mode, r = {}, extra = {}, options = {}) {
       generationSource: TRANSFER_REASON.EXECUTE_SCRIPT_OUTPUT_OVERFLOW,
       source: "tool",
       reason: TRANSFER_REASON.EXECUTE_SCRIPT_OUTPUT_OVERFLOW,
-      identity: options.identity,
+      identity,
       intent: {
         source: "tool",
         reason: TRANSFER_REASON.EXECUTE_SCRIPT_OUTPUT_OVERFLOW,
@@ -81,23 +77,23 @@ export async function toolExecResult(mode, r = {}, extra = {}, options = {}) {
     transferEnvelopes = persisted.transferEnvelopes;
   }
   return toToolJsonResult(EXECUTE_SCRIPT_TOOL_NAME, {
-    ok: Number(r?.code || 0) === 0,
     mode,
     ...extra,
     ...normalizedResult,
-    ...(r?.outputOverflow === true
+    ...(r.outputOverflow === true
       ? {
           ...buildOutputTransferDeclaration({
             reason: TRANSFER_REASON.EXECUTE_SCRIPT_OUTPUT_OVERFLOW,
             transferEnvelopes: [...transferEnvelopes, ...outputFileEnvelopes],
-            outputLimitExceeded: r?.outputLimitExceeded === true,
-            outputLimitBytes: Number(r?.outputLimitBytes || 0),
+            outputLimitExceeded: r.outputLimitExceeded === true,
+            outputLimitBytes: r.outputLimitBytes,
           }),
           outputOverflow: true,
         }
       : outputFileEnvelopes.length
         ? { transferEnvelopes: outputFileEnvelopes }
         : {}),
+    ...(outputResources.length ? { outputResources } : {}),
     includeLineNumbers,
   });
 }

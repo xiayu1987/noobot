@@ -5,8 +5,8 @@
  */
 import { test, expect } from "../fixtures/noobot.fixture.js";
 import {
-  applyCanonicalToolTimelineEvent,
   countCanonicalThinkingDetailEvents,
+  reduceCanonicalToolTimeline,
 } from "@noobot/event-protocol/tool-timeline";
 import { reduceCanonicalActivityTimeline } from "@noobot/event-protocol/activity-timeline";
 import { findProtocolObjects } from "../helpers/websocket-capture.js";
@@ -99,10 +99,7 @@ async function assertStoppedThinkingDetails(page, records, turnScopeId, capture)
       ({ event, data }) => event === "message_event" && data.identity?.turnScopeId === turnScopeId,
     )
     .map(({ data }) => data);
-  const toolTimeline = envelopes.reduce(
-    (timeline, envelope) => applyCanonicalToolTimelineEvent(timeline, envelope),
-    [],
-  );
+  const toolTimeline = envelopes.reduce(reduceCanonicalToolTimeline, []);
   const activityTimeline = envelopes.reduce(reduceCanonicalActivityTimeline, []);
   const expectedDetailCount = countCanonicalThinkingDetailEvents({
     toolTimeline,

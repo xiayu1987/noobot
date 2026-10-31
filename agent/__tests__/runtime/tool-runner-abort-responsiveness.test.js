@@ -34,7 +34,7 @@ test("tool runner aborts a tool that never observes the signal", async () => {
   };
 
   const pending = executeToolCall({
-    call: { id: "call-abort", name: "demo" },
+    call: { id: "call-abort", name: "demo", args: {} },
     tool,
     runtime: runtime(controller.signal),
     abortSignal: controller.signal,
@@ -54,13 +54,13 @@ test("tool runner rejects immediately when the signal is already aborted", async
   const tool = {
     invoke: async () => {
       invoked = true;
-      return "result";
+      return JSON.stringify({ ok: true });
     },
   };
 
   await assert.rejects(
     executeToolCall({
-      call: { id: "call-pre-aborted", name: "demo" },
+      call: { id: "call-pre-aborted", name: "demo", args: {} },
       tool,
       runtime: runtime(controller.signal),
       abortSignal: controller.signal,
@@ -72,12 +72,13 @@ test("tool runner rejects immediately when the signal is already aborted", async
 
 test("tool runner still returns normal results when a signal is present but not aborted", async () => {
   const controller = new AbortController();
+  const resultText = JSON.stringify({ toolName: "demo", ok: true, content: "ok" });
   const result = await executeToolCall({
-    call: { id: "call-not-aborted", name: "demo" },
-    tool: { invoke: async () => "ok" },
+    call: { id: "call-not-aborted", name: "demo", args: {} },
+    tool: { invoke: async () => resultText },
     runtime: runtime(controller.signal),
     abortSignal: controller.signal,
   });
 
-  assert.equal(result.toolResultText, "ok");
+  assert.deepEqual(JSON.parse(result.toolResultText), JSON.parse(resultText));
 });

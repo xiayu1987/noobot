@@ -11,6 +11,14 @@ const accesses = [];
 const connectorAccess = {
   access: async ({ request }) => {
     accesses.push(request);
+    if (request.input.command === "fail") {
+      return {
+        ok: false,
+        code: "connector_execution_failed",
+        error: "ssh command exited with code 2",
+        output: { stdout: "", stderr: "boom", exitCode: 2 },
+      };
+    }
     return { ok: true, output: { echoed: request.input.command } };
   },
   listUserConnectors: async () => [],
@@ -56,4 +64,20 @@ test("access_connector delegates the generic operation through the protocol port
   assert.equal(result.ok, true);
   assert.equal(result.output.echoed, "SELECT 1");
   assert.equal(accesses.length, 1);
+});
+
+test("access_connector carries the connector failure contract into the tool result", async () => {
+  const tool = createConnectorAccessTool({ agentContext: createScope() })[0];
+  const result = JSON.parse(
+    await tool.invoke({
+      connector_id: "con_selected",
+      operation: "execute",
+      input: { command: "fail" },
+    }),
+  );
+  assert.equal(result.ok, false);
+  assert.equal(Object.hasOwn(result, "status"), false);
+  assert.equal(result.code, "connector_execution_failed");
+  assert.equal(result.error, "ssh command exited with code 2");
+  assert.equal(result.output.exitCode, 2);
 });

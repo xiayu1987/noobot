@@ -10,13 +10,15 @@ import os from "node:os";
 import test from "node:test";
 import { filePath as path } from "@noobot/path-resolver";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
-import { SESSION_ARTIFACT_MANIFEST_SNAPSHOT_INDEX_SCHEMA_VERSION } from "@noobot/session-protocol";
+import {
+  SESSION_ARTIFACT_MANIFEST_SNAPSHOT_INDEX_SCHEMA_VERSION,
+  SESSION_ARTIFACT_SUMMARY_SNAPSHOT_SCHEMA_VERSION,
+} from "@noobot/session-protocol";
 import { TEST_SCOPED_SESSION_ROOTS } from "./helpers/scoped-session-roots.js";
 import { TRANSFER_ENVELOPE_V2, TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import { legacyV2TransferEnvelope } from "./helpers/legacy-transfer-envelope.js";
 import { upgradeSessionTransferEnvelopes } from "../src/workspace-lifecycle/session-transfer-envelope-upgrade.js";
 import {
-  SUMMARY_SNAPSHOT_SCHEMA_VERSION,
   messageHash,
   summarySnapshotContentHash,
 } from "../src/session/session-artifact-session/turn-journal-store.js";
@@ -117,7 +119,7 @@ async function seedSession(fixture) {
   await fixture.write("turns/turn-1.jsonl", `${committed}${TAIL}`);
 
   const snapshot = {
-    schemaVersion: SUMMARY_SNAPSHOT_SCHEMA_VERSION,
+    schemaVersion: SESSION_ARTIFACT_SUMMARY_SNAPSHOT_SCHEMA_VERSION,
     checkpointId: "cp-1",
     checkpointRevision: 1,
     previousCheckpointHash: "",
@@ -212,7 +214,7 @@ function assertV3(envelope, id) {
   assert.equal(Object.hasOwn(envelope, V2_FIELD), false);
 }
 
-test("v6 rewrites session envelopes and resyncs every derived checksum", async () => {
+test("v6 rewrites session envelopes, resyncs checksums and leaves rebuilt summaries untouched", async () => {
   const fixture = await createFixture();
   try {
     const seeded = await seedSession(fixture);
@@ -248,12 +250,8 @@ test("v6 rewrites session envelopes and resyncs every derived checksum", async (
     assertV3(snapshot.records[0].message.transferEnvelopes[0], "c");
     assert.equal(turn.messageHashes.sm_c, snapshot.records[0].hash);
 
-    const detail = await fixture.readJson(DETAIL_FILE);
-    assertV3(detail.toolTimeline[0].transfer, "d");
-    const summary = await fixture.readJson("session-summary.json");
-    assert.equal(summary.messages[0].thinkingDetailRef.contentHash, sha(detail));
-    assertV3(summary.messages[0].transferEnvelopes[0], "s");
-    assert.equal(summary.source.revision, SUMMARY_REVISION);
+    assert.deepEqual(await fixture.readJson(DETAIL_FILE), seeded.detail);
+    assert.deepEqual(await fixture.readJson("session-summary.json"), seeded.summary);
 
     assertV3(
       JSON.parse((await fixture.readText("events/events.jsonl")).split("\n")[0]).transfer,
@@ -275,8 +273,6 @@ test("v6 rewrites session envelopes and resyncs every derived checksum", async (
         "events/events.jsonl",
         `${SEGMENT_DIR}/index.json`,
         `${SEGMENT_DIR}/${SEGMENT_FILE}`,
-        DETAIL_FILE,
-        "session-summary.json",
         "session.json",
         SNAPSHOT_FILE,
         "turns/turn-1.jsonl",

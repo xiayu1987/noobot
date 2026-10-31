@@ -40,12 +40,7 @@ import {
   normalizePersistedAttachments,
   persistParsedTextAttachment,
 } from "../core/parsed-artifact-persistence.js";
-import {
-  TOOL_CALL_MODE,
-  TOOL_DATA_MODE,
-  TOOL_NAME,
-  TOOL_RESULT_STATUS,
-} from "../constants/index.js";
+import { TOOL_CALL_MODE, TOOL_DATA_MODE, TOOL_NAME } from "../constants/index.js";
 import { text } from "@noobot/shared/value";
 
 const MAX_RESPONSES_FILE_INPUT_BYTES = LENGTH_THRESHOLDS.dataProcessing.responsesFileInputBytes;
@@ -271,7 +266,7 @@ export function createMultimodalParseTool({ agentContext }) {
       const [parsedAttachment] = attachments;
       const outputResources = registerTransferAttachmentResources({
         agentContext,
-        transferEnvelopes: persistedOutput.transferEnvelopes,
+        attachments,
       });
       const updatedSourceAttachments = (
         await Promise.all(
@@ -290,10 +285,10 @@ export function createMultimodalParseTool({ agentContext }) {
         TOOL_NAME.MULTIMODAL_PARSE,
         {
           ok: true,
-          status: TOOL_RESULT_STATUS.COMPLETED,
           mode: TOOL_CALL_MODE.MULTIMODAL_PARSE,
           inputs,
-          resources: [...resolvedInputs.map((item) => item.resourceRef), ...outputResources],
+          resources: resolvedInputs.map((item) => item.resourceRef),
+          outputResources,
           ...persistedOutput.resultFields,
           model: { alias: modelSpec.alias || "", name: modelSpec.model || "" },
           summary: {

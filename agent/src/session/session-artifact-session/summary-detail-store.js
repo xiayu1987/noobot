@@ -5,11 +5,11 @@
  */
 import { filePath as path, resolveScopedArtifactPath } from "@noobot/path-resolver";
 import { createHash } from "node:crypto";
-import { compactThinkingTimeline } from "../session-summary-builders/message-summary-projection.js";
 import { mkdir, readdir, rm } from "node:fs/promises";
 import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
 import { readJsonWithStorage, writeJsonWithStorage } from "./artifact-json-io.js";
 import { isObjectLike, text } from "@noobot/shared/value";
+import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
 
 function resolveSummaryDetailPath(sessionDir = "", file = "") {
   return resolveScopedArtifactPath({
@@ -84,12 +84,12 @@ export async function hydrateSessionSummaryDetails({ storageService, sessionDir,
         summaryDetailHash(detail) !== ref.contentHash
       ) {
         const error = new Error(`session summary detail does not match its reference: ${ref.file}`);
-        error.code = "SESSION_SUMMARY_DETAIL_REFERENCE_MISMATCH";
+        error.code = SESSION_ERROR_CODE.SUMMARY_DETAIL_REFERENCE_MISMATCH;
         throw error;
       }
       return {
         ...message,
-        toolTimeline: compactThinkingTimeline(detail.toolTimeline),
+        toolTimeline: detail.toolTimeline,
         activityTimeline: detail.activityTimeline,
       };
     },

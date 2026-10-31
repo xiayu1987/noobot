@@ -79,6 +79,8 @@ describe("turnTransportEnvelope", () => {
     const envelope = canonicalMessageEvent({
       eventId: "event-1",
       eventType: "model_analysis_delta",
+      activityId: "activity-l81",
+      activityKind: "main_model_analysis",
       presentationMessageId: "message-1",
       sessionId: "session-1",
       dialogProcessId: "dialog-1",
@@ -101,6 +103,8 @@ describe("turnTransportEnvelope", () => {
     const envelope = canonicalMessageEvent({
       eventId: "event-2",
       eventType: "model_analysis_delta",
+      activityId: "activity-l103",
+      activityKind: "main_model_analysis",
       presentationMessageId: "message-1",
       sessionId: "session-1",
       dialogProcessId: "dialog-1",

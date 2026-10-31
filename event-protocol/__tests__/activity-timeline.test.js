@@ -12,9 +12,10 @@ import {
   projectCanonicalActivityTimelineEvent,
   reduceCanonicalActivityTimeline,
 } from "../src/activity-timeline.js";
-import { createEventEnvelope } from "../src/envelope.js";
-import { EVENT_FAMILY, getEventFamily } from "../src/event-registry.js";
+import { createEventEnvelope, validateEventEnvelope } from "../src/envelope.js";
+import { EVENT_FAMILY, getEventFamily, validateProtocolEvent } from "../src/event-registry.js";
 import {
+  ACTIVITY_KIND,
   MESSAGE_EVENT_TYPE,
   MESSAGE_EVENT_WIRE_EVENT,
   validateMessageEventPayload,
@@ -44,6 +45,8 @@ function activityEnvelope(overrides = {}, envelopeOverrides = {}) {
       eventType: MESSAGE_EVENT_TYPE.MODEL_ANALYSIS,
       presentationMessageId: "presentation-1",
       dialogProcessId: "dialog-1",
+      activityId: "activity-1",
+      activityKind: ACTIVITY_KIND.MAIN_MODEL_ANALYSIS,
       text: "先确认当前真实状态。",
       ...overrides,
     },
@@ -57,7 +60,7 @@ test("projects one exact canonical activity fact from an authoritative envelope"
     eventId: "activity-1",
     eventType: MESSAGE_EVENT_TYPE.MODEL_ANALYSIS,
     text: "先确认当前真实状态。",
-    activityKind: "",
+    activityKind: ACTIVITY_KIND.MAIN_MODEL_ANALYSIS,
     purpose: "",
     pluginFlow: "",
     chain: "",
@@ -71,9 +74,11 @@ test("projects one exact canonical activity fact from an authoritative envelope"
     dialogProcessId: "dialog-1",
     turnScopeId: "turn-1",
     presentationMessageId: "presentation-1",
+    activityId: "activity-1",
   });
   assert.equal(isCanonicalActivityTimelineFact(fact), true);
   assert.deepEqual(Object.keys(fact).sort(), [
+    "activityId",
     "activityKind",
     "authority",
     "chain",
@@ -95,12 +100,12 @@ test("projects one exact canonical activity fact from an authoritative envelope"
 });
 
 test("rejects incomplete envelopes and noncanonical activity records", () => {
-  assert.equal(
-    projectCanonicalActivityTimelineEvent({
+  assert.deepEqual(
+    validateEventEnvelope({
       ...activityEnvelope(),
       ordering: { domain: "message-event", scopeId: "", sequence: 0 },
-    }),
-    null,
+    }).errors,
+    ["missing_ordering_scope"],
   );
   assert.equal(
     isCanonicalActivityTimelineFact({
@@ -116,6 +121,8 @@ test("rejects incomplete envelopes and noncanonical activity records", () => {
       eventType: MESSAGE_EVENT_TYPE.MODEL_ANALYSIS,
       presentationMessageId: "presentation-1",
       dialogProcessId: "dialog-1",
+      activityId: "activity-1",
+      activityKind: ACTIVITY_KIND.MAIN_MODEL_ANALYSIS,
     }).errors,
     ["missing_text"],
   );
@@ -225,6 +232,7 @@ test("merging snapshots keeps one fact per activityId with the latest sequence",
       {
         eventType: MESSAGE_EVENT_TYPE.MODEL_ANALYSIS,
         activityId: "activity-main-1",
+        activityKind: ACTIVITY_KIND.MAIN_MODEL_ANALYSIS,
         text: "final analysis",
       },
       { identity: { eventId: "completed-1" }, ordering: { sequence: 2 } },
@@ -235,17 +243,18 @@ test("merging snapshots keeps one fact per activityId with the latest sequence",
   assert.deepEqual(mergeCanonicalActivityTimelines([streaming], [completed]), [completed]);
 });
 
-test("activity deltas must pass protocol validation to enter the timeline", () => {
+test("activity deltas without activity identity are rejected at the protocol entry", () => {
   const invalidDelta = activityEnvelope(
     {
       eventType: MESSAGE_EVENT_TYPE.ACTIVITY_DELTA,
+      activityId: "",
       activityKind: "main_model_analysis",
       activityEventType: MESSAGE_EVENT_TYPE.MODEL_ANALYSIS,
       text: "orphan",
     },
     { identity: { eventId: "delta-invalid" }, ordering: { sequence: 0 } },
   );
-  assert.equal(projectCanonicalActivityTimelineEvent(invalidDelta), null);
+  assert.deepEqual(validateProtocolEvent(invalidDelta).errors, ["missing_activity_id"]);
 });
 
 test("only standalone activity events are durable; activity deltas are transport fragments", async () => {
@@ -284,11 +293,24 @@ test("only standalone activity events are durable; activity deltas are transport
   assert.equal(isDurableActivityMessageEvent(delta), false);
   assert.equal(
     isDurableActivityMessageEvent(
-      envelope("c", "model_analysis_delta", { activityId: "a", text: "x" }),
+      envelope("c", "model_analysis_delta", {
+        activityId: "a",
+        activityKind: "main_model_analysis",
+        text: "x",
+      }),
     ),
     true,
   );
-  assert.equal(isDurableActivityMessageEvent(envelope("t", "thinking", { text: "x" })), true);
+  assert.equal(
+    isDurableActivityMessageEvent(
+      envelope("t", "thinking", {
+        activityId: "t",
+        activityKind: "guidance_analysis",
+        text: "x",
+      }),
+    ),
+    true,
+  );
   assert.equal(
     isDurableActivityMessageEvent(envelope("u", "tool_call_end", { toolCallId: "c" })),
     false,

@@ -17,7 +17,6 @@ import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
 import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
 
 export const TURN_JOURNAL_SCHEMA_VERSION = SESSION_ARTIFACT_SCHEMA_VERSION;
-export const SUMMARY_SNAPSHOT_SCHEMA_VERSION = 2;
 
 export function turnJournalSchemaRequiredError(operation) {
   const error = new Error(`${operation} requires the canonical turn journal schema`);
@@ -56,7 +55,7 @@ export function assertIncrementalJournalRecords(records, file) {
           record.hash === messageHash(record.message)));
     if (!valid) {
       const error = new Error(`turn journal contains an invalid incremental record: ${file}`);
-      error.code = "SESSION_TURN_JOURNAL_RECORD_INVALID";
+      error.code = SESSION_ERROR_CODE.TURN_JOURNAL_RECORD_INVALID;
       throw error;
     }
   }

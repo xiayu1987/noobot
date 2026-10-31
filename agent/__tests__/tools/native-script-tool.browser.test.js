@@ -13,6 +13,7 @@ import { createNativeScriptTool } from "../../src/tools/execution/native-script-
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import { IDENTITY, createRuntime, hasChromiumCapability } from "./native-script-tool.fixtures.js";
 import { closeAllBrowserSessions } from "../../src/tools/execution/browser-session-registry.js";
+import { createTestAttachmentService } from "../helpers/test-runtime-context.js";
 
 after(closeAllBrowserSessions);
 
@@ -24,7 +25,7 @@ test("execute_native_script uses the installed Chromium path with an isolated ta
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-browser-"));
   let persistedRequest = null;
   const runtime = createRuntime(basePath, {
-    attachmentService: {
+    attachmentService: createTestAttachmentService({
       async ingestGeneratedArtifacts(request) {
         persistedRequest = request;
         return request.artifacts.map((artifact, index) => ({
@@ -36,7 +37,7 @@ test("execute_native_script uses the installed Chromium path with an isolated ta
           size: Buffer.from(artifact.contentBase64, "base64").length,
         }));
       },
-    },
+    }),
   });
   const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
   const result = JSON.parse(

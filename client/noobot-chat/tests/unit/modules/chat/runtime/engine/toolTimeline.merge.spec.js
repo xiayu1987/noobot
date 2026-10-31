@@ -10,7 +10,7 @@ describe("mergeToolTimelines identity", () => {
   it("merges entries by toolCallId when key is absent", () => {
     const merged = mergeToolTimelines(
       [{ toolCallId: "call-1", call: { sequence: 1 } }],
-      [{ toolCallId: "call-1", resultEvent: { sequence: 2 } }],
+      [{ toolCallId: "call-1", success: true, resultEvent: { sequence: 2 } }],
     );
     expect(merged).toHaveLength(1);
     expect(merged[0].key).toBe("call:call-1");

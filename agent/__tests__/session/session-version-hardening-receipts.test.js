@@ -13,6 +13,7 @@ test("turn summary checkpoint receipts reject stale revisions and are pruned wit
   const h = harness({
     messages: [
       {
+        attachments: [],
         messageUid: "sm_1",
         role: "assistant",
         content: "one",
@@ -20,6 +21,7 @@ test("turn summary checkpoint receipts reject stale revisions and are pruned wit
         turnScopeId: "t",
       },
       {
+        attachments: [],
         messageUid: "sm_2",
         role: "assistant",
         content: "two",
@@ -105,8 +107,20 @@ test("deleteFromMessage replays a committed receipt without deleting again", asy
   const h = harness({
     aggregateVersion: 2,
     messages: [
-      { role: "user", messageOrigin: "natural", content: "keep", turnScopeId: "keep" },
-      { role: "user", messageOrigin: "natural", content: "delete", turnScopeId: "delete" },
+      {
+        attachments: [],
+        role: "user",
+        messageOrigin: "natural",
+        content: "keep",
+        turnScopeId: "keep",
+      },
+      {
+        attachments: [],
+        role: "user",
+        messageOrigin: "natural",
+        content: "delete",
+        turnScopeId: "delete",
+      },
     ],
   });
   const input = {
@@ -133,6 +147,7 @@ test("replaceTurn replays a committed receipt after the original anchor is gone"
     aggregateVersion: 4,
     messages: [
       {
+        attachments: [],
         sessionId: "s1",
         role: "user",
         messageOrigin: "natural",
@@ -146,6 +161,7 @@ test("replaceTurn replays a committed receipt after the original anchor is gone"
     sessionId: "s1",
     anchor: { turnScopeId: "old" },
     newContent: "new",
+    attachments: [],
     turnScopeId: "replacement",
     expectedAggregateVersion: 4,
     commandId: "replace-once",
@@ -171,6 +187,7 @@ test("replaceTurn idempotency keys reject reuse with a different request", async
   const replace = harness({
     messages: [
       {
+        attachments: [],
         sessionId: "s1",
         role: "user",
         messageOrigin: "natural",
@@ -180,6 +197,7 @@ test("replaceTurn idempotency keys reject reuse with a different request", async
     ],
   });
   await replace.service.replaceTurn({
+    attachments: [],
     userId: "u1",
     sessionId: "s1",
     anchor: { turnScopeId: "old" },
@@ -189,6 +207,7 @@ test("replaceTurn idempotency keys reject reuse with a different request", async
   });
   await assert.rejects(
     replace.service.replaceTurn({
+      attachments: [],
       userId: "u1",
       sessionId: "s1",
       anchor: { turnScopeId: "other" },
@@ -204,6 +223,7 @@ test("user_meta parsed results attach only to an existing user source message", 
   const h = harness({
     messages: [
       {
+        attachments: [],
         messageUid: "sm_u",
         role: "user",
         messageOrigin: "natural",
@@ -212,6 +232,7 @@ test("user_meta parsed results attach only to an existing user source message", 
         dialogProcessId: "dp",
       },
       {
+        attachments: [],
         messageUid: "sm_a",
         role: "assistant",
         content: "a",

@@ -3,47 +3,31 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { CONNECTOR_FAILURE_CODE } from "@noobot/connector-protocol";
+import { text } from "@noobot/shared/value";
+import { connectorFailure, errorMessage, loadDriverModule } from "../channel-result.js";
 import {
-  importDefaultOrModule,
-  normalizeConnectionSource,
+  queryOutput,
+  requireConnectionSource,
   resolveDatabaseConnection,
 } from "./common-db-connector-channel.js";
-import { text } from "@noobot/shared/value";
 
-function resolveMysqlConnection(connectionInfo = {}) {
-  const source = normalizeConnectionSource(connectionInfo);
-  const resolved = resolveDatabaseConnection({
-    source,
-    defaultPort: 3306,
-  });
-
-  return {
-    host: resolved.host,
-    port: resolved.port,
-    user: resolved.user,
-    password: resolved.password,
-    database: resolved.database,
-    timeoutMs: 30000,
-    poolLimit: 4,
-  };
-}
-
-async function importMysqlPromise() {
-  return importDefaultOrModule("mysql2/promise");
-}
-
+const MYSQL_TIMEOUT_MS = 30000;
+const MYSQL_POOL_LIMIT = 4;
 const mysqlPools = new Map();
+const abortedFailure = () =>
+  connectorFailure(CONNECTOR_FAILURE_CODE.ABORTED, "mysql query aborted");
 
-function poolKey(channelKey = "") {
+function poolKey(channelKey) {
   const key = text(channelKey);
   if (!key) throw new TypeError("mysql connector channelKey is required");
   return key;
 }
 
-function getMysqlPool(mysql, conn = {}, channelKey = "") {
+function getMysqlPool(mysql, conn, channelKey) {
   const key = poolKey(channelKey);
   const cached = mysqlPools.get(key);
-  if (cached?.pool) return cached.pool;
+  if (cached) return cached.pool;
   const pool = mysql.createPool({
     host: conn.host,
     port: conn.port,
@@ -51,95 +35,52 @@ function getMysqlPool(mysql, conn = {}, channelKey = "") {
     password: conn.password || undefined,
     database: conn.database || undefined,
     waitForConnections: true,
-    connectionLimit: conn.poolLimit,
+    connectionLimit: MYSQL_POOL_LIMIT,
     queueLimit: 0,
-    connectTimeout: conn.timeoutMs,
+    connectTimeout: MYSQL_TIMEOUT_MS,
   });
   mysqlPools.set(key, { pool, createdAt: Date.now() });
   return pool;
 }
 
-export async function executeMysqlCommand({
-  command = "",
-  connectionInfo = {},
-  channelKey = "",
-  abortSignal = null,
-} = {}) {
+export async function executeMysqlCommand({ command, connectionInfo, channelKey, abortSignal }) {
   const sql = text(command);
-  if (!sql) {
-    return { ok: false, code: 400, stdout: "", stderr: "mysql command required" };
-  }
-
-  const conn = resolveMysqlConnection(connectionInfo);
+  if (!sql) return connectorFailure(CONNECTOR_FAILURE_CODE.INPUT_INVALID, "mysql command required");
+  const conn = resolveDatabaseConnection({
+    source: requireConnectionSource(connectionInfo),
+    defaultPort: 3306,
+  });
   if (!conn.user) {
-    return {
-      ok: false,
-      code: 400,
-      stdout: "",
-      stderr: "mysql username is required",
-    };
+    return connectorFailure(CONNECTOR_FAILURE_CODE.CONFIG_INVALID, "mysql username is required");
   }
-
-  const mysql = await importMysqlPromise();
-  if (!mysql?.createPool) {
-    return {
-      ok: false,
-      code: 501,
-      stdout: "",
-      stderr: "mysql2 not installed, run: npm i mysql2",
-    };
-  }
-  const pool = getMysqlPool(mysql, conn, channelKey);
-  if (abortSignal?.aborted === true) {
-    return { ok: false, code: 499, stdout: "", stderr: "mysql query aborted" };
-  }
+  const loaded = await loadDriverModule("mysql2/promise");
+  if (!loaded.ok) return loaded.failure;
+  const pool = getMysqlPool(loaded.driver, conn, channelKey);
+  if (abortSignal?.aborted) return abortedFailure();
   let connection = null;
   let aborted = false;
   const abortConnection = () => {
     aborted = true;
-    connection?.destroy?.();
+    connection?.destroy();
   };
   try {
     connection = await pool.getConnection();
-    abortSignal?.addEventListener?.("abort", abortConnection, { once: true });
-    const [rows] = await connection.query({
-      sql,
-      timeout: conn.timeoutMs,
-    });
-    if (Array.isArray(rows)) {
-      return {
-        ok: true,
-        code: 0,
-        stdout: JSON.stringify(rows),
-        stderr: "",
-      };
-    }
-    return {
-      ok: true,
-      code: 0,
-      stdout: JSON.stringify(rows || {}),
-      stderr: "",
-    };
+    abortSignal?.addEventListener("abort", abortConnection, { once: true });
+    const [rows] = await connection.query({ sql, timeout: MYSQL_TIMEOUT_MS });
+    return queryOutput(rows);
   } catch (error) {
-    if (aborted) {
-      return { ok: false, code: 499, stdout: "", stderr: "mysql query aborted" };
-    }
-    return {
-      ok: false,
-      code: Number(error?.errno || 1),
-      stdout: "",
-      stderr: String(error?.message || error || "mysql query failed"),
-    };
+    if (aborted) return abortedFailure();
+    return connectorFailure(CONNECTOR_FAILURE_CODE.EXECUTION_FAILED, errorMessage(error));
   } finally {
-    abortSignal?.removeEventListener?.("abort", abortConnection);
-    if (!aborted) connection?.release?.();
+    abortSignal?.removeEventListener("abort", abortConnection);
+    if (!aborted) connection?.release();
   }
 }
 
-export async function releaseMysqlConnection(channelKey = "") {
+export async function releaseMysqlConnection(channelKey) {
   const key = poolKey(channelKey);
   const cached = mysqlPools.get(key);
-  if (!cached?.pool) return false;
+  if (!cached) return false;
   mysqlPools.delete(key);
   await cached.pool.end();
   return true;

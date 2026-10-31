@@ -6,3 +6,4 @@
 
 export * from "./protocol.js";
 export * from "./native-script.js";
+export * from "./script-outcome.js";

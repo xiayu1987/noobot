@@ -16,20 +16,22 @@ function runtime(sanitizeOutput) {
 }
 
 test("tool runner sanitizes successful output when enabled and preserves it when disabled", async () => {
-  const tool = { invoke: async () => email };
+  const tool = {
+    invoke: async () => JSON.stringify({ toolName: "demo", ok: true, content: email }),
+  };
   const sanitized = await executeToolCall({
-    call: { id: "call-sanitized", name: "demo" },
+    call: { id: "call-sanitized", name: "demo", args: {} },
     tool,
     runtime: runtime(true),
   });
   const raw = await executeToolCall({
-    call: { id: "call-raw", name: "demo" },
+    call: { id: "call-raw", name: "demo", args: {} },
     tool,
     runtime: runtime(false),
   });
 
   assert.doesNotMatch(sanitized.toolResultText, /alice@example\.com/);
-  assert.equal(raw.toolResultText, email);
+  assert.equal(JSON.parse(raw.toolResultText).content, email);
 });
 
 test("tool runner applies the output sanitization preference to recoverable errors", async () => {
@@ -39,12 +41,12 @@ test("tool runner applies the output sanitization preference to recoverable erro
     },
   };
   const sanitized = await executeToolCall({
-    call: { id: "call-error-sanitized", name: "demo" },
+    call: { id: "call-error-sanitized", name: "demo", args: {} },
     tool,
     runtime: runtime(true),
   });
   const raw = await executeToolCall({
-    call: { id: "call-error-raw", name: "demo" },
+    call: { id: "call-error-raw", name: "demo", args: {} },
     tool,
     runtime: runtime(false),
   });

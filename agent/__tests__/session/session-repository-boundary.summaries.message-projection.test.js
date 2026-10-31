@@ -10,7 +10,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
-import { canonicalActivity } from "./session-repository-boundary.summaries.fixtures.js";
+import {
+  canonicalActivity,
+  canonicalToolTimelineItem,
+  fileToolResultText,
+} from "./session-repository-boundary.summaries.fixtures.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 import { buildPersistedDisplaySummary } from "./session-artifact-store-v2.test-helpers.js";
 
@@ -20,6 +24,7 @@ test("session display summary projects persisted userMessageId and messageUid wi
     aggregateVersion: 0,
     messages: [
       {
+        attachments: [],
         role: "user",
         content: "persisted user",
         userMessageId: "msg-persisted-user",
@@ -48,6 +53,7 @@ test("session display summary preserves the canonical internal control message t
     aggregateVersion: 0,
     messages: [
       {
+        attachments: [],
         role: "user",
         type: "context_control",
         content: "task check prompt",
@@ -70,6 +76,7 @@ test("session display summary retains a workflow final assistant with stable pre
     aggregateVersion: 0,
     messages: [
       {
+        attachments: [],
         role: "assistant",
         type: "workflow",
         content: "final workflow body\n\n/workspace/result.md",
@@ -119,8 +126,10 @@ test("session display summary does not duplicate an active Turn with persisted a
     aggregateVersion: 0,
     messages: [
       {
+        attachments: [],
         role: "assistant",
         type: "tool_call",
+        tool_calls: [{ id: "call-1", name: "read_file", args: {}, type: "tool_call" }],
         content: "",
         modelMessageId: "model-tool-call",
         presentationMessageId: "presentation-active",
@@ -169,8 +178,10 @@ test("session display summary projects one explicit assistant presentation from 
     aggregateVersion: 0,
     messages: [
       {
+        attachments: [],
         role: "assistant",
         type: "tool_call",
+        tool_calls: [{ id: "tool-1", name: "read_file", args: {}, type: "tool_call" }],
         content: "",
         messageUid: "sm-tool-call",
         modelMessageId: "model-tool-call",
@@ -188,16 +199,19 @@ test("session display summary projects one explicit assistant presentation from 
           }),
         ],
         toolTimeline: [
-          {
-            key: "call:tool-1",
+          canonicalToolTimelineItem({
             toolCallId: "tool-1",
-            status: "completed",
+            tool: "read_file",
+            args: { filePath: "notes.txt" },
             call: { eventId: "tool-call-1", sequence: 2 },
+            result: fileToolResultText("notes.txt", { content: "notes" }),
+            success: true,
             resultEvent: { eventId: "tool-result-1", sequence: 3 },
-          },
+          }),
         ],
       },
       {
+        attachments: [],
         role: "assistant",
         type: "message",
         content: "final answer",
@@ -240,6 +254,7 @@ test("session display summary rejects multiple canonical assistants for one pres
         aggregateVersion: 0,
         messages: [
           {
+            attachments: [],
             role: "assistant",
             content: "first",
             messageUid: "assistant-1",
@@ -249,6 +264,7 @@ test("session display summary rejects multiple canonical assistants for one pres
             turnScopeId: "turn-1",
           },
           {
+            attachments: [],
             role: "assistant",
             content: "second",
             messageUid: "assistant-2",

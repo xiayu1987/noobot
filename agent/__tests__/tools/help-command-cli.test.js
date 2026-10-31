@@ -13,7 +13,10 @@ import {
 } from "@noobot/execution-isolation-protocol/native-script";
 import { createAgentExecutionScope } from "../../src/context/agent-execution-scope.js";
 import { createMainFlowControlPort } from "../../src/runtime/main-flow-control.js";
-import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
+import {
+  createTestAttachmentService,
+  createTestRuntimeContext,
+} from "../helpers/test-runtime-context.js";
 import {
   TEST_AGENT_EXECUTION,
   createTestAgentEnvironment,
@@ -66,7 +69,7 @@ const IDENTITY = Object.freeze({
 const FIXTURE_TOOL_NAMES = Object.freeze(["help", "read_file", "search"]);
 
 function createScope({
-  attachmentService = null,
+  attachmentService = createTestAttachmentService(),
   toolNames = FIXTURE_TOOL_NAMES,
   globalConfig = {},
   identity = IDENTITY,
@@ -342,7 +345,8 @@ test("capability queries require a tool name and a declared capability", async (
   const [helpTool] = createHelpTool({ agentContext: createScope({ toolNames }) });
   const missingName = JSON.parse(await helpTool.func({ command: "--tools --capability browser" }));
   assert.equal(missingName.ok, false);
-  assert.ok(missingName.reason.length > 0);
+  assert.equal(missingName.code, "RECOVERABLE_MISSING_REQUIRED_FIELD");
+  assert.ok(missingName.error.length > 0);
 
   const unknown = JSON.parse(
     await helpTool.func({
@@ -388,7 +392,7 @@ test("attachs results survive the model projection layer without mixed or incomp
     path: "/host/abs/runtime/attach/note.txt",
     relativePath: "runtime/attach/note.txt",
   };
-  const attachmentService = {
+  const attachmentService = createTestAttachmentService({
     async readAttachmentMetas({ attachmentSource }) {
       return attachmentSource === ATTACHMENT_SOURCES[0] ? [record] : [];
     },
@@ -397,7 +401,7 @@ test("attachs results survive the model projection layer without mixed or incomp
         ? record
         : null;
     },
-  };
+  });
   const [tool] = createHelpTool({ agentContext: createScope({ attachmentService }) });
 
   for (const command of [
@@ -423,8 +427,9 @@ test("parse failures surface a translated reason rather than the raw key", async
   const raw = await tool.func({ command: "--bogus" });
   const payload = typeof raw === "string" ? JSON.parse(raw) : raw;
   assert.equal(payload.ok, false);
-  assert.notEqual(payload.reason, HELP_PARSE_ERROR.UNKNOWN_COMMAND);
-  assert.ok(payload.reason.length > 0);
+  assert.equal(payload.code, "RECOVERABLE_INVALID_INPUT");
+  assert.notEqual(payload.error, HELP_PARSE_ERROR.UNKNOWN_COMMAND);
+  assert.ok(payload.error.length > 0);
   assert.deepEqual(
     payload.commands,
     HELP_COMMAND_NAMES.map((name) => `--${name}`),
@@ -505,17 +510,4 @@ test("models section excludes providers disabled by enabled false", async () => 
     aliases,
   );
   assert.equal(typeof parsed.current, "object");
-});
-
-test("attachs reports a translated reason when the attachment service is missing", async () => {
-  const [tool] = createHelpTool({ agentContext: createScope({ attachmentService: null }) });
-  const parsed = JSON.parse(await tool.func({ command: `--${HELP_COMMAND.ATTACHS}` }));
-  assert.equal(parsed.ok, false);
-  assert.equal(parsed.command, HELP_COMMAND.ATTACHS);
-  assert.ok(parsed.reason.length > 0);
-  assert.equal(
-    parsed.reason.startsWith("tools.help."),
-    false,
-    `${parsed.reason} must be a translated message, not a raw i18n key leaked by a missing entry`,
-  );
 });

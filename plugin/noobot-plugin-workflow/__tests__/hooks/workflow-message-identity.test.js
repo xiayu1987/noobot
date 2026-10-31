@@ -24,7 +24,14 @@ function createCtx() {
       presentationMessageId: "pm-1",
     },
     agentContext: {
-      bindings: { runtime: { materializeUnownedCurrentTurnMessageEvents: () => ({}) } },
+      bindings: {
+        runtime: {
+          materializeUnownedCurrentTurnMessageEvents: () => ({
+            activityTimeline: [],
+            toolTimeline: [],
+          }),
+        },
+      },
     },
   };
 }

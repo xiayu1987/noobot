@@ -6,6 +6,10 @@
 
 export const TRANSFER_PROTOCOL = "noobot.semantic-transfer";
 export const TRANSFER_VERSION = 3;
+export const TRANSFER_ERROR_CODE = Object.freeze({
+  IDENTITY_CONFLICT: "transfer_identity_conflict",
+  ATTACHMENT_IDENTITY_CONFLICT: "transfer_attachment_identity_conflict",
+});
 export const TRANSFER_ENVELOPE_V2 = Object.freeze({
   version: 2,
   presentationField: "messageId",

@@ -8,9 +8,11 @@ import assert from "node:assert/strict";
 import { convertToOpenAITool } from "@langchain/core/utils/function_calling";
 
 import {
+  MCP_TOOL_RESULT_ERROR,
   buildLangChainMcpTools,
   normalizeMcpInputSchema,
   normalizeMcpToolCallArgs,
+  normalizeMcpToolResult,
 } from "../../../src/integrations/mcp/tool-adapter.js";
 
 test("MCP tool adapter exposes inputSchema to model binding", async () => {
@@ -44,7 +46,7 @@ test("MCP tool adapter exposes inputSchema to model binding", async () => {
     fromStation: "BJP",
     toStation: "SHH",
   });
-  assert.equal(result, "ok");
+  assert.deepEqual(JSON.parse(result), { ok: true, content: [{ type: "text", text: "ok" }] });
   assert.deepEqual(calls[0], {
     name: "get-tickets",
     args: {
@@ -53,6 +55,37 @@ test("MCP tool adapter exposes inputSchema to model binding", async () => {
       toStation: "SHH",
     },
   });
+});
+
+test("MCP tool result maps isError to ok:false and keeps structuredContent", () => {
+  const content = [{ type: "text", text: "boom" }];
+  assert.deepEqual(JSON.parse(normalizeMcpToolResult({ content, isError: true })), {
+    ok: false,
+    code: "RECOVERABLE_MCP_TOOL_REPORTED_ERROR",
+    error: "boom",
+    content,
+  });
+  assert.deepEqual(
+    JSON.parse(normalizeMcpToolResult({ content, structuredContent: { rows: 2 } })),
+    { ok: true, content, structuredContent: { rows: 2 } },
+  );
+});
+
+test("MCP tool result rejects payloads outside the MCP contract", () => {
+  for (const invalid of [undefined, "ok", {}, { content: "ok" }]) {
+    assert.throws(() => normalizeMcpToolResult(invalid), {
+      name: "TypeError",
+      code: MCP_TOOL_RESULT_ERROR.CONTENT_NOT_ARRAY,
+    });
+  }
+  assert.throws(() => normalizeMcpToolResult({ content: [], isError: "true" }), {
+    name: "TypeError",
+    code: MCP_TOOL_RESULT_ERROR.IS_ERROR_NOT_BOOLEAN,
+  });
+  assert.throws(
+    () => normalizeMcpToolResult({ content: [{ type: "image", data: "x" }], isError: true }),
+    { name: "TypeError", code: MCP_TOOL_RESULT_ERROR.ERROR_TEXT_MISSING },
+  );
 });
 
 test("MCP tool adapter normalizes schemas and args defensively", () => {

@@ -212,7 +212,13 @@ test("unified delete patch confirms the deleted file instead of the absent side"
     "patch_file",
   );
   const patch = "--- a/gone.txt\n+++ /dev/null\n@@ -1,1 +0,0 @@\n-one\n";
-  await patchTool.invoke({ format: "unified_diff", patch, dryRun: false, riskLevel: "low" });
+  await patchTool.invoke({
+    format: "unified_diff",
+    patch,
+    strip: 1,
+    dryRun: false,
+    riskLevel: "low",
+  });
   assert.equal(requests.length, 1);
   assert.match(requests[0].content, /gone\.txt/);
   assert.equal(requests[0].content.includes("/dev/null"), false);

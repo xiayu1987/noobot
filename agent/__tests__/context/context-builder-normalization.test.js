@@ -11,7 +11,10 @@ import { buildSystemRuntime } from "../../src/context/application/build-system-c
 import { buildContextMessageBlocks } from "../../src/context/assembly/message-builder.js";
 import { createPersistedCurrentUserMessage } from "../runtime/core/message-builder-current-user-fixture.js";
 import { createTestBotManager, testHeadlessStartupContext } from "../helpers/test-bot-manager.js";
-import { TEST_RUNTIME_IDENTITY } from "../helpers/test-runtime-context.js";
+import {
+  TEST_RUNTIME_IDENTITY,
+  createTestAttachmentService,
+} from "../helpers/test-runtime-context.js";
 import { TEST_RUN_PREFERENCES } from "../helpers/run-preferences.js";
 
 function systemRuntimeIdentity(overrides) {
@@ -70,11 +73,11 @@ function createBuilderForAttachmentRuntimeTest({
     serviceContainer: {
       sessionManager: createContextSessionManager(),
       memoryService: null,
-      attachmentService: {
+      attachmentService: createTestAttachmentService({
         async ingest() {
           return [];
         },
-      },
+      }),
       skillService: null,
       eventListener,
       botManager,
@@ -249,11 +252,11 @@ test("buildNewSessionContext marks normalized superAdmin user as super user", as
     serviceContainer: {
       sessionManager: createContextSessionManager(),
       memoryService: null,
-      attachmentService: {
+      attachmentService: createTestAttachmentService({
         async ingest() {
           return [];
         },
-      },
+      }),
       skillService: null,
       eventListener: null,
       botManager: createTestBotManager(),
@@ -300,11 +303,11 @@ test("buildNewSessionContext keeps turn identity in runtime but excludes it from
     serviceContainer: {
       sessionManager: createContextSessionManager(),
       memoryService: null,
-      attachmentService: {
+      attachmentService: createTestAttachmentService({
         async ingest() {
           throw new Error("fixture has no raw attachments");
         },
-      },
+      }),
       skillService: null,
       eventListener: null,
       botManager: createTestBotManager(),
@@ -351,11 +354,11 @@ test("buildNewSessionContext keeps super user identity in system message when sy
     serviceContainer: {
       sessionManager: createContextSessionManager(),
       memoryService: null,
-      attachmentService: {
+      attachmentService: createTestAttachmentService({
         async ingest() {
           return [];
         },
-      },
+      }),
       skillService: null,
       eventListener: null,
       botManager: createTestBotManager(),
@@ -510,11 +513,11 @@ test("buildNewSessionContext resolves session history and passes edited turnScop
         },
       },
       memoryService: null,
-      attachmentService: {
+      attachmentService: createTestAttachmentService({
         async ingest() {
           return [];
         },
-      },
+      }),
       skillService: null,
       eventListener: null,
       botManager: createTestBotManager(),
@@ -663,11 +666,11 @@ function createBuilderForLongMemoryTest(
           errorLogs.push(entry);
         },
       },
-      attachmentService: {
+      attachmentService: createTestAttachmentService({
         async ingest() {
           return [];
         },
-      },
+      }),
       skillService: null,
       eventListener: { onEvent: (event) => events.push(event) },
       botManager: createTestBotManager(),
@@ -773,7 +776,7 @@ test("a builder with memoryService requires an error logger", () => {
           eventListener: null,
           sessionManager: createContextSessionManager(),
           memoryService: { readLongMemory: async () => "" },
-          attachmentService: null,
+          attachmentService: createTestAttachmentService(),
           skillService: null,
           botManager: createTestBotManager(),
           errorLogger: null,

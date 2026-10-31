@@ -114,7 +114,7 @@ export const INVOCATION_TOOL_SCHEMA = {
       },
       outputFiles: {
         key: "tools.script.fieldOutputFiles",
-        text: "需要交付给用户的产物文件绝对路径列表（按本工具的执行视角书写）。命令执行后这些文件会登记为附件快照，结果返回附件引用；回复中请引用该附件，未声明的文件无法下载。",
+        text: "需要交付给用户的产物文件绝对路径列表（按本工具的执行视角书写）。命令执行后这些文件会登记为附件快照，结果返回附件引用；回复中照抄结果里的附件引用来链接文件，未声明的文件无法下载。",
       },
       riskLevel: {
         key: "tools.script.fieldRiskLevel",

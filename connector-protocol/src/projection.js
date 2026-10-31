@@ -22,7 +22,7 @@ export function projectPublicConnector(record = {}, runtimeStatus = {}, definiti
       ),
     ),
     status: text(runtimeStatus.status || "disconnected") || "disconnected",
-    statusCode: Number(runtimeStatus.statusCode ?? 0),
+    ...(runtimeStatus.errorCode === undefined ? {} : { errorCode: runtimeStatus.errorCode }),
     statusMessage: text(runtimeStatus.statusMessage),
     connectedAt: text(runtimeStatus.connectedAt),
     createdAt: text(record.createdAt),

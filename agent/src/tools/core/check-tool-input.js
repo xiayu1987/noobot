@@ -3,12 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { access, lstat, realpath } from "node:fs/promises";
+import { lstat, realpath, stat } from "node:fs/promises";
 import {
   authorizePathRef,
   PATH_CAPABILITIES,
+  PATH_ENTRY_KIND,
+  PATH_REF_VIEWS,
   filePath as path,
   normalizePathForPlatform,
+  resolveConfiguredSandboxMounts,
   resolvePathRef,
   resolveToolInputPath,
   TOOL_PATH_RESOLUTION_ERROR,
@@ -68,10 +71,27 @@ function resolveToolPathErrorText(agentContext = {}, resolution = {}, fieldName 
     : tCheckInput(agentContext, "pathOutOfScope");
 }
 
+async function statExisting(readStats, targetPath) {
+  try {
+    return await readStats(targetPath);
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+const lstatExisting = (targetPath) => statExisting(lstat, targetPath);
+
+function resolveEntryKind(stats) {
+  if (stats.isFile()) return PATH_ENTRY_KIND.FILE;
+  if (stats.isDirectory()) return PATH_ENTRY_KIND.DIRECTORY;
+  return PATH_ENTRY_KIND.OTHER;
+}
+
 async function resolveExistingParent(targetPath = "") {
   let candidate = path.dirname(path.resolve(targetPath));
   while (candidate && candidate !== path.dirname(candidate)) {
-    if (await lstat(candidate).catch(() => null)) return realpath(candidate);
+    if (await lstatExisting(candidate)) return realpath(candidate);
     candidate = path.dirname(candidate);
   }
   return realpath(candidate || path.parse(path.resolve(targetPath)).root);
@@ -103,6 +123,9 @@ export function projectToolPathRef(pathRef = {}) {
   const resolved = resolvePathRef({ input: pathRef });
   if (resolved.view === "attachment") {
     return Object.freeze({ view: resolved.view, identity: resolved.identity });
+  }
+  if (resolved.view === PATH_REF_VIEWS.MOUNT) {
+    return Object.freeze({ view: resolved.view, mount: resolved.mount, path: resolved.path });
   }
   return Object.freeze({
     view: resolved.view,
@@ -232,38 +255,21 @@ export async function resolveAuthorizedUserWorkspaceFilePath({
       },
     });
   }
-  const logicalPathRef = resolvedToolPath.mountTarget
-    ? resolvePathRef({
-        input: {
-          view: "workspace",
-          path: resolvedToolPath.logicalPath,
-          owner: userId,
-        },
-      })
-    : resolvePathRef({
-        input: resolvedTargetPath,
-        workspaceRoot: workspacePath,
-        owner: userId,
-      });
-  if (
-    resolvedToolPath.mountReadOnly === true &&
-    [PATH_CAPABILITIES.FILE_WRITE, PATH_CAPABILITIES.FILE_PATCH].includes(capability)
-  ) {
-    throw recoverableToolError(`${fieldName} ${tCheckInput(agentContext, "pathOutOfScope")}`, {
-      code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
-      details: {
-        field: fieldName,
-        filePath: normalizedPath,
-        pathView: logicalPathRef.view,
-        reason: "sandbox_mount_read_only",
-      },
+
+  const logicalPathRef =
+    resolvedToolPath.mountPathRef ??
+    resolvePathRef({
+      input: resolvedTargetPath,
+      workspaceRoot: workspacePath,
+      owner: userId,
     });
-  }
   const configuredPathPolicy = resolveConfiguredPathPolicy(runtime.globalConfig);
   const principal = {
     userId,
     role: isSuperUser ? "super_admin" : "regular_user",
   };
+
+  const mounts = resolveConfiguredSandboxMounts(runtime);
   const authorizeExecutionPath = (executionPath) =>
     authorizePathRef({
       pathRef: logicalPathRef,
@@ -272,10 +278,11 @@ export async function resolveAuthorizedUserWorkspaceFilePath({
       pathPolicy: configuredPathPolicy,
       executionPath,
       workspaceRoot: workspacePath,
-      executionRoots: resolvedToolPath.executionRoot ? [resolvedToolPath.executionRoot] : [],
+      mounts,
     });
 
-  if (!authorizeExecutionPath(resolvedTargetPath).allowed) {
+  const targetAuthorization = authorizeExecutionPath(resolvedTargetPath);
+  if (!targetAuthorization.allowed) {
     throw recoverableToolError(tCheckInput(agentContext, "pathOutOfScope"), {
       code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
       details: {
@@ -283,11 +290,12 @@ export async function resolveAuthorizedUserWorkspaceFilePath({
           field: fieldName,
           pathView: resolvedToolPath.view,
         }),
+        reason: targetAuthorization.code,
       },
     });
   }
 
-  const existingInfo = await lstat(resolvedTargetPath).catch(() => null);
+  const existingInfo = await lstatExisting(resolvedTargetPath);
   if (
     existingInfo?.isSymbolicLink() &&
     configuredPathPolicy.resolution.followSymbolicLinks !== true
@@ -302,31 +310,33 @@ export async function resolveAuthorizedUserWorkspaceFilePath({
       },
     });
   }
-  if (mustExist) {
-    try {
-      await access(resolvedTargetPath);
-    } catch {
-      throw recoverableToolError(
-        `${tCheckInput(agentContext, "fileNotFound")}: ${normalizedPath}`,
-        {
-          code: ERROR_CODE.RECOVERABLE_FILE_NOT_FOUND,
-          details: { field: fieldName, filePath: normalizedPath },
-        },
-      );
-    }
+  const targetInfo = existingInfo ? await statExisting(stat, resolvedTargetPath) : null;
+  if (existingInfo && !targetInfo) {
+    throw recoverableToolError(tCheckInput(agentContext, "pathOutOfScope"), {
+      code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
+      details: {
+        field: fieldName,
+        pathView: logicalPathRef.view,
+        scope: "real_path",
+        reason: "dangling_symbolic_link",
+      },
+    });
+  }
+  if (mustExist && !targetInfo) {
+    throw recoverableToolError(`${tCheckInput(agentContext, "fileNotFound")}: ${normalizedPath}`, {
+      code: ERROR_CODE.RECOVERABLE_FILE_NOT_FOUND,
+      details: { field: fieldName, filePath: normalizedPath },
+    });
   }
   let resourcePath = resolvedTargetPath;
-  if (existingInfo) {
+  let entryKind = PATH_ENTRY_KIND.MISSING;
+  if (targetInfo) {
     const realTarget = await realpath(resolvedTargetPath);
     resourcePath = realTarget;
+    entryKind = resolveEntryKind(targetInfo);
     if (
       normalizedRequiredExecutionRoot &&
-      !isPathWithinRoot(
-        await realpath(normalizedRequiredExecutionRoot).catch(
-          () => normalizedRequiredExecutionRoot,
-        ),
-        realTarget,
-      )
+      !isPathWithinRoot(await realpath(normalizedRequiredExecutionRoot), realTarget)
     ) {
       throw recoverableToolError(tCheckInput(agentContext, "pathOutOfScope"), {
         code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
@@ -337,33 +347,35 @@ export async function resolveAuthorizedUserWorkspaceFilePath({
         },
       });
     }
-    if (!authorizeExecutionPath(realTarget).allowed)
+    const realAuthorization = authorizeExecutionPath(realTarget);
+    if (!realAuthorization.allowed)
       throw recoverableToolError(tCheckInput(agentContext, "pathOutOfScope"), {
         code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
         details: {
           field: fieldName,
           pathView: logicalPathRef.view,
-          scope: "workspace",
-          reason: "real_path_out_of_scope",
+          scope: "real_path",
+          reason: realAuthorization.code,
         },
       });
   }
   if (
-    !existingInfo &&
+    !targetInfo &&
     capability !== PATH_CAPABILITIES.FILE_READ &&
     capability !== PATH_CAPABILITIES.FILE_SEARCH
   ) {
     const realParent = await resolveExistingParent(resolvedTargetPath);
     const projectedTarget = path.join(realParent, path.basename(resolvedTargetPath));
     resourcePath = projectedTarget;
-    if (!authorizeExecutionPath(projectedTarget).allowed)
+    const parentAuthorization = authorizeExecutionPath(projectedTarget);
+    if (!parentAuthorization.allowed)
       throw recoverableToolError(tCheckInput(agentContext, "pathOutOfScope"), {
         code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
         details: {
           field: fieldName,
           pathView: logicalPathRef.view,
-          scope: "workspace",
-          reason: "write_parent_out_of_scope",
+          scope: "write_parent",
+          reason: parentAuthorization.code,
         },
       });
   }
@@ -371,6 +383,7 @@ export async function resolveAuthorizedUserWorkspaceFilePath({
   return Object.freeze({
     executionPath: resolvedTargetPath,
     resourcePath,
+    entryKind,
     pathRef: logicalPathRef,
     toolPath: Object.freeze({ ...resolvedToolPath }),
   });

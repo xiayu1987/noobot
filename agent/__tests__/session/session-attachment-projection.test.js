@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { projectSessionAttachmentState } from "../../src/session/services/session-attachment-projection.js";
+import { createTestAttachmentService } from "../helpers/test-runtime-context.js";
 
 test("session display projection joins current attachment state by canonical identity", async () => {
   const identity = {
@@ -37,12 +38,12 @@ test("session display projection joins current attachment state by canonical ide
   const projected = await projectSessionAttachmentState({
     userId: "admin",
     session: source,
-    attachmentService: {
+    attachmentService: createTestAttachmentService({
       async readAttachmentMetas(scope) {
         calls.push(scope);
         return [{ ...identity, name: "source.png", mimeType: "image/png", relations: [relation] }];
       },
-    },
+    }),
   });
 
   assert.deepEqual(calls, [{ userId: "admin", sessionId: "session-1", attachmentSource: "user" }]);

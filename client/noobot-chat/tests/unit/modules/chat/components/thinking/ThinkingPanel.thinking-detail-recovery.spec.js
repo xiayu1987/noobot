@@ -16,6 +16,10 @@ import { normalizeThinkingToolLogs } from "../../../../../../src/modules/chat/mo
 import ThinkingPanelRealtime from "../../../../../../src/modules/chat/components/thinking/ThinkingPanelRealtime.vue";
 import { setTurnThinkingOpenNames } from "../../../../../../src/modules/chat/runtime/engine/turnUiStore.js";
 import { API_REQUEST_ERROR_CODE, ApiRequestError } from "@noobot/shared/request-error";
+import {
+  completedToolTimelineItem,
+  toolResultText,
+} from "../../../../helpers/toolTimelineFixture.js";
 
 const detailServiceMock = vi.hoisted(() => ({ getDetail: null }));
 vi.mock("../../../../../../src/infrastructure/api/thinking/thinkingDetailService.js", () => ({
@@ -46,14 +50,30 @@ function thinkingDetailPayload(messageItem) {
   };
 }
 
-function persistedToolTimeline(text, id = "call-1") {
+function readFilePath(name) {
+  return `docs/${name}.md`;
+}
+
+function displayText(name) {
+  return `read_file · ${readFilePath(name)}`;
+}
+
+function readFileResult(name) {
+  return toolResultText({
+    ok: true,
+    path: { view: "workspace", path: readFilePath(name) },
+    fileName: `${name}.md`,
+  });
+}
+
+function persistedToolTimeline(name, id = "call-1") {
   return [
-    {
-      key: `call:${id}`,
+    completedToolTimelineItem({
       toolCallId: id,
-      tool: text,
-      result: text,
-      status: "completed",
+      tool: "read_file",
+      args: { filePath: readFilePath(name) },
+      result: readFileResult(name),
+      success: true,
       resultEvent: {
         eventId: `result:${id}`,
         sequence: 1,
@@ -61,7 +81,7 @@ function persistedToolTimeline(text, id = "call-1") {
         sequenceDomain: "message-event",
         authority: "authoritative",
       },
-    },
+    }),
   ];
 }
 
@@ -130,9 +150,8 @@ describe("ThinkingPanel thinking-detail recovery", () => {
       normalizeThinkingToolLogs({
         messageItem: cached.messageItem,
         variant: "panel",
-        toolResultFallback: "tool_result",
-      }).map((item) => item.text || item.detailText),
-    ).toContain("persisted-tool");
+      }).map((item) => item.text),
+    ).toContain(displayText("persisted-tool"));
     expect(cached.messageItem.toolTimeline).toHaveLength(1);
 
     await wrapper.setProps({
@@ -275,7 +294,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
       wrapper
         .findAll(".execution-log-line")
         .map((item) => [item.text(), item.attributes("data-status-key")]),
-    ).toContainEqual(["details-tool", "message.executionStatusCompleted"]);
+    ).toContainEqual(["read_file", "message.executionStatusCompleted"]);
   });
 
   it("refreshes an empty cached detail in details mode", async () => {
@@ -310,7 +329,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
       wrapper
         .findAll(".execution-log-line")
         .map((item) => [item.text(), item.attributes("data-status-key")]),
-    ).toContainEqual(["fresh-details-tool", "message.executionStatusCompleted"]);
+    ).toContainEqual(["read_file", "message.executionStatusCompleted"]);
   });
 
   it("does not fetch canonical details while a message is pending or local logs exist", async () => {
@@ -402,24 +421,24 @@ describe("ThinkingPanel thinking-detail recovery", () => {
 
   it("rotates an unsequenced tool error out of the latest ten execution logs", async () => {
     const toolTimeline = [
-      {
-        key: "call:failed",
+      completedToolTimelineItem({
         toolCallId: "failed",
-        tool: "missing-file",
-        result: "missing file",
-        resultEvent: {
-          sequence: 2,
-        },
-      },
-      ...Array.from({ length: 10 }, (_, index) => ({
-        key: `call:success-${index + 1}`,
-        toolCallId: `success-${index + 1}`,
-        tool: `success-${index + 1}`,
-        result: `success-${index + 1}`,
-        resultEvent: {
-          sequence: index + 3,
-        },
-      })),
+        tool: "read_file",
+        args: { filePath: readFilePath("missing") },
+        result: toolResultText({ ok: false, error: "missing file", code: "FILE_NOT_FOUND" }),
+        success: false,
+        resultEvent: { sequence: 2 },
+      }),
+      ...Array.from({ length: 10 }, (_, index) =>
+        completedToolTimelineItem({
+          toolCallId: `success-${index + 1}`,
+          tool: "read_file",
+          args: { filePath: readFilePath(`success-${index + 1}`) },
+          result: readFileResult(`success-${index + 1}`),
+          success: true,
+          resultEvent: { sequence: index + 3 },
+        }),
+      ),
     ];
     const wrapper = mountThinkingPanel(
       {
@@ -441,13 +460,15 @@ describe("ThinkingPanel thinking-detail recovery", () => {
     await nextTick();
 
     expect(wrapper.vm.currentExecutionLogs).toHaveLength(10);
-    expect(wrapper.vm.currentExecutionLogs.map((item) => [item.text, item.statusKey])).toEqual(
+    expect(
+      wrapper.vm.currentExecutionLogs.map((item) => [item.toolCallId, item.statusKey]),
+    ).toEqual(
       Array.from({ length: 10 }, (_, index) => [
         `success-${index + 1}`,
         "message.executionStatusCompleted",
       ]),
     );
-    expect(wrapper.vm.currentExecutionLogs.some((item) => item.text.includes("missing file"))).toBe(
+    expect(wrapper.vm.currentExecutionLogs.some((item) => item.toolCallId === "failed")).toBe(
       false,
     );
   });

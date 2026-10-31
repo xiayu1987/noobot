@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { isPlainObject, text } from "@noobot/shared/value";
+import { decodeToolResultText } from "@noobot/event-protocol/tool-result";
 import { toToolJsonResult } from "../../tools/core/tool-json-result.js";
 import {
   DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS,
@@ -13,15 +14,6 @@ import {
 import { sourceReferenceTransfer, TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 import { tTool } from "../../tools/core/tool-i18n.js";
-
-function parseJsonObject(inputText = "") {
-  try {
-    const value = JSON.parse(String(inputText || ""));
-    return isPlainObject(value) ? value : null;
-  } catch {
-    return null;
-  }
-}
 
 function transferIdentityRequired(identity) {
   if (!isPlainObject(identity)) throw new Error("semantic_transfer_overflow_identity_required");
@@ -40,28 +32,47 @@ function transferIdentityRequired(identity) {
   return identity;
 }
 
-function overflowArtifactName(call = {}) {
-  const toolName = text(call?.name) || "tool";
-  return `${toolName}.result.txt`;
+function requiredToolName(call) {
+  const toolName = text(call?.name);
+  if (!toolName) throw new Error("tool_result_overflow_tool_name_required");
+  return toolName;
 }
 
-function buildReadFileSourceReference({ parsed = {}, identity }) {
-  const pathRef = parsed?.path && typeof parsed.path === "object" ? parsed.path : null;
-  const view = text(pathRef?.view);
-  const address =
-    view === "attachment" && isPlainObject(pathRef?.identity)
-      ? pathRef.identity
-      : ["workspace", "host"].includes(view)
-        ? text(pathRef?.path)
-        : null;
-  if (!address) return null;
+function encodeOverflowResult({ toolName, parsed, message, transferEnvelopes }) {
+  const failure = parsed.ok ? {} : { code: parsed.code, error: parsed.error };
+  return toToolJsonResult(toolName, {
+    ok: parsed.ok,
+    ...failure,
+    message,
+    overflowed: true,
+    transferEnvelopes,
+  });
+}
+
+function requiredLineNumber(parsed, field) {
+  if (!Number.isInteger(parsed[field]) || parsed[field] < 0) {
+    throw new Error(`read_file_source_reference_${field}_required`);
+  }
+  return parsed[field];
+}
+
+function readFileSourceAddress(pathRef) {
+  if (!isPlainObject(pathRef)) throw new Error("read_file_source_reference_path_required");
+  if (pathRef.view === "attachment") return pathRef.identity;
+  if (pathRef.view === "workspace" || pathRef.view === "host") return pathRef.path;
+  throw new Error(`read_file_source_reference_view_unsupported:${pathRef.view}`);
+}
+
+function buildReadFileSourceReference({ parsed, identity }) {
+  const name = text(parsed.fileName);
+  if (!name) throw new Error("read_file_source_reference_file_name_required");
   const reference = {
-    address,
-    name: text(parsed?.fileName) || "read-file-source",
+    address: readFileSourceAddress(parsed.path),
+    name,
     mimeType: "text/plain",
-    ...(Number.isFinite(Number(parsed?.totalLines)) ? { size: Number(parsed.totalLines) } : {}),
-    ...(Number.isFinite(Number(parsed?.startLine)) ? { startLine: Number(parsed.startLine) } : {}),
-    ...(Number.isFinite(Number(parsed?.endLine)) ? { endLine: Number(parsed.endLine) } : {}),
+    startLine: requiredLineNumber(parsed, "startLine"),
+    endLine: requiredLineNumber(parsed, "endLine"),
+    totalLines: requiredLineNumber(parsed, "totalLines"),
   };
   return sourceReferenceTransfer({
     transferId: identity.transferId,
@@ -80,12 +91,13 @@ function buildReadFileSourceReference({ parsed = {}, identity }) {
 }
 
 export async function normalizeToolResultOverflow({
-  call = {},
-  toolResultText = "",
+  call,
+  toolResultText,
   runtime = {},
   identity = null,
 } = {}) {
-  const rawText = String(toolResultText || "");
+  const parsed = decodeToolResultText(toolResultText);
+  const rawText = toolResultText;
   const maxChars = resolveToolResultInlineTextLimit(runtime, DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS);
   if (rawText.length <= maxChars) {
     return {
@@ -93,21 +105,19 @@ export async function normalizeToolResultOverflow({
       overflowed: false,
       rawLength: rawText.length,
       measuredLength: rawText.length,
+      transferEnvelopes: [],
     };
   }
 
   const ids = transferIdentityRequired(identity);
-  const parsed = parseJsonObject(rawText);
-  if (text(call?.name) === "read_file") {
+  const toolName = requiredToolName(call);
+  if (toolName === "read_file") {
     const referenceEnvelope = buildReadFileSourceReference({ parsed, identity: ids });
-    if (!referenceEnvelope) throw new Error("read_file_source_reference_required");
-    const normalized = toToolJsonResult(call?.name, {
-      ...(typeof parsed?.ok === "boolean" ? { ok: parsed.ok } : { ok: true }),
+    const normalized = encodeOverflowResult({
+      toolName,
+      parsed,
       message: tTool(runtime, "tools.result.readFileSourceReferenceOverflow"),
-      overflowed: true,
-      overflow_reason: `tool result length ${rawText.length} exceeds limit ${maxChars}`,
       transferEnvelopes: [referenceEnvelope],
-      summary: { original_length: rawText.length, max_length: maxChars },
     });
     return {
       toolResultText: normalized,
@@ -120,42 +130,31 @@ export async function normalizeToolResultOverflow({
   const persisted = await materializeTextForToolResult({
     runtime,
     text: rawText,
-    name: overflowArtifactName(call),
+    name: `${toolName}.result.txt`,
     mimeType: "text/plain",
     attachmentSource: ATTACHMENT_SOURCE.MODEL,
-    generationSource: "tool_result_overflow",
+    generationSource: TRANSFER_REASON.TOOL_RESULT_OVERFLOW,
     source: "tool",
-    reason: "tool_result_overflow",
+    reason: TRANSFER_REASON.TOOL_RESULT_OVERFLOW,
     alwaysPersist: true,
     forcePreview: true,
     identity: ids,
     meta: {
       overflowContentKind: "tool_result",
-      toolName: text(call?.name),
-      toolCallId: text(call?.id),
+      toolName,
+      toolCallId: text(call.id),
     },
   });
-  const transferEnvelopes = Array.isArray(persisted?.transferEnvelopes)
-    ? persisted.transferEnvelopes
-    : [];
+  const { transferEnvelopes } = persisted;
   if (!transferEnvelopes.length) {
     throw new Error("semantic_transfer_overflow_envelope_required");
   }
 
-  const message =
-    text(parsed?.message) ||
-    tTool(runtime, "tools.result.toolResultOverflow", { measuredLength: rawText.length });
-  const normalized = toToolJsonResult(call?.name, {
-    ...(typeof parsed?.ok === "boolean" ? { ok: parsed.ok } : { ok: true }),
-    ...(parsed?.status ? { status: parsed.status } : {}),
-    message,
-    overflowed: true,
-    overflow_reason: `tool result length ${rawText.length} exceeds limit ${maxChars}`,
+  const normalized = encodeOverflowResult({
+    toolName,
+    parsed,
+    message: tTool(runtime, "tools.result.toolResultOverflow", { measuredLength: rawText.length }),
     transferEnvelopes,
-    summary: {
-      original_length: rawText.length,
-      max_length: maxChars,
-    },
   });
   return {
     toolResultText: normalized,

@@ -20,7 +20,9 @@ async function withTempDir(fn) {
   }
 }
 
-test("AttachmentService persists a canonical sourcePath and reads it back", async () => {
+const ORIGIN = Object.freeze({ view: "host", path: "D:/work/report.xlsx" });
+
+test("AttachmentService persists a canonical origin and reads it back", async () => {
   await withTempDir(async (workspaceRoot) => {
     const service = new AttachmentService({ workspaceRoot });
     const [saved] = await service.ingestGeneratedArtifacts({
@@ -33,22 +35,22 @@ test("AttachmentService persists a canonical sourcePath and reads it back", asyn
           name: "report.xlsx",
           mimeType: "application/octet-stream",
           contentBase64: "cmVwb3J0",
-          sourcePath: "D:/work/report.xlsx",
+          origin: ORIGIN,
         },
       ],
     });
-    assert.equal(saved.sourcePath, "D:/work/report.xlsx");
+    assert.deepEqual(saved.origin, ORIGIN);
     const loaded = await service.getAttachmentById({
       userId: "u1",
       attachmentId: saved.attachmentId,
       sessionId: "s1",
       attachmentSource: "model",
     });
-    assert.equal(loaded.sourcePath, "D:/work/report.xlsx");
+    assert.deepEqual(loaded.origin, ORIGIN);
   });
 });
 
-test("AttachmentService persists no sourcePath field for artifacts without one", async () => {
+test("AttachmentService persists no origin field for artifacts without one", async () => {
   await withTempDir(async (workspaceRoot) => {
     const service = new AttachmentService({ workspaceRoot });
     const [saved] = await service.ingestGeneratedArtifacts({
@@ -57,11 +59,11 @@ test("AttachmentService persists no sourcePath field for artifacts without one",
       attachmentSource: "model",
       artifacts: [{ name: "a.txt", mimeType: "text/plain", contentBase64: "YQ==" }],
     });
-    assert.equal("sourcePath" in saved, false);
+    assert.equal("origin" in saved, false);
   });
 });
 
-test("AttachmentService rejects a non-canonical sourcePath instead of persisting it", async () => {
+test("AttachmentService rejects a non-canonical origin instead of persisting it", async () => {
   await withTempDir(async (workspaceRoot) => {
     const service = new AttachmentService({ workspaceRoot });
     await assert.rejects(
@@ -74,11 +76,11 @@ test("AttachmentService rejects a non-canonical sourcePath instead of persisting
             name: "report.xlsx",
             mimeType: "application/octet-stream",
             contentBase64: "cmVwb3J0",
-            sourcePath: "d:\\work\\report.xlsx",
+            origin: { view: "host", path: "d:\\work\\report.xlsx" },
           },
         ],
       }),
-      /non_canonical_attachment_source_path/,
+      /invalid_attachment_origin/,
     );
   });
 });

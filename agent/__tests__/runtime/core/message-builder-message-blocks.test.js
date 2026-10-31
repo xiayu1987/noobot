@@ -290,7 +290,7 @@ test("buildContextMessageBlocks adapts restored protocol tool messages into Lang
           {
             role: "tool",
             tool_call_id: "call_resume_1",
-            content: "tool result text",
+            content: '{"toolName":"read_file","ok":true}',
             dialogProcessId: "dlg-stopped",
           },
         ]),
@@ -304,7 +304,7 @@ test("buildContextMessageBlocks adapts restored protocol tool messages into Lang
   assert.equal(blocks.history[0]?.tool_calls?.[0]?.id, "call_resume_1");
   assert.equal(blocks.history[1]?.type, "tool");
   assert.equal(blocks.history[1]?.tool_call_id, "call_resume_1");
-  assert.equal(blocks.history[1]?.content, "tool result text");
+  assert.equal(blocks.history[1]?.content, '{"toolName":"read_file","ok":true}');
   assert.equal(blocks.incremental[0]?.type, "human");
   assert.equal(blocks.incremental[0]?.content, "resume user input");
   assert.equal(

@@ -224,7 +224,7 @@ function handleToggle() {
   border-radius: var(--noobot-thinking-log-event-radius);
   background: var(--noobot-thinking-detail-background);
   color: var(--noobot-thinking-muted);
-  font-size: 0.9em;
+  font-size: var(--noobot-font-size-xs);
   font-weight: var(--noobot-font-weight-semibold);
 }
 .base-thinking-log-line__risk.is-medium {

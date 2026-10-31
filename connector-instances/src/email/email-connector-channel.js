@@ -7,46 +7,36 @@ import { executeSendEmail } from "./send-email.js";
 import { executeListEmail } from "./list-email.js";
 import { executeReadEmail } from "./read-email.js";
 import { executeListFolders } from "./list-folders.js";
+import { CONNECTOR_FAILURE_CODE } from "@noobot/connector-protocol";
 import { isPlainObject, text } from "@noobot/shared/value";
+import { commandOutput, connectorFailure, errorMessage } from "../channel-result.js";
+
+const EMAIL_OPERATIONS = Object.freeze({
+  send: ({ payload, connectionInfo }) => executeSendEmail({ payload, connectionInfo }),
+  list: ({ payload, connectionInfo }) => executeListEmail({ payload, connectionInfo }),
+  read: ({ payload, connectionInfo, attachmentHandler }) =>
+    executeReadEmail({ payload, connectionInfo, attachmentHandler }),
+  list_folders: ({ connectionInfo }) => executeListFolders({ connectionInfo }),
+});
 
 export async function executeEmailOperation({
-  operation = "",
-  input = {},
-  connectionInfo = {},
-  attachmentHandler = null,
-} = {}) {
+  operation,
+  input,
+  connectionInfo,
+  attachmentHandler,
+}) {
+  const action = text(operation);
+  const run = Object.hasOwn(EMAIL_OPERATIONS, action) ? EMAIL_OPERATIONS[action] : null;
+  if (!run) {
+    return connectorFailure(CONNECTOR_FAILURE_CODE.INPUT_INVALID, "Email operation is invalid");
+  }
+  if (!isPlainObject(input)) {
+    return connectorFailure(CONNECTOR_FAILURE_CODE.INPUT_INVALID, "Email input must be an object");
+  }
   try {
-    const action = text(operation);
-    const payload = isPlainObject(input) ? input : {};
-    if (!["send", "list", "read", "list_folders"].includes(action)) {
-      throw new Error("Email operation is invalid");
-    }
-    let resultPayload = {};
-    if (action === "send") {
-      resultPayload = await executeSendEmail({ payload, connectionInfo });
-    } else if (action === "list") {
-      resultPayload = await executeListEmail({ payload, connectionInfo });
-    } else if (action === "read") {
-      resultPayload = await executeReadEmail({
-        payload,
-        connectionInfo,
-        attachmentHandler,
-      });
-    } else if (action === "list_folders") {
-      resultPayload = await executeListFolders({ connectionInfo });
-    }
-    return {
-      ok: true,
-      code: 0,
-      stdout: JSON.stringify(resultPayload),
-      stderr: "",
-    };
+    const resultPayload = await run({ payload: input, connectionInfo, attachmentHandler });
+    return commandOutput({ stdout: JSON.stringify(resultPayload) });
   } catch (error) {
-    return {
-      ok: false,
-      code: 1,
-      stdout: "",
-      stderr: String(error?.message || error || "email command failed"),
-    };
+    return connectorFailure(CONNECTOR_FAILURE_CODE.EXECUTION_FAILED, errorMessage(error));
   }
 }

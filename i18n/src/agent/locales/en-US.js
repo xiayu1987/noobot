@@ -21,22 +21,16 @@ export default {
   "tools.search.textTooLong": "Search text is too long. Please search in smaller chunks.",
   "tools.patch.patchContentTooLong":
     "Patch content is too long. Please apply in batches or split the patch and try again.",
-  "tools.result.toolResultOverflow": (params = {}) =>
-    `Tool result is too long (${Number(params.measuredLength || 0)} chars) and was saved as an attachment. Read it in batches using the returned transfer info.`,
+  "tools.result.toolResultOverflow": ({ measuredLength }) =>
+    `Tool result is too long (${measuredLength} chars) and was saved as an attachment. Read it in batches using the returned transfer info.`,
   "tools.result.readFileSourceReferenceOverflow":
     "read_file result is too long. The source file reference was kept; continue reading by source address and line range.",
-  "tools.file.readDescriptionWithLineNumbers":
-    "Read text file content (line numbers enabled by default).",
   "tools.file.workspaceRelativePathRule":
     "Relative paths are consistently resolved from the current user's workspace root.",
   "tools.file.symbolicLinkRule":
     "The current path policy does not allow file tools to use symbolic links.",
-  "tools.file.readStartLineField": "Start line (1-based).",
-  "tools.file.readEndLineField": "End line (1-based).",
-  "tools.file.readIncludeLineNumbersField": "Whether content includes line numbers.",
-  "tools.file.readMaxLinesField": "Maximum returned lines.",
-  "tools.file.readLineRangeOutOfBounds": (params = {}) =>
-    `Invalid read line range: requested ${Number(params.startLine || 0)}-${Number(params.endLine || 0)}, file has ${Number(params.totalLines || 0)} lines`,
+  "tools.file.readLineRangeOutOfBounds": ({ startLine, endLine, totalLines }) =>
+    `Invalid read line range: requested ${startLine}-${endLine ?? "end"}, file has ${totalLines} lines`,
   "tools.file.pathErrorRequired": (params = {}) =>
     `${String(params.field || "filePath")} is required.`,
   "tools.file.pathErrorHostAbsoluteNotAllowed":

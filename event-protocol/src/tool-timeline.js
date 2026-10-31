@@ -6,115 +6,145 @@
 
 import { text } from "@noobot/shared/value";
 import { MESSAGE_EVENT_TYPE } from "./message-event.js";
-import { mergeCanonicalActivityTimelines } from "./activity-timeline.js";
+import { selectCanonicalActivityTimeline } from "./activity-timeline.js";
 import { normalizeSecurityRiskLevel } from "@noobot/security-assessment-protocol";
+import {
+  TASK_CHECK_PROTOCOL_VERSION,
+  TASK_CHECK_TOOL_NAME,
+  parseTaskCheckReceipt,
+} from "@noobot/context-protocol/task/check-receipt";
+import { decodeToolResultText } from "./tool-result.js";
 
-export function countCanonicalToolTimelineEvents(timeline = []) {
-  return (Array.isArray(timeline) ? timeline : []).reduce(
-    (count, entry = {}) =>
-      count + Number(Boolean(entry?.call)) + Number(Boolean(entry?.resultEvent)),
+const TOOL_EVENT_TYPES = Object.freeze(
+  new Set([MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END]),
+);
+
+export function selectMessageToolTimeline(message) {
+  return message.toolTimeline ?? [];
+}
+
+export function projectTaskCheckReceipt(entry) {
+  if (entry.tool !== TASK_CHECK_TOOL_NAME || !entry.resultEvent || entry.success !== true) {
+    return null;
+  }
+  const payload = decodeToolResultText(entry.result);
+  if (payload.protocolVersion !== TASK_CHECK_PROTOCOL_VERSION) {
+    throw new TypeError(`task_check result protocolVersion must be ${TASK_CHECK_PROTOCOL_VERSION}`);
+  }
+  return parseTaskCheckReceipt(payload.summary);
+}
+
+export function selectTaskCheckReceipt(entry) {
+  if (Object.hasOwn(entry, "result")) return projectTaskCheckReceipt(entry);
+  return entry.taskCheckReceipt ?? null;
+}
+
+export function countCanonicalToolTimelineEvents(timeline) {
+  return timeline.reduce(
+    (count, entry) => count + Number(Boolean(entry.call)) + Number(Boolean(entry.resultEvent)),
     0,
   );
 }
 
-export function countCanonicalThinkingDetailEvents({
-  toolTimeline = [],
-  activityTimeline = [],
-} = {}) {
+export function countCanonicalThinkingDetailEvents(message) {
   return (
-    countCanonicalToolTimelineEvents(toolTimeline) +
-    mergeCanonicalActivityTimelines(activityTimeline).length
+    countCanonicalToolTimelineEvents(selectMessageToolTimeline(message)) +
+    selectCanonicalActivityTimeline(message).length
   );
 }
 
-export function isCanonicalToolMessageEvent(envelope = {}) {
-  return [MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END].includes(
-    envelope?.payload?.eventType,
-  );
+export function isCanonicalToolMessageEvent(envelope) {
+  return TOOL_EVENT_TYPES.has(envelope.payload.eventType);
 }
 
-export function resolveCanonicalToolTimelineStatus(entry = {}) {
-  if (!entry?.resultEvent) return "running";
-  return entry.success === false ? "failed" : "completed";
+export function resolveCanonicalToolTimelineStatus(entry) {
+  if (!entry.resultEvent) return "running";
+  if (typeof entry.success !== "boolean") {
+    throw new TypeError("completed tool timeline entry requires boolean success");
+  }
+  return entry.success ? "completed" : "failed";
 }
 
-function pickPayloadAttachments(payload = {}) {
-  return Array.isArray(payload?.attachments) && payload.attachments.length
-    ? { attachments: payload.attachments }
-    : {};
+export function requireCanonicalToolTimelineIdentity(item) {
+  const { key, toolCallId } = item;
+  if (typeof toolCallId !== "string" || !toolCallId || key !== `call:${toolCallId}`) {
+    throw new TypeError("tool timeline item requires key call:<toolCallId>");
+  }
+  return { key, toolCallId };
 }
 
-function createToolEventFact(envelope = {}) {
-  const identity = envelope?.identity || {};
-  const ordering = envelope?.ordering || {};
+function pickPayloadResourceRefs(payload) {
+  return payload.resourceRefs?.length ? { resourceRefs: payload.resourceRefs } : {};
+}
+
+function pickPayloadMutationRefs(payload) {
+  return payload.mutationRefs?.length ? { mutationRefs: payload.mutationRefs } : {};
+}
+
+function createToolEventFact(envelope) {
+  const { identity, ordering } = envelope;
   return {
     eventId: text(identity.eventId),
-    sequence: Number(ordering.sequence || 0),
+    sequence: ordering.sequence,
     sequenceScopeId: text(ordering.scopeId),
     sequenceDomain: text(ordering.domain),
     authority: "authoritative",
     timestamp: text(envelope.occurredAt),
     sessionId: text(identity.sessionId),
-    dialogProcessId: text(envelope?.payload?.dialogProcessId),
+    dialogProcessId: text(envelope.payload.dialogProcessId),
     turnScopeId: text(identity.turnScopeId),
-    ...pickPayloadAttachments(envelope?.payload),
+    ...pickPayloadResourceRefs(envelope.payload),
+    ...pickPayloadMutationRefs(envelope.payload),
   };
 }
 
-export function applyCanonicalToolTimelineEvent(
-  timeline = [],
-  envelope = {},
-  { indexByKey = null } = {},
-) {
-  if (!isCanonicalToolMessageEvent(envelope)) {
-    return Array.isArray(timeline) ? timeline : [];
-  }
+export function applyCanonicalToolTimelineEvent(timeline, envelope, { indexByKey }) {
+  if (!isCanonicalToolMessageEvent(envelope)) return timeline;
   const payload = envelope.payload;
-  const toolCallId = text(payload.toolCallId);
-  if (!toolCallId) return Array.isArray(timeline) ? timeline : [];
-
+  const toolCallId = payload.toolCallId;
   const key = `call:${toolCallId}`;
-  const next = Array.isArray(timeline) ? timeline : [];
-  const indexedPosition = indexByKey instanceof Map ? indexByKey.get(key) : undefined;
+  const indexedPosition = indexByKey.get(key);
   const index =
-    Number.isInteger(indexedPosition) && next[indexedPosition]?.key === key
+    Number.isInteger(indexedPosition) && timeline[indexedPosition]?.key === key
       ? indexedPosition
-      : next.findIndex((item) => item.key === key);
-  if (index >= 0 && indexByKey instanceof Map) indexByKey.set(key, index);
-  const current = index >= 0 ? next[index] : { key, toolCallId };
+      : timeline.findIndex((item) => item.key === key);
+  if (index >= 0) indexByKey.set(key, index);
+  const current = index >= 0 ? timeline[index] : { key, toolCallId };
   const eventFact = createToolEventFact(envelope);
+  const riskLevel = normalizeSecurityRiskLevel(payload.securityAssessment?.effectiveRiskLevel);
 
   const updated =
     payload.eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_START
       ? {
           ...current,
-          tool: text(payload.tool || current.tool),
-          args: payload.args ?? current.args ?? {},
+          tool: payload.tool,
+          args: payload.args,
           call: eventFact,
-          riskLevel: normalizeSecurityRiskLevel(payload?.securityAssessment?.effectiveRiskLevel),
+          riskLevel,
           status: current.resultEvent ? resolveCanonicalToolTimelineStatus(current) : "running",
         }
       : (() => {
           const entry = {
             ...current,
-            tool: text(payload.tool || current.tool),
+            tool: payload.tool,
             result: payload.result,
             success: payload.success,
             resultEvent: eventFact,
-            riskLevel: normalizeSecurityRiskLevel(payload?.securityAssessment?.effectiveRiskLevel),
+            riskLevel,
           };
           return { ...entry, status: resolveCanonicalToolTimelineStatus(entry) };
         })();
 
-  if (index >= 0) next[index] = updated;
+  if (index >= 0) timeline[index] = updated;
   else {
-    next.push(updated);
-    if (indexByKey instanceof Map) indexByKey.set(key, next.length - 1);
+    timeline.push(updated);
+    indexByKey.set(key, timeline.length - 1);
   }
-  return next;
+  return timeline;
 }
 
-export function reduceCanonicalToolTimeline(timeline = [], envelope = {}) {
-  const next = Array.isArray(timeline) ? timeline.map((item) => ({ ...item })) : [];
-  return applyCanonicalToolTimelineEvent(next, envelope);
+export function reduceCanonicalToolTimeline(timeline, envelope) {
+  const next = timeline.map((item) => ({ ...item }));
+  const indexByKey = new Map(next.map((item, position) => [item.key, position]));
+  return applyCanonicalToolTimelineEvent(next, envelope, { indexByKey });
 }

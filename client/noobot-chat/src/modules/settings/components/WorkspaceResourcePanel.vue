@@ -231,7 +231,7 @@ function sectionClass(name) {
 
 .resource-collapse :deep(.el-collapse-item__header) {
   height: 40px;
-  line-height: 40px;
+  line-height: var(--noobot-line-height-none);
   padding: 0 var(--noobot-space-md);
   background: var(--noobot-panel-head-bg);
   color: var(--noobot-text-main);

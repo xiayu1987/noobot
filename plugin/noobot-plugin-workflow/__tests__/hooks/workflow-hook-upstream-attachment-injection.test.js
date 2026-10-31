@@ -90,6 +90,7 @@ test("workflow hook injects upstream node result attachments into downstream sub
       sessionId: "s-upstream",
       dialogProcessId: "d-upstream",
       userMessage: "请运行带并发和汇聚的流程",
+      userMessageAttachments: [],
       runConfig: { locale: "zh-CN" },
       agentContext: {
         bindings: {
@@ -198,6 +199,7 @@ test("workflow hook injects one upstream action attachments into multiple direct
       sessionId: "s-fanout",
       dialogProcessId: "d-fanout",
       userMessage: "请运行直接多下游流程",
+      userMessageAttachments: [],
       runConfig: { locale: "zh-CN" },
       agentContext: {
         bindings: {

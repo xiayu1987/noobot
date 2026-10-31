@@ -21,32 +21,12 @@ import { compactTransferEnvelopes } from "../../session/transfer-attachment-refs
 import { EXECUTION_LOG_EVENT, MESSAGE_ROLE } from "../config/constants.js";
 import { summarizeSessionTurnPayload } from "./turn-payload-summary.js";
 
-const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set(["tool_result_overflow"]);
-
 function pickSourceTimestampField(source) {
   if (source.ts === undefined) return {};
   if (!isCanonicalMessageTimestamp(source.ts)) {
     throw new TypeError("session turn ts must be a canonical ISO timestamp");
   }
   return { ts: source.ts };
-}
-
-function filterSessionAttachments(attachments = []) {
-  return (Array.isArray(attachments) ? attachments : []).filter(
-    (attachmentItem = {}) =>
-      !HIDDEN_INTERMEDIATE_GENERATION_SOURCES.has(text(attachmentItem?.generationSource)),
-  );
-}
-
-function filterSessionTransferEnvelopes(transferEnvelopes = []) {
-  return compactTransferEnvelopes(
-    (Array.isArray(transferEnvelopes) ? transferEnvelopes : []).filter(isPlainObject),
-  );
-}
-
-function resolveMessageAttachments(message = {}) {
-  if (Array.isArray(message?.attachments)) return message.attachments;
-  return [];
 }
 
 function valueOrDefault(value, defaultValue) {
@@ -73,12 +53,25 @@ function assistantPresentationField(input) {
   return input.role === MESSAGE_ROLE.ASSISTANT ? { chatPresentation: input.chatPresentation } : {};
 }
 
+function toolCallsField(source) {
+  return Object.hasOwn(source, "tool_calls") ? { tool_calls: source.tool_calls } : {};
+}
+
+function workspaceRootField(source) {
+  return source.workspaceRootDirectory === undefined
+    ? {}
+    : { workspaceRootDirectory: source.workspaceRootDirectory };
+}
+
 function normalizedRawModelContent(value) {
   return typeof value === "string" || Array.isArray(value) ? value : null;
 }
 
-function arrayValue(value, fallback = []) {
-  return Array.isArray(value) ? value : fallback;
+function runtimeMessageList(messageItem, name) {
+  const value = messageItem[name];
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new TypeError(`runtime message ${name} must be an array`);
+  return value;
 }
 
 function firstTruthyValue(values, fallback = "") {
@@ -96,9 +89,8 @@ function normalizeSessionTurnInput(input = {}) {
     presentationMessageId: text(input.presentationMessageId),
     chatPresentation: input.chatPresentation === true,
     type: valueOrDefault(input.type, ""),
-    tool_calls: valueOrDefault(input.tool_calls, null),
     tool_call_id: valueOrDefault(input.tool_call_id, ""),
-    attachments: filterSessionAttachments(valueOrDefault(input.attachments, [])),
+    attachments: input.attachments,
     modelAlias: valueOrDefault(input.modelAlias, ""),
     modelName: valueOrDefault(input.modelName, ""),
     summarized: input.summarized === true,
@@ -123,7 +115,7 @@ function normalizeSessionTurnInput(input = {}) {
     ...pickMessageOriginField(input),
     pluginMessage: input.pluginMessage === true,
     pluginMeta: valueOrDefault(input.pluginMeta, null),
-    transferEnvelopes: filterSessionTransferEnvelopes(valueOrDefault(input.transferEnvelopes, [])),
+    transferEnvelopes: compactTransferEnvelopes(input.transferEnvelopes),
     ...pickSourceTimestampField(input),
     persistenceScope: input.persistenceScope,
   };
@@ -144,7 +136,7 @@ function buildFullTurnPayload(input) {
     dialogProcessId: input.dialogProcessId,
     parentDialogProcessId: stringValue(input.parentDialogProcessId),
     turnScopeId: input.turnScopeId,
-    tool_calls: Array.isArray(input.tool_calls) ? input.tool_calls : [],
+    ...toolCallsField(input),
     tool_call_id: stringValue(input.tool_call_id),
     attachments: input.attachments,
     modelAlias: stringValue(input.modelAlias).trim(),
@@ -205,13 +197,14 @@ function buildTurnPayload(input) {
     userMessageId: input.userMessageId,
     presentationMessageId: input.presentationMessageId,
     chatPresentation: input.chatPresentation,
+    ...workspaceRootField(input),
     content: String(input.content || ""),
     type: input.type,
     userName: input.userName,
     dialogProcessId: input.dialogProcessId,
     parentDialogProcessId: input.parentDialogProcessId,
     turnScopeId: input.turnScopeId,
-    tool_calls: input.tool_calls,
+    ...toolCallsField(input),
     tool_call_id: input.tool_call_id,
     attachments: input.attachments,
     modelAlias: input.modelAlias,
@@ -235,7 +228,7 @@ function buildTurnPayload(input) {
     ...pickMessageOriginField(input),
     pluginMessage: input.pluginMessage,
     pluginMeta: input.pluginMeta,
-    ...(input.transferEnvelopes.length ? { transferEnvelopes: input.transferEnvelopes } : {}),
+    transferEnvelopes: input.transferEnvelopes,
     ...pickSourceTimestampField(input),
   };
 }
@@ -266,6 +259,7 @@ function buildAgentMessageTurnInput(messageItem, input) {
     ...(typeof messageItem.chatPresentation === "boolean"
       ? { chatPresentation: messageItem.chatPresentation }
       : {}),
+    ...workspaceRootField(messageItem),
     content: stringValue(messageItem.content),
     type: stringValue(messageItem.type),
     dialogProcessId: firstTruthyValue([
@@ -276,10 +270,10 @@ function buildAgentMessageTurnInput(messageItem, input) {
       messageItem.parentDialogProcessId,
       input.parentDialogProcessId,
     ]),
-    tool_calls: arrayValue(messageItem.tool_calls, null),
+    ...toolCallsField(messageItem),
     tool_call_id: stringValue(messageItem.tool_call_id),
     ...(contextPolicy ? { contextPolicy } : {}),
-    attachments: filterSessionAttachments(resolveMessageAttachments(messageItem)),
+    attachments: runtimeMessageList(messageItem, "attachments"),
     modelAlias: text(messageItem.modelAlias),
     modelName: text(messageItem.modelName),
     summarized: messageItem.summarized === true,
@@ -297,10 +291,10 @@ function buildAgentMessageTurnInput(messageItem, input) {
     ...pickMessageOriginField(messageItem),
     pluginMessage: messageItem?.pluginMessage === true,
     pluginMeta: normalizedOptionalObject(messageItem.pluginMeta),
-    transferEnvelopes: arrayValue(messageItem.transferEnvelopes),
+    transferEnvelopes: runtimeMessageList(messageItem, "transferEnvelopes"),
     modelResponseMetadata: normalizedOptionalObject(messageItem.modelResponseMetadata),
-    activityTimeline: arrayValue(messageItem.activityTimeline),
-    toolTimeline: arrayValue(messageItem.toolTimeline),
+    activityTimeline: runtimeMessageList(messageItem, "activityTimeline"),
+    toolTimeline: runtimeMessageList(messageItem, "toolTimeline"),
     turnScopeId: stringValue(firstTruthyValue([messageItem.turnScopeId, input.turnScopeId])).trim(),
     ...pickSourceTimestampField(messageItem),
     eventListener: input.eventListener,
