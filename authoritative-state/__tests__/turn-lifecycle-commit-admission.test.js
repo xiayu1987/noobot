@@ -5,13 +5,64 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol/turn-lifecycle";
 import { commitTurnLifecycle } from "../src/application/commit-turn-lifecycle.js";
+
+test("unknown terminal fields are rejected before materialization or event allocation", () => {
+  const lifecycle = {
+    ...createEmptyTurnLifecycle(),
+    sequence: 1,
+    turns: { "turn-1": { turnScopeId: "turn-1", sequence: 1, dialogProcessId: "dialog-1" } },
+  };
+  const before = structuredClone(lifecycle);
+  assert.throws(
+    () =>
+      commitTurnLifecycle({
+        parentSessionId: "",
+        lifecycle,
+        event: {
+          eventType: TURN_EVENT.COMPLETED,
+          turnScopeId: "turn-1",
+          terminalStatus: { command: "completed", extra: "unexpected" },
+        },
+        materializeTerminal: () => assert.fail("materializer must not run"),
+        createEventId: () => assert.fail("event allocator must not run"),
+      }),
+    { code: "TURN_TERMINAL_FIELD_UNKNOWN", field: "extra" },
+  );
+  assert.deepEqual(lifecycle, before);
+});
+
+test("damaged lifecycle is rejected before terminal materialization or event allocation", () => {
+  const lifecycle = {
+    ...createEmptyTurnLifecycle(),
+    sequence: 1,
+    turns: { "turn-1": { turnScopeId: "turn-1", sequence: 2 } },
+  };
+  const before = structuredClone(lifecycle);
+  assert.throws(
+    () =>
+      commitTurnLifecycle({
+        parentSessionId: "",
+        lifecycle,
+        event: {
+          eventType: TURN_EVENT.COMPLETED,
+          turnScopeId: "turn-1",
+          terminalStatus: { command: "completed" },
+        },
+        materializeTerminal: () => assert.fail("materializer must not run"),
+        createEventId: () => assert.fail("event allocator must not run"),
+      }),
+    { code: "TURN_LIFECYCLE_RECORD_INVALID" },
+  );
+  assert.deepEqual(lifecycle, before);
+});
 
 test("turn lifecycle commit rejects events without causationId", () => {
   const result = commitTurnLifecycle({
     parentSessionId: "",
-    lifecycle: {},
+    lifecycle: createEmptyTurnLifecycle(),
     event: {
       eventType: TURN_EVENT.ACTION_ACCEPTED,
       startedAt: "2026-07-18T00:00:00.000Z",
@@ -33,7 +84,7 @@ test("turn lifecycle commit rejects events without causationId", () => {
 
 test("turn lifecycle commit rejects a terminal event without an explicit terminalStatus", () => {
   for (const eventType of [TURN_EVENT.COMPLETED, TURN_EVENT.STOP_COMPLETED, TURN_EVENT.FAILED]) {
-    const lifecycle = {};
+    const lifecycle = createEmptyTurnLifecycle();
     const result = commitTurnLifecycle({
       parentSessionId: "",
       lifecycle,
@@ -61,7 +112,7 @@ test("turn lifecycle commit rejects a terminal event without an explicit termina
 
 test("turn lifecycle commit rejects terminalStatus on a retryable finalize failure", () => {
   for (const phase of [TURN_PHASE.COMPLETION, TURN_PHASE.STOP]) {
-    const lifecycle = {};
+    const lifecycle = createEmptyTurnLifecycle();
     const result = commitTurnLifecycle({
       parentSessionId: "",
       lifecycle,

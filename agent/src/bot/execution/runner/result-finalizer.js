@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
-
 export async function finalizeAgentTurn({
   resolvedRunConfig,
   runtimeEventListener,
@@ -45,14 +43,13 @@ export async function finalizeAgentTurn({
   });
   const scopedPersistedTurnMessages = persistedSessionMessages.filter(
     (message) =>
-      text(message?.turnScopeId) === resolvedTurnScopeId &&
-      (!text(message?.dialogProcessId) || text(message?.dialogProcessId) === text(dialogProcessId)),
+      message.turnScopeId === resolvedTurnScopeId && message.dialogProcessId === dialogProcessId,
   );
   const persistedTurnMessages = scopedPersistedTurnMessages.filter((message) =>
-    checkpointPersistedMessageUids.has(text(message.messageUid)),
+    checkpointPersistedMessageUids.has(message.messageUid),
   );
   const durableTurnMessageUids = new Set(
-    scopedPersistedTurnMessages.map((message) => text(message?.messageUid)).filter(Boolean),
+    scopedPersistedTurnMessages.map((message) => message.messageUid),
   );
   return finalizeRunSession({
     userId,
@@ -62,7 +59,7 @@ export async function finalizeAgentTurn({
     caller,
     dialogProcessId,
     turnScopeId: resolvedTurnScopeId,
-    thinkingStartedAt: text(resolvedRunConfig?.thinkingStartedAt),
+    thinkingStartedAt: resolvedRunConfig.thinkingStartedAt,
     agentResult,
     persistedTurnMessageUids: [
       ...new Set([...checkpointPersistedMessageUids, ...durableTurnMessageUids]),
@@ -72,10 +69,8 @@ export async function finalizeAgentTurn({
     summaryCheckpointPromotionSources: dispatchRuntime.summaryCheckpointPromotionSources,
     runtimeEventListener,
     userConfig: {
-      ...(userConfig && typeof userConfig === "object" ? userConfig : {}),
-      ...(text(resolvedRunConfig?.memoryModel)
-        ? { memoryModel: String(resolvedRunConfig.memoryModel).trim() }
-        : {}),
+      ...userConfig,
+      ...(resolvedRunConfig.memoryModel ? { memoryModel: resolvedRunConfig.memoryModel } : {}),
     },
     lifecycle,
     persistenceScope,

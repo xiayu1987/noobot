@@ -7,7 +7,13 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import test from "node:test";
+import {
+  CONFIG_DOCUMENT_SCOPE,
+  repairConfigDocument,
+  upgradeConfigModelLibrary,
+} from "@noobot/agent-config-protocol";
 import { filePath as path } from "@noobot/path-resolver";
+import { MODEL_LIBRARY_VERSION, listModelLibraryOptions } from "@noobot/model-protocol";
 import {
   renderDefaultMemoryDocument,
   renderDefaultShortMemoryText,
@@ -26,8 +32,14 @@ import {
 
 const EMPTY_LONG_MEMORY_DOCUMENT = "NOOBOT_LONG_MEMORY/1\n";
 const USER_LONG_MEMORY_DOCUMENT = "NOOBOT_LONG_MEMORY/1\n\npersonal_info.occupation：工程师\n";
-const BASE_VALUES = { preferences: { language: "zh-CN" } };
-const USER_CONFIG = { preferences: { language: "en-US" } };
+const BASE_VALUES = repairConfigDocument({
+  scope: CONFIG_DOCUMENT_SCOPE.USER,
+  target: upgradeConfigModelLibrary({ preferences: { language: "zh-CN" } }).document,
+}).document;
+const USER_CONFIG = repairConfigDocument({
+  scope: CONFIG_DOCUMENT_SCOPE.USER,
+  target: upgradeConfigModelLibrary({ preferences: { language: "en-US" } }).document,
+}).document;
 
 async function createFixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), "noobot-workspace-lifecycle-"));
@@ -172,6 +184,30 @@ test("repair backs up invalid config JSON and rebuilds it through the config pro
     await fixture.restore();
   }
 });
+
+for (const invalid of ["{broken", "[]", "null"]) {
+  test(`repair restores ${invalid} then upgrades an unversioned base in the same startup`, async () => {
+    const fixture = await createFixture();
+    try {
+      const baseValues = { providers: { private: { model: "private" } } };
+      await fixture.write("config.json", invalid);
+      const { report } = await repairUserWorkspace({ ...fixture.options, baseValues });
+      const document = JSON.parse(await fixture.read("config.json"));
+      assert.equal(report.modelLibraryUpgrade.changed, true);
+      assert.equal(document.model_library_version, MODEL_LIBRARY_VERSION);
+      assert.equal(document.providers.private.is_custom, true);
+      for (const { key } of listModelLibraryOptions()) assert.ok(document.providers[key]);
+      const { stampDir } = await listBackupFiles(fixture.userPath);
+      assert.equal(await readFile(path.join(stampDir, "config.json"), "utf8"), invalid);
+      const before = await fixture.read("config.json");
+      const restarted = await repairUserWorkspace({ ...fixture.options, baseValues });
+      assert.equal(restarted.report.modelLibraryUpgrade.changed, false);
+      assert.equal(await fixture.read("config.json"), before);
+    } finally {
+      await fixture.restore();
+    }
+  });
+}
 
 test("repair backs up and repairs legacy memory documents", async () => {
   const fixture = await createFixture();

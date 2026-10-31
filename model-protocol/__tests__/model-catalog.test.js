@@ -11,9 +11,21 @@ import { resolveModelLibraryProvider } from "../src/index.js";
 const additions = {
   gpt_6_sol: "gpt-6-sol",
   gpt_6_1_sol: "gpt-6.1-sol",
+  gpt_6_1_terra: "gpt-6.1-terra",
   gpt_6_luna: "gpt-6-luna",
   claude_opus_5_5: "claude-opus-5-5",
+  claude_sonnet_5_5: "claude-sonnet-5-5",
+  claude_haiku_5_5: "claude-haiku-5-5",
+  kimi_k3_1_pro: "kimi-k3.1-pro",
+  kimi_k3_1_pro_highspeed: "kimi-k3.1-pro-highspeed",
+  minimax_m3_1_flash: "MiniMax-M3.1-Flash",
   gemini_3_8_flash: "gemini-3.8-flash",
+  gemini_4_argon: "gemini-4-argon",
+  gemini_3_6_flash: "gemini-3.6-flash",
+  gemini_3_5_flash_lite: "gemini-3.5-flash-lite",
+  gemini_3_1_flash_lite: "gemini-3.1-flash-lite",
+  qwen3_7_flash: "qwen3.7-flash",
+  qwen3_8_omni_flash: "qwen3.8-omni-flash",
   deepseek_flash: "deepseek-flash",
   grok_4_7: "grok-4.7",
   qwen3_8_max: "qwen3.8-max",
@@ -38,9 +50,10 @@ test("released catalog additions use exact API IDs and project to the global con
 
 test("retirement and generation cleanup preserves independent active product lines", () => {
   assert.equal(resolveModelLibraryProvider("gpt_5_4"), null);
+  assert.equal(resolveModelLibraryProvider("gpt_5_5"), null);
   assert.equal(resolveModelLibraryProvider("deepseek_v4_flash"), null);
   for (const alias of [
-    "gpt_5_5",
+    "gpt_5_6_sol",
     "claude_haiku_4_5",
     "gemini_3_1_pro_preview",
     "qwen3_6_flash",
@@ -48,6 +61,79 @@ test("retirement and generation cleanup preserves independent active product lin
   ]) {
     assert.ok(resolveModelLibraryProvider(alias), alias);
   }
+});
+
+test("October catalog additions preserve reasoning, transport and credential boundaries", () => {
+  const terra = resolveModelLibraryProvider("gpt_6_1_terra");
+  assert.equal(terra.use_responses_api, true);
+  assert.deepEqual(terra.reasoning_effort_options, [
+    "none",
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+    "max",
+  ]);
+  assert.deepEqual(terra.prompt_cache_fields, ["prompt_cache_key", "prompt_cache_options"]);
+  for (const alias of ["claude_sonnet_5_5", "claude_haiku_5_5", "minimax_m3_1_flash"]) {
+    assert.deepEqual(resolveModelLibraryProvider(alias).reasoning_effort_options, [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+    ]);
+  }
+  assert.equal(resolveModelLibraryProvider("claude_sonnet_5_5").reasoning_effort, "high");
+  assert.equal(resolveModelLibraryProvider("claude_haiku_5_5").reasoning_effort, "medium");
+  for (const alias of ["kimi_k3_1_pro", "kimi_k3_1_pro_highspeed"]) {
+    const provider = resolveModelLibraryProvider(alias);
+    assert.equal(provider.reasoning_effort, "max");
+    assert.deepEqual(provider.reasoning_effort_options, ["low", "high", "max"]);
+    assert.deepEqual(provider.prompt_cache_fields, ["prompt_cache_key", "prompt_cache_options"]);
+  }
+  const minimax = resolveModelLibraryProvider("minimax_m3_1_flash");
+  assert.equal(minimax.api_key, "${MINIMAX_API_KEY}");
+  assert.equal(minimax.base_url, "${MINIMAX_API_ADDRESS}");
+  assert.equal(minimax.reasoning_effort, "max");
+  assert.deepEqual(minimax.prompt_cache_fields, []);
+  assert.deepEqual(minimax.multimodal_parsing.input_modalities, ["image", "video"]);
+});
+
+test("Gemini catalog covers flagship, Flash, Pro and Flash-Lite with compatible effort controls", () => {
+  for (const alias of [
+    "gemini_4_argon",
+    "gemini_3_8_flash",
+    "gemini_3_7_flash",
+    "gemini_3_6_flash",
+    "gemini_3_1_pro_preview",
+    "gemini_3_5_flash_lite",
+    "gemini_3_1_flash_lite",
+  ]) {
+    const provider = resolveModelLibraryProvider(alias);
+    assert.equal(provider.reasoning_effort_parameter, "reasoning_effort");
+    assert.equal(provider.reasoning_effort_options.includes("none"), false);
+    assert.deepEqual(provider.multimodal_parsing.input_modalities, [
+      "image",
+      "document",
+      "audio",
+      "video",
+    ]);
+    assert.deepEqual(provider.prompt_cache_fields, []);
+  }
+  assert.deepEqual(resolveModelLibraryProvider("gemini_4_argon").reasoning_effort_options, [
+    "low",
+    "medium",
+    "high",
+  ]);
+  assert.equal(resolveModelLibraryProvider("gemini_3_5_flash_lite").reasoning_effort, "minimal");
+  assert.equal(resolveModelLibraryProvider("gemini_3_1_pro_preview").reasoning_effort, "high");
+  const omni = resolveModelLibraryProvider("qwen3_8_omni_flash");
+  assert.equal(omni.reasoning_effort_parameter, "reasoning_effort");
+  assert.equal(omni.reasoning_effort, "xhigh");
+  assert.deepEqual(omni.reasoning_effort_options, ["none", "low", "medium", "xhigh"]);
+  assert.deepEqual(omni.multimodal_parsing.input_modalities, ["image", "audio", "video"]);
+  assert.deepEqual(omni.prompt_cache_fields, []);
 });
 
 test("GPT-6 Sol and Luna use Responses for reasoning with tools and the current cache protocol", () => {

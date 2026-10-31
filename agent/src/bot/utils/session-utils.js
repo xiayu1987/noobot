@@ -9,7 +9,3 @@ export function isValidSessionId(sessionId = "") {
     String(sessionId || ""),
   );
 }
-
-export function now() {
-  return new Date().toISOString();
-}

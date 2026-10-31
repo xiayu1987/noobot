@@ -13,6 +13,7 @@ import {
   createTurnSnapshotEnvelope,
 } from "@noobot/event-protocol";
 import { text } from "@noobot/shared/value";
+import { randomUUID } from "node:crypto";
 
 export function authoritativeSnapshot(fields = {}) {
   return createTurnSnapshotEnvelope(
@@ -23,8 +24,7 @@ export function authoritativeSnapshot(fields = {}) {
       ...fields,
     }),
     {
-      eventId: fields.eventId || `${fields.commandId}:snapshot:${fields.sequence || 0}`,
-      producer: { type: "test", id: "agent-proxy-reconnect-fixture" },
+      eventId: randomUUID(),
     },
   );
 }

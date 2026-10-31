@@ -11,7 +11,12 @@ import { resolveHookClientEmitter } from "@noobot/context-protocol/assembly/hook
 import { createCapabilityRuntime } from "../capabilities/runtime.js";
 import { safeId } from "../data/record-builders.js";
 import { normalizeOptions } from "./options.js";
-import { PLUGIN_NAME, PLUGIN_VERSION, resolveHarnessRunsRelativePath } from "./constants.js";
+import {
+  HARNESS_FILES,
+  PLUGIN_NAME,
+  PLUGIN_VERSION,
+  resolveHarnessRunsRelativePath,
+} from "./constants.js";
 import { formatHarnessCoreError, HARNESS_CORE_ERROR } from "./error-messages.js";
 import { text, isFunction } from "@noobot/shared/value";
 
@@ -28,7 +33,7 @@ export function createRunPaths(ctx, options) {
     basePath,
     runId,
     runDir,
-    manifest: path.join(runDir, "harness-run.json"),
+    manifest: path.join(runDir, HARNESS_FILES.RUN_MANIFEST),
     contextSnapshot: path.join(runDir, "context-snapshot.json"),
     events: path.join(runDir, "events.jsonl"),
     prompts: path.join(runDir, "prompts.jsonl"),

@@ -105,6 +105,7 @@ test("session display summary rejects an active Turn without canonical presentat
         messages: [],
         turnLifecycle: {
           ...createEmptyTurnLifecycle(),
+          sequence: 1,
           activeTurnScopeId: "turn-active",
           turns: {
             "turn-active": {
@@ -149,6 +150,7 @@ test("session display summary does not duplicate an active Turn with persisted a
     ],
     turnLifecycle: {
       ...createEmptyTurnLifecycle(),
+      sequence: 1,
       activeTurnScopeId: "turn-active",
       turns: {
         "turn-active": {

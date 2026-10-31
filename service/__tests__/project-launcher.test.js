@@ -52,12 +52,12 @@ const minimalGlobalExample = {
     },
   },
   providers: {
-    example_openai: {
+    gpt_5_6_sol: {
       enabled: true,
       used_for_conversation: true,
       api_key: "${OPENAI_API_KEY}",
       base_url: "${OPENAI_API_ADDRESS}",
-      model: "example-openai",
+      model: "gpt-5.6-sol",
       reasoning_effort: "medium",
       tool_reasoning_effort: "medium",
       reasoning_effort_options: ["low", "medium", "high"],
@@ -137,7 +137,7 @@ test("project launcher uses NOOBOT_GLOBAL_CONFIG_PATH when resolving global conf
   const customConfig = await readJson(customConfigPath);
   assert.equal(customConfig.workspace_root, "./custom-workspace");
   assert.equal(customConfig.workspace_template_path, "./custom-template");
-  assert.ok(customConfig.providers?.example_openai);
+  assert.ok(customConfig.providers?.gpt_5_6_sol);
   assert.equal(await exists(path.join(serviceRoot, "config", "global.config.json")), false);
   assert.equal(
     await exists(path.join(serviceRoot, "custom-workspace", "config-params.json")),
@@ -287,13 +287,13 @@ test("project launcher recursively adds new global nodes without replacing confi
   example.multimodal = {
     parsing: {
       default_models: {
-        audio: "example_openai",
-        video: "example_openai",
-        image: "example_openai",
-        document: "example_openai",
+        audio: "gpt_5_6_sol",
+        video: "gpt_5_6_sol",
+        image: "gpt_5_6_sol",
+        document: "gpt_5_6_sol",
       },
     },
-    generation: { default_models: { image: "example_openai" } },
+    generation: { default_models: { image: "gpt_5_6_sol" } },
   };
   await writeJson(examplePath, example);
   await writeJson(path.join(serviceRoot, "config", "global.config.json"), {
@@ -349,8 +349,8 @@ test("project launcher recursively adds new global nodes without replacing confi
   assert.equal(config.session, undefined);
   assert.equal(Object.hasOwn(config.tools, "set_skill_task"), false);
   assert.deepEqual(config.tools.execute_script, { enabled: true });
-  assert.equal(config.multimodal.parsing.default_models.document, "example_openai");
-  assert.equal(config.multimodal.generation.default_models.image, "example_openai");
+  assert.equal(config.multimodal.parsing.default_models.document, "gpt_5_6_sol");
+  assert.equal(config.multimodal.generation.default_models.image, "gpt_5_6_sol");
 });
 
 test("project launcher preserves malformed global JSON before restoring the template", async (t) => {
@@ -368,7 +368,7 @@ test("project launcher preserves malformed global JSON before restoring the temp
 
   const restored = await readJson(globalConfigPath);
   assert.equal(restored.workspace_root, "./workspace");
-  assert.equal(restored.providers.example_openai.model, "example-openai");
+  assert.equal(restored.providers.gpt_5_6_sol.model, "gpt-5.6-sol");
   const backupName = (await readdir(path.dirname(globalConfigPath))).find((name) =>
     name.startsWith("global.config.json.invalid-"),
   );

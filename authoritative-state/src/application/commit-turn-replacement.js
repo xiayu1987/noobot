@@ -26,7 +26,7 @@ function sameReplacement(left = {}, right = {}) {
   );
 }
 
-export function commitTurnReplacement({ lifecycle = {}, replacement = {} } = {}) {
+export function commitTurnReplacement({ lifecycle, replacement = {} } = {}) {
   try {
     assertTurnReplacementCommit(replacement);
   } catch (error) {

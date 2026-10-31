@@ -8,7 +8,7 @@ import { attachModelContextRuntime } from "./model-runtime.js";
 import { MESSAGE_BLOCK_LANES, MODEL_CONTEXT_PROTOCOL_VERSION } from "../agent-context/schema.js";
 import { HOOK_PROTOCOL_VERSION } from "@noobot/hook-protocol";
 import { normalizeUserMetaBackwrites } from "../policy/user-meta-backwrite.js";
-import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function asObject(value) {
   return isPlainObject(value) ? value : null;
@@ -73,8 +73,17 @@ export function createModelContext({
   return modelContext;
 }
 
-export function attachModelContext(context = {}, modelContext = null) {
-  if (!isObjectLike(context)) return context;
+export function attachModelContext(context, modelContext) {
+  if (!isPlainObject(context)) {
+    throw new TypeError("hook context must be a plain object");
+  }
+  if (
+    modelContext !== null &&
+    (!isPlainObject(modelContext) ||
+      modelContext.protocolVersion !== MODEL_CONTEXT_PROTOCOL_VERSION)
+  ) {
+    throw new TypeError("hook modelContext must be null or use the current protocol version");
+  }
   context.contextProtocolVersion = HOOK_PROTOCOL_VERSION;
   context.modelContext = modelContext;
   return context;

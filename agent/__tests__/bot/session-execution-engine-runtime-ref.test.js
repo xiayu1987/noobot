@@ -115,7 +115,7 @@ test("detached sub-session runner inherits userInteractionBridge from parent run
   engine.runner = {
     async runSession(payload = {}) {
       capturedRunSessionPayload = payload;
-      return { output: "done", dialogProcessId: payload.dialogProcessId };
+      return { answer: "done", messages: [], traces: [], dialogProcessId: payload.dialogProcessId };
     },
   };
   engine._prepareRunConfig = ({ runConfig = {} } = {}) => runConfig;

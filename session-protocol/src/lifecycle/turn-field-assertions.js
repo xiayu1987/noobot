@@ -18,8 +18,7 @@ export function collectTurnScopeIdErrors(
 }
 
 export function collectPositiveIntegerErrors(value, code, { minimum = 1 } = {}) {
-  const numeric = Number(value);
-  if (!Number.isInteger(numeric) || numeric < minimum) return [code];
+  if (!Number.isInteger(value) || value < minimum) return [code];
   return [];
 }
 

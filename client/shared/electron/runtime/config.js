@@ -13,6 +13,7 @@ import {
   ensureModelProviderInConfigFile,
   normalizeConfigParamsDocument,
   repairConfigDocument,
+  upgradeConfigModelLibrary,
   summarizeConfigRepairReport,
   synchronizeConfigParamsDocument,
 } from "@noobot/agent-config-protocol";
@@ -266,7 +267,7 @@ export function createDesktopConfigManager({
       const repair = repairConfigDocument({
         scope: CONFIG_DOCUMENT_SCOPE.USER,
         baseValues,
-        target: payload,
+        target: upgradeConfigModelLibrary(payload).document,
       });
       const synchronized = repair.document;
       if (!fs.existsSync(filePath) || JSON.stringify(payload) !== JSON.stringify(synchronized)) {
@@ -298,7 +299,8 @@ export function createDesktopConfigManager({
     const globalRepair = repairConfigDocument({
       scope: CONFIG_DOCUMENT_SCOPE.GLOBAL,
       baseValues: exampleConfig,
-      target: currentConfig,
+      target: upgradeConfigModelLibrary(isFirstGlobalConfig ? exampleConfig : currentConfig)
+        .document,
     });
     const mergedConfig = globalRepair.document;
     mergedConfig.workspace_root = workspaceRootPath;

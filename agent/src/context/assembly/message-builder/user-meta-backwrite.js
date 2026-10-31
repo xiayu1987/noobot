@@ -22,7 +22,7 @@ function setBackwrites(modelContext, records) {
   modelContext.userMetaBackwrites = normalizeUserMetaBackwrites(records);
 }
 
-export function queueUserMetaBackwrite(runtime, { attachmentRef, result, createdAt = "" }) {
+export function queueUserMetaBackwrite(runtime, { attachmentRef, result, createdAt }) {
   const sourceMessage = runtime.currentUserMessage;
   if (!sourceMessage || !isNaturalDialogUserMessage(sourceMessage)) {
     throw new Error("user_meta backwrite requires the current natural user message");
@@ -31,7 +31,7 @@ export function queueUserMetaBackwrite(runtime, { attachmentRef, result, created
     userMetaSourceMessageUid: sourceMessage.messageUid,
     attachmentRef,
     result,
-    createdAt: createdAt || new Date().toISOString(),
+    createdAt,
   });
   const modelContext = requireActiveModelContext(runtime);
   const current = modelContext.userMetaBackwrites;

@@ -22,9 +22,7 @@ function assertSummarySnapshotIndex(snapshot, path) {
   if (!Number.isSafeInteger(snapshot.checkpointRevision) || snapshot.checkpointRevision < 1) {
     throw layoutError(`${path}.checkpointRevision must be a positive integer`);
   }
-  if (!Array.isArray(snapshot.messageUids) || !snapshot.messageUids.every(isCanonicalText)) {
-    throw layoutError(`${path}.messageUids must be a messageUid array`);
-  }
+  if (Object.hasOwn(snapshot, "messageUids")) throw layoutError(`${path}.messageUids is retired`);
 }
 
 const MESSAGE_HASH_PATTERN = /^sha256:[0-9a-f]{64}$/;

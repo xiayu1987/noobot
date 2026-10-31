@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import {
   buildAuthoritativeExecutionReadModel,
   createAuthoritativeTurnSnapshot,
@@ -35,11 +36,12 @@ const turn = (overrides = {}) => ({
 test("authority builds active and terminal snapshot from one lifecycle rule", () => {
   const snapshot = createAuthoritativeTurnSnapshot({
     lifecycle: {
+      ...createEmptyTurnLifecycle(),
       activeTurnScopeId: "turn-1",
       sequence: 3,
       turns: {
-        active: turn(),
-        terminal: turn({
+        "turn-1": turn(),
+        "turn-0": turn({
           turnScopeId: "turn-0",
           executionId: "agent:turn-0",
           rootExecutionId: "agent:turn-0",
@@ -77,7 +79,12 @@ test("authority builds active and terminal snapshot from one lifecycle rule", ()
 
 test("authority snapshot carries the read-side recovery annotation verbatim", () => {
   const snapshot = createAuthoritativeTurnSnapshot({
-    lifecycle: { activeTurnScopeId: "turn-1", sequence: 2, turns: { active: turn() } },
+    lifecycle: {
+      ...createEmptyTurnLifecycle(),
+      activeTurnScopeId: "turn-1",
+      sequence: 2,
+      turns: { "turn-1": turn() },
+    },
     commandId: "snapshot-recovery",
     sessionId: "s1",
     terminalTurnScopeIds: [],
@@ -93,10 +100,11 @@ test("authority snapshot carries the read-side recovery annotation verbatim", ()
 test("authority snapshots only terminal Turns represented by canonical messages", () => {
   const snapshot = createAuthoritativeTurnSnapshot({
     lifecycle: {
+      ...createEmptyTurnLifecycle(),
       sequence: 3,
       turns: {
-        retained: turn({ turnScopeId: "turn-retained", state: "completed", sequence: 2 }),
-        deleted: turn({ turnScopeId: "turn-deleted", state: "stop_completed", sequence: 3 }),
+        "turn-retained": turn({ turnScopeId: "turn-retained", state: "completed", sequence: 2 }),
+        "turn-deleted": turn({ turnScopeId: "turn-deleted", state: "stop_completed", sequence: 3 }),
       },
     },
     terminalTurnScopeIds: ["turn-retained"],
@@ -115,7 +123,7 @@ test("authority snapshots only terminal Turns represented by canonical messages"
 });
 
 test("authority owns terminal readiness decisions", () => {
-  const lifecycle = { turns: { active: turn() } };
+  const lifecycle = { ...createEmptyTurnLifecycle(), sequence: 2, turns: { "turn-1": turn() } };
   assert.throws(
     () => resolveAuthoritativeTurnTerminal({ lifecycle, sessionId: "s1", turnScopeId: "turn-1" }),
     /requires commandId/,
@@ -139,7 +147,7 @@ test("authority owns terminal readiness decisions", () => {
     "turn_not_terminal",
   );
 
-  lifecycle.turns.active = turn({
+  lifecycle.turns["turn-1"] = turn({
     state: "completed",
     phase: "completion",
     terminalStatus: { turnScopeId: "turn-1", status: "completed", reason: "run_completed" },
@@ -158,11 +166,16 @@ test("authority owns terminal readiness decisions", () => {
 
 test("authority execution read model excludes conflicting ownership and builds trees", () => {
   const readModel = buildAuthoritativeExecutionReadModel([
-    { sessionId: "root", turnLifecycle: { turns: { root: turn() } } },
+    {
+      sessionId: "root",
+      turnLifecycle: { ...createEmptyTurnLifecycle(), sequence: 2, turns: { "turn-1": turn() } },
+    },
     {
       sessionId: "child",
       parentSessionId: "root",
       turnLifecycle: {
+        ...createEmptyTurnLifecycle(),
+        sequence: 2,
         turns: {
           child: turn({
             turnScopeId: "child",
@@ -175,11 +188,19 @@ test("authority execution read model excludes conflicting ownership and builds t
     },
     {
       sessionId: "left",
-      turnLifecycle: { turns: { left: turn({ executionId: "agent:conflict" }) } },
+      turnLifecycle: {
+        ...createEmptyTurnLifecycle(),
+        sequence: 2,
+        turns: { "turn-1": turn({ executionId: "agent:conflict" }) },
+      },
     },
     {
       sessionId: "right",
-      turnLifecycle: { turns: { right: turn({ executionId: "agent:conflict" }) } },
+      turnLifecycle: {
+        ...createEmptyTurnLifecycle(),
+        sequence: 2,
+        turns: { "turn-1": turn({ executionId: "agent:conflict" }) },
+      },
     },
   ]);
   assert.equal(

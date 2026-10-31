@@ -99,7 +99,7 @@ test("summary checkpoint persists unmodified messages before atomically marking 
     ["sm_3"],
   );
   assert.deepEqual(runtime.summaryCheckpointPromotionSources, [
-    { role: "tool", type: "", attachments: [{ id: "a1" }] },
+    { role: "tool", attachments: [{ id: "a1" }] },
   ]);
 });
 

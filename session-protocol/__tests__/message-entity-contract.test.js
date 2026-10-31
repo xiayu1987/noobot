@@ -12,9 +12,22 @@ import {
   collectSessionMessageEntityErrors,
   isDialogAnchorMessageRecord,
   isInternalDialogUserMessage,
+  readSessionMessageDraftAttachments,
 } from "../src/index.js";
 
 const base = { content: "hi", attachments: [], ts: "2026-01-01T00:00:00.000Z" };
+
+test("draft attachments may be absent but invalid supplied values are rejected", () => {
+  assert.deepEqual(readSessionMessageDraftAttachments({}), []);
+  const attachments = [{ id: "a1" }];
+  assert.equal(readSessionMessageDraftAttachments({ attachments }), attachments);
+  for (const attachments of [null, {}, "", false]) {
+    assert.throws(() => readSessionMessageDraftAttachments({ attachments }), TypeError);
+  }
+  assert.throws(() => assertSessionMessageEntity({ ...base, attachments: undefined }), {
+    code: SESSION_MESSAGE_ENTITY_INVALID,
+  });
+});
 
 test("dialog user messages require a canonical messageOrigin", () => {
   assert.deepEqual(

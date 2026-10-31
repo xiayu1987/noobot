@@ -35,21 +35,26 @@ function stripCodeFence(sourceText = "") {
   return trimmed.slice(contentStart, -3).trim();
 }
 
+// End of one token starting at cursor: a quoted run up to its closing quote, else a non-space run.
+function scanTokenEnd(source, cursor) {
+  const quote = source[cursor] === '"' || source[cursor] === "'" ? source[cursor] : "";
+  if (!quote) {
+    while (cursor < source.length && !/\s/.test(source[cursor])) cursor += 1;
+    return cursor;
+  }
+  const closing = source.indexOf(quote, cursor + 1);
+  return closing < 0 ? source.length : closing + 1;
+}
+
 function tokenize(line = "") {
   const source = String(line || "");
   const tokens = [];
   let cursor = 0;
   while (cursor < source.length) {
-    while (cursor < source.length && /\s/.test(source[cursor])) cursor += 1;
+    cursor = skipWhitespace(source, cursor);
     if (cursor >= source.length) break;
     const start = cursor;
-    const quote = source[cursor] === '"' || source[cursor] === "'" ? source[cursor++] : "";
-    if (quote) {
-      while (cursor < source.length && source[cursor] !== quote) cursor += 1;
-      if (cursor < source.length) cursor += 1;
-    } else {
-      while (cursor < source.length && !/\s/.test(source[cursor])) cursor += 1;
-    }
+    cursor = scanTokenEnd(source, cursor);
     tokens.push(source.slice(start, cursor));
   }
   return tokens;
@@ -79,19 +84,11 @@ function skipWhitespace(source, cursor) {
 }
 
 function readAttributeValue(source, cursor) {
-  const start = cursor;
-  const quote = source[cursor] === '"' || source[cursor] === "'" ? source[cursor++] : "";
-  if (quote) {
-    while (cursor < source.length && source[cursor] !== quote) cursor += 1;
-    if (cursor < source.length) cursor += 1;
-  } else {
-    while (cursor < source.length && !/\s/.test(source[cursor])) cursor += 1;
-  }
-  return { cursor, value: unquote(source.slice(start, cursor)) };
+  const end = scanTokenEnd(source, cursor);
+  return { cursor: end, value: unquote(source.slice(cursor, end)) };
 }
 
-function parseAttrs(input = "") {
-  const source = Array.isArray(input) ? String(input.join(" ") || "") : String(input || "");
+function parseAttrs(source) {
   const attrs = {};
   let cursor = 0;
   while (cursor < source.length) {
@@ -122,11 +119,42 @@ function parseNodeAttachmentRefs(value = "") {
     .filter(Boolean);
 }
 
-export function parseWorkflowDslText(inputText = "", options = {}) {
-  return parseWorkflowDslTextWithOptions(inputText, options);
+function parseNodeLine(attrs, { lineNo, nodeSet, fail }) {
+  const id = text(attrs.id);
+  const type = text(attrs.type);
+  const name = text(attrs.name);
+  if (!id) fail(lineNo, DSL_ERROR_MESSAGE.NODE_ID_REQUIRED);
+  if (!name) fail(lineNo, DSL_ERROR_MESSAGE.NODE_NAME_REQUIRED, { id });
+  if (nodeSet.has(id)) fail(lineNo, DSL_ERROR_MESSAGE.NODE_ID_DUPLICATE, { id });
+  if (!isWorkflowNodeType(type)) fail(lineNo, DSL_ERROR_MESSAGE.NODE_TYPE_INVALID, { type });
+  const isState = type === WORKFLOW_NODE_TYPE.STATE;
+  const stateType = text(attrs.stateType);
+  if (isState ? !isWorkflowStateType(stateType) : stateType)
+    fail(lineNo, DSL_ERROR_MESSAGE.STATE_TYPE_INVALID, { id, stateType });
+  nodeSet.add(id);
+  const task = text(attrs.task);
+  const attachments = parseNodeAttachmentRefs(attrs.attachments);
+  return {
+    id,
+    name,
+    type,
+    ...(isState ? { stateType } : {}),
+    ...(task ? { task } : {}),
+    ...(attachments.length ? { attachments } : {}),
+  };
 }
 
-function parseWorkflowDslTextWithOptions(inputText = "", options = {}) {
+function parseEdgeLine(attrs, { lineNo, edgeIndex, fail }) {
+  const from = text(attrs.from);
+  const to = text(attrs.to);
+  if (!from || !to) fail(lineNo, DSL_ERROR_MESSAGE.EDGE_FROM_TO_REQUIRED);
+  // Conditional edges are not part of the protocol; reject them explicitly instead of ignoring.
+  if (text(attrs.when || attrs.condition))
+    fail(lineNo, DSL_ERROR_MESSAGE.EDGE_CONDITION_UNSUPPORTED);
+  return { from, to, name: text(attrs.name) || `${from}->${to}#${edgeIndex}` };
+}
+
+export function parseWorkflowDslText(inputText = "", options = {}) {
   const locale = normalizeDslLocale(options?.locale || "en-US");
   const normalized = stripCodeFence(inputText);
   if (!normalized) {
@@ -148,97 +176,28 @@ function parseWorkflowDslTextWithOptions(inputText = "", options = {}) {
   let edgeIndex = 0;
   let headerSeen = false;
 
-  function failWithLocale(lineNo = 0, message = "") {
-    throw new Error(dslLineError(lineNo, message, { locale }));
+  function fail(lineNo, code, params) {
+    throw new Error(dslLineError(lineNo, dslMessage(code, { locale, params }), { locale }));
   }
 
-  for (const item of lines) {
-    const { lineNo, text: line } = item;
+  for (const { lineNo, text: line } of lines) {
     const tokens = tokenize(line);
     if (!tokens.length) continue;
     const head = text(tokens[0]).toUpperCase();
-
     if (head === DSL_PROTOCOL.HEADER) {
       headerSeen = true;
       continue;
     }
     if (head === DSL_PROTOCOL.CMD_END) break;
-
+    const attrs = parseAttrs(line.slice(tokens[0].length).trim());
     if (head === DSL_PROTOCOL.CMD_NODE) {
-      const attrs = parseAttrs(line.slice(tokens[0].length).trim());
-      const id = text(attrs.id);
-      const type = text(attrs.type);
-      const name = text(attrs.name);
-      if (!id) failWithLocale(lineNo, dslMessage(DSL_ERROR_MESSAGE.NODE_ID_REQUIRED, { locale }));
-      if (!name) {
-        failWithLocale(
-          lineNo,
-          dslMessage(DSL_ERROR_MESSAGE.NODE_NAME_REQUIRED, { locale, params: { id } }),
-        );
-      }
-      if (nodeSet.has(id)) {
-        failWithLocale(
-          lineNo,
-          dslMessage(DSL_ERROR_MESSAGE.NODE_ID_DUPLICATE, { locale, params: { id } }),
-        );
-      }
-      if (!isWorkflowNodeType(type)) {
-        failWithLocale(
-          lineNo,
-          dslMessage(DSL_ERROR_MESSAGE.NODE_TYPE_INVALID, { locale, params: { type } }),
-        );
-      }
-      const isState = type === WORKFLOW_NODE_TYPE.STATE;
-      const stateType = text(attrs.stateType);
-      if (isState ? !isWorkflowStateType(stateType) : stateType) {
-        failWithLocale(
-          lineNo,
-          dslMessage(DSL_ERROR_MESSAGE.STATE_TYPE_INVALID, {
-            locale,
-            params: { id, stateType },
-          }),
-        );
-      }
-      nodeSet.add(id);
-      const task = text(attrs.task);
-      const attachments = parseNodeAttachmentRefs(attrs.attachments || "");
-      semantic.nodes.push({
-        id,
-        name,
-        type,
-        ...(isState ? { stateType } : {}),
-        ...(task ? { task } : {}),
-        ...(attachments.length ? { attachments } : {}),
-      });
-      continue;
-    }
-
-    if (head === DSL_PROTOCOL.CMD_EDGE) {
-      const attrs = parseAttrs(line.slice(tokens[0].length).trim());
-      const from = text(attrs.from);
-      const to = text(attrs.to);
-      if (!from || !to) {
-        failWithLocale(lineNo, dslMessage(DSL_ERROR_MESSAGE.EDGE_FROM_TO_REQUIRED, { locale }));
-      }
-      if (text(attrs.when || attrs.condition)) {
-        failWithLocale(
-          lineNo,
-          dslMessage(DSL_ERROR_MESSAGE.EDGE_CONDITION_UNSUPPORTED, { locale }),
-        );
-      }
+      semantic.nodes.push(parseNodeLine(attrs, { lineNo, nodeSet, fail }));
+    } else if (head === DSL_PROTOCOL.CMD_EDGE) {
       edgeIndex += 1;
-      semantic.flowtos.push({
-        from,
-        to,
-        name: text(attrs.name) || `${from}->${to}#${edgeIndex}`,
-      });
-      continue;
+      semantic.flowtos.push(parseEdgeLine(attrs, { lineNo, edgeIndex, fail }));
+    } else {
+      fail(lineNo, DSL_ERROR_MESSAGE.UNKNOWN_COMMAND, { command: head });
     }
-
-    failWithLocale(
-      lineNo,
-      dslMessage(DSL_ERROR_MESSAGE.UNKNOWN_COMMAND, { locale, params: { command: head } }),
-    );
   }
 
   if (!headerSeen) {

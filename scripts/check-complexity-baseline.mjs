@@ -15,11 +15,12 @@ import { getFirstPartyProductionFiles } from "./quality/source-inventory.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const COMPLEXITY_LIMIT = 20;
-const LINT_RULES = Object.freeze({
+const NESTING_LIMIT = 2;
+export const LINT_RULES = Object.freeze({
   complexity: ["error", COMPLEXITY_LIMIT],
   "max-lines-per-function": ["error", { max: 150, skipBlankLines: true, skipComments: true }],
   "no-nested-ternary": "error",
-  "max-depth": ["error", 4],
+  "max-depth": ["error", NESTING_LIMIT],
   "max-params": ["error", 4],
 });
 const COUNTED_RULES = Object.freeze({
@@ -90,7 +91,7 @@ export const CHECK = defineCheck({
       hint: "replace nested ternaries with a lookup table or early returns",
     },
     deepNestingCount: {
-      description: "blocks nested deeper than 4 levels",
+      description: `blocks nested deeper than ${NESTING_LIMIT} levels`,
       hint: "flatten with early returns or extracted helpers",
     },
     longParameterListCount: {
@@ -100,11 +101,11 @@ export const CHECK = defineCheck({
   },
   exemptions: [],
   baseline: {
-    complexityCount: 158,
+    complexityCount: 151,
     longFunctionCount: 57,
     maxComplexity: 48,
     nestedTernaryCount: 76,
-    deepNestingCount: 20,
+    deepNestingCount: 514,
     longParameterListCount: 45,
     exemptions: 0,
   },

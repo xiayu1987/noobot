@@ -17,6 +17,7 @@ import {
 import { initializeSessionTree, persistSession } from "../../helpers/runtime-events-env.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import {
+  assignContextMessageIdentity,
   readContextMessageValue,
   writeContextMessageMetadata,
 } from "@noobot/context-protocol/message/codec";
@@ -61,28 +62,36 @@ function snapshotFileOf(workspaceRoot) {
 
 test("stopped model message snapshot keeps message tool calls and tool results", async () => {
   const workspaceRoot = await createWorkspace();
-  const toolCallingAi = new AIMessage({
-    content: "",
-    additional_kwargs: {
-      tool_calls: [{ id: "call-1", type: "function", function: { name: "x", arguments: "{}" } }],
-    },
-  });
-  const toolResult = new ToolMessage({ content: "tool output", tool_call_id: "call-1" });
+  const toolCallingAi = assignContextMessageIdentity(
+    new AIMessage({
+      content: "",
+      additional_kwargs: {
+        tool_calls: [{ id: "call-1", type: "function", function: { name: "x", arguments: "{}" } }],
+      },
+    }),
+  );
+  const toolResult = assignContextMessageIdentity(
+    new ToolMessage({ content: "tool output", tool_call_id: "call-1" }),
+  );
 
   await saveStoppedModelMessageSnapshot({
     globalConfig: { workspaceRoot },
     identity,
     messageBlocks: {
-      system: [new SystemMessage("system prompt")],
-      history: [new HumanMessage("old user"), toolCallingAi, toolResult],
-      incremental: [new HumanMessage("current user")],
+      system: [assignContextMessageIdentity(new SystemMessage("system prompt"))],
+      history: [
+        assignContextMessageIdentity(new HumanMessage("old user")),
+        toolCallingAi,
+        toolResult,
+      ],
+      incremental: [assignContextMessageIdentity(new HumanMessage("current user"))],
     },
     messages: [
-      new SystemMessage("system prompt"),
-      new HumanMessage("old user"),
+      assignContextMessageIdentity(new SystemMessage("system prompt")),
+      assignContextMessageIdentity(new HumanMessage("old user")),
       toolCallingAi,
       toolResult,
-      new HumanMessage("current user"),
+      assignContextMessageIdentity(new HumanMessage("current user")),
     ],
   });
 
@@ -144,34 +153,42 @@ test("stopped model message snapshot keeps message tool calls and tool results",
 
 test("stopped snapshot round trip preserves Anthropic thinking blocks and OpenAI Responses reasoning output", async () => {
   const workspaceRoot = await createWorkspace();
-  const anthropicAi = new AIMessage({
-    content: [
-      { type: "thinking", thinking: "inspect", signature: "sig_1" },
-      { type: "tool_use", id: "tool_1", name: "read_file", input: {} },
-    ],
-    tool_calls: [{ id: "tool_1", name: "read_file", args: {}, type: "tool_call" }],
-  });
-  const anthropicResult = new ToolMessage({ content: "ok", tool_call_id: "tool_1" });
-  const openAiAi = new AIMessage({
-    content: [{ type: "reasoning", reasoning: "summary" }],
-    tool_calls: [{ id: "call_1", name: "read_file", args: {}, type: "tool_call" }],
-    additional_kwargs: {
-      reasoning: { id: "rs_1", type: "reasoning", encrypted_content: "encrypted", summary: [] },
-    },
-    response_metadata: {
-      output: [
-        { id: "rs_1", type: "reasoning", encrypted_content: "encrypted", summary: [] },
-        {
-          id: "fc_1",
-          type: "function_call",
-          call_id: "call_1",
-          name: "read_file",
-          arguments: "{}",
-        },
+  const anthropicAi = assignContextMessageIdentity(
+    new AIMessage({
+      content: [
+        { type: "thinking", thinking: "inspect", signature: "sig_1" },
+        { type: "tool_use", id: "tool_1", name: "read_file", input: {} },
       ],
-    },
-  });
-  const openAiResult = new ToolMessage({ content: "ok", tool_call_id: "call_1" });
+      tool_calls: [{ id: "tool_1", name: "read_file", args: {}, type: "tool_call" }],
+    }),
+  );
+  const anthropicResult = assignContextMessageIdentity(
+    new ToolMessage({ content: "ok", tool_call_id: "tool_1" }),
+  );
+  const openAiAi = assignContextMessageIdentity(
+    new AIMessage({
+      content: [{ type: "reasoning", reasoning: "summary" }],
+      tool_calls: [{ id: "call_1", name: "read_file", args: {}, type: "tool_call" }],
+      additional_kwargs: {
+        reasoning: { id: "rs_1", type: "reasoning", encrypted_content: "encrypted", summary: [] },
+      },
+      response_metadata: {
+        output: [
+          { id: "rs_1", type: "reasoning", encrypted_content: "encrypted", summary: [] },
+          {
+            id: "fc_1",
+            type: "function_call",
+            call_id: "call_1",
+            name: "read_file",
+            arguments: "{}",
+          },
+        ],
+      },
+    }),
+  );
+  const openAiResult = assignContextMessageIdentity(
+    new ToolMessage({ content: "ok", tool_call_id: "call_1" }),
+  );
   await saveStoppedModelMessageSnapshot({
     globalConfig: { workspaceRoot },
     identity,
@@ -221,7 +238,7 @@ test("stopped model message snapshot preserves additional_kwargs facts and rejec
     { attachmentId: "att-1" },
   ]);
 
-  const offProtocol = new HumanMessage("off protocol");
+  const offProtocol = assignContextMessageIdentity(new HumanMessage("off protocol"));
   offProtocol.noobotBusinessMeta = { kept: true };
   await assert.rejects(
     () =>
@@ -244,10 +261,12 @@ test("stopped snapshot round trip preserves injected messages by block, order, s
     dialogProcessId,
     turnScopeId,
   }) => {
-    const message = new MessageClass({
-      content,
-      additional_kwargs: { marker: `${content}-marker` },
-    });
+    const message = assignContextMessageIdentity(
+      new MessageClass({
+        content,
+        additional_kwargs: { marker: `${content}-marker` },
+      }),
+    );
     return writeContextMessageMetadata(message, {
       injectedMessage: true,
       injectedBy,
@@ -285,9 +304,12 @@ test("stopped snapshot round trip preserves injected messages by block, order, s
     globalConfig: { workspaceRoot },
     identity,
     messageBlocks: {
-      system: [new SystemMessage("base system"), systemInjection],
-      history: [new HumanMessage("history user"), historyInjection],
-      incremental: [incrementalInjection, new AIMessage("after injection")],
+      system: [assignContextMessageIdentity(new SystemMessage("base system")), systemInjection],
+      history: [assignContextMessageIdentity(new HumanMessage("history user")), historyInjection],
+      incremental: [
+        incrementalInjection,
+        assignContextMessageIdentity(new AIMessage("after injection")),
+      ],
     },
   });
 
@@ -380,13 +402,22 @@ test("stopped model message snapshot validates identity on load", async () => {
   await saveStoppedModelMessageSnapshot({
     globalConfig: { workspaceRoot },
     identity,
-    messageBlocks: { system: [new SystemMessage("system")], history: [], incremental: [] },
-    messages: [new SystemMessage("system")],
+    messageBlocks: {
+      system: [assignContextMessageIdentity(new SystemMessage("system"))],
+      history: [],
+      incremental: [],
+    },
+    messages: [assignContextMessageIdentity(new SystemMessage("system"))],
   });
 
   const snapshotFile = snapshotFileOf(workspaceRoot);
   const raw = JSON.parse(await fs.readFile(snapshotFile, "utf8"));
   raw.sessionId = "different-session";
+  raw.messages = [
+    ...raw.messageBlocks.system,
+    ...raw.messageBlocks.history,
+    ...raw.messageBlocks.incremental,
+  ];
   await fs.writeFile(snapshotFile, JSON.stringify(raw, null, 2), "utf8");
 
   await assert.rejects(
@@ -409,7 +440,11 @@ test("stopped model message snapshot does not recreate a deleted parent session 
   const saved = await saveStoppedModelMessageSnapshot({
     globalConfig: { workspaceRoot },
     identity,
-    messageBlocks: { system: [new SystemMessage("late")], history: [], incremental: [] },
+    messageBlocks: {
+      system: [assignContextMessageIdentity(new SystemMessage("late"))],
+      history: [],
+      incremental: [],
+    },
   });
 
   assert.deepEqual(saved, { saved: false, reason: "session_deleted" });
@@ -430,7 +465,11 @@ test("stopped model message snapshot skips a session that is not registered in t
   const saved = await saveStoppedModelMessageSnapshot({
     globalConfig: { workspaceRoot },
     identity,
-    messageBlocks: { system: [new SystemMessage("draft")], history: [], incremental: [] },
+    messageBlocks: {
+      system: [assignContextMessageIdentity(new SystemMessage("draft"))],
+      history: [],
+      incremental: [],
+    },
   });
 
   assert.deepEqual(saved, { saved: false, reason: "session_missing" });
@@ -443,41 +482,55 @@ test("stopped model message snapshot skips a session that is not registered in t
 
 test("stopped model message snapshot preserves existing harness policy messages", async () => {
   const workspaceRoot = await createWorkspace();
-  const protocolPatch = new HumanMessage({
-    content: "ID: dialog-a\nPATCH: keep allowed protocol content",
-    additional_kwargs: { dialogProcessId: "dialog-a", turnScopeId: "turn-a" },
-  });
-  const userMeta = new HumanMessage({
-    content: '[用户元信息]\n{"dialogProcessId":"dialog-a","turnScopeId":"turn-a"}\n[/用户元信息]',
-    additional_kwargs: {
-      noobotInternalMessageType: "user_meta",
-      dialogProcessId: "dialog-a",
-      turnScopeId: "turn-a",
-    },
-  });
-  const harnessPolicy = new SystemMessage(
-    "[HARNESS_POLICY_SELECTION]\nscenario = programming\n[/HARNESS_POLICY_SELECTION]",
+  const protocolPatch = assignContextMessageIdentity(
+    new HumanMessage({
+      content: "ID: dialog-a\nPATCH: keep allowed protocol content",
+      additional_kwargs: { dialogProcessId: "dialog-a", turnScopeId: "turn-a" },
+    }),
   );
-  const harnessScenario = new SystemMessage(
-    "[HARNESS_SCENARIO_POLICY]\nshould not enter resume init\n[/HARNESS_SCENARIO_POLICY]",
+  const userMeta = assignContextMessageIdentity(
+    new HumanMessage({
+      content: '[用户元信息]\n{"dialogProcessId":"dialog-a","turnScopeId":"turn-a"}\n[/用户元信息]',
+      additional_kwargs: {
+        noobotInternalMessageType: "user_meta",
+        dialogProcessId: "dialog-a",
+        turnScopeId: "turn-a",
+      },
+    }),
   );
-  const harnessDynamic = new HumanMessage(
-    "[HARNESS_DYNAMIC_POLICY_PROMPT]\nexternal policy\n[/HARNESS_DYNAMIC_POLICY_PROMPT]",
+  const harnessPolicy = assignContextMessageIdentity(
+    new SystemMessage(
+      "[HARNESS_POLICY_SELECTION]\nscenario = programming\n[/HARNESS_POLICY_SELECTION]",
+    ),
+  );
+  const harnessScenario = assignContextMessageIdentity(
+    new SystemMessage(
+      "[HARNESS_SCENARIO_POLICY]\nshould not enter resume init\n[/HARNESS_SCENARIO_POLICY]",
+    ),
+  );
+  const harnessDynamic = assignContextMessageIdentity(
+    new HumanMessage(
+      "[HARNESS_DYNAMIC_POLICY_PROMPT]\nexternal policy\n[/HARNESS_DYNAMIC_POLICY_PROMPT]",
+    ),
   );
 
   await saveStoppedModelMessageSnapshot({
     globalConfig: { workspaceRoot },
     identity,
     messageBlocks: {
-      system: [new SystemMessage("snapshot-system"), harnessPolicy, harnessScenario],
-      history: [new AIMessage("snapshot-history")],
+      system: [
+        assignContextMessageIdentity(new SystemMessage("snapshot-system")),
+        harnessPolicy,
+        harnessScenario,
+      ],
+      history: [assignContextMessageIdentity(new AIMessage("snapshot-history"))],
       incremental: [protocolPatch, userMeta, harnessDynamic],
     },
     messages: [
-      new SystemMessage("snapshot-system"),
+      assignContextMessageIdentity(new SystemMessage("snapshot-system")),
       harnessPolicy,
       harnessScenario,
-      new AIMessage("snapshot-history"),
+      assignContextMessageIdentity(new AIMessage("snapshot-history")),
       protocolPatch,
       userMeta,
       harnessDynamic,
@@ -535,29 +588,37 @@ test("stopped model message snapshot preserves protocol content on load", async 
     globalConfig: { workspaceRoot },
     identity,
     messageBlocks: {
-      system: [new SystemMessage("system")],
+      system: [assignContextMessageIdentity(new SystemMessage("system"))],
       history: [],
-      incremental: [new HumanMessage("ID: keep\nPATCH: keep")],
+      incremental: [assignContextMessageIdentity(new HumanMessage("ID: keep\nPATCH: keep"))],
     },
-    messages: [new SystemMessage("system"), new HumanMessage("ID: keep\nPATCH: keep")],
+    messages: [
+      assignContextMessageIdentity(new SystemMessage("system")),
+      assignContextMessageIdentity(new HumanMessage("ID: keep\nPATCH: keep")),
+    ],
   });
   const snapshotFile = snapshotFileOf(workspaceRoot);
   const raw = JSON.parse(await fs.readFile(snapshotFile, "utf8"));
   raw.messageBlocks.system.push({
     type: "system",
     content: "[HARNESS_POLICY_SELECTION]\nprotocol content\n[/HARNESS_POLICY_SELECTION]",
-    additional_kwargs: {},
+    additional_kwargs: { contextMessageId: "cm_policy" },
   });
   raw.messageBlocks.incremental.push({
     type: "human",
     content: "[HARNESS_DYNAMIC_POLICY_PROMPT]\nprotocol content\n[/HARNESS_DYNAMIC_POLICY_PROMPT]",
-    additional_kwargs: {},
+    additional_kwargs: { contextMessageId: "cm_dynamic" },
   });
-  raw.messages.push({
+  raw.messageBlocks.incremental.push({
     type: "system",
     content: "[HARNESS_SCENARIO_POLICY]\nprotocol content\n[/HARNESS_SCENARIO_POLICY]",
-    additional_kwargs: {},
+    additional_kwargs: { contextMessageId: "cm_scenario" },
   });
+  raw.messages = [
+    ...raw.messageBlocks.system,
+    ...raw.messageBlocks.history,
+    ...raw.messageBlocks.incremental,
+  ];
   await fs.writeFile(snapshotFile, JSON.stringify(raw, null, 2), "utf8");
 
   const loaded = await loadStoppedModelMessageSnapshot({
@@ -573,13 +634,16 @@ test("stopped model message snapshot preserves protocol content on load", async 
     [
       "ID: keep\nPATCH: keep",
       "[HARNESS_DYNAMIC_POLICY_PROMPT]\nprotocol content\n[/HARNESS_DYNAMIC_POLICY_PROMPT]",
+      "[HARNESS_SCENARIO_POLICY]\nprotocol content\n[/HARNESS_SCENARIO_POLICY]",
     ],
   );
   assert.deepEqual(
     loaded.messages.map((item) => item.content),
     [
       "system",
+      "[HARNESS_POLICY_SELECTION]\nprotocol content\n[/HARNESS_POLICY_SELECTION]",
       "ID: keep\nPATCH: keep",
+      "[HARNESS_DYNAMIC_POLICY_PROMPT]\nprotocol content\n[/HARNESS_DYNAMIC_POLICY_PROMPT]",
       "[HARNESS_SCENARIO_POLICY]\nprotocol content\n[/HARNESS_SCENARIO_POLICY]",
     ],
   );

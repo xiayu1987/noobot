@@ -89,6 +89,32 @@ test("authority outbox delivery is read, attempted, and acknowledged through the
   assert.equal(replay.deduplicated, 1);
 });
 
+test("authority outbox service rejects string acknowledgement coordinates without persisting", async () => {
+  const h = harness();
+  const accepted = await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.ACTION_ACCEPTED, "strict-ack-r1", 0, {
+      action: "send",
+      phase: TURN_PHASE.ACTION,
+    }),
+  );
+  const receipt = deliveryReceiptOf(accepted.envelope);
+  await assert.rejects(
+    () =>
+      h.service.acknowledgeAuthorityEvents({
+        userId: "u1",
+        sessionId: "s1",
+        consumerId: receipt.consumerId,
+        acknowledgements: [{ ...receipt, sequence: String(receipt.sequence) }],
+      }),
+    /sequence must be a positive integer/,
+  );
+  assert.equal(
+    authorityEventConsumerDelivery(await h.outboxEntry(receipt.eventId), receipt.consumerId)
+      .deliveredAt,
+    "",
+  );
+});
+
 test("authority outbox delivery mutations remain atomic when session persistence fails", async () => {
   const h = harness();
   const accepted = await h.service.applyTurnLifecycleEvent(
@@ -148,12 +174,15 @@ test("authority outbox compaction is explicit, receipt-safe, and atomic on persi
     acknowledgements: [receipt],
   });
 
-  const invalid = await h.service.compactAuthorityEvents({
-    userId: "u1",
-    sessionId: "s1",
-    consumerId: receipt.consumerId,
-  });
-  assert.equal(invalid.reason, "invalid_retention_cutoff");
+  await assert.rejects(
+    () =>
+      h.service.compactAuthorityEvents({
+        userId: "u1",
+        sessionId: "s1",
+        consumerId: receipt.consumerId,
+      }),
+    /retainDeliveredAfter/,
+  );
   assert.equal((await h.outbox()).length, 1);
 
   const restore = h.failOutboxJournal();

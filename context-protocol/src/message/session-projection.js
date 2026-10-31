@@ -9,6 +9,7 @@ import {
   normalizeTransferEnvelopes,
 } from "@noobot/semantic-transfer-protocol";
 import { isPlainObject } from "@noobot/shared/value";
+import { readSessionMessageDraftAttachments } from "@noobot/session-protocol";
 import {
   readContextMessageValue,
   readContextMessageArray,
@@ -134,7 +135,7 @@ export function projectSessionRecordToContextMessage(record = {}) {
   }
   const toolCalls = optionalArray(source.tool_calls, "tool_calls");
   const toolCallId = presentText(source.tool_call_id);
-  const attachments = optionalArray(source.attachments, "attachments");
+  const attachments = readSessionMessageDraftAttachments(source);
   const transferEnvelopes = normalizeContextTransferEnvelopes(
     optionalArray(source.transferEnvelopes, "transferEnvelopes"),
   );

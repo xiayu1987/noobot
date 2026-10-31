@@ -1,6 +1,8 @@
 {
+  "version": 1,
   "defaults": {
     "generic_provider": {
+      "is_custom": true,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${OPENAI_API_KEY}",
@@ -26,6 +28,7 @@
   },
   "providers": {
     "gpt_5_6_sol": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${OPENAI_API_KEY}",
@@ -52,6 +55,7 @@
       }
     },
     "gpt_6_sol": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${OPENAI_API_KEY}",
@@ -79,6 +83,7 @@
       }
     },
     "gpt_6_1_sol": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${OPENAI_API_KEY}",
@@ -105,7 +110,36 @@
         }
       }
     },
+    "gpt_6_1_terra": {
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": true,
+      "api_key": "${OPENAI_API_KEY}",
+      "base_url": "${OPENAI_API_ADDRESS}",
+      "model": "gpt-6.1-terra",
+      "prompt_cache_fields": ["prompt_cache_key", "prompt_cache_options"],
+      "reasoning_effort": "medium",
+      "tool_reasoning_effort": "medium",
+      "reasoning_effort_options": ["none", "low", "medium", "high", "xhigh", "max"],
+      "reasoning_effort_parameter": "reasoning_effort",
+      "use_responses_api": true,
+      "description": "OpenAI GPT-6.1 Terra for fast visual reasoning, computer use, and writing",
+      "capabilities": {
+        "web_search": true
+      },
+      "multimodal_parsing": {
+        "enabled": true,
+        "input_modalities": ["image"]
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      }
+    },
     "gpt_6_luna": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${OPENAI_API_KEY}",
@@ -133,6 +167,7 @@
       }
     },
     "gpt_6_astra": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${OPENAI_API_KEY}",
@@ -160,6 +195,7 @@
       }
     },
     "gpt_5_6_terra": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${OPENAI_API_KEY}",
@@ -186,6 +222,7 @@
       }
     },
     "gpt_5_6_luna": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${OPENAI_API_KEY}",
@@ -211,33 +248,8 @@
         }
       }
     },
-    "gpt_5_5": {
-      "enabled": true,
-      "used_for_conversation": true,
-      "api_key": "${OPENAI_API_KEY}",
-      "base_url": "${OPENAI_API_ADDRESS}",
-      "model": "gpt-5.5",
-      "prompt_cache_fields": ["prompt_cache_key", "prompt_cache_retention"],
-      "reasoning_effort": "medium",
-      "tool_reasoning_effort": "medium",
-      "reasoning_effort_options": ["none", "low", "medium", "high", "xhigh"],
-      "reasoning_effort_parameter": "reasoning_effort",
-      "description": "OpenAI general-purpose model recommended for Responses API Web Search",
-      "capabilities": {
-        "web_search": true
-      },
-      "multimodal_parsing": {
-        "enabled": true,
-        "input_modalities": ["image", "document"]
-      },
-      "multimodal_generation": {
-        "support_generation": {
-          "enabled": false,
-          "support_scope": []
-        }
-      }
-    },
     "claude_fable_5": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${ANTHROPIC_API_KEY}",
@@ -264,6 +276,7 @@
       }
     },
     "claude_fable_5_1": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${ANTHROPIC_API_KEY}",
@@ -290,6 +303,7 @@
       }
     },
     "claude_opus_5_5": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${ANTHROPIC_API_KEY}",
@@ -316,6 +330,7 @@
       }
     },
     "claude_opus_5": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${ANTHROPIC_API_KEY}",
@@ -342,6 +357,7 @@
       }
     },
     "claude_sonnet_5": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${ANTHROPIC_API_KEY}",
@@ -367,7 +383,35 @@
         }
       }
     },
+    "claude_sonnet_5_5": {
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": true,
+      "api_key": "${ANTHROPIC_API_KEY}",
+      "base_url": "${ANTHROPIC_API_ADDRESS}",
+      "model": "claude-sonnet-5-5",
+      "prompt_cache_fields": ["cache_control"],
+      "reasoning_effort": "high",
+      "tool_reasoning_effort": "high",
+      "reasoning_effort_options": ["low", "medium", "high", "xhigh", "max"],
+      "reasoning_effort_parameter": "reasoning_effort",
+      "description": "Anthropic Claude Sonnet 5.5 for balanced speed and intelligence via the native Messages API",
+      "capabilities": {
+        "web_search": true
+      },
+      "multimodal_parsing": {
+        "enabled": true,
+        "input_modalities": ["image", "document"]
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      }
+    },
     "claude_haiku_4_5": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${ANTHROPIC_API_KEY}",
@@ -393,7 +437,59 @@
         }
       }
     },
+    "claude_haiku_5_5": {
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": true,
+      "api_key": "${ANTHROPIC_API_KEY}",
+      "base_url": "${ANTHROPIC_API_ADDRESS}",
+      "model": "claude-haiku-5-5",
+      "prompt_cache_fields": ["cache_control"],
+      "reasoning_effort": "medium",
+      "tool_reasoning_effort": "medium",
+      "reasoning_effort_options": ["low", "medium", "high", "xhigh", "max"],
+      "reasoning_effort_parameter": "reasoning_effort",
+      "description": "Anthropic Claude Haiku 5.5 for high-volume, latency-sensitive tasks via the native Messages API",
+      "capabilities": {
+        "web_search": true
+      },
+      "multimodal_parsing": {
+        "enabled": true,
+        "input_modalities": ["image", "document"]
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      }
+    },
+    "gemini_4_argon": {
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": true,
+      "api_key": "${GEMINI_API_KEY}",
+      "base_url": "${GEMINI_API_ADDRESS}",
+      "model": "gemini-4-argon",
+      "prompt_cache_fields": [],
+      "reasoning_effort": "medium",
+      "tool_reasoning_effort": "medium",
+      "reasoning_effort_options": ["low", "medium", "high"],
+      "reasoning_effort_parameter": "reasoning_effort",
+      "description": "Google Gemini 4 Argon flagship reasoning model with a unified 1M context window",
+      "multimodal_parsing": {
+        "enabled": true,
+        "input_modalities": ["image", "document", "audio", "video"]
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      }
+    },
     "gemini_3_8_flash": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${GEMINI_API_KEY}",
@@ -403,7 +499,7 @@
       "reasoning_effort": "medium",
       "tool_reasoning_effort": "medium",
       "reasoning_effort_options": ["low", "medium", "high"],
-      "reasoning_effort_parameter": "thinking_level",
+      "reasoning_effort_parameter": "reasoning_effort",
       "description": "Google Gemini 3.8 Flash for long-horizon software engineering and multimodal workflows",
       "multimodal_parsing": {
         "enabled": true,
@@ -417,6 +513,7 @@
       }
     },
     "gemini_3_7_flash": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${GEMINI_API_KEY}",
@@ -426,7 +523,7 @@
       "reasoning_effort": "medium",
       "tool_reasoning_effort": "medium",
       "reasoning_effort_options": ["low", "medium", "high"],
-      "reasoning_effort_parameter": "thinking_level",
+      "reasoning_effort_parameter": "reasoning_effort",
       "description": "Google's stable Flash model for coding, agentic workflows, and multimodal analysis",
       "multimodal_parsing": {
         "enabled": true,
@@ -439,17 +536,42 @@
         }
       }
     },
+    "gemini_3_6_flash": {
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": true,
+      "api_key": "${GEMINI_API_KEY}",
+      "base_url": "${GEMINI_API_ADDRESS}",
+      "model": "gemini-3.6-flash",
+      "prompt_cache_fields": [],
+      "reasoning_effort": "medium",
+      "tool_reasoning_effort": "medium",
+      "reasoning_effort_options": ["minimal", "low", "medium", "high"],
+      "reasoning_effort_parameter": "reasoning_effort",
+      "description": "Google Gemini 3.6 Flash for general agentic and multimodal tasks",
+      "multimodal_parsing": {
+        "enabled": true,
+        "input_modalities": ["image", "document", "audio", "video"]
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      }
+    },
     "gemini_3_1_pro_preview": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${GEMINI_API_KEY}",
       "base_url": "${GEMINI_API_ADDRESS}",
       "model": "gemini-3.1-pro-preview",
       "prompt_cache_fields": [],
-      "reasoning_effort": "medium",
-      "tool_reasoning_effort": "medium",
+      "reasoning_effort": "high",
+      "tool_reasoning_effort": "high",
       "reasoning_effort_options": ["low", "medium", "high"],
-      "reasoning_effort_parameter": "thinking_level",
+      "reasoning_effort_parameter": "reasoning_effort",
       "description": "Google advanced multimodal reasoning model; preview release",
       "multimodal_parsing": {
         "enabled": true,
@@ -462,7 +584,56 @@
         }
       }
     },
+    "gemini_3_5_flash_lite": {
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": true,
+      "api_key": "${GEMINI_API_KEY}",
+      "base_url": "${GEMINI_API_ADDRESS}",
+      "model": "gemini-3.5-flash-lite",
+      "prompt_cache_fields": [],
+      "reasoning_effort": "minimal",
+      "tool_reasoning_effort": "minimal",
+      "reasoning_effort_options": ["minimal", "low", "medium", "high"],
+      "reasoning_effort_parameter": "reasoning_effort",
+      "description": "Google Gemini 3.5 Flash-Lite for fast, cost-efficient high-throughput tasks",
+      "multimodal_parsing": {
+        "enabled": true,
+        "input_modalities": ["image", "document", "audio", "video"]
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      }
+    },
+    "gemini_3_1_flash_lite": {
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": true,
+      "api_key": "${GEMINI_API_KEY}",
+      "base_url": "${GEMINI_API_ADDRESS}",
+      "model": "gemini-3.1-flash-lite",
+      "prompt_cache_fields": [],
+      "reasoning_effort": "medium",
+      "tool_reasoning_effort": "medium",
+      "reasoning_effort_options": ["minimal", "low", "medium", "high"],
+      "reasoning_effort_parameter": "reasoning_effort",
+      "description": "Google Gemini 3.1 Flash-Lite for low-cost multimodal workloads",
+      "multimodal_parsing": {
+        "enabled": true,
+        "input_modalities": ["image", "document", "audio", "video"]
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      }
+    },
     "deepseek_v4_pro": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${DEEPSEEK_API_KEY}",
@@ -489,6 +660,7 @@
       }
     },
     "deepseek_flash": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${DEEPSEEK_API_KEY}",
@@ -512,6 +684,7 @@
       }
     },
     "grok_4_7": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${XAI_API_KEY}",
@@ -538,6 +711,7 @@
       }
     },
     "grok_4_6": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${XAI_API_KEY}",
@@ -564,6 +738,7 @@
       }
     },
     "qwen3_8_max": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${DASHSCOPE_API_KEY}",
@@ -590,6 +765,7 @@
       }
     },
     "qwen3_8_flash": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${DASHSCOPE_API_KEY}",
@@ -615,7 +791,35 @@
         "web_search": true
       }
     },
+    "qwen3_8_omni_flash": {
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": true,
+      "api_key": "${DASHSCOPE_API_KEY}",
+      "base_url": "${DASHSCOPE_API_ADDRESS}",
+      "model": "qwen3.8-omni-flash",
+      "prompt_cache_fields": [],
+      "reasoning_effort": "xhigh",
+      "tool_reasoning_effort": "xhigh",
+      "reasoning_effort_options": ["none", "low", "medium", "xhigh"],
+      "reasoning_effort_parameter": "reasoning_effort",
+      "description": "Alibaba Qwen 3.8 Omni Flash for text, image, audio, and video understanding with text output",
+      "multimodal_parsing": {
+        "enabled": true,
+        "input_modalities": ["image", "audio", "video"]
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      },
+      "capabilities": {
+        "web_search": true
+      }
+    },
     "qwen3_7_max": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${DASHSCOPE_API_KEY}",
@@ -642,6 +846,7 @@
       }
     },
     "qwen3_7_plus": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${DASHSCOPE_API_KEY}",
@@ -667,7 +872,35 @@
         }
       }
     },
+    "qwen3_7_flash": {
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": true,
+      "api_key": "${DASHSCOPE_API_KEY}",
+      "base_url": "${DASHSCOPE_API_ADDRESS}",
+      "model": "qwen3.7-flash",
+      "prompt_cache_fields": ["cache_control"],
+      "reasoning_effort": "medium",
+      "tool_reasoning_effort": "medium",
+      "reasoning_effort_options": ["none", "medium"],
+      "reasoning_effort_parameter": "enable_thinking",
+      "description": "Alibaba Qwen 3.7 Flash for cost-efficient text generation and tool use",
+      "multimodal_parsing": {
+        "enabled": false,
+        "input_modalities": []
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      },
+      "capabilities": {
+        "web_search": true
+      }
+    },
     "qwen3_6_flash": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${DASHSCOPE_API_KEY}",
@@ -691,6 +924,7 @@
       }
     },
     "glm_5_2": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${ZAI_API_KEY}",
@@ -714,6 +948,7 @@
       }
     },
     "glm_5_3_flash": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${ZAI_API_KEY}",
@@ -737,6 +972,7 @@
       }
     },
     "glm_5_3_flashx": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${ZAI_API_KEY}",
@@ -760,6 +996,7 @@
       }
     },
     "glm_5_3": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${ZAI_API_KEY}",
@@ -783,6 +1020,7 @@
       }
     },
     "gpt_image_2_5_sunburst": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": false,
       "api_key": "${OPENAI_API_KEY}",
@@ -807,6 +1045,7 @@
       "reasoning_effort_parameter": "reasoning_effort"
     },
     "gpt_image_2_5_flare": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": false,
       "api_key": "${OPENAI_API_KEY}",
@@ -831,6 +1070,7 @@
       "reasoning_effort_parameter": "reasoning_effort"
     },
     "kimi_k3": {
+      "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
       "api_key": "${MOONSHOT_API_KEY}",
@@ -842,6 +1082,78 @@
       "reasoning_effort_options": ["low", "high", "max"],
       "reasoning_effort_parameter": "reasoning_effort",
       "description": "Moonshot Kimi K3 reasoning model (official OpenAI-compatible API)",
+      "multimodal_parsing": {
+        "enabled": true,
+        "input_modalities": ["image", "video"]
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      }
+    },
+    "kimi_k3_1_pro": {
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": true,
+      "api_key": "${MOONSHOT_API_KEY}",
+      "base_url": "${MOONSHOT_API_ADDRESS}",
+      "model": "kimi-k3.1-pro",
+      "prompt_cache_fields": ["prompt_cache_key", "prompt_cache_options"],
+      "reasoning_effort": "max",
+      "tool_reasoning_effort": "max",
+      "reasoning_effort_options": ["low", "high", "max"],
+      "reasoning_effort_parameter": "reasoning_effort",
+      "description": "Moonshot Kimi K3.1 Pro for long-horizon coding and knowledge work with a 1M context window",
+      "multimodal_parsing": {
+        "enabled": true,
+        "input_modalities": ["image", "video"]
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      }
+    },
+    "kimi_k3_1_pro_highspeed": {
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": true,
+      "api_key": "${MOONSHOT_API_KEY}",
+      "base_url": "${MOONSHOT_API_ADDRESS}",
+      "model": "kimi-k3.1-pro-highspeed",
+      "prompt_cache_fields": ["prompt_cache_key", "prompt_cache_options"],
+      "reasoning_effort": "max",
+      "tool_reasoning_effort": "max",
+      "reasoning_effort_options": ["low", "high", "max"],
+      "reasoning_effort_parameter": "reasoning_effort",
+      "description": "Moonshot Kimi K3.1 Pro Highspeed, the faster K3.1 Pro variant",
+      "multimodal_parsing": {
+        "enabled": true,
+        "input_modalities": ["image", "video"]
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      }
+    },
+    "minimax_m3_1_flash": {
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": true,
+      "api_key": "${MINIMAX_API_KEY}",
+      "base_url": "${MINIMAX_API_ADDRESS}",
+      "model": "MiniMax-M3.1-Flash",
+      "prompt_cache_fields": [],
+      "reasoning_effort": "max",
+      "tool_reasoning_effort": "max",
+      "reasoning_effort_options": ["low", "medium", "high", "xhigh", "max"],
+      "reasoning_effort_parameter": "reasoning_effort",
+      "description": "MiniMax M3.1 Flash for multimodal coding and agentic tasks via the OpenAI-compatible API",
       "multimodal_parsing": {
         "enabled": true,
         "input_modalities": ["image", "video"]

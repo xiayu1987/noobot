@@ -276,7 +276,7 @@ test("deduplicated lifecycle commands do not bypass the acknowledged authority o
         if (result.applied) {
           lifecycle = result.lifecycle;
           if (result.committedEvent) {
-            eventOutbox = [...eventOutbox, result.committedEvent];
+            eventOutbox = [...eventOutbox, { ...result.committedEvent, deliveries: {} }];
           }
         }
         return result;
@@ -286,7 +286,11 @@ test("deduplicated lifecycle commands do not bypass the acknowledged authority o
       },
       async recordAuthorityEventAttempts({ consumerId, eventIds = [] } = {}) {
         for (const eventId of eventIds) {
-          const result = recordAuthorityEventDeliveryAttempt(eventOutbox, { eventId, consumerId });
+          const result = recordAuthorityEventDeliveryAttempt(eventOutbox, {
+            eventId,
+            consumerId,
+            attemptedAt: new Date().toISOString(),
+          });
           if (!result.found) return { recorded: false, reason: result.reason };
           eventOutbox = result.outbox;
         }

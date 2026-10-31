@@ -15,6 +15,7 @@ import { createHash } from "node:crypto";
 import { mkdir, open, rename, writeFile } from "node:fs/promises";
 import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
 import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
+import { assertStoredCheckpointReceipts } from "@noobot/session-protocol/summary-checkpoint-storage";
 
 export const TURN_JOURNAL_SCHEMA_VERSION = SESSION_ARTIFACT_SCHEMA_VERSION;
 
@@ -28,6 +29,7 @@ export function assertCanonicalSessionManifest(session, operation) {
   if (session.schemaVersion !== TURN_JOURNAL_SCHEMA_VERSION) {
     throw turnJournalSchemaRequiredError(operation);
   }
+  assertStoredCheckpointReceipts(session);
   return assertSessionManifestLayout(session);
 }
 
@@ -106,7 +108,6 @@ export function summarySnapshotIndex(receipt, file, contentHash) {
     checkpointRevision: receipt.checkpointRevision,
     file,
     contentHash,
-    messageUids: [...receipt.summarizedMessageUids],
     committedAt: receipt.committedAt,
   };
 }

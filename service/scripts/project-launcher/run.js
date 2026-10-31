@@ -6,7 +6,11 @@
 import { isPlainObject, text } from "@noobot/shared/value";
 import path from "node:path";
 import process from "node:process";
-import { CONFIG_DOCUMENT_SCOPE, repairConfigDocument } from "@noobot/agent-config-protocol";
+import {
+  CONFIG_DOCUMENT_SCOPE,
+  repairConfigDocument,
+  upgradeConfigModelLibrary,
+} from "@noobot/agent-config-protocol";
 import { resolveInitializationAnswers } from "./answers.js";
 import { resolveWorkspaceRootPath } from "@noobot/runtime-topology-protocol/workspace-root";
 import { parseCliOptions, resolveLauncherGlobalConfigPath } from "./cli.js";
@@ -134,7 +138,7 @@ async function syncWhenGlobalConfigExists({
   const globalRepair = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.GLOBAL,
     baseValues: globalExampleConfig,
-    target: globalConfig,
+    target: upgradeConfigModelLibrary(globalConfig).document,
   });
   const mergedGlobal = globalRepair.document;
 

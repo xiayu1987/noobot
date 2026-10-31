@@ -173,6 +173,8 @@ test("requires persisted message identity and ignores malformed persisted detail
 function relayActivity(overrides = {}) {
   return {
     eventId: "activity-1",
+    activityId: "activity-1",
+    activityKind: "model_analysis",
     eventType: "thinking",
     text: "继续检查缓存事实。",
     sequence: 1,
@@ -252,15 +254,17 @@ test("projects plugin-declared activity kinds as plugin_activity facts carrying 
   const timeline = projectThinkingDetailContentTimeline(
     [],
     [
-      relayActivity({ eventId: "host-thinking", sequence: 1 }),
+      relayActivity({ eventId: "host-thinking", activityId: "host-1", sequence: 1 }),
       relayActivity({
         eventId: "main-analysis",
+        activityId: "main-1",
         sequence: 2,
         timestamp: "2026-09-05T03:39:02.000Z",
         activityKind: "main_model_analysis",
       }),
       relayActivity({
         eventId: "plugin-analysis",
+        activityId: "plugin-1",
         sequence: 3,
         timestamp: "2026-09-05T03:39:03.000Z",
         activityKind: "guidance_analysis",

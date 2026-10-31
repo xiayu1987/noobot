@@ -5,6 +5,7 @@
  */
 
 import { emitEvent } from "../../events/index.js";
+import { assertSessionFinalizationContext } from "@noobot/agent-transport-protocol/session-finalization";
 import { runBestEffort } from "@noobot/shared/best-effort";
 import {
   isSummarizedSessionMessageRecord,
@@ -17,13 +18,9 @@ import {
 } from "@noobot/session-protocol/execution-report";
 import { emitContextIdentityDebug } from "../../observability/context-identity-debug.js";
 import { projectGeneratedArtifactsToFinalAssistant } from "../../runtime/turn/final-assistant-artifact-projection.js";
-import { text } from "@noobot/shared/value";
 
-function summarizedMessageUids(messages = []) {
-  return (Array.isArray(messages) ? messages : [])
-    .filter((message = {}) => isSummarizedSessionMessageRecord(message))
-    .map((message = {}) => text(message.messageUid))
-    .filter(Boolean);
+function summarizedMessageUids(messages) {
+  return messages.filter(isSummarizedSessionMessageRecord).map((message) => message.messageUid);
 }
 
 export class SessionExecutionFinalizer {
@@ -38,21 +35,27 @@ export class SessionExecutionFinalizer {
     userId,
     sessionId,
     parentSessionId,
-    parentDialogProcessId = "",
+    parentDialogProcessId,
     caller,
     dialogProcessId,
-    turnScopeId = "",
-    thinkingStartedAt = "",
-    agentResult = {},
+    turnScopeId,
+    thinkingStartedAt,
+    agentResult,
     persistedTurnMessageUids,
     persistedTurnMessages,
     durableTurnMessages,
     summaryCheckpointPromotionSources,
-    runtimeEventListener = null,
-    userConfig = {},
-    lifecycle = null,
+    runtimeEventListener,
+    userConfig,
+    lifecycle,
     persistenceScope,
   }) {
+    assertSessionFinalizationContext({
+      lifecycle,
+      runtimeEventListener,
+      parentDialogProcessId,
+      userConfig,
+    });
     requireDialogProcessKey(dialogProcessId);
     const activeTurnMessages = agentResult.turnMessages;
     if (!Array.isArray(activeTurnMessages) || activeTurnMessages.length === 0) {
@@ -60,7 +63,7 @@ export class SessionExecutionFinalizer {
     }
     const persistedUidSet = new Set(persistedTurnMessageUids);
     const persistedMessagesByUid = new Map(
-      durableTurnMessages.map((message) => [text(message.messageUid), message]),
+      durableTurnMessages.map((message) => [message.messageUid, message]),
     );
     for (const messageUid of persistedUidSet) {
       if (!persistedMessagesByUid.has(messageUid)) {
@@ -69,13 +72,9 @@ export class SessionExecutionFinalizer {
         );
       }
     }
-    const activeMessageUids = new Set(
-      activeTurnMessages.map((message) => text(message.messageUid)),
-    );
+    const activeMessageUids = new Set(activeTurnMessages.map((message) => message.messageUid));
     const rawTurnMessages = [
-      ...persistedTurnMessages.filter(
-        (message) => !activeMessageUids.has(text(message.messageUid)),
-      ),
+      ...persistedTurnMessages.filter((message) => !activeMessageUids.has(message.messageUid)),
       ...activeTurnMessages,
     ];
     const promotionSourceCount = summaryCheckpointPromotionSources.length;
@@ -84,7 +83,7 @@ export class SessionExecutionFinalizer {
       ...rawTurnMessages,
     ]).slice(promotionSourceCount);
     const messagesToPersist = turnMessages.filter((message) => {
-      const messageUid = text(message.messageUid);
+      const messageUid = message.messageUid;
       if (!persistedUidSet.has(messageUid)) return true;
       return JSON.stringify(persistedMessagesByUid.get(messageUid)) !== JSON.stringify(message);
     });
@@ -98,14 +97,14 @@ export class SessionExecutionFinalizer {
       persistedSummarizedMessageUids: summarizedMessageUids(messagesToPersist),
     });
     const thinkingFinishedAt = this.now();
-    lifecycle?.enterPersisting?.();
+    lifecycle.enterPersisting();
     await this.turnPersister.appendAgentMessages({
       userId,
       sessionId,
       messages: messagesToPersist,
       dialogProcessId,
       parentDialogProcessId,
-      turnScopeId: text(turnScopeId),
+      turnScopeId,
       eventListener: runtimeEventListener,
       persistenceScope,
     });
@@ -115,11 +114,11 @@ export class SessionExecutionFinalizer {
       turnScopeId,
       dialogProcessId,
       thinkingFinishedAt,
-      modelLoopRound: agentResult?.modelLoopRound,
+      modelLoopRound: agentResult.modelLoopRound,
       persistenceScope,
     });
 
-    lifecycle?.enterMemory?.();
+    lifecycle.enterMemory();
     const memoryPostProcessAsyncEnabled =
       this.memoryPostProcessService.resolveMemoryPostProcessAsyncEnabled(userConfig);
     const memoryPostProcessInput = {
@@ -150,7 +149,7 @@ export class SessionExecutionFinalizer {
       });
     }
 
-    await runtimeEventListener?.flush();
+    await runtimeEventListener.flush();
 
     const executionLogs = await this.session.getExecutionTurnLogs({
       userId,
@@ -173,13 +172,13 @@ export class SessionExecutionFinalizer {
     return {
       sessionId,
       parentSessionId,
-      parentDialogProcessId: parentDialogProcessId || "",
+      parentDialogProcessId,
       caller,
       answer: agentResult.output,
       traces: agentResult.traces,
       messages: turnMessages,
       dialogProcessId,
-      turnScopeId: text(turnScopeId),
+      turnScopeId,
     };
   }
 

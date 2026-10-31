@@ -44,6 +44,8 @@ test("display summary of a tool_call promoted by activity keeps empty string con
     activityTimeline: [
       {
         eventId: "evt-1",
+        activityId: "analysis-1",
+        activityKind: "model_analysis",
         eventType: "thinking",
         text: "plan",
         sequence: 1,

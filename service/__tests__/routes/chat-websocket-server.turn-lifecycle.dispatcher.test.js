@@ -14,7 +14,12 @@ import {
   PLUGIN_ARTIFACT_EVENT,
   recordAuthorityEventDeliveryAttempt,
 } from "@noobot/event-protocol";
-import { TURN_EVENT, TURN_LIFECYCLE_WIRE_EVENT, TURN_PHASE } from "@noobot/session-protocol";
+import {
+  createEmptyTurnLifecycle,
+  TURN_EVENT,
+  TURN_LIFECYCLE_WIRE_EVENT,
+  TURN_PHASE,
+} from "@noobot/session-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import {
   AUTHORITY_EVENT_CONSUMER,
@@ -120,7 +125,7 @@ test("authority dispatcher keeps a failed send pending and reconnect retries the
   let eventOutbox = [];
   const committed = commitTurnLifecycle({
     parentSessionId: "",
-    lifecycle: {},
+    lifecycle: createEmptyTurnLifecycle(),
     eventOutbox,
     createEventId: () => "authority-event-send-retry",
     event: {
@@ -139,7 +144,7 @@ test("authority dispatcher keeps a failed send pending and reconnect retries the
     },
   });
   assert.equal(committed.applied, true);
-  eventOutbox = [committed.committedEvent];
+  eventOutbox = [{ ...committed.committedEvent, deliveries: {} }];
 
   const sent = [];
   let socketAvailable = false;
@@ -570,7 +575,7 @@ test("authority dispatcher leaves an event pending when acknowledgement persiste
   let eventOutbox = [];
   const committed = commitTurnLifecycle({
     parentSessionId: "",
-    lifecycle: {},
+    lifecycle: createEmptyTurnLifecycle(),
     eventOutbox,
     createEventId: () => "authority-event-ack-retry",
     event: {
@@ -589,7 +594,7 @@ test("authority dispatcher leaves an event pending when acknowledgement persiste
     },
   });
   assert.equal(committed.applied, true);
-  eventOutbox = [committed.committedEvent];
+  eventOutbox = [{ ...committed.committedEvent, deliveries: {} }];
 
   let acknowledgementAvailable = false;
   const sentEventIds = [];

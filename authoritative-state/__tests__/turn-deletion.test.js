@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 
 import { commitTurnDeletion } from "../src/application/commit-turn-deletion.js";
 
@@ -22,6 +23,7 @@ test("turn deletion removes lifecycle facts and receipts for the deleted scopes"
   });
   const committed = commitTurnDeletion({
     lifecycle: {
+      ...createEmptyTurnLifecycle(),
       activeTurnScopeId: "turn-delete",
       sequence: 8,
       turns: {
@@ -62,6 +64,8 @@ test("turn deletion removes lifecycle facts and receipts for the deleted scopes"
 test("turn deletion clears a surviving continuation's reference to the deleted source", () => {
   const committed = commitTurnDeletion({
     lifecycle: {
+      ...createEmptyTurnLifecycle(),
+      sequence: 2,
       turns: {
         source: {
           turnScopeId: "source",

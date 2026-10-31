@@ -46,7 +46,7 @@ test("snapshot policy preserves block boundaries and message protocol fields", (
           role: "assistant",
           content: "",
           tool_calls: [{ id: "call", name: "tool" }],
-          additional_kwargs: { custom: { value: 1 } },
+          additional_kwargs: { contextMessageId: "cm_assistant", custom: { value: 1 } },
         },
       ],
       incremental: [
@@ -54,7 +54,7 @@ test("snapshot policy preserves block boundaries and message protocol fields", (
           role: "tool",
           content: "result",
           tool_call_id: "call",
-          additional_kwargs: { summarized: true },
+          additional_kwargs: { contextMessageId: "cm_tool", summarized: true },
         },
       ],
     },
@@ -109,12 +109,18 @@ test("continued snapshot recovery preserves stored facts and rebinds only increm
     system: [{ role: "system", content: "system", additional_kwargs: { messageUid: "sm_sys" } }],
     history: [],
     incremental: [
-      { role: "user", content: "start", additional_kwargs: { ...firstTurn } },
+      {
+        role: "user",
+        content: "start",
+        additional_kwargs: { messageUid: "sm_user", ...firstTurn },
+      },
       {
         role: "user",
         content: userMetaContent,
         additional_kwargs: {
           noobotInternalMessageType: "user_meta",
+          projectionType: "user_meta",
+          sourceMessageUid: "sm_user",
           ...firstTurn,
         },
       },
@@ -122,13 +128,13 @@ test("continued snapshot recovery preserves stored facts and rebinds only increm
         role: "assistant",
         content: "",
         tool_calls: [{ id: "call-first", name: "read_file", args: {} }],
-        additional_kwargs: { ...firstTurn },
+        additional_kwargs: { contextMessageId: "cm_assistant", ...firstTurn },
       },
       {
         role: "tool",
         content: "first result",
         tool_call_id: "call-first",
-        additional_kwargs: { ...firstTurn },
+        additional_kwargs: { contextMessageId: "cm_tool", ...firstTurn },
       },
     ],
   };

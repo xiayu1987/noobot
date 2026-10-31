@@ -13,6 +13,7 @@ import {
 import { sendFailedCommandReceipt } from "./command-receipt.js";
 import { findPendingInteraction } from "./pending-interaction-registry.js";
 import { text } from "@noobot/shared/value";
+import { randomUUID } from "node:crypto";
 
 const EXECUTION_QUERY_READERS = Object.freeze({
   [EXECUTION_QUERY_COMMAND.SNAPSHOT_GET]: Object.freeze({
@@ -38,7 +39,10 @@ function sendAuthoritativeTurnSnapshot(sendEvent, command, snapshot) {
     });
     return;
   }
-  sendEvent(TURN_SNAPSHOT_WIRE_EVENT, createTurnSnapshotEnvelope(snapshot));
+  sendEvent(
+    TURN_SNAPSHOT_WIRE_EVENT,
+    createTurnSnapshotEnvelope(snapshot, { eventId: randomUUID() }),
+  );
 }
 
 function resolveTurnCommandIdentity(userId, command) {

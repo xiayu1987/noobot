@@ -132,7 +132,7 @@ export const SOURCE_POLICY_EXEMPTIONS = Object.freeze([
       SUMMARY_POLICY_PATH,
       "context-protocol/src/message/codec.js",
       "agent/src/bot/session/summary-checkpoint-committer.js",
-      "agent/src/session/services/session-message-service/turn-summary-checkpoint.js",
+      "context-protocol/src/policy/summary-checkpoint-transaction.js",
     ],
   ),
   ownershipExemption(

@@ -114,6 +114,30 @@ test("creates strict direct V3 envelope", () => {
   assert.equal(validateTransferEnvelope(envelope).ok, true);
 });
 
+test("rejects payload modes outside the protocol, including Object.prototype names", () => {
+  const envelope = directTransfer({
+    transferId: "tr-mode",
+    presentationMessageId: "m-mode",
+    identity,
+    direction: "output",
+    intent: {
+      source: "tool",
+      reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
+      scenario: "tool",
+      strategy: "tool_output",
+    },
+    content: "ok",
+  });
+  for (const mode of ["constructor", "toString", "__proto__", "unknown"]) {
+    const result = validateTransferEnvelope({
+      ...envelope,
+      payload: { ...envelope.payload, mode },
+    });
+    assert.equal(result.ok, false, mode);
+    assert.ok(result.errors.includes("invalid_payload_mode"), mode);
+  }
+});
+
 test("creates attachment envelope from canonical identity and rejects paths", () => {
   const envelope = attachmentTransfer({
     transferId: "tr2",

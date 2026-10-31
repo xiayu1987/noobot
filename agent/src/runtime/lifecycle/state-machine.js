@@ -84,6 +84,9 @@ export function createAgentLifecycleMachine({
   now = () => new Date().toISOString(),
   basePayload = {},
 } = {}) {
+  if (typeof basePayload.resumeFromStoppedSnapshot !== "boolean") {
+    throw new TypeError("agent lifecycle requires resumeFromStoppedSnapshot");
+  }
   let currentState = "";
   let currentBranchState = "";
   let revision = 0;
@@ -99,6 +102,9 @@ export function createAgentLifecycleMachine({
   const executionOrigin = isPlainObject(basePayload?.origin) ? { ...basePayload.origin } : {};
 
   const emit = (nextState, extra = {}) => {
+    if (Object.hasOwn(extra, "resumeFromStoppedSnapshot")) {
+      throw new TypeError("agent lifecycle resumeFromStoppedSnapshot is owned by basePayload");
+    }
     const branchState = isBranchState(nextState) ? nextState : "";
     const state = branchState || nextState;
     if (!state) return null;
@@ -122,9 +128,7 @@ export function createAgentLifecycleMachine({
       sessionId: normalizeText(extra?.sessionId ?? basePayload?.sessionId),
       dialogProcessId: normalizeText(extra?.dialogProcessId ?? basePayload?.dialogProcessId),
       turnScopeId: normalizeText(extra?.turnScopeId ?? basePayload?.turnScopeId),
-      resumeFromStoppedSnapshot:
-        extra?.resumeFromStoppedSnapshot === true ||
-        basePayload?.resumeFromStoppedSnapshot === true,
+      resumeFromStoppedSnapshot: basePayload.resumeFromStoppedSnapshot,
       ...executionIdentity,
       origin: { ...executionOrigin },
       revision,
@@ -137,9 +141,6 @@ export function createAgentLifecycleMachine({
 
   return {
     transition: emit,
-    enterInitializing(runConfig = {}) {
-      return emit(resolveInitialLifecycleState(runConfig));
-    },
     enterRunning(extra = {}) {
       return emit(AGENT_LIFECYCLE_STATE.RUNNING, extra);
     },

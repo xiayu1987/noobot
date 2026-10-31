@@ -79,6 +79,7 @@ test("projects root workflow and nested child agents from authoritative turn lif
       parentSessionId: "",
       turnLifecycle: {
         ...createEmptyTurnLifecycle(),
+        sequence: 2,
         turns: {
           root: turn({
             executionKind: "workflow",
@@ -93,6 +94,7 @@ test("projects root workflow and nested child agents from authoritative turn lif
       parentSessionId: "root-session",
       turnLifecycle: {
         ...createEmptyTurnLifecycle(),
+        sequence: 2,
         turns: {
           child: turn({
             turnScopeId: "child",
@@ -109,6 +111,7 @@ test("projects root workflow and nested child agents from authoritative turn lif
       parentSessionId: "child-session",
       turnLifecycle: {
         ...createEmptyTurnLifecycle(),
+        sequence: 2,
         turns: {
           grandchild: turn({
             turnScopeId: "grandchild",
@@ -137,6 +140,7 @@ test("execution record excludes turn timing facts", async () => {
       sessionId: "timed-session",
       turnLifecycle: {
         ...createEmptyTurnLifecycle(),
+        sequence: 2,
         turns: { root: turn({ createdAt: "2026-07-20T00:00:05.000Z" }) },
       },
       turnTimings: [
@@ -159,15 +163,16 @@ test("children query returns direct children only and preserves historical attem
   const reader = service([
     {
       sessionId: "root",
-      turnLifecycle: { ...createEmptyTurnLifecycle(), turns: { root: turn() } },
+      turnLifecycle: { ...createEmptyTurnLifecycle(), sequence: 2, turns: { root: turn() } },
     },
     {
       sessionId: "attempt-1",
       parentSessionId: "root",
       turnLifecycle: {
         ...createEmptyTurnLifecycle(),
+        sequence: 2,
         turns: {
-          a1: turn({
+          "attempt-1": turn({
             turnScopeId: "attempt-1",
             executionId: "agent:attempt-1",
             parentExecutionId: "agent:root",
@@ -180,8 +185,9 @@ test("children query returns direct children only and preserves historical attem
       parentSessionId: "root",
       turnLifecycle: {
         ...createEmptyTurnLifecycle(),
+        sequence: 2,
         turns: {
-          a2: turn({
+          "attempt-2": turn({
             turnScopeId: "attempt-2",
             executionId: "agent:attempt-2",
             parentExecutionId: "agent:root",
@@ -194,6 +200,7 @@ test("children query returns direct children only and preserves historical attem
       parentSessionId: "attempt-2",
       turnLifecycle: {
         ...createEmptyTurnLifecycle(),
+        sequence: 2,
         turns: {
           nested: turn({
             turnScopeId: "nested",
@@ -217,14 +224,16 @@ test("duplicate executionId with different ownership is diagnosed and excluded",
       sessionId: "left",
       turnLifecycle: {
         ...createEmptyTurnLifecycle(),
-        turns: { left: turn({ turnScopeId: "duplicate", executionId: "agent:duplicate" }) },
+        sequence: 2,
+        turns: { duplicate: turn({ turnScopeId: "duplicate", executionId: "agent:duplicate" }) },
       },
     },
     {
       sessionId: "right",
       turnLifecycle: {
         ...createEmptyTurnLifecycle(),
-        turns: { right: turn({ turnScopeId: "duplicate", executionId: "agent:duplicate" }) },
+        sequence: 2,
+        turns: { duplicate: turn({ turnScopeId: "duplicate", executionId: "agent:duplicate" }) },
       },
     },
   ]);
@@ -243,6 +252,7 @@ test("orphan execution remains visible as a root in the read model", async () =>
       sessionId: "orphan",
       turnLifecycle: {
         ...createEmptyTurnLifecycle(),
+        sequence: 2,
         turns: {
           orphan: turn({
             turnScopeId: "orphan",
@@ -262,7 +272,10 @@ test("orphan execution remains visible as a root in the read model", async () =>
 
 test("execution tree query without target is rejected", async () => {
   const reader = service([
-    { sessionId: "s1", turnLifecycle: { ...createEmptyTurnLifecycle(), turns: { root: turn() } } },
+    {
+      sessionId: "s1",
+      turnLifecycle: { ...createEmptyTurnLifecycle(), sequence: 2, turns: { root: turn() } },
+    },
   ]);
   const result = await reader.getExecutionTree({ userId: "u1" });
   assert.deepEqual(result, { found: false, reason: "missing_execution" });
@@ -275,7 +288,7 @@ test("disposable read index is isolated by user and rebuilds when authoritative 
       {
         sessionId: "u1-session",
         updatedAt: "2026-07-20T00:00:00.000Z",
-        turnLifecycle: { ...createEmptyTurnLifecycle(), turns: { root: turn() } },
+        turnLifecycle: { ...createEmptyTurnLifecycle(), sequence: 2, turns: { root: turn() } },
       },
     ],
     u2: [
@@ -284,8 +297,9 @@ test("disposable read index is isolated by user and rebuilds when authoritative 
         updatedAt: "2026-07-20T00:00:00.000Z",
         turnLifecycle: {
           ...createEmptyTurnLifecycle(),
+          sequence: 2,
           turns: {
-            root: turn({ turnScopeId: "u2", executionId: "agent:u2", rootExecutionId: "agent:u2" }),
+            u2: turn({ turnScopeId: "u2", executionId: "agent:u2", rootExecutionId: "agent:u2" }),
           },
         },
       },
@@ -317,6 +331,7 @@ test("disposable read index is isolated by user and rebuilds when authoritative 
   assert.equal(scans, 2);
 
   sessionsByUser.u1[0].updatedAt = "2026-07-20T00:01:00.000Z";
+  sessionsByUser.u1[0].turnLifecycle.sequence = 4;
   sessionsByUser.u1[0].turnLifecycle.turns.root = turn({
     revision: 4,
     sequence: 4,
@@ -360,7 +375,7 @@ test("unreadable sessions are skipped and surfaced as read diagnostics", async (
           {
             sessionId: "ok",
             parentSessionId: "",
-            turnLifecycle: { ...createEmptyTurnLifecycle(), turns: { root: turn() } },
+            turnLifecycle: { ...createEmptyTurnLifecycle(), sequence: 2, turns: { root: turn() } },
           },
         ];
       },

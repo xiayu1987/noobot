@@ -13,6 +13,7 @@ vi.mock("../../../../../src/infrastructure/api/thinking/thinkingDetailService.js
 }));
 import { useThinkingTimeline } from "../../../../../src/modules/chat/composables/thinkingPanelTimeline.js";
 import { __resetThinkingDetailCacheForTests } from "../../../../../src/modules/chat/model/thinkingDetailCache.js";
+import { canonicalActivityFact } from "../helpers/messageEventFixture.js";
 import {
   createUserInterjectionContentFact,
   reduceThinkingDetailContentTimelines,
@@ -108,13 +109,14 @@ describe("thinking panel round timeline reactivity", () => {
 
     for (let index = 1; index <= 3; index += 1) {
       live.activityTimeline = [
-        {
+        canonicalActivityFact({
           eventId: "activity-live",
           activityId: "activity-live",
+          eventType: "model_analysis_delta",
           activityKind: "main_model_analysis",
           text: "a".repeat(index),
           sequence: 100 + index,
-        },
+        }),
       ];
       await nextTick();
       expect(timeline.currentExecutionLogs.value).toBe(before);

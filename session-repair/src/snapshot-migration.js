@@ -20,13 +20,13 @@ import {
   messageFieldRenamesFor,
 } from "@noobot/session-protocol/message-identity-schema";
 import { isPlainObject, text } from "@noobot/shared/value";
-import { CONTEXT_MESSAGE_PROJECTION_TYPE } from "../message/codec.js";
-import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "../message/internal-types.js";
+import { CONTEXT_MESSAGE_PROJECTION_TYPE } from "@noobot/context-protocol/message/codec";
+import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "@noobot/context-protocol/message/internal-types";
 import {
   SNAPSHOT_VERSION,
+  assertModelContextSnapshot,
   composeMessagesFromBlocks,
-  hydrateModelContextSnapshot,
-} from "./snapshot.js";
+} from "@noobot/context-protocol/policy/snapshot";
 
 export const MODEL_CONTEXT_SNAPSHOT_MIGRATION_KIND = "model-context-snapshot";
 export const V3_MESSAGE_IDENTITY_KEY = MESSAGE_REMOVED_FIELD_NAME.NOOBOT_MESSAGE_ID;
@@ -332,6 +332,12 @@ export const MODEL_CONTEXT_SNAPSHOT_VERSION_CHAIN = defineVersionChain({
   kind: MODEL_CONTEXT_SNAPSHOT_MIGRATION_KIND,
   currentVersion: SNAPSHOT_VERSION,
   readVersion: (snapshot) => snapshot?.version,
+  schemas: {
+    3: (snapshot) => assertHistoricalSnapshot(snapshot, 3),
+    4: (snapshot) => assertHistoricalSnapshot(snapshot, 4),
+    5: (snapshot) => assertHistoricalSnapshot(snapshot, 5),
+    [SNAPSHOT_VERSION]: assertModelContextSnapshot,
+  },
   steps: [
     { from: 3, to: 4, migrate: migrateSnapshotV3 },
     { from: 4, to: 5, migrate: migrateSnapshotV4 },
@@ -340,14 +346,30 @@ export const MODEL_CONTEXT_SNAPSHOT_VERSION_CHAIN = defineVersionChain({
 });
 
 export function migrateModelContextSnapshot(snapshot) {
-  const result = runVersionChain(MODEL_CONTEXT_SNAPSHOT_VERSION_CHAIN, snapshot);
-  try {
-    hydrateModelContextSnapshot(result.document, result.document);
-  } catch (error) {
-    throw Object.assign(
-      unmappable(result.fromVersion, "current_protocol_rejected", { message: error.message }),
-      { cause: error },
-    );
+  return runVersionChain(MODEL_CONTEXT_SNAPSHOT_VERSION_CHAIN, snapshot);
+}
+
+function assertHistoricalSnapshot(snapshot, version) {
+  for (const block of SNAPSHOT_BLOCKS) {
+    if (!Array.isArray(snapshot.messageBlocks?.[block])) {
+      throw new TypeError(`snapshot v${version} requires messageBlocks.${block}`);
+    }
+    for (const message of snapshot.messageBlocks[block]) {
+      if (!isPlainObject(message) || !V3_RAW_ROLE_BY_TYPE[message.type]) {
+        throw new TypeError(`snapshot v${version} requires a declared message type`);
+      }
+      if (!isPlainObject(message.additional_kwargs)) {
+        throw new TypeError(`snapshot v${version} requires additional_kwargs`);
+      }
+      if (version === 3 && !isPlainObject(message.lc_kwargs)) {
+        throw new TypeError("snapshot v3 requires lc_kwargs");
+      }
+    }
   }
-  return result;
+  if (!sameJson(snapshot.messages, composeMessagesFromBlocks(snapshot.messageBlocks))) {
+    throw new TypeError(`snapshot v${version} messages must equal composed blocks`);
+  }
+  if (snapshot.userMetaBackwrites !== undefined && !Array.isArray(snapshot.userMetaBackwrites)) {
+    throw new TypeError(`snapshot v${version} userMetaBackwrites must be an array`);
+  }
 }

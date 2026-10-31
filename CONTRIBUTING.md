@@ -24,6 +24,9 @@ Thanks for contributing to Noobot 🎉
 
 ## Code Guidelines
 
+`npm run check:quality` includes the [dead-code check](./docs/dead-code-quality.md).
+Run `npm run check:dead-code` on its own to check unused production files, exports and dependencies.
+
 - Keep changes small and focused.
 - Do not commit runtime/build artifacts (follow `.gitignore`).
 - If config/env behavior changes, update:

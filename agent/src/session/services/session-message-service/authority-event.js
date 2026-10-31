@@ -17,6 +17,7 @@ import {
 } from "@noobot/event-protocol";
 import {
   AUTHORITY_OUTBOX_JOURNAL_OP,
+  assertAuthorityOutboxRequest,
   advanceAuthorityOutboxCheckpoint,
   allocateAuthorityEventSequence,
 } from "@noobot/event-protocol/outbox";
@@ -36,7 +37,7 @@ import {
   writeAuthorityOutboxCheckpoint,
 } from "../../authority-outbox-store/outbox-journal.js";
 import { locateOutboxSessionDir } from "./outbox-scope.js";
-import { isCanonicalText, isObjectLike, text } from "@noobot/shared/value";
+import { isCanonicalText, isObjectLike } from "@noobot/shared/value";
 import {
   SESSION_NOT_FOUND_REASON,
   createSessionNotFoundError,
@@ -172,14 +173,11 @@ export async function commitAuthorityEvent({
   return mutation;
 }
 
-export async function getPendingAuthorityEvents({
-  userId,
-  sessionId,
-  persistenceContext,
-  consumerId,
-}) {
-  if (!userId || !sessionId) return { found: false, reason: "missing_session", events: [] };
-  if (!text(consumerId)) return { found: false, reason: "missing_consumer", events: [] };
+export async function getPendingAuthorityEvents(request) {
+  const { userId, sessionId, persistenceContext, consumerId } = assertAuthorityOutboxRequest(
+    request,
+    "pending",
+  );
   const sessionDir = await locateOutboxSessionDir(this, userId, sessionId, persistenceContext);
   if (!sessionDir) return { found: false, reason: SESSION_NOT_FOUND_REASON, events: [] };
   const outbox = await readAuthorityOutbox(sessionDir);
@@ -189,18 +187,14 @@ export async function getPendingAuthorityEvents({
   };
 }
 
-export async function recordAuthorityEventAttempts({
-  userId,
-  sessionId,
-  persistenceContext,
-  consumerId,
-  eventIds,
-}) {
-  const requested = eventIds.map(text).filter(Boolean);
-  const normalizedConsumerId = text(consumerId);
-  if (!userId || !sessionId || !normalizedConsumerId || !requested.length) {
-    return { recorded: false, reason: "missing_identity", events: [] };
-  }
+export async function recordAuthorityEventAttempts(request) {
+  const {
+    userId,
+    sessionId,
+    persistenceContext,
+    consumerId,
+    eventIds: requested,
+  } = assertAuthorityOutboxRequest(request, "attempt");
   const sessionDir = await locateOutboxSessionDir(this, userId, sessionId, persistenceContext);
   if (!sessionDir) return { recorded: false, reason: SESSION_NOT_FOUND_REASON, events: [] };
   return withAuthorityOutboxMutation(sessionDir, async () => {
@@ -210,7 +204,7 @@ export async function recordAuthorityEventAttempts({
     for (const eventId of requested) {
       const result = recordAuthorityEventDeliveryAttempt(outbox, {
         eventId,
-        consumerId: normalizedConsumerId,
+        consumerId,
         attemptedAt,
       });
       if (!result.found) return { recorded: false, reason: "event_not_found", events: [] };
@@ -218,7 +212,7 @@ export async function recordAuthorityEventAttempts({
       records.push({
         op: AUTHORITY_OUTBOX_JOURNAL_OP.ATTEMPT,
         eventId,
-        consumerId: normalizedConsumerId,
+        consumerId,
         attemptedAt,
       });
     }
@@ -228,17 +222,14 @@ export async function recordAuthorityEventAttempts({
   });
 }
 
-export async function acknowledgeAuthorityEvents({
-  userId,
-  sessionId,
-  persistenceContext,
-  consumerId,
-  acknowledgements,
-}) {
-  const requested = acknowledgements;
-  if (!userId || !sessionId || !text(consumerId) || !requested.length) {
-    return { acknowledged: false, reason: "missing_identity", delivered: 0, deduplicated: 0 };
-  }
+export async function acknowledgeAuthorityEvents(request) {
+  const {
+    userId,
+    sessionId,
+    persistenceContext,
+    consumerId,
+    acknowledgements: requested,
+  } = assertAuthorityOutboxRequest(request, "ack");
   const sessionDir = await locateOutboxSessionDir(this, userId, sessionId, persistenceContext);
   if (!sessionDir) {
     return { acknowledged: false, reason: SESSION_NOT_FOUND_REASON, delivered: 0, deduplicated: 0 };
@@ -250,13 +241,7 @@ export async function acknowledgeAuthorityEvents({
     let delivered = 0;
     let deduplicated = 0;
     for (const entry of requested) {
-      const eventId = text(entry.eventId);
-      const orderingDomain = text(entry.orderingDomain);
-      const orderingScopeId = text(entry.orderingScopeId);
-      const sequence = Number(entry.sequence);
-      if (!eventId || !orderingDomain || !orderingScopeId) {
-        return { acknowledged: false, reason: "missing_identity", delivered, deduplicated };
-      }
+      const { eventId, orderingDomain, orderingScopeId, sequence } = entry;
       const result = acknowledgeAuthorityEventDelivery(outbox, {
         eventId,
         consumerId,
@@ -265,9 +250,6 @@ export async function acknowledgeAuthorityEvents({
         sequence,
         deliveredAt,
       });
-      if (result.reason) {
-        return { acknowledged: false, reason: result.reason, delivered, deduplicated };
-      }
       if (!result.found) {
         return { acknowledged: false, reason: "event_not_found", delivered, deduplicated };
       }
@@ -292,21 +274,15 @@ export async function acknowledgeAuthorityEvents({
   });
 }
 
-export async function compactAuthorityEvents({
-  userId,
-  sessionId,
-  persistenceContext,
-  retainDeliveredAfter,
-}) {
-  if (!userId || !sessionId) {
-    return { compacted: false, reason: "missing_compaction_identity" };
-  }
+export async function compactAuthorityEvents(request) {
+  const { userId, sessionId, persistenceContext, retainDeliveredAfter } =
+    assertAuthorityOutboxRequest(request, "compact");
   const sessionDir = await locateOutboxSessionDir(this, userId, sessionId, persistenceContext);
   if (!sessionDir) return { compacted: false, reason: SESSION_NOT_FOUND_REASON };
   return withAuthorityOutboxMutation(sessionDir, async () => {
     const outbox = await readAuthorityOutbox(sessionDir);
     const result = compactAuthorityEventOutbox(outbox, { retainDeliveredAfter });
-    if (result.reason || !result.compacted) return result;
+    if (!result.compacted) return result;
     const checkpoint = await readAuthorityOutboxCheckpoint(sessionDir);
     await writeAuthorityOutboxCheckpoint(
       sessionDir,

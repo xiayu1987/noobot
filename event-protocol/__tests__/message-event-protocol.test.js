@@ -536,9 +536,9 @@ test("message payload validates canonical tool risk", () => {
   assert.deepEqual(validateMessageEventPayload(ended), { valid: true, errors: [] });
 });
 
-test("isHostActivity accepts empty and host kinds and rejects plugin kinds", () => {
-  assert.equal(isHostActivity({}), true);
-  assert.equal(isHostActivity({ activityKind: " " }), true);
+test("isHostActivity requires a declared kind and distinguishes host from plugin activities", () => {
+  assert.throws(() => isHostActivity({}), /canonical activityKind/);
+  assert.throws(() => isHostActivity({ activityKind: " " }), /canonical activityKind/);
   for (const activityKind of Object.values(ACTIVITY_KIND)) {
     assert.equal(isHostActivity({ activityKind }), true);
   }

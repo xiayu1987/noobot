@@ -211,8 +211,8 @@ export function collectTurnReplacementTombstoneErrors(replacement, lifecycleSequ
     errors.push("missing_replacement_user_message_uid");
   if (!clean(replacement?.commandId)) errors.push("missing_replacement_command_id");
   if (
-    !Number.isInteger(Number(replacement?.committedAggregateVersion)) ||
-    Number(replacement.committedAggregateVersion) < 1
+    !Number.isInteger(replacement?.committedAggregateVersion) ||
+    replacement.committedAggregateVersion < 1
   )
     errors.push("invalid_replacement_committed_version");
   if (
@@ -224,9 +224,9 @@ export function collectTurnReplacementTombstoneErrors(replacement, lifecycleSequ
   if (replacedTurnScopeIds.includes(replacementTurnScopeId))
     errors.push("replacement_scope_reuses_replaced_scope");
   if (
-    !Number.isInteger(Number(replacement?.sequence)) ||
-    Number(replacement.sequence) < 1 ||
-    Number(replacement.sequence) > Number(lifecycleSequence)
+    !Number.isInteger(replacement?.sequence) ||
+    replacement.sequence < 1 ||
+    replacement.sequence > lifecycleSequence
   )
     errors.push("invalid_replacement_sequence");
   if (!clean(replacement?.committedAt)) errors.push("missing_replacement_committed_at");
@@ -249,35 +249,38 @@ export function validateTurnLifecycleSnapshot(snapshot = {}) {
     return { valid: false, errors: ["snapshot_not_object"] };
   }
   const errors = [];
-  if (Number(snapshot.protocolVersion) !== TURN_LIFECYCLE_PROTOCOL_VERSION)
+  if (snapshot.protocolVersion !== TURN_LIFECYCLE_PROTOCOL_VERSION)
     errors.push("unsupported_protocol_version");
   if (clean(snapshot.eventType) !== TURN_EVENT.SNAPSHOT) errors.push("invalid_snapshot_event_type");
   if (!clean(snapshot.commandId)) errors.push("missing_command_id");
   if (!clean(snapshot.sessionId)) errors.push("missing_session_id");
-  if (!Number.isInteger(Number(snapshot.sequence)) || Number(snapshot.sequence) < 0)
+  if (!Number.isInteger(snapshot.sequence) || snapshot.sequence < 0)
     errors.push("invalid_sequence");
   if (typeof snapshot.unchanged !== "boolean") errors.push("invalid_snapshot_unchanged");
   if (!isTurnRecoveryAction(snapshot.recovery)) errors.push("invalid_snapshot_recovery");
   else if (isActionableTurnRecovery(snapshot.recovery) && !snapshot.activeTurn)
     errors.push("recovery_without_active_turn");
-  const turns = [
-    snapshot.activeTurn,
-    ...(Array.isArray(snapshot.recentTerminalTurns) ? snapshot.recentTerminalTurns : []),
-  ].filter(Boolean);
+  if (!Array.isArray(snapshot.recentTerminalTurns)) {
+    return { valid: false, errors: [...errors, "missing_recent_terminal_turns"] };
+  }
+  const turns =
+    snapshot.activeTurn === null
+      ? snapshot.recentTerminalTurns
+      : [snapshot.activeTurn, ...snapshot.recentTerminalTurns];
   for (const turn of turns) {
+    if (!isObjectLike(turn)) {
+      errors.push("invalid_snapshot_turn");
+      continue;
+    }
     errors.push(...collectTurnMaterializationErrors(turn));
     if (turn.sessionId !== snapshot.sessionId) errors.push("turn_session_identity_mismatch");
-    if (
-      Number.isInteger(Number(turn.sequence)) &&
-      Number(turn.sequence) >= 1 &&
-      Number(turn.sequence) > Number(snapshot.sequence)
-    )
+    if (Number.isInteger(turn.sequence) && turn.sequence >= 1 && turn.sequence > snapshot.sequence)
       errors.push("turn_sequence_exceeds_snapshot");
   }
   if (!Array.isArray(snapshot.replacedTurns)) errors.push("missing_replaced_turns");
   const replacementScopes = collectReplacementErrors(snapshot, errors);
   const materializedTurnScopes = new Set(
-    turns.map((turn) => turn.turnScopeId).filter(isCanonicalTurnScopeId),
+    turns.map((turn) => turn?.turnScopeId).filter(isCanonicalTurnScopeId),
   );
   if ([...replacementScopes].some((turnScopeId) => materializedTurnScopes.has(turnScopeId))) {
     errors.push("replaced_turn_still_materialized");

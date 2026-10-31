@@ -56,11 +56,6 @@ import {
 } from "../../events/message-event-stream.js";
 import { CONTROL_TOOL_NAMES } from "../../tools/constants/index.js";
 import { text, isObjectLike } from "@noobot/shared/value";
-export {
-  buildAssistantModelMessageForToolCalls,
-  formatToolCallsForLangChain,
-  formatToolCallsForStorage,
-} from "./tool-call-message.js";
 
 function assertHookContextRetainsModelContext(runtime, hookContext) {
   const expected = requireActiveModelContext(runtime);

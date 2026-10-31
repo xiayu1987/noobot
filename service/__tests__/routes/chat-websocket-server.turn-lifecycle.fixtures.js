@@ -189,7 +189,7 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
         if (result.applied) {
           lifecycle = result.lifecycle;
           if (result.committedEvent) {
-            eventOutbox = [...eventOutbox, result.committedEvent];
+            eventOutbox = [...eventOutbox, { ...result.committedEvent, deliveries: {} }];
           }
           committed.push(input.eventType);
         }
@@ -226,7 +226,11 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
       },
       async recordAuthorityEventAttempts({ consumerId, eventIds = [] } = {}) {
         for (const eventId of eventIds) {
-          const result = recordAuthorityEventDeliveryAttempt(eventOutbox, { eventId, consumerId });
+          const result = recordAuthorityEventDeliveryAttempt(eventOutbox, {
+            eventId,
+            consumerId,
+            attemptedAt: new Date().toISOString(),
+          });
           if (!result.found) return { recorded: false, reason: result.reason };
           eventOutbox = result.outbox;
         }

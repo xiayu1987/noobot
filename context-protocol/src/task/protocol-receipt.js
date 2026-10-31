@@ -4,12 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import crypto from "node:crypto";
-export {
-  TASK_PROTOCOL_RECEIPT_FIELDS,
-  TASK_PROTOCOL_STATE,
-  parseTaskProtocolReceipt,
-} from "./receipt-contract.js";
-
 export function createTaskProtocolReceipt(parsed = {}) {
   return Object.freeze({
     state: parsed.state,

@@ -38,7 +38,7 @@ import {
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 test("Session artifact and Turn commit metadata have one canonical protocol shape", () => {
-  assert.equal(SESSION_ARTIFACT_SCHEMA_VERSION, 18);
+  assert.equal(SESSION_ARTIFACT_SCHEMA_VERSION, 19);
   assert.deepEqual(
     normalizeTurnCommitMetadata({
       action: " SEND ",

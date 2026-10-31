@@ -5,26 +5,24 @@
  */
 import { TURN_SNAPSHOT_WIRE_EVENT, validateTurnLifecycleSnapshot } from "@noobot/session-protocol";
 import { createEventEnvelope } from "./envelope.js";
-import { text } from "@noobot/shared/value";
 
 export const TURN_SNAPSHOT_EVENT_FAMILY = "turn.snapshot";
 export const TURN_SNAPSHOT_SCHEMA_VERSION = 1;
 export const SESSION_SEQUENCE_DOMAIN = "session";
 
-export function createTurnSnapshotEnvelope(
-  snapshot,
-  { eventId, producer = { type: "domain-service", id: "turn-snapshot-query" } } = {},
-) {
+const TURN_SNAPSHOT_PRODUCER = Object.freeze({ type: "domain-service", id: "turn-snapshot-query" });
+
+export function createTurnSnapshotEnvelope(snapshot, { eventId }) {
   const validation = validateTurnLifecycleSnapshot(snapshot);
   if (!validation.valid) {
     throw new TypeError(`invalid turn lifecycle snapshot: ${validation.errors.join(",")}`);
   }
-  const sequence = Number(snapshot.sequence);
+  const sequence = snapshot.sequence;
   return createEventEnvelope({
     family: TURN_SNAPSHOT_EVENT_FAMILY,
     schemaVersion: TURN_SNAPSHOT_SCHEMA_VERSION,
     identity: {
-      eventId: text(eventId) || `${snapshot.commandId}:snapshot:${sequence}`,
+      eventId,
       eventType: TURN_SNAPSHOT_WIRE_EVENT,
       sessionId: snapshot.sessionId,
       turnScopeId: snapshot.activeTurnScopeId || undefined,
@@ -35,7 +33,7 @@ export function createTurnSnapshotEnvelope(
       scopeId: snapshot.sessionId,
       sequence,
     },
-    producer,
+    producer: TURN_SNAPSHOT_PRODUCER,
     occurredAt: snapshot.generatedAt,
     payload: snapshot,
   });
@@ -53,7 +51,7 @@ export function validateTurnSnapshotEnvelope(envelope = {}) {
     errors.push("sequence_scope_mismatch");
   if (envelope?.payload?.sessionId !== envelope?.identity?.sessionId)
     errors.push("snapshot_session_identity_mismatch");
-  if (Number(envelope?.payload?.sequence) !== Number(envelope?.ordering?.sequence))
+  if (envelope?.payload?.sequence !== envelope?.ordering?.sequence)
     errors.push("snapshot_sequence_mismatch");
   if (envelope?.payload?.commandId !== envelope?.causality?.commandId)
     errors.push("snapshot_command_identity_mismatch");

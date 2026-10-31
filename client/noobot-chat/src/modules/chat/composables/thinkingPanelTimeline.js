@@ -33,10 +33,13 @@ import {
   selectTaskCheckReceipts,
 } from "../runtime/engine/toolTimeline.js";
 import {
-  mergeActivityTimelines,
   selectActivityTimelineLogs,
   selectLatestAnalysisActivities,
 } from "../runtime/engine/activityTimeline.js";
+import {
+  mergeCanonicalActivityTimelines,
+  selectMessageActivityTimeline,
+} from "@noobot/event-protocol/activity-timeline";
 import {
   createThinkingAnalysisProjection,
   sourceToProjectionLatencyMs,
@@ -74,9 +77,7 @@ export function useThinkingTimeline(
     ),
   );
   const roundActivityTimeline = computed(() =>
-    mergeActivityTimelines(
-      ...roundMessages.value.map((candidate) => candidate?.activityTimeline || []),
-    ),
+    mergeCanonicalActivityTimelines(...roundMessages.value.map(selectMessageActivityTimeline)),
   );
   const roundThinkingContentTimeline = computed(() =>
     projectThinkingDetailContentTimeline(roundMessages.value, roundActivityTimeline.value),

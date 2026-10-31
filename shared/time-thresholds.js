@@ -103,6 +103,7 @@ export const TIME_THRESHOLDS = deepFreeze({
     tmpFileMaxAgeMs: TIME_TIERS.oneDayMs,
     tmpCleanupMinIntervalMs: TIME_TIERS.fiveMinutesMs,
     cleanupGraceMs: 10 * MINUTE_MS,
+    runWriteLockStaleMs: 10 * MINUTE_MS,
     maxRunAgeDays: TIME_TIERS.thirtyDays,
     fsmCacheMaxAgeMs: 30 * MINUTE_MS,
     fsmCacheCleanupIntervalMs: TIME_TIERS.fiveMinutesMs,

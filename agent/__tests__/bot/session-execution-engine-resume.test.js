@@ -138,12 +138,19 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
     globalConfig: { workspaceRoot },
     identity: stoppedIdentity,
     messageBlocks: {
-      system: [{ type: "system", content: "snapshot task-state system" }],
+      system: [
+        {
+          type: "system",
+          content: "snapshot task-state system",
+          additional_kwargs: { contextMessageId: "cm_system" },
+        },
+      ],
       history: [
         {
           type: "human",
           content: "history",
           additional_kwargs: {
+            messageUid: "sm_history",
             dialogProcessId: "dialog-history",
             turnScopeId: "turn-history",
           },

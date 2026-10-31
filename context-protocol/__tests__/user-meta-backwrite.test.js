@@ -45,6 +45,8 @@ test("user_meta backwrite rejects duplicate attachment relations", () => {
     userMetaSourceMessageUid: "sm_user",
     attachmentRef,
     result: { sourceAttachmentRef: attachmentRef },
+    createdAt: "2026-10-21T00:00:00.000Z",
+    status: "pending",
   };
   assert.throws(
     () => normalizeUserMetaBackwrites([record, record]),
@@ -61,4 +63,25 @@ test("parsed results replace the entry for the same attachment", () => {
     { sourceAttachmentRef: attachmentRef, v: 2 },
   ]);
   assert.throws(() => mergeUserMetaParsedResults([], { v: 1 }), /requires sourceAttachmentRef/);
+});
+
+test("stored backwrites reject missing timestamps and invalid pending state", () => {
+  const record = createUserMetaBackwrite({
+    userMetaSourceMessageUid: "sm_user",
+    attachmentRef,
+    result: {},
+  });
+  for (const createdAt of [undefined, null, "", "2026-01-01", 1]) {
+    assert.throws(
+      () => normalizeUserMetaBackwrites([{ ...record, createdAt }]),
+      /canonical createdAt/,
+    );
+  }
+  for (const status of [undefined, "", "completed"]) {
+    assert.throws(
+      () => normalizeUserMetaBackwrites([{ ...record, status }]),
+      /status must be pending/,
+    );
+  }
+  assert.throws(() => normalizeUserMetaBackwrites(null), /must be an array/);
 });

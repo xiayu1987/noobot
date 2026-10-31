@@ -11,8 +11,7 @@ import {
 } from "./configStructureContract.js";
 import {
   CONFIG_DOCUMENT_SCOPE,
-  CONFIG_NODE_ACCESS,
-  projectConfigDocumentForAccess,
+  projectConfigDocumentForScope,
 } from "@noobot/agent-config-protocol";
 
 export const CONFIG_DOCUMENT_PATH = "config.json";
@@ -150,9 +149,8 @@ export function pruneConfigDocument(document = {}, baseline = {}) {
 
 export function buildConfigDocumentForSave(document = {}, baseline = {}) {
   const pruned = pruneConfigDocument(document, baseline);
-  const userDocument = projectConfigDocumentForAccess(pruned, {
+  const userDocument = projectConfigDocumentForScope(pruned, {
     scope: CONFIG_DOCUMENT_SCOPE.USER,
-    access: CONFIG_NODE_ACCESS.USER,
   });
   assertConfigDocument(userDocument);
   return userDocument;

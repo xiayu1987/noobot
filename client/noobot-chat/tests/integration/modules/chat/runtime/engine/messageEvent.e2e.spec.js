@@ -16,7 +16,7 @@ import { createRuntimeContext } from "../../../../../../../../agent/src/runtime/
 import { createTestAttachmentService } from "../../../../../../../../agent/__tests__/helpers/test-runtime-context.js";
 import { createRunEventListener } from "../../../../../../../../service/ws/chat-websocket/run-event-listener.js";
 import { isWorkflowNodeMessageEvent } from "@noobot/event-protocol/message-event";
-import { toolResultText } from "../../../../helpers/toolTimelineFixture.js";
+import { toolResultText } from "../../../../../unit/helpers/toolTimelineFixture.js";
 import { useChatStore } from "../../../../../../src/modules/chat/stores/useChatStore.js";
 import { collectSessionLinkSnapshots } from "../../../../../../src/modules/chat/composables/message/useMessageFiles.js";
 import { useMarkdownRenderer } from "../../../../../../src/modules/chat/composables/message/useMarkdownRenderer.js";
@@ -24,8 +24,8 @@ import { buildAttachmentRefIndex } from "../../../../../../src/modules/chat/comp
 import { translateMessageKey } from "../../../../../../src/shared/i18n/messageCatalog.js";
 import { buildViewMessage } from "../../../../../../src/modules/chat/model/messageModel.js";
 import { buildSessionDetailProjection } from "../../../../../../src/modules/session/model/list/sessionDetailProjection.js";
-import { canonicalMessageEvent } from "../../helpers/messageEventFixture.js";
-import { canonicalWorkflowSessionSnapshot } from "../../helpers/workflowRuntimeEventFixture.js";
+import { canonicalMessageEvent } from "../../../../../unit/modules/chat/helpers/messageEventFixture.js";
+import { canonicalWorkflowSessionSnapshot } from "../../../../../unit/modules/chat/helpers/workflowRuntimeEventFixture.js";
 
 function applySessionSnapshot(store, sessionDoc) {
   return store.applyWorkflowRuntimeEvent(

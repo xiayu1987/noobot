@@ -5,7 +5,12 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { CONFIG_ITEM_TYPE, CONFIG_NODE_ACCESS } from "@noobot/agent-config-protocol";
+import {
+  CONFIG_ITEM_TYPE,
+  CONFIG_NODE_ACCESS,
+  upgradeConfigModelLibrary,
+} from "@noobot/agent-config-protocol";
+import { MODEL_LIBRARY_VERSION } from "@noobot/model-protocol";
 import {
   assertConfigDocument,
   buildConfigDocumentForSave,
@@ -82,6 +87,21 @@ describe("configStructureContract", () => {
 });
 
 describe("configDocumentState", () => {
+  it("preserves catalog version and custom flags across edit, save and startup", () => {
+    const loaded = upgradeConfigModelLibrary({
+      providers: { mine: { model: "private" } },
+    }).document;
+    const saved = buildConfigDocumentForSave(loaded, structuredClone(loaded));
+    expect(saved.model_library_version).toBe(MODEL_LIBRARY_VERSION);
+    expect(saved.providers.mine.is_custom).toBe(true);
+    const restarted = upgradeConfigModelLibrary(
+      parseConfigDocument(serializeConfigDocument(saved)),
+    );
+    expect(restarted.report.changed).toBe(false);
+    expect(restarted.document).toEqual(saved);
+    expect(USER_CONFIG_SECTIONS.map(({ key }) => key)).not.toContain("model_library_version");
+  });
+
   it("rejects non-object documents", () => {
     expect(() => parseConfigDocument("[]")).toThrowError(/must be an object/);
     expect(() => parseConfigDocument("{oops}")).toThrowError(/JSON parse error/);

@@ -31,6 +31,14 @@ export function isCanonicalMessageTimestamp(value) {
   return Number.isFinite(ms) && new Date(ms).toISOString() === value;
 }
 
+export function readSessionMessageDraftAttachments(message) {
+  if (message.attachments === undefined) return [];
+  if (!Array.isArray(message.attachments)) {
+    throw new TypeError("Session message draft attachments must be an array");
+  }
+  return message.attachments;
+}
+
 export function collectSessionMessageEntityErrors(record) {
   const errors = [];
   if (typeof record.content !== "string") errors.push("content_not_string");

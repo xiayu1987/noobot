@@ -11,6 +11,7 @@ import {
   MESSAGE_ORIGIN,
   SESSION_ARTIFACT_SCHEMA_VERSION,
   SESSION_ERROR_CODE,
+  createTurnTerminalStatus,
 } from "@noobot/session-protocol";
 import { projectTurnCompletionMessages } from "@noobot/context-protocol";
 import { upgradeSessionMessageIdentity } from "../src/workspace-lifecycle/session-message-identity-upgrade.js";
@@ -95,6 +96,9 @@ async function saveCheckpointedSession(sessionRepo, sessionId) {
 async function downgradeToSchema10JournalSnapshots(sessionDir, tail) {
   const manifestFile = path.join(sessionDir, "session.json");
   const manifest = await readJson(manifestFile);
+  manifest.turnSummaryCheckpoints = (
+    await readSessionArtifact({ sessionDir, storageService: TEST_STORAGE_SERVICE })
+  ).turnSummaryCheckpoints;
   const [turn] = manifest.turnOrder;
   const records = [
     ...turn.summarySnapshots.map((index) => ({
@@ -227,12 +231,16 @@ async function saveCompletedTurnWithRejectedBatch(sessionRepo, sessionId) {
       aggregateVersion: 0,
       turnLifecycle: {
         ...createTestSessionRequiredFields().turnLifecycle,
+        sequence: 1,
         turns: {
           done: {
             revision: 1,
             sequence: 1,
             ...turn,
-            terminalStatus: { ...turn, status: "completed", reason: "run_completed" },
+            terminalStatus: createTurnTerminalStatus("completed", {
+              turnScopeId: turn.turnScopeId,
+              dialogProcessId: turn.dialogProcessId,
+            }),
           },
         },
       },
@@ -371,6 +379,9 @@ function withRetiredTaskFields(record) {
 async function downgradeToSchema17WithTaskFields(sessionDir) {
   const manifestFile = path.join(sessionDir, "session.json");
   const manifest = await readJson(manifestFile);
+  manifest.turnSummaryCheckpoints = (
+    await readSessionArtifact({ sessionDir, storageService: TEST_STORAGE_SERVICE })
+  ).turnSummaryCheckpoints;
   manifest.currentTaskId = "";
   for (const turn of manifest.turnOrder) {
     const latestHash = new Map();

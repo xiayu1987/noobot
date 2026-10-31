@@ -454,6 +454,16 @@ function isStructuredNode(node) {
 
 function materializeFromValues({ node, path, values, scope, changes }) {
   if (!isStructuredNode(node)) return clone(values.resolve(path));
+  if (pathText(path) === "providers") {
+    return repairStructureNode({
+      node,
+      target: clone(values.resolve(path)),
+      path,
+      values,
+      scope,
+      changes,
+    });
+  }
   return repairStructureNode({ node, target: {}, path, values, scope, changes });
 }
 
@@ -467,7 +477,7 @@ function resetFromValues({ node, path, values, scope, changes, reason = "invalid
 }
 
 function collectionValueKeys({ path, values }) {
-  if (pathText(path) === "providers") return values.listProviderAliases();
+  if (pathText(path) === "providers") return [];
   const declared = values.has(path) ? values.resolve(path) : null;
   return isPlainObject(declared) ? Object.keys(declared) : [];
 }
@@ -546,8 +556,11 @@ function collectReferenceRules(document) {
   return rules;
 }
 
-function repairModelReferences(document, values, changes) {
-  const providers = isPlainObject(document.providers) ? document.providers : {};
+function repairModelReferences(document, values, changes, scope) {
+  const providers = {
+    ...(scope === CONFIG_DOCUMENT_SCOPE.USER ? values.resolve(["providers"]) : {}),
+    ...document.providers,
+  };
   for (const rule of collectReferenceRules(document)) {
     const alias = valueAt(document, rule.path);
     if (typeof alias !== "string" || !alias) continue;
@@ -598,7 +611,7 @@ export function repairConfigDocument({
     scope,
     changes,
   });
-  repairModelReferences(document === REMOVE_NODE ? {} : document, values, changes);
+  repairModelReferences(document === REMOVE_NODE ? {} : document, values, changes, scope);
   return Object.freeze({
     document: document === REMOVE_NODE ? {} : document,
     report: Object.freeze({ changed: changes.length > 0, changes: Object.freeze(changes) }),

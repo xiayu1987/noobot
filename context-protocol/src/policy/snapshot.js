@@ -13,6 +13,7 @@ import {
   withContextMessageMetadata,
   resolveContextMessageRole,
   resolveContextToolResultCallId,
+  resolveContextMessageIdentity,
 } from "../message/codec.js";
 import { normalizeUserMetaBackwrites } from "./user-meta-backwrite.js";
 import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
@@ -141,7 +142,7 @@ export function createModelContextSnapshot({
     history: serializeList(messageBlocks?.history),
     incremental: serializeList(messageBlocks?.incremental),
   };
-  return {
+  const snapshot = {
     version: SNAPSHOT_VERSION,
     ...normalizedIdentity,
     createdAt: now,
@@ -151,6 +152,8 @@ export function createModelContextSnapshot({
     userMetaBackwrites: normalizeUserMetaBackwrites(userMetaBackwrites),
     turnProgress: normalizeTurnProgress(turnProgress),
   };
+  assertModelContextSnapshot(snapshot);
+  return snapshot;
 }
 
 function assertModelContextSnapshotIdentity(snapshot = {}, identity = {}) {
@@ -167,25 +170,51 @@ export function hydrateModelContextSnapshot(
   identity = {},
   { deserializeMessage = (message) => message } = {},
 ) {
-  if (Number(snapshot?.version) !== SNAPSHOT_VERSION) {
-    throw new Error(`Stopped model message snapshot version must equal ${SNAPSHOT_VERSION}`);
-  }
+  assertModelContextSnapshot(snapshot);
   assertModelContextSnapshotIdentity(snapshot, identity);
   const hydrate = (messages) =>
-    (Array.isArray(messages) ? messages : [])
-      .map(deserializeContextMessageRecord)
-      .map(deserializeMessage);
+    messages.map(deserializeContextMessageRecord).map(deserializeMessage);
   return {
     ...snapshot,
     messageBlocks: {
-      system: hydrate(snapshot?.messageBlocks?.system),
-      history: hydrate(snapshot?.messageBlocks?.history),
-      incremental: hydrate(snapshot?.messageBlocks?.incremental),
+      system: hydrate(snapshot.messageBlocks.system),
+      history: hydrate(snapshot.messageBlocks.history),
+      incremental: hydrate(snapshot.messageBlocks.incremental),
     },
-    messages: hydrate(snapshot?.messages),
-    userMetaBackwrites: normalizeUserMetaBackwrites(snapshot?.userMetaBackwrites || []),
-    turnProgress: normalizeTurnProgress(snapshot?.turnProgress),
+    messages: hydrate(snapshot.messages),
+    userMetaBackwrites: normalizeUserMetaBackwrites(snapshot.userMetaBackwrites ?? []),
+    turnProgress: normalizeTurnProgress(snapshot.turnProgress),
   };
+}
+
+export function assertModelContextSnapshot(snapshot) {
+  if (snapshot?.version !== SNAPSHOT_VERSION) {
+    throw new Error(`Stopped model message snapshot version must equal ${SNAPSHOT_VERSION}`);
+  }
+  for (const field of SNAPSHOT_REQUIRED_IDENTITY_FIELDS) {
+    if (typeof snapshot[field] !== "string" || !snapshot[field].trim()) {
+      throw new TypeError(`Stopped model message snapshot requires ${field}`);
+    }
+  }
+  for (const block of ["system", "history", "incremental"]) {
+    if (!Array.isArray(snapshot.messageBlocks?.[block])) {
+      throw new TypeError(`Stopped model message snapshot requires messageBlocks.${block}`);
+    }
+    for (const message of snapshot.messageBlocks[block]) {
+      assertProtocolTopLevelKeys(message);
+      if (!Object.values(SNAPSHOT_TYPE_BY_ROLE).includes(message.type)) {
+        throw new TypeError("Stopped model message snapshot requires a declared message type");
+      }
+      resolveContextMessageIdentity(message);
+    }
+  }
+  if (
+    JSON.stringify(snapshot.messages) !==
+    JSON.stringify(composeMessagesFromBlocks(snapshot.messageBlocks))
+  ) {
+    throw new TypeError("Stopped model message snapshot messages must equal composed blocks");
+  }
+  normalizeUserMetaBackwrites(snapshot.userMetaBackwrites ?? []);
 }
 
 function indexAuthoritativeSessionMessages(messages) {

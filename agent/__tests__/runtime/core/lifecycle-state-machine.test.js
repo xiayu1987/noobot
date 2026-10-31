@@ -15,6 +15,23 @@ import {
 } from "../../../src/runtime/lifecycle/state-machine.js";
 import { AGENT_RUN_EVENT } from "../../../src/events/run-event.js";
 
+test("resume identity is immutable and owned by lifecycle base payload", () => {
+  const events = [];
+  const machine = createAgentLifecycleMachine({
+    basePayload: { resumeFromStoppedSnapshot: true },
+    eventListener: { onEvent: (event) => events.push(event) },
+  });
+  for (const resumeFromStoppedSnapshot of [true, false, undefined]) {
+    assert.throws(
+      () => machine.enterRunning({ resumeFromStoppedSnapshot }),
+      /owned by basePayload/,
+    );
+  }
+  assert.equal(events.length, 0);
+  assert.equal(machine.enterRunning().resumeFromStoppedSnapshot, true);
+  assert.equal(events[0].data.sequence, 1);
+});
+
 test("agent lifecycle machine emits normalized state change payload", () => {
   const events = [];
   const machine = createAgentLifecycleMachine({
@@ -41,7 +58,6 @@ test("agent lifecycle machine emits normalized state change payload", () => {
     ],
   );
   assert.equal(events[0].data.state, "resume_initializing");
-  assert.equal(events[0].data.state, "resume_initializing");
   assert.equal(events[0].data.previousState, "");
   assert.equal(events[1].data.previousState, "resume_initializing");
   assert.equal(events[2].data.state, "failed");
@@ -59,8 +75,8 @@ test("agent lifecycle helpers resolve initial state and sync runtime fields", ()
     AGENT_LIFECYCLE_STATE.RESUME_INITIALIZING,
   );
 
-  const machine = createAgentLifecycleMachine();
-  machine.enterInitializing({ resumeFromStoppedSnapshot: true });
+  const machine = createAgentLifecycleMachine({ basePayload: { resumeFromStoppedSnapshot: true } });
+  machine.transition(resolveInitialLifecycleState({ resumeFromStoppedSnapshot: true }));
   const runtime = {};
 
   syncLifecycleRuntimeState(runtime, machine);
@@ -78,9 +94,10 @@ test("agent lifecycle phase methods and terminal branch payloads are standardize
   const machine = createAgentLifecycleMachine({
     eventListener: { onEvent: (event) => events.push(event) },
     now: () => "2026-01-01T00:00:00.000Z",
+    basePayload: { resumeFromStoppedSnapshot: false },
   });
 
-  machine.enterInitializing({ resumeFromStoppedSnapshot: false });
+  machine.transition(resolveInitialLifecycleState({ resumeFromStoppedSnapshot: false }));
   machine.enterRunning();
   machine.enterPersisting();
   machine.enterMemory();

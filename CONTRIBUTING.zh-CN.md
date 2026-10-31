@@ -24,6 +24,9 @@
 
 ## 代码建议
 
+`npm run check:quality` 包含[僵尸代码检查](./docs/dead-code-quality.md)。
+可单独运行 `npm run check:dead-code`，检查未使用的生产文件、导出和依赖。
+
 - 改动保持“小且聚焦”。
 - 不提交运行时/构建产物（遵循 `.gitignore`）。
 - 如涉及配置或环境变量变更，请同步更新：

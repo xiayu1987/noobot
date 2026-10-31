@@ -131,12 +131,14 @@ async function runWorkspaceOperation({
   await ensureRuntimeDirectories(base);
   report.memory = await repairMemorySection(base);
   if (operation !== WORKSPACE_OPERATION.RESET || selected.has(WORKSPACE_SECTION.CONFIG)) {
-    report.config = await repairConfigSection({
+    const { modelLibraryUpgrade, ...config } = await repairConfigSection({
       base,
       baseValues,
       backup,
       onlyInvalid: operation === WORKSPACE_OPERATION.REPAIR,
     });
+    report.config = config;
+    report.modelLibraryUpgrade = modelLibraryUpgrade;
   }
   const assetSections = WORKSPACE_ASSET_SECTIONS.filter((name) => selected.has(name));
   report.assets = await applyWorkspaceAssets({

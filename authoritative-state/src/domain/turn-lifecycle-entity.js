@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import {
+  assertTurnLifecycleRecordIntegrity,
   decideTurnTransition,
   isRetryableFinalizeFailure,
   isTerminalTurnState,
@@ -42,9 +43,8 @@ function normalizeFinalizeIntent(value) {
   };
 }
 
-function normalizeTurn(value, key) {
-  const turnScopeId = clean(value.turnScopeId || key);
-  if (!turnScopeId) return null;
+function normalizeTurn(value) {
+  const turnScopeId = value.turnScopeId;
   return {
     turnScopeId,
     presentationMessageId: clean(value.presentationMessageId),
@@ -76,11 +76,10 @@ function normalizeTurn(value, key) {
   };
 }
 
-function normalizeReplacedTurn(value, key) {
-  const turnScopeId = clean(value.turnScopeId || key);
+function normalizeReplacedTurn(value) {
+  const turnScopeId = value.turnScopeId;
   const replacementTurnScopeId = clean(value.replacementTurnScopeId);
   const commandId = clean(value.commandId);
-  if (!turnScopeId || !replacementTurnScopeId || !commandId) return null;
   return {
     turnScopeId,
     replacementDialogProcessId: clean(value.replacementDialogProcessId),
@@ -103,15 +102,14 @@ function normalizeReplacedTurn(value, key) {
 
 function normalizeRecord(source, projector) {
   const output = {};
-  for (const [key, value] of Object.entries(source || {})) {
-    if (!isPlainObject(value)) continue;
-    const projected = projector(value, key);
-    if (projected) output[projected.turnScopeId] = projected;
+  for (const [key, value] of Object.entries(source)) {
+    output[key] = projector(value);
   }
   return output;
 }
 
 export function normalizeTurnLifecycleEntity(source) {
+  assertTurnLifecycleRecordIntegrity(source);
   const turns = normalizeRecord(source.turns, normalizeTurn);
   const replacedTurns = normalizeRecord(source.replacedTurns, normalizeReplacedTurn);
   const commandReceipts = normalizeCommandReceipts(source.commandReceipts);
@@ -123,11 +121,7 @@ export function normalizeTurnLifecycleEntity(source) {
         isRetryableFinalizeFailure(turns[activeTurnScopeId]))
         ? activeTurnScopeId
         : "",
-    sequence: Math.max(
-      integer(source.sequence),
-      ...Object.values(turns).map((turn) => turn.sequence),
-      ...Object.values(replacedTurns).map((turn) => turn.sequence),
-    ),
+    sequence: source.sequence,
     turns,
     replacedTurns,
     commandReceipts,
@@ -154,11 +148,7 @@ function rejectionResult(request, decision) {
   return result;
 }
 
-export function transitionTurnLifecycle(
-  source = {},
-  input = {},
-  now = () => new Date().toISOString(),
-) {
+export function transitionTurnLifecycle(source, input = {}, now = () => new Date().toISOString()) {
   const lifecycle = normalizeTurnLifecycleEntity(source);
   const turnScopeId = clean(input.turnScopeId);
   const current = lifecycle.turns[turnScopeId] || null;

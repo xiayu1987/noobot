@@ -74,6 +74,26 @@ function normalizeError(error = null) {
   );
 }
 
+const TERMINAL_PAYLOAD_FIELDS = Object.freeze([
+  "turnScopeId",
+  "dialogProcessId",
+  "parentDialogProcessId",
+  "description",
+  "updatedAt",
+  "error",
+]);
+
+function assertTerminalFields(value, fields) {
+  for (const field of Object.keys(value)) {
+    if (!fields.includes(field)) {
+      throw Object.assign(new TypeError(`unknown turn terminal field: ${field}`), {
+        code: "TURN_TERMINAL_FIELD_UNKNOWN",
+        field,
+      });
+    }
+  }
+}
+
 function buildTurnTerminalStatus(status, reason, payload = {}) {
   const turnScopeId = clean(payload.turnScopeId);
   const description = resolveTerminalDescription(status, payload.description);
@@ -95,6 +115,7 @@ function buildTurnTerminalStatus(status, reason, payload = {}) {
 }
 
 export function createTurnTerminalStatus(command = "", payload = {}) {
+  assertTerminalFields(payload, TERMINAL_PAYLOAD_FIELDS);
   const contract = commandContract[clean(command).toLowerCase()];
   if (!contract || !isCanonicalText(payload.dialogProcessId)) return null;
   return buildTurnTerminalStatus(contract[0], contract[1], payload);
@@ -106,6 +127,7 @@ const contractPairs = new Set(
 
 export function normalizeTurnTerminalStatus(value = null) {
   if (!isPlainObject(value)) return null;
+  assertTerminalFields(value, [...TERMINAL_PAYLOAD_FIELDS, "status", "reason"]);
   const status = clean(value.status);
   const reason = clean(value.reason);
   if (!contractPairs.has(`${status}\u0000${reason}`)) return null;

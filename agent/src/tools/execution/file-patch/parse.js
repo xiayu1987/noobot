@@ -117,57 +117,70 @@ function normalizePatchText(patch = "") {
   return fenced ? fenced[1] : inputText;
 }
 
+function isUnifiedFileHeader(lines, index) {
+  return lines[index].startsWith("--- ") && Boolean(lines[index + 1]?.startsWith("+++ "));
+}
+
+function isUnifiedHunkBoundary(lines, index) {
+  const line = lines[index];
+  return (
+    line.startsWith("@@") || line.startsWith("diff --git ") || isUnifiedFileHeader(lines, index)
+  );
+}
+
+/** Reads hunk body lines; counts are taken from the body, the header only locates the hunk. */
+function parseUnifiedHunk(lines, startIndex) {
+  const header =
+    lines[startIndex].trim() === "@@" ? null : parseUnifiedHunkHeader(lines[startIndex]);
+  const hunkLines = [];
+  let index = startIndex + 1;
+  for (; index < lines.length && !isUnifiedHunkBoundary(lines, index); index += 1) {
+    if (lines[index] === "\\ No newline at end of file") continue;
+    const prefix = lines[index][0];
+    if (![" ", "+", "-"].includes(prefix)) break;
+    hunkLines.push({ type: prefix, text: lines[index].slice(1) });
+  }
+  return {
+    index,
+    hunk: {
+      ...header,
+      searchOnly: !header,
+      oldCount: hunkLines.filter((line) => line.type !== "+").length,
+      newCount: hunkLines.filter((line) => line.type !== "-").length,
+      lines: hunkLines,
+    },
+  };
+}
+
+function parseUnifiedFile(lines, startIndex, strip) {
+  const oldPath = stripDiffPath(lines[startIndex].slice(4), strip);
+  const newPath = stripDiffPath(lines[startIndex + 1].slice(4), strip);
+  const hunks = [];
+  let index = startIndex + 2;
+  while (index < lines.length && !isUnifiedFileHeader(lines, index)) {
+    if (!lines[index].startsWith("@@")) {
+      index += 1;
+      continue;
+    }
+    const parsed = parseUnifiedHunk(lines, index);
+    hunks.push(parsed.hunk);
+    index = parsed.index;
+  }
+  return { index, filePatch: buildUnifiedFilePatch({ oldPath, newPath, hunks }) };
+}
+
 export function parseUnifiedDiff(patch, strip) {
   const lines = normalizePatchText(patch).split("\n");
   const filePatches = [];
-  let i = 0;
-  while (i < lines.length) {
-    if (!lines[i].startsWith("--- ") || !lines[i + 1]?.startsWith("+++ ")) {
-      i += 1;
+  let index = 0;
+  while (index < lines.length) {
+    if (!isUnifiedFileHeader(lines, index)) {
+      index += 1;
       continue;
     }
-    const oldPath = stripDiffPath(lines[i].slice(4), strip);
-    const newPath = stripDiffPath(lines[i + 1].slice(4), strip);
-    i += 2;
-    const hunks = [];
-    while (i < lines.length) {
-      if (lines[i].startsWith("--- ") && lines[i + 1]?.startsWith("+++ ")) {
-        break;
-      }
-      if (!lines[i].startsWith("@@")) {
-        i += 1;
-        continue;
-      }
-      const header = lines[i].trim() === "@@" ? null : parseUnifiedHunkHeader(lines[i]);
-      i += 1;
-      const hunkLines = [];
-      let oldSeen = 0;
-      let newSeen = 0;
-      while (i < lines.length) {
-        if (lines[i] === "\\ No newline at end of file") {
-          i += 1;
-          continue;
-        }
-        if (lines[i].startsWith("@@") || lines[i].startsWith("diff --git ")) break;
-        if (lines[i].startsWith("--- ") && lines[i + 1]?.startsWith("+++ ")) break;
-        const prefix = lines[i][0];
-        if (![" ", "+", "-"].includes(prefix)) break;
-        hunkLines.push({ type: prefix, text: lines[i].slice(1) });
-        if (prefix !== "+") oldSeen += 1;
-        if (prefix !== "-") newSeen += 1;
-        i += 1;
-      }
-      hunks.push({
-        ...(header || {}),
-        searchOnly: !header,
-        oldCount: oldSeen,
-        newCount: newSeen,
-        declaredOldCount: header?.oldCount || oldSeen,
-        declaredNewCount: header?.newCount || newSeen,
-        lines: hunkLines,
-      });
-    }
-    filePatches.push(buildUnifiedFilePatch({ oldPath, newPath, hunks }));
+    const parsed = parseUnifiedFile(lines, index, strip);
+    filePatches.push(parsed.filePatch);
+    index = parsed.index;
   }
   if (!filePatches.length) {
     throw recoverableToolError("invalid unified diff: no file patch found", {
@@ -176,6 +189,67 @@ export function parseUnifiedDiff(patch, strip) {
     });
   }
   return filePatches;
+}
+
+const APPLY_PATCH_ADD = "*** Add File: ";
+const APPLY_PATCH_DELETE = "*** Delete File: ";
+const APPLY_PATCH_UPDATE = "*** Update File: ";
+const APPLY_PATCH_MOVE = "*** Move to: ";
+
+function isApplyPatchSectionEnd(lines, index) {
+  return index >= lines.length || lines[index].startsWith("*** ");
+}
+
+function parseApplyPatchAdd(lines, startIndex) {
+  const newPath = lines[startIndex].slice(APPLY_PATCH_ADD.length).trim();
+  const contentLines = [];
+  let index = startIndex + 1;
+  for (; !isApplyPatchSectionEnd(lines, index); index += 1) {
+    if (!lines[index].startsWith("+")) {
+      throw recoverableToolError("invalid apply_patch add file line: expected + prefix", {
+        code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
+        details: { field: "patch" },
+      });
+    }
+    contentLines.push(lines[index].slice(1));
+  }
+  const content = buildAddedFileContent(contentLines);
+  return { index, patch: { mode: "add", oldPath: "", newPath, hunks: [], content } };
+}
+
+function parseApplyPatchDelete(lines, startIndex) {
+  const oldPath = lines[startIndex].slice(APPLY_PATCH_DELETE.length).trim();
+  return { index: startIndex + 1, patch: { mode: "delete", oldPath, newPath: "", hunks: [] } };
+}
+
+function parseApplyPatchUpdate(lines, startIndex) {
+  const oldPath = lines[startIndex].slice(APPLY_PATCH_UPDATE.length).trim();
+  let index = startIndex + 1;
+  const moved = Boolean(lines[index]?.startsWith(APPLY_PATCH_MOVE));
+  const newPath = moved ? lines[index].slice(APPLY_PATCH_MOVE.length).trim() : oldPath;
+  if (moved) index += 1;
+  const hunks = [];
+  while (!isApplyPatchSectionEnd(lines, index)) {
+    if (!lines[index].startsWith("@@")) {
+      index += 1;
+      continue;
+    }
+    const parsed = parseApplyPatchHunk(lines, index);
+    hunks.push(parsed.hunk);
+    index = parsed.index;
+  }
+  const mode = newPath === oldPath ? "update" : "move";
+  return { index, patch: { mode, oldPath, newPath, hunks } };
+}
+
+const APPLY_PATCH_SECTION_PARSERS = Object.freeze([
+  [APPLY_PATCH_ADD, parseApplyPatchAdd],
+  [APPLY_PATCH_DELETE, parseApplyPatchDelete],
+  [APPLY_PATCH_UPDATE, parseApplyPatchUpdate],
+]);
+
+function resolveApplyPatchSectionParser(line) {
+  return APPLY_PATCH_SECTION_PARSERS.find(([marker]) => line.startsWith(marker))?.[1] || null;
 }
 
 export function parseApplyPatch(patch = "") {
@@ -187,65 +261,16 @@ export function parseApplyPatch(patch = "") {
     });
   }
   const patches = [];
-  let i = 1;
-  while (i < lines.length) {
-    const line = lines[i];
-    if (line === "*** End Patch") break;
-    if (line.startsWith("*** Add File: ")) {
-      const filePath = line.slice("*** Add File: ".length).trim();
-      i += 1;
-      const contentLines = [];
-      while (i < lines.length && !lines[i].startsWith("*** ")) {
-        if (!lines[i].startsWith("+")) {
-          throw recoverableToolError("invalid apply_patch add file line: expected + prefix", {
-            code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
-            details: { field: "patch" },
-          });
-        }
-        contentLines.push(lines[i].slice(1));
-        i += 1;
-      }
-      patches.push({
-        mode: "add",
-        oldPath: "",
-        newPath: filePath,
-        hunks: [],
-        content: buildAddedFileContent(contentLines),
-      });
+  let index = 1;
+  while (index < lines.length && lines[index] !== "*** End Patch") {
+    const parseSection = resolveApplyPatchSectionParser(lines[index]);
+    if (!parseSection) {
+      index += 1;
       continue;
     }
-    if (line.startsWith("*** Delete File: ")) {
-      patches.push({
-        mode: "delete",
-        oldPath: line.slice("*** Delete File: ".length).trim(),
-        newPath: "",
-        hunks: [],
-      });
-      i += 1;
-      continue;
-    }
-    if (line.startsWith("*** Update File: ")) {
-      const oldPath = line.slice("*** Update File: ".length).trim();
-      let newPath = oldPath;
-      i += 1;
-      if (lines[i]?.startsWith("*** Move to: ")) {
-        newPath = lines[i].slice("*** Move to: ".length).trim();
-        i += 1;
-      }
-      const hunks = [];
-      while (i < lines.length && !lines[i].startsWith("*** ")) {
-        if (lines[i].startsWith("@@")) {
-          const parsedHunk = parseApplyPatchHunk(lines, i);
-          i = parsedHunk.index;
-          hunks.push(parsedHunk.hunk);
-          continue;
-        }
-        i += 1;
-      }
-      patches.push({ mode: newPath === oldPath ? "update" : "move", oldPath, newPath, hunks });
-      continue;
-    }
-    i += 1;
+    const parsed = parseSection(lines, index);
+    patches.push(parsed.patch);
+    index = parsed.index;
   }
   if (!patches.length) {
     throw recoverableToolError("invalid apply_patch: no file operation found", {

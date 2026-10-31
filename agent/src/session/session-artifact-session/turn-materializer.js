@@ -28,7 +28,7 @@ function resolveSummarySnapshotPath(sessionDir, file) {
     reference: file,
     scopeDir: SESSION_ARTIFACT_FILE_NAMES.turnSnapshotsDir,
     extensions: [".json"],
-    errorCode: "SESSION_SUMMARY_SNAPSHOT_PATH_INVALID",
+    errorCode: SESSION_ERROR_CODE.SUMMARY_SNAPSHOT_PATH_INVALID,
     errorLabel: "session summary snapshot reference",
   });
 }
@@ -44,7 +44,12 @@ function snapshotError(message, code) {
   return error;
 }
 
-async function readVerifiedSnapshot({ storageService, sessionDir, index, previousCheckpointHash }) {
+export async function readVerifiedSnapshot({
+  storageService,
+  sessionDir,
+  index,
+  previousCheckpointHash,
+}) {
   const file = index.file;
   const artifactPath = resolveSummarySnapshotPath(sessionDir, file);
   const identityBeforeRead = await readFileIdentity(artifactPath).catch((error) => {
@@ -52,7 +57,7 @@ async function readVerifiedSnapshot({ storageService, sessionDir, index, previou
 
     const failure = snapshotError(
       `summary snapshot registered in manifest is missing: ${file}`,
-      "SESSION_SUMMARY_SNAPSHOT_INDEX_MISMATCH",
+      SESSION_ERROR_CODE.SUMMARY_SNAPSHOT_INDEX_MISMATCH,
     );
     failure.cause = error;
     throw failure;
@@ -69,13 +74,13 @@ async function readVerifiedSnapshot({ storageService, sessionDir, index, previou
   ) {
     throw snapshotError(
       `summary snapshot does not match its manifest index: ${file}`,
-      "SESSION_SUMMARY_SNAPSHOT_INDEX_MISMATCH",
+      SESSION_ERROR_CODE.SUMMARY_SNAPSHOT_INDEX_MISMATCH,
     );
   }
   if (summarySnapshotContentHash(payload) !== index.contentHash) {
     throw snapshotError(
       `summary snapshot hash mismatch: ${file}`,
-      "SESSION_SUMMARY_SNAPSHOT_HASH_MISMATCH",
+      SESSION_ERROR_CODE.SUMMARY_SNAPSHOT_HASH_MISMATCH,
     );
   }
 

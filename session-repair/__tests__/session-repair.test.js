@@ -774,7 +774,6 @@ test("protocol repair resegments a migrated checkpoint baseline and preserves th
               summarySnapshots: indexes.map(({ op, ...index }, position) => ({
                 ...index,
                 committedAt: checkpointPayloads[position].committedAt,
-                messageUids: [],
               })),
               compacted: false,
             },

@@ -26,7 +26,7 @@ test("packaged desktop preserves malformed user JSON before restoring it", async
       appendDesktopLog: (line) => logLines.push(line),
     });
     manager.ensureDesktopGlobalConfig({ isPackaged: true, userDataPath: fixture.userDataPath });
-    assert.equal(JSON.parse(await readFile(configPath, "utf8")).default_provider, "openai");
+    assert.equal(JSON.parse(await readFile(configPath, "utf8")).default_provider, "gpt_5_6_sol");
     const backupName = fs
       .readdirSync(existingUserPath)
       .find((name) => name.startsWith("config.json.invalid-"));

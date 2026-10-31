@@ -30,3 +30,8 @@ export {
   rebuildSessionTree,
 } from "./session-tree-rebuild.js";
 export { resolveRepairedSessionCaller } from "./session-caller-migration.js";
+export {
+  MODEL_CONTEXT_SNAPSHOT_MIGRATION_KIND,
+  V3_MESSAGE_IDENTITY_KEY,
+  migrateModelContextSnapshot,
+} from "./snapshot-migration.js";

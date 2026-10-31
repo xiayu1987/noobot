@@ -38,8 +38,8 @@ export function createDeps(overrides = {}) {
         return {
           answer: "agent answer",
           traces: [{ type: "trace" }],
-          messages: [{ role: "assistant", content: "agent answer" }],
-          dialogProcessId: payload.dialogProcessId || "sub-dialog",
+          messages: [{ messageUid: "sm_child", role: "assistant", content: "agent answer" }],
+          dialogProcessId: payload.dialogProcessId,
         };
       },
     },

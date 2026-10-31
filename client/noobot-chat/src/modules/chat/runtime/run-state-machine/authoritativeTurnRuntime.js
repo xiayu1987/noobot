@@ -101,7 +101,7 @@ export function applyTurnTerminalResolution(registry, response = {}) {
       errors: validation.errors,
     };
   }
-  const turn = response.turn || {};
+  const turn = response.turn;
   return applyTurnRuntimeEvent(registry, {
     ...turn,
     type: SESSION_RUN_EVENT.TERMINAL_RESOLVED,
@@ -109,8 +109,8 @@ export function applyTurnTerminalResolution(registry, response = {}) {
     sessionId: response.sessionId,
     turnScopeId: response.turnScopeId,
     state: turn.state,
-    seq: Number(turn.sequence || 0),
-    revision: Number(turn.revision || 0),
+    seq: turn.sequence,
+    revision: turn.revision,
     completionCommitId: turn.completionCommitId,
     summaryVersion: turn.summaryVersion,
     finalizeIntent: turn.finalizeIntent,

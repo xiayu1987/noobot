@@ -69,7 +69,7 @@ export function createAuthoritativeTurnSnapshot({
 }
 
 export function resolveAuthoritativeTurnTerminal({
-  lifecycle: lifecycleSource = {},
+  lifecycle: lifecycleSource,
   turnTimings = [],
   commandId = "",
   sessionId = "",

@@ -35,6 +35,12 @@ export function canonicalMessageEvent(overrides = {}) {
     sequence: 1,
     occurredAt: "2026-01-01T00:00:00.000Z",
     turnScopeId: "turn-1",
+    ...(["thinking", "model_analysis_delta", "activity_delta"].includes(eventType)
+      ? {
+          activityId: `test-activity:${overrides.eventId ?? overrides.sequence ?? 1}`,
+          activityKind: "model_analysis",
+        }
+      : {}),
     ...(["tool_call_start", "tool_call_end"].includes(eventType)
       ? {
           tool: "read_file",

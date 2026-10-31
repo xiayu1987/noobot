@@ -22,10 +22,6 @@ export const MESSAGE_ROLE = {
   TOOL: "tool",
 };
 
-export const MESSAGE_TYPE = {
-  MESSAGE: "message",
-};
-
 export const EXECUTION_LOG_EVENT = {
   SESSION_TURN_FULL: "session_turn_full",
 };

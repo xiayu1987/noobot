@@ -80,7 +80,7 @@ export async function listExecutionEventTurns({ storageService, sessionDir }) {
   return index === null ? [] : index.turns;
 }
 
-export async function readExecutionTurnIndex({ storageService, turnDir }) {
+async function readExecutionTurnIndex({ storageService, turnDir }) {
   requireStorageService(storageService, "readExecutionTurnIndex");
   return readIndexDocument(storageService, turnDir, requireTurnExecutionIndex);
 }

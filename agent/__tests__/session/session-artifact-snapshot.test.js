@@ -117,6 +117,7 @@ test("snapshot rejects a completed turn whose summary marks need canonical repai
         aggregateVersion: 1,
         turnLifecycle: {
           ...required.turnLifecycle,
+          sequence: 1,
           turns: {
             "turn-1": {
               revision: 1,

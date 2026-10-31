@@ -14,6 +14,7 @@ import {
   normalizeConfigParamValues,
   normalizeConfigParamsDocument,
   repairConfigDocument,
+  upgradeConfigModelLibrary,
   summarizeConfigRepairReport,
 } from "@noobot/agent-config-protocol";
 import { localizeConfigTextTree, resolveTextLocaleFromConfigLanguage, t } from "./i18n.js";
@@ -92,7 +93,7 @@ async function repairUserConfigFile({ targetFilePath, baseValues = {}, transform
   const repair = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.USER,
     baseValues,
-    target: seeded,
+    target: upgradeConfigModelLibrary(seeded).document,
   });
   const merged = repair.document;
 

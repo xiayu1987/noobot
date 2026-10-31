@@ -32,10 +32,6 @@ function joinBasePath(basePath, relativePath) {
   return path.join(basePath, relativePath);
 }
 
-export function memoryDir(basePath) {
-  return joinBasePath(basePath, MEMORY_RELATIVE_PATHS.MEMORY_DIR);
-}
-
 export function shortPath(basePath) {
   return joinBasePath(basePath, MEMORY_RELATIVE_PATHS.SHORT_MEMORY);
 }

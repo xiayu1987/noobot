@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { nextTick } from "vue";
 import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
+import { ACTIVITY_KIND } from "@noobot/event-protocol/message-event";
 import {
   clearExtensionRegistry,
   contributeExtension,
@@ -19,7 +20,7 @@ function activity(eventId, sequence, event, output, extra = {}) {
     eventId,
     sequence,
     eventType,
-    activityKind: eventType === "thinking" ? event : "",
+    activityKind: eventType === "thinking" ? event : "main_model_analysis",
     text: output,
     ...extra,
   });
@@ -197,9 +198,9 @@ describe("ThinkingPanel canonical analysis timeline", () => {
 
   it("interleaves guidance analyses with host content in the details timeline", () => {
     const messages = roundMessages([
-      activity("host-1", 1, "", "host thinking text"),
+      activity("host-1", 1, ACTIVITY_KIND.MODEL_ANALYSIS, "host thinking text"),
       activity("guidance-1", 2, "guidance_analysis", "first guidance"),
-      activity("host-2", 3, "", "later host thinking"),
+      activity("host-2", 3, ACTIVITY_KIND.MODEL_ANALYSIS, "later host thinking"),
       activity("guidance-2", 4, "guidance_analysis", "second guidance"),
     ]);
     const wrapper = mountThinkingPanel(messages[0], { variant: "details", allMessages: messages });
@@ -258,7 +259,7 @@ describe("ThinkingPanel canonical analysis timeline", () => {
   it("hides plugin items and their count when no renderer is registered", () => {
     clearExtensionRegistry();
     const messages = roundMessages([
-      activity("host-1", 1, "", "host thinking text"),
+      activity("host-1", 1, ACTIVITY_KIND.MODEL_ANALYSIS, "host thinking text"),
       activity("guidance-1", 2, "guidance_analysis", "hidden guidance"),
     ]);
     const wrapper = mountThinkingPanel(messages[0], { variant: "details", allMessages: messages });
@@ -272,7 +273,7 @@ describe("ThinkingPanel canonical analysis timeline", () => {
   it("recomputes renderable items when the plugin registers after mount", async () => {
     clearExtensionRegistry();
     const messages = roundMessages([
-      activity("host-1", 1, "", "host thinking text"),
+      activity("host-1", 1, ACTIVITY_KIND.MODEL_ANALYSIS, "host thinking text"),
       activity("guidance-1", 2, "guidance_analysis", "late guidance"),
     ]);
     const wrapper = mountThinkingPanel(messages[0], { variant: "details", allMessages: messages });

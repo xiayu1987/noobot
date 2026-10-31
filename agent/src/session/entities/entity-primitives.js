@@ -7,11 +7,3 @@
 export function objectRecord(value) {
   return value && typeof value === "object" ? value : {};
 }
-
-export function copyPresentFields(target, source, keys = []) {
-  for (const key of keys) {
-    if (source[key] !== undefined && source[key] !== null && source[key] !== "") {
-      target[key] = source[key];
-    }
-  }
-}

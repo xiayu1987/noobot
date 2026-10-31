@@ -8,10 +8,14 @@ import test from "node:test";
 import { MIGRATION_UNMAPPABLE_CODE } from "@noobot/shared/migration";
 import {
   V3_MESSAGE_IDENTITY_KEY,
+  MODEL_CONTEXT_SNAPSHOT_VERSION_CHAIN,
   migrateModelContextSnapshot,
-} from "../src/policy/snapshot-migration.js";
-import { SNAPSHOT_VERSION, hydrateModelContextSnapshot } from "../src/policy/snapshot.js";
-import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "../src/message/internal-types.js";
+} from "../src/snapshot-migration.js";
+import {
+  SNAPSHOT_VERSION,
+  hydrateModelContextSnapshot,
+} from "@noobot/context-protocol/policy/snapshot";
+import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "@noobot/context-protocol/message/internal-types";
 
 const identity = {
   userId: "user-a",
@@ -20,6 +24,20 @@ const identity = {
   dialogProcessId: "dialog-a",
   turnScopeId: "client-turn:a",
 };
+
+test("every snapshot version has a schema and rejects incomplete blocks before migration", () => {
+  assert.deepEqual(Object.keys(MODEL_CONTEXT_SNAPSHOT_VERSION_CHAIN.schemas), ["3", "4", "5", "6"]);
+  for (const version of [3, 4, 5, 6]) {
+    assert.throws(
+      () => migrateModelContextSnapshot({ version, ...identity, messageBlocks: {}, messages: [] }),
+      (error) =>
+        error.code === MIGRATION_UNMAPPABLE_CODE &&
+        error.details.reason === "version_schema_rejected" &&
+        error.details.stage === "input" &&
+        error.details.version === version,
+    );
+  }
+});
 
 function v3Message({ type, id, metadata = {}, raw = {}, lcExtra = {}, extra = {} }) {
   const additional = { [V3_MESSAGE_IDENTITY_KEY]: id, ...metadata };
@@ -225,7 +243,12 @@ test("v4 backwrite targeting a non user_meta message is unmappable", () => {
 });
 
 test("current version snapshots are returned unchanged", () => {
-  const document = { version: SNAPSHOT_VERSION, ...identity, messageBlocks: {}, messages: [] };
+  const document = {
+    version: SNAPSHOT_VERSION,
+    ...identity,
+    messageBlocks: { system: [], history: [], incremental: [] },
+    messages: [],
+  };
   const result = migrateModelContextSnapshot(document);
   assert.equal(result.migrated, false);
   assert.equal(result.document, document);

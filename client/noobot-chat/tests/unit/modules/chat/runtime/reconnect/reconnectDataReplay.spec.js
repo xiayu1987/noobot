@@ -90,7 +90,6 @@ function batch({
     sessionId,
     snapshot: createTurnSnapshotEnvelope(baseline, {
       eventId: `snapshot-event-${sessionId}-${sequence}`,
-      producer: { type: "test", id: "reconnect-data-replay" },
     }),
     snapshotSequence: sequence,
     events,

@@ -36,7 +36,6 @@ function snapshotIndex(overrides = {}) {
     committedAt: "2026-01-01T00:00:00.000Z",
     contentHash: "sha256:abc",
     file: "turn-snapshots/turn-000001/checkpoint-000001.json",
-    messageUids: ["m1"],
     ...overrides,
   };
 }

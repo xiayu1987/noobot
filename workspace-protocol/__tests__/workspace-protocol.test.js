@@ -200,6 +200,7 @@ test("layout upgrades run every step above the installed version and end at the 
       "session-script-exit-code-v23",
       "session-legacy-mcp-result-v24",
       "session-result-overflow-v25",
+      "session-checkpoint-identity-v26",
     ],
   );
   assert.deepEqual(
@@ -227,6 +228,7 @@ test("layout upgrades run every step above the installed version and end at the 
       "session-script-exit-code-v23",
       "session-legacy-mcp-result-v24",
       "session-result-overflow-v25",
+      "session-checkpoint-identity-v26",
     ],
   );
   assert.deepEqual(planWorkspaceLayoutUpgrades({ installedVersion: WORKSPACE_LAYOUT_VERSION }), []);

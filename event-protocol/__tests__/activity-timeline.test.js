@@ -138,16 +138,17 @@ test("reduces repeated event identity to one fact and excludes legacy aliases", 
 
   assert.equal(timeline.length, 1);
   assert.equal(timeline[0].text, "authoritative replacement");
-  assert.deepEqual(
-    mergeCanonicalActivityTimelines(timeline, [
-      {
-        eventId: "synthetic-1",
-        event: "legacy_alias",
-        type: "legacy_alias",
-        text: "duplicate",
-      },
-    ]),
-    timeline,
+  assert.throws(
+    () =>
+      mergeCanonicalActivityTimelines(timeline, [
+        {
+          eventId: "synthetic-1",
+          event: "legacy_alias",
+          type: "legacy_alias",
+          text: "duplicate",
+        },
+      ]),
+    /noncanonical fact/,
   );
 });
 
@@ -322,5 +323,8 @@ test("canonical activity facts require an integer sequence", () => {
 
   assert.equal(isCanonicalActivityTimelineFact({ ...fact, sequence: "1" }), false);
   assert.equal(isCanonicalActivityTimelineFact({ ...fact, sequence: 1.5 }), false);
-  assert.deepEqual(mergeCanonicalActivityTimelines([{ ...fact, sequence: "1" }]), []);
+  assert.throws(
+    () => mergeCanonicalActivityTimelines([{ ...fact, sequence: "1" }]),
+    /noncanonical fact/,
+  );
 });

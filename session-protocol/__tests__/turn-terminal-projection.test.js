@@ -19,9 +19,22 @@ const committed = createTurnTerminalStatus("completed", {
   updatedAt: "2026-01-01T00:00:00.000Z",
 });
 
-test("terminal status normalization keeps only the command contract shape", () => {
+test("terminal status normalization rejects unknown fields", () => {
   assert.deepEqual(normalizeTurnTerminalStatus(committed), committed);
-  assert.deepEqual(normalizeTurnTerminalStatus({ ...committed, extra: "x" }), committed);
+  assert.throws(() => normalizeTurnTerminalStatus({ ...committed, extra: "x" }), {
+    code: "TURN_TERMINAL_FIELD_UNKNOWN",
+    field: "extra",
+  });
+  const payload = {
+    turnScopeId: committed.turnScopeId,
+    dialogProcessId: committed.dialogProcessId,
+    updatedAt: committed.updatedAt,
+  };
+  assert.deepEqual(createTurnTerminalStatus("completed", payload), committed);
+  assert.throws(() => createTurnTerminalStatus("completed", { ...payload, extra: "x" }), {
+    code: "TURN_TERMINAL_FIELD_UNKNOWN",
+    field: "extra",
+  });
   const aborted = createTurnTerminalStatus("aborted", {
     turnScopeId: "t",
     dialogProcessId: "d",
@@ -53,9 +66,9 @@ test("terminal status normalization rejects non-protocol shapes", () => {
   assert.equal(normalizeTurnTerminalStatus({ status: "completed" }), null);
   assert.equal(normalizeTurnTerminalStatus({ ...committed, turnScopeId: "" }), null);
   assert.equal(normalizeTurnTerminalStatus({ ...committed, reason: "user_stop" }), null);
-  assert.equal(
-    normalizeTurnTerminalStatus({ ...committed, command: "completed", status: "" }),
-    null,
+  assert.throws(
+    () => normalizeTurnTerminalStatus({ ...committed, command: "completed", status: "" }),
+    { code: "TURN_TERMINAL_FIELD_UNKNOWN", field: "command" },
   );
 });
 

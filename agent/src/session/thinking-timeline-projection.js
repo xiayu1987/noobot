@@ -4,7 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { mergeCanonicalActivityTimelines } from "@noobot/event-protocol/activity-timeline";
+import {
+  mergeCanonicalActivityTimelines,
+  selectMessageActivityTimeline,
+} from "@noobot/event-protocol/activity-timeline";
 import { requireCanonicalToolTimelineIdentity } from "@noobot/event-protocol/tool-timeline";
 import { projectThinkingDetailContentTimeline } from "@noobot/event-protocol/thinking-detail-content";
 import { requireCanonicalTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
@@ -33,7 +36,7 @@ export function projectThinkingTimeline(messages, { turnScopeId }) {
   const roundMessages = messages.filter((message) => message.turnScopeId === scope);
   const toolTimeline = mergeToolTimeline(roundMessages);
   const activityTimeline = mergeCanonicalActivityTimelines(
-    ...roundMessages.map((message) => message.activityTimeline ?? []),
+    ...roundMessages.map(selectMessageActivityTimeline),
   );
   const thinkingContentTimeline = projectThinkingDetailContentTimeline(
     roundMessages,

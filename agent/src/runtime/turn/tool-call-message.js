@@ -34,7 +34,7 @@ export function formatToolCallsForStorage(toolCalls = []) {
     .filter((call) => call.function.name);
 }
 
-export function formatToolCallsForLangChain(toolCalls = []) {
+function formatToolCallsForLangChain(toolCalls = []) {
   return (Array.isArray(toolCalls) ? toolCalls : [])
     .map((call = {}) => {
       const contextPolicy = resolveToolContextPolicy(call);

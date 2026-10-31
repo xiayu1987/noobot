@@ -50,41 +50,108 @@ function pathIsInside(rootDir = "", candidatePath = "") {
 }
 
 function errorMessage(error) {
-  return error instanceof Error ? error.message : String(error || "unknown error");
+  return error instanceof Error ? error.message : String(error);
 }
 
 function resolveDefaultPluginRootDir() {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../plugin");
 }
 
-async function discoverNoobotPluginManifests({ pluginRootDir = "", strict = false } = {}) {
-  const root = path.resolve(text(pluginRootDir) || resolveDefaultPluginRootDir());
-  let directoryEntries;
+function isAbsentPathError(error) {
+  return error?.code === "ENOENT" || error?.code === "ENOTDIR";
+}
+
+// An absent plugin root or manifest means "nothing installed"; any other I/O failure propagates.
+async function readPluginRootEntries(root) {
   try {
-    directoryEntries = await readdir(root, { withFileTypes: true });
+    return await readdir(root, { withFileTypes: true });
   } catch (error) {
-    if (error?.code !== "ENOENT" && error?.code !== "ENOTDIR") {
-      if (strict) throw error;
-      console.warn("[plugin-runtime] plugin manifest discovery failed", { root, error });
-    }
-    return [];
+    if (isAbsentPathError(error)) return [];
+    throw error;
   }
+}
+
+async function manifestExists(manifestPath) {
+  try {
+    await access(manifestPath);
+    return true;
+  } catch (error) {
+    if (isAbsentPathError(error)) return false;
+    throw error;
+  }
+}
+
+async function discoverNoobotPluginManifests({ pluginRootDir = "" } = {}) {
+  const root = path.resolve(text(pluginRootDir) || resolveDefaultPluginRootDir());
   const manifests = [];
-  for (const directoryEntry of directoryEntries) {
+  for (const directoryEntry of await readPluginRootEntries(root)) {
     if (!directoryEntry.isDirectory()) continue;
     const pluginDir = path.join(root, directoryEntry.name);
     const manifestPath = path.join(pluginDir, MANIFEST_FILE_NAME);
-    try {
-      await access(manifestPath);
+    if (await manifestExists(manifestPath))
       manifests.push({ directoryName: directoryEntry.name, pluginDir, manifestPath });
-    } catch (error) {
-      if (error?.code !== "ENOENT" && error?.code !== "ENOTDIR") {
-        if (strict) throw error;
-        console.warn("[plugin-runtime] plugin manifest access failed", { manifestPath, error });
-      }
-    }
   }
   return manifests.sort((left, right) => left.directoryName.localeCompare(right.directoryName));
+}
+
+function pluginLifecycleEvent(event, manifest, surface) {
+  return Object.freeze({
+    event,
+    pluginId: manifest.id,
+    pluginVersion: manifest.version,
+    protocolVersion: manifest.protocolVersion,
+    surface,
+  });
+}
+
+function resolveSkipReason(manifest, { include, surface }) {
+  if (include.size && !include.has(manifest.id)) return "not_selected";
+  if (!manifest.enabledByDefault && !include.has(manifest.id)) return "not_enabled";
+  if (!manifestContributesToSurface(manifest, surface)) return `no_${surface}_contributions`;
+  return "";
+}
+
+async function importPluginSurfaceEntry(item, manifest, surface) {
+  const entryRelativePath = manifest.entries[surface];
+  const entryPath = path.resolve(item.pluginDir, entryRelativePath);
+  if (!pathIsInside(item.pluginDir, entryPath)) {
+    throw new Error(`entry path escapes plugin root: ${entryRelativePath}`);
+  }
+  await access(entryPath);
+  const moduleNamespace = await import(pathToFileURL(entryPath).href);
+  if (!isFunction(moduleNamespace.activate)) {
+    throw new Error(`plugin surface entry must export activate: ${manifest.id}/${surface}`);
+  }
+  return { entryPath, activate: moduleNamespace.activate };
+}
+
+/** Loads one discovered plugin; records lifecycle events and either a skip or a registry entry. */
+async function loadDiscoveredPlugin(
+  item,
+  { include, surface, registry, skipped, lifecycleEvents },
+) {
+  const manifest = parsePluginManifest(JSON.parse(await readFile(item.manifestPath, "utf8")));
+  lifecycleEvents.push(pluginLifecycleEvent("plugin.manifest_validated", manifest, surface));
+  const reason = resolveSkipReason(manifest, { include, surface });
+  if (reason) {
+    skipped.push({ pluginId: manifest.id, reason, ...item });
+    return;
+  }
+  if (registry.has(manifest.id)) throw new Error(`duplicate plugin id: ${manifest.id}`);
+  const { entryPath, activate } = await importPluginSurfaceEntry(item, manifest, surface);
+  lifecycleEvents.push(pluginLifecycleEvent("plugin.module_loaded", manifest, surface));
+  registry.set(
+    manifest.id,
+    Object.freeze({
+      pluginId: manifest.id,
+      pluginDir: item.pluginDir,
+      manifestPath: item.manifestPath,
+      manifest,
+      surface,
+      entryPath,
+      activate,
+    }),
+  );
 }
 
 export async function loadNoobotPlugins(options = {}) {
@@ -106,66 +173,13 @@ export async function loadNoobotPlugins(options = {}) {
 
   for (const item of discovered) {
     try {
-      const manifest = parsePluginManifest(JSON.parse(await readFile(item.manifestPath, "utf8")));
-      lifecycleEvents.push(
-        Object.freeze({
-          event: "plugin.manifest_validated",
-          pluginId: manifest.id,
-          pluginVersion: manifest.version,
-          protocolVersion: manifest.protocolVersion,
-          surface: normalized.surface,
-        }),
-      );
-      if (include.size && !include.has(manifest.id)) {
-        skipped.push({ pluginId: manifest.id, reason: "not_selected", ...item });
-        continue;
-      }
-      if (!manifest.enabledByDefault && !include.has(manifest.id)) {
-        skipped.push({ pluginId: manifest.id, reason: "not_enabled", ...item });
-        continue;
-      }
-      if (!manifestContributesToSurface(manifest, normalized.surface)) {
-        skipped.push({
-          pluginId: manifest.id,
-          reason: `no_${normalized.surface}_contributions`,
-          ...item,
-        });
-        continue;
-      }
-      if (registry.has(manifest.id)) throw new Error(`duplicate plugin id: ${manifest.id}`);
-      const entryRelativePath = manifest.entries[normalized.surface];
-      const entryPath = path.resolve(item.pluginDir, entryRelativePath);
-      if (!pathIsInside(item.pluginDir, entryPath)) {
-        throw new Error(`entry path escapes plugin root: ${entryRelativePath}`);
-      }
-      await access(entryPath);
-      const moduleNamespace = await import(pathToFileURL(entryPath).href);
-      if (!isFunction(moduleNamespace.activate)) {
-        throw new Error(
-          `plugin surface entry must export activate: ${manifest.id}/${normalized.surface}`,
-        );
-      }
-      lifecycleEvents.push(
-        Object.freeze({
-          event: "plugin.module_loaded",
-          pluginId: manifest.id,
-          pluginVersion: manifest.version,
-          protocolVersion: manifest.protocolVersion,
-          surface: normalized.surface,
-        }),
-      );
-      registry.set(
-        manifest.id,
-        Object.freeze({
-          pluginId: manifest.id,
-          pluginDir: item.pluginDir,
-          manifestPath: item.manifestPath,
-          manifest,
-          surface: normalized.surface,
-          entryPath,
-          activate: moduleNamespace.activate,
-        }),
-      );
+      await loadDiscoveredPlugin(item, {
+        include,
+        surface: normalized.surface,
+        registry,
+        skipped,
+        lifecycleEvents,
+      });
     } catch (error) {
       lifecycleEvents.push(
         Object.freeze({
@@ -211,7 +225,7 @@ export async function getNoobotPluginRuntime(options = {}) {
 export async function collectNoobotPluginScopedSessionRootDeclarations({
   pluginRootDir = "",
 } = {}) {
-  const discovered = await discoverNoobotPluginManifests({ pluginRootDir, strict: true });
+  const discovered = await discoverNoobotPluginManifests({ pluginRootDir });
   const declarations = [];
   for (const item of discovered) {
     const manifest = parsePluginManifest(JSON.parse(await readFile(item.manifestPath, "utf8")));

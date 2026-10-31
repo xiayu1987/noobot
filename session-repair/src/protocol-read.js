@@ -6,6 +6,7 @@
 import { createHash } from "node:crypto";
 import {
   SESSION_ARTIFACT_CHECKPOINT_RECORDS_SCHEMA_VERSION,
+  SESSION_ARTIFACT_CHECKPOINT_IDENTITY_SOURCE_SCHEMA_VERSION,
   SESSION_ARTIFACT_LOCATION_MESSAGE_ORDER_SCHEMA_VERSION,
   SESSION_ARTIFACT_MANIFEST_SNAPSHOT_INDEX_SCHEMA_VERSION,
   SESSION_ARTIFACT_SCHEMA_VERSION,
@@ -17,6 +18,11 @@ import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
 import { resolveRepairArtifactPath } from "./repair-primitives.js";
 import { readRepairJson, readRepairJournal } from "./repair-artifact-io.js";
 import { SESSION_REPAIR_ERROR_CODE } from "./errors.js";
+import {
+  assertStoredCheckpointReceipts,
+  createCheckpointIdentitySource,
+  hydrateCheckpointReceipts,
+} from "@noobot/session-protocol/summary-checkpoint-storage";
 
 function materializeRepairRecords(records, order, baseMessages = []) {
   const byUid = new Map(
@@ -78,7 +84,7 @@ async function readLegacyCheckpointMessages(sessionDir, indexes) {
   return payload.messages;
 }
 
-async function readPreviousCheckpointRecords(sessionDir, indexes) {
+async function readPreviousCheckpointRecords(sessionDir, indexes, collectPayload) {
   const checkpointRecords = [];
   let previousCheckpointHash = "";
   for (const index of indexes) {
@@ -100,6 +106,7 @@ async function readPreviousCheckpointRecords(sessionDir, indexes) {
       );
     }
     checkpointRecords.push(...payload.records);
+    collectPayload(payload, index);
     previousCheckpointHash = index.contentHash;
   }
   return checkpointRecords;
@@ -123,13 +130,17 @@ async function readTurnFileMessages(sessionDir, item) {
   return turn.messages;
 }
 
-async function readTurnJournalMessages(sessionDir, schemaVersion, item) {
+async function readTurnJournalMessages(sessionDir, schemaVersion, item, collectPayload) {
   const artifact = resolveRepairArtifactPath(sessionDir, item?.file, "turns", [".jsonl"]);
   const order = requireLayoutArray(item, "messageOrder", "Session turn manifest entry");
   const records = await readRepairJournal(artifact, item?.committedBytes);
   const { indexes, journal } = splitTurnSnapshotIndexes(schemaVersion, item, records);
   if (schemaVersion >= SESSION_ARTIFACT_CHECKPOINT_RECORDS_SCHEMA_VERSION) {
-    const checkpointRecords = await readPreviousCheckpointRecords(sessionDir, indexes);
+    const checkpointRecords = await readPreviousCheckpointRecords(
+      sessionDir,
+      indexes,
+      collectPayload,
+    );
     return materializeRepairRecords([...checkpointRecords, ...journal], order);
   }
   const baseMessages = await readLegacyCheckpointMessages(sessionDir, indexes);
@@ -174,15 +185,26 @@ export async function readSessionForProtocolRepair({ sessionDir = "", session = 
   }
   const journalLayout = schemaVersion >= SESSION_ARTIFACT_TURN_JOURNAL_LAYOUT_SCHEMA_VERSION;
   const messagesByTurnId = new Map();
+  const checkpointSource = createCheckpointIdentitySource(session);
+  const checkpointIdentitySource =
+    schemaVersion >= SESSION_ARTIFACT_CHECKPOINT_IDENTITY_SOURCE_SCHEMA_VERSION;
+  if (checkpointIdentitySource) assertStoredCheckpointReceipts(session);
   const messages = [];
   for (const item of requireLayoutArray(session, "turnOrder", "Session manifest")) {
     const turnMessages = journalLayout
-      ? await readTurnJournalMessages(sessionDir, schemaVersion, item)
+      ? await readTurnJournalMessages(sessionDir, schemaVersion, item, (payload, index) => {
+          if (checkpointIdentitySource) checkpointSource.collect(item, index, payload);
+        })
       : await readTurnFileMessages(sessionDir, item);
     messagesByTurnId.set(text(item?.turnId), turnMessages);
     messages.push(...turnMessages);
   }
-  if (journalLayout) return { ...session, messages: orderByMessageUid(session, messages) };
+  if (journalLayout) {
+    const projected = checkpointIdentitySource
+      ? hydrateCheckpointReceipts(session, checkpointSource.resolve)
+      : session;
+    return { ...projected, messages: orderByMessageUid(session, messages) };
+  }
   if (schemaVersion >= SESSION_ARTIFACT_LOCATION_MESSAGE_ORDER_SCHEMA_VERSION) {
     return { ...session, messages: orderByTurnLocation(session, messagesByTurnId) };
   }

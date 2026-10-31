@@ -10,7 +10,7 @@ import { TOOL_BINDING_NAME_MAX_LENGTH } from "../../models/tool/binding-adapter.
 import { isPlainObject, text } from "@noobot/shared/value";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 
-export function buildMcpToolDescription(toolSpec = {}) {
+function buildMcpToolDescription(toolSpec = {}) {
   const description = text(toolSpec?.description);
   const inputSchema = toolSpec?.inputSchema || {};
   const schemaText = JSON.stringify(inputSchema || {}, null, 2);

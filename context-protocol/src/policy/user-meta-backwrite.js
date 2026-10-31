@@ -5,6 +5,7 @@
  */
 
 import { text, isPlainObject } from "@noobot/shared/value";
+import { isCanonicalMessageTimestamp } from "@noobot/session-protocol";
 
 const STATUS_PENDING = "pending";
 
@@ -18,11 +19,11 @@ function backwriteKey(record) {
 }
 
 export function createUserMetaBackwrite({
-  userMetaSourceMessageUid = "",
-  attachmentRef = "",
-  result = {},
+  userMetaSourceMessageUid,
+  attachmentRef,
+  result,
   createdAt = new Date().toISOString(),
-} = {}) {
+}) {
   const sourceMessageUid = text(userMetaSourceMessageUid);
   const normalizedAttachmentRef = text(attachmentRef);
   if (!sourceMessageUid || !normalizedAttachmentRef) {
@@ -31,16 +32,19 @@ export function createUserMetaBackwrite({
   if (!isPlainObject(result)) {
     throw new TypeError("user_meta backwrite result must be an object");
   }
+  if (!isCanonicalMessageTimestamp(createdAt)) {
+    throw new TypeError("user_meta backwrite createdAt must be a canonical ISO timestamp");
+  }
   return {
     userMetaSourceMessageUid: sourceMessageUid,
     attachmentRef: normalizedAttachmentRef,
-    result: cloneJson(result) || {},
+    result: cloneJson(result),
     status: STATUS_PENDING,
-    createdAt: text(createdAt) || new Date().toISOString(),
+    createdAt,
   };
 }
 
-export function isSameUserMetaBackwrite(left = {}, right = {}) {
+export function isSameUserMetaBackwrite(left, right) {
   return backwriteKey(left) === backwriteKey(right);
 }
 
@@ -48,7 +52,13 @@ export function normalizeUserMetaBackwrites(records = []) {
   if (!Array.isArray(records)) throw new TypeError("userMetaBackwrites must be an array");
   const seen = new Set();
   return records.map((record) => {
-    const normalized = createUserMetaBackwrite(record || {});
+    if (!isPlainObject(record) || !isCanonicalMessageTimestamp(record.createdAt)) {
+      throw new TypeError("stored user_meta backwrite requires a canonical createdAt");
+    }
+    if (record.status !== STATUS_PENDING) {
+      throw new TypeError("stored user_meta backwrite status must be pending");
+    }
+    const normalized = createUserMetaBackwrite(record);
     const key = backwriteKey(normalized);
     if (seen.has(key)) {
       throw new Error(
@@ -60,15 +70,15 @@ export function normalizeUserMetaBackwrites(records = []) {
   });
 }
 
-export function mergeUserMetaParsedResults(current = [], result = {}) {
+export function mergeUserMetaParsedResults(current = [], result) {
   if (!isPlainObject(result)) {
     throw new TypeError("user_meta parsed result must be an object");
   }
   const resultRef = text(result.sourceAttachmentRef);
   if (!resultRef) throw new TypeError("user_meta parsed result requires sourceAttachmentRef");
-  const existing = Array.isArray(current) ? current : [];
+  if (!Array.isArray(current)) throw new TypeError("userMetaParsedResults must be an array");
   return [
-    ...existing.filter((item) => text(item?.sourceAttachmentRef) !== resultRef),
+    ...current.filter((item) => text(item?.sourceAttachmentRef) !== resultRef),
     cloneJson(result),
   ];
 }

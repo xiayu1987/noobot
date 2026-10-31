@@ -21,7 +21,7 @@ import {
   listPendingAuthorityEvents,
   recordAuthorityEventDeliveryAttempt,
 } from "@noobot/event-protocol";
-import { TURN_EVENT } from "@noobot/session-protocol";
+import { createEmptyTurnLifecycle, TURN_EVENT } from "@noobot/session-protocol";
 import {
   AGENT_COMMAND_RECEIPT_OUTCOME,
   AGENT_TRANSPORT_EVENT,
@@ -290,7 +290,7 @@ test("chat-websocket-server: authoritative stop completion uses the accepted ass
 });
 
 test("chat-websocket-server: idle stop persists an authoritative user_stopped terminal fact", async () => {
-  let lifecycle = {};
+  let lifecycle = createEmptyTurnLifecycle();
   let authorityEventOutbox = [];
   let authorityEventSequence = 0;
   const lifecycleEvents = [];
@@ -366,7 +366,10 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
           if (result.applied) {
             lifecycle = result.lifecycle;
             if (result.committedEvent) {
-              authorityEventOutbox = [...authorityEventOutbox, result.committedEvent];
+              authorityEventOutbox = [
+                ...authorityEventOutbox,
+                { ...result.committedEvent, deliveries: {} },
+              ];
             }
           }
           return result;
@@ -380,6 +383,7 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
             const result = recordAuthorityEventDeliveryAttempt(authorityEventOutbox, {
               eventId,
               consumerId,
+              attemptedAt: new Date().toISOString(),
             });
             if (!result.found) return { recorded: false, reason: result.reason };
             authorityEventOutbox = result.outbox;

@@ -75,10 +75,10 @@ export async function createFixture() {
           tool_reasoning_effort: "high",
         },
       },
-      default_provider: "openai",
+      default_provider: "gpt_5_6_sol",
       multimodal: {
-        parsing: { default_models: { audio: "openai", image: "openai" } },
-        generation: { default_models: { image: "openai" } },
+        parsing: { default_models: { audio: "gpt_5_6_sol", image: "gpt_5_6_sol" } },
+        generation: { default_models: { image: "gpt_5_6_sol" } },
       },
       plugins: {
         character: {
@@ -151,8 +151,8 @@ test("packaged desktop startup incrementally adds any bundled global config fiel
     assert.equal(config.security.path_policy, undefined);
     assert.equal(config.attachments, undefined);
     assert.deepEqual(config.multimodal.parsing.default_models, {
-      audio: "openai",
-      image: "openai",
+      audio: "gpt_5_6_sol",
+      image: "gpt_5_6_sol",
     });
     const userConfig = JSON.parse(await readFile(path.join(legacyUserDir, "config.json"), "utf8"));
     assert.deepEqual(userConfig.plugins.character, { enabled: true, mode: "on" });
@@ -296,7 +296,7 @@ test("packaged desktop setup selects library models and new users inherit them f
       assert.equal(config.providers["gemini_3_7_flash"].api_key, "${GEMINI_API_KEY}");
     }
     assert.equal(globalConfig.providers.openai.model, "gpt");
-    assert.equal(defaultUserConfig.providers.openai.model, "gpt");
+    assert.equal(defaultUserConfig.providers.openai, undefined);
     assert.equal(
       nextState.missingParams.some((item) => item.key === "GEMINI_API_KEY"),
       true,
@@ -344,6 +344,11 @@ test("packaged desktop model selection preserves explicit provider reasoning set
     manager.ensureDesktopGlobalConfig({ isPackaged: true, userDataPath: fixture.userDataPath });
     for (const filePath of [state.globalConfigPath, userConfigPath]) {
       const config = JSON.parse(await readFile(filePath, "utf8"));
+      config.providers.selected = {
+        ...config.providers.selected,
+        model: "selected-model",
+        is_custom: true,
+      };
       config.providers.selected.reasoning_effort = "medium";
       config.providers.selected.tool_reasoning_effort = "medium";
       await writeFile(filePath, JSON.stringify(config));
@@ -482,22 +487,25 @@ test("packaged desktop startup preserves config params absent from current templ
       userDataPath: fixture.userDataPath,
     });
 
-    assert.deepEqual(JSON.parse(await readFile(configParamsPath, "utf8")), {
-      values: { ACTIVE_API_KEY: "preserved", RETIRED_API_KEY: "stale" },
-      descriptions: { ACTIVE_API_KEY: "active", RETIRED_API_KEY: "retired" },
-    });
+    const params = JSON.parse(await readFile(configParamsPath, "utf8"));
+    assert.equal(params.values.ACTIVE_API_KEY, "preserved");
+    assert.equal(params.values.RETIRED_API_KEY, "stale");
+    assert.equal(params.descriptions.ACTIVE_API_KEY, "active");
+    assert.equal(params.descriptions.RETIRED_API_KEY, "retired");
+    assert.equal(params.values.OPENAI_API_KEY, "");
     const globalConfig = JSON.parse(await readFile(globalConfigPath, "utf8"));
     assert.deepEqual(globalConfig.tools, {
       access_connector: { enabled: true },
       execute_script: { enabled: true },
       read_file: { enabled: true },
     });
-    assert.deepEqual(state.missingParams, []);
+    assert.ok(state.missingParams.some(({ key }) => key === "OPENAI_API_KEY"));
     manager.saveConfigParamValues({
       workspaceRootPath: state.workspaceRootPath,
       values: { RETIRED_API_KEY: "user-defined" },
     });
     assert.deepEqual(JSON.parse(await readFile(configParamsPath, "utf8")).values, {
+      ...params.values,
       ACTIVE_API_KEY: "preserved",
       RETIRED_API_KEY: "user-defined",
     });
@@ -506,6 +514,7 @@ test("packaged desktop startup preserves config params absent from current templ
       values: { ACTIVE_API_KEY: "updated" },
     });
     assert.deepEqual(JSON.parse(await readFile(configParamsPath, "utf8")).values, {
+      ...params.values,
       ACTIVE_API_KEY: "updated",
       RETIRED_API_KEY: "user-defined",
     });

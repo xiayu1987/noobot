@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import {
+  assertTurnLifecycleRecordIntegrity,
   appendCommandReceipt,
   createTurnLifecycleEnvelope,
   createTurnTerminalStatus,
@@ -57,7 +58,7 @@ export function createCommittedTurnLifecycleEnvelope({ event, turn, eventId, par
 }
 
 export function commitTurnLifecycle({
-  lifecycle = {},
+  lifecycle,
   event = {},
   parentSessionId,
   isCommittedEventId,
@@ -65,6 +66,7 @@ export function commitTurnLifecycle({
   createEventId,
   now = () => new Date().toISOString(),
 } = {}) {
+  assertTurnLifecycleRecordIntegrity(lifecycle);
   let lifecycleEvent = event;
   let terminalMaterialization = null;
   const requestedTerminal =
@@ -78,8 +80,9 @@ export function commitTurnLifecycle({
   if (requestedTerminal) {
     const settlingTurn = lifecycle.turns[event.turnScopeId];
     if (!settlingTurn) return { applied: false, reason: "turn_not_found", lifecycle };
-    const terminalStatus = createTurnTerminalStatus(requestedTerminal.command, {
-      ...requestedTerminal,
+    const { command, ...terminalPayload } = requestedTerminal;
+    const terminalStatus = createTurnTerminalStatus(command, {
+      ...terminalPayload,
       turnScopeId: event.turnScopeId,
       dialogProcessId: settlingTurn.dialogProcessId,
       updatedAt: clean(event.finishedAt) || now(),

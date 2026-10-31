@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path } from "@noobot/path-resolver";
-import { readFile, readdir, rm } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import { EXECUTION_EVENT_TURNS_DIR } from "@noobot/session-protocol/execution-event-index";
 import { sessionMutationCoordinator } from "./session-mutation-coordinator.js";
 import {
@@ -29,9 +29,62 @@ import {
 } from "@noobot/session-repair";
 import { requireBoolean } from "@noobot/shared/value";
 import { requireStorageService } from "./storage-service.js";
+import { readDirectoryEntriesIfPresent } from "../shared/storage/dir-entries.js";
 
 function diagnostic(code, message, extra = {}) {
   return { code, message, ...extra };
+}
+
+function isTurnJournalFile(entry) {
+  return entry.isFile() && (entry.name.endsWith(".json") || entry.name.endsWith(".jsonl"));
+}
+
+function isTempFile(entry) {
+  return entry.isFile() && (entry.name.endsWith(".tmp") || entry.name.includes(".tmp-"));
+}
+
+async function listTurnJournalNames(turnsDir) {
+  const entries = await readDirectoryEntriesIfPresent(turnsDir);
+  return entries.filter(isTurnJournalFile).map((entry) => entry.name);
+}
+
+async function listSummarySnapshotFiles(turnSnapshotsDir) {
+  const files = [];
+  for (const turnEntry of await readDirectoryEntriesIfPresent(turnSnapshotsDir)) {
+    if (!turnEntry.isDirectory()) continue;
+    const entries = await readDirectoryEntriesIfPresent(
+      path.join(turnSnapshotsDir, turnEntry.name),
+    );
+    const snapshots = entries.filter((entry) => entry.isFile() && entry.name.endsWith(".json"));
+    files.push(
+      ...snapshots.map((entry) =>
+        path
+          .join(SESSION_ARTIFACT_FILE_NAMES.turnSnapshotsDir, turnEntry.name, entry.name)
+          .replaceAll("\\", "/"),
+      ),
+    );
+  }
+  return files;
+}
+
+async function listTempFiles(dirs) {
+  const targets = [];
+  for (const dir of dirs) {
+    const entries = await readDirectoryEntriesIfPresent(dir);
+    targets.push(...entries.filter(isTempFile).map((entry) => path.join(dir, entry.name)));
+  }
+  return targets;
+}
+
+async function listOwnedRepairTempDirs(sessionDir) {
+  const parentDir = path.dirname(sessionDir);
+  const baseName = path.basename(sessionDir);
+  const entries = await readDirectoryEntriesIfPresent(parentDir);
+  return entries
+    .filter(
+      (entry) => entry.isDirectory() && isOwnedSessionRepairTempDirectoryName(entry.name, baseName),
+    )
+    .map((entry) => path.join(parentDir, entry.name));
 }
 
 async function readExecutionSegmentStates({ storageService, sessionDir }) {
@@ -85,18 +138,11 @@ export async function inspectSessionArtifacts({ storageService, sessionDir }) {
     }
   }
   try {
-    for (const entry of await readdir(files.turnsDir, { withFileTypes: true }))
-      if (
-        entry.isFile() &&
-        (entry.name.endsWith(".json") || entry.name.endsWith(".jsonl")) &&
-        !referenced.has(entry.name)
-      )
-        result.turns.orphaned.push(entry.name);
+    const names = await listTurnJournalNames(files.turnsDir);
+    result.turns.orphaned = names.filter((name) => !referenced.has(name));
   } catch (error) {
-    if (error.code !== "ENOENT") {
-      result.ok = false;
-      result.issues.push(diagnostic("TURNS_READ_FAILED", error.message));
-    }
+    result.ok = false;
+    result.issues.push(diagnostic("TURNS_READ_FAILED", error.message));
   }
   const referencedSnapshots = new Set();
   try {
@@ -113,23 +159,13 @@ export async function inspectSessionArtifacts({ storageService, sessionDir }) {
     result.issues.push(diagnostic(error.code || "SUMMARY_SNAPSHOT_INVALID", error.message));
   }
   try {
-    for (const turnEntry of await readdir(files.turnSnapshotsDir, { withFileTypes: true })) {
-      if (!turnEntry.isDirectory()) continue;
-      for (const entry of await readdir(path.join(files.turnSnapshotsDir, turnEntry.name), {
-        withFileTypes: true,
-      })) {
-        if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
-        const relative = path
-          .join(SESSION_ARTIFACT_FILE_NAMES.turnSnapshotsDir, turnEntry.name, entry.name)
-          .replaceAll("\\", "/");
-        if (!referencedSnapshots.has(relative)) result.summarySnapshots.orphaned.push(relative);
-      }
-    }
+    const snapshotFiles = await listSummarySnapshotFiles(files.turnSnapshotsDir);
+    result.summarySnapshots.orphaned = snapshotFiles.filter(
+      (file) => !referencedSnapshots.has(file),
+    );
   } catch (error) {
-    if (error.code !== "ENOENT") {
-      result.ok = false;
-      result.issues.push(diagnostic("SUMMARY_SNAPSHOTS_READ_FAILED", error.message));
-    }
+    result.ok = false;
+    result.issues.push(diagnostic("SUMMARY_SNAPSHOTS_READ_FAILED", error.message));
   }
   try {
     const turns = await readExecutionSegmentStates({ storageService, sessionDir });
@@ -187,32 +223,14 @@ export async function cleanupSessionArtifacts({
     const executionTurnDirs = (await listExecutionEventTurns({ storageService, sessionDir })).map(
       (turn) => resolveExecutionTurnDir(sessionDir, turn.dialogProcessId),
     );
-    for (const dir of [
+    const tempFiles = await listTempFiles([
       sessionDir,
       files.turnsDir,
       files.executionEventsDir,
       ...executionTurnDirs,
-    ]) {
-      try {
-        for (const entry of await readdir(dir, { withFileTypes: true })) {
-          if (entry.isFile() && (entry.name.endsWith(".tmp") || entry.name.includes(".tmp-")))
-            await removePath(path.join(dir, entry.name), { recursive: false });
-        }
-      } catch (error) {
-        if (error?.code !== "ENOENT") throw error;
-      }
-    }
-    const parentDir = path.dirname(sessionDir);
-    const baseName = path.basename(sessionDir);
-    try {
-      for (const entry of await readdir(parentDir, { withFileTypes: true })) {
-        if (!entry.isDirectory()) continue;
-        if (isOwnedSessionRepairTempDirectoryName(entry.name, baseName))
-          await removePath(path.join(parentDir, entry.name));
-      }
-    } catch (error) {
-      if (error?.code !== "ENOENT") throw error;
-    }
+    ]);
+    for (const target of tempFiles) await removePath(target, { recursive: false });
+    for (const target of await listOwnedRepairTempDirs(sessionDir)) await removePath(target);
     return { ...report, dryRun, removed };
   };
   const lockDir = resolveSessionArtifactMutationLock(sessionDir);

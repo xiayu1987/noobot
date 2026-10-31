@@ -513,10 +513,8 @@ export {
 } from "./session-artifact-store.js";
 export {
   normalizeMessageEntity,
-  normalizeMessagesEntity,
   normalizeSelectedConnectorIds,
   normalizeSessionTreeEntity,
-  normalizeExecutionLogEntity,
 } from "./entities/normalizers.js";
 
 export { readSessionThinkingDetail } from "./session-thinking-detail.js";

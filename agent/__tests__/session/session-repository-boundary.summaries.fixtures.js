@@ -6,7 +6,7 @@
 
 import os from "node:os";
 import path from "node:path";
-import { access, mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { resolveCanonicalToolTimelineStatus } from "@noobot/event-protocol/tool-timeline";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
@@ -16,15 +16,6 @@ export async function withTempWorkspace(fn) {
     return await fn(workspaceRoot);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });
-  }
-}
-
-export async function exists(filePath) {
-  try {
-    await access(filePath);
-    return true;
-  } catch {
-    return false;
   }
 }
 
@@ -74,6 +65,7 @@ export function canonicalToolTimelineItem(fields) {
 
 export function canonicalActivity({
   eventId = "activity-1",
+  activityId = "analysis-1",
   eventType = "thinking",
   activityKind = "analysis",
   text = "analysis",
@@ -89,6 +81,7 @@ export function canonicalActivity({
 } = {}) {
   return {
     eventId,
+    activityId,
     eventType,
     text,
     activityKind,

@@ -58,7 +58,8 @@ test("before-dispatch capability events use the bound Turn message domain", asyn
         acceptedRunConfig,
       );
       const runtimeAgentContext = createTestAgentExecutionScope(
-        Object.assign(createTestRuntimeContext({ identity: runtimeIdentity }), {
+        createTestRuntimeContext({
+          identity: runtimeIdentity,
           eventListener: buildContextPayload.eventListener,
         }),
         { identity: invocationIdentity },

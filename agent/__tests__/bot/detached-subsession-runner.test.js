@@ -13,7 +13,6 @@ import { readAuthorityOutbox } from "../../src/session/authority-outbox-store/ou
 import {
   createDetachedSubSessionRunner,
   createDetachedTerminalReceipt,
-  createScopedSubSessionEventListener,
 } from "../../src/bot/session/detached-subsession-runner.js";
 import {
   AGENT_DETACHED_SESSION_ROOT,
@@ -169,7 +168,9 @@ test("detached sub-session delegates execution and persistence to the main runne
   );
   assert.equal("persisted" in result, false);
   assert.equal(result.result.answer, "agent answer");
-  assert.deepEqual(result.result.messages, [{ role: "assistant", content: "agent answer" }]);
+  assert.deepEqual(result.result.messages, [
+    { messageUid: "sm_child", role: "assistant", content: "agent answer" },
+  ]);
   assert.equal(Object.hasOwn(result.result, "turnTasks"), false);
 });
 
@@ -448,11 +449,50 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
   assert.equal(outbox[3].envelope.payload.completionCommitId, "turn-persisted:turn.completed");
 });
 
+test("invalid runner results commit failure instead of a successful empty result", async () => {
+  for (const patch of [
+    { messages: undefined },
+    { messages: {} },
+    { messages: [{ role: "assistant" }] },
+    { traces: undefined },
+    { answer: null },
+    { dialogProcessId: undefined },
+    { dialogProcessId: " sub-dialog " },
+  ]) {
+    const { calls, deps } = createDeps({
+      sessionRunner: {
+        async runSession({ dialogProcessId }) {
+          return { answer: "done", messages: [], traces: [], dialogProcessId, ...patch };
+        },
+      },
+    });
+    const runner = createDetachedSubSessionRunner(deps);
+    await assert.rejects(
+      runner({
+        abortSignal: new AbortController().signal,
+        parentExecutionScope: createParentExecutionScope(),
+        message: "hello",
+        attachments: [],
+        metadata: DETACHED_REQUEST_METADATA,
+        strategy: createCompleteStrategy(),
+      }),
+      (error) =>
+        error.code === "SESSION_EXECUTION_RESULT_INVALID" &&
+        error.lifecycle.state === "processing_failed",
+    );
+    assert.equal(calls.lifecyclePayloads.at(-1).eventType, "turn.failed");
+    assert.equal(
+      calls.lifecyclePayloads.some((entry) => entry.eventType === "turn.completed"),
+      false,
+    );
+  }
+});
+
 test("detached sub-session rejects a runner result with a second dialog identity", async () => {
   const { calls, deps } = createDeps({
     sessionRunner: {
       async runSession() {
-        return { answer: "done", dialogProcessId: "foreign-dialog" };
+        return { answer: "done", traces: [], messages: [], dialogProcessId: "foreign-dialog" };
       },
     },
   });
@@ -765,46 +805,4 @@ test("createDetachedSubSessionRunner propagates user config loading failures", a
       }),
     /config unavailable/,
   );
-});
-
-test("createScopedSubSessionEventListener injects child session coordinates", () => {
-  const received = [];
-  const listener = createScopedSubSessionEventListener(
-    { onEvent() {}, forwardEvent: (event) => received.push(event) },
-    {
-      userId: "u1",
-      sessionId: "sub1",
-      parentSessionId: "parent1",
-      dialogProcessId: "dialog1",
-      turnScopeId: "turn1",
-    },
-  );
-  listener.onEvent({ type: "model_delta", data: { content: "x" } });
-  assert.deepEqual(received[0].data, { content: "x" });
-  assert.deepEqual(received[0].route, {
-    userId: "u1",
-    sessionId: "sub1",
-    parentSessionId: "parent1",
-    dialogProcessId: "dialog1",
-    turnScopeId: "turn1",
-  });
-});
-
-test("createScopedSubSessionEventListener returns null without a listener", () => {
-  assert.equal(createScopedSubSessionEventListener(null, { sessionId: "sub1" }), null);
-});
-
-test("createScopedSubSessionEventListener rejects a persistence-owning listener without a forwarding port", () => {
-  assert.throws(
-    () => createScopedSubSessionEventListener({ onEvent() {} }, { sessionId: "sub1" }),
-    /forwardEvent port/,
-  );
-});
-
-test("createScopedSubSessionEventListener rejects non-object events", () => {
-  const listener = createScopedSubSessionEventListener(
-    { onEvent() {}, forwardEvent() {} },
-    { sessionId: "sub1" },
-  );
-  assert.throws(() => listener.onEvent(null), /must be an object/);
 });

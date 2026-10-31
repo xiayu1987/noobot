@@ -4,15 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import {
-  mergeCanonicalActivityTimelines,
-  selectCanonicalActivityTimeline,
-} from "@noobot/event-protocol/activity-timeline";
+import { selectCanonicalActivityTimeline } from "@noobot/event-protocol/activity-timeline";
 import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
-
-export function mergeActivityTimelines(...timelines) {
-  return mergeCanonicalActivityTimelines(...timelines);
-}
 
 export function selectActivityTimelineLogs(message = {}) {
   return selectCanonicalActivityTimeline(message);

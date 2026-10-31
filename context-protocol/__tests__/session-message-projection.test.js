@@ -84,7 +84,7 @@ test("Session Record projection rejects malformed collections and transfer facts
         role: "assistant",
         attachments: {},
       }),
-    /attachments to be an array/,
+    /Session message draft attachments must be an array/,
   );
   assert.throws(() => normalizeContextTransferEnvelopes([{}]), /invalid_transfer_envelope/);
   assert.deepEqual(normalizeContextTransferEnvelopes([transferEnvelope(), transferEnvelope()]), [

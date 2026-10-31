@@ -191,6 +191,7 @@ test("summary checkpoint receipts survive turn-journal persistence with historic
     session.turnLifecycle = {
       ...createEmptyTurnLifecycle(),
       activeTurnScopeId: "turn-current",
+      sequence: 1,
       turns: {
         "turn-current": {
           revision: 1,
@@ -232,14 +233,21 @@ test("summary checkpoint receipts survive turn-journal persistence with historic
     );
     const manifest = JSON.parse(await readFile(sessionFile, "utf8"));
     assert.equal("messages" in manifest, false);
-    assert.deepEqual(
-      manifest.turnSummaryCheckpoints["turn-current"].receipts[0].summarizedMessageUids,
-      ["sm_historical"],
+    assert.equal(
+      Object.hasOwn(
+        manifest.turnSummaryCheckpoints["turn-current"].receipts[0],
+        "summarizedMessageUids",
+      ),
+      false,
     );
 
     const reloaded = await repository.findById(userId, sessionId, {
       persistenceContext: repository.treePersistenceContext(userId, sessionId),
     });
+    assert.deepEqual(
+      reloaded.turnSummaryCheckpoints["turn-current"].receipts[0].summarizedMessageUids,
+      ["sm_historical"],
+    );
     assert.equal(
       reloaded.messages.find((message) => message.messageUid === "sm_historical").summarized,
       true,

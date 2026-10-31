@@ -8,11 +8,7 @@ import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js"
 import assert from "node:assert/strict";
 import { createModelMessageId } from "@noobot/session-protocol/message-identity";
 import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
-import {
-  createRunner,
-  createTestAgentExecutionScope,
-  createCurrentTurnMessagesStore,
-} from "./runner-bot-hook.fixtures.js";
+import { createRunner, createTestAgentExecutionScope } from "./runner-bot-hook.fixtures.js";
 
 test("SessionExecutionRunner checkpoints current turn messages with scoped persistence identity", async () => {
   const checkpointPayloads = [];
@@ -23,20 +19,19 @@ test("SessionExecutionRunner checkpoints current turn messages with scoped persi
     relativeDir: "runtime/agent/session/s1",
     allowedRoot: "runtime/agent/session",
   };
-  const runtime = Object.assign(createTestRuntimeContext(), {
-    currentTurnMessages: createCurrentTurnMessagesStore([
-      {
-        messageUid: "sm_checkpoint",
-        role: "assistant",
-        type: "message",
-        content: "analysis",
-        presentationMessageId: "msg_chat_checkpoint",
-        chatPresentation: true,
-        activityTimeline: [{ eventId: "activity-checkpoint-1" }],
-        toolTimeline: [{ toolCallId: "tool-checkpoint-1" }],
-      },
-    ]),
-  });
+  const runtime = createTestRuntimeContext();
+  runtime.currentTurnMessages.replaceAll([
+    {
+      messageUid: "sm_checkpoint",
+      role: "assistant",
+      type: "message",
+      content: "analysis",
+      presentationMessageId: "msg_chat_checkpoint",
+      chatPresentation: true,
+      activityTimeline: [{ eventId: "activity-checkpoint-1" }],
+      toolTimeline: [{ toolCallId: "tool-checkpoint-1" }],
+    },
+  ]);
   const runtimeAgentContext = createTestAgentExecutionScope(runtime);
   const runner = createRunner({
     appendAgentMessages: async (payload = {}) => {
@@ -110,24 +105,23 @@ test("SessionExecutionRunner checkpoints current turn messages with scoped persi
 test("SessionExecutionRunner checkpoints only new or changed current-turn messages", async () => {
   const checkpointPayloads = [];
   const events = [];
-  const runtime = Object.assign(createTestRuntimeContext(), {
-    currentTurnMessages: createCurrentTurnMessagesStore([
-      {
-        messageUid: "sm_assistant",
-        role: "assistant",
-        type: "message",
-        content: "analysis",
-        activityTimeline: [{ eventId: "activity-1" }],
-      },
-      {
-        messageUid: "sm_tool_1",
-        role: "tool",
-        type: "tool_result",
-        content: "result-1",
-        tool_call_id: "call-1",
-      },
-    ]),
-  });
+  const runtime = createTestRuntimeContext();
+  runtime.currentTurnMessages.replaceAll([
+    {
+      messageUid: "sm_assistant",
+      role: "assistant",
+      type: "message",
+      content: "analysis",
+      activityTimeline: [{ eventId: "activity-1" }],
+    },
+    {
+      messageUid: "sm_tool_1",
+      role: "tool",
+      type: "tool_result",
+      content: "result-1",
+      tool_call_id: "call-1",
+    },
+  ]);
   const runtimeAgentContext = createTestAgentExecutionScope(runtime);
   const runner = createRunner({
     appendAgentMessages: async (payload = {}) => {
@@ -197,9 +191,7 @@ test("SessionExecutionRunner checkpoints only new or changed current-turn messag
 
 test("SessionExecutionRunner coalesces persistence requests inside one tool-result batch", async () => {
   const checkpointPayloads = [];
-  const runtime = Object.assign(createTestRuntimeContext(), {
-    currentTurnMessages: createCurrentTurnMessagesStore([]),
-  });
+  const runtime = createTestRuntimeContext();
   const runtimeAgentContext = createTestAgentExecutionScope(runtime);
   const runner = createRunner({
     appendAgentMessages: async (payload = {}) => {
@@ -255,11 +247,10 @@ test("SessionExecutionRunner coalesces persistence requests inside one tool-resu
 
 test("SessionExecutionRunner retries an incremental checkpoint after persistence failure", async () => {
   const attempts = [];
-  const runtime = Object.assign(createTestRuntimeContext(), {
-    currentTurnMessages: createCurrentTurnMessagesStore([
-      { messageUid: "sm_retry", role: "tool", type: "tool_result", content: "retry" },
-    ]),
-  });
+  const runtime = createTestRuntimeContext();
+  runtime.currentTurnMessages.replaceAll([
+    { messageUid: "sm_retry", role: "tool", type: "tool_result", content: "retry" },
+  ]);
   const runtimeAgentContext = createTestAgentExecutionScope(runtime);
   const runner = createRunner({
     appendAgentMessages: async ({ messages = [] } = {}) => {
@@ -360,12 +351,11 @@ test("SessionExecutionRunner hands the validated persistence scope to session in
 });
 
 test("SessionExecutionRunner rejects a checkpoint whose messages are missing from the durable result", async () => {
-  const runtime = Object.assign(createTestRuntimeContext(), {
-    currentTurnMessages: createCurrentTurnMessagesStore([
-      { messageUid: "sm_durable", role: "tool", type: "tool_result", content: "a" },
-      { messageUid: "sm_lost", role: "tool", type: "tool_result", content: "b" },
-    ]),
-  });
+  const runtime = createTestRuntimeContext();
+  runtime.currentTurnMessages.replaceAll([
+    { messageUid: "sm_durable", role: "tool", type: "tool_result", content: "a" },
+    { messageUid: "sm_lost", role: "tool", type: "tool_result", content: "b" },
+  ]);
   const runtimeAgentContext = createTestAgentExecutionScope(runtime);
   const runner = createRunner({
     appendAgentMessages: async ({ messages = [] } = {}) =>

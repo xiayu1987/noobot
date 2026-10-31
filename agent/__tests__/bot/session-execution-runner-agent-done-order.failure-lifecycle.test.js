@@ -25,7 +25,7 @@ test("runSession does not persist stopped snapshot for non-abort errors", async 
   const runner = createRunner({
     callOrder,
     eventListener,
-    runtime: Object.assign(createTestRuntimeContext(), {
+    runtime: createTestRuntimeContext({
       activeMessageContext: createModelContext({
         messageBlocks: { system: [], history: [], incremental: [] },
       }),

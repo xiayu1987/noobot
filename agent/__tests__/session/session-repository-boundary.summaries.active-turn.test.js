@@ -41,6 +41,7 @@ test("session display summary materializes the active Turn presentation in the z
     turnLifecycle: {
       ...createEmptyTurnLifecycle(),
       activeTurnScopeId: "turn-active",
+      sequence: 1,
       turns: {
         "turn-active": {
           revision: 1,
@@ -134,6 +135,7 @@ test("session display summary materializes stopped Turn details on its stable pr
     turnLifecycle: {
       ...createEmptyTurnLifecycle(),
       activeTurnScopeId: "",
+      sequence: 2,
       turns: {
         "turn-stopped": {
           revision: 1,
@@ -271,6 +273,7 @@ test("active Turn summary carries its authoritative thinking timelines", async (
         activityTimeline: [
           canonicalActivity({
             eventId: "thinking-active",
+            activityId: "analysis-active-1",
             sequenceScopeId: "source-tool-message",
             sessionId: "active-timeline-session",
             dialogProcessId: "dialog-active-timeline",
@@ -302,6 +305,7 @@ test("active Turn summary carries its authoritative thinking timelines", async (
         activityTimeline: [
           canonicalActivity({
             eventId: "thinking-active-2",
+            activityId: "analysis-active-2",
             sequence: 2,
             sequenceScopeId: "source-tool-message-2",
             sessionId: "active-timeline-session",

@@ -88,12 +88,10 @@ function clean(value) {
     return v.length ? v : undefined;
   }
   if (isPlainObject(value)) {
-    const v = {};
-    for (const [k, x] of Object.entries(value)) {
-      const y = clean(x);
-      if (y !== undefined) v[k] = y;
-    }
-    return Object.keys(v).length ? v : undefined;
+    const entries = Object.entries(value)
+      .map(([k, x]) => [k, clean(x)])
+      .filter(([, y]) => y !== undefined);
+    return entries.length ? Object.fromEntries(entries) : undefined;
   }
   return value;
 }
@@ -241,6 +239,36 @@ export function sourceReferenceTransfer({ reference, ...options } = {}) {
   });
 }
 
+function validateDirectPayload(payload) {
+  if (typeof payload.content !== "string") throw new Error("direct_content_required");
+  if (payload.attachments !== undefined) throw new Error("direct_attachments_forbidden");
+}
+
+function validateAttachmentPayload(payload) {
+  if (!Array.isArray(payload.attachments) || !payload.attachments.length)
+    throw new Error("attachment_list_required");
+  if (payload.content !== undefined) throw new Error("attachment_content_forbidden");
+  payload.attachments.forEach((x) => {
+    known(x, REF_KEYS, "unknown_attachment_field");
+    createAttachmentReference(x);
+  });
+}
+
+function validateSourceReferencePayload(payload) {
+  if (!isPlainObject(payload.reference)) throw new Error("source_reference_required");
+  known(payload.reference, SOURCE_REFERENCE_KEYS, "unknown_source_reference_field");
+  normalizeSourceReferenceAddress(payload.reference.address);
+  if (payload.content !== undefined || payload.attachments !== undefined) {
+    throw new Error("source_reference_payload_exclusive");
+  }
+}
+
+const PAYLOAD_VALIDATORS = Object.freeze({
+  [TRANSFER_MODE.DIRECT]: validateDirectPayload,
+  [TRANSFER_MODE.ATTACHMENT]: validateAttachmentPayload,
+  [TRANSFER_MODE.SOURCE_REFERENCE]: validateSourceReferencePayload,
+});
+
 export function validateTransferEnvelope(value, { strict = false } = {}) {
   const errors = [];
   try {
@@ -274,25 +302,9 @@ export function validateTransferEnvelope(value, { strict = false } = {}) {
       new Set(["mode", "content", "attachments", "reference"]),
       "unknown_payload_field",
     );
-    if (value.payload.mode === TRANSFER_MODE.DIRECT) {
-      if (typeof value.payload.content !== "string") throw new Error("direct_content_required");
-      if (value.payload.attachments !== undefined) throw new Error("direct_attachments_forbidden");
-    } else if (value.payload.mode === TRANSFER_MODE.ATTACHMENT) {
-      if (!Array.isArray(value.payload.attachments) || !value.payload.attachments.length)
-        throw new Error("attachment_list_required");
-      if (value.payload.content !== undefined) throw new Error("attachment_content_forbidden");
-      value.payload.attachments.forEach((x) => {
-        known(x, REF_KEYS, "unknown_attachment_field");
-        createAttachmentReference(x);
-      });
-    } else if (value.payload.mode === TRANSFER_MODE.SOURCE_REFERENCE) {
-      if (!isPlainObject(value.payload.reference)) throw new Error("source_reference_required");
-      known(value.payload.reference, SOURCE_REFERENCE_KEYS, "unknown_source_reference_field");
-      normalizeSourceReferenceAddress(value.payload.reference.address);
-      if (value.payload.content !== undefined || value.payload.attachments !== undefined) {
-        throw new Error("source_reference_payload_exclusive");
-      }
-    } else throw new Error("invalid_payload_mode");
+    if (!Object.hasOwn(PAYLOAD_VALIDATORS, value.payload.mode))
+      throw new Error("invalid_payload_mode");
+    PAYLOAD_VALIDATORS[value.payload.mode](value.payload);
     if (!isPlainObject(value.intent)) throw new Error("invalid_intent");
     known(value.intent, INTENT_KEYS, "unknown_intent_field");
     assertTransferIntentVocabulary({
@@ -360,24 +372,29 @@ export function isTransferIdentityConflict(error) {
   );
 }
 
-export function mergeTransferEnvelopes(...values) {
+// Keeps the first item per identity; a repeated identity must carry identical content.
+function dedupeByIdentity(items, identityKeyOf, conflictCode) {
   const result = [];
   const identities = new Map();
-  for (const value of values) {
-    for (const candidate of collectTransferEnvelopeCandidates(value)) {
-      const envelope = assertTransferEnvelope(candidate);
-      const identityKey = transferIdentityKey(envelope);
-      const contentKey = protocolValueKey(envelope);
-      const existingContentKey = identities.get(identityKey);
-      if (existingContentKey === undefined) {
-        identities.set(identityKey, contentKey);
-        result.push(envelope);
-      } else if (existingContentKey !== contentKey) {
-        throw identityConflictError(TRANSFER_ERROR_CODE.IDENTITY_CONFLICT, identityKey);
-      }
+  for (const item of items) {
+    const identityKey = identityKeyOf(item);
+    const contentKey = protocolValueKey(item);
+    const existingContentKey = identities.get(identityKey);
+    if (existingContentKey === undefined) {
+      identities.set(identityKey, contentKey);
+      result.push(item);
+    } else if (existingContentKey !== contentKey) {
+      throw identityConflictError(conflictCode, identityKey);
     }
   }
   return Object.freeze(result);
+}
+
+export function mergeTransferEnvelopes(...values) {
+  const envelopes = values
+    .flatMap(collectTransferEnvelopeCandidates)
+    .map((candidate) => assertTransferEnvelope(candidate));
+  return dedupeByIdentity(envelopes, transferIdentityKey, TRANSFER_ERROR_CODE.IDENTITY_CONFLICT);
 }
 
 export function normalizeTransferEnvelopes(value = null) {
@@ -385,23 +402,14 @@ export function normalizeTransferEnvelopes(value = null) {
 }
 
 export function getTransferAttachmentReferences(value = null) {
-  const result = [];
-  const identities = new Map();
-  for (const envelope of normalizeTransferEnvelopes(value)) {
-    if (envelope.payload.mode !== TRANSFER_MODE.ATTACHMENT) continue;
-    for (const reference of envelope.payload.attachments) {
-      const identityKey = attachmentIdentityKey(reference.identity);
-      const contentKey = protocolValueKey(reference);
-      const existingContentKey = identities.get(identityKey);
-      if (existingContentKey === undefined) {
-        identities.set(identityKey, contentKey);
-        result.push(reference);
-      } else if (existingContentKey !== contentKey) {
-        throw identityConflictError(TRANSFER_ERROR_CODE.ATTACHMENT_IDENTITY_CONFLICT, identityKey);
-      }
-    }
-  }
-  return Object.freeze(result);
+  const references = normalizeTransferEnvelopes(value)
+    .filter((envelope) => envelope.payload.mode === TRANSFER_MODE.ATTACHMENT)
+    .flatMap((envelope) => envelope.payload.attachments);
+  return dedupeByIdentity(
+    references,
+    (reference) => attachmentIdentityKey(reference.identity),
+    TRANSFER_ERROR_CODE.ATTACHMENT_IDENTITY_CONFLICT,
+  );
 }
 
 export function getTransferSourceReferences(value = null) {

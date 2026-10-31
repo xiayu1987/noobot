@@ -8,11 +8,21 @@ import { access, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promise
 import os from "node:os";
 import test from "node:test";
 import { filePath as path } from "@noobot/path-resolver";
-import { WORKSPACE_LAYOUT, WORKSPACE_LAYOUT_UPGRADE_OWNER } from "@noobot/workspace-protocol";
+import {
+  WORKSPACE_LAYOUT,
+  WORKSPACE_LAYOUT_UPGRADE_OWNER,
+  WORKSPACE_LAYOUT_VERSION,
+} from "@noobot/workspace-protocol";
 import { SNAPSHOT_VERSION } from "@noobot/context-protocol/policy/snapshot";
-import { V3_MESSAGE_IDENTITY_KEY } from "@noobot/context-protocol/policy/snapshot-migration";
+import { V3_MESSAGE_IDENTITY_KEY } from "@noobot/session-repair";
 import { TEST_SCOPED_SESSION_ROOTS } from "./helpers/scoped-session-roots.js";
 import { upgradeModelContextSnapshots } from "../src/workspace-lifecycle/model-context-snapshot-upgrade.js";
+import { upgradeWorkspaceLayout } from "../src/workspace-lifecycle/sections.js";
+import {
+  quarantineMigrationUnit,
+  listQuarantinedUnits,
+} from "../src/workspace-lifecycle/migration-quarantine.js";
+import { TEST_STORAGE_SERVICE } from "./helpers/storage-service.js";
 
 const SESSION = `${WORKSPACE_LAYOUT.SESSION_DIR}/s-1`;
 const SNAPSHOT_DIR = `${SESSION}/model-message-snapshots`;
@@ -62,6 +72,60 @@ async function createWorkspace(t) {
   await writeFile(path.join(base, SESSION, "session.json"), "{}\n");
   return base;
 }
+
+test("current layouts retry quarantined snapshots once and preserve rejected units", async (t) => {
+  const base = await createWorkspace(t);
+  await mkdir(path.dirname(path.join(base, WORKSPACE_LAYOUT.LAYOUT_STATE_FILE)), {
+    recursive: true,
+  });
+  await writeFile(
+    path.join(base, WORKSPACE_LAYOUT.LAYOUT_STATE_FILE),
+    JSON.stringify({ version: WORKSPACE_LAYOUT_VERSION }),
+  );
+  const kind = WORKSPACE_LAYOUT_UPGRADE_OWNER.MODEL_CONTEXT_SNAPSHOT;
+  const validPath = `${SNAPSHOT_DIR}/retry-valid.json`;
+  const invalidPath = `${SNAPSHOT_DIR}/retry-invalid.json`;
+  for (const [relativePath, snapshot] of [
+    [validPath, v3Snapshot()],
+    [invalidPath, v3Snapshot(2)],
+  ]) {
+    await writeFile(path.join(base, relativePath), JSON.stringify(snapshot));
+    await quarantineMigrationUnit({
+      base,
+      kind,
+      relativePath,
+      error: new Error("previous rejection"),
+      move: true,
+    });
+  }
+  const options = {
+    base,
+    backupBase: path.join(base, "backup"),
+    created: false,
+    scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS,
+    storageService: TEST_STORAGE_SERVICE,
+  };
+  const reports = await upgradeWorkspaceLayout(options);
+  const retry = reports.find(({ id }) => id === `quarantine-retry:${kind}`);
+  assert.deepEqual(new Set(retry.released), new Set([validPath, invalidPath]));
+  assert.equal(retry.result.migrated.length, 1);
+  assert.equal(retry.result.quarantined.length, 1);
+  assert.equal(
+    JSON.parse(await readFile(path.join(base, validPath), "utf8")).version,
+    SNAPSHOT_VERSION,
+  );
+  assert.equal(
+    JSON.parse(await readFile(path.join(options.backupBase, validPath), "utf8")).version,
+    3,
+  );
+  const units = await listQuarantinedUnits({ base });
+  assert.equal(units.length, 1);
+  assert.equal(units[0].path, invalidPath);
+  assert.equal(units[0].error.details.reason, "unsupported_version");
+  assert.equal(await exists(path.join(base, invalidPath)), false);
+  assert.deepEqual(await upgradeWorkspaceLayout(options), []);
+  assert.equal((await listQuarantinedUnits({ base })).length, 1);
+});
 
 test("snapshot upgrade migrates v3 snapshots in place and quarantines unmappable ones", async (t) => {
   const base = await createWorkspace(t);
@@ -190,7 +254,7 @@ test("snapshot upgrade leaves current snapshots untouched", async (t) => {
   const filePath = path.join(base, SNAPSHOT_DIR, "dp-1__client-turn_t-1.json");
   const current = JSON.stringify({
     ...v3Snapshot(SNAPSHOT_VERSION),
-    messageBlocks: {},
+    messageBlocks: { system: [], history: [], incremental: [] },
     messages: [],
   });
   await writeFile(filePath, current);

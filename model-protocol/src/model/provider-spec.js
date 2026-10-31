@@ -395,6 +395,7 @@ export const MODEL_PROVIDER_CONFIG_CONTRACT = Object.freeze({
   type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.OBJECT,
   additionalProperties: false,
   properties: Object.freeze({
+    is_custom: connectionField(booleanField),
     enabled: connectionField(booleanField),
     used_for_conversation: connectionField(booleanField),
     api_key: connectionField(stringField),

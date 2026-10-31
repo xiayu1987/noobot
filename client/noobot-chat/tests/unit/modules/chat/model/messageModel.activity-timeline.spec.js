@@ -13,6 +13,7 @@ import { selectActivityTimelineLogs } from "../../../../../src/modules/chat/runt
 function activity(eventId, sequence, text) {
   return {
     eventId,
+    activityId: `test-activity:${eventId}`,
     eventType: "thinking",
     text,
     activityKind: "analysis",

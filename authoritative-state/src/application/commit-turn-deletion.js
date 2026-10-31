@@ -6,7 +6,7 @@
 import { normalizeTurnLifecycleEntity } from "../domain/turn-lifecycle-entity.js";
 import { text as clean } from "@noobot/shared/value";
 
-export function commitTurnDeletion({ lifecycle = {}, turnScopeIds = [] } = {}) {
+export function commitTurnDeletion({ lifecycle, turnScopeIds = [] } = {}) {
   const normalizedLifecycle = normalizeTurnLifecycleEntity(lifecycle);
   const deletedTurnScopeIds = [
     ...new Set((Array.isArray(turnScopeIds) ? turnScopeIds : []).map(clean).filter(Boolean)),

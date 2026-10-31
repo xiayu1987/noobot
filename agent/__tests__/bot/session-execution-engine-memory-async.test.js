@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import test from "node:test";
+import { createTestSessionFinalizationContext } from "../helpers/session-finalization.js";
 import assert from "node:assert/strict";
 
 import { createTestSessionExecutionEngine } from "../helpers/session-execution-engine.js";
@@ -59,6 +60,7 @@ function createEngine({
 
 function buildFinalizeInput(userConfig = {}) {
   return {
+    ...createTestSessionFinalizationContext(),
     userId: "u1",
     sessionId: "s1",
     parentSessionId: "",
@@ -75,7 +77,6 @@ function buildFinalizeInput(userConfig = {}) {
     persistedTurnMessages: [],
     durableTurnMessages: [],
     summaryCheckpointPromotionSources: [],
-    runtimeEventListener: null,
     userConfig,
     persistenceScope: null,
   };

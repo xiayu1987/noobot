@@ -8,10 +8,16 @@ import test from "node:test";
 import { MIGRATION_UNMAPPABLE_CODE, defineVersionChain, runVersionChain } from "../migration.js";
 
 const readVersion = (document) => document.version;
+const schemas = {
+  1: (document) => assert.equal(typeof document.a, "string"),
+  2: (document) => assert.equal(typeof document.b, "string"),
+  3: (document) => assert.equal(typeof document.c, "string"),
+};
 const chain = defineVersionChain({
   kind: "sample",
   currentVersion: 3,
   readVersion,
+  schemas,
   steps: [
     { from: 1, to: 2, migrate: (document) => ({ ...document, version: 2, b: document.a }) },
     { from: 2, to: 3, migrate: (document) => ({ version: 3, c: document.b }) },
@@ -48,10 +54,11 @@ test("version chain rejects steps that do not advance the version", () => {
     kind: "broken",
     currentVersion: 2,
     readVersion,
+    schemas,
     steps: [{ from: 1, to: 2, migrate: (document) => document }],
   });
   assert.throws(
-    () => runVersionChain(broken, { version: 1 }),
+    () => runVersionChain(broken, { version: 1, a: "x" }),
     (error) => error.details.reason === "step_did_not_advance_version",
   );
 });
@@ -63,6 +70,7 @@ test("version chain definitions must be contiguous single steps", () => {
       kind: "gap",
       currentVersion: 3,
       readVersion,
+      schemas,
       steps: [{ from: 1, to: 2, migrate }],
     }),
   );
@@ -71,6 +79,7 @@ test("version chain definitions must be contiguous single steps", () => {
       kind: "skip",
       currentVersion: 3,
       readVersion,
+      schemas,
       steps: [{ from: 1, to: 3, migrate }],
     }),
   );
@@ -79,10 +88,52 @@ test("version chain definitions must be contiguous single steps", () => {
       kind: "dup",
       currentVersion: 2,
       readVersion,
+      schemas,
       steps: [
         { from: 1, to: 2, migrate },
         { from: 1, to: 2, migrate },
       ],
     }),
+  );
+});
+
+test("version schemas reject invalid input and output with version and stage", () => {
+  for (const document of [
+    { version: 1, a: 1 },
+    { version: 3, c: null },
+  ]) {
+    assert.throws(
+      () => runVersionChain(chain, document),
+      (error) =>
+        error.code === MIGRATION_UNMAPPABLE_CODE &&
+        error.details.reason === "version_schema_rejected" &&
+        error.details.version === document.version &&
+        error.details.stage === "input",
+    );
+  }
+  const broken = defineVersionChain({
+    kind: "broken-output",
+    currentVersion: 2,
+    readVersion,
+    schemas,
+    steps: [{ from: 1, to: 2, migrate: () => ({ version: 2, b: null }) }],
+  });
+  assert.throws(
+    () => runVersionChain(broken, { version: 1, a: "x" }),
+    (error) =>
+      error.details.reason === "version_schema_rejected" &&
+      error.details.version === 2 &&
+      error.details.stage === "output",
+  );
+  assert.throws(
+    () =>
+      defineVersionChain({
+        kind: "missing-schema",
+        currentVersion: 1,
+        readVersion,
+        schemas: {},
+        steps: [],
+      }),
+    /missing schema for v1/,
   );
 });

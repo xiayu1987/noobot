@@ -69,7 +69,7 @@ export function isThinkingDetailContentFact(value) {
   );
 }
 
-export const USER_INTERJECTION_FACT_REQUIREMENTS = Object.freeze([
+const USER_INTERJECTION_FACT_REQUIREMENTS = Object.freeze([
   ["sourceMessageUid", "missing_user_interjection_fact_source_message_uid"],
   ["timestamp", "missing_user_interjection_fact_timestamp"],
   ["sessionId", "missing_user_interjection_fact_session_id"],

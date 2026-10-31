@@ -135,6 +135,7 @@ export const MODEL_PROVIDER_AGENT_CONFIG_CONTRACT = Object.freeze({
 
 const MODEL_PROVIDER_STRUCTURE_REF = Object.freeze({
   kind: CONFIG_STRUCTURE_KIND.OBJECT,
+  initialValue: Object.freeze({ is_custom: true }),
   itemType: EXPLICIT,
   access: USER,
   delegatedContract: MODEL_PROVIDER_AGENT_CONFIG_CONTRACT,
@@ -270,6 +271,10 @@ export const CONFIG_STRUCTURE = object({
   ),
   context: object({}, builtin({ open: true })),
   default_provider: string({ nonEmpty: true, modelReference: "conversation" }),
+  model_library_version: systemField(CONFIG_STRUCTURE_KIND.INTEGER, {
+    minimum: 1,
+    policy: USER_OPTIONAL,
+  }),
   providers: collection(MODEL_PROVIDER_STRUCTURE_REF),
   multimodal: object({
     parsing: object({
@@ -396,6 +401,22 @@ export function projectConfigDocumentForAccess(
     throw new TypeError(`unsupported config path representation: ${representation}`);
   }
   return projectConfigNode(CONFIG_STRUCTURE, document, { scope, access, representation }) || {};
+}
+
+export function projectConfigDocumentForScope(
+  document = {},
+  { scope = CONFIG_DOCUMENT_SCOPE.USER } = {},
+) {
+  if (!Object.values(CONFIG_DOCUMENT_SCOPE).includes(scope)) {
+    throw new TypeError(`unsupported config document scope: ${scope}`);
+  }
+  if (!isPlainObject(document)) return {};
+  return (
+    projectConfigNode(CONFIG_STRUCTURE, document, {
+      scope,
+      representation: CONFIG_PATH_REPRESENTATION.PERSISTED,
+    }) || {}
+  );
 }
 
 export function projectUserVisibleConfigDeclarations(document = {}) {

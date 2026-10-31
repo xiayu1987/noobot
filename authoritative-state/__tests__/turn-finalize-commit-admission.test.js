@@ -6,7 +6,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol/turn-lifecycle";
-import { deriveAgentExecutionId, EXECUTION_KIND } from "@noobot/session-protocol";
+import {
+  createEmptyTurnLifecycle,
+  createTurnTerminalStatus,
+  deriveAgentExecutionId,
+  EXECUTION_KIND,
+} from "@noobot/session-protocol";
 import { transitionTurnLifecycle } from "../src/domain/turn-lifecycle-entity.js";
 import { commitTurnLifecycle } from "../src/application/commit-turn-lifecycle.js";
 
@@ -14,7 +19,7 @@ const turnScopeId = "turn-finalize";
 const executionId = deriveAgentExecutionId({ turnScopeId });
 
 function processing() {
-  let lifecycle = {};
+  let lifecycle = createEmptyTurnLifecycle();
   for (const input of [
     {
       sessionId: "session-1",
@@ -65,7 +70,10 @@ function completed(commandId) {
     causationId: commandId,
     phase: TURN_PHASE.COMPLETION,
     summaryVersion: 1,
-    terminalStatus: { command: "completed" },
+    terminalStatus: createTurnTerminalStatus("completed", {
+      turnScopeId,
+      dialogProcessId: "dialog-1",
+    }),
   };
 }
 
@@ -113,7 +121,11 @@ test("non-retryable failure does not write completionCommitId", () => {
     causationId: "failed",
     phase: TURN_PHASE.PROCESSING,
     failure: { code: "turn_failed", message: "turn failed", retryable: false },
-    terminalStatus: { command: "error" },
+    terminalStatus: createTurnTerminalStatus("error", {
+      turnScopeId,
+      dialogProcessId: "dialog-1",
+      description: "turn failed",
+    }),
   });
   assert.equal(result.applied, true, result.reason);
   assert.equal(result.lifecycle.turns[turnScopeId].completionCommitId, "");

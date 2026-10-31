@@ -5,6 +5,7 @@
  */
 import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import test from "node:test";
+import { createTestSessionFinalizationContext } from "../helpers/session-finalization.js";
 import assert from "node:assert/strict";
 import { createNoopMemoryPostProcessService } from "../helpers/memory-postprocess-service.js";
 
@@ -92,6 +93,7 @@ test("SessionExecutionFinalizer waits for execution event durability before read
   });
 
   await finalizer.finalizeRunSession({
+    ...createTestSessionFinalizationContext(),
     userId: "u1",
     sessionId: "s1",
     dialogProcessId: "dp1",
@@ -143,6 +145,7 @@ test("SessionExecutionFinalizer rejects completion when execution event persiste
 
   await assert.rejects(
     finalizer.finalizeRunSession({
+      ...createTestSessionFinalizationContext(),
       dialogProcessId: "dp1",
       userId: "u1",
       sessionId: "s1",
@@ -158,6 +161,7 @@ test("SessionExecutionFinalizer rejects completion when execution event persiste
       durableTurnMessages: [],
       summaryCheckpointPromotionSources: [],
       lifecycle: {
+        ...createTestSessionFinalizationContext().lifecycle,
         complete: () => events.push("completed"),
       },
       runtimeEventListener: {
@@ -196,6 +200,7 @@ test("SessionExecutionFinalizer promotes semantic-transfer attachments as transf
   });
 
   const result = await finalizer.finalizeRunSession({
+    ...createTestSessionFinalizationContext(),
     userId: "u1",
     sessionId: "s1",
     dialogProcessId: "dp1",
@@ -257,6 +262,7 @@ test("SessionExecutionFinalizer promotes ordinary generated attachments to final
   });
 
   const result = await finalizer.finalizeRunSession({
+    ...createTestSessionFinalizationContext(),
     userId: "u1",
     sessionId: "s1",
     dialogProcessId: "dp1",
@@ -328,6 +334,7 @@ test("SessionExecutionFinalizer promotes checkpoint attachment sources without r
   });
 
   const result = await finalizer.finalizeRunSession({
+    ...createTestSessionFinalizationContext(),
     dialogProcessId: "dp1",
     userId: "u1",
     sessionId: "s1",
@@ -410,6 +417,7 @@ test("SessionExecutionFinalizer restores the pre-refactor full result from persi
   });
 
   const result = await finalizer.finalizeRunSession({
+    ...createTestSessionFinalizationContext(),
     dialogProcessId: "dp1",
     userId: "u1",
     sessionId: "s1",
@@ -458,6 +466,7 @@ test("SessionExecutionFinalizer skips non-contiguous persisted UIDs without dupl
   });
 
   const result = await finalizer.finalizeRunSession({
+    ...createTestSessionFinalizationContext(),
     dialogProcessId: "dp1",
     userId: "u1",
     sessionId: "s1",
@@ -510,6 +519,7 @@ test("SessionExecutionFinalizer persists canonical summary-state changes for an 
   });
 
   const result = await finalizer.finalizeRunSession({
+    ...createTestSessionFinalizationContext(),
     dialogProcessId: "dp1",
     userId: "u1",
     sessionId: "s1",
@@ -585,6 +595,7 @@ test("SessionExecutionFinalizer upserts summary marks for an already durable tur
     now: () => new Date().toISOString(),
   });
   await finalizer.finalizeRunSession({
+    ...createTestSessionFinalizationContext(),
     userId: "u1",
     sessionId: "s1",
     dialogProcessId: "dp1",
@@ -664,6 +675,7 @@ test("completed turn summary policy marks are durably upserted before the next d
     now: () => new Date().toISOString(),
   });
   await finalizer.finalizeRunSession({
+    ...createTestSessionFinalizationContext(),
     userId: "u1",
     sessionId: "s1",
     dialogProcessId: "dp1",
@@ -706,6 +718,7 @@ test("SessionExecutionFinalizer rejects a persisted UID without a durable journa
 
   await assert.rejects(
     finalizer.finalizeRunSession({
+      ...createTestSessionFinalizationContext(),
       dialogProcessId: "dp1",
       userId: "u1",
       sessionId: "s1",

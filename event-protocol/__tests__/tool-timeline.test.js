@@ -122,6 +122,8 @@ test("canonical detail counts match the event records exposed to renderers", () 
             toolCallId: undefined,
             tool: undefined,
             text: "model analysis",
+            activityId: "analysis-1",
+            activityKind: "main_model_analysis",
           }),
         ),
       ],

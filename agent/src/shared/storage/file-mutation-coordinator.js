@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { filePath as path } from "@noobot/path-resolver";
 import { runBestEffort } from "@noobot/shared/best-effort";
+import { requirePositiveInteger, text } from "@noobot/shared/value";
 import { fsMkdir, fsOpen, fsReadFile, fsReaddir, fsRename, fsRm, fsStat } from "./fs-adapter.js";
 
 const WAITER_TICKET_WIDTH = 16;
@@ -74,6 +75,32 @@ function waiterOwnerToken(name, ownerToken) {
   return match ? `${match[1]}:` : "";
 }
 
+function readFileIfPresent(filePath) {
+  return fsReadFile(filePath, "utf8").catch((error) => {
+    if (error?.code === "ENOENT") return "";
+    throw error;
+  });
+}
+
+/** Returns the live waiter record, or null when it vanished or was reclaimed as stale. */
+async function inspectWaiter(waiterPath, name, staleMs) {
+  const waiterStat = await fsStat(waiterPath);
+  if (Date.now() - waiterStat.mtimeMs <= staleMs) return waiterStat;
+  const storedOwner = await readFileIfPresent(waiterPath);
+  if (isOwnerProcessAlive(waiterOwnerToken(name, storedOwner))) return waiterStat;
+  await fsRm(waiterPath, { force: true });
+  return null;
+}
+
+async function inspectWaiterIfPresent(waiterPath, name, staleMs) {
+  try {
+    return await inspectWaiter(waiterPath, name, staleMs);
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
 async function listLiveWaiters(lockPath, staleMs) {
   const parent = path.dirname(lockPath);
   const { choosingPrefix, settledPrefix } = waiterNames(lockPath);
@@ -87,19 +114,8 @@ async function listLiveWaiters(lockPath, staleMs) {
     const choosing = name.startsWith(choosingPrefix);
     if (!choosing && ticket === null) continue;
     const waiterPath = path.join(parent, name);
-    try {
-      const waiterStat = await fsStat(waiterPath);
-      if (Date.now() - waiterStat.mtimeMs > staleMs) {
-        const storedOwner = await fsReadFile(waiterPath, "utf8").catch(() => "");
-        if (!isOwnerProcessAlive(waiterOwnerToken(name, storedOwner))) {
-          await fsRm(waiterPath, { force: true });
-          continue;
-        }
-      }
+    if (await inspectWaiterIfPresent(waiterPath, name, staleMs))
       live.push({ name, path: waiterPath, choosing, ticket });
-    } catch (error) {
-      if (error?.code !== "ENOENT") throw error;
-    }
   }
   return live;
 }
@@ -194,6 +210,44 @@ async function reclaimStaleLock(lockPath) {
   return true;
 }
 
+const COORDINATOR_OWNER = "FileMutationCoordinator";
+
+function requireText(name, value) {
+  const normalized = text(value);
+  if (!normalized) throw new TypeError(`${COORDINATOR_OWNER} requires non-empty ${name}`);
+  return normalized;
+}
+
+function startHeartbeat(handle, staleMs, operationName, context) {
+  const timer = setInterval(() => {
+    void runBestEffort(() => handle.utimes(new Date(), new Date()), { operationName, context });
+  }, heartbeatInterval(staleMs));
+  timer.unref?.();
+  return timer;
+}
+
+/** Creates the lock file exclusively; a partially written lock is removed before rethrowing. */
+async function openLock(lockPath, ownerToken) {
+  const handle = await fsOpen(lockPath, "wx");
+  try {
+    await handle.writeFile(ownerToken, "utf8");
+    return handle;
+  } catch (error) {
+    await cleanupBestEffort(() => handle.close(), "fileMutation.closeIncompleteLock", lockPath);
+    await cleanupBestEffort(
+      () => fsRm(lockPath, { force: true }),
+      "fileMutation.removeIncompleteLock",
+      lockPath,
+    );
+    throw error;
+  }
+}
+
+async function releaseOwnedLock(lockPath, ownerToken) {
+  if ((await readFileIfPresent(lockPath)) !== ownerToken) return;
+  await fsRm(lockPath, { force: true });
+}
+
 export class FileMutationCoordinator {
   constructor({
     timeoutMs = 30000,
@@ -203,12 +257,12 @@ export class FileMutationCoordinator {
     timeoutErrorCode = "FILE_MUTATION_BUSY",
     operationName = "fileMutation.refreshLock",
   } = {}) {
-    this.timeoutMs = Math.max(1, Number(timeoutMs) || 30000);
-    this.staleMs = Math.max(1, Number(staleMs) || 60000);
-    this.pollMs = Math.max(1, Number(pollMs) || 10);
-    this.timeoutMessage = String(timeoutMessage || "file mutation lock timeout");
-    this.timeoutErrorCode = String(timeoutErrorCode || "FILE_MUTATION_BUSY");
-    this.operationName = String(operationName || "fileMutation.refreshLock");
+    this.timeoutMs = requirePositiveInteger(COORDINATOR_OWNER, "timeoutMs", timeoutMs);
+    this.staleMs = requirePositiveInteger(COORDINATOR_OWNER, "staleMs", staleMs);
+    this.pollMs = requirePositiveInteger(COORDINATOR_OWNER, "pollMs", pollMs);
+    this.timeoutMessage = requireText("timeoutMessage", timeoutMessage);
+    this.timeoutErrorCode = requireText("timeoutErrorCode", timeoutErrorCode);
+    this.operationName = requireText("operationName", operationName);
     this.transientCreateWindowMs = Math.max(
       this.pollMs,
       Math.min(this.staleMs, TRANSIENT_EXCLUSIVE_CREATE_WINDOW_MS),
@@ -219,84 +273,25 @@ export class FileMutationCoordinator {
   async run(lockPath, operation) {
     const key = path.resolve(lockPath);
     const heldLocks = this.asyncHeldLocks.getStore();
-    const held = heldLocks?.get(key);
-    if (held && !held.released) {
-      held.depth += 1;
-      try {
-        return await operation();
-      } finally {
-        held.depth -= 1;
-      }
-    }
+    if (heldLocks?.get(key)?.released === false) return operation();
     const deadline = Date.now() + this.timeoutMs;
     const ownerUuid = randomUUID();
-    const ownerId = `${process.pid}-${ownerUuid}`;
-    const ownerToken = `${process.pid}:${ownerUuid}`;
+    const owner = { id: `${process.pid}-${ownerUuid}`, token: `${process.pid}:${ownerUuid}` };
+    const handle = await this.acquireAsWaiter(key, owner, deadline);
+    return this.runHolding({ key, handle, ownerToken: owner.token }, operation);
+  }
+
+  async acquireAsWaiter(key, owner, deadline) {
     await fsMkdir(path.dirname(key), { recursive: true });
-    const waiter = await createWaiter(key, this.staleMs, ownerId, ownerToken);
-    const waiterHeartbeat = setInterval(() => {
-      void runBestEffort(() => waiter.handle.utimes(new Date(), new Date()), {
-        operationName: this.operationName,
-        context: { lockPath: key, phase: "waiting" },
-      });
-    }, heartbeatInterval(this.staleMs));
-    waiterHeartbeat.unref?.();
-    let lockHandle = null;
-    let transientCreateSince = 0;
+    const waiter = await createWaiter(key, this.staleMs, owner.id, owner.token);
+    const heartbeat = startHeartbeat(waiter.handle, this.staleMs, this.operationName, {
+      lockPath: key,
+      phase: "waiting",
+    });
     try {
-      while (true) {
-        if (await isElectedWaiter(key, this.staleMs, waiter.name)) {
-          try {
-            lockHandle = await fsOpen(key, "wx");
-            await lockHandle.writeFile(ownerToken, "utf8");
-            break;
-          } catch (error) {
-            if (lockHandle) {
-              await cleanupBestEffort(
-                () => lockHandle.close(),
-                "fileMutation.closeIncompleteLock",
-                key,
-              );
-              lockHandle = null;
-              await cleanupBestEffort(
-                () => fsRm(key, { force: true }),
-                "fileMutation.removeIncompleteLock",
-                key,
-              );
-            }
-            try {
-              const current = await statAfterExclusiveCreateFailure(key, error);
-              if (!current) {
-                if (isTransientExclusiveCreateFailure(error)) {
-                  transientCreateSince ||= Date.now();
-                  if (Date.now() - transientCreateSince > this.transientCreateWindowMs) throw error;
-                }
-                continue;
-              }
-              transientCreateSince = 0;
-              if (Date.now() - current.mtimeMs > this.staleMs) {
-                const currentOwner = await readLockOwner(key);
-                if (!isOwnerProcessAlive(currentOwner)) {
-                  await reclaimStaleLock(key);
-                  continue;
-                }
-              }
-            } catch (statError) {
-              if (statError?.code === "ENOENT") continue;
-              throw statError;
-            }
-          }
-        }
-        if (Date.now() >= deadline) {
-          const failure = new Error(this.timeoutMessage);
-          failure.statusCode = 409;
-          failure.code = this.timeoutErrorCode;
-          throw failure;
-        }
-        await new Promise((resolve) => setTimeout(resolve, this.pollMs));
-      }
+      return await this.acquire(key, waiter.name, owner.token, deadline);
     } finally {
-      clearInterval(waiterHeartbeat);
+      clearInterval(heartbeat);
       await cleanupBestEffort(() => waiter.handle.close(), "fileMutation.closeWaiter", key);
       await cleanupBestEffort(
         () => fsRm(waiter.path, { force: true }),
@@ -304,26 +299,78 @@ export class FileMutationCoordinator {
         key,
       );
     }
-    const heartbeat = setInterval(() => {
-      void runBestEffort(() => lockHandle.utimes(new Date(), new Date()), {
-        operationName: this.operationName,
-        context: { lockPath: key },
-      });
-    }, heartbeatInterval(this.staleMs));
-    heartbeat.unref?.();
-    const nextHeldLocks = new Map(heldLocks || []);
-    const heldEntry = { depth: 1, released: false };
+  }
+
+  async acquire(key, waiterName, ownerToken, deadline) {
+    const contention = { transientSince: 0 };
+    while (true) {
+      const attempt = await this.tryAcquire(key, waiterName, ownerToken, contention);
+      if (attempt.handle) return attempt.handle;
+      if (attempt.retry) continue;
+      if (Date.now() >= deadline) throw this.timeoutError();
+      await new Promise((resolve) => setTimeout(resolve, this.pollMs));
+    }
+  }
+
+  async tryAcquire(key, waiterName, ownerToken, contention) {
+    if (!(await isElectedWaiter(key, this.staleMs, waiterName))) return { retry: false };
+    try {
+      return { handle: await openLock(key, ownerToken) };
+    } catch (error) {
+      return { retry: await this.retryAfterCreateFailure(key, error, contention) };
+    }
+  }
+
+  async retryAfterCreateFailure(key, error, contention) {
+    try {
+      return await this.resolveCreateFailure(key, error, contention);
+    } catch (statError) {
+      if (statError?.code === "ENOENT") return true;
+      throw statError;
+    }
+  }
+
+  /** Returns true to retry immediately, false to wait for the next poll. */
+  async resolveCreateFailure(key, error, contention) {
+    const current = await statAfterExclusiveCreateFailure(key, error);
+    if (!current && !isTransientExclusiveCreateFailure(error)) return true;
+    if (!current) {
+      contention.transientSince ||= Date.now();
+      if (Date.now() - contention.transientSince > this.transientCreateWindowMs) throw error;
+      return true;
+    }
+    contention.transientSince = 0;
+    if (Date.now() - current.mtimeMs <= this.staleMs) return false;
+    if (isOwnerProcessAlive(await readLockOwner(key))) return false;
+    await reclaimStaleLock(key);
+    return true;
+  }
+
+  async runHolding({ key, handle, ownerToken }, operation) {
+    const heartbeat = startHeartbeat(handle, this.staleMs, this.operationName, {
+      lockPath: key,
+    });
+    const heldEntry = { released: false };
+    const nextHeldLocks = new Map(this.asyncHeldLocks.getStore());
     nextHeldLocks.set(key, heldEntry);
     try {
       return await this.asyncHeldLocks.run(nextHeldLocks, operation);
     } finally {
       heldEntry.released = true;
       clearInterval(heartbeat);
-      await cleanupBestEffort(() => lockHandle.close(), "fileMutation.closeLock", key);
-      const currentOwner = await fsReadFile(key, "utf8").catch(() => "");
-      if (currentOwner === ownerToken) {
-        await cleanupBestEffort(() => fsRm(key, { force: true }), "fileMutation.removeLock", key);
-      }
+      await cleanupBestEffort(() => handle.close(), "fileMutation.closeLock", key);
+      await cleanupBestEffort(
+        () => releaseOwnedLock(key, ownerToken),
+        "fileMutation.removeLock",
+        key,
+      );
     }
+  }
+
+  timeoutError() {
+    const failure = new Error(this.timeoutMessage);
+    failure.statusCode = 409;
+    failure.code = this.timeoutErrorCode;
+    return failure;
   }
 }

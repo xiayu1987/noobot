@@ -133,7 +133,7 @@ test("runSession persists stopped model message snapshot from runtime candidate 
     parentSessionId: "",
     caller: SESSION_CALLER.USER,
   });
-  const runtime = Object.assign(createTestRuntimeContext(), {
+  const runtime = createTestRuntimeContext({
     globalConfig: { ...TEST_MODEL_GLOBAL_CONFIG, workspaceRoot },
     activeMessageContext: activeContextFor({
       system: [{ type: "system", content: "system" }],
@@ -228,7 +228,7 @@ test("runSession persists stopped model message snapshot for plain user_stop err
     parentSessionId: "",
     caller: SESSION_CALLER.USER,
   });
-  const runtime = Object.assign(createTestRuntimeContext(), {
+  const runtime = createTestRuntimeContext({
     globalConfig: { ...TEST_MODEL_GLOBAL_CONFIG, workspaceRoot },
     activeMessageContext: activeContextFor({
       system: [{ type: "system", content: "system second" }],
@@ -303,7 +303,7 @@ test("runSession seals stopped snapshot only after the abort reaches the termina
     caller: SESSION_CALLER.USER,
   });
   const abortController = new AbortController();
-  const runtime = Object.assign(createTestRuntimeContext(), {
+  const runtime = createTestRuntimeContext({
     globalConfig: { ...TEST_MODEL_GLOBAL_CONFIG, workspaceRoot },
     activeMessageContext: activeContextFor({
       system: [{ type: "system", content: "system" }],
@@ -335,7 +335,11 @@ test("runSession seals stopped snapshot only after the abort reaches the termina
       runtime.activeMessageContext.messageBlocks.incremental.push(
         writeContextMessageMetadata(
           { type: "human", role: "user", content: "terminal hook injection after stop signal" },
-          { injectedMessage: true, injectedMessageType: "separate_model_relay:guidance" },
+          {
+            contextMessageId: "cm_terminal_hook",
+            injectedMessage: true,
+            injectedMessageType: "separate_model_relay:guidance",
+          },
         ),
       );
       throw abortError;
@@ -411,7 +415,7 @@ test("runSession drains accepted user interjections before sealing the stopped s
       ],
     },
   });
-  const runtime = Object.assign(createTestRuntimeContext(), {
+  const runtime = createTestRuntimeContext({
     globalConfig: { ...TEST_MODEL_GLOBAL_CONFIG, workspaceRoot },
     activeMessageContext: modelContext,
     stoppedModelMessageSnapshotCandidate: {
@@ -509,7 +513,7 @@ test("runSession emits stopped snapshot diagnostic when abort candidate is incom
   const runner = createRunner({
     callOrder,
     eventListener,
-    runtime: Object.assign(createTestRuntimeContext(), {
+    runtime: createTestRuntimeContext({
       activeMessageContext: activeContextFor({ system: [], history: [], incremental: [] }),
       stoppedModelMessageSnapshotCandidate: {
         userId: "u1",

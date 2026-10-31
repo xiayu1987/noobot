@@ -10,11 +10,7 @@ import { filePath as path } from "@noobot/path-resolver";
 import { FILE_MUTATION_ERROR_CODE, createFileMutationError } from "@noobot/file-mutation-protocol";
 import { FileMutationCoordinator } from "../../shared/storage/file-mutation-coordinator.js";
 
-const coordinator = new FileMutationCoordinator({
-  timeoutMessage: "file mutation lock timeout",
-  timeoutErrorCode: "FILE_MUTATION_BUSY",
-  operationName: "fileMutation.refreshLock",
-});
+const coordinator = new FileMutationCoordinator();
 
 export function fileContentSha256(value) {
   return createHash("sha256").update(value).digest("hex");

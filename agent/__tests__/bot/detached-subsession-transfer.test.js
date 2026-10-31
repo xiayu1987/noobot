@@ -34,8 +34,13 @@ test("detached sub-session projects finalizer messages and their transfer envelo
     },
   });
   const messages = [
-    { role: "assistant", content: "done", transferEnvelopes: [envelope] },
-    { role: "tool", content: "dup", transferEnvelopes: [envelope] },
+    {
+      messageUid: "assistant-result",
+      role: "assistant",
+      content: "done",
+      transferEnvelopes: [envelope],
+    },
+    { messageUid: "tool-result", role: "tool", content: "dup", transferEnvelopes: [envelope] },
   ];
   const baseRunSession = deps.sessionRunner.runSession;
   deps.sessionRunner.runSession = async (payload) => ({

@@ -21,60 +21,8 @@ import { handleSessionRunFailure } from "./runner/run-failure.js";
 import { initializeSessionRun } from "./runner/run-initialization.js";
 import { finalizeAgentTurn } from "./runner/result-finalizer.js";
 import { commitAuthoritativeFinalResult } from "../../runtime/engine.js";
-import { validateSessionPersistenceScope } from "@noobot/session-protocol";
-import { isCanonicalText, isFunction, isPlainObject } from "@noobot/shared/value";
-
-const SESSION_RUN_PAYLOAD_FIELDS = Object.freeze([
-  "userId",
-  "sessionId",
-  "message",
-  "attachments",
-  "systemMessages",
-  "eventListener",
-  "caller",
-  "parentSessionId",
-  "parentDialogProcessId",
-  "dialogProcessId",
-  "abortSignal",
-  "userInteractionBridge",
-  "userInterjectionPort",
-  "runConfig",
-  "turnAcceptance",
-  "turnScopeId",
-  "persistenceScope",
-]);
-
-function assertSessionRunPayload(payload) {
-  if (!payload || typeof payload !== "object") {
-    throw new TypeError("session run payload must be an object");
-  }
-  const missing = SESSION_RUN_PAYLOAD_FIELDS.filter((field) => !Object.hasOwn(payload, field));
-  if (missing.length) {
-    throw new TypeError(`session run payload requires: ${missing.join(",")}`);
-  }
-  const unknown = Object.keys(payload).filter(
-    (field) => !SESSION_RUN_PAYLOAD_FIELDS.includes(field),
-  );
-  if (unknown.length) {
-    throw new TypeError(`session run payload has unknown fields: ${unknown.join(",")}`);
-  }
-  for (const field of ["attachments", "systemMessages"]) {
-    if (!Array.isArray(payload[field])) {
-      throw new TypeError(`session run payload ${field} must be an array`);
-    }
-  }
-  if (!isPlainObject(payload.runConfig)) {
-    throw new TypeError("session run payload runConfig must be a plain object");
-  }
-  if (!isCanonicalText(payload.turnScopeId)) {
-    throw new TypeError("session run payload turnScopeId must be canonical text");
-  }
-  for (const field of ["parentDialogProcessId", "dialogProcessId"]) {
-    if (payload[field] !== "" && !isCanonicalText(payload[field])) {
-      throw new TypeError(`session run payload ${field} must be empty or canonical text`);
-    }
-  }
-}
+import { assertSessionRunRequest } from "@noobot/agent-transport-protocol/session-run-request";
+import { isFunction } from "@noobot/shared/value";
 
 export class SessionExecutionRunner {
   constructor({
@@ -134,7 +82,7 @@ export class SessionExecutionRunner {
   }
 
   async runSession(payload) {
-    assertSessionRunPayload(payload);
+    assertSessionRunRequest(payload);
     const {
       userId,
       sessionId,
@@ -154,15 +102,6 @@ export class SessionExecutionRunner {
       turnScopeId,
       persistenceScope,
     } = payload;
-    if (typeof parentSessionId !== "string") {
-      throw new TypeError("session run parentSessionId must be a string");
-    }
-    const persistenceScopeValidation = validateSessionPersistenceScope(persistenceScope);
-    if (!persistenceScopeValidation.valid) {
-      throw new TypeError(
-        `invalid Session persistence scope: ${persistenceScopeValidation.errors.join(",")}`,
-      );
-    }
     let resolvedRunConfig = runConfig;
     let preparedBotHook = null;
     let initializedSession = null;
@@ -249,7 +188,7 @@ export class SessionExecutionRunner {
           eventListener: runtimeEventListener,
           userInteractionBridge,
           abortSignal,
-          persistenceScope: persistenceScopeValidation.scope,
+          persistenceScope,
           contextMode,
           runtimeIdentity: botHookIdentity,
           userConfig,

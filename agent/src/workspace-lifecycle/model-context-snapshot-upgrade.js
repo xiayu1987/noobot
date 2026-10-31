@@ -10,7 +10,7 @@ import { MIGRATION_UNMAPPABLE_CODE, createMigrationError } from "@noobot/shared/
 import {
   MODEL_CONTEXT_SNAPSHOT_MIGRATION_KIND,
   migrateModelContextSnapshot,
-} from "@noobot/context-protocol/policy/snapshot-migration";
+} from "@noobot/session-repair";
 import { writeFileAtomic } from "../shared/storage/atomic-file-write.js";
 import { sessionMutationCoordinator } from "../session/session-mutation-coordinator.js";
 import {

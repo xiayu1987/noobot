@@ -44,12 +44,5 @@ export function createConfigValueSource({ baseValues = {} } = {}) {
         exactLibraryMatch: libraryProvider !== null,
       });
     },
-
-    listProviderAliases() {
-      const aliases = new Set();
-      const providers = isPlainObject(base) ? base.providers : null;
-      if (isPlainObject(providers)) for (const alias of Object.keys(providers)) aliases.add(alias);
-      return Object.freeze([...aliases]);
-    },
   });
 }

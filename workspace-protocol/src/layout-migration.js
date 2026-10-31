@@ -26,6 +26,7 @@ export const WORKSPACE_LAYOUT_UPGRADE_OWNER = Object.freeze({
   SESSION_SCRIPT_EXIT_CODE: "session-script-exit-code",
   SESSION_LEGACY_MCP_RESULT: "session-legacy-mcp-result",
   SESSION_RESULT_OVERFLOW: "session-result-overflow",
+  SESSION_CHECKPOINT_IDENTITY: "session-checkpoint-identity",
 });
 
 export const WORKSPACE_LAYOUT_UPGRADES = Object.freeze([
@@ -148,6 +149,11 @@ export const WORKSPACE_LAYOUT_UPGRADES = Object.freeze([
     id: "session-result-overflow-v25",
     toVersion: 25,
     owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_RESULT_OVERFLOW,
+  }),
+  Object.freeze({
+    id: "session-checkpoint-identity-v26",
+    toVersion: 26,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_CHECKPOINT_IDENTITY,
   }),
 ]);
 

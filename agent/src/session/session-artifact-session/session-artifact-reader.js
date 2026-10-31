@@ -7,6 +7,7 @@ import { requireCanonicalTurnScopeId } from "@noobot/session-protocol/turn-scope
 import { readSessionForProtocolRepair } from "@noobot/session-repair";
 import { buildSessionArtifactFileMap } from "../session-artifact-files.js";
 import { readOptionalJsonWithStorage } from "./artifact-json-io.js";
+import { readCheckpointReceiptProjection } from "./checkpoint-receipts.js";
 import {
   TURN_JOURNAL_SCHEMA_VERSION,
   assertCanonicalSessionManifest,
@@ -21,7 +22,8 @@ async function readCanonicalManifest({ storageService, sessionDir }) {
     artifactPath: files.session,
   });
   if (session === null) return null;
-  return assertCanonicalSessionManifest(session, "Session artifact");
+  assertCanonicalSessionManifest(session, "Session artifact");
+  return readCheckpointReceiptProjection({ storageService, sessionDir, session });
 }
 
 async function materializeOrderedMessages({ storageService, sessionDir, turnItems, references }) {

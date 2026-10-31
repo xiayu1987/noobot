@@ -42,17 +42,19 @@ test("authority outbox tracks attempts and acknowledges delivery idempotently", 
     },
   });
   const initial = normalizeAuthorityEventOutbox([
-    { eventId: envelope.identity.eventId, envelope, committedAt: envelope.occurredAt },
+    {
+      eventId: envelope.identity.eventId,
+      envelope,
+      committedAt: envelope.occurredAt,
+      deliveries: {},
+    },
   ]);
   const consumerId = "service-websocket";
-  assert.throws(
-    () => listPendingAuthorityEvents(initial, { consumerId: "" }),
-    /require a delivery consumer/,
-  );
+  assert.throws(() => listPendingAuthorityEvents(initial, { consumerId: "" }), /consumerId/);
   assert.equal(listPendingAuthorityEvents(initial, { consumerId }).length, 1);
-  assert.equal(
-    recordAuthorityEventDeliveryAttempt(initial, { eventId: envelope.identity.eventId }).reason,
-    "missing_delivery_consumer",
+  assert.throws(
+    () => recordAuthorityEventDeliveryAttempt(initial, { eventId: envelope.identity.eventId }),
+    /consumerId/,
   );
   const attempted = recordAuthorityEventDeliveryAttempt(initial, {
     eventId: envelope.identity.eventId,
@@ -120,9 +122,9 @@ test("outbox compaction reclaims only events every attempting consumer delivered
           {
             attempts: 1,
             lastAttemptAt: "2026-07-01T00:00:00.000Z",
-            orderingDomain: item.ordering.domain,
-            orderingScopeId: scopeId,
-            sequence,
+            orderingDomain: deliveredAt ? item.ordering.domain : "",
+            orderingScopeId: deliveredAt ? scopeId : "",
+            sequence: deliveredAt ? sequence : 0,
             deliveredAt,
           },
         ]),
@@ -135,6 +137,7 @@ test("outbox compaction reclaims only events every attempting consumer delivered
       eventId: "pending",
       envelope: envelope("pending", 1),
       committedAt: "2026-07-01T00:00:00.000Z",
+      deliveries: {},
     },
     delivered("recent", 2, { "service-websocket": "2026-07-20T00:00:00.000Z" }),
     delivered("attempted-not-delivered", 3, { "service-websocket": old, "service-cli": "" }),
@@ -149,9 +152,9 @@ test("outbox compaction reclaims only events every attempting consumer delivered
     result.outbox.map((item) => item.eventId),
     ["pending", "recent", "attempted-not-delivered"],
   );
-  assert.equal(
-    compactAuthorityEventOutbox(source, { retainDeliveredAfter: "not-a-date" }).reason,
-    "invalid_retention_cutoff",
+  assert.throws(
+    () => compactAuthorityEventOutbox(source, { retainDeliveredAfter: "not-a-date" }),
+    /retainDeliveredAfter/,
   );
 });
 
@@ -188,7 +191,9 @@ test("authority outbox tracks each consumer independently so one ack never hides
       sequence: envelope.ordering.sequence,
       deliveredAt,
     });
-  const initial = normalizeAuthorityEventOutbox([{ eventId, envelope }]);
+  const initial = normalizeAuthorityEventOutbox([
+    { eventId, envelope, committedAt: envelope.occurredAt, deliveries: {} },
+  ]);
   const byCli = ack(initial, "service.cli", "2026-07-18T00:00:01.000Z");
   assert.equal(byCli.changed, true);
   assert.equal(listPendingAuthorityEvents(byCli.outbox, { consumerId: "service.cli" }).length, 0);
@@ -200,13 +205,12 @@ test("authority outbox tracks each consumer independently so one ack never hides
   assert.equal(byWeb.changed, true);
 
   const projected = projectAuthorityOutboxJournal([
-    { op: AUTHORITY_OUTBOX_JOURNAL_OP.COMMIT, eventId, envelope, committedAt: "" },
-    { op: AUTHORITY_OUTBOX_JOURNAL_OP.ATTEMPT, eventId, attemptedAt: "legacy-no-consumer" },
+    { op: AUTHORITY_OUTBOX_JOURNAL_OP.COMMIT, eventId, envelope, committedAt: envelope.occurredAt },
     {
       op: AUTHORITY_OUTBOX_JOURNAL_OP.ATTEMPT,
       eventId,
       consumerId: "service.cli",
-      attemptedAt: "t1",
+      attemptedAt: "2026-07-18T00:00:00.000Z",
     },
     {
       op: AUTHORITY_OUTBOX_JOURNAL_OP.ACK,

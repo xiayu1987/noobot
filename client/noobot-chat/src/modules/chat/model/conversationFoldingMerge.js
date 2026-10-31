@@ -7,7 +7,10 @@ import { mergeAttachments } from "./dialogProcessChain.js";
 import { getMessageTransferEnvelopes } from "./transferEnvelopes.js";
 import { getMessageRole } from "./messageIdentity.js";
 import { mergeToolTimelines } from "../runtime/engine/toolTimeline.js";
-import { mergeActivityTimelines } from "../runtime/engine/activityTimeline.js";
+import {
+  mergeCanonicalActivityTimelines,
+  selectMessageActivityTimeline,
+} from "@noobot/event-protocol/activity-timeline";
 import { mergeMessagePresentationFacets } from "./messagePresentation.js";
 import { getMessageAttachments, normalizeArray } from "./messageAttachmentsProjection.js";
 import { resolveMessageTurnScopeMergeKey } from "./conversationFoldingIdentity.js";
@@ -39,9 +42,9 @@ function mergeFoldedTimelines(previousMessage, currentMessage) {
     previousMessage.toolTimeline,
     currentMessage.toolTimeline,
   );
-  previousMessage.activityTimeline = mergeActivityTimelines(
-    previousMessage.activityTimeline,
-    currentMessage.activityTimeline,
+  previousMessage.activityTimeline = mergeCanonicalActivityTimelines(
+    selectMessageActivityTimeline(previousMessage),
+    selectMessageActivityTimeline(currentMessage),
   );
   previousMessage.thinkingContentTimeline = reduceThinkingDetailContentTimelines(
     previousMessage.thinkingContentTimeline,

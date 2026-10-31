@@ -30,7 +30,7 @@ function requireSource(source, label) {
   return value;
 }
 
-export function createSummaryCheckpointInstruction({ source, summarizedMessageUids } = {}) {
+export function createSummaryCheckpointInstruction({ source, summarizedMessageUids }) {
   const canonicalSource = requireSource(source, "summary checkpoint instruction");
   if (!Array.isArray(summarizedMessageUids) || summarizedMessageUids.length === 0) {
     throw new TypeError("summary checkpoint instruction requires non-empty summarizedMessageUids");

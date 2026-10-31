@@ -246,34 +246,18 @@ test("upstream snapshot responses resolve and release the reconnect command", as
     },
   });
 
-  upstream.emit(
-    "message",
-    JSON.stringify({
-      event: "turn_snapshot",
-      data: authoritativeSnapshot({
-        commandId: "snapshot-command-1",
-        sessionId: "session-snapshot-response",
-        sequence: 2,
-        activeTurnScopeId: "",
-        activeTurn: null,
-        recovery: "none",
-        unchanged: false,
-      }),
-    }),
-  );
-
-  assert.deepEqual(resolution, {
-    ok: true,
-    snapshot: authoritativeSnapshot({
-      commandId: "snapshot-command-1",
-      sessionId: "session-snapshot-response",
-      sequence: 2,
-      activeTurnScopeId: "",
-      activeTurn: null,
-      recovery: "none",
-      unchanged: false,
-    }),
+  const snapshot = authoritativeSnapshot({
+    commandId: "snapshot-command-1",
+    sessionId: "session-snapshot-response",
+    sequence: 2,
+    activeTurnScopeId: "",
+    activeTurn: null,
+    recovery: "none",
+    unchanged: false,
   });
+  upstream.emit("message", JSON.stringify({ event: "turn_snapshot", data: snapshot }));
+
+  assert.deepEqual(resolution, { ok: true, snapshot });
   assert.equal(countPendingCommands(manager, channel, PENDING_COMMAND_KIND.TURN_SNAPSHOT), 0);
 });
 

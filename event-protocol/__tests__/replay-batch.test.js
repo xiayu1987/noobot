@@ -53,7 +53,7 @@ const snapshot = (sequence = 2) =>
       sequence,
       generatedAt: "2026-01-01T00:00:00.000Z",
     }),
-    { eventId: `snapshot-${sequence}`, producer: { type: "agent", id: "agent-1" } },
+    { eventId: `snapshot-${sequence}` },
   );
 
 const interaction = (requestId, payloadOverrides = {}) =>
@@ -78,6 +78,33 @@ const interaction = (requestId, payloadOverrides = {}) =>
       ...payloadOverrides,
     },
   });
+
+test("turn snapshot requires an explicit event identity and canonical payload types", () => {
+  const original = snapshot(2);
+  assert.throws(() => createTurnSnapshotEnvelope(original.payload, {}), /event_id/);
+  for (const fields of [
+    { protocolVersion: "1" },
+    { sequence: "2" },
+    { sequence: null },
+    { recentTerminalTurns: null },
+    { recentTerminalTurns: {} },
+    { recentTerminalTurns: [null] },
+    { activeTurn: undefined },
+  ]) {
+    assert.throws(
+      () => createTurnSnapshotEnvelope({ ...original.payload, ...fields }, { eventId: "explicit" }),
+      /invalid turn lifecycle snapshot/,
+    );
+  }
+  assert.deepEqual(original.producer, { type: "domain-service", id: "turn-snapshot-query" });
+  assert.equal(
+    validateProtocolEvent({
+      ...original,
+      ordering: { ...original.ordering, sequence: "2" },
+    }).valid,
+    false,
+  );
+});
 
 const batchOf = (fields) =>
   createReplayBatch({

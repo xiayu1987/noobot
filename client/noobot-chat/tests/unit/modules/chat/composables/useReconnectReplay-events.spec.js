@@ -325,7 +325,6 @@ describe("useReconnectReplay", () => {
             sessionId: "s-1",
             snapshot: createTurnSnapshotEnvelope(snapshot, {
               eventId: "snapshot-command-dp-new",
-              producer: { type: "test", id: "use-reconnect-replay" },
             }),
             snapshotSequence: 1,
             events: [],

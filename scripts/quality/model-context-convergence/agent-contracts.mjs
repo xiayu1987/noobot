@@ -99,6 +99,40 @@ export const AGENT_CONTRACTS = Object.freeze([
   {
     file: "agent/src/session/services/session-message-service/turn-summary-checkpoint.js",
     required: [
+      ["checkpoint request delegates to protocol", /parseTurnSummaryCheckpointRequest\(payload\)/],
+      [
+        "checkpoint transaction delegates to protocol",
+        /applyTurnSummaryCheckpoint\(session, request, this\.now\(\)\)/,
+      ],
+    ],
+    forbidden: [
+      [
+        "checkpoint service redefines protocol request rules",
+        /function\s+(?:parseCheckpointRequest|assertCheckpointTargetsTurn|assertCheckpointDisposition|checkpointRequestHash|assertCheckpointMessagesResolved|assertSummarizedToolPairClosure|markCheckpointMessages|assertCheckpointRevision|resolveDuplicateCheckpoint)\b/,
+      ],
+    ],
+  },
+  {
+    file: "context-protocol/src/policy/summary-checkpoint-transaction.js",
+    required: [
+      [
+        "checkpoint turn ownership uses protocol",
+        /assertSummaryCheckpointTargetsTurn\(session, request\)/,
+      ],
+      ["checkpoint disposition uses protocol", /assertSummaryCheckpointDisposition\(request\)/],
+      [
+        "checkpoint resolves message scope before mutation",
+        /assertCheckpointMessagesResolved\(session\.messages, request\)/,
+      ],
+      [
+        "checkpoint preserves tool pair closure",
+        /assertSummarizedToolPairClosure\(session\.messages, request\.summarizedMessageUids\)/,
+      ],
+    ],
+  },
+  {
+    file: "context-protocol/src/policy/summary-checkpoint-request.js",
+    required: [
       [
         "terminal recovery cannot append messages",
         /isTerminalTurnState\(lifecycleTurn\.state\)[\s\S]*?request\.persistedMessageUids\.length[\s\S]*?TURN_SUMMARY_CHECKPOINT_TERMINAL_PERSISTENCE/,

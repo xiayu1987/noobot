@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
+import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -16,16 +17,6 @@ import { createSessionCrudServiceStub } from "../helpers/session-crud-service-st
 
 const TEST_SESSION_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-session-dir-"));
 after(() => fs.rmSync(TEST_SESSION_DIR, { recursive: true, force: true }));
-
-function emptyTurnLifecycle() {
-  return {
-    turns: {},
-    activeTurnScopeId: "",
-    nextSequence: 0,
-    commandReceipts: [],
-    replacedTurns: {},
-  };
-}
 
 test("SessionMessageService.appendTurns persists transferEnvelopes", async () => {
   const saved = [];
@@ -275,7 +266,7 @@ test("SessionMessageService.deleteFromMessage prunes orphan turnTimings", async 
         thinkingFinishedAt: "2026-07-08T00:00:01.000Z",
       },
     ],
-    turnLifecycle: emptyTurnLifecycle(),
+    turnLifecycle: createEmptyTurnLifecycle(),
   };
   const sessionRepo = {
     async locateSessionScope() {
@@ -357,7 +348,7 @@ test("SessionMessageService.replaceTurn prunes replaced turnTimings", async () =
         thinkingFinishedAt: "2026-07-08T00:00:01.000Z",
       },
     ],
-    turnLifecycle: emptyTurnLifecycle(),
+    turnLifecycle: createEmptyTurnLifecycle(),
   };
   const sessionRepo = {
     async locateSessionScope() {

@@ -15,6 +15,7 @@ import {
 } from "@noobot/runtime-events";
 import { createAppDependencies } from "./create-app-dependencies.js";
 import { createServiceGlobalConfigSource } from "../services/global-config-source.js";
+import { upgradeGlobalModelLibrary } from "./upgrade-global-model-library.js";
 import { ConnectorSecretVault } from "../security/connector-secret-vault.js";
 import {
   applyStartupRuntimeEnv,
@@ -61,6 +62,7 @@ export async function createHeadlessRuntime({
   });
 
   const globalConfigSource = createServiceGlobalConfigSource({ cwd });
+  await upgradeGlobalModelLibrary(globalConfigSource.getResolvedPath());
   const globalConfigBuilder = createGlobalConfigBuilder({
     source: globalConfigSource,
   });

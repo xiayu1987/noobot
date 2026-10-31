@@ -13,7 +13,10 @@
     "./reconnect": "./src/reconnect.js",
     "./package.json": "./package.json",
     "./bot-dispatch": "./src/bot-dispatch.js",
-    "./agent-turn-result": "./src/agent-turn-result.js"
+    "./agent-turn-result": "./src/agent-turn-result.js",
+    "./session-execution-result": "./src/session-execution-result.js",
+    "./session-run-request": "./src/session-run-request.js",
+    "./session-finalization": "./src/session-finalization.js"
   },
   "scripts": {
     "test": "node ../scripts/run-with-isolated-tmp.mjs node --test __tests__/*.test.js"

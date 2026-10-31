@@ -187,10 +187,8 @@ export function parsePlanDocumentFromText(inputText = "") {
   const doc = ensurePlanDocumentShape({});
   for (const line of splitLines(inputText)) {
     const patchLine = parsePatchLine(line);
-    if (patchLine) {
-      if (patchLine.command) applyPatchCommand(doc, patchLine.command);
-      continue;
-    }
+    if (patchLine?.command) applyPatchCommand(doc, patchLine.command);
+    if (patchLine) continue;
     const subMatch = line.match(SUB_PLAN_LINE);
     if (subMatch) {
       const { mainId, subIndex, content } = subMatch.groups;

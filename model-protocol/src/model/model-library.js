@@ -36,12 +36,18 @@ function validatePromptCacheConfiguration(provider, label) {
 }
 
 function validateLibrary(payload) {
+  if (!Number.isInteger(payload?.version) || payload.version < 1) {
+    throw new TypeError("model library version must be a positive integer");
+  }
   if (!isPlainObject(payload?.providers)) {
     throw new TypeError("model library providers are required");
   }
   for (const [alias, provider] of Object.entries(payload.providers)) {
     if (!alias || !isPlainObject(provider)) {
       throw new TypeError(`invalid model library provider: ${alias || "missing"}`);
+    }
+    if (provider.is_custom !== false) {
+      throw new TypeError(`model library provider ${alias}.is_custom must be false`);
     }
     for (const field of ["model", "api_key", "base_url"]) {
       if (!text(provider[field])) {
@@ -55,6 +61,7 @@ function validateLibrary(payload) {
 }
 
 const MODEL_LIBRARY_PROVIDERS = validateLibrary(libraryPayload);
+export const MODEL_LIBRARY_VERSION = libraryPayload.version;
 const MODEL_LIBRARY_CACHE_FIELDS = new Map();
 for (const provider of Object.values(MODEL_LIBRARY_PROVIDERS)) {
   const model = String(provider.model).trim().toLowerCase();

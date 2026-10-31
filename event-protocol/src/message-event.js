@@ -44,9 +44,11 @@ export const ACTIVITY_KIND = Object.freeze({
 
 const HOST_ACTIVITY_KINDS = Object.freeze(new Set(Object.values(ACTIVITY_KIND)));
 
-export function isHostActivity(activity = {}) {
-  const activityKind = text(activity?.activityKind);
-  return !activityKind || HOST_ACTIVITY_KINDS.has(activityKind);
+export function isHostActivity(activity) {
+  if (!isCanonicalText(activity.activityKind)) {
+    throw new TypeError("activity requires a canonical activityKind");
+  }
+  return HOST_ACTIVITY_KINDS.has(activity.activityKind);
 }
 
 const TRANSIENT_MESSAGE_EVENT_TYPES = Object.freeze(

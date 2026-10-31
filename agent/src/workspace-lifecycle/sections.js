@@ -6,7 +6,12 @@
 import { existsSync } from "node:fs";
 import { access, cp, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
-import { CONFIG_DOCUMENT_SCOPE, repairConfigDocument } from "@noobot/agent-config-protocol";
+import {
+  CONFIG_DOCUMENT_SCOPE,
+  isPlainObject,
+  repairConfigDocument,
+  upgradeConfigModelLibrary,
+} from "@noobot/agent-config-protocol";
 import {
   WORKSPACE_LAYOUT,
   WORKSPACE_LAYOUT_UNMARKED_VERSION,
@@ -36,6 +41,7 @@ import { upgradeSessionToolResults } from "./session-tool-result-upgrade.js";
 import { upgradeSessionScriptExitCodes } from "./session-script-exit-code-upgrade.js";
 import { upgradeSessionLegacyMcpResults } from "./session-legacy-mcp-result-upgrade.js";
 import { upgradeSessionResultOverflow } from "./session-result-overflow-upgrade.js";
+import { upgradeSessionCheckpointIdentity } from "./session-checkpoint-identity-upgrade.js";
 import { releaseQuarantinedUnits } from "./migration-quarantine.js";
 import { ignoreSessionProgress } from "./session-directory-walk.js";
 
@@ -53,6 +59,7 @@ const LAYOUT_UPGRADE_HANDLERS = Object.freeze({
   [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_SCRIPT_EXIT_CODE]: upgradeSessionScriptExitCodes,
   [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_LEGACY_MCP_RESULT]: upgradeSessionLegacyMcpResults,
   [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_RESULT_OVERFLOW]: upgradeSessionResultOverflow,
+  [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_CHECKPOINT_IDENTITY]: upgradeSessionCheckpointIdentity,
 });
 
 const QUARANTINE_RETRY_OWNERS = Object.freeze([
@@ -253,7 +260,8 @@ async function readConfigTarget(filePath) {
     throw error;
   }
   try {
-    return { exists: true, raw, document: JSON.parse(raw) };
+    const document = JSON.parse(raw);
+    return { exists: true, raw, document: isPlainObject(document) ? document : null };
   } catch {
     return { exists: true, raw, document: null };
   }
@@ -274,16 +282,20 @@ export async function repairConfigSection({ base, baseValues, backup, onlyInvali
   const retired = await retireConfigPaths({ base, backup });
   const filePath = path.join(base, WORKSPACE_LAYOUT.CONFIG_FILE);
   const current = await readConfigTarget(filePath);
-  if (onlyInvalid && current.exists && current.document !== null) return { retired, repair: null };
-  if (current.exists && current.document === null) await backup(WORKSPACE_LAYOUT.CONFIG_FILE);
+  const valid = current.exists && current.document !== null;
+  const upgraded = upgradeConfigModelLibrary(valid ? current.document : baseValues);
+  if (onlyInvalid && valid && !upgraded.report.changed)
+    return { retired, repair: null, modelLibraryUpgrade: upgraded.report };
+  if (current.exists && (!valid || upgraded.report.changed))
+    await backup(WORKSPACE_LAYOUT.CONFIG_FILE);
   const repaired = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.USER,
     baseValues,
-    target: current.document ?? {},
+    target: upgraded.document,
   });
   const next = `${JSON.stringify(repaired.document, null, 2)}\n`;
   if (current.raw !== next) await writeConfigDocument(filePath, repaired.document);
-  return { retired, repair: repaired.report };
+  return { retired, repair: repaired.report, modelLibraryUpgrade: upgraded.report };
 }
 
 export function resolveWorkspaceBackupBase(base, now = new Date()) {
@@ -292,12 +304,15 @@ export function resolveWorkspaceBackupBase(base, now = new Date()) {
 }
 
 export function createSectionBackup(backupBase, base) {
+  const snapshots = new Map();
   return async function backup(relativePath) {
+    if (snapshots.has(relativePath)) return snapshots.get(relativePath);
     const source = path.join(base, relativePath);
     if (!(await pathExists(source))) return null;
     const target = path.join(backupBase, relativePath);
     await mkdir(path.dirname(target), { recursive: true });
     await cp(source, target, { recursive: true, errorOnExist: true, force: false });
+    snapshots.set(relativePath, target);
     return target;
   };
 }

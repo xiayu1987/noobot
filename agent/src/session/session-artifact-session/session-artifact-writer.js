@@ -13,6 +13,7 @@ import {
   SESSION_ARTIFACT_FILE_NAMES,
 } from "../session-artifact-files.js";
 import { readOptionalJsonWithStorage, writeJsonWithStorage } from "./artifact-json-io.js";
+import { buildStoredCheckpointReceipts } from "./checkpoint-receipts.js";
 import { buildSessionListFacts } from "./session-list-facts.js";
 import {
   compareTurnPlacement,
@@ -507,10 +508,15 @@ async function writeSessionManifest({ storageService, files, sessionPayload, lay
     messageOrder: layout.messageOrder,
   };
   delete manifest.messages;
+  const storedManifest = await buildStoredCheckpointReceipts({
+    storageService,
+    sessionDir: path.dirname(files.session),
+    session: manifest,
+  });
   await writeJsonWithStorage({
     storageService,
     artifactPath: files.session,
-    payload: manifest,
+    payload: storedManifest,
     atomic,
   });
 }

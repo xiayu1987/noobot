@@ -12,7 +12,7 @@ export const TASK_PROTOCOL_STATE = Object.freeze({
   BLOCKED: "BLOCKED",
 });
 
-export const TASK_PROTOCOL_RECEIPT_FIELDS = Object.freeze([
+const TASK_PROTOCOL_RECEIPT_FIELDS = Object.freeze([
   "abstract",
   "contentHash",
   "nextAction",

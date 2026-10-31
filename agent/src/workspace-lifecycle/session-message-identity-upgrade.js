@@ -56,6 +56,7 @@ import { backupRewrittenFiles } from "./session-rewrite-backup.js";
 import { PERSISTED_JSON_READ_ERROR_CODE } from "../shared/storage/json-file-reader.js";
 import { ignoreSessionProgress } from "./session-directory-walk.js";
 import { upgradeSessionDirectories } from "./session-upgrade-driver.js";
+import { migrateSessionCheckpointIdentity } from "./session-checkpoint-identity-upgrade.js";
 
 const UPGRADE_INVALID_CODE = "WORKSPACE_SESSION_MESSAGE_IDENTITY_UPGRADE_INVALID";
 const QUARANTINE_KIND = WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MESSAGE_IDENTITY;
@@ -160,8 +161,18 @@ async function migrateOutboxJournal(stagingDir, legacyOutbox) {
 }
 
 async function repairStagedSession({ storageService, stagingDir, expectScope }) {
-  const source = await readSessionArtifactForRepair({ storageService, sessionDir: stagingDir });
+  let source = await readSessionArtifactForRepair({ storageService, sessionDir: stagingDir });
   if (!source) throw upgradeError("session_artifact_missing", {});
+  const fromSchemaVersion = source.schemaVersion;
+  if (source.schemaVersion === 18) {
+    await migrateSessionCheckpointIdentity({
+      storageService,
+      sessionDir: stagingDir,
+      base: stagingDir,
+      backupBase: null,
+    });
+    source = await readSessionArtifact({ storageService, sessionDir: stagingDir });
+  }
   const scope = await expectScope(source);
   const migration = normalizeSessionDocumentForCurrentProtocol(source, { now: MIGRATION_NOW });
   await writeSessionArtifact({
@@ -176,7 +187,7 @@ async function repairStagedSession({ storageService, stagingDir, expectScope }) 
   await resegmentMigratedCheckpointBaselines({ sessionDir: stagingDir });
   return {
     scope,
-    fromSchemaVersion: source.schemaVersion,
+    fromSchemaVersion,
     migrations: migration.migrations,
     droppedCommandReceiptIds: migration.droppedCommandReceiptIds,
     outbox,

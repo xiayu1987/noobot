@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  createEmptyTurnLifecycle,
   createTurnReplacementCommit,
   deriveAgentExecutionId,
   EXECUTION_KIND,
@@ -29,7 +30,7 @@ function acceptedAgentExecution(turnScopeId, sessionId = "session-1") {
 function acceptedTurn() {
   return commitTurnLifecycle({
     parentSessionId: "",
-    lifecycle: {},
+    lifecycle: createEmptyTurnLifecycle(),
     event: {
       ...acceptedAgentExecution("turn-old"),
       eventType: TURN_EVENT.ACTION_ACCEPTED,
@@ -260,6 +261,7 @@ test("turn replacement removes the authoritative Continue edge when replacing it
 
 test("turn replacement rejects removing a Continue source while its target survives", () => {
   const lifecycle = {
+    ...createEmptyTurnLifecycle(),
     activeTurnScopeId: "turn-target",
     sequence: 2,
     turns: {

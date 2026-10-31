@@ -335,6 +335,7 @@ test("internal append and summary checkpoint use mutation lock without changing 
     ],
     turnLifecycle: {
       ...createEmptyTurnLifecycle(),
+      sequence: 1,
       activeTurnScopeId: "t",
       turns: {
         t: {
@@ -451,6 +452,7 @@ test("turn summary checkpoints mark exact UIDs and persist an idempotent scoped 
     ],
     turnLifecycle: {
       ...createEmptyTurnLifecycle(),
+      sequence: 1,
       activeTurnScopeId: "t",
       turns: {
         t: {
@@ -520,6 +522,7 @@ test("turn summary checkpoint restores explicitly retained messages to active co
     ],
     turnLifecycle: {
       ...createEmptyTurnLifecycle(),
+      sequence: 1,
       activeTurnScopeId: "t",
       turns: {
         t: {
@@ -583,6 +586,7 @@ test("turn summary checkpoints reject a split assistant tool-call and result pai
     ],
     turnLifecycle: {
       ...createEmptyTurnLifecycle(),
+      sequence: 1,
       activeTurnScopeId: "t",
       turns: {
         t: {
@@ -643,6 +647,7 @@ test("turn summary checkpoints allow exact historical summary targets but keep p
     ],
     turnLifecycle: {
       ...createEmptyTurnLifecycle(),
+      sequence: 1,
       activeTurnScopeId: "t",
       turns: {
         t: {
@@ -730,6 +735,7 @@ test("turn summary checkpoints validate historical tool pairs inside their origi
     ],
     turnLifecycle: {
       ...createEmptyTurnLifecycle(),
+      sequence: 1,
       activeTurnScopeId: "t",
       turns: {
         t: {
@@ -775,6 +781,7 @@ test("terminal turn checkpoints only mark already persisted canonical messages",
     ],
     turnLifecycle: {
       ...createEmptyTurnLifecycle(),
+      sequence: 1,
       activeTurnScopeId: "",
       turns: {
         t: {

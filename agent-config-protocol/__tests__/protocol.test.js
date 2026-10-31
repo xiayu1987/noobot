@@ -566,6 +566,7 @@ test("config repair preserves an explicit DashScope GLM provider over the librar
     },
   });
   assert.deepEqual(repaired.document.providers["glm_5_3"], {
+    is_custom: false,
     reasoning_effort: "low",
     tool_reasoning_effort: "low",
     enabled: true,
@@ -604,6 +605,7 @@ test("config repair uses generic provider structure without repairing custom con
 
   assert.deepEqual(repaired.document.providers.CustomGPT, {
     ...customProvider,
+    is_custom: true,
     enabled: true,
     used_for_conversation: true,
     prompt_cache_fields: [],

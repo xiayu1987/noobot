@@ -25,6 +25,7 @@ export function isConfigContainerNode(node) {
 }
 
 export function defaultValueForConfigNode(node) {
+  if (node?.initialValue !== undefined) return structuredClone(node.initialValue);
   switch (node?.kind) {
     case CONFIG_FORM_NODE_KIND.OBJECT:
     case CONFIG_FORM_NODE_KIND.COLLECTION:

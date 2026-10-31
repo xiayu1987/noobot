@@ -12,7 +12,7 @@ import {
   createProtocolTestCommand,
   stopChatWs,
 } from "./chat-websocket-server.test-helpers.js";
-import { TURN_EVENT } from "@noobot/session-protocol";
+import { createEmptyTurnLifecycle, TURN_EVENT } from "@noobot/session-protocol";
 import {
   AGENT_COMMAND_RECEIPT_OUTCOME,
   AGENT_TRANSPORT_EVENT,
@@ -27,6 +27,7 @@ function stoppedLifecycle({
   dialogProcessId = "dp-stopped",
 } = {}) {
   return {
+    ...createEmptyTurnLifecycle(),
     sequence: 5,
     activeTurnScopeId: "",
     turns: {

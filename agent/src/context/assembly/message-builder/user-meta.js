@@ -23,10 +23,6 @@ import {
 } from "@noobot/context-protocol/message/codec";
 import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "@noobot/context-protocol/message/internal-types";
 
-export function resolveAttachments(msg = {}) {
-  return resolveContextMessageAttachments(msg);
-}
-
 export function buildHumanMessageContent(msg = {}) {
   return String(msg?.content || "");
 }
@@ -43,7 +39,7 @@ function buildUserMetaInfoContent(runtime = {}, msg = {}) {
     dialogProcessId: resolveContextMessageDialogProcessId(msg),
     parentDialogProcessId: readContextMessageField(msg, "parentDialogProcessId"),
     turnScopeId: resolveContextMessageTurnScopeId(msg),
-    attachments: resolveAttachments(msg).map((attachmentItem) =>
+    attachments: resolveContextMessageAttachments(msg).map((attachmentItem) =>
       buildUserMetaAttachmentInfo(attachmentItem),
     ),
   };

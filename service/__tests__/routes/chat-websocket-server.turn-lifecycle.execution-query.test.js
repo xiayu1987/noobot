@@ -11,7 +11,11 @@ import {
   selectAuthoritativeActiveTurn,
 } from "@noobot/authoritative-state/application";
 
-import { TURN_EVENT, createEmptyTurnLifecycle } from "@noobot/session-protocol";
+import {
+  TURN_EVENT,
+  createEmptyTurnLifecycle,
+  createTurnTerminalStatus,
+} from "@noobot/session-protocol";
 import { finalizeTurnSnapshot } from "../../ws/chat-websocket/turn-recovery.js";
 
 import { EXECUTION_QUERY_COMMAND } from "@noobot/session-protocol/execution-lifecycle";
@@ -84,8 +88,19 @@ test("finalize recovery is idempotent across repeated service recovery attempts"
       },
     },
   };
-  const commitTurnLifecycle = async (input) =>
-    apply(input.terminalStatus ? { ...input, summaryVersion: 4 } : input);
+  const commitTurnLifecycle = async (input) => {
+    if (!input.terminalStatus) return apply(input);
+    const { command, ...payload } = input.terminalStatus;
+    return apply({
+      ...input,
+      summaryVersion: 4,
+      terminalStatus: createTurnTerminalStatus(command, {
+        ...payload,
+        turnScopeId: input.turnScopeId,
+        dialogProcessId: lifecycle.turns[input.turnScopeId].dialogProcessId,
+      }),
+    });
+  };
   const inspectExecution = async () => {
     throw new Error("pending finalize must not inspect execution liveness");
   };

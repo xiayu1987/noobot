@@ -54,6 +54,7 @@ function scalarKind(structureKind, options) {
 }
 
 const DELEGATED_META_KEYS = Object.freeze([
+  "initialValue",
   "group",
   "familyScope",
   "itemType",
@@ -117,6 +118,7 @@ function resolveNode(rawNode, delegated) {
 
 function formNodeBase(node, path, key, required) {
   return {
+    ...(node.initialValue === undefined ? {} : { initialValue: node.initialValue }),
     path: path.join("."),
     key,
     itemType: node.itemType,

@@ -265,7 +265,10 @@ export async function startServerWithWs({
       if (result.applied) {
         turnLifecycle = result.lifecycle;
         if (result.committedEvent) {
-          authorityEventOutbox = [...authorityEventOutbox, result.committedEvent];
+          authorityEventOutbox = [
+            ...authorityEventOutbox,
+            { ...result.committedEvent, deliveries: {} },
+          ];
         }
       }
       return {
@@ -300,6 +303,7 @@ export async function startServerWithWs({
         const result = recordAuthorityEventDeliveryAttempt(authorityEventOutbox, {
           eventId,
           consumerId,
+          attemptedAt: new Date().toISOString(),
         });
         if (!result.found) return { recorded: false, reason: result.reason, attempted: recorded };
         authorityEventOutbox = result.outbox;
@@ -378,7 +382,12 @@ export async function startServerWithWs({
       }
       authorityEventOutbox = normalizeAuthorityEventOutbox([
         ...authorityEventOutbox,
-        { eventId: envelope.identity.eventId, envelope, committedAt: envelope.occurredAt },
+        {
+          eventId: envelope.identity.eventId,
+          envelope,
+          committedAt: envelope.occurredAt,
+          deliveries: {},
+        },
       ]);
       return envelope;
     },

@@ -105,6 +105,7 @@ test("agent context envelope rejects a non-object identity with the protocol err
         environment: {},
         execution: {},
         messageBlocks: {},
+        userMetaBackwrites: [],
       }),
     /invalid agent context envelope: .*identity must be a plain object/,
   );

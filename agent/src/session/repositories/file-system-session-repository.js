@@ -19,9 +19,6 @@ export class FileSystemSessionRepository {
     sessionTreeRepository,
     storageService,
     now = () => new Date().toISOString(),
-    mutationLockTimeoutMs = 30000,
-    mutationLockStaleMs = 60000,
-    mutationLockPollMs = 10,
   } = {}) {
     if (!sessionTreeRepository) {
       throw new TypeError("FileSystemSessionRepository requires sessionTreeRepository");
@@ -32,14 +29,7 @@ export class FileSystemSessionRepository {
     this.storageService = storageService;
     this.normalizeSelectedConnectorIds = normalizeSelectedConnectorIds;
     this.now = now;
-    this.mutationLockTimeoutMs = Math.max(1, Number(mutationLockTimeoutMs) || 30000);
-    this.mutationLockStaleMs = Math.max(1, Number(mutationLockStaleMs) || 60000);
-    this.mutationLockPollMs = Math.max(1, Number(mutationLockPollMs) || 10);
-    this.mutationCoordinator = new SessionMutationCoordinator({
-      timeoutMs: this.mutationLockTimeoutMs,
-      staleMs: this.mutationLockStaleMs,
-      pollMs: this.mutationLockPollMs,
-    });
+    this.mutationCoordinator = new SessionMutationCoordinator();
   }
 }
 

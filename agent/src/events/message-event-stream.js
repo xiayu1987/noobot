@@ -26,8 +26,6 @@ import {
 import { AGENT_RUN_EVENT } from "./run-event.js";
 import { isObjectLike, isPlainObject } from "@noobot/shared/value";
 
-export { assertMessageEventPayload };
-
 export function createMessageEventStreamState() {
   return {
     activePresentationMessageId: "",

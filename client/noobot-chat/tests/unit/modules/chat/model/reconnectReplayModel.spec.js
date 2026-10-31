@@ -26,7 +26,6 @@ const createReplayBatch = ({ sessionId, snapshot, snapshotSequence, pendingInter
         ? null
         : createTurnSnapshotEnvelope(snapshot, {
             eventId: `snapshot-${snapshot.commandId}`,
-            producer,
           }),
     snapshotSequence,
     events: [],

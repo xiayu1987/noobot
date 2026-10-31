@@ -31,6 +31,7 @@ import { assertNotAborted } from "../../shared/utils/error-utils.js";
 import { transferCanonicalAttachmentsToSubSession } from "./detached-subsession-attachments.js";
 import { isPlainObject, text, isFunction } from "@noobot/shared/value";
 import { mergeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
+import { assertSessionExecutionResult } from "@noobot/agent-transport-protocol/session-execution-result";
 
 export { createDetachedTerminalReceipt, createScopedSubSessionEventListener };
 
@@ -415,13 +416,14 @@ async function executeDetachedSession(dependencies, identity, prepared, lifecycl
     turnScopeId: identity.turnScopeId,
     persistenceScope: lifecycle.persistenceScope,
   });
+  assertSessionExecutionResult(result);
   assertDetachedDialogIdentity(result, identity, lifecycle);
   return result;
 }
 
 function assertDetachedDialogIdentity(result, identity, lifecycle) {
-  const returnedDialogProcessId = text(result?.dialogProcessId);
-  if (!returnedDialogProcessId || returnedDialogProcessId === identity.subDialogProcessId) return;
+  const returnedDialogProcessId = result.dialogProcessId;
+  if (returnedDialogProcessId === identity.subDialogProcessId) return;
   const error = new Error(
     "detached sub-session returned a dialogProcessId different from its authoritative turn identity",
   );
@@ -531,7 +533,7 @@ async function commitDetachedCompletion(dependencies, lifecycle) {
 
 function projectDetachedResult(result, identity, terminalLifecycle) {
   const dialogProcessId = identity.subDialogProcessId;
-  const messages = readArray(result?.messages);
+  const messages = result.messages;
   const transferEnvelopes = collectTransferEnvelopes(messages);
   return {
     userId: identity.userId,
@@ -544,17 +546,13 @@ function projectDetachedResult(result, identity, terminalLifecycle) {
       parentSessionId: identity.parentSessionId,
       parentDialogProcessId: identity.parentDialogProcessId,
       caller: SESSION_CALLER.BOT,
-      answer: text(result?.answer),
-      traces: readArray(result?.traces),
+      answer: result.answer,
+      traces: result.traces,
       messages,
       ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
       dialogProcessId,
     },
   };
-}
-
-function readArray(value) {
-  return Array.isArray(value) ? value : [];
 }
 
 function collectTransferEnvelopes(turnMessages) {

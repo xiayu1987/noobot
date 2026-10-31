@@ -31,6 +31,14 @@ function documentFixture() {
 }
 
 describe("configNavigation", () => {
+  it("initializes new providers as custom through the protocol declaration", () => {
+    const providers = buildConfigNavTree({}).find(({ key }) => key === "providers");
+    const first = defaultValueForConfigNode(providers.node.entry);
+    expect(first).toEqual({ is_custom: true });
+    first.is_custom = false;
+    expect(defaultValueForConfigNode(providers.node.entry)).toEqual({ is_custom: true });
+  });
+
   it("builds a nav tree whose group nodes track document presence", () => {
     const tree = buildConfigNavTree(documentFixture());
     const providers = tree.find((navNode) => navNode.key === "providers");

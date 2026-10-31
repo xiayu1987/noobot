@@ -39,6 +39,7 @@ test("user config generated from the global config is idempotent and omits syste
   assert.deepEqual(regenerated.document, generated);
   assert.deepEqual(regenerated.report.changes, []);
   const legacyUserConfig = structuredClone(globalTemplate);
+  delete legacyUserConfig.model_library_version;
   assert.deepEqual(
     repairConfigDocument({
       scope: CONFIG_DOCUMENT_SCOPE.USER,
@@ -268,17 +269,7 @@ test("config repair recursively adds template nodes through one protocol", () =>
     "Generic OpenAI-compatible fallback model",
   );
   assert.equal(synchronized.providers.primary.tool_reasoning_effort, "medium");
-  assert.equal(synchronized.providers.added.enabled, true);
-  assert.equal(synchronized.providers.added.model, "default-model");
-  assert.equal(
-    synchronized.providers.added.description,
-    "Generic OpenAI-compatible fallback model",
-  );
-  assert.deepEqual(synchronized.providers.added.reasoning_effort_options, [
-    "low",
-    "medium",
-    "high",
-  ]);
+  assert.equal(synchronized.providers.added, undefined);
   assert.equal(synchronized.providers.custom.model, "custom-model");
   assert.equal("format" in synchronized.providers.custom, false);
   assert.deepEqual(synchronized.tools, {
@@ -379,8 +370,7 @@ test("config repair seeds missing providers from declared base values and repair
   assert.equal(provider.enabled, true);
   assert.ok(
     repaired.report.changes.some(
-      ({ path, reason }) =>
-        path === "providers.example_openai" && reason === "missing_defaulted_node",
+      ({ path, reason }) => path === "providers" && reason === "missing_defaulted_node",
     ),
   );
 });

@@ -204,7 +204,7 @@ function createSessionRewritePlanner({ upgradeError, migrateMessage, migrateOutb
   async function planSession(sessionDir) {
     const manifestPath = path.join(sessionDir, SESSION_ARTIFACT_FILE_NAMES.session);
     const manifest = await readJson(manifestPath);
-    if (manifest?.schemaVersion !== SESSION_ARTIFACT_SCHEMA_VERSION) {
+    if (![18, SESSION_ARTIFACT_SCHEMA_VERSION].includes(manifest?.schemaVersion)) {
       throw upgradeError("manifest_schema_unsupported", { filePath: manifestPath });
     }
     const shared = {};

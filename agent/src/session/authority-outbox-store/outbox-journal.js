@@ -7,13 +7,15 @@ import { filePath as path } from "@noobot/path-resolver";
 import { SESSION_REPAIR_ERROR_CODE } from "@noobot/session-repair";
 import {
   AUTHORITY_OUTBOX_JOURNAL_OP,
+  assertAuthorityOutboxJournalRecord,
   createEmptyAuthorityOutboxCheckpoint,
+  normalizeAuthorityEventOutbox,
   parseAuthorityOutboxCheckpoint,
   projectAuthorityOutboxJournal,
   serializeAuthorityOutboxCheckpoint,
 } from "@noobot/event-protocol/outbox";
 import { mkdir, open, readFile, rename } from "node:fs/promises";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
 import { sessionMutationCoordinator } from "../session-mutation-coordinator.js";
 import { resolveSessionArtifactMutationLock } from "../session-artifact-files.js";
 
@@ -94,15 +96,14 @@ export async function readAuthorityOutbox(sessionDir = "") {
   return projectAuthorityOutboxJournal(await readAuthorityOutboxRecords(sessionDir));
 }
 
-export async function appendAuthorityOutboxRecords(sessionDir = "", records = []) {
-  const normalized = (Array.isArray(records) ? records : []).filter((record) =>
-    isPlainObject(record),
-  );
-  if (!normalized.length) return 0;
+export async function appendAuthorityOutboxRecords(sessionDir, records) {
+  if (!Array.isArray(records)) throw new TypeError("outbox records must be an array");
+  records.forEach(assertAuthorityOutboxJournalRecord);
+  if (!records.length) return 0;
   return withAuthorityOutboxMutation(sessionDir, async () => {
     const file = authorityOutboxJournalPath(sessionDir);
     await mkdir(path.dirname(file), { recursive: true });
-    const payload = normalized.map((record) => `${JSON.stringify(record)}\n`).join("");
+    const payload = records.map((record) => `${JSON.stringify(record)}\n`).join("");
     const handle = await open(file, "a");
     try {
       await handle.writeFile(payload, "utf8");
@@ -110,17 +111,16 @@ export async function appendAuthorityOutboxRecords(sessionDir = "", records = []
     } finally {
       await handle.close();
     }
-    return normalized.length;
+    return records.length;
   });
 }
 
-export async function replaceAuthorityOutboxRecords(sessionDir = "", records = []) {
+export async function replaceAuthorityOutboxRecords(sessionDir, records) {
+  projectAuthorityOutboxJournal(records);
   return withAuthorityOutboxMutation(sessionDir, async () => {
     const file = authorityOutboxJournalPath(sessionDir);
     await mkdir(path.dirname(file), { recursive: true });
-    const payload = (Array.isArray(records) ? records : [])
-      .map((record) => `${JSON.stringify(record)}\n`)
-      .join("");
+    const payload = records.map((record) => `${JSON.stringify(record)}\n`).join("");
     const temp = `${file}.tmp-${process.pid}-${Date.now()}`;
     const handle = await open(temp, "w");
     try {
@@ -144,15 +144,7 @@ export function authorityOutboxCommitRecord(entry = {}) {
 }
 
 export async function readCommittedAuthorityEventIds(sessionDir = "") {
-  const records = await readAuthorityOutboxRecords(sessionDir);
-  const eventIds = new Set();
-  for (const record of records) {
-    const eventId = text(record?.eventId);
-    if (!eventId) continue;
-    if (record.op === AUTHORITY_OUTBOX_JOURNAL_OP.COMMIT) eventIds.add(eventId);
-    else if (record.op === AUTHORITY_OUTBOX_JOURNAL_OP.REMOVE) eventIds.delete(eventId);
-  }
-  return eventIds;
+  return new Set((await readAuthorityOutbox(sessionDir)).map((item) => item.eventId));
 }
 
 export async function removeAuthorityOutboxTurnScopes(sessionDir = "", turnScopeIds = []) {
@@ -168,33 +160,30 @@ export async function removeAuthorityOutboxTurnScopes(sessionDir = "", turnScope
   return appendAuthorityOutboxRecords(sessionDir, records);
 }
 
-export function authorityOutboxRecordsFromOutbox(outbox = []) {
+export function authorityOutboxRecordsFromOutbox(outbox) {
   const records = [];
-  for (const item of Array.isArray(outbox) ? outbox : []) {
-    const eventId = text(item?.eventId);
-    if (!eventId) continue;
+  for (const item of normalizeAuthorityEventOutbox(outbox)) {
+    const eventId = item.eventId;
     records.push(authorityOutboxCommitRecord(item));
-    const deliveries =
-      item?.deliveries && typeof item.deliveries === "object" ? item.deliveries : {};
-    for (const [consumerId, delivery] of Object.entries(deliveries)) {
-      const attempts = Math.max(0, Number(delivery?.attempts) || 0);
+    for (const [consumerId, delivery] of Object.entries(item.deliveries)) {
+      const attempts = delivery.attempts;
       for (let index = 0; index < attempts; index += 1) {
         records.push({
           op: AUTHORITY_OUTBOX_JOURNAL_OP.ATTEMPT,
           eventId,
           consumerId,
-          attemptedAt: text(delivery.lastAttemptAt),
+          attemptedAt: delivery.lastAttemptAt,
         });
       }
-      if (text(delivery?.deliveredAt)) {
+      if (delivery.deliveredAt) {
         records.push({
           op: AUTHORITY_OUTBOX_JOURNAL_OP.ACK,
           eventId,
           consumerId,
-          orderingDomain: text(delivery.orderingDomain),
-          orderingScopeId: text(delivery.orderingScopeId),
-          sequence: Number(delivery.sequence) || 0,
-          deliveredAt: text(delivery.deliveredAt),
+          orderingDomain: delivery.orderingDomain,
+          orderingScopeId: delivery.orderingScopeId,
+          sequence: delivery.sequence,
+          deliveredAt: delivery.deliveredAt,
         });
       }
     }

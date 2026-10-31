@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import test from "node:test";
+import { createTestSessionFinalizationContext } from "../helpers/session-finalization.js";
 import assert from "node:assert/strict";
 import { createNoopMemoryPostProcessService } from "../helpers/memory-postprocess-service.js";
 
@@ -11,6 +12,7 @@ import { EXECUTION_REPORT_STATUS } from "@noobot/session-protocol/execution-repo
 import { SessionExecutionFinalizer } from "../../src/bot/execution/finalizer.js";
 import { handleSessionRunFailure } from "../../src/bot/execution/runner/run-failure.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import { createSessionDeletedError } from "@noobot/session-protocol";
 import {
   HOOK_POINT,
   HOOK_RUNTIME_IDENTITY_FIELDS,
@@ -35,6 +37,7 @@ function createFinalizer(session) {
 }
 
 const finalizePayload = {
+  ...createTestSessionFinalizationContext(),
   userId: "u1",
   sessionId: "s1",
   dialogProcessId: "dp1",
@@ -179,6 +182,44 @@ test("handleSessionRunFailure aggregates report write failures with the run fail
     assert.ok(errors.some((entry) => /report disk/.test(entry?.message)));
     return true;
   });
+});
+
+test("deleted session failure retains the original, flush and report errors and completes failure handling", async () => {
+  const deleted = (operation) =>
+    createSessionDeletedError({ userId: "u1", sessionId: "s1", operation });
+  const original = deleted("checkpoint");
+  const flushError = deleted("execution_flush");
+  const reportError = deleted("execution_report");
+  const calls = [];
+  const { context } = failureContext({
+    error: original,
+    lifecycle: { fail: () => calls.push("fail") },
+    errorLogger: { log: async () => calls.push("log") },
+    executionEventListener: {
+      flush: async () => {
+        calls.push("flush");
+        throw flushError;
+      },
+    },
+    getExecutionTurnLogs: async () => {
+      calls.push("read_logs");
+      return [];
+    },
+    saveExecutionReport: async () => {
+      calls.push("report");
+      throw reportError;
+    },
+  });
+  await assert.rejects(handleSessionRunFailure(context), (failure) => {
+    assert.ok(failure.cause instanceof AggregateError);
+    const [runFailure, failedFlush, failedReport] = failure.cause.errors;
+    assert.equal(runFailure.code, "SESSION_DELETED");
+    assert.equal(runFailure.cause, original);
+    assert.equal(failedFlush, flushError);
+    assert.equal(failedReport, reportError);
+    return true;
+  });
+  assert.deepEqual(calls, ["fail", "log", "flush", "read_logs", "report"]);
 });
 
 test("handleSessionRunFailure emits session_run_error only with the initialized protocol identity", async () => {

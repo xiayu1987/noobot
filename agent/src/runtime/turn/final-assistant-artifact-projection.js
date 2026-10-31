@@ -10,6 +10,7 @@ import {
   selectUntransferredAttachments,
 } from "@noobot/semantic-transfer-protocol";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
+import { readSessionMessageDraftAttachments } from "@noobot/session-protocol";
 import {
   compactTransferEnvelopes,
   dedupeSessionAttachmentRefs,
@@ -32,12 +33,6 @@ function shouldPromoteAttachmentToAssistant(attachmentItem = {}) {
 
 function resolveTransferEnvelopesFromMessage(messageItem = {}) {
   return normalizeTransferEnvelopes(messageItem.transferEnvelopes);
-}
-
-function resolveAttachmentsFromMessage(messageItem) {
-  const attachments = messageItem.attachments ?? [];
-  if (!Array.isArray(attachments)) throw new TypeError("session attachments must be an array");
-  return attachments;
 }
 
 function dedupeTransferEnvelopes(envelopes = []) {
@@ -69,7 +64,7 @@ export function projectGeneratedArtifactsToFinalAssistant(messages = []) {
   const attachments = dedupeSessionAttachmentRefs(
     sourceMessages.flatMap((messageItem = {}) =>
       selectUntransferredAttachments(
-        resolveAttachmentsFromMessage(messageItem),
+        readSessionMessageDraftAttachments(messageItem),
         resolveTransferEnvelopesFromMessage(messageItem),
       ).filter(shouldPromoteAttachmentToAssistant),
     ),
@@ -96,7 +91,10 @@ export function projectGeneratedArtifactsToFinalAssistant(messages = []) {
     ...transferEnvelopes,
   ]);
   const mergedAttachments = selectUntransferredAttachments(
-    dedupeSessionAttachmentRefs([...resolveAttachmentsFromMessage(finalAssistant), ...attachments]),
+    dedupeSessionAttachmentRefs([
+      ...readSessionMessageDraftAttachments(finalAssistant),
+      ...attachments,
+    ]),
     mergedTransferEnvelopes,
   );
   outputMessages[finalAssistantIndex] = {

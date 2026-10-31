@@ -239,6 +239,7 @@ test("SessionMessageService.replaceTurn mutates only the owning lifecycle aggreg
     initialSession: baseSession({
       turnLifecycle: {
         ...createEmptyTurnLifecycle(),
+        sequence: 3,
         turns: {
           "scope-keep": {
             revision: 1,
@@ -282,6 +283,7 @@ test("SessionMessageService.replaceTurn mutates only the owning lifecycle aggreg
       ],
       turnLifecycle: {
         ...createEmptyTurnLifecycle(),
+        sequence: 1,
         turns: {
           "child-turn": {
             revision: 1,

@@ -5,7 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chmod, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -556,10 +556,24 @@ test("scoped session root declarations come from every installed manifest withou
           collectNoobotPluginScopedSessionRootDeclarations({ pluginRootDir: lockedRoot }),
           { code: "EACCES" },
         );
+        await assert.rejects(loadNoobotPlugins({ pluginRootDir: lockedRoot, surface: "agent" }), {
+          code: "EACCES",
+        });
       }
     } finally {
       await chmod(lockedRoot, 0o700);
     }
+
+    // Root-independent: a symlink loop fails with ELOOP, which is not "absent" and must propagate.
+    const loopRoot = path.join(root, "loop-root");
+    await symlink(loopRoot, loopRoot);
+    await assert.rejects(loadNoobotPlugins({ pluginRootDir: loopRoot, surface: "agent" }), {
+      code: "ELOOP",
+    });
+    await assert.rejects(
+      collectNoobotPluginScopedSessionRootDeclarations({ pluginRootDir: loopRoot }),
+      { code: "ELOOP" },
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -5,7 +5,6 @@
  */
 import { emitEvent } from "../../events/index.js";
 import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
-import { resolveHookClientEmitter } from "./client-channel.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { isHookRuntimeEventVerboseEnabled } from "@noobot/shared/runtime-events-config";
 import {
@@ -210,8 +209,6 @@ function createHookClientEmitter({ listener = null, point = "", runtime = {} } =
     });
   };
 }
-
-export { resolveHookClientEmitter };
 
 function withHookClientEmitter(context = {}, emitHookClientEvent = null) {
   const safeContext = context && typeof context === "object" ? context : {};

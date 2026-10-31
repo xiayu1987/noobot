@@ -199,14 +199,8 @@ export function createRegisterHarnessHooks(deps = {}) {
 
             const basePath = text(ctx.basePath);
             if (!basePath) throw new TypeError("harness session cleanup requires basePath");
-            const cleanup = await cleanupRunsBySessionIdsFn(basePath, sessionIds, options);
-            emitHarnessHookProgressFn(ctx, "session_cleanup_done", {
-              point,
-              deleted: cleanup?.deleted || 0,
-              matchedRuns: cleanup?.matchedRuns || 0,
-              errors: cleanup?.errors || 0,
-              skippedLocked: cleanup?.skippedLocked || 0,
-            });
+            const cleanup = await cleanupRunsBySessionIdsFn(basePath, sessionIds);
+            emitHarnessHookProgressFn(ctx, "session_cleanup_done", { point, ...cleanup });
           },
           {
             id: `${plugin.name}.cleanup.${point}`,

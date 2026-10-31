@@ -32,7 +32,7 @@ const SESSION_TREE_FATAL = Object.freeze({
   [SESSION_TREE_ERROR.PARENT_MISMATCH]: PARENT_MISSING_FATAL,
 });
 
-export function toSessionTreeFatalError(error, sessionId) {
+function toSessionTreeFatalError(error, sessionId) {
   const fatal = SESSION_TREE_FATAL[error.code];
   if (!fatal) throw error;
   return fatalSystemError(`${tSystem(fatal.messageKey)}: ${error.message}`, {

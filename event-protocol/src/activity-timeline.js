@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isCanonicalText, isPlainObject, text } from "@noobot/shared/value";
 import {
   ACTIVITY_EVENT_TYPES,
   MESSAGE_EVENT_TYPE,
@@ -121,6 +121,8 @@ export function isCanonicalActivityTimelineFact(value) {
     text(value.eventId) &&
     ACTIVITY_EVENT_TYPES.has(text(value.eventType)) &&
     typeof value.text === "string" &&
+    isCanonicalText(value.activityId) &&
+    isCanonicalText(value.activityKind) &&
     Number.isInteger(value.sequence) &&
     value.sequence > 0 &&
     text(value.sequenceScopeId) &&
@@ -137,10 +139,10 @@ export function isCanonicalActivityTimelineFact(value) {
 export function mergeCanonicalActivityTimelines(...timelines) {
   const byIdentity = new Map();
   for (const fact of timelines.flat()) {
-    if (!isCanonicalActivityTimelineFact(fact)) continue;
-    const identity = text(fact.activityId)
-      ? `activity:${text(fact.activityId)}`
-      : `event:${text(fact.eventId)}`;
+    if (!isCanonicalActivityTimelineFact(fact)) {
+      throw new TypeError("activity timeline contains a noncanonical fact");
+    }
+    const identity = fact.activityId;
     const previous = byIdentity.get(identity);
     if (!previous || fact.sequence >= previous.sequence) {
       byIdentity.set(identity, fact);
