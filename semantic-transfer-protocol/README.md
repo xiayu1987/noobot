@@ -11,6 +11,7 @@ It has no filesystem, runtime, session repository, path resolver, or business-sc
 - Attachment references contain an attachment-protocol identity and never a path.
 - Invalid envelopes are rejected; they are not filtered, normalized from legacy shapes, or silently downgraded.
 - A transfer is bound to stable `transferId`, `presentationMessageId`, and producer identity. `sessionId` is mandatory; execution-scoped transfers also carry `turnScopeId` and `runId`.
+- Independent parts of one producer output use `createTransferPartIdentity(identity, partKey)`, with a stable, nonempty part key. It appends `:part:` and the URI-encoded key to the transfer ID while preserving message and execution identity. Distinct payloads must never reuse a transfer identity; merging conflicting envelopes remains an error.
 
 ## Registered Scenarios
 

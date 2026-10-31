@@ -25,6 +25,7 @@ export const WORKSPACE_LAYOUT_UPGRADE_OWNER = Object.freeze({
   SESSION_TOOL_RESULT: "session-tool-result",
   SESSION_SCRIPT_EXIT_CODE: "session-script-exit-code",
   SESSION_LEGACY_MCP_RESULT: "session-legacy-mcp-result",
+  SESSION_RESULT_OVERFLOW: "session-result-overflow",
 });
 
 export const WORKSPACE_LAYOUT_UPGRADES = Object.freeze([
@@ -142,6 +143,11 @@ export const WORKSPACE_LAYOUT_UPGRADES = Object.freeze([
     id: "session-legacy-mcp-result-v24",
     toVersion: 24,
     owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_LEGACY_MCP_RESULT,
+  }),
+  Object.freeze({
+    id: "session-result-overflow-v25",
+    toVersion: 25,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_RESULT_OVERFLOW,
   }),
 ]);
 

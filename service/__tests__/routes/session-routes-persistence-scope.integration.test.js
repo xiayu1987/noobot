@@ -109,7 +109,12 @@ test("session-routes: HTTP 调用经真实 facade 绑定根会话 persistence sc
       [
         "replace-turn",
         SESSION_COMMAND.TURN_REPLACE,
-        { anchor: { turnScopeId: "turn-x" }, newContent: "edited", turnScopeId: "turn-new" },
+        {
+          anchor: { turnScopeId: "turn-x" },
+          newContent: "edited",
+          turnScopeId: "turn-new",
+          attachments: [],
+        },
       ],
     ]) {
       await assertScopeAccepted(

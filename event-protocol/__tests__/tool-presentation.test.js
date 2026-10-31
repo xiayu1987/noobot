@@ -5,6 +5,7 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
+import { sourceReferenceTransfer } from "@noobot/semantic-transfer-protocol";
 
 import {
   projectToolOperationSubject,
@@ -82,7 +83,21 @@ test("overflowed results show the overflow message for every tool", () => {
     ok: true,
     message: "result moved to a source reference",
     overflowed: true,
-    transferEnvelopes: [],
+    transferEnvelopes: [
+      sourceReferenceTransfer({
+        transferId: "overflow-1",
+        presentationMessageId: "presentation-1",
+        identity: { sessionId: "s1", turnScopeId: "t1", producer: { type: "tool", id: "c1" } },
+        direction: "output",
+        reference: { address: "/tmp/output.txt", name: "output.txt" },
+        intent: {
+          source: "tool",
+          reason: "read_file_source_reference",
+          scenario: "tool",
+          strategy: "tool_output",
+        },
+      }),
+    ],
   };
   for (const tool of ["read_file", "patch_file", "search", "execute_script"]) {
     assert.equal(

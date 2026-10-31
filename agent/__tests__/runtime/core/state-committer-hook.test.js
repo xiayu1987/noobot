@@ -188,7 +188,7 @@ test("state-committer emits before/after hooks for tool result commit", async ()
     async (ctx = {}) => {
       if (ctx.commitType !== "tool_result") return;
       hookCalls.push(`before:${ctx.commitType}`);
-      ctx.payload.content = "tool_result_overridden_by_hook";
+      ctx.payload.content = JSON.stringify({ ok: true, value: "tool_result_overridden_by_hook" });
     },
     { id: "test.tool-commit.before" },
   );
@@ -221,16 +221,59 @@ test("state-committer emits before/after hooks for tool result commit", async ()
   assert.deepEqual(hookCalls, ["before:tool_result", "after:tool_result"]);
   assert.equal(turnMessageStore.items.length, 1);
   assert.equal(turnMessageStore.items[0].role, "tool");
-  assert.equal(turnMessageStore.items[0].content, "tool_result_overridden_by_hook");
+  assert.deepEqual(JSON.parse(turnMessageStore.items[0].content), {
+    ok: true,
+    value: "tool_result_overridden_by_hook",
+  });
   assert.deepEqual(turnMessageStore.items[0].contextPolicy, contextPolicy);
   assert.match(turnMessageStore.items[0].messageUid, /^sm_/);
   assert.equal(Object.hasOwn(turnMessageStore.items[0], "messageId"), false);
   assert.equal(traces.length, 1);
   assert.equal(traces[0].tool, "demo_tool");
-  assert.equal(traces[0].result, "tool_result_overridden_by_hook");
+  assert.equal(traces[0].result, turnMessageStore.items[0].content);
   assert.equal(messages.length, 1);
-  assert.equal(messages[0]?.content, "tool_result_overridden_by_hook");
+  assert.equal(messages[0]?.content, turnMessageStore.items[0].content);
   assert.deepEqual(readContextMessageValue(messages[0], "contextPolicy"), contextPolicy);
+});
+
+test("state-committer rejects invalid hook output before any result is committed", async () => {
+  const hookManager = createHookManager();
+  const runtime = createTestRuntime({ runConfig: { hookManager } });
+  let persisted = 0;
+  runtime.persistCurrentTurnMessages = async () => {
+    persisted += 1;
+  };
+  hookManager.on(
+    HOOK_POINT.AGENT.BEFORE_STATE_COMMIT,
+    async (ctx) => {
+      ctx.payload.content = "invalid";
+    },
+    { id: "test.invalid-result" },
+  );
+  const modelContext = createTestModelContext("dp_invalid", "turn-invalid");
+  const turnMessageStore = createInMemoryTurnStore();
+  const traces = [];
+  const committer = createStateCommitter({
+    modelContext,
+    traces,
+    turnMessageStore,
+    dialogProcessId: "dp_invalid",
+    runtime,
+  });
+  await assert.rejects(
+    committer.pushToolResult({
+      call: { id: "c1", name: "demo" },
+      toolResultText: '{"ok":true}',
+      transferEnvelopes: [],
+      resourceRefs: [],
+      mutationRefs: [],
+    }),
+    /tool_result_not_json/,
+  );
+  assert.equal(turnMessageStore.items.length, 0);
+  assert.equal(modelContext.messages.length, 0);
+  assert.equal(traces.length, 0);
+  assert.equal(persisted, 0);
 });
 
 test("state-committer completes tool result hooks and commit after the parent Turn is stopped", async () => {
@@ -375,7 +418,7 @@ test("state-committer writes tool result through message store when holder is pr
   assert.equal(turnMessageStore.items[0]?.content, STORE_TOOL_RESULT_TEXT);
 });
 
-test("state-committer stores compact LLM-facing tool result content", async () => {
+test("state-committer retains raw results and compacts only the model projection", async () => {
   const turnMessageStore = createInMemoryTurnStore();
   const modelContext = createTestModelContext("dp_compact", "turn-compact");
   const messages = modelContext.messages;
@@ -425,13 +468,27 @@ test("state-committer stores compact LLM-facing tool result content", async () =
 
   await committer.pushToolResult({
     call: { id: "call_compact", name: "multimodal_generate", args: {} },
-    toolResultText: JSON.stringify({ toolName: "multimodal_generate", ok: true }),
+    toolResultText: JSON.stringify({
+      toolName: "multimodal_generate",
+      ok: true,
+      empty: [],
+      nullable: null,
+    }),
     transferEnvelopes: [envelope],
     resourceRefs: [],
     mutationRefs: [],
   });
 
   const payload = JSON.parse(messages[0].content);
+  assert.deepEqual(payload.empty, []);
+  assert.equal(Object.hasOwn(payload, "nullable"), true);
+  assert.equal(payload.nullable, null);
+  assert.deepEqual(JSON.parse(turnMessageStore.items[0].content), {
+    toolName: "multimodal_generate",
+    ok: true,
+    empty: [],
+    nullable: null,
+  });
   assert.equal("transferResult" in payload, false);
   assert.equal("attachmentMetas" in payload, false);
   assert.equal(payload.toolName, "multimodal_generate");

@@ -43,6 +43,51 @@ async function withTempDir(fn) {
   }
 }
 
+test("attachment ingestion rejects invalid lists and preserves repeated input order", async () => {
+  await withTempDir(async (workspaceRoot) => {
+    const service = new AttachmentService({ workspaceRoot });
+    for (const invalid of [null, {}, "invalid"]) {
+      await assert.rejects(
+        service.ingest({ userId: "u1", sessionId: "s1", attachments: invalid }),
+        /attachment_ingest_arrays_required/,
+      );
+      await assert.rejects(
+        service.ingestGeneratedArtifacts({ userId: "u1", sessionId: "s1", artifacts: invalid }),
+        /attachment_ingest_arrays_required/,
+      );
+    }
+    const first = {
+      name: "first.txt",
+      clientAttachmentId: "first",
+      contentBase64: Buffer.from("first").toString("base64"),
+    };
+    const second = {
+      name: "second.txt",
+      clientAttachmentId: "second",
+      contentBase64: Buffer.from("second").toString("base64"),
+    };
+    const records = await service.ingest({
+      userId: "u1",
+      sessionId: "s1",
+      attachments: [second, first, second],
+    });
+    assert.deepEqual(
+      records.map((record) => record.name),
+      ["second.txt", "first.txt", "second.txt"],
+    );
+    assert.equal(records[0].attachmentId, records[2].attachmentId);
+    const replay = await service.ingest({
+      userId: "u1",
+      sessionId: "s1",
+      attachments: [first, second],
+    });
+    assert.deepEqual(
+      replay.map((record) => record.attachmentId),
+      [records[1].attachmentId, records[0].attachmentId],
+    );
+  });
+});
+
 test("AttachmentService.ingest + getAttachmentById keeps core behavior", async () => {
   await withTempDir(async (workspaceRoot) => {
     const service = new AttachmentService({ workspaceRoot });
@@ -691,7 +736,7 @@ test("index-manager persists only versioned protocol records and isolates every 
         { attachments: { a1: { attachmentId: "a1", name: "x.txt" } } },
         scope,
       ),
-      /invalid_persisted_attachment_record/,
+      /attachment_storage_ref_required/,
     );
 
     await writeAttachIndex(
@@ -707,6 +752,7 @@ test("index-manager persists only versioned protocol records and isolates every 
             path: path.join(basePath, "runtime/attach/scoped/s1/user/a2/x.txt"),
             createdAt: "2026-01-01T00:00:00.000Z",
             updatedAt: "2026-01-01T00:00:00.000Z",
+            relations: [],
             sandboxPath: "/workspace/sandbox/runtime/attach/scoped/s1/user/a2/x.txt",
             previewUrl: "/preview/a2",
           },
@@ -729,6 +775,7 @@ test("index-manager persists only versioned protocol records and isolates every 
             sessionId: "s2",
             attachmentSource: "user",
             name: "other.txt",
+            relations: [],
             mimeType: "text/plain",
             path: path.join(basePath, "runtime/attach/scoped/s2/user/a2/other.txt"),
             createdAt: "2026-01-01T00:00:00.000Z",
@@ -748,6 +795,27 @@ test("index-manager persists only versioned protocol records and isolates every 
     assert.equal(migratedPayload.attachments.a2?.identity?.attachmentId, "a2");
     assert.equal(migratedPayload.attachments.a2?.identity?.sessionId, "s1");
     assert.equal(migratedPayload.attachments.a2?.identity?.attachmentSource, "user");
+  });
+});
+
+test("index-manager rejects malformed entries without replacing the persisted index", async () => {
+  await withTempDir(async (basePath) => {
+    const scope = { sessionId: "s1", attachmentSource: "user" };
+    await writeAttachIndex(basePath, { attachments: {} }, scope);
+    const file = path.join(basePath, "runtime/attach/scoped/s1/user/attachments.json");
+    const original = await readFile(file, "utf8");
+    for (const attachments of [undefined, null, [], "invalid"]) {
+      await assert.rejects(
+        writeAttachIndex(basePath, { attachments }, scope),
+        /invalid_attachment_index_entries/,
+      );
+      assert.equal(await readFile(file, "utf8"), original);
+      await writeFile(file, JSON.stringify({ ...JSON.parse(original), attachments }));
+      await assert.rejects(readAttachIndex(basePath, scope), /invalid_attachment_index_entries/);
+      await writeFile(file, original);
+    }
+    await writeFile(file, JSON.stringify({ ...JSON.parse(original), updatedAt: null }));
+    await assert.rejects(readAttachIndex(basePath, scope), /invalid_attachment_index_updated_at/);
   });
 });
 

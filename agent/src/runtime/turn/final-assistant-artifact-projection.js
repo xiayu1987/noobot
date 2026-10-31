@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { getTransferAttachments } from "../../transfer-adapter/storage/consumer.js";
-import { TRANSFER_REASON, normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
+import {
+  TRANSFER_REASON,
+  normalizeTransferEnvelopes,
+  selectUntransferredAttachments,
+} from "@noobot/semantic-transfer-protocol";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 import {
   compactTransferEnvelopes,
@@ -64,9 +68,10 @@ export function projectGeneratedArtifactsToFinalAssistant(messages = []) {
   );
   const attachments = dedupeSessionAttachmentRefs(
     sourceMessages.flatMap((messageItem = {}) =>
-      resolveTransferEnvelopesFromMessage(messageItem).length
-        ? []
-        : resolveAttachmentsFromMessage(messageItem).filter(shouldPromoteAttachmentToAssistant),
+      selectUntransferredAttachments(
+        resolveAttachmentsFromMessage(messageItem),
+        resolveTransferEnvelopesFromMessage(messageItem),
+      ).filter(shouldPromoteAttachmentToAssistant),
     ),
   );
   if (!transferEnvelopes.length && !attachments.length) return sourceMessages;
@@ -90,14 +95,14 @@ export function projectGeneratedArtifactsToFinalAssistant(messages = []) {
     ...resolveTransferEnvelopesFromMessage(finalAssistant),
     ...transferEnvelopes,
   ]);
-  const mergedAttachments = dedupeSessionAttachmentRefs([
-    ...resolveAttachmentsFromMessage(finalAssistant),
-    ...attachments,
-  ]);
+  const mergedAttachments = selectUntransferredAttachments(
+    dedupeSessionAttachmentRefs([...resolveAttachmentsFromMessage(finalAssistant), ...attachments]),
+    mergedTransferEnvelopes,
+  );
   outputMessages[finalAssistantIndex] = {
     ...finalAssistant,
     ...(mergedTransferEnvelopes.length ? { transferEnvelopes: mergedTransferEnvelopes } : {}),
-    ...(mergedAttachments.length ? { attachments: mergedAttachments } : {}),
+    attachments: mergedAttachments,
   };
   return outputMessages;
 }

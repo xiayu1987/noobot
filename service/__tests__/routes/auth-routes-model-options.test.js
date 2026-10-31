@@ -9,7 +9,7 @@ import express from "express";
 import { registerAuthRoutes } from "../../routes/auth-routes.js";
 import { withTestServer } from "./session-routes.helpers.js";
 
-test("connect exposes a case-sensitive custom provider after rejecting system field overrides", async () => {
+test("connect exposes custom providers without requiring credentials or validating unused models", async () => {
   const app = express();
   app.use(express.json());
   registerAuthRoutes(app, {
@@ -20,6 +20,7 @@ test("connect exposes a case-sensitive custom provider after rejecting system fi
           enabled: true,
           used_for_conversation: true,
           model: "ZHIPU/GLM-5.3",
+          api_key: "",
           description: "forged user description",
           reasoning_effort: "medium",
           tool_reasoning_effort: "medium",
@@ -31,7 +32,9 @@ test("connect exposes a case-sensitive custom provider after rejecting system fi
     }),
     globalConfigProvider: () => ({
       superAdmin: { userId: "admin", connectCode: "admin-code" },
-      providers: {},
+      providers: {
+        incomplete: { enabled: true, used_for_conversation: true },
+      },
       scenarios: {},
     }),
     issueApiKey: () => "test-api-key",
@@ -55,6 +58,10 @@ test("connect exposes a case-sensitive custom provider after rejecting system fi
 
     assert.equal(response.status, 200);
     assert.equal(payload.ok, true);
+    assert.deepEqual(
+      payload.enabledModels.find((item) => item.alias === "incomplete"),
+      { alias: "incomplete", model: "", description: "" },
+    );
     assert.deepEqual(
       payload.enabledModels.find((item) => item.alias === "GLM_5_3"),
       { alias: "GLM_5_3", model: "ZHIPU/GLM-5.3", description: "forged user description" },

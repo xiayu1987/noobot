@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { isPlainObject, text } from "@noobot/shared/value";
-import { decodeToolResultText } from "@noobot/event-protocol/tool-result";
+import { decodeToolResultText, toolResultOverflow } from "@noobot/event-protocol/tool-result";
 import { toToolJsonResult } from "../../tools/core/tool-json-result.js";
 import {
   DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS,
@@ -43,9 +43,7 @@ function encodeOverflowResult({ toolName, parsed, message, transferEnvelopes }) 
   return toToolJsonResult(toolName, {
     ok: parsed.ok,
     ...failure,
-    message,
-    overflowed: true,
-    transferEnvelopes,
+    ...toolResultOverflow({ message, transferEnvelopes }),
   });
 }
 

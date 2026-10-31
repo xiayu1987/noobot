@@ -49,6 +49,13 @@ export function readContextMessageField(message = {}, field = "") {
   return text(readContextMessageValue(message, field) ?? "");
 }
 
+export function readContextMessageArray(message, field) {
+  const value = readContextMessageValue(message, field);
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new TypeError(`context message ${field} must be an array`);
+  return value;
+}
+
 function readContextMessageFlag(message = {}, field = "") {
   return readContextMessageMetadata(message)[field] === true;
 }

@@ -126,6 +126,7 @@ test("session-routes: workflow session returns summary and execution jsonl from 
           presentationMessageId: "pm_wf_node_1",
           role: "assistant",
           content: "done",
+          attachments: [],
           dialogProcessId: "wf_node_1",
           turnScopeId: "workflow-node:wf_node_1",
         },
@@ -244,6 +245,7 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
           dialogProcessId: "dp-1",
           turnScopeId,
           content: "answer",
+          attachments: [],
           toolTimeline: [
             {
               key: "call:call-1",
@@ -270,6 +272,7 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
           injectedMessage: true,
           injectedBy: "harness-plugin",
           content: "injected",
+          attachments: [],
         },
         {
           messageUid: "t1",
@@ -282,6 +285,14 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
           dialogProcessId: "dp-1",
           turnScopeId,
           content: "tool call",
+          tool_calls: [
+            {
+              id: "call-2",
+              name: "read_file",
+              args: { filePath: "example.txt", riskLevel: "low" },
+            },
+          ],
+          attachments: [],
         },
         {
           messageUid: "t2",
@@ -293,6 +304,7 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
           dialogProcessId: "dp-1",
           turnScopeId,
           content: "tool result",
+          attachments: [],
         },
         {
           messageUid: "other",
@@ -305,6 +317,14 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
           dialogProcessId: "dp-2",
           turnScopeId: "workflow-node:other",
           content: "other",
+          tool_calls: [
+            {
+              id: "other-call",
+              name: "read_file",
+              args: { filePath: "other.txt", riskLevel: "low" },
+            },
+          ],
+          attachments: [],
         },
       ],
     },

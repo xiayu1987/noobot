@@ -249,9 +249,9 @@ test("execute_script: foreground 大输出通过 V2 附件身份保留", async (
   );
 
   assert.equal(result.ok, true);
-  assert.equal(result.outputOverflow, true);
-  assert.equal(result.outputDelivery, "file");
-  assert.equal(result.outputTransferReason, "execute_script_output_overflow");
+  assert.equal(result.overflowed, true);
+  assert.equal(Object.hasOwn(result, "outputOverflow"), false);
+  assert.equal(Object.hasOwn(result, "outputDelivery"), false);
   assert.equal(result.stdout.length, LENGTH_THRESHOLDS.semanticTransfer.previewChars);
   assert.equal(result.stderr, "");
   assert.equal(result.stdout.endsWith("xxx"), true);
@@ -343,8 +343,8 @@ test("execute_script: background 模式将 stdout/stderr 交给附件层并返�
   assert.equal(result.stdout, undefined);
   assert.equal(result.stderr, undefined);
   assert.equal(typeof result.message === "string" && result.message.length > 0, true);
-  assert.equal(result.outputDelivery, "file");
-  assert.equal(result.outputTransferReason, "execute_script_background");
+  assert.equal(Object.hasOwn(result, "outputDelivery"), false);
+  assert.equal(Object.hasOwn(result, "outputTransferReason"), false);
   assert.equal(result.transferEnvelopes.length, 1);
   assert.equal(result.transferEnvelopes[0].version, TRANSFER_VERSION);
   assert.equal(result.transferEnvelopes[0].payload.mode, "attachment");
@@ -414,14 +414,11 @@ test("execute_script: 大 stdout 通过 foreground 原文件 semantic-transfer �
   );
 
   assert.equal(result.ok, true);
-  assert.equal(result.outputOverflow, true);
-  assert.equal(result.outputDelivery, "file");
-  assert.equal(result.outputTransferReason, "execute_script_output_overflow");
-  assert.equal(result.overflowed, undefined);
-  assert.deepEqual(result.attachmentRefs, [
-    "attachment:v1:s-script-large-output/model/att-script-output-1",
-  ]);
-  assert.equal(result.transferEnvelopes, undefined);
+  assert.equal(result.overflowed, true);
+  assert.equal(Object.hasOwn(result, "outputOverflow"), false);
+  assert.equal(Object.hasOwn(result, "outputDelivery"), false);
+  assert.deepEqual(result.transferEnvelopes, runnerResult.transferEnvelopes);
+  assert.equal(Object.hasOwn(result, "attachmentRefs"), false);
   assert.equal(savedArtifacts.length, 1);
   assert.equal(savedArtifacts[0].content.length, outputLength);
   assert.equal(stdoutFile.size, outputLength);

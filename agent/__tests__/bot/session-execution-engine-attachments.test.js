@@ -123,6 +123,7 @@ test("_prepareAgentTurnExecution enriches raw userMessageAttachments from scoped
   await writeFile(
     path.join(indexDir, "attachments.json"),
     JSON.stringify({
+      updatedAt: "2026-08-16T00:00:00.000Z",
       sessionId,
       attachmentSource: "user",
       attachments: {

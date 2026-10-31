@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { attachmentTransfer } from "@noobot/semantic-transfer-protocol";
 
 import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
 import {
@@ -31,6 +32,105 @@ function userAttachment(attachmentId, sessionId, metadata = {}) {
 }
 
 const contextMessage = projectSessionRecordToContextMessage;
+
+test("user metadata combines message and transfer attachments by canonical identity", () => {
+  const transfer = attachmentTransfer({
+    transferId: "transfer-meta",
+    presentationMessageId: "presentation-meta",
+    identity: { sessionId: "s1", turnScopeId: "t1", producer: { type: "tool", id: "tool1" } },
+    direction: "output",
+    intent: {
+      source: "tool",
+      reason: "semantic_transfer_tool_result",
+      scenario: "tool",
+      strategy: "tool_output",
+    },
+    attachments: [
+      { identity: userAttachment("b", "s1"), name: "transfer.txt", mimeType: "text/plain" },
+    ],
+  });
+  const messages = buildHumanMessagesForUser(
+    {},
+    contextMessage({
+      messageUid: "mixed-attachments",
+      role: "user",
+      content: "input",
+      attachments: [userAttachment("a", "s1", { name: "input.txt" }), userAttachment("b", "s1")],
+      transferEnvelopes: [transfer],
+    }),
+  );
+  const meta = parseUserMeta(messages[1].content);
+  assert.deepEqual(meta.attachments, [
+    { attachmentRef: "attachment:v1:s1/user/a", name: "input.txt" },
+    { attachmentRef: "attachment:v1:s1/user/b", name: "transfer.txt", mimeType: "text/plain" },
+  ]);
+  assert.throws(
+    () =>
+      buildHumanMessagesForUser(
+        {},
+        contextMessage({
+          messageUid: "conflicting-attachments",
+          role: "user",
+          content: "input",
+          attachments: [userAttachment("b", "s1", { name: "conflict.txt" })],
+          transferEnvelopes: [transfer],
+        }),
+      ),
+    /context_attachment_metadata_conflict:name/,
+  );
+});
+
+test("user metadata rejects conflicting duplicate attachments within the same source", () => {
+  for (const field of ["name", "mimeType", "size"]) {
+    assert.throws(
+      () =>
+        buildHumanMessagesForUser(
+          {},
+          contextMessage({
+            messageUid: "duplicate-attachments",
+            role: "user",
+            content: "input",
+            attachments: [
+              userAttachment("a", "s1", { [field]: field === "size" ? 1 : "first" }),
+              userAttachment("a", "s1", { [field]: field === "size" ? 2 : "second" }),
+            ],
+          }),
+        ),
+      new RegExp(`context_attachment_metadata_conflict:${field}`),
+    );
+  }
+});
+
+test("user metadata rejects malformed arrays and transfer envelopes", () => {
+  for (const field of ["attachments", "transferEnvelopes", "userMetaParsedResults"]) {
+    for (const value of [null, {}, "invalid"]) {
+      assert.throws(
+        () =>
+          buildHumanMessagesForUser(
+            {},
+            {
+              role: "user",
+              content: "input",
+              additional_kwargs: { messageUid: "invalid-meta", [field]: value },
+            },
+          ),
+        /must be an array/,
+      );
+    }
+  }
+  assert.throws(
+    () =>
+      buildHumanMessagesForUser(
+        {},
+        {
+          role: "user",
+          content: "input",
+          additional_kwargs: { messageUid: "invalid-transfer", transferEnvelopes: [null] },
+        },
+      ),
+    /invalid_transfer_envelope/,
+  );
+});
 
 function createRuntimeWithToolAttachments({ toolAttachments, ...options }) {
   const runtime = createTestRuntimeContext(options);

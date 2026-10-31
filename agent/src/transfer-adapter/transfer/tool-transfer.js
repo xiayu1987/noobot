@@ -8,6 +8,7 @@ import {
   decideTransfer,
   DEFAULT_TRANSFER_MIME_TYPE,
   directTransfer,
+  requireTransferCharLimit,
   resolveTransferIntent,
   TRANSFER_DIRECTION,
   TRANSFER_MODE,
@@ -25,12 +26,6 @@ import { tTool } from "../../tools/core/tool-i18n.js";
 
 function normalizeRawString(value = "") {
   return String(value || "");
-}
-
-function toSafePositiveInt(value, fallback = 0, min = 0) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return Math.max(min, Number(fallback || 0));
-  return Math.max(min, Math.floor(parsed));
 }
 
 function resolveToolInputOverflowFromCall(call = {}, runtime = {}) {
@@ -129,7 +124,7 @@ export async function transferToolOutput({
   const maxInline =
     inlineMaxChars == null
       ? resolveToolResultInlineTextLimit(runtime)
-      : toSafePositiveInt(inlineMaxChars, resolveToolResultInlineTextLimit(runtime), 0);
+      : requireTransferCharLimit(inlineMaxChars);
   const materialized = await materializeTextForToolResult({
     runtime,
     text: normalizedText,
@@ -196,11 +191,7 @@ export async function transferToolInput({
     inlineMaxChars == null
       ? (callOverflow?.maxChars ?? resolveToolResultInlineTextLimit(runtime))
       : inlineMaxChars;
-  const maxInline = toSafePositiveInt(
-    resolvedInlineLimit,
-    resolveToolResultInlineTextLimit(runtime),
-    0,
-  );
+  const maxInline = requireTransferCharLimit(resolvedInlineLimit);
   const decision = decideTransfer({
     content: normalizedText,
     forceAttachment: forceAttachment === true || callOverflow?.forceAttachment === true,

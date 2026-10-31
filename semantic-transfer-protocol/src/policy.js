@@ -18,9 +18,21 @@ const TRANSFER_DECISION_REASON = Object.freeze({
   DIRECT: "within_direct_limit",
 });
 
-function positive(value, fallback) {
-  const n = Number(value);
-  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : fallback;
+export function requireTransferCharLimit(value) {
+  if (!Number.isSafeInteger(value) || value < 0) throw new TypeError("invalid_transfer_char_limit");
+  return value;
+}
+
+export function previewTransferText(content, maxChars) {
+  requireTransferCharLimit(maxChars);
+  if (typeof content !== "string") throw new TypeError("invalid_transfer_text");
+  let end = Math.min(content.length, maxChars);
+  if (end < content.length && end > 0) {
+    const last = content.charCodeAt(end - 1);
+    const next = content.charCodeAt(end);
+    if (last >= 0xd800 && last <= 0xdbff && next >= 0xdc00 && next <= 0xdfff) end--;
+  }
+  return content.slice(0, end);
 }
 function normalizeTransferPolicy({
   policy = {},
@@ -33,8 +45,12 @@ function normalizeTransferPolicy({
     throw new Error("invalid_transfer_preference");
   return Object.freeze({
     preference,
-    maxDirectChars: Math.max(1, positive(policy.maxDirectChars, maxDirectChars)),
-    previewChars: Math.max(0, positive(policy.previewChars, previewChars)),
+    maxDirectChars: requireTransferCharLimit(
+      policy.maxDirectChars === undefined ? maxDirectChars : policy.maxDirectChars,
+    ),
+    previewChars: requireTransferCharLimit(
+      policy.previewChars === undefined ? previewChars : policy.previewChars,
+    ),
     allowAttachment: policy.allowAttachment !== false,
   });
 }

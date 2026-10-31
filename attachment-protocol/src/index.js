@@ -6,8 +6,10 @@
 export * from "./errors.js";
 export * from "./protocol-utils.js";
 export * from "./identity.js";
+export { assertAttachmentIngestInputs, assertAttachmentIngestResult } from "./ingest.js";
 export * from "./model.js";
 export * from "./persistence/record-v1.js";
+export { parsePersistedAttachmentIndex } from "./persistence/index.js";
 export * from "./lifecycle/index.js";
 export * from "./collections/identity-index.js";
 export * from "./collections/identity-set.js";

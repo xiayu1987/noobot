@@ -7,27 +7,11 @@ import {
   getRuntimeFromAgentContext,
   getToolsFromAgentContext,
 } from "../../context/agent-context-accessor.js";
-import { compactToolResultTextForModel } from "../../transfer-adapter/core/compact.js";
 import { filterForModelContext } from "@noobot/context-protocol/policy/message";
-import {
-  resolveContextMessageRole,
-  resolveContextMessageContent,
-} from "@noobot/context-protocol/message/codec";
 import { PLUGIN_MODEL_HEADER_KEY } from "../../models/headers/plugin-headers.js";
 import { requireModelContextSequencePolicy } from "@noobot/model-protocol";
 import { text } from "@noobot/shared/value";
 import { requireAbortSignal } from "@noobot/session-protocol/execution-abort";
-
-function compactToolMessagesForMiniRunner(messages = []) {
-  return (Array.isArray(messages) ? messages : []).map((messageItem = {}) => {
-    const role = resolveContextMessageRole(messageItem);
-    if (role !== "tool") return messageItem;
-    return {
-      ...messageItem,
-      content: compactToolResultTextForModel(resolveContextMessageContent(messageItem)),
-    };
-  });
-}
 
 export function resolveCapabilityExecution(ctx, signal) {
   requireAbortSignal(signal, "capability model invocation");
@@ -75,7 +59,7 @@ export function requireCapabilityFlowPrefix(pluginId) {
 }
 
 export function prepareCapabilityMessages(messages, prompt) {
-  const result = compactToolMessagesForMiniRunner(filterForModelContext(messages));
+  const result = filterForModelContext(messages);
   if (prompt) result.unshift({ role: "system", content: String(prompt) });
   return result;
 }

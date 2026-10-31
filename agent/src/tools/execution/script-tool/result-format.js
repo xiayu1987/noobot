@@ -88,7 +88,6 @@ export async function toolExecResult(mode, r, extra, options) {
             outputLimitExceeded: r.outputLimitExceeded === true,
             outputLimitBytes: r.outputLimitBytes,
           }),
-          outputOverflow: true,
         }
       : outputFileEnvelopes.length
         ? { transferEnvelopes: outputFileEnvelopes }

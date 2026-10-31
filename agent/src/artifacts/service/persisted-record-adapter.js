@@ -16,7 +16,6 @@ import {
 } from "@noobot/path-resolver";
 import { isPlainObject } from "@noobot/shared/value";
 import { safeStr } from "../../shared/utils/shared-utils.js";
-import { DEFAULT_MIME_TYPE } from "../constants.js";
 import { attachScopeRoot } from "./attachment-storage-layout.js";
 
 function identityFor(record) {
@@ -66,7 +65,6 @@ export function toPersistedAttachmentRecord(basePath, record) {
   const createdAt = safeStr(record.createdAt);
   const updatedAt = safeStr(record.updatedAt);
   const storagePath = safeStr(record.path);
-  if (!storagePath) return null;
   const ref = storageRef(basePath, identity, storagePath);
   const persisted = {
     schema: ATTACHMENT_RECORD_SCHEMA,
@@ -78,9 +76,9 @@ export function toPersistedAttachmentRecord(basePath, record) {
         ? { clientAttachmentId: safeStr(record.clientAttachmentId) }
         : {}),
       name: safeStr(record?.name),
-      mimeType: safeStr(record?.mimeType, DEFAULT_MIME_TYPE),
+      mimeType: record.mimeType,
       ...(isPlainObject(record?.owner) ? { owner: record.owner } : {}),
-      ...(Number.isSafeInteger(Number(record?.size)) ? { size: Number(record.size) } : {}),
+      ...(record.size === undefined ? {} : { size: record.size }),
       ...(safeStr(record?.contentSha256) ? { contentSha256: safeStr(record.contentSha256) } : {}),
       ...(safeStr(record?.generationSource)
         ? { generationSource: safeStr(record.generationSource) }
@@ -89,7 +87,7 @@ export function toPersistedAttachmentRecord(basePath, record) {
       ...(record?.origin === undefined ? {} : { origin: record.origin }),
     },
     storageRef: { kind: "attachment-store", ref },
-    relations: Array.isArray(record?.relations) ? record.relations : [],
+    relations: record.relations,
     createdAt,
     updatedAt,
   };

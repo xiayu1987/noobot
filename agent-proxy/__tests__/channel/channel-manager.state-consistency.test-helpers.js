@@ -58,7 +58,14 @@ export function canonicalMessageEvent({
     },
     producer: { type: "test", id: "agent-proxy-test" },
     occurredAt: "2026-08-17T00:00:00.000Z",
-    payload: { eventType, presentationMessageId, dialogProcessId, text },
+    payload: {
+      eventType,
+      presentationMessageId,
+      dialogProcessId,
+      text,
+      activityId: `activity-${sequence}`,
+      activityKind: "model_analysis",
+    },
   });
 }
 

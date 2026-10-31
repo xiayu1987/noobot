@@ -9,7 +9,6 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { formatAttachmentIdentityRef } from "@noobot/attachment-protocol";
 import {
   attachmentEnvelope,
   executeToolCall,
@@ -94,10 +93,7 @@ test("executeToolCall: tool result too long should be persisted as a V2 attachme
   assert.equal(overflowAttachment.identity.sessionId, "session-overflow-1");
   assert.equal(overflowAttachment.identity.attachmentSource, "model");
   assert.equal(overflowAttachment.name, "demo_tool.result.txt");
-  assert.deepEqual(payload.attachmentRefs, [
-    formatAttachmentIdentityRef(overflowAttachment.identity),
-  ]);
-  assert.equal(payload.transferEnvelopes, undefined);
+  assert.deepEqual(payload.transferEnvelopes, result.transferEnvelopes);
   assert.equal(JSON.stringify(overflowEnvelope).includes("filePath"), false);
 });
 
@@ -134,11 +130,9 @@ test("executeToolCall: overflow length is measured after compacting transfer wra
 
   const payload = JSON.parse(result.toolResultText);
   assert.equal(payload.overflowed, undefined);
-  assert.deepEqual(payload.attachmentRefs, [
-    formatAttachmentIdentityRef(getPrimaryTransferAttachment(result.transferEnvelopes[0]).identity),
-  ]);
+  assert.deepEqual(payload.transferEnvelopes, result.transferEnvelopes);
   assert.equal("transferResult" in payload, false);
-  assert.equal("transferEnvelopes" in payload, false);
+  assert.equal("transferEnvelopes" in payload, true);
   assert.equal("attachmentMetas" in payload, false);
   assert.equal("transferFiles" in payload, false);
   assert.equal(
@@ -180,9 +174,8 @@ test("executeToolCall: overflow keeps original semantic-transfer artifact and co
 
   const payload = JSON.parse(result.toolResultText);
   assert.equal(payload.overflowed, true);
-  assert.equal(Array.isArray(payload.attachmentRefs), true);
-  assert.equal(payload.attachmentRefs.length >= 1, true);
-  assert.equal(payload.transferEnvelopes, undefined);
+  assert.equal(Array.isArray(payload.transferEnvelopes), true);
+  assert.equal(payload.transferEnvelopes.length >= 1, true);
   assert.equal("extractedAttachments" in result, false);
   assert.equal(result.transferEnvelopes.length >= 1, true);
   const overflowEnvelope = findTransferEnvelopeByReason(
@@ -277,8 +270,7 @@ test("executeToolCall task_summary returns transfer metadata without phase summa
   assert.equal(payload.phaseSummary, undefined);
   assert.equal(payload.toolInputOverflow, undefined);
   assert.equal(payload.transferFiles, undefined);
-  assert.equal(Array.isArray(payload.attachmentRefs), true);
-  assert.equal(payload.transferEnvelopes, undefined);
+  assert.deepEqual(payload.transferEnvelopes, result.transferEnvelopes);
   assert.equal(
     result.transferEnvelopes?.[0]?.payload?.attachments?.[0]?.name,
     "task-summary-content.tool-input.md",
@@ -329,8 +321,7 @@ test("executeToolCall: overflow result never exposes sandbox or host paths", asy
     result.transferEnvelopes,
     "tool_result_overflow",
   );
-  assert.equal(Array.isArray(payload.attachmentRefs), true);
-  assert.equal(payload.transferEnvelopes, undefined);
+  assert.deepEqual(payload.transferEnvelopes, result.transferEnvelopes);
   assert.equal(overflowEnvelope.version, TRANSFER_VERSION);
   assert.equal(overflowEnvelope.payload.mode, "attachment");
   assert.equal(JSON.stringify(overflowEnvelope).includes("filePath"), false);

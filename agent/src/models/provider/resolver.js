@@ -17,15 +17,7 @@ export function getProviders(globalConfig = {}, userConfig = {}) {
 export function getEnabledProviders(globalConfig = {}, userConfig = {}) {
   const providers = getProviders(globalConfig, userConfig);
   return Object.fromEntries(
-    Object.entries(providers).filter(([, provider]) => {
-      if (!isProviderEnabled(provider)) return false;
-      try {
-        normalizeRuntimeModelSpec(provider);
-        return true;
-      } catch {
-        return false;
-      }
-    }),
+    Object.entries(providers).filter(([, provider]) => isProviderEnabled(provider)),
   );
 }
 

@@ -9,7 +9,7 @@ import { resolveMimeTypeFromFileName } from "@noobot/attachment-protocol/mime";
 import { resolveAttachmentPolicy } from "@noobot/agent-config-protocol";
 import { PATH_CAPABILITIES, filePath as path } from "@noobot/path-resolver";
 import { createLocator } from "@noobot/shared/locator";
-import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
+import { createTransferPartIdentity, TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { recoverableToolError } from "../../../shared/errors/index.js";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
@@ -97,7 +97,7 @@ export async function persistScriptOutputFiles({
     generationSource: TRANSFER_REASON.EXECUTE_SCRIPT_OUTPUT_FILES,
     source: "tool",
     reason: TRANSFER_REASON.EXECUTE_SCRIPT_OUTPUT_FILES,
-    identity,
+    identity: createTransferPartIdentity(identity, TRANSFER_REASON.EXECUTE_SCRIPT_OUTPUT_FILES),
     intent: {
       source: "tool",
       reason: TRANSFER_REASON.EXECUTE_SCRIPT_OUTPUT_FILES,

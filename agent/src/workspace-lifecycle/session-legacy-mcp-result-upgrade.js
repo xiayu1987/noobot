@@ -8,7 +8,7 @@ import {
   decodeToolResultText,
   encodeToolResultObject,
   TOOL_RESULT_ERROR,
-} from "@noobot/event-protocol/tool-result";
+} from "@noobot/event-protocol/tool-result-v24";
 import { TOOL_RESULT_MESSAGE_TYPE } from "@noobot/session-protocol";
 import { isPlainObject } from "@noobot/shared/value";
 import { TOOL_NAME } from "../tools/constants/index.js";

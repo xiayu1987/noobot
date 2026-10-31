@@ -7,6 +7,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   ATTACHMENT_EVENT_TYPE,
+  assertAttachmentIngestInputs,
+  assertAttachmentIngestResult,
   ATTACHMENT_LIFECYCLE,
   attachmentIdentityKey,
   formatAttachmentIdentityRef,
@@ -32,6 +34,28 @@ const identity = {
   sessionId: "session-1",
   attachmentSource: "upload",
 };
+
+test("ingest rejects invalid lists, result counts and identities", () => {
+  for (const value of [undefined, null, {}, "", 1]) {
+    assert.throws(() => assertAttachmentIngestInputs(value), /attachment_ingest_arrays_required/);
+    assert.throws(
+      () => assertAttachmentIngestResult([], value),
+      /attachment_ingest_arrays_required/,
+    );
+  }
+  assert.deepEqual(assertAttachmentIngestInputs([]), []);
+  assert.throws(
+    () => assertAttachmentIngestResult([{}], []),
+    /attachment_ingest_result_count_mismatch/,
+  );
+  assert.throws(
+    () => assertAttachmentIngestResult([], [identity]),
+    /attachment_ingest_result_count_mismatch/,
+  );
+  assert.throws(() => assertAttachmentIngestResult([{}], [{}]));
+  const records = [identity, { ...identity }];
+  assert.equal(assertAttachmentIngestResult([{}, {}], records), records);
+});
 
 function descriptor() {
   return {

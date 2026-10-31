@@ -5,6 +5,7 @@
  */
 
 import { isPlainObject } from "@noobot/shared/value";
+import { isTransferIdentityConflict } from "@noobot/semantic-transfer-protocol";
 
 export const ERROR_LEVEL = Object.freeze({
   FATAL: "fatal",
@@ -43,7 +44,7 @@ export function recoverableToolError(message, options) {
 }
 
 export function isFatalError(error) {
-  return error instanceof NoobotError && error.fatal;
+  return isTransferIdentityConflict(error) || (error instanceof NoobotError && error.fatal);
 }
 
 export * from "./execution-failure.js";

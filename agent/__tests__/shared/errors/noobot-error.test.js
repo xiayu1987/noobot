@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { TRANSFER_ERROR_CODE } from "@noobot/semantic-transfer-protocol";
 import {
   NoobotError,
   fatalSystemError,
@@ -25,4 +26,14 @@ test("fatal is the single severity source", () => {
   assert.equal(isFatalError(recoverableToolError("x", { code: "FATAL_LOOKALIKE" })), false);
   const foreign = Object.assign(new Error("x"), { code: "FATAL_A", level: "fatal", fatal: true });
   assert.equal(isFatalError(foreign), false);
+});
+
+test("protocol identity conflicts are fatal without message inference", () => {
+  for (const code of [
+    TRANSFER_ERROR_CODE.IDENTITY_CONFLICT,
+    TRANSFER_ERROR_CODE.ATTACHMENT_IDENTITY_CONFLICT,
+  ]) {
+    assert.equal(isFatalError(Object.assign(new Error("conflict"), { code })), true);
+    assert.equal(isFatalError(new Error(`${code}:conflict`)), false);
+  }
 });

@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { createNoopMemoryPostProcessService } from "../helpers/memory-postprocess-service.js";
 
 import { SessionExecutionFinalizer } from "../../src/bot/execution/finalizer.js";
+import { projectGeneratedArtifactsToFinalAssistant } from "../../src/runtime/turn/final-assistant-artifact-projection.js";
 import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
 import { createAgentTurnResult } from "@noobot/agent-transport-protocol/agent-turn-result";
 
@@ -54,6 +55,23 @@ function semanticTransferEnvelope() {
     },
   };
 }
+
+test("final assistant preserves independent attachments and removes only transferred identities", () => {
+  const transferred = {
+    attachmentId: "att-generated",
+    sessionId: "s1",
+    attachmentSource: "model",
+    name: "image.png",
+    mimeType: "image/png",
+  };
+  const independent = { ...transferred, attachmentId: "independent" };
+  const messages = projectGeneratedArtifactsToFinalAssistant([
+    { role: "tool", transferEnvelopes: [semanticTransferEnvelope()] },
+    { role: "assistant", content: "done", attachments: [transferred, independent] },
+  ]);
+  assert.deepEqual(messages[1].attachments, [independent]);
+  assert.equal(messages[1].transferEnvelopes.length, 1);
+});
 
 test("SessionExecutionFinalizer waits for execution event durability before reading the bundle", async () => {
   const order = [];
@@ -201,7 +219,7 @@ test("SessionExecutionFinalizer promotes semantic-transfer attachments as transf
 
   const finalAssistant = result.messages.find((item = {}) => item.role === "assistant") || {};
   assert.equal(finalAssistant.attachmentMetas, undefined);
-  assert.equal(finalAssistant.attachments, undefined);
+  assert.deepEqual(finalAssistant.attachments, []);
   assert.equal("transferEnvelopes" in finalAssistant, true);
   assert.equal(Array.isArray(finalAssistant.transferEnvelopes), true);
   assert.equal(

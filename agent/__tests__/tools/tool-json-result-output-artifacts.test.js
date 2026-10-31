@@ -186,7 +186,21 @@ test("model tool results expose only canonical attachment references", () => {
           size: 0,
         },
       ],
-      attachmentRefs: ["attachment:v1:session-1/model/att-1"],
+      transfers: [
+        {
+          direction: "output",
+          reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
+          mode: "attachment",
+          attachments: [
+            {
+              attachmentRef: "attachment:v1:session-1/model/att-1",
+              role: "primary",
+              name: "result.txt",
+              mimeType: "text/plain",
+            },
+          ],
+        },
+      ],
     },
   );
 });
@@ -302,13 +316,30 @@ test("projectToolResultForModel exposes source reference envelopes to the model"
     ),
     {
       ok: true,
-      sourceReferences: [
-        { filePath: "/ws/big.txt", startLine: 1, endLine: 400, totalLines: 20000 },
+      transfers: [
         {
-          attachmentRef: "attachment:v1:session-1/model/att-1",
-          startLine: 1,
-          endLine: 10,
-          totalLines: 10,
+          direction: "output",
+          reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
+          mode: "source_reference",
+          reference: {
+            filePath: "/ws/big.txt",
+            name: "big.txt",
+            startLine: 1,
+            endLine: 400,
+            totalLines: 20000,
+          },
+        },
+        {
+          direction: "output",
+          reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
+          mode: "source_reference",
+          reference: {
+            attachmentRef: "attachment:v1:session-1/model/att-1",
+            name: "r.txt",
+            startLine: 1,
+            endLine: 10,
+            totalLines: 10,
+          },
         },
       ],
     },

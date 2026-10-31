@@ -11,9 +11,44 @@ import {
   assertToolResultObject,
   decodeToolResultText,
   encodeToolResultObject,
+  toolResultOverflow,
 } from "../src/tool-result.js";
 
 const rejects = (code) => (error) => error instanceof TypeError && error.code === code;
+
+test("overflow results reject missing delivery and invalid transfer envelopes", () => {
+  for (const validate of [
+    assertToolResultObject,
+    encodeToolResultObject,
+    (value) => decodeToolResultText(JSON.stringify(value)),
+  ]) {
+    assert.throws(
+      () => validate({ ok: true, overflowed: true, message: "read output" }),
+      /tool_result_overflow_transfers_required/,
+    );
+    assert.throws(
+      () => validate({ ok: true, overflowed: false }),
+      /tool_result_overflow_flag_invalid/,
+    );
+    assert.throws(
+      () =>
+        validate({ ok: true, overflowed: true, message: "read output", transferEnvelopes: [{}] }),
+      /invalid_transfer_envelope/,
+    );
+  }
+  assert.throws(
+    () => toolResultOverflow({ message: "read output", transferEnvelopes: [] }),
+    /tool_result_overflow_transfers_required/,
+  );
+  assert.throws(
+    () => toolResultOverflow({ message: "read output", transferEnvelopes: [{}] }),
+    /invalid_transfer_envelope/,
+  );
+  assert.throws(
+    () => toolResultOverflow({ message: "", transferEnvelopes: [{}] }),
+    /tool_result_overflow_message_required/,
+  );
+});
 
 test("tool result text decodes to a JSON object with a boolean ok", () => {
   assert.deepEqual(decodeToolResultText('{"ok":true,"path":"a.txt"}'), {

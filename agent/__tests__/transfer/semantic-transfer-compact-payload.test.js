@@ -28,7 +28,7 @@ function attachment(id, name = `${id}.txt`) {
   };
 }
 
-test("compact model view retains only V2 transfer envelopes and canonical attachment identities", () => {
+test("compact model view exposes callable references without internal transfer identities", () => {
   const envelope = attachmentTransfer({
     ...identity(),
     identity: identity(),
@@ -46,23 +46,28 @@ test("compact model view retains only V2 transfer envelopes and canonical attach
       JSON.stringify({ toolName: "tool", ok: true, transferEnvelopes: [envelope] }),
     ),
   );
-  assert.deepEqual(Object.keys(compacted), ["toolName", "ok", "transferEnvelopes"]);
+  assert.deepEqual(Object.keys(compacted), ["toolName", "ok", "transfers"]);
   assert.throws(
     () => compactToolResultTextForModel(JSON.stringify({ toolName: "tool" })),
     /tool_result_ok_not_boolean/,
   );
   assert.deepEqual(
-    compacted.transferEnvelopes[0].payload.attachments[0].identity,
-    attachment("att-1").identity,
+    compacted.transfers[0].attachments[0].attachmentRef,
+    "attachment:v1:session-test-1/model/att-1",
   );
-  assert.deepEqual(Object.keys(compacted.transferEnvelopes[0].payload.attachments[0]).sort(), [
-    "identity",
+  assert.deepEqual(Object.keys(compacted.transfers[0].attachments[0]).sort(), [
+    "attachmentRef",
     "mimeType",
     "name",
     "preview",
     "role",
     "size",
   ]);
+});
+
+test("model projection preserves empty result facts", () => {
+  const result = { ok: true, matches: [], metadata: {}, content: "", cursor: null, hasMore: false };
+  assert.deepEqual(JSON.parse(compactToolResultTextForModel(JSON.stringify(result))), result);
 });
 
 test("consumer returns only validated V2 envelopes and canonical attachment references", () => {

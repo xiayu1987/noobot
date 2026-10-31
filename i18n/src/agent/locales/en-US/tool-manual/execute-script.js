@@ -8,19 +8,24 @@ export const EXECUTE_SCRIPT_MANUAL = {
   execute_script: {
     summary:
       "Run a shell script under the current execution isolation view, for work that genuinely needs a command line.",
-    usage: ["execute_script({ command, riskLevel, executionMode, includeLineNumbers })"],
+    usage: [
+      "execute_script({ command, riskLevel, executionMode, includeLineNumbers, outputFiles })",
+    ],
     params: {
       command: "Shell command. Must use the syntax of the interpreter declared by the runtime.",
       riskLevel:
         "Script risk level: low, medium, high, or critical. Destructive scripts must be marked critical.",
       executionMode:
-        "foreground returns stdout and stderr directly; background also waits for completion but stores output as an attachment and returns its path.",
+        "foreground returns stdout/stderr; oversized and background output return attachments through transfers. Both modes wait for completion.",
       includeLineNumbers: "Whether output carries line numbers, off by default.",
+      outputFiles:
+        "Absolute paths to deliver as attachments after execution. Reuse returned attachment references verbatim in replies.",
     },
     notes: [
       "Do not replace dedicated tools with commands: read with read_file, edit with patch_file, search with search.",
       "Use paths relative to the current working directory; the interpreter and working directory come from the runtime environment section.",
       "background does not return early, and the command must not use background operators, nohup, or disown.",
+      "overflowed marks oversized inline output; read the full result with attachmentRef from transfers.",
       "Builds, tests, lint, and type checks are the main use here; run them right after changing code.",
     ],
     pitfalls: [

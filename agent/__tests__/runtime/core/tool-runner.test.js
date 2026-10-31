@@ -9,7 +9,6 @@ import { z } from "zod";
 import { createHookManager, HOOK_PHASE_STATUS, HOOK_POINT } from "@noobot/hook-protocol";
 import { confirmToolOperation } from "../../../src/tools/execution/tool-risk.js";
 import { SECURITY_EVIDENCE_SOURCE } from "@noobot/security-assessment-protocol";
-import { formatAttachmentIdentityRef } from "@noobot/attachment-protocol";
 import {
   attachmentEnvelope,
   executeToolCall,
@@ -21,6 +20,7 @@ import {
   createTestAttachmentService,
 } from "../../helpers/test-runtime-context.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import { compactToolResultTextForModel } from "../../../src/transfer-adapter/core/compact.js";
 import {
   assertMutationRef,
   createFileDiff,
@@ -69,7 +69,7 @@ test("executeToolCall gives tools an output transfer identity named after the ca
   assert.equal(identity.transferId.includes(":output:execute_script"), false);
 });
 
-test("executeToolCall keeps read resources internal and out of resourceRefs", async () => {
+test("executeToolCall preserves read-resource evidence but excludes it from the model and resourceRefs", async () => {
   const result = await executeToolCall({
     call: { id: "call-resource", name: "read_file", args: {} },
     tool: {
@@ -82,9 +82,11 @@ test("executeToolCall keeps read resources internal and out of resourceRefs", as
         }),
     },
   });
-  const publicResult = JSON.parse(result.toolResultText);
-  assert.equal(publicResult.resolvedPath, "src/index.js");
-  assert.equal("resources" in publicResult, false);
+  const canonicalResult = JSON.parse(result.toolResultText);
+  assert.equal(canonicalResult.resolvedPath, "src/index.js");
+  assert.equal(canonicalResult.resources[0].resourceId, "res_internal");
+  const modelResult = JSON.parse(compactToolResultTextForModel(result.toolResultText));
+  assert.equal("resources" in modelResult, false);
   assert.deepEqual(result.resourceRefs, []);
 });
 
@@ -101,8 +103,10 @@ test("executeToolCall promotes only declared outputResources into resourceRefs",
         }),
     },
   });
-  const publicResult = JSON.parse(result.toolResultText);
-  assert.equal("outputResources" in publicResult, false);
+  const canonicalResult = JSON.parse(result.toolResultText);
+  assert.equal(canonicalResult.outputResources[0].resourceId, "res_written");
+  const modelResult = JSON.parse(compactToolResultTextForModel(result.toolResultText));
+  assert.equal("outputResources" in modelResult, false);
   assert.deepEqual(
     result.resourceRefs.map((item) => item.resourceId),
     ["res_written"],
@@ -257,10 +261,7 @@ test("executeToolCall materializes outputArtifacts through the single transfer o
 
   assert.equal("outputArtifacts" in publicResult, false);
   assert.equal("attachments" in publicResult, false);
-  assert.deepEqual(publicResult.attachmentRefs, [
-    formatAttachmentIdentityRef(result.transferEnvelopes[0].payload.attachments[0].identity),
-  ]);
-  assert.equal(publicResult.transferEnvelopes, undefined);
+  assert.deepEqual(publicResult.transferEnvelopes, result.transferEnvelopes);
   assert.equal(result.transferEnvelopes.length, 1);
   assert.equal(result.transferEnvelopes[0].payload.attachments[0].name, "result.md");
   assert.equal(

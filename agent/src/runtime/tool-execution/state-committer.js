@@ -11,7 +11,7 @@ import {
 import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
 import { HOOK_PHASE_STATUS, HOOK_POINT } from "@noobot/hook-protocol";
 import { buildHookContext } from "../hooks/hook-context-builder.js";
-import { compactToolResultTextForModel } from "../../transfer-adapter/core/compact.js";
+import { decodeToolResultText } from "@noobot/event-protocol/tool-result";
 import { appendToolResultModelMessage } from "../message-context/message-store.js";
 import {
   currentAssistantPresentationMessageId,
@@ -181,13 +181,13 @@ export function createStateCommitter({
         }
       }
       const resolvedCallName = text(call.name);
-      const compactedToolResultText = compactToolResultTextForModel(toolResultText);
+      decodeToolResultText(toolResultText);
       const messageUid = createMessageUid();
       const contextPolicy = resolveToolContextPolicy(call);
       const toolResultPayload = {
         messageUid,
         role: "tool",
-        content: compactedToolResultText,
+        content: toolResultText,
         type: TOOL_RESULT_MESSAGE_TYPE,
         dialogProcessId,
         ...(ownership.turnScopeId ? { turnScopeId: ownership.turnScopeId } : {}),
@@ -212,7 +212,8 @@ export function createStateCommitter({
           agentContext,
         }),
       });
-      const normalizedToolResultText = String(toolResultPayload.content || "");
+      const normalizedToolResultText = toolResultPayload.content;
+      decodeToolResultText(normalizedToolResultText);
       if (Array.isArray(traces)) {
         traces.push({
           tool: resolvedCallName,

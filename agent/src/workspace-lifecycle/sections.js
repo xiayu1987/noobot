@@ -35,6 +35,7 @@ import { upgradeSessionActivityTimeline } from "./session-activity-timeline-upgr
 import { upgradeSessionToolResults } from "./session-tool-result-upgrade.js";
 import { upgradeSessionScriptExitCodes } from "./session-script-exit-code-upgrade.js";
 import { upgradeSessionLegacyMcpResults } from "./session-legacy-mcp-result-upgrade.js";
+import { upgradeSessionResultOverflow } from "./session-result-overflow-upgrade.js";
 import { releaseQuarantinedUnits } from "./migration-quarantine.js";
 import { ignoreSessionProgress } from "./session-directory-walk.js";
 
@@ -51,6 +52,7 @@ const LAYOUT_UPGRADE_HANDLERS = Object.freeze({
   [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_TOOL_RESULT]: upgradeSessionToolResults,
   [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_SCRIPT_EXIT_CODE]: upgradeSessionScriptExitCodes,
   [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_LEGACY_MCP_RESULT]: upgradeSessionLegacyMcpResults,
+  [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_RESULT_OVERFLOW]: upgradeSessionResultOverflow,
 });
 
 const QUARANTINE_RETRY_OWNERS = Object.freeze([
@@ -64,6 +66,7 @@ const QUARANTINE_RETRY_OWNERS = Object.freeze([
   WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_TOOL_RESULT,
   WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_SCRIPT_EXIT_CODE,
   WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_LEGACY_MCP_RESULT,
+  WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_RESULT_OVERFLOW,
 ]);
 
 const retriedQuarantines = new Set();

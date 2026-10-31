@@ -7,11 +7,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   attachmentTransfer,
+  selectUntransferredAttachments,
   getTransferSourceReferences,
   sourceReferenceTransfer,
   directTransfer,
   validateTransferEnvelope,
   createTransferIdentity,
+  createTransferPartIdentity,
   assertSemanticTransferRegistration,
   getToolInputPolicy,
   getToolOutputPolicy,
@@ -31,6 +33,67 @@ const identity = createTransferIdentity({
   turnScopeId: "t1",
   runId: "r1",
   producer: { type: "tool", id: "call1" },
+});
+
+test("independent transfer parts preserve ownership and have stable distinct identities", () => {
+  const base = { ...identity, transferId: "transfer:root", presentationMessageId: "pm:root" };
+  const files = createTransferPartIdentity(base, "output/files");
+  assert.deepEqual(files, {
+    ...base,
+    transferId: "transfer:root:part:output%2Ffiles",
+  });
+  assert.deepEqual(createTransferPartIdentity(base, "output/files"), files);
+  assert.notEqual(createTransferPartIdentity(base, "output%2Ffiles").transferId, files.transferId);
+  assert.notEqual(createTransferPartIdentity(base, "stdout").transferId, files.transferId);
+  assert.equal(base.transferId, "transfer:root");
+  assert.ok(Object.isFrozen(files));
+  for (const key of [undefined, null, "", " "]) {
+    assert.throws(() => createTransferPartIdentity(base, key), /invalid_transfer_part_key/);
+  }
+  assert.throws(
+    () => createTransferPartIdentity({ ...base, transferId: "" }, "files"),
+    /invalid_transfer_id/,
+  );
+  assert.throws(
+    () => createTransferPartIdentity({ ...base, presentationMessageId: "" }, "files"),
+    /invalid_presentation_message_id/,
+  );
+  assert.throws(
+    () => createTransferPartIdentity({ ...base, producer: undefined }, "files"),
+    /invalid_transfer_producer/,
+  );
+});
+
+test("attachment carriers remove only transferred identities and preserve source-reference inputs", () => {
+  const a = { attachmentId: "a", sessionId: "s1", attachmentSource: "user", name: "a.txt" };
+  const b = { attachmentId: "b", sessionId: "s1", attachmentSource: "user", name: "b.txt" };
+  const options = {
+    transferId: "tr-carriers",
+    presentationMessageId: "m-carriers",
+    identity,
+    direction: "output",
+    intent: {
+      source: "tool",
+      reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
+      scenario: "tool",
+      strategy: "tool_output",
+    },
+  };
+  const transfer = attachmentTransfer({
+    ...options,
+    attachments: [
+      { identity: { attachmentId: "b", sessionId: "s1", attachmentSource: "user" }, name: "b.txt" },
+    ],
+  });
+  assert.deepEqual(selectUntransferredAttachments([a, b], [transfer]), [a]);
+  const reference = sourceReferenceTransfer({
+    ...options,
+    intent: { ...options.intent, reason: TRANSFER_REASON.READ_FILE_SOURCE_REFERENCE },
+    reference: { address: "/tmp/source.txt", name: "source.txt" },
+  });
+  assert.deepEqual(selectUntransferredAttachments([a, b], [reference]), [a, b]);
+  assert.throws(() => selectUntransferredAttachments(null, []));
+  assert.throws(() => selectUntransferredAttachments([{}], []));
 });
 
 test("creates strict direct V3 envelope", () => {

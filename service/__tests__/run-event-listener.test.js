@@ -201,6 +201,7 @@ test("run-event-listener audits authority commits from the committed envelope id
     eventType: MESSAGE_EVENT_TYPE.TOOL_CALL_START,
     tool: "read_file",
     toolCallId: "call-1",
+    args: { filePath: "example.txt", riskLevel: "low" },
     dialogProcessId: "dialog-1",
     presentationMessageId: "presentation-1",
   });

@@ -12,7 +12,6 @@ import { isFatalError, NoobotError, recoverableToolError } from "../../shared/er
 import {
   parseToolOutputArtifacts,
   stripToolOutputArtifacts,
-  projectToolResultForModel,
   toToolJsonResult,
 } from "../../tools/core/tool-json-result.js";
 import {
@@ -40,7 +39,6 @@ import {
   persistTransferArtifacts,
   transferSemanticContent,
 } from "../../transfer-adapter/index.js";
-import { compactToolResultTextForModel } from "../../transfer-adapter/core/compact.js";
 import { sanitizeToolResultText } from "@noobot/sanitize";
 import {
   getToolOutputPolicy,
@@ -270,17 +268,15 @@ function hasDeclaredToolInputOverflow(meta = {}) {
 }
 
 async function completeToolInputOverflow(state, meta) {
-  state.toolResultText = compactToolResultTextForModel(
-    toToolJsonResult(state.call.name, {
-      ok: false,
-      code: ERROR_CODE.RECOVERABLE_TOOL_INPUT_OVERFLOW,
-      error: meta.message,
-      toolInputOverflow: meta.toolInputOverflow,
-      ...(state.inputTransferEnvelopes.length
-        ? { transferEnvelopes: state.inputTransferEnvelopes }
-        : {}),
-    }),
-  );
+  state.toolResultText = toToolJsonResult(state.call.name, {
+    ok: false,
+    code: ERROR_CODE.RECOVERABLE_TOOL_INPUT_OVERFLOW,
+    error: meta.message,
+    toolInputOverflow: meta.toolInputOverflow,
+    ...(state.inputTransferEnvelopes.length
+      ? { transferEnvelopes: state.inputTransferEnvelopes }
+      : {}),
+  });
   const timing = completedToolTiming(state);
   await runToolHook(state, HOOK_POINT.AGENT.AFTER_TOOL_CALL, {
     status: HOOK_PHASE_STATUS.ERROR,
@@ -508,7 +504,6 @@ async function finalizeToolExecution(state) {
   );
 
   const mutationRefs = failureState.success ? projectMutationRefs(state.resultObject) : [];
-  state.toolResultText = projectToolResultForModel(state.toolResultText);
   const timing = completedToolTiming(state);
   await runToolHook(state, HOOK_POINT.AGENT.AFTER_TOOL_CALL, {
     status: failureState.success ? HOOK_PHASE_STATUS.SUCCESS : HOOK_PHASE_STATUS.ERROR,

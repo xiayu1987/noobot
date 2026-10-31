@@ -63,13 +63,11 @@ export function resolveConfigTemplates(
         const resolved = lookup(key);
         if (resolved !== undefined) return String(resolved);
         if (unresolved === UNRESOLVED_TEMPLATE_POLICY.PRESERVE) return token;
-        if (unresolved === UNRESOLVED_TEMPLATE_POLICY.ERROR) {
-          throw new AgentConfigProtocolError(`unresolved config template: ${key}`, {
-            code: CONFIG_ERROR_CODE.UNRESOLVED_TEMPLATE,
-            details: { key },
-          });
-        }
-        return "";
+        if (unresolved === UNRESOLVED_TEMPLATE_POLICY.EMPTY) return "";
+        throw new AgentConfigProtocolError(`unresolved config template: ${key}`, {
+          code: CONFIG_ERROR_CODE.UNRESOLVED_TEMPLATE,
+          details: { key },
+        });
       });
     }
     if (Array.isArray(value)) return value.map(resolve);

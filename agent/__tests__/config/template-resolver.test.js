@@ -36,12 +36,14 @@ test("resolveConfigTemplates: 应按调用方声明的来源顺序解析", () =>
   assert.equal(out.provider.region, "cn");
 });
 
-test("resolveConfigTemplates: 未命中变量应替换为空字符串", () => {
-  const out = resolveConfigTemplates(
-    { text: "hello-${NOT_FOUND}-world" },
-    { lookup: createConfigValueLookup() },
+test("resolveConfigTemplates preserves the protocol's empty value for missing parameters", () => {
+  assert.deepEqual(
+    resolveConfigTemplates(
+      { text: "hello-${NOT_FOUND}-world", api_key: "${MISSING_KEY}" },
+      { lookup: createConfigValueLookup() },
+    ),
+    { text: "hello--world", api_key: "" },
   );
-  assert.equal(out.text, "hello--world");
 });
 
 test("resolveConfigTemplates: 小写占位符不作为配置变量解析", () => {

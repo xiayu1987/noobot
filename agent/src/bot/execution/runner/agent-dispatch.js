@@ -6,7 +6,7 @@
 
 import { emitEvent } from "../../../events/index.js";
 import { runBotRuntimeHook } from "../../hook/index.js";
-import { HOOK_POINT } from "@noobot/hook-protocol";
+import { HOOK_POINT, requireAgentDispatchAttachments } from "@noobot/hook-protocol";
 import {
   BOT_DISPATCH_DISPOSITION,
   BOT_DISPATCH_ROOT_OWNER,
@@ -245,7 +245,7 @@ export async function dispatchAgentTurn({
       ...baseContext,
       agentContext: runtimeAgentContext,
       modelContext: dispatchModelContext,
-      userMessageAttachments,
+      userMessageAttachments: requireAgentDispatchAttachments({ userMessageAttachments }),
       eventListener: runtimeEventListener,
       claimAgentDispatch: claim,
     },

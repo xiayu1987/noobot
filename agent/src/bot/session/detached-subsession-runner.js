@@ -30,6 +30,7 @@ import { createExecutionFailure } from "../../shared/errors/index.js";
 import { assertNotAborted } from "../../shared/utils/error-utils.js";
 import { transferCanonicalAttachmentsToSubSession } from "./detached-subsession-attachments.js";
 import { isPlainObject, text, isFunction } from "@noobot/shared/value";
+import { mergeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 
 export { createDetachedTerminalReceipt, createScopedSubSessionEventListener };
 
@@ -135,7 +136,9 @@ function resolveDetachedRuntime(request) {
 }
 
 function resolveDetachedIdentity(request, inheritedRuntime) {
-  const strategy = request.strategy || {};
+  const strategy = request.strategy;
+  if (!isPlainObject(strategy))
+    throw new TypeError("detached sub-session strategy must be an object");
   const identity = {
     userId: text(strategy.userId),
     parentSessionId: text(strategy.parentSessionId),
@@ -268,8 +271,10 @@ function bindDetachedMessageIdentity(effectiveRunConfig, mergedRunConfig) {
 }
 
 async function resolveDetachedSystemMessages(systemMessageFactory, attachments) {
-  const messages =
-    typeof systemMessageFactory === "function" ? await systemMessageFactory({ attachments }) : [];
+  if (systemMessageFactory === undefined) return [];
+  if (!isFunction(systemMessageFactory))
+    throw new TypeError("detached sub-session systemMessageFactory must be a function");
+  const messages = await systemMessageFactory({ attachments });
   if (!Array.isArray(messages)) {
     throw new TypeError("detached sub-session systemMessageFactory must return an array");
   }
@@ -553,16 +558,7 @@ function readArray(value) {
 }
 
 function collectTransferEnvelopes(turnMessages) {
-  return Array.from(
-    new Map(
-      (Array.isArray(turnMessages) ? turnMessages : [])
-        .flatMap((message = {}) =>
-          Array.isArray(message.transferEnvelopes) ? message.transferEnvelopes : [],
-        )
-        .map((envelope) => [String(envelope?.transferId || ""), envelope])
-        .filter(([transferId]) => transferId),
-    ).values(),
-  );
+  return mergeTransferEnvelopes(...turnMessages.map((message) => message.transferEnvelopes));
 }
 
 function clearParentTurnTransactionIdentity(runConfig = {}) {

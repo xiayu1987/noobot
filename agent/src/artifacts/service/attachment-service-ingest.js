@@ -9,7 +9,11 @@ import { filePath as path } from "@noobot/path-resolver";
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import { v4 as uuidv4 } from "uuid";
-import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
+import {
+  ATTACHMENT_SOURCE,
+  assertAttachmentIngestInputs,
+  assertAttachmentIngestResult,
+} from "@noobot/attachment-protocol";
 import { resolveAttachmentPolicy } from "@noobot/agent-config-protocol";
 
 import { fsMkdir, fsWriteFile } from "../../shared/storage/fs-adapter.js";
@@ -63,6 +67,7 @@ export async function saveAttachmentRecord({
   await fsMkdir(path.dirname(savePath), { recursive: true });
   await fsWriteFile(savePath, contentBytes);
 
+  const createdAt = new Date().toISOString();
   const record = buildPublicRecord(basePath, {
     attachmentId,
     clientAttachmentId,
@@ -71,7 +76,9 @@ export async function saveAttachmentRecord({
     mimeType: safeStr(mimeType, DEFAULT_MIME_TYPE),
     size: contentBytes.length,
     path: savePath,
-    createdAt: new Date().toISOString(),
+    createdAt,
+    updatedAt: createdAt,
+    relations: [],
     sessionId: scope.sessionId,
     attachmentSource: scope.attachmentSource,
     generatedByModel,
@@ -92,7 +99,8 @@ export async function ingestAttachments(
   { userId, sessionId = "", attachmentSource = "user", attachments },
 ) {
   const basePath = resolveBasePath(service.globalConfig, userId);
-  if (!attachments?.length) return [];
+  assertAttachmentIngestInputs(attachments);
+  if (!attachments.length) return [];
 
   const scope = resolveAttachmentScope({ sessionId, attachmentSource });
   const policy = resolveAttachmentPolicy(service.globalConfig);
@@ -202,6 +210,7 @@ export async function ingestAttachments(
       saved.push(record);
     }
 
+    assertAttachmentIngestResult(attachments, saved);
     await writeAttachIndex(basePath, index, scope);
     return saved;
   });
@@ -222,7 +231,7 @@ export async function ingestGeneratedArtifacts(
   },
 ) {
   const basePath = resolveBasePath(service.globalConfig, userId);
-  const list = Array.isArray(artifacts) ? artifacts : [];
+  const list = assertAttachmentIngestInputs(artifacts);
   if (!list.length) return [];
   const entries = requireArtifactEntries(list, "artifacts");
 
@@ -250,6 +259,7 @@ export async function ingestGeneratedArtifacts(
       saved.push(record);
     }
 
+    assertAttachmentIngestResult(list, saved);
     await writeAttachIndex(basePath, index, scope);
     return saved;
   });

@@ -112,7 +112,7 @@ export function buildHistoryMessages({ effectiveHistoryMessages = [], runtime = 
       history.push(
         new ToolMessage({
           tool_call_id: toolCallId,
-          content: compactToolResultTextForModel(msg.content || ""),
+          content: compactToolResultTextForModel(msg.content),
           additional_kwargs: {
             ...projectContextMessageModelMetadata(msg),
             ...(declaredContextPolicy ? { contextPolicy: declaredContextPolicy } : {}),

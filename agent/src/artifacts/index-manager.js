@@ -6,11 +6,7 @@
 
 import { filePath as path } from "@noobot/path-resolver";
 import { fsMkdir, fsReadFile, fsRename, fsRm, fsWriteFile } from "../shared/storage/fs-adapter.js";
-import {
-  assertAttachmentBelongsToScope,
-  parsePersistedAttachmentRecord,
-} from "@noobot/attachment-protocol";
-import { isPlainObject } from "@noobot/shared/value";
+import { parsePersistedAttachmentIndex, requirePlainObject } from "@noobot/attachment-protocol";
 import {
   fromPersistedAttachmentRecord,
   toPersistedAttachmentRecord,
@@ -53,24 +49,13 @@ export async function readAttachIndex(basePath, scope) {
       if (error?.code !== "ENOENT") throw error;
       return emptyIndex(scope);
     }
-    const parsed = JSON.parse(raw);
-    if (
-      parsed?.sessionId !== scope.sessionId ||
-      parsed?.attachmentSource !== scope.attachmentSource
-    ) {
-      throw new Error("attachment_index_scope_mismatch");
-    }
+    const parsed = parsePersistedAttachmentIndex(JSON.parse(raw), scope);
     const attachments = {};
-    for (const [key, value] of Object.entries(
-      isPlainObject(parsed.attachments) ? parsed.attachments : {},
-    )) {
-      const persisted = parsePersistedAttachmentRecord(value);
-      assertAttachmentBelongsToScope(persisted.identity, scope);
-      if (key !== persisted.identity.attachmentId) throw new Error("attachment_index_key_mismatch");
+    for (const [key, persisted] of Object.entries(parsed.attachments)) {
       attachments[key] = fromPersistedAttachmentRecord(basePath, persisted);
     }
     return {
-      updatedAt: String(parsed.updatedAt),
+      updatedAt: parsed.updatedAt,
       sessionId: scope.sessionId,
       attachmentSource: scope.attachmentSource,
       attachments,
@@ -84,21 +69,21 @@ export async function writeAttachIndex(basePath, indexData, scope) {
     await fsMkdir(path.dirname(indexFile), { recursive: true });
     const attachments = {};
     for (const [key, value] of Object.entries(
-      isPlainObject(indexData?.attachments) ? indexData.attachments : {},
+      requirePlainObject(indexData?.attachments, "invalid_attachment_index_entries"),
     )) {
       const persisted = toPersistedAttachmentRecord(basePath, value);
-      if (!persisted) throw new Error("invalid_persisted_attachment_record");
-      assertAttachmentBelongsToScope(persisted.identity, scope);
-      if (key !== persisted.identity.attachmentId) throw new Error("attachment_index_key_mismatch");
       attachments[key] = persisted;
     }
     const serialized = JSON.stringify(
-      {
-        updatedAt: new Date().toISOString(),
-        sessionId: scope.sessionId,
-        attachmentSource: scope.attachmentSource,
-        attachments,
-      },
+      parsePersistedAttachmentIndex(
+        {
+          updatedAt: new Date().toISOString(),
+          sessionId: scope.sessionId,
+          attachmentSource: scope.attachmentSource,
+          attachments,
+        },
+        scope,
+      ),
       null,
       2,
     );
@@ -107,9 +92,7 @@ export async function writeAttachIndex(basePath, indexData, scope) {
       await fsWriteFile(temporaryIndexFile, serialized, "utf8");
       await fsRename(temporaryIndexFile, indexFile);
     } finally {
-      await fsRm(temporaryIndexFile, { force: true }).catch((cleanupError) => {
-        void cleanupError;
-      });
+      await fsRm(temporaryIndexFile, { force: true });
     }
   });
 }

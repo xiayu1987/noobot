@@ -11,7 +11,11 @@ import {
   projectAttachmentIdentity,
   mergeAttachmentsByIdentity,
 } from "@noobot/attachment-protocol";
-import { assertTransferEnvelope } from "@noobot/semantic-transfer-protocol";
+import {
+  getTransferAttachmentReferences,
+  mergeTransferEnvelopes,
+} from "@noobot/semantic-transfer-protocol";
+import { requireAgentDispatchAttachments } from "@noobot/hook-protocol";
 import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 
 export function mergeAttachments(existing = [], incoming = []) {
@@ -28,12 +32,7 @@ export function mergeAttachmentReferences(existing = [], incoming = []) {
 }
 
 export function resolveWorkflowInputAttachments(ctx = {}) {
-  const attachments = ctx.userMessageAttachments;
-  if (!Array.isArray(attachments)) {
-    throw new TypeError("workflow dispatch context requires userMessageAttachments array");
-  }
-  for (const attachment of attachments) projectAttachmentIdentity(attachment);
-  return attachments;
+  return requireAgentDispatchAttachments(ctx);
 }
 
 function requireAttachmentRefs(refs) {
@@ -67,41 +66,27 @@ export function resolveNodeInputAttachments({ ctx, semanticNode }) {
 }
 
 export function normalizeWorkflowTransferPayload(payload = {}) {
-  const source = isPlainObject(payload) ? payload : {};
-  const transferEnvelopes = Array.isArray(source.transferEnvelopes)
-    ? source.transferEnvelopes.filter(isPlainObject)
-    : [];
-  return { transferEnvelopes };
+  if (!isPlainObject(payload)) throw new TypeError("workflow transfer payload must be an object");
+  return { transferEnvelopes: mergeTransferEnvelopes(payload.transferEnvelopes) };
 }
 
 export function getWorkflowTransferPayloadFromResult(result = {}) {
-  if (!isPlainObject(result)) return normalizeWorkflowTransferPayload();
-  return normalizeWorkflowTransferPayload({
-    transferEnvelopes: result.transferEnvelopes || [],
-  });
+  return normalizeWorkflowTransferPayload(result);
 }
 
 export function applyWorkflowTransferPayload(target = {}, payload = {}) {
-  if (!isObjectLike(target)) return target;
+  if (!isObjectLike(target)) throw new TypeError("workflow transfer target must be an object");
   const transferPayload = normalizeWorkflowTransferPayload(payload);
   if (transferPayload.transferEnvelopes.length) {
-    const existing = Array.isArray(target.transferEnvelopes) ? target.transferEnvelopes : [];
-    const merged = [...existing];
-    for (const envelope of transferPayload.transferEnvelopes) {
-      if (!merged.includes(envelope)) merged.push(envelope);
-    }
-    target.transferEnvelopes = merged;
+    target.transferEnvelopes = mergeTransferEnvelopes(
+      target.transferEnvelopes,
+      transferPayload.transferEnvelopes,
+    );
   }
   return target;
 }
 
 export function resolveWorkflowTransferAttachmentReferences(payload = {}) {
   const transferPayload = normalizeWorkflowTransferPayload(payload);
-  if (!transferPayload.transferEnvelopes.length) return [];
-  const source = transferPayload.transferEnvelopes;
-  return source.flatMap((envelope = {}) => {
-    assertTransferEnvelope(envelope);
-    const references = envelope?.payload?.mode === "attachment" ? envelope.payload.attachments : [];
-    return (Array.isArray(references) ? references : []).map((reference) => ({ ...reference }));
-  });
+  return getTransferAttachmentReferences(transferPayload.transferEnvelopes);
 }

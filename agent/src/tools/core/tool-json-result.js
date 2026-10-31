@@ -10,11 +10,7 @@ import {
   decodeToolResultText,
   encodeToolResultObject,
 } from "@noobot/event-protocol/tool-result";
-import { formatAttachmentIdentityRef } from "@noobot/attachment-protocol";
-import {
-  getTransferSourceReferences,
-  normalizeTransferEnvelopes,
-} from "@noobot/semantic-transfer-protocol";
+import { projectTransferEnvelopesForModel } from "@noobot/semantic-transfer-protocol";
 import { projectAttachmentMetaForModel } from "../../artifacts/meta-ops.js";
 
 function isCanonicalBase64(value = "") {
@@ -87,28 +83,6 @@ function projectCanonicalAttachmentFields(value) {
   return projectAttachmentMetaForModel(value);
 }
 
-function attachmentRefsFromTransferEnvelopes(value) {
-  const refs = normalizeTransferEnvelopes(value).flatMap((envelope) =>
-    envelope.payload.mode === "attachment"
-      ? envelope.payload.attachments.map((attachment) =>
-          formatAttachmentIdentityRef(attachment.identity),
-        )
-      : [],
-  );
-  return Array.from(new Set(refs));
-}
-
-function sourceReferencesFromTransferEnvelopes(value) {
-  return getTransferSourceReferences(value).map(({ address, startLine, endLine, totalLines }) => ({
-    ...(typeof address === "string"
-      ? { filePath: address }
-      : { attachmentRef: formatAttachmentIdentityRef(address) }),
-    startLine,
-    endLine,
-    totalLines,
-  }));
-}
-
 export function projectToolResultForModel(toolResultText) {
   const source = decodeToolResultText(toolResultText);
   const visit = (value) => {
@@ -133,10 +107,7 @@ export function projectToolResultForModel(toolResultText) {
         continue;
       }
       if (key === "transferEnvelopes") {
-        const attachmentRefs = attachmentRefsFromTransferEnvelopes(child);
-        if (attachmentRefs.length) out.attachmentRefs = attachmentRefs;
-        const sourceReferences = sourceReferencesFromTransferEnvelopes(child);
-        if (sourceReferences.length) out.sourceReferences = sourceReferences;
+        out.transfers = projectTransferEnvelopesForModel(child);
         continue;
       }
       if (key === "identity") {

@@ -4,15 +4,58 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
+import {
+  attachmentIdentityKey,
+  normalizeTransferEnvelopes,
+} from "@noobot/semantic-transfer-protocol";
 import { isPlainObject } from "@noobot/shared/value";
 import {
   readContextMessageValue,
+  readContextMessageArray,
   resolveContextMessageRole,
   writeContextMessageMetadata,
 } from "./codec.js";
 
 const SESSION_CONTEXT_ROLES = new Set(["system", "user", "assistant", "tool"]);
+
+export function resolveContextMessageAttachments(message) {
+  const attachments = new Map();
+  const add = (identity, descriptor) => {
+    const key = attachmentIdentityKey(identity);
+    const existing = attachments.get(key);
+    const projected = {
+      attachmentId: identity.attachmentId,
+      sessionId: identity.sessionId,
+      attachmentSource: identity.attachmentSource,
+    };
+    for (const field of ["name", "mimeType", "size"]) {
+      const original = existing?.[field];
+      const incoming = descriptor[field];
+      if (original !== undefined && incoming !== undefined && original !== incoming)
+        throw new TypeError(`context_attachment_metadata_conflict:${field}`);
+      if (original !== undefined) projected[field] = original;
+      else if (incoming !== undefined) projected[field] = incoming;
+    }
+    attachments.set(key, projected);
+  };
+  for (const record of readContextMessageArray(message, "attachments")) {
+    const identity = {
+      attachmentId: record?.attachmentId,
+      sessionId: record?.sessionId,
+      attachmentSource: record?.attachmentSource,
+    };
+    add(identity, record);
+  }
+  for (const envelope of normalizeTransferEnvelopes(
+    readContextMessageArray(message, "transferEnvelopes"),
+  )) {
+    if (envelope.payload.mode !== "attachment") continue;
+    for (const { identity, ...descriptor } of envelope.payload.attachments) {
+      add(identity, descriptor);
+    }
+  }
+  return [...attachments.values()];
+}
 
 function requireRecord(record) {
   if (!isPlainObject(record)) {

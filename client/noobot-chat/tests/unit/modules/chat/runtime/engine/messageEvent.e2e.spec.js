@@ -13,6 +13,7 @@ import {
 } from "../../../../../../../../agent/src/events/message-event-stream.js";
 import { initializeCurrentTurnMessageEventProjection } from "../../../../../../../../agent/src/events/current-turn-message-event-projection.js";
 import { createRuntimeContext } from "../../../../../../../../agent/src/runtime/runtime-context-factory.js";
+import { createTestAttachmentService } from "../../../../../../../../agent/__tests__/helpers/test-runtime-context.js";
 import { createRunEventListener } from "../../../../../../../../service/ws/chat-websocket/run-event-listener.js";
 import { isWorkflowNodeMessageEvent } from "@noobot/event-protocol/message-event";
 import { toolResultText } from "../../../../helpers/toolTimelineFixture.js";
@@ -146,7 +147,7 @@ function createNodeStream() {
     globalConfig: {},
     userConfig: {},
     eventListener: null,
-    attachmentService: null,
+    attachmentService: createTestAttachmentService(),
     botManager: null,
     userInteractionBridge: null,
     abortSignal: new AbortController().signal,

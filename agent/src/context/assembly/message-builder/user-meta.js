@@ -7,13 +7,13 @@ import { HumanMessage } from "@langchain/core/messages";
 import { MESSAGE_ORIGIN, normalizeParentSessionId } from "@noobot/session-protocol";
 import { tEngine } from "../../../runtime/i18n-adapter.js";
 import { MESSAGE_ROLE } from "../../../bot/config/constants.js";
-import { getTransferAttachments } from "../../../transfer-adapter/storage/consumer.js";
+import { resolveContextMessageAttachments } from "@noobot/context-protocol/message/session-projection";
 import { projectAttachmentMetaForModel } from "../../../artifacts/index.js";
 import {
   CONTEXT_MESSAGE_PROJECTION_TYPE,
   projectContextMessageModelMetadata,
   readContextMessageField,
-  readContextMessageValue,
+  readContextMessageArray,
   resolveContextMessageFlags,
   resolveContextSessionMessageUid,
   resolveContextMessageTurnScopeId,
@@ -23,17 +23,8 @@ import {
 } from "@noobot/context-protocol/message/codec";
 import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "@noobot/context-protocol/message/internal-types";
 
-function readContextMessageArray(msg = {}, field = "") {
-  const value = readContextMessageValue(msg, field);
-  return Array.isArray(value) ? value : [];
-}
-
 export function resolveAttachments(msg = {}) {
-  const transferAttachments = getTransferAttachments(
-    readContextMessageArray(msg, "transferEnvelopes").filter(Boolean),
-  );
-  if (transferAttachments.length) return transferAttachments;
-  return readContextMessageArray(msg, "attachments");
+  return resolveContextMessageAttachments(msg);
 }
 
 export function buildHumanMessageContent(msg = {}) {

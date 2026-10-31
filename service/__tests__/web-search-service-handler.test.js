@@ -5,6 +5,7 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
+import { SERVICE_FAILURE_CODE } from "@noobot/agent-config-protocol/service-handler";
 import webSearchServiceHandler from "../../user-template/default-user/services/web-search-service-handler.js";
 
 function createUnavailableFetcher(calls) {
@@ -28,8 +29,10 @@ test("web search reports an invalid custom fallback instance without throwing", 
   let result;
   try {
     result = await webSearchServiceHandler({
+      failureCode: SERVICE_FAILURE_CODE,
+      locale: "en-US",
       runtime: { sharedTools: { fetch: createUnavailableFetcher(calls) } },
-      endpointCfg: { url: "https://primary.example.invalid/search" },
+      endpointCfg: { url: "https://primary.example.invalid/search", custom_param_format: "json" },
       serviceCfg: { fallback_instances: [] },
       custom_param: "not a url",
       queryString: { search: "noobot" },
@@ -39,7 +42,7 @@ test("web search reports an invalid custom fallback instance without throwing", 
   }
 
   assert.equal(result.ok, false);
-  assert.equal(result.statusText, "invalid_custom_param");
-  assert.equal(result.source, "fallback_failed");
+  assert.equal(result.code, SERVICE_FAILURE_CODE.INPUT_INVALID);
+  assert.ok(result.error);
   assert.ok(calls.includes("https://primary.example.invalid/search?q=noobot&format=json"));
 });

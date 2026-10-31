@@ -208,6 +208,29 @@ describe("5. 配置优先级测试", () => {
   });
 
   describe("enabled 过滤优先级", () => {
+    it("enumerates enabled configuration and validates only the selected model", () => {
+      const globalConfig = createBaseGlobalConfig({
+        providers: { invalid: { enabled: true } },
+      });
+      assert.deepEqual(getEnabledProviders(globalConfig).invalid, { enabled: true });
+      assert.equal(resolveModelSpecByAlias({ alias: "openai", globalConfig }).model, "gpt-4");
+      assert.throws(
+        () => resolveModelSpecByAlias({ alias: "invalid", globalConfig }),
+        /model spec.model is required/,
+      );
+      assert.deepEqual(getEnabledProviders({ providers: { invalid: { enabled: false } } }), {});
+    });
+
+    it("preserves an empty credential instead of inheriting another credential", () => {
+      const globalConfig = createBaseGlobalConfig();
+      globalConfig.providers.openai.api_key = "global-credential";
+      const userConfig = { providers: { openai: { api_key: "" } } };
+      assert.equal(
+        resolveModelSpecByAlias({ alias: "openai", globalConfig, userConfig }).api_key,
+        "",
+      );
+    });
+
     it("enabled: false 的 provider 应被排除", () => {
       const globalConfig = createBaseGlobalConfig({
         providers: {

@@ -12,6 +12,30 @@ function memorySource(loadRawConfig) {
   return { name: "memory-source", loadRawConfig };
 }
 
+test("global config builds with missing optional credentials and preserves editable templates", async () => {
+  const reasoning = {
+    reasoning_effort_parameter: "reasoning_effort",
+    reasoning_effort_options: ["none", "low", "medium", "high"],
+  };
+  const builder = createGlobalConfigBuilder({
+    source: memorySource(async () => ({
+      providers: {
+        gemini: { ...reasoning, model: "gemini-3-flash", apiKey: "${GEMINI_API_KEY}" },
+        configured: { ...reasoning, model: "gpt-5.5", apiKey: "${CONFIGURED_API_KEY}" },
+      },
+      services: { search: { apiKey: "${SEARCH_API_KEY}" } },
+    })),
+  });
+  const built = await builder.build({
+    configParams: { CONFIGURED_API_KEY: "configured-key" },
+    env: {},
+  });
+  assert.equal(built.resolvedConfig.providers.gemini.apiKey, "");
+  assert.equal(built.resolvedConfig.providers.configured.apiKey, "configured-key");
+  assert.equal(built.resolvedConfig.services.search.apiKey, "");
+  assert.equal(built.persistedConfig.providers.gemini.apiKey, "${GEMINI_API_KEY}");
+});
+
 test("createGlobalConfigBuilder: 支持 source + migrations + validators", async () => {
   let sourceCalled = 0;
   const builder = createGlobalConfigBuilder({

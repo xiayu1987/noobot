@@ -5,7 +5,7 @@
  */
 import { execFile, spawn } from "node:child_process";
 import { createWriteStream } from "node:fs";
-import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { filePath as path } from "@noobot/path-resolver";
 import { SCRIPT_EXECUTION_MODE } from "./constants.js";
@@ -25,9 +25,10 @@ import {
   usesDetachedProcessGroup,
 } from "@noobot/platform-compatibility/process";
 import { isPlainObject, text } from "@noobot/shared/value";
+import { previewTransferText } from "@noobot/semantic-transfer-protocol";
 
-const FOREGROUND_CAPTURE_BYTES = LENGTH_THRESHOLDS.semanticTransfer.toolResultInlineChars;
-const FOREGROUND_PREVIEW_BYTES = LENGTH_THRESHOLDS.semanticTransfer.previewChars;
+const FOREGROUND_INLINE_CHARS = LENGTH_THRESHOLDS.semanticTransfer.toolResultInlineChars;
+const FOREGROUND_PREVIEW_CHARS = LENGTH_THRESHOLDS.semanticTransfer.previewChars;
 const OUTPUT_ARTIFACT_MAX_BYTES = LENGTH_THRESHOLDS.attachments.maxFileSizeBytes;
 const FORCE_KILL_GRACE_MS = TIME_THRESHOLDS.tools.processForceKillGraceMs;
 const SETTLE_GRACE_MS = TIME_THRESHOLDS.tools.processSettleGraceMs;
@@ -71,19 +72,27 @@ function spawnCommandProcess(command, cwd) {
 }
 
 async function normalizeCommandOutputFile(filePath) {
-  const bytes = await readFile(filePath).catch(() => Buffer.alloc(0));
-  if (!bytes.length) return;
+  const bytes = await readFile(filePath);
+  if (!bytes.length) return 0;
   const inputText = decodeCommandOutput(bytes);
   const normalized = Buffer.from(inputText, "utf8");
   if (!normalized.equals(bytes)) await writeFile(filePath, normalized);
+  return inputText.length;
 }
 
-function appendCapture(chunks, chunk, state, maxBytes) {
-  if (state.bytes >= maxBytes) return;
-  const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
-  const retained = bytes.subarray(0, Math.max(0, maxBytes - state.bytes));
-  if (retained.length) chunks.push(retained);
-  state.bytes += retained.length;
+async function readOutputPreview(filePath, overflowed) {
+  if (!overflowed) return readFile(filePath, "utf8");
+  const file = await open(filePath, "r");
+  try {
+    const bytes = Buffer.alloc(FOREGROUND_PREVIEW_CHARS * 4);
+    const { bytesRead } = await file.read(bytes, 0, bytes.length, 0);
+    const decoded = new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(0, bytesRead), {
+      stream: true,
+    });
+    return previewTransferText(decoded, FOREGROUND_PREVIEW_CHARS);
+  } finally {
+    await file.close();
+  }
 }
 
 function createTerminationController(child, abortSignal, timeoutMs, onTerminate, onSettle) {
@@ -166,7 +175,7 @@ async function openOutputFiles(sessionDir, kind) {
 }
 
 async function finalizeOutputFiles(files) {
-  await Promise.all([
+  const [stdoutChars, stderrChars] = await Promise.all([
     normalizeCommandOutputFile(files.stdoutPath),
     normalizeCommandOutputFile(files.stderrPath),
   ]);
@@ -177,6 +186,7 @@ async function finalizeOutputFiles(files) {
   return {
     stdoutBytes: stdoutStat.size,
     stderrBytes: stderrStat.size,
+    inlineOverflow: stdoutChars > FOREGROUND_INLINE_CHARS || stderrChars > FOREGROUND_INLINE_CHARS,
   };
 }
 
@@ -236,13 +246,20 @@ function pickOutputLimitFields(termination) {
 
 export async function run(cmd, cwd, timeoutMs, abortSignal = null, options = {}) {
   const files = await openOutputFiles(options?.generatedDataRoot, "executeScriptForeground");
+  return captureCommand({
+    cmd,
+    cwd,
+    timeoutMs,
+    abortSignal,
+    options,
+    files,
+    project: projectInlineOutput,
+  });
+}
 
+function captureCommand({ cmd, cwd, timeoutMs, abortSignal, options, files, project }) {
   return new Promise((resolve, reject) => {
     const child = spawnCommandProcess(cmd, cwd);
-    const stdoutChunks = [];
-    const stderrChunks = [];
-    const stdoutCapture = { bytes: 0 };
-    const stderrCapture = { bytes: 0 };
     let spawnError = null;
     let settled = false;
     const { termination, outputPipeOptions } = startTermination(
@@ -253,18 +270,8 @@ export async function run(cmd, cwd, timeoutMs, abortSignal = null, options = {})
       options,
       () => settle(null, null),
     );
-    pipeReadableToWritable(
-      child.stdout,
-      files.stdoutStream,
-      (chunk) => appendCapture(stdoutChunks, chunk, stdoutCapture, FOREGROUND_CAPTURE_BYTES),
-      outputPipeOptions,
-    );
-    pipeReadableToWritable(
-      child.stderr,
-      files.stderrStream,
-      (chunk) => appendCapture(stderrChunks, chunk, stderrCapture, FOREGROUND_CAPTURE_BYTES),
-      outputPipeOptions,
-    );
+    pipeReadableToWritable(child.stdout, files.stdoutStream, null, outputPipeOptions);
+    pipeReadableToWritable(child.stderr, files.stderrStream, null, outputPipeOptions);
     child.on("error", (error) => {
       spawnError = error;
     });
@@ -274,40 +281,41 @@ export async function run(cmd, cwd, timeoutMs, abortSignal = null, options = {})
       const finalize = async () => {
         termination.dispose();
         detachChildOutput(child, files.streams);
-        await Promise.allSettled(files.finished);
-        const { stdoutBytes, stderrBytes } = await finalizeOutputFiles(files);
-        const outputOverflow =
-          stdoutBytes > FOREGROUND_CAPTURE_BYTES || stderrBytes > FOREGROUND_CAPTURE_BYTES;
-        const stdoutBuffer = Buffer.concat(stdoutChunks);
-        const stderrBuffer = Buffer.concat(stderrChunks);
-        const stdout = decodeCommandOutput(
-          outputOverflow ? stdoutBuffer.subarray(0, FOREGROUND_PREVIEW_BYTES) : stdoutBuffer,
-        );
-        const rawStderr = decodeCommandOutput(
-          outputOverflow ? stderrBuffer.subarray(0, FOREGROUND_PREVIEW_BYTES) : stderrBuffer,
-        );
-        const result = {
+        await Promise.all(files.finished);
+        const sizes = await finalizeOutputFiles(files);
+        const outcome = {
           ...resolveProcessOutcome({ termination, code, signal, spawnError, timeoutMs }),
-          stdout,
-          stderr: rawStderr,
           ...pickOutputLimitFields(termination),
-          ...(outputOverflow
-            ? {
-                outputOverflow: true,
-                stdoutPath: files.stdoutPath,
-                stderrPath: files.stderrPath,
-                stdoutBytes,
-                stderrBytes,
-              }
-            : {}),
         };
-        if (!outputOverflow) await rm(files.outputDir, { recursive: true, force: true });
-        return result;
+        return project(files, sizes, outcome);
       };
       void finalize().then(resolve, reject);
     }
     child.on("close", (code, signal) => settle(code, signal));
   });
+}
+
+async function projectInlineOutput(files, sizes, outcome) {
+  const outputOverflow = sizes.inlineOverflow;
+  const stdout = await readOutputPreview(files.stdoutPath, outputOverflow);
+  const stderr = await readOutputPreview(files.stderrPath, outputOverflow);
+  if (!outputOverflow) await rm(files.outputDir, { recursive: true, force: true });
+  return {
+    ...outcome,
+    stdout,
+    stderr,
+    ...(outputOverflow ? { outputOverflow: true, ...projectFileOutput(files, sizes, {}) } : {}),
+  };
+}
+
+function projectFileOutput(files, sizes, outcome) {
+  return {
+    ...outcome,
+    stdoutPath: files.stdoutPath,
+    stderrPath: files.stderrPath,
+    stdoutBytes: sizes.stdoutBytes,
+    stderrBytes: sizes.stderrBytes,
+  };
 }
 
 export function normalizeExecutionMode(value = "") {
@@ -362,48 +370,14 @@ function pipeReadableToWritable(readable, writable, onChunk = null, options = {}
 
 export async function runFileBacked(cmd, cwd, timeoutMs, abortSignal = null, options = {}) {
   const files = await openOutputFiles(options?.generatedDataRoot, "executeScriptBackground");
-
-  return await new Promise((resolve, reject) => {
-    const child = spawnCommandProcess(cmd, cwd);
-    let spawnError = null;
-    let settled = false;
-    const { termination, outputPipeOptions } = startTermination(
-      child,
-      files,
-      abortSignal,
-      timeoutMs,
-      options,
-      () => settle(null, null),
-    );
-    pipeReadableToWritable(child.stdout, files.stdoutStream, null, outputPipeOptions);
-    pipeReadableToWritable(child.stderr, files.stderrStream, null, outputPipeOptions);
-    child.on("error", (error) => {
-      spawnError = error;
-    });
-    function settle(code, signal) {
-      if (settled) return;
-      settled = true;
-      const finalize = async () => {
-        termination.dispose();
-        detachChildOutput(child, files.streams);
-        try {
-          await Promise.all(files.finished);
-        } catch (error) {
-          spawnError ||= error;
-        }
-        const { stdoutBytes, stderrBytes } = await finalizeOutputFiles(files);
-        return {
-          ...resolveProcessOutcome({ termination, code, signal, spawnError, timeoutMs }),
-          ...pickOutputLimitFields(termination),
-          stdoutPath: files.stdoutPath,
-          stderrPath: files.stderrPath,
-          stdoutBytes,
-          stderrBytes,
-        };
-      };
-      void finalize().then(resolve, reject);
-    }
-    child.on("close", (code, signal) => settle(code, signal));
+  return captureCommand({
+    cmd,
+    cwd,
+    timeoutMs,
+    abortSignal,
+    options,
+    files,
+    project: projectFileOutput,
   });
 }
 

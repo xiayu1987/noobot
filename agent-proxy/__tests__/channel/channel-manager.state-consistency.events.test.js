@@ -54,6 +54,8 @@ function messageEnvelope({
       eventType,
       presentationMessageId,
       dialogProcessId,
+      activityId: `activity-${sequence}`,
+      activityKind: "model_analysis",
       text,
     },
   });

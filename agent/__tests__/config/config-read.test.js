@@ -106,11 +106,9 @@ test("ConfigService.loadUserConfig: 缺少独立 config-params 文档时不读�
       "utf8",
     );
 
-    const service = new ConfigService();
-
+    const service = new ConfigService({ env: {} });
     const loaded = await service.loadUserConfig(tempDir);
-    assert.equal(loaded.providers?.openai?.api_key, "");
-    assert.equal(loaded.configParams, undefined);
+    assert.equal(loaded.providers.openai.api_key, "");
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }

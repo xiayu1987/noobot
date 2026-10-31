@@ -168,6 +168,7 @@ const SECURITY_STRUCTURE = object(
 );
 
 const TOOLS_STRUCTURE = object({
+  maxToolResultChars: integer({ minimum: 0 }),
   read_file: toolToggle(),
   write_file: toolToggle(),
   list_skills: toolToggle(),

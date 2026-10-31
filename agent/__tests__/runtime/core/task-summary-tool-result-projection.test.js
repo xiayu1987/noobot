@@ -7,6 +7,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { executeToolCall } from "./tool-runner.test-helpers.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import { getTransferAttachmentReferences } from "@noobot/semantic-transfer-protocol";
+import { formatAttachmentIdentityRef } from "@noobot/attachment-protocol";
 import {
   createTestRuntimeContext,
   createTestAttachmentService,
@@ -72,13 +74,19 @@ test("executeToolCall task_summary preserves recovery diagnostics", async () => 
   });
 
   assert.equal(result.success, false);
-  assert.deepEqual(JSON.parse(result.toolResultText), {
+  const { transferEnvelopes, ...diagnostics } = JSON.parse(result.toolResultText);
+  assert.deepEqual(
+    getTransferAttachmentReferences(transferEnvelopes).map((ref) =>
+      formatAttachmentIdentityRef(ref.identity),
+    ),
+    ["attachment:v1:s1/model/task-summary-invalid-1"],
+  );
+  assert.deepEqual(diagnostics, {
     toolName: "task_summary",
     ok: false,
     status: "failed",
     code: "RECOVERABLE_INVALID_TOOL_INPUT",
     error: "summaryContent does not conform to NOOBOT_TASK_SUMMARY/1",
     details: { reason: "[ABSTRACT] is missing or out of order" },
-    attachmentRefs: ["attachment:v1:s1/model/task-summary-invalid-1"],
   });
 });

@@ -281,6 +281,7 @@ test("text renderer streams deltas and stream-json passes packets verbatim", () 
   const toolStart = message(FIXED_TURN, MESSAGE_EVENT_TYPE.TOOL_CALL_START, {
     tool: "read_file",
     toolCallId: "call-1",
+    args: { filePath: "example.txt", riskLevel: "low" },
   });
   text.event(toolStart, read(toolStart));
   text.result({ content: "hi", exitCode: 0 });

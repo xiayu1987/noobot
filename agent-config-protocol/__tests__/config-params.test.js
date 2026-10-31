@@ -121,4 +121,9 @@ test("template resolution has one explicit source order and unresolved policy", 
     () => resolveConfigTemplates("${MISSING}", { lookup, unresolved: "fallback" }),
     /unsupported unresolved config template policy/,
   );
+  assert.equal(
+    resolveConfigTemplates("${MISSING}", { lookup, unresolved: UNRESOLVED_TEMPLATE_POLICY.EMPTY }),
+    "",
+  );
+  assert.equal(resolveConfigTemplates("${MISSING}", { lookup }), "");
 });

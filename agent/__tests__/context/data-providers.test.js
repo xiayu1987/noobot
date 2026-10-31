@@ -87,7 +87,7 @@ test("resolveAttachments should call ingest when attachments are raw", async () 
     attachmentService: createTestAttachmentService({
       async ingest(payload = {}) {
         receivedPayload = payload;
-        return [{ attachmentId: "att-ingested" }];
+        return [{ attachmentId: "att-ingested", sessionId: "s1", attachmentSource: "user" }];
       },
     }),
     userMessageAttachments: [{ name: "raw.txt", mimeType: "text/plain", size: 10 }],
@@ -98,7 +98,9 @@ test("resolveAttachments should call ingest when attachments are raw", async () 
   assert.equal(receivedPayload.sessionId, "s1");
   assert.equal(receivedPayload.attachmentSource, "user");
   assert.equal(Object.hasOwn(receivedPayload, "attachmentPolicy"), false);
-  assert.deepEqual(result, [{ attachmentId: "att-ingested" }]);
+  assert.deepEqual(result, [
+    { attachmentId: "att-ingested", sessionId: "s1", attachmentSource: "user" },
+  ]);
 });
 
 test("resolveAttachments preserves canonical attachments and ingests only raw items", async () => {
@@ -107,7 +109,12 @@ test("resolveAttachments preserves canonical attachments and ingests only raw it
     async ingest(payload) {
       ingestPayload = payload;
       return [
-        { attachmentId: "canonicalized", sessionId: payload.sessionId, path: "/tmp/new.txt" },
+        {
+          attachmentId: "canonicalized",
+          sessionId: payload.sessionId,
+          attachmentSource: "user",
+          path: "/tmp/new.txt",
+        },
       ];
     },
   });
@@ -135,29 +142,31 @@ test("resolveAttachments preserves canonical attachments and ingests only raw it
   );
 });
 
-test("resolveAttachments does not infer a canonical identity from an incomplete attachment", async () => {
+test("resolveAttachments rejects missing ingest results for incomplete attachments", async () => {
   let ingestCalled = false;
-  const result = await resolveAttachments({
-    attachmentService: createTestAttachmentService({
-      async ingest() {
-        ingestCalled = true;
-        return [];
-      },
+  await assert.rejects(
+    resolveAttachments({
+      attachmentService: createTestAttachmentService({
+        async ingest() {
+          ingestCalled = true;
+          return [];
+        },
+      }),
+      userMessageAttachments: [
+        {
+          attachmentId: "existing",
+          name: "existing.txt",
+          mimeType: "text/plain",
+          path: "/tmp/existing.txt",
+        },
+      ],
+      userId: "u1",
+      sessionId: "fallback_session",
     }),
-    userMessageAttachments: [
-      {
-        attachmentId: "existing",
-        name: "existing.txt",
-        mimeType: "text/plain",
-        path: "/tmp/existing.txt",
-      },
-    ],
-    userId: "u1",
-    sessionId: "fallback_session",
-  });
+    /attachment_ingest_result_count_mismatch/,
+  );
 
   assert.equal(ingestCalled, true);
-  assert.deepEqual(result, []);
 });
 
 test("resolveAttachments reads only userMessageAttachments", async () => {
@@ -166,7 +175,7 @@ test("resolveAttachments reads only userMessageAttachments", async () => {
     attachmentService: createTestAttachmentService({
       async ingest(payload = {}) {
         receivedPayload = payload;
-        return [{ attachmentId: "att-input" }];
+        return [{ attachmentId: "att-input", sessionId: "s1", attachmentSource: "user" }];
       },
     }),
     userMessageAttachments: [{ name: "input.txt", mimeType: "text/plain", size: 1 }],
@@ -175,7 +184,9 @@ test("resolveAttachments reads only userMessageAttachments", async () => {
   });
 
   assert.equal(receivedPayload.attachments[0].name, "input.txt");
-  assert.deepEqual(result, [{ attachmentId: "att-input" }]);
+  assert.deepEqual(result, [
+    { attachmentId: "att-input", sessionId: "s1", attachmentSource: "user" },
+  ]);
 });
 
 test("toConversationMessages preserves model payload fields and attachments", () => {

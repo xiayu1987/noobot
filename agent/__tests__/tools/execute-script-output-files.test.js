@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { createLocator } from "@noobot/shared/locator";
+import { mergeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { ERROR_CODE } from "../../src/shared/errors/constants.js";
 import {
   test,
@@ -58,6 +60,54 @@ function buildCapturingAttachmentService() {
 
 function invokeScript(tool, args) {
   return tool.invoke(args, { configurable: { transferIdentity: TEST_TRANSFER_IDENTITY } });
+}
+
+for (const executionMode of ["background", "foreground"]) {
+  test(`execute_script: ${executionMode} stdout/stderr 与 outputFiles 使用独立传输身份`, async (t) => {
+    const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-transfer-parts-"));
+    t.after(() => fs.rm(basePath, { recursive: true, force: true }));
+    const { captured, service } = buildCapturingAttachmentService();
+    const tool = buildHostTool(basePath, service);
+    const output = "x".repeat(LENGTH_THRESHOLDS.semanticTransfer.toolResultInlineChars + 1);
+    const result = parseToolResult(
+      await invokeScript(tool, {
+        command: `printf 'report' > '普通 文件.txt'\nprintf '${output}'\nprintf 'diagnostic' >&2`,
+        executionMode,
+        riskLevel: "low",
+        outputFiles: [path.join(basePath, "普通 文件.txt")],
+      }),
+    );
+    assert.equal(result.ok, true);
+    const envelopes = mergeTransferEnvelopes(result.transferEnvelopes);
+    assert.equal(envelopes.length, 2);
+    assert.equal(new Set(envelopes.map((item) => item.transferId)).size, 2);
+    for (const envelope of envelopes) {
+      assert.equal(envelope.presentationMessageId, TEST_TRANSFER_IDENTITY.presentationMessageId);
+      assert.equal(envelope.identity.producer.id, TEST_TRANSFER_IDENTITY.producer.id);
+    }
+    assert.equal(envelopes.flatMap((item) => item.payload.attachments).length, 3);
+    assert.equal(result.outputResources.length, 1);
+    assert.equal(
+      result.outputResources[0].attachment.attachmentId,
+      envelopes
+        .flatMap((item) => item.payload.attachments)
+        .find((item) => item.name === "普通 文件.txt").identity.attachmentId,
+    );
+    assert.equal(
+      Buffer.from(
+        captured.find((item) => item.name === "execute-script-stdout.txt").contentBase64,
+        "base64",
+      ).toString(),
+      output,
+    );
+    assert.equal(
+      Buffer.from(
+        captured.find((item) => item.name === "execute-script-stderr.txt").contentBase64,
+        "base64",
+      ).toString(),
+      "diagnostic",
+    );
+  });
 }
 
 test("execute_script: outputFiles 登记为附件并写入规范化 origin", async () => {

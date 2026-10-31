@@ -57,9 +57,9 @@ export async function transferSummaryInjectionMessage(
     detailText,
     meta,
   });
-  const directEnvelope = (
-    Array.isArray(transferred?.transferEnvelopes) ? transferred.transferEnvelopes : []
-  ).find((envelope = {}) => envelope?.payload?.mode === "direct");
+  const directEnvelope = normalizeTransferEnvelopes(transferred.transferEnvelopes).find(
+    (envelope) => envelope.payload.mode === "direct",
+  );
   if (!directEnvelope || typeof directEnvelope?.payload?.content !== "string") {
     throw new Error("harness_summary_direct_transfer_required");
   }
@@ -81,7 +81,7 @@ export function recordSummaryTransferEnvelopes(ctx = {}, transferPayload = {}) {
     (envelope) => envelope.payload.mode === "attachment",
   );
   bucket.summaryTransferEnvelopes = mergeTransferEnvelopes(
-    bucket.summaryTransferEnvelopes || [],
+    bucket.summaryTransferEnvelopes,
     envelopes,
   );
   return bucket.summaryTransferEnvelopes;

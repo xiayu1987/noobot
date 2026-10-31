@@ -7,6 +7,8 @@ import {
   decideTransfer,
   DEFAULT_TRANSFER_MIME_TYPE,
   normalizeTransferEnvelopes,
+  previewTransferText,
+  requireTransferCharLimit,
   resolveTransferIntent,
   TRANSFER_MODE,
   TRANSFER_REASON,
@@ -23,19 +25,14 @@ export const DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS =
   LENGTH_THRESHOLDS.semanticTransfer.toolResultInlineChars;
 const DEFAULT_PREVIEW_CHARS = LENGTH_THRESHOLDS.semanticTransfer.previewChars;
 
-function toSafePositiveInt(value, fallback = DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS, min = 0) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return Math.max(min, Number(fallback || 0));
-  return Math.max(min, Math.floor(parsed));
-}
-
 export function resolveToolResultInlineTextLimit(
   runtime = {},
   fallback = DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS,
 ) {
   const userLimit = runtime?.userConfig?.tools?.maxToolResultChars;
   const globalLimit = runtime?.globalConfig?.tools?.maxToolResultChars;
-  return toSafePositiveInt(userLimit ?? globalLimit, fallback, 512);
+  const limit = userLimit === undefined ? globalLimit : userLimit;
+  return requireTransferCharLimit(limit === undefined ? fallback : limit);
 }
 
 function buildTextResultFields({
@@ -47,20 +44,19 @@ function buildTextResultFields({
 } = {}) {
   const normalizedText = String(text || "");
   const normalizedTransferEnvelopes = normalizeTransferEnvelopes(transferEnvelopes);
-  const maxInline = toSafePositiveInt(inlineMaxChars, DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS, 0);
-  const maxPreview = toSafePositiveInt(previewChars, DEFAULT_PREVIEW_CHARS, 0);
+  const maxInline = requireTransferCharLimit(inlineMaxChars);
+  const preview = previewTransferText(normalizedText, previewChars);
   const shouldInline = !forcePreview && normalizedText.length <= maxInline;
   const textPayload = shouldInline
     ? { text: normalizedText }
     : {
-        textPreview: normalizedText.slice(0, maxPreview),
-        textPreviewLength: Math.min(normalizedText.length, maxPreview),
-        textPreviewTruncated: normalizedText.length > maxPreview,
+        textPreview: preview,
+        textPreviewLength: preview.length,
+        textPreviewTruncated: normalizedText.length > preview.length,
       };
   return {
     ...textPayload,
     textLength: normalizedText.length,
-    contentStoredInFile: normalizedTransferEnvelopes.length > 0,
     ...(normalizedTransferEnvelopes.length
       ? { transferEnvelopes: normalizedTransferEnvelopes }
       : {}),
@@ -95,7 +91,7 @@ export async function materializeTextForToolResult({
   const maxInline =
     inlineMaxChars == null
       ? resolveToolResultInlineTextLimit(runtime)
-      : toSafePositiveInt(inlineMaxChars, DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS, 0);
+      : requireTransferCharLimit(inlineMaxChars);
   const decision = decideTransfer({
     content: normalizedText,
     forceAttachment: alwaysPersist,

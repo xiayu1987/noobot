@@ -8,6 +8,7 @@ import { ToolMessage } from "@langchain/core/messages";
 import { appendContextMessage } from "@noobot/context-protocol/mutation/context";
 import { writeContextMessageMetadata } from "@noobot/context-protocol/message/codec";
 import { text, isObjectLike } from "@noobot/shared/value";
+import { compactToolResultTextForModel } from "../../transfer-adapter/core/compact.js";
 
 export function appendToolResultModelMessage({
   modelContext,
@@ -27,7 +28,10 @@ export function appendToolResultModelMessage({
   return appendContextMessage(
     modelContext,
     writeContextMessageMetadata(
-      new ToolMessage({ tool_call_id: canonicalToolCallId, content: String(content || "") }),
+      new ToolMessage({
+        tool_call_id: canonicalToolCallId,
+        content: compactToolResultTextForModel(content),
+      }),
       { messageUid: canonicalMessageUid, contextPolicy: contextPolicy || undefined },
     ),
     { block: "incremental" },

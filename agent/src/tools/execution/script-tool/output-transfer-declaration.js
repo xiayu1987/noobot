@@ -3,7 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TRANSFER_REASON, TRANSFER_RESULT_STATUS } from "@noobot/semantic-transfer-protocol";
+import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
+import { toolResultOverflow } from "@noobot/event-protocol/tool-result";
 
 const OUTPUT_TRANSFER_MESSAGE = Object.freeze({
   [TRANSFER_REASON.EXECUTE_SCRIPT_BACKGROUND]:
@@ -25,10 +26,8 @@ export function buildOutputTransferDeclaration({
   outputLimitExceeded,
   outputLimitBytes,
 }) {
-  return {
-    message: resolveMessage(reason, outputLimitExceeded, outputLimitBytes),
-    outputDelivery: TRANSFER_RESULT_STATUS.FILE,
-    outputTransferReason: reason,
-    transferEnvelopes,
-  };
+  const message = resolveMessage(reason, outputLimitExceeded, outputLimitBytes);
+  return reason === TRANSFER_REASON.EXECUTE_SCRIPT_OUTPUT_OVERFLOW
+    ? toolResultOverflow({ message, transferEnvelopes })
+    : { message, transferEnvelopes };
 }

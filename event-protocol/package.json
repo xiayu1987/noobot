@@ -14,6 +14,7 @@
     "./execution-query": "./src/execution-query.js",
     "./tool-presentation": "./src/tool-presentation.js",
     "./tool-result": "./src/tool-result.js",
+    "./tool-result-v24": "./src/tool-result-v24.js",
     "./tool-timeline": "./src/tool-timeline.js",
     "./activity-timeline": "./src/activity-timeline.js",
     "./thinking-detail-content": "./src/thinking-detail-content.js",
@@ -24,6 +25,7 @@
     "test": "node ../scripts/run-with-isolated-tmp.mjs node --test __tests__/*.test.js"
   },
   "dependencies": {
+    "@noobot/semantic-transfer-protocol": "file:../semantic-transfer-protocol",
     "@noobot/attachment-protocol": "file:../attachment-protocol",
     "@noobot/context-protocol": "file:../context-protocol",
     "@noobot/file-mutation-protocol": "file:../file-mutation-protocol",

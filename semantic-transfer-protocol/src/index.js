@@ -7,6 +7,9 @@ import {
   parseAttachmentDescriptor,
   parseAttachmentIdentity,
   attachmentIdentityKey,
+  projectAttachmentIdentity,
+  dedupeAttachmentsByIdentity,
+  formatAttachmentIdentityRef,
 } from "@noobot/attachment-protocol";
 import { isPlainObject } from "@noobot/shared/value";
 import { assertSemanticTransferRegistration } from "./registry.js";
@@ -135,6 +138,17 @@ export function createTransferIdentity({ sessionId, turnScopeId, runId, producer
       type: required(producer.type, "invalid_transfer_producer_type"),
       id: required(producer.id, "invalid_transfer_producer_id"),
     }),
+  });
+}
+
+export function createTransferPartIdentity(identity, partKey) {
+  return Object.freeze({
+    ...createTransferIdentity(identity),
+    transferId: `${required(identity.transferId, "invalid_transfer_id")}:part:${encodeURIComponent(required(partKey, "invalid_transfer_part_key"))}`,
+    presentationMessageId: required(
+      identity.presentationMessageId,
+      "invalid_presentation_message_id",
+    ),
   });
 }
 
@@ -397,4 +411,40 @@ export function getTransferSourceReferences(value = null) {
       .map((envelope) => envelope.payload.reference),
   );
 }
+
+export function projectTransferEnvelopesForModel(value) {
+  return normalizeTransferEnvelopes(value).map(({ direction, payload, intent }) => {
+    const transfer = { direction, reason: intent.reason, mode: payload.mode };
+    if (payload.mode === TRANSFER_MODE.ATTACHMENT) {
+      transfer.attachments = payload.attachments.map(({ identity, ...descriptor }) => ({
+        attachmentRef: formatAttachmentIdentityRef(identity),
+        ...descriptor,
+      }));
+    } else if (payload.mode === TRANSFER_MODE.SOURCE_REFERENCE) {
+      const { address, ...descriptor } = payload.reference;
+      transfer.reference = {
+        ...(typeof address === "string"
+          ? { filePath: address }
+          : { attachmentRef: formatAttachmentIdentityRef(address) }),
+        ...descriptor,
+      };
+    } else {
+      transfer.content = payload.content;
+    }
+    return transfer;
+  });
+}
+export function selectUntransferredAttachments(attachments, envelopes) {
+  const transferred = new Set(
+    normalizeTransferEnvelopes(envelopes).flatMap((envelope) =>
+      envelope.payload.mode === "attachment"
+        ? envelope.payload.attachments.map((item) => attachmentIdentityKey(item.identity))
+        : [],
+    ),
+  );
+  return dedupeAttachmentsByIdentity(attachments).filter(
+    (attachment) => !transferred.has(attachmentIdentityKey(projectAttachmentIdentity(attachment))),
+  );
+}
+
 export { attachmentIdentityKey };

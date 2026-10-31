@@ -13,7 +13,7 @@ import {
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import { normalizeMessageEntity } from "../../entities/message-entity.js";
 import { registerSessionMessageFacts } from "../../entities/session-message-facts.js";
-import { dedupeAttachments } from "./attachment-helpers.js";
+import { selectUntransferredAttachments } from "@noobot/semantic-transfer-protocol";
 import { isPlainObject, text } from "@noobot/shared/value";
 
 function normalizedString(value) {
@@ -92,8 +92,7 @@ function resolveTurnAttachments(input) {
   if (!Array.isArray(input.attachments) || !Array.isArray(input.transferEnvelopes)) {
     throw new TypeError("session turn attachments and transferEnvelopes must be arrays");
   }
-  if (input.transferEnvelopes.length) return [];
-  return dedupeAttachments(input.attachments);
+  return selectUntransferredAttachments(input.attachments, input.transferEnvelopes);
 }
 
 function createIdentityError(message, code) {

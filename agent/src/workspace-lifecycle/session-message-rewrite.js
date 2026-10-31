@@ -91,23 +91,34 @@ function createSessionRewriteReader(upgradeError) {
   return { readJson, readVerifiedCheckpoint, readVerifiedJournal, readSessionMessages };
 }
 
-async function planOutboxToolResults({ sessionDir, manifest, writes, migrateOutboxToolResult }) {
+async function planOutboxToolResults({
+  sessionDir,
+  manifest,
+  writes,
+  migrateOutboxToolResult,
+  shared,
+  loadSessionMessages,
+}) {
   if (migrateOutboxToolResult === null) return 0;
   const records = await readAuthorityOutboxRecords(sessionDir);
   let migratedRecords = 0;
-  const next = records.map((record) => {
-    const payload = record.envelope?.payload;
-    if (payload?.eventType !== MESSAGE_EVENT_TYPE.TOOL_CALL_END) return record;
-    const { identity } = record.envelope;
-    const result = migrateOutboxToolResult(payload, {
-      manifest,
-      identity,
-      details: { eventId: identity.eventId },
-    });
-    if (result === null) return record;
-    migratedRecords += 1;
-    return { ...record, envelope: { ...record.envelope, payload: { ...payload, result } } };
-  });
+  const next = await Promise.all(
+    records.map(async (record) => {
+      const payload = record.envelope?.payload;
+      if (payload?.eventType !== MESSAGE_EVENT_TYPE.TOOL_CALL_END) return record;
+      const { identity } = record.envelope;
+      const result = await migrateOutboxToolResult(payload, {
+        manifest,
+        identity,
+        shared,
+        loadSessionMessages,
+        details: { eventId: identity.eventId },
+      });
+      if (result === null) return record;
+      migratedRecords += 1;
+      return { ...record, envelope: { ...record.envelope, payload: { ...payload, result } } };
+    }),
+  );
   if (migratedRecords) {
     writes.set(
       authorityOutboxJournalPath(sessionDir),
@@ -232,6 +243,8 @@ function createSessionRewritePlanner({ upgradeError, migrateMessage, migrateOutb
       manifest,
       writes,
       migrateOutboxToolResult,
+      shared,
+      loadSessionMessages,
     });
     return { writes, migratedMessages, migratedRecords };
   }

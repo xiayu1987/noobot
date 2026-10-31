@@ -13,18 +13,15 @@ import {
 import { resolveLocale } from "./i18n.js";
 import { isPlainObject, isObjectLike } from "@noobot/shared/value";
 
-function ensureObjectField(target = {}, key = "") {
-  if (!target || !key) return {};
-  const current = target[key];
-  if (!isPlainObject(current)) {
-    target[key] = {};
-  }
+function ensureObjectField(target, key) {
+  if (target[key] === undefined) target[key] = {};
+  if (!isPlainObject(target[key])) throw new TypeError(`invalid_harness_object:${key}`);
   return target[key];
 }
 
-function ensureArrayField(target = {}, key = "") {
-  if (!target || !key) return [];
-  if (!Array.isArray(target[key])) target[key] = [];
+function ensureArrayField(target, key) {
+  if (target[key] === undefined) target[key] = [];
+  if (!Array.isArray(target[key])) throw new TypeError(`invalid_harness_array:${key}`);
   return target[key];
 }
 

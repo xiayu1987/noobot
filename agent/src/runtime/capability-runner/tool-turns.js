@@ -5,6 +5,8 @@
  */
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { text } from "@noobot/shared/value";
+import { compactToolResultTextForModel } from "../../transfer-adapter/core/compact.js";
+import { toToolJsonResult } from "../../tools/core/tool-json-result.js";
 
 export function createCapabilityToolBinding(adapted = {}) {
   const tools = Array.isArray(adapted.tools) ? adapted.tools : [];
@@ -27,10 +29,19 @@ async function executeCapabilityTool({
   turn,
 }) {
   if (!allowPolicy.allowAll && allowPolicy.allowSet.size && !allowPolicy.allowSet.has(call.name)) {
-    return JSON.stringify({ ok: false, error: `tool not allowed: ${call.name}` });
+    return toToolJsonResult(call.name, {
+      ok: false,
+      code: "RECOVERABLE_TOOL_NOT_ALLOWED",
+      error: `tool not allowed: ${call.name}`,
+    });
   }
   const tool = binding.toolMap.get(call.name);
-  if (!tool) return JSON.stringify({ ok: false, error: `tool not found: ${call.name}` });
+  if (!tool)
+    return toToolJsonResult(call.name, {
+      ok: false,
+      code: "RECOVERABLE_TOOL_NOT_FOUND",
+      error: `tool not found: ${call.name}`,
+    });
   const result = await executeToolCall({
     ...execution,
     call,
@@ -38,7 +49,7 @@ async function executeCapabilityTool({
     turn,
     toolStartedAtMs: Date.now(),
   });
-  return result.toolResultText;
+  return compactToolResultTextForModel(result.toolResultText);
 }
 
 export async function runCapabilityToolTurns({

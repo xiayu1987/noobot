@@ -50,7 +50,7 @@ export async function backupRewrittenFiles({ base, backupBase, sessionDir, stagi
     const original = (await sizeOrNull(originalPath)) !== null;
     const staged = (await sizeOrNull(stagedPath)) !== null;
     const relativePath = path.relative(base, originalPath);
-    if (original) {
+    if (original && backupBase !== null) {
       const backupPath = path.join(backupBase, relativePath);
       await mkdir(path.dirname(backupPath), { recursive: true });
       await copyFile(originalPath, backupPath);

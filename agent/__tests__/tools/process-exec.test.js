@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { SCRIPT_FAILURE_CODE } from "@noobot/execution-isolation-protocol";
 import {
   hasCommand,
@@ -16,6 +17,72 @@ import {
 } from "../../src/tools/execution/script-tool/process-exec.js";
 
 const MISSING_COMMAND = "noobot-missing-command-for-process-exec-test";
+
+test("overflow previews preserve Chinese and supplementary Unicode characters", async (t) => {
+  const root = await createRoot(t);
+  for (const character of ["中", "😀"]) {
+    const count = LENGTH_THRESHOLDS.semanticTransfer.toolResultInlineChars + 1;
+    const result = await run(
+      {
+        command: process.execPath,
+        args: ["-e", `process.stdout.write(${JSON.stringify(character)}.repeat(${count}))`],
+      },
+      root,
+      5000,
+      null,
+      { generatedDataRoot: root },
+    );
+    assert.equal(result.ok, true);
+    assert.equal(result.outputOverflow, true);
+    assert.equal(
+      result.stdout,
+      character.repeat(
+        Math.floor(LENGTH_THRESHOLDS.semanticTransfer.previewChars / character.length),
+      ),
+    );
+    assert.equal(await fs.readFile(result.stdoutPath, "utf8"), character.repeat(count));
+  }
+});
+
+test("inline output uses UTF-16 thresholds without splitting surrogate pairs", async (t) => {
+  const root = await createRoot(t);
+  const limit = LENGTH_THRESHOLDS.semanticTransfer.toolResultInlineChars;
+  const previewLimit = LENGTH_THRESHOLDS.semanticTransfer.previewChars;
+  for (const character of ["a", "中", "😀"]) {
+    for (const delta of [-1, 0, 1]) {
+      const length = limit + delta;
+      const output =
+        character.repeat(Math.floor(length / character.length)) +
+        "x".repeat(length % character.length);
+      const result = await run(
+        {
+          command: process.execPath,
+          args: ["-e", `process.stdout.write(${JSON.stringify(output)})`],
+        },
+        root,
+        5000,
+        null,
+        { generatedDataRoot: root },
+      );
+      assert.equal(result.ok, true);
+      assert.equal(result.outputOverflow === true, delta > 0);
+      if (delta <= 0) assert.equal(result.stdout, output);
+      else assert.equal(result.stdout.length, previewLimit);
+    }
+  }
+  const result = await run(
+    {
+      command: process.execPath,
+      args: ["-e", `process.stdout.write("a" + "😀".repeat(${limit}))`],
+    },
+    root,
+    5000,
+    null,
+    { generatedDataRoot: root },
+  );
+  assert.equal(result.stdout, "a" + "😀".repeat(Math.floor((previewLimit - 1) / 2)));
+  assert.equal(result.stdout.isWellFormed(), true);
+});
 
 async function createRoot(t) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-process-exec-"));

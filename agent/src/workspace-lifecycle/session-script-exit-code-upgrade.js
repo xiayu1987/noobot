@@ -5,7 +5,7 @@
  */
 import { WORKSPACE_LAYOUT, WORKSPACE_LAYOUT_UPGRADE_OWNER } from "@noobot/workspace-protocol";
 import { SCRIPT_FAILURE_CODE } from "@noobot/execution-isolation-protocol/script-outcome";
-import { encodeToolResultObject } from "@noobot/event-protocol/tool-result";
+import { encodeToolResultObject } from "@noobot/event-protocol/tool-result-v24";
 import { TOOL_RESULT_MESSAGE_TYPE } from "@noobot/session-protocol";
 import { isPlainObject } from "@noobot/shared/value";
 import { TOOL_NAME } from "../tools/constants/index.js";

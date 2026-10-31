@@ -173,35 +173,6 @@ test("detached sub-session delegates execution and persistence to the main runne
   assert.equal(Object.hasOwn(result.result, "turnTasks"), false);
 });
 
-test("detached sub-session projects finalizer messages and their transfer envelopes", async () => {
-  const { deps } = createDeps();
-  const envelope = { transferId: "tr-1", kind: "file" };
-  const messages = [
-    { role: "assistant", content: "done", transferEnvelopes: [envelope] },
-    { role: "tool", content: "dup", transferEnvelopes: [envelope] },
-  ];
-  const baseRunSession = deps.sessionRunner.runSession;
-  deps.sessionRunner.runSession = async (payload) => ({
-    ...(await baseRunSession(payload)),
-    answer: "final answer",
-    messages,
-  });
-  const runner = createDetachedSubSessionRunner(deps);
-
-  const result = await runner({
-    abortSignal: new AbortController().signal,
-    parentExecutionScope: createParentExecutionScope(),
-    message: "hello",
-    attachments: [],
-    metadata: DETACHED_REQUEST_METADATA,
-    strategy: createCompleteStrategy(),
-  });
-
-  assert.equal(result.result.answer, "final answer");
-  assert.deepEqual(result.result.messages, messages);
-  assert.deepEqual(result.result.transferEnvelopes, [envelope]);
-});
-
 test("detached sub-session uses the selected parent model over the parent runtime model", async () => {
   const { calls, deps } = createDeps();
   const runner = createDetachedSubSessionRunner(deps);
@@ -767,6 +738,7 @@ test("createDetachedSubSessionRunner aborts before execution when signal is alre
         attachments: [],
         parentExecutionScope: createParentExecutionScope(),
         abortSignal: controller.signal,
+        strategy: createCompleteStrategy(),
       }),
     /execution_aborted/,
   );

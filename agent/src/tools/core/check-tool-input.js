@@ -305,7 +305,7 @@ export async function resolveAuthorizedUserWorkspaceFilePath({
       details: {
         field: fieldName,
         pathView: logicalPathRef.view,
-        scope: "workspace",
+        scope: logicalPathRef.view,
         reason: "symbolic_link_not_allowed",
       },
     });

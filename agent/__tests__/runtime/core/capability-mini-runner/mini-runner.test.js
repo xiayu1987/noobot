@@ -217,7 +217,7 @@ test("mini-runner appends assistant tool calls and tool results before the next 
     }),
     executeToolCallFn: async ({ call }) => {
       executed.push(call);
-      return { toolResultText: "echo:hi" };
+      return { toolResultText: JSON.stringify({ ok: true, text: "echo:hi" }) };
     },
   })({ messages: [{ role: "user", content: "go" }], ctx, signal: new AbortController().signal });
 
@@ -231,7 +231,7 @@ test("mini-runner appends assistant tool calls and tool results before the next 
   assert.equal(secondMessages[1].role, "assistant");
   assert.equal(secondMessages[1].tool_calls[0].id, "c1");
   assert.equal(secondMessages[2].role, "tool");
-  assert.equal(secondMessages[2].content, "echo:hi");
+  assert.deepEqual(JSON.parse(secondMessages[2].content), { ok: true, text: "echo:hi" });
   assert.deepEqual(modelPort.requests[0].options.toolBinding, {
     tool_choice: "auto",
     strict: false,
@@ -327,7 +327,7 @@ test("mini-runner enforces the configured tool-turn limit and finalizes through 
     enableToolBinding: true,
     toolAllowlist: ["echo"],
     adaptToolsForBindingFn: () => ({ tools: [tool] }),
-    executeToolCallFn: async () => ({ toolResultText: "ok" }),
+    executeToolCallFn: async () => ({ toolResultText: JSON.stringify({ ok: true }) }),
   })({ messages: [], ctx, signal: new AbortController().signal });
 
   assert.equal(result.output.text, "finalized");
@@ -368,7 +368,9 @@ for (const streaming of [false, true]) {
         maxTurns: mode === "finalize" ? 1 : 2,
         toolAllowlist: ["echo"],
         adaptToolsForBindingFn: () => ({ tools: [tool] }),
-        executeToolCallFn: async () => ({ toolResultText: "tool result" }),
+        executeToolCallFn: async () => ({
+          toolResultText: JSON.stringify({ ok: true, text: "tool result" }),
+        }),
       })({
         purpose: "third_party_review",
         activity: { activityKind: "custom_review" },
