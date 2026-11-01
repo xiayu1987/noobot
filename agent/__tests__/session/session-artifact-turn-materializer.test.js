@@ -5,14 +5,24 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFile, rename, writeFile } from "node:fs/promises";
+import { readFile, rename, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 import {
   buildSessionArtifactFileMap,
   readSessionArtifact,
 } from "../../src/session/session-artifact-store.js";
-import { createTurnMaterializer } from "../../src/session/session-artifact-session/turn-materializer.js";
+import {
+  createTurnMaterializer,
+  readVerifiedSnapshot,
+} from "../../src/session/session-artifact-session/turn-materializer.js";
+import {
+  buildStoredCheckpointReceipts,
+  readCheckpointReceiptProjection,
+} from "../../src/session/session-artifact-session/checkpoint-receipts.js";
+import { createVerifiedSnapshotCache } from "../../src/session/session-artifact-session/verified-snapshot-cache.js";
 import { replaceJournalRecords } from "../../src/session/session-artifact-session/turn-journal-store.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 import { TEST_STORAGE_SERVICE as storageService } from "../helpers/storage-service.js";
@@ -70,12 +80,13 @@ async function manifestTurn(root) {
 
 const uids = (messages) => messages.map((item) => item.messageUid);
 
-async function seedCheckpointedTurn(root) {
+async function seedCheckpointedTurn(root, stable = true) {
   const base = [message("m1", "user", "question"), message("m2", "assistant", "answer")];
   await writeSessionArtifact({
     sessionDir: root,
     sessionPayload: payloadOf(base, [receipt(1, ["m1", "m2"], ["m1"])]),
   });
+  if (stable) await delay(TIME_THRESHOLDS.agent.snapshotIdentityGuardMs + 10);
   return base;
 }
 
@@ -190,8 +201,111 @@ test("byte budget evicts least recently materialized turns", async () =>
     const first = await tight.materialize({ storageService, sessionDir: root, item });
     assert.equal(tight.cachedBytes(), 0, "an entry above the budget is not retained");
     const second = await tight.materialize({ storageService, sessionDir: root, item });
-    assert.notEqual(second[0], first[0]);
+    assert.equal(
+      second[0],
+      first[0],
+      "verified snapshots remain reusable after turn cache eviction",
+    );
+    assert.equal(tight.cachedBytes(), 0);
     assert.throws(() => createTurnMaterializer({ byteBudget: -1 }), TypeError);
+  }));
+
+test("snapshot cache enforces its byte budget, LRU order and immutable payloads", () => {
+  const cache = createVerifiedSnapshotCache({ byteBudget: 2 });
+  const identity = { key: "identity", bytes: 1 };
+  const payload = { records: [{ message: { content: "original" } }] };
+  cache.retain("a", "hash", identity, payload);
+  payload.records[0].message.content = "mutated";
+  assert.equal(cache.get("a", "hash", identity).records[0].message.content, "original");
+  cache.retain("b", "hash", identity, payload);
+  cache.get("a", "hash", identity);
+  cache.retain("c", "hash", identity, payload);
+  assert.equal(cache.get("b", "hash", identity), null);
+  assert.equal(cache.cachedBytes(), 2);
+  assert.throws(() => {
+    cache.get("a", "hash", identity).records.push({});
+  }, TypeError);
+  assert.equal(cache.get("a", "hash", { key: "changed", bytes: 1 }), null);
+  cache.retain("oversize", "hash", { key: "large", bytes: 3 }, payload);
+  assert.equal(cache.get("oversize", "hash", { key: "large", bytes: 3 }), null);
+  assert.throws(() => createVerifiedSnapshotCache({ byteBudget: -1 }), TypeError);
+});
+
+test("snapshot cache rejects in-place edits, invalid chain indexes and deleted files", async () =>
+  withTemp(async (root) => {
+    await seedCheckpointedTurn(root, false);
+    const item = await manifestTurn(root);
+    const index = item.summarySnapshots[0];
+    const file = path.join(root, index.file);
+    const options = { storageService, sessionDir: root, index, previousCheckpointHash: "" };
+    await readVerifiedSnapshot(options);
+    await assert.rejects(readVerifiedSnapshot({ ...options, previousCheckpointHash: "wrong" }), {
+      code: "SESSION_SUMMARY_SNAPSHOT_INDEX_MISMATCH",
+    });
+    await assert.rejects(
+      readVerifiedSnapshot({ ...options, index: { ...index, checkpointRevision: 99 } }),
+      {
+        code: "SESSION_SUMMARY_SNAPSHOT_INDEX_MISMATCH",
+      },
+    );
+    const original = await readFile(file, "utf8");
+    const changed = original.replace('"answer"', '"ANSWER"');
+    assert.notEqual(changed, original);
+    await writeFile(file, changed, "utf8");
+    await assert.rejects(readVerifiedSnapshot(options), {
+      code: "SESSION_SUMMARY_SNAPSHOT_HASH_MISMATCH",
+    });
+    await writeFile(file, original, "utf8");
+    await readVerifiedSnapshot(options);
+    await rm(file);
+    await assert.rejects(readVerifiedSnapshot(options), {
+      code: "SESSION_SUMMARY_SNAPSHOT_INDEX_MISMATCH",
+    });
+  }));
+
+test("snapshots verified during the identity guard require stable verification before reuse", () => {
+  const cache = createVerifiedSnapshotCache({ byteBudget: 100 });
+  const recent = { key: "same-stat-identity", bytes: 1, reusable: false };
+  const stable = { ...recent, reusable: true };
+  const payload = { records: [] };
+  cache.retain("snapshot", "hash", recent, payload);
+  assert.equal(cache.get("snapshot", "hash", recent), null);
+  assert.equal(cache.get("snapshot", "hash", stable), null);
+  cache.retain("snapshot", "hash", stable, payload);
+  assert.deepEqual(cache.get("snapshot", "hash", stable), payload);
+});
+
+test("receipt read and write projections share prewarmed snapshots as history grows", async (t) =>
+  withTemp(async (root) => {
+    const base = [message("m1", "user", "question"), message("m2", "assistant", "x".repeat(65536))];
+    let reads = 0;
+    const countedStorage = Object.create(storageService);
+    countedStorage.readJson = async (file) => {
+      reads += 1;
+      return storageService.readJson(file);
+    };
+    for (const count of [1, 8, 32]) {
+      await writeSessionArtifact({
+        sessionDir: root,
+        sessionPayload: payloadOf(
+          base,
+          Array.from({ length: count }, (_, i) => receipt(i + 1, ["m1", "m2"], ["m1"])),
+        ),
+      });
+      const files = buildSessionArtifactFileMap(root);
+      const session = JSON.parse(await readFile(files.session, "utf8"));
+      await delay(TIME_THRESHOLDS.agent.snapshotIdentityGuardMs + 10);
+      const options = { storageService: countedStorage, sessionDir: root, session };
+      await readCheckpointReceiptProjection(options);
+      reads = 0;
+      const started = performance.now();
+      await readCheckpointReceiptProjection(options);
+      await buildStoredCheckpointReceipts(options);
+      assert.equal(reads, 0, `${count} cached snapshots must incur no JSON reads or hashing`);
+      t.diagnostic(
+        `${count} snapshots: receipt read + write ${(performance.now() - started).toFixed(2)}ms, snapshot reads=${reads}`,
+      );
+    }
   }));
 
 test("session reads expose frozen materialized messages without breaking writers", async () =>

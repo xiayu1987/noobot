@@ -15,6 +15,7 @@ import {
   rebuildSessionDisplaySummaryArtifact,
 } from "../../session-artifact-store.js";
 import { buildSessionListFacts } from "../../session-artifact-session/session-list-facts.js";
+import { assertCanonicalSessionManifest } from "../../session-artifact-session/turn-journal-store.js";
 import {
   assertSessionScopeIdentity,
   createSessionArtifactNotFoundError,
@@ -22,6 +23,17 @@ import {
 } from "@noobot/session-protocol";
 
 class SessionArtifactMethods {
+  async readSessionEventManifest(scope, sessionId) {
+    const manifest = await this._readSessionManifest(scope);
+    assertCanonicalSessionManifest(manifest, "authority event commit");
+    assertSessionScopeIdentity({
+      session: manifest,
+      sessionId,
+      parentSessionId: scope.resolvedParentSessionId,
+    });
+    return manifest;
+  }
+
   async readSessionDisplaySummary(userId, sessionId, { persistenceContext }) {
     const result = await this.ensureSessionDisplaySummary(userId, sessionId, {
       persistenceContext,

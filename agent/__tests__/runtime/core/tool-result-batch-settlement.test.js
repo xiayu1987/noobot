@@ -12,7 +12,11 @@ import os from "node:os";
 import path from "node:path";
 
 import { processToolResults } from "../../../src/runtime/turn/response-processor.js";
-import { settleToolCallInTurn } from "../../../src/runtime/tool-execution/tool-runner.js";
+import {
+  startToolCallInTurn,
+  settleStartedToolCallInTurn,
+} from "../../../src/runtime/tool-execution/tool-runner.js";
+import { bindCurrentTurnPersistence } from "../../../src/bot/execution/runner/current-turn-persistence.js";
 import { bindAssistantMessageEventStream } from "../../../src/events/message-event-stream.js";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
@@ -26,9 +30,296 @@ import { bindTestDispatchLifecycle } from "./turn-runtime-test-helper.js";
 import { findCommittedMessagePayload } from "./tool-runner.test-helpers.js";
 
 const wait = (durationMs) => new Promise((resolve) => setTimeout(resolve, durationMs));
+const settleToolCallInTurn = async (options) =>
+  settleStartedToolCallInTurn(await startToolCallInTurn(options));
+
+test("parallel starts persist before invocation and ends/results flush once before fatal propagation", async () => {
+  const runtime = createRuntime();
+  runtime.currentTurnMessages.replaceAll([
+    { messageUid: "owner", role: "assistant", content: "running" },
+  ]);
+  const persisted = [];
+  const facts = [];
+  const commitMessageEvent = runtime.sessionManager.commitMessageEvent;
+  runtime.sessionManager.commitMessageEvent = async (request) => {
+    const result = await commitMessageEvent(request);
+    facts.push(request.payload.eventType);
+    return result;
+  };
+  runtime.projectCurrentTurnMessageEvent = async () => {
+    runtime.currentTurnMessages.replaceAll([
+      { messageUid: "owner", role: "assistant", content: facts.join(",") },
+    ]);
+    await runtime.persistCurrentTurnMessages();
+  };
+  const checkpointFile = path.join(workspaceRoot, "start-checkpoint.json");
+  bindCurrentTurnPersistence({
+    dispatchRuntime: runtime,
+    appendAgentMessages: async ({ messages }) => {
+      persisted.push(messages);
+      fs.writeFileSync(checkpointFile, JSON.stringify(messages));
+      return messages;
+    },
+  });
+  const fatalError = fatalSystemError("fatal", { code: "FATAL_TEST" });
+  await assert.rejects(
+    processToolResults({
+      modelState: { runtime, agentContext: createTestAgentExecutionScope(runtime) },
+      loopState: { errorLogger: null },
+      turn: 1,
+      calls: [
+        { id: "ok", name: "read_file", args: {} },
+        { id: "fatal", name: "execute_script", args: {} },
+      ],
+      toolMap: new Map([
+        [
+          "read_file",
+          {
+            async invoke() {
+              assert.equal(persisted.length, 1);
+              assert.ok(facts.includes("tool_call_start"));
+              const checkpoint = JSON.parse(fs.readFileSync(checkpointFile, "utf8"));
+              assert.equal(checkpoint[0].content, "tool_call_start,tool_call_start");
+              return { ok: true };
+            },
+          },
+        ],
+        [
+          "execute_script",
+          {
+            async invoke() {
+              throw fatalError;
+            },
+          },
+        ],
+      ]),
+      stateCommitter: {
+        async pushToolResult() {
+          await runtime.persistCurrentTurnMessages();
+        },
+      },
+    }),
+    (error) => error === fatalError,
+  );
+  assert.equal(persisted.length, 2);
+  assert.equal(persisted[0][0].content, "tool_call_start,tool_call_start");
+  assert.equal(
+    persisted[1][0].content,
+    "tool_call_start,tool_call_start,tool_call_end,tool_call_end",
+  );
+  assert.equal(facts.filter((type) => type === "tool_call_start").length, 2);
+  assert.equal(facts.filter((type) => type === "tool_call_end").length, 2);
+});
+
+test("settled timing separates invocation from event commit and includes the final commit", async () => {
+  const runtime = createRuntime();
+  const events = [];
+  runtime.eventListener = { onEvent: (event) => events.push(event) };
+  const commitMessageEvent = runtime.sessionManager.commitMessageEvent;
+  runtime.sessionManager.commitMessageEvent = async (request) => {
+    await wait(15);
+    return commitMessageEvent(request);
+  };
+  const settled = await settleToolCallInTurn({
+    call: { id: "timed", name: "read_file", args: {} },
+    tool: {
+      async invoke() {
+        await wait(10);
+        return { ok: true };
+      },
+    },
+    turn: 1,
+    runtime,
+    agentContext: createTestAgentExecutionScope(runtime),
+    abortSignal: runtime.abortSignal,
+  });
+  const timing = events.find((event) => event.event === "tool_call_timing");
+  const { executionMs, frameworkMs } = timing.data;
+  assert.ok(executionMs >= 5);
+  assert.ok(frameworkMs >= 25, "both durable event commits belong to framework time");
+  const end = findCommittedMessagePayload(events, "tool_call_end");
+  assert.equal(settled.result.durationMs, end.durationMs);
+  assert.ok(executionMs + frameworkMs >= end.durationMs + 10);
+  for (const object of [end, settled.result]) {
+    assert.equal(Object.hasOwn(object, "executionMs"), false);
+    assert.equal(Object.hasOwn(object, "frameworkMs"), false);
+  }
+  assert.equal(Object.hasOwn(timing.data, "durationMs"), false);
+});
 
 const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-tool-batch-"));
 test.after(() => fs.rmSync(workspaceRoot, { recursive: true, force: true }));
+
+test("start persistence failure prevents invocation and is not recast as a tool end", async () => {
+  const runtime = createRuntime();
+  const failure = new Error("start persistence failed");
+  const eventTypes = [];
+  runtime.sessionManager.commitMessageEvent = async ({ payload }) => {
+    eventTypes.push(payload.eventType);
+    throw failure;
+  };
+  let invoked = false;
+  await assert.rejects(
+    settleToolCallInTurn({
+      call: { id: "start-failure", name: "read_file", args: {} },
+      abortSignal: runtime.abortSignal,
+      tool: {
+        async invoke() {
+          invoked = true;
+        },
+      },
+      runtime,
+      turn: 1,
+      agentContext: createTestAgentExecutionScope(runtime),
+    }),
+    (error) => error === failure,
+  );
+  assert.equal(invoked, false);
+  assert.deepEqual(eventTypes, ["tool_call_start"]);
+});
+
+for (const eventType of ["tool_call_end", "tool_call_timing"]) {
+  test(`${eventType} failure preserves the original fatal error without retrying end`, async () => {
+    const runtime = createRuntime();
+    const fatalError = fatalSystemError("fatal invocation", { code: "FATAL_TEST" });
+    const emissionError = new Error("event emission failed");
+    const commit = runtime.sessionManager.commitMessageEvent;
+    let endAttempts = 0;
+    runtime.sessionManager.commitMessageEvent = async (request) => {
+      if (request.payload.eventType === "tool_call_end") {
+        endAttempts += 1;
+        if (eventType === "tool_call_end") throw emissionError;
+      }
+      return commit(request);
+    };
+    runtime.eventListener = {
+      onEvent(event) {
+        if (event.event === eventType) throw emissionError;
+      },
+    };
+    await assert.rejects(
+      settleToolCallInTurn({
+        call: { id: `failure-${eventType}`, name: "execute_script", args: {} },
+        abortSignal: runtime.abortSignal,
+        tool: {
+          async invoke() {
+            throw fatalError;
+          },
+        },
+        runtime,
+        turn: 1,
+        agentContext: createTestAgentExecutionScope(runtime),
+      }),
+      (error) => {
+        assert.ok(error instanceof AggregateError);
+        assert.deepEqual(error.errors, [fatalError, emissionError]);
+        return true;
+      },
+    );
+    assert.equal(endAttempts, 1);
+  });
+}
+
+test("timing emission failure after success propagates without a second end", async () => {
+  const runtime = createRuntime();
+  const failure = new Error("timing failed");
+  let endCount = 0;
+  runtime.eventListener = {
+    onEvent(event) {
+      if (event.data?.envelope?.payload.eventType === "tool_call_end") endCount += 1;
+      if (event.event === "tool_call_timing") return Promise.reject(failure);
+    },
+  };
+  await assert.rejects(
+    settleToolCallInTurn({
+      call: { id: "timing-failure", name: "read_file", args: {} },
+      abortSignal: runtime.abortSignal,
+      tool: {
+        async invoke() {
+          return { ok: true };
+        },
+      },
+      runtime,
+      turn: 1,
+      agentContext: createTestAgentExecutionScope(runtime),
+    }),
+    (error) => error === failure,
+  );
+  assert.equal(endCount, 1);
+});
+
+test("a failed parallel settlement drains peers and persists their results before propagating", async () => {
+  const runtime = createRuntime();
+  const failure = new Error("timing failed");
+  const fatalError = fatalSystemError("parallel fatal invocation", { code: "FATAL_TEST" });
+  let slowCompleted = false;
+  const committed = [];
+  const order = [];
+  runtime.eventListener = {
+    onEvent(event) {
+      if (event.event === "tool_call_timing" && event.data.toolCallId === "fast") throw failure;
+    },
+  };
+  runtime.withCurrentTurnPersistenceBatch = async (operation) => {
+    const result = await operation();
+    order.push("flushed");
+    return result;
+  };
+  await assert.rejects(
+    processToolResults({
+      modelState: { runtime, agentContext: createTestAgentExecutionScope(runtime) },
+      loopState: { errorLogger: null },
+      turn: 1,
+      calls: [
+        { id: "fast", name: "read_file", args: {} },
+        { id: "slow", name: "execute_script", args: {} },
+        { id: "fatal-peer", name: "multimodal_parse", args: {} },
+      ],
+      toolMap: new Map([
+        [
+          "multimodal_parse",
+          {
+            async invoke() {
+              throw fatalError;
+            },
+          },
+        ],
+        [
+          "read_file",
+          {
+            async invoke() {
+              return { ok: true };
+            },
+          },
+        ],
+        [
+          "execute_script",
+          {
+            async invoke() {
+              await wait(20);
+              slowCompleted = true;
+              return { ok: true };
+            },
+          },
+        ],
+      ]),
+      stateCommitter: {
+        async pushToolResult(result) {
+          committed.push(result.call.id);
+          order.push("result");
+        },
+      },
+    }),
+    (error) => {
+      assert.ok(error instanceof AggregateError);
+      assert.deepEqual(error.errors, [failure, fatalError]);
+      return true;
+    },
+  );
+  assert.equal(slowCompleted, true);
+  assert.deepEqual(committed, ["slow", "fatal-peer"]);
+  assert.deepEqual(order, ["flushed", "result", "result", "flushed"]);
+});
 
 function createRuntime(abortSignal = new AbortController().signal) {
   const runtime = createTestRuntimeContext({
@@ -252,8 +543,9 @@ test("processToolResults consumes queued user interjections only after the tool 
   const order = [];
   runtime.withCurrentTurnPersistenceBatch = async (operation) => {
     order.push("batch:start");
-    await operation();
+    const result = await operation();
     order.push("batch:persisted");
+    return result;
   };
   runtime.consumeUserInterjections = async () => {
     order.push("interjections:consumed");
@@ -284,6 +576,8 @@ test("processToolResults consumes queued user interjections only after the tool 
     },
   });
   assert.deepEqual(order, [
+    "batch:start",
+    "batch:persisted",
     "batch:start",
     "tool:committed",
     "batch:persisted",
@@ -328,12 +622,16 @@ test("settleToolCallInTurn rejected fatal path reports elapsed durationMs on too
   const events = [];
   runtime.eventListener = { onEvent: (event) => events.push(event) };
   const fatalError = fatalSystemError("fatal tool failure", { code: "FATAL_TEST" });
+  let invokedAt;
+  let failedAt;
 
   const settlement = await settleToolCallInTurn({
     call: { id: "call-fatal", name: "execute_script", args: {} },
     tool: {
       async invoke() {
+        invokedAt = Date.now();
         await wait(20);
+        failedAt = Date.now();
         throw fatalError;
       },
     },
@@ -349,5 +647,6 @@ test("settleToolCallInTurn rejected fatal path reports elapsed durationMs on too
   const toolCallEnd = findCommittedMessagePayload(events, "tool_call_end");
   assert.equal(toolCallEnd.success, false);
   assert.ok(Number.isFinite(toolCallEnd.durationMs));
-  assert.ok(toolCallEnd.durationMs >= 20);
+  assert.ok(toolCallEnd.durationMs >= failedAt - invokedAt);
+  assert.ok(toolCallEnd.durationMs > 0);
 });

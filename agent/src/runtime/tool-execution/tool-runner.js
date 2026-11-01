@@ -57,6 +57,7 @@ import { isPlainObject, text } from "@noobot/shared/value";
 import { projectMutationRefs } from "@noobot/file-mutation-protocol";
 import { repairToolCallArgs } from "./tool-args-repair.js";
 import { validateRuntimeToolCall } from "@noobot/context-protocol/tool/context-policy";
+import { assertToolCallTiming } from "@noobot/event-protocol/tool-timing";
 
 function shouldTransferToolInput(call) {
   const toolName = text(call.name);
@@ -174,6 +175,7 @@ function createToolCallExecutionState({
   agentContext,
   abortSignal,
   toolStartedAtMs,
+  executionTiming,
 }) {
   if (!Number.isFinite(toolStartedAtMs)) {
     throw new TypeError(`tool call ${text(call.id)} requires toolStartedAtMs`);
@@ -189,6 +191,7 @@ function createToolCallExecutionState({
     agentContext,
     abortSignal,
     toolStartedAtMs,
+    executionTiming,
     toolStartedAt: new Date(toolStartedAtMs).toISOString(),
     riskAssessment: createToolRiskAssessment(call),
     toolResultText: "",
@@ -455,15 +458,18 @@ async function handleToolInvocationError(state, error) {
 
 async function invokeConfiguredTool(state) {
   try {
-    await raceWithAbort(
-      (async () => {
-        state.rawResult = await runWithToolRiskAssessment(state.riskAssessment, () =>
+    const startedAt = performance.now();
+    try {
+      state.rawResult = await raceWithAbort(
+        runWithToolRiskAssessment(state.riskAssessment, () =>
           state.tool.invoke(state.call.args, toolInvocationConfig(state)),
-        );
-        await materializeToolInvocationResult(state);
-      })(),
-      state.abortSignal,
-    );
+        ),
+        state.abortSignal,
+      );
+    } finally {
+      state.executionTiming.executionMs = performance.now() - startedAt;
+    }
+    await raceWithAbort(materializeToolInvocationResult(state), state.abortSignal);
   } catch (error) {
     await handleToolInvocationError(state, error);
   }
@@ -528,7 +534,7 @@ async function finalizeToolExecution(state) {
 
 export async function executeToolCall(options) {
   validateRuntimeToolCall(options.call);
-  return executeValidatedToolCall(options);
+  return executeValidatedToolCall({ ...options, executionTiming: { executionMs: 0 } });
 }
 
 async function executeValidatedToolCall(options) {
@@ -578,8 +584,14 @@ function normalizeToolCallOptions(options) {
   return { ...options, call: { ...call, args: repaired.args } };
 }
 
-async function runToolCallInTurn(options) {
-  const { call, runtime, eventListener, turn, toolCallId, abortSignal } =
+export async function startToolCallInTurn(rawOptions) {
+  const options = {
+    ...normalizeToolCallOptions(rawOptions),
+    toolStartedAtMs: Date.now(),
+    startedAt: performance.now(),
+    executionTiming: { executionMs: 0 },
+  };
+  const { call, runtime, eventListener, turn, toolCallId } =
     createTurnToolExecutionContext(options);
   const initialRiskAssessment = createToolRiskAssessment(call);
   const initialRiskLevel = getToolRiskLevel(initialRiskAssessment);
@@ -591,8 +603,17 @@ async function runToolCallInTurn(options) {
     riskLevel: initialRiskLevel,
     securityAssessment: initialRiskAssessment.current,
   });
-  assertNotAborted(abortSignal);
-  const result = await executeValidatedToolCall(options);
+  return options;
+}
+
+async function runStartedToolCallInTurn(options) {
+  assertNotAborted(options.abortSignal);
+  return executeValidatedToolCall(options);
+}
+
+async function emitToolCallEnd(options, result) {
+  const { call, runtime, eventListener, turn, toolCallId } =
+    createTurnToolExecutionContext(options);
   await emitMessageEvent(eventListener, runtime, "tool_call_end", {
     turn,
     tool: call.name,
@@ -608,7 +629,8 @@ async function runToolCallInTurn(options) {
 }
 
 export async function executeToolCallInTurn(options) {
-  return runToolCallInTurn(normalizeToolCallOptions(options));
+  const started = await startToolCallInTurn(options);
+  return emitToolCallEnd(started, await runStartedToolCallInTurn(started));
 }
 
 function rejectedToolCallResult({ call, error, abortSignal }) {
@@ -638,15 +660,16 @@ function rejectedToolCallResult({ call, error, abortSignal }) {
   };
 }
 
-export async function settleToolCallInTurn(rawOptions) {
-  const options = normalizeToolCallOptions(rawOptions);
-  const { call, runtime, eventListener, turn, toolCallId, abortSignal } =
+export async function settleStartedToolCallInTurn(options) {
+  const { call, eventListener, turn, toolCallId, abortSignal } =
     createTurnToolExecutionContext(options);
-  const toolStartedAtMs = Date.now();
+  const { toolStartedAtMs, startedAt, executionTiming } = options;
+  let settlement;
   try {
-    return {
+    const result = await runStartedToolCallInTurn(options);
+    settlement = {
       status: "fulfilled",
-      result: await runToolCallInTurn({ ...options, toolStartedAtMs }),
+      result,
       error: null,
     };
   } catch (error) {
@@ -655,20 +678,32 @@ export async function settleToolCallInTurn(rawOptions) {
       error,
       abortSignal,
     });
-    await emitMessageEvent(eventListener, runtime, "tool_call_end", {
-      turn,
-      tool: call.name,
-      result: result.toolResultText,
-      success: false,
-      durationMs: Date.now() - toolStartedAtMs,
-      toolCallId,
-      riskLevel: result.riskLevel,
-      securityAssessment: result.securityAssessment,
-    });
-    return {
+    result.durationMs = Date.now() - toolStartedAtMs;
+    settlement = {
       status: "rejected",
       result,
       error,
     };
   }
+  try {
+    await emitToolCallEnd(options, settlement.result);
+    const elapsedMs = performance.now() - startedAt;
+    const timing = assertToolCallTiming({
+      turn,
+      tool: call.name,
+      toolCallId,
+      executionMs: executionTiming.executionMs,
+      frameworkMs: elapsedMs - executionTiming.executionMs,
+    });
+    await emitEvent(eventListener, "tool_call_timing", timing);
+  } catch (error) {
+    if (settlement.status === "rejected") {
+      throw new AggregateError(
+        [settlement.error, error],
+        "tool execution and settlement emission failed",
+      );
+    }
+    throw error;
+  }
+  return settlement;
 }

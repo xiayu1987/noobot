@@ -11,6 +11,32 @@ import { summarizeExecutionMetrics } from "../../src/observability/execution-log
 const at = (seconds) => new Date(Date.UTC(2026, 0, 1, 0, 0, seconds)).toISOString();
 const log = (event, seconds, data = {}) => ({ event, ts: at(seconds), data });
 
+test("report aggregates full tool timing separately from shared projection checkpoints", () => {
+  const metrics = summarizeExecutionMetrics([
+    log("tool_call_start", 0, { tool: "read_file", toolCallId: "timed", args: {} }),
+    log("tool_call_end", 1, {
+      tool: "read_file",
+      toolCallId: "timed",
+      success: true,
+      durationMs: 80,
+      persistDurationMs: 20,
+    }),
+    log("tool_call_timing", 1, {
+      toolCallId: "timed",
+      executionMs: 30,
+      frameworkMs: 70,
+    }),
+    log("timeline_checkpoint_persisted", 1, { durationMs: 40 }),
+  ]);
+  assert.equal(metrics.tools.totalToolDurationMs, 80);
+  assert.equal(metrics.tools.totalExecutionMs, 30);
+  assert.equal(metrics.tools.totalFrameworkMs, 70);
+  assert.equal(metrics.tools.totalPersistDurationMs, 20);
+  assert.equal(metrics.tools.splitTimedCount, 1);
+  assert.equal(metrics.phases.checkpointDurationMs, 40);
+  assert.equal(metrics.tools.slowestToolCalls[0].frameworkMs, 70);
+});
+
 test("summarizeExecutionMetrics aggregates model calls, retries and switches", () => {
   const metrics = summarizeExecutionMetrics([
     log("llm_call_start", 0, { modelLoopRound: 1 }),
@@ -137,4 +163,20 @@ test("summarizeExecutionMetrics returns empty aggregates for no logs", () => {
   assert.equal(metrics.model.llmCalls, 0);
   assert.deepEqual(metrics.tools.slowestToolCalls, []);
   assert.equal(metrics.phases.contextBuildMs, null);
+});
+
+test("timing cannot redefine end duration or silently target a missing call", () => {
+  const timing = { toolCallId: "missing", executionMs: 1, frameworkMs: 2 };
+  assert.throws(
+    () => summarizeExecutionMetrics([log("tool_call_timing", 0, timing)]),
+    /requires a completed tool call/,
+  );
+  assert.throws(
+    () => summarizeExecutionMetrics([log("tool_call_timing", 0, { ...timing, durationMs: 3 })]),
+    /must not redefine/,
+  );
+  assert.throws(
+    () => summarizeExecutionMetrics([log("tool_call_timing", 0, { ...timing, executionMs: -1 })]),
+    /invalid tool timing/,
+  );
 });

@@ -11,7 +11,7 @@ import {
 import { deepFreeze } from "@noobot/shared/deep-freeze";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { isPlainObject } from "@noobot/shared/value";
-import { stat } from "node:fs/promises";
+import { readFileIdentity, verifiedSnapshotCache } from "./verified-snapshot-cache.js";
 import { isMissingPersistencePathError } from "../../shared/storage/json-file-reader.js";
 import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
 import { readJsonWithStorage } from "./artifact-json-io.js";
@@ -31,11 +31,6 @@ function resolveSummarySnapshotPath(sessionDir, file) {
     errorCode: SESSION_ERROR_CODE.SUMMARY_SNAPSHOT_PATH_INVALID,
     errorLabel: "session summary snapshot reference",
   });
-}
-
-async function readFileIdentity(file) {
-  const info = await stat(file, { bigint: true });
-  return { key: `${info.dev}:${info.ino}`, bytes: Number(info.size) };
 }
 
 function snapshotError(message, code) {
@@ -62,7 +57,8 @@ export async function readVerifiedSnapshot({
     failure.cause = error;
     throw failure;
   });
-  const payload = await readJsonWithStorage({ storageService, artifactPath });
+  const cached = verifiedSnapshotCache.get(artifactPath, index.contentHash, identityBeforeRead);
+  const payload = cached || (await readJsonWithStorage({ storageService, artifactPath }));
   if (
     !isPlainObject(payload) ||
     payload.schemaVersion !== SESSION_ARTIFACT_SUMMARY_SNAPSHOT_SCHEMA_VERSION ||
@@ -77,14 +73,24 @@ export async function readVerifiedSnapshot({
       SESSION_ERROR_CODE.SUMMARY_SNAPSHOT_INDEX_MISMATCH,
     );
   }
-  if (summarySnapshotContentHash(payload) !== index.contentHash) {
+  if (!cached && summarySnapshotContentHash(payload) !== index.contentHash) {
     throw snapshotError(
       `summary snapshot hash mismatch: ${file}`,
       SESSION_ERROR_CODE.SUMMARY_SNAPSHOT_HASH_MISMATCH,
     );
   }
 
-  assertIncrementalJournalRecords(payload.records, artifactPath);
+  if (!cached) {
+    assertIncrementalJournalRecords(payload.records, artifactPath);
+    const identityAfterRead = await readFileIdentity(artifactPath);
+    if (identityBeforeRead.key !== identityAfterRead.key) {
+      throw snapshotError(
+        `summary snapshot changed during verification: ${file}`,
+        SESSION_ERROR_CODE.SUMMARY_SNAPSHOT_HASH_MISMATCH,
+      );
+    }
+    verifiedSnapshotCache.retain(artifactPath, index.contentHash, identityBeforeRead, payload);
+  }
   return { payload, identity: identityBeforeRead };
 }
 
@@ -156,7 +162,12 @@ export function createTurnMaterializer({ byteBudget }) {
         if (isMissingPersistencePathError(error)) return null;
         throw error;
       });
-      if (identity?.key !== link.identityKey) return null;
+      if (
+        link.reusable === false ||
+        identity?.key !== link.identityKey ||
+        identity?.reusable === false
+      )
+        return null;
     }
     return cached;
   }
@@ -182,6 +193,7 @@ export function createTurnMaterializer({ byteBudget }) {
         checkpointRevision: index.checkpointRevision,
         contentHash: index.contentHash,
         identityKey: identity.key,
+        reusable: identity.reusable,
       });
       bytes += identity.bytes;
       previousCheckpointHash = index.contentHash;

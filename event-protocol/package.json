@@ -16,6 +16,7 @@
     "./execution-query": "./src/execution-query.js",
     "./tool-presentation": "./src/tool-presentation.js",
     "./tool-result": "./src/tool-result.js",
+    "./tool-timing": "./src/tool-timing.js",
     "./tool-result-v24": "./src/tool-result-v24.js",
     "./tool-timeline": "./src/tool-timeline.js",
     "./activity-timeline": "./src/activity-timeline.js",

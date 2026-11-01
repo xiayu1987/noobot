@@ -76,9 +76,10 @@ export async function commitAuthorityEvent({
     owner.userId,
     owner.sessionId,
     async (scope) => {
-      const session = await this.sessionRepo.requireById(owner.userId, owner.sessionId, {
-        persistenceContext,
-      });
+      const isSessionArtifactEvent = descriptor.sessionArtifact === true;
+      const session = isSessionArtifactEvent
+        ? await this.sessionRepo.requireById(owner.userId, owner.sessionId, { persistenceContext })
+        : await this.sessionRepo.readSessionEventManifest(scope, owner.sessionId);
       const eventPayload = { ...payload };
       const isArtifact = descriptor.sessionArtifact === true && family === PLUGIN_ARTIFACT_FAMILY;
       if (isArtifact) {
@@ -86,7 +87,6 @@ export async function commitAuthorityEvent({
         if (!artifactDecision.allowed) return createPluginArtifactCommitRejection(artifactDecision);
         eventPayload.revision = artifactDecision.revision;
       }
-      const isSessionArtifactEvent = descriptor.sessionArtifact === true;
       const concurrency = isSessionArtifactEvent
         ? decideAggregateConcurrency({
             expectedAggregateVersion: null,

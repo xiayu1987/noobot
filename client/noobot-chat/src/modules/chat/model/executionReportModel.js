@@ -81,6 +81,13 @@ function buildModelRows(model, translate) {
 
 function buildPhaseRows(metrics, translate) {
   return [
+    ...[
+      ["message.executionReportToolExecution", metrics.tools.totalExecutionMs],
+      ["message.executionReportToolFramework", metrics.tools.totalFrameworkMs],
+      ["message.executionReportCheckpointDuration", metrics.phases.checkpointDurationMs],
+    ]
+      .filter(([, value]) => Number.isFinite(value))
+      .map(([key, value]) => row(translate(key), formatDuration(value))),
     row(
       translate("message.executionReportContextBuild"),
       formatDuration(metrics.phases.contextBuildMs),

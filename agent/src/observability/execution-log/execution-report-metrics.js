@@ -8,6 +8,7 @@ import { projectToolOperationSubject } from "@noobot/event-protocol/tool-present
 import { normalizeSecurityRiskLevel } from "@noobot/security-assessment-protocol";
 import { resolveData, resolveTimestampMs, resolveToolName } from "./execution-log-fields.js";
 import { text } from "@noobot/shared/value";
+import { assertToolCallTiming } from "@noobot/event-protocol/tool-timing";
 
 const SLOWEST_TOOL_CALL_LIMIT = QUANTITY_THRESHOLDS.diagnostics.executionReportSlowestToolCalls;
 
@@ -36,6 +37,7 @@ function createAccumulator() {
     hookDurationMs: 0,
     contextStartMs: null,
     contextReadyMs: null,
+    checkpointDurationMs: 0,
   };
 }
 
@@ -80,6 +82,17 @@ const EVENT_HANDLERS = {
   tool_call_end(acc, record) {
     trackToolCall(acc, record, "end");
   },
+  tool_call_timing(acc, { data }) {
+    assertToolCallTiming(data);
+    const entry = acc.toolCalls.get(data.toolCallId);
+    if (!entry?.ended) throw new TypeError("tool_call_timing requires a completed tool call");
+    if (Object.hasOwn(entry, "executionMs")) throw new TypeError("duplicate tool_call_timing");
+    entry.executionMs = data.executionMs;
+    entry.frameworkMs = data.frameworkMs;
+  },
+  timeline_checkpoint_persisted(acc, { data }) {
+    if (Number.isFinite(data.durationMs)) acc.checkpointDurationMs += data.durationMs;
+  },
   hook_summary(acc, { data }) {
     acc.hookCount += 1;
     acc.hookErrorCount += Number(data.errorCount) || 0;
@@ -98,6 +111,9 @@ function summarizeToolCalls(toolCalls) {
   const riskLevels = {};
   const timedCalls = [];
   let totalPersistDurationMs = 0;
+  let totalExecutionMs = 0;
+  let totalFrameworkMs = 0;
+  let splitTimedCount = 0;
   for (const [toolCallId, entry] of toolCalls) {
     const stats = (toolStats[entry.tool] ||= {
       calls: 0,
@@ -118,12 +134,21 @@ function summarizeToolCalls(toolCalls) {
     stats.timedCount += 1;
     stats.totalDurationMs += durationMs;
     stats.maxDurationMs = Math.max(stats.maxDurationMs, durationMs);
+    const split = Number.isFinite(entry.executionMs) && Number.isFinite(entry.frameworkMs);
+    if (split) {
+      splitTimedCount += 1;
+      totalExecutionMs += entry.executionMs;
+      totalFrameworkMs += entry.frameworkMs;
+      stats.totalExecutionMs = (stats.totalExecutionMs || 0) + entry.executionMs;
+      stats.totalFrameworkMs = (stats.totalFrameworkMs || 0) + entry.frameworkMs;
+    }
     timedCalls.push({
       toolCallId,
       tool: entry.tool,
       subject: entry.subject || "",
       durationMs,
       persistDurationMs,
+      ...(split ? { executionMs: entry.executionMs, frameworkMs: entry.frameworkMs } : {}),
       success: entry.success,
     });
   }
@@ -131,7 +156,14 @@ function summarizeToolCalls(toolCalls) {
     .sort((left, right) => right.durationMs - left.durationMs)
     .slice(0, SLOWEST_TOOL_CALL_LIMIT);
   const totalToolDurationMs = timedCalls.reduce((sum, call) => sum + call.durationMs, 0);
-  return { toolStats, riskLevels, slowestToolCalls, totalToolDurationMs, totalPersistDurationMs };
+  return {
+    toolStats,
+    riskLevels,
+    slowestToolCalls,
+    totalToolDurationMs,
+    totalPersistDurationMs,
+    ...(splitTimedCount ? { totalExecutionMs, totalFrameworkMs, splitTimedCount } : {}),
+  };
 }
 
 export function summarizeExecutionMetrics(scopedLogs = []) {
@@ -155,6 +187,9 @@ export function summarizeExecutionMetrics(scopedLogs = []) {
       errorCount: acc.hookErrorCount,
       totalDurationMs: acc.hookDurationMs,
     },
-    phases: { contextBuildMs: resolveSpanMs(acc.contextStartMs, acc.contextReadyMs) },
+    phases: {
+      contextBuildMs: resolveSpanMs(acc.contextStartMs, acc.contextReadyMs),
+      checkpointDurationMs: acc.checkpointDurationMs,
+    },
   };
 }

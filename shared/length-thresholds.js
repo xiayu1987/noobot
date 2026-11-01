@@ -173,6 +173,7 @@ export const LENGTH_THRESHOLDS = deepFreeze({
   artifact: {
     executionEventSegmentBytes: LENGTH_TIERS.bytes.jsonlBuffer,
     turnMaterializerCacheBytes: 128 * MiB,
+    verifiedSnapshotCacheBytes: 128 * MiB,
   },
 
   display: {

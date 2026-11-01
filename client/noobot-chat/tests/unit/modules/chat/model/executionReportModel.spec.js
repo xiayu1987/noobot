@@ -53,6 +53,17 @@ function createReport() {
 }
 
 describe("executionReportModel persistence timing", () => {
+  it("shows execution, framework and shared projection time when present", () => {
+    const report = createReport();
+    Object.assign(report.summary.metrics.tools, { totalExecutionMs: 3000, totalFrameworkMs: 4000 });
+    report.summary.metrics.phases.checkpointDurationMs = 200;
+    const rows = Object.fromEntries(
+      buildExecutionReportView(report, translate).phases.map((item) => [item.label, item.value]),
+    );
+    expect(rows["message.executionReportToolExecution"]).toBe("3.0s");
+    expect(rows["message.executionReportToolFramework"]).toBe("4.0s");
+    expect(rows["message.executionReportCheckpointDuration"]).toBe("200ms");
+  });
   it("shows tool time and persistence time as separate phase rows", () => {
     const view = buildExecutionReportView(createReport(), translate);
     const rows = Object.fromEntries(view.phases.map((item) => [item.label, item.value]));

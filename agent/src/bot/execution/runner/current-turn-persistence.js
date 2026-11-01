@@ -114,6 +114,7 @@ export function bindCurrentTurnPersistence({
 
   const enqueuePersistence = () => {
     const persist = async () => {
+      const startedAt = performance.now();
       const messages = dispatchRuntime.currentTurnMessages.toArray();
       if (!messages.length) return;
       const checkpointEntries = buildCheckpointEntries(messages);
@@ -180,6 +181,7 @@ export function bindCurrentTurnPersistence({
         messages: durableActivityMessages,
       });
       emitEvent(eventListener, "timeline_checkpoint_persisted", {
+        durationMs: performance.now() - startedAt,
         sessionId,
         dialogProcessId,
         parentDialogProcessId,
