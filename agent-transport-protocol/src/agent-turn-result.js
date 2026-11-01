@@ -3,14 +3,18 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject } from "@noobot/shared/value";
+import { isMessageIdentity } from "@noobot/session-protocol/message-identity";
 
 export const AGENT_TURN_RESULT_ERROR_CODE = "AGENT_TURN_RESULT_INVALID";
 
 const isString = (value) => typeof value === "string";
 const isNonNegativeInteger = (value) => Number.isInteger(value) && value >= 0;
-const isTurnMessage = (message) => isPlainObject(message) && Boolean(text(message.messageUid));
-const isTurnMessageList = (value) => Array.isArray(value) && value.every(isTurnMessage);
+const isTurnMessage = (message) => isPlainObject(message) && isMessageIdentity(message.messageUid);
+const isTurnMessageList = (value) =>
+  Array.isArray(value) &&
+  Array.from(value).every(isTurnMessage) &&
+  new Set(value.map((message) => message.messageUid)).size === value.length;
 
 const REQUIRED_FIELDS = Object.freeze({
   output: isString,

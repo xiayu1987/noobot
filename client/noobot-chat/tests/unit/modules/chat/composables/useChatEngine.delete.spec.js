@@ -380,6 +380,7 @@ describe("useChatEngine.delete", () => {
     activeSession.value.rawMessages = [{ ...first }, { ...target }];
     activeSession.value.aggregateVersion = 7;
     applyTurnRuntimeEvent(turnRuntimeRegistry.value, {
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,
       sessionId: "local-delete-stopped-sending",
       turnScopeId: target.turnScopeId,

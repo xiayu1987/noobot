@@ -12,7 +12,11 @@ import {
   createProtocolTestCommand,
   stopChatWs,
 } from "./chat-websocket-server.test-helpers.js";
-import { createEmptyTurnLifecycle, TURN_EVENT } from "@noobot/session-protocol";
+import {
+  createEmptyTurnLifecycle,
+  deriveAgentExecutionId,
+  TURN_EVENT,
+} from "@noobot/session-protocol";
 import {
   AGENT_COMMAND_RECEIPT_OUTCOME,
   AGENT_TRANSPORT_EVENT,
@@ -42,6 +46,24 @@ function stoppedLifecycle({
         executionState: "user_stopped",
         revision: 5,
         sequence: 5,
+        executionId: deriveAgentExecutionId({ turnScopeId }),
+        executionKind: "agent",
+        rootExecutionId: deriveAgentExecutionId({ turnScopeId }),
+        parentExecutionId: "",
+        origin: {},
+        stage: "",
+        commandId: "stopped-command",
+        summaryVersion: 0,
+        completionCommitId: "",
+        terminalStatus: null,
+        failure: null,
+        finalizeIntent: null,
+        continuationSource: null,
+        continuedByTurnScopeId: "",
+        startedAt: "2026-01-01T00:00:00.000Z",
+        finishedAt: "2026-01-01T00:00:03.000Z",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:03.000Z",
       },
     },
   };

@@ -7,6 +7,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   assertConnectorAccessPort,
+  assertSelectedConnectorsOwned,
+  CONNECTOR_SELECTION_ERROR_CODE,
   assertConnectorInstanceImplementation,
   CONNECTOR_ACCESS_CANCELLATION,
   CONNECTOR_FAILURE_CODE,
@@ -22,6 +24,17 @@ import {
   normalizeSelectedConnectorIds,
   projectSelectedConnectorContext,
 } from "../src/index.js";
+
+test("connector ownership rejection has a stable protocol classification", () => {
+  assert.throws(
+    () => assertSelectedConnectorsOwned(["other"], []),
+    (error) => {
+      assert.equal(error.code, CONNECTOR_SELECTION_ERROR_CODE.NOT_OWNED);
+      assert.equal(error.statusCode, undefined);
+      return error instanceof TypeError;
+    },
+  );
+});
 
 test("connector definitions validate one canonical instance shape", () => {
   const definition = createConnectorInstanceDefinition({

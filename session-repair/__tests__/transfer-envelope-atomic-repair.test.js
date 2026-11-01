@@ -43,7 +43,7 @@ function sessionWithEnvelope(envelope) {
     sessionId: "session-1",
     aggregateVersion: 2,
     turnTimings: [],
-    turnLifecycle: { turns: {}, commandReceipts: [] },
+    turnLifecycle: { activeTurnScopeId: "", sequence: 0, turns: {}, commandReceipts: [] },
     messages: [
       { messageUid: "assistant-1", role: "assistant", content: "", transferEnvelopes: [envelope] },
     ],

@@ -218,6 +218,7 @@ export function useReconnectReplay({
       applyRuntimeStreamEvent: (envelope, context) =>
         routeRuntimeStreamEvent(envelope, {
           ...context,
+          isCurrentActiveSession,
           logRuntimeProjectionDiagnostics: logWorkflowDiagnostics,
         }),
       applyPendingInteraction: (interaction, { channelSessionId }) =>

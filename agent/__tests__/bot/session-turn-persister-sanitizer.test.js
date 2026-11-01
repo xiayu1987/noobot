@@ -8,9 +8,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  SESSION_DELETED_REASON,
   SESSION_ERROR_CODE,
-  SESSION_NOT_FOUND_REASON,
+  createSessionDeletedError,
+  createSessionNotFoundError,
   createSessionPersistenceScope,
 } from "@noobot/session-protocol";
 import { SessionTurnPersister } from "../../src/bot/execution/turn-persister.js";
@@ -26,7 +26,7 @@ test("appendAgentMessages persists all messages through one appendTurns batch", 
       appendExecutionLog: async () => {},
       appendTurns: async (payload = {}) => {
         batches.push(payload);
-        return { appended: true, reason: "", turns: payload.turns };
+        return { turns: payload.turns };
       },
     },
   });
@@ -55,7 +55,7 @@ test("appendAgentMessages preserves the canonical tool policy at the Session bou
       appendExecutionLog: async () => {},
       appendTurns: async (payload = {}) => {
         batches.push(payload);
-        return { appended: true, reason: "", turns: payload.turns };
+        return { turns: payload.turns };
       },
     },
   });
@@ -91,7 +91,7 @@ test("appendAgentMessages keeps scoped persistence identity for logs and message
       appendExecutionLog: async (payload = {}) => executionPayloads.push(payload),
       appendTurns: async (payload = {}) => {
         batches.push(payload);
-        return { appended: true, reason: "", turns: payload.turns };
+        return { turns: payload.turns };
       },
     },
   });
@@ -123,7 +123,7 @@ test("appendAgentMessages forwards the authoritative realtime message identity",
       appendExecutionLog: async () => {},
       appendTurns: async (payload = {}) => {
         turns.push(...payload.turns);
-        return { appended: true, reason: "", turns: payload.turns };
+        return { turns: payload.turns };
       },
     },
   });
@@ -150,7 +150,7 @@ test("appendAgentMessages forwards the canonical internal control message type",
       appendExecutionLog: async () => {},
       appendTurns: async (payload = {}) => {
         turns.push(...payload.turns);
-        return { appended: true, reason: "", turns: payload.turns };
+        return { turns: payload.turns };
       },
     },
   });
@@ -186,7 +186,7 @@ test("appendAgentMessages forwards presentation identity and checkpoint context"
       appendExecutionLog: async () => {},
       appendTurns: async (payload = {}) => {
         batches.push(payload);
-        return { appended: true, reason: "", turns: payload.turns };
+        return { turns: payload.turns };
       },
     },
   });
@@ -231,7 +231,7 @@ test("SessionTurnPersister never forwards a caller parentSessionId to persistenc
     appendExecutionLog: async (payload = {}) => executionLogs.push(payload),
     appendTurns: async (payload = {}) => {
       batches.push(payload);
-      return { appended: true, reason: "", turns: payload.turns };
+      return { turns: payload.turns };
     },
   };
   const persister = new SessionTurnPersister({ session });
@@ -259,7 +259,7 @@ test("SessionTurnPersister persists tool transfer envelopes into session turns",
     appendExecutionLog: async () => {},
     appendTurns: async (payload = {}) => {
       appendedTurns.push(...payload.turns);
-      return { appended: true, reason: "", turns: payload.turns };
+      return { turns: payload.turns };
     },
   };
   const persister = new SessionTurnPersister({ session });
@@ -313,7 +313,7 @@ test("SessionTurnPersister persists final assistant transfer envelopes with atta
     appendExecutionLog: async () => {},
     appendTurns: async (payload = {}) => {
       appendedTurns.push(...payload.turns);
-      return { appended: true, reason: "", turns: payload.turns };
+      return { turns: payload.turns };
     },
   };
   const persister = new SessionTurnPersister({ session });
@@ -383,7 +383,7 @@ test("SessionTurnPersister persists canonical plugin metadata without old concre
     },
     appendTurns: async (payload = {}) => {
       appendedTurns.push(...payload.turns);
-      return { appended: true, reason: "", turns: payload.turns };
+      return { turns: payload.turns };
     },
   };
   const persister = new SessionTurnPersister({ session });
@@ -432,7 +432,7 @@ test("SessionTurnPersister does not carry thinking timing on persisted turns", a
     appendExecutionLog: async () => {},
     appendTurns: async (payload = {}) => {
       appendedTurns.push(...payload.turns);
-      return { appended: true, reason: "", turns: payload.turns };
+      return { turns: payload.turns };
     },
   };
   const persister = new SessionTurnPersister({ session });
@@ -479,7 +479,7 @@ test("appendAgentMessages keeps relayCorrelationId on persisted injected turns",
       appendExecutionLog: async () => {},
       appendTurns: async (payload = {}) => {
         appendedTurns.push(...payload.turns);
-        return { appended: true, reason: "", turns: payload.turns };
+        return { turns: payload.turns };
       },
     },
   });
@@ -519,7 +519,7 @@ test("appendAgentMessages keeps canonical user interjection time and sequence", 
       appendExecutionLog: async () => {},
       appendTurns: async (payload = {}) => {
         appendedTurns.push(...payload.turns);
-        return { appended: true, reason: "", turns: payload.turns };
+        return { turns: payload.turns };
       },
     },
   });
@@ -547,12 +547,14 @@ test("appendAgentMessages keeps canonical user interjection time and sequence", 
   assert.equal(appendedTurns[0].ts, "2026-09-18T01:00:00.000Z");
 });
 
-test("appendAgentMessages rejects an append the Session did not accept", async () => {
-  const createPersister = (reason) =>
+test("appendAgentMessages propagates Session deletion and absence errors unchanged", async () => {
+  const createPersister = (error) =>
     new SessionTurnPersister({
       session: {
         appendExecutionLog: async () => {},
-        appendTurns: async () => ({ appended: false, reason, turns: [] }),
+        appendTurns: async () => {
+          throw error;
+        },
       },
     });
   const input = {
@@ -560,13 +562,16 @@ test("appendAgentMessages rejects an append the Session did not accept", async (
     sessionId: "s1",
     messages: [{ messageUid: "sm_1", role: "tool", content: "r", tool_call_id: "call_1" }],
   };
-  await assert.rejects(createPersister(SESSION_DELETED_REASON).appendAgentMessages(input), {
-    code: SESSION_ERROR_CODE.SESSION_DELETED,
+  const deleted = createSessionDeletedError({ userId: "u1", sessionId: "s1" });
+  await assert.rejects(createPersister(deleted).appendAgentMessages(input), (error) => {
+    assert.equal(error, deleted);
+    assert.equal(error.code, SESSION_ERROR_CODE.SESSION_DELETED);
+    return true;
   });
-  await assert.rejects(createPersister(SESSION_NOT_FOUND_REASON).appendAgentMessages(input), {
-    code: SESSION_ERROR_CODE.SESSION_NOT_FOUND,
-  });
-  await assert.rejects(createPersister("locked").appendAgentMessages(input), {
-    code: SESSION_ERROR_CODE.TURN_APPEND_REJECTED,
+  const missing = createSessionNotFoundError({ userId: "u1", sessionId: "s1" });
+  await assert.rejects(createPersister(missing).appendAgentMessages(input), (error) => {
+    assert.equal(error, missing);
+    assert.equal(error.code, SESSION_ERROR_CODE.SESSION_NOT_FOUND);
+    return true;
   });
 });

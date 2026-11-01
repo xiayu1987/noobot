@@ -4,8 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import {
+  buildExecutionForest,
   compareExecutionVersion,
   projectExecutionRecord,
+  selectExecutionRelations,
   validateExecutionRecord,
 } from "@noobot/session-protocol/execution-lifecycle";
 import { executionTurnKey, isTurnRuntimeDeleted } from "./turnRuntimeRegistryIdentity.js";
@@ -41,25 +43,12 @@ export function applyExecutionProjection(registry, source) {
       ? { applied: false, deduplicated: true, reason: "duplicate_execution" }
       : { applied: false, reason: "execution_sequence_conflict" };
   }
-  const previousParentExecutionId = text(current?.parentExecutionId);
-  if (previousParentExecutionId && previousParentExecutionId !== execution.parentExecutionId) {
-    registry.childExecutionIdsByParentId[previousParentExecutionId] = (
-      registry.childExecutionIdsByParentId[previousParentExecutionId] || []
-    ).filter((id) => id !== execution.executionId);
-    if (!registry.childExecutionIdsByParentId[previousParentExecutionId].length) {
-      delete registry.childExecutionIdsByParentId[previousParentExecutionId];
-    }
-  }
+  buildExecutionForest(
+    Object.values({ ...registry.executions, [execution.executionId]: execution }),
+  );
   registry.executions[execution.executionId] = execution;
   const indexedTurnKey = executionTurnKey(execution.sessionId, execution.turnScopeId);
   if (indexedTurnKey) registry.executionIdByTurnScopeId[indexedTurnKey] = execution.executionId;
-  if (execution.parentExecutionId) {
-    const children = new Set(
-      registry.childExecutionIdsByParentId[execution.parentExecutionId] || [],
-    );
-    children.add(execution.executionId);
-    registry.childExecutionIdsByParentId[execution.parentExecutionId] = [...children];
-  }
   return { applied: true, execution };
 }
 
@@ -68,21 +57,29 @@ export function applyExecutionSnapshot(registry, payload) {
 }
 
 export function applyExecutionChildren(registry, payload) {
-  const results = [payload.execution, ...payload.children].map((item) =>
-    applyExecutionProjection(registry, item),
-  );
+  const results = applyExecutionBatch(registry, [payload.execution, ...payload.children]);
   return { applied: results.some((item) => item.applied), results };
 }
 
 export function applyExecutionTree(registry, payload) {
-  const results = Object.values(payload.tree.executions).map((item) =>
-    applyExecutionProjection(registry, item),
-  );
+  const results = applyExecutionBatch(registry, Object.values(payload.tree.executions));
   return {
     applied: results.some((item) => item.applied),
     results,
     rootExecutionId: payload.rootExecutionId,
   };
+}
+
+function applyExecutionBatch(registry, executions) {
+  const prepared = {
+    ...registry,
+    executions: { ...registry.executions },
+    executionIdByTurnScopeId: { ...registry.executionIdByTurnScopeId },
+  };
+  const results = executions.map((item) => applyExecutionProjection(prepared, item));
+  registry.executions = prepared.executions;
+  registry.executionIdByTurnScopeId = prepared.executionIdByTurnScopeId;
+  return results;
 }
 
 export function selectExecution(registry, executionId) {
@@ -95,7 +92,5 @@ export function selectTurnExecution(registry, sessionId, turnScopeId) {
 }
 
 export function selectExecutionChildren(registry, executionId) {
-  return (registry.childExecutionIdsByParentId[text(executionId)] || [])
-    .map((id) => registry.executions[id])
-    .filter(Boolean);
+  return selectExecutionRelations(registry.executions, executionId);
 }

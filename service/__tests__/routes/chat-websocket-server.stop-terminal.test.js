@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { WebSocket } from "ws";
 import {
   createAcceptedAgentExecutionIdentity,
+  acceptFakeAgentTurnLifecycleEvent,
   startServerWithWs,
   startAuthoritativeServerWithWs,
   closeServer,
@@ -351,7 +352,7 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
           const result = commitTurnLifecycle({
             parentSessionId: "",
             lifecycle,
-            event,
+            event: acceptFakeAgentTurnLifecycleEvent(lifecycle, event).lifecycleEvent,
             eventOutbox: authorityEventOutbox,
             createEventId: () => `idle-stop-authority-event-${++authorityEventSequence}`,
             materializeTerminal: event.terminalStatus

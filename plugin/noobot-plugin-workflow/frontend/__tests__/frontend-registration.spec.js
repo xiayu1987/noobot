@@ -105,7 +105,7 @@ describe("Workflow frontend registration", () => {
     });
   });
 
-  it("contributes one plugin-runtime projector with canonical record semantics", async () => {
+  it.each(["live", "reconnect"])("projects canonical workflow facts from %s", async (source) => {
     const contributions = [];
     await activate({
       contributeExtension: (point, contribution) => contributions.push({ point, contribution }),
@@ -153,13 +153,54 @@ describe("Workflow frontend registration", () => {
       projector({
         envelope,
         descriptor: { family: EVENT_FAMILY.WORKFLOW_RUNTIME },
-        context: { source: "live", applyWorkflowRuntimeEvent, logRuntimeProjectionDiagnostics },
+        context: {
+          source,
+          sessionId: "unrelated-session",
+          turnScopeId: "unrelated-turn",
+          applyWorkflowRuntimeEvent,
+          logRuntimeProjectionDiagnostics,
+        },
       }),
     ).toBe(true);
-    expect(applyWorkflowRuntimeEvent).toHaveBeenCalledWith(envelope, { source: "live" });
+    expect(applyWorkflowRuntimeEvent).toHaveBeenCalledWith(envelope, { source });
     expect(logRuntimeProjectionDiagnostics).toHaveBeenCalledWith(
       "frontend.workflowRuntime.projectorReduced",
-      expect.objectContaining({ sessionId: "root", nodeSessionId: "child", applied: true }),
+      expect.objectContaining({
+        sessionId: "root",
+        nodeSessionId: "child",
+        turnScopeId: envelope.identity.turnScopeId,
+        nodeExecutionId: envelope.identity.executionId,
+        dialogProcessId: undefined,
+        source,
+        reason: undefined,
+        applied: true,
+      }),
     );
+    expect(logRuntimeProjectionDiagnostics).toHaveBeenCalledWith(
+      "frontend.workflowRuntime.projectorMatched",
+      expect.objectContaining({
+        nodeExecutionId: "node-1",
+        authoritativeSequence: 46,
+        status: "running",
+      }),
+    );
+
+    const project = (context) =>
+      projector({ envelope, descriptor: { family: EVENT_FAMILY.WORKFLOW_RUNTIME }, context });
+    for (const applyWorkflowRuntimeEvent of [undefined, null, false, {}, "callback"]) {
+      expect(() => project({ source, applyWorkflowRuntimeEvent })).toThrow(
+        "workflow runtime projector requires applyWorkflowRuntimeEvent",
+      );
+    }
+    const failure = new Error("workflow reducer failed");
+    expect(() =>
+      project({
+        source,
+        applyWorkflowRuntimeEvent: () => {
+          throw failure;
+        },
+      }),
+    ).toThrow(failure);
+    expect(project({ source, applyWorkflowRuntimeEvent })).toBe(true);
   });
 });

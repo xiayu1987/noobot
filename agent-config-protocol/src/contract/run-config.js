@@ -8,6 +8,14 @@ import { mergeConfig } from "../pipeline/effective-config.js";
 import { isPlainObject, normalizeStringList } from "../utils.js";
 import { removeDeniedToolNamesFromAllow } from "../policy/tool-policy.js";
 import { text } from "@noobot/shared/value";
+import { PREFERENCE_LANGUAGE } from "../enums.js";
+
+export function requireRunLocale(runConfig) {
+  if (!isPlainObject(runConfig) || !Object.values(PREFERENCE_LANGUAGE).includes(runConfig.locale)) {
+    throw new TypeError("invalid_run_locale");
+  }
+  return runConfig.locale;
+}
 
 export class RunConfigResolver {
   constructor({ globalConfig = {} } = {}) {

@@ -7,6 +7,7 @@ import { vi } from "vitest";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { jsonResponse } from "../../../helpers/jsonResponse.js";
 import { terminalStatusFixture } from "../helpers/terminalStatusFixture.js";
+import { turnRecordFixture } from "../helpers/turnRecordFixture.js";
 import { createSessionDetailDocument } from "@noobot/session-protocol/session-detail";
 import { detailEntryWithLifecycle } from "../../../helpers/sessionDetailFixture.js";
 
@@ -69,7 +70,7 @@ export function terminalLifecycleSnapshot({
     unchanged: false,
     replacedTurns: [],
     recentTerminalTurns: [
-      {
+      turnRecordFixture({
         sessionId,
         turnScopeId,
         dialogProcessId,
@@ -78,12 +79,11 @@ export function terminalLifecycleSnapshot({
         phase: state === "stop_completed" ? "stop" : "completion",
         revision,
         sequence,
-        capabilities: { canStop: false },
+        capabilities: { actionLocked: false, canStop: false },
         completionCommitId,
         summaryVersion: 1,
-        finalizeIntent: state === "stop_completed" ? "stop" : "complete",
         failure: null,
-      },
+      }),
     ],
   };
 }
@@ -111,7 +111,7 @@ export function terminalResolution({
     reason: "",
     retryAfterMs: 0,
     aggregateVersion: 1,
-    turn: {
+    turn: turnRecordFixture({
       sessionId,
       turnScopeId,
       dialogProcessId: `dp-${turnScopeId}`,
@@ -121,14 +121,15 @@ export function terminalResolution({
       sequence,
       completionCommitId,
       summaryVersion,
-      finalizeIntent: state === "stop_completed" ? "stop" : "complete",
-      failure: successful ? null : { stage: state.replace("_failed", ""), retryable: false },
+      failure: successful
+        ? null
+        : { code: "fixture_failure", message: "terminal failure", retryable: false },
       ...(startedAt ? { startedAt } : {}),
       terminalStatus: terminalStatusFixture(state, {
         turnScopeId,
         dialogProcessId: `dp-${turnScopeId}`,
       }),
-    },
+    }),
   };
 }
 

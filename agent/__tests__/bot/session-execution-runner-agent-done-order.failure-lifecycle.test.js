@@ -6,6 +6,7 @@
 import test from "node:test";
 import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import { createModelContext } from "@noobot/context-protocol";
+import { createSessionDeletedError } from "@noobot/session-protocol";
 import {
   assert,
   createRunner,
@@ -101,4 +102,35 @@ test("runSession emits failed branch lifecycle state for non-abort errors", asyn
   );
   assert.equal(failedEvent.data.branchState, AGENT_LIFECYCLE_BRANCH_STATE.FAILED);
   assert.equal(failedEvent.data.error, "model failed");
+});
+
+test("runSession fails the lifecycle when the session is deleted during finalization", async () => {
+  const events = [];
+  const deleted = createSessionDeletedError({ userId: "u1", sessionId: "s1" });
+  const runner = createRunner({
+    callOrder: [],
+    eventListener: {
+      onEvent(event) {
+        events.push(event);
+      },
+    },
+    finalizeRunSession: async () => {
+      throw deleted;
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      runner.runAcceptedSession({
+        turnScopeId: "turn-default",
+        userId: "u1",
+        sessionId: "s1",
+        message: "hello",
+      }),
+    (error) => error.code === deleted.code && error.statusCode === 410,
+  );
+
+  const states = collectLifecycleStates(events);
+  assert.equal(states.at(-1), AGENT_LIFECYCLE_BRANCH_STATE.FAILED);
+  assert.equal(states.includes(AGENT_LIFECYCLE_STATE.COMPLETED), false);
 });

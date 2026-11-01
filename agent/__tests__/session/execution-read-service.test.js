@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { turnRecord } from "../helpers/turn-record.js";
 import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import {
   SESSIONS_SUMMARY_SCHEMA_VERSION,
@@ -41,11 +42,11 @@ function summaryPayload(entries) {
 }
 
 function turn(overrides = {}) {
-  return {
+  return turnRecord({
     turnScopeId: "root",
     executionId: "agent:root",
     executionKind: "agent",
-    rootExecutionId: "agent:root",
+    rootExecutionId: `agent:${overrides.turnScopeId ?? "root"}`,
     state: "processing",
     phase: "processing",
     executionState: "sending",
@@ -53,7 +54,7 @@ function turn(overrides = {}) {
     sequence: 2,
     updatedAt: "2026-07-20T00:00:00.000Z",
     ...overrides,
-  };
+  });
 }
 
 function service(sessions) {
@@ -101,7 +102,7 @@ test("projects root workflow and nested child agents from authoritative turn lif
             executionId: "agent:child",
             parentExecutionId: "agent:root",
             rootExecutionId: "agent:root",
-            origin: { type: "workflow_node", nodeExecutionId: "node-1" },
+            origin: { type: "workflow_node", workflowRunId: "wf-1", nodeExecutionId: "node-1" },
           }),
         },
       },
@@ -176,6 +177,7 @@ test("children query returns direct children only and preserves historical attem
             turnScopeId: "attempt-1",
             executionId: "agent:attempt-1",
             parentExecutionId: "agent:root",
+            rootExecutionId: "agent:root",
           }),
         },
       },
@@ -191,6 +193,7 @@ test("children query returns direct children only and preserves historical attem
             turnScopeId: "attempt-2",
             executionId: "agent:attempt-2",
             parentExecutionId: "agent:root",
+            rootExecutionId: "agent:root",
           }),
         },
       },
@@ -206,6 +209,7 @@ test("children query returns direct children only and preserves historical attem
             turnScopeId: "nested",
             executionId: "agent:nested",
             parentExecutionId: "agent:attempt-2",
+            rootExecutionId: "agent:root",
           }),
         },
       },

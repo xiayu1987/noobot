@@ -86,10 +86,9 @@ export async function bindTurnAttachments({
     identity.userId,
     identity.sessionId,
     async () => {
-      const session = await this.sessionRepo.findById(identity.userId, identity.sessionId, {
+      const session = await this.sessionRepo.requireById(identity.userId, identity.sessionId, {
         persistenceContext,
       });
-      if (!session) throw Object.assign(new Error("session not found"), { statusCode: 404 });
       const idempotency = decideCommandIdempotency({
         commandId: identity.commandId,
         type: SESSION_COMMAND.TURN_ATTACHMENTS_BIND,
@@ -167,10 +166,9 @@ export async function bindTurnAttachments({
         expectedAggregateVersion: currentVersion,
         persistenceContext,
       });
-      const savedSession = await this.sessionRepo.findById(identity.userId, identity.sessionId, {
+      const savedSession = await this.sessionRepo.requireById(identity.userId, identity.sessionId, {
         persistenceContext,
       });
-      if (!savedSession) throw new TypeError("attachment binding saved Session is missing");
       const savedMessage = savedSession.messages.find(
         (message) => text(message?.messageUid) === identity.messageUid,
       );

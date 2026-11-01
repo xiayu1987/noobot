@@ -95,35 +95,35 @@ export function resolveAuthoritativeModelContext(context = {}) {
   return null;
 }
 
+function validateModelContextProtocol(modelContext) {
+  if (modelContext == null) return [];
+  if (!asObject(modelContext)) return ["modelContext should be object"];
+  const warnings = [];
+  if (Number(modelContext.protocolVersion) !== MODEL_CONTEXT_PROTOCOL_VERSION)
+    warnings.push(`modelContext.protocolVersion must equal ${MODEL_CONTEXT_PROTOCOL_VERSION}`);
+  if (!Number.isInteger(modelContext.checkpointRevision) || modelContext.checkpointRevision < 0)
+    warnings.push("modelContext.checkpointRevision must be a non-negative integer");
+  const activeTurnIdentity = modelContext.activeTurnIdentity;
+  if (
+    activeTurnIdentity != null &&
+    (!asObject(activeTurnIdentity) ||
+      !text(activeTurnIdentity?.dialogProcessId) ||
+      !text(activeTurnIdentity?.turnScopeId))
+  )
+    warnings.push("modelContext.activeTurnIdentity must contain dialogProcessId and turnScopeId");
+  if (modelContext.messages != null && !Array.isArray(modelContext.messages))
+    warnings.push("modelContext.messages should be array");
+  if (modelContext.messageBlocks != null && !asObject(modelContext.messageBlocks))
+    warnings.push("modelContext.messageBlocks should be object");
+  return warnings;
+}
+
 export function validateHookContextProtocol(context = {}, { point = "" } = {}) {
   const warnings = [];
   const version = Number(context?.contextProtocolVersion);
   if (version !== HOOK_PROTOCOL_VERSION)
     warnings.push(`contextProtocolVersion must equal ${HOOK_PROTOCOL_VERSION}`);
-  const modelContext = context?.modelContext;
-  if (modelContext != null) {
-    if (!asObject(modelContext)) warnings.push("modelContext should be object");
-    else {
-      if (Number(modelContext.protocolVersion) !== MODEL_CONTEXT_PROTOCOL_VERSION)
-        warnings.push(`modelContext.protocolVersion must equal ${MODEL_CONTEXT_PROTOCOL_VERSION}`);
-      if (!Number.isInteger(modelContext.checkpointRevision) || modelContext.checkpointRevision < 0)
-        warnings.push("modelContext.checkpointRevision must be a non-negative integer");
-      const activeTurnIdentity = modelContext.activeTurnIdentity;
-      if (
-        activeTurnIdentity != null &&
-        (!asObject(activeTurnIdentity) ||
-          !text(activeTurnIdentity?.dialogProcessId) ||
-          !text(activeTurnIdentity?.turnScopeId))
-      )
-        warnings.push(
-          "modelContext.activeTurnIdentity must contain dialogProcessId and turnScopeId",
-        );
-      if (modelContext.messages != null && !Array.isArray(modelContext.messages))
-        warnings.push("modelContext.messages should be array");
-      if (modelContext.messageBlocks != null && !asObject(modelContext.messageBlocks))
-        warnings.push("modelContext.messageBlocks should be object");
-    }
-  }
+  warnings.push(...validateModelContextProtocol(context?.modelContext));
   if (typeof context?.resumeFromStoppedSnapshot !== "boolean")
     warnings.push("resumeFromStoppedSnapshot must be boolean");
   const normalizedPoint = text(point || context?.point);

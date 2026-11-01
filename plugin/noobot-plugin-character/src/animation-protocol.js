@@ -541,26 +541,35 @@ function validateCharacterTimeline(
     });
 }
 
+function validateTrackFrames(trackValue, duration, trackPath, context) {
+  let previous = -1;
+  for (const [keyframeIndex, frame] of trackValue.keyframes.entries()) {
+    const framePath = [...trackPath, "keyframes", keyframeIndex];
+    if (frame.time <= previous || frame.time > duration)
+      context.addIssue({
+        code: "custom",
+        path: [...framePath, "time"],
+        message: "keyframe times must increase and stay within segment duration",
+      });
+    if (!frame[trackValue.property])
+      context.addIssue({
+        code: "custom",
+        path: [...framePath, trackValue.property],
+        message: `keyframe requires ${trackValue.property}`,
+      });
+    previous = frame.time;
+  }
+}
+
 function validateSegment(segmentValue, segmentPath, context) {
   if (segmentValue.type === "keyframes") {
     for (const [trackIndex, trackValue] of segmentValue.tracks.entries()) {
-      let previous = -1;
-      for (const [keyframeIndex, frame] of trackValue.keyframes.entries()) {
-        const framePath = [...segmentPath, "tracks", trackIndex, "keyframes", keyframeIndex];
-        if (frame.time <= previous || frame.time > segmentValue.duration)
-          context.addIssue({
-            code: "custom",
-            path: [...framePath, "time"],
-            message: "keyframe times must increase and stay within segment duration",
-          });
-        if (!frame[trackValue.property])
-          context.addIssue({
-            code: "custom",
-            path: [...framePath, trackValue.property],
-            message: `keyframe requires ${trackValue.property}`,
-          });
-        previous = frame.time;
-      }
+      validateTrackFrames(
+        trackValue,
+        segmentValue.duration,
+        [...segmentPath, "tracks", trackIndex],
+        context,
+      );
       validateTrackBounds(trackValue, segmentValue.duration, segmentPath, trackIndex, context);
     }
   }

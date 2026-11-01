@@ -34,6 +34,7 @@ const event = (sequence, eventId = `event-${sequence}`, overrides = {}) => {
     action: "send",
     executionState: "sending",
     occurredAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
     payload: overrides.payload,
   });
   return createTurnLifecycleEventEnvelope(payload, { producer: { type: "agent", id: "agent-1" } });

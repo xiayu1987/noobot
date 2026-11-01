@@ -163,6 +163,21 @@ export const WORKSPACE_LAYOUT_UPGRADES = Object.freeze([
 
     preflight: true,
   }),
+  Object.freeze({
+    id: "session-artifact-events-v28",
+    toVersion: 28,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MESSAGE_IDENTITY,
+  }),
+  Object.freeze({
+    id: "session-turn-lifecycle-record-v29",
+    toVersion: 29,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MESSAGE_IDENTITY,
+  }),
+  Object.freeze({
+    id: "attachment-lifecycle-event-identity-v30",
+    toVersion: 30,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MESSAGE_IDENTITY,
+  }),
 ]);
 
 function layoutStateError(message) {

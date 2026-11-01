@@ -34,11 +34,24 @@ import {
   validateTurnAcceptanceUserMessage,
   validateSessionCommand,
   assertSessionScopeIdentity,
+  assertSessionCommand,
 } from "../src/index.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
+test("invalid command rejection exposes its protocol classification and validation errors", () => {
+  assert.throws(
+    () => assertSessionCommand({}),
+    (error) => {
+      assert.equal(error.code, SESSION_ERROR_CODE.COMMAND_INVALID);
+      assert.deepEqual(error.protocolErrors, validateSessionCommand({}).errors);
+      assert.equal(error.statusCode, undefined);
+      return error instanceof TypeError;
+    },
+  );
+});
+
 test("Session artifact and Turn commit metadata have one canonical protocol shape", () => {
-  assert.equal(SESSION_ARTIFACT_SCHEMA_VERSION, 19);
+  assert.equal(SESSION_ARTIFACT_SCHEMA_VERSION, 21);
   assert.deepEqual(
     normalizeTurnCommitMetadata({
       action: " SEND ",

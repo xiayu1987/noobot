@@ -65,31 +65,41 @@ function countSnapshotMessages(messageBlocks) {
   };
 }
 
+function auditSnapshotBlock(messages, blockName, audit) {
+  const summary = { total: 0, complete: 0, missing: 0, partial: 0 };
+  for (const message of messages) {
+    summary.total += 1;
+    const { key } = inspectContextMessageIdentity(message);
+    if (!key) audit.unidentifiedMessageCount += 1;
+    const dialogProcessId = readContextMessageField(message, "dialogProcessId");
+    const turnScopeId = readContextMessageField(message, "turnScopeId");
+    const presentCount = Number(Boolean(dialogProcessId)) + Number(Boolean(turnScopeId));
+    if (presentCount === 2) {
+      summary.complete += 1;
+      continue;
+    }
+    if (presentCount === 1) {
+      summary.partial += 1;
+      if (key) audit.partialMessageKeys.push(key);
+      continue;
+    }
+    summary.missing += 1;
+    if (key && blockName !== "system") audit.missingScopedMessageKeys.push(key);
+  }
+  return summary;
+}
+
 function summarizeSnapshotRoundIdentity(messageBlocks) {
   const summary = {};
-  const partialMessageKeys = [];
-  const missingScopedMessageKeys = [];
-  let unidentifiedMessageCount = 0;
+  const audit = {
+    partialMessageKeys: [],
+    missingScopedMessageKeys: [],
+    unidentifiedMessageCount: 0,
+  };
   for (const blockName of MESSAGE_BLOCK_LANES) {
-    const blockSummary = { total: 0, complete: 0, missing: 0, partial: 0 };
-    for (const message of messageBlocks[blockName]) {
-      blockSummary.total += 1;
-      const { key } = inspectContextMessageIdentity(message);
-      if (!key) unidentifiedMessageCount += 1;
-      const dialogProcessId = readContextMessageField(message, "dialogProcessId");
-      const turnScopeId = readContextMessageField(message, "turnScopeId");
-      const presentCount = Number(Boolean(dialogProcessId)) + Number(Boolean(turnScopeId));
-      if (presentCount === 2) blockSummary.complete += 1;
-      else if (presentCount === 1) {
-        blockSummary.partial += 1;
-        if (key) partialMessageKeys.push(key);
-      } else {
-        blockSummary.missing += 1;
-        if (key && blockName !== "system") missingScopedMessageKeys.push(key);
-      }
-    }
-    summary[blockName] = blockSummary;
+    summary[blockName] = auditSnapshotBlock(messageBlocks[blockName], blockName, audit);
   }
+  const { partialMessageKeys, missingScopedMessageKeys, unidentifiedMessageCount } = audit;
   return {
     blocks: summary,
     unidentifiedMessageCount,

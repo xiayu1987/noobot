@@ -23,6 +23,7 @@ import { createLiveProjectionController } from "./workflow-node-session-viewer/l
 import { createNodeSessionOpeningController } from "./workflow-node-session-viewer/node-session-opening.js";
 import { text } from "@noobot/shared/value";
 import { projectSessionMetadata } from "../runtime/workflowUnifiedSessionDetail.js";
+import { requireSelectedExecutionDetail } from "@noobot/plugin-protocol/frontend";
 
 export {
   isSameWorkflowDrawerRoute,
@@ -43,8 +44,10 @@ function createExecutionController({ props, refs, nodeViewTransaction }) {
   function applyExecutionDetail(executionId = "") {
     const id = text(executionId);
     if (!id) return false;
-    const detail = props.selectExecutionDetail(id);
-    if (!detail) return false;
+    const detail = requireSelectedExecutionDetail(props.selectExecutionDetail(id), {
+      executionId: id,
+    });
+    if (detail === null) return false;
     const { session } = detail;
     refs.selectedExecutionId.value = id;
     nodeViewTransaction.replace(nodeViewTransaction.ticket(), {
@@ -84,7 +87,6 @@ function createViewerCommands(context) {
     const route = buildWorkflowDrawerRoute(refs.selectedNode.value || {});
     return fetchWorkflowNodeExecutionReport({
       props,
-      translate: context.translate,
       rootSessionId: route.rootSessionId,
       routeDialogProcessId: route.dialogProcessId,
       dialogProcessId,

@@ -10,6 +10,7 @@ import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStor
 
 function lifecycle(eventType, sequence, state, executionState, extra = {}) {
   return createTurnLifecycleEnvelope({
+    updatedAt: "2026-01-01T00:00:00.000Z",
     eventType,
     eventId: `event-${sequence}`,
     commandId: "command-turn-a",

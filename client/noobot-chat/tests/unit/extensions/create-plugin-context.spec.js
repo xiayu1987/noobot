@@ -31,10 +31,94 @@ describe("plugin context", () => {
     expect(updateConfig).toHaveBeenCalledTimes(1);
   });
 
-  it("rejects an empty namespace and tolerates unavailable storage", () => {
-    expect(() => createPluginContext()).toThrow("plugin context id is required");
-    const context = createPluginContext({ pluginId: "workflow" });
+  it("requires a namespace and both storage dependencies", () => {
+    expect(() => createPluginContext()).toThrow(TypeError);
+    expect(() => createPluginContext({})).toThrow("plugin context id is required");
+    expect(() => createPluginContext({ pluginId: "workflow" })).toThrow(
+      "requires function dependencies: getConfig, updateConfig",
+    );
+    expect(() => createPluginContext({ pluginId: "workflow", getConfig: () => ({}) })).toThrow(
+      "requires function dependencies: updateConfig",
+    );
+    expect(() => createPluginContext({ pluginId: "workflow", updateConfig: vi.fn() })).toThrow(
+      "requires function dependencies: getConfig",
+    );
+  });
+
+  it("creates an absent namespace without changing other plugins", () => {
+    let root = { harness: { enabled: true } };
+    const context = createPluginContext({
+      pluginId: "workflow",
+      getConfig: () => root,
+      updateConfig: (next) => {
+        root = next;
+      },
+    });
     expect(context.config.get()).toEqual({});
-    expect(() => context.config.patch({ semanticModel: "m1" })).not.toThrow();
+    context.config.patch({ semanticModel: "m1" });
+    expect(context.config.get()).toEqual({ semanticModel: "m1" });
+    expect(root.harness).toEqual({ enabled: true });
+  });
+
+  it.each([undefined, null, [], "invalid", 42])("rejects an invalid root %j", (root) => {
+    const updateConfig = vi.fn();
+    const context = createPluginContext({
+      pluginId: "workflow",
+      getConfig: () => root,
+      updateConfig,
+    });
+    expect(() => context.config.get()).toThrow("plugin config root must be an object");
+    expect(() => context.config.patch({ semanticModel: "m1" })).toThrow(
+      "plugin config root must be an object",
+    );
+    expect(updateConfig).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, null, [], "invalid", 42])("rejects an invalid namespace %j", (value) => {
+    const updateConfig = vi.fn();
+    const context = createPluginContext({
+      pluginId: "workflow",
+      getConfig: () => ({ workflow: value }),
+      updateConfig,
+    });
+    expect(() => context.config.get()).toThrow("plugin config workflow must be an object");
+    expect(() => context.config.patch({ semanticModel: "m1" })).toThrow(
+      "plugin config workflow must be an object",
+    );
+    expect(updateConfig).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, null, [], "invalid", 42])("rejects an invalid patch %j", (patch) => {
+    const updateConfig = vi.fn();
+    const context = createPluginContext({
+      pluginId: "workflow",
+      getConfig: () => ({}),
+      updateConfig,
+    });
+    expect(() => context.config.patch(patch)).toThrow("plugin config patch must be an object");
+    expect(updateConfig).not.toHaveBeenCalled();
+  });
+
+  it("propagates storage read and write failures", () => {
+    const readError = new Error("storage read failed");
+    const readContext = createPluginContext({
+      pluginId: "workflow",
+      getConfig: () => {
+        throw readError;
+      },
+      updateConfig: vi.fn(),
+    });
+    expect(() => readContext.config.get()).toThrow(readError);
+    expect(() => readContext.config.patch({})).toThrow(readError);
+
+    const writeError = new Error("storage write failed");
+    const writeContext = createPluginContext({
+      pluginId: "workflow",
+      getConfig: () => ({}),
+      updateConfig: () => {
+        throw writeError;
+      },
+    });
+    expect(() => writeContext.config.patch({})).toThrow(writeError);
   });
 });

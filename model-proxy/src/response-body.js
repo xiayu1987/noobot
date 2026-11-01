@@ -15,29 +15,23 @@ const brotliDecompress = util.promisify(zlib.brotliDecompress);
 
 async function decodeBodyByEncoding(buffer, encoding) {
   if (!encoding) return buffer;
-  const enc = String(encoding).toLowerCase();
-
-  try {
-    if (enc.includes("gzip")) return await gunzip(buffer);
-    if (enc.includes("deflate")) return await inflate(buffer);
-    if (enc.includes("br")) return await brotliDecompress(buffer);
-    return buffer;
-  } catch {
-    return buffer;
+  const encodings = String(encoding)
+    .toLowerCase()
+    .split(",")
+    .map((value) => value.trim());
+  for (const enc of encodings.reverse()) {
+    if (enc === "identity") continue;
+    const decode = { gzip: gunzip, deflate: inflate, br: brotliDecompress }[enc];
+    if (typeof decode !== "function") throw new TypeError(`unsupported content encoding: ${enc}`);
+    buffer = await decode(buffer);
   }
+  return buffer;
 }
 
 function normalizeBodyText(inputText, contentType = "") {
   const ct = String(contentType).toLowerCase();
 
-  if (ct.includes("application/json")) {
-    try {
-      const obj = JSON.parse(inputText);
-      return JSON.stringify(obj, null, 2);
-    } catch {
-      return inputText;
-    }
-  }
+  if (ct.includes("application/json")) return JSON.stringify(JSON.parse(inputText), null, 2);
 
   return inputText;
 }
@@ -102,27 +96,29 @@ function extractResponsesOutput(payloadObject = null) {
   for (const item of payloadObject.output) {
     if (!isObjectLike(item)) continue;
     if (item.type === "function_call") {
-      const normalized = normalizeResponsesOutputItem(item);
-      if (normalized) toolCalls.push(normalized);
+      toolCalls.push(normalizeResponsesOutputItem(item));
       continue;
     }
     if (item.type === "reasoning") {
       const summaries = Array.isArray(item.summary) ? item.summary : [];
-      for (const summary of summaries) {
-        const value = typeof summary === "string" ? summary : summary?.text;
-        if (text(value)) reasoning.push(String(value).trim());
-      }
+      reasoning.push(
+        ...summaries
+          .map((summary) => text(typeof summary === "string" ? summary : summary?.text))
+          .filter(Boolean),
+      );
       continue;
     }
-    if (item.type === "message" && Array.isArray(item.content)) {
-      for (const block of item.content) {
-        if (block?.type === "output_text" || block?.type === "text") {
-          if (text(block.text)) textValue.push(String(block.text).trim());
-        }
-      }
-    }
+    if (item.type !== "message" || !Array.isArray(item.content)) continue;
+    textValue.push(...extractMessageTextBlocks(item.content));
   }
   return { text: textValue.join(""), toolCalls, reasoning };
+}
+
+function extractMessageTextBlocks(content) {
+  return content
+    .filter((block) => block?.type === "output_text" || block?.type === "text")
+    .map((block) => text(block.text))
+    .filter(Boolean);
 }
 
 function extractAnthropicContent(payloadObject = null) {
@@ -240,12 +236,21 @@ function extractFinalTextFromSseBody(sseText = "") {
       latestResolvedText = payloadText;
       continue;
     }
-    const payloadResolvedText = extractFinalTextFromJsonPayload(payloadObject);
-    if (!payloadResolvedText) continue;
-
     const payloadChoices = Array.isArray(payloadObject?.choices) ? payloadObject.choices : [];
     const firstChoice =
       payloadChoices[0] && typeof payloadChoices[0] === "object" ? payloadChoices[0] : null;
+    const deltaToolCalls = Array.isArray(firstChoice?.delta?.tool_calls)
+      ? firstChoice.delta.tool_calls
+      : [];
+    deltaToolCalls.forEach((item, idx) => upsertToolCallDelta(item, idx));
+    if (
+      deltaToolCalls.length &&
+      !text(firstChoice?.delta?.content) &&
+      !text(firstChoice?.message?.content)
+    )
+      continue;
+    const payloadResolvedText = extractFinalTextFromJsonPayload(payloadObject);
+    if (!payloadResolvedText) continue;
     const hasDeltaContent = typeof firstChoice?.delta?.content === "string";
     if (hasDeltaContent) {
       deltaTextBuffer += String(firstChoice?.delta?.content || "");
@@ -253,34 +258,30 @@ function extractFinalTextFromSseBody(sseText = "") {
     } else {
       latestResolvedText = payloadResolvedText;
     }
-
-    const deltaToolCalls = Array.isArray(firstChoice?.delta?.tool_calls)
-      ? firstChoice.delta.tool_calls
-      : [];
-    if (deltaToolCalls.length) {
-      deltaToolCalls.forEach((item, idx) => upsertToolCallDelta(item, idx));
-      if (!latestResolvedText) latestResolvedText = "[tool_calls_streaming]";
-    }
   }
 
-  if (toolCallBufferByIndex.size && !text(latestResolvedText)) {
-    const toolCalls = Array.from(toolCallBufferByIndex.entries())
-      .sort((left, right) => left[0] - right[0])
-      .map(([, item]) => normalizeToolCallItem(item))
-      .filter(Boolean);
-    if (toolCalls.length) {
-      return JSON.stringify(
-        {
-          type: "tool_calls",
-          tool_calls: toolCalls,
-        },
-        null,
-        2,
-      );
-    }
-  }
+  return (
+    projectSseToolCalls(toolCallBufferByIndex, latestResolvedText) ||
+    latestResolvedText ||
+    dataPayloads[dataPayloads.length - 1]
+  );
+}
 
-  return latestResolvedText || dataPayloads[dataPayloads.length - 1];
+function projectSseToolCalls(toolCallBufferByIndex, latestResolvedText) {
+  if (!toolCallBufferByIndex.size || text(latestResolvedText)) return "";
+  const toolCalls = Array.from(toolCallBufferByIndex.entries())
+    .sort((left, right) => left[0] - right[0])
+    .map(([, item]) => normalizeToolCallItem(item))
+    .filter(Boolean);
+  if (!toolCalls.length) return "";
+  return JSON.stringify(
+    {
+      type: "tool_calls",
+      tool_calls: toolCalls,
+    },
+    null,
+    2,
+  );
 }
 
 function resolveFinalResponseBodyText(bodyText = "", contentType = "") {

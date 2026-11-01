@@ -91,6 +91,35 @@ function dependencyViolation(importer, target) {
   return "";
 }
 
+function inspectScriptDependencies(filePath, script) {
+  let imports;
+  try {
+    [imports] = parse(script, filePath);
+  } catch (error) {
+    violations.push(`${path.relative(repoRoot, filePath)} cannot be parsed: ${error.message}`);
+    return;
+  }
+  for (const { specifier } of imports) {
+    if (!specifier?.startsWith(".")) continue;
+    const target = path.resolve(path.dirname(filePath), specifier.replace(/[?#].*$/, ""));
+    const reason = dependencyViolation(filePath, target);
+    if (reason) {
+      violations.push(`${path.relative(repoRoot, filePath)}: ${reason} (${specifier})`);
+    }
+  }
+}
+
+function inspectFileDependencies(filePath) {
+  let regions;
+  try {
+    regions = vueScriptRegions(filePath, fs.readFileSync(filePath, "utf8"));
+  } catch (error) {
+    violations.push(`${path.relative(repoRoot, filePath)} cannot be parsed: ${error.message}`);
+    return;
+  }
+  for (const { source } of regions) inspectScriptDependencies(filePath, source);
+}
+
 async function inspectDependencies(directory) {
   if (!fs.existsSync(directory)) return;
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
@@ -99,33 +128,8 @@ async function inspectDependencies(directory) {
       await inspectDependencies(filePath);
       continue;
     }
-    if (!entry.isFile() || !inspectedExtensions.has(path.extname(entry.name).toLowerCase()))
-      continue;
-    let regions;
-    try {
-      regions = vueScriptRegions(filePath, fs.readFileSync(filePath, "utf8"));
-    } catch (error) {
-      violations.push(`${path.relative(repoRoot, filePath)} cannot be parsed: ${error.message}`);
-      continue;
-    }
-    for (const { source: script } of regions) {
-      let imports;
-      try {
-        [imports] = parse(script, filePath);
-      } catch (error) {
-        violations.push(`${path.relative(repoRoot, filePath)} cannot be parsed: ${error.message}`);
-        continue;
-      }
-      for (const moduleImport of imports) {
-        const specifier = moduleImport.specifier;
-        if (!specifier?.startsWith(".")) continue;
-        const target = path.resolve(path.dirname(filePath), specifier.replace(/[?#].*$/, ""));
-        const reason = dependencyViolation(filePath, target);
-        if (reason) {
-          violations.push(`${path.relative(repoRoot, filePath)}: ${reason} (${specifier})`);
-        }
-      }
-    }
+    if (entry.isFile() && inspectedExtensions.has(path.extname(entry.name).toLowerCase()))
+      inspectFileDependencies(filePath);
   }
 }
 
@@ -141,23 +145,18 @@ for (const relativeDirectory of retiredTestDirectories) {
     violations.push(`tests/unit/${relativeDirectory} is retired; mirror the owning source layer`);
   }
 }
-if (fs.existsSync(agentProxyTestRoot)) {
-  for (const entry of fs.readdirSync(agentProxyTestRoot, { withFileTypes: true })) {
-    if (entry.isFile() && /\.(?:test|spec)\.js$/.test(entry.name)) {
-      violations.push(`agent-proxy/__tests__/${entry.name} must belong to an owning source layer`);
-    }
-  }
-}
-for (const pluginTestRoot of pluginTestRoots) {
-  if (!fs.existsSync(pluginTestRoot)) continue;
-  for (const entry of fs.readdirSync(pluginTestRoot, { withFileTypes: true })) {
+function inspectTestRoot(directory, requirement) {
+  if (!fs.existsSync(directory)) return;
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     if (entry.isFile() && /\.(?:test|spec)\.js$/.test(entry.name)) {
       violations.push(
-        `${path.relative(repoRoot, path.join(pluginTestRoot, entry.name))} must belong to a test domain`,
+        `${path.relative(repoRoot, path.join(directory, entry.name))} must belong to ${requirement}`,
       );
     }
   }
 }
+inspectTestRoot(agentProxyTestRoot, "an owning source layer");
+for (const pluginTestRoot of pluginTestRoots) inspectTestRoot(pluginTestRoot, "a test domain");
 
 await init;
 for (const directory of inspectedSourceRoots) inspectDirectory(directory);

@@ -10,7 +10,6 @@ import {
 } from "@noobot/session-protocol/turn-scope-identity";
 import { AGENT_CHANNEL_STATE, FrontendRunState, STATUS_STEP_STAGE } from "./constants.js";
 import { isStageStatusStepState, resolvePendingCommandStatusStep } from "./statusStep.js";
-import { findTurnByScope, resolveTurnRoute } from "./turnRuntimeRegistryIdentity.js";
 
 export function turnRuntimeDisplayState(turn = null) {
   if (!turn || turn.terminal) return "";
@@ -44,12 +43,9 @@ function latestObservedTurn(bucket) {
   return Object.values(bucket.turns)
     .filter((turn) => Boolean(turn?.state || turn?.terminal || turn?.commandPending))
     .sort((left, right) => {
-      const sequenceDelta = Number(right?.lifecycleSeq || 0) - Number(left?.lifecycleSeq || 0);
+      const sequenceDelta = right.lifecycleSeq - left.lifecycleSeq;
       if (sequenceDelta) return sequenceDelta;
-      return (
-        Number(right?.updatedAtMs || right?.finishedAtMs || 0) -
-        Number(left?.updatedAtMs || left?.finishedAtMs || 0)
-      );
+      return right.updatedAtMs - left.updatedAtMs;
     })[0];
 }
 
@@ -65,11 +61,11 @@ export function selectTurnRuntimeByScope(registry, sessionId, turnScopeId) {
   return selectSessionRuntimeBucket(registry, sessionId)?.turns[scope] ?? null;
 }
 
-export function resolveTurnRuntimeByScope(registry, turnScopeId, { sessionId = "" } = {}) {
+export function resolveTurnRuntimeByScope(registry, turnScopeId, { sessionId }) {
   const scope = requireOptionalCanonicalTurnScopeId(turnScopeId);
   const id = text(sessionId);
-  if (!scope) return null;
-  return findTurnByScope(registry, scope, { sessionId: id });
+  if (!scope || !id) return null;
+  return selectTurnRuntimeByScope(registry, id, scope);
 }
 
 export function selectSessionTurnRuntime(registry, sessionId) {
@@ -126,26 +122,13 @@ export function selectTurnMessageRuntime(
     thinkingFinishedAt: "",
     modelLoopRound: 0,
   };
-  let normalizedTurnScopeId = requireOptionalCanonicalTurnScopeId(turnScopeId);
-  let routeSessionId = "";
-  if (!normalizedTurnScopeId && normalizedDialogProcessId) {
-    const route = resolveTurnRoute(registry, normalizedDialogProcessId);
-    normalizedTurnScopeId = route?.turnScopeId || "";
-    routeSessionId = text(route?.sessionId);
-  }
+  const normalizedTurnScopeId = defaultRuntimeView.turnScopeId;
   const turn = normalizedTurnScopeId
     ? resolveTurnRuntimeByScope(registry, normalizedTurnScopeId, {
-        sessionId: normalizedSessionId || routeSessionId,
+        sessionId: normalizedSessionId,
       })
     : null;
-  if (!turn) {
-    const turnInAnotherSession =
-      normalizedSessionId && normalizedTurnScopeId
-        ? resolveTurnRuntimeByScope(registry, normalizedTurnScopeId)
-        : null;
-    return turnInAnotherSession ? null : defaultRuntimeView;
-  }
-  if (normalizedSessionId && turn.sessionId !== normalizedSessionId) return null;
+  if (!turn) return defaultRuntimeView;
   const state =
     turn.state === AGENT_CHANNEL_STATE.SENDING ? FrontendRunState.PROCESSING : turn.state || "";
   return {
@@ -161,7 +144,7 @@ export function selectTurnMessageRuntime(
     lifecycleObserved: turn.lifecycleObserved === true,
     authority: turn.authority || "none",
     updatedAt: turn.updatedAt || "",
-    updatedAtMs: Number(turn.updatedAtMs || 0),
+    updatedAtMs: turn.updatedAtMs,
     terminal: turn.terminal || null,
     running:
       !turn.finishedAt &&
@@ -190,8 +173,7 @@ export function resolveLatestStoppedTurn(registry, sessionId) {
       .filter((turn) => turn.terminal === "user_stopped")
       .sort(
         (left, right) =>
-          Number(right.finishedAtMs || right.updatedAtMs || 0) -
-          Number(left.finishedAtMs || left.updatedAtMs || 0),
+          (right.finishedAtMs || right.updatedAtMs) - (left.finishedAtMs || left.updatedAtMs),
       )[0] || null
   );
 }
@@ -209,12 +191,9 @@ export function resolveLatestContinuableStoppedTurn(registry, sessionId) {
       .filter((turn) => turn.terminal === "user_stopped")
       .filter((turn) => !turn.continuedByTurnScopeId && !consumedScopes.has(turn.turnScopeId))
       .sort((left, right) => {
-        const sequenceDelta = Number(right.lifecycleSeq || 0) - Number(left.lifecycleSeq || 0);
+        const sequenceDelta = right.lifecycleSeq - left.lifecycleSeq;
         if (sequenceDelta) return sequenceDelta;
-        return (
-          Number(right.finishedAtMs || right.updatedAtMs || 0) -
-          Number(left.finishedAtMs || left.updatedAtMs || 0)
-        );
+        return (right.finishedAtMs || right.updatedAtMs) - (left.finishedAtMs || left.updatedAtMs);
       })[0] || null
   );
 }

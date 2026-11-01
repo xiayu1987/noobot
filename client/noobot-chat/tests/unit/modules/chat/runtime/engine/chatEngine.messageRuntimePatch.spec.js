@@ -31,6 +31,7 @@ describe("chatEngine message runtime patch isolation", () => {
     ]);
     const turnRuntimeRegistry = ref(createTurnRuntimeRegistryState());
     const event = {
+      updatedAtMs: 1767225600000,
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       state: AGENT_CHANNEL_STATE.SENDING,
       sessionId: "a",
@@ -39,6 +40,7 @@ describe("chatEngine message runtime patch isolation", () => {
       seq: 1,
     };
     applyTurnRuntimeEvent(turnRuntimeRegistry.value, {
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
       sessionId: "a",
       turnScopeId: "ta",
@@ -58,12 +60,15 @@ describe("chatEngine message runtime patch isolation", () => {
     const sessions = ref([{ sessionId: "a", messages: [message] }]);
     const turnRuntimeRegistry = ref(createTurnRuntimeRegistryState());
     applyTurnRuntimeEvent(turnRuntimeRegistry.value, {
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
       sessionId: "a",
       turnScopeId: "ta",
       dialogProcessId: "da",
     });
     applyTurnRuntimeEvent(turnRuntimeRegistry.value, {
+      updatedAtMs: 1767225600000,
+      seq: 1,
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       state: AGENT_CHANNEL_STATE.SENDING,
       sessionId: "a",

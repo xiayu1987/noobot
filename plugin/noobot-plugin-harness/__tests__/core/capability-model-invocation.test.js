@@ -29,6 +29,25 @@ test("capability-model deadline aborts and settles before the enclosing hook dea
   assert.ok(Date.now() - startedAt < 200);
 });
 
+test("capability-model timeout is a plugin failure, not a host execution abort", async () => {
+  const error = await invokeCapabilityModelWithinDeadline({
+    timeoutMs: 5,
+    invoker: ({ signal }) =>
+      new Promise((_, reject) => {
+        signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+      }),
+  }).catch((caught) => caught);
+  assert.equal(error.code, "CAPABILITY_MODEL_TIMEOUT");
+  assert.notEqual(error.name, "AbortError");
+});
+
+test("capability-model invocation rejects a missing invoker", async () => {
+  await assert.rejects(
+    invokeCapabilityModelWithinDeadline({ timeoutMs: 5 }),
+    /requires an invoker function/,
+  );
+});
+
 test("parent hook cancellation remains the authoritative abort reason", async () => {
   const parent = new AbortController();
   const parentError = new Error("parent stopped");

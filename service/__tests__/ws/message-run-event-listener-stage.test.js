@@ -10,6 +10,9 @@ import { createEventEnvelope, EVENT_FAMILY, getEventFamily } from "@noobot/event
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
 import { createMessageRunEventListener } from "../../ws/chat-websocket/message-run/event-listener-stage.js";
 import { createTestLifecycleEnvelope } from "../routes/chat-websocket-server.turn-lifecycle.fixtures.js";
+import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
+
+useProvisionedRuntimeEventsWorkspace(["u1"]);
 
 function createListener(dispatchResult, runHandle = {}) {
   const calls = [];
@@ -112,4 +115,53 @@ test("transient message events bypass the authority dispatcher", async () => {
   assert.deepEqual(result, { dispatched: true, delivered: 1 });
   assert.deepEqual(sent, [MESSAGE_EVENT_WIRE_EVENT]);
   assert.equal(calls.length, 0);
+});
+
+test("running signals request a transition without rewriting stored execution ownership", async () => {
+  const requests = [];
+  const context = {
+    state: { currentRunMeta: { dialogProcessId: "dialog-1" } },
+    lifecycle: {},
+    commitTurnLifecycle: async (request) => {
+      requests.push(request);
+      return { applied: true, turn: { executionId: "agent:scope-1" } };
+    },
+  };
+  const run = {
+    userId: "u1",
+    sessionId: "root-session",
+    turnScopeId: "scope-1",
+    dialogProcessId: "dialog-1",
+  };
+  const active = { runHandle: {}, runMeta: { turnScopeId: "scope-1" } };
+  const { eventListener, lifecycle } = createMessageRunEventListener(
+    context,
+    run,
+    { commandId: "accepted-1" },
+    active,
+  );
+  await eventListener.onEvent({
+    event: AGENT_RUN_EVENT.LIFECYCLE_STATE_CHANGED,
+    data: {
+      state: "running",
+      sessionId: run.sessionId,
+      turnScopeId: run.turnScopeId,
+      executionId: "untrusted-copy",
+      origin: undefined,
+    },
+  });
+  await lifecycle.processingStarted;
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].eventType, "turn.processing_started");
+  for (const field of [
+    "executionId",
+    "executionKind",
+    "parentExecutionId",
+    "rootExecutionId",
+    "origin",
+    "stage",
+  ]) {
+    assert.equal(Object.hasOwn(requests[0], field), false);
+  }
+  assert.equal(context.lifecycle.latestTurn.executionId, "agent:scope-1");
 });

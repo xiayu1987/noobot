@@ -89,3 +89,26 @@ test("analyzes exports without executing repository modules", async (t) => {
   assert.deepEqual(await dropped(project), []);
   assert.equal(fs.existsSync(path.join(project.root, "executed")), false);
 });
+
+test("propagates recursive namespaces while excluding unresolved nested collisions", async (t) => {
+  const project = fixture(t, {
+    "src/index.js": 'export * from "./nested.js";\nexport * from "./right.js";\n',
+    "src/nested.js": 'export * from "./left.js";\nexport * from "./other.js";\n',
+    "src/left.js": "export const hidden = 1;\nexport const shared = 2;\n",
+    "src/other.js": "export const hidden = 3;\n",
+    "src/right.js": "export const shared = 4;\nexport const hidden = 5;\n",
+  });
+  assert.deepEqual(await dropped(project), [
+    "src/index.js shared exported by ./nested.js and ./right.js",
+    "src/nested.js hidden exported by ./left.js and ./other.js",
+  ]);
+});
+
+test("rejects circular star sources instead of returning a partial namespace", async (t) => {
+  const project = fixture(t, {
+    "src/index.js": 'export * from "./loop.js";\nexport * from "./value.js";\n',
+    "src/loop.js": 'export * from "./index.js";\n',
+    "src/value.js": "export const value = 1;\n",
+  });
+  await assert.rejects(dropped(project), /circular star export cannot be analyzed/);
+});

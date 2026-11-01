@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { turnRecord } from "./helpers/turn-record.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -41,7 +42,6 @@ function acceptedTurn() {
       turnScopeId: "turn-old",
       dialogProcessId: "dialog-old",
       presentationMessageId: "presentation-old",
-      parentSessionId: "",
       action: "send",
       phase: TURN_PHASE.ACTION,
       expectedRevision: 0,
@@ -265,22 +265,25 @@ test("turn replacement rejects removing a Continue source while its target survi
     activeTurnScopeId: "turn-target",
     sequence: 2,
     turns: {
-      "turn-old": {
+      "turn-old": turnRecord({
         turnScopeId: "turn-old",
+        dialogProcessId: "dialog-old",
         state: "stop_completed",
+        phase: "stop",
+        finishedAt: "2026-07-30T00:00:00.000Z",
         executionState: "user_stopped",
         revision: 1,
         sequence: 1,
         continuedByTurnScopeId: "turn-target",
-      },
-      "turn-target": {
+      }),
+      "turn-target": turnRecord({
         turnScopeId: "turn-target",
         state: "processing",
         revision: 1,
         sequence: 2,
         action: "continue",
         continuationSource: { turnScopeId: "turn-old", dialogProcessId: "dialog-old" },
-      },
+      }),
     },
   };
   const committed = commitTurnReplacement({
@@ -303,7 +306,6 @@ test("replaying a follow-up event without identity fields deduplicates and a con
     sessionId: "session-1",
     turnScopeId: "turn-old",
     dialogProcessId: "dialog-old",
-    parentSessionId: "",
     phase: TURN_PHASE.PROCESSING,
   };
   const started = commitTurnLifecycle({

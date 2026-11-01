@@ -21,26 +21,26 @@ import {
 import { buildAcceptanceReport, renderAcceptanceReportText } from "./report-builder.js";
 import { runAcceptanceBySeparateModel } from "./validation-runner.js";
 import { text, isObjectLike } from "@noobot/shared/value";
+import { assertAgentTurnResult } from "@noobot/agent-transport-protocol/agent-turn-result";
 
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
 
 function attachTransferPayloadToFinalOutputTurn(ctx = {}, transferPayload = {}) {
+  const result = assertAgentTurnResult(ctx.result);
   const normalizedTransferPayload = normalizeTransferPayload(transferPayload);
   if (!normalizedTransferPayload.transferEnvelopes.length) return false;
-  const result = ctx?.result && typeof ctx.result === "object" ? ctx.result : null;
-  if (!result) return false;
-  const turnMessages = Array.isArray(result.turnMessages) ? result.turnMessages : [];
+  const { turnMessages } = result;
   for (let index = turnMessages.length - 1; index >= 0; index -= 1) {
-    const item = turnMessages[index] || {};
+    const item = turnMessages[index];
     if (text(item?.role) !== "assistant") continue;
     turnMessages[index] = applyTransferPayloadToMessage({ ...item }, normalizedTransferPayload);
     return true;
   }
-  applyTransferPayloadToMessage(result, normalizedTransferPayload);
-  return true;
+  return false;
 }
 
 export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
+  assertAgentTurnResult(ctx.result);
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;

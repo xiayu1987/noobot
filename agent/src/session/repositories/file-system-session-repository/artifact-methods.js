@@ -34,8 +34,7 @@ class SessionArtifactMethods {
     return this._projectUnavailableOnFailure(userId, sessionId, scope, async () => {
       const cached = await this._readCurrentDisplaySummary(scope, sessionId);
       if (cached !== null) return { summary: cached, rebuilt: false };
-      const session = await this.findById(userId, sessionId, { persistenceContext });
-      if (!session) throw createSessionNotFoundError({ userId, sessionId });
+      const session = await this.requireById(userId, sessionId, { persistenceContext });
       return this._rebuildSessionDisplaySummary(userId, sessionId, session, persistenceContext);
     });
   }

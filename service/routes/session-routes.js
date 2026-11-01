@@ -15,6 +15,7 @@ import {
   requireMessageDeleteResponse,
   requireTurnReplaceResponse,
   SESSION_COMMAND,
+  SESSION_ERROR_CODE,
 } from "@noobot/session-protocol";
 import {
   isAvailableSessionDetailEntry,
@@ -33,7 +34,10 @@ import { buildContentDisposition } from "./content-disposition.js";
 const HTTP_SESSION_PERSISTENCE_SCOPE = null;
 
 function decodeSessionCommand(body, { type, userId, sessionId }) {
-  const command = decodeRequestInput(() => assertSessionCommand(body));
+  const command = decodeRequestInput(
+    () => assertSessionCommand(body),
+    (error) => error.code === SESSION_ERROR_CODE.COMMAND_INVALID,
+  );
   if (command.type !== type)
     throw createBadRequestError(`unexpected session command type: ${command.type}`);
   if (command.scope.userId !== userId || command.scope.sessionId !== sessionId) {

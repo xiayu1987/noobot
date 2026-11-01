@@ -67,7 +67,6 @@ defineEmits([
 
 <style scoped>
 .workflow-card {
-  --noobot-text-primary: var(--noobot-text-main);
   border: 1px solid var(--noobot-msg-assistant-border);
   border-radius: var(--noobot-radius-md);
   padding: var(--noobot-space-lg);
@@ -101,7 +100,7 @@ defineEmits([
   border: 1px solid var(--noobot-msg-assistant-border);
   border-radius: var(--noobot-radius-sm);
   background: var(--noobot-accent-soft);
-  color: var(--noobot-text-primary);
+  color: var(--noobot-text-main);
   font-size: var(--noobot-font-size-xs);
   cursor: pointer;
 }
@@ -123,7 +122,7 @@ defineEmits([
   word-break: break-word;
   margin: 0;
   padding: var(--noobot-space-md) var(--noobot-space-lg);
-  color: var(--noobot-text-primary);
+  color: var(--noobot-text-main);
   font-size: var(--noobot-font-size-xs);
   line-height: var(--noobot-line-height-body);
   background: transparent;

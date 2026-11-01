@@ -64,11 +64,7 @@ export function buildEngineErrorPayload({
   const name = text(error?.name || error?.cause?.name);
   const message =
     normalizedClassification === "abort"
-      ? resolveExecutionAbortMessage({
-          error,
-          abortSignal,
-          fallback: resolveErrorMessage(error),
-        })
+      ? resolveExecutionAbortMessage({ error, abortSignal })
       : resolveErrorMessage(error);
   const requestId = resolveRequestId(error);
 

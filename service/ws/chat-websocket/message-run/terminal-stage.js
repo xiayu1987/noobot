@@ -4,25 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  EXECUTION_ABORT_TYPE,
   TURN_EVENT,
   TURN_PHASE,
   createTurnLifecycleCommandId,
   createTurnLifecycleRejectedError,
-  resolveExecutionAbortMessage,
 } from "@noobot/session-protocol";
 import { isUserStopRunAbort } from "../stop-lifecycle.js";
 
-export async function finalizeRunResult(context, run, accepted, active) {
+export async function finalizeRunResult(context, run, accepted) {
   if (context.state.currentRunTimedOut && context.state.currentAbortSignal?.aborted) {
-    const timeoutMessage = resolveExecutionAbortMessage({
-      abortSignal: context.state.currentAbortSignal,
-      fallback: `run timeout after ${active.runTimeoutMs}ms`,
-    });
-    await context.finalizeTimeout(context.buildRunStateSnapshot(), {
-      description: timeoutMessage,
-      errorObject: { message: timeoutMessage, code: EXECUTION_ABORT_TYPE.RUN_TIMEOUT },
-    });
+    await context.finalizeTimeout(context.buildRunStateSnapshot());
     return;
   }
   if (isUserStopRunAbort(context.state.currentAbortSignal)) {

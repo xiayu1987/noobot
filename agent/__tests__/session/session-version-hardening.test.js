@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { turnRecord } from "../helpers/turn-record.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -338,13 +339,13 @@ test("internal append and summary checkpoint use mutation lock without changing 
       sequence: 1,
       activeTurnScopeId: "t",
       turns: {
-        t: {
+        t: turnRecord({
           revision: 1,
           sequence: 1,
           turnScopeId: "t",
           dialogProcessId: "dp",
           state: "processing",
-        },
+        }),
       },
     },
   });
@@ -455,13 +456,13 @@ test("turn summary checkpoints mark exact UIDs and persist an idempotent scoped 
       sequence: 1,
       activeTurnScopeId: "t",
       turns: {
-        t: {
+        t: turnRecord({
           revision: 1,
           sequence: 1,
           turnScopeId: "t",
           dialogProcessId: "dp",
           state: "processing",
-        },
+        }),
       },
     },
   });
@@ -525,13 +526,13 @@ test("turn summary checkpoint restores explicitly retained messages to active co
       sequence: 1,
       activeTurnScopeId: "t",
       turns: {
-        t: {
+        t: turnRecord({
           revision: 1,
           sequence: 1,
           turnScopeId: "t",
           dialogProcessId: "dp",
           state: "processing",
-        },
+        }),
       },
     },
   });
@@ -589,13 +590,13 @@ test("turn summary checkpoints reject a split assistant tool-call and result pai
       sequence: 1,
       activeTurnScopeId: "t",
       turns: {
-        t: {
+        t: turnRecord({
           revision: 1,
           sequence: 1,
           turnScopeId: "t",
           dialogProcessId: "dp",
           state: "processing",
-        },
+        }),
       },
     },
   });
@@ -650,13 +651,13 @@ test("turn summary checkpoints allow exact historical summary targets but keep p
       sequence: 1,
       activeTurnScopeId: "t",
       turns: {
-        t: {
+        t: turnRecord({
           revision: 1,
           sequence: 1,
           turnScopeId: "t",
           dialogProcessId: "dp",
           state: "processing",
-        },
+        }),
       },
     },
   });
@@ -738,13 +739,13 @@ test("turn summary checkpoints validate historical tool pairs inside their origi
       sequence: 1,
       activeTurnScopeId: "t",
       turns: {
-        t: {
+        t: turnRecord({
           revision: 1,
           sequence: 1,
           turnScopeId: "t",
           dialogProcessId: "dp",
           state: "processing",
-        },
+        }),
       },
     },
   });
@@ -784,13 +785,13 @@ test("terminal turn checkpoints only mark already persisted canonical messages",
       sequence: 1,
       activeTurnScopeId: "",
       turns: {
-        t: {
+        t: turnRecord({
           revision: 1,
           sequence: 1,
           turnScopeId: "t",
           dialogProcessId: "dp",
           state: "completed",
-        },
+        }),
       },
     },
   });

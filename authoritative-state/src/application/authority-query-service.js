@@ -70,7 +70,7 @@ export function createAuthoritativeTurnSnapshot({
 
 export function resolveAuthoritativeTurnTerminal({
   lifecycle: lifecycleSource,
-  turnTimings = [],
+  turnTimings,
   commandId = "",
   sessionId = "",
   turnScopeId = "",

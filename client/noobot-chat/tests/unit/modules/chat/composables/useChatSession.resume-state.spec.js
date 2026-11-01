@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { turnRecordFixture } from "../helpers/turnRecordFixture.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { nextTick } from "vue";
@@ -76,7 +77,7 @@ describe("useChatSession summary and reconnect state", () => {
           generatedAt: "2026-07-10T00:00:00.000Z",
           replacedTurns: [],
           recentTerminalTurns: [
-            {
+            turnRecordFixture({
               sessionId: "s-snapshot",
               turnScopeId: "t-snapshot",
               dialogProcessId: "dp-snapshot",
@@ -87,8 +88,8 @@ describe("useChatSession summary and reconnect state", () => {
               revision: 2,
               createdAt: "2026-07-10T00:00:00.000Z",
               updatedAt: "2026-07-10T00:00:01.000Z",
-              capabilities: { canStop: false },
-            },
+              capabilities: { actionLocked: false, canStop: false },
+            }),
           ],
         },
       }),
@@ -151,7 +152,7 @@ describe("useChatSession summary and reconnect state", () => {
           generatedAt: "2026-07-10T00:00:01.000Z",
           replacedTurns: [],
           recentTerminalTurns: [
-            {
+            turnRecordFixture({
               sessionId,
               turnScopeId,
               dialogProcessId: "dp-action-failure",
@@ -165,9 +166,13 @@ describe("useChatSession summary and reconnect state", () => {
                 turnScopeId,
                 dialogProcessId: "dp-action-failure",
               }),
-              failure: { code: "ATTACHMENT_REJECTED" },
-              capabilities: { canStop: false },
-            },
+              failure: {
+                code: "ATTACHMENT_REJECTED",
+                message: "attachment rejected",
+                retryable: false,
+              },
+              capabilities: { actionLocked: false, canStop: false },
+            }),
           ],
         },
       }),
@@ -217,7 +222,7 @@ describe("useChatSession summary and reconnect state", () => {
           replacedTurns: [],
           generatedAt: "2026-07-10T00:00:00.000Z",
           recentTerminalTurns: [
-            {
+            turnRecordFixture({
               sessionId: "s-late-identity",
               turnScopeId: "t-late-identity",
               presentationMessageId: "msg-t-late-identity",
@@ -226,8 +231,8 @@ describe("useChatSession summary and reconnect state", () => {
               phase: "completion",
               sequence: 2,
               revision: 2,
-              capabilities: { canStop: false },
-            },
+              capabilities: { actionLocked: false, canStop: false },
+            }),
           ],
         },
       }),
@@ -282,7 +287,7 @@ describe("useChatSession summary and reconnect state", () => {
           sequence: 4,
           activeTurnScopeId: turnScopeId,
           replacedTurns: [],
-          activeTurn: {
+          activeTurn: turnRecordFixture({
             sessionId,
             turnScopeId,
             dialogProcessId: `dp-${turnScopeId}`,
@@ -292,7 +297,7 @@ describe("useChatSession summary and reconnect state", () => {
             revision: 4,
             sequence: 4,
             startedAt: "2026-07-24T05:42:07.698Z",
-          },
+          }),
           recentTerminalTurns: [],
           unchanged: false,
         },
@@ -404,6 +409,7 @@ describe("useChatSession summary and reconnect state", () => {
     ];
     store.activeSessionId = "local-pending";
     applyTurnRuntimeEvent(store.turnRuntimeRegistry, {
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
       sessionId: "local-pending",
       turnScopeId: "turn-detail-race",
@@ -430,6 +436,7 @@ describe("useChatSession summary and reconnect state", () => {
       sequence: 2,
     });
     applyTurnRuntimeEvent(store.turnRuntimeRegistry, {
+      updatedAtMs: 1767225600000,
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       sessionId: "local-pending",
       turnScopeId: "turn-detail-race",

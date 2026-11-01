@@ -6,7 +6,6 @@
 
 function createCapabilityModelTimeoutError(timeoutMs = 0) {
   const error = new Error(`capability model timeout (${timeoutMs}ms)`);
-  error.name = "AbortError";
   error.code = "CAPABILITY_MODEL_TIMEOUT";
   error.timeoutMs = timeoutMs;
   return error;
@@ -18,7 +17,9 @@ export async function invokeCapabilityModelWithinDeadline({
   parentSignal = null,
   timeoutMs = 0,
 } = {}) {
-  if (typeof invoker !== "function") return null;
+  if (typeof invoker !== "function") {
+    throw new TypeError("capability model invocation requires an invoker function");
+  }
   const controller = new AbortController();
   const normalizedTimeoutMs = Number(timeoutMs);
   let timer = null;
@@ -35,11 +36,11 @@ export async function invokeCapabilityModelWithinDeadline({
 
   const abortPromise = new Promise((_, reject) => {
     if (controller.signal.aborted) {
-      reject(controller.signal.reason || new Error("capability model invocation aborted"));
+      reject(controller.signal.reason);
       return;
     }
     const rejectOnAbort = () => {
-      reject(controller.signal.reason || new Error("capability model invocation aborted"));
+      reject(controller.signal.reason);
     };
     controller.signal.addEventListener("abort", rejectOnAbort, { once: true });
     removeInvocationListener = () => controller.signal.removeEventListener("abort", rejectOnAbort);

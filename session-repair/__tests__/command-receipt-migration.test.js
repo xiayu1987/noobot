@@ -143,8 +143,18 @@ test("receipt migration rejects values that are not placeholders", () => {
 });
 
 test("receipt migration is gated by the canonical receipt schema version", () => {
-  const source = [turnReceipt({ result: {} })];
+  const source = [turnReceipt()];
   const result = migrate(source, SESSION_ARTIFACT_CANONICAL_COMMAND_RECEIPT_SCHEMA_VERSION);
   assert.deepEqual(result.document.turnLifecycle.commandReceipts, source);
   assert.equal(result.migrations.includes(CANONICAL_COMMAND_RECEIPT_MIGRATION), false);
+  assert.throws(
+    () =>
+      migrate(
+        [turnReceipt({ result: {} })],
+        SESSION_ARTIFACT_CANONICAL_COMMAND_RECEIPT_SCHEMA_VERSION,
+      ),
+    {
+      code: "SESSION_TURN_LIFECYCLE_RECORD_UNMIGRATABLE",
+    },
+  );
 });

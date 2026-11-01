@@ -144,6 +144,7 @@ describe("useChatSession conversation and composer action state", () => {
       sequence: 2,
     });
     applyTurnRuntimeEvent(store.turnRuntimeRegistry, {
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,
       sessionId: "s-stop",
       turnScopeId: "turn-stop",

@@ -6,6 +6,7 @@
 import { isCanonicalText } from "@noobot/shared/value";
 import {
   ATTACHMENT_LIFECYCLE_SEQUENCE_DOMAIN,
+  ATTACHMENT_LIFECYCLE_SCHEMA_VERSION,
   attachmentLifecycleSequenceScopeId,
 } from "@noobot/attachment-protocol";
 import { INTERACTION_SEQUENCE_DOMAIN } from "./interaction.js";
@@ -20,6 +21,8 @@ import {
 export const validateAttachmentEnvelope = (envelope) => {
   const { identity, ordering, payload } = envelope;
   const errors = [];
+  if (envelope.protocol.schemaVersion !== ATTACHMENT_LIFECYCLE_SCHEMA_VERSION)
+    errors.push("unsupported_attachment_schema_version");
   if (ordering.domain !== ATTACHMENT_LIFECYCLE_SEQUENCE_DOMAIN)
     errors.push("sequence_domain_mismatch");
   if (ordering.scopeId !== attachmentLifecycleSequenceScopeId(payload.identity))

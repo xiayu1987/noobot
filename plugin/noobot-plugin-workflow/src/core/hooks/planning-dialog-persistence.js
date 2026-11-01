@@ -5,15 +5,12 @@
  */
 
 import { WORKFLOW_DATA_SCOPE, resolveWorkflowDataRelativePath } from "../constants.js";
-import { text } from "@noobot/shared/value";
+import { isCanonicalText } from "@noobot/shared/value";
 
-export function buildWorkflowDialogRelativeDir({ ctx = {}, dialogProcessId = "" } = {}) {
+export function buildWorkflowDialogRelativeDir({ ctx, dialogProcessId }) {
   const sessionId = ctx.sessionId;
-  const nodeDialogProcessId = text(dialogProcessId);
-  if (!sessionId || !nodeDialogProcessId) return "";
-  return resolveWorkflowDataRelativePath(
-    WORKFLOW_DATA_SCOPE.SESSION,
-    sessionId,
-    nodeDialogProcessId,
-  );
+  if (!isCanonicalText(sessionId) || !isCanonicalText(dialogProcessId)) {
+    throw new TypeError("workflow dialog directory requires canonical session and dialog identity");
+  }
+  return resolveWorkflowDataRelativePath(WORKFLOW_DATA_SCOPE.SESSION, sessionId, dialogProcessId);
 }

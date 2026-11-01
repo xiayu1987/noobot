@@ -19,13 +19,6 @@ const sourceRoots = [
   path.join(repoRoot, "plugin/noobot-plugin-workflow/frontend"),
   path.join(repoRoot, "plugin/noobot-plugin-character/frontend"),
 ];
-const sharedPopperRoots = [
-  path.join(projectRoot, "src"),
-  path.join(repoRoot, "client/startup/src"),
-  path.join(repoRoot, "plugin/noobot-plugin-harness/frontend"),
-  path.join(repoRoot, "plugin/noobot-plugin-workflow/frontend"),
-  path.join(repoRoot, "plugin/noobot-plugin-character/frontend"),
-];
 const inspectedExtensions = new Set([".css", ".js", ".jsx", ".ts", ".tsx", ".vue"]);
 const tokenLocations = [
   path.join(projectRoot, "src/shared/styles/tokens"),
@@ -116,14 +109,18 @@ function inspectEmptyStyleRules(filePath, source) {
       }))
     : [{ source, offset: 0 }];
   for (const region of styleRegions) {
-    for (const match of region.source.matchAll(/(?:^|})\s*([^{}]+)\{\s*\}/g)) {
-      const selector = text(match[1]);
-      if (!selector || selector.startsWith("@")) continue;
-      const lineNumber = source.slice(0, region.offset + (match.index || 0)).split(/\r?\n/).length;
-      violations.push(
-        `${path.relative(repoRoot, filePath)}:${lineNumber}: empty style rule is forbidden`,
-      );
-    }
+    inspectEmptyStyleRegion(filePath, source, region);
+  }
+}
+
+function inspectEmptyStyleRegion(filePath, source, region) {
+  for (const match of region.source.matchAll(/(?:^|})\s*([^{}]+)\{\s*\}/g)) {
+    const selector = text(match[1]);
+    if (!selector || selector.startsWith("@")) continue;
+    const lineNumber = source.slice(0, region.offset + (match.index || 0)).split(/\r?\n/).length;
+    violations.push(
+      `${path.relative(repoRoot, filePath)}:${lineNumber}: empty style rule is forbidden`,
+    );
   }
 }
 
@@ -208,20 +205,21 @@ function inspectFixedLayers(filePath, source) {
   }
 }
 
+function inspectStyleLine(filePath, line, index) {
+  for (const [message, pattern] of checks) {
+    if (!pattern.test(line)) continue;
+    if (
+      (message.includes("color") || message.includes("radius") || message.includes("easing")) &&
+      isTokenDeclaration(filePath, line)
+    )
+      continue;
+    violations.push(`${path.relative(repoRoot, filePath)}:${index + 1}: ${message}`);
+  }
+}
+
 function inspectFile(filePath) {
   const source = fs.readFileSync(filePath, "utf8");
-  const lines = source.split(/\r?\n/);
-  lines.forEach((line, index) => {
-    for (const [message, pattern] of checks) {
-      if (!pattern.test(line)) continue;
-      if (
-        (message.includes("color") || message.includes("radius") || message.includes("easing")) &&
-        isTokenDeclaration(filePath, line)
-      )
-        continue;
-      violations.push(`${path.relative(repoRoot, filePath)}:${index + 1}: ${message}`);
-    }
-  });
+  source.split(/\r?\n/).forEach((line, index) => inspectStyleLine(filePath, line, index));
   if (filePath.endsWith(".css") || filePath.endsWith(".vue")) {
     inspectTypography(filePath, source);
     inspectEmptyStyleRules(filePath, source);
@@ -233,27 +231,35 @@ function inspectFile(filePath) {
 
   if (filePath.endsWith(".vue")) {
     inspectIconOnlyButtons(filePath, source);
-    for (const match of source.matchAll(/<(?:el-button|button)\b[^>]*>/g)) {
-      const openingTag = match[0];
-      const usesVariant = iconButtonVariantClasses.some((className) =>
-        openingTag.includes(className),
-      );
-      const usesElementCircle = /(?:^|\s)circle(?:\s|=|>|\/)/.test(openingTag);
-      if ((!usesVariant && !usesElementCircle) || openingTag.includes("noobot-icon-button")) {
-        continue;
-      }
-      const lineNumber = source.slice(0, match.index).split(/\r?\n/).length;
-      violations.push(
-        `${path.relative(repoRoot, filePath)}:${lineNumber}: icon-only button must use noobot-icon-button`,
-      );
-    }
+    inspectIconButtonVariants(filePath, source);
   }
 
   if (
     path.extname(filePath).toLowerCase() !== ".vue" ||
-    !sharedPopperRoots.some((root) => isInside(root, filePath))
+    !sourceRoots.some((root) => isInside(root, filePath))
   )
     return;
+  inspectDropdownContracts(filePath, source);
+}
+
+function inspectIconButtonVariants(filePath, source) {
+  for (const match of source.matchAll(/<(?:el-button|button)\b[^>]*>/g)) {
+    const openingTag = match[0];
+    const usesVariant = iconButtonVariantClasses.some((className) =>
+      openingTag.includes(className),
+    );
+    const usesElementCircle = /(?:^|\s)circle(?:\s|=|>|\/)/.test(openingTag);
+    if ((!usesVariant && !usesElementCircle) || openingTag.includes("noobot-icon-button")) {
+      continue;
+    }
+    const lineNumber = source.slice(0, match.index).split(/\r?\n/).length;
+    violations.push(
+      `${path.relative(repoRoot, filePath)}:${lineNumber}: icon-only button must use noobot-icon-button`,
+    );
+  }
+}
+
+function inspectDropdownContracts(filePath, source) {
   const dropdownContracts = [
     [
       /<el-select(?=[\s>])(?:[^"'<>]|"[^"]*"|'[^']*')*>/g,
@@ -267,11 +273,15 @@ function inspectFile(filePath) {
     ],
   ];
   for (const [pattern, requiredClass, message] of dropdownContracts) {
-    for (const match of source.matchAll(pattern)) {
-      if (match[0].includes(requiredClass)) continue;
-      const lineNumber = source.slice(0, match.index).split(/\r?\n/).length;
-      violations.push(`${path.relative(repoRoot, filePath)}:${lineNumber}: ${message}`);
-    }
+    inspectDropdownContract(filePath, source, { pattern, requiredClass, message });
+  }
+}
+
+function inspectDropdownContract(filePath, source, { pattern, requiredClass, message }) {
+  for (const match of source.matchAll(pattern)) {
+    if (match[0].includes(requiredClass)) continue;
+    const lineNumber = source.slice(0, match.index).split(/\r?\n/).length;
+    violations.push(`${path.relative(repoRoot, filePath)}:${lineNumber}: ${message}`);
   }
 }
 

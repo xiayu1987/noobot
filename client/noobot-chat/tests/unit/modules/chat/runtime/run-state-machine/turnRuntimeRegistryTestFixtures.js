@@ -14,17 +14,23 @@ import {
   createTurnTerminalResolution,
 } from "@noobot/session-protocol";
 import { terminalStatusFixture } from "../../helpers/terminalStatusFixture.js";
+import { turnRecordFixture } from "../../helpers/turnRecordFixture.js";
 
 export function sendStart(registry, { sessionId, turnScopeId, seq = 1 }) {
   return applyTurnRuntimeEvent(registry, {
+    timestamp: 1767225600000,
     type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
     sessionId,
     turnScopeId,
     seq,
   });
 }
-export function backendState(registry, { sessionId, turnScopeId, dialogProcessId, state, seq }) {
+export function backendState(
+  registry,
+  { sessionId, turnScopeId, dialogProcessId = "", state, seq },
+) {
   return applyTurnRuntimeEvent(registry, {
+    updatedAtMs: 1767225600000,
     type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
     sessionId,
     turnScopeId,
@@ -92,8 +98,9 @@ export function settleTerminal(
     summaryVersion = 0,
     failure = null,
     finalizeIntent = null,
-    startedAt = "",
-    finishedAt = "",
+    terminalStatus,
+    startedAt = "2026-01-01T00:00:00.000Z",
+    finishedAt = "2026-01-01T00:00:03.000Z",
   } = {},
 ) {
   terminalResolutionSequence += 1;
@@ -101,6 +108,7 @@ export function settleTerminal(
   const resolvedSummaryVersion = summaryVersion || revision;
   const terminalFailure = state.endsWith("_failed")
     ? failure || {
+        code: "fixture_failure",
         message: `${state} terminal failure`,
         retryable: false,
       }
@@ -113,12 +121,11 @@ export function settleTerminal(
       turnScopeId,
       resolved: true,
       aggregateVersion: 1,
-      turn: {
+      turn: turnRecordFixture({
         sessionId,
         turnScopeId,
         dialogProcessId,
         state,
-        phase: state.replace(/_failed$/, ""),
         revision,
         sequence,
         completionCommitId: resolvedCommitId,
@@ -130,8 +137,11 @@ export function settleTerminal(
         finishedAt,
         capabilities: { actionLocked: false, canStop: false },
         updatedAt: "2026-01-01T00:00:03.000Z",
-        terminalStatus: terminalStatusFixture(state, { turnScopeId, dialogProcessId }),
-      },
+        terminalStatus:
+          terminalStatus === undefined
+            ? terminalStatusFixture(state, { turnScopeId, dialogProcessId })
+            : terminalStatus,
+      }),
     }),
   );
 }
@@ -140,13 +150,13 @@ export function snapshot(overrides = {}) {
   const sessionId = overrides.sessionId ?? "s1";
   const withMessageIdentity = (turn) =>
     turn
-      ? {
+      ? turnRecordFixture({
           sessionId,
           presentationMessageId: `msg-${turn.turnScopeId}`,
           continuedByTurnScopeId: "",
           startedAt: "2026-01-01T00:00:00.000Z",
           ...turn,
-        }
+        })
       : null;
   const activeTurn = withMessageIdentity(
     overrides.activeTurn === undefined

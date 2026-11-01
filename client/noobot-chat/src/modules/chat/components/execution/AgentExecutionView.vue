@@ -6,14 +6,13 @@
 <script setup>
 import SharedChatMessageItem from "../message/SharedChatMessageItem.vue";
 import { BaseEmptyHint } from "../../../../shared/public-api/ui.js";
-import { getMessageTurnScopeId } from "../../model/messageIdentity.js";
 import { sharedMessageRenderProps } from "../../model/messageItemProps.js";
-import { text } from "@noobot/shared/value";
+import { resolveMessageViewKey } from "@noobot/event-protocol/message-event";
 
 const props = defineProps({
   executionId: { type: String, required: true },
   channelContext: { type: String, default: "primary" },
-  messages: { type: Array, default: () => [] },
+  messages: { type: Array, required: true },
   ...sharedMessageRenderProps,
   emptyText: { type: String, default: "" },
 });
@@ -29,16 +28,16 @@ function openThinkingDetails(payload = {}, messageItem = {}) {
   });
 }
 
-function messageRenderKey(messageItem = {}, messageIndex = 0) {
-  const turnScopeKey = getMessageTurnScopeId(messageItem);
-  const role = text(messageItem?.role) || "message";
-  return `${props.executionId}-${turnScopeKey || "unscoped"}-${role}-${messageIndex}`;
+function messageRenderKey(messageItem) {
+  const key = resolveMessageViewKey(messageItem);
+  if (!key) throw new TypeError("execution message requires a canonical view identity");
+  return key;
 }
 
 function isCurrentAssistantMessage(messageItem = {}, messageIndex = 0) {
-  if (text(messageItem?.role) !== "assistant") return false;
+  if (messageItem.role !== "assistant") return false;
   for (let index = props.messages.length - 1; index >= 0; index -= 1) {
-    if (text(props.messages[index]?.role) === "assistant") {
+    if (props.messages[index].role === "assistant") {
       return index === messageIndex;
     }
   }

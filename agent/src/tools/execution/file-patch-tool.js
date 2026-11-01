@@ -134,6 +134,12 @@ async function buildPatchPlans({ targets, normalizedFormat, workspaceIo }) {
   };
   const hash = (buffer) => (buffer === null ? null : fileContentSha256(buffer));
   for (const item of targets) {
+    const failure = await planTarget(item);
+    if (failure) return failure;
+  }
+  return { writePlans, deletePlans };
+
+  async function planTarget(item) {
     if (item.mode === "add") {
       if ((await readContent(item.resolvedNewPath)) !== null) {
         throw recoverableToolError(`target file already exists: ${item.newPath}`, {
@@ -148,7 +154,7 @@ async function buildPatchPlans({ targets, normalizedFormat, workspaceIo }) {
         expectedSha256: null,
       });
       plannedContents.set(item.resolvedNewPath, Buffer.from(writePlans.at(-1).content, "utf8"));
-      continue;
+      return;
     }
     const originalBuffer = await readContent(item.resolvedOldPath);
     if (originalBuffer === null) {
@@ -163,7 +169,7 @@ async function buildPatchPlans({ targets, normalizedFormat, workspaceIo }) {
         pathRef: item.oldPathRef,
         expectedSha256: originalSha256,
       });
-      continue;
+      return;
     }
     const original = originalBuffer.toString("utf8");
     let nextContent = "";
@@ -197,7 +203,6 @@ async function buildPatchPlans({ targets, normalizedFormat, workspaceIo }) {
       });
     }
   }
-  return { writePlans, deletePlans };
 }
 
 async function applyPatchMutations({
@@ -239,24 +244,7 @@ async function applyPatchMutations({
       await commitPlan(plan, { operation: "delete" });
     }
   } catch (error) {
-    const rollbackErrors = [];
-    for (const { mutation, plan, rollbackState } of committed.toReversed()) {
-      try {
-        await rollbackFileMutation({
-          mutationRoot,
-          mutationId: mutation.mutations[0].id,
-          restoreState: rollbackState,
-          filePath: plan.filePath,
-          writeText: (target, value) => workspaceIo.writeText(target, value),
-          removeFile: (target) => workspaceIo.remove(target),
-        });
-      } catch (rollbackError) {
-        rollbackErrors.push({
-          path: mutationLocator(plan.pathRef).path,
-          error: rollbackError.message,
-        });
-      }
-    }
+    const rollbackErrors = await rollbackPatchMutations({ committed, mutationRoot, workspaceIo });
     if (rollbackErrors.length) {
       throw createFileMutationError(
         FILE_MUTATION_ERROR_CODE.ROLLBACK_CONFLICT,
@@ -267,6 +255,28 @@ async function applyPatchMutations({
     throw error;
   }
   return mutations.flatMap((item) => item.mutations);
+}
+
+async function rollbackPatchMutations({ committed, mutationRoot, workspaceIo }) {
+  const rollbackErrors = [];
+  for (const { mutation, plan, rollbackState } of committed.toReversed()) {
+    try {
+      await rollbackFileMutation({
+        mutationRoot,
+        mutationId: mutation.mutations[0].id,
+        restoreState: rollbackState,
+        filePath: plan.filePath,
+        writeText: (target, value) => workspaceIo.writeText(target, value),
+        removeFile: (target) => workspaceIo.remove(target),
+      });
+    } catch (rollbackError) {
+      rollbackErrors.push({
+        path: mutationLocator(plan.pathRef).path,
+        error: rollbackError.message,
+      });
+    }
+  }
+  return rollbackErrors;
 }
 
 async function registerPatchResources({ agentContext, writePlans, dryRun }) {

@@ -6,7 +6,10 @@
 import { filePath as path } from "@noobot/path-resolver";
 import { sanitizeFileName } from "@noobot/memory-protocol/text";
 import { formatDomainBlock } from "../../utils/format.js";
-import { buildExperiencePatchSchema } from "@noobot/memory-protocol/experience/schema";
+import {
+  buildExperiencePatchSchema,
+  resolveExperienceDocumentSegments,
+} from "@noobot/memory-protocol/experience/schema";
 
 export async function saveWeeklyDomainSummary({
   storage,
@@ -21,14 +24,20 @@ export async function saveWeeklyDomainSummary({
   const safeDomainName = sanitizeFileName(domainName, "");
   if (!safeDomainName || !Array.isArray(categories) || !categories.length) return false;
   const schema = buildExperiencePatchSchema("weekly", fields);
-  const domainDir = path.join(storage.weeklySummaryDir(basePath), weekLabel, safeDomainName);
-  await storage.ensureDir(domainDir);
+  const weekDir = path.join(storage.weeklySummaryDir(basePath), weekLabel);
 
   let writtenCount = 0;
   for (const category of categories) {
     const categoryName = sanitizeFileName(category?.category, "");
     if (!categoryName) continue;
-    const filePath = path.join(domainDir, `${categoryName}.md`);
+    const filePath = path.join(
+      weekDir,
+      ...resolveExperienceDocumentSegments("weekly", {
+        domain: safeDomainName,
+        category: categoryName,
+      }),
+    );
+    await storage.ensureDir(path.dirname(filePath));
     const block = [
       `${schema.timeLabel}：${createdAt || new Date().toISOString()}`,
       `${schema.sourceLabel}：${(Array.isArray(sourceDates) ? sourceDates : []).join(", ")}`,

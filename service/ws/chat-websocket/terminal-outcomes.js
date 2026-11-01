@@ -4,20 +4,21 @@
  * SPDX-License-Identifier: MIT
  */
 import { recordServiceWebSocketRuntimeError } from "./runtime-events.js";
-import { buildAbortErrorMessage } from "./stop-lifecycle.js";
 import {
   TURN_EVENT,
   TURN_PHASE,
+  createTurnFailure,
   createTurnLifecycleCommandId,
+  createTurnLifecycleRejectedError,
   deriveTurnCommandId,
-  isTurnLifecycleRejectedError,
   resolveUserStopPayload,
 } from "@noobot/session-protocol";
+import { resolveExecutionAbortType } from "@noobot/session-protocol/execution-abort";
 import { AGENT_COMMAND_RECEIPT_OUTCOME } from "@noobot/agent-transport-protocol";
 import { sendCommandReceipt as writeCommandReceipt } from "./command-receipt.js";
 import { text } from "@noobot/shared/value";
 
-export function snapshotRunState({ runMeta, abortSignal = null, locale = "" }) {
+export function snapshotRunState({ runMeta, abortSignal = null }) {
   if (!runMeta) throw new TypeError("run_state_snapshot_requires_run_meta");
   const identity = {
     userId: text(runMeta.userId),
@@ -26,13 +27,12 @@ export function snapshotRunState({ runMeta, abortSignal = null, locale = "" }) {
     dialogProcessId: text(runMeta.dialogProcessId),
     turnScopeId: text(runMeta.turnScopeId),
   };
-  return { runMeta, identity, abortSignal, locale };
+  return { runMeta, identity, abortSignal };
 }
 
 export function createTurnFinalizer({
   sendEvent,
   rejectUnpersistedTurnStatus,
-  translateText,
   webSocket,
   commitTurnLifecycle,
 } = {}) {
@@ -47,7 +47,8 @@ export function createTurnFinalizer({
       outcome,
       error,
     );
-  const finalizeTimeout = async (state, { description = "", errorObject = null } = {}) => {
+  const finalizeTimeout = async (state) => {
+    const failure = createTurnFailure({ abortSignal: state.abortSignal, retryable: false });
     const commandId = createTurnLifecycleCommandId({
       commandId: deriveTurnCommandId(state.identity.turnScopeId),
       eventType: TURN_EVENT.FAILED,
@@ -62,21 +63,14 @@ export function createTurnFinalizer({
       causationId: commandId,
       eventType: TURN_EVENT.FAILED,
       phase: TURN_PHASE.PROCESSING,
-      failure: {
-        code: "run_timeout",
-        message: description,
-        retryable: false,
-      },
-      terminalStatus: { command: "timeout", description, error: errorObject },
+      failure,
+      terminalStatus: { command: "timeout", description: failure.message, error: failure },
     });
     if (!failed?.applied && !failed?.deduplicated) {
       rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "timeout", result: failed });
       return;
     }
-    sendCommandReceipt(state, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED, {
-      code: "run_timeout",
-      message: description,
-    });
+    sendCommandReceipt(state, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED, failed.turn.failure);
     webSocket.close(1011, "timeout");
   };
 
@@ -167,11 +161,10 @@ export function createTurnFinalizer({
         causationId: rootCommandId,
         eventType: TURN_EVENT.FAILED,
         phase: TURN_PHASE.COMPLETION,
-        failure: {
-          code: completed?.reason || "completion_transaction_failed",
-          message: "completion transaction failed",
+        failure: createTurnFailure({
+          error: createTurnLifecycleRejectedError(completed),
           retryable: true,
-        },
+        }),
       });
       rejectUnpersistedTurnStatus({
         runMeta: state.runMeta,
@@ -185,12 +178,6 @@ export function createTurnFinalizer({
   };
 
   const finalizeAborted = async (state, { error = null, committed = null } = {}) => {
-    const errorMessage = buildAbortErrorMessage({
-      error,
-      abortSignal: state.abortSignal,
-      currentLocale: state.locale,
-      translateText,
-    });
     void recordServiceWebSocketRuntimeError({
       event: "service.websocket.run.aborted",
       userId: state.identity.userId,
@@ -200,20 +187,14 @@ export function createTurnFinalizer({
       turnScopeId: state.identity.turnScopeId,
       error,
       data: {
-        abortReasonType:
-          state.abortSignal?.reason && typeof state.abortSignal.reason === "object"
-            ? text(state.abortSignal.reason?.type)
-            : "",
+        abortReasonType: resolveExecutionAbortType({ error, abortSignal: state.abortSignal }),
       },
     });
     if (!committed?.applied && !committed?.deduplicated) {
       rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "error", result: committed });
       return;
     }
-    sendCommandReceipt(state, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED, {
-      code: isTurnLifecycleRejectedError(error) ? error.code : "run_aborted",
-      message: errorMessage,
-    });
+    sendCommandReceipt(state, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED, committed.turn.failure);
     webSocket.close(1011, "aborted");
   };
 
@@ -227,15 +208,11 @@ export function createTurnFinalizer({
       turnScopeId: state.identity.turnScopeId,
       error,
     });
-    const errorMessage = error?.message || translateText("ws.unknownError", state.locale);
     if (!committed?.applied && !committed?.deduplicated) {
       rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "error", result: committed });
       return;
     }
-    sendCommandReceipt(state, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED, {
-      code: isTurnLifecycleRejectedError(error) ? error.code : "run_failed",
-      message: errorMessage,
-    });
+    sendCommandReceipt(state, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED, committed.turn.failure);
     webSocket.close(1011, "error");
   };
 

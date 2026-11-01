@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { turnRecord } from "../helpers/turn-record.js";
 import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
 import assert from "node:assert/strict";
@@ -119,12 +120,12 @@ test("snapshot rejects a completed turn whose summary marks need canonical repai
           ...required.turnLifecycle,
           sequence: 1,
           turns: {
-            "turn-1": {
+            "turn-1": turnRecord({
               revision: 1,
               sequence: 1,
               ...turn,
-              terminalStatus: { ...turn, status: "completed", reason: "run_completed" },
-            },
+              state: "completed",
+            }),
           },
         },
         messages,

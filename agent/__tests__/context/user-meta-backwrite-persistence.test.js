@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { createModelContext } from "@noobot/context-protocol/assembly/hook-context";
 import { readContextMessageValue } from "@noobot/context-protocol/message/codec";
 import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
+import { createSessionDeletedError } from "@noobot/session-protocol";
 import {
   applyPendingUserMetaBackwrites,
   queueUserMetaBackwrite,
@@ -48,7 +49,7 @@ test("user_meta backwrite records the parsed result on the source user message",
     session: {
       async recordUserMetaParsedResult(payload) {
         calls.push(payload);
-        return { recorded: true };
+        return { userMetaParsedResults: [payload.result] };
       },
     },
     userId: "u1",
@@ -70,16 +71,20 @@ test("user_meta backwrite records the parsed result on the source user message",
   assert.deepEqual(runtime.activeMessageContext.userMetaBackwrites, []);
 });
 
-test("user_meta backwrite keeps the record pending when the session rejects it", async () => {
+test("user_meta backwrite propagates session errors and keeps the record pending", async () => {
   const { runtime } = createRuntime();
   queueUserMetaBackwrite(runtime, { attachmentRef: "attach://a1", result });
   await assert.rejects(
     applyPendingUserMetaBackwrites(runtime, {
-      session: { recordUserMetaParsedResult: async () => ({ recorded: false }) },
+      session: {
+        recordUserMetaParsedResult: async () => {
+          throw createSessionDeletedError({ userId: "u1", sessionId: "s1" });
+        },
+      },
       userId: "u1",
       sessionId: "s1",
     }),
-    /was not recorded: sm_user_1/,
+    { code: "SESSION_DELETED" },
   );
   assert.equal(runtime.activeMessageContext.userMetaBackwrites.length, 1);
 });

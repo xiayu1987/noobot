@@ -11,6 +11,7 @@ import {
 } from "@noobot/session-protocol";
 import {
   ATTACHMENT_LIFECYCLE_WIRE_EVENT,
+  ATTACHMENT_LIFECYCLE_SCHEMA_VERSION,
   validateAttachmentLifecycleEvent,
 } from "@noobot/attachment-protocol";
 import { validateEventEnvelope } from "./envelope.js";
@@ -134,11 +135,11 @@ const descriptors = Object.freeze(
       family: EVENT_FAMILY.ATTACHMENT_LIFECYCLE,
       wireEvents: [ATTACHMENT_LIFECYCLE_WIRE_EVENT],
       reducerTarget: EVENT_REDUCER_TARGET.ATTACHMENT,
-      reducerInput: EVENT_REDUCER_INPUT.PAYLOAD,
+      reducerInput: EVENT_REDUCER_INPUT.ENVELOPE,
       minimumSequence: 1,
       validateEnvelope: validateAttachmentEnvelope,
       validatePayload: validateAttachmentLifecycleEvent,
-      schemaVersion: 1,
+      schemaVersion: ATTACHMENT_LIFECYCLE_SCHEMA_VERSION,
     },
     {
       family: EVENT_FAMILY.INTERACTION_REQUEST,

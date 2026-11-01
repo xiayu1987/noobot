@@ -26,6 +26,34 @@ function joinPatchedLines(lines, textFormat) {
   );
 }
 
+function applyUnifiedHunkLines({ lines, originalLines, output, pointer }) {
+  for (const line of lines) {
+    if (line.type === "+") {
+      output.push(line.text);
+      continue;
+    }
+    if (line.type !== " " && line.type !== "-") continue;
+    if (originalLines[pointer] !== line.text) {
+      const message =
+        line.type === " "
+          ? "patch context does not match target file"
+          : "patch removal does not match target file";
+      throw recoverableToolError(message, {
+        code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
+        details: {
+          field: "patch",
+          line: pointer + 1,
+          expected: line.text,
+          actual: originalLines[pointer],
+        },
+      });
+    }
+    if (line.type === " ") output.push(line.text);
+    pointer += 1;
+  }
+  return pointer;
+}
+
 export function applyUnifiedHunks(originalContent, hunks) {
   const textFormat = readTextFormat(originalContent);
   const originalLines = splitLines(textFormat.content);
@@ -42,38 +70,7 @@ export function applyUnifiedHunks(originalContent, hunks) {
     }
     output.push(...originalLines.slice(pointer, hunkStart));
     pointer = hunkStart;
-    for (const line of hunk.lines) {
-      if (line.type === " ") {
-        if (originalLines[pointer] !== line.text) {
-          throw recoverableToolError("patch context does not match target file", {
-            code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
-            details: {
-              field: "patch",
-              line: pointer + 1,
-              expected: line.text,
-              actual: originalLines[pointer],
-            },
-          });
-        }
-        output.push(line.text);
-        pointer += 1;
-      } else if (line.type === "-") {
-        if (originalLines[pointer] !== line.text) {
-          throw recoverableToolError("patch removal does not match target file", {
-            code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
-            details: {
-              field: "patch",
-              line: pointer + 1,
-              expected: line.text,
-              actual: originalLines[pointer],
-            },
-          });
-        }
-        pointer += 1;
-      } else if (line.type === "+") {
-        output.push(line.text);
-      }
-    }
+    pointer = applyUnifiedHunkLines({ lines: hunk.lines, originalLines, output, pointer });
   }
   output.push(...originalLines.slice(pointer));
   return joinPatchedLines(output, textFormat);
@@ -82,14 +79,7 @@ export function applyUnifiedHunks(originalContent, hunks) {
 function findSubsequence(lines = [], pattern = [], startIndex = 0) {
   if (!pattern.length) return Math.max(0, startIndex);
   for (let i = Math.max(0, startIndex); i <= lines.length - pattern.length; i += 1) {
-    let ok = true;
-    for (let j = 0; j < pattern.length; j += 1) {
-      if (lines[i + j] !== pattern[j]) {
-        ok = false;
-        break;
-      }
-    }
-    if (ok) return i;
+    if (pattern.every((line, offset) => lines[i + offset] === line)) return i;
   }
   return -1;
 }

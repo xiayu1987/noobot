@@ -365,7 +365,7 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
     },
     async appendTurns(payload = {}) {
       persistedTurns.push(...payload.turns);
-      return { appended: true, reason: "", turns: payload.turns };
+      return { turns: payload.turns };
     },
     async upsertTurnTiming() {},
     async getTurnSummaryCheckpointState({ dialogProcessId, turnScopeId }) {

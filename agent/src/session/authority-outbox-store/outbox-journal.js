@@ -17,7 +17,11 @@ import {
 import { mkdir, open, readFile, rename } from "node:fs/promises";
 import { text } from "@noobot/shared/value";
 import { sessionMutationCoordinator } from "../session-mutation-coordinator.js";
-import { resolveSessionArtifactMutationLock } from "../session-artifact-files.js";
+import {
+  resolveSessionArtifactMutationLock,
+  buildSessionArtifactFileMap,
+} from "../session-artifact-files.js";
+import { projectCommittedTurnOutbox } from "@noobot/event-protocol/turn-outbox";
 
 export const AUTHORITY_OUTBOX_DIR = "authority-outbox";
 const AUTHORITY_OUTBOX_JOURNAL_FILE = "outbox.jsonl";
@@ -93,7 +97,31 @@ export async function readAuthorityOutboxRecords(sessionDir = "") {
 }
 
 export async function readAuthorityOutbox(sessionDir = "") {
-  return projectAuthorityOutboxJournal(await readAuthorityOutboxRecords(sessionDir));
+  return withAuthorityOutboxMutation(sessionDir, async () => {
+    let manifest;
+    try {
+      manifest = JSON.parse(
+        await readFile(buildSessionArtifactFileMap(sessionDir).session, "utf8"),
+      );
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+      return projectAuthorityOutboxJournal(await readAuthorityOutboxRecords(sessionDir));
+    }
+    await materializeCommittedTurnEvents(sessionDir, manifest.turnLifecycle);
+    return projectAuthorityOutboxJournal(await readAuthorityOutboxRecords(sessionDir));
+  });
+}
+
+export async function materializeCommittedTurnEvents(sessionDir, lifecycle) {
+  return withAuthorityOutboxMutation(sessionDir, async () => {
+    const projection = projectCommittedTurnOutbox(
+      await readAuthorityOutboxRecords(sessionDir),
+      lifecycle,
+      await readAuthorityOutboxCheckpoint(sessionDir),
+    );
+    if (projection.added) await replaceAuthorityOutboxRecords(sessionDir, projection.records);
+    return projection.added;
+  });
 }
 
 export async function appendAuthorityOutboxRecords(sessionDir, records) {

@@ -4,6 +4,5 @@
  * SPDX-License-Identifier: MIT
  */
 
-export * from "./event-v1.js";
+export * from "./event.js";
 export * from "./transition-table.js";
-export * from "./reducer.js";

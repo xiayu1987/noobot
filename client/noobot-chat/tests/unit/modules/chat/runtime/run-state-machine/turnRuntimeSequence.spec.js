@@ -14,10 +14,10 @@ import {
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnReducer.js";
 import { SESSION_RUN_EVENT } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
 import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/session-protocol";
-import { normalizeSessionRunEvent } from "../../../../../../src/modules/chat/runtime/run-state-machine/eventNormalization.js";
+import { sessionRunEventFixture } from "../../helpers/sessionRunEventFixture.js";
 
 const reduceTurnRuntimeEvent = (current, rawEvent) =>
-  reduceNormalizedTurnRuntimeEvent(current, normalizeSessionRunEvent(rawEvent));
+  reduceNormalizedTurnRuntimeEvent(current, sessionRunEventFixture(rawEvent, current));
 
 function registryWith(turns) {
   return {
@@ -52,6 +52,7 @@ describe("turn runtime sequence", () => {
   it("tracks lifecycle sequence without a duplicate turn seq", () => {
     const identity = { sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1" };
     const accepted = reduceTurnRuntimeEvent(null, {
+      updatedAt: "2026-01-01T00:00:00.000Z",
       ...identity,
       type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
       eventType: TURN_EVENT.ACTION_ACCEPTED,

@@ -11,7 +11,7 @@ import {
 } from "./summary.js";
 import { isFunction } from "@noobot/shared/value";
 
-export function applyTurnCompletionPolicy({ modelMessages, turnMessageStore, policyOptions = {} }) {
+export function applyTurnCompletionPolicy({ modelMessages, turnMessageStore }) {
   if (
     !turnMessageStore ||
     !isFunction(turnMessageStore.updateWhere) ||
@@ -19,9 +19,7 @@ export function applyTurnCompletionPolicy({ modelMessages, turnMessageStore, pol
   ) {
     throw new Error("turn completion policy requires the canonical turn message store");
   }
-  const { markedCount, markedMessageUids } = markCurrentTurnStoreSummarized(turnMessageStore, {
-    policyOptions,
-  });
+  const { markedCount, markedMessageUids } = markCurrentTurnStoreSummarized(turnMessageStore);
   mirrorSummarizedMessagesByUid(modelMessages, markedMessageUids);
   return {
     markedCount,
@@ -29,6 +27,6 @@ export function applyTurnCompletionPolicy({ modelMessages, turnMessageStore, pol
   };
 }
 
-export function projectTurnCompletionMessages(records = [], { policyOptions = {} } = {}) {
-  return markCurrentTurnArraySummarized(records, { policyOptions });
+export function projectTurnCompletionMessages(records = []) {
+  return markCurrentTurnArraySummarized(records);
 }

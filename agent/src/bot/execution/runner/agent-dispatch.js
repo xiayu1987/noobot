@@ -264,16 +264,17 @@ export async function dispatchAgentTurn({
           currentUserMessage,
           hookArgs: { botHookRuntime, baseContext },
         });
+  assertAgentTurnResult(agentResult);
+  await runBotRuntimeHook({
+    runtime: botHookRuntime,
+    point: HOOK_POINT.BOT.AFTER_AGENT_DISPATCH,
+    context: { ...baseContext, agentResult },
+  });
   acceptAgentResultMessages({
     agentResult,
     dispatchRuntime,
     dispatchOutcome,
     runtimeEventListener,
-  });
-  await runBotRuntimeHook({
-    runtime: botHookRuntime,
-    point: HOOK_POINT.BOT.AFTER_AGENT_DISPATCH,
-    context: { ...baseContext, agentResult },
   });
   return agentResult;
 }

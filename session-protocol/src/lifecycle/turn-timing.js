@@ -94,14 +94,14 @@ export function assertTurnTimingOwnership(timing, ownerDialogProcessId) {
   );
 }
 
-function findTurnTiming(turnScopeId, timings) {
-  return timings.find((item) => isPlainObject(item) && clean(item.turnScopeId) === turnScopeId);
-}
-
-export function projectTurnTiming(turn = {}, timings = []) {
-  const timing = findTurnTiming(clean(turn.turnScopeId), timings);
-  return {
-    ...turn,
-    thinkingFinishedAt: clean(timing?.thinkingFinishedAt),
-  };
+export function projectTurnTiming(turn, timings) {
+  if (!Array.isArray(timings)) {
+    throw timingError(SESSION_ERROR_CODE.TURN_TIMING_INVALID, "turn timings must be an array");
+  }
+  const timing = timings
+    .map((item) => normalizeTurnTimingRecord(item))
+    .find((item) => item.turnScopeId === turn.turnScopeId);
+  if (!timing?.thinkingFinishedAt) return turn;
+  assertTurnTimingOwnership(timing, turn.dialogProcessId);
+  return { ...turn, thinkingFinishedAt: timing.thinkingFinishedAt };
 }

@@ -15,8 +15,6 @@ export const EXECUTION_ABORT_TYPE = Object.freeze({
 
 const EXECUTION_ABORT_TYPES = new Set(Object.values(EXECUTION_ABORT_TYPE));
 
-const EXECUTION_ABORTED = "execution_aborted";
-
 export function requireAbortSignal(value, consumer) {
   if (!(value instanceof AbortSignal)) {
     throw new TypeError(`${consumer} requires an AbortSignal`);
@@ -31,14 +29,15 @@ function structuredAbortReason(value) {
   return Object.freeze({
     ...value,
     type,
-    reason: clean(value.reason || value.message),
+    reason: clean(value.reason),
   });
 }
 
 export function createExecutionAbortReason(source = {}) {
   const reason = structuredAbortReason(source);
   if (!reason) throw new TypeError("execution abort reason requires a supported type");
-  const error = Object.assign(new Error(reason.reason || reason.type), reason);
+  if (!reason.reason) throw new TypeError("execution abort reason requires reason text");
+  const error = Object.assign(new Error(reason.reason), reason);
   Object.defineProperties(error, {
     name: { value: "AbortError", configurable: true, writable: true },
     code: { value: "ABORT_ERR", configurable: true, writable: true },
@@ -72,18 +71,14 @@ export function isExecutionAbortError({ error = null, abortSignal = null } = {})
 
 export function resolveExecutionAbortType({ error = null, abortSignal = null } = {}) {
   const reason = resolveExecutionAbortReason({ error, abortSignal });
-  if (reason?.type) return reason.type;
-  return isExecutionAbortError({ error, abortSignal }) ? "interrupted" : "";
+  return reason ? reason.type : "";
 }
 
-export function resolveExecutionAbortMessage({
-  error = null,
-  abortSignal = null,
-  fallback = "",
-} = {}) {
+export function resolveExecutionAbortMessage({ error = null, abortSignal = null } = {}) {
   const reason = resolveExecutionAbortReason({ error, abortSignal });
-  if (reason) return clean(reason.reason) || reason.type;
-  return clean(error?.message) || clean(fallback);
+  const message = reason ? reason.reason : clean(error?.message);
+  if (!message) throw new TypeError("execution abort message requires reason text");
+  return message;
 }
 
 export function isExecutionUserStop({ error = null, abortSignal = null } = {}) {
@@ -104,10 +99,11 @@ export function resolveUserStopPayload({ abortSignal = null } = {}) {
 
 function createExecutionAbortError({ abortSignal }) {
   const reason = resolveExecutionAbortReason({ abortSignal });
-  const error = new Error(clean(reason?.reason) || clean(reason?.type) || EXECUTION_ABORTED);
+  if (!reason) return abortSignal.reason;
+  const error = new Error(resolveExecutionAbortMessage({ abortSignal }));
   error.name = "AbortError";
   error.code = "ABORT_ERR";
-  if (reason) error.reason = reason;
+  error.reason = reason;
   return error;
 }
 

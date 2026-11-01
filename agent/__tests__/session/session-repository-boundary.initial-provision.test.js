@@ -319,21 +319,23 @@ test("appendTurns cannot implicitly create a missing Session", async () => {
       sessionId: "session-1",
       parentSessionId: "",
     });
-    const result = await createSessionFacade(runtime).appendTurns({
-      userId: "u1",
-      sessionId: "session-1",
-      persistenceScope: null,
-      turns: [
-        {
-          attachments: [],
-          transferEnvelopes: [],
-          role: "user",
-          content: "must be provisioned first",
-          turnScopeId: "turn-1",
-        },
-      ],
-    });
-    assert.deepEqual(result, { appended: false, reason: "session_not_found", turns: [] });
+    await assert.rejects(
+      createSessionFacade(runtime).appendTurns({
+        userId: "u1",
+        sessionId: "session-1",
+        persistenceScope: null,
+        turns: [
+          {
+            attachments: [],
+            transferEnvelopes: [],
+            role: "user",
+            content: "must be provisioned first",
+            turnScopeId: "turn-1",
+          },
+        ],
+      }),
+      { code: "SESSION_NOT_FOUND" },
+    );
     assert.equal(await exists(scope.sessionFile), false);
   });
 });
@@ -393,12 +395,14 @@ test("getSessionTurns reads from the same scoped persistence location used by ap
     assert.equal(scopedTurns[0]?.messageUid, "sm-child-1");
     assert.equal(scopedTurns[0]?.activityTimeline?.[0]?.eventId, "model-content:msg-child-1");
 
-    const defaultScopeTurns = await session.getSessionTurns({
-      userId: "u1",
-      sessionId: "child-session-1",
-      persistenceScope: null,
-    });
-    assert.deepEqual(defaultScopeTurns, []);
+    await assert.rejects(
+      session.getSessionTurns({
+        userId: "u1",
+        sessionId: "child-session-1",
+        persistenceScope: null,
+      }),
+      (error) => error?.code === "SESSION_NOT_FOUND" && error?.statusCode === 404,
+    );
   });
 });
 

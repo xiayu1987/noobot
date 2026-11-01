@@ -16,17 +16,15 @@ import { configureImportedAssetStore } from "./runtime/importedAssetStore.js";
 import { useCharacterLocale } from "./i18n/index.js";
 import { text, isFunction } from "@noobot/shared/value";
 
-function routeCharacterRuntimeEvent({ envelope, descriptor, context } = {}) {
+function routeCharacterRuntimeEvent({ envelope, descriptor, context }) {
   if (
-    descriptor?.family === EVENT_FAMILY.PLUGIN_ARTIFACT &&
-    envelope?.payload?.pluginId === CHARACTER_PLUGIN_ID &&
-    envelope?.payload?.artifactType === CHARACTER_ANIMATION_ARTIFACT_TYPE
+    descriptor.family === EVENT_FAMILY.PLUGIN_ARTIFACT &&
+    envelope.payload.pluginId === CHARACTER_PLUGIN_ID &&
+    envelope.payload.artifactType === CHARACTER_ANIMATION_ARTIFACT_TYPE
   ) {
-    const eventSessionId = text(envelope?.identity?.sessionId);
-    const activeSessionId = text(context?.sessionId);
-
-    if (activeSessionId && eventSessionId && activeSessionId !== eventSessionId) return false;
-    if (eventSessionId && animationRuntimeState.sessionId !== eventSessionId) {
+    const eventSessionId = envelope.identity.sessionId;
+    if (!context.isCurrentActiveSession(eventSessionId)) return false;
+    if (animationRuntimeState.sessionId !== eventSessionId) {
       resetAnimationRuntimeState(eventSessionId);
     }
     return applyAnimationRuntimeEvent(envelope).applied === true;

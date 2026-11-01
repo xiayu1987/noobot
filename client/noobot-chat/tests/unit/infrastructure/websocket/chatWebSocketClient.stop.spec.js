@@ -60,6 +60,7 @@ describe("chatWebSocketClient stop transport", () => {
       "turn_lifecycle",
       turnLifecycleProtocolEvent(
         createTurnLifecycleEnvelope({
+          updatedAt: "2026-01-01T00:00:00.000Z",
           eventType: TURN_EVENT.STOP_ACCEPTED,
           eventId: "stop-accepted:main-turn",
           commandId: "stop:main-turn",
@@ -120,6 +121,7 @@ describe("chatWebSocketClient stop transport", () => {
       "turn_lifecycle",
       turnLifecycleProtocolEvent(
         createTurnLifecycleEnvelope({
+          updatedAt: "2026-01-01T00:00:00.000Z",
           eventType: TURN_EVENT.STOP_ACCEPTED,
           eventId: "stop-accepted:turn-1",
           commandId: "stop:turn-1",

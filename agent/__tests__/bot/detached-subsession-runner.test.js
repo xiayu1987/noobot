@@ -20,6 +20,7 @@ import {
 } from "../../src/bot/session/detached-subsession-strategy.js";
 import { normalizeSessionEntity } from "../../src/session/entities/session-entity.js";
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
+import { createSessionFacade } from "../../src/session/index.js";
 import { createTestSessionServices } from "../helpers/session-services.js";
 import {
   DETACHED_REQUEST_METADATA,
@@ -33,6 +34,7 @@ import {
   createSessionPersistenceScope,
 } from "@noobot/session-protocol";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
+import { requiredSessionReads } from "../helpers/session-repo-required-reads.js";
 import { createTestAttachmentService } from "../helpers/test-runtime-context.js";
 
 const LEGACY_MESSAGE_ID = MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID;
@@ -44,7 +46,7 @@ test("detached sub-session delegates execution and persistence to the main runne
   const result = await runner({
     abortSignal: new AbortController().signal,
     parentExecutionScope: createParentExecutionScope({
-      runConfig: { hookManager: null, runtimeModel: "gpt_5_4" },
+      runConfig: { hookManager: null, runtimeModel: "gpt_5_4", locale: "en-US" },
     }),
     message: "hello",
     attachments: [],
@@ -102,6 +104,7 @@ test("detached sub-session delegates execution and persistence to the main runne
   assert.equal(payload.runConfig.parentExecutionId, "workflow:root");
   assert.equal(payload.runConfig.rootExecutionId, "workflow:root");
   assert.equal(payload.runConfig.runtimeModel, "gpt_5_4");
+  assert.equal(payload.runConfig.locale, "en-US");
   assert.equal(payload.runConfig.systemRuntimePatch, undefined);
   assert.equal(Object.hasOwn(payload, "persistenceContext"), false);
   assert.deepEqual(payload.persistenceScope, {
@@ -395,6 +398,7 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
     async isSessionDeleted() {
       return false;
     },
+    ...requiredSessionReads,
     async findById() {
       return persisted
         ? normalizeSessionEntity(structuredClone(persisted), { now: fixedNow })
@@ -408,10 +412,15 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
     },
   };
   const messageService = new SessionMessageService({ sessionRepo: repo, now: fixedNow });
+  const sessionFacade = createSessionFacade({
+    repositories: {},
+    sessionMessageService: messageService,
+    createSessionPersistenceContext: ({ persistenceScope }) => persistenceScope,
+  });
   const { deps } = createDeps({
     session: {
       async appendExecutionLog() {},
-      applyTurnLifecycleEvent: (payload) => messageService.applyTurnLifecycleEvent(payload),
+      applyTurnLifecycleEvent: sessionFacade.applyTurnLifecycleEvent,
       async writeSessionMetadata() {},
     },
   });
@@ -780,7 +789,7 @@ test("createDetachedSubSessionRunner aborts before execution when signal is alre
         abortSignal: controller.signal,
         strategy: createCompleteStrategy(),
       }),
-    /execution_aborted/,
+    (error) => error === controller.signal.reason,
   );
   assert.equal(runCalled, false);
 });

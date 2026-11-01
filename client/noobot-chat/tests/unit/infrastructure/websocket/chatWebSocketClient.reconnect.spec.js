@@ -310,6 +310,7 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
 
     const overlapLifecycle = turnLifecycleProtocolEvent(
       createTurnLifecycleEnvelope({
+        updatedAt: "2026-01-01T00:00:00.000Z",
         eventType: TURN_EVENT.ACTION_ACCEPTED,
         eventId: "lifecycle-overlap-1",
         commandId: overlapCommand.commandId,

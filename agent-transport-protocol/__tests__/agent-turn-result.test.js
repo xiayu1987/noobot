@@ -35,3 +35,25 @@ test("agent turn result rejects turn messages without messageUid", () => {
     );
   }
 });
+
+test("agent turn result preserves explicit empty messages and rejects malformed collections", () => {
+  const empty = turnResult([]);
+  assert.equal(assertAgentTurnResult(empty), empty);
+  for (const messages of [
+    undefined,
+    null,
+    {},
+    [null],
+    [false],
+    ["message"],
+    new Array(1),
+    [{ messageUid: " mu1" }],
+    [{ messageUid: 1 }],
+    [{ messageUid: "mu1" }, { messageUid: "mu1" }],
+  ]) {
+    const input = turnResult(messages);
+    const before = structuredClone(input);
+    assert.throws(() => assertAgentTurnResult(input), { code: AGENT_TURN_RESULT_ERROR_CODE });
+    assert.deepEqual(input, before);
+  }
+});

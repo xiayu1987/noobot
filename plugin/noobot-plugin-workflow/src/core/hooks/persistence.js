@@ -22,12 +22,7 @@ import {
 import { requirePluginMessagePayload } from "@noobot/plugin-protocol/plugin-message-payload";
 import { text, isFunction, isObjectLike } from "@noobot/shared/value";
 import { createMessageUid, createModelMessageId } from "@noobot/session-protocol/message-identity";
-
-function ensureTurnMessages(agentResult = {}) {
-  const turnMessages = Array.isArray(agentResult?.turnMessages) ? agentResult.turnMessages : [];
-  agentResult.turnMessages = turnMessages;
-  return turnMessages;
-}
+import { assertAgentTurnResult } from "@noobot/agent-transport-protocol/agent-turn-result";
 
 function resolveSubSessionResult(subSession) {
   return subSession?.result && typeof subSession.result === "object" ? subSession.result : {};
@@ -339,7 +334,7 @@ async function upsertWorkflowMessage({
   if (!WORKFLOW_MESSAGE_PHASES.has(normalizedPhase)) {
     throw new Error("Workflow message requires an explicit planning or completed phase");
   }
-  const turnMessages = ensureTurnMessages(agentResult);
+  const { turnMessages } = assertAgentTurnResult(agentResult);
   const dialogProcessId = ctx.dialogProcessId;
   const { transferEnvelopes, attachmentReferenceBlock } = await resolveWorkflowTransferParts({
     nodeTransferEnvelopes,

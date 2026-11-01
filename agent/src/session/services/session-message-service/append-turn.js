@@ -4,27 +4,25 @@
  * SPDX-License-Identifier: MIT
  */
 import { upsertTurnInSession } from "./turn-upsert.js";
-import { SESSION_NOT_FOUND_REASON } from "@noobot/session-protocol";
-import { resolveDeletedSessionAs } from "./session-deleted-result.js";
 import { text } from "@noobot/shared/value";
 
-export async function appendTurns({ userId, sessionId, turns = [], persistenceContext } = {}) {
-  const sourceTurns = Array.isArray(turns) ? turns : [];
-  if (!sourceTurns.length) return { appended: false, reason: "empty_batch", turns: [] };
-  const requestedTurnScopeIds = [...new Set(sourceTurns.map((turn) => text(turn?.turnScopeId)))];
-  const mutation = this.sessionRepo.withSessionMutation(
+export async function appendTurns({ userId, sessionId, turns, persistenceContext } = {}) {
+  if (!Array.isArray(turns) || !turns.length) {
+    throw new TypeError("appendTurns requires a non-empty turns array");
+  }
+  const requestedTurnScopeIds = [...new Set(turns.map((turn) => text(turn?.turnScopeId)))];
+  return this.sessionRepo.withSessionMutation(
     userId,
     sessionId,
     async (scope) => {
       const resolvedParentSessionId = scope.resolvedParentSessionId;
-      const view = await this.sessionRepo.findTurnView(userId, sessionId, {
+      const view = await this.sessionRepo.requireTurnView(userId, sessionId, {
         turnScopeIds: requestedTurnScopeIds,
         persistenceContext,
       });
-      if (!view) return { appended: false, reason: SESSION_NOT_FOUND_REASON, turns: [] };
       const { session, turnScopeIds } = view;
 
-      const persistedTurns = sourceTurns.map((turn = {}) =>
+      const persistedTurns = turns.map((turn = {}) =>
         upsertTurnInSession(this, session, resolvedParentSessionId, {
           ...turn,
           userId,
@@ -35,9 +33,8 @@ export async function appendTurns({ userId, sessionId, turns = [], persistenceCo
         turnScopeIds,
         persistenceContext,
       });
-      return { appended: true, reason: "", turns: persistedTurns };
+      return { turns: persistedTurns };
     },
     { persistenceContext },
   );
-  return resolveDeletedSessionAs(mutation, { appended: false, turns: [] });
 }

@@ -97,6 +97,9 @@ class SessionAccessMethods {
   async requireSessionScope(userId, sessionId, persistenceContext) {
     const scope = await this.locateSessionScope(userId, sessionId, persistenceContext);
     if (scope) return scope;
+    if (await this.isSessionDeleted(userId, sessionId)) {
+      throw createSessionDeletedError({ userId, sessionId });
+    }
     throw sessionTreeNodeMissingError(sessionId);
   }
 

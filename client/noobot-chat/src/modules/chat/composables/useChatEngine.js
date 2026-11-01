@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { getCurrentScope, onScopeDispose } from "vue";
+import { createLocalSessionRunEvent } from "@noobot/session-protocol/runtime-event";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 import { createAssistantMessageHelpers } from "../runtime/engine/assistantMessage.js";
 import { createChatEngineConversationState } from "../runtime/engine/conversationState.js";
@@ -25,7 +26,7 @@ import { SESSION_RUN_EVENT } from "../runtime/run-state-machine/constants.js";
 import { createTerminalResolutionCoordinator } from "../runtime/terminalResolutionCoordinator.js";
 import { logTerminalResolutionDebug } from "../../debug/loggers/terminalResolutionDebugLogger.js";
 import { applyLatestSessionAggregateVersion } from "../runtime/engine/sessionAggregateVersionManager.js";
-import { text, isObjectLike, requireFunctionDependencies } from "@noobot/shared/value";
+import { text, requireFunctionDependencies } from "@noobot/shared/value";
 
 export function useChatEngine({
   userId,
@@ -106,70 +107,47 @@ export function useChatEngine({
     navigateToTurnOnTerminalOnce(sessionId, turnScopeId);
   };
   const applyAuthoritativeTerminalResolution = (response) => {
-    const sessionId = text(response?.sessionId);
-    const turnScopeId = text(response?.turnScopeId);
-    const terminalStatus = response?.turn?.terminalStatus;
-    if (!sessionId || !turnScopeId || !isObjectLike(terminalStatus)) {
-      logTerminalResolutionDebug("frontend.terminalResolution.rejected", () => ({
+    const { sessionId, turnScopeId, turn } = response;
+    const result = commitTurnTerminalResolution(response);
+    navigateOnTurnTerminalCommit(result);
+    if (result.applied !== true) {
+      const current = selectTurnRuntimeByScope(turnRuntimeRegistry.value, sessionId, turnScopeId);
+      logTerminalResolutionDebug("frontend.terminalResolution.reducerRejected", () => ({
         sessionId,
         turnScopeId,
-        reason: "invalid_terminal_status",
-        responseResolved: response?.resolved,
-        hasTerminalStatus: Boolean(terminalStatus),
+        reason: result.reason,
+        currentRevision: current?.revision ?? null,
+        currentSequence: current?.lifecycleSeq ?? null,
+        terminalResolved: current?.terminalResolved === true,
+        responseRevision: turn.revision,
+        responseSequence: turn.sequence,
       }));
-      return { applied: false, reason: "invalid_terminal_status" };
-    }
-    try {
-      const result = commitTurnTerminalResolution(response);
-      navigateOnTurnTerminalCommit(result);
-      if (result.applied !== true) {
-        const current = selectTurnRuntimeByScope(turnRuntimeRegistry.value, sessionId, turnScopeId);
-        logTerminalResolutionDebug("frontend.terminalResolution.reducerRejected", () => ({
-          sessionId,
-          turnScopeId,
-          reason: result.reason,
-          currentRevision: Number(current?.revision || 0),
-          currentSequence: Number(current?.lifecycleSeq || 0),
-          terminalResolved: current?.terminalResolved === true,
-          responseRevision: Number(response?.turn?.revision || response?.revision || 0),
-          responseSequence: Number(response?.turn?.sequence || response?.sequence || 0),
-        }));
-      }
-      if (result.applied) {
-        const targetSession = activeSession.value;
-        if (text(targetSession?.sessionId) === sessionId) {
-          applyLatestSessionAggregateVersion(targetSession, response);
-        }
-        const projected = projectTurnRuntimeView(
-          sessionId,
-          selectTurnRuntimeByScope(turnRuntimeRegistry.value, sessionId, turnScopeId),
-        );
-        logTerminalResolutionDebug("frontend.terminalResolution.applied", () => ({
-          sessionId,
-          turnScopeId,
-          responseState: response?.turn?.state || "",
-          responseExecutionState: response?.turn?.executionState || "",
-          responseRevision: Number(response?.turn?.revision || response?.revision || 0),
-          responseSequence: Number(response?.turn?.sequence || response?.sequence || 0),
-          startedAt: response?.turn?.startedAt || "",
-          finishedAt: response?.turn?.finishedAt || "",
-          projectedState: projected?.displayState || projected?.state || "",
-          projectedSending: projected?.sending === true,
-          projectedTerminal: projected?.terminal || null,
-          activeTurnScopeId:
-            selectSessionRuntimeBucket(turnRuntimeRegistry.value, sessionId)?.activeTurnScopeId ||
-            "",
-        }));
-      }
       return result;
-    } catch (error) {
-      return {
-        applied: false,
-        retryable: true,
-        reason: "terminal_materialization_apply_failed",
-        error,
-      };
     }
+    const targetSession = activeSession.value;
+    if (text(targetSession?.sessionId) === sessionId) {
+      applyLatestSessionAggregateVersion(targetSession, response);
+    }
+    const projected = projectTurnRuntimeView(
+      sessionId,
+      selectTurnRuntimeByScope(turnRuntimeRegistry.value, sessionId, turnScopeId),
+    );
+    logTerminalResolutionDebug("frontend.terminalResolution.applied", () => ({
+      sessionId,
+      turnScopeId,
+      responseState: turn.state,
+      responseExecutionState: turn.executionState,
+      responseRevision: turn.revision,
+      responseSequence: turn.sequence,
+      startedAt: turn.startedAt,
+      finishedAt: turn.finishedAt,
+      projectedState: projected?.displayState || projected?.state || "",
+      projectedSending: projected?.sending === true,
+      projectedTerminal: projected?.terminal || null,
+      activeTurnScopeId:
+        selectSessionRuntimeBucket(turnRuntimeRegistry.value, sessionId)?.activeTurnScopeId || "",
+    }));
+    return result;
   };
   const terminalResolutionCoordinator = createTerminalResolutionCoordinator({
     userId,
@@ -210,7 +188,10 @@ export function useChatEngine({
       data,
     });
   };
-  const applyRunStateEvent = (event) => {
+  const applyRunStateEvent = (input) => {
+    const event = input.type.startsWith("local_")
+      ? createLocalSessionRunEvent(input, Date.now())
+      : input;
     const eventSummary = summarizeStateMachineEvent(event);
     const beforeTurn = eventSummary.turnScopeId
       ? selectTurnRuntimeByScope(

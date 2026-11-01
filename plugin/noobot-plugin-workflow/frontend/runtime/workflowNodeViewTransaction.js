@@ -62,6 +62,12 @@ export function createWorkflowNodeViewTransaction({
     return true;
   }
 
+  function fail(candidate) {
+    if (!accepts(candidate)) return false;
+    state.phase = "failed";
+    return true;
+  }
+
   function merge(ownerKey = "", detail = {}) {
     if (!["loading", "live"].includes(state.phase) || text(ownerKey) !== state.ownerKey)
       return false;
@@ -78,6 +84,7 @@ export function createWorkflowNodeViewTransaction({
     ticket,
     replace,
     activate,
+    fail,
     merge,
   };
 }

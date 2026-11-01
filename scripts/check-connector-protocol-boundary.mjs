@@ -75,6 +75,31 @@ const LEGACY_TERMS = Object.freeze([
 const filesUnder = (directories) =>
   getFirstPartyFilesUnder(directories, { ...SCAN, repositoryRoot });
 
+async function measureFileDependencies(measurement, file, forbidden) {
+  const source = await readRepositoryText(file);
+  for (const dependency of forbidden) {
+    if (source.includes(dependency)) {
+      addHit(measurement, { file, message: `depends on ${dependency}` });
+    }
+  }
+}
+
+async function measureLayerDependencies(measurement, layer, forbidden) {
+  for (const file of await filesUnder([layer])) {
+    await measureFileDependencies(measurement, file, forbidden);
+  }
+}
+
+async function measureConsumer(measured, file) {
+  const source = await readRepositoryText(file);
+  if (/export\s+const\s+CONNECTOR_TYPE\b/.test(source)) {
+    addHit(measured.typeOwnership, { file, message: "exports CONNECTOR_TYPE" });
+  }
+  for (const term of LEGACY_TERMS) {
+    if (source.includes(term)) addHit(measured.legacyTerm, { file, message: term });
+  }
+}
+
 async function measure() {
   const measured = emptyRuleMeasurements(CHECK);
   await addRemovedPathHits(measured.removedImplementation, REMOVED_PATHS, "must remain removed");
@@ -99,23 +124,10 @@ async function measure() {
     });
   }
   for (const [layer, forbidden] of Object.entries(LAYER_FORBIDDEN)) {
-    for (const file of await filesUnder([layer])) {
-      const source = await readRepositoryText(file);
-      for (const dependency of forbidden) {
-        if (source.includes(dependency)) {
-          addHit(measured.layerDependency, { file, message: `depends on ${dependency}` });
-        }
-      }
-    }
+    await measureLayerDependencies(measured.layerDependency, layer, forbidden);
   }
   for (const file of await filesUnder(CONSUMER_ROOTS)) {
-    const source = await readRepositoryText(file);
-    if (/export\s+const\s+CONNECTOR_TYPE\b/.test(source)) {
-      addHit(measured.typeOwnership, { file, message: "exports CONNECTOR_TYPE" });
-    }
-    for (const term of LEGACY_TERMS) {
-      if (source.includes(term)) addHit(measured.legacyTerm, { file, message: term });
-    }
+    await measureConsumer(measured, file);
   }
   if ((await readRepositoryText(RUN_PREFERENCES)).includes("selectedConnectorIds")) {
     addHit(measured.typeOwnership, { file: RUN_PREFERENCES, message: "selectedConnectorIds" });

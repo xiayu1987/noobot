@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { turnRecordFixture } from "../helpers/turnRecordFixture.js";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
@@ -247,6 +248,7 @@ describe("sub-session realtime message projection", () => {
           : {};
       const result = store.applyTurnLifecycleEnvelope(
         createTurnLifecycleEnvelope({
+          updatedAt: "2026-01-01T00:00:00.000Z",
           ...identity,
           eventId: `child-lifecycle-${sequence}`,
           commandId: `child-command-${sequence}`,
@@ -282,7 +284,7 @@ describe("sub-session realtime message projection", () => {
       aggregateVersion: 1,
       sessionId: identity.sessionId,
       turnScopeId: identity.turnScopeId,
-      turn: {
+      turn: turnRecordFixture({
         ...identity,
         state: "completed",
         revision: 4,
@@ -290,8 +292,7 @@ describe("sub-session realtime message projection", () => {
         completionCommitId: "child-run:completed",
         summaryVersion: 1,
         finishedAt: "2026-01-01T00:00:05.000Z",
-        terminalStatus: { command: "completed", description: "done" },
-      },
+      }),
     });
     expect(terminal.applied).toBe(true);
     const completed = store.selectSubSessionMessages("child-session");
@@ -338,6 +339,7 @@ describe("sub-session realtime message projection", () => {
     for (const [eventType, sequence, phase, state, executionState] of lifecycle) {
       const result = store.applyTurnLifecycleEnvelope(
         createTurnLifecycleEnvelope({
+          updatedAt: "2026-01-01T00:00:00.000Z",
           ...identity,
           parentSessionId: "",
           eventId: `root-lifecycle-${sequence}`,
@@ -471,7 +473,7 @@ describe("sub-session realtime message projection", () => {
           sessionId,
           sequence: 2,
           recentTerminalTurns: [
-            {
+            turnRecordFixture({
               continuedByTurnScopeId: "",
               sessionId,
               turnScopeId: "workflow-node:node-1",
@@ -484,7 +486,7 @@ describe("sub-session realtime message projection", () => {
               startedAt: "2026-07-31T08:42:28.213Z",
               finishedAt: "2026-07-31T08:43:59.859Z",
               updatedAt: "2026-07-31T08:43:59.859Z",
-            },
+            }),
           ],
           generatedAt: "2026-07-31T08:43:59.859Z",
         }),
@@ -545,6 +547,8 @@ describe("sub-session realtime message projection", () => {
                 nodeSessionId: sessionId,
                 turnScopeId: `workflow-node:${nodeExecutionId}`,
                 eventId: `${nodeExecutionId}:ready`,
+                activeChildExecutionId: "agent-1",
+                attemptExecutionIds: [],
                 sequence: 1,
                 revision: 1,
                 status: "ready",

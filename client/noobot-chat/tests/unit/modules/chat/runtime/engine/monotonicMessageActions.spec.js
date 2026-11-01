@@ -127,6 +127,7 @@ describe("monotonicMessageActions stop-window gates", () => {
       sequence: 2,
     });
     applyTurnRuntimeEvent(turnRuntimeRegistry.value, {
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,
       sessionId: "s1",
       turnScopeId: "turn-1",

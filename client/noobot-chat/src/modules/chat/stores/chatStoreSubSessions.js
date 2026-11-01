@@ -12,6 +12,7 @@ import {
 import { projectTurnRuntimeToSession } from "../runtime/engine/turnProjectionStore.js";
 import { createSubSessionEventOperations } from "./subSessionEventOperations.js";
 import { createEmptySubSession } from "./subSessionRegistry.js";
+import { requireSelectedSessionDocument } from "@noobot/plugin-protocol/frontend";
 
 function buildSubSessionProjection({ session, turnRuntime, workflowNodeState }) {
   return {
@@ -99,7 +100,7 @@ export function createSubSessionStore({
     const workflowNodeState = selectWorkflowNodeState(id, session.turnScopeId);
     const projection = buildSubSessionProjection({ session, turnRuntime, workflowNodeState });
     logSubSessionProjection({ id, session, projection, turnRuntime, workflowNodeState });
-    return projection;
+    return requireSelectedSessionDocument(projection, id);
   }
 
   function removeSubSessionsByWorkflowRunIds(workflowRunIds, { parentSessionId }) {

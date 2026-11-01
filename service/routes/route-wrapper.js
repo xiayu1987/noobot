@@ -14,11 +14,11 @@ export function createBadRequestError(message, { code = "" } = {}) {
   return error;
 }
 
-export function decodeRequestInput(decode) {
+export function decodeRequestInput(decode, isInvalidInput) {
   try {
     return decode();
   } catch (error) {
-    if (error instanceof Error && !Number.isInteger(Number(error.statusCode))) {
+    if (error instanceof Error && error.statusCode === undefined && isInvalidInput(error)) {
       error.statusCode = HTTP_STATUS.BAD_REQUEST;
     }
     throw error;
@@ -45,7 +45,7 @@ export function withJsonError(
       return await handler(req, res);
     } catch (error) {
       const fallbackMessage = fallbackErrorKey ? translateText(fallbackErrorKey, req?.locale) : "";
-      const errorStatusCode = Number(error?.statusCode);
+      const errorStatusCode = error?.statusCode;
       const responseStatusCode =
         Number.isInteger(errorStatusCode) && errorStatusCode >= 400 && errorStatusCode < 600
           ? errorStatusCode

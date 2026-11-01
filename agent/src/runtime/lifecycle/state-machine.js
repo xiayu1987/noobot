@@ -5,6 +5,7 @@
  */
 
 import { resolveErrorMessage } from "../../shared/utils/error-utils.js";
+import { EXECUTION_ABORT_TYPE } from "@noobot/session-protocol/execution-abort";
 import { AGENT_RUN_EVENT } from "../../events/run-event.js";
 import { emitEvent } from "../../events/emitter.js";
 import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
@@ -32,23 +33,30 @@ function isBranchState(state = "") {
   return Object.values(AGENT_LIFECYCLE_BRANCH_STATE).includes(state);
 }
 
-function normalizeStoppedSnapshotPersistence(value = null) {
-  if (isPlainObject(value)) {
-    const status = normalizeText(value.status);
-    return {
-      ...value,
-      status: status || "unknown",
-    };
+const STOPPED_SNAPSHOT_PERSISTENCE_STATUSES = new Set(["saved", "skipped", "failed"]);
+const INTERRUPT_STOP_TYPES = new Set(
+  Object.values(EXECUTION_ABORT_TYPE).filter((type) => type !== EXECUTION_ABORT_TYPE.USER_STOP),
+);
+
+function requireStoppedSnapshotPersistence(value) {
+  if (!isPlainObject(value) || !STOPPED_SNAPSHOT_PERSISTENCE_STATUSES.has(value.status)) {
+    throw new TypeError("agent lifecycle stop requires a stoppedSnapshotPersistence result");
   }
-  return {
-    status: "skipped",
-    reason: "missing_persistence_result",
-    source: "lifecycle_stop",
-    messageCount: 0,
-    systemCount: 0,
-    historyCount: 0,
-    incrementalCount: 0,
-  };
+  return { ...value };
+}
+
+function requireStopReason(value) {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new TypeError("agent lifecycle stop requires reason text");
+  }
+  return value.trim();
+}
+
+function requireStopType(value) {
+  if (!INTERRUPT_STOP_TYPES.has(value)) {
+    throw new TypeError("agent lifecycle interrupt requires a protocol abort stopType");
+  }
+  return value;
 }
 
 export function resolveInitialLifecycleState(runConfig = {}) {
@@ -153,29 +161,23 @@ export function createAgentLifecycleMachine({
     complete(extra = {}) {
       return emit(AGENT_LIFECYCLE_STATE.COMPLETED, extra);
     },
-    userStop({ reason = "", error = "", stoppedSnapshotPersistence = null, ...extra } = {}) {
+    userStop({ reason, stoppedSnapshotPersistence, ...extra }) {
+      const persistence = requireStoppedSnapshotPersistence(stoppedSnapshotPersistence);
       return emit(AGENT_LIFECYCLE_BRANCH_STATE.USER_STOPPED, {
         ...extra,
         stopType: "user_stop",
-        canResume:
-          normalizeStoppedSnapshotPersistence(stoppedSnapshotPersistence).status === "saved",
-        error: resolveErrorMessage(reason || error),
-        stoppedSnapshotPersistence: normalizeStoppedSnapshotPersistence(stoppedSnapshotPersistence),
+        canResume: persistence.status === "saved",
+        error: requireStopReason(reason),
+        stoppedSnapshotPersistence: persistence,
       });
     },
-    interrupt({
-      reason = "",
-      error = "",
-      stopType = AGENT_LIFECYCLE_BRANCH_STATE.INTERRUPTED,
-      stoppedSnapshotPersistence = null,
-      ...extra
-    } = {}) {
+    interrupt({ reason, stopType, stoppedSnapshotPersistence, ...extra }) {
       return emit(AGENT_LIFECYCLE_BRANCH_STATE.INTERRUPTED, {
         ...extra,
-        stopType: normalizeText(stopType) || AGENT_LIFECYCLE_BRANCH_STATE.INTERRUPTED,
+        stopType: requireStopType(stopType),
         canResume: false,
-        error: resolveErrorMessage(reason || error),
-        stoppedSnapshotPersistence: normalizeStoppedSnapshotPersistence(stoppedSnapshotPersistence),
+        error: requireStopReason(reason),
+        stoppedSnapshotPersistence: requireStoppedSnapshotPersistence(stoppedSnapshotPersistence),
       });
     },
     fail({ error = "", ...extra } = {}) {

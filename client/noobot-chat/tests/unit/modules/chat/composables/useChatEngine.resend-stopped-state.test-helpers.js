@@ -6,6 +6,7 @@
 import { createTurnTerminalResolution } from "@noobot/session-protocol";
 import { applyTurnTerminalResolution } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { terminalStatusFixture } from "../helpers/terminalStatusFixture.js";
+import { turnRecordFixture } from "../helpers/turnRecordFixture.js";
 
 export function settleStoppedTurn(
   turnRuntimeRegistry,
@@ -22,7 +23,7 @@ export function settleStoppedTurn(
       turnScopeId,
       resolved: true,
       aggregateVersion: 1,
-      turn: {
+      turn: turnRecordFixture({
         sessionId,
         turnScopeId,
         dialogProcessId,
@@ -39,7 +40,7 @@ export function settleStoppedTurn(
           turnScopeId,
           dialogProcessId,
         }),
-      },
+      }),
     }),
   );
   if (result?.applied && result.registry) {

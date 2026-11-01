@@ -6,6 +6,7 @@
 import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 import {
   applyCanonicalToolTimelineEvent,
+  requireCanonicalToolTimelineIdentity,
   resolveCanonicalToolTimelineStatus,
   selectMessageToolTimeline,
   selectTaskCheckReceipt,
@@ -17,19 +18,8 @@ import { createWeakArrayIndex } from "@noobot/timeline-runtime";
 import { LINK_SNAPSHOT_KIND } from "@noobot/path-resolver/resource-link";
 import { text, isObjectLike } from "@noobot/shared/value";
 
-function toolCallIdOf(value = {}) {
-  return text(value.toolCallId);
-}
-
-function timelineKey(value = {}) {
-  const callId = toolCallIdOf(value);
-  if (callId) return `call:${callId}`;
-  const eventId = text(value.eventId);
-  return eventId ? `event:${eventId}` : "";
-}
-
 const toolTimelineIndex = createWeakArrayIndex({
-  keyOf: (entry) => text(entry?.key) || timelineKey(entry),
+  keyOf: (entry) => requireCanonicalToolTimelineIdentity(entry).key,
 });
 
 function stringifyToolDetail(value) {
@@ -189,8 +179,7 @@ export function selectTaskCheckReceipts(message = {}) {
 export function mergeToolTimelines(...timelines) {
   const merged = new Map();
   for (const candidate of timelines.flat()) {
-    const key = text(candidate?.key) || timelineKey(candidate);
-    if (!key) continue;
+    const { key } = requireCanonicalToolTimelineIdentity(candidate);
     const previous = merged.get(key) || {};
     const mergedEntry = {
       ...previous,

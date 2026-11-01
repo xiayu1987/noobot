@@ -14,14 +14,16 @@ import {
 } from "@noobot/event-protocol";
 import { text } from "@noobot/shared/value";
 import { randomUUID } from "node:crypto";
+import { snapshotTurnRecord } from "./turn-record.fixture.js";
 
 export function authoritativeSnapshot(fields = {}) {
   return createTurnSnapshotEnvelope(
     createTurnLifecycleSnapshot({
       generatedAt: "2026-08-17T00:00:00.000Z",
-      recentTerminalTurns: [],
       replacedTurns: [],
       ...fields,
+      activeTurn: fields.activeTurn === null ? null : snapshotTurnRecord(fields.activeTurn),
+      recentTerminalTurns: (fields.recentTerminalTurns ?? []).map(snapshotTurnRecord),
     }),
     {
       eventId: randomUUID(),
@@ -67,6 +69,7 @@ export function authoritativeLifecycle(fields = {}) {
     executionState: fields.executionState || (terminal ? "completed" : "sending"),
     summaryVersion: terminal ? 1 : 0,
     completionCommitId: terminal ? `commit-${fields.eventId}` : "",
+    updatedAt: "2026-01-01T00:00:00.000Z",
     ...fields,
   });
   return createTurnLifecycleEventEnvelope(payload, {

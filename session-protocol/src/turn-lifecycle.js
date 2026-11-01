@@ -5,22 +5,22 @@
  */
 import { text as clean, isCanonicalText, isObjectLike } from "@noobot/shared/value";
 import { normalizeExecutionIdentity } from "./execution-lifecycle.js";
+import { projectTurnLifecycleRuntimeEvent } from "./runtime-event.js";
 import {
   isCanonicalTurnScopeId,
   requireCanonicalTurnScopeId,
   requireOptionalCanonicalTurnScopeId,
 } from "./identity/turn-scope-identity.js";
 import { deriveAuthoritativeTurnCapabilities } from "./lifecycle/turn-capability.js";
+import { collectTurnFailureErrors, collectTurnRecordErrors } from "./lifecycle/turn-record.js";
 import {
   collectPositiveIntegerErrors,
   collectRequiredFieldErrors,
   collectDialogProcessIdErrors,
   collectParentSessionIdErrors,
-  collectTurnMaterializationErrors,
   collectTurnScopeIdErrors,
 } from "./lifecycle/turn-field-assertions.js";
 import { normalizeTurnContinuationSource } from "./lifecycle/turn-continuation.js";
-import { normalizeTurnFailure } from "./lifecycle/turn-failure.js";
 import {
   isTurnCommitContinuation,
   TURN_COMMIT_ACTION,
@@ -41,6 +41,7 @@ import {
 } from "./lifecycle/turn-transition-policy.js";
 import { isTerminalTurnState, TURN_PHASE, TURN_STATE } from "./lifecycle/turn-state.js";
 import { isSessionCaller } from "@noobot/shared/session-caller";
+import { collectTurnReplacementTombstoneErrors } from "./lifecycle/turn-replacement.js";
 import { snapshotReplacedTurn, snapshotTurn } from "./lifecycle/turn-projection.js";
 import {
   isActionableTurnRecovery,
@@ -185,53 +186,7 @@ export function createTurnLifecycleSnapshot({
   return snapshot;
 }
 
-export function collectTurnReplacementTombstoneErrors(replacement, lifecycleSequence) {
-  const errors = [];
-  const turnScopeId = replacement?.turnScopeId;
-  const replacementTurnScopeId = replacement?.replacementTurnScopeId;
-  const replacedTurnScopeIds = Array.isArray(replacement?.replacedTurnScopeIds)
-    ? replacement.replacedTurnScopeIds
-    : [];
-  errors.push(
-    ...collectTurnScopeIdErrors(turnScopeId, {
-      missingCode: "missing_replaced_turn_scope_id",
-      nonCanonicalCode: "non_canonical_replaced_turn_scope_id",
-    }),
-  );
-  if (!clean(replacement?.replacementDialogProcessId))
-    errors.push("missing_replacement_dialog_process_id");
-  if (!clean(replacement?.requestHash)) errors.push("missing_replacement_request_hash");
-  errors.push(
-    ...collectTurnScopeIdErrors(replacementTurnScopeId, {
-      missingCode: "missing_replacement_turn_scope_id",
-      nonCanonicalCode: "non_canonical_replacement_turn_scope_id",
-    }),
-  );
-  if (!clean(replacement?.replacementUserMessageUid))
-    errors.push("missing_replacement_user_message_uid");
-  if (!clean(replacement?.commandId)) errors.push("missing_replacement_command_id");
-  if (
-    !Number.isInteger(replacement?.committedAggregateVersion) ||
-    replacement.committedAggregateVersion < 1
-  )
-    errors.push("invalid_replacement_committed_version");
-  if (
-    !replacedTurnScopeIds.length ||
-    !replacedTurnScopeIds.every(isCanonicalTurnScopeId) ||
-    !replacedTurnScopeIds.includes(turnScopeId)
-  )
-    errors.push("invalid_replaced_turn_scope_ids");
-  if (replacedTurnScopeIds.includes(replacementTurnScopeId))
-    errors.push("replacement_scope_reuses_replaced_scope");
-  if (
-    !Number.isInteger(replacement?.sequence) ||
-    replacement.sequence < 1 ||
-    replacement.sequence > lifecycleSequence
-  )
-    errors.push("invalid_replacement_sequence");
-  if (!clean(replacement?.committedAt)) errors.push("missing_replacement_committed_at");
-  return errors;
-}
+export { collectTurnReplacementTombstoneErrors } from "./lifecycle/turn-replacement.js";
 
 function collectReplacementErrors(snapshot, errors) {
   const replacementScopes = new Set();
@@ -242,6 +197,17 @@ function collectReplacementErrors(snapshot, errors) {
     errors.push(...collectTurnReplacementTombstoneErrors(replacement, snapshot.sequence));
   }
   return replacementScopes;
+}
+
+function collectSnapshotRuntimeErrors(turn) {
+  const errors = collectTurnRecordErrors(turn);
+  if (errors.length) return errors;
+  try {
+    projectTurnLifecycleRuntimeEvent(turn);
+  } catch (error) {
+    errors.push(error.message);
+  }
+  return errors;
 }
 
 export function validateTurnLifecycleSnapshot(snapshot = {}) {
@@ -272,7 +238,8 @@ export function validateTurnLifecycleSnapshot(snapshot = {}) {
       errors.push("invalid_snapshot_turn");
       continue;
     }
-    errors.push(...collectTurnMaterializationErrors(turn));
+    if (!isCanonicalText(turn.sessionId)) errors.push("missing_turn_session_id");
+    errors.push(...collectSnapshotRuntimeErrors(turn));
     if (turn.sessionId !== snapshot.sessionId) errors.push("turn_session_identity_mismatch");
     if (Number.isInteger(turn.sequence) && turn.sequence >= 1 && turn.sequence > snapshot.sequence)
       errors.push("turn_sequence_exceeds_snapshot");
@@ -337,6 +304,8 @@ export function createTurnLifecycleEnvelope({
     origin,
     stage,
   });
+  const failureErrors = collectTurnFailureErrors(failure);
+  if (failureErrors.length) throw new TypeError(failureErrors.join(","));
   const envelope = {
     protocolVersion: TURN_LIFECYCLE_PROTOCOL_VERSION,
     eventType: clean(eventType),
@@ -363,7 +332,7 @@ export function createTurnLifecycleEnvelope({
     finishedAt: clean(finishedAt),
     occurredAt: clean(occurredAt),
     capabilities: capabilities && typeof capabilities === "object" ? capabilities : undefined,
-    failure: normalizeTurnFailure(failure) || undefined,
+    failure: failure === null ? undefined : failure,
     payload: payload && typeof payload === "object" ? payload : {},
     continuationSource: normalizeTurnContinuationSource(continuationSource) || undefined,
     continuedByTurnScopeId: requireOptionalCanonicalTurnScopeId(continuedByTurnScopeId),
@@ -379,9 +348,9 @@ export function createTurnLifecycleEnvelope({
 
 export function validateTurnLifecycleEnvelope(envelope = {}) {
   const errors = [];
-  if (Number(envelope.protocolVersion) !== TURN_LIFECYCLE_PROTOCOL_VERSION)
+  if (envelope.protocolVersion !== TURN_LIFECYCLE_PROTOCOL_VERSION)
     errors.push("unsupported_protocol_version");
-  if (!EVENT_VALUES.has(clean(envelope.eventType))) errors.push("invalid_event_type");
+  if (!EVENT_VALUES.has(envelope.eventType)) errors.push("invalid_event_type");
   if (!isCanonicalText(envelope.eventId)) errors.push("missing_event_id");
   if (!isCanonicalText(envelope.sessionId)) errors.push("missing_session_id");
   errors.push(...collectTurnScopeIdErrors(envelope.turnScopeId));
@@ -418,8 +387,15 @@ export function validateTurnLifecycleEnvelope(envelope = {}) {
   }
   if (isCompletionCommitTurnEvent(envelope.eventType)) {
     if (!clean(envelope.completionCommitId)) errors.push("missing_completion_commit_id");
-    if (!Number.isInteger(Number(envelope.summaryVersion)) || Number(envelope.summaryVersion) < 1)
+    if (!Number.isSafeInteger(envelope.summaryVersion) || envelope.summaryVersion < 1)
       errors.push("invalid_completion_summary_version");
+  }
+  if (errors.length === 0) {
+    try {
+      projectTurnLifecycleRuntimeEvent(envelope);
+    } catch (error) {
+      errors.push(error.message);
+    }
   }
   return { valid: errors.length === 0, errors };
 }

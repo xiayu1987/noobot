@@ -99,6 +99,9 @@ test("SessionExecutionFinalizer waits for execution event durability before read
     dialogProcessId: "dp1",
     agentResult: {
       output: "done",
+      traces: [],
+      modelMessages: [],
+      modelLoopRound: 0,
       turnMessages: [
         { messageUid: "sm_done", role: "assistant", type: "message", content: "done" },
       ],
@@ -152,6 +155,9 @@ test("SessionExecutionFinalizer rejects completion when execution event persiste
       turnScopeId: "turn-1",
       agentResult: {
         output: "done",
+        traces: [],
+        modelMessages: [],
+        modelLoopRound: 0,
         turnMessages: [
           { messageUid: "sm_done", role: "assistant", type: "message", content: "done" },
         ],
@@ -210,6 +216,9 @@ test("SessionExecutionFinalizer promotes semantic-transfer attachments as transf
     summaryCheckpointPromotionSources: [],
     agentResult: {
       output: "done",
+      traces: [],
+      modelMessages: [],
+      modelLoopRound: 0,
       turnMessages: [
         {
           messageUid: "sm_transfer_tool",
@@ -272,6 +281,9 @@ test("SessionExecutionFinalizer promotes ordinary generated attachments to final
     summaryCheckpointPromotionSources: [],
     agentResult: {
       output: "done",
+      traces: [],
+      modelMessages: [],
+      modelLoopRound: 0,
       turnMessages: [
         {
           messageUid: "sm_ordinary_tool",
@@ -374,6 +386,10 @@ test("SessionExecutionFinalizer promotes checkpoint attachment sources without r
       },
     ],
     agentResult: {
+      output: "tail",
+      traces: [],
+      modelMessages: [],
+      modelLoopRound: 0,
       turnMessages: [
         {
           messageUid: "sm_persisted",
@@ -432,6 +448,10 @@ test("SessionExecutionFinalizer restores the pre-refactor full result from persi
     ],
     summaryCheckpointPromotionSources: [],
     agentResult: {
+      output: "tail",
+      traces: [],
+      modelMessages: [],
+      modelLoopRound: 0,
       turnMessages: [{ messageUid: "sm_tail", role: "assistant", content: "tail" }],
     },
   });
@@ -481,6 +501,10 @@ test("SessionExecutionFinalizer skips non-contiguous persisted UIDs without dupl
     ],
     summaryCheckpointPromotionSources: [],
     agentResult: {
+      output: "tail",
+      traces: [],
+      modelMessages: [],
+      modelLoopRound: 0,
       turnMessages: [
         { messageUid: "sm_retained", role: "tool", content: "retained" },
         { messageUid: "sm_tail", role: "assistant", content: "tail" },
@@ -537,6 +561,10 @@ test("SessionExecutionFinalizer persists canonical summary-state changes for an 
     ],
     summaryCheckpointPromotionSources: [],
     agentResult: {
+      output: "",
+      traces: [],
+      modelMessages: [],
+      modelLoopRound: 0,
       turnMessages: [
         {
           messageUid: "sm_guidance",
@@ -600,7 +628,13 @@ test("SessionExecutionFinalizer upserts summary marks for an already durable tur
     sessionId: "s1",
     dialogProcessId: "dp1",
     turnScopeId: "turn-1",
-    agentResult: { turnMessages: [{ ...durableMessage, summarized: true }] },
+    agentResult: {
+      output: "",
+      traces: [],
+      modelMessages: [],
+      modelLoopRound: 0,
+      turnMessages: [{ ...durableMessage, summarized: true }],
+    },
     persistedTurnMessages: [],
     durableTurnMessages: [durableMessage],
     persistedTurnMessageUids: [durableMessage.messageUid],
@@ -727,6 +761,10 @@ test("SessionExecutionFinalizer rejects a persisted UID without a durable journa
       durableTurnMessages: [],
       summaryCheckpointPromotionSources: [],
       agentResult: {
+        output: "canonical",
+        traces: [],
+        modelMessages: [],
+        modelLoopRound: 0,
         turnMessages: [
           {
             messageUid: "sm_missing",

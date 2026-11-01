@@ -362,11 +362,14 @@ test("appendTurns should not recreate session after deletion marker is set", asy
     await runtime.sessionTreeService.deleteSessionBranch({ userId, sessionIds: [sessionId] });
     assert.equal(await exists(scope.sessionFile), false);
 
-    await runtime.sessionMessageService.appendTurns({
-      userId,
-      sessionId,
-      turns: [{ role: "assistant", content: "late async write" }],
-    });
+    await assert.rejects(
+      runtime.sessionMessageService.appendTurns({
+        userId,
+        sessionId,
+        turns: [{ role: "assistant", content: "late async write" }],
+      }),
+      { code: "SESSION_DELETED", statusCode: 410 },
+    );
 
     assert.equal(await exists(scope.sessionFile), false);
   });

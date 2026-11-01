@@ -59,8 +59,7 @@ test("channel transport preserves strict event payloads during broadcast and rep
   });
   const lifecycle = {
     eventType: "attachment.parsed",
-    eventVersion: 1,
-    attachmentEventId: "attachment-event-1",
+    eventVersion: 2,
     identity: { attachmentId: "attachment-1", sessionId, attachmentSource: "user" },
     status: "parsed",
     occurredAt: "2026-08-17T00:00:00.000Z",
@@ -77,7 +76,7 @@ test("channel transport preserves strict event payloads during broadcast and rep
     family: EVENT_FAMILY.ATTACHMENT_LIFECYCLE,
     schemaVersion: getEventFamily(EVENT_FAMILY.ATTACHMENT_LIFECYCLE).schemaVersion,
     identity: {
-      eventId: lifecycle.attachmentEventId,
+      eventId: "attachment-event-1",
       eventType: ATTACHMENT_LIFECYCLE_WIRE_EVENT,
       sessionId,
     },

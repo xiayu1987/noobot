@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { turnRecordFixture } from "../helpers/turnRecordFixture.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createAuthoritativeMessageEnvelope,
@@ -71,6 +72,8 @@ describe("useReconnectReplay", () => {
             {
               nodeExecutionId: "node-1",
               eventId: "workflow_node_state:workflow-1:node-1:1",
+              activeChildExecutionId: "agent-1",
+              attemptExecutionIds: [],
               status: "pending",
               revision: 1,
               sequence: 1,
@@ -139,6 +142,7 @@ describe("useReconnectReplay", () => {
   it("EV-01d: channel_state sending is transport-only", async () => {
     const { api, refs } = createFixture();
     applyTurnRuntimeEvent(refs.turnRuntimeRegistry.value, {
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
       sessionId: "s-1",
       turnScopeId: "turn-cs",
@@ -158,6 +162,7 @@ describe("useReconnectReplay", () => {
   it("EV-01e: channel_state reconnecting is transport-only", async () => {
     const { api, refs } = createFixture();
     applyTurnRuntimeEvent(refs.turnRuntimeRegistry.value, {
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
       sessionId: "s-1",
       turnScopeId: "turn-reconnecting",
@@ -200,11 +205,14 @@ describe("useReconnectReplay", () => {
   it("EV-01g: stale terminal channel_state does not clear current local turn scope", async () => {
     const { api, refs } = createFixture();
     applyTurnRuntimeEvent(refs.turnRuntimeRegistry.value, {
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
       sessionId: "s-1",
       turnScopeId: "client-current",
     });
     applyTurnRuntimeEvent(refs.turnRuntimeRegistry.value, {
+      updatedAtMs: 1767225600000,
+      seq: 1,
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       sessionId: "s-1",
       turnScopeId: "client-current",
@@ -298,7 +306,7 @@ describe("useReconnectReplay", () => {
       sessionId: "s-1",
       sequence: 1,
       activeTurnScopeId: "turn-dp-new",
-      activeTurn: {
+      activeTurn: turnRecordFixture({
         continuedByTurnScopeId: "",
         userId: "admin",
         sessionId: "s-1",
@@ -310,7 +318,7 @@ describe("useReconnectReplay", () => {
         executionState: "sending",
         revision: 1,
         sequence: 1,
-      },
+      }),
     });
     const reconnectControl = createReconnectControl({
       requestId: "reconnect-s-1",

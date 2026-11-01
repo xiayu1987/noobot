@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { turnRecord } from "./helpers/turn-record.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import path from "node:path";
@@ -233,7 +234,8 @@ async function saveCompletedTurnWithRejectedBatch(sessionRepo, sessionId) {
         ...createTestSessionRequiredFields().turnLifecycle,
         sequence: 1,
         turns: {
-          done: {
+          done: turnRecord({
+            state: "completed",
             revision: 1,
             sequence: 1,
             ...turn,
@@ -241,7 +243,7 @@ async function saveCompletedTurnWithRejectedBatch(sessionRepo, sessionId) {
               turnScopeId: turn.turnScopeId,
               dialogProcessId: turn.dialogProcessId,
             }),
-          },
+          }),
         },
       },
       messages: [...canonical.slice(0, 3), rejected, canonical[3]],

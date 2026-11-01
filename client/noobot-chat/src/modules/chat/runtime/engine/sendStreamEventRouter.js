@@ -111,8 +111,7 @@ function routeAuthoritativeRuntimeEvent({
   protocolEnvelope,
   applyWorkflowRuntimeEvent,
   logSessionEvent,
-  sessionId,
-  turnScopeId,
+  activeSession,
 }) {
   if (!protocolEnvelope) return false;
   const routed = routeRuntimeStreamEvent(protocolEnvelope, {
@@ -120,8 +119,7 @@ function routeAuthoritativeRuntimeEvent({
     logRuntimeProjectionDiagnostics: logPluginRuntimeDiagnostics,
     applyWorkflowRuntimeEvent,
     logSessionEvent,
-    sessionId,
-    turnScopeId,
+    isCurrentActiveSession: (sessionId) => activeSession.value?.sessionId === sessionId,
   });
   logRuntimeRouteCompleted({
     routed,
@@ -228,8 +226,7 @@ export function createSendStreamEventHandler(context) {
         protocolEnvelope,
         applyWorkflowRuntimeEvent,
         logSessionEvent,
-        sessionId,
-        turnScopeId,
+        activeSession,
       })
     )
       return;

@@ -10,6 +10,8 @@ import { validateTurnCommitMetadata } from "./turn-commit-metadata.js";
 import { validateCanonicalAssistantPresentation } from "../turn-presentation.js";
 import { isSessionCaller } from "@noobot/shared/session-caller";
 import { isCanonicalTurnScopeId } from "../identity/turn-scope-identity.js";
+import { collectTurnRecordErrors } from "../lifecycle/turn-record.js";
+import { collectTurnReplacementTombstoneErrors } from "../lifecycle/turn-replacement.js";
 
 export function createEmptyTurnLifecycle() {
   return { activeTurnScopeId: "", sequence: 0, turns: {}, replacedTurns: {}, commandReceipts: [] };
@@ -25,31 +27,79 @@ export function isTurnLifecycleShape(lifecycle) {
 }
 
 export function assertTurnLifecycleRecordIntegrity(lifecycle) {
-  const errors = [];
   if (!isTurnLifecycleShape(lifecycle)) {
-    errors.push("invalid_turn_lifecycle_shape");
-  } else {
-    if (!Number.isInteger(lifecycle.sequence) || lifecycle.sequence < 0) {
-      errors.push("invalid_lifecycle_sequence");
-    }
-    for (const field of ["turns", "replacedTurns"]) {
-      for (const [key, record] of Object.entries(lifecycle[field])) {
-        if (!isPlainObject(record)) {
-          errors.push(`invalid_lifecycle_record:${field}:${key}`);
-          continue;
-        }
-        if (!isCanonicalTurnScopeId(record.turnScopeId) || record.turnScopeId !== key) {
-          errors.push(`lifecycle_record_identity_mismatch:${field}:${key}`);
-        }
-        if (
-          !Number.isInteger(record.sequence) ||
-          record.sequence < 1 ||
-          record.sequence > lifecycle.sequence
-        ) {
-          errors.push(`invalid_lifecycle_record_sequence:${field}:${key}`);
-        }
+    throw Object.assign(new TypeError("invalid turn lifecycle: invalid_turn_lifecycle_shape"), {
+      code: "TURN_LIFECYCLE_RECORD_INVALID",
+      protocolErrors: ["invalid_turn_lifecycle_shape"],
+    });
+  }
+  const errors = [];
+  if (!Number.isInteger(lifecycle.sequence) || lifecycle.sequence < 0) {
+    errors.push("invalid_lifecycle_sequence");
+  }
+  for (const field of ["turns", "replacedTurns"]) {
+    for (const [key, record] of Object.entries(lifecycle[field])) {
+      if (!isPlainObject(record)) {
+        errors.push(`invalid_lifecycle_record:${field}:${key}`);
+        continue;
+      }
+      errors.push(
+        ...(field === "turns"
+          ? collectTurnRecordErrors(record)
+          : collectTurnReplacementTombstoneErrors(record, lifecycle.sequence)),
+      );
+      if (!isCanonicalTurnScopeId(record.turnScopeId) || record.turnScopeId !== key) {
+        errors.push(`lifecycle_record_identity_mismatch:${field}:${key}`);
+      }
+      if (
+        !Number.isInteger(record.sequence) ||
+        record.sequence < 1 ||
+        record.sequence > lifecycle.sequence
+      ) {
+        errors.push(`invalid_lifecycle_record_sequence:${field}:${key}`);
       }
     }
+  }
+  const active = lifecycle.activeTurnScopeId;
+  for (const turn of Object.values(lifecycle.turns)) {
+    if (!isPlainObject(turn)) continue;
+    if (turn.continuationSource !== null && isPlainObject(turn.continuationSource)) {
+      const source = lifecycle.turns[turn.continuationSource.turnScopeId];
+      if (
+        !source ||
+        source.state !== "stop_completed" ||
+        source.dialogProcessId !== turn.continuationSource.dialogProcessId ||
+        source.continuedByTurnScopeId !== turn.turnScopeId ||
+        source.sequence >= turn.sequence
+      )
+        errors.push("turn_continuation_source_relation_mismatch");
+    }
+    if (turn.continuedByTurnScopeId) {
+      const target = lifecycle.turns[turn.continuedByTurnScopeId];
+      if (
+        !target ||
+        target.continuationSource?.turnScopeId !== turn.turnScopeId ||
+        target.continuationSource?.dialogProcessId !== turn.dialogProcessId
+      )
+        errors.push("turn_continuation_target_relation_mismatch");
+    }
+  }
+  if (
+    active !== "" &&
+    (!isCanonicalTurnScopeId(active) ||
+      !lifecycle.turns[active] ||
+      isSettledTurn(lifecycle.turns[active]))
+  ) {
+    errors.push("invalid_active_turn");
+  }
+  if (Object.keys(lifecycle.turns).some((scope) => Object.hasOwn(lifecycle.replacedTurns, scope))) {
+    errors.push("replaced_turn_materialized");
+  }
+  const commandIds = new Set();
+  for (const receipt of lifecycle.commandReceipts) {
+    if (!normalizeCommandReceipt(receipt)) errors.push("invalid_command_receipt");
+    if (commandIds.has(receipt?.commandId)) errors.push("duplicate_command_receipt");
+    commandIds.add(receipt?.commandId);
   }
   if (errors.length) {
     throw Object.assign(new TypeError(`invalid turn lifecycle: ${errors.join(",")}`), {

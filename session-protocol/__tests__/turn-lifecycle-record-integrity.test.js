@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { turnRecord } from "./helpers/turn-record.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { assertTurnLifecycleRecordIntegrity, createEmptyTurnLifecycle } from "../src/index.js";
@@ -11,8 +12,21 @@ function lifecycle() {
   return {
     ...createEmptyTurnLifecycle(),
     sequence: 3,
-    turns: { "turn-1": { turnScopeId: "turn-1", sequence: 2 } },
-    replacedTurns: { "turn-old": { turnScopeId: "turn-old", sequence: 3 } },
+    turns: { "turn-1": turnRecord({ sequence: 2 }) },
+    replacedTurns: {
+      "turn-old": {
+        turnScopeId: "turn-old",
+        sequence: 3,
+        replacementDialogProcessId: "dialog-new",
+        replacementTurnScopeId: "turn-new",
+        replacementUserMessageUid: "user-new",
+        requestHash: "request-hash",
+        commandId: "replace-command",
+        committedAggregateVersion: 4,
+        replacedTurnScopeIds: ["turn-old"],
+        committedAt: "2026-07-30T00:00:00.000Z",
+      },
+    },
   };
 }
 

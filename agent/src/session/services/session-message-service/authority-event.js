@@ -38,11 +38,7 @@ import {
 } from "../../authority-outbox-store/outbox-journal.js";
 import { locateOutboxSessionDir } from "./outbox-scope.js";
 import { isCanonicalText, isObjectLike } from "@noobot/shared/value";
-import {
-  SESSION_NOT_FOUND_REASON,
-  createSessionNotFoundError,
-  decideAggregateConcurrency,
-} from "@noobot/session-protocol";
+import { SESSION_NOT_FOUND_REASON, decideAggregateConcurrency } from "@noobot/session-protocol";
 
 function decidePluginArtifactRevision(session, payload) {
   const currentArtifact =
@@ -80,10 +76,9 @@ export async function commitAuthorityEvent({
     owner.userId,
     owner.sessionId,
     async (scope) => {
-      const session = await this.sessionRepo.findById(owner.userId, owner.sessionId, {
+      const session = await this.sessionRepo.requireById(owner.userId, owner.sessionId, {
         persistenceContext,
       });
-      if (!session) throw createSessionNotFoundError(owner);
       const eventPayload = { ...payload };
       const isArtifact = descriptor.sessionArtifact === true && family === PLUGIN_ARTIFACT_FAMILY;
       if (isArtifact) {

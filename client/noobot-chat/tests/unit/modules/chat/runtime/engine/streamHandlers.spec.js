@@ -9,8 +9,13 @@ import {
   ATTACHMENT_LIFECYCLE,
   ATTACHMENT_RELATION_TYPE,
   createAttachmentLifecycleEvent,
+  attachmentLifecycleSequenceScopeId,
+  ATTACHMENT_LIFECYCLE_SEQUENCE_DOMAIN,
 } from "@noobot/attachment-protocol";
+import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
 import { handleAttachmentLifecycleStreamEvent } from "../../../../../../src/modules/chat/runtime/engine/streamHandlers.js";
+import { normalizeTurnTransportEnvelope } from "../../../../../../src/modules/chat/runtime/engine/turnTransportEnvelope.js";
+import { applyReconnectEventReplay } from "../../../../../../src/modules/chat/runtime/reconnect/reconnectEventReplay.js";
 import {
   buildViewMessage,
   normalizeMessageAttachments,
@@ -37,11 +42,10 @@ describe("chatEngine streamHandlers transport boundary", () => {
     mimeType: "text/markdown",
     createdAt: "2026-08-16T00:00:00.000Z",
   };
-  const parsedEvent = (overrides = {}) =>
-    createAttachmentLifecycleEvent({
+  const parsedEvent = (overrides = {}) => {
+    const payload = createAttachmentLifecycleEvent({
       eventType: ATTACHMENT_EVENT_TYPE.PARSED,
-      eventVersion: 1,
-      attachmentEventId: "attachment-event-1",
+      eventVersion: 2,
       identity,
       status: ATTACHMENT_LIFECYCLE.PARSED,
       occurredAt: "2026-08-16T00:00:00.000Z",
@@ -49,6 +53,26 @@ describe("chatEngine streamHandlers transport boundary", () => {
       relation,
       ...overrides,
     });
+    return createEventEnvelope({
+      family: EVENT_FAMILY.ATTACHMENT_LIFECYCLE,
+      schemaVersion: 2,
+      identity: {
+        eventId: "evt-parsed-1",
+        eventType: "attachment_lifecycle",
+        sessionId: identity.sessionId,
+        turnScopeId: payload.turnScopeId,
+      },
+      causality: {},
+      ordering: {
+        domain: ATTACHMENT_LIFECYCLE_SEQUENCE_DOMAIN,
+        scopeId: attachmentLifecycleSequenceScopeId(identity),
+        sequence: 1,
+      },
+      producer: { type: "test", id: "stream-test" },
+      occurredAt: payload.occurredAt,
+      payload,
+    });
+  };
 
   it("projects a parsed-result relation onto the canonical user attachment", () => {
     const userMessage = {
@@ -103,6 +127,32 @@ describe("chatEngine streamHandlers transport boundary", () => {
         activeSession: { value: { messages: [] } },
       }),
     ).toThrow();
+  });
+
+  it("deduplicates a persisted authority event across live and reconnect delivery", async () => {
+    const incoming = parsedEvent();
+    const userMessage = { role: "user", attachments: [{ ...identity }] };
+    const context = {
+      activeSession: { value: { messages: [userMessage] } },
+      makeViewAttachments,
+      logSessionEvent: vi.fn(),
+    };
+    const live = normalizeTurnTransportEnvelope({ event: "attachment_lifecycle", data: incoming });
+    handleAttachmentLifecycleStreamEvent({ ...context, data: live.data });
+    const state = userMessage.attachments[0].attachmentLifecycle;
+    expect(state.events.map((event) => event.identity.eventId)).toEqual(["evt-parsed-1"]);
+    const onAttachmentLifecycle = vi.fn((data) => {
+      handleAttachmentLifecycleStreamEvent({ ...context, data });
+    });
+    const result = await applyReconnectEventReplay({
+      event: "attachment_lifecycle",
+      data: JSON.parse(JSON.stringify(incoming)),
+      isDeletedTurn: () => false,
+      onAttachmentLifecycle,
+    });
+    expect(result.applied).toBe(true);
+    expect(onAttachmentLifecycle.mock.calls[0][0].identity.eventId).toBe("evt-parsed-1");
+    expect(userMessage.attachments[0].attachmentLifecycle).toBe(state);
   });
 
   it("uses the same relation projection during a live run and hydration", () => {

@@ -7,7 +7,10 @@ import { filePath as path } from "@noobot/path-resolver";
 import { toDateKey } from "../../utils/date.js";
 import { sanitizeFileName, dedupeTextList } from "@noobot/memory-protocol/text";
 import { formatDomainBlock } from "../../utils/format.js";
-import { buildExperiencePatchSchema } from "@noobot/memory-protocol/experience/schema";
+import {
+  buildExperiencePatchSchema,
+  resolveExperienceDocumentSegments,
+} from "@noobot/memory-protocol/experience/schema";
 
 export async function appendDailyDomainResults({
   storage,
@@ -30,7 +33,10 @@ export async function appendDailyDomainResults({
   for (const item of normalizedResults) {
     const domainName = sanitizeFileName(item?.domain, "");
     if (!domainName) continue;
-    const filePath = path.join(dayDir, `${domainName}.md`);
+    const filePath = path.join(
+      dayDir,
+      ...resolveExperienceDocumentSegments("daily", { domain: domainName }),
+    );
     const block = formatDomainBlock({ createdAt, item, schema });
     await storage.appendMemoryDocument(schema.documentKind, filePath, block);
     appendedCount += 1;

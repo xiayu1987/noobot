@@ -114,6 +114,7 @@ describe("createSessionListActions.fetchSessions identity reconciliation", () =>
     const activeSessionId = ref("session-1");
     const registry = createTurnRuntimeRegistryState();
     applyTurnRuntimeEvent(registry, {
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
       sessionId: "session-1",
       turnScopeId,
@@ -304,6 +305,7 @@ describe("createSessionListActions.deleteSession", () => {
     const activeSessionId = ref("s-active");
     const registry = createTurnRuntimeRegistryState();
     applyTurnRuntimeEvent(registry, {
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
       sessionId: "s-active",
       turnScopeId: "turn-active",

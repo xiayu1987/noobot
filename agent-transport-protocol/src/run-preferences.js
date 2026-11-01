@@ -10,7 +10,11 @@ import {
   normalizeSecurityRiskLevel,
 } from "@noobot/security-assessment-protocol";
 import { isPlainObject, text } from "@noobot/shared/value";
-const SUMMARY_POLICY_KEYS = Object.freeze(["phaseSummaryLoopTurns", "taskCheckLoopTurns"]);
+const SUMMARY_POLICY_FIELDS = Object.freeze([
+  { key: "phaseSummaryLoopTurns", error: "invalid_phase_summary_loop_turns" },
+  { key: "taskCheckLoopTurns", error: "invalid_task_check_loop_turns" },
+]);
+const SUMMARY_POLICY_KEYS = new Set(SUMMARY_POLICY_FIELDS.map(({ key }) => key));
 const PREFERENCE_FLAG_KEYS = Object.freeze([
   "allowUserInteraction",
   "safeConfirm",
@@ -47,16 +51,26 @@ function pluginModelConfig(value) {
 
 function summaryPolicy(value) {
   if (!isPlainObject(value)) return undefined;
-  const phaseSummaryLoopTurns = Number(value.phaseSummaryLoopTurns);
-  const taskCheckLoopTurns = Number(value.taskCheckLoopTurns);
   const normalized = {};
-  if (Number.isInteger(phaseSummaryLoopTurns) && phaseSummaryLoopTurns > 0) {
-    normalized.phaseSummaryLoopTurns = phaseSummaryLoopTurns;
-  }
-  if (Number.isInteger(taskCheckLoopTurns) && taskCheckLoopTurns > 0) {
-    normalized.taskCheckLoopTurns = taskCheckLoopTurns;
+  for (const { key } of SUMMARY_POLICY_FIELDS) {
+    const turns = Number(value[key]);
+    if (Number.isInteger(turns) && turns > 0) normalized[key] = turns;
   }
   return Object.keys(normalized).length ? normalized : undefined;
+}
+
+function validateSummaryPolicy(policy) {
+  if (!isPlainObject(policy)) return ["invalid_summary_policy"];
+  const errors = Object.keys(policy)
+    .filter((key) => !SUMMARY_POLICY_KEYS.has(key))
+    .map((key) => `unknown_summary_policy_field:${key}`);
+  for (const { key, error } of SUMMARY_POLICY_FIELDS) {
+    if (Object.hasOwn(policy, key) && (!Number.isInteger(policy[key]) || policy[key] <= 0)) {
+      errors.push(error);
+    }
+  }
+  if (!Object.keys(policy).length) errors.push("empty_summary_policy");
+  return errors;
 }
 
 export function createRunPreferences(input = {}) {
@@ -126,27 +140,7 @@ export function validateRunPreferences(preferences) {
     errors.push("invalid_plugin_model_config");
   }
   if (Object.prototype.hasOwnProperty.call(preferences, "summaryPolicy")) {
-    const policy = preferences.summaryPolicy;
-    if (!isPlainObject(policy)) {
-      errors.push("invalid_summary_policy");
-    } else {
-      for (const key of Object.keys(policy)) {
-        if (!SUMMARY_POLICY_KEYS.includes(key)) errors.push(`unknown_summary_policy_field:${key}`);
-      }
-      if (
-        Object.prototype.hasOwnProperty.call(policy, "phaseSummaryLoopTurns") &&
-        (!Number.isInteger(policy.phaseSummaryLoopTurns) || policy.phaseSummaryLoopTurns <= 0)
-      ) {
-        errors.push("invalid_phase_summary_loop_turns");
-      }
-      if (
-        Object.prototype.hasOwnProperty.call(policy, "taskCheckLoopTurns") &&
-        (!Number.isInteger(policy.taskCheckLoopTurns) || policy.taskCheckLoopTurns <= 0)
-      ) {
-        errors.push("invalid_task_check_loop_turns");
-      }
-      if (!Object.keys(policy).length) errors.push("empty_summary_policy");
-    }
+    errors.push(...validateSummaryPolicy(preferences.summaryPolicy));
   }
   return { valid: errors.length === 0, errors };
 }

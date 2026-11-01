@@ -3,6 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { turnRecordFixture } from "../helpers/turnRecordFixture.js";
+import { terminalStatusFixture } from "../helpers/terminalStatusFixture.js";
 import { describe, expect, it, vi } from "vitest";
 import { AGENT_COMMAND } from "@noobot/agent-transport-protocol";
 import {
@@ -73,6 +75,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     const applyEvent = ([eventType, phase, state], sequence) =>
       engine.applyTurnLifecycleEnvelope(
         createTurnLifecycleEnvelope({
+          updatedAt: "2026-01-01T00:00:00.000Z",
           ...identity,
           eventId: `workflow-child-${sequence + 1}`,
           commandId: `workflow-child-command-${sequence + 1}`,
@@ -124,7 +127,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
   it("applies the real refresh terminal payload atomically when discovery races snapshot hydration", async () => {
     const sessionId = "3801ff60-0a8d-4dd8-903f-139febe37254";
     const turnScopeId = "client-turn:mryihoqc:3qrncu3i";
-    const terminalTurn = {
+    const terminalTurn = turnRecordFixture({
       executionId: `agent:${turnScopeId}`,
       executionKind: "agent",
       sessionId,
@@ -140,11 +143,14 @@ describe("useChatEngine.interaction-stop: terminal", () => {
       sequence: 4,
       summaryVersion: 0,
       completionCommitId: `${turnScopeId}:completed`,
-      terminalStatus: { turnScopeId, status: "completed", reason: "run_completed" },
+      terminalStatus: terminalStatusFixture("completed", {
+        turnScopeId,
+        dialogProcessId: "a31a2316-61b9-452b-af1d-4be302fc375d",
+      }),
       failure: null,
       finalizeIntent: null,
       capabilities: { actionLocked: false, canStop: false },
-    };
+    });
     let releaseResponse;
     const terminalResolutionFetcher = vi.fn(
       () =>
@@ -225,16 +231,19 @@ describe("useChatEngine.interaction-stop: terminal", () => {
         reason: "",
         retryAfterMs: 0,
         aggregateVersion: 1,
-        turn: {
+        turn: turnRecordFixture({
           sessionId,
           turnScopeId,
           state: "completed",
           revision: 4,
           sequence: 4,
           completionCommitId: `${turnScopeId}:completed`,
-          terminalStatus: { turnScopeId, status: "completed", reason: "run_completed" },
+          terminalStatus: terminalStatusFixture("completed", {
+            turnScopeId,
+            dialogProcessId: "dp1",
+          }),
           capabilities: { actionLocked: false, canStop: false },
-        },
+        }),
       }),
     );
     const { engine, activeSessionId, sessions, turnRuntimeRegistry } = createHarness({
@@ -284,16 +293,20 @@ describe("useChatEngine.interaction-stop: terminal", () => {
         reason: "",
         retryAfterMs: 0,
         aggregateVersion: 1,
-        turn: {
+        turn: turnRecordFixture({
           sessionId,
           turnScopeId,
           state: "completed",
           revision: 2,
           sequence: 2,
+          dialogProcessId: "dp-refresh-e2e",
           completionCommitId: `${turnScopeId}:completed`,
-          terminalStatus: { turnScopeId, status: "completed", reason: "run_completed" },
+          terminalStatus: terminalStatusFixture("completed", {
+            turnScopeId,
+            dialogProcessId: "dp-refresh-e2e",
+          }),
           capabilities: { actionLocked: false, canStop: false },
-        },
+        }),
       }),
     );
     const harness = createHarness({
@@ -303,6 +316,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     harness.sessions.value[0].isLocal = true;
     harness.sessions.value[0].messages = [{ role: RoleEnum.ASSISTANT, turnScopeId, pending: true }];
     applyTurnRuntimeEvent(harness.turnRuntimeRegistry.value, {
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
       sessionId: localSessionId,
       turnScopeId,

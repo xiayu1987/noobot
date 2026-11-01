@@ -8,6 +8,7 @@ import test from "node:test";
 import { SESSION_ARTIFACT_SCHEMA_VERSION } from "@noobot/session-protocol";
 import { migrateSessionDocument } from "../src/index.js";
 import { releasedSession } from "./helpers/released-session.js";
+import { turnRecord } from "./helpers/turn-record.js";
 
 const MIGRATION = "turn-timing-lifecycle-start-v16";
 const STARTED_AT = "2026-10-01T00:00:00.000Z";
@@ -19,7 +20,7 @@ function sessionWith(timing, startedAt, schemaVersion) {
     sessionId: "session-1",
     aggregateVersion: 0,
     turnTimings: [timing],
-    turnLifecycle: { turns: { "turn-1": { turnScopeId: "turn-1", startedAt } } },
+    turnLifecycle: { sequence: 1, turns: { "turn-1": turnRecord({ startedAt }) } },
   });
 }
 

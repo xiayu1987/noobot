@@ -189,6 +189,7 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     const streamPromise = client.stream(payload, onEvent);
     const socket = MockWebSocket.instances[0];
     const lifecycle = createTurnLifecycleEnvelope({
+      updatedAt: "2026-01-01T00:00:00.000Z",
       eventType: TURN_EVENT.PROCESSING_STARTED,
       eventId: "event-early",
       commandId: "command-early",
@@ -284,6 +285,7 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     const socket = MockWebSocket.instances[0];
     socket.sent = [];
     const lifecycle = createTurnLifecycleEnvelope({
+      updatedAt: "2026-01-01T00:00:00.000Z",
       eventType: TURN_EVENT.PROCESSING_STARTED,
       eventId: "event-receipt-1",
       commandId: "command-receipt-1",
@@ -337,6 +339,7 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     const socket = MockWebSocket.instances[0];
     socket.sent = [];
     const lifecycle = createTurnLifecycleEnvelope({
+      updatedAt: "2026-01-01T00:00:00.000Z",
       eventType: TURN_EVENT.PROCESSING_STARTED,
       eventId: "event-receipt-before-reducer",
       commandId: "command-receipt-before-reducer",
@@ -388,6 +391,7 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       throw new Error("receipt send failed");
     };
     const lifecycle = createTurnLifecycleEnvelope({
+      updatedAt: "2026-01-01T00:00:00.000Z",
       eventType: TURN_EVENT.PROCESSING_STARTED,
       eventId: "event-receipt-failure",
       commandId: "command-receipt-failure",

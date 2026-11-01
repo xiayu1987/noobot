@@ -3,8 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text } from "@noobot/shared/value";
-import { SESSION_RUN_EVENT } from "./constants.js";
+import {
+  projectTurnLifecycleRuntimeEvent,
+  projectTurnTerminalRuntimeEvent,
+} from "@noobot/session-protocol/runtime-event";
 import { isFinalTurnState } from "./turnReducer.js";
 import { projectAuthoritativeTurnTerminal } from "./authoritativeTurnProjection.js";
 import {
@@ -18,17 +20,17 @@ import {
   runtimeFingerprint as executionFingerprint,
 } from "./executionRuntimeProjection.js";
 import { resolveTurnRuntimeByScope } from "./turnRuntimeSelectors.js";
-import { applyTurnRuntimeEvent } from "./turnRuntimeEventReducer.js";
+import { applyProjectedTurnRuntimeEvent } from "./turnRuntimeEventReducer.js";
 import { projectTurnLifecycleSnapshot } from "./turnLifecycleSnapshotProjection.js";
 
 function envelopeCoordinateDecision(existing, envelope, fingerprint) {
   if (!existing) return { allowed: true };
-  const incomingRevision = Number(envelope.revision || 0);
-  const incomingSequence = Number(envelope.sequence || 0);
+  const incomingRevision = envelope.revision;
+  const incomingSequence = envelope.sequence;
   const currentRevision = Number(existing.revision || 0);
   const currentSequence = Number(existing.lifecycleSeq || 0);
   if (incomingRevision === currentRevision && incomingSequence === currentSequence) {
-    const sameIdentity = text(existing.authoritativeEventId) === text(envelope.eventId);
+    const sameIdentity = existing.authoritativeEventId === envelope.eventId;
     const sameContent = existing.authoritativeEventFingerprint === fingerprint;
     return sameIdentity && sameContent
       ? { allowed: false, deduplicated: true, reason: "duplicate_authoritative_event" }
@@ -46,25 +48,26 @@ function envelopeCoordinateDecision(existing, envelope, fingerprint) {
   return { allowed: true };
 }
 
-function commitEnvelopeProjection(registry, envelope, result, fingerprint) {
+function commitEnvelopeProjection(registry, envelope, result, { fingerprint, executionRegistry }) {
   if (result.turn) {
     Object.assign(result.turn, {
-      parentSessionId: text(envelope.parentSessionId),
-      presentationMessageId: text(envelope.presentationMessageId),
-      authoritativeEventId: text(envelope.eventId),
+      parentSessionId: envelope.parentSessionId,
+      presentationMessageId: envelope.presentationMessageId,
+      authoritativeEventId: envelope.eventId,
       authoritativeEventFingerprint: fingerprint,
     });
   }
   const bucket = ensureSessionBucket(registry, envelope.sessionId);
   bucket.authoritativeSequence = Math.max(
     Number(bucket.authoritativeSequence || 0),
-    Number(envelope.sequence || 0),
+    envelope.sequence,
   );
-  bucket.protocolVersion = Number(envelope.protocolVersion || 1);
-  applyExecutionProjection(registry, envelope);
+  bucket.protocolVersion = envelope.protocolVersion;
+  registry.executions = executionRegistry.executions;
+  registry.executionIdByTurnScopeId = executionRegistry.executionIdByTurnScopeId;
 }
 
-export function applyTurnLifecycleEnvelope(registry, envelope = {}) {
+export function applyTurnLifecycleEnvelope(registry, envelope) {
   const validation = validateTurnLifecycleEnvelope(envelope);
   if (!validation.valid) {
     return {
@@ -81,45 +84,37 @@ export function applyTurnLifecycleEnvelope(registry, envelope = {}) {
   const fingerprint = executionFingerprint(envelope);
   const decision = envelopeCoordinateDecision(existing, envelope, fingerprint);
   if (!decision.allowed) return { registry, turn: existing, applied: false, ...decision };
-  const result = applyTurnRuntimeEvent(registry, {
-    ...envelope,
-    type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
-    seq: Number(envelope.sequence || 0),
-    source: "turn_lifecycle",
-  });
-  if (result.applied) commitEnvelopeProjection(registry, envelope, result, fingerprint);
+  const executionRegistry = {
+    ...registry,
+    executions: { ...registry.executions },
+    executionIdByTurnScopeId: { ...registry.executionIdByTurnScopeId },
+  };
+  applyExecutionProjection(executionRegistry, envelope);
+  const result = applyProjectedTurnRuntimeEvent(
+    registry,
+    projectTurnLifecycleRuntimeEvent(envelope),
+  );
+  if (result.applied) {
+    commitEnvelopeProjection(registry, envelope, result, { fingerprint, executionRegistry });
+  }
   return result;
 }
 
-export function applyTurnTerminalResolution(registry, response = {}) {
+export function applyTurnTerminalResolution(registry, response) {
   const validation = validateTurnTerminalResolution(response);
-  if (!validation.valid || response.resolved !== true) {
+  if (!validation.valid) {
     return {
       registry,
       applied: false,
-      reason: response.resolved === false ? "terminal_unresolved" : "invalid_terminal_resolution",
+      reason: "invalid_terminal_resolution",
       errors: validation.errors,
     };
   }
-  const turn = response.turn;
-  return applyTurnRuntimeEvent(registry, {
-    ...turn,
-    type: SESSION_RUN_EVENT.TERMINAL_RESOLVED,
-    authoritativeTurnState: turn.state,
-    sessionId: response.sessionId,
-    turnScopeId: response.turnScopeId,
-    state: turn.state,
-    seq: turn.sequence,
-    revision: turn.revision,
-    completionCommitId: turn.completionCommitId,
-    summaryVersion: turn.summaryVersion,
-    finalizeIntent: turn.finalizeIntent,
-    failure: turn.failure,
-    source: "authoritative_terminal_service",
-  });
+  if (response.resolved !== true) throw new TypeError("terminal_resolution_unresolved_apply");
+  return applyProjectedTurnRuntimeEvent(registry, projectTurnTerminalRuntimeEvent(response));
 }
 
-export function applyTurnLifecycleSnapshot(registry, snapshot = {}) {
+export function applyTurnLifecycleSnapshot(registry, snapshot) {
   const validation = validateTurnLifecycleSnapshot(snapshot);
   if (!validation.valid) {
     return {

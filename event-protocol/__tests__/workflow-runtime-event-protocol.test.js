@@ -15,6 +15,7 @@ import {
   WORKFLOW_RUNTIME_EVENT,
   WORKFLOW_SEQUENCE_DOMAIN,
   workflowSessionSnapshotEventId,
+  selectWorkflowNodeChildExecutionIds,
 } from "@noobot/event-protocol/workflow-runtime-event";
 
 test("constructs the canonical workflow snapshot envelope at its producing boundary", () => {
@@ -193,6 +194,8 @@ test("validates canonical planning envelope with explicit ownership", () => {
           {
             nodeExecutionId: "node-1",
             eventId: "workflow_node_state:run-1:node-1:1",
+            activeChildExecutionId: "agent-1",
+            attemptExecutionIds: [],
             status: "ready",
             revision: 1,
             sequence: 1,
@@ -210,6 +213,74 @@ test("validates canonical planning envelope with explicit ownership", () => {
   assert.deepEqual(validateWorkflowRuntimeEnvelope(envelope), { valid: true, errors: [] });
 });
 
+test("workflow execution references share one contract across planning, state and selection", () => {
+  const node = Object.freeze({
+    nodeExecutionId: "node-1",
+    eventId: "node-event-1",
+    status: "ready",
+    revision: 1,
+    sequence: 1,
+    activeChildExecutionId: "agent-2",
+    attemptExecutionIds: Object.freeze(["agent-1", "agent-2"]),
+  });
+  assert.deepEqual(selectWorkflowNodeChildExecutionIds(node), ["agent-2", "agent-1"]);
+  assert.deepEqual(node.attemptExecutionIds, ["agent-1", "agent-2"]);
+  assert.deepEqual(
+    selectWorkflowNodeChildExecutionIds({ activeChildExecutionId: "", attemptExecutionIds: [] }),
+    [],
+  );
+  const variants = [
+    { attemptExecutionIds: undefined },
+    { attemptExecutionIds: null },
+    { attemptExecutionIds: {} },
+    { attemptExecutionIds: ["agent-1", "agent-1"] },
+    { attemptExecutionIds: [""] },
+    { attemptExecutionIds: [" agent-1"] },
+    { attemptExecutionIds: [1] },
+    { activeChildExecutionId: undefined },
+    { activeChildExecutionId: null },
+    { activeChildExecutionId: " agent-1" },
+  ];
+  for (const fields of variants) {
+    const invalid = { ...node, ...fields };
+    assert.throws(() => selectWorkflowNodeChildExecutionIds(invalid), TypeError);
+    const planning = workflowEnvelope(
+      WORKFLOW_RUNTIME_EVENT.PLANNING,
+      {
+        workflowRunId: "run-1",
+        turnScopeId: "turn-1",
+        presentationMessageId: "p-1",
+        workflowPayload: { nodeSessions: [invalid] },
+      },
+      {
+        sessionId: "s-1",
+        turnScopeId: "turn-1",
+        executionId: "run-1",
+        domain: WORKFLOW_SEQUENCE_DOMAIN.PLANNING,
+      },
+    );
+    assert.ok(validateWorkflowRuntimeEnvelope(planning).errors.includes("invalid_planning_node"));
+    const state = workflowEnvelope(
+      WORKFLOW_RUNTIME_EVENT.NODE_STATE,
+      {
+        workflowRunId: "run-1",
+        turnScopeId: "turn-1",
+        status: "ready",
+        activeChildExecutionId: invalid.activeChildExecutionId,
+        attemptExecutionIds: invalid.attemptExecutionIds,
+      },
+      {
+        sessionId: "s-1",
+        turnScopeId: "turn-1",
+        executionId: "node-1",
+        domain: WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE,
+        revision: 1,
+      },
+    );
+    assert.equal(validateWorkflowRuntimeEnvelope(state).valid, false);
+  }
+});
+
 test("requires canonical workflow execution and turn scope identity", () => {
   const envelope = workflowEnvelope(
     WORKFLOW_RUNTIME_EVENT.PLANNING,
@@ -224,6 +295,8 @@ test("requires canonical workflow execution and turn scope identity", () => {
           {
             nodeExecutionId: "node-1",
             eventId: "workflow_node_state:run-1:node-1:1",
+            activeChildExecutionId: "agent-1",
+            attemptExecutionIds: [],
             status: "ready",
             revision: 1,
             sequence: 1,
@@ -252,6 +325,8 @@ test("rejects cross-domain workflow declarations", () => {
       workflowRunId: "run-1",
       turnScopeId: "workflow-node:node-1",
       status: "running",
+      activeChildExecutionId: "agent-1",
+      attemptExecutionIds: ["agent-1"],
     },
     {
       sessionId: "session-1",
@@ -272,6 +347,8 @@ test("node state execution identity lives only on the envelope", () => {
       nodeExecutionId: "node-1",
       turnScopeId: "workflow-node:node-1",
       status: "running",
+      activeChildExecutionId: "agent-1",
+      attemptExecutionIds: ["agent-1"],
     },
     {
       sessionId: "session-1",
@@ -288,7 +365,13 @@ test("rejects node state without a positive ordering revision", () => {
   for (const revision of [undefined, 0, 1.5]) {
     const envelope = workflowEnvelope(
       WORKFLOW_RUNTIME_EVENT.NODE_STATE,
-      { workflowRunId: "run-1", turnScopeId: "workflow-node:node-1", status: "running" },
+      {
+        workflowRunId: "run-1",
+        turnScopeId: "workflow-node:node-1",
+        status: "running",
+        activeChildExecutionId: "agent-1",
+        attemptExecutionIds: ["agent-1"],
+      },
       {
         sessionId: "session-1",
         turnScopeId: "workflow-node:node-1",
@@ -315,6 +398,8 @@ test("rejects a planning envelope that carries an ordering revision", () => {
           {
             nodeExecutionId: "node-1",
             eventId: "workflow_node_state:run-1:node-1:1",
+            activeChildExecutionId: "agent-1",
+            attemptExecutionIds: [],
             status: "ready",
             revision: 1,
             sequence: 1,
@@ -347,6 +432,8 @@ test("planning nodes live only in workflowPayload and carry only node fact field
   const node = {
     nodeExecutionId: "node-1",
     eventId: "workflow_node_state:run-1:node-1:1",
+    activeChildExecutionId: "agent-1",
+    attemptExecutionIds: [],
     status: "ready",
     revision: 1,
     sequence: 1,

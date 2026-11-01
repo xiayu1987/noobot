@@ -73,6 +73,7 @@ test("turn lifecycle envelope requires stable identity and monotonic coordinates
   const envelope = createTurnLifecycleEnvelope({
     eventType: TURN_EVENT.PROCESSING_STARTED,
     eventId: "evt-1",
+    updatedAt: "2026-01-01T00:00:00.000Z",
     commandId: "cmd-1",
     causationId: "cmd-1",
     sessionId: "session-1",
@@ -99,6 +100,7 @@ test("turn lifecycle envelope does not expose persistence locators", () => {
   const envelope = createTurnLifecycleEnvelope({
     eventType: TURN_EVENT.PROCESSING_STARTED,
     eventId: "evt-scoped",
+    updatedAt: "2026-01-01T00:00:00.000Z",
     commandId: "cmd-scoped",
     causationId: "cmd-scoped",
     sessionId: "child-session",
@@ -131,7 +133,6 @@ test("durable command receipt returns the original envelope after outbox compact
     turnScopeId: "turn-1",
     presentationMessageId: "presentation-1",
     dialogProcessId: "dialog-1",
-    parentSessionId: "",
     action: "send",
     phase: TURN_PHASE.ACTION,
     expectedRevision: 0,
@@ -179,6 +180,7 @@ test("turn lifecycle envelope preserves parent identity without leaking mutation
   const envelope = createTurnLifecycleEnvelope({
     eventType: TURN_EVENT.ACTION_ACCEPTED,
     eventId: "evt-child",
+    updatedAt: "2026-01-01T00:00:00.000Z",
     commandId: "cmd-child",
     causationId: "cmd-child",
     sessionId: "child-session",
@@ -566,16 +568,13 @@ test("committed turn lifecycle envelope projects identity from the committed tur
   assert.equal(envelope.causality.correlationId, "turn-1");
 });
 
-test("normalizeTurnLifecycleEntity strips legacy failure.phase and keeps the top-level phase", () => {
-  const lifecycle = normalizeTurnLifecycleEntity({
+test("lifecycle reads reject legacy failure.phase instead of repairing stored facts", () => {
+  const lifecycle = {
     ...createEmptyTurnLifecycle(),
     sequence: 1,
     turns: {
       "turn-legacy": {
         turnScopeId: "turn-legacy",
-        state: TURN_STATE.PROCESSING_FAILED,
-        phase: TURN_PHASE.PROCESSING,
-        revision: 1,
         sequence: 1,
         failure: {
           phase: TURN_PHASE.PROCESSING,
@@ -585,12 +584,10 @@ test("normalizeTurnLifecycleEntity strips legacy failure.phase and keeps the top
         },
       },
     },
+  };
+  const before = structuredClone(lifecycle);
+  assert.throws(() => normalizeTurnLifecycleEntity(lifecycle), {
+    code: "TURN_LIFECYCLE_RECORD_INVALID",
   });
-  const turn = lifecycle.turns["turn-legacy"];
-  assert.equal(turn.phase, TURN_PHASE.PROCESSING);
-  assert.deepEqual(turn.failure, {
-    code: "model_failed",
-    message: "model failed",
-    retryable: false,
-  });
+  assert.deepEqual(lifecycle, before);
 });

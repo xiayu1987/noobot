@@ -12,7 +12,6 @@ import {
   ATTACHMENT_LIFECYCLE,
   attachmentIdentityKey,
   formatAttachmentIdentityRef,
-  createAttachmentEventId,
   createAttachmentLifecycleEvent,
   parseAttachmentAccessRef,
   parseAttachmentDescriptor,
@@ -24,7 +23,6 @@ import {
   ATTACHMENT_RECORD_VERSION,
   ATTACHMENT_RELATION_TYPE,
   mergeAttachmentsByIdentity,
-  reduceAttachmentLifecycle,
   validateAttachmentLifecycleEvent,
 } from "../src/index.js";
 import { DEFAULT_MIME_TYPE, resolveMimeTypeFromFileName } from "../src/mime.js";
@@ -168,7 +166,7 @@ test("persistence, runtime, access and UI models stay separate", () => {
   );
 });
 
-test("lifecycle events require stable identity and versioned attachment event identity", () => {
+test("lifecycle payloads require stable attachment identity and reject retired event identity", () => {
   const relation = {
     relationType: ATTACHMENT_RELATION_TYPE.PARSED_RESULT,
     sourceIdentity: identity,
@@ -177,8 +175,7 @@ test("lifecycle events require stable identity and versioned attachment event id
   };
   const event = createAttachmentLifecycleEvent({
     eventType: ATTACHMENT_EVENT_TYPE.PARSED,
-    eventVersion: 1,
-    attachmentEventId: "attachment-event-1",
+    eventVersion: 2,
     identity,
     status: ATTACHMENT_LIFECYCLE.PARSED,
     occurredAt: "2026-08-07T00:00:00.000Z",
@@ -186,7 +183,7 @@ test("lifecycle events require stable identity and versioned attachment event id
   });
   assert.equal(event.identity.attachmentId, "att-1");
   assert.throws(
-    () => createAttachmentLifecycleEvent({ ...event, eventVersion: 2 }),
+    () => createAttachmentLifecycleEvent({ ...event, eventVersion: 1 }),
     /unsupported_attachment_event_version/,
   );
   assert.throws(
@@ -198,7 +195,7 @@ test("lifecycle events require stable identity and versioned attachment event id
     /invalid_attachment_session_id/,
   );
   assert.deepEqual(validateAttachmentLifecycleEvent(event), { valid: true, errors: [] });
-  assert.deepEqual(validateAttachmentLifecycleEvent({ ...event, eventVersion: 2 }), {
+  assert.deepEqual(validateAttachmentLifecycleEvent({ ...event, eventVersion: 1 }), {
     valid: false,
     errors: ["unsupported_attachment_event_version"],
   });
@@ -248,39 +245,26 @@ test("persisted records are explicitly versioned and relations are source-bound"
   assert.equal(record.relations[0].targetIdentity.attachmentId, "parsed-1");
 });
 
-test("lifecycle reducer is the unique deterministic transition authority", () => {
-  const base = { eventVersion: 1, identity, occurredAt: "2026-08-07T00:00:00.000Z" };
+test("lifecycle payload rejects mismatched status and a second event identity", () => {
+  const base = { eventVersion: 2, identity, occurredAt: "2026-08-07T00:00:00.000Z" };
   assert.throws(
     () =>
       createAttachmentLifecycleEvent({
         ...base,
         eventType: ATTACHMENT_EVENT_TYPE.PARSED,
         status: ATTACHMENT_LIFECYCLE.DELETED,
-        attachmentEventId: "bad",
       }),
     /attachment_event_status_mismatch/,
   );
-  const received = createAttachmentLifecycleEvent({
-    ...base,
-    eventType: ATTACHMENT_EVENT_TYPE.RECEIVED,
-    status: ATTACHMENT_LIFECYCLE.RECEIVED,
-    attachmentEventId: "1",
-  });
-  const persisted = createAttachmentLifecycleEvent({
-    ...base,
-    eventType: ATTACHMENT_EVENT_TYPE.PERSISTED,
-    status: ATTACHMENT_LIFECYCLE.PERSISTED,
-    attachmentEventId: "2",
-  });
-  const state = reduceAttachmentLifecycle(
-    reduceAttachmentLifecycle(undefined, received),
-    persisted,
-  );
-  assert.equal(state.status, ATTACHMENT_LIFECYCLE.PERSISTED);
-  assert.equal(reduceAttachmentLifecycle(state, persisted), state);
   assert.throws(
-    () => reduceAttachmentLifecycle(state, { ...received, attachmentEventId: "3" }),
-    /invalid_attachment_lifecycle_transition/,
+    () =>
+      createAttachmentLifecycleEvent({
+        ...base,
+        eventType: ATTACHMENT_EVENT_TYPE.RECEIVED,
+        status: ATTACHMENT_LIFECYCLE.RECEIVED,
+        attachmentEventId: "retired-id",
+      }),
+    /unknown_attachment_event_field/,
   );
 });
 
@@ -308,12 +292,6 @@ test("mime type is resolved from the file name extension table", () => {
   assert.equal(resolveMimeTypeFromFileName(".png"), DEFAULT_MIME_TYPE);
   assert.equal(resolveMimeTypeFromFileName("archive.unknown"), DEFAULT_MIME_TYPE);
   assert.equal(resolveMimeTypeFromFileName(""), DEFAULT_MIME_TYPE);
-});
-
-test("attachment event identity has its own generator", () => {
-  const first = createAttachmentEventId();
-  assert.match(first, /^attachment-event:[0-9a-f-]{36}$/);
-  assert.notEqual(first, createAttachmentEventId());
 });
 
 test("descriptor accepts only a canonical origin locator", () => {

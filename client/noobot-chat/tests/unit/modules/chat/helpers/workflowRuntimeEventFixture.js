@@ -57,6 +57,8 @@ export function canonicalWorkflowRuntimeEvent(eventType, data) {
 export function canonicalWorkflowNodeStateEvent({ nodeExecutionId, ...nodeRecord }) {
   return canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.NODE_STATE, {
     nodeSessionId: "sub-session-1",
+    activeChildExecutionId: "",
+    attemptExecutionIds: [],
     ...nodeRecord,
     executionId: nodeExecutionId,
   });

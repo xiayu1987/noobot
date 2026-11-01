@@ -16,11 +16,15 @@ import {
   MESSAGE_EVENT_TYPE,
   MESSAGE_CONTENT_EFFECT,
   MESSAGE_EVENT_WIRE_EVENT,
+  assertMessageEventPayload,
   isAuthoritativeFinalContentEvent,
   isHostActivity,
+  isTransientMessageEvent,
+  isTransientMessageEventType,
   projectMessageEventContent,
   projectTurnPresentation,
   resolveMessageEventPresentationId,
+  resolveMessageEventModelMessageId,
   resolveMessageViewKey,
   validateMessageEventPayload,
 } from "@noobot/event-protocol/message-event";
@@ -117,6 +121,100 @@ test("message payload validation is total for non-object input", () => {
       valid: false,
       errors: ["payload_not_object"],
     });
+  }
+});
+
+test("optional message ownership is absent or canonical without identity repair", () => {
+  const original = payload({ modelMessageId: "model-1" });
+  assert.equal(assertMessageEventPayload(original), original);
+  assert.equal(resolveMessageEventModelMessageId(original), "model-1");
+  assert.equal(resolveMessageEventModelMessageId(payload()), "");
+  for (const field of ["modelMessageId", "workflowRunId", "nodeExecutionId"]) {
+    for (const value of ["", " ", " owner-1 ", null, 1, {}]) {
+      const validation = validateMessageEventPayload(payload({ [field]: value }));
+      assert.equal(validation.valid, false);
+      assert.ok(validation.errors.includes(`invalid_${field}`));
+    }
+  }
+});
+
+test("transient classifiers use exact event types and allow absent envelopes", () => {
+  assert.equal(isTransientMessageEventType(MESSAGE_EVENT_TYPE.LLM_DELTA), true);
+  assert.equal(isTransientMessageEventType(MESSAGE_EVENT_TYPE.ACTIVITY_DELTA), true);
+  for (const eventType of [undefined, null, " llm_delta ", {}, MESSAGE_EVENT_TYPE.THINKING]) {
+    assert.equal(isTransientMessageEventType(eventType), false);
+  }
+  const transient = envelope({ eventType: MESSAGE_EVENT_TYPE.LLM_DELTA, text: "delta" });
+  assert.equal(isTransientMessageEvent(transient), true);
+  assert.equal(isTransientMessageEvent(undefined), false);
+  assert.equal(isTransientMessageEvent(null), false);
+  assert.equal(isTransientMessageEvent({}), false);
+  assert.equal(
+    isTransientMessageEvent({
+      ...transient,
+      identity: { ...transient.identity, eventType: " message_event " },
+    }),
+    false,
+  );
+  assert.equal(
+    isTransientMessageEvent({
+      ...transient,
+      payload: { ...transient.payload, eventType: " llm_delta " },
+    }),
+    false,
+  );
+});
+
+test("message event assertions preserve non-object rejection without default payloads", () => {
+  for (const value of [undefined, null, [], "invalid"]) {
+    assert.throws(() => assertMessageEventPayload(value), /payload_not_object/);
+  }
+  const original = payload();
+  assert.equal(assertMessageEventPayload(original), original);
+});
+
+test("message event types are exact protocol values", () => {
+  for (const eventType of [" tool_call_start ", null, 1, {}]) {
+    assert.deepEqual(validateMessageEventPayload(payload({ eventType })).errors, [
+      "unsupported_event_type",
+    ]);
+  }
+});
+
+test("tool identities reject whitespace and non-string values at admission", () => {
+  for (const eventType of [MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END]) {
+    const original = payload({ eventType, result: OK_RESULT, success: true, durationMs: 0 });
+    for (const [field, error] of [
+      ["tool", "missing_tool"],
+      ["toolCallId", "missing_tool_call_id"],
+    ]) {
+      for (const value of [undefined, null, 1, {}, "", " read_file "]) {
+        assert.deepEqual(validateMessageEventPayload({ ...original, [field]: value }).errors, [
+          error,
+        ]);
+      }
+    }
+  }
+});
+
+test("activity identities and activity event types are canonical at admission", () => {
+  const original = payload({
+    eventType: MESSAGE_EVENT_TYPE.ACTIVITY_DELTA,
+    activityId: "activity-1",
+    activityKind: ACTIVITY_KIND.MODEL_ANALYSIS,
+    activityEventType: MESSAGE_EVENT_TYPE.MODEL_ANALYSIS,
+    text: "thinking",
+  });
+  for (const [field, error] of [
+    ["activityId", "missing_activity_id"],
+    ["activityKind", "missing_activity_kind"],
+    ["activityEventType", "invalid_activity_event_type"],
+  ]) {
+    for (const value of [undefined, null, 1, {}, "", ` ${original[field]} `]) {
+      assert.deepEqual(validateMessageEventPayload({ ...original, [field]: value }).errors, [
+        error,
+      ]);
+    }
   }
 });
 

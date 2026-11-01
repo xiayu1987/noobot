@@ -13,34 +13,35 @@ export async function executeTransportRetry({
   signal = null,
   streamedTokens = () => 0,
 }) {
-  let last;
   const maxAttempts = Math.max(1, Number(policy?.maxAttempts) || 1);
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+  for (let attempt = 1; ; attempt++) {
     try {
       return { value: await run(attempt), attemptCount: attempt };
     } catch (error) {
-      last = error;
-      if (signal?.aborted) throw error;
-      const classification = classify(error);
-      if (
-        !shouldRetryTransport({
-          classification,
-          attempt,
-          maxAttempts,
-          streamedTokens: Number(streamedTokens()) || 0,
-        })
-      )
-        throw error;
-      const delayMs = Math.max(0, Number(policy?.baseDelayMs) || 0) * attempt;
-      observe?.("model.invocation.retry_scheduled", {
-        attempt,
-        nextAttempt: attempt + 1,
-        delayMs,
-        classification,
-      });
-      await clock.sleep(delayMs);
-      if (signal?.aborted) throw error;
+      await waitForRetry(error, attempt);
     }
   }
-  throw last;
+
+  async function waitForRetry(error, attempt) {
+    if (signal?.aborted) throw error;
+    const classification = classify(error);
+    if (
+      !shouldRetryTransport({
+        classification,
+        attempt,
+        maxAttempts,
+        streamedTokens: Number(streamedTokens()) || 0,
+      })
+    )
+      throw error;
+    const delayMs = Math.max(0, Number(policy?.baseDelayMs) || 0) * attempt;
+    observe?.("model.invocation.retry_scheduled", {
+      attempt,
+      nextAttempt: attempt + 1,
+      delayMs,
+      classification,
+    });
+    await clock.sleep(delayMs);
+    if (signal?.aborted) throw error;
+  }
 }

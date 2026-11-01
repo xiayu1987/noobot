@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { turnRecord } from "../helpers/turn-record.js";
 import { countCanonicalThinkingDetailEvents } from "@noobot/event-protocol/tool-timeline";
 import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import test from "node:test";
@@ -102,18 +103,21 @@ test("session display summary rejects an active Turn without canonical presentat
         ...createTestSessionRequiredFields(),
         sessionId: "invalid-active-turn-session",
         aggregateVersion: 0,
+        turnArtifactSequence: 0,
+        turnArtifacts: {},
         messages: [],
         turnLifecycle: {
           ...createEmptyTurnLifecycle(),
           sequence: 1,
           activeTurnScopeId: "turn-active",
           turns: {
-            "turn-active": {
+            "turn-active": turnRecord({
               revision: 1,
               sequence: 1,
               turnScopeId: "turn-active",
+              presentationMessageId: "",
               state: "processing",
-            },
+            }),
           },
         },
       }),
@@ -153,7 +157,7 @@ test("session display summary does not duplicate an active Turn with persisted a
       sequence: 1,
       activeTurnScopeId: "turn-active",
       turns: {
-        "turn-active": {
+        "turn-active": turnRecord({
           revision: 1,
           sequence: 1,
           turnScopeId: "turn-active",
@@ -161,7 +165,7 @@ test("session display summary does not duplicate an active Turn with persisted a
           dialogProcessId: "dialog-active",
           state: "processing",
           startedAt: "2026-07-31T02:00:00.000Z",
-        },
+        }),
       },
     },
   });

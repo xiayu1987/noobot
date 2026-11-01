@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { decodeExecutionReport } from "@noobot/session-protocol/execution-report";
-import { isPlainObject, text, isFunction } from "@noobot/shared/value";
+import { isFunction } from "@noobot/shared/value";
 import {
   API_REQUEST_ERROR_CODE,
   ApiRequestError,
@@ -13,6 +13,11 @@ import {
   readApiResponseEnvelope,
 } from "@noobot/shared/request-error";
 import { projectSessionMetadata } from "./workflowUnifiedSessionDetail.js";
+import {
+  requireWorkflowDetailIdentity,
+  requireWorkflowSessionRequest,
+  requireWorkflowSessionDetail,
+} from "@noobot/event-protocol/workflow-session-detail";
 
 function requireSessionMethod(props, method) {
   const service = props?.workflowSessionService;
@@ -30,22 +35,16 @@ function createExecutionDetailContext({
   dialogProcessId,
   traceId,
 }) {
-  const requestedChildSessionId = text(sessionId);
-  const request = {
-    userId: props.userId,
-    sessionId: text(rootSessionId),
-    dialogProcessId: text(dialogProcessId),
-    traceId,
-  };
-  if (
-    !request.userId ||
-    !requestedChildSessionId ||
-    !request.sessionId ||
-    !request.dialogProcessId ||
-    !request.traceId
-  ) {
-    throw new Error(translate("workflow.nodeSessionMissing"));
-  }
+  const requestedChildSessionId = requireWorkflowDetailIdentity(sessionId, "nodeSessionId");
+  const request = requireWorkflowSessionRequest(
+    {
+      userId: props.userId,
+      sessionId: rootSessionId,
+      dialogProcessId,
+      traceId,
+    },
+    "detail",
+  );
   return { props, translate, requestedChildSessionId, request };
 }
 
@@ -79,14 +78,11 @@ async function requestExecutionSessionDetail(context) {
 }
 
 function executionDetailPayloadDiagnostics(payload = {}) {
-  const workflowSession = isPlainObject(payload.workflowSession) ? payload.workflowSession : {};
-  const sessionSummary = isPlainObject(workflowSession.sessionSummary)
-    ? workflowSession.sessionSummary
-    : {};
+  const snapshot = payload.workflowSession?.snapshotEnvelope;
   return {
     payloadOk: payload.ok === true,
-    responseSessionId: String(sessionSummary.sessionId || ""),
-    responseDialogProcessId: String(payload.dialogProcessId || ""),
+    responseSessionId: snapshot?.payload?.nodeSessionId,
+    responseDialogProcessId: snapshot?.payload?.dialogProcessId,
     payloadError: String(payload.error || ""),
   };
 }
@@ -107,38 +103,21 @@ async function readExecutionDetailPayload(context, response) {
   }
 }
 
-function requireWorkflowSession(payload) {
-  const workflowSession = payload?.workflowSession;
-  if (!isPlainObject(workflowSession)) {
-    throw new TypeError("workflowSession must be an object");
-  }
-  const { aggregateVersion, snapshotEnvelope, sessionSummary, executionLogs } = workflowSession;
-  if (!Number.isInteger(aggregateVersion) || aggregateVersion <= 0) {
-    throw new TypeError("workflowSession.aggregateVersion must be a positive integer");
-  }
-  if (!isPlainObject(snapshotEnvelope)) {
-    throw new TypeError("workflowSession.snapshotEnvelope must be an object");
-  }
-  if (!isPlainObject(sessionSummary) || !text(sessionSummary.sessionId)) {
-    throw new TypeError("workflowSession.sessionSummary must carry a sessionId");
-  }
-  if (!Array.isArray(sessionSummary.messages)) {
-    throw new TypeError("workflowSession.sessionSummary must carry a messages array");
-  }
-  if (!Array.isArray(executionLogs)) {
-    throw new TypeError("workflowSession.executionLogs must be an array");
-  }
-  return { aggregateVersion, snapshotEnvelope, sessionSummary, executionLogs };
-}
-
-function projectExecutionSessionDetail(payload) {
-  const { aggregateVersion, snapshotEnvelope, sessionSummary, executionLogs } =
-    requireWorkflowSession(payload);
-  const { messages } = sessionSummary;
+function projectExecutionSessionDetail(context, payload) {
+  const { snapshotEnvelope, executionLogs } = requireWorkflowSessionDetail(
+    payload.workflowSession,
+    {
+      sessionId: context.requestedChildSessionId,
+      authoritySessionId: context.request.sessionId,
+      dialogProcessId: context.request.dialogProcessId,
+    },
+  );
+  const { nodeSessionId: sessionId, messages, ...metadata } = snapshotEnvelope.payload;
+  const sessionSummary = { ...metadata, sessionId, messages };
   return {
     state: messages.length ? "ready" : "empty",
-    sessionId: sessionSummary.sessionId,
-    aggregateVersion,
+    sessionId,
+    aggregateVersion: snapshotEnvelope.ordering.aggregateVersion,
     snapshotEnvelope,
     sessionMetadata: projectSessionMetadata(sessionSummary),
     messages,
@@ -161,7 +140,7 @@ function normalizeExecutionDetail(context, payload) {
       : typeof payload?.workflowSession,
   });
   try {
-    const detail = projectExecutionSessionDetail(payload);
+    const detail = projectExecutionSessionDetail(context, payload);
     logExecutionDetail(context, "normalizationCompleted", {
       requestedChildSessionId: context.requestedChildSessionId,
       responseState: detail.state,
@@ -185,7 +164,7 @@ export function hydrateExecutionSessionDetail(detail, { executionId }) {
     ...detail,
     sessionMetadata: {
       ...detail.sessionMetadata,
-      executionId: text(executionId),
+      executionId,
     },
   };
 }
@@ -193,9 +172,9 @@ export function hydrateExecutionSessionDetail(detail, { executionId }) {
 export async function fetchExecutionSessionDetail({
   props,
   translate,
-  sessionId = "",
-  rootSessionId = "",
-  dialogProcessId = "",
+  sessionId,
+  rootSessionId,
+  dialogProcessId,
   traceId,
 }) {
   const context = createExecutionDetailContext({
@@ -211,16 +190,6 @@ export async function fetchExecutionSessionDetail({
   return normalizeExecutionDetail(context, payload);
 }
 
-function requireTurnTarget(translate, values) {
-  const normalized = Object.fromEntries(
-    Object.entries(values).map(([key, value]) => [key, text(value)]),
-  );
-  if (!normalized.userId || !normalized.rootSessionId || !normalized.routeDialogProcessId) {
-    throw new Error(translate("workflow.nodeSessionMissing"));
-  }
-  return normalized;
-}
-
 export async function fetchWorkflowNodeThinkingDetail({
   props,
   translate,
@@ -229,17 +198,22 @@ export async function fetchWorkflowNodeThinkingDetail({
   dialogProcessId,
   turnScopeId,
 }) {
-  const target = requireTurnTarget(translate, {
-    userId: props.userId,
-    rootSessionId,
-    routeDialogProcessId,
-  });
+  const target = requireWorkflowSessionRequest(
+    {
+      userId: props.userId,
+      sessionId: rootSessionId,
+      routeDialogProcessId,
+      dialogProcessId,
+      turnScopeId,
+    },
+    "thinking-detail",
+  );
   const response = await requireSessionMethod(
     props,
     "getThinkingDetail",
   )({
     userId: target.userId,
-    sessionId: target.rootSessionId,
+    sessionId: target.sessionId,
     routeDialogProcessId: target.routeDialogProcessId,
     dialogProcessId,
     turnScopeId,
@@ -256,24 +230,25 @@ export async function fetchWorkflowNodeThinkingDetail({
 
 export async function fetchWorkflowNodeExecutionReport({
   props,
-  translate,
-  rootSessionId = "",
-  routeDialogProcessId = "",
-  dialogProcessId = "",
+  rootSessionId,
+  routeDialogProcessId,
+  dialogProcessId,
 }) {
-  const target = requireTurnTarget(translate, {
-    userId: props.userId,
-    rootSessionId,
-    routeDialogProcessId,
-    dialogProcessId,
-  });
-  if (!target.dialogProcessId) throw new Error(translate("workflow.nodeSessionMissing"));
+  const target = requireWorkflowSessionRequest(
+    {
+      userId: props.userId,
+      sessionId: rootSessionId,
+      routeDialogProcessId,
+      dialogProcessId,
+    },
+    "execution-report",
+  );
   const response = await requireSessionMethod(
     props,
     "getExecutionReport",
   )({
     userId: target.userId,
-    sessionId: target.rootSessionId,
+    sessionId: target.sessionId,
     routeDialogProcessId: target.routeDialogProcessId,
     dialogProcessId: target.dialogProcessId,
   });

@@ -8,6 +8,50 @@ import { describe, expect, it } from "vitest";
 import { mergeCanonicalSessionDetail } from "../../../../../src/modules/chat/model/sessionDetailMerge.js";
 
 describe("mergeCanonicalSessionDetail", () => {
+  it("preserves content for a partial update without mutating either input", () => {
+    const message = Object.freeze({ messageUid: "u1", role: "user", content: "question" });
+    const base = Object.freeze({ sessionId: "session-1", messages: Object.freeze([message]) });
+    const incoming = Object.freeze({ sessionId: "session-1", title: "updated" });
+    const merged = mergeCanonicalSessionDetail(base, incoming);
+    expect(merged).toMatchObject({ title: "updated", messages: [message] });
+    expect(incoming).not.toHaveProperty("messages");
+    expect(base.messages[0]).toBe(message);
+    expect(mergeCanonicalSessionDetail({}, incoming).messages).toEqual([]);
+  });
+
+  it.each([null, undefined, [], "bad", false])(
+    "rejects invalid content %j on either side",
+    (value) => {
+      expect(() => mergeCanonicalSessionDetail(value, {})).toThrow(/content projection/);
+      expect(() => mergeCanonicalSessionDetail({}, value)).toThrow(/content projection/);
+    },
+  );
+
+  it.each([null, undefined, {}, "bad", [null], [[]], ["bad"]])(
+    "rejects explicit malformed messages %j on merge and replacement",
+    (messages) => {
+      for (const replaceFields of [[], ["messages"]]) {
+        expect(() => mergeCanonicalSessionDetail({}, { messages }, { replaceFields })).toThrow(
+          /content projection messages/,
+        );
+        expect(() => mergeCanonicalSessionDetail({ messages }, {}, { replaceFields })).toThrow(
+          /content projection messages/,
+        );
+      }
+    },
+  );
+
+  it("rejects retired top-level fields on either side instead of dropping them", () => {
+    for (const field of ["sessionSummary", "turnTimings"]) {
+      expect(() => mergeCanonicalSessionDetail({ [field]: undefined }, {})).toThrow(
+        new RegExp(`carries ${field}`),
+      );
+      expect(() => mergeCanonicalSessionDetail({}, { [field]: undefined })).toThrow(
+        new RegExp(`carries ${field}`),
+      );
+    }
+  });
+
   it("keeps persisted facts when a sparse realtime update arrives later", () => {
     const persisted = {
       sessionId: "session-1",
@@ -105,7 +149,7 @@ describe("mergeCanonicalSessionDetail", () => {
       content: "final answer",
       pending: true,
       turnScopeId: "turn-1",
-      toolTimeline: [{ eventId: "tool-1" }],
+      toolTimeline: [{ key: "call:tool-1", toolCallId: "tool-1", status: "running" }],
     };
     const persisted = {
       messageUid: "uid-1",
@@ -128,10 +172,25 @@ describe("mergeCanonicalSessionDetail", () => {
       content: "final answer",
     });
     expect(merged.messages[0]).not.toHaveProperty("pending");
-    expect(merged.messages[0].toolTimeline).toEqual([{ eventId: "tool-1" }]);
+    expect(merged.messages[0].toolTimeline).toEqual(realtime.toolTimeline);
   });
 
   it("does not regress a persisted assistant terminal fact when a realtime shell arrives later", () => {
+    const thinking = {
+      eventId: "thinking-1",
+      eventType: "thinking",
+      activityId: "activity-1",
+      activityKind: "main_model_analysis",
+      text: "thinking",
+      sequence: 1,
+      sequenceScopeId: "session-1",
+      sequenceDomain: "message-event",
+      authority: "authoritative",
+      timestamp: "2026-10-31T17:00:00.000Z",
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
+      presentationMessageId: "presentation-1",
+    };
     const persisted = {
       messageUid: "uid-1",
       presentationMessageId: "presentation-1",
@@ -146,7 +205,7 @@ describe("mergeCanonicalSessionDetail", () => {
       content: "",
       pending: true,
       turnScopeId: "turn-1",
-      activityTimeline: [{ eventId: "thinking-1", text: "thinking" }],
+      activityTimeline: [thinking],
     };
 
     const merged = mergeCanonicalSessionDetail(
@@ -160,9 +219,19 @@ describe("mergeCanonicalSessionDetail", () => {
       content: "final answer",
     });
     expect(merged.messages[0]).not.toHaveProperty("pending");
-    expect(merged.messages[0].activityTimeline).toEqual([
-      { eventId: "thinking-1", text: "thinking" },
-    ]);
+    expect(merged.messages[0].activityTimeline).toEqual([thinking]);
+
+    const newerThinking = { ...thinking, eventId: "thinking-2", sequence: 2, text: "complete" };
+    const newer = mergeCanonicalSessionDetail(merged, {
+      sessionId: "session-1",
+      messages: [{ ...realtime, activityTimeline: [newerThinking] }],
+    });
+    const replayed = mergeCanonicalSessionDetail(newer, {
+      sessionId: "session-1",
+      messages: [realtime],
+    });
+    expect(newer.messages[0].activityTimeline).toEqual([newerThinking]);
+    expect(replayed.messages[0].activityTimeline).toEqual([newerThinking]);
   });
 
   it("uses presentation identity when a persisted terminal assistant has no messageUid", () => {
@@ -179,7 +248,7 @@ describe("mergeCanonicalSessionDetail", () => {
       content: "",
       pending: true,
       turnScopeId: "workflow-node:node-2",
-      toolTimeline: [{ eventId: "tool-2" }],
+      toolTimeline: [{ key: "call:tool-2", toolCallId: "tool-2", status: "running" }],
     };
 
     const merged = mergeCanonicalSessionDetail(
@@ -193,7 +262,50 @@ describe("mergeCanonicalSessionDetail", () => {
       content: "completed child result",
     });
     expect(merged.messages[0]).not.toHaveProperty("pending");
-    expect(merged.messages[0].toolTimeline).toEqual([{ eventId: "tool-2" }]);
+    expect(merged.messages[0].toolTimeline).toEqual(realtime.toolTimeline);
+  });
+
+  it.each([[], ["messages"]])("rejects retired rawEvents when replacing %j", (replaceFields) => {
+    const detail = {
+      sessionId: "session-1",
+      messages: [{ presentationMessageId: "p1", role: "assistant", rawEvents: [] }],
+    };
+    expect(() => mergeCanonicalSessionDetail({}, detail, { replaceFields })).toThrow(
+      /rawEvents is retired/,
+    );
+    expect(() => mergeCanonicalSessionDetail(detail, {})).toThrow(/rawEvents is retired/);
+  });
+
+  it.each([
+    ["toolTimeline", { eventId: "event-only" }, /requires key call:<toolCallId>/],
+    ["toolTimeline", { key: "call:wrong", toolCallId: "call-1" }, /requires key call:<toolCallId>/],
+    ["activityTimeline", { eventId: "event-only", text: "thinking" }, /noncanonical fact/],
+  ])("rejects invalid %s identity instead of inventing a merge key", (field, fact, error) => {
+    const incoming = {
+      sessionId: "session-1",
+      messages: [{ presentationMessageId: "p1", role: "assistant", [field]: [fact] }],
+    };
+    expect(() => mergeCanonicalSessionDetail({}, incoming)).toThrow(error);
+  });
+
+  it("merges tool call and result facets by the canonical call identity", () => {
+    const call = {
+      key: "call:call-1",
+      toolCallId: "call-1",
+      call: { eventId: "start", sequence: 1 },
+    };
+    const result = {
+      key: "call:call-1",
+      toolCallId: "call-1",
+      success: true,
+      resultEvent: { eventId: "end", sequence: 2 },
+    };
+    const detail = (entry) => ({
+      sessionId: "session-1",
+      messages: [{ presentationMessageId: "p1", role: "assistant", toolTimeline: [entry] }],
+    });
+    const merged = mergeCanonicalSessionDetail(detail(call), detail(result));
+    expect(merged.messages[0].toolTimeline).toEqual([{ ...call, ...result, status: "completed" }]);
   });
 
   it("does not treat the removed messageRole alias as assistant role for presentation merge", () => {

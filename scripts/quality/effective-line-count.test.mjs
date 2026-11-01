@@ -39,3 +39,17 @@ second\`;
 test("effective line count handles code around block comments", () => {
   assert.equal(countEffectiveCodeLines("const value = /* reason */ 1;\n/* only */\nvalue;"), 2);
 });
+
+test("comment closers restore code scanning and quoted blank lines remain effective", () => {
+  const source = [
+    "<!-- opening",
+    "ignored */",
+    "--> const value = 1; /* opening",
+    "ignored -->",
+    "*/ const text = `first",
+    "",
+    "  ",
+    "last`; // end",
+  ].join("\r\n");
+  assert.equal(countEffectiveCodeLines(source), 5);
+});

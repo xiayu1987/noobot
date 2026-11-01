@@ -7,9 +7,7 @@
 import {
   assertExecutionNotAborted,
   isExecutionAbortError,
-  isExecutionUserStop,
   raceExecutionAbort,
-  resolveExecutionAbortType,
 } from "@noobot/session-protocol/execution-abort";
 
 export const isAbortError = (error, abortSignal = null) =>
@@ -59,14 +57,6 @@ export function resolveErrorMessage(error = null) {
   }
 
   return normalizeErrorText(error);
-}
-
-export function isUserStopAbort(error = null, abortSignal = null) {
-  return isExecutionUserStop({ error, abortSignal });
-}
-
-export function resolveAbortStopType(error = null, abortSignal = null) {
-  return resolveExecutionAbortType({ error, abortSignal });
 }
 
 export function assertNotAborted(abortSignal) {

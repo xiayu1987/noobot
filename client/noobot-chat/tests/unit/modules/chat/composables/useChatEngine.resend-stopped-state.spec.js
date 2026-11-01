@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { turnRecordFixture } from "../helpers/turnRecordFixture.js";
 import { describe, expect, it, vi } from "vitest";
 import {
   applyMainEntryMessages,
@@ -55,7 +56,7 @@ describe("useChatEngine.resend stopped state", () => {
           turnScopeId: stoppedTurnScopeId,
           resolved: true,
           aggregateVersion: 12,
-          turn: {
+          turn: turnRecordFixture({
             continuedByTurnScopeId: "",
             sessionId,
             turnScopeId: stoppedTurnScopeId,
@@ -71,7 +72,7 @@ describe("useChatEngine.resend stopped state", () => {
               dialogProcessId: "dp-immediate-stop",
             }),
             capabilities: { actionLocked: false, canStop: false },
-          },
+          }),
         }),
       }),
     );
@@ -128,6 +129,7 @@ describe("useChatEngine.resend stopped state", () => {
     activeSession.value.messages = [stoppedUser, stoppedAssistant];
     activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
     applyTurnRuntimeEvent(turnRuntimeRegistry.value, {
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,
       sessionId,
       turnScopeId: stoppedTurnScopeId,
@@ -358,7 +360,7 @@ describe("useChatEngine.resend stopped state", () => {
           turnScopeId,
           resolved: true,
           aggregateVersion: terminalResolutionCount,
-          turn: {
+          turn: turnRecordFixture({
             continuedByTurnScopeId: "",
             sessionId,
             turnScopeId,
@@ -373,7 +375,7 @@ describe("useChatEngine.resend stopped state", () => {
               turnScopeId,
               dialogProcessId: `dp-${turnScopeId}`,
             }),
-          },
+          }),
         }),
       });
     });

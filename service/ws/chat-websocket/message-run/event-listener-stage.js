@@ -121,7 +121,7 @@ async function dispatchAuthorityEvent(context, run, active, envelope, dispatchCo
   return { ...dispatch, deliveryDegraded: true };
 }
 
-function startProcessing(context, run, accepted, lifecycleData) {
+function startProcessing(context, run, accepted) {
   return context
     .commitTurnLifecycle({
       userId: run.userId,
@@ -136,12 +136,6 @@ function startProcessing(context, run, accepted, lifecycleData) {
       causationId: accepted.commandId,
       eventType: TURN_EVENT.PROCESSING_STARTED,
       phase: TURN_PHASE.PROCESSING,
-      executionId: lifecycleData?.executionId,
-      executionKind: lifecycleData?.executionKind,
-      parentExecutionId: lifecycleData?.parentExecutionId,
-      rootExecutionId: lifecycleData?.rootExecutionId,
-      origin: lifecycleData?.origin,
-      stage: lifecycleData?.stage,
     })
     .then((started) => {
       if (!started.applied && !started.deduplicated) {
@@ -153,9 +147,9 @@ function startProcessing(context, run, accepted, lifecycleData) {
 }
 
 function createRootRunningHandler(context, run, accepted, lifecycle) {
-  return (lifecycleData) => {
+  return () => {
     if (lifecycle.processingStarted) return lifecycle.processingStarted;
-    lifecycle.processingStarted = startProcessing(context, run, accepted, lifecycleData);
+    lifecycle.processingStarted = startProcessing(context, run, accepted);
     context.lifecycle.pending = lifecycle.processingStarted;
     void lifecycle.processingStarted.catch((error) => {
       void recordServiceWebSocketLifecycle({
@@ -193,7 +187,6 @@ export function createMessageRunEventListener(context, run, accepted, active) {
     sendEvent: (...args) => publishRunEvent(active.runHandle, ...args),
     sessionId: run.sessionId,
     getCurrentRunMeta: () => active.runMeta,
-    getCurrentTurnScopeId: () => active.runMeta.turnScopeId,
     onEventReceived: (audit) => onEventReceived(run, audit),
     onDeliveryTiming: isSessionLogDebugTypeEnabled(DELIVERY_TIMING_DEBUG_TYPE)
       ? (summary) => recordDeliveryTiming(run, summary)

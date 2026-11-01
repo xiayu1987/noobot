@@ -19,7 +19,7 @@ import {
 } from "@noobot/file-mutation-protocol";
 import { resolveMimeTypeFromFileName } from "@noobot/attachment-protocol/mime";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-import { safeJoin } from "#agent/utils";
+import { isPathOutOfScopeError, safeJoin } from "#agent/utils";
 import {
   classifyRequestedPathError,
   createBadRequestError,
@@ -131,7 +131,7 @@ export function registerFileCrudRoutes(
     if (isAbsolutePathAllowed(req) && path.isAbsolute(normalizedPath)) {
       return path.resolve(normalizedPath);
     }
-    return decodeRequestInput(() => safeJoin(root, normalizedPath));
+    return decodeRequestInput(() => safeJoin(root, normalizedPath), isPathOutOfScopeError);
   };
 
   const resolveRequestMutationLocator = (req, requestedPath, absolutePath) =>

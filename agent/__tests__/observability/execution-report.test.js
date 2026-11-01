@@ -45,6 +45,9 @@ const finalizePayload = {
   thinkingStartedAt: "2026-01-01T00:00:00.000Z",
   agentResult: {
     output: "done",
+    traces: [],
+    modelMessages: [],
+    modelLoopRound: 0,
     turnMessages: [{ messageUid: "sm_done", role: "assistant", type: "message", content: "done" }],
   },
   persistedTurnMessageUids: [],
@@ -113,9 +116,9 @@ function failureContext(overrides = {}) {
 for (const [label, overrides, expectedStatus] of [
   ["plain error", {}, EXECUTION_REPORT_STATUS.FAILED],
   [
-    "system abort",
+    "unstructured abort",
     { error: Object.assign(new Error("aborted"), { name: "AbortError" }) },
-    EXECUTION_REPORT_STATUS.INTERRUPTED,
+    EXECUTION_REPORT_STATUS.FAILED,
   ],
   [
     "user stop",

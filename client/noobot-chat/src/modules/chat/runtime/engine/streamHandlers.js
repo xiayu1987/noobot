@@ -8,10 +8,12 @@ import { getMessageRole } from "../../model/messageIdentity.js";
 import {
   attachmentIdentityKey,
   ATTACHMENT_EVENT_TYPE,
-  createAttachmentLifecycleEvent,
   projectAttachmentIdentity,
-  reduceAttachmentLifecycle,
 } from "@noobot/attachment-protocol";
+import {
+  requireAttachmentLifecycleEnvelope,
+  reduceAttachmentLifecycle,
+} from "@noobot/event-protocol";
 import { reduceInteractionRequest } from "../interactionPayload.js";
 import { text } from "@noobot/shared/value";
 
@@ -31,7 +33,8 @@ export function handleAttachmentLifecycleStreamEvent({
   makeViewAttachments,
   logSessionEvent,
 }) {
-  const event = createAttachmentLifecycleEvent(data);
+  const envelope = requireAttachmentLifecycleEnvelope(data);
+  const event = envelope.payload;
   if (event.eventType !== ATTACHMENT_EVENT_TYPE.PARSED || !activeSession.value) return;
   logSessionEvent({
     category: "debug",
@@ -52,7 +55,7 @@ export function handleAttachmentLifecycleStreamEvent({
       const canonicalKey = canonicalAttachmentProjectionKey(existing);
       if (canonicalKey !== eventKey) return existing;
       matchedCount += 1;
-      const lifecycle = reduceAttachmentLifecycle(existing.attachmentLifecycle, event);
+      const lifecycle = reduceAttachmentLifecycle(existing.attachmentLifecycle, envelope);
       const updated = {
         ...existing,
         attachmentLifecycle: lifecycle,

@@ -33,7 +33,6 @@ function createListener(overrides = {}) {
     },
     sessionId: "root-session",
     getCurrentRunMeta: () => ({ turnScopeId: "turn-1", dialogProcessId: "dialog-1" }),
-    getCurrentTurnScopeId: () => "turn-1",
     ...overrides,
   });
   return { listener, frames };
@@ -191,6 +190,93 @@ test("run event listener exposes onDeliveryTiming only when delivery-timing debu
   assert.deepEqual(received, [{ queueWaitMs: { n: 1 } }]);
 });
 
+test("run-event-listener rejects malformed data before auditing or coordinating a run", () => {
+  const audits = [];
+  const running = [];
+  const { listener, frames } = createListener({
+    onEventReceived: (audit) => audits.push(audit),
+    onRootRunning: (data) => running.push(data),
+  });
+  for (const event of [
+    "authority_event_committed",
+    "turn_lifecycle_committed",
+    "turn_committed",
+    "turn_attachments_bound",
+    "agent_lifecycle_state_changed",
+  ]) {
+    for (const data of [undefined, null, false, 0, "", "running", []]) {
+      assert.throws(
+        () => listener.onEvent({ event, data }),
+        new RegExp(`invalid ${event} data: expected an object`),
+      );
+    }
+  }
+  assert.deepEqual(audits, []);
+  assert.deepEqual(running, []);
+  assert.deepEqual(frames, []);
+});
+
+test("run-event-listener does not normalize event names, lifecycle states or identities", () => {
+  const running = [];
+  const { listener } = createListener({ onRootRunning: (data) => running.push(data) });
+  assert.throws(
+    () => listener.onEvent({ event: " agent_lifecycle_state_changed ", data: {} }),
+    /unsupported agent run event/,
+  );
+  const data = { state: "running", sessionId: "root-session", turnScopeId: "turn-1" };
+  for (const patch of [
+    { state: "RUNNING" },
+    { state: " running " },
+    { sessionId: " root-session " },
+    { turnScopeId: " turn-1 " },
+  ]) {
+    listener.onEvent({ event: "agent_lifecycle_state_changed", data: { ...data, ...patch } });
+  }
+  assert.deepEqual(running, []);
+});
+
+test("run-event-listener reads current turn identity from live run metadata only", () => {
+  const running = [];
+  let runMeta = null;
+  const { listener } = createListener({
+    getCurrentRunMeta: () => runMeta,
+    onRootRunning: (data) => running.push(data),
+  });
+  const emit = (turnScopeId) => {
+    const data = { state: "running", sessionId: "root-session", turnScopeId };
+    listener.onEvent({ event: "agent_lifecycle_state_changed", data });
+    return data;
+  };
+  emit("turn-1");
+  runMeta = { turnScopeId: "turn-1" };
+  const first = emit("turn-1");
+  runMeta = { turnScopeId: "turn-2" };
+  emit("turn-1");
+  const second = emit("turn-2");
+  assert.deepEqual(running, [first, second]);
+  assert.equal(running[0], first);
+  assert.equal(running[1], second);
+});
+
+test("run-event-listener rejects invalid delivery timing callbacks and preserves failures", () => {
+  for (const onDeliveryTiming of [false, 0, "callback", {}, []]) {
+    assert.throws(
+      () => createListener({ onDeliveryTiming }),
+      /onDeliveryTiming must be a function/,
+    );
+  }
+  const failure = new Error("timing callback failed");
+  const { listener } = createListener({
+    onDeliveryTiming: () => {
+      throw failure;
+    },
+  });
+  assert.throws(
+    () => listener.onDeliveryTiming({}),
+    (error) => error === failure,
+  );
+});
+
 test("run-event-listener audits authority commits from the committed envelope identity", () => {
   const audits = [];
   const { listener } = createListener({
@@ -216,6 +302,9 @@ test("run-event-listener audits authority commits from the committed envelope id
   assert.equal(audits[0].turnScopeId, "turn-1");
   assert.equal(audits[0].dialogProcessId, "dialog-1");
   assert.equal(audits[0].eventId, "event-1");
+  assert.equal(audits[0].protocolVersion, envelope.protocol.version);
+  assert.equal(audits[0].schemaVersion, envelope.protocol.schemaVersion);
+  assert.equal(audits[0].presentationMessageId, envelope.payload.presentationMessageId);
 });
 
 test("run-event-listener audits workflow planning from the committed envelope payload", () => {
@@ -247,6 +336,8 @@ test("run-event-listener audits workflow planning from the committed envelope pa
           {
             nodeExecutionId: "node-1",
             eventId: "workflow_node_state:run-1:node-1:1",
+            activeChildExecutionId: "agent-1",
+            attemptExecutionIds: [],
             status: "ready",
             revision: 1,
             sequence: 1,
@@ -269,6 +360,45 @@ test("run-event-listener audits workflow planning from the committed envelope pa
   assert.equal(audits[0].sequenceScopeId, "run-1");
 });
 
+test("run-event-listener audits node state from its sole execution identity", () => {
+  const audits = [];
+  const dispatched = [];
+  const { listener } = createListener({
+    onAuthorityEventCommitted: (envelope) => dispatched.push(envelope),
+    onEventReceived: (audit) => audits.push(audit),
+  });
+  const envelope = createWorkflowRuntimeEnvelope({
+    eventType: WORKFLOW_RUNTIME_EVENT.NODE_STATE,
+    authoritySessionId: "root-session",
+    turnScopeId: "workflow-node:node-1",
+    executionId: "node-1",
+    eventId: "node-state-1",
+    workflowRunId: "run-1",
+    sequence: 1,
+    revision: 2,
+    occurredAt: "2026-08-17T00:00:00.000Z",
+    producer: { type: "plugin", id: "workflow" },
+    causality: { correlationId: "run-1" },
+    payload: {
+      workflowRunId: "run-1",
+      turnScopeId: "workflow-node:node-1",
+      status: "running",
+      activeChildExecutionId: "agent-1",
+      attemptExecutionIds: ["agent-1"],
+    },
+  });
+  assert.equal(Object.hasOwn(envelope.payload, "nodeExecutionId"), false);
+  listener.onEvent({
+    event: "authority_event_committed",
+    data: { envelope, persistenceScope: null },
+  });
+  assert.equal(audits.length, 1);
+  assert.equal(audits[0].nodeExecutionId, envelope.identity.executionId);
+  assert.equal(audits[0].workflowRevision, envelope.ordering.revision);
+  assert.equal(audits[0].workflowStatus, envelope.payload.status);
+  assert.equal(dispatched[0], envelope);
+});
+
 test("run-event-listener audits envelope-free run events from their route-projected data", () => {
   const audits = [];
   const { listener } = createListener({ onEventReceived: (audit) => audits.push(audit) });
@@ -279,6 +409,9 @@ test("run-event-listener audits envelope-free run events from their route-projec
   assert.equal(audits[0].sessionId, "root-session");
   assert.equal(audits[0].turnScopeId, "turn-1");
   assert.equal(audits[0].dialogProcessId, "d");
+  for (const field of ["protocolVersion", "schemaVersion", "eventId", "presentationMessageId"]) {
+    assert.equal(Object.hasOwn(audits[0], field), false);
+  }
 });
 
 test("run-event-listener ignores child-session lifecycle for root run coordination", () => {

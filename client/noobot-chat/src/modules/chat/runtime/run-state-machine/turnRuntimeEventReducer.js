@@ -6,7 +6,7 @@
 import { text } from "@noobot/shared/value";
 import { requireCanonicalTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
 import { SESSION_RUN_EVENT } from "./constants.js";
-import { normalizeSessionRunEvent } from "./eventNormalization.js";
+import { projectSessionRunEvent } from "@noobot/session-protocol/runtime-event";
 import { isFinalTurnState, reduceTurnRuntimeEvent } from "./turnReducer.js";
 import {
   createTurnRuntimeRegistryState,
@@ -142,14 +142,29 @@ function commitProjectedTurn(registry, turn) {
   }
 }
 
-export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
+export function applyTurnRuntimeEvent(registry, rawEvent) {
+  let event;
+  try {
+    event = projectSessionRunEvent(rawEvent);
+  } catch (error) {
+    return {
+      registry,
+      turn: null,
+      applied: false,
+      reason: "invalid_runtime_event",
+      errors: [error.message],
+    };
+  }
+  return applyProjectedTurnRuntimeEvent(registry, event);
+}
+
+export function applyProjectedTurnRuntimeEvent(registry, event) {
   const next = registry || createTurnRuntimeRegistryState();
   if (!next.sessions) next.sessions = {};
   if (!next.routeIndex) next.routeIndex = {};
-  const event = normalizeSessionRunEvent(rawEvent);
   const route = resolveRoute(next, event.dialogProcessId);
-  const turnScopeId = event.turnScopeId || route?.turnScopeId || "";
-  const routedSessionId = text(event.sessionId || route?.sessionId);
+  const turnScopeId = event.turnScopeId;
+  const routedSessionId = event.sessionId;
   const observe = createObservation({
     registry: next,
     event,
@@ -167,7 +182,7 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
     });
   }
   const current = findTurnByScope(next, turnScopeId, { sessionId: requestedSessionId });
-  const sessionId = text(requestedSessionId || current?.sessionId);
+  const sessionId = requestedSessionId;
   const result = (values = {}) => observe({ canonicalSessionId: sessionId, ...values });
   const conflictReason = resolveTurnRuntimeConflict({
     current,

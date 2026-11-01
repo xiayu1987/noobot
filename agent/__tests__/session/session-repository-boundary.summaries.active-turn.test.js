@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { turnRecord } from "../helpers/turn-record.js";
 import { countCanonicalThinkingDetailEvents } from "@noobot/event-protocol/tool-timeline";
 import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
@@ -43,7 +44,7 @@ test("session display summary materializes the active Turn presentation in the z
       activeTurnScopeId: "turn-active",
       sequence: 1,
       turns: {
-        "turn-active": {
+        "turn-active": turnRecord({
           revision: 1,
           sequence: 1,
           turnScopeId: "turn-active",
@@ -52,7 +53,7 @@ test("session display summary materializes the active Turn presentation in the z
           state: "processing",
           startedAt: "2026-07-31T02:53:40.000Z",
           updatedAt: "2026-07-31T02:53:42.225Z",
-        },
+        }),
       },
     },
   });
@@ -137,15 +138,15 @@ test("session display summary materializes stopped Turn details on its stable pr
       activeTurnScopeId: "",
       sequence: 2,
       turns: {
-        "turn-stopped": {
+        "turn-stopped": turnRecord({
           revision: 1,
           turnScopeId: "turn-stopped",
           dialogProcessId: "dialog-stopped",
           presentationMessageId: "presentation-stopped",
           executionState: "user_stopped",
-          terminalStatus: { status: "user_stopped" },
+          state: "stop_completed",
           sequence: 2,
-        },
+        }),
       },
     },
   });
@@ -201,7 +202,7 @@ test("Session Detail exposes canonical active Turn messages", async () => {
       activeTurnScopeId: "turn-active-full",
       sequence: 1,
       turns: {
-        "turn-active-full": {
+        "turn-active-full": turnRecord({
           revision: 1,
           turnScopeId: "turn-active-full",
           presentationMessageId: "presentation-active-full",
@@ -210,7 +211,7 @@ test("Session Detail exposes canonical active Turn messages", async () => {
           startedAt: "2026-07-31T03:04:00.000Z",
           sequence: 1,
           updatedAt: "2026-07-31T03:04:06.000Z",
-        },
+        }),
       },
     };
     await runtime.repositories.sessionRepository.save(userId, applySessionMessageFacts(session), {
@@ -321,7 +322,7 @@ test("active Turn summary carries its authoritative thinking timelines", async (
       activeTurnScopeId: turnScopeId,
       sequence: 1,
       turns: {
-        [turnScopeId]: {
+        [turnScopeId]: turnRecord({
           revision: 1,
           sequence: 1,
           sessionId: "active-timeline-session",
@@ -330,7 +331,7 @@ test("active Turn summary carries its authoritative thinking timelines", async (
           presentationMessageId,
           state: "processing",
           startedAt: "2026-07-31T03:10:00.000Z",
-        },
+        }),
       },
     },
   });

@@ -67,6 +67,30 @@ test("layout upgrades must be contiguous up to the layout version", () => {
   assert.equal(measured.layoutUpgradeGap.total, 2);
 });
 
+test("chain loading failures propagate and stop subsequent exports", async () => {
+  const measured = emptyRuleMeasurements(CHECK);
+  const failure = new Error("chain module failed");
+  const loaded = [];
+  await assert.rejects(
+    measureVersionChains(measured, {
+      sources: [
+        {
+          file: CHAIN_FILE,
+          source: `${CHAIN_SOURCE}\nexport const SECOND_CHAIN = defineVersionChain({});`,
+        },
+      ],
+      tests: [],
+      load: async (file, name) => {
+        loaded.push([file, name]);
+        throw failure;
+      },
+    }),
+    (error) => error === failure,
+  );
+  assert.deepEqual(loaded, [[CHAIN_FILE, "DEMO_CHAIN"]]);
+  assert.equal(measured.uncoveredChainStep.total, 0);
+});
+
 test("layout owners need a bound handler that an agent test calls", () => {
   const measured = emptyRuleMeasurements(CHECK);
   measureLayoutHandlers(measured, {

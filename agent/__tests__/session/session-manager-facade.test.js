@@ -254,7 +254,7 @@ test("createSessionFacade should delegate message and tree methods", async () =>
     sessionMessageService: {
       async appendTurns(payload = {}) {
         appendCaptured = payload;
-        return { appended: true, reason: "", turns: payload.turns };
+        return { turns: payload.turns };
       },
       async getSessionTurns() {
         return [{ role: "user", content: "hi" }];

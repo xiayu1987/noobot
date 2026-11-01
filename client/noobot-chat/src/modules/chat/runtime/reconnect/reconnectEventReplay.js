@@ -96,10 +96,11 @@ export async function applyReconnectEventReplay({
     return applyRuntimeStreamEvent(protocolEnvelope, { source: "reconnect" });
   }
   if (family === EVENT_FAMILY.INTERACTION_REQUEST) {
-    return applyPendingInteraction(data, { channelSessionId });
+    await applyPendingInteraction(data, { channelSessionId });
+    return { applied: true, reason: "interaction_request_projected" };
   }
   if (family === EVENT_FAMILY.ATTACHMENT_LIFECYCLE) {
-    onAttachmentLifecycle(protocolEnvelope.payload);
+    onAttachmentLifecycle(data);
     return { applied: true, reason: "attachment_lifecycle_projected" };
   }
   if (replayEvent === StreamEventEnum.EXECUTION_SNAPSHOT)

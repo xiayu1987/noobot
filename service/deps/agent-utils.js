@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-export { safeJoin } from "noobot-agent/utils/fs-safe";
+export { isPathOutOfScopeError, safeJoin } from "noobot-agent/utils/fs-safe";
 export {
   isSuperAdminRole,
   resolveConfiguredSuperUserId,

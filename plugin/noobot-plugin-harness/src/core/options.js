@@ -74,6 +74,38 @@ export const DEFAULT_OPTIONS = Object.freeze({
   finalResponseText: "",
 });
 
+export const HarnessJsonlFlushStrategySchema = z.object({
+  maxSize: z.coerce.number().positive().default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxSize),
+  maxTime: z.coerce.number().nonnegative().default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxTime),
+  onTerminal: z.boolean().default(DEFAULT_OPTIONS.jsonlFlushStrategy.onTerminal),
+  onError: z.boolean().default(DEFAULT_OPTIONS.jsonlFlushStrategy.onError),
+  maxRetry: z.coerce
+    .number()
+    .int()
+    .nonnegative()
+    .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxRetry),
+  maxBufferEntries: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxBufferEntries),
+  maxBufferBytes: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxBufferBytes),
+  maxFileBytes: z.coerce
+    .number()
+    .int()
+    .nonnegative()
+    .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxFileBytes),
+  maxFiles: z.coerce
+    .number()
+    .int()
+    .nonnegative()
+    .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxFiles),
+});
+
 const HarnessOptionsSchema = z
   .object({
     timeoutMs: z.coerce.number().positive().default(DEFAULT_OPTIONS.timeoutMs),
@@ -108,43 +140,7 @@ const HarnessOptionsSchema = z
     manifestDebounceMs: z.coerce.number().nonnegative().default(DEFAULT_OPTIONS.manifestDebounceMs),
     flushHookPriority: z.coerce.number().default(DEFAULT_OPTIONS.flushHookPriority),
     flushHookTimeoutMs: z.coerce.number().positive().default(DEFAULT_OPTIONS.flushHookTimeoutMs),
-    jsonlFlushStrategy: z
-      .object({
-        maxSize: z.coerce.number().positive().default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxSize),
-        maxTime: z.coerce
-          .number()
-          .nonnegative()
-          .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxTime),
-        onTerminal: z.boolean().default(DEFAULT_OPTIONS.jsonlFlushStrategy.onTerminal),
-        onError: z.boolean().default(DEFAULT_OPTIONS.jsonlFlushStrategy.onError),
-        maxRetry: z.coerce
-          .number()
-          .int()
-          .nonnegative()
-          .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxRetry),
-        maxBufferEntries: z.coerce
-          .number()
-          .int()
-          .positive()
-          .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxBufferEntries),
-        maxBufferBytes: z.coerce
-          .number()
-          .int()
-          .positive()
-          .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxBufferBytes),
-        maxFileBytes: z.coerce
-          .number()
-          .int()
-          .nonnegative()
-          .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxFileBytes),
-        maxFiles: z.coerce
-          .number()
-          .int()
-          .nonnegative()
-          .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxFiles),
-      })
-      .partial()
-      .default(DEFAULT_OPTIONS.jsonlFlushStrategy),
+    jsonlFlushStrategy: HarnessJsonlFlushStrategySchema.default(DEFAULT_OPTIONS.jsonlFlushStrategy),
     maxRuns: z.coerce.number().positive().default(DEFAULT_OPTIONS.maxRuns),
     maxRunAgeDays: z.coerce.number().positive().default(DEFAULT_OPTIONS.maxRunAgeDays),
     cleanupGraceMs: z.coerce.number().nonnegative().default(DEFAULT_OPTIONS.cleanupGraceMs),

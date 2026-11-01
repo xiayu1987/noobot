@@ -62,8 +62,8 @@ test("appendTurns from continuations spawned inside a session lock keeps every m
   );
   const results = await spawned;
   assert.deepEqual(
-    results.map((result) => result.appended),
-    concurrentUids.map(() => true),
+    results.map((result) => result.turns.map((turn) => turn.messageUid)),
+    concurrentUids.map((messageUid) => [messageUid]),
   );
 
   const manifest = JSON.parse(

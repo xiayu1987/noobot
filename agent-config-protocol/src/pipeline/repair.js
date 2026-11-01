@@ -70,10 +70,10 @@ function validatesContract(value, contract = {}, enforceValueConstraints = true)
     if (!validatesContract(value[key], properties[key], enforceValueConstraints)) return false;
   }
   for (const [key, child] of Object.entries(value)) {
-    if (properties[key]) {
-      if (!validatesContract(child, properties[key], enforceValueConstraints)) return false;
-      continue;
-    }
+    const childContract = properties[key];
+    if (childContract && !validatesContract(child, childContract, enforceValueConstraints))
+      return false;
+    if (childContract) continue;
     if (contract.additionalProperties === true) continue;
     if (!isPlainObject(contract.additionalProperties)) return false;
     if (!validatesContract(child, contract.additionalProperties, enforceValueConstraints))
@@ -137,37 +137,32 @@ function repairTemplateAdditionalProperties({
   for (const [key, child] of Object.entries(templateObject)) {
     if (properties[key]) continue;
     if (contract.additionalProperties === true) {
-      if (Object.prototype.hasOwnProperty.call(target, key)) {
-        output[key] = clone(target[key]);
-      } else {
-        output[key] = clone(child);
-        recordChange(
-          changes,
-          [...path, key],
-          CONFIG_REPAIR_ACTION.ADD_DEFAULT,
-          "missing_defaulted_node",
-        );
-      }
+      output[key] = repairOpenProperty({ target, key, template: child, path, changes });
       continue;
     }
-    if (isPlainObject(contract.additionalProperties)) {
-      const repaired = repairContractNode({
-        contract: contract.additionalProperties,
-        template: child,
-        valueTemplate: valueObject[key],
-        target: target[key],
-        path: [...path, key],
-        changes,
-        scope,
-        enforceValueConstraints,
-      });
-      if (repaired !== REMOVE_NODE) output[key] = repaired;
-      continue;
+    if (!isPlainObject(contract.additionalProperties)) {
+      throw new TypeError(
+        `config value source contains unsupported node: ${pathText([...path, key])}`,
+      );
     }
-    throw new TypeError(
-      `config value source contains unsupported node: ${pathText([...path, key])}`,
-    );
+    const repaired = repairContractNode({
+      contract: contract.additionalProperties,
+      template: child,
+      valueTemplate: valueObject[key],
+      target: target[key],
+      path: [...path, key],
+      changes,
+      scope,
+      enforceValueConstraints,
+    });
+    if (repaired !== REMOVE_NODE) output[key] = repaired;
   }
+}
+
+function repairOpenProperty({ target, key, template, path, changes }) {
+  if (Object.prototype.hasOwnProperty.call(target, key)) return clone(target[key]);
+  recordChange(changes, [...path, key], CONFIG_REPAIR_ACTION.ADD_DEFAULT, "missing_defaulted_node");
+  return clone(template);
 }
 
 function repairTargetAdditionalProperties({
@@ -186,24 +181,24 @@ function repairTargetAdditionalProperties({
       output[key] = clone(child);
       continue;
     }
-    if (isPlainObject(contract.additionalProperties)) {
-      const repaired = repairContractNode({
-        contract: contract.additionalProperties,
-        target: child,
-        path: [...path, key],
+    if (!isPlainObject(contract.additionalProperties)) {
+      recordChange(
         changes,
-        scope,
-        enforceValueConstraints,
-      });
-      if (repaired !== REMOVE_NODE) output[key] = repaired;
+        [...path, key],
+        CONFIG_REPAIR_ACTION.REMOVE_UNSUPPORTED,
+        "unsupported_node",
+      );
       continue;
     }
-    recordChange(
+    const repaired = repairContractNode({
+      contract: contract.additionalProperties,
+      target: child,
+      path: [...path, key],
       changes,
-      [...path, key],
-      CONFIG_REPAIR_ACTION.REMOVE_UNSUPPORTED,
-      "unsupported_node",
-    );
+      scope,
+      enforceValueConstraints,
+    });
+    if (repaired !== REMOVE_NODE) output[key] = repaired;
   }
 }
 
@@ -373,32 +368,7 @@ function repairStructureNode({ node, target, path, values, scope, changes }) {
     if (!isPlainObject(target)) {
       return resetFromValues({ node, path, values, scope, changes });
     }
-    const output = {};
-    for (const [key, entryTarget] of Object.entries(target)) {
-      const repaired = repairStructureNode({
-        node: node.entry,
-        target: entryTarget,
-        path: [...path, key],
-        values,
-        scope,
-        changes,
-      });
-      if (repaired !== REMOVE_NODE) output[key] = repaired;
-    }
-
-    for (const key of collectionValueKeys({ path, values })) {
-      if (Object.prototype.hasOwnProperty.call(output, key)) continue;
-      const repaired = repairStructureNode({
-        node: node.entry,
-        target: undefined,
-        path: [...path, key],
-        values,
-        scope,
-        changes,
-      });
-      if (repaired !== REMOVE_NODE) output[key] = repaired;
-    }
-    return output;
+    return repairStructureCollection({ node, target, path, values, scope, changes });
   }
 
   if (node.kind === CONFIG_STRUCTURE_KIND.OBJECT) {
@@ -406,32 +376,7 @@ function repairStructureNode({ node, target, path, values, scope, changes }) {
       return resetFromValues({ node, path, values, scope, changes });
     }
     if (node.open) return clone(target);
-    const output = {};
-    for (const [key, child] of Object.entries(node.fields)) {
-      const repaired = repairStructureNode({
-        node: child,
-        target: target[key],
-        path: [...path, key],
-        values,
-        scope,
-        changes,
-      });
-      if (repaired !== REMOVE_NODE) output[key] = repaired;
-    }
-    for (const key of Object.keys(target)) {
-      if (Object.prototype.hasOwnProperty.call(output, key)) continue;
-      if (node.fields[key]) continue;
-      recordChange(
-        changes,
-        [...path, key],
-        CONFIG_REPAIR_ACTION.REMOVE_UNSUPPORTED,
-        "unsupported_node",
-      );
-    }
-    for (const key of node.requiredFields || []) {
-      if (!Object.prototype.hasOwnProperty.call(output, key)) return REMOVE_NODE;
-    }
-    return output;
+    return repairStructureObject({ node, target, path, values, scope, changes });
   }
 
   if (!validatesStructureLeaf(target, node)) {
@@ -445,6 +390,63 @@ function repairStructureNode({ node, target, path, values, scope, changes }) {
     });
   }
   return clone(target);
+}
+
+function repairStructureCollection({ node, target, path, values, scope, changes }) {
+  const output = {};
+  for (const [key, entryTarget] of Object.entries(target)) {
+    const repaired = repairStructureNode({
+      node: node.entry,
+      target: entryTarget,
+      path: [...path, key],
+      values,
+      scope,
+      changes,
+    });
+    if (repaired !== REMOVE_NODE) output[key] = repaired;
+  }
+  for (const key of collectionValueKeys({ path, values })) {
+    if (Object.prototype.hasOwnProperty.call(output, key)) continue;
+    const repaired = repairStructureNode({
+      node: node.entry,
+      target: undefined,
+      path: [...path, key],
+      values,
+      scope,
+      changes,
+    });
+    if (repaired !== REMOVE_NODE) output[key] = repaired;
+  }
+  return output;
+}
+
+function repairStructureObject({ node, target, path, values, scope, changes }) {
+  const output = {};
+  for (const [key, child] of Object.entries(node.fields)) {
+    const repaired = repairStructureNode({
+      node: child,
+      target: target[key],
+      path: [...path, key],
+      values,
+      scope,
+      changes,
+    });
+    if (repaired !== REMOVE_NODE) output[key] = repaired;
+  }
+  for (const key of Object.keys(target)) {
+    if (Object.prototype.hasOwnProperty.call(output, key)) continue;
+    if (node.fields[key]) continue;
+    recordChange(
+      changes,
+      [...path, key],
+      CONFIG_REPAIR_ACTION.REMOVE_UNSUPPORTED,
+      "unsupported_node",
+    );
+  }
+  for (const key of node.requiredFields || []) {
+    if (!Object.prototype.hasOwnProperty.call(output, key)) return REMOVE_NODE;
+  }
+  return output;
 }
 
 function isStructuredNode(node) {
@@ -532,28 +534,22 @@ function providerReferenceExists(provider) {
   );
 }
 
-function collectReferenceRules(document) {
-  const rules = [];
-  for (const { path, requirement } of listStructureModelReferences()) {
-    const placeholderIndex = path.indexOf(CONFIG_STRUCTURE_PLACEHOLDER);
-    if (placeholderIndex < 0) {
-      const node = valueAt(document, path);
-      if (isPlainObject(node)) {
-        for (const key of Object.keys(node)) rules.push({ path: [...path, key], requirement });
-        continue;
-      }
-      rules.push({ path: [...path], requirement });
-      continue;
-    }
+function expandReferencePaths(document, { path }) {
+  const placeholderIndex = path.indexOf(CONFIG_STRUCTURE_PLACEHOLDER);
+  if (placeholderIndex >= 0) {
     const parentPath = path.slice(0, placeholderIndex);
-    const suffix = path.slice(placeholderIndex + 1);
     const parent = valueAt(document, parentPath);
-    if (!isPlainObject(parent)) continue;
-    for (const key of Object.keys(parent)) {
-      rules.push({ path: [...parentPath, key, ...suffix], requirement });
-    }
+    if (!isPlainObject(parent)) return [];
+    const suffix = path.slice(placeholderIndex + 1);
+    return Object.keys(parent).map((key) => [...parentPath, key, ...suffix]);
   }
-  return rules;
+  const node = valueAt(document, path);
+  if (!isPlainObject(node)) return [[...path]];
+  return Object.keys(node).map((key) => [...path, key]);
+}
+
+function collectReferencePaths(document) {
+  return listStructureModelReferences().flatMap((rule) => expandReferencePaths(document, rule));
 }
 
 function repairModelReferences(document, values, changes, scope) {
@@ -561,24 +557,19 @@ function repairModelReferences(document, values, changes, scope) {
     ...(scope === CONFIG_DOCUMENT_SCOPE.USER ? values.resolve(["providers"]) : {}),
     ...document.providers,
   };
-  for (const rule of collectReferenceRules(document)) {
-    const alias = valueAt(document, rule.path);
+  for (const path of collectReferencePaths(document)) {
+    const alias = valueAt(document, path);
     if (typeof alias !== "string" || !alias) continue;
     if (providerReferenceExists(providers[alias])) continue;
-    const fallback = values.resolve(rule.path);
+    const fallback = values.resolve(path);
     if (typeof fallback !== "string" || !fallback) {
-      throw new TypeError(`config value source has no model reference at ${pathText(rule.path)}`);
+      throw new TypeError(`config value source has no model reference at ${pathText(path)}`);
     }
     if (!providerReferenceExists(providers[fallback])) {
-      throw new TypeError(`config repair cannot restore model reference at ${pathText(rule.path)}`);
+      throw new TypeError(`config repair cannot restore model reference at ${pathText(path)}`);
     }
-    setValueAt(document, rule.path, fallback);
-    recordChange(
-      changes,
-      rule.path,
-      CONFIG_REPAIR_ACTION.RESET_TO_DEFAULT,
-      "invalid_model_reference",
-    );
+    setValueAt(document, path, fallback);
+    recordChange(changes, path, CONFIG_REPAIR_ACTION.RESET_TO_DEFAULT, "invalid_model_reference");
   }
 }
 

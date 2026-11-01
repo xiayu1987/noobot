@@ -5,13 +5,54 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { gzipSync, deflateSync, brotliCompressSync } from "node:zlib";
 
 import {
+  decodeBodyByEncoding,
   extractAnthropicContent,
   extractResponsesOutput,
   resolveFinalResponseBodyText,
 } from "../src/response-body.js";
 import { normalizeUsageCacheDiagnostics } from "../src/cache-diagnostics.js";
+
+test("decodes declared content encodings in reverse order and propagates corrupt or unsupported encodings", async () => {
+  const raw = Buffer.from('{"ok":true}');
+  for (const [encoding, encode] of [
+    ["gzip", gzipSync],
+    ["deflate", deflateSync],
+    ["br", brotliCompressSync],
+  ]) {
+    assert.deepEqual(await decodeBodyByEncoding(encode(raw), encoding), raw);
+    await assert.rejects(decodeBodyByEncoding(Buffer.from("corrupt"), encoding));
+  }
+  assert.deepEqual(await decodeBodyByEncoding(brotliCompressSync(gzipSync(raw)), "gzip, br"), raw);
+  assert.equal(await decodeBodyByEncoding(raw, "identity"), raw);
+  assert.equal(await decodeBodyByEncoding(raw), raw);
+  await assert.rejects(decodeBodyByEncoding(raw, "unknown"), /unsupported content encoding/);
+  assert.throws(() => resolveFinalResponseBodyText("{invalid", "application/json"), SyntaxError);
+});
+
+test("projects interleaved SSE tool call fragments in index order, including argument-only deltas", () => {
+  const frame = (tool_calls) =>
+    `data: ${JSON.stringify({ choices: [{ delta: { tool_calls } }] })}\n\n`;
+  const body =
+    frame([
+      { index: 1, id: "b", function: { name: "write", arguments: '{"b":' } },
+      { index: 0, id: "a", function: { name: "read", arguments: '{"a":' } },
+    ]) +
+    frame([
+      { index: 0, function: { arguments: "1}" } },
+      { index: 1, function: { arguments: "2}" } },
+    ]) +
+    "data: [DONE]\n\n";
+  assert.deepEqual(JSON.parse(resolveFinalResponseBodyText(body, "text/event-stream")), {
+    type: "tool_calls",
+    tool_calls: [
+      { id: "a", type: "function", function: { name: "read", arguments: '{"a":1}' } },
+      { id: "b", type: "function", function: { name: "write", arguments: '{"b":2}' } },
+    ],
+  });
+});
 
 test("projects OpenAI Responses function calls without logging the full response envelope", () => {
   const payload = {

@@ -49,6 +49,7 @@ function applyLifecycle(
   const result = applyTurnLifecycleEnvelope(
     registry,
     createTurnLifecycleEnvelope({
+      updatedAt: "2026-01-01T00:00:00.000Z",
       eventType,
       eventId: `${eventType}:${sessionId}:${turnScopeId}:${revision}`,
       commandId: `${action}:${turnScopeId}`,
@@ -73,6 +74,7 @@ function applyLifecycle(
 
 function activateAuthorityTurn(store, sessionId, turnScopeId, dialogProcessId) {
   applyRuntimeEvent(store, {
+    timestamp: 1767225600000,
     type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
     sessionId,
     turnScopeId,

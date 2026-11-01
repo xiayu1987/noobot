@@ -13,6 +13,24 @@ import { canonicalActivityFact } from "../../../chat/helpers/messageEventFixture
 const identity = (item) => ({ ...item });
 
 describe("buildSessionDetailProjection", () => {
+  it("projects a valid partial document with no messages as an empty view", () => {
+    expect(
+      buildSessionDetailProjection({
+        sessionDetail: { sessionId: "session-1" },
+        makeViewMessage: identity,
+      }),
+    ).toEqual({ sessionId: "session-1", messages: [] });
+  });
+
+  it.each([null, { messages: null }, { messages: {} }, { messages: [null] }])(
+    "rejects damaged detail %j instead of displaying an empty view",
+    (sessionDetail) => {
+      expect(() =>
+        buildSessionDetailProjection({ sessionDetail, makeViewMessage: identity }),
+      ).toThrow(/content projection/);
+    },
+  );
+
   it("projects canonical messages through one entrypoint", () => {
     const projection = buildSessionDetailProjection({
       sessionDetail: {

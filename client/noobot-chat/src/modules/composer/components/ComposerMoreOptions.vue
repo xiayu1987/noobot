@@ -371,7 +371,7 @@ const composerExtensionBaseProps = computed(() => ({
   color: var(--noobot-text-secondary);
   font-size: var(--noobot-font-size-xs);
   font-weight: var(--noobot-font-weight-semibold);
-  line-height: var(--noobot-space-2xl);
+  line-height: var(--noobot-line-height-comfortable);
   white-space: nowrap;
 }
 
@@ -404,7 +404,7 @@ const composerExtensionBaseProps = computed(() => ({
   color: var(--noobot-text-secondary);
   font-size: var(--noobot-font-size-xs);
   font-weight: var(--noobot-font-weight-medium);
-  line-height: var(--noobot-space-xl);
+  line-height: var(--noobot-line-height-compact);
   white-space: nowrap;
 }
 
@@ -432,7 +432,7 @@ const composerExtensionBaseProps = computed(() => ({
 .scenario-selector-label {
   flex: 0 0 auto;
   font-size: var(--noobot-font-size-sm);
-  line-height: var(--noobot-space-2xl);
+  line-height: var(--noobot-line-height-balanced);
   color: var(--noobot-text-secondary);
   font-weight: var(--noobot-font-weight-semibold);
 }
@@ -546,10 +546,6 @@ const composerExtensionBaseProps = computed(() => ({
 .model-option-description {
   font-size: var(--noobot-font-size-sm);
   line-height: var(--noobot-line-height-balanced);
-  color: var(--noobot-text-secondary);
-}
-
-.model-option-description {
   color: var(--noobot-text-secondary);
 }
 

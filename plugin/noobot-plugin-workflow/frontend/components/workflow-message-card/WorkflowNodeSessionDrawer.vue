@@ -6,9 +6,10 @@
 <script setup>
 import { computed, nextTick, ref, watch } from "vue";
 import { BaseEmptyHint, BaseMessageErrorAlert, useMobileViewport } from "noobot-chat/plugin-api/ui";
-import { AgentExecutionView } from "noobot-chat/plugin-api/chat-ui";
+import { AgentExecutionView, ChatMessageItem } from "noobot-chat/plugin-api/chat-ui";
+import { resolveMessageViewKey } from "@noobot/event-protocol/message-event";
 import { resolveWorkflowDialogProcessId } from "../../utils/workflowDialogProcessId.js";
-import { text } from "@noobot/shared/value";
+import { buildExecutionForest } from "@noobot/session-protocol/execution-lifecycle";
 
 function resolveDialogProcessId(item = {}) {
   return resolveWorkflowDialogProcessId(item);
@@ -22,7 +23,7 @@ const props = defineProps({
   selectedNodeSessionId: { type: String, default: "" },
   runningPlaceholderViewModel: { type: Object, default: null },
   selectedExecutionId: { type: String, default: "" },
-  executionDirectory: { type: Array, default: () => [] },
+  executionDirectory: { type: Array, required: true },
   attemptExecutionIds: { type: Array, default: () => [] },
   stopExecution: { type: Function, required: true },
   fetchExecutionReport: { type: Function, required: true },
@@ -54,44 +55,24 @@ const expandedExecutionIds = ref(new Set());
 const stopPendingExecutionId = ref("");
 const stopError = ref("");
 
+const executionForest = computed(() => buildExecutionForest(props.executionDirectory));
+
 const executionTreeRows = computed(() => {
-  const items = Array.isArray(props.executionDirectory) ? props.executionDirectory : [];
-  const byId = new Map(
-    items.map((item = {}) => [text(item.executionId), item]).filter(([id]) => id),
-  );
-  const children = new Map();
-  for (const [id, item] of byId) {
-    const parentId = text(item.parentExecutionId);
-    if (!byId.has(parentId) || parentId === id) continue;
-    if (!children.has(parentId)) children.set(parentId, []);
-    children.get(parentId).push(id);
-  }
-  const roots = [...byId.keys()].filter((id) => {
-    const parentId = text(byId.get(id)?.parentExecutionId);
-    return !parentId || !byId.has(parentId) || parentId === id;
-  });
+  const { executions, rootExecutionIds } = executionForest.value;
   const rows = [];
-  const visited = new Set();
   const visit = (id, depth) => {
-    if (visited.has(id)) return;
-    visited.add(id);
-    const childIds = children.get(id) || [];
-    rows.push({ execution: byId.get(id), depth, hasChildren: childIds.length > 0 });
+    const execution = executions[id];
+    const childIds = execution.childExecutionIds;
+    rows.push({ execution, depth, hasChildren: childIds.length > 0 });
     if (expandedExecutionIds.value.has(id))
       childIds.forEach((childId) => visit(childId, depth + 1));
   };
-  roots.forEach((id) => visit(id, 0));
-  [...byId.keys()].filter((id) => !visited.has(id)).forEach((id) => visit(id, 0));
+  rootExecutionIds.forEach((id) => visit(id, 0));
   return rows;
 });
 
 const selectedExecution = computed(() => {
-  const selectedId = text(props.selectedExecutionId);
-  return (
-    (Array.isArray(props.executionDirectory) ? props.executionDirectory : []).find(
-      (item = {}) => text(item.executionId) === selectedId,
-    ) || null
-  );
+  return executionForest.value.executions[props.selectedExecutionId];
 });
 
 const canStopSelectedExecution = computed(() =>
@@ -99,7 +80,7 @@ const canStopSelectedExecution = computed(() =>
 );
 
 async function stopSelectedExecution() {
-  const executionId = text(props.selectedExecutionId);
+  const executionId = props.selectedExecutionId;
   if (!executionId || !canStopSelectedExecution.value || stopPendingExecutionId.value) return false;
   stopError.value = "";
   stopPendingExecutionId.value = executionId;
@@ -122,9 +103,7 @@ watch(
   },
 );
 
-function toggleExecution(executionId = "") {
-  const id = text(executionId);
-  if (!id) return;
+function toggleExecution(id) {
   const next = new Set(expandedExecutionIds.value);
   if (next.has(id)) next.delete(id);
   else next.add(id);
@@ -132,13 +111,11 @@ function toggleExecution(executionId = "") {
 }
 
 watch(
-  () => props.executionDirectory,
-  (items = []) => {
+  () => executionForest.value,
+  ({ executions, rootExecutionIds }) => {
     const next = new Set(expandedExecutionIds.value);
-    for (const item of items) {
-      const id = text(item?.executionId);
-      if (id && (id === props.selectedExecutionId || !item?.parentExecutionId)) next.add(id);
-    }
+    rootExecutionIds.forEach((id) => next.add(id));
+    if (Object.hasOwn(executions, props.selectedExecutionId)) next.add(props.selectedExecutionId);
     expandedExecutionIds.value = next;
   },
   { immediate: true, deep: true },
@@ -297,8 +274,8 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
                 >
                   {{ expandedExecutionIds.has(row.execution.executionId) ? "▾" : "▸" }}
                 </span>
-                {{ row.execution.executionKind || "agent" }} ·
-                {{ row.execution.stage || row.execution.state || "pending" }}
+                {{ row.execution.executionKind }} ·
+                {{ row.execution.state }}
               </button>
             </div>
           </div>
@@ -328,11 +305,11 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
                 <div class="workflow-runtime-state-title">
                   <span>{{ resolveStateBoxLabel(stateBox) }}</span>
                   <span class="workflow-runtime-state-count">
-                    {{ translate("workflow.stepCount", { count: (stateBox?.steps || []).length }) }}
+                    {{ translate("workflow.stepCount", { count: stateBox.steps.length }) }}
                   </span>
                 </div>
                 <button
-                  v-for="(stepItem, stepIndex) in stateBox?.steps || []"
+                  v-for="(stepItem, stepIndex) in stateBox.steps"
                   :key="stepItem.nodeExecutionId"
                   type="button"
                   class="workflow-runtime-step-box"
@@ -353,7 +330,7 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
                   }}</span>
                 </button>
                 <BaseEmptyHint
-                  v-if="!(stateBox?.steps || []).length"
+                  v-if="!stateBox.steps.length"
                   class="workflow-runtime-step-empty"
                   :text="translate('workflow.noStepBox')"
                 />
@@ -361,8 +338,8 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
             </div>
           </div>
           <AgentExecutionView
-            v-if="selectedRuntimeStep && (selectedExecutionId || selectedNodeSessionId)"
-            :execution-id="selectedExecutionId || selectedNodeSessionId"
+            v-if="selectedRuntimeStep && selectedExecutionId"
+            :execution-id="selectedExecutionId"
             channel-context="workflow-node"
             :messages="displayNodeMessages"
             :session-docs="selectedNodeSessionDocs"
@@ -384,6 +361,26 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
             "
             @open-thinking-details="$emit('open-thinking-details', $event)"
           />
+          <div
+            v-if="selectedRuntimeStep && !selectedExecutionId && selectedNodeSessionId"
+            class="workflow-node-session-messages"
+          >
+            <ChatMessageItem
+              v-for="message in displayNodeMessages"
+              :key="resolveMessageViewKey(message)"
+              :message-item="message"
+              :all-messages="displayNodeMessages"
+              :session-docs="selectedNodeSessionDocs"
+              :user-id="userId"
+              :render-markdown="renderMarkdown"
+              :format-time="formatTime"
+              :format-file-size="formatFileSize"
+              :is-image-mime="isImageMime"
+              :stop-execution="stopExecution"
+              :fetch-execution-report="fetchExecutionReport"
+              @open-thinking-details="$emit('open-thinking-details', $event)"
+            />
+          </div>
           <div
             v-if="selectedRuntimeStep && runningPlaceholderViewModel"
             class="workflow-node-running-placeholder"
@@ -407,10 +404,6 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
 </template>
 
 <style>
-.workflow-node-session-drawer {
-  --noobot-text-primary: var(--noobot-text-main);
-}
-
 .workflow-node-session-drawer__body {
   display: flex;
   flex-direction: column;
@@ -466,10 +459,10 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
   margin-bottom: var(--noobot-space-sm);
 }
 .workflow-execution-directory__stop {
-  border: 1px solid var(--el-color-danger);
+  border: 1px solid var(--noobot-status-error);
   border-radius: var(--noobot-radius-xs);
   padding: var(--noobot-space-2xs) var(--noobot-space-md);
-  color: var(--el-color-danger);
+  color: var(--noobot-status-error);
   background: transparent;
   cursor: pointer;
 }
@@ -478,7 +471,7 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
   cursor: not-allowed;
 }
 .workflow-execution-directory__stop-error {
-  color: var(--el-color-danger);
+  color: var(--noobot-status-error);
   font-size: var(--noobot-font-size-xs);
 }
 .workflow-execution-directory__group {
@@ -530,7 +523,7 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
   font-size: var(--noobot-font-size-md);
   font-weight: var(--noobot-font-weight-bold);
   line-height: var(--noobot-line-height-balanced);
-  color: var(--noobot-text-primary);
+  color: var(--noobot-text-main);
 }
 
 .workflow-runtime-panel-subtitle {
@@ -559,7 +552,7 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
   justify-content: space-between;
   gap: var(--noobot-space-md);
   margin-bottom: var(--noobot-space-sm);
-  color: var(--noobot-text-primary);
+  color: var(--noobot-text-main);
   font-size: var(--noobot-font-size-xs);
   font-weight: var(--noobot-font-weight-semibold);
 }
@@ -583,7 +576,7 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
   border: 1px solid color-mix(in srgb, var(--noobot-msg-assistant-border) 78%, transparent 22%);
   border-radius: var(--noobot-radius-xs);
   background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 96%, var(--noobot-base-black) 4%);
-  color: var(--noobot-text-primary);
+  color: var(--noobot-text-main);
   text-align: left;
   cursor: pointer;
   transition:
@@ -624,18 +617,18 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
 }
 
 .workflow-runtime-step-box.succeeded .workflow-runtime-step-status {
-  color: color-mix(in srgb, var(--noobot-status-success) 78%, var(--noobot-text-primary) 22%);
+  color: color-mix(in srgb, var(--noobot-status-success) 78%, var(--noobot-text-main) 22%);
   background: color-mix(in srgb, var(--noobot-status-success) 14%, transparent 86%);
 }
 
 .workflow-runtime-step-box.failed .workflow-runtime-step-status,
 .workflow-runtime-step-box.stopped .workflow-runtime-step-status {
-  color: color-mix(in srgb, var(--noobot-status-error) 82%, var(--noobot-text-primary) 18%);
+  color: color-mix(in srgb, var(--noobot-status-error) 82%, var(--noobot-text-main) 18%);
   background: color-mix(in srgb, var(--noobot-status-error) 12%, transparent);
 }
 
 .workflow-runtime-step-box.running .workflow-runtime-step-status {
-  color: color-mix(in srgb, var(--noobot-status-running) 82%, var(--noobot-text-primary) 18%);
+  color: color-mix(in srgb, var(--noobot-status-running) 82%, var(--noobot-text-main) 18%);
   background: color-mix(in srgb, var(--noobot-status-running) 12%, transparent);
 }
 

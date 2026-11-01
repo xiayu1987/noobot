@@ -6,7 +6,7 @@
 
 import { assertTurnSummaryCheckpoints } from "@noobot/context-protocol/policy/summary";
 import { normalizeTurnLifecycleEntity } from "@noobot/authoritative-state/domain";
-import { validateProtocolEvent } from "@noobot/event-protocol";
+import { assertSessionArtifactEvents } from "@noobot/event-protocol";
 import {
   assertSessionAggregateInvariants,
   assertSessionAggregateShape,
@@ -23,29 +23,6 @@ import { normalizeSessionTree } from "@noobot/workspace-protocol/session-tree";
 import { objectRecord } from "./entity-primitives.js";
 import { normalizeMessagesEntity } from "./message-entity.js";
 import { firstText, text } from "@noobot/shared/value";
-
-function normalizeSessionArtifactEvents(session = {}, sessionId = "") {
-  const events = [];
-  const eventIds = new Set();
-  for (const envelope of Array.isArray(session?.sessionArtifactEvents)
-    ? session.sessionArtifactEvents
-    : []) {
-    const validation = validateProtocolEvent(envelope);
-    const eventId = text(envelope?.identity?.eventId);
-    if (
-      !validation.valid ||
-      !validation.descriptor?.sessionArtifact ||
-      (sessionId && text(envelope?.identity?.sessionId) !== sessionId) ||
-      !eventId ||
-      eventIds.has(eventId)
-    ) {
-      continue;
-    }
-    eventIds.add(eventId);
-    events.push(envelope);
-  }
-  return events;
-}
 
 function normalizeTurnTimingsEntity(turnTimings) {
   const byKey = new Map();
@@ -87,7 +64,10 @@ function createNormalizedSessionEntity(session, context, messages) {
     dialogOrder: normalizeDialogOrderEntity(session.dialogOrder),
     turnTimings: normalizeTurnTimingsEntity(session.turnTimings),
     turnLifecycle: normalizeTurnLifecycleEntity(session.turnLifecycle),
-    sessionArtifactEvents: normalizeSessionArtifactEvents(session, session.sessionId),
+    sessionArtifactEvents: assertSessionArtifactEvents(
+      session.sessionArtifactEvents,
+      session.sessionId,
+    ),
     selectedConnectorIds: normalizeSelectedConnectorIds(session?.selectedConnectorIds),
     createdAt: firstText(session?.createdAt, context.nowValue),
     updatedAt: firstText(session?.updatedAt, context.nowValue),

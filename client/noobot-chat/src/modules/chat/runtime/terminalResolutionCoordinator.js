@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { resolveTurnTerminalStateApi } from "../../../infrastructure/api/chat/chatApi.js";
-import { isTerminalTurnEvent } from "@noobot/session-protocol";
+import { isTerminalTurnEvent, validateTurnTerminalResolution } from "@noobot/session-protocol";
 import { SESSION_RUN_EVENT } from "./run-state-machine/constants.js";
 import { terminalResolutionMetadata } from "./terminalResolutionMetadata.js";
 import { text as clean, requireFunctionDependencies } from "@noobot/shared/value";
@@ -111,7 +111,6 @@ export function createTerminalResolutionCoordinator({
         targetVersion: {},
         resolvedVersion: null,
         resolvedResult: null,
-        resolvedResponse: null,
         exhaustedVersion: null,
         exhaustedResult: null,
         cooldownUntil: 0,
@@ -130,11 +129,6 @@ export function createTerminalResolutionCoordinator({
     const comparison = compareVersion(requestedVersion, entry.resolvedVersion || {});
     if (!entry.resolvedResult || comparison === null || comparison > 0) return null;
     const cached = entry.resolvedResult;
-    if (cached.applied !== true && cached.retryable === true && entry.resolvedResponse) {
-      const reapplied = applyTurnTerminalResolution(entry.resolvedResponse);
-      entry.resolvedResult = reapplied;
-      return Promise.resolve(reapplied);
-    }
     traceCache(identity, "resolved", {
       applied: cached?.applied === true,
       reason: cached?.reason || "",
@@ -239,8 +233,8 @@ export function createTerminalResolutionCoordinator({
         resolved: response?.resolved === true,
         retryable: response?.retryable === true,
         reason: response?.reason || "",
-        revision: Number(turn?.revision || response?.revision || 0),
-        sequence: Number(turn?.sequence || response?.sequence || 0),
+        revision: turn?.revision ?? null,
+        sequence: turn?.sequence ?? null,
         terminalState: turn?.state || "",
         responseSessionId: clean(response?.sessionId),
         responseTurnScopeId: clean(response?.turnScopeId),
@@ -267,7 +261,6 @@ export function createTerminalResolutionCoordinator({
       if (generation !== entry.generation) return result;
       entry.resolvedVersion = versionOf(response.turn);
       entry.resolvedResult = result;
-      entry.resolvedResponse = response;
       entry.exhaustedVersion = null;
       entry.exhaustedResult = null;
       if (result.applied !== true) return result;
@@ -295,10 +288,20 @@ export function createTerminalResolutionCoordinator({
     const settleUnresolved = (response) => {
       const result = {
         applied: false,
-        reason: response?.reason || "terminal_unresolved",
+        reason: response.reason,
         response,
       };
-      if (response?.retryable !== true || retry >= maxRetries) {
+      if (response.retryable !== true || retry >= maxRetries) {
+        entry.exhaustedVersion = { ...entry.targetVersion };
+        entry.exhaustedResult = result;
+      }
+      return result;
+    };
+
+    const settleInvalidResponse = (response, errors) => {
+      const result = { applied: false, reason: "invalid_terminal_resolution", errors, response };
+      trace("stateMachine.terminal.fetch.invalid", { ...identity, errors });
+      if (generation === entry.generation) {
         entry.exhaustedVersion = { ...entry.targetVersion };
         entry.exhaustedResult = result;
       }
@@ -307,9 +310,11 @@ export function createTerminalResolutionCoordinator({
 
     const settleResponse = (response) => {
       traceFetchResult(response);
-      if (response?.resolved === true) return settleResolvedResponse(response);
+      const validation = validateTurnTerminalResolution(response);
+      if (!validation.valid) return settleInvalidResponse(response, validation.errors);
+      if (response.resolved === true) return settleResolvedResponse(response);
       onUnresolved({ ...identity, response, retry });
-      if (response?.retryable === true && retry < maxRetries && !disposed) {
+      if (response.retryable === true && retry < maxRetries && !disposed) {
         return scheduleRetry(response);
       }
       return settleUnresolved(response);

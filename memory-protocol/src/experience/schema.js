@@ -17,6 +17,7 @@ const {
 
 const DOCUMENT_TIME_LABEL = "时间";
 const DOCUMENT_EMPTY_VALUE = "（无）";
+export const EXPERIENCE_DOCUMENT_EXTENSION = ".md";
 
 const STAGE_STRUCTURE = Object.freeze({
   daily: Object.freeze({
@@ -28,6 +29,7 @@ const STAGE_STRUCTURE = Object.freeze({
       new: NEW_DOMAIN_FIELD,
     }),
     requiredFields: Object.freeze(["domain"]),
+    documentPathFields: Object.freeze(["domain"]),
   }),
   weekly: Object.freeze({
     documentKind: MEMORY_DOCUMENT_KIND.WEEKLY_SUMMARY,
@@ -35,6 +37,7 @@ const STAGE_STRUCTURE = Object.freeze({
     parseErrorCode: "weekly_patch_command_not_found",
     structureFields: Object.freeze({ category: CATEGORY_FIELD }),
     requiredFields: Object.freeze(["category"]),
+    documentPathFields: Object.freeze(["domain", "category"]),
     sourceLabel: "来源日期",
   }),
   monthly: Object.freeze({
@@ -47,6 +50,7 @@ const STAGE_STRUCTURE = Object.freeze({
     }),
     requiredFields: Object.freeze(["category", "subcategory"]),
     hasSubcategory: true,
+    documentPathFields: Object.freeze(["domain", "category", "subcategory"]),
     sourceLabel: "来源周",
   }),
   yearly: Object.freeze({
@@ -59,6 +63,7 @@ const STAGE_STRUCTURE = Object.freeze({
     }),
     requiredFields: Object.freeze(["category", "subcategory"]),
     hasSubcategory: true,
+    documentPathFields: Object.freeze(["domain", "category", "subcategory"]),
     sourceLabel: "来源月",
   }),
 });
@@ -98,6 +103,17 @@ export const EXPERIENCE_PATCH_SCHEMA = Object.freeze(
     Object.keys(STAGE_STRUCTURE).map((stage) => [stage, buildExperiencePatchSchema(stage)]),
   ),
 );
+
+export function resolveExperienceDocumentSegments(stage, values) {
+  const { documentPathFields } = requireStructure(stage);
+  const segments = documentPathFields.map((field) => {
+    const value = text(values[field]);
+    if (!value) throw new Error(`experience ${stage} document path requires ${field}`);
+    return value;
+  });
+  segments[segments.length - 1] += EXPERIENCE_DOCUMENT_EXTENSION;
+  return segments;
+}
 
 const DEFAULT_PROMPT_LABELS = Object.freeze({
   id: "integer",

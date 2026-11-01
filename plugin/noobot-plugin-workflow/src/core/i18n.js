@@ -4,13 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { resolveWorkflowAgentContext, resolveWorkflowRuntimeFromContext } from "./hooks/runtime.js";
+import {
+  PREFERENCE_LANGUAGE as WORKFLOW_LOCALE,
+  requireRunLocale,
+} from "@noobot/agent-config-protocol";
 import { text } from "@noobot/shared/value";
-
-const WORKFLOW_LOCALE = Object.freeze({
-  ZH_CN: "zh-CN",
-  EN_US: "en-US",
-});
 
 export const WORKFLOW_I18N_KEYSET = Object.freeze({
   COMMON: Object.freeze({
@@ -274,29 +272,13 @@ const DEFAULT_SEMANTIC_PROMPT_BY_LOCALE = Object.freeze({
   ].join("\n"),
 });
 
-export function normalizeWorkflowLocale(locale = "") {
+function normalizeWorkflowLocale(locale = "") {
   const value = text(locale).toLowerCase();
   return value.startsWith("en") ? WORKFLOW_LOCALE.EN_US : WORKFLOW_LOCALE.ZH_CN;
 }
 
-export function resolveWorkflowLocaleFromContext(ctx = {}, fallbackLocale = WORKFLOW_LOCALE.ZH_CN) {
-  const agentContext = resolveWorkflowAgentContext(ctx);
-  const runtime =
-    resolveWorkflowRuntimeFromContext({
-      ...ctx,
-      agentContext: agentContext || ctx?.agentContext || null,
-    }) || {};
-  const localeCandidates = [
-    ctx?.runConfig?.locale,
-    ctx?.locale,
-    agentContext?.runConfig?.locale,
-    runtime?.systemRuntime?.config?.locale,
-    runtime?.userConfig?.locale,
-    runtime?.globalConfig?.locale,
-    fallbackLocale,
-  ];
-  const first = localeCandidates.map((item) => text(item)).find(Boolean);
-  return normalizeWorkflowLocale(first || fallbackLocale);
+export function resolveWorkflowLocaleFromContext(ctx) {
+  return requireRunLocale(ctx?.runConfig);
 }
 
 export function tWorkflow(locale = WORKFLOW_LOCALE.ZH_CN, key = "", params = {}) {

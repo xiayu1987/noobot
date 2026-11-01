@@ -5,6 +5,7 @@
   "type": "module",
   "description": "Canonical Noobot session aggregate, command, event and policy protocol",
   "exports": {
+    "./runtime-event": "./src/runtime-event.js",
     ".": "./src/index.js",
     "./turn-lifecycle": "./src/turn-lifecycle.js",
     "./summary-checkpoint-storage": "./src/aggregate/summary-checkpoint-storage.js",

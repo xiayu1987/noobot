@@ -29,102 +29,79 @@ function isIdentifierChar(char) {
   return /[\w$]/.test(char);
 }
 
+function consumeNonCode(cursor, char, next) {
+  if (cursor.state === "blockComment") {
+    if (char === "*" && next === "/") {
+      cursor.index += 1;
+      cursor.column += 1;
+      cursor.state = "code";
+    }
+    return true;
+  }
+  if (cursor.state === "lineComment") return true;
+  if (cursor.state !== "string" && cursor.state !== "template") return false;
+  if (char === "\\") {
+    cursor.index += 1;
+    cursor.column += 1;
+    return true;
+  }
+  if (char === cursor.quote) {
+    cursor.state = "code";
+    cursor.quote = "";
+  }
+  return true;
+}
+
+function openNonCode(cursor, char, next) {
+  if (char === "/" && (next === "*" || next === "/")) {
+    cursor.index += 1;
+    cursor.column += 1;
+    cursor.state = next === "*" ? "blockComment" : "lineComment";
+    return true;
+  }
+  if (char !== '"' && char !== "'" && char !== "`") return false;
+  cursor.state = char === "`" ? "template" : "string";
+  cursor.quote = char;
+  return true;
+}
+
+function consumeToken(cursor, text, matches) {
+  const start = cursor.index;
+  let end = start + 1;
+  while (end < text.length && matches(text[end])) end += 1;
+  cursor.column += end - start - 1;
+  cursor.index = end - 1;
+  return text.slice(start, end);
+}
+
+function advanceLine(cursor) {
+  cursor.line += 1;
+  cursor.column = 0;
+  if (cursor.state === "lineComment") cursor.state = "code";
+}
+
 export function scanCodeTokens(file, text) {
   const violations = [];
-  let state = "code";
-  let quote = "";
-  let line = 1;
-  let column = 0;
-
-  for (let index = 0; index < text.length; index += 1) {
-    const char = text[index];
-    const next = text[index + 1];
-    column += 1;
-
+  const cursor = { state: "code", quote: "", line: 1, column: 0, index: 0 };
+  for (; cursor.index < text.length; cursor.index += 1) {
+    const char = text[cursor.index];
+    const next = text[cursor.index + 1];
+    cursor.column += 1;
     if (char === "\n") {
-      line += 1;
-      column = 0;
-      if (state === "lineComment") state = "code";
+      advanceLine(cursor);
       continue;
     }
-
-    if (state === "blockComment") {
-      if (char === "*" && next === "/") {
-        index += 1;
-        column += 1;
-        state = "code";
-      }
-      continue;
-    }
-
-    if (state === "lineComment") continue;
-
-    if (state === "string") {
-      if (char === "\\") {
-        index += 1;
-        column += 1;
-        continue;
-      }
-      if (char === quote) {
-        state = "code";
-        quote = "";
-      }
-      continue;
-    }
-
-    if (state === "template") {
-      if (char === "\\") {
-        index += 1;
-        column += 1;
-        continue;
-      }
-      if (char === "`") state = "code";
-      continue;
-    }
-
-    if (char === "/" && next === "*") {
-      index += 1;
-      column += 1;
-      state = "blockComment";
-      continue;
-    }
-    if (char === "/" && next === "/") {
-      index += 1;
-      column += 1;
-      state = "lineComment";
-      continue;
-    }
-    if (char === '"' || char === "'") {
-      state = "string";
-      quote = char;
-      continue;
-    }
-    if (char === "`") {
-      state = "template";
-      continue;
-    }
-
+    if (consumeNonCode(cursor, char, next) || openNonCode(cursor, char, next)) continue;
     if (isIdentifierStart(char)) {
-      let end = index + 1;
-      while (end < text.length && isIdentifierChar(text[end])) end += 1;
-      column += end - index - 1;
-      index = end - 1;
+      consumeToken(cursor, text, isIdentifierChar);
       continue;
     }
-
     if (!isDigit(char)) continue;
-
-    const tokenLine = line;
-    const tokenColumn = column;
-    const start = index;
-    let end = index + 1;
-    while (end < text.length && isTokenChar(text[end])) end += 1;
-    const token = text.slice(start, end);
+    const { line, column } = cursor;
+    const token = consumeToken(cursor, text, isTokenChar);
     if (/\d_\d/.test(token)) {
-      violations.push({ file, line: tokenLine, column: tokenColumn, token });
+      violations.push({ file, line, column, token });
     }
-    column += end - index - 1;
-    index = end - 1;
   }
 
   return violations;

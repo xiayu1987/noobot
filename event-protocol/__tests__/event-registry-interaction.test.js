@@ -112,6 +112,7 @@ test("protocol payload reader validates wire identity and returns the canonical 
   const payload = createTurnLifecycleEnvelope({
     eventType: TURN_EVENT.PROCESSING_STARTED,
     eventId: "event-1",
+    updatedAt: "2026-01-01T00:00:00.000Z",
     commandId: "command-1",
     sessionId: "session-1",
     turnScopeId: "turn-1",
@@ -154,6 +155,7 @@ test("event family declares the exact reducer input projection", () => {
   const turnPayload = createTurnLifecycleEnvelope({
     eventType: TURN_EVENT.PROCESSING_STARTED,
     eventId: "event-reducer-1",
+    updatedAt: "2026-01-01T00:00:00.000Z",
     commandId: "command-reducer-1",
     sessionId: "session-reducer-1",
     turnScopeId: "turn-reducer-1",
@@ -171,7 +173,7 @@ test("event family declares the exact reducer input projection", () => {
 
   assert.equal(readProtocolEventReducerInput(turnEnvelope).input, turnPayload);
   assert.equal(projectProtocolEventReducerInput(turnEnvelope), turnPayload);
-  assert.equal(getEventFamily(EVENT_FAMILY.ATTACHMENT_LIFECYCLE).reducerInput, "payload");
+  assert.equal(getEventFamily(EVENT_FAMILY.ATTACHMENT_LIFECYCLE).reducerInput, "envelope");
   assert.equal(getEventFamily(EVENT_FAMILY.INTERACTION_REQUEST).reducerInput, "identity_payload");
   assert.equal(getEventFamily(EVENT_FAMILY.MESSAGE_TIMELINE).reducerInput, "envelope");
   assert.equal(getEventFamily(EVENT_FAMILY.WORKFLOW_RUNTIME).reducerInput, "envelope");
@@ -324,6 +326,7 @@ test("turn lifecycle envelope causality must equal the payload causality", () =>
   const payload = createTurnLifecycleEnvelope({
     eventType: TURN_EVENT.PROCESSING_STARTED,
     eventId: "event-causality-1",
+    updatedAt: "2026-01-01T00:00:00.000Z",
     commandId: "command-causality-1",
     causationId: "cause-causality-1",
     correlationId: "turn-causality-1",

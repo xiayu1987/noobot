@@ -47,6 +47,8 @@ function planningNode(overrides = {}) {
     workflowRunId: "workflow-run-a",
     nodeExecutionId: "node-exec-a",
     commandId: "cmd-a",
+    activeChildExecutionId: "agent-a",
+    attemptExecutionIds: [],
     nodeSessionId: "child-session-a",
     dialogProcessId: "wf_node_node-exec-a",
     turnScopeId: "workflow-node:node-exec-a",
@@ -161,6 +163,7 @@ describe("useChatStore workflow node state registry", () => {
 
     const accepted = store.applyTurnLifecycleEnvelope(
       createTurnLifecycleEnvelope({
+        updatedAt: "2026-01-01T00:00:00.000Z",
         eventType: "turn.action_accepted",
         eventId: "authority-child-accepted",
         commandId: "authority-child-command",
@@ -182,6 +185,7 @@ describe("useChatStore workflow node state registry", () => {
     );
     const processing = store.applyTurnLifecycleEnvelope(
       createTurnLifecycleEnvelope({
+        updatedAt: "2026-01-01T00:00:00.000Z",
         eventType: "turn.processing_started",
         eventId: "authority-child-processing",
         commandId: "authority-child-command",

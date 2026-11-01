@@ -14,6 +14,9 @@ import {
   SESSION_ARTIFACT_PANEL_CONTEXT_FIELDS,
   createSessionArtifactPanelContext,
   requireMessageCardHostCapabilities,
+  requireRuntimeStreamRouteContext,
+  requireSelectedExecutionDetail,
+  requireSelectedSessionDocument,
 } from "../src/frontend.js";
 
 function completeContext() {
@@ -23,6 +26,117 @@ function completeContext() {
     [MESSAGE_CARD_HOST_STATE_VERSION]: 0,
   };
 }
+
+function executionDetail() {
+  return {
+    execution: { executionId: "execution-a", sessionId: "child-a", turnScopeId: "turn-a" },
+    session: { sessionId: "child-a", messages: [] },
+    children: [],
+    descendants: [],
+  };
+}
+
+test("selector results preserve unavailable null and loaded empty documents without copying", () => {
+  const target = { executionId: "execution-a", sessionId: "child-a" };
+  assert.equal(requireSelectedExecutionDetail(null, target), null);
+  assert.equal(requireSelectedSessionDocument(null, target.sessionId), null);
+  const detail = executionDetail();
+  assert.equal(requireSelectedExecutionDetail(detail, target), detail);
+  assert.equal(requireSelectedSessionDocument(detail.session, target.sessionId), detail.session);
+});
+
+test("session selector rejects malformed results instead of treating them as unloaded", () => {
+  for (const document of [
+    undefined,
+    false,
+    [],
+    {},
+    { sessionId: "other", messages: [] },
+    { sessionId: "child-a" },
+    { sessionId: "child-a", messages: null },
+  ]) {
+    assert.throws(() => requireSelectedSessionDocument(document, "child-a"), TypeError);
+  }
+});
+
+test("execution selector rejects missing facts, conflicting identity and malformed arrays", () => {
+  const target = { executionId: "execution-a", sessionId: "child-a" };
+  for (const field of ["executionId", "sessionId", "turnScopeId"]) {
+    const detail = executionDetail();
+    delete detail.execution[field];
+    assert.throws(() => requireSelectedExecutionDetail(detail, target), TypeError);
+  }
+  for (const field of ["children", "descendants"]) {
+    for (const value of [undefined, null, {}]) {
+      const detail = { ...executionDetail(), [field]: value };
+      assert.throws(() => requireSelectedExecutionDetail(detail, target), TypeError);
+    }
+  }
+  for (const detail of [
+    undefined,
+    false,
+    [],
+    {},
+    { ...executionDetail(), session: null },
+    { ...executionDetail(), session: { sessionId: "root", messages: [] } },
+  ]) {
+    assert.throws(() => requireSelectedExecutionDetail(detail, target), TypeError);
+  }
+  assert.throws(
+    () =>
+      requireSelectedExecutionDetail(executionDetail(), {
+        ...target,
+        executionId: "another-execution",
+      }),
+    TypeError,
+  );
+  assert.throws(
+    () =>
+      requireSelectedExecutionDetail(executionDetail(), {
+        ...target,
+        sessionId: "root",
+      }),
+    /belongs to another session/,
+  );
+});
+
+test("execution selector preserves ordered records and rejects damaged or duplicate list identities", () => {
+  const root = executionDetail();
+  const child = Object.freeze({
+    executionId: "execution-child",
+    sessionId: "child-session",
+    turnScopeId: "child-turn",
+  });
+  const grandchild = Object.freeze({
+    executionId: "execution-grandchild",
+    sessionId: "grandchild-session",
+    turnScopeId: "grandchild-turn",
+  });
+  const detail = Object.freeze({
+    ...root,
+    children: Object.freeze([child]),
+    descendants: Object.freeze([child, grandchild]),
+  });
+  const target = { executionId: root.execution.executionId };
+  assert.equal(requireSelectedExecutionDetail(detail, target), detail);
+  assert.equal(detail.children[0], detail.descendants[0]);
+  for (const field of ["children", "descendants"]) {
+    for (const value of [
+      [null],
+      [{}],
+      [{ ...child, executionId: " execution-child" }],
+      [{ ...child, sessionId: "" }],
+      [{ ...child, turnScopeId: undefined }],
+      [child, child],
+      [root.execution],
+    ]) {
+      assert.throws(
+        () => requireSelectedExecutionDetail({ ...detail, [field]: value }, target),
+        /selected execution list/,
+      );
+    }
+  }
+});
 
 function assertMissing(context, name) {
   assert.throws(
@@ -111,5 +225,46 @@ test("session artifact panel context rejects invalid fields", () => {
         error.code === EXTENSION_CONTEXT_ERROR_CODE.INVALID &&
         error.message.endsWith(field),
     );
+  }
+});
+
+test("runtime stream context preserves live capabilities and optional diagnostics", () => {
+  for (const source of ["live", "reconnect"]) {
+    let activeSessionId = "session-1";
+    const context = {
+      source,
+      isCurrentActiveSession: (sessionId) => sessionId === activeSessionId,
+    };
+    assert.equal(requireRuntimeStreamRouteContext(context), context);
+    assert.equal(context.isCurrentActiveSession(activeSessionId), true);
+    activeSessionId = "session-2";
+    assert.equal(context.isCurrentActiveSession("session-1"), false);
+    const withDiagnostics = { ...context, logRuntimeProjectionDiagnostics: () => {} };
+    assert.equal(requireRuntimeStreamRouteContext(withDiagnostics), withDiagnostics);
+  }
+});
+
+test("runtime stream context rejects malformed source and capability contracts", () => {
+  const valid = { source: "live", isCurrentActiveSession: () => true };
+  for (const [field, value] of [
+    ["source", undefined],
+    ["source", " live "],
+    ["source", "unknown"],
+    ["isCurrentActiveSession", undefined],
+    ["isCurrentActiveSession", null],
+    ["isCurrentActiveSession", true],
+    ["logRuntimeProjectionDiagnostics", null],
+    ["logRuntimeProjectionDiagnostics", "logger"],
+  ]) {
+    assert.throws(
+      () => requireRuntimeStreamRouteContext({ ...valid, [field]: value }),
+      (error) =>
+        error.code === EXTENSION_CONTEXT_ERROR_CODE.INVALID && error.message.endsWith(field),
+    );
+  }
+  for (const value of [undefined, null, [], "context"]) {
+    assert.throws(() => requireRuntimeStreamRouteContext(value), {
+      code: EXTENSION_CONTEXT_ERROR_CODE.INVALID,
+    });
   }
 });

@@ -20,6 +20,7 @@ import {
 import { text } from "@noobot/shared/value";
 import { createAcceptedAgentExecution } from "../helpers/accepted-run-identity.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
+import { requiredSessionReads } from "../helpers/session-repo-required-reads.js";
 
 const now = () => "2026-07-18T00:00:00.000Z";
 
@@ -52,6 +53,7 @@ function harness(initial = {}) {
     async locateSessionScope() {
       return { resolvedParentSessionId: "", sessionDir };
     },
+    ...requiredSessionReads,
     async findById() {
       return normalizeSessionEntity(structuredClone(persisted), { now });
     },
@@ -123,6 +125,7 @@ function newSessionHarness() {
         { now },
       );
     },
+    ...requiredSessionReads,
     async findById() {
       return persisted ? normalizeSessionEntity(structuredClone(persisted), { now }) : null;
     },

@@ -197,6 +197,7 @@ button:disabled {
   min-width: 0;
   padding: var(--noobot-space-2xs) var(--noobot-space-xs);
   border: 1px solid var(--noobot-panel-border);
+  border-radius: var(--noobot-radius-xs);
   background: var(--noobot-control-bg);
 }
 .character-animation-card__diagnostic-row > strong {

@@ -126,7 +126,7 @@ describe("useChatEngine.resend replace turn", () => {
       });
     });
     const applySessionDetail = applyMainEntryMessages(() => activeSession);
-    const { engine, activeSession, input, appendMessage, sending, canStop, activeTurnRuntime } =
+    const { engine, activeSession, input, deps, sending, canStop, activeTurnRuntime } =
       createHarness({
         sessionId: "local-resend-replace-success",
         stream,
@@ -176,14 +176,10 @@ describe("useChatEngine.resend replace turn", () => {
     expect(activeTurnRuntime.value.state).toBe(FrontendRunState.PROCESSING);
     expect(activeTurnRuntime.value.backendState).toBe(AGENT_CHANNEL_STATE.SENDING);
     expect(activeTurnRuntime.value.turnScopeId).toBeTruthy();
-    expect(appendMessage).toHaveBeenCalledTimes(1);
-    expect(appendMessage).not.toHaveBeenCalledWith(RoleEnum.USER, "edited question", []);
-    expect(appendMessage).toHaveBeenCalledWith(
-      RoleEnum.ASSISTANT,
-      "",
-      [],
+    expect(deps.upsertCanonicalAssistantMessage).toHaveBeenCalledTimes(1);
+    expect(deps.upsertCanonicalAssistantMessage).toHaveBeenCalledWith(
+      expect.stringMatching(/^pm_/),
       expect.objectContaining({
-        presentationMessageId: expect.stringMatching(/^pm_/),
         sessionId: "local-resend-replace-success",
         turnScopeId: expect.stringMatching(/^client-turn:/),
       }),
@@ -206,6 +202,11 @@ describe("useChatEngine.resend replace turn", () => {
         message.role === RoleEnum.ASSISTANT && /^pm_/.test(message.presentationMessageId),
     );
     expect(canonicalAssistantIndex).toBeGreaterThan(replacementUserIndex);
+    expect(activeSession.value.messages[canonicalAssistantIndex]).toMatchObject({
+      sessionId: "local-resend-replace-success",
+      role: RoleEnum.ASSISTANT,
+      attachments: [],
+    });
     expect(activeSession.value.messages[canonicalAssistantIndex]).not.toHaveProperty(
       "turnPlaceholder",
     );

@@ -76,6 +76,7 @@ function lifecycle(turn, eventType, revision, { phase = TURN_EVENT_PHASE[eventTy
     state: deriveTurnState(eventType, phase),
     executionId: "ex-1",
     occurredAt: OCCURRED_AT,
+    updatedAt: OCCURRED_AT,
     ...completion,
   });
   return {

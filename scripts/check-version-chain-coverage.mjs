@@ -43,22 +43,26 @@ async function loadChain(file, name) {
   return (await import(pathToFileURL(path.join(repositoryRoot, file))))[name];
 }
 
-export async function measureVersionChains(measured, { sources, tests, load = loadChain }) {
-  for (const { file, source } of sources) {
-    for (const match of source.matchAll(CHAIN_EXPORT)) {
-      const chain = await load(file, match[1]);
-      const covering = testsImporting(tests, file);
-      for (const from of chain.byFrom.keys()) {
-        const sample = new RegExp(String.raw`\bversion:\s*${from}\b`);
-        if (!covering.some(({ source: testSource }) => sample.test(testSource))) {
-          addHit(measured.uncoveredChainStep, {
-            file,
-            message: `${chain.kind} v${from}->v${from + 1} has no version: ${from} sample in a test importing ${path.posix.basename(file)}`,
-          });
-        }
-      }
-    }
+function measureChainSteps(measured, { file, chain, covering }) {
+  for (const from of chain.byFrom.keys()) {
+    const sample = new RegExp(String.raw`\bversion:\s*${from}\b`);
+    if (covering.some(({ source }) => sample.test(source))) continue;
+    addHit(measured.uncoveredChainStep, {
+      file,
+      message: `${chain.kind} v${from}->v${from + 1} has no version: ${from} sample in a test importing ${path.posix.basename(file)}`,
+    });
   }
+}
+
+async function measureSourceChains(measured, { file, source }, { tests, load }) {
+  for (const match of source.matchAll(CHAIN_EXPORT)) {
+    const chain = await load(file, match[1]);
+    measureChainSteps(measured, { file, chain, covering: testsImporting(tests, file) });
+  }
+}
+
+export async function measureVersionChains(measured, { sources, tests, load = loadChain }) {
+  for (const entry of sources) await measureSourceChains(measured, entry, { tests, load });
 }
 
 export function measureLayoutSequence(

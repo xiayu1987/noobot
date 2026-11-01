@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { turnRecordFixture } from "../helpers/turnRecordFixture.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { nextTick } from "vue";
@@ -55,7 +56,7 @@ function settleStopped(store, session) {
       turnScopeId,
       resolved: true,
       aggregateVersion: Number(session.aggregateVersion || 0),
-      turn: {
+      turn: turnRecordFixture({
         continuedByTurnScopeId: "",
         sessionId,
         turnScopeId,
@@ -72,7 +73,7 @@ function settleStopped(store, session) {
           turnScopeId,
           dialogProcessId: assistant.dialogProcessId,
         }),
-      },
+      }),
     }),
   );
 }

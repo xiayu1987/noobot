@@ -205,13 +205,7 @@ function handleClick(nodeItem = {}, clickable = true) {
   word-break: break-word;
 }
 
-.workflow-node-parallel {
-  margin-top: var(--noobot-space-3xs);
-  font-size: var(--noobot-font-size-xs);
-  color: color-mix(in srgb, var(--noobot-accent) 82%, var(--noobot-text-secondary) 18%);
-  line-height: var(--noobot-line-height-compact);
-}
-
+.workflow-node-parallel,
 .workflow-node-runtime-hint {
   margin-top: var(--noobot-space-3xs);
   font-size: var(--noobot-font-size-xs);

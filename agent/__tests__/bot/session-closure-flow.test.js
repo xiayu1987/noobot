@@ -65,7 +65,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
     },
     async appendTurns(payload = {}) {
       persistedTurns.push(...payload.turns);
-      return { appended: true, reason: "", turns: payload.turns };
+      return { turns: payload.turns };
     },
     async upsertTurnTiming() {},
     async getTurnSummaryCheckpointState({ dialogProcessId, turnScopeId }) {
@@ -443,7 +443,7 @@ test("continue mode closed-loop: should build continue context and persist paren
     async appendTurns(payload = {}) {
       persistedBatches.push(payload);
       persistedTurns.push(...payload.turns);
-      return { appended: true, reason: "", turns: payload.turns };
+      return { turns: payload.turns };
     },
     async upsertTurnTiming() {},
     async getTurnSummaryCheckpointState({ dialogProcessId, turnScopeId }) {

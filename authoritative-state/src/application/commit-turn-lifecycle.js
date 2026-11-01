@@ -10,10 +10,11 @@ import {
   createTurnTerminalStatus,
   deriveAuthoritativeTurnCapabilities,
   isSettlingTurnEvent,
+  validateTurnLifecycleRequest,
 } from "@noobot/session-protocol";
 import { createTurnLifecycleEventEnvelope } from "@noobot/event-protocol";
 import { transitionTurnLifecycle } from "../domain/turn-lifecycle-entity.js";
-import { text as clean } from "@noobot/shared/value";
+import { isCanonicalText } from "@noobot/shared/value";
 
 export function createCommittedTurnLifecycleEnvelope({ event, turn, eventId, parentSessionId }) {
   const payload = createTurnLifecycleEnvelope({
@@ -67,6 +68,10 @@ export function commitTurnLifecycle({
   now = () => new Date().toISOString(),
 } = {}) {
   assertTurnLifecycleRecordIntegrity(lifecycle);
+  const requestFailure = validateTurnLifecycleRequest(event);
+  if (requestFailure) return { applied: false, reason: requestFailure, lifecycle };
+  if (Object.hasOwn(event, "eventId") && !isCanonicalText(event.eventId))
+    return { applied: false, reason: "invalid_event_id", lifecycle };
   let lifecycleEvent = event;
   let terminalMaterialization = null;
   const requestedTerminal =
@@ -85,34 +90,13 @@ export function commitTurnLifecycle({
       ...terminalPayload,
       turnScopeId: event.turnScopeId,
       dialogProcessId: settlingTurn.dialogProcessId,
-      updatedAt: clean(event.finishedAt) || now(),
+      updatedAt: event.finishedAt || now(),
     });
     if (!terminalStatus)
       return { applied: false, reason: "invalid_turn_terminal_status", lifecycle };
-    if (typeof materializeTerminal !== "function") {
-      return { applied: false, reason: "terminal_materializer_unavailable", lifecycle };
-    }
-    terminalMaterialization = materializeTerminal({
-      event,
-      terminalStatus,
-      previousSummaryVersion: settlingTurn.summaryVersion,
-    });
-    if (
-      !terminalMaterialization?.materialized ||
-      terminalMaterialization.terminalStatus !== terminalStatus ||
-      !Array.isArray(terminalMaterialization.messages) ||
-      !Number.isInteger(Number(terminalMaterialization.summaryVersion)) ||
-      Number(terminalMaterialization.summaryVersion) < 1
-    ) {
-      return {
-        applied: false,
-        reason: terminalMaterialization?.reason || "terminal_materialization_failed",
-        lifecycle,
-      };
-    }
     lifecycleEvent = {
       ...event,
-      summaryVersion: Number(terminalMaterialization.summaryVersion),
+      summaryVersion: settlingTurn.summaryVersion + 1,
       terminalStatus,
     };
   }
@@ -127,11 +111,19 @@ export function commitTurnLifecycle({
     };
   }
 
+  if (requestedTerminal && typeof materializeTerminal !== "function") {
+    return { applied: false, reason: "terminal_materializer_unavailable", lifecycle };
+  }
+
   const { receiptDraft, ...applied } = transition;
   const turn = applied.turn;
-  const eventId =
-    clean(event.eventId) || clean(typeof createEventId === "function" ? createEventId() : "");
-  if (!eventId) return { applied: false, reason: "event_id_unavailable", lifecycle };
+  const eventId = Object.hasOwn(event, "eventId")
+    ? event.eventId
+    : typeof createEventId === "function"
+      ? createEventId()
+      : "";
+  if (!isCanonicalText(eventId))
+    return { applied: false, reason: "event_id_unavailable", lifecycle };
   if (typeof isCommittedEventId === "function" && isCommittedEventId(eventId) === true) {
     return { applied: false, reason: "event_id_conflict", lifecycle };
   }
@@ -141,6 +133,26 @@ export function commitTurnLifecycle({
     eventId,
     parentSessionId,
   });
+  if (requestedTerminal) {
+    const { terminalStatus, summaryVersion } = turn;
+    terminalMaterialization = materializeTerminal({
+      event,
+      terminalStatus,
+      previousSummaryVersion: lifecycle.turns[event.turnScopeId].summaryVersion,
+    });
+    if (
+      !terminalMaterialization?.materialized ||
+      terminalMaterialization.terminalStatus !== terminalStatus ||
+      !Array.isArray(terminalMaterialization.messages) ||
+      terminalMaterialization.summaryVersion !== summaryVersion
+    ) {
+      return {
+        applied: false,
+        reason: terminalMaterialization?.reason || "terminal_materialization_failed",
+        lifecycle,
+      };
+    }
+  }
   applied.lifecycle.commandReceipts = appendCommandReceipt(applied.lifecycle.commandReceipts, {
     ...receiptDraft,
     eventId,

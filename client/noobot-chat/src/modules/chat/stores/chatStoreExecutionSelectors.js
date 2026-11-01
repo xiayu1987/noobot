@@ -9,6 +9,8 @@ import {
   sessionRuntimeId,
 } from "../runtime/run-state-machine/turnRuntimeRegistry.js";
 import { text } from "@noobot/shared/value";
+import { requireSelectedExecutionDetail } from "@noobot/plugin-protocol/frontend";
+import { selectExecutionRelations } from "@noobot/session-protocol/execution-lifecycle";
 
 export function createChatExecutionSelectors({
   turnRuntimeRegistry,
@@ -24,21 +26,10 @@ export function createChatExecutionSelectors({
     return mainSession || selectSubSessionMessages(sessionId);
   }
 
-  function selectExecutionDescendants(executionId = "") {
-    const rootId = text(executionId);
-    if (!rootId || !selectExecution(turnRuntimeRegistry.value, rootId)) return [];
-    const descendants = [];
-    const visited = new Set([rootId]);
-    const queue = [...selectExecutionChildren(turnRuntimeRegistry.value, rootId)];
-    while (queue.length) {
-      const child = queue.shift();
-      const childId = text(child?.executionId);
-      if (!childId || visited.has(childId)) continue;
-      visited.add(childId);
-      descendants.push(child);
-      queue.push(...selectExecutionChildren(turnRuntimeRegistry.value, childId));
-    }
-    return descendants;
+  function selectExecutionDescendants(executionId) {
+    return selectExecutionRelations(turnRuntimeRegistry.value.executions, executionId, {
+      descendants: true,
+    });
   }
 
   function selectExecutionDetail(executionId = "") {
@@ -46,15 +37,15 @@ export function createChatExecutionSelectors({
     if (!execution) return null;
     const session = selectExecutionSession(execution.executionId);
     if (!session) return null;
-    if (!Array.isArray(session.messages)) {
-      throw new TypeError(`execution session messages must be an array: ${execution.executionId}`);
-    }
-    return {
-      execution,
-      session,
-      children: selectExecutionChildren(turnRuntimeRegistry.value, execution.executionId),
-      descendants: selectExecutionDescendants(execution.executionId),
-    };
+    return requireSelectedExecutionDetail(
+      {
+        execution,
+        session,
+        children: selectExecutionChildren(turnRuntimeRegistry.value, execution.executionId),
+        descendants: selectExecutionDescendants(execution.executionId),
+      },
+      { executionId: execution.executionId },
+    );
   }
 
   return { selectExecutionSession, selectExecutionDescendants, selectExecutionDetail };

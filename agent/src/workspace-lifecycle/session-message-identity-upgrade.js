@@ -23,6 +23,8 @@ import {
   migrateSessionDocumentIdentity,
 } from "@noobot/session-protocol";
 import { isLegacyEventEnvelope, validateEventEnvelope } from "@noobot/event-protocol/envelope";
+import { migrateAttachmentLifecycleOutboxRecords } from "@noobot/event-protocol/attachment-lifecycle-migration";
+import { AttachmentProtocolError } from "@noobot/attachment-protocol";
 import {
   AUTHORITY_OUTBOX_JOURNAL_OP,
   migrateLegacyAuthorityEventOutbox,
@@ -149,8 +151,15 @@ async function migrateOutboxJournal(stagingDir, legacyOutbox) {
     (record) => !isPlainObject(record) || !droppedEventIds.has(record.eventId),
   );
   changed ||= kept.length !== records.length;
-  const migrated = kept.map(migrateOutboxRecord);
-  changed ||= migrated.some((item) => item.changed);
+  let attachments;
+  try {
+    attachments = migrateAttachmentLifecycleOutboxRecords(kept);
+  } catch (error) {
+    if (!(error instanceof AttachmentProtocolError)) throw error;
+    throw upgradeError(error.code, {}, error);
+  }
+  const migrated = attachments.records.map(migrateOutboxRecord);
+  changed ||= attachments.changed || migrated.some((item) => item.changed);
   if (changed) {
     await replaceAuthorityOutboxRecords(
       stagingDir,
@@ -171,7 +180,7 @@ async function repairStagedSession({ storageService, stagingDir, expectScope }) 
       base: stagingDir,
       backupBase: null,
     });
-    source = await readSessionArtifact({ storageService, sessionDir: stagingDir });
+    source = await readSessionArtifactForRepair({ storageService, sessionDir: stagingDir });
   }
   const scope = await expectScope(source);
   const migration = normalizeSessionDocumentForCurrentProtocol(source, { now: MIGRATION_NOW });
@@ -209,6 +218,9 @@ async function validateStagedSession({ storageService, stagingDir, scope }) {
     throw upgradeError("summary_marks_not_canonical", {});
   }
   const records = await readAuthorityOutboxRecords(stagingDir);
+  if (migrateAttachmentLifecycleOutboxRecords(records).changed) {
+    throw upgradeError("attachment_outbox_not_canonical", {});
+  }
   if (records.map(migrateOutboxRecord).some((item) => item.changed)) {
     throw upgradeError("outbox_not_canonical", {});
   }

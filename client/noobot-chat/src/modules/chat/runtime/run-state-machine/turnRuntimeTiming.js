@@ -24,12 +24,11 @@ function isSameTiming(left, right) {
 }
 
 export function mergeAuthoritativeTurnTiming(currentTiming, authoritativeTurn) {
-  const thinkingFinishedAt = text(authoritativeTurn.thinkingFinishedAt);
-  if (!thinkingFinishedAt) return currentTiming;
+  if (!authoritativeTurn.thinkingFinishedAt) return currentTiming;
   const incoming = {
     turnScopeId: authoritativeTurn.turnScopeId,
     dialogProcessId: authoritativeTurn.dialogProcessId,
-    thinkingFinishedAt,
+    thinkingFinishedAt: authoritativeTurn.thinkingFinishedAt,
   };
   return currentTiming
     ? mergeTurnTimingRecord(currentTiming, incoming)

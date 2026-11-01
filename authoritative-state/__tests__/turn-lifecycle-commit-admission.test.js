@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { turnRecord } from "./helpers/turn-record.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
@@ -13,7 +14,7 @@ test("unknown terminal fields are rejected before materialization or event alloc
   const lifecycle = {
     ...createEmptyTurnLifecycle(),
     sequence: 1,
-    turns: { "turn-1": { turnScopeId: "turn-1", sequence: 1, dialogProcessId: "dialog-1" } },
+    turns: { "turn-1": turnRecord() },
   };
   const before = structuredClone(lifecycle);
   assert.throws(
@@ -23,6 +24,9 @@ test("unknown terminal fields are rejected before materialization or event alloc
         lifecycle,
         event: {
           eventType: TURN_EVENT.COMPLETED,
+          phase: TURN_PHASE.COMPLETION,
+          commandId: "commit-1",
+          causationId: "cause-1",
           turnScopeId: "turn-1",
           terminalStatus: { command: "completed", extra: "unexpected" },
         },
@@ -95,8 +99,17 @@ test("turn lifecycle commit rejects a terminal event without an explicit termina
         userId: "user-1",
         sessionId: "session-1",
         turnScopeId: "turn-1",
-        phase: TURN_PHASE.PROCESSING,
-        failure: { code: "turn_failed", message: "turn failed", retryable: false },
+        phase:
+          eventType === TURN_EVENT.COMPLETED
+            ? TURN_PHASE.COMPLETION
+            : eventType === TURN_EVENT.STOP_COMPLETED
+              ? TURN_PHASE.STOP
+              : TURN_PHASE.PROCESSING,
+        ...(eventType === TURN_EVENT.FAILED
+          ? {
+              failure: { code: "turn_failed", message: "turn failed", retryable: false },
+            }
+          : {}),
       },
       materializeTerminal: () => assert.fail("materializer must not run"),
       createEventId: () => "terminal-event",

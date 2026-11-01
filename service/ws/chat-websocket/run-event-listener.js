@@ -23,7 +23,7 @@ import {
   WORKFLOW_RUNTIME_FAMILY,
 } from "@noobot/event-protocol/workflow-runtime-event";
 import { validateSessionPersistenceScope } from "@noobot/session-protocol";
-import { text, isFunction } from "@noobot/shared/value";
+import { isPlainObject, isFunction } from "@noobot/shared/value";
 
 function committedDispatchContext(eventName, eventData) {
   const validation = validateSessionPersistenceScope(eventData.persistenceScope);
@@ -33,30 +33,27 @@ function committedDispatchContext(eventName, eventData) {
   return { persistenceScope: validation.scope };
 }
 
-function trimmedText(value) {
-  return text(value);
-}
-
-function countOf(value) {
-  return Number(value || 0);
-}
-
 function auditEnvelopeIdentity(canonicalEnvelope, eventData) {
-  const protocol = canonicalEnvelope?.protocol;
-  const identity = canonicalEnvelope ? canonicalEnvelope.identity : eventData;
-  const payload = canonicalEnvelope ? canonicalEnvelope.payload : eventData;
+  if (!canonicalEnvelope) {
+    return {
+      sessionId: eventData.sessionId,
+      dialogProcessId: eventData.dialogProcessId,
+      turnScopeId: eventData.turnScopeId,
+    };
+  }
+  const { protocol, identity, payload } = canonicalEnvelope;
   return {
-    protocolName: trimmedText(protocol?.name),
-    protocolVersion: countOf(protocol?.version),
-    eventFamily: trimmedText(protocol?.family),
-    schemaVersion: countOf(protocol?.schemaVersion),
-    eventType: trimmedText(identity?.eventType),
-    payloadEventType: trimmedText(payload?.eventType),
-    sessionId: trimmedText(identity?.sessionId),
-    dialogProcessId: trimmedText(payload?.dialogProcessId),
-    turnScopeId: trimmedText(identity?.turnScopeId),
-    presentationMessageId: trimmedText(payload?.presentationMessageId),
-    eventId: trimmedText(identity?.eventId),
+    protocolName: protocol.name,
+    protocolVersion: protocol.version,
+    eventFamily: protocol.family,
+    schemaVersion: protocol.schemaVersion,
+    eventType: identity.eventType,
+    payloadEventType: payload.eventType,
+    sessionId: identity.sessionId,
+    dialogProcessId: payload.dialogProcessId,
+    turnScopeId: identity.turnScopeId,
+    presentationMessageId: payload.presentationMessageId,
+    eventId: identity.eventId,
   };
 }
 
@@ -75,7 +72,7 @@ function auditWorkflowRuntime(canonicalEnvelope) {
     return {
       ...audit,
       workflowRevision: ordering.revision,
-      nodeExecutionId: payload.nodeExecutionId,
+      nodeExecutionId: identity.executionId,
       workflowStatus: payload.status,
     };
   }
@@ -108,21 +105,21 @@ function syncRunState({
   eventData,
   childRunEvent,
   sessionId,
-  resolveTurnScopeId,
+  getCurrentRunMeta,
   onRootRunning,
 }) {
   if (
     eventName === AGENT_RUN_EVENT.LIFECYCLE_STATE_CHANGED &&
-    text(eventData?.state).toLowerCase() === "running" &&
+    eventData.state === "running" &&
     !childRunEvent
   ) {
-    const eventSessionId = text(eventData?.sessionId);
-    const eventTurnScopeId = text(eventData?.turnScopeId);
+    const eventSessionId = eventData.sessionId;
+    const eventTurnScopeId = eventData.turnScopeId;
     if (
-      eventSessionId === text(sessionId) &&
+      eventSessionId === sessionId &&
       eventTurnScopeId &&
-      eventTurnScopeId === resolveTurnScopeId() &&
-      typeof onRootRunning === "function"
+      eventTurnScopeId === getCurrentRunMeta()?.turnScopeId &&
+      isFunction(onRootRunning)
     ) {
       onRootRunning(eventData);
     }
@@ -133,24 +130,27 @@ export function createRunEventListener({
   sendEvent,
   sessionId,
   getCurrentRunMeta = () => null,
-  getCurrentTurnScopeId = () => "",
   onRootRunning = null,
   onCommittedTurnLifecycle = null,
   onAuthorityEventCommitted = null,
   onEventReceived = null,
   onDeliveryTiming = null,
 } = {}) {
-  const resolveTurnScopeId = () =>
-    getCurrentRunMeta()?.turnScopeId || getCurrentTurnScopeId() || "";
+  if (onDeliveryTiming !== null && !isFunction(onDeliveryTiming)) {
+    throw new TypeError("onDeliveryTiming must be a function when provided");
+  }
 
   return {
-    ...(typeof onDeliveryTiming === "function" ? { onDeliveryTiming } : {}),
+    ...(onDeliveryTiming === null ? {} : { onDeliveryTiming }),
     onEvent: (eventPayload) => {
-      const eventName = text(eventPayload?.event);
+      const eventName = eventPayload?.event;
       if (!AGENT_RUN_EVENTS.has(eventName)) {
         throw new Error(`unsupported agent run event: ${eventName || "missing"}`);
       }
-      const eventData = eventPayload?.data || {};
+      const eventData = eventPayload.data;
+      if (!isPlainObject(eventData)) {
+        throw new TypeError(`invalid ${eventName} data: expected an object`);
+      }
       if (eventName === AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED) {
         const envelope = eventData.envelope;
         const validation = validateProtocolEvent(envelope);
@@ -189,7 +189,7 @@ export function createRunEventListener({
         eventData,
         childRunEvent,
         sessionId,
-        resolveTurnScopeId,
+        getCurrentRunMeta,
         onRootRunning,
       });
 

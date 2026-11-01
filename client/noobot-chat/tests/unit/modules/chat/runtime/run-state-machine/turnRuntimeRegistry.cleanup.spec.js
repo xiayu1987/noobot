@@ -25,6 +25,7 @@ it("does not retain legacy detail acknowledgements when Turns or Sessions are re
   const registry = createTurnRuntimeRegistryState();
   for (const turnScopeId of ["t1", "t2"]) {
     applyTurnRuntimeEvent(registry, {
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
       sessionId: "s1",
       turnScopeId,
@@ -84,6 +85,7 @@ it("prunes old or excess terminal turns per session while protecting continuable
   const complete = (sessionId, turnScopeId, dialogProcessId, timestamp, sequence) => {
     sendStart(registry, { sessionId, turnScopeId, seq: sequence - 3 });
     applyTurnRuntimeEvent(registry, {
+      updatedAtMs: 1767225600000,
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       sessionId,
       turnScopeId,
@@ -93,6 +95,7 @@ it("prunes old or excess terminal turns per session while protecting continuable
       timestamp,
     });
     applyTurnRuntimeEvent(registry, {
+      updatedAtMs: 1767225600000,
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       sessionId,
       turnScopeId,

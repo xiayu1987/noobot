@@ -5,7 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { FileMutationCoordinator } from "../../../src/shared/storage/file-mutation-coordinator.js";
@@ -26,6 +26,21 @@ test("nested run inside a held lock reenters without deadlock", async (t) => {
   );
   assert.equal(result, "nested");
 });
+
+for (const owner of ["", `${process.pid}:live-owner`]) {
+  test(`fresh lock with ${owner ? "live" : "unfinished"} owner cannot be reclaimed`, async (t) => {
+    const lockPath = await lockFixture(t);
+    await writeFile(lockPath, owner);
+    const coordinator = new FileMutationCoordinator({ timeoutMs: 30, staleMs: 60000, pollMs: 2 });
+    await assert.rejects(
+      coordinator.run(lockPath, () => assert.fail("must not enter")),
+      {
+        code: "FILE_MUTATION_BUSY",
+      },
+    );
+    assert.equal(await readFile(lockPath, "utf8"), owner);
+  });
+}
 
 test("continuations spawned inside a lock must reacquire it after release", async (t) => {
   const lockPath = await lockFixture(t);

@@ -8,7 +8,6 @@ import { resolveAuthoritativeTurnTerminal } from "@noobot/authoritative-state/ap
 import {
   SESSION_NOT_FOUND_REASON,
   createSessionArtifactNotFoundError,
-  createSessionNotFoundError,
   createSessionUnavailableReason,
   createTurnTerminalResolution,
 } from "@noobot/session-protocol";
@@ -252,8 +251,9 @@ export class SessionCrudService {
       userId,
       sessionId,
       async () => {
-        const session = await this.sessionRepo.findById(userId, sessionId, { persistenceContext });
-        if (!session) throw createSessionNotFoundError({ userId, sessionId });
+        const session = await this.sessionRepo.requireById(userId, sessionId, {
+          persistenceContext,
+        });
         mutate(session);
         session.updatedAt = this.now();
         await this.sessionRepo.save(userId, session, { persistenceContext });

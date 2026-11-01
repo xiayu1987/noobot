@@ -8,10 +8,9 @@ import { isPlainObject } from "@noobot/shared/value";
 import { HOOK_POINT, withHookRuntimeIdentity } from "@noobot/hook-protocol";
 import { runBotRuntimeHook } from "../../hook/index.js";
 import { BOT_MANAGE_LOG_EVENT, BOT_MANAGE_LOG_SOURCE } from "../../config/constants.js";
-import { isAbortError, isUserStopAbort } from "../../../shared/utils/error-utils.js";
 import {
-  resolveExecutionAbortMessage,
-  resolveExecutionAbortType,
+  EXECUTION_ABORT_TYPE,
+  resolveExecutionAbortReason,
 } from "@noobot/session-protocol/execution-abort";
 import { syncLifecycleRuntimeState } from "../../../runtime/lifecycle/state-machine.js";
 import { createExecutionFailure } from "../../../shared/errors/index.js";
@@ -23,8 +22,9 @@ import { summarizeExecutionLogs } from "../../../observability/execution-log/exe
 import { materializeStoppedAssistantDraft } from "../../../runtime/tool-execution/stopped-assistant-draft.js";
 
 function resolveFailureReportStatus(error, abortSignal) {
-  if (!isAbortError(error, abortSignal)) return EXECUTION_REPORT_STATUS.FAILED;
-  return isUserStopAbort(error, abortSignal)
+  const abortReason = resolveExecutionAbortReason({ error, abortSignal });
+  if (!abortReason) return EXECUTION_REPORT_STATUS.FAILED;
+  return abortReason.type === EXECUTION_ABORT_TYPE.USER_STOP
     ? EXECUTION_REPORT_STATUS.USER_STOPPED
     : EXECUTION_REPORT_STATUS.INTERRUPTED;
 }
@@ -84,10 +84,10 @@ async function recordSessionRunFailure({
   parentSessionId,
   message,
 }) {
-  const aborted = isAbortError(error, abortSignal);
-  const userStopped = aborted && isUserStopAbort(error, abortSignal);
+  const abortReason = resolveExecutionAbortReason({ error, abortSignal });
+  const aborted = abortReason !== null;
   if (aborted) {
-    if (userStopped) {
+    if (abortReason.type === EXECUTION_ABORT_TYPE.USER_STOP) {
       if (lifecycleRuntime) {
         await lifecycleRuntime.consumeUserInterjections();
         await materializeStoppedAssistantDraft(lifecycleRuntime);
@@ -101,10 +101,9 @@ async function recordSessionRunFailure({
       });
       if (lifecycleRuntime) await lifecycleRuntime.persistCurrentTurnMessages();
     } else {
-      const interruptionReason = resolveExecutionAbortMessage({ error, abortSignal });
       lifecycle?.interrupt({
-        reason: interruptionReason,
-        stopType: resolveExecutionAbortType({ error, abortSignal }),
+        reason: abortReason.reason,
+        stopType: abortReason.type,
         stoppedSnapshotPersistence: {
           status: "skipped",
           reason: "non_user_abort",
@@ -176,10 +175,7 @@ export async function handleSessionRunFailure({ executionEventListener, ...conte
   try {
     failure = await recordSessionRunFailure(context);
   } catch (error) {
-    failure = createExecutionFailure(
-      new AggregateError([context.error, error], error.message, { cause: context.error }),
-      context.lifecycle?.snapshot || null,
-    );
+    failure = createExecutionFailure(context.error, context.lifecycle?.snapshot || null, [error]);
   }
   const followUpErrors = [];
   try {
@@ -193,10 +189,7 @@ export async function handleSessionRunFailure({ executionEventListener, ...conte
     followUpErrors.push(error);
   }
   if (followUpErrors.length) {
-    throw createExecutionFailure(
-      new AggregateError([failure, ...followUpErrors], failure.message, { cause: failure }),
-      context.lifecycle?.snapshot || null,
-    );
+    throw createExecutionFailure(failure, context.lifecycle?.snapshot || null, followUpErrors);
   }
   throw failure;
 }

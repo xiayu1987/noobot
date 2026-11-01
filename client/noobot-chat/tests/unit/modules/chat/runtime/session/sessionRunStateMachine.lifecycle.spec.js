@@ -10,7 +10,8 @@ import {
   SESSION_RUN_EVENT,
   evaluateSessionRunState,
 } from "../../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
-import { normalizeSessionRunEvent } from "../../../../../../src/modules/chat/runtime/run-state-machine/eventNormalization.js";
+import { sessionRunEventFixture } from "../../helpers/sessionRunEventFixture.js";
+import { projectSessionRunEvent } from "@noobot/session-protocol/runtime-event";
 import {
   deriveTurnCapabilities,
   reduceTurnRuntimeEvent as reduceNormalizedTurnRuntimeEvent,
@@ -18,9 +19,10 @@ import {
 import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/session-protocol";
 
 const reduceTurnRuntimeEvent = (current, rawEvent) =>
-  reduceNormalizedTurnRuntimeEvent(current, normalizeSessionRunEvent(rawEvent));
+  reduceNormalizedTurnRuntimeEvent(current, sessionRunEventFixture(rawEvent, current));
 
 const processingStarted = {
+  updatedAt: "2026-01-01T00:00:00.000Z",
   type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
   eventType: TURN_EVENT.PROCESSING_STARTED,
   state: TURN_STATE.PROCESSING,
@@ -29,6 +31,7 @@ const processingStarted = {
   capabilities: { actionLocked: true, canStop: true },
 };
 const actionAccepted = {
+  updatedAt: "2026-01-01T00:00:00.000Z",
   type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
   eventType: TURN_EVENT.ACTION_ACCEPTED,
   state: TURN_STATE.ACTION_REQUESTING,
@@ -36,12 +39,14 @@ const actionAccepted = {
   action: "send",
 };
 const processingCompleted = {
+  updatedAt: "2026-01-01T00:00:00.000Z",
   type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
   eventType: TURN_EVENT.PROCESSING_COMPLETED,
   state: TURN_STATE.COMPLETION_REQUESTING,
   phase: TURN_PHASE.COMPLETION,
 };
 const stopAccepted = {
+  updatedAt: "2026-01-01T00:00:00.000Z",
   type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
   eventType: TURN_EVENT.STOP_ACCEPTED,
   state: TURN_STATE.ACTION_REQUESTING,
@@ -49,6 +54,7 @@ const stopAccepted = {
   action: "stop",
 };
 const stopProcessingCompleted = {
+  updatedAt: "2026-01-01T00:00:00.000Z",
   type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
   eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED,
   state: TURN_STATE.STOPPING,
@@ -56,6 +62,7 @@ const stopProcessingCompleted = {
 };
 const completionCommit = { completionCommitId: "completion-commit-1", summaryVersion: 1 };
 const terminalResolved = (state) => ({
+  updatedAt: "2026-01-01T00:00:00.000Z",
   type: SESSION_RUN_EVENT.TERMINAL_RESOLVED,
   state,
   revision: 10,
@@ -75,22 +82,23 @@ function apply(current, event) {
 }
 
 describe("sessionRunStateMachine lifecycle", () => {
-  it("normalizes aliases and evaluates the stop-summary phase", () => {
-    const event = normalizeSessionRunEvent({
-      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-      state: "running",
-      sessionId: " s1 ",
-      turnScopeId: "c1",
-    });
-    expect(event).toMatchObject({
-      state: AGENT_CHANNEL_STATE.SENDING,
-      sessionId: "s1",
-      turnScopeId: "c1",
-    });
+  it("rejects noncanonical identity and evaluates the stop-summary phase", () => {
     expect(() =>
-      normalizeSessionRunEvent({
+      projectSessionRunEvent({
+        updatedAtMs: 1767225600000,
+        seq: 1,
         type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
         state: "running",
+        sessionId: " s1 ",
+        turnScopeId: "c1",
+      }),
+    ).toThrow("invalid_runtime_sessionId");
+    expect(() =>
+      projectSessionRunEvent({
+        type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+        state: "running",
+        seq: 1,
+        updatedAtMs: 1767225600000,
         sessionId: "s1",
         turnScopeId: " c1 ",
       }),
@@ -103,7 +111,10 @@ describe("sessionRunStateMachine lifecycle", () => {
   });
 
   it("keeps lifecycle phases locked until the authoritative terminal event", () => {
-    let turn = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED });
+    let turn = apply(null, {
+      timestamp: 1767225600000,
+      type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
+    });
     expect(turn).toMatchObject({ commandPending: true, pendingCommandType: "action" });
     expect(turn.state).toBeUndefined();
     turn = apply(turn, actionAccepted);
@@ -112,6 +123,7 @@ describe("sessionRunStateMachine lifecycle", () => {
     turn = apply(turn, processingCompleted);
     expect(turn.state).toBe(FrontendRunState.FRONTEND_COMPLETION_REQUESTING);
     turn = apply(turn, {
+      updatedAt: "2026-01-01T00:00:00.000Z",
       type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
       eventType: TURN_EVENT.COMPLETED,
       state: TURN_STATE.COMPLETED,
@@ -126,6 +138,7 @@ describe("sessionRunStateMachine lifecycle", () => {
 
   it("starts continue as a new identity-bound action", () => {
     const turn = apply(null, {
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_STARTED,
       action: "continue",
     });
@@ -138,9 +151,14 @@ describe("sessionRunStateMachine lifecycle", () => {
   });
 
   it("promotes only an authoritative lifecycle fact to processing with stop capability", () => {
-    const localRequest = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED });
+    const localRequest = apply(null, {
+      timestamp: 1767225600000,
+      type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
+    });
     const requesting = apply(localRequest, actionAccepted);
     const transport = apply(requesting, {
+      updatedAtMs: 1767225600000,
+      seq: 1,
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       state: AGENT_CHANNEL_STATE.SENDING,
     });
@@ -154,10 +172,16 @@ describe("sessionRunStateMachine lifecycle", () => {
   });
 
   it("keeps stop locked through request, backend confirmation, and summary", () => {
-    let turn = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED });
+    let turn = apply(null, {
+      timestamp: 1767225600000,
+      type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
+    });
     turn = apply(turn, actionAccepted);
     turn = apply(turn, processingStarted);
-    turn = apply(turn, { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED });
+    turn = apply(turn, {
+      timestamp: 1767225600000,
+      type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,
+    });
     expect(turn).toMatchObject({
       state: FrontendRunState.PROCESSING,
       commandPending: true,

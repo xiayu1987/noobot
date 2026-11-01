@@ -17,6 +17,7 @@ import {
   assertSessionScopeIdentity,
   createAggregateVersionConflictError,
   createEmptyTurnLifecycle,
+  createSessionDeletedError,
   createSessionNotFoundError,
   requireSessionAggregateVersion,
 } from "@noobot/session-protocol";
@@ -74,6 +75,7 @@ class SessionCrudMethods {
         modelAlias: "",
         shortMemoryCheckpoint: 0,
         messages: [],
+        sessionArtifactEvents: [],
         dialogOrder: [],
         turnTimings: [],
         turnLifecycle: createEmptyTurnLifecycle(),
@@ -88,6 +90,25 @@ class SessionCrudMethods {
       persistenceContext,
       read: (scope) => this._readNormalizedSession(scope, sessionId),
     });
+  }
+
+  async requireById(userId, sessionId, { persistenceContext }) {
+    const session = await this.findById(userId, sessionId, { persistenceContext });
+    if (session) return session;
+    return this._throwSessionUnavailable(userId, sessionId);
+  }
+
+  async requireTurnView(userId, sessionId, { turnScopeIds, persistenceContext }) {
+    const view = await this.findTurnView(userId, sessionId, { turnScopeIds, persistenceContext });
+    if (view) return view;
+    return this._throwSessionUnavailable(userId, sessionId);
+  }
+
+  async _throwSessionUnavailable(userId, sessionId) {
+    if (await this.isSessionDeleted(userId, sessionId)) {
+      throw createSessionDeletedError({ userId, sessionId });
+    }
+    throw createSessionNotFoundError({ userId, sessionId });
   }
 
   async findTurnView(userId, sessionId, { turnScopeIds, persistenceContext }) {
@@ -105,9 +126,13 @@ class SessionCrudMethods {
   }
 
   async readSelectedConnectorIds(userId, sessionId, { persistenceContext } = {}) {
-    if (await this.isSessionDeleted(userId, sessionId)) return [];
+    if (await this.isSessionDeleted(userId, sessionId)) {
+      throw createSessionDeletedError({ userId, sessionId });
+    }
     const scope = await this.locateSessionScope(userId, sessionId, persistenceContext);
-    if (!scope || !(await this.storageService.exists(scope.sessionFile))) return [];
+    if (!scope || !(await this.storageService.exists(scope.sessionFile))) {
+      throw createSessionNotFoundError({ userId, sessionId });
+    }
     const manifest = await this.storageService.readJson(scope.sessionFile);
     assertSessionScopeIdentity({
       session: manifest,

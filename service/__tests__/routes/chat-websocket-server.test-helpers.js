@@ -58,7 +58,20 @@ export function createAcceptedAgentExecutionIdentity({ turnScopeId } = {}) {
   };
 }
 
-export function acceptFakeAgentTurnLifecycleEvent(lifecycle, { sessionCaller, ...event }) {
+export function selectFakeTurnLifecycleRequest({
+  sessionCaller,
+  persistenceScope,
+  parentSessionId,
+  createSessionIfAbsent,
+  expectedAggregateVersion,
+  ...event
+}) {
+  return event;
+}
+
+export function acceptFakeAgentTurnLifecycleEvent(lifecycle, input) {
+  const { sessionCaller } = input;
+  const event = selectFakeTurnLifecycleRequest(input);
   const acceptance = assertTurnAcceptanceUserMessage({ ...event, sessionCaller });
   const allocatesDialogProcess =
     acceptance.materialize &&

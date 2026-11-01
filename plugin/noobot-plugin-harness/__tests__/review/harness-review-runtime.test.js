@@ -160,7 +160,12 @@ test("acceptance checklist attachments are bound to final assistant turn output"
   const ctx = {
     result: {
       output: "done",
-      turnMessages: [{ role: "assistant", content: "done", type: "message" }],
+      traces: [],
+      modelMessages: [],
+      modelLoopRound: 0,
+      turnMessages: [
+        { messageUid: "mu-final", role: "assistant", content: "done", type: "message" },
+      ],
     },
     agentContext: {
       bindings: {

@@ -28,6 +28,7 @@ import {
 } from "@noobot/session-protocol";
 import {
   createAcceptedAgentExecutionIdentity,
+  selectFakeTurnLifecycleRequest,
   createProtocolTestCommand,
 } from "./chat-websocket-server.test-helpers.js";
 import { TURN_SNAPSHOT_TERMINAL_LIMIT } from "@noobot/session-protocol/turn-lifecycle";
@@ -62,6 +63,7 @@ export function createTestLifecycleEnvelope({
 } = {}) {
   const facts = TEST_EVENT_FACTS[eventType];
   const payload = createTurnLifecycleEnvelope({
+    updatedAt: "2026-01-01T00:00:00.000Z",
     eventId,
     commandId: `${eventId}:command`,
     causationId: `${eventId}:command`,
@@ -171,7 +173,7 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
         const result = commitTurnLifecycle({
           parentSessionId: "",
           lifecycle,
-          event: { ...input, parentSessionId: AUTHORITATIVE_ROOT_PARENT_SESSION_ID },
+          event: selectFakeTurnLifecycleRequest(input),
           eventOutbox,
           createEventId: () => `authority-event-${++eventIdSequence}`,
           materializeTerminal: input.terminalStatus

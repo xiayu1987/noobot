@@ -28,7 +28,6 @@ export const WORKFLOW_HOOKS = Object.freeze({
 export const WORKFLOW_PLUGIN_DEFAULTS = Object.freeze({
   MODE_OFF: "off",
   MODE_ON: "on",
-  DEFAULT_LOCALE: "zh-CN",
   DEFAULT_TIMEOUT_MS: TIME_THRESHOLDS.workflow.timeoutMs,
   DEFAULT_PRIORITY: 10,
   DEFAULT_MAX_AUTO_TRANSITIONS: 50,

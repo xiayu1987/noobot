@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { createSecureId } from "@noobot/shared/secure-identity";
-import { SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
 import { selectSessionRuntimeBucket } from "../run-state-machine/turnRuntimeRegistry.js";
 import { logStateMachineDebug } from "../../../debug/loggers/stateMachineLogger.js";
 import { AGENT_COMMAND, createTurnInterjectionCommand } from "@noobot/agent-transport-protocol";
@@ -19,7 +18,6 @@ export function createComposerActions({
   turnRuntimeRegistry,
   resolveActiveSessionIdentity,
   resolveActiveTurn,
-  submitTurnRuntimeEvent,
   waitForSessionConnectorState,
   send,
   requestJson,
@@ -87,46 +85,19 @@ export function createComposerActions({
       notify({ type: "warning", message: translate("chat.sessionStateOutOfSync") });
       return false;
     }
-    const composerEventType = isContinueFromUserStopped
-      ? SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_STARTED
-      : SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED;
-    const composerSettledEventType = isContinueFromUserStopped
-      ? SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_SETTLED
-      : SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_SETTLED;
     const continuingTurnScopeId = isContinueFromUserStopped ? createTurnScopeId() : "";
-    submitTurnRuntimeEvent(
+    return send(
       isContinueFromUserStopped
         ? {
-            type: composerEventType,
-            sessionId: resumeSessionId,
+            commandType: AGENT_COMMAND.CONTINUE,
             turnScopeId: continuingTurnScopeId,
-            continuationSource: {
+            continuation: {
               dialogProcessId: resumeDialogProcessId,
               turnScopeId: resumeTurnScopeId,
             },
-            source: "use_chat_session",
           }
-        : { type: composerEventType, continuationSource: null, source: "use_chat_session" },
+        : { commandType: AGENT_COMMAND.SEND },
     );
-    try {
-      return await send(
-        isContinueFromUserStopped
-          ? {
-              commandType: AGENT_COMMAND.CONTINUE,
-              turnScopeId: continuingTurnScopeId,
-              continuation: {
-                dialogProcessId: resumeDialogProcessId,
-                turnScopeId: resumeTurnScopeId,
-              },
-            }
-          : { commandType: AGENT_COMMAND.SEND },
-      );
-    } finally {
-      submitTurnRuntimeEvent({
-        type: composerSettledEventType,
-        source: "use_chat_session",
-      });
-    }
   }
 
   function stopSendingWithComposerActionState() {

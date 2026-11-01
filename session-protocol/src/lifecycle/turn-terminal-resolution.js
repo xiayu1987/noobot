@@ -6,6 +6,8 @@
 import { text as clean, isObjectLike } from "@noobot/shared/value";
 import { requireCanonicalTurnScopeId } from "../identity/turn-scope-identity.js";
 import { snapshotTurn } from "./turn-projection.js";
+import { collectTurnRecordErrors } from "./turn-record.js";
+import { projectTurnTerminalRuntimeEvent } from "../runtime-event.js";
 import { TURN_FAILED_STATES, TURN_TERMINAL_STATES } from "./turn-state.js";
 import {
   collectPositiveIntegerErrors,
@@ -55,9 +57,35 @@ export function createTurnTerminalResolution({
   };
 }
 
-export function validateTurnTerminalResolution(response = {}) {
+function collectResolvedTurnErrors(response) {
+  const { turn } = response;
+  const recordErrors = collectTurnRecordErrors(turn);
+  if (recordErrors.includes("invalid_turn_record")) return recordErrors;
+  const errors = [...recordErrors];
+  try {
+    projectTurnTerminalRuntimeEvent(response);
+  } catch (error) {
+    errors.push(error.message);
+  }
+  if (clean(turn.sessionId) !== clean(response.sessionId))
+    errors.push("terminal_session_identity_mismatch");
+  if (clean(turn.turnScopeId) !== clean(response.turnScopeId))
+    errors.push("terminal_turn_identity_mismatch");
+  if (!TERMINAL_STATE_VALUES.has(clean(turn.state))) errors.push("invalid_terminal_state");
+  errors.push(...collectPositiveIntegerErrors(turn.revision, "invalid_turn_revision"));
+  errors.push(...collectPositiveIntegerErrors(turn.sequence, "invalid_turn_sequence"));
+  if (!isObjectLike(turn.terminalStatus)) errors.push("missing_terminal_status");
+  if (!Number.isInteger(response.aggregateVersion) || response.aggregateVersion < 0)
+    errors.push("invalid_aggregate_version");
+  if (FAILED_TERMINAL_STATES.has(clean(turn.state)) && !isObjectLike(turn.failure))
+    errors.push("missing_terminal_failure");
+  return errors;
+}
+
+export function validateTurnTerminalResolution(response) {
+  if (!isObjectLike(response)) return { valid: false, errors: ["invalid_terminal_resolution"] };
   const errors = [];
-  if (Number(response.protocolVersion) !== TURN_TERMINAL_RESOLUTION_PROTOCOL_VERSION)
+  if (response.protocolVersion !== TURN_TERMINAL_RESOLUTION_PROTOCOL_VERSION)
     errors.push("unsupported_terminal_resolution_version");
   if (clean(response.eventType) !== TURN_TERMINAL_RESOLVED_EVENT)
     errors.push("invalid_terminal_resolution_event_type");
@@ -70,21 +98,7 @@ export function validateTurnTerminalResolution(response = {}) {
       : response.retryAfterMs !== 0
   )
     errors.push("invalid_retry_after_ms");
-  if (response.resolved === true) {
-    const turn = response.turn || {};
-    const terminalStatus = turn.terminalStatus;
-    if (clean(turn.sessionId) !== clean(response.sessionId))
-      errors.push("terminal_session_identity_mismatch");
-    if (clean(turn.turnScopeId) !== clean(response.turnScopeId))
-      errors.push("terminal_turn_identity_mismatch");
-    if (!TERMINAL_STATE_VALUES.has(clean(turn.state))) errors.push("invalid_terminal_state");
-    errors.push(...collectPositiveIntegerErrors(turn.revision, "invalid_turn_revision"));
-    errors.push(...collectPositiveIntegerErrors(turn.sequence, "invalid_turn_sequence"));
-    if (!isObjectLike(terminalStatus)) errors.push("missing_terminal_status");
-    if (!Number.isInteger(response.aggregateVersion) || response.aggregateVersion < 0)
-      errors.push("invalid_aggregate_version");
-    if (FAILED_TERMINAL_STATES.has(clean(turn.state)) && !isObjectLike(turn.failure))
-      errors.push("missing_terminal_failure");
-  } else if (!clean(response.reason)) errors.push("missing_unresolved_reason");
+  if (response.resolved === true) errors.push(...collectResolvedTurnErrors(response));
+  else if (!clean(response.reason)) errors.push("missing_unresolved_reason");
   return { valid: errors.length === 0, errors };
 }

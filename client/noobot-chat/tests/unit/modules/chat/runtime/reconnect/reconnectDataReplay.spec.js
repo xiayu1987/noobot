@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
+import { turnRecordFixture } from "../../helpers/turnRecordFixture.js";
 import { applyReconnectDataReplay } from "../../../../../../src/modules/chat/runtime/reconnect/reconnectDataReplay.js";
 import {
   createEventEnvelope,
@@ -59,7 +60,7 @@ function snapshot({
     sessionId,
     sequence,
     activeTurnScopeId: turnScopeId,
-    activeTurn: {
+    activeTurn: turnRecordFixture({
       sessionId,
       dialogProcessId: `dp-${turnScopeId}`,
       turnScopeId,
@@ -67,13 +68,11 @@ function snapshot({
       commandId: `command-${turnScopeId}`,
       action: "send",
       state,
-      phase: state === TURN_STATE.PROCESSING ? "processing" : "completion",
-      executionState: state === TURN_STATE.PROCESSING ? "sending" : "completed",
       revision: 2,
       sequence,
       continuedByTurnScopeId: "",
       startedAt: "2026-01-01T00:00:00.000Z",
-    },
+    }),
   });
 }
 
@@ -99,6 +98,7 @@ function batch({
 
 function lifecycleEvent(sequence) {
   const payload = createTurnLifecycleEnvelope({
+    updatedAt: "2026-01-01T00:00:00.000Z",
     eventType: TURN_EVENT.PROCESSING_STARTED,
     eventId: `event-${sequence}`,
     commandId: "command-1",

@@ -228,6 +228,23 @@ test("session selection accepts only owned connectors with active user connectio
       },
     );
     assert.equal(unknownResponse.status, 400);
+    assert.equal((await unknownResponse.json()).errorCode, "CONNECTOR_SELECTION_NOT_OWNED");
+    assert.deepEqual(selections.get("root-a"), ["con_db"]);
+  });
+});
+
+test("connector selection leaves internal runtime failures as 500 without changing selection", async () => {
+  const { app, connectorRuntime, selections } = createHarness();
+  connectorRuntime.listUserConnectors = async () => {
+    throw new TypeError("connector storage failed");
+  };
+  await withTestServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/internal/connectors/alice/sessions/root-a/selection`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ selectedConnectorIds: ["con_db"] }),
+    });
+    assert.equal(response.status, 500);
     assert.deepEqual(selections.get("root-a"), ["con_db"]);
   });
 });

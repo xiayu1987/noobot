@@ -4,27 +4,36 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, requireFunctionDependencies, text } from "@noobot/shared/value";
 
-export function createPluginContext({ pluginId = "", getConfig, updateConfig } = {}) {
+export function createPluginContext({ pluginId, getConfig, updateConfig }) {
   const namespace = text(pluginId);
   if (!namespace) throw new Error("plugin context id is required");
+  requireFunctionDependencies("createPluginContext", { getConfig, updateConfig });
+
+  function readConfig() {
+    const root = getConfig();
+    if (!isPlainObject(root)) throw new TypeError("plugin config root must be an object");
+    if (Object.hasOwn(root, namespace) && !isPlainObject(root[namespace])) {
+      throw new TypeError(`plugin config ${namespace} must be an object`);
+    }
+    return root;
+  }
+
   return Object.freeze({
     pluginId: namespace,
     config: Object.freeze({
       get() {
-        const root = typeof getConfig === "function" ? getConfig() : {};
-        const value = root?.[namespace];
-        return isPlainObject(value) ? value : {};
+        const root = readConfig();
+        return Object.hasOwn(root, namespace) ? root[namespace] : {};
       },
-      patch(patch = {}) {
-        if (typeof updateConfig !== "function") return;
-        const root = typeof getConfig === "function" ? getConfig() : {};
-        const current =
-          root?.[namespace] && typeof root[namespace] === "object" ? root[namespace] : {};
+      patch(patch) {
+        if (!isPlainObject(patch)) throw new TypeError("plugin config patch must be an object");
+        const root = readConfig();
+        const current = Object.hasOwn(root, namespace) ? root[namespace] : {};
         updateConfig({
           ...root,
-          [namespace]: { ...current, ...(patch && typeof patch === "object" ? patch : {}) },
+          [namespace]: { ...current, ...patch },
         });
       },
     }),

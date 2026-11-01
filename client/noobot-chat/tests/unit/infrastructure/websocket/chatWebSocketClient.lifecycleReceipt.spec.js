@@ -28,6 +28,7 @@ const RECEIPT_EVENT = "frontend.websocket.lifecycleReceipt";
 
 function lifecycle(eventId = "event-receipt") {
   return createTurnLifecycleEnvelope({
+    updatedAt: "2026-01-01T00:00:00.000Z",
     eventType: TURN_EVENT.PROCESSING_STARTED,
     eventId,
     commandId: "command-receipt",

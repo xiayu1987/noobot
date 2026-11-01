@@ -16,6 +16,7 @@ import {
 import { ATTACHMENT_EVENT_STATUS, ATTACHMENT_EVENT_TYPE } from "./transition-table.js";
 export const ATTACHMENT_LIFECYCLE_WIRE_EVENT = "attachment_lifecycle";
 export const ATTACHMENT_LIFECYCLE_SEQUENCE_DOMAIN = "attachment-lifecycle";
+export const ATTACHMENT_LIFECYCLE_SCHEMA_VERSION = 2;
 
 export function attachmentLifecycleSequenceScopeId(identityValue) {
   const identity = parseAttachmentIdentity(identityValue);
@@ -24,7 +25,6 @@ export function attachmentLifecycleSequenceScopeId(identityValue) {
 const FIELDS = new Set([
   "eventType",
   "eventVersion",
-  "attachmentEventId",
   "identity",
   "status",
   "occurredAt",
@@ -40,7 +40,7 @@ export function createAttachmentLifecycleEvent(value) {
     expected = ATTACHMENT_EVENT_STATUS[eventType];
   if (!expected) throw new AttachmentProtocolError("unsupported_attachment_event_type");
   if (s.status !== expected) throw new AttachmentProtocolError("attachment_event_status_mismatch");
-  if (s.eventVersion !== 1)
+  if (s.eventVersion !== ATTACHMENT_LIFECYCLE_SCHEMA_VERSION)
     throw new AttachmentProtocolError("unsupported_attachment_event_version");
   const identity = parseAttachmentIdentity(s.identity);
   let relation;
@@ -61,8 +61,7 @@ export function createAttachmentLifecycleEvent(value) {
   }
   return freezeDefined({
     eventType,
-    eventVersion: 1,
-    attachmentEventId: requireNonEmptyString(s.attachmentEventId, "invalid_attachment_event_id"),
+    eventVersion: ATTACHMENT_LIFECYCLE_SCHEMA_VERSION,
     identity,
     status: expected,
     occurredAt: requireNonEmptyString(s.occurredAt, "invalid_attachment_event_occurred_at"),

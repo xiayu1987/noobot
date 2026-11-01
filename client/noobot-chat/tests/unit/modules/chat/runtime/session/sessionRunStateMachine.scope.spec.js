@@ -15,12 +15,13 @@ import {
   TURN_TRANSITION_REASON,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnReducer.js";
 import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/session-protocol";
-import { normalizeSessionRunEvent } from "../../../../../../src/modules/chat/runtime/run-state-machine/eventNormalization.js";
+import { sessionRunEventFixture } from "../../helpers/sessionRunEventFixture.js";
 
 const reduceTurnRuntimeEvent = (current, rawEvent) =>
-  reduceNormalizedTurnRuntimeEvent(current, normalizeSessionRunEvent(rawEvent));
+  reduceNormalizedTurnRuntimeEvent(current, sessionRunEventFixture(rawEvent, current));
 
 const processingStarted = {
+  updatedAt: "2026-01-01T00:00:00.000Z",
   type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
   eventType: TURN_EVENT.PROCESSING_STARTED,
   phase: TURN_PHASE.PROCESSING,
@@ -29,6 +30,7 @@ const processingStarted = {
   capabilities: { actionLocked: true, canStop: true },
 };
 const actionAccepted = {
+  updatedAt: "2026-01-01T00:00:00.000Z",
   type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
   eventType: TURN_EVENT.ACTION_ACCEPTED,
   phase: TURN_PHASE.ACTION,
@@ -36,12 +38,14 @@ const actionAccepted = {
   action: "send",
 };
 const processingCompleted = {
+  updatedAt: "2026-01-01T00:00:00.000Z",
   type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
   eventType: TURN_EVENT.PROCESSING_COMPLETED,
   phase: TURN_PHASE.COMPLETION,
   state: TURN_STATE.COMPLETION_REQUESTING,
 };
 const stopAccepted = {
+  updatedAt: "2026-01-01T00:00:00.000Z",
   type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
   eventType: TURN_EVENT.STOP_ACCEPTED,
   phase: TURN_PHASE.STOP,
@@ -49,6 +53,7 @@ const stopAccepted = {
   action: "stop",
 };
 const stopProcessingCompleted = {
+  updatedAt: "2026-01-01T00:00:00.000Z",
   type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
   eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED,
   phase: TURN_PHASE.STOP,
@@ -56,6 +61,7 @@ const stopProcessingCompleted = {
 };
 const completionCommit = { completionCommitId: "completion-commit-1", summaryVersion: 1 };
 const terminalResolved = (state) => ({
+  updatedAt: "2026-01-01T00:00:00.000Z",
   type: SESSION_RUN_EVENT.TERMINAL_RESOLVED,
   state,
   revision: 10,
@@ -82,9 +88,14 @@ describe("sessionRunStateMachine scope separation", () => {
   });
 
   it("keeps processing facts scoped to their exact Turn", () => {
-    const localRequest = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED });
+    const localRequest = apply(null, {
+      timestamp: 1767225600000,
+      type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
+    });
     const started = apply(localRequest, actionAccepted);
     const transport = apply(started, {
+      updatedAtMs: 1767225600000,
+      seq: 1,
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       state: AGENT_CHANNEL_STATE.SENDING,
     });
@@ -94,6 +105,8 @@ describe("sessionRunStateMachine scope separation", () => {
       state: FrontendRunState.PROCESSING,
     });
     const transportOnly = reduceTurnRuntimeEvent(started, {
+      updatedAtMs: 1767225600000,
+      seq: 1,
       ...identity,
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       state: AGENT_CHANNEL_STATE.INTERACTION_PENDING,
@@ -103,11 +116,15 @@ describe("sessionRunStateMachine scope separation", () => {
   });
 
   it("uses distinct completion and stop phases on the same Turn", () => {
-    let processing = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED });
+    let processing = apply(null, {
+      timestamp: 1767225600000,
+      type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
+    });
     processing = apply(processing, actionAccepted);
     processing = apply(processing, processingStarted);
     const completion = apply(processing, processingCompleted);
     const stopRequest = apply(processing, {
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,
     });
     expect(completion.state).toBe(FrontendRunState.FRONTEND_COMPLETION_REQUESTING);
@@ -120,7 +137,10 @@ describe("sessionRunStateMachine scope separation", () => {
   });
 
   it("rejects a differently scoped event instead of clearing another Turn lock", () => {
-    const started = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED });
+    const started = apply(null, {
+      timestamp: 1767225600000,
+      type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
+    });
     expect(identity.sessionId).not.toBe("another-session");
     expect(
       reduceTurnRuntimeEvent(started, {
@@ -136,6 +156,7 @@ describe("sessionRunStateMachine scope separation", () => {
   it("compares Turn identity case-sensitively and keeps command identity verbatim", () => {
     const mixedIdentity = { sessionId: "S1", dialogProcessId: "dialog-1", turnScopeId: "Turn-A" };
     const started = reduceTurnRuntimeEvent(null, {
+      timestamp: 1767225600000,
       ...mixedIdentity,
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
       commandId: "Cmd-A",
@@ -164,11 +185,15 @@ describe("sessionRunStateMachine scope separation", () => {
   });
 
   it("keeps the completion commit identity verbatim", () => {
-    let processing = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED });
+    let processing = apply(null, {
+      timestamp: 1767225600000,
+      type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
+    });
     processing = apply(processing, actionAccepted);
     processing = apply(processing, processingStarted);
     let completion = apply(processing, processingCompleted);
     completion = apply(completion, {
+      updatedAt: "2026-01-01T00:00:00.000Z",
       type: SESSION_RUN_EVENT.TERMINAL_RESOLVED,
       state: TURN_STATE.COMPLETED,
       revision: 10,
@@ -182,11 +207,15 @@ describe("sessionRunStateMachine scope separation", () => {
   });
 
   it("settles summaries into explicit terminal states rather than identity-free idle", () => {
-    let processing = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED });
+    let processing = apply(null, {
+      timestamp: 1767225600000,
+      type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
+    });
     processing = apply(processing, actionAccepted);
     processing = apply(processing, processingStarted);
     let completion = apply(processing, processingCompleted);
     completion = apply(completion, {
+      updatedAt: "2026-01-01T00:00:00.000Z",
       type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
       eventType: TURN_EVENT.COMPLETED,
       phase: TURN_PHASE.COMPLETION,
@@ -196,7 +225,10 @@ describe("sessionRunStateMachine scope separation", () => {
     completion = apply(completion, terminalResolved(TURN_STATE.COMPLETED));
     expect(completion).toMatchObject({ ...identity, state: FrontendRunState.FRONTEND_COMPLETED });
 
-    let stopping = apply(processing, { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED });
+    let stopping = apply(processing, {
+      timestamp: 1767225600000,
+      type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,
+    });
     stopping = apply(stopping, stopAccepted);
     stopping = apply(stopping, stopProcessingCompleted);
     stopping = apply(stopping, terminalResolved(TURN_STATE.STOP_COMPLETED));

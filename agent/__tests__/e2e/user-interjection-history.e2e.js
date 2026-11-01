@@ -73,7 +73,7 @@ test("session execution preserves every user interjection into the next model hi
     },
     async appendTurns({ turns = [] } = {}) {
       persistedTurns.push(...turns);
-      return { appended: true, reason: "", turns };
+      return { turns };
     },
     async getSessionTurns() {
       return persistedTurns;

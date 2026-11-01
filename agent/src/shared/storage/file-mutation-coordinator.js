@@ -75,9 +75,10 @@ function readFileIfPresent(filePath) {
 
 async function inspectWaiter(waiterPath, name, staleMs) {
   const waiterStat = await fsStat(waiterPath);
-  if (Date.now() - waiterStat.mtimeMs <= staleMs) return waiterStat;
   const storedOwner = await readFileIfPresent(waiterPath);
-  if (isOwnerProcessAlive(waiterOwnerToken(name, storedOwner))) return waiterStat;
+  const ownerToken = waiterOwnerToken(name, storedOwner);
+  if (isOwnerProcessAlive(ownerToken)) return waiterStat;
+  if (!/^\d+:/.test(ownerToken) && Date.now() - waiterStat.mtimeMs <= staleMs) return waiterStat;
   await fsRm(waiterPath, { force: true });
   return null;
 }
@@ -319,8 +320,9 @@ export class FileMutationCoordinator {
       return true;
     }
     contention.transientSince = 0;
-    if (Date.now() - current.mtimeMs <= this.staleMs) return false;
-    if (isOwnerProcessAlive(await readFileIfPresent(key))) return false;
+    const ownerToken = await readFileIfPresent(key);
+    if (isOwnerProcessAlive(ownerToken)) return false;
+    if (!/^\d+:/.test(ownerToken) && Date.now() - current.mtimeMs <= this.staleMs) return false;
     await reclaimStaleLock(key);
     return true;
   }

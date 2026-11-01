@@ -37,8 +37,8 @@ function toEngineSemantic(semantic) {
   return { ...semantic, nodes: semantic.nodes.map(toEngineNode) };
 }
 
-export function parseWorkflowSemantic({ semanticText, options }) {
-  return parseWorkflowDslText(semanticText, { locale: options.locale });
+export function parseWorkflowSemantic({ semanticText, locale }) {
+  return parseWorkflowDslText(semanticText, { locale });
 }
 
 export function createWorkflowInstance({ instanceId, semantic, options, meta }) {

@@ -18,7 +18,6 @@ import {
   assertNotAborted,
   isAbortError,
   raceWithAbort,
-  resolveAbortStopType,
   resolveErrorMessage,
 } from "../../shared/utils/error-utils.js";
 import {
@@ -33,7 +32,10 @@ import { HOOK_PHASE_STATUS, HOOK_POINT } from "@noobot/hook-protocol";
 import { buildHookContext } from "../hooks/hook-context-builder.js";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { getSessionIdsFromAgentContext } from "../../context/agent-context-accessor.js";
-import { resolveExecutionAbortMessage } from "@noobot/session-protocol/execution-abort";
+import {
+  resolveExecutionAbortMessage,
+  resolveExecutionAbortReason,
+} from "@noobot/session-protocol/execution-abort";
 import {
   resolveRuntimeTransferIdentity,
   persistTransferArtifacts,
@@ -432,7 +434,7 @@ function toRecoverableInvocationError(error) {
 }
 
 async function handleToolInvocationError(state, error) {
-  if (isAbortError(error) || isFatalError(error)) {
+  if (isAbortError(error, state.abortSignal) || isFatalError(error)) {
     reportToolInvocationError(state, error);
     throw error;
   }
@@ -612,10 +614,10 @@ export async function executeToolCallInTurn(options) {
 function rejectedToolCallResult({ call, error, abortSignal }) {
   const riskAssessment = createToolRiskAssessment(call);
   const aborted = isAbortError(error, abortSignal);
-  const stopType = aborted ? resolveAbortStopType(error, abortSignal) : "";
+  const abortReason = aborted ? resolveExecutionAbortReason({ error, abortSignal }) : null;
   const invocationError = aborted ? null : toRecoverableInvocationError(error);
   const errorMessage = aborted
-    ? resolveExecutionAbortMessage({ error, abortSignal, fallback: stopType })
+    ? resolveExecutionAbortMessage({ error, abortSignal })
     : invocationError.message;
   return {
     call,
@@ -624,7 +626,7 @@ function rejectedToolCallResult({ call, error, abortSignal }) {
       status: aborted ? "aborted" : "failed",
       code: aborted ? ERROR_CODE.RECOVERABLE_USER_CANCELLED : invocationError.code,
       error: errorMessage,
-      ...(stopType ? { stopType } : {}),
+      ...(abortReason ? { stopType: abortReason.type } : {}),
     }),
     resourceRefs: [],
     transferEnvelopes: [],

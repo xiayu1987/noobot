@@ -98,16 +98,16 @@ export function normalizeExecutionIdentity(source = {}) {
   });
 }
 
-function collectAgentExecutionIdErrors(identity) {
+function collectAgentExecutionIdErrors(identity, requireSession) {
   if (identity.executionKind !== EXECUTION_KIND.AGENT) return [];
-  if (!identity.sessionId) return ["missing_session_id"];
+  if (requireSession && !identity.sessionId) return ["missing_session_id"];
   if (!isCanonicalTurnScopeId(identity.turnScopeId)) return ["missing_turn_scope_id"];
   return identity.executionId === deriveAgentExecutionId(identity)
     ? []
     : ["agent_execution_id_not_derived"];
 }
 
-export function validateExecutionIdentity(source = {}) {
+export function validateExecutionIdentity(source = {}, { requireSession = true } = {}) {
   const identity = normalizeExecutionIdentity(source);
   const errors = [];
   if (!identity.executionId) errors.push("missing_execution_id");
@@ -118,7 +118,7 @@ export function validateExecutionIdentity(source = {}) {
     errors.push("root_execution_id_mismatch");
   if (identity.parentExecutionId && identity.parentExecutionId === identity.executionId)
     errors.push("self_parent_execution");
-  if (identity.executionId) errors.push(...collectAgentExecutionIdErrors(identity));
+  if (identity.executionId) errors.push(...collectAgentExecutionIdErrors(identity, requireSession));
   return { valid: errors.length === 0, errors, identity };
 }
 
@@ -147,9 +147,70 @@ export function compareExecutionVersion(left, right) {
   return left.revision - right.revision || left.sequence - right.sequence;
 }
 
-export function buildExecutionTree(executions = []) {
+export function buildExecutionForest(executions) {
+  if (!Array.isArray(executions)) {
+    throw new TypeError("execution directory must be an array");
+  }
   const byId = new Map();
   for (const source of executions) {
+    if (
+      !isPlainObject(source) ||
+      !isCanonicalText(source.executionId) ||
+      !(source.parentExecutionId === "" || isCanonicalText(source.parentExecutionId))
+    ) {
+      throw new TypeError(
+        "execution directory requires canonical executionId and parentExecutionId",
+      );
+    }
+    if (byId.has(source.executionId)) {
+      throw new TypeError("execution directory contains a duplicate executionId");
+    }
+    byId.set(source.executionId, { ...source, childExecutionIds: [] });
+  }
+  const roots = [];
+  for (const execution of byId.values()) {
+    const parent = byId.get(execution.parentExecutionId);
+    if (parent) parent.childExecutionIds.push(execution.executionId);
+    else roots.push(execution.executionId);
+  }
+  const reachable = [...roots];
+  for (let index = 0; index < reachable.length; index += 1) {
+    reachable.push(...byId.get(reachable[index]).childExecutionIds);
+  }
+  if (reachable.length !== byId.size) {
+    throw new TypeError("execution directory contains a parent cycle");
+  }
+  return { executions: Object.fromEntries(byId), rootExecutionIds: roots };
+}
+
+export function selectExecutionRelations(executions, executionId, { descendants = false } = {}) {
+  if (!isCanonicalText(executionId)) {
+    throw new TypeError("execution relation query requires a canonical executionId");
+  }
+  if (!isPlainObject(executions)) {
+    throw new TypeError("execution relation query requires an execution directory");
+  }
+  for (const [key, execution] of Object.entries(executions)) {
+    if (!isPlainObject(execution) || key !== execution.executionId) {
+      throw new TypeError("execution directory key must match executionId");
+    }
+  }
+  const forest = buildExecutionForest(Object.values(executions));
+  if (!Object.hasOwn(forest.executions, executionId)) return [];
+  const ids = [...forest.executions[executionId].childExecutionIds];
+  if (descendants) {
+    for (let index = 0; index < ids.length; index += 1) {
+      ids.push(...forest.executions[ids[index]].childExecutionIds);
+    }
+  }
+  return ids.map((id) => executions[id]);
+}
+
+export function buildExecutionTree(executions) {
+  if (!Array.isArray(executions)) {
+    throw new TypeError("execution tree requires an array");
+  }
+  const records = executions.map((source) => {
     const validation = validateExecutionRecord(source);
     if (!validation.valid) {
       throw Object.assign(new TypeError("execution tree requires valid execution records"), {
@@ -158,17 +219,10 @@ export function buildExecutionTree(executions = []) {
         errors: validation.errors,
       });
     }
-    byId.set(validation.identity.executionId, {
+    return {
       ...source,
       ...validation.identity,
-      childExecutionIds: [],
-    });
-  }
-  const roots = [];
-  for (const execution of byId.values()) {
-    const parent = byId.get(execution.parentExecutionId);
-    if (parent) parent.childExecutionIds.push(execution.executionId);
-    else roots.push(execution.executionId);
-  }
-  return { executions: Object.fromEntries(byId), rootExecutionIds: roots };
+    };
+  });
+  return buildExecutionForest(records);
 }

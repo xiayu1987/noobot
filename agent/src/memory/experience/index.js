@@ -11,13 +11,11 @@ import {
   parseDailyExperienceOutput,
 } from "@noobot/memory-protocol/experience/summary-output";
 import { appendDailyDomainResults } from "./daily/appender.js";
-import { mergeDomainTextForDates } from "./weekly/merger.js";
 import { saveWeeklyDomainSummary } from "./weekly/saver.js";
 import { runWeeklySummaryIfNeeded } from "./weekly/runner.js";
-import { mergeDomainTextForWeeks } from "./monthly/merger.js";
 import { saveMonthlyDomainSummary } from "./monthly/saver.js";
 import { runMonthlySummaryIfNeeded } from "./monthly/runner.js";
-import { mergeDomainTextForMonths } from "./yearly/merger.js";
+import { mergeStageDocumentsByDomain } from "./stage-documents.js";
 import { saveYearlyDomainSummary } from "./yearly/saver.js";
 import { runYearlySummaryIfNeeded } from "./yearly/runner.js";
 import { readExperienceFields } from "./fields-reader.js";
@@ -102,6 +100,10 @@ export class ExperienceManager {
     });
   }
 
+  async mergeStageDocuments(stage, periodDir, periodKeys) {
+    return mergeStageDocumentsByDomain({ storage: this.storage, stage, periodDir, periodKeys });
+  }
+
   async listDateDirs(basePath = "") {
     const lessonsDir = this.storage.dailySummaryDir(basePath);
     const entries = await this.storage.safeReadDirEntries(lessonsDir);
@@ -162,14 +164,6 @@ export class ExperienceManager {
     });
   }
 
-  async mergeDomainTextForDates(basePath = "", dateKeys = []) {
-    return mergeDomainTextForDates({
-      storage: this.storage,
-      basePath,
-      dateKeys,
-    });
-  }
-
   async saveWeeklyDomainSummary(params = {}) {
     return saveWeeklyDomainSummary({
       storage: this.storage,
@@ -192,7 +186,8 @@ export class ExperienceManager {
       abortSignal,
       basePath,
       listDateDirs: (bp) => this.listDateDirs(bp),
-      mergeDomainText: (bp, dateKeys) => this.mergeDomainTextForDates(bp, dateKeys),
+      mergeDomainText: (bp, dateKeys) =>
+        this.mergeStageDocuments("daily", this.storage.dailySummaryDir(bp), dateKeys),
       normalizeWeeklySummary: (raw, fallback, options) =>
         this.normalizeDomainSummary("weekly", raw, fallback, { ...options, fields }),
       saveWeeklySummary: (params) => this.saveWeeklyDomainSummary({ ...params, fields }),
@@ -200,14 +195,6 @@ export class ExperienceManager {
       writeMetadata: (bp, metadata) => this.writeMetadata(bp, metadata),
       readExperienceModel: (bp) => this.readExperienceModel(bp),
       upsertModelEntries: (bp, entries) => this.upsertExperienceModelEntries(bp, entries),
-    });
-  }
-
-  async mergeDomainTextForWeeks(basePath = "", weekKeys = []) {
-    return mergeDomainTextForWeeks({
-      storage: this.storage,
-      basePath,
-      weekKeys,
     });
   }
 
@@ -233,20 +220,13 @@ export class ExperienceManager {
       abortSignal,
       basePath,
       listWeekDirs: (bp) => this.listWeekDirs(bp),
-      mergeDomainText: (bp, weekKeys) => this.mergeDomainTextForWeeks(bp, weekKeys),
+      mergeDomainText: (bp, weekKeys) =>
+        this.mergeStageDocuments("weekly", this.storage.weeklySummaryDir(bp), weekKeys),
       normalizeMonthlySummary: (raw, fallback, options) =>
         this.normalizeDomainSummary("monthly", raw, fallback, { ...options, fields }),
       saveMonthlySummary: (params) => this.saveMonthlyDomainSummary({ ...params, fields }),
       readExperienceModel: (bp) => this.readExperienceModel(bp),
       upsertModelEntries: (bp, entries) => this.upsertExperienceModelEntries(bp, entries),
-    });
-  }
-
-  async mergeDomainTextForMonths(basePath = "", monthKeys = []) {
-    return mergeDomainTextForMonths({
-      storage: this.storage,
-      basePath,
-      monthKeys,
     });
   }
 
@@ -272,7 +252,8 @@ export class ExperienceManager {
       abortSignal,
       basePath,
       listMonthDirs: (bp) => this.listMonthDirs(bp),
-      mergeDomainText: (bp, monthKeys) => this.mergeDomainTextForMonths(bp, monthKeys),
+      mergeDomainText: (bp, monthKeys) =>
+        this.mergeStageDocuments("monthly", this.storage.monthlySummaryDir(bp), monthKeys),
       normalizeYearlySummary: (raw, fallback, options) =>
         this.normalizeDomainSummary("yearly", raw, fallback, { ...options, fields }),
       saveYearlySummary: (params) => this.saveYearlyDomainSummary({ ...params, fields }),

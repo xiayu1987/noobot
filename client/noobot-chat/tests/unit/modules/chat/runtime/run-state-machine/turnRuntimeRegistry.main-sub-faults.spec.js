@@ -21,10 +21,13 @@ import {
   createTurnTerminalResolution,
 } from "@noobot/session-protocol";
 import { terminalStatusFixture } from "../../helpers/terminalStatusFixture.js";
+import { turnRecordFixture } from "../../helpers/turnRecordFixture.js";
 
 function event(registry, type, sessionId, turnScopeId, dialogProcessId, extra = {}) {
   return applyTurnRuntimeEvent(registry, {
     type,
+    timestamp: 1767225600000,
+    updatedAtMs: 1767225600000,
     sessionId,
     turnScopeId,
     dialogProcessId,
@@ -39,6 +42,7 @@ function start(registry, sessionId, turnScopeId, dialogProcessId, seq = 1) {
   applyTurnLifecycleEnvelope(
     registry,
     createTurnLifecycleEnvelope({
+      updatedAt: "2026-01-01T00:00:00.000Z",
       eventType: "turn.action_accepted",
       eventId: `accepted-${sessionId}-${turnScopeId}`,
       commandId: `command-${sessionId}-${turnScopeId}`,
@@ -60,6 +64,7 @@ function start(registry, sessionId, turnScopeId, dialogProcessId, seq = 1) {
   applyTurnLifecycleEnvelope(
     registry,
     createTurnLifecycleEnvelope({
+      updatedAt: "2026-01-01T00:00:00.000Z",
       eventType: "turn.processing_started",
       eventId: `start-${sessionId}-${turnScopeId}`,
       commandId: `command-${sessionId}-${turnScopeId}`,
@@ -85,8 +90,8 @@ function settle(registry, sessionId, turnScopeId, state = "completed", revision 
   resolutionSequence += 1;
   const completionCommitId = `commit-${sessionId}-${turnScopeId}-${revision}`;
   const failure = state.endsWith("_failed")
-    ? { phase: state.replace(/_failed$/, ""), message: `${state} failure`, retryable: false }
-    : undefined;
+    ? { code: "fixture_failure", message: `${state} failure`, retryable: false }
+    : null;
   return applyTurnTerminalResolution(
     registry,
     createTurnTerminalResolution({
@@ -95,13 +100,12 @@ function settle(registry, sessionId, turnScopeId, state = "completed", revision 
       turnScopeId,
       resolved: true,
       aggregateVersion: 1,
-      turn: {
+      turn: turnRecordFixture({
         continuedByTurnScopeId: "",
         sessionId,
         turnScopeId,
         dialogProcessId: `dp-${turnScopeId}`,
         state,
-        phase: state.replace(/_failed$/, ""),
         revision,
         sequence: revision,
         completionCommitId,
@@ -112,7 +116,7 @@ function settle(registry, sessionId, turnScopeId, state = "completed", revision 
           turnScopeId,
           dialogProcessId: `dp-${turnScopeId}`,
         }),
-      },
+      }),
     }),
   );
 }
@@ -146,6 +150,7 @@ describe("turnRuntimeRegistry main/sub-session concurrent fault isolation", () =
     const mismatched = applyTurnLifecycleEnvelope(
       registry,
       createTurnLifecycleEnvelope({
+        updatedAt: "2026-01-01T00:00:00.000Z",
         eventType: "turn.processing_started",
         eventId: "mismatched-main-processing",
         commandId: "command-main-main-turn",
@@ -210,6 +215,7 @@ describe("turnRuntimeRegistry main/sub-session concurrent fault isolation", () =
     applyTurnLifecycleEnvelope(
       registry,
       createTurnLifecycleEnvelope({
+        updatedAt: "2026-01-01T00:00:00.000Z",
         eventType: "turn.processing_started",
         eventId: "start-child-canonical-child-turn",
         commandId: "command-child-canonical-child-turn",

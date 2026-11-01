@@ -77,12 +77,7 @@ async function prepareSessionCommand({
   expectedAggregateVersion,
   matcher,
 }) {
-  const session = await this.sessionRepo.findById(userId, sessionId, { persistenceContext });
-  if (!session) {
-    const error = new Error("session not found");
-    error.statusCode = 404;
-    throw error;
-  }
+  const session = await this.sessionRepo.requireById(userId, sessionId, { persistenceContext });
   const idempotency = decideCommandIdempotency({
     commandId,
     type,

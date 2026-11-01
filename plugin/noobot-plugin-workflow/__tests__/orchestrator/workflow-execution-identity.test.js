@@ -46,7 +46,7 @@ function buildCtx() {
     sessionId: "s1",
     dialogProcessId: "d1",
     turnScopeId: "turn-workflow-test",
-    runConfig: { streaming: false },
+    runConfig: { streaming: false, locale: "zh-CN" },
     eventListener: {
       onEvent(event) {
         events.push(event);

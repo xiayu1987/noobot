@@ -90,22 +90,17 @@ export function filterForModelContext(
         .map(resolveContextToolCallDeclarationId)
         .filter(Boolean)
         .forEach((id) => assistantIds.add(id));
-    if (role === "tool") {
-      const id = resolveContextToolResultCallId(message);
-      if (id) resultIds.add(id);
-    }
+    if (role !== "tool") continue;
+    const id = resolveContextToolResultCallId(message);
+    if (id) resultIds.add(id);
   }
   const validIds = new Set([...assistantIds].filter((id) => resultIds.has(id)));
   const result = [];
   for (const message of source) {
     const role = resolveContextMessageRole(message);
     if (role === "tool") {
-      const id = resolveContextToolResultCallId(message);
-      if (id && validIds.has(id)) result.push(message);
-      else if (typeof recoverUnpairedToolResult === "function") {
-        const recovered = recoverUnpairedToolResult(message);
-        if (recovered) result.push(recovered);
-      }
+      const paired = pairedToolResult(message, validIds, recoverUnpairedToolResult);
+      if (paired) result.push(paired);
       continue;
     }
     if (role !== "assistant") {
@@ -121,6 +116,13 @@ export function filterForModelContext(
     if (ids.length && ids.every((id) => validIds.has(id))) result.push(message);
   }
   return result;
+}
+
+function pairedToolResult(message, validIds, recoverUnpairedToolResult) {
+  const id = resolveContextToolResultCallId(message);
+  if (id && validIds.has(id)) return message;
+  if (typeof recoverUnpairedToolResult === "function") return recoverUnpairedToolResult(message);
+  return null;
 }
 
 export function shouldMarkCurrentTurnSummarizedByPolicy(message = {}) {

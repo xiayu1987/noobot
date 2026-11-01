@@ -28,22 +28,25 @@ const ISSUE_RULES = Object.freeze({
   optionalPeerDependencies: "unusedDependencies",
 });
 
+function measureIssueGroup(measurement, { file, type, issues }, usage) {
+  const rule = ISSUE_RULES[type];
+  for (const issue of issues) {
+    if (usage.exempts(rule, EXEMPTION_KINDS.PROPERTY_NAME, `${file}#${issue.name}`)) continue;
+    addHit(measurement, { file, line: issue.line, message: `${type}: ${issue.name}` });
+  }
+}
+
+function measureReportRow(measured, row, usage) {
+  for (const [type, rule] of Object.entries(ISSUE_RULES)) {
+    measureIssueGroup(measured[rule], { file: row.file, type, issues: row[type] }, usage);
+  }
+}
+
 export function measureDeadCodeReport(report, usage = NO_EXEMPTIONS) {
   if (!Array.isArray(report.issues)) throw new TypeError("Knip report must contain issues");
   const measured = emptyRuleMeasurements(CHECK);
   for (const row of report.issues) {
-    if (!isFirstPartyProductionPath(row.file)) continue;
-    for (const [type, rule] of Object.entries(ISSUE_RULES)) {
-      for (const issue of row[type]) {
-        if (usage.exempts(rule, EXEMPTION_KINDS.PROPERTY_NAME, `${row.file}#${issue.name}`))
-          continue;
-        addHit(measured[rule], {
-          file: row.file,
-          line: issue.line,
-          message: `${type}: ${issue.name}`,
-        });
-      }
-    }
+    if (isFirstPartyProductionPath(row.file)) measureReportRow(measured, row, usage);
   }
   return measured;
 }

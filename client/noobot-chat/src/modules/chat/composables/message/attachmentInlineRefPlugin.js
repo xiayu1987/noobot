@@ -166,12 +166,15 @@ function splitTextTokenByRef(state, textToken) {
 function rewriteAttachmentTextTokens(state) {
   for (const blockToken of state.tokens || []) {
     if (blockToken.type !== "inline" || !Array.isArray(blockToken.children)) continue;
-    const children = blockToken.children;
-    for (let index = children.length - 1; index >= 0; index -= 1) {
-      if (children[index]?.type !== "text") continue;
-      const produced = splitTextTokenByRef(state, children[index]);
-      if (produced) children.splice(index, 1, ...produced);
-    }
+    rewriteTextChildren(state, blockToken.children);
+  }
+}
+
+function rewriteTextChildren(state, children) {
+  for (let index = children.length - 1; index >= 0; index -= 1) {
+    if (children[index]?.type !== "text") continue;
+    const produced = splitTextTokenByRef(state, children[index]);
+    if (produced) children.splice(index, 1, ...produced);
   }
 }
 
@@ -207,34 +210,39 @@ function resolveLinkTarget(href, env) {
 function rewriteAttachmentLinkTokens(state) {
   for (const blockToken of state.tokens || []) {
     if (blockToken.type !== "inline" || !Array.isArray(blockToken.children)) continue;
-    const children = blockToken.children;
-    for (let index = 0; index < children.length; index += 1) {
-      const token = children[index];
-      if (token.type !== "link_open") continue;
-      const href = String(token.attrGet?.("href") || "");
-      const target = resolveLinkTarget(href, state.env);
-      if (!target) continue;
+    rewriteLinkChildren(state, blockToken.children);
+  }
+}
 
-      let closeIndex = index + 1;
-      let depth = 1;
-      const labelParts = [];
-      while (closeIndex < children.length && depth > 0) {
-        const cursorToken = children[closeIndex];
-        if (cursorToken.type === "link_open") depth += 1;
-        else if (cursorToken.type === "link_close") {
-          depth -= 1;
-          if (depth === 0) break;
-        } else if (typeof cursorToken.content === "string") {
-          labelParts.push(cursorToken.content);
-        }
-        closeIndex += 1;
-      }
-      if (depth !== 0) continue;
+function readLinkLabel(children, start) {
+  let closeIndex = start + 1;
+  let depth = 1;
+  const labelParts = [];
+  while (closeIndex < children.length && depth > 0) {
+    const token = children[closeIndex];
+    if (token.type === "link_open") depth += 1;
+    else if (token.type === "link_close") depth -= 1;
+    else if (typeof token.content === "string") labelParts.push(token.content);
+    if (depth === 0) break;
+    closeIndex += 1;
+  }
+  return { closeIndex, depth, label: labelParts.join("").trim() };
+}
 
-      const replacement = new state.Token(ATTACHMENT_INLINE_TOKEN, "", 0);
-      replacement.meta = { ...target, label: labelParts.join("").trim() };
-      children.splice(index, closeIndex - index + 1, replacement);
-    }
+function rewriteLinkChildren(state, children) {
+  for (let index = 0; index < children.length; index += 1) {
+    const token = children[index];
+    if (token.type !== "link_open") continue;
+    const href = String(token.attrGet?.("href") || "");
+    const target = resolveLinkTarget(href, state.env);
+    if (!target) continue;
+
+    const { closeIndex, depth, label } = readLinkLabel(children, index);
+    if (depth !== 0) continue;
+
+    const replacement = new state.Token(ATTACHMENT_INLINE_TOKEN, "", 0);
+    replacement.meta = { ...target, label };
+    children.splice(index, closeIndex - index + 1, replacement);
   }
 }
 

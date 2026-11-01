@@ -9,6 +9,7 @@ import { WORKSPACE_LAYOUT, WORKSPACE_LAYOUT_UPGRADE_OWNER } from "@noobot/worksp
 import { runAtomicSessionRepair } from "@noobot/session-repair";
 import {
   SESSION_ARTIFACT_SCHEMA_VERSION,
+  SESSION_ARTIFACT_CHECKPOINT_IDENTITY_SOURCE_SCHEMA_VERSION,
   SESSION_ARTIFACT_READ_REJECTION_CODES,
   assertSessionManifestLayout,
 } from "@noobot/session-protocol";
@@ -37,7 +38,10 @@ async function planUpgrade({ storageService, sessionDir }) {
   } catch (cause) {
     throw Object.assign(checkpointIdentityError("manifest is not JSON"), { cause });
   }
-  if (session.schemaVersion === SESSION_ARTIFACT_SCHEMA_VERSION) {
+  if (
+    session.schemaVersion === SESSION_ARTIFACT_CHECKPOINT_IDENTITY_SOURCE_SCHEMA_VERSION ||
+    session.schemaVersion === SESSION_ARTIFACT_SCHEMA_VERSION
+  ) {
     assertSessionManifestLayout(session);
     assertStoredCheckpointReceipts(session);
     await readCheckpointReceiptProjection({ storageService, sessionDir, session });
@@ -65,7 +69,7 @@ async function planUpgrade({ storageService, sessionDir }) {
   }));
   return assertSessionManifestLayout({
     ...stored,
-    schemaVersion: SESSION_ARTIFACT_SCHEMA_VERSION,
+    schemaVersion: SESSION_ARTIFACT_CHECKPOINT_IDENTITY_SOURCE_SCHEMA_VERSION,
     turnOrder,
   });
 }

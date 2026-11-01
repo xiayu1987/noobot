@@ -331,23 +331,11 @@ watch(
 .thinking-execution-actions {
   flex: 0 0 auto;
   display: flex;
-  justify-content: flex-end;
+  justify-content: stretch;
+  gap: var(--noobot-space-sm);
   margin-top: var(--noobot-space-md);
   padding-top: var(--noobot-space-sm);
   border-top: 1px solid var(--noobot-divider);
-}
-.thinking-realtime-body {
-  max-height: none;
-}
-.thinking-realtime-log-stream {
-  min-height: 0;
-}
-.thinking-analysis-block :deep(.base-note-block__content) {
-  max-height: none;
-}
-.thinking-execution-actions {
-  justify-content: stretch;
-  gap: var(--noobot-space-sm);
 }
 .thinking-execution-action-button {
   flex: 1 1 0;

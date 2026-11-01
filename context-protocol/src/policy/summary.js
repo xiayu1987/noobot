@@ -128,17 +128,21 @@ function collectLatestFlowControlMessageIndexesByToolIdentity(
   const indexes = new Set();
   const latestBatchByTool = new Map();
   for (const batch of toolBatchIndex.assistantBatches) {
-    for (const call of batch.calls) {
-      if (!hasToolCallFlowControlRole(call, role)) continue;
-      const toolName = resolveToolCallName(call);
-      if (toolName) latestBatchByTool.set(toolName, batch);
-    }
+    indexFlowControlBatchByTool(batch, role, latestBatchByTool);
   }
   for (const batch of latestBatchByTool.values()) {
     indexes.add(batch.assistantIndex);
     batch.resultIndexes.forEach((index) => indexes.add(index));
   }
   return indexes;
+}
+
+function indexFlowControlBatchByTool(batch, role, latestBatchByTool) {
+  for (const call of batch.calls) {
+    if (!hasToolCallFlowControlRole(call, role)) continue;
+    const toolName = resolveToolCallName(call);
+    if (toolName) latestBatchByTool.set(toolName, batch);
+  }
 }
 
 export function collectLatestCheckpointBoundaryMessageIndexes(messages = []) {
@@ -168,16 +172,15 @@ export function shouldMarkCurrentTurnSummarizedMessageInScope(
     retainedInjectedIndexes = null,
     latestCheckpointBoundaryIndexes = null,
     latestCheckpointEvidenceIndexes = null,
-    policyOptions = {},
   } = {},
 ) {
   const source = Array.isArray(messages) ? messages : [];
   if (isContextControlMessage(message)) return true;
-  const injected = isInjectedMessage(message, policyOptions);
+  const injected = isInjectedMessage(message);
   const retainedInjected =
     retainedInjectedIndexes instanceof Set
       ? retainedInjectedIndexes
-      : collectRetainedInjectedMessageIndexes(source, policyOptions);
+      : collectRetainedInjectedMessageIndexes(source);
   if (injected && retainedInjected.has(index)) return false;
   if (injected) return true;
   if (
@@ -213,12 +216,12 @@ function isLatestCheckpointMessageIndex(
   return latestEvidence.has(index);
 }
 
-function summaryScope(messages, { policyOptions }) {
+function summaryScope(messages) {
   const source = Array.isArray(messages) ? messages : [];
   const toolBatchIndex = createToolCallBatchIndex(source);
   return {
     source,
-    retainedInjectedIndexes: collectRetainedInjectedMessageIndexes(source, policyOptions),
+    retainedInjectedIndexes: collectRetainedInjectedMessageIndexes(source),
     latestCheckpointBoundaryIndexes: collectLatestFlowControlMessageIndexesByToolIdentity(
       source,
       FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY,
@@ -315,10 +318,7 @@ function collectClosedToolCallBatchMessages(messages = [], { retentionMessages =
   );
 }
 
-export function resolveSummaryScope(
-  messageBlocks = {},
-  { messageKeys = null, policyOptions = {} } = {},
-) {
+export function resolveSummaryScope(messageBlocks = {}, { messageKeys = null } = {}) {
   const blocks = messageBlocks && typeof messageBlocks === "object" ? messageBlocks : {};
   const history = Array.isArray(blocks.history) ? blocks.history : [];
   const incremental = Array.isArray(blocks.incremental) ? blocks.incremental : [];
@@ -334,7 +334,6 @@ export function resolveSummaryScope(
     maxMessages: selectedCheckpointMessages.length,
     limitToProvidedMessagesOnly: true,
     retentionMessages: sourceMessages,
-    policyOptions,
   });
   return Object.freeze({
     history,
@@ -345,11 +344,8 @@ export function resolveSummaryScope(
   });
 }
 
-export function collectCurrentTurnSummarizedMessageIndexes(
-  messages = [],
-  { policyOptions = {} } = {},
-) {
-  const dimensions = summaryScope(messages, { policyOptions });
+export function collectCurrentTurnSummarizedMessageIndexes(messages = []) {
+  const dimensions = summaryScope(messages);
   const indexes = new Set();
   dimensions.source.forEach((message, index) => {
     if (
@@ -357,7 +353,6 @@ export function collectCurrentTurnSummarizedMessageIndexes(
         ...dimensions,
         messages: dimensions.source,
         index,
-        policyOptions,
       })
     ) {
       indexes.add(index);
@@ -366,15 +361,14 @@ export function collectCurrentTurnSummarizedMessageIndexes(
   return indexes;
 }
 
-function collectRecordSummarizedIndexes(records = [], policyOptions = {}) {
+function collectRecordSummarizedIndexes(records = []) {
   return collectCurrentTurnSummarizedMessageIndexes(
     records.map(projectSessionRecordToContextMessage),
-    { policyOptions },
   );
 }
 
-export function markCurrentTurnStoreSummarized(turnMessageStore, { policyOptions = {} } = {}) {
-  const indexes = collectRecordSummarizedIndexes(turnMessageStore.toArray(), policyOptions);
+export function markCurrentTurnStoreSummarized(turnMessageStore) {
+  const indexes = collectRecordSummarizedIndexes(turnMessageStore.toArray());
   const markedMessageUids = new Set();
   const markedCount = turnMessageStore.updateWhere({ summarized: true }, (record, index) => {
     if (!indexes.has(index)) return false;
@@ -384,8 +378,8 @@ export function markCurrentTurnStoreSummarized(turnMessageStore, { policyOptions
   return { markedCount, markedMessageUids };
 }
 
-export function markCurrentTurnArraySummarized(records = [], { policyOptions = {} } = {}) {
-  const indexes = collectRecordSummarizedIndexes(records, policyOptions);
+export function markCurrentTurnArraySummarized(records = []) {
+  const indexes = collectRecordSummarizedIndexes(records);
   return records.map((record, index) =>
     indexes.has(index) ? { ...record, summarized: true } : record,
   );
@@ -398,13 +392,35 @@ export function mirrorSummarizedMessagesByUid(messages, messageUids) {
   }
 }
 
+function shouldSelectScopedMessage(
+  message,
+  { preservedInjected, preservedCheckpointBoundaries, preservedCheckpointEvidence, ...scope },
+) {
+  if (isContextControlMessage(message)) return true;
+  if (isInjectedMessage(message)) {
+    return !isPreservedMessage(message, preservedInjected);
+  }
+  if (isFlowControlRoleMessage(message, FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY)) {
+    return (
+      !isPreservedMessage(message, preservedCheckpointBoundaries) &&
+      shouldMarkCurrentTurnSummarizedByPolicy(message)
+    );
+  }
+  if (isFlowControlRoleMessage(message, FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE)) {
+    return (
+      !isPreservedMessage(message, preservedCheckpointEvidence) &&
+      shouldMarkCurrentTurnSummarizedByPolicy(message)
+    );
+  }
+  return shouldMarkCurrentTurnSummarizedMessageInScope(message, scope);
+}
+
 export function collectScopedMessagesToSummarize(
   messages = [],
   {
     maxMessages = Number.POSITIVE_INFINITY,
     limitToProvidedMessagesOnly = false,
     retentionMessages = messages,
-    policyOptions = {},
   } = {},
 ) {
   const source = Array.isArray(messages) ? messages : [];
@@ -414,8 +430,8 @@ export function collectScopedMessagesToSummarize(
     Number.isFinite(numericLimit) && numericLimit >= 0
       ? Math.min(source.length, Math.floor(numericLimit))
       : source.length;
-  const dimensions = summaryScope(source, { policyOptions });
-  const retentionDimensions = summaryScope(retentionSource, { policyOptions });
+  const dimensions = summaryScope(source);
+  const retentionDimensions = summaryScope(retentionSource);
   const preservedInjected = collectPreservedMessages(
     retentionSource,
     retentionDimensions.retainedInjectedIndexes,
@@ -431,33 +447,19 @@ export function collectScopedMessagesToSummarize(
   const selectedMessages = [];
   for (let index = 0; index < limit; index += 1) {
     const message = source[index];
-    if (isContextControlMessage(message)) {
-      if (!resolveContextMessageSummarized(message)) {
-        selectedMessages.push(message);
-      }
-      continue;
-    }
-    const injected = isInjectedMessage(message, policyOptions);
-    if (injected) {
-      if (isPreservedMessage(message, preservedInjected)) continue;
-    } else if (isFlowControlRoleMessage(message, FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY)) {
-      if (isPreservedMessage(message, preservedCheckpointBoundaries)) continue;
-      if (!shouldMarkCurrentTurnSummarizedByPolicy(message)) continue;
-    } else if (isFlowControlRoleMessage(message, FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE)) {
-      if (isPreservedMessage(message, preservedCheckpointEvidence)) continue;
-      if (!shouldMarkCurrentTurnSummarizedByPolicy(message)) continue;
-    } else if (
-      !shouldMarkCurrentTurnSummarizedMessageInScope(message, {
+    if (
+      shouldSelectScopedMessage(message, {
         ...dimensions,
         messages: source,
         index,
-        policyOptions,
-      })
+        preservedInjected,
+        preservedCheckpointBoundaries,
+        preservedCheckpointEvidence,
+      }) &&
+      !resolveContextMessageSummarized(message)
     ) {
-      continue;
+      selectedMessages.push(message);
     }
-    if (resolveContextMessageSummarized(message)) continue;
-    selectedMessages.push(message);
   }
   return {
     messages: enforceToolCallBatchClosure(

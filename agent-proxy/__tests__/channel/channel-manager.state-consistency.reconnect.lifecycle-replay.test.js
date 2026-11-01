@@ -251,7 +251,11 @@ test("reconnect opens a query transport without replaying the stale run command"
             revision: 2,
             sequence: 2,
             state: "processing_failed",
-            failure: { code: "service_restart_orphaned_turn" },
+            failure: {
+              code: "service_restart_orphaned_turn",
+              message: "service restart orphaned turn",
+              retryable: false,
+            },
           },
         ],
         recovery: "none",

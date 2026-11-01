@@ -15,10 +15,41 @@ import {
   createTurnLifecycleSnapshot,
   isAvailableSessionDetailEntry,
   requireSessionDetailDocument,
+  requireSessionContentProjection,
+  selectSessionContentMessages,
   selectMainSessionDetailEntry,
 } from "../src/index.js";
 
 const INVALID = { code: SESSION_ERROR_CODE.SESSION_DETAIL_PAYLOAD_INVALID };
+
+test("partial content projection preserves references and distinguishes omitted messages", () => {
+  const partial = Object.freeze({ sessionId: "s-1", title: "updated" });
+  assert.equal(requireSessionContentProjection(partial), partial);
+  assert.deepEqual(selectSessionContentMessages(partial), []);
+  assert.equal(Object.hasOwn(partial, "messages"), false);
+  const messages = Object.freeze([Object.freeze({ role: "user" })]);
+  const content = Object.freeze({ sessionId: "s-1", messages });
+  assert.equal(requireSessionContentProjection(content), content);
+  assert.equal(selectSessionContentMessages(content), messages);
+});
+
+test("content projection rejects malformed containers and explicit invalid messages", () => {
+  for (const value of [null, undefined, [], "", 1, false]) {
+    assert.throws(() => requireSessionContentProjection(value), INVALID);
+    assert.throws(() => selectSessionContentMessages(value), INVALID);
+  }
+  for (const messages of [null, undefined, {}, "", [null], [[]], ["message"]]) {
+    assert.throws(() => selectSessionContentMessages({ messages }), INVALID);
+  }
+});
+
+test("content projection rejects retired summary and timing ownership even when undefined", () => {
+  for (const field of ["sessionSummary", "turnTimings"]) {
+    for (const value of [undefined, null, [], {}]) {
+      assert.throws(() => requireSessionContentProjection({ [field]: value }), INVALID);
+    }
+  }
+});
 
 function snapshot(sessionId) {
   return createTurnLifecycleSnapshot({
@@ -47,7 +78,7 @@ function availableEntry(overrides = {}) {
     aggregateVersion: 3,
     turnTimings: [],
     turnLifecycleSnapshot: snapshot(sessionId),
-    sessionArtifactEvents: [{ identity: { sessionId } }],
+    sessionArtifactEvents: [{ identity: { eventId: "artifact-1", sessionId } }],
     messages: [{ role: "user" }],
     availability: "available",
     ...overrides,

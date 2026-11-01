@@ -47,8 +47,9 @@ async function pathExists(file) {
   try {
     await fs.access(file);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    if (error.code === "ENOENT") return false;
+    throw error;
   }
 }
 
@@ -67,17 +68,8 @@ async function rotateIfNeeded(file, line, options = {}) {
   if (!maxFileBytes) return null;
   let state = activeFileStates.get(file);
   if (!state) {
-    let bytes = 0;
-    let exists = false;
-    try {
-      const stat = await fs.stat(file);
-      if (!stat.isFile()) return null;
-      bytes = Number(stat.size || 0);
-      exists = true;
-    } catch (error) {
-      if (error?.code !== "ENOENT") throw error;
-    }
-    state = { bytes, exists };
+    state = await readActiveFileState(file);
+    if (state === null) return null;
     cacheSet(activeFileStates, file, state);
   }
   if (!state.exists) return null;
@@ -86,6 +78,17 @@ async function rotateIfNeeded(file, line, options = {}) {
   await fs.rename(file, archive);
   state.bytes = 0;
   return archive;
+}
+
+async function readActiveFileState(file) {
+  try {
+    const stat = await fs.stat(file);
+    if (!stat.isFile()) return null;
+    return { bytes: stat.size, exists: true };
+  } catch (error) {
+    if (error.code === "ENOENT") return { bytes: 0, exists: false };
+    throw error;
+  }
 }
 
 async function ensureDirectory(directory) {
@@ -177,25 +180,27 @@ function flushPendingBatch(file) {
   pendingBatches.delete(file);
   batch.flushing = true;
   if (batch.timer) clearTimeout(batch.timer);
-  batch.flushPromise = enqueueAppend(file, async () => {
-    let start = 0;
-    while (start < batch.entries.length) {
-      let end = start + 1;
-      while (
-        end < batch.entries.length &&
-        sameBatchOptions(batch.entries[start].options, batch.entries[end].options)
-      )
-        end += 1;
-      const group = batch.entries.slice(start, end);
-      try {
-        await appendLineBatch(file, group);
-      } catch (error) {
-        for (const entry of group) entry.reject(error);
-      }
-      start = end;
-    }
-  });
+  batch.flushPromise = enqueueAppend(file, () => appendOptionGroups(file, batch.entries));
   return batch.flushPromise;
+}
+
+async function appendOptionGroups(file, entries) {
+  let start = 0;
+  while (start < entries.length) {
+    let end = start + 1;
+    while (end < entries.length && sameBatchOptions(entries[start].options, entries[end].options))
+      end += 1;
+    await settleLineBatch(file, entries.slice(start, end));
+    start = end;
+  }
+}
+
+async function settleLineBatch(file, entries) {
+  try {
+    await appendLineBatch(file, entries);
+  } catch (error) {
+    for (const entry of entries) entry.reject(error);
+  }
 }
 
 function isArchiveForActiveFile(activeFile, candidate) {
@@ -240,9 +245,8 @@ async function cleanupArchives(file, options = {}) {
   const deleteSet = new Set();
   if (retentionDays) {
     const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
-    for (const archive of archives) {
-      if (archive.mtimeMs < cutoff) deleteSet.add(archive.file);
-    }
+    for (const archive of archives.filter((entry) => entry.mtimeMs < cutoff))
+      deleteSet.add(archive.file);
   }
   if (maxArchives && archives.length > maxArchives) {
     for (const archive of archives.slice(0, archives.length - maxArchives)) {

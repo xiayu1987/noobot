@@ -5,7 +5,6 @@
  */
 
 import { WORKFLOW_PLUGIN_DEFAULTS } from "./constants.js";
-import { getWorkflowDefaultSemanticPrompt, normalizeWorkflowLocale } from "./i18n.js";
 import { isFunction, text } from "@noobot/shared/value";
 
 function normalizeToolNameList(input = []) {
@@ -58,14 +57,12 @@ export function resolveWorkflowAgentHostCapabilities(input = {}) {
 export function normalizeOptions(input = {}) {
   const source = input && typeof input === "object" ? input : {};
   const mode = (text(source?.mode) || WORKFLOW_PLUGIN_DEFAULTS.MODE_OFF).toLowerCase();
-  const locale = normalizeWorkflowLocale(source?.locale || WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_LOCALE);
   const maxAutoTransitions = Number(source?.maxAutoTransitions);
   const maxParallelNodeAgents = Number(source?.maxParallelNodeAgents);
   const miniRunnerMaxTurns = Number(source?.miniRunnerMaxTurns);
 
   return {
     enabled: source?.enabled !== false,
-    locale,
     mode:
       mode === WORKFLOW_PLUGIN_DEFAULTS.MODE_ON
         ? WORKFLOW_PLUGIN_DEFAULTS.MODE_ON
@@ -73,7 +70,7 @@ export function normalizeOptions(input = {}) {
     semanticPrompt:
       typeof source?.semanticPrompt === "string" && source.semanticPrompt.trim()
         ? source.semanticPrompt.trim()
-        : getWorkflowDefaultSemanticPrompt(locale),
+        : "",
     semanticModel: text(source?.semanticModel),
     maxAutoTransitions:
       Number.isFinite(maxAutoTransitions) && maxAutoTransitions > 0

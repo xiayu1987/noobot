@@ -4,124 +4,22 @@
  * SPDX-License-Identifier: MIT
  */
 import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
+import { mountItem } from "./sharedChatMessageItemHarness.js";
 import { mount } from "@vue/test-utils";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { defineComponent, h, nextTick, ref } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import SharedChatMessageItem from "../../../../../../src/modules/chat/components/message/SharedChatMessageItem.vue";
-import { useChatStore } from "../../../../../../src/modules/chat/stores/useChatStore.js";
+import { createElementPlusMountOptions } from "../../../../fixtures/elementPlusStubs.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { defineComponent, h, nextTick, ref } from "vue";
 import {
   clearExtensionRegistry,
   contributeExtension,
 } from "../../../../../../src/extensions/extension-registry.js";
 import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
 import { clearSessionTurnUiStates } from "../../../../../../src/modules/chat/runtime/engine/turnUiStore.js";
-import {
-  canonicalWorkflowRuntimeEvent,
-  canonicalWorkflowSessionSnapshot,
-} from "../../helpers/workflowRuntimeEventFixture.js";
-import { WORKFLOW_RUNTIME_EVENT } from "@noobot/event-protocol/workflow-runtime-event";
+import { canonicalWorkflowSessionSnapshot } from "../../helpers/workflowRuntimeEventFixture.js";
 import { resolveMessageViewKey } from "@noobot/event-protocol/message-event";
-import { createElementPlusMountOptions } from "../../../../fixtures/elementPlusStubs.js";
 import { ElTabPane, ElTabs } from "element-plus";
-
-vi.mock("../../../../../../src/shared/public-api/ui.js", async () => {
-  const { defineComponent, h } = await import("vue");
-  const passthrough = (name) =>
-    defineComponent({
-      name,
-      setup(_, { slots }) {
-        return () => h("div", { class: `${name}-stub` }, slots.default?.());
-      },
-    });
-  return {
-    BaseAttachmentFileCard: defineComponent({
-      name: "BaseAttachmentFileCard",
-      props: {
-        attachmentItem: { type: Object, default: () => ({}) },
-        nameText: { type: String, default: "" },
-      },
-      setup(props) {
-        return () =>
-          h(
-            "div",
-            { class: "BaseAttachmentFileCard-stub" },
-            props.nameText || props.attachmentItem?.name || props.attachmentItem?.fileName || "",
-          );
-      },
-    }),
-    BaseFileCardList: passthrough("BaseFileCardList"),
-    BaseMarkdownContent: defineComponent({
-      name: "BaseMarkdownContent",
-      props: { content: { type: String, default: "" } },
-      setup(props) {
-        return () => h("div", { class: "BaseMarkdownContent-stub" }, props.content);
-      },
-    }),
-    BaseMessageErrorAlert: defineComponent({
-      name: "BaseMessageErrorAlert",
-      props: { error: { type: String, default: "" } },
-      setup(props) {
-        return () =>
-          props.error
-            ? h("div", { class: "BaseMessageErrorAlert-stub", "data-error": props.error })
-            : null;
-      },
-    }),
-    BaseMessageShell: defineComponent({
-      name: "BaseMessageShell",
-      props: { hideHeader: { type: Boolean, default: false } },
-      setup(props, { slots }) {
-        return () =>
-          h(
-            "div",
-            {
-              class: "BaseMessageShell-stub",
-              "data-hide-header": String(props.hideHeader),
-            },
-            slots.default?.(),
-          );
-      },
-    }),
-    BaseMessageTypeTag: defineComponent({
-      name: "BaseMessageTypeTag",
-      setup() {
-        return () => h("div", { class: "BaseMessageTypeTag-stub" });
-      },
-    }),
-    BasePreviewContent: defineComponent({
-      name: "BasePreviewContent",
-      setup() {
-        return () => null;
-      },
-    }),
-  };
-});
-
-vi.mock("../../../../../../src/modules/chat/components/thinking/ThinkingPanel.vue", async () => {
-  const { defineComponent, h, onMounted } = await import("vue");
-  return {
-    default: defineComponent({
-      name: "ThinkingPanel",
-      props: {
-        messageItem: { type: Object, default: () => ({}) },
-        fetchExecutionReport: { type: Function, default: null },
-      },
-      emits: ["panel-visibility-change", "open-thinking-details"],
-      setup(props, { emit }) {
-        const visible = props.messageItem?.thinkingProbeVisible === true;
-        onMounted(() => emit("panel-visibility-change", visible));
-        return () => (visible ? h("div", { class: "thinking-panel-probe" }) : null);
-      },
-    }),
-  };
-});
-
-vi.mock("../../../../../../src/shared/i18n/useLocale", () => ({
-  useLocale: () => ({
-    translate: (key = "") => key,
-  }),
-}));
 
 const TestRenderer = defineComponent({
   name: "SharedMessageContextProbe",
@@ -168,54 +66,6 @@ const RuntimeRenderer = defineComponent({
       });
   },
 });
-
-function mountItem(props = {}) {
-  const { storeSetup, ...componentProps } = props;
-  const pinia = createPinia();
-  setActivePinia(pinia);
-  storeSetup?.(useChatStore(pinia));
-  const messageItem = componentProps.messageItem || {
-    presentationMessageId: "msg-1",
-    role: "assistant",
-    content: "hello",
-    attachments: [
-      {
-        attachmentId: "att-1",
-        sessionId: "test-session",
-        attachmentSource: "test",
-        name: "a.txt",
-        size: 12,
-      },
-    ],
-  };
-  return mount(SharedChatMessageItem, {
-    props: {
-      sessionDocs: [],
-      userId: "u1",
-      renderMarkdown: (content = "") => String(content || ""),
-      formatTime: (value = "") => String(value || ""),
-      formatFileSize: (value = 0) => String(value || 0),
-      isImageMime: () => false,
-      stopExecution: async () => true,
-      fetchExecutionReport: async () => null,
-      ...componentProps,
-      messageItem,
-      allMessages: componentProps.allMessages || [messageItem],
-    },
-    global: {
-      plugins: [pinia],
-      ...createElementPlusMountOptions({
-        "el-drawer": true,
-        "el-button": defineComponent({
-          name: "ElButton",
-          setup(_, { slots }) {
-            return () => h("button", slots.default?.());
-          },
-        }),
-      }),
-    },
-  });
-}
 
 describe("SharedChatMessageItem", () => {
   beforeEach(() => {
@@ -421,94 +271,6 @@ describe("SharedChatMessageItem", () => {
     });
 
     expect(wrapper.find(".BaseMessageTypeTag-stub").exists()).toBe(true);
-  });
-
-  it("keeps the single outer assistant header that owns a live workflow", () => {
-    const wrapper = mountItem({
-      storeSetup: (store) =>
-        store.applyWorkflowRuntimeEvent(
-          canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.PLANNING, {
-            eventId: "turn-workflow:planning",
-            executionId: "turn-workflow",
-            workflowRunId: "turn-workflow",
-            authoritySessionId: "session-1",
-            dialogProcessId: "dialog-workflow",
-            turnScopeId: "turn-workflow",
-            presentationMessageId: "workflow-thinking-host",
-            semanticText: "WORKFLOW_DSL/1",
-            workflowPayload: {
-              nodes: [{ nodeExecutionId: "node-1" }],
-              nodeSessions: [
-                {
-                  nodeExecutionId: "node-1",
-                  eventId: "workflow_node_state:turn-workflow:node-1:1",
-                  status: "running",
-                  revision: 1,
-                  sequence: 1,
-                },
-              ],
-            },
-          }),
-          { source: "test" },
-        ),
-      messageItem: {
-        presentationMessageId: "workflow-thinking-host",
-        role: "assistant",
-        type: "message",
-        content: "",
-        sessionId: "session-1",
-        dialogProcessId: "dialog-workflow",
-        turnScopeId: "turn-workflow",
-        pending: true,
-      },
-    });
-
-    expect(wrapper.find(".BaseMessageShell-stub").attributes("data-hide-header")).toBe("false");
-  });
-
-  it("keeps the assistant header when workflow ownership arrives after mount", async () => {
-    const wrapper = mountItem({
-      messageItem: {
-        presentationMessageId: "workflow-thinking-host-late",
-        role: "assistant",
-        type: "message",
-        content: "",
-        sessionId: "session-late",
-        dialogProcessId: "dialog-before-workflow",
-        turnScopeId: "turn-before-workflow",
-        pending: true,
-      },
-    });
-    expect(wrapper.find(".BaseMessageShell-stub").attributes("data-hide-header")).toBe("false");
-
-    useChatStore().applyWorkflowRuntimeEvent(
-      canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.PLANNING, {
-        eventId: "workflow-late:planning",
-        executionId: "workflow-late",
-        workflowRunId: "workflow-late",
-        authoritySessionId: "session-late",
-        dialogProcessId: "dialog-workflow-late",
-        turnScopeId: "turn-workflow-late",
-        presentationMessageId: "workflow-thinking-host-late",
-        semanticText: "WORKFLOW_DSL/1",
-        workflowPayload: {
-          nodes: [{ nodeExecutionId: "node-late" }],
-          nodeSessions: [
-            {
-              nodeExecutionId: "node-late",
-              eventId: "workflow_node_state:late-workflow:node-late:1",
-              status: "running",
-              revision: 1,
-              sequence: 1,
-            },
-          ],
-        },
-      }),
-      { source: "test" },
-    );
-    await nextTick();
-
-    expect(wrapper.find(".BaseMessageShell-stub").attributes("data-hide-header")).toBe("false");
   });
 
   it("passes displayed attachments to message card renderers", () => {

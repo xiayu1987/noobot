@@ -144,18 +144,13 @@ export function advanceAuxiliaryModelContext({
   let appendsSystem = false;
   for (const message of [...system, ...history]) {
     const identity = resolveAuxiliarySequenceIdentity(message);
-    if (identity.kind === AUXILIARY_SEQUENCE_MESSAGE_KIND.CONTEXT) {
-      const id = requireContextIdentity(message);
-      if (!contextIds.has(id)) {
-        contextIds.add(id);
-        appended.push(message);
-        if (system.includes(message)) appendsSystem = true;
-      }
-    } else if (!stableProtocolIds.has(identity.key)) {
-      stableProtocolIds.add(identity.key);
-      appended.push(message);
-      if (system.includes(message)) appendsSystem = true;
-    }
+    const isContext = identity.kind === AUXILIARY_SEQUENCE_MESSAGE_KIND.CONTEXT;
+    const ids = isContext ? contextIds : stableProtocolIds;
+    const key = isContext ? requireContextIdentity(message) : identity.key;
+    if (ids.has(key)) continue;
+    ids.add(key);
+    appended.push(message);
+    if (system.includes(message)) appendsSystem = true;
   }
   if (appendsSystem) {
     const snapshot = cloneSnapshot(revision, currentMessages);

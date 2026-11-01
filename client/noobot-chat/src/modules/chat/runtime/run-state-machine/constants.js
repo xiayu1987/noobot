@@ -36,29 +36,7 @@ export const FrontendRunState = Object.freeze({
   STOP_ERROR: "frontend_stop_error",
 });
 
-export const SESSION_RUN_EVENT = Object.freeze({
-  LOCAL_SEND_STARTED: "local_send_started",
-  LOCAL_SEND_REQUEST_STARTED: "local_send_request_started",
-  LOCAL_SEND_REQUEST_SETTLED: "local_send_request_settled",
-  LOCAL_CONTINUE_REQUEST_STARTED: "local_continue_request_started",
-  LOCAL_CONTINUE_REQUEST_SETTLED: "local_continue_request_settled",
-  LOCAL_RESEND_STARTED: "local_resend_started",
-  LOCAL_RESEND_REPLACING_TURN: "local_resend_replacing_turn",
-  LOCAL_RESEND_STREAMING: "local_resend_streaming",
-  LOCAL_RESEND_FAILED: "local_resend_failed",
-  LOCAL_FRONTEND_COMPLETION_REQUEST_STARTED: "local_frontend_completion_request_started",
-  LOCAL_FRONTEND_COMPLETION_FAILED: "local_frontend_completion_failed",
-  LOCAL_USER_STOP_REQUESTED: "local_user_stop_requested",
-  LOCAL_USER_STOP_REQUEST_STARTED: "local_user_stop_request_started",
-  LOCAL_USER_STOP_REQUEST_SETTLED: "local_user_stop_request_settled",
-  LOCAL_USER_STOP_PENDING_BACKEND_READY: "local_user_stop_pending_backend_ready",
-  LOCAL_USER_STOP_PENDING_CLEARED: "local_user_stop_pending_cleared",
-  BACKEND_CONVERSATION_STATE: "backend_conversation_state",
-  BACKEND_CHANNEL_STATE: "backend_channel_state",
-  BACKEND_TURN_LIFECYCLE: "backend_turn_lifecycle",
-  TERMINAL_RESOLVED: "turn_terminal_resolved",
-  LOCAL_RESET: "local_reset",
-});
+export { SESSION_RUN_EVENT } from "@noobot/session-protocol/runtime-event";
 
 export const MESSAGE_IN_FLIGHT_CHANNEL_STATES = Object.freeze([
   FrontendRunState.ACTION_REQUESTING,

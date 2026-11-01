@@ -5,8 +5,10 @@
  */
 export * from "./authority-event-outbox.js";
 export * from "./envelope.js";
+export * from "./attachment-lifecycle.js";
 export * from "./replay-batch.js";
 export * from "./event-registry.js";
+export * from "./session-artifact-events.js";
 export * from "./interaction.js";
 export * from "./turn-snapshot.js";
 export * from "./turn-lifecycle-event.js";

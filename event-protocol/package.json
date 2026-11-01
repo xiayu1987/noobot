@@ -8,6 +8,8 @@
     ".": "./src/index.js",
     "./envelope": "./src/envelope.js",
     "./outbox": "./src/authority-event-outbox.js",
+    "./attachment-lifecycle-migration": "./src/attachment-lifecycle-migration.js",
+    "./turn-outbox": "./src/turn-outbox-projection.js",
     "./package.json": "./package.json",
     "./message-event": "./src/message-event.js",
     "./turn-snapshot": "./src/turn-snapshot.js",
@@ -19,6 +21,7 @@
     "./activity-timeline": "./src/activity-timeline.js",
     "./thinking-detail-content": "./src/thinking-detail-content.js",
     "./workflow-runtime-event": "./src/workflow-runtime-event.js",
+    "./workflow-session-detail": "./src/workflow-session-detail.js",
     "./plugin-artifact-event": "./src/plugin-artifact-event.js"
   },
   "scripts": {

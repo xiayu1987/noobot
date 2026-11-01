@@ -68,7 +68,7 @@ describe("useReconnectReplay", () => {
     });
 
     refs.activeSessionId.value = "s-2";
-    refs.activeSession.value = refs.sessions.value.find((s) => s.sessionId === "s-2");
+    expect(refs.activeSession.value.sessionId).toBe("s-2");
 
     await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-2",
@@ -80,7 +80,7 @@ describe("useReconnectReplay", () => {
     });
 
     refs.activeSessionId.value = "s-1";
-    refs.activeSession.value = refs.sessions.value.find((s) => s.sessionId === "s-1");
+    expect(refs.activeSession.value.sessionId).toBe("s-1");
 
     await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",

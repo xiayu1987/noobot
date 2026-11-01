@@ -9,6 +9,7 @@ import {
   assertTurnTimingOwnership,
   mergeTurnTimingRecord,
   normalizeTurnTimingRecord,
+  projectTurnTiming,
 } from "../src/index.js";
 
 const FINISHED_AT = "2026-10-01T00:00:09.000Z";
@@ -72,4 +73,27 @@ test("turn timing ownership rejects a timing owned by another dialog process", (
   assert.throws(() => assertTurnTimingOwnership(timing, "dialog-2"), {
     code: "SESSION_TURN_TIMING_CONFLICT",
   });
+});
+
+test("turn timing projection injects the recorded fact and keeps unloaded turns unchanged", () => {
+  const turn = { ...base, state: "completed" };
+  assert.deepEqual(projectTurnTiming(turn, [{ ...base, thinkingFinishedAt: FINISHED_AT }]), {
+    ...turn,
+    thinkingFinishedAt: FINISHED_AT,
+  });
+  assert.equal(projectTurnTiming(turn, []), turn);
+  assert.equal(projectTurnTiming(turn, [{ ...base, modelLoopRound: 2 }]), turn);
+});
+
+test("turn timing projection rejects missing containers, invalid records and foreign owners", () => {
+  const turn = { ...base, state: "completed" };
+  assert.throws(() => projectTurnTiming(turn, undefined), { code: "SESSION_TURN_TIMING_INVALID" });
+  assert.throws(() => projectTurnTiming(turn, [null]), { code: "SESSION_TURN_TIMING_INVALID" });
+  assert.throws(
+    () =>
+      projectTurnTiming(turn, [
+        { turnScopeId: "turn-1", dialogProcessId: "dialog-2", thinkingFinishedAt: FINISHED_AT },
+      ]),
+    { code: "SESSION_TURN_TIMING_CONFLICT" },
+  );
 });

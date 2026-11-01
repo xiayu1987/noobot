@@ -17,7 +17,7 @@ function createEngine({
   captureDialogToShortMemory = async () => true,
   maybeSummarize = async () => undefined,
   globalConfig = {},
-  appendTurns = async (payload = {}) => ({ appended: true, reason: "", turns: payload.turns }),
+  appendTurns = async (payload = {}) => ({ turns: payload.turns }),
   upsertTurnTiming = async () => {},
 } = {}) {
   const session = {
@@ -71,6 +71,9 @@ function buildFinalizeInput(userConfig = {}) {
     thinkingStartedAt: "2026-07-08T16:49:44.113Z",
     agentResult: {
       output: "ok",
+      traces: [],
+      modelMessages: [],
+      modelLoopRound: 0,
       turnMessages: [{ role: "assistant", type: "message", content: "ok", messageUid: "sm_final" }],
     },
     persistedTurnMessageUids: [],
@@ -88,7 +91,7 @@ test("_finalizeRunSession persists only thinking finish facts to turn timing", a
   const engine = createEngine({
     appendTurns: async (payload = {}) => {
       appendTurnPayloads.push(...payload.turns);
-      return { appended: true, reason: "", turns: payload.turns };
+      return { turns: payload.turns };
     },
     upsertTurnTiming: async (payload) => timingPayloads.push(payload),
   });

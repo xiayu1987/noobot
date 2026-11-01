@@ -10,14 +10,13 @@ import { buildEngineErrorPayload } from "../../../src/runtime/errors/error-handl
 import { recoverableToolError } from "../../../src/shared/errors/index.js";
 import { resolveErrorMessage } from "../../../src/shared/utils/error-utils.js";
 
-test("structured abort identity is the canonical error message", () => {
-  const error = { type: "user_stop" };
+test("structured abort reason is the canonical error message", () => {
+  const error = { type: "user_stop", reason: "stopped by user" };
 
-  assert.equal(resolveErrorMessage(error), "user_stop");
   const payload = buildEngineErrorPayload({ error });
   assert.equal(payload.classification, "abort");
-  assert.equal(payload.message, "user_stop");
-  assert.equal(payload.error.message, "user_stop");
+  assert.equal(payload.message, "stopped by user");
+  assert.equal(payload.error.message, "stopped by user");
   assert.equal(payload.error.type, "user_stop");
 });
 

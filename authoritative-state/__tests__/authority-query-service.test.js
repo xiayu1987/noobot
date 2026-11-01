@@ -14,24 +14,24 @@ import {
   resolveAuthoritativeTurnTerminal,
 } from "../src/application/index.js";
 
+import { turnRecord } from "./helpers/turn-record.js";
+
 const now = "2026-07-30T00:00:00.000Z";
-const turn = (overrides = {}) => ({
-  turnScopeId: "turn-1",
-  presentationMessageId: "message-1",
-  dialogProcessId: "dialog-1",
-  executionId: "agent:turn-1",
-  executionKind: "agent",
-  rootExecutionId: "agent:turn-1",
-  state: "processing",
-  phase: "processing",
-  executionState: "sending",
-  revision: 2,
-  sequence: 2,
-  startedAt: now,
-  createdAt: now,
-  updatedAt: now,
-  ...overrides,
-});
+const turn = (overrides = {}) =>
+  turnRecord({
+    turnScopeId: "turn-1",
+    presentationMessageId: "message-1",
+    dialogProcessId: "dialog-1",
+    state: "processing",
+    phase: "processing",
+    executionState: "sending",
+    revision: 2,
+    sequence: 2,
+    startedAt: now,
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
+  });
 
 test("authority builds active and terminal snapshot from one lifecycle rule", () => {
   const snapshot = createAuthoritativeTurnSnapshot({
@@ -46,6 +46,7 @@ test("authority builds active and terminal snapshot from one lifecycle rule", ()
           executionId: "agent:turn-0",
           rootExecutionId: "agent:turn-0",
           state: "completed",
+          finishedAt: now,
           phase: "completion",
           sequence: 1,
         }),
@@ -85,6 +86,7 @@ test("authority snapshot carries the read-side recovery annotation verbatim", ()
       sequence: 2,
       turns: { "turn-1": turn() },
     },
+    turnTimings: [],
     commandId: "snapshot-recovery",
     sessionId: "s1",
     terminalTurnScopeIds: [],
@@ -103,10 +105,23 @@ test("authority snapshots only terminal Turns represented by canonical messages"
       ...createEmptyTurnLifecycle(),
       sequence: 3,
       turns: {
-        "turn-retained": turn({ turnScopeId: "turn-retained", state: "completed", sequence: 2 }),
-        "turn-deleted": turn({ turnScopeId: "turn-deleted", state: "stop_completed", sequence: 3 }),
+        "turn-retained": turn({
+          turnScopeId: "turn-retained",
+          state: "completed",
+          phase: "completion",
+          finishedAt: now,
+          sequence: 2,
+        }),
+        "turn-deleted": turn({
+          turnScopeId: "turn-deleted",
+          state: "stop_completed",
+          phase: "stop",
+          finishedAt: now,
+          sequence: 3,
+        }),
       },
     },
+    turnTimings: [],
     terminalTurnScopeIds: ["turn-retained"],
     recovery: "none",
     commandId: "snapshot-message-projection",
@@ -131,6 +146,7 @@ test("authority owns terminal readiness decisions", () => {
   assert.equal(
     resolveAuthoritativeTurnTerminal({
       lifecycle,
+      turnTimings: [],
       commandId: "resolve-1",
       sessionId: "s1",
       turnScopeId: "missing",
@@ -140,6 +156,7 @@ test("authority owns terminal readiness decisions", () => {
   assert.equal(
     resolveAuthoritativeTurnTerminal({
       lifecycle,
+      turnTimings: [],
       commandId: "resolve-1",
       sessionId: "s1",
       turnScopeId: "turn-1",
@@ -150,10 +167,19 @@ test("authority owns terminal readiness decisions", () => {
   lifecycle.turns["turn-1"] = turn({
     state: "completed",
     phase: "completion",
-    terminalStatus: { turnScopeId: "turn-1", status: "completed", reason: "run_completed" },
+    finishedAt: now,
+    terminalStatus: {
+      turnScopeId: "turn-1",
+      dialogProcessId: "dialog-1",
+      status: "completed",
+      reason: "run_completed",
+      description: "",
+      updatedAt: now,
+    },
   });
   const resolved = resolveAuthoritativeTurnTerminal({
     lifecycle,
+    turnTimings: [],
     aggregateVersion: 12,
     commandId: "resolve-1",
     sessionId: "s1",
@@ -191,7 +217,7 @@ test("authority execution read model excludes conflicting ownership and builds t
       turnLifecycle: {
         ...createEmptyTurnLifecycle(),
         sequence: 2,
-        turns: { "turn-1": turn({ executionId: "agent:conflict" }) },
+        turns: { conflict: turn({ turnScopeId: "conflict" }) },
       },
     },
     {
@@ -199,7 +225,7 @@ test("authority execution read model excludes conflicting ownership and builds t
       turnLifecycle: {
         ...createEmptyTurnLifecycle(),
         sequence: 2,
-        turns: { "turn-1": turn({ executionId: "agent:conflict" }) },
+        turns: { conflict: turn({ turnScopeId: "conflict" }) },
       },
     },
   ]);

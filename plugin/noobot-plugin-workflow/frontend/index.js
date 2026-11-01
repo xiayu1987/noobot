@@ -7,39 +7,34 @@ import { routeWorkflowDiagnosticsPayload } from "./runtime/workflowDiagnosticsRo
 import { createPluginActivationResult, PLUGIN_SURFACE } from "@noobot/plugin-protocol";
 import { EVENT_FAMILY } from "@noobot/event-protocol";
 import { isPlainObject, text, isFunction } from "@noobot/shared/value";
+import { requireWorkflowSessionRequest } from "@noobot/event-protocol/workflow-session-detail";
 
 function routeWorkflowRuntimeEvent({ envelope, descriptor, context = {} } = {}) {
   if (descriptor?.family !== EVENT_FAMILY.WORKFLOW_RUNTIME) return false;
   const data = envelope.payload;
-  const authoritySessionId = String(envelope.identity.sessionId || "");
-  const nodeSessionId = String(data?.nodeSessionId || "");
-  context?.logRuntimeProjectionDiagnostics?.("frontend.workflowRuntime.projectorMatched", {
-    sessionId: authoritySessionId,
-    nodeSessionId,
-    dialogProcessId: String(data?.dialogProcessId || ""),
-    turnScopeId: String(envelope.identity.turnScopeId || context?.turnScopeId || ""),
-    workflowRunId: String(data?.workflowRunId || ""),
-    nodeExecutionId: String(data?.nodeExecutionId || ""),
+  if (!isFunction(context.applyWorkflowRuntimeEvent)) {
+    throw new TypeError("workflow runtime projector requires applyWorkflowRuntimeEvent");
+  }
+  const diagnostics = {
+    sessionId: envelope.identity.sessionId,
+    nodeSessionId: data.nodeSessionId,
+    dialogProcessId: data.dialogProcessId,
+    turnScopeId: envelope.identity.turnScopeId,
+    workflowRunId: data.workflowRunId,
+    nodeExecutionId: envelope.identity.executionId,
     runtimeEvent: envelope.identity.eventType,
-    authoritativeSequence: Number(envelope.ordering.sequence),
-    status: String(data?.status || data?.state || ""),
-    source: String(context?.source || "live"),
+    source: context.source,
+  };
+  context.logRuntimeProjectionDiagnostics?.("frontend.workflowRuntime.projectorMatched", {
+    ...diagnostics,
+    authoritativeSequence: envelope.ordering.sequence,
+    status: data.status,
   });
-  const result =
-    typeof context?.applyWorkflowRuntimeEvent === "function"
-      ? context.applyWorkflowRuntimeEvent(envelope, { source: context?.source || "live" })
-      : { applied: false, reason: "workflow_runtime_projection_unavailable" };
-  context?.logRuntimeProjectionDiagnostics?.("frontend.workflowRuntime.projectorReduced", {
-    sessionId: authoritySessionId,
-    nodeSessionId,
-    dialogProcessId: String(data?.dialogProcessId || ""),
-    turnScopeId: String(envelope.identity.turnScopeId || context?.turnScopeId || ""),
-    workflowRunId: String(data?.workflowRunId || ""),
-    nodeExecutionId: String(data?.nodeExecutionId || ""),
-    runtimeEvent: envelope.identity.eventType,
-    applied: result?.applied === true,
-    reason: String(result?.reason || ""),
-    source: String(context?.source || "live"),
+  const result = context.applyWorkflowRuntimeEvent(envelope, { source: context.source });
+  context.logRuntimeProjectionDiagnostics?.("frontend.workflowRuntime.projectorReduced", {
+    ...diagnostics,
+    applied: result.applied,
+    reason: result.reason,
   });
   return true;
 }
@@ -54,21 +49,30 @@ function requireAuthenticatedRequest(request) {
 function createWorkflowSessionService(authenticatedRequest) {
   const request = requireAuthenticatedRequest(authenticatedRequest);
   return Object.freeze({
-    getDetail({ userId, sessionId, dialogProcessId, traceId }) {
-      const query = new URLSearchParams({ traceId });
+    getDetail(input) {
+      const { userId, sessionId, dialogProcessId, traceId } = requireWorkflowSessionRequest(
+        input,
+        "detail",
+      );
+      const query = new URLSearchParams();
+      if (traceId !== undefined) query.set("traceId", traceId);
       return request(
         `/api/internal/workflow/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/${encodeURIComponent(dialogProcessId)}?${query.toString()}`,
         { method: "GET" },
       );
     },
-    getExecutionReport({ userId, sessionId, routeDialogProcessId, dialogProcessId }) {
+    getExecutionReport(input) {
+      const { userId, sessionId, routeDialogProcessId, dialogProcessId } =
+        requireWorkflowSessionRequest(input, "execution-report");
       const query = new URLSearchParams({ dialogProcessId });
       return request(
         `/api/internal/workflow/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/${encodeURIComponent(routeDialogProcessId)}/execution-report?${query.toString()}`,
         { method: "GET" },
       );
     },
-    getThinkingDetail({ userId, sessionId, routeDialogProcessId, dialogProcessId, turnScopeId }) {
+    getThinkingDetail(input) {
+      const { userId, sessionId, routeDialogProcessId, dialogProcessId, turnScopeId } =
+        requireWorkflowSessionRequest(input, "thinking-detail");
       const query = new URLSearchParams({ dialogProcessId, turnScopeId });
       return request(
         `/api/internal/workflow/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/${encodeURIComponent(routeDialogProcessId)}/thinking-detail?${query.toString()}`,

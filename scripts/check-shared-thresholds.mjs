@@ -60,75 +60,51 @@ const CATEGORY_RULES = [
   },
 ];
 
+function maskRegionCharacter(cursor, char, next) {
+  const masked = char === "\n" ? "\n" : " ";
+  if (cursor.state === "lineComment") {
+    if (char === "\n") cursor.state = "code";
+    return masked;
+  }
+  if (cursor.state === "blockComment") {
+    if (char !== "*" || next !== "/") return masked;
+    cursor.index += 1;
+    cursor.state = "code";
+    return "  ";
+  }
+  if (char === "\\") {
+    cursor.index += 1;
+    return "  ";
+  }
+  if (char === cursor.quote) {
+    cursor.state = "code";
+    cursor.quote = "";
+  }
+  return masked;
+}
+
+function maskCodeCharacter(cursor, char, next) {
+  if (char === "/" && (next === "/" || next === "*")) {
+    cursor.index += 1;
+    cursor.state = next === "/" ? "lineComment" : "blockComment";
+    return "  ";
+  }
+  if (char !== '"' && char !== "'" && char !== "`") return char;
+  cursor.quote = char;
+  cursor.state = "string";
+  return " ";
+}
+
 function stripCommentsAndStrings(text) {
   let out = "";
-  let state = "code";
-  let quote = "";
-  for (let index = 0; index < text.length; index += 1) {
-    const char = text[index];
-    const next = text[index + 1];
-
-    if (state === "lineComment") {
-      if (char === "\n") {
-        state = "code";
-        out += "\n";
-      } else {
-        out += " ";
-      }
-      continue;
-    }
-
-    if (state === "blockComment") {
-      if (char === "*" && next === "/") {
-        out += "  ";
-        index += 1;
-        state = "code";
-      } else {
-        out += char === "\n" ? "\n" : " ";
-      }
-      continue;
-    }
-
-    if (state === "string" || state === "template") {
-      if (char === "\\") {
-        out += "  ";
-        index += 1;
-        continue;
-      }
-      const isEnd = state === "template" ? char === "`" : char === quote;
-      out += char === "\n" ? "\n" : " ";
-      if (isEnd) {
-        state = "code";
-        quote = "";
-      }
-      continue;
-    }
-
-    if (char === "/" && next === "/") {
-      out += "  ";
-      index += 1;
-      state = "lineComment";
-      continue;
-    }
-    if (char === "/" && next === "*") {
-      out += "  ";
-      index += 1;
-      state = "blockComment";
-      continue;
-    }
-    if (char === '"' || char === "'") {
-      out += " ";
-      quote = char;
-      state = "string";
-      continue;
-    }
-    if (char === "`") {
-      out += " ";
-      state = "template";
-      continue;
-    }
-
-    out += char;
+  const cursor = { index: 0, state: "code", quote: "" };
+  for (; cursor.index < text.length; cursor.index += 1) {
+    const char = text[cursor.index];
+    const next = text[cursor.index + 1];
+    out +=
+      cursor.state === "code"
+        ? maskCodeCharacter(cursor, char, next)
+        : maskRegionCharacter(cursor, char, next);
   }
   return out;
 }
@@ -169,21 +145,23 @@ const DECLARATION =
   /\b(?:export\s+)?(?:const|let|var)\s+(?<name>[A-Z_$][\w$]*)\s*=\s*(?<expr>[^;\n]+)/g;
 const PROPERTY = /\b(?<name>[A-Za-z_$][\w$]*)\s*:\s*(?<expr>[^,\n}]+)/g;
 
-export function findScatteredThresholds(text) {
-  const code = stripCommentsAndStrings(text);
+function findPatternThresholds(code, pattern, namePattern) {
   const findings = [];
-  for (const [pattern, namePattern] of [
-    [DECLARATION, "namePattern"],
-    [PROPERTY, "propPattern"],
-  ]) {
-    for (const match of code.matchAll(pattern)) {
-      const { name, expr } = match.groups;
-      const rule = classifyName(name, namePattern);
-      if (!rule || !expressionLooksNumeric(expr)) continue;
-      findings.push({ ...lineAndColumn(code, match.index), name, expr: expr.trim(), rule });
-    }
+  for (const match of code.matchAll(pattern)) {
+    const { name, expr } = match.groups;
+    const rule = classifyName(name, namePattern);
+    if (!rule || !expressionLooksNumeric(expr)) continue;
+    findings.push({ ...lineAndColumn(code, match.index), name, expr: expr.trim(), rule });
   }
   return findings;
+}
+
+export function findScatteredThresholds(text) {
+  const code = stripCommentsAndStrings(text);
+  return [
+    [DECLARATION, "namePattern"],
+    [PROPERTY, "propPattern"],
+  ].flatMap(([pattern, namePattern]) => findPatternThresholds(code, pattern, namePattern));
 }
 
 export async function measureSharedThresholds(files) {

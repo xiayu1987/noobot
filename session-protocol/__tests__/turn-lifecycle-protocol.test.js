@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { turnRecord } from "./helpers/turn-record.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -24,7 +25,7 @@ import {
   validateSessionProvisionIntent,
 } from "@noobot/session-protocol";
 
-const productionTurn = (turn) => ({ continuedByTurnScopeId: "", ...turn });
+const productionTurn = (turn) => turnRecord({ ...turn });
 const snapshotInput = (input) => ({
   activeTurnScopeId: "",
   activeTurn: null,
@@ -34,6 +35,31 @@ const snapshotInput = (input) => ({
   recovery: TURN_RECOVERY_ACTION.NONE,
   generatedAt: "2026-08-02T10:00:00.000Z",
   ...input,
+});
+
+test("snapshot runtime diagnostics do not depend on preceding invalid records", () => {
+  const activeTurn = productionTurn({ sessionId: "s1", capabilities: { canStop: "yes" } });
+  const snapshot = {
+    protocolVersion: 2,
+    eventType: TURN_EVENT.SNAPSHOT,
+    commandId: "snapshot-1",
+    sessionId: "s1",
+    sequence: 1,
+    ...snapshotInput({ activeTurn, activeTurnScopeId: activeTurn.turnScopeId }),
+  };
+  for (const records of [[], [null]]) {
+    const result = validateTurnLifecycleSnapshot({ ...snapshot, recentTerminalTurns: records });
+    assert.equal(result.valid, false);
+    assert.ok(result.errors.includes("invalid_runtime_capabilities"));
+  }
+  const result = validateTurnLifecycleSnapshot({
+    ...snapshot,
+    activeTurn: null,
+    activeTurnScopeId: "",
+    recentTerminalTurns: [null, activeTurn],
+  });
+  assert.ok(result.errors.includes("invalid_snapshot_turn"));
+  assert.ok(result.errors.includes("invalid_runtime_capabilities"));
 });
 
 test("turn lifecycle event type is derived from authoritative state", () => {
@@ -57,6 +83,7 @@ test("terminal resolution binds terminal state to the committed Session aggregat
       sessionId: "session-terminal-version",
       turnScopeId: "turn-terminal-version",
       state: TURN_STATE.STOP_COMPLETED,
+      finishedAt: "2026-08-02T10:00:00.000Z",
       phase: TURN_PHASE.STOP,
       revision: 5,
       sequence: 5,
@@ -65,6 +92,8 @@ test("terminal resolution binds terminal state to the committed Session aggregat
         status: "user_stopped",
         reason: "user_stop",
         description: TURN_TERMINAL_FIXED_DESCRIPTION.user_stopped,
+        dialogProcessId: "dialog-1",
+        updatedAt: "2026-08-02T10:00:00.000Z",
       },
     }),
   });
@@ -75,6 +104,12 @@ test("terminal resolution binds terminal state to the committed Session aggregat
     validateTurnTerminalResolution({ ...resolution, aggregateVersion: null }).errors,
     ["invalid_aggregate_version"],
   );
+  assert.deepEqual(validateTurnTerminalResolution({ ...resolution, turn: null }).errors, [
+    "invalid_turn_record",
+  ]);
+  assert.deepEqual(validateTurnTerminalResolution(undefined).errors, [
+    "invalid_terminal_resolution",
+  ]);
 });
 
 test("turn lifecycle snapshot carries authoritative replacement tombstones", () => {
@@ -125,7 +160,7 @@ test("turn lifecycle snapshot carries authoritative replacement tombstones", () 
     validateTurnLifecycleSnapshot({
       ...snapshot,
       activeTurnScopeId: "turn-old",
-      activeTurn: {
+      activeTurn: productionTurn({
         sessionId: snapshot.sessionId,
         turnScopeId: "turn-old",
         presentationMessageId: "presentation-old",
@@ -134,14 +169,14 @@ test("turn lifecycle snapshot carries authoritative replacement tombstones", () 
         revision: 1,
         sequence: 7,
         startedAt: "2026-08-02T09:59:00.000Z",
-      },
+      }),
     }).errors,
     ["replaced_turn_still_materialized"],
   );
 });
 
 test("snapshot turn state must be an authoritative turn state", () => {
-  const activeTurn = {
+  const activeTurn = productionTurn({
     sessionId: "session-state-1",
     turnScopeId: "turn-state-1",
     presentationMessageId: "presentation-state-1",
@@ -150,7 +185,7 @@ test("snapshot turn state must be an authoritative turn state", () => {
     revision: 1,
     sequence: 1,
     startedAt: "2026-08-02T09:59:00.000Z",
-  };
+  });
   const base = {
     ...createTurnLifecycleSnapshot(
       snapshotInput({ commandId: "snapshot-state-1", sessionId: "session-state-1", sequence: 1 }),
@@ -167,14 +202,16 @@ test("snapshot turn state must be an authoritative turn state", () => {
   assert.deepEqual(
     validateTurnLifecycleSnapshot({
       ...base,
-      recentTerminalTurns: [{ ...activeTurn, turnScopeId: "turn-state-0", state: "" }],
+      recentTerminalTurns: [
+        productionTurn({ sessionId: activeTurn.sessionId, turnScopeId: "turn-state-0", state: "" }),
+      ],
     }).errors,
     ["invalid_turn_state"],
   );
 });
 
 test("snapshot turn sessionId is required and must equal the snapshot sessionId", () => {
-  const activeTurn = {
+  const activeTurn = productionTurn({
     sessionId: "session-turn-identity",
     turnScopeId: "turn-identity-1",
     presentationMessageId: "presentation-identity-1",
@@ -183,7 +220,7 @@ test("snapshot turn sessionId is required and must equal the snapshot sessionId"
     revision: 1,
     sequence: 1,
     startedAt: "2026-08-02T09:59:00.000Z",
-  };
+  });
   const base = {
     ...createTurnLifecycleSnapshot(
       snapshotInput({
@@ -197,7 +234,11 @@ test("snapshot turn sessionId is required and must equal the snapshot sessionId"
   assert.deepEqual(validateTurnLifecycleSnapshot({ ...base, activeTurn }).errors, []);
   assert.deepEqual(
     validateTurnLifecycleSnapshot({ ...base, activeTurn: { ...activeTurn, sessionId: "" } }).errors,
-    ["missing_turn_session_id", "turn_session_identity_mismatch"],
+    [
+      "missing_turn_session_id",
+      "missing_runtime_authoritative_identity",
+      "turn_session_identity_mismatch",
+    ],
   );
   assert.deepEqual(
     validateTurnLifecycleSnapshot({
@@ -206,7 +247,11 @@ test("snapshot turn sessionId is required and must equal the snapshot sessionId"
         {
           ...activeTurn,
           turnScopeId: "turn-identity-0",
+          executionId: "agent:turn-identity-0",
+          rootExecutionId: "agent:turn-identity-0",
           state: TURN_STATE.COMPLETED,
+          phase: TURN_PHASE.COMPLETION,
+          finishedAt: "2026-08-02T10:00:00.000Z",
           sessionId: "session-other",
         },
       ],
@@ -280,6 +325,7 @@ test("active Turn snapshot requires its authoritative start time", () => {
       sessionId: "session-active-timing",
       turnScopeId: "turn-active",
       presentationMessageId: "presentation-active",
+      startedAt: undefined,
       dialogProcessId: "dialog-active",
       state: TURN_STATE.PROCESSING,
       revision: 1,
@@ -288,8 +334,8 @@ test("active Turn snapshot requires its authoritative start time", () => {
   });
 
   assert.throws(() => createTurnLifecycleSnapshot(input), {
-    code: "TURN_LIFECYCLE_SNAPSHOT_INVALID",
-    errors: ["missing_active_turn_started_at"],
+    code: "TURN_LIFECYCLE_RECORD_INVALID",
+    protocolErrors: ["invalid_turn_startedAt"],
   });
 });
 
@@ -335,6 +381,7 @@ test("turn lifecycle receipt identifies one authoritative delivery without carry
 
 test("turn lifecycle envelope requires stable identity and monotonic coordinates", () => {
   const envelope = createTurnLifecycleEnvelope({
+    updatedAt: "2026-01-01T00:00:00.000Z",
     eventType: TURN_EVENT.PROCESSING_STARTED,
     eventId: "evt-1",
     commandId: "cmd-1",
@@ -360,6 +407,7 @@ test("turn lifecycle envelope rejects storage locator fields", () => {
     allowedRoot: "runtime/plugin/session",
   };
   const envelope = createTurnLifecycleEnvelope({
+    updatedAt: "2026-01-01T00:00:00.000Z",
     eventType: TURN_EVENT.PROCESSING_STARTED,
     eventId: "evt-scoped",
     commandId: "cmd-scoped",
@@ -383,6 +431,7 @@ test("turn lifecycle envelope rejects storage locator fields", () => {
 
 test("turn lifecycle envelope preserves parent identity without leaking mutation intents", () => {
   const envelope = createTurnLifecycleEnvelope({
+    updatedAt: "2026-01-01T00:00:00.000Z",
     eventType: TURN_EVENT.ACTION_ACCEPTED,
     eventId: "evt-child",
     commandId: "cmd-child",
@@ -408,7 +457,11 @@ test("turn lifecycle envelope rejects missing identity and invalid revision", ()
   const input = { eventType: TURN_EVENT.FAILED, eventId: "evt-2", revision: 0, sequence: 1 };
   assert.throws(() => createTurnLifecycleEnvelope(input), { code: "TURN_SCOPE_ID_INVALID" });
   const result = validateTurnLifecycleEnvelope(
-    createTurnLifecycleEnvelope({ ...input, turnScopeId: "turn-2" }),
+    createTurnLifecycleEnvelope({
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      ...input,
+      turnScopeId: "turn-2",
+    }),
   );
   assert.equal(result.valid, false);
   assert.deepEqual(result.errors, [
@@ -424,6 +477,7 @@ test("turn lifecycle envelope rejects missing identity and invalid revision", ()
 
 test("turn lifecycle envelope rejects event, phase and state contradictions", () => {
   const envelope = createTurnLifecycleEnvelope({
+    updatedAt: "2026-01-01T00:00:00.000Z",
     eventType: TURN_EVENT.COMPLETED,
     eventId: "evt-completed-contract",
     commandId: "cmd-completed-contract",
@@ -465,12 +519,17 @@ test("action acceptance enforces one continuation source contract", () => {
     phase: TURN_PHASE.ACTION,
     state: TURN_STATE.ACTION_REQUESTING,
   };
-  const missingSource = createTurnLifecycleEnvelope({ ...base, action: "continue" });
+  const missingSource = createTurnLifecycleEnvelope({
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    ...base,
+    action: "continue",
+  });
   assert.deepEqual(validateTurnLifecycleEnvelope(missingSource), {
     valid: false,
     errors: ["missing_continuation_source"],
   });
   const unexpectedSource = createTurnLifecycleEnvelope({
+    updatedAt: "2026-01-01T00:00:00.000Z",
     ...base,
     action: "send",
     continuationSource: { turnScopeId: "stopped-turn", dialogProcessId: "stopped-dialog" },

@@ -11,7 +11,7 @@ import {
   HARNESS_FLUSH_REASONS,
   HARNESS_TERMINAL_RUN_STATUSES,
 } from "../core/constants.js";
-import { DEFAULT_OPTIONS } from "../core/options.js";
+import { DEFAULT_OPTIONS, HarnessJsonlFlushStrategySchema } from "../core/options.js";
 import { ensureIntervalCleanupTask } from "../utils/cleanup-scheduler.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { randomUUID } from "node:crypto";
@@ -27,27 +27,26 @@ const MANIFEST_CLEANUP_INTERVAL_MS = TIME_THRESHOLDS.harness.manifestCleanupInte
 function cleanupStaleManifests() {
   const now = Date.now();
   for (const [key, lastAccess] of manifestLastAccessed.entries()) {
-    if (now - lastAccess > MANIFEST_CACHE_MAX_AGE_MS) {
-      const timer = manifestWriteTimers.get(key);
-      if (timer) {
-        clearTimeout(timer);
-        manifestWriteTimers.delete(key);
-      }
-      const cached = manifestCache.get(key);
-      if (cached) {
-        writeJsonValidated(key, cached)
-          .then(() => {
-            manifestCache.delete(key);
-            manifestLastAccessed.delete(key);
-          })
-          .catch((err) => {
-            console.warn(`[harness] Manifest cleanup write failed for ${key}: ${err.message}`);
-          });
-        continue;
-      }
-      manifestCache.delete(key);
-      manifestLastAccessed.delete(key);
+    if (now - lastAccess <= MANIFEST_CACHE_MAX_AGE_MS) continue;
+    const timer = manifestWriteTimers.get(key);
+    if (timer) {
+      clearTimeout(timer);
+      manifestWriteTimers.delete(key);
     }
+    const cached = manifestCache.get(key);
+    if (cached) {
+      writeJsonValidated(key, cached)
+        .then(() => {
+          manifestCache.delete(key);
+          manifestLastAccessed.delete(key);
+        })
+        .catch((err) => {
+          console.warn(`[harness] Manifest cleanup write failed for ${key}: ${err.message}`);
+        });
+      continue;
+    }
+    manifestCache.delete(key);
+    manifestLastAccessed.delete(key);
   }
 }
 
@@ -89,24 +88,25 @@ export async function updateManifestCached(
   } else if (debounceMs > 0) {
     manifestWriteTimers.set(
       key,
-      setTimeout(async () => {
-        const cached = manifestCache.get(key);
-        if (cached) {
-          try {
-            await writeJsonValidated(key, cached);
-            manifestCache.delete(key);
-            manifestLastAccessed.delete(key);
-          } catch (err) {
-            console.warn(`[harness] Manifest debounced write failed for ${key}: ${err.message}`);
-          }
-        }
-        manifestWriteTimers.delete(key);
-      }, debounceMs),
+      setTimeout(() => flushManifestDebounced(key), debounceMs),
     );
   } else {
     await writeJsonValidated(key, next);
     manifestCache.delete(key);
     manifestLastAccessed.delete(key);
+  }
+}
+
+async function flushManifestDebounced(key) {
+  manifestWriteTimers.delete(key);
+  const cached = manifestCache.get(key);
+  if (!cached) return;
+  try {
+    await writeJsonValidated(key, cached);
+    manifestCache.delete(key);
+    manifestLastAccessed.delete(key);
+  } catch (err) {
+    console.warn(`[harness] Manifest debounced write failed for ${key}: ${err.message}`);
   }
 }
 
@@ -137,7 +137,8 @@ const JSONL_RETRY_MAX_DELAY_MS = TIME_THRESHOLDS.harness.jsonlRetryMaxDelayMs;
 const jsonlFlushFailures = new Map();
 const jsonlFlushStrategies = new Map();
 const tmpCleanupLastRunByFile = new Map();
-const runWriteLockRefCounts = new Map();
+const runWriteOperations = new Map();
+const jsonlOperations = new Map();
 const TMP_FILE_MAX_AGE_MS = TIME_THRESHOLDS.harness.tmpFileMaxAgeMs;
 const TMP_CLEANUP_MIN_INTERVAL_MS = TIME_THRESHOLDS.harness.tmpCleanupMinIntervalMs;
 
@@ -159,25 +160,34 @@ function resolveRunWriteLockPath(targetPath = "") {
   return path.join(dir, HARNESS_FILES.RUN_WRITE_LOCK);
 }
 
-async function withRunWriteLock(targetPath = "", operation = async () => undefined) {
+async function serializeOperation(operations, key, operation) {
+  const previous = operations.get(key);
+  const current = (async () => {
+    if (previous) await previous.catch(() => undefined);
+    return operation();
+  })();
+  operations.set(key, current);
+  try {
+    return await current;
+  } finally {
+    if (operations.get(key) === current) operations.delete(key);
+  }
+}
+
+async function withRunWriteLock(targetPath, operation) {
   const lockPath = resolveRunWriteLockPath(targetPath);
   if (!lockPath) return operation();
   const runDir = path.dirname(lockPath);
-  const current = Number(runWriteLockRefCounts.get(runDir) || 0);
-  if (current <= 0) {
-    await fs.mkdir(runDir, { recursive: true });
-    await fs.writeFile(lockPath, String(Date.now()), "utf-8");
-  }
-  runWriteLockRefCounts.set(runDir, current + 1);
+  return serializeOperation(runWriteOperations, runDir, () => executeRunWrite(lockPath, operation));
+}
+
+async function executeRunWrite(lockPath, operation) {
+  const runDir = path.dirname(lockPath);
+  await fs.mkdir(runDir, { recursive: true });
+  await fs.writeFile(lockPath, String(Date.now()), "utf-8");
   try {
     return await operation();
   } finally {
-    const next = Number(runWriteLockRefCounts.get(runDir) || 1) - 1;
-    if (next > 0) {
-      runWriteLockRefCounts.set(runDir, next);
-      return;
-    }
-    runWriteLockRefCounts.delete(runDir);
     await runBestEffort(() => unlinkIfPresent(lockPath), {
       operationName: "harnessStore.removeRunWriteLock",
       context: { lockPath },
@@ -189,45 +199,7 @@ function normalizeFlushStrategy(input) {
   if (!isPlainObject(input)) {
     throw new TypeError("harness appendJsonlBuffered requires a jsonlFlushStrategy object");
   }
-  const maxSize = Number(input.maxSize);
-  const maxTime = Number(input.maxTime);
-  const maxRetry = Number(input.maxRetry);
-  const maxBufferEntries = Number(input.maxBufferEntries);
-  const maxBufferBytes = Number(input.maxBufferBytes);
-  const maxFileBytes = Number(input.maxFileBytes);
-  const maxFiles = Number(input.maxFiles);
-  return {
-    maxSize:
-      Number.isFinite(maxSize) && maxSize > 0 ? maxSize : DEFAULT_JSONL_FLUSH_STRATEGY.maxSize,
-    maxTime:
-      Number.isFinite(maxTime) && maxTime >= 0 ? maxTime : DEFAULT_JSONL_FLUSH_STRATEGY.maxTime,
-    onTerminal:
-      typeof input.onTerminal === "boolean"
-        ? input.onTerminal
-        : DEFAULT_JSONL_FLUSH_STRATEGY.onTerminal,
-    onError:
-      typeof input.onError === "boolean" ? input.onError : DEFAULT_JSONL_FLUSH_STRATEGY.onError,
-    maxRetry:
-      Number.isFinite(maxRetry) && maxRetry >= 0
-        ? Math.trunc(maxRetry)
-        : DEFAULT_JSONL_FLUSH_STRATEGY.maxRetry,
-    maxBufferEntries:
-      Number.isFinite(maxBufferEntries) && maxBufferEntries > 0
-        ? Math.trunc(maxBufferEntries)
-        : DEFAULT_JSONL_FLUSH_STRATEGY.maxBufferEntries,
-    maxBufferBytes:
-      Number.isFinite(maxBufferBytes) && maxBufferBytes > 0
-        ? Math.trunc(maxBufferBytes)
-        : DEFAULT_JSONL_FLUSH_STRATEGY.maxBufferBytes,
-    maxFileBytes:
-      Number.isFinite(maxFileBytes) && maxFileBytes >= 0
-        ? Math.trunc(maxFileBytes)
-        : DEFAULT_JSONL_FLUSH_STRATEGY.maxFileBytes,
-    maxFiles:
-      Number.isFinite(maxFiles) && maxFiles >= 0
-        ? Math.trunc(maxFiles)
-        : DEFAULT_JSONL_FLUSH_STRATEGY.maxFiles,
-  };
+  return HarnessJsonlFlushStrategySchema.parse(input);
 }
 
 function clearJsonlFlushTimer(filePath = "") {
@@ -245,8 +217,10 @@ function scheduleJsonlFlush(
   jsonlFlushTimers.set(
     filePath,
     setTimeout(async () => {
-      await flushJsonlBuffer(filePath, strategy);
       jsonlFlushTimers.delete(filePath);
+      await flushJsonlBuffer(filePath, strategy).catch((error) => {
+        console.error(`[harness] Background JSONL flush failed for ${filePath}:`, error);
+      });
     }, maxTime),
   );
 }
@@ -268,8 +242,10 @@ function scheduleJsonlRetry(filePath = "", strategy = DEFAULT_JSONL_FLUSH_STRATE
   jsonlFlushTimers.set(
     filePath,
     setTimeout(async () => {
-      await flushJsonlBuffer(filePath, strategy);
       jsonlFlushTimers.delete(filePath);
+      await flushJsonlBuffer(filePath, strategy).catch((error) => {
+        console.error(`[harness] Background JSONL retry failed for ${filePath}:`, error);
+      });
     }, delayMs),
   );
 }
@@ -281,36 +257,6 @@ function estimateUtf8Bytes(inputText = "") {
 function calculateJsonlBufferBytes(buffer = []) {
   if (!Array.isArray(buffer) || !buffer.length) return 0;
   return buffer.reduce((sum, line) => sum + estimateUtf8Bytes(line), 0);
-}
-
-function trimJsonlBuffer(filePath = "", buffer = [], strategy = DEFAULT_JSONL_FLUSH_STRATEGY) {
-  if (!filePath || !Array.isArray(buffer)) return buffer;
-  const maxEntries = Number(strategy?.maxBufferEntries);
-  if (Number.isFinite(maxEntries) && maxEntries > 0 && buffer.length > maxEntries) {
-    const dropped = buffer.length - maxEntries;
-    buffer.splice(0, dropped);
-    console.warn(
-      `[harness] JSONL buffer capped by entries for ${filePath}; dropped ${dropped} oldest record(s) to avoid OOM`,
-    );
-  }
-  const maxBytes = Number(strategy?.maxBufferBytes);
-  if (!Number.isFinite(maxBytes) || maxBytes <= 0 || !buffer.length) return buffer;
-  const currentBytes = calculateJsonlBufferBytes(buffer);
-  if (currentBytes <= maxBytes) return buffer;
-  let droppedEntries = 0;
-  let droppedBytes = 0;
-  for (const line of buffer) {
-    droppedEntries += 1;
-    droppedBytes += estimateUtf8Bytes(line);
-    if (currentBytes - droppedBytes <= maxBytes) break;
-  }
-  if (droppedEntries > 0) {
-    buffer.splice(0, droppedEntries);
-    console.warn(
-      `[harness] JSONL buffer capped by bytes for ${filePath}; dropped ${droppedEntries} oldest record(s), reclaimed ${droppedBytes} bytes`,
-    );
-  }
-  return buffer;
 }
 
 async function cleanupStaleTmpFilesForTarget(filePath = "", { force = false } = {}) {
@@ -335,16 +281,7 @@ async function cleanupStaleTmpFilesForTarget(filePath = "", { force = false } = 
   for (const entry of entries) {
     if (!entry?.isFile?.() || !String(entry.name || "").startsWith(prefix)) continue;
     const tmpPath = path.join(dir, entry.name);
-    try {
-      const stat = await fs.stat(tmpPath);
-      if (now - Number(stat?.mtimeMs || 0) <= TMP_FILE_MAX_AGE_MS) continue;
-      await fs.unlink(tmpPath);
-      removed += 1;
-    } catch (error) {
-      if (!isMissingPathError(error)) {
-        console.warn(`[harness] Failed to clean temporary file ${tmpPath}:`, error);
-      }
-    }
+    removed += await removeStaleTmpFile(tmpPath, now);
   }
   if (removed > 0) {
     console.warn(`[harness] Cleaned ${removed} stale tmp file(s) near ${targetPath}`);
@@ -352,19 +289,50 @@ async function cleanupStaleTmpFilesForTarget(filePath = "", { force = false } = 
   return removed;
 }
 
-export async function appendJsonlBuffered(filePath, record, flushStrategy, flushHint = {}) {
-  if (!filePath || !record) return;
-  const strategy = normalizeFlushStrategy(flushStrategy);
-  jsonlFlushStrategies.set(filePath, strategy);
+async function removeStaleTmpFile(tmpPath, now) {
+  try {
+    const stat = await fs.stat(tmpPath);
+    if (now - stat.mtimeMs <= TMP_FILE_MAX_AGE_MS) return 0;
+    await fs.unlink(tmpPath);
+    return 1;
+  } catch (error) {
+    if (!isMissingPathError(error)) {
+      console.warn(`[harness] Failed to clean temporary file ${tmpPath}:`, error);
+    }
+  }
+  return 0;
+}
 
+export async function appendJsonlBuffered(filePath, record, flushStrategy, flushHint = {}) {
+  if (!filePath || !record) throw new TypeError("JSONL append requires a path and record");
+  const strategy = normalizeFlushStrategy(flushStrategy);
+  const line = JSON.stringify(record);
+  if (typeof line !== "string" || estimateUtf8Bytes(line) > strategy.maxBufferBytes)
+    throw new RangeError("JSONL record exceeds buffer capacity");
+  return serializeOperation(jsonlOperations, filePath, () =>
+    appendJsonlRecord(filePath, line, strategy, flushHint),
+  );
+}
+
+async function appendJsonlRecord(filePath, line, strategy, flushHint) {
+  jsonlFlushStrategies.set(filePath, strategy);
   let buffer = jsonlBuffers.get(filePath);
+  if (
+    buffer &&
+    (buffer.length >= strategy.maxBufferEntries ||
+      calculateJsonlBufferBytes(buffer) + estimateUtf8Bytes(line) > strategy.maxBufferBytes)
+  ) {
+    clearJsonlFlushTimer(filePath);
+    await flushJsonlBufferLocked(filePath, strategy);
+    buffer = jsonlBuffers.get(filePath);
+  }
   if (!buffer) {
     buffer = [];
     jsonlBuffers.set(filePath, buffer);
   }
 
-  buffer.push(JSON.stringify(record));
-  trimJsonlBuffer(filePath, buffer, strategy);
+  buffer.push(line);
+  jsonlFlushStrategies.set(filePath, strategy);
 
   const reason = text(flushHint?.reason).toLowerCase();
   const shouldFlushByReason =
@@ -373,47 +341,35 @@ export async function appendJsonlBuffered(filePath, record, flushStrategy, flush
 
   if (buffer.length >= strategy.maxSize || shouldFlushByReason) {
     clearJsonlFlushTimer(filePath);
-    await flushJsonlBuffer(filePath, strategy);
+    await flushJsonlBufferLocked(filePath, strategy);
   } else {
     scheduleJsonlFlush(filePath, strategy.maxTime, strategy);
   }
 }
 
 async function flushJsonlBuffer(filePath, strategy = DEFAULT_JSONL_FLUSH_STRATEGY) {
+  return serializeOperation(jsonlOperations, filePath, () =>
+    flushJsonlBufferLocked(filePath, strategy),
+  );
+}
+
+async function flushJsonlBufferLocked(filePath, strategy) {
   const buffer = jsonlBuffers.get(filePath);
   if (!buffer || buffer.length === 0) return;
 
   const lines = buffer.join("\n") + "\n";
-  const newBuffer = [];
-  jsonlBuffers.set(filePath, newBuffer);
-
   try {
     await appendFileValidated(filePath, lines, strategy);
     jsonlFlushFailures.delete(filePath);
-    const current = jsonlBuffers.get(filePath);
-    if (Array.isArray(current) && current.length === 0) {
-      jsonlBuffers.delete(filePath);
-      jsonlFlushStrategies.delete(filePath);
-    }
+    jsonlBuffers.delete(filePath);
+    jsonlFlushStrategies.delete(filePath);
   } catch (err) {
     console.error(`[harness] JSONL flush failed for ${filePath}:`, err.message);
     const retries = Number(jsonlFlushFailures.get(filePath) || 0) + 1;
     jsonlFlushFailures.set(filePath, retries);
-    const current = jsonlBuffers.get(filePath) || [];
-    const merged = [...buffer, ...current];
-    trimJsonlBuffer(filePath, merged, strategy);
-    const maxRetry = Number(strategy?.maxRetry);
-    if (Number.isFinite(maxRetry) && retries > maxRetry) {
-      console.error(
-        `[harness] JSONL flush exceeded retry limit for ${filePath}; dropped ${merged.length} buffered record(s)`,
-      );
-      jsonlBuffers.delete(filePath);
-      jsonlFlushFailures.delete(filePath);
-      clearJsonlFlushTimer(filePath);
-      return;
-    }
-    jsonlBuffers.set(filePath, merged);
-    scheduleJsonlRetry(filePath, strategy, retries);
+    if (retries <= strategy.maxRetry) scheduleJsonlRetry(filePath, strategy, retries);
+    else clearJsonlFlushTimer(filePath);
+    throw err;
   }
 }
 
@@ -442,7 +398,7 @@ export async function writeJson(filePath, data) {
   await writeJsonValidated(filePath, data);
 }
 
-async function writeJsonValidated(filePath, data, devMode = false) {
+async function writeJsonValidated(filePath, data) {
   const content = JSON.stringify(data, null, 2);
   const dir = path.dirname(filePath);
   const tmpPath = `${filePath}.tmp.${randomUUID()}`;
@@ -451,19 +407,21 @@ async function writeJsonValidated(filePath, data, devMode = false) {
     await fs.mkdir(dir, { recursive: true });
     await cleanupStaleTmpFilesForTarget(filePath);
 
-    await fs.writeFile(tmpPath, content, "utf-8");
-    await fs.rename(tmpPath, filePath);
-
-    if (devMode || process.env.HARNESS_VALIDATE_WRITES === "1") {
-      try {
-        const written = await fs.readFile(filePath, "utf-8");
-        JSON.parse(written);
-      } catch (err) {
-        console.error(`[harness] JSON validation failed for ${filePath}:`, err.message);
-        await fs.writeFile(filePath, content, "utf-8");
-      }
+    try {
+      await fs.writeFile(tmpPath, content, "utf-8");
+      await verifyJsonWrite(tmpPath, content);
+      await fs.rename(tmpPath, filePath);
+    } finally {
+      await unlinkIfPresent(tmpPath);
     }
   });
+}
+
+async function verifyJsonWrite(tmpPath, content) {
+  if (process.env.HARNESS_VALIDATE_WRITES !== "1") return;
+  const written = await fs.readFile(tmpPath, "utf-8");
+  JSON.parse(written);
+  if (written !== content) throw new Error(`JSON write verification mismatch: ${tmpPath}`);
 }
 
 function buildRotatedJsonlPath(filePath = "") {

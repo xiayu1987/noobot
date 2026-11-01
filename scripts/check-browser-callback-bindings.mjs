@@ -17,14 +17,10 @@ import { getFirstPartyFilesUnder } from "./quality/source-inventory.mjs";
 const BROWSER_TEST_ROOTS = Object.freeze(["client/noobot-chat/tests/e2e"]);
 
 function childNodes(node) {
-  const children = [];
-  for (const [key, value] of Object.entries(node)) {
-    if (key === "parent") continue;
-    for (const item of Array.isArray(value) ? value : [value]) {
-      if (item && typeof item.type === "string") children.push(item);
-    }
-  }
-  return children;
+  return Object.entries(node)
+    .filter(([key]) => key !== "parent")
+    .flatMap(([, value]) => (Array.isArray(value) ? value : [value]))
+    .filter((item) => item && typeof item.type === "string");
 }
 
 function* walk(node, parent = null) {
@@ -48,15 +44,17 @@ function collectPatternNames(pattern, names) {
   }
 }
 
+function collectFunctionNames(node, names) {
+  if (node.id) names.add(node.id.name);
+  for (const param of node.params) collectPatternNames(param, names);
+}
+
 function declaredNames(callback) {
   const names = new Set();
   for (const param of callback.params) collectPatternNames(param, names);
   for (const { node } of walk(callback.body)) {
     if (node.type === "VariableDeclarator") collectPatternNames(node.id, names);
-    if (/Function/.test(node.type)) {
-      if (node.id) names.add(node.id.name);
-      for (const param of node.params) collectPatternNames(param, names);
-    }
+    if (/Function/.test(node.type)) collectFunctionNames(node, names);
     if (node.type === "CatchClause" && node.param) collectPatternNames(node.param, names);
   }
   return names;
@@ -81,6 +79,17 @@ function browserCallbacks(program) {
   return callbacks;
 }
 
+function callbackModuleBindings({ method, callback }, imported) {
+  const local = declaredNames(callback);
+  const hits = [];
+  for (const { node, parent } of walk(callback.body, callback)) {
+    if (node.type !== "Identifier" || !imported.has(node.name) || local.has(node.name)) continue;
+    if (isReference(node, parent))
+      hits.push({ method, name: node.name, line: node.loc.start.line });
+  }
+  return hits;
+}
+
 export function findBrowserCallbackModuleBindings(source) {
   const program = parseJavaScript(source, {
     ecmaVersion: "latest",
@@ -88,16 +97,7 @@ export function findBrowserCallbackModuleBindings(source) {
     loc: true,
   });
   const imported = importedNames(program);
-  const hits = [];
-  for (const { method, callback } of browserCallbacks(program)) {
-    const local = declaredNames(callback);
-    for (const { node, parent } of walk(callback.body, callback)) {
-      if (node.type !== "Identifier" || !imported.has(node.name) || local.has(node.name)) continue;
-      if (isReference(node, parent))
-        hits.push({ method, name: node.name, line: node.loc.start.line });
-    }
-  }
-  return hits;
+  return browserCallbacks(program).flatMap((entry) => callbackModuleBindings(entry, imported));
 }
 
 async function measure() {

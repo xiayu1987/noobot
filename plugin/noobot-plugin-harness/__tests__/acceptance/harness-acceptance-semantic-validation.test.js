@@ -167,8 +167,12 @@ test("acceptance semantic validation relays via unified ctx.modelContext.message
     messageBlocks: { system: [], history: [], incremental: modelMessages },
     result: {
       output: "任务完成",
+      traces: [],
+      modelLoopRound: 0,
       modelMessages,
-      turnMessages: [{ role: "assistant", content: "任务完成", type: "message" }],
+      turnMessages: [
+        { messageUid: "mu-final", role: "assistant", content: "任务完成", type: "message" },
+      ],
     },
     agentContext: {
       bindings: {
@@ -376,7 +380,16 @@ test("acceptance handler inject mode schedules and captures semantic validation 
     },
   };
 
-  const finalCtx = { agentContext, result: { output: "done" } };
+  const finalCtx = {
+    agentContext,
+    result: {
+      output: "done",
+      traces: [],
+      modelLoopRound: 0,
+      modelMessages: [],
+      turnMessages: [],
+    },
+  };
   await handler({
     capability: "acceptance",
     point: "agent.before_final_output",

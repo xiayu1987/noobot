@@ -241,27 +241,29 @@ export function replaceMessages(holder = {}, messages = []) {
   holder.messages.splice(0, holder.messages.length, ...canonicalMessages);
   const blocks =
     holder.messageBlocks && typeof holder.messageBlocks === "object" ? holder.messageBlocks : null;
-  if (blocks) {
-    const retained = new Set(canonicalMessages);
-    const assigned = new Set();
-    for (const blockName of ["system", "history", "incremental"]) {
-      const next =
-        blockName === "history"
-          ? normalizeList(blocks[blockName])
-          : normalizeList(blocks[blockName]).filter((message) => retained.has(message));
-      blocks[blockName] = next;
-      for (const message of next) assigned.add(message);
-    }
-    for (const message of canonicalMessages) {
-      if (assigned.has(message)) continue;
-      const blockName = isContextSystemMessage(message) ? "system" : "incremental";
-      blocks[blockName].push(message);
-      assigned.add(message);
-    }
-    syncBlockIds(blocks);
-  }
+  if (blocks) reconcileReplacedBlocks(blocks, canonicalMessages);
   notifyCanonicalEntitiesAdded(holder, prepared.addedEntities, { operation: "replace" });
   return holder.messages;
+}
+
+function reconcileReplacedBlocks(blocks, canonicalMessages) {
+  const retained = new Set(canonicalMessages);
+  const assigned = new Set();
+  for (const blockName of ["system", "history", "incremental"]) {
+    const next =
+      blockName === "history"
+        ? normalizeList(blocks[blockName])
+        : normalizeList(blocks[blockName]).filter((message) => retained.has(message));
+    blocks[blockName] = next;
+    next.forEach((message) => assigned.add(message));
+  }
+  for (const message of canonicalMessages) {
+    if (assigned.has(message)) continue;
+    const blockName = isContextSystemMessage(message) ? "system" : "incremental";
+    blocks[blockName].push(message);
+    assigned.add(message);
+  }
+  syncBlockIds(blocks);
 }
 
 export function replaceMessageProjection(holder = {}, messages = []) {
@@ -319,12 +321,12 @@ export function writeMessageBlocks(holder = {}, blocks = {}) {
   holder.messageBlocks = existing;
   const projected = [];
   const seen = new Set();
-  for (const blockName of ["system", "history", "incremental"]) {
-    for (const message of normalizeList(existing[blockName])) {
-      if (seen.has(message)) continue;
-      seen.add(message);
-      projected.push(message);
-    }
+  for (const message of ["system", "history", "incremental"].flatMap((name) =>
+    normalizeList(existing[name]),
+  )) {
+    if (seen.has(message)) continue;
+    seen.add(message);
+    projected.push(message);
   }
   if (!Array.isArray(holder.messages)) holder.messages = [];
   holder.messages.splice(0, holder.messages.length, ...projected);

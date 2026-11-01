@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { turnRecord } from "../helpers/turn-record.js";
 import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import fs from "node:fs";
 import os from "node:os";
@@ -14,6 +15,7 @@ import { SessionMessageService } from "../../src/session/services/session-messag
 import { dedupeSessionAttachmentRefs } from "../../src/session/transfer-attachment-refs.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 import { createSessionCrudServiceStub } from "../helpers/session-crud-service-stub.js";
+import { requiredSessionReads } from "../helpers/session-repo-required-reads.js";
 
 const TEST_SESSION_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-session-dir-"));
 after(() => fs.rmSync(TEST_SESSION_DIR, { recursive: true, force: true }));
@@ -35,6 +37,7 @@ function createService({ initialSession }) {
     async withSessionMutation(_u, _s, operation) {
       return operation(await this.locateSessionScope());
     },
+    ...requiredSessionReads,
     async findById() {
       return currentSession;
     },
@@ -109,30 +112,30 @@ test("SessionMessageService.replaceTurn matches turnScopeId and returns snapshot
         activeTurnScopeId: "",
         sequence: 8,
         turns: {
-          "scope-keep": {
+          "scope-keep": turnRecord({
             turnScopeId: "scope-keep",
             presentationMessageId: "presentation-keep",
             state: "completed",
             phase: "completion",
             revision: 4,
             sequence: 4,
-          },
-          "scope-old": {
+          }),
+          "scope-old": turnRecord({
             turnScopeId: "scope-old",
             presentationMessageId: "presentation-old",
             state: "stop_completed",
             phase: "stop",
             revision: 4,
             sequence: 6,
-          },
-          "scope-tail": {
+          }),
+          "scope-tail": turnRecord({
             turnScopeId: "scope-tail",
             presentationMessageId: "presentation-tail",
             state: "stop_completed",
             phase: "stop",
             revision: 4,
             sequence: 8,
-          },
+          }),
         },
         commandReceipts: [
           {
@@ -241,27 +244,27 @@ test("SessionMessageService.replaceTurn mutates only the owning lifecycle aggreg
         ...createEmptyTurnLifecycle(),
         sequence: 3,
         turns: {
-          "scope-keep": {
+          "scope-keep": turnRecord({
             revision: 1,
             sequence: 1,
             turnScopeId: "scope-keep",
             dialogProcessId: "dp-keep",
             state: "completed",
-          },
-          "scope-old": {
+          }),
+          "scope-old": turnRecord({
             revision: 1,
             sequence: 2,
             turnScopeId: "scope-old",
             dialogProcessId: "dp-old",
             state: "action_failed",
-          },
-          "scope-tail": {
+          }),
+          "scope-tail": turnRecord({
             revision: 1,
             sequence: 3,
             turnScopeId: "scope-tail",
             dialogProcessId: "dp-tail",
             state: "stop_completed",
-          },
+          }),
         },
         commandReceipts: [],
       },
@@ -285,13 +288,13 @@ test("SessionMessageService.replaceTurn mutates only the owning lifecycle aggreg
         ...createEmptyTurnLifecycle(),
         sequence: 1,
         turns: {
-          "child-turn": {
+          "child-turn": turnRecord({
             revision: 1,
             sequence: 1,
             turnScopeId: "child-turn",
             dialogProcessId: "child-dialog",
             state: "stop_completed",
-          },
+          }),
         },
         commandReceipts: [],
       },

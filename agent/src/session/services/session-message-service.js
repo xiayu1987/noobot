@@ -18,7 +18,6 @@ import {
   pluginArtifactKey,
   projectPluginArtifacts,
 } from "@noobot/event-protocol";
-import { createSessionNotFoundError } from "@noobot/session-protocol";
 import { deleteFromMessage, replaceTurn } from "./session-message-service/turn-mutations.js";
 import {
   applyTurnLifecycleEvent,
@@ -30,7 +29,6 @@ import {
   getSessionTurns,
   getSessionContextSource,
   getTurnSummaryCheckpointState,
-  hasDialogProcessIdInSession,
 } from "./session-message-service/message-queries.js";
 import { commitTurnSummaryCheckpoint } from "./session-message-service/turn-summary-checkpoint.js";
 import { recordUserMetaParsedResult } from "./session-message-service/user-meta-parsed-result.js";
@@ -61,10 +59,9 @@ export class SessionMessageService {
     return commitAuthorityEvent.call(this, payload);
   }
   async getPluginArtifact(payload) {
-    const session = await this.sessionRepo.findById(payload.userId, payload.sessionId, {
+    const session = await this.sessionRepo.requireById(payload.userId, payload.sessionId, {
       persistenceContext: payload.persistenceContext,
     });
-    if (!session) throw createSessionNotFoundError(payload);
     const projected = projectPluginArtifacts(session.sessionArtifactEvents);
     return createPluginArtifactQueryResult(projected[pluginArtifactKey(payload)] || null);
   }
@@ -74,7 +71,7 @@ export class SessionMessageService {
   async replaceTurn(payload = {}) {
     return replaceTurn.call(this, payload);
   }
-  async applyTurnLifecycleEvent(payload = {}) {
+  async applyTurnLifecycleEvent(payload) {
     return applyTurnLifecycleEvent.call(this, payload);
   }
   async getTurnLifecycleSnapshot(payload = {}) {
@@ -112,8 +109,5 @@ export class SessionMessageService {
   }
   async getTurnSummaryCheckpointState(payload = {}) {
     return getTurnSummaryCheckpointState.call(this, payload);
-  }
-  async hasDialogProcessIdInSession(payload = {}) {
-    return hasDialogProcessIdInSession.call(this, payload);
   }
 }

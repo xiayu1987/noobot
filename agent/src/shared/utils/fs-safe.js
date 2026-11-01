@@ -8,6 +8,10 @@ import { recoverableToolError } from "../errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../errors/constants.js";
 
+export function isPathOutOfScopeError(error) {
+  return error?.code === ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE;
+}
+
 export function safeJoin(base, target) {
   const resolvedBase = path.resolve(base);
   const resolvedTarget = path.resolve(base, target);

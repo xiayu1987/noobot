@@ -13,6 +13,7 @@ import {
   collectSessionSummaryEntryErrors,
 } from "./sessions-summary.js";
 import { isSessionCaller } from "@noobot/shared/session-caller";
+import { collectSessionArtifactEventIdentityErrors } from "./session-artifact-events.js";
 
 const AVAILABLE_DETAIL_ENTRY_FIELDS = Object.freeze([
   "sessionId",
@@ -64,10 +65,6 @@ function collectTurnTimingErrors(turnTimings) {
   return errors;
 }
 
-function isOwnedArtifactEvent(envelope, sessionId) {
-  return isPlainObject(envelope) && envelope.identity?.sessionId === sessionId;
-}
-
 function collectAvailableDetailEntryErrors(entry) {
   const errors = collectExactFieldErrors(entry, AVAILABLE_DETAIL_ENTRY_FIELDS);
   if (!isCanonicalText(entry.sessionId)) errors.push("invalid_session_id");
@@ -87,8 +84,7 @@ function collectAvailableDetailEntryErrors(entry) {
     errors.push("invalid_turn_lifecycle_snapshot");
   }
   if (
-    !Array.isArray(entry.sessionArtifactEvents) ||
-    !entry.sessionArtifactEvents.every((event) => isOwnedArtifactEvent(event, entry.sessionId))
+    collectSessionArtifactEventIdentityErrors(entry.sessionArtifactEvents, entry.sessionId).length
   ) {
     errors.push("invalid_session_artifact_events");
   }
@@ -117,6 +113,24 @@ export function requireSessionDetailEntry(entry) {
     throw detailInvalid(`${subject}: ${errors.join(",")}`, errors);
   }
   return entry;
+}
+
+export function requireSessionContentProjection(value) {
+  if (!isPlainObject(value)) throw detailInvalid("content projection must be an object");
+  for (const field of ["sessionSummary", "turnTimings"]) {
+    if (Object.hasOwn(value, field)) throw detailInvalid(`content projection carries ${field}`);
+  }
+  if (Object.hasOwn(value, "messages")) {
+    if (!Array.isArray(value.messages) || !value.messages.every(isPlainObject)) {
+      throw detailInvalid("content projection messages must be an array of objects");
+    }
+  }
+  return value;
+}
+
+export function selectSessionContentMessages(value) {
+  const projection = requireSessionContentProjection(value);
+  return Object.hasOwn(projection, "messages") ? projection.messages : [];
 }
 
 export function createAvailableSessionDetailEntry(displaySummary) {

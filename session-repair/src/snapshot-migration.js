@@ -127,17 +127,24 @@ function assertV3MessageKeys(message, at) {
 function mergeV3Raw(metadata, message, sourceId, at) {
   const raw = isPlainObject(message.raw) ? message.raw : {};
   for (const [key, value] of Object.entries(raw)) {
-    if (key === "messageUid") {
-      if (value !== sourceId) throw unmappable(3, "raw_identity_mismatch", { at });
-    } else if (key === "role") {
-      if (value !== V3_RAW_ROLE_BY_TYPE[message.type])
-        throw unmappable(3, "raw_role_mismatch", { at });
-    } else if (V3_RAW_METADATA_KEYS.has(key)) {
-      mergeMetadata(metadata, key, value, at);
-    } else if (!V3_RAW_DROPPED_KEYS.has(key)) {
-      throw unmappable(3, "raw_unknown_key", { at, key });
-    }
+    mergeV3RawField(metadata, key, value, { sourceId, type: message.type, at });
   }
+}
+
+function mergeV3RawField(metadata, key, value, { sourceId, type, at }) {
+  if (key === "messageUid") {
+    if (value !== sourceId) throw unmappable(3, "raw_identity_mismatch", { at });
+    return;
+  }
+  if (key === "role") {
+    if (value !== V3_RAW_ROLE_BY_TYPE[type]) throw unmappable(3, "raw_role_mismatch", { at });
+    return;
+  }
+  if (V3_RAW_METADATA_KEYS.has(key)) {
+    mergeMetadata(metadata, key, value, at);
+    return;
+  }
+  if (!V3_RAW_DROPPED_KEYS.has(key)) throw unmappable(3, "raw_unknown_key", { at, key });
 }
 
 function mergeV3Flags(metadata, message, at) {
@@ -349,21 +356,25 @@ export function migrateModelContextSnapshot(snapshot) {
   return runVersionChain(MODEL_CONTEXT_SNAPSHOT_VERSION_CHAIN, snapshot);
 }
 
+function assertHistoricalMessage(message, version) {
+  if (!isPlainObject(message) || !V3_RAW_ROLE_BY_TYPE[message.type]) {
+    throw new TypeError(`snapshot v${version} requires a declared message type`);
+  }
+  if (!isPlainObject(message.additional_kwargs)) {
+    throw new TypeError(`snapshot v${version} requires additional_kwargs`);
+  }
+  if (version === 3 && !isPlainObject(message.lc_kwargs)) {
+    throw new TypeError("snapshot v3 requires lc_kwargs");
+  }
+}
+
 function assertHistoricalSnapshot(snapshot, version) {
   for (const block of SNAPSHOT_BLOCKS) {
     if (!Array.isArray(snapshot.messageBlocks?.[block])) {
       throw new TypeError(`snapshot v${version} requires messageBlocks.${block}`);
     }
     for (const message of snapshot.messageBlocks[block]) {
-      if (!isPlainObject(message) || !V3_RAW_ROLE_BY_TYPE[message.type]) {
-        throw new TypeError(`snapshot v${version} requires a declared message type`);
-      }
-      if (!isPlainObject(message.additional_kwargs)) {
-        throw new TypeError(`snapshot v${version} requires additional_kwargs`);
-      }
-      if (version === 3 && !isPlainObject(message.lc_kwargs)) {
-        throw new TypeError("snapshot v3 requires lc_kwargs");
-      }
+      assertHistoricalMessage(message, version);
     }
   }
   if (!sameJson(snapshot.messages, composeMessagesFromBlocks(snapshot.messageBlocks))) {

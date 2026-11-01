@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { turnRecordFixture } from "../helpers/turnRecordFixture.js";
 import { ref } from "vue";
 import { describe, expect, it, vi } from "vitest";
 import { createSessionDetailApplicator } from "../../../../../src/modules/session/model/list/sessionDetailApply.js";
@@ -240,12 +241,14 @@ describe("useChatEngine.session-detail", () => {
     const sessions = ref([activeSession]);
     const registry = createTurnRuntimeRegistryState();
     applyTurnRuntimeEvent(registry, {
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
       sessionId,
       turnScopeId: freshTurnScopeId,
       seq: 1,
     });
     applyTurnRuntimeEvent(registry, {
+      updatedAtMs: 1767225600000,
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       sessionId,
       turnScopeId: freshTurnScopeId,
@@ -253,12 +256,14 @@ describe("useChatEngine.session-detail", () => {
       seq: 2,
     });
     applyTurnRuntimeEvent(registry, {
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED,
       sessionId,
       turnScopeId: freshTurnScopeId,
       seq: 3,
     });
     applyTurnRuntimeEvent(registry, {
+      updatedAtMs: 1767225600000,
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       sessionId,
       turnScopeId: freshTurnScopeId,
@@ -273,7 +278,7 @@ describe("useChatEngine.session-detail", () => {
         turnScopeId: freshTurnScopeId,
         resolved: true,
         aggregateVersion: 1,
-        turn: {
+        turn: turnRecordFixture({
           continuedByTurnScopeId: "",
           sessionId,
           turnScopeId: freshTurnScopeId,
@@ -288,7 +293,7 @@ describe("useChatEngine.session-detail", () => {
             turnScopeId: freshTurnScopeId,
             dialogProcessId: "dp-stale-stopped",
           }),
-        },
+        }),
       }),
     );
     expect(terminalResult.applied).toBe(true);

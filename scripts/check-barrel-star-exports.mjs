@@ -45,6 +45,40 @@ function starSpecifiers(imports) {
     .map((record) => record.specifier);
 }
 
+function parseModuleSource(absolute) {
+  const source = fs.readFileSync(absolute, "utf8");
+  try {
+    parseJavaScript(source, { ecmaVersion: "latest", sourceType: "module" });
+    return parse(source, absolute);
+  } catch (error) {
+    throw new Error(`unable to analyze ${absolute}: ${error.message}`, { cause: error });
+  }
+}
+
+function addNamespaceOrigins(origins, namespace, source) {
+  for (const name of namespace) {
+    if (!origins.has(name)) origins.set(name, []);
+    origins.get(name).push(source);
+  }
+}
+
+async function collectStarOrigins(absolute, sources, state) {
+  const origins = new Map();
+  for (const source of sources) {
+    const namespace = await loadStaticNamespace(resolveRelativeModule(absolute, source), state);
+    addNamespaceOrigins(origins, namespace, source);
+  }
+  return origins;
+}
+
+function mergeNamespace(explicit, origins) {
+  const namespace = new Set(explicit);
+  for (const [name, owners] of origins) {
+    if (explicit.has(name) || owners.length === 1) namespace.add(name);
+  }
+  return namespace;
+}
+
 async function loadStaticNamespace(absolute, state) {
   const { cache, resolving } = state;
   if (cache.has(absolute)) return cache.get(absolute);
@@ -57,31 +91,9 @@ async function loadStaticNamespace(absolute, state) {
   resolving.add(absolute);
   try {
     await init;
-    const source = fs.readFileSync(absolute, "utf8");
-    let imports;
-    let exports;
-    try {
-      parseJavaScript(source, { ecmaVersion: "latest", sourceType: "module" });
-      [imports, exports] = parse(source, absolute);
-    } catch (error) {
-      throw new Error(`unable to analyze ${absolute}: ${error.message}`, {
-        cause: error,
-      });
-    }
-    const explicit = exportedNames(exports);
-    const origins = new Map();
-    for (const specifier of starSpecifiers(imports)) {
-      const target = resolveRelativeModule(absolute, specifier);
-      const namespace = await loadStaticNamespace(target, state);
-      for (const name of namespace) {
-        if (!origins.has(name)) origins.set(name, 0);
-        origins.set(name, origins.get(name) + 1);
-      }
-    }
-    const namespace = new Set(explicit);
-    for (const [name, count] of origins) {
-      if (explicit.has(name) || count === 1) namespace.add(name);
-    }
+    const [imports, exports] = parseModuleSource(absolute);
+    const origins = await collectStarOrigins(absolute, starSpecifiers(imports), state);
+    const namespace = mergeNamespace(exportedNames(exports), origins);
     cache.set(absolute, namespace);
     return namespace;
   } finally {
@@ -93,14 +105,7 @@ async function inspectBarrel(root, relative, sources) {
   const absolute = path.join(root, relative);
   const state = { cache: new Map(), resolving: new Set() };
   const exported = await loadStaticNamespace(absolute, state);
-  const origins = new Map();
-  for (const source of sources) {
-    const namespace = await loadStaticNamespace(resolveRelativeModule(absolute, source), state);
-    for (const name of namespace) {
-      if (!origins.has(name)) origins.set(name, []);
-      origins.get(name).push(source);
-    }
-  }
+  const origins = await collectStarOrigins(absolute, sources, state);
   return [...origins].filter(([name, owners]) => owners.length > 1 && !exported.has(name));
 }
 

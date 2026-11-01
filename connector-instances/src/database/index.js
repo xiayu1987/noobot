@@ -9,6 +9,24 @@ import { executePostgresCommand, releasePostgresConnection } from "./postgres-co
 import { executeMysqlCommand, releaseMysqlConnection } from "./mysql-connector-channel.js";
 import { executeSqliteCommand, releaseSqliteConnection } from "./sqlite-connector-channel.js";
 
+function skipSqlQuotedValue(source, start) {
+  const quote = source[start];
+  let index = start + 1;
+  while (index < source.length) {
+    if (source[index] === "\\") {
+      index += Math.min(2, source.length - index);
+      continue;
+    }
+    if (source[index] !== quote) {
+      index += 1;
+      continue;
+    }
+    if (source[index + 1] !== quote) return index + 1;
+    index += 2;
+  }
+  return index;
+}
+
 function stripSqlCommentsAndStrings(sql = "") {
   const source = String(sql || "");
   let output = "";
@@ -18,22 +36,7 @@ function stripSqlCommentsAndStrings(sql = "") {
     if (character === "'" || character === '"' || character === "`") {
       const quote = character;
       output += quote + quote;
-      index += 1;
-      while (index < source.length) {
-        if (source[index] === "\\") {
-          index += Math.min(2, source.length - index);
-          continue;
-        }
-        if (source[index] === quote) {
-          if (source[index + 1] === quote) {
-            index += 2;
-            continue;
-          }
-          index += 1;
-          break;
-        }
-        index += 1;
-      }
+      index = skipSqlQuotedValue(source, index);
       continue;
     }
     if (character === "/" && next === "*") {

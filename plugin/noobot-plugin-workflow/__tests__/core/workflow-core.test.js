@@ -508,6 +508,7 @@ test("workflow hook in before_agent_dispatch mode can request skipping main agen
     dialogProcessId: "d1",
     userMessage: "请规划一个流程",
     userMessageAttachments: [],
+    runConfig: { locale: "zh-CN" },
     claimAgentDispatch: (claim = {}) => dispatchClaims.push(claim),
   };
   const dispatchOutcome = await listener.handler(

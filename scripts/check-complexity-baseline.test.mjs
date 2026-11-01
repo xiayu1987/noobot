@@ -52,3 +52,47 @@ test("starts a separate nesting depth inside extracted functions", async () => {
     0,
   );
 });
+
+test("measurement counts each registered rule and ignores unrelated lint messages", () => {
+  const messages = [
+    { ruleId: "max-depth", line: 3, message: "third level" },
+    { ruleId: "complexity", line: 4, message: "Function has a complexity of 21." },
+    { ruleId: "max-params", line: 5, message: "five parameters" },
+    { ruleId: "max-lines-per-function", line: 6, message: "long function" },
+    { ruleId: "no-nested-ternary", line: 7, message: "nested ternary" },
+    { ruleId: "no-unused-vars", line: 8, message: "unrelated" },
+    { ruleId: null, line: 9, message: "parser diagnostic" },
+  ];
+  const measured = measureLintResults(
+    [
+      { filePath: fixturePath, messages },
+      {
+        filePath: path.join(repositoryRoot, "scripts/quality/second-fixture.js"),
+        messages: [
+          { ruleId: "max-depth", line: 10, message: "fourth level" },
+          { ruleId: "complexity", line: 11, message: "Function has a complexity of 25." },
+        ],
+      },
+    ],
+    repositoryRoot,
+  );
+  assert.deepEqual(
+    Object.fromEntries(Object.entries(measured).map(([name, value]) => [name, value.total])),
+    {
+      complexityCount: 2,
+      longFunctionCount: 1,
+      nestedTernaryCount: 1,
+      deepNestingCount: 2,
+      longParameterListCount: 1,
+      maxComplexity: 25,
+    },
+  );
+  assert.deepEqual(measured.deepNestingCount.files, {
+    "scripts/quality/nesting-fixture.js": 1,
+    "scripts/quality/second-fixture.js": 1,
+  });
+  assert.deepEqual(measured.deepNestingCount.samples, [
+    "scripts/quality/nesting-fixture.js:3 third level",
+    "scripts/quality/second-fixture.js:10 fourth level",
+  ]);
+});

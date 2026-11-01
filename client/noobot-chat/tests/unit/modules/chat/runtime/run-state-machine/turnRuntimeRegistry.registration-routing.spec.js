@@ -129,6 +129,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
         displayState: "requesting",
       });
       const stopped = applyTurnRuntimeEvent(registry, {
+        timestamp: 1767225600000,
         type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,
         sessionId: "s1",
         turnScopeId: "t1",
@@ -140,7 +141,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       expect(selectCurrentTurnRuntime(registry, "s1")).toEqual(before);
     },
   );
-  it("routes later events by dialogProcessId", () => {
+  it("checks later events against their explicit session and turn identity", () => {
     const registry = createTurnRuntimeRegistryState();
     sendStart(registry, { sessionId: "s1", turnScopeId: "t1" });
     backendState(registry, {
@@ -151,10 +152,12 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       seq: 2,
     });
     const result = applyTurnRuntimeEvent(registry, {
+      updatedAtMs: 1767225600000,
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       sessionId: "s1",
       dialogProcessId: "dp1",
       state: AGENT_CHANNEL_STATE.COMPLETED,
+      turnScopeId: "t1",
       seq: 3,
     });
     expect(result.turn).toMatchObject({
@@ -215,6 +218,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
     const registry = createTurnRuntimeRegistryState();
     sendStart(registry, { sessionId: "s1", turnScopeId: "old" });
     applyTurnRuntimeEvent(registry, {
+      updatedAt: "2026-01-01T00:00:00.000Z",
       type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
       eventType: "turn.action_accepted",
       sessionId: "s1",
@@ -223,6 +227,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       seq: 2,
     });
     applyTurnRuntimeEvent(registry, {
+      updatedAt: "2026-01-01T00:00:00.000Z",
       type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
       eventType: "turn.processing_started",
       sessionId: "s1",
@@ -231,6 +236,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       seq: 3,
     });
     applyTurnRuntimeEvent(registry, {
+      updatedAt: "2026-01-01T00:00:00.000Z",
       type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
       eventType: "turn.processing_completed",
       sessionId: "s1",
@@ -247,6 +253,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
     });
     sendStart(registry, { sessionId: "s1", turnScopeId: "new" });
     const late = applyTurnRuntimeEvent(registry, {
+      updatedAtMs: 1767225600000,
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       sessionId: "s1",
       turnScopeId: "old",
@@ -301,6 +308,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       seq: 0,
     });
     applyTurnRuntimeEvent(registry, {
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,
       sessionId: "s1",
       turnScopeId: "t1",
@@ -493,8 +501,10 @@ describe("turnRuntimeRegistry: registration and routing", () => {
     });
     expect(
       selectTurnMessageRuntime(registry, { sessionId: "s1", dialogProcessId: "dp1" }),
-    ).toMatchObject({ turnScopeId: "t1" });
-    expect(selectTurnMessageRuntime(registry, { sessionId: "s2", turnScopeId: "t1" })).toBeNull();
+    ).toMatchObject({ turnScopeId: "", running: false, lifecycleObserved: false });
+    expect(
+      selectTurnMessageRuntime(registry, { sessionId: "s2", turnScopeId: "t1" }),
+    ).toMatchObject({ sessionId: "s2", running: false, lifecycleObserved: false });
     expect(
       selectTurnMessageRuntime(registry, {
         sessionId: "s1",
@@ -508,6 +518,48 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       running: true,
     });
   });
+  it("looks up identical turn scopes only within the requested session", () => {
+    const registry = createTurnRuntimeRegistryState();
+    for (const sessionId of ["s1", "s2"]) {
+      sendStart(registry, { sessionId, turnScopeId: "shared-turn" });
+      backendState(registry, {
+        sessionId,
+        turnScopeId: "shared-turn",
+        dialogProcessId: `dialog:${sessionId}`,
+        state: AGENT_CHANNEL_STATE.SENDING,
+        seq: 2,
+      });
+    }
+    for (const sessionId of ["s1", "s2"]) {
+      expect(resolveTurnRuntimeByScope(registry, "shared-turn", { sessionId })).toMatchObject({
+        sessionId,
+        dialogProcessId: `dialog:${sessionId}`,
+      });
+      expect(
+        selectTurnMessageRuntime(registry, { sessionId, turnScopeId: "shared-turn" }),
+      ).toMatchObject({ sessionId, dialogProcessId: `dialog:${sessionId}` });
+    }
+    expect(resolveTurnRuntimeByScope(registry, "shared-turn", { sessionId: "" })).toBeNull();
+    expect(resolveTurnRuntimeByScope(registry, "shared-turn", { sessionId: "missing" })).toBeNull();
+    expect(selectTurnMessageRuntime(registry, { turnScopeId: "shared-turn" })).toMatchObject({
+      sessionId: "",
+      running: false,
+      lifecycleObserved: false,
+    });
+  });
+  it("does not inspect another session to resolve a missing message runtime", () => {
+    const registry = createTurnRuntimeRegistryState();
+    Object.defineProperty(registry.sessions, "unrelated", {
+      enumerable: true,
+      get() {
+        throw new Error("cross-session lookup");
+      },
+    });
+    expect(
+      selectTurnMessageRuntime(registry, { sessionId: "missing", turnScopeId: "t1" }),
+    ).toMatchObject({ sessionId: "missing", turnScopeId: "t1", running: false });
+    expect(resolveTurnRuntimeByScope(registry, "t1", { sessionId: "" })).toBeNull();
+  });
   it("derives continue from the stopped turn", () => {
     const registry = createTurnRuntimeRegistryState();
     sendStart(registry, { sessionId: "s1", turnScopeId: "t1" });
@@ -518,6 +570,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       seq: 2,
     });
     applyTurnRuntimeEvent(registry, {
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED,
       sessionId: "s1",
       turnScopeId: "t1",
@@ -569,22 +622,31 @@ describe("turnRuntimeRegistry: registration and routing", () => {
     expect(registry.routeIndex.dp1).toEqual({ sessionId: "s1", turnScopeId: "t1" });
   });
 
-  it("rejects an error that arrives before Turn identity is established", () => {
+  it("hydrates an authoritative failure with complete identity before a local Turn exists", () => {
     const registry = createTurnRuntimeRegistryState();
     const result = applyTurnRuntimeEvent(registry, {
+      updatedAt: "2026-01-01T00:00:00.000Z",
       type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
       eventType: "turn.failed",
+      state: "processing_failed",
       phase: "processing",
       sessionId: "s1",
       turnScopeId: "t1",
       dialogProcessId: "dp1",
       revision: 1,
-      sequence: 1,
-      error: { message: "early failure" },
+      seq: 1,
+      failure: { code: "PROCESSING_FAILED", message: "early failure", retryable: false },
     });
 
-    expect(result).toMatchObject({ applied: false, reason: "missing_state" });
-    expect(registry.sessions.s1).toBeUndefined();
-    expect(registry.routeIndex.dp1).toBeUndefined();
+    expect(result).toMatchObject({
+      applied: true,
+      turn: {
+        sessionId: "s1",
+        turnScopeId: "t1",
+        state: "frontend_processing_error",
+        failure: { code: "PROCESSING_FAILED", message: "early failure", retryable: false },
+      },
+    });
+    expect(registry.routeIndex.dp1).toEqual({ sessionId: "s1", turnScopeId: "t1" });
   });
 });

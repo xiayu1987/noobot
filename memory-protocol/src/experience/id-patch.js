@@ -28,54 +28,70 @@ function unquote(value = "") {
   return raw;
 }
 
+function skipWhitespace(source, index) {
+  while (index < source.length && /\s/.test(source[index])) index += 1;
+  return index;
+}
+
+function isKeyStart(source, index) {
+  return index < source.length && /[A-Za-z_]/.test(source[index]);
+}
+
+function scanKeyEnd(source, index) {
+  while (index < source.length && /[A-Za-z0-9_-]/.test(source[index])) index += 1;
+  return index;
+}
+
+function scanQuotedValueEnd(source, index) {
+  const quote = source[index++];
+  while (index < source.length) {
+    if (source[index] === "\\" && index + 1 < source.length) {
+      index += 2;
+      continue;
+    }
+    if (source[index++] === quote) break;
+  }
+  return index;
+}
+
+function isAssignmentBoundary(source, index) {
+  const candidateEnd = isKeyStart(source, index) ? scanKeyEnd(source, index) : index;
+  return source[skipWhitespace(source, candidateEnd)] === "=";
+}
+
+function scanUnquotedValueEnd(source, index) {
+  while (index < source.length) {
+    if (!/\s/.test(source[index])) {
+      index += 1;
+      continue;
+    }
+    const whitespaceStart = index;
+    index = skipWhitespace(source, index);
+    if (isAssignmentBoundary(source, index)) return whitespaceStart;
+  }
+  return index;
+}
+
+function scanValueEnd(source, index) {
+  if (source[index] === '"' || source[index] === "'") return scanQuotedValueEnd(source, index);
+  return scanUnquotedValueEnd(source, index);
+}
+
 export function parseKvPayload(inputText = "") {
   const out = {};
   const source = text(inputText);
-  if (!source) return out;
-  const isKeyStart = (character) => /[A-Za-z_]/.test(character || "");
-  const isKeyPart = (character) => /[A-Za-z0-9_-]/.test(character || "");
-  const skipWhitespace = (index) => {
-    while (index < source.length && /\s/.test(source[index])) index += 1;
-    return index;
-  };
   let cursor = 0;
   while (cursor < source.length) {
-    cursor = skipWhitespace(cursor);
-    if (!isKeyStart(source[cursor])) break;
+    cursor = skipWhitespace(source, cursor);
+    if (!isKeyStart(source, cursor)) break;
     const keyStart = cursor;
-    while (isKeyPart(source[cursor])) cursor += 1;
+    cursor = scanKeyEnd(source, cursor);
     const key = source.slice(keyStart, cursor).toLowerCase();
-    cursor = skipWhitespace(cursor);
+    cursor = skipWhitespace(source, cursor);
     if (source[cursor] !== "=") break;
-    cursor = skipWhitespace(cursor + 1);
+    cursor = skipWhitespace(source, cursor + 1);
     const valueStart = cursor;
-    if (source[cursor] === '"' || source[cursor] === "'") {
-      const quote = source[cursor];
-      cursor += 1;
-      while (cursor < source.length) {
-        if (source[cursor] === "\\" && cursor + 1 < source.length) cursor += 2;
-        else if (source[cursor++] === quote) break;
-      }
-    } else {
-      while (cursor < source.length) {
-        if (!/\s/.test(source[cursor])) {
-          cursor += 1;
-          continue;
-        }
-        const whitespaceStart = cursor;
-        cursor = skipWhitespace(cursor);
-        let candidateEnd = cursor;
-        if (isKeyStart(source[cursor])) {
-          candidateEnd += 1;
-          while (isKeyPart(source[candidateEnd])) candidateEnd += 1;
-          candidateEnd = skipWhitespace(candidateEnd);
-        }
-        if (source[candidateEnd] === "=") {
-          cursor = whitespaceStart;
-          break;
-        }
-      }
-    }
+    cursor = scanValueEnd(source, cursor);
     out[key] = unquote(source.slice(valueStart, cursor));
   }
   return out;

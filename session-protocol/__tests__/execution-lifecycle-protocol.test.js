@@ -195,16 +195,33 @@ test("execution abort reason is an extensible AbortError accepted by fetch", asy
   assert.equal(resolveExecutionAbortType({ error: reason }), EXECUTION_ABORT_TYPE.USER_STOP);
 });
 
-test("structured abort type remains authoritative when reason text is absent", () => {
+test("structured abort without reason text is rejected instead of falling back to type", () => {
   const controller = new AbortController();
   controller.abort({ type: EXECUTION_ABORT_TYPE.SYSTEM_ABORT });
   const error = new Error("Request was aborted.");
   error.name = "AbortError";
 
-  assert.equal(
-    resolveExecutionAbortMessage({ error, abortSignal: controller.signal }),
-    "system_abort",
+  assert.throws(
+    () => resolveExecutionAbortMessage({ error, abortSignal: controller.signal }),
+    /requires reason text/,
   );
+  assert.throws(
+    () => createExecutionAbortReason({ type: EXECUTION_ABORT_TYPE.SYSTEM_ABORT }),
+    /requires reason text/,
+  );
+  assert.throws(
+    () =>
+      createExecutionAbortReason({ type: EXECUTION_ABORT_TYPE.SYSTEM_ABORT, message: "legacy" }),
+    /requires reason text/,
+  );
+});
+
+test("unstructured aborts carry no protocol abort type", () => {
+  const controller = new AbortController();
+  controller.abort();
+  assert.equal(isExecutionAbortError({ abortSignal: controller.signal }), true);
+  assert.equal(resolveExecutionAbortType({ abortSignal: controller.signal }), "");
+  assert.equal(resolveExecutionAbortReason({ abortSignal: controller.signal }), null);
 });
 
 test("provider error types cannot enter the execution abort protocol", () => {
@@ -223,17 +240,29 @@ test("provider error types cannot enter the execution abort protocol", () => {
 test("user stop payload is read only from a user_stop abort reason with a stop commandId", () => {
   const stopPayload = { commandId: "stop:turn-1", turnScopeId: "turn-1" };
   const stopped = new AbortController();
-  stopped.abort(createExecutionAbortReason({ type: EXECUTION_ABORT_TYPE.USER_STOP, stopPayload }));
+  stopped.abort(
+    createExecutionAbortReason({
+      type: EXECUTION_ABORT_TYPE.USER_STOP,
+      reason: "user stop action",
+      stopPayload,
+    }),
+  );
   assert.deepEqual(resolveUserStopPayload({ abortSignal: stopped.signal }), stopPayload);
 
   const timedOut = new AbortController();
-  timedOut.abort(createExecutionAbortReason({ type: EXECUTION_ABORT_TYPE.RUN_TIMEOUT }));
+  timedOut.abort(
+    createExecutionAbortReason({ type: EXECUTION_ABORT_TYPE.RUN_TIMEOUT, reason: "run timeout" }),
+  );
   assert.throws(() => resolveUserStopPayload({ abortSignal: timedOut.signal }), /user_stop/);
   assert.throws(() => resolveUserStopPayload({ abortSignal: null }), /user_stop/);
 
   const missing = new AbortController();
   missing.abort(
-    createExecutionAbortReason({ type: EXECUTION_ABORT_TYPE.USER_STOP, stopPayload: {} }),
+    createExecutionAbortReason({
+      type: EXECUTION_ABORT_TYPE.USER_STOP,
+      reason: "user stop action",
+      stopPayload: {},
+    }),
   );
   assert.throws(() => resolveUserStopPayload({ abortSignal: missing.signal }), /commandId/);
 });

@@ -69,14 +69,13 @@ function resolveResponsesOutputText(result = {}) {
 
 function extractResponsesUrlCitations(output = []) {
   const sources = new Map();
-  for (const item of Array.isArray(output) ? output : []) {
-    for (const part of Array.isArray(item?.content) ? item.content : []) {
-      for (const annotation of Array.isArray(part?.annotations) ? part.annotations : []) {
-        const url = text(annotation?.url);
-        if (annotation?.type !== "url_citation" || !url || sources.has(url)) continue;
-        sources.set(url, { title: text(annotation.title), url });
-      }
-    }
+  const annotations = (Array.isArray(output) ? output : [])
+    .flatMap((item) => (Array.isArray(item?.content) ? item.content : []))
+    .flatMap((part) => (Array.isArray(part?.annotations) ? part.annotations : []));
+  for (const annotation of annotations) {
+    const url = text(annotation?.url);
+    if (annotation?.type !== "url_citation" || !url || sources.has(url)) continue;
+    sources.set(url, { title: text(annotation.title), url });
   }
   return [...sources.values()];
 }
@@ -256,16 +255,17 @@ async function executeImagesAsync({
 
 function extractResponsesImages(output = []) {
   const artifacts = [];
-  for (const item of Array.isArray(output) ? output : []) {
-    const values = [item, ...(Array.isArray(item?.content) ? item.content : [])];
-    for (const value of values) {
-      const type = String(value?.type || "").toLowerCase();
-      if (!type.includes("image")) continue;
-      const b64Json = text(value?.result || value?.b64_json || value?.image_base64 || value?.data);
-      const url = text(value?.image_url?.url || value?.url);
-      if (b64Json || url)
-        artifacts.push({ fileName: `generated_image_${artifacts.length + 1}.png`, b64Json, url });
-    }
+  const values = (Array.isArray(output) ? output : []).flatMap((item) => [
+    item,
+    ...(Array.isArray(item?.content) ? item.content : []),
+  ]);
+  for (const value of values) {
+    const type = String(value?.type || "").toLowerCase();
+    if (!type.includes("image")) continue;
+    const b64Json = text(value?.result || value?.b64_json || value?.image_base64 || value?.data);
+    const url = text(value?.image_url?.url || value?.url);
+    if (b64Json || url)
+      artifacts.push({ fileName: `generated_image_${artifacts.length + 1}.png`, b64Json, url });
   }
   return artifacts;
 }

@@ -82,9 +82,11 @@ export function createTurnOrchestrator({
     async function continueForAcceptedUserInterjections(nextTurn = turn + 1) {
       if (runtime.sealUserInterjectionQueueIfEmpty()) return null;
       const consumed = await runtime.consumeUserInterjections();
-      if (!Array.isArray(consumed) || consumed.length === 0) {
-        if (runtime.sealUserInterjectionQueueIfEmpty()) return null;
-      }
+      if (
+        (!Array.isArray(consumed) || consumed.length === 0) &&
+        runtime.sealUserInterjectionQueueIfEmpty()
+      )
+        return null;
       emitEvent(eventListener, "user_interjections_continued_model_loop", {
         turn,
         nextTurn,
@@ -127,7 +129,7 @@ export function createTurnOrchestrator({
       }
     }
 
-    try {
+    async function executeTurn() {
       assertNotAbortedFn(abortSignal);
 
       if (isOverMaxTurns && loopState?.loopLimitFinalizePrompted !== true) {
@@ -284,6 +286,10 @@ export function createTurnOrchestrator({
         loopState,
         turn: turn + Math.max(1, calls.length),
       });
+    }
+
+    try {
+      return await executeTurn();
     } catch (error) {
       const executionIdentity = getSessionIdsFromAgentContext(modelState.agentContext);
       handleEngineErrorFn({

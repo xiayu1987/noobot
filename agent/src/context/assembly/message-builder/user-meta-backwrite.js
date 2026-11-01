@@ -54,16 +54,13 @@ export async function applyPendingUserMetaBackwrites(
     if (!source) {
       throw new Error(`user_meta backwrite source not found: ${record.userMetaSourceMessageUid}`);
     }
-    const outcome = await session.recordUserMetaParsedResult({
+    await session.recordUserMetaParsedResult({
       userId,
       sessionId,
       persistenceScope,
       userMetaSourceMessageUid: record.userMetaSourceMessageUid,
       result: record.result,
     });
-    if (outcome?.recorded !== true) {
-      throw new Error(`user_meta backwrite was not recorded: ${record.userMetaSourceMessageUid}`);
-    }
     writeContextMessageMetadata(source, {
       userMetaParsedResults: mergeUserMetaParsedResults(
         readContextMessageValue(source, "userMetaParsedResults"),

@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 import { appendTurns } from "../../src/session/services/session-message-service/append-turn.js";
+import { requiredSessionReads } from "../helpers/session-repo-required-reads.js";
 import {
   FLOW_CONTROL_ROLE,
   createFlowControlContextPolicy,
@@ -28,6 +29,7 @@ test("appendTurns upserts an ordered message batch with one Session save", async
     now: () => "2026-07-25T00:01:00.000Z",
     sessionRepo: {
       withSessionMutation: async (_userId, _sessionId, operation) => operation(TEST_SCOPE),
+      ...requiredSessionReads,
       findTurnView: async () => {
         findCount += 1;
         return { session, turnScopeIds: [] };
@@ -78,7 +80,6 @@ test("appendTurns upserts an ordered message batch with one Session save", async
 
   assert.equal(findCount, 1);
   assert.equal(saveCount, 1);
-  assert.equal(result.appended, true);
   assert.deepEqual(
     result.turns.map((message) => message.messageUid),
     ["sm_assistant", "sm_tool_1", "sm_tool_2"],
@@ -95,6 +96,7 @@ test("appendTurns supersedes the prior canonical assistant presentation in one T
     now: () => "2026-07-25T00:01:00.000Z",
     sessionRepo: {
       withSessionMutation: async (_userId, _sessionId, operation) => operation(TEST_SCOPE),
+      ...requiredSessionReads,
       findTurnView: async () => ({ session, turnScopeIds: [] }),
       saveTurnView: async () => {},
     },
@@ -178,6 +180,7 @@ test("appendTurns persists the canonical tool policy", async () => {
     now: () => "2026-07-25T00:01:00.000Z",
     sessionRepo: {
       withSessionMutation: async (_userId, _sessionId, operation) => operation(TEST_SCOPE),
+      ...requiredSessionReads,
       findTurnView: async () => ({ session, turnScopeIds: [] }),
       saveTurnView: async () => {},
     },
@@ -211,6 +214,7 @@ test("appendTurns persists the canonical internal control message type", async (
     now: () => "2026-07-25T00:01:00.000Z",
     sessionRepo: {
       withSessionMutation: async (_userId, _sessionId, operation) => operation(TEST_SCOPE),
+      ...requiredSessionReads,
       findTurnView: async () => ({ session, turnScopeIds: [] }),
       saveTurnView: async () => {},
     },
@@ -246,6 +250,7 @@ test("appendTurns preserves canonical user interjection time and sequence", asyn
     now: () => "2026-09-18T01:01:00.000Z",
     sessionRepo: {
       withSessionMutation: async (_userId, _sessionId, operation) => operation(TEST_SCOPE),
+      ...requiredSessionReads,
       findTurnView: async () => ({ session, turnScopeIds: [] }),
       saveTurnView: async () => {},
     },
@@ -282,6 +287,7 @@ test("appendTurns leaves natural user presentation unspecified and visible", asy
     now: () => "2026-07-25T00:01:00.000Z",
     sessionRepo: {
       withSessionMutation: async (_userId, _sessionId, operation) => operation(TEST_SCOPE),
+      ...requiredSessionReads,
       findTurnView: async () => ({ session, turnScopeIds: [] }),
       saveTurnView: async () => {},
     },
@@ -332,6 +338,7 @@ test("appendTurns updates an existing message with the same messageUid", async (
     now: () => "2026-07-25T00:01:00.000Z",
     sessionRepo: {
       withSessionMutation: async (_userId, _sessionId, operation) => operation(TEST_SCOPE),
+      ...requiredSessionReads,
       findTurnView: async () => ({ session, turnScopeIds: [] }),
       saveTurnView: async () => {
         saveCount += 1;
@@ -363,7 +370,6 @@ test("appendTurns updates an existing message with the same messageUid", async (
   assert.equal(session.messages[0].modelMessageId, "message-1");
   assert.equal(session.messages[0].messageUid, "sm_existing");
   assert.equal(session.messages[0].ts, "2026-07-25T00:00:00.000Z");
-  assert.equal(result.appended, true);
   assert.equal(result.turns[0].modelMessageId, "message-1");
   assert.equal(result.turns[0].messageUid, "sm_existing");
   assert.equal(saveCount, 1);
@@ -391,6 +397,7 @@ test("appendTurns keeps distinct messageUids separate when runtime message ids c
     now: () => "2026-07-25T01:00:00.000Z",
     sessionRepo: {
       withSessionMutation: async (_userId, _sessionId, operation) => operation(TEST_SCOPE),
+      ...requiredSessionReads,
       findTurnView: async () => ({ session, turnScopeIds: [] }),
       saveTurnView: async () => {},
     },
@@ -431,6 +438,7 @@ test("appendTurns rejects a turn without messageUid", async () => {
     now: () => "2026-07-25T00:01:00.000Z",
     sessionRepo: {
       withSessionMutation: async (_userId, _sessionId, operation) => operation(TEST_SCOPE),
+      ...requiredSessionReads,
       findTurnView: async () => ({ session, turnScopeIds: [] }),
       saveTurnView: async () => {},
     },
@@ -479,6 +487,7 @@ test("appendTurns uses messageUid as the persistence identity and validates its 
     now: () => "2026-07-25T00:01:00.000Z",
     sessionRepo: {
       withSessionMutation: async (_userId, _sessionId, operation) => operation(TEST_SCOPE),
+      ...requiredSessionReads,
       findTurnView: async () => ({ session, turnScopeIds: [] }),
       saveTurnView: async () => {},
     },
@@ -502,7 +511,6 @@ test("appendTurns uses messageUid as the persistence identity and validates its 
     ],
   });
   assert.equal(session.messages.length, 1);
-  assert.equal(updated.appended, true);
   assert.equal(updated.turns[0].messageUid, "sm_fixed");
   assert.equal(updated.turns[0].content, "done");
 
@@ -534,6 +542,7 @@ test("appendTurns preserves assistant presentation identity in the authoritative
     now: () => "2026-07-25T00:01:00.000Z",
     sessionRepo: {
       withSessionMutation: async (_userId, _sessionId, operation) => operation(TEST_SCOPE),
+      ...requiredSessionReads,
       findTurnView: async () => ({ session, turnScopeIds: [] }),
       saveTurnView: async () => {},
     },

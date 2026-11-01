@@ -100,20 +100,29 @@ function createLogger({
 
       if (stat.isDirectory()) {
         cleanupOldLogsInDir(filePath, now);
-        try {
-          if (!fs.readdirSync(filePath).length) fs.rmdirSync(filePath);
-        } catch (error) {
-          console.warn("Unable to remove empty model proxy log directory:", filePath, error);
-        }
+        removeEmptyLogDirectory(filePath);
         continue;
       }
 
       if (!isManagedLogFile(file)) continue;
-      try {
-        if (now - stat.mtimeMs > retainMs) fs.unlinkSync(filePath);
-      } catch (error) {
-        console.warn("Unable to remove expired model proxy log:", filePath, error);
-      }
+      removeExpiredLogFile(filePath, stat, now);
+    }
+  }
+
+  function removeEmptyLogDirectory(filePath) {
+    try {
+      if (!fs.readdirSync(filePath).length) fs.rmdirSync(filePath);
+    } catch (error) {
+      console.warn("Unable to remove empty model proxy log directory:", filePath, error);
+    }
+  }
+
+  function removeExpiredLogFile(filePath, stat, now) {
+    if (now - stat.mtimeMs <= retainMs) return;
+    try {
+      fs.unlinkSync(filePath);
+    } catch (error) {
+      console.warn("Unable to remove expired model proxy log:", filePath, error);
     }
   }
 
@@ -149,27 +158,23 @@ function createLogger({
       .sort((leftIndex, rightIndex) => leftIndex - rightIndex);
 
     let index = indices.length ? indices[indices.length - 1] : 1;
-    let filePath = path.join(
+    const filePath = path.join(
       modelFlowSessionLogDir,
       `${logPrefix}-${dateStr}-${pad(index, 3)}.log`,
     );
 
-    try {
-      if (fs.existsSync(filePath)) {
-        const stat = fs.statSync(filePath);
-        if (stat.size + entrySizeBytes > maxLogFileSizeBytes) {
-          index += 1;
-          filePath = path.join(
-            modelFlowSessionLogDir,
-            `${logPrefix}-${dateStr}-${pad(index, 3)}.log`,
-          );
-        }
-      }
-    } catch (error) {
-      console.warn("Unable to inspect model proxy log size:", filePath, error);
-    }
+    if (!logFileExceedsCapacity(filePath, entrySizeBytes)) return filePath;
+    index += 1;
+    return path.join(modelFlowSessionLogDir, `${logPrefix}-${dateStr}-${pad(index, 3)}.log`);
+  }
 
-    return filePath;
+  function logFileExceedsCapacity(filePath, entrySizeBytes) {
+    try {
+      return fs.statSync(filePath).size + entrySizeBytes > maxLogFileSizeBytes;
+    } catch (error) {
+      if (error.code === "ENOENT") return false;
+      throw error;
+    }
   }
 
   function appendLog(

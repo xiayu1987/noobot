@@ -51,22 +51,46 @@ function isPhaseSummaryMemoryMessage(msg = {}) {
   );
 }
 
-export function buildHistoryMessages({ effectiveHistoryMessages = [], runtime = {} } = {}) {
-  const history = [];
-  const knownHistoryToolCallIds = new Set();
+function collectHistoryToolCalls(messages) {
   const historyToolCallsById = new Map();
-  for (const msg of effectiveHistoryMessages) {
+  for (const msg of messages) {
     if (shouldSkipSummarizedHistoryMessage(msg)) continue;
     if (resolveContextMessageRole(msg) !== MESSAGE_ROLE.ASSISTANT) continue;
     const normalizedToolCalls = toLangChainToolCalls(resolveContextToolCalls(msg));
     for (const toolCall of normalizedToolCalls) {
       const toolCallId = text(toolCall?.id);
-      if (toolCallId) {
-        knownHistoryToolCallIds.add(toolCallId);
-        historyToolCallsById.set(toolCallId, toolCall);
-      }
+      if (!toolCallId) continue;
+      historyToolCallsById.set(toolCallId, toolCall);
     }
   }
+  return historyToolCallsById;
+}
+
+function buildHistoryToolMessages(msg, historyToolCallsById, runtime) {
+  const toolCallId = resolveContextToolResultCallId(msg);
+  if (toolCallId && !historyToolCallsById.has(toolCallId)) {
+    if (!isCheckpointBoundaryToolResultMessage(msg)) return [];
+    const summary = buildTaskSummaryFallbackHumanMessage(msg, {
+      locale: resolveLocaleFromRuntime(runtime),
+    });
+    return summary ? [summary] : [];
+  }
+  const declaredContextPolicy = resolveToolContextPolicy(historyToolCallsById.get(toolCallId));
+  return [
+    new ToolMessage({
+      tool_call_id: toolCallId,
+      content: compactToolResultTextForModel(msg.content),
+      additional_kwargs: {
+        ...projectContextMessageModelMetadata(msg),
+        ...(declaredContextPolicy ? { contextPolicy: declaredContextPolicy } : {}),
+      },
+    }),
+  ];
+}
+
+export function buildHistoryMessages({ effectiveHistoryMessages = [], runtime = {} } = {}) {
+  const history = [];
+  const historyToolCallsById = collectHistoryToolCalls(effectiveHistoryMessages);
   for (const msg of effectiveHistoryMessages) {
     if (shouldSkipSummarizedHistoryMessage(msg)) continue;
     if (isDerivedUserMetaMessage(msg)) continue;
@@ -97,28 +121,7 @@ export function buildHistoryMessages({ effectiveHistoryMessages = [], runtime = 
       continue;
     }
     if (role === MESSAGE_ROLE.TOOL) {
-      const toolCallId = resolveContextToolResultCallId(msg);
-      if (toolCallId && !knownHistoryToolCallIds.has(toolCallId)) {
-        if (isCheckpointBoundaryToolResultMessage(msg)) {
-          const fallbackSummaryMessage = buildTaskSummaryFallbackHumanMessage(msg, {
-            locale: resolveLocaleFromRuntime(runtime),
-          });
-          if (fallbackSummaryMessage) history.push(fallbackSummaryMessage);
-        }
-        continue;
-      }
-
-      const declaredContextPolicy = resolveToolContextPolicy(historyToolCallsById.get(toolCallId));
-      history.push(
-        new ToolMessage({
-          tool_call_id: toolCallId,
-          content: compactToolResultTextForModel(msg.content),
-          additional_kwargs: {
-            ...projectContextMessageModelMetadata(msg),
-            ...(declaredContextPolicy ? { contextPolicy: declaredContextPolicy } : {}),
-          },
-        }),
-      );
+      history.push(...buildHistoryToolMessages(msg, historyToolCallsById, runtime));
       continue;
     }
     if (isPhaseSummaryMemoryMessage(msg)) {

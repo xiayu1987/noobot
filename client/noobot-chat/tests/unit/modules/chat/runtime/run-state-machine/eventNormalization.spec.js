@@ -3,144 +3,116 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createTurnLifecycleEnvelope } from "@noobot/session-protocol";
 import {
-  TURN_RUNTIME_AUTHORITY,
-  normalizeSessionRunEvent,
-} from "../../../../../../src/modules/chat/runtime/run-state-machine/eventNormalization.js";
-import { SESSION_RUN_EVENT } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
+  createLocalSessionRunEvent,
+  SESSION_RUN_EVENT,
+} from "@noobot/session-protocol/runtime-event";
+import {
+  applyTurnRuntimeEvent,
+  applyTurnLifecycleEnvelope,
+  createTurnRuntimeRegistryState,
+} from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { createRuntimeEventProjector } from "../../../../../../src/modules/chat/runtime/session/runtimeEventProjector.js";
 
-describe("normalizeSessionRunEvent", () => {
-  it("reads authoritative state from the top-level lifecycle envelope", () => {
-    const normalized = normalizeSessionRunEvent({
-      type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
-      seq: 7,
-      state: "COMPLETED",
-    });
-    expect(normalized.state).toBe("completed");
-    expect(normalized.lifecycleSeq).toBe(7);
-    expect(normalized.seq).toBe(7);
-    expect(normalized.transportSeq).toBe(0);
+function envelope() {
+  return createTurnLifecycleEnvelope({
+    eventType: "turn.processing_started",
+    eventId: "event-1",
+    commandId: "command-1",
+    userId: "u1",
+    sessionId: "s1",
+    parentSessionId: "",
+    turnScopeId: "t1",
+    presentationMessageId: "message-1",
+    dialogProcessId: "dp1",
+    revision: 2,
+    sequence: 2,
+    state: "processing",
+    phase: "processing",
+    action: "send",
+    executionState: "sending",
+    capabilities: { actionLocked: true, canStop: true },
+    startedAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:01.000Z",
+    occurredAt: "2026-01-01T00:00:01.000Z",
+  });
+}
+
+afterEach(() => vi.useRealTimers());
+
+describe("runtime event input contract", () => {
+  it("replays authoritative events independently of the local clock", () => {
+    vi.useFakeTimers();
+    const input = envelope();
+    const before = structuredClone(input);
+    const first = createTurnRuntimeRegistryState();
+    vi.setSystemTime(new Date("2027-01-01T00:00:00.000Z"));
+    expect(applyTurnLifecycleEnvelope(first, input).applied).toBe(true);
+    const second = createTurnRuntimeRegistryState();
+    vi.setSystemTime(new Date("2030-01-01T00:00:00.000Z"));
+    expect(applyTurnLifecycleEnvelope(second, input).applied).toBe(true);
+    expect(second).toEqual(first);
+    expect(first.sessions.s1.turns.t1.updatedAtMs).toBe(Date.parse(input.updatedAt));
+    expect(input).toEqual(before);
   });
 
-  it("exposes terminal resolution as authoritative turn state and applied authority", () => {
-    const normalized = normalizeSessionRunEvent({
-      type: SESSION_RUN_EVENT.TERMINAL_RESOLVED,
-      state: "Failed",
-      finalizeIntent: "abort",
-      failure: { code: "model_failed" },
-    });
-    expect(normalized.authoritativeTurnState).toBe("failed");
-    expect(normalized.authority).toBe(TURN_RUNTIME_AUTHORITY.AUTHORITATIVE_DETAIL_APPLIED);
-    expect(normalized.finalizeIntent).toBe("abort");
-    expect(normalized.failure).toEqual({ code: "model_failed" });
+  it.each(["sessionId", "turnScopeId", "dialogProcessId", "updatedAt", "sequence", "revision"])(
+    "rejects missing authoritative %s before changing the registry",
+    (field) => {
+      const input = envelope();
+      delete input[field];
+      const registry = createTurnRuntimeRegistryState();
+      const before = structuredClone(registry);
+      expect(applyTurnLifecycleEnvelope(registry, input)).toMatchObject({
+        applied: false,
+        reason: "invalid_authoritative_envelope",
+      });
+      expect(registry).toEqual(before);
+    },
+  );
+
+  it("does not recover a transport event identity from an existing dialog route", () => {
+    const registry = createTurnRuntimeRegistryState();
+    applyTurnLifecycleEnvelope(registry, envelope());
+    const before = structuredClone(registry);
+    expect(
+      applyTurnRuntimeEvent(registry, {
+        type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+        dialogProcessId: "dp1",
+        state: "completed",
+        seq: 3,
+        updatedAtMs: 1767225602000,
+      }),
+    ).toMatchObject({ applied: false, reason: "missing_turn_identity" });
+    expect(registry).toEqual(before);
   });
 
-  it("does not read turn payload from a nested raw.turn copy", () => {
-    const normalized = normalizeSessionRunEvent({
-      type: SESSION_RUN_EVENT.TERMINAL_RESOLVED,
-      raw: { turn: { state: "failed", finalizeIntent: "abort", failure: { code: "x" } } },
-    });
-    expect(normalized.authoritativeTurnState).toBe("");
-    expect(normalized.finalizeIntent).toBeNull();
-    expect(normalized.failure).toBeNull();
-  });
-
-  it("treats local_failure as a non-protocol event without failureState derivation", () => {
-    const normalized = normalizeSessionRunEvent({
-      type: "local_failure",
-      failureState: "error",
-      state: "running",
-    });
-    expect(normalized.state).toBe("sending");
-    expect(normalized.authoritativeTurnState).toBe("");
-  });
-
-  it("marks frontend completion failure with failed authority", () => {
-    const normalized = normalizeSessionRunEvent({
-      type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_FAILED,
-    });
-    expect(normalized.authority).toBe(TURN_RUNTIME_AUTHORITY.AUTHORITATIVE_DETAIL_FAILED);
-  });
-
-  it("prefers an explicit authority over the derived one", () => {
-    const normalized = normalizeSessionRunEvent({
-      type: SESSION_RUN_EVENT.TERMINAL_RESOLVED,
-      authority: "  custom_authority  ",
-    });
-    expect(normalized.authority).toBe("custom_authority");
-  });
-
-  it("clears dialogProcessId for turn-starting events but keeps it otherwise", () => {
-    const started = normalizeSessionRunEvent({
-      type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
-      dialogProcessId: "dialog-1",
-    });
-    const other = normalizeSessionRunEvent({
-      type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
-      dialogProcessId: "dialog-1",
-    });
-    expect(started.dialogProcessId).toBe("");
-    expect(other.dialogProcessId).toBe("dialog-1");
-  });
-
-  it("routes seq into transportSeq for backend state events", () => {
-    const normalized = normalizeSessionRunEvent({
-      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-      seq: 12,
-    });
-    expect(normalized.transportSeq).toBe(12);
-    expect(normalized.lifecycleSeq).toBe(0);
-  });
-
-  it("keeps derived sequences at zero for local events", () => {
-    const normalized = normalizeSessionRunEvent({
-      type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
-      seq: 5,
-      transportSeq: 9,
-      lifecycleSeq: 9,
-    });
-    expect(normalized.seq).toBe(5);
-    expect(normalized.transportSeq).toBe(0);
-    expect(normalized.lifecycleSeq).toBe(0);
-  });
-
-  it("normalizes a missing or zero seq to zero without reading aliases", () => {
-    const missing = normalizeSessionRunEvent({
-      type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
-      sequence: 4,
-    });
-    const zero = normalizeSessionRunEvent({
-      type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
-      seq: 0,
-    });
-    expect([missing.seq, missing.lifecycleSeq, missing.transportSeq]).toEqual([0, 0, 0]);
-    expect([zero.seq, zero.lifecycleSeq, zero.transportSeq]).toEqual([0, 0, 0]);
-  });
-
-  it("derives timestamp from updatedAt then createdAt without reading a timestamp alias", () => {
-    expect(normalizeSessionRunEvent({ timestamp: 1000, updatedAtMs: 2000 }).timestamp).toBe(2000);
-    expect(normalizeSessionRunEvent({ updatedAtMs: 2000 }).timestamp).toBe(2000);
-    const iso = "2026-01-02T03:04:05.000Z";
-    expect(normalizeSessionRunEvent({ updatedAt: iso }).timestamp).toBe(Date.parse(iso));
-    expect(normalizeSessionRunEvent({ createdAt: iso }).timestamp).toBe(Date.parse(iso));
-    expect(normalizeSessionRunEvent({}).timestamp).toBeGreaterThan(0);
-  });
-
-  it("reads type only from the protocol field and does not carry the raw event", () => {
-    const normalized = normalizeSessionRunEvent({ state: "running", event: "backend" });
-    expect(normalized.type).toBe("");
-    expect(normalized).not.toHaveProperty("raw");
-  });
-
-  it("does not carry a terminal materialization field", () => {
-    expect(normalizeSessionRunEvent({ materialization: { kind: "full" } })).not.toHaveProperty(
-      "materialization",
+  it("keeps a local event timestamp across consumption under a different clock", () => {
+    vi.useFakeTimers();
+    const input = createLocalSessionRunEvent(
+      { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED, sessionId: "s1", turnScopeId: "t1" },
+      1000,
     );
+    vi.setSystemTime(9000);
+    const registry = createTurnRuntimeRegistryState();
+    expect(applyTurnRuntimeEvent(registry, input).applied).toBe(true);
+    expect(registry.sessions.s1.turns.t1.updatedAtMs).toBe(1000);
   });
 
-  it("reads phase only from the top-level protocol field", () => {
-    expect(normalizeSessionRunEvent({ failure: { phase: "tool" } }).phase).toBe("");
-    expect(normalizeSessionRunEvent({ phase: "processing" }).phase).toBe("processing");
+  it("creates local time at the session dispatch producer before store consumption", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1000);
+    const registry = createTurnRuntimeRegistryState();
+    const apply = vi.fn((input) => applyTurnRuntimeEvent(registry, input));
+    const submit = createRuntimeEventProjector({
+      turnRuntimeRegistry: { value: registry },
+      chatStore: { applyTurnRuntimeEvent: apply },
+      resolveActiveSessionIdentity: () => "s1",
+    });
+    submit({ type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED, sessionId: "s1", turnScopeId: "t1" });
+    expect(apply.mock.calls[0][0].timestamp).toBe(1000);
+    expect(registry.sessions.s1.turns.t1.updatedAtMs).toBe(1000);
   });
 });

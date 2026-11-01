@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createTurnLifecycleSnapshot } from "@noobot/session-protocol";
 import { workflowSessionSnapshotEventId } from "@noobot/event-protocol/workflow-runtime-event";
+import { WORKFLOW_SESSION_REQUEST_ERROR_CODE } from "@noobot/event-protocol/workflow-session-detail";
 import {
   createWorkflowServiceRouteHandlers,
   WORKFLOW_ROUTE_ERROR_CODE,
@@ -48,7 +49,7 @@ test("rejects non-canonical query values as invalid", async () => {
   for (const value of [" dialog-1", "", ["dialog-1"]]) {
     await assert.rejects(
       handlers["workflow.execution-report"](request({ dialogProcessId: value }), response().res),
-      { code: WORKFLOW_ROUTE_ERROR_CODE.QUERY_INVALID, statusCode: 400 },
+      { code: WORKFLOW_SESSION_REQUEST_ERROR_CODE.INVALID, statusCode: 400 },
     );
   }
 });
@@ -56,7 +57,7 @@ test("rejects non-canonical query values as invalid", async () => {
 test("rejects absent required query values as required", async () => {
   const handlers = createHandlers();
   await assert.rejects(handlers["workflow.execution-report"](request({}), response().res), {
-    code: WORKFLOW_ROUTE_ERROR_CODE.QUERY_REQUIRED,
+    code: WORKFLOW_SESSION_REQUEST_ERROR_CODE.REQUIRED,
     statusCode: 400,
   });
 });
@@ -71,11 +72,11 @@ test("thinking-detail passes the Turn lookup key to the host port unmodified", a
   });
   const { result, res } = response();
   await handlers["workflow.thinking-detail"](
-    request({ turnScopeId: " turn-1", dialogProcessId: "dialog-2" }),
+    request({ turnScopeId: "turn-1", dialogProcessId: "dialog-2" }),
     res,
   );
   assert.equal(received.length, 1);
-  assert.equal(received[0].turnScopeId, " turn-1");
+  assert.equal(received[0].turnScopeId, "turn-1");
   assert.equal(received[0].dialogProcessId, "dialog-2");
   assert.deepEqual(received[0].segments.slice(-1), ["dialog-1"]);
   assert.equal(result.body.dialogProcessId, "dialog-1");
@@ -133,11 +134,5 @@ test("builds the snapshot eventId through the protocol factory", async () => {
   for (const field of ["sessionId", "parentSessionId", "aggregateVersion", "updatedAt"]) {
     assert.equal(Object.hasOwn(workflowSession.snapshotEnvelope.payload, field), false, field);
   }
-  assert.deepEqual(Object.keys(workflowSession).sort(), [
-    "aggregateVersion",
-    "executionLogs",
-    "meta",
-    "sessionSummary",
-    "snapshotEnvelope",
-  ]);
+  assert.deepEqual(Object.keys(workflowSession).sort(), ["executionLogs", "snapshotEnvelope"]);
 });

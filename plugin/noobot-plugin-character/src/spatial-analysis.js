@@ -170,12 +170,11 @@ function collidersCanContact(source, target, characters, time, options = {}) {
   );
 }
 
-function nodeReachAllowance(collider, character, time, options) {
+function nodeReachAllowance(collider, character, time) {
   if (collider?.node == null) return 0;
-  if (options.attackReachAllowance != null) return options.attackReachAllowance;
 
   const transform = characterTransformAt(character, time);
-  return Math.abs(transform.scale[1] || 1) * 0.65;
+  return Math.abs(transform.scale[1]) * 0.65;
 }
 
 export function hasSpatiallyReachableEvents(value, options = {}) {
@@ -193,8 +192,8 @@ export function hasSpatiallyReachableEvents(value, options = {}) {
       const targetCharacter = characters.get(target?.characterId);
       const reachAllowance =
         options.attackReachAllowance ??
-        nodeReachAllowance(source, sourceCharacter, event.time, options) +
-          nodeReachAllowance(target, targetCharacter, event.time, options);
+        nodeReachAllowance(source, sourceCharacter, event.time) +
+          nodeReachAllowance(target, targetCharacter, event.time);
       return collidersCanContact(source, target, characters, event.time, {
         ...options,
         reachAllowance,
@@ -212,109 +211,137 @@ export function hasSpatiallyReachableEvents(value, options = {}) {
   });
 }
 
-export function analyzeAnimationSpatial(protocol, options = {}) {
-  const characters = new Map(
-    protocol.characters.map((character) => [character.characterId, character]),
+function analyzeCharacterMotion(character, { duration, samples, dt }) {
+  const initial = characterPositionAt(character, 0);
+  let previous = initial;
+  let distance = 0;
+  let maxSpeed = 0;
+  for (let index = 1; index < samples; index += 1) {
+    const current = characterPositionAt(character, index * dt);
+    const step = Math.hypot(...current.map((value, axis) => value - previous[axis]));
+    distance += step;
+    maxSpeed = Math.max(maxSpeed, step / dt);
+    previous = current;
+  }
+  return {
+    distance,
+    displacement: Math.hypot(
+      ...characterPositionAt(character, duration).map((value, index) => value - initial[index]),
+    ),
+    averageSpeed: distance / duration,
+    maxSpeed,
+    minClearance: Infinity,
+    penetrationIntervals: [],
+  };
+}
+
+function colliderClearance(source, target, characters, { time, options }) {
+  const sourceTransform = colliderWorldTransform(
+    source,
+    characters.get(source.characterId),
+    time,
+    options,
   );
-  const colliders = protocol.scene.collisionSpace.colliders;
+  const targetTransform = colliderWorldTransform(
+    target,
+    characters.get(target.characterId),
+    time,
+    options,
+  );
+  return (
+    Math.hypot(
+      ...sourceTransform.position.map((value, axis) => value - targetTransform.position[axis]),
+    ) -
+    colliderRadius(source.shape, sourceTransform.scale) -
+    colliderRadius(target.shape, targetTransform.scale)
+  );
+}
+
+function analyzeColliderPair(source, target, sampling) {
+  const { duration, samples, dt, characters, options } = sampling;
+  const penetrationIntervals = [];
+  let start = null;
+  let minClearance = Infinity;
+  for (let sampleIndex = 0; sampleIndex < samples; sampleIndex += 1) {
+    const time = sampleIndex * dt;
+    const clearance = colliderClearance(source, target, characters, { time, options });
+    const swept =
+      sampleIndex > 0
+        ? sweptClearance(source, target, characters, time - dt, time, options)
+        : Infinity;
+    minClearance = Math.min(minClearance, clearance, swept);
+    if (swept < 0 && start == null) start = time - dt;
+    if (clearance < 0 && start == null) start = time;
+    if (clearance >= 0 && start != null) {
+      penetrationIntervals.push({
+        sourceColliderId: source.colliderId,
+        targetColliderId: target.colliderId,
+        start,
+        end: time,
+      });
+      start = null;
+    }
+  }
+  if (start != null)
+    penetrationIntervals.push({
+      sourceColliderId: source.colliderId,
+      targetColliderId: target.colliderId,
+      start,
+      end: duration,
+    });
+  return { minClearance, penetrationIntervals };
+}
+
+function* colliderPairs(colliders) {
+  for (let index = 0; index < colliders.length; index += 1) {
+    for (let otherIndex = index + 1; otherIndex < colliders.length; otherIndex += 1) {
+      yield [colliders[index], colliders[otherIndex]];
+    }
+  }
+}
+
+function analyzeColliderPairs(colliders, diagnostics, sampling) {
+  const penetrationIntervals = [];
+  for (const [source, target] of colliderPairs(colliders)) {
+    if (source.characterId === target.characterId) continue;
+    const { minClearance, penetrationIntervals: intervals } = analyzeColliderPair(
+      source,
+      target,
+      sampling,
+    );
+    for (const interval of intervals) penetrationIntervals.push(interval);
+    diagnostics.get(source.characterId).minClearance = Math.min(
+      diagnostics.get(source.characterId).minClearance,
+      minClearance,
+    );
+    diagnostics.get(target.characterId).minClearance = Math.min(
+      diagnostics.get(target.characterId).minClearance,
+      minClearance,
+    );
+  }
+  return penetrationIntervals;
+}
+
+export function analyzeAnimationSpatial(protocol, options = {}) {
+  const samples = Math.max(2, Math.ceil(protocol.duration * 60) + 1);
+  const sampling = {
+    duration: protocol.duration,
+    samples,
+    dt: protocol.duration / (samples - 1),
+    characters: new Map(protocol.characters.map((character) => [character.characterId, character])),
+    options,
+  };
   const diagnostics = new Map(
     protocol.characters.map((character) => [
       character.characterId,
-      {
-        distance: 0,
-        displacement: 0,
-        averageSpeed: 0,
-        maxSpeed: 0,
-        minClearance: Infinity,
-        penetrationIntervals: [],
-      },
+      analyzeCharacterMotion(character, sampling),
     ]),
   );
-  const samples = Math.max(2, Math.ceil(protocol.duration * 60) + 1);
-  const dt = protocol.duration / (samples - 1);
-  for (const character of protocol.characters) {
-    let previous = characterPositionAt(character, 0);
-    let distance = 0;
-    let maxSpeed = 0;
-    for (let index = 1; index < samples; index += 1) {
-      const current = characterPositionAt(character, index * dt);
-      const step = Math.hypot(...current.map((value, axis) => value - previous[axis]));
-      distance += step;
-      maxSpeed = Math.max(maxSpeed, step / dt);
-      previous = current;
-    }
-    const item = diagnostics.get(character.characterId);
-    item.distance = distance;
-    item.displacement = Math.hypot(
-      ...characterPositionAt(character, protocol.duration).map(
-        (value, index) => value - characterPositionAt(character, 0)[index],
-      ),
-    );
-    item.averageSpeed = distance / protocol.duration;
-    item.maxSpeed = maxSpeed;
-  }
-  const penetrationIntervals = [];
-  for (let index = 0; index < colliders.length; index += 1) {
-    for (let otherIndex = index + 1; otherIndex < colliders.length; otherIndex += 1) {
-      const source = colliders[index];
-      const target = colliders[otherIndex];
-      if (source.characterId === target.characterId) continue;
-      let start = null;
-      let minClearance = Infinity;
-      for (let sampleIndex = 0; sampleIndex < samples; sampleIndex += 1) {
-        const time = sampleIndex * dt;
-        const sourceTransform = colliderWorldTransform(
-          source,
-          characters.get(source.characterId),
-          time,
-          options,
-        );
-        const targetTransform = colliderWorldTransform(
-          target,
-          characters.get(target.characterId),
-          time,
-          options,
-        );
-        const a = sourceTransform.position;
-        const b = targetTransform.position;
-        const clearance =
-          Math.hypot(...a.map((value, axis) => value - b[axis])) -
-          colliderRadius(source.shape, sourceTransform.scale) -
-          colliderRadius(target.shape, targetTransform.scale);
-        minClearance = Math.min(minClearance, clearance);
-        if (sampleIndex > 0) {
-          const swept = sweptClearance(source, target, characters, time - dt, time, options);
-          minClearance = Math.min(minClearance, swept);
-          if (swept < 0 && start == null) start = time - dt;
-        }
-        if (clearance < 0 && start == null) start = time;
-        if (clearance >= 0 && start != null) {
-          penetrationIntervals.push({
-            sourceColliderId: source.colliderId,
-            targetColliderId: target.colliderId,
-            start,
-            end: time,
-          });
-          start = null;
-        }
-      }
-      if (start != null)
-        penetrationIntervals.push({
-          sourceColliderId: source.colliderId,
-          targetColliderId: target.colliderId,
-          start,
-          end: protocol.duration,
-        });
-      diagnostics.get(source.characterId).minClearance = Math.min(
-        diagnostics.get(source.characterId).minClearance,
-        minClearance,
-      );
-      diagnostics.get(target.characterId).minClearance = Math.min(
-        diagnostics.get(target.characterId).minClearance,
-        minClearance,
-      );
-    }
-  }
+  const penetrationIntervals = analyzeColliderPairs(
+    protocol.scene.collisionSpace.colliders,
+    diagnostics,
+    sampling,
+  );
   return {
     units: protocol.scene.coordinateSystem,
     sampleRate: (samples - 1) / protocol.duration,

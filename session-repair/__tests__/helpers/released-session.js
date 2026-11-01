@@ -8,6 +8,7 @@ import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 export function releasedSession(fields) {
   return {
     messages: [],
+    sessionArtifactEvents: [],
     turnTimings: [],
     ...fields,
     turnLifecycle: { ...createEmptyTurnLifecycle(), ...fields.turnLifecycle },

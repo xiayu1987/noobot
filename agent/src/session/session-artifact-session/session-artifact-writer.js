@@ -4,10 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path } from "@noobot/path-resolver";
-import { SESSION_ARTIFACT_SUMMARY_SNAPSHOT_SCHEMA_VERSION } from "@noobot/session-protocol";
+import {
+  SESSION_ARTIFACT_SUMMARY_SNAPSHOT_SCHEMA_VERSION,
+  SESSION_ARTIFACT_CHECKPOINT_IDENTITY_SOURCE_SCHEMA_VERSION,
+  assertSessionManifestLayout,
+} from "@noobot/session-protocol";
+import { assertStoredCheckpointReceipts } from "@noobot/session-protocol/summary-checkpoint-storage";
 import { requireCanonicalTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
 import { mkdir, readdir, rm } from "node:fs/promises";
 import { normalizeSessionEntity } from "../entities/session-entity.js";
+import { materializeCommittedTurnEvents } from "../authority-outbox-store/outbox-journal.js";
 import {
   buildSessionArtifactFileMap,
   SESSION_ARTIFACT_FILE_NAMES,
@@ -70,10 +76,19 @@ async function readPreviousTurnManifest({ storageService, files, predecessor }) 
   if (previousManifest === null) return null;
   if (
     predecessor === SESSION_ARTIFACT_PREDECESSOR.LEGACY_REWRITE &&
+    previousManifest.schemaVersion === SESSION_ARTIFACT_CHECKPOINT_IDENTITY_SOURCE_SCHEMA_VERSION
+  ) {
+    assertStoredCheckpointReceipts(previousManifest);
+    return assertSessionManifestLayout(previousManifest);
+  }
+  if (
+    predecessor === SESSION_ARTIFACT_PREDECESSOR.LEGACY_REWRITE &&
     previousManifest.schemaVersion !== TURN_JOURNAL_SCHEMA_VERSION
   )
     return null;
-  return assertCanonicalSessionManifest(previousManifest, "Session artifact write");
+  const canonical = assertCanonicalSessionManifest(previousManifest, "Session artifact write");
+  await materializeCommittedTurnEvents(path.dirname(files.session), canonical.turnLifecycle);
+  return canonical;
 }
 
 function assignArtifactTurnIds(turns, previousManifest) {

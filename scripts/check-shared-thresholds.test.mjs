@@ -54,3 +54,25 @@ test("ignores thresholds inside comments and strings, and unrelated names", () =
     [],
   );
 });
+
+test("preserves locations after multiline comments and escaped string delimiters", () => {
+  const source = [
+    "/* maxItems: 50,",
+    "*/ const MAX_COUNT = 12;",
+    'const label = "escaped \\" maxItems: 50";',
+    "const options = { maxTurns: 8 };",
+  ].join("\r\n");
+  assert.deepEqual(
+    findScatteredThresholds(source).map(({ line, column, name, expr, rule }) => ({
+      line,
+      column,
+      name,
+      expr,
+      category: rule.category,
+    })),
+    [
+      { line: 2, column: 4, name: "MAX_COUNT", expr: "12", category: "quantity" },
+      { line: 4, column: 19, name: "maxTurns", expr: "8", category: "turn" },
+    ],
+  );
+});

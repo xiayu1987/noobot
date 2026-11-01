@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { WORKFLOW_PLUGIN_DEFAULTS, WORKFLOW_SEMANTIC } from "../constants.js";
+import { WORKFLOW_SEMANTIC } from "../constants.js";
 import { throwIfWorkflowAborted } from "../hooks/runtime.js";
 import { resolveWorkflowInputAttachments } from "../hooks/attachments.js";
 import {
@@ -12,7 +12,12 @@ import {
   resolveWorkflowAvailableToolNames,
   resolveWorkflowSemanticContextMessages,
 } from "../hooks/messages.js";
-import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
+import {
+  getWorkflowDefaultSemanticPrompt,
+  resolveWorkflowLocaleFromContext,
+  tWorkflow,
+  WORKFLOW_I18N_KEYSET,
+} from "../i18n.js";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import { defineCapabilityActivity } from "@noobot/plugin-protocol";
 import {
@@ -60,11 +65,11 @@ function buildWorkflowInputAttachmentPlanningBlock(attachments = [], ctx = {}) {
 export async function resolveSemanticText({ options, ctx, signal, sourceText }) {
   throwIfWorkflowAborted(signal);
   const userMessage = text(ctx?.userMessage);
-  const locale = text(ctx?.runConfig?.locale) || WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_LOCALE;
+  const locale = resolveWorkflowLocaleFromContext(ctx);
   const userAttachments = resolveWorkflowInputAttachments(ctx);
   const attachmentPlanningBlock = buildWorkflowInputAttachmentPlanningBlock(userAttachments, ctx);
   const availableToolNames = resolveWorkflowAvailableToolNames(ctx);
-  const availableToolsPlanningBlock = buildWorkflowAvailableToolsPlanningBlock(ctx, locale);
+  const availableToolsPlanningBlock = buildWorkflowAvailableToolsPlanningBlock(ctx);
   const contextMessages = resolveWorkflowSemanticContextMessages({ options, ctx });
   const availableToolsSystemMessage = text(availableToolsPlanningBlock)
     ? { role: "system", content: availableToolsPlanningBlock }
@@ -89,7 +94,7 @@ export async function resolveSemanticText({ options, ctx, signal, sourceText }) 
     lane: MODEL_CONTEXT_LANE.AUXILIARY,
     sourceMessages: contextMessages,
     protocolSystemMessages: [
-      text(options?.semanticPrompt),
+      options.semanticPrompt || getWorkflowDefaultSemanticPrompt(locale),
       ...(availableToolsSystemMessage ? [availableToolsSystemMessage] : []),
     ].filter(Boolean),
     taskMessages: [semanticTaskMessage],

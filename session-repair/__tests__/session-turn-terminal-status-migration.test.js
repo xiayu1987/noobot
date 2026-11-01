@@ -14,6 +14,7 @@ import {
 import { migrateSessionDocument } from "../src/index.js";
 
 import { releasedSession } from "./helpers/released-session.js";
+import { turnRecord } from "./helpers/turn-record.js";
 
 function migrateReleased(fields) {
   return migrateSessionDocument(releasedSession(fields));
@@ -27,7 +28,17 @@ function sessionWith(turn, schemaVersion = 9) {
     sessionId: "session-1",
     aggregateVersion: 0,
     messages: [],
-    turnLifecycle: { turns: { [turnScopeId]: { turnScopeId, ...turn } } },
+    turnLifecycle: {
+      sequence: 1,
+      turns: {
+        [turnScopeId]: turnRecord({
+          turnScopeId,
+          executionId: `agent:${turnScopeId}`,
+          rootExecutionId: `agent:${turnScopeId}`,
+          ...turn,
+        }),
+      },
+    },
   };
 }
 
@@ -75,9 +86,17 @@ test("v10 migration keeps protocol terminal statuses unchanged", () => {
     reason: "run_completed",
     description: "",
     updatedAt: finishedAt,
+    dialogProcessId: "dialog-1",
   };
   const result = migrateReleased(
-    sessionWith({ state: "completed", terminalStatus, failure: null }),
+    sessionWith({
+      state: "completed",
+      phase: "completion",
+      executionState: "completed",
+      finishedAt,
+      terminalStatus,
+      failure: null,
+    }),
   );
   assert.deepEqual(result.document.turnLifecycle.turns[turnScopeId].terminalStatus, terminalStatus);
   assert.equal(result.migrations.includes("turn-terminal-status-protocol-v1"), false);
@@ -97,17 +116,24 @@ test("v10 migration rejects a non-protocol terminalStatus without an orphan reco
   }
 });
 
-test("v10 migration does not run for documents already at the current schema", () => {
+test("current schema rejects legacy terminal facts instead of reinterpreting them", () => {
   const source = sessionWith(orphanedTurn(), SESSION_ARTIFACT_SCHEMA_VERSION);
-  const result = migrateReleased(source);
-  assert.deepEqual(
-    result.document.turnLifecycle.turns[turnScopeId].terminalStatus,
-    source.turnLifecycle.turns[turnScopeId].terminalStatus,
-  );
+  const before = structuredClone(source);
+  assert.throws(() => migrateReleased(source), {
+    code: "SESSION_TURN_LIFECYCLE_RECORD_UNMIGRATABLE",
+  });
+  assert.deepEqual(source, before);
 });
 
 function terminalTurn(terminalStatus) {
-  return { dialogProcessId: "dialog-1", state: "stop_completed", finishedAt, terminalStatus };
+  return {
+    dialogProcessId: "dialog-1",
+    state: "stop_completed",
+    phase: "stop",
+    executionState: "user_stopped",
+    finishedAt,
+    terminalStatus,
+  };
 }
 
 function v13Terminal(command, extra = {}) {
@@ -135,7 +161,17 @@ test("v14 migration clears a completed terminal description", () => {
     ...v13Terminal("completed", { reason: "run_completed" }),
     description: "done",
   };
-  const result = migrateReleased(sessionWith(terminalTurn(status), 13));
+  const result = migrateReleased(
+    sessionWith(
+      {
+        ...terminalTurn(status),
+        state: "completed",
+        phase: "completion",
+        executionState: "completed",
+      },
+      13,
+    ),
+  );
   assert.equal(result.document.turnLifecycle.turns[turnScopeId].terminalStatus.description, "");
 });
 

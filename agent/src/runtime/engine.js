@@ -197,7 +197,7 @@ export async function runAgentTurn({ agentContext, currentUserMessage, errorLogg
     return result;
   } catch (error) {
     const failedAtMs = Date.now();
-    const aborted = isAbortError(error) || isAbortError(error?.cause);
+    const aborted = isAbortError(error, runtime.abortSignal);
     const failurePoint = aborted ? HOOK_POINT.AGENT.ON_ABORT : HOOK_POINT.AGENT.ON_ERROR;
     await runAgentRuntimeHook({
       runtime,

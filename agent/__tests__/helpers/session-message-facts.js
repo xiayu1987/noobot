@@ -12,6 +12,7 @@ export function createTestSessionRequiredFields() {
     parentSessionId: "",
     caller: SESSION_CALLER.USER,
     messages: [],
+    sessionArtifactEvents: [],
     dialogOrder: [],
     turnTimings: [],
     turnLifecycle: createEmptyTurnLifecycle(),

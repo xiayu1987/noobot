@@ -69,7 +69,7 @@ describe("workflow node message projection", () => {
         role: "assistant",
         type: "tool_call",
         content: "",
-        toolTimeline: [{ event: "tool_call", toolCallId: "call-1" }],
+        toolTimeline: [{ key: "call:call-1", toolCallId: "call-1", call: { sequence: 1 } }],
         sessionId: "child-session",
         turnScopeId: "turn-1",
       },
@@ -87,7 +87,14 @@ describe("workflow node message projection", () => {
         role: "assistant",
         type: "tool_call",
         content: "",
-        toolTimeline: [{ event: "tool_result", toolCallId: "call-1" }],
+        toolTimeline: [
+          {
+            key: "call:call-1",
+            toolCallId: "call-1",
+            success: true,
+            resultEvent: { sequence: 2 },
+          },
+        ],
         sessionId: "child-session",
         turnScopeId: "turn-1",
       },
@@ -119,7 +126,15 @@ describe("workflow node message projection", () => {
       "user",
       "assistant",
     ]);
-    expect(messages.displayNodeMessages.value[1].toolTimeline.length).toBeGreaterThan(0);
+    expect(messages.displayNodeMessages.value[1].toolTimeline).toEqual([
+      expect.objectContaining({
+        key: "call:call-1",
+        toolCallId: "call-1",
+        status: "completed",
+        call: { sequence: 1 },
+        resultEvent: { sequence: 2 },
+      }),
+    ]);
     expect(messages.displayNodeMessages.value.some((item) => item.role === "tool")).toBe(false);
     wrapper.unmount();
   });

@@ -250,6 +250,60 @@ test("after_session_run hook failures stay isolated and keep the completed repor
   );
 });
 
+test("invalid result mutations after dispatch fail before finalization and retain failed lifecycle", async () => {
+  const botHookManager = createTestBotHookManager();
+  botHookManager.on(HOOK_POINT.BOT.AFTER_AGENT_DISPATCH, ({ agentResult }) => {
+    agentResult.turnMessages = [null];
+  });
+  const { reports, runner } = createReportingRunner({ botHookManager });
+  await assert.rejects(runner.runAcceptedSession(reportRunPayload), (error) => {
+    assert.equal(error.code, "AGENT_TURN_RESULT_INVALID");
+    assert.equal(error.lifecycle.state, "failed");
+    return true;
+  });
+  assert.deepEqual(
+    reports.map((report) => report.status),
+    ["failed"],
+  );
+});
+
+test("result hook failures block finalization even if the result stays structurally valid", async () => {
+  const botHookManager = createTestBotHookManager();
+  botHookManager.on(HOOK_POINT.BOT.AFTER_AGENT_DISPATCH, () => {
+    throw new Error("result hook failed");
+  });
+  const { reports, runner } = createReportingRunner({ botHookManager });
+  await assert.rejects(runner.runAcceptedSession(reportRunPayload), (error) => {
+    assert.match(error.message, /hook/i);
+    assert.equal(error.lifecycle.state, "failed");
+    return true;
+  });
+  assert.deepEqual(
+    reports.map((report) => report.status),
+    ["failed"],
+  );
+});
+
+test("valid result hook additions reach the canonical result and finalization", async () => {
+  const botHookManager = createTestBotHookManager();
+  botHookManager.on(HOOK_POINT.BOT.AFTER_AGENT_DISPATCH, ({ agentResult }) => {
+    agentResult.turnMessages.push({ messageUid: "mu-hook", role: "system", content: "hook fact" });
+  });
+  let finalized = null;
+  const runner = createRunner({
+    botHookManager,
+    finalizeRunSession: async ({ agentResult }) => {
+      finalized = agentResult;
+      return { answer: agentResult.output };
+    },
+  });
+  await runner.runAcceptedSession(reportRunPayload);
+  assert.equal(
+    finalized.turnMessages.find((message) => message.messageUid === "mu-hook").content,
+    "hook fact",
+  );
+});
+
 test("a failure after finalize overwrites the completed report with a failed report", async () => {
   const { reports, runner } = createReportingRunner({
     initializeRunSessionRuntime: async ({ parentSessionId }) => ({

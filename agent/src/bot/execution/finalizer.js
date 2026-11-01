@@ -6,6 +6,7 @@
 
 import { emitEvent } from "../../events/index.js";
 import { assertSessionFinalizationContext } from "@noobot/agent-transport-protocol/session-finalization";
+import { assertAgentTurnResult } from "@noobot/agent-transport-protocol/agent-turn-result";
 import { runBestEffort } from "@noobot/shared/best-effort";
 import {
   isSummarizedSessionMessageRecord,
@@ -57,10 +58,8 @@ export class SessionExecutionFinalizer {
       userConfig,
     });
     requireDialogProcessKey(dialogProcessId);
+    assertAgentTurnResult(agentResult);
     const activeTurnMessages = agentResult.turnMessages;
-    if (!Array.isArray(activeTurnMessages) || activeTurnMessages.length === 0) {
-      throw new Error("finalizeRunSession requires accepted canonical turn messages");
-    }
     const persistedUidSet = new Set(persistedTurnMessageUids);
     const persistedMessagesByUid = new Map(
       durableTurnMessages.map((message) => [message.messageUid, message]),

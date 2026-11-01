@@ -30,6 +30,9 @@ const COUNTED_RULES = Object.freeze({
   deepNestingCount: "max-depth",
   longParameterListCount: "max-params",
 });
+const MEASUREMENT_BY_RULE = new Map(
+  Object.entries(COUNTED_RULES).map(([name, rule]) => [rule, name]),
+);
 
 function measuredComplexity(message) {
   const value = Number(/complexity of (\d+)/.exec(message.message)?.[1]);
@@ -38,18 +41,20 @@ function measuredComplexity(message) {
   return value;
 }
 
+function addCountedRuleHits(measured, file, messages) {
+  for (const message of messages) {
+    const name = MEASUREMENT_BY_RULE.get(message.ruleId);
+    if (name) addHit(measured[name], { file, line: message.line, message: message.message });
+  }
+}
+
 export function measureLintResults(results, repositoryRoot = root) {
   const measured = Object.fromEntries(
     [...Object.keys(COUNTED_RULES), "maxComplexity"].map((name) => [name, emptyMeasurement()]),
   );
   for (const result of results) {
     const file = path.relative(repositoryRoot, result.filePath);
-    for (const [name, ruleId] of Object.entries(COUNTED_RULES)) {
-      for (const message of result.messages) {
-        if (message.ruleId === ruleId)
-          addHit(measured[name], { file, line: message.line, message: message.message });
-      }
-    }
+    addCountedRuleHits(measured, file, result.messages);
     const values = result.messages
       .filter(({ ruleId }) => ruleId === "complexity")
       .map(measuredComplexity);
@@ -101,12 +106,12 @@ export const CHECK = defineCheck({
   },
   exemptions: [],
   baseline: {
-    complexityCount: 151,
+    complexityCount: 140,
     longFunctionCount: 57,
     maxComplexity: 48,
-    nestedTernaryCount: 76,
-    deepNestingCount: 514,
-    longParameterListCount: 45,
+    nestedTernaryCount: 74,
+    deepNestingCount: 298,
+    longParameterListCount: 44,
     exemptions: 0,
   },
   measure,

@@ -39,6 +39,8 @@ function workflowNodeEvent() {
     payload: {
       workflowRunId: "workflow-1",
       status: "running",
+      activeChildExecutionId: "agent-1",
+      attemptExecutionIds: ["agent-1"],
       turnScopeId: "turn-1",
     },
   });
@@ -71,8 +73,61 @@ describe("runtime stream projector boundary", () => {
       provide: () => [projector],
     });
 
-    expect(routeRuntimeStreamEvent(workflowNodeEvent(), { source: "live" })).toBe(true);
+    expect(
+      routeRuntimeStreamEvent(workflowNodeEvent(), {
+        source: "live",
+        isCurrentActiveSession: () => true,
+      }),
+    ).toBe(true);
     expect(projector).toHaveBeenCalledOnce();
+  });
+
+  it("rejects invalid context before matching or invoking projectors", () => {
+    const projector = vi.fn(() => true);
+    const when = vi.fn(() => true);
+    contributeExtension(EXTENSION_POINTS.RUNTIME_STREAM_ROUTE, {
+      id: "context-projector",
+      when,
+      provide: () => [projector],
+    });
+    for (const context of [undefined, {}, { source: "live" }]) {
+      expect(() => routeRuntimeStreamEvent(workflowNodeEvent(), context)).toThrow(
+        expect.objectContaining({ code: "PLUGIN_EXTENSION_CONTEXT_INVALID" }),
+      );
+    }
+    expect(when).not.toHaveBeenCalled();
+    expect(projector).not.toHaveBeenCalled();
+  });
+
+  it("reports invalid projector values and continues to a valid projector", () => {
+    const logRuntimeProjectionDiagnostics = vi.fn();
+    const projector = vi.fn(() => true);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    contributeExtension(EXTENSION_POINTS.RUNTIME_STREAM_ROUTE, {
+      id: "mixed-projectors",
+      provide: () => [null, {}, projector],
+    });
+    try {
+      expect(
+        routeRuntimeStreamEvent(workflowNodeEvent(), {
+          source: "live",
+          isCurrentActiveSession: () => true,
+          logRuntimeProjectionDiagnostics,
+        }),
+      ).toBe(true);
+      expect(projector).toHaveBeenCalledOnce();
+      expect(
+        logRuntimeProjectionDiagnostics.mock.calls.filter(
+          ([event]) => event === "frontend.pluginRuntime.projectorFailed",
+        ),
+      ).toHaveLength(2);
+      expect(logRuntimeProjectionDiagnostics).toHaveBeenCalledWith(
+        "frontend.pluginRuntime.gatewayEvaluated",
+        expect.objectContaining({ projectorCount: 1 }),
+      );
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("records registered, matched, and executable projector counts", () => {
@@ -96,6 +151,7 @@ describe("runtime stream projector boundary", () => {
     expect(
       routeRuntimeStreamEvent(workflowNodeEvent(), {
         source: "live",
+        isCurrentActiveSession: () => true,
         logRuntimeProjectionDiagnostics,
       }),
     ).toBe(true);
@@ -108,5 +164,63 @@ describe("runtime stream projector boundary", () => {
       }),
     );
     expect(predicate).toHaveBeenCalledOnce();
+  });
+
+  it("keeps diagnostic identities on the validated envelope when context identities differ", () => {
+    const logRuntimeProjectionDiagnostics = vi.fn();
+    const envelope = workflowNodeEvent();
+    routeRuntimeStreamEvent(envelope, {
+      source: "live",
+      isCurrentActiveSession: () => true,
+      sessionId: "active-session",
+      turnScopeId: "active-turn",
+      logRuntimeProjectionDiagnostics,
+    });
+
+    expect(logRuntimeProjectionDiagnostics).toHaveBeenCalledWith(
+      "frontend.pluginRuntime.gatewayEvaluated",
+      expect.objectContaining({
+        sessionId: envelope.identity.sessionId,
+        turnScopeId: envelope.identity.turnScopeId,
+        eventType: envelope.identity.eventType,
+        eventFamily: envelope.protocol.family,
+        dialogProcessId: undefined,
+      }),
+    );
+  });
+
+  it("keeps projector failure diagnostics on the same envelope identity", () => {
+    const logRuntimeProjectionDiagnostics = vi.fn();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    contributeExtension(EXTENSION_POINTS.RUNTIME_STREAM_ROUTE, {
+      id: "failing-projector",
+      provide: () => [
+        () => {
+          throw new Error("projector failed");
+        },
+      ],
+    });
+    try {
+      expect(
+        routeRuntimeStreamEvent(workflowNodeEvent(), {
+          source: "reconnect",
+          isCurrentActiveSession: () => true,
+          sessionId: "active-session",
+          turnScopeId: "active-turn",
+          logRuntimeProjectionDiagnostics,
+        }),
+      ).toBe(false);
+      expect(logRuntimeProjectionDiagnostics).toHaveBeenCalledWith(
+        "frontend.pluginRuntime.projectorFailed",
+        expect.objectContaining({
+          sessionId: "s-1",
+          turnScopeId: "turn-1",
+          source: "reconnect",
+          error: "projector failed",
+        }),
+      );
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

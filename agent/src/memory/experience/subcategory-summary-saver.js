@@ -5,7 +5,10 @@
  */
 import { filePath as path } from "@noobot/path-resolver";
 import { sanitizeFileName } from "@noobot/memory-protocol/text";
-import { buildExperiencePatchSchema } from "@noobot/memory-protocol/experience/schema";
+import {
+  buildExperiencePatchSchema,
+  resolveExperienceDocumentSegments,
+} from "@noobot/memory-protocol/experience/schema";
 import { renderSectionLines } from "../utils/format.js";
 
 export async function saveSubcategoryDomainSummary({
@@ -31,9 +34,16 @@ export async function saveSubcategoryDomainSummary({
     for (const subcategory of subcategories) {
       const safeSubcategoryName = sanitizeFileName(subcategory?.subcategory, "");
       if (!safeSubcategoryName) continue;
-      const dirPath = path.join(periodDir, periodKey, safeDomainName, safeCategoryName);
-      await storage.ensureDir(dirPath);
-      const filePath = path.join(dirPath, `${safeSubcategoryName}.md`);
+      const filePath = path.join(
+        periodDir,
+        periodKey,
+        ...resolveExperienceDocumentSegments(schemaKey, {
+          domain: safeDomainName,
+          category: safeCategoryName,
+          subcategory: safeSubcategoryName,
+        }),
+      );
+      await storage.ensureDir(path.dirname(filePath));
       const block = [
         `${schema.timeLabel}：${createdAt || new Date().toISOString()}`,
         `${schema.sourceLabel}：${(Array.isArray(sourceKeys) ? sourceKeys : []).join(", ")}`,

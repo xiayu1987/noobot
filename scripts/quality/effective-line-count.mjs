@@ -10,29 +10,27 @@ function consumeQuotedCharacter(line, index, state) {
   return { index, state };
 }
 
+const COMMENT_CLOSERS = Object.freeze({ blockComment: "*/", htmlComment: "-->" });
+
+function consumeCommentCharacter(line, index, state) {
+  const closer = COMMENT_CLOSERS[state.mode];
+  if (!line.startsWith(closer, index)) return { index, state };
+  return { index: index + closer.length - 1, state: { mode: "code", quote: "" } };
+}
+
 function scanEffectiveLine(line, initialState) {
   let state = initialState;
   let hasCode = state.mode === "string" || state.mode === "template";
   for (let index = 0; index < line.length; index += 1) {
     const character = line[index];
     const pair = line.slice(index, index + 2);
-    const htmlEnd = line.slice(index, index + 3);
-    if (state.mode === "blockComment") {
-      if (pair === "*/") {
-        state = { mode: "code", quote: "" };
-        index += 1;
-      }
-      continue;
-    }
-    if (state.mode === "htmlComment") {
-      if (htmlEnd === "-->") {
-        state = { mode: "code", quote: "" };
-        index += 2;
-      }
+    if (Object.hasOwn(COMMENT_CLOSERS, state.mode)) {
+      const consumed = consumeCommentCharacter(line, index, state);
+      state = consumed.state;
+      index = consumed.index;
       continue;
     }
     if (state.mode === "string" || state.mode === "template") {
-      if (!/\s/.test(character)) hasCode = true;
       const consumed = consumeQuotedCharacter(line, index, state);
       state = consumed.state;
       index = consumed.index;

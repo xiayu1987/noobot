@@ -25,7 +25,6 @@ function buildMessageContentFacet(canonicalMessage = {}) {
       "toolCall",
       "toolResult",
       "tool_calls",
-      "rawEvents",
     ]),
     content: getMessageContentIdentity(canonicalMessage),
   };

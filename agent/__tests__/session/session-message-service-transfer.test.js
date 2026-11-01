@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 import { createSessionCrudServiceStub } from "../helpers/session-crud-service-stub.js";
+import { requiredSessionReads } from "../helpers/session-repo-required-reads.js";
 
 const TEST_SESSION_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-session-dir-"));
 after(() => fs.rmSync(TEST_SESSION_DIR, { recursive: true, force: true }));
@@ -28,6 +29,7 @@ test("SessionMessageService.appendTurns persists transferEnvelopes", async () =>
       return operation(await this.locateSessionScope());
     },
     async ensureSession() {},
+    ...requiredSessionReads,
     async findTurnView() {
       const session = {
         ...createTestSessionRequiredFields(),
@@ -122,6 +124,7 @@ test("SessionMessageService.appendTurns leaves turnTimings to the timing fact wr
       return operation(await this.locateSessionScope());
     },
     async ensureSession() {},
+    ...requiredSessionReads,
     async findTurnView() {
       return { session, turnScopeIds: [] };
     },
@@ -182,6 +185,7 @@ test("SessionMessageService.upsertTurnTiming is first-write-wins and rejects con
       return operation(await this.locateSessionScope());
     },
     async ensureSession() {},
+    ...requiredSessionReads,
     async findTurnView() {
       return { session, turnScopeIds: [] };
     },
@@ -275,6 +279,7 @@ test("SessionMessageService.deleteFromMessage prunes orphan turnTimings", async 
     async withSessionMutation(_u, _s, operation) {
       return operation(await this.locateSessionScope());
     },
+    ...requiredSessionReads,
     async findById() {
       return session;
     },
@@ -357,6 +362,7 @@ test("SessionMessageService.replaceTurn prunes replaced turnTimings", async () =
     async withSessionMutation(_u, _s, operation) {
       return operation(await this.locateSessionScope());
     },
+    ...requiredSessionReads,
     async findById() {
       return session;
     },

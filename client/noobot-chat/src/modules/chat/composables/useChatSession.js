@@ -222,20 +222,21 @@ export function useChatSession({
         data: normalizedEntry,
       }),
     );
-    submitTurnRuntimeEvent({
-      type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
-      state,
-      sessionId,
-      dialogProcessId,
-      turnScopeId,
-      source: normalizedEntry.source,
-      sourceEvent,
-      seq,
-      createdAtMs,
-      updatedAtMs,
-      createdAt,
-      updatedAt,
-    });
+    if (scope === AGENT_CHANNEL_STATE_SCOPE.TURN)
+      submitTurnRuntimeEvent({
+        type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
+        state,
+        sessionId,
+        dialogProcessId,
+        turnScopeId,
+        source: normalizedEntry.source,
+        sourceEvent,
+        seq,
+        createdAtMs,
+        updatedAtMs,
+        createdAt,
+        updatedAt,
+      });
 
     if (state === AGENT_CHANNEL_STATE.USER_STOPPED && turnScopeId) {
       const currentSessionId = resolveActiveSessionIdentity();
@@ -545,7 +546,6 @@ export function useChatSession({
       turnRuntimeRegistry,
       resolveActiveSessionIdentity,
       resolveActiveTurn,
-      submitTurnRuntimeEvent,
       waitForSessionConnectorState: connectorPanel.waitForSessionConnectorState,
       send: chatEngine.send,
       requestJson: chatWebSocketClient.requestJson,

@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { turnRecord } from "../helpers/turn-record.js";
 import { createEmptyTurnLifecycle, TURN_RECOVERY_ACTION } from "@noobot/session-protocol";
 import fs from "node:fs";
 import os from "node:os";
@@ -14,6 +15,7 @@ import { SessionMessageService } from "../../src/session/services/session-messag
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 import { createSessionCrudServiceStub } from "../helpers/session-crud-service-stub.js";
 import { buildPersistedDisplaySummary } from "./session-artifact-store-v2.test-helpers.js";
+import { requiredSessionReads } from "../helpers/session-repo-required-reads.js";
 
 const TEST_SESSION_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-session-dir-"));
 after(() => fs.rmSync(TEST_SESSION_DIR, { recursive: true, force: true }));
@@ -35,6 +37,7 @@ function createService({ initialSession }) {
     async withSessionMutation(_u, _s, operation) {
       return operation(await this.locateSessionScope());
     },
+    ...requiredSessionReads,
     async findById() {
       return currentSession;
     },
@@ -139,22 +142,22 @@ test("SessionMessageService.deleteFromMessage removes deleted terminal Turns fro
         sequence: 2,
         activeTurnScopeId: "",
         turns: {
-          "scope-keep": {
+          "scope-keep": turnRecord({
             turnScopeId: "scope-keep",
             presentationMessageId: "presentation-keep",
             dialogProcessId: "dialog-keep",
             state: "completed",
             revision: 1,
             sequence: 1,
-          },
-          "scope-delete": {
+          }),
+          "scope-delete": turnRecord({
             turnScopeId: "scope-delete",
             presentationMessageId: "presentation-delete",
             dialogProcessId: "dialog-delete",
             state: "stop_completed",
             revision: 2,
             sequence: 2,
-          },
+          }),
         },
         commandReceipts: [
           {
@@ -237,14 +240,15 @@ test("SessionMessageService.deleteFromMessage clears a survivor's reference to t
       ...createEmptyTurnLifecycle(),
       sequence: 2,
       turns: {
-        source: {
+        source: turnRecord({
+          continuedByTurnScopeId: "continuation",
           revision: 1,
           turnScopeId: "source",
           dialogProcessId: "source-dialog",
           state: "stop_completed",
           sequence: 1,
-        },
-        continuation: {
+        }),
+        continuation: turnRecord({
           revision: 1,
           turnScopeId: "continuation",
           dialogProcessId: "continuation-dialog",
@@ -254,7 +258,7 @@ test("SessionMessageService.deleteFromMessage clears a survivor's reference to t
             turnScopeId: "source",
             dialogProcessId: "source-dialog",
           },
-        },
+        }),
       },
       commandReceipts: [],
     },

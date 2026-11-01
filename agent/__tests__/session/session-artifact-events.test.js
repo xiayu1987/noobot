@@ -18,6 +18,7 @@ import {
   PLUGIN_ARTIFACT_EVENT,
 } from "@noobot/event-protocol/plugin-artifact-event";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
+import { requiredSessionReads } from "../helpers/session-repo-required-reads.js";
 
 const protocol = {
   format: "noobot.animation.protocol",
@@ -102,6 +103,7 @@ test("plugin artifact commits persist an independent Session artifact fact", asy
     async locateSessionScope() {
       return { resolvedParentSessionId: "", sessionDir };
     },
+    ...requiredSessionReads,
     async findById() {
       return structuredClone(session);
     },
@@ -242,6 +244,7 @@ test("plugin artifact replacement increments revision and rejects a stale base r
     async locateSessionScope() {
       return { resolvedParentSessionId: "", sessionDir };
     },
+    ...requiredSessionReads,
     async findById() {
       return structuredClone(session);
     },
@@ -362,6 +365,7 @@ test("concurrent authority event commits allocate sequences inside one outbox lo
     async locateSessionScope() {
       return { resolvedParentSessionId: "", sessionDir };
     },
+    ...requiredSessionReads,
     async findById() {
       return structuredClone(session);
     },

@@ -74,6 +74,25 @@ function declaredFrontendModules(manifest) {
   );
 }
 
+function measureFrontendImports(measurement, { file, source, imports, declared }) {
+  for (const imported of imports) {
+    if (declared.has(imported.specifier)) {
+      addHit(measurement, {
+        file,
+        line: offsetLine(source, imported.start),
+        message: `component ${imported.specifier} must load from its manifest declaration`,
+      });
+    }
+    if (imported.type === "static" && imported.specifier.endsWith(".vue")) {
+      addHit(measurement, {
+        file,
+        line: offsetLine(source, imported.start),
+        message: `static Vue import ${imported.specifier}`,
+      });
+    }
+  }
+}
+
 async function measureEntries(measured, pluginName) {
   const pluginRoot = `plugin/${pluginName}`;
   const manifest = parsePluginManifest(await readRepositoryJson(`${pluginRoot}/manifest.json`));
@@ -90,22 +109,13 @@ async function measureEntries(measured, pluginName) {
     }
     if (surface !== "frontend") continue;
     const declared = declaredFrontendModules(manifest);
-    for (const imported of imports) {
-      if (declared.has(imported.specifier)) {
-        addHit(measured.frontendComponentLoading, {
-          file,
-          line: offsetLine(source, imported.start),
-          message: `component ${imported.specifier} must load from its manifest declaration`,
-        });
-      }
-      if (imported.type === "static" && imported.specifier.endsWith(".vue")) {
-        addHit(measured.frontendComponentLoading, {
-          file,
-          line: offsetLine(source, imported.start),
-          message: `static Vue import ${imported.specifier}`,
-        });
-      }
-    }
+    measureFrontendImports(measured.frontendComponentLoading, { file, source, imports, declared });
+  }
+}
+
+function measureHostLifecycle(measurement, file, source) {
+  for (const [message, pattern] of HOST_RUNTIME_FORBIDDEN) {
+    addPatternLineHits({ measurement, file, source, pattern, message });
   }
 }
 
@@ -118,9 +128,7 @@ async function measure() {
       addPatternLineHits({ measurement: measured.legacyTerm, file, source, pattern, message });
     }
     if (hostRuntimeFiles.has(file)) {
-      for (const [message, pattern] of HOST_RUNTIME_FORBIDDEN) {
-        addPatternLineHits({ measurement: measured.hostLifecycle, file, source, pattern, message });
-      }
+      measureHostLifecycle(measured.hostLifecycle, file, source);
     }
   }
   await init;

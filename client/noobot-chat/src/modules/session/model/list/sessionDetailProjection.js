@@ -8,7 +8,7 @@ import { foldConversationMessages } from "../../../chat/model/messageModel.js";
 import { selectTurnPresentations } from "../../../chat/runtime/engine/turnPresentation.js";
 import { createTurnRuntimeRegistryState } from "../../../chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { createWorkflowNodeStateRegistry } from "../../../chat/stores/workflowEventOperations.js";
-import { requireTopLevelDetail } from "../../../chat/model/sessionDetailMerge.js";
+import { selectSessionContentMessages } from "@noobot/session-protocol/session-detail";
 import { text } from "@noobot/shared/value";
 
 export function buildSessionDetailProjection({
@@ -16,8 +16,7 @@ export function buildSessionDetailProjection({
   sessionDocs = [],
   makeViewMessage,
 } = {}) {
-  requireTopLevelDetail(sessionDetail, "projection");
-  const messages = Array.isArray(sessionDetail.messages) ? sessionDetail.messages : [];
+  const messages = selectSessionContentMessages(sessionDetail);
   const sessionId = text(sessionDetail.sessionId);
   const normalizedMessages = buildNormalizedDetailMessages({
     detailMessages: messages,

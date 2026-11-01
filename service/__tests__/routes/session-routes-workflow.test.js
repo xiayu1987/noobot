@@ -79,6 +79,7 @@ test("workflow service reads child execution events only from the workflow scope
       sessionId: "child-s",
       parentSessionId: "root-s",
       caller: SESSION_CALLER.USER,
+      sessionArtifactEvents: [],
       aggregateVersion: 0,
       messages: [],
       dialogOrder: [],
@@ -98,7 +99,7 @@ test("workflow service reads child execution events only from the workflow scope
   assert.deepEqual(logs, []);
 });
 
-test("session-routes: workflow session returns summary and execution jsonl from scoped path", async () => {
+test("session-routes: workflow session returns the canonical snapshot and execution jsonl from scoped path", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workflow-session-route-"));
   const workflowDir = path.join(
     workspaceRoot,
@@ -112,6 +113,7 @@ test("session-routes: workflow session returns summary and execution jsonl from 
       caller: SESSION_CALLER.USER,
       aggregateVersion: 1,
       updatedAt: "2026-08-19T00:00:00.000Z",
+      sessionArtifactEvents: [],
       turnTimings: [],
       turnLifecycle: createEmptyTurnLifecycle(),
       dialogOrder: [
@@ -169,11 +171,19 @@ test("session-routes: workflow session returns summary and execution jsonl from 
     const payload = await response.json();
     assert.equal(response.status, 200, JSON.stringify(payload));
     assert.equal(payload.ok, true);
-    assert.equal(payload.workflowSession.sessionSummary.sessionId, "node-s");
-    for (const field of ["session", "task", "files", "childSessionId", "dir"]) {
+    for (const field of [
+      "session",
+      "task",
+      "files",
+      "childSessionId",
+      "dir",
+      "sessionSummary",
+      "aggregateVersion",
+      "meta",
+    ]) {
       assert.equal(field in payload.workflowSession, false, field);
     }
-    assert.equal(payload.workflowSession.aggregateVersion, 1);
+    assert.equal(payload.workflowSession.snapshotEnvelope.ordering.aggregateVersion, 1);
     assert.equal(
       payload.workflowSession.snapshotEnvelope.identity.eventType,
       "workflow_session_snapshot_loaded",
@@ -196,6 +206,7 @@ test("session-routes: workflow session rejects a node snapshot without session m
       caller: SESSION_CALLER.USER,
       aggregateVersion: 1,
       updatedAt: "2026-08-19T00:00:00.000Z",
+      sessionArtifactEvents: [],
       turnTimings: [],
       turnLifecycle: createEmptyTurnLifecycle(),
       dialogOrder: [],
@@ -227,6 +238,7 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
       parentSessionId: "root-s",
       caller: SESSION_CALLER.USER,
       aggregateVersion: 1,
+      sessionArtifactEvents: [],
       turnTimings: [],
       turnLifecycle: createEmptyTurnLifecycle(),
       dialogOrder: [

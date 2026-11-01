@@ -41,7 +41,7 @@ function activeContextFor(messageBlocks) {
   });
 }
 
-test("runSession emits interrupted branch lifecycle state for non-user abort errors", async () => {
+test("runSession fails and logs unstructured abort errors", async () => {
   const callOrder = [];
   const events = [];
   const eventListener = {
@@ -74,14 +74,9 @@ test("runSession emits interrupted branch lifecycle state for non-user abort err
   assert.deepEqual(collectLifecycleStates(events), [
     AGENT_LIFECYCLE_STATE.INITIALIZING,
     AGENT_LIFECYCLE_STATE.RUNNING,
-    AGENT_LIFECYCLE_BRANCH_STATE.INTERRUPTED,
+    AGENT_LIFECYCLE_BRANCH_STATE.FAILED,
   ]);
-  const interruptedEvent = events.find(
-    (item) => item.data?.state === AGENT_LIFECYCLE_BRANCH_STATE.INTERRUPTED,
-  );
-  assert.equal(interruptedEvent.data.branchState, AGENT_LIFECYCLE_BRANCH_STATE.INTERRUPTED);
-  assert.equal(interruptedEvent.data.canResume, false);
-  assert.equal(interruptedEvent.data.stoppedSnapshotPersistence.reason, "non_user_abort");
+  assert.ok(callOrder.includes("errorLogger.log"));
 });
 
 test("runSession projects the structured timeout reason into interrupted lifecycle state", async () => {
@@ -253,7 +248,7 @@ test("runSession persists stopped model message snapshot for plain user_stop err
     eventListener,
     runtime,
     agentRunner: async () => {
-      throw { type: "user_stop", message: "second user stop" };
+      throw { type: "user_stop", reason: "second user stop" };
     },
     finalizeRunSession: async () => ({ ok: true }),
   });

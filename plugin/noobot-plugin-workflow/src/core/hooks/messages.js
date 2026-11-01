@@ -54,7 +54,8 @@ export function resolveWorkflowAvailableToolNames(ctx = {}) {
   return resolveWorkflowAvailableToolCatalog(ctx).map((item) => item.name);
 }
 
-export function buildWorkflowAvailableToolsPlanningBlock(ctx = {}, locale = "zh-CN") {
+export function buildWorkflowAvailableToolsPlanningBlock(ctx) {
+  const locale = resolveWorkflowLocaleFromContext(ctx);
   const catalog = resolveWorkflowAvailableToolCatalog(ctx);
   if (!catalog.length) return "";
   return [

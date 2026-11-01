@@ -97,6 +97,15 @@ STAGE: weekly
 - 每个阶段（daily/weekly/monthly/yearly）至少一个字段；key 为小写字母、数字和下划线，不能占用结构字段名。
 - 字段只有一个名字：协议 key 即补丁 key、内部字段名和落盘标题的来源，不提供别名。结构字段（`domain`、`new`、`category`、`subcategory`）由 `experience/structure.js` 唯一定义。
 - 补丁协议、示例和字段说明都由 `renderExperiencePatchProtocol(stage, { fields, labels })` 生成，i18n 只提供占位词（`experiencePatchLabels`）。
+- 各阶段汇总文档的落盘层级由 `experience/schema.js` 的 `documentPathFields` 唯一声明：daily 为 `<日期>/<domain>.md`，weekly 为 `<周>/<domain>/<category>.md`，monthly、yearly 为 `<周期>/<domain>/<category>/<subcategory>.md`。写入路径统一用 `resolveExperienceDocumentSegments(stage, values)` 生成，缺少路径字段直接报错；读取方按同一层级遍历，最外层段即领域名。
+
+## 经验模型结构契约
+
+`experience/model-text.js` 是经验模型的结构校验、名称规范化、文本解析和渲染入口。模型树为 `{ domain: { category: subcategories[] } }`：根和领域节点必须是非数组对象，分类节点必须是数组；允许空模型、空领域和空分类。
+
+领域及分类名称通过 `sanitizeFileName` 规范化，空名称和规范化后的重名均报 `EXPERIENCE_MODEL_DOCUMENT_INVALID`，禁止静默丢弃节点或覆盖同名节点。子分类名称由同一规范化过程清理、去空并去重。渲染方只读取已验证的树，按名称排序，不修改传入数据，也不再补空对象或重复去重。
+
+文本中 `CATEGORY` 必须属于当前 `DOMAIN`，子分类必须属于当前 `CATEGORY`；切换领域后必须重新声明分类。重复领域、重复分类和未知行均报 `EXPERIENCE_MODEL_DOCUMENT_INVALID`。名称按自身属性判断，`constructor`、`toString` 和 `__proto__` 不作为继承属性处理。
 
 长期记忆读取失败时（包括协议头不匹配），Agent 只记录 `memory_injection_failed` 事件和错误日志，按空记忆继续这一轮，不中断对话。
 

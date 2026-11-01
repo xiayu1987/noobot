@@ -56,6 +56,8 @@ describe("applyReconnectEventReplay", () => {
                   {
                     nodeExecutionId: "node-1",
                     eventId: "workflow_node_state:workflow-1:node-1:1",
+                    activeChildExecutionId: "agent-1",
+                    attemptExecutionIds: [],
                     status: "pending",
                     revision: 1,
                     sequence: 1,
@@ -68,6 +70,8 @@ describe("applyReconnectEventReplay", () => {
               executionId: "node-1",
               nodeSessionId: "node-session-1",
               status: "running",
+              activeChildExecutionId: "agent-1",
+              attemptExecutionIds: ["agent-1"],
             }),
       };
       const applyWorkflowRuntimeEvent = vi.fn(() => ({ applied: true }));
@@ -95,6 +99,7 @@ describe("applyReconnectEventReplay", () => {
     const replayCache = {};
     const applyTurnLifecycleEnvelope = vi.fn(() => ({ applied: true }));
     const lifecycle = createTurnLifecycleEnvelope({
+      updatedAt: "2026-01-01T00:00:00.000Z",
       eventType: TURN_EVENT.PROCESSING_STARTED,
       eventId: "event-1",
       commandId: "command-1",

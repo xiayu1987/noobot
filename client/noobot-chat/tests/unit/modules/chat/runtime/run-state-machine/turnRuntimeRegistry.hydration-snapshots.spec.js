@@ -110,7 +110,8 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
       sequence: 2,
       activeTurn: {
         ...snapshot().activeTurn,
-        ...events[1],
+        commandId: events[1].commandId,
+        startedAt: "2026-01-01T00:00:00.000Z",
         state: "processing",
         phase: "processing",
         executionState: "sending",
@@ -349,8 +350,22 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
         activeTurn: null,
         activeTurnScopeId: "",
         recentTerminalTurns: [
-          { ...snapshot().activeTurn, turnScopeId: "turn-old", revision: 2, sequence: 2 },
-          { ...snapshot().activeTurn, turnScopeId: "turn-tail", revision: 2, sequence: 4 },
+          {
+            ...snapshot().activeTurn,
+            turnScopeId: "turn-old",
+            executionId: "agent:turn-old",
+            rootExecutionId: "agent:turn-old",
+            revision: 2,
+            sequence: 2,
+          },
+          {
+            ...snapshot().activeTurn,
+            turnScopeId: "turn-tail",
+            executionId: "agent:turn-tail",
+            rootExecutionId: "agent:turn-tail",
+            revision: 2,
+            sequence: 4,
+          },
         ],
       }),
     );
@@ -416,12 +431,15 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
     const terminal = {
       ...snapshot().activeTurn,
       turnScopeId: "done",
+      executionId: "agent:done",
+      rootExecutionId: "agent:done",
       dialogProcessId: "dp-done",
       state: "completed",
       phase: "completion",
       executionState: "completed",
       revision: 3,
       sequence: 3,
+      finishedAt: "2026-01-01T00:00:03.000Z",
       capabilities: { actionLocked: false, canStop: false },
     };
     const result = applyTurnLifecycleSnapshot(

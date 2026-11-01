@@ -15,6 +15,7 @@ import {
   TURN_PHASE,
   createSessionPersistenceScope,
   createTurnAcceptanceReceipt,
+  createTurnFailure,
   createTurnLifecycleCommandId,
   deriveTurnCommandId,
   EXECUTION_KIND,
@@ -441,16 +442,10 @@ async function commitDetachedError(error, dependencies, identity, lifecycle) {
   const stopped = isExecutionAbortError({ error, abortSignal: identity.abortSignal });
   const terminalLifecycle = stopped
     ? await commitDetachedStop(dependencies, lifecycle)
-    : await commitDetachedFailure(error, lifecycle);
+    : await commitDetachedFailure(error, identity, lifecycle);
   const receipt = createDetachedTerminalReceipt(terminalLifecycle.turn);
   const executionFailure = createExecutionFailure(error, receipt);
-  emitDetachedTerminalEvent(
-    lifecycle.factListener,
-    identity,
-    terminalLifecycle,
-    executionFailure,
-    stopped,
-  );
+  emitDetachedTerminalEvent(lifecycle.factListener, identity, terminalLifecycle.turn, stopped);
   await lifecycle.factListener.flush();
   return executionFailure;
 }
@@ -480,34 +475,28 @@ async function commitDetachedStop(dependencies, lifecycle) {
   });
 }
 
-function commitDetachedFailure(error, lifecycle) {
-  const message = String(error?.message || "detached sub-session failed");
+function commitDetachedFailure(error, identity, lifecycle) {
+  const failure = createTurnFailure({ error, abortSignal: identity.abortSignal, retryable: false });
   return lifecycle.commit({
     commandId: lifecycleCommandId(lifecycle, TURN_EVENT.FAILED, TURN_PHASE.PROCESSING),
     causationId: lifecycle.commandId,
     eventType: TURN_EVENT.FAILED,
     phase: TURN_PHASE.PROCESSING,
-    failure: {
-      code: text(error?.code) || "detached_sub_session_failed",
-      message,
-      retryable: false,
-    },
-    terminalStatus: { command: "error", description: message, error },
+    failure,
+    terminalStatus: { command: "error", description: failure.message, error },
   });
 }
 
-function emitDetachedTerminalEvent(factListener, identity, terminalLifecycle, error, stopped) {
+function emitDetachedTerminalEvent(factListener, identity, terminalTurn, stopped) {
   emitEvent(
     factListener,
     stopped ? "detached_sub_session_stop_committed" : "detached_sub_session_failure_committed",
     {
       executionId: identity.executionId,
-      ...(stopped
-        ? { reason: "user_stop" }
-        : { errorCode: text(error?.code) || "detached_sub_session_failed" }),
-      state: text(terminalLifecycle?.turn?.state),
-      revision: Number(terminalLifecycle?.turn?.revision || 0),
-      sequence: Number(terminalLifecycle?.turn?.sequence || 0),
+      ...(stopped ? { reason: "user_stop" } : { errorCode: terminalTurn.failure.code }),
+      state: terminalTurn.state,
+      revision: terminalTurn.revision,
+      sequence: terminalTurn.sequence,
     },
   );
 }

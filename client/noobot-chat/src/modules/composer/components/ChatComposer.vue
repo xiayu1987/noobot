@@ -432,10 +432,10 @@ defineExpose({
 
 <style scoped>
 .composer-wrapper {
-  --composer-row-gap: 8px;
-  --composer-icon-size: 36px;
-  --composer-icon-radius: 10px;
-  --composer-send-height: 36px;
+  --composer-row-gap: var(--noobot-space-sm);
+  --composer-icon-size: var(--noobot-control-icon-size-lg);
+  --composer-icon-radius: var(--noobot-radius-lg);
+  --composer-send-height: var(--noobot-control-icon-size-lg);
   --composer-send-padding-x: 20px;
 
   padding: 0 var(--noobot-space-2xl) var(--noobot-space-2xl);
@@ -486,7 +486,7 @@ defineExpose({
   left: 16px;
   right: 16px;
   bottom: calc(100% + 12px);
-  z-index: 80;
+  z-index: var(--noobot-layer-mobile-sidebar);
 }
 
 .more-panel {
@@ -544,10 +544,10 @@ defineExpose({
 
 @media (max-width: 768px) {
   .composer-wrapper {
-    --composer-row-gap: 6px;
-    --composer-icon-size: 32px;
+    --composer-row-gap: var(--noobot-space-xs);
+    --composer-icon-size: var(--noobot-control-icon-size);
     --composer-icon-radius: var(--noobot-radius-xs);
-    --composer-send-height: 32px;
+    --composer-send-height: var(--noobot-control-icon-size);
     --composer-send-padding-x: 16px;
     padding: 0 var(--noobot-space-md) calc(var(--noobot-space-md) + env(safe-area-inset-bottom));
   }
@@ -564,6 +564,7 @@ defineExpose({
   }
   .more-panel-overlay {
     position: fixed;
+    z-index: var(--noobot-layer-mobile-sidebar);
     left: 12px;
     right: 12px;
     bottom: calc(84px + env(safe-area-inset-bottom));

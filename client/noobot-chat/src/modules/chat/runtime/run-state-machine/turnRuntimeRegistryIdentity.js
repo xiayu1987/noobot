@@ -24,7 +24,6 @@ export function createTurnRuntimeRegistryState() {
     routeIndex: {},
     executions: {},
     executionIdByTurnScopeId: {},
-    childExecutionIdsByParentId: {},
     deletedTurnScopeIdsBySession: {},
   };
 }
@@ -44,14 +43,9 @@ export function ensureSessionBucket(registry, sessionId) {
 
 export function findTurnByScope(registry, turnScopeId, { sessionId }) {
   const scope = requireOptionalCanonicalTurnScopeId(turnScopeId);
-  if (!scope) return null;
   const id = text(sessionId);
-  if (id) return registry.sessions[id]?.turns[scope] || null;
-  for (const bucket of Object.values(registry.sessions)) {
-    const turn = bucket.turns[scope];
-    if (turn) return turn;
-  }
-  return null;
+  if (!scope || !id) return null;
+  return registry.sessions[id]?.turns[scope] || null;
 }
 
 export function resolveTurnRoute(registry, dialogProcessId) {

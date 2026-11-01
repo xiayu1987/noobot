@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { turnRecord } from "../helpers/turn-record.js";
 import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -30,7 +31,7 @@ function terminalLifecycle({
     sequence: 2,
     activeTurnScopeId: "",
     turns: {
-      [turnScopeId]: {
+      [turnScopeId]: turnRecord({
         turnScopeId,
         presentationMessageId: `${turnScopeId}-presentation-message`,
         dialogProcessId,
@@ -47,7 +48,7 @@ function terminalLifecycle({
           description: status === "completed" ? "" : `${status} explanation`,
           updatedAt: now(),
         },
-      },
+      }),
     },
   };
 }

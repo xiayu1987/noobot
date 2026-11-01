@@ -5,6 +5,7 @@
  */
 import {
   assertSelectedConnectorsOwned,
+  CONNECTOR_SELECTION_ERROR_CODE,
   normalizeSelectedConnectorIds,
 } from "@noobot/connector-protocol";
 import express from "express";
@@ -59,11 +60,13 @@ function registerConnectorSelectionRoutes(router, { bot, connectorRuntime, jsonO
     withJsonError(async (req, res) => {
       const userId = text(req.params.userId);
       const connectors = await connectorRuntime.listUserConnectors(userId);
-      const selectedConnectorIds = decodeRequestInput(() =>
-        assertSelectedConnectorsOwned(
-          normalizeSelectedConnectorIds(req.body?.selectedConnectorIds),
-          connectors,
-        ),
+      const selectedConnectorIds = decodeRequestInput(
+        () =>
+          assertSelectedConnectorsOwned(
+            normalizeSelectedConnectorIds(req.body?.selectedConnectorIds),
+            connectors,
+          ),
+        (error) => error.code === CONNECTOR_SELECTION_ERROR_CODE.NOT_OWNED,
       );
       const connectedIds = new Set(
         connectors.filter((item) => item.status === "connected").map((item) => item.connectorId),

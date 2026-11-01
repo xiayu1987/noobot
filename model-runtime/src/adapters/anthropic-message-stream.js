@@ -42,6 +42,63 @@ async function applyBlockDelta(entry, delta, onText) {
   throw invalidStream(`unsupported ${delta?.type || "missing delta"} for ${block.type}`);
 }
 
+function startMessage(message, event) {
+  if (
+    message ||
+    !event.message ||
+    !Array.isArray(event.message.content) ||
+    event.message.content.length
+  ) {
+    throw invalidStream("unexpected message_start");
+  }
+  return { ...event.message, content: [], usage: { ...event.message.usage } };
+}
+
+async function startContentBlock(message, openBlocks, event, onText) {
+  if (event.index !== message.content.length || !event.content_block?.type) {
+    throw invalidStream("unexpected content block index or type");
+  }
+  const block = { ...event.content_block };
+  message.content.push(block);
+  openBlocks.set(event.index, { block, json: "" });
+  if (block.type === "text" && block.text) await onText(block.text);
+}
+
+function stopContentBlock(openBlocks, event) {
+  const entry = openBlocks.get(event.index);
+  if (!entry) throw invalidStream("stop without an open content block");
+  if (entry.json) entry.block.input = JSON.parse(entry.json);
+  openBlocks.delete(event.index);
+}
+
+async function applyMessageEvent(message, openBlocks, event, onText) {
+  switch (event.type) {
+    case "content_block_start":
+      await startContentBlock(message, openBlocks, event, onText);
+      return false;
+    case "content_block_delta": {
+      const entry = openBlocks.get(event.index);
+      if (!entry) throw invalidStream("delta without an open content block");
+      await applyBlockDelta(entry, event.delta, onText);
+      return false;
+    }
+    case "content_block_stop":
+      stopContentBlock(openBlocks, event);
+      return false;
+    case "message_delta":
+      Object.assign(message, event.delta);
+      Object.assign(message.usage, event.usage);
+      return false;
+    case "message_stop":
+      if (openBlocks.size || !message.stop_reason) {
+        throw invalidStream("message_stop before content and stop reason are complete");
+      }
+      return true;
+    default:
+      throw invalidStream(`unsupported event: ${event.type}`);
+  }
+}
+
 export async function readAnthropicMessageStream(response, { onText, signal }) {
   if (
     !response.headers.get("content-type")?.toLowerCase().includes("text/event-stream") ||
@@ -63,54 +120,11 @@ export async function readAnthropicMessageStream(response, { onText, signal }) {
       throw error;
     }
     if (event.type === "message_start") {
-      if (
-        message ||
-        !event.message ||
-        !Array.isArray(event.message.content) ||
-        event.message.content.length
-      ) {
-        throw invalidStream("unexpected message_start");
-      }
-      message = { ...event.message, content: [], usage: { ...event.message.usage } };
+      message = startMessage(message, event);
       continue;
     }
     if (!message) throw invalidStream("missing message_start");
-    switch (event.type) {
-      case "content_block_start": {
-        if (event.index !== message.content.length || !event.content_block?.type) {
-          throw invalidStream("unexpected content block index or type");
-        }
-        const block = { ...event.content_block };
-        message.content.push(block);
-        openBlocks.set(event.index, { block, json: "" });
-        if (block.type === "text" && block.text) await onText(block.text);
-        break;
-      }
-      case "content_block_delta": {
-        const entry = openBlocks.get(event.index);
-        if (!entry) throw invalidStream("delta without an open content block");
-        await applyBlockDelta(entry, event.delta, onText);
-        break;
-      }
-      case "content_block_stop": {
-        const entry = openBlocks.get(event.index);
-        if (!entry) throw invalidStream("stop without an open content block");
-        if (entry.json) entry.block.input = JSON.parse(entry.json);
-        openBlocks.delete(event.index);
-        break;
-      }
-      case "message_delta":
-        Object.assign(message, event.delta);
-        Object.assign(message.usage, event.usage);
-        break;
-      case "message_stop":
-        if (openBlocks.size || !message.stop_reason) {
-          throw invalidStream("message_stop before content and stop reason are complete");
-        }
-        return message;
-      default:
-        throw invalidStream(`unsupported event: ${event.type}`);
-    }
+    if (await applyMessageEvent(message, openBlocks, event, onText)) return message;
   }
   signal?.throwIfAborted();
   throw invalidStream("connection ended before message_stop");

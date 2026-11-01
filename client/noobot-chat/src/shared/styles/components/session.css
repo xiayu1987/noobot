@@ -2,10 +2,6 @@
   background: var(--noobot-panel-muted);
 }
 
-.connector-summary-empty {
-  color: var(--noobot-text-secondary);
-}
-
 .session-delete-btn:hover {
   background: var(--noobot-danger-soft);
 }

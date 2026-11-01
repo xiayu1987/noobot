@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { turnRecordFixture } from "../helpers/turnRecordFixture.js";
 import { describe, expect, it } from "vitest";
 import { computed, nextTick } from "vue";
 import { createPinia, setActivePinia } from "pinia";
@@ -26,7 +27,7 @@ function settleCompleted(registry, { sessionId, turnScopeId, updatedAt }) {
       turnScopeId,
       resolved: true,
       aggregateVersion: 1,
-      turn: {
+      turn: turnRecordFixture({
         continuedByTurnScopeId: "",
         sessionId,
         turnScopeId,
@@ -38,12 +39,13 @@ function settleCompleted(registry, { sessionId, turnScopeId, updatedAt }) {
         completionCommitId,
         summaryVersion: revision,
         updatedAt,
+        finishedAt: updatedAt,
         capabilities: { actionLocked: false, canStop: false },
         terminalStatus: terminalStatusFixture("completed", {
           turnScopeId,
           dialogProcessId: `dp-${turnScopeId}`,
         }),
-      },
+      }),
     }),
   );
 }
@@ -62,6 +64,7 @@ describe("useChatStore turn runtime actions", () => {
     expect(runtime.value.startedAt).toBe("");
     const before = store.turnRuntimeRegistry;
     const result = store.applyTurnRuntimeEvent({
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
       sessionId: "session-1",
       turnScopeId: "client-turn:abc:def",
@@ -90,6 +93,7 @@ describe("useChatStore turn runtime actions", () => {
     store.activeSessionId = "session-1";
 
     store.applyTurnRuntimeEvent({
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
       sessionId: "session-1",
       turnScopeId: "client-turn:identity:promotion",
@@ -97,6 +101,7 @@ describe("useChatStore turn runtime actions", () => {
       updatedAt: "2026-07-21T10:00:00.000Z",
     });
     const result = store.applyTurnRuntimeEvent({
+      updatedAtMs: Date.parse("2026-07-21T10:00:01.000Z"),
       type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
       sessionId: "session-1",
       turnScopeId: "client-turn:identity:promotion",
@@ -122,6 +127,7 @@ describe("useChatStore turn runtime actions", () => {
     setActivePinia(createPinia());
     const store = useChatStore();
     store.applyTurnRuntimeEvent({
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
       sessionId: "session-1",
       turnScopeId: "client-turn:abc:def",
@@ -131,6 +137,8 @@ describe("useChatStore turn runtime actions", () => {
     const afterSending = store.turnRuntimeRegistry;
 
     store.applyTurnRuntimeEvent({
+      updatedAtMs: 1767225600000,
+      seq: 1,
       type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
       sessionId: "session-1",
       turnScopeId: "client-turn:abc:def",
@@ -147,6 +155,7 @@ describe("useChatStore turn runtime actions", () => {
     expect(runtime.running).toBe(true);
 
     store.applyTurnRuntimeEvent({
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_REQUEST_STARTED,
       sessionId: "session-1",
       turnScopeId: "client-turn:abc:def",
@@ -159,6 +168,8 @@ describe("useChatStore turn runtime actions", () => {
     });
     const afterCompleted = store.turnRuntimeRegistry;
     store.applyTurnRuntimeEvent({
+      updatedAtMs: 1767225600000,
+      seq: 1,
       type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
       sessionId: "session-1",
       turnScopeId: "client-turn:abc:def",

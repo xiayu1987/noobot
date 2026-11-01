@@ -63,11 +63,9 @@ function compareContentFacts(left = {}, right = {}) {
 
 export function reduceThinkingDetailContentTimelines(...timelines) {
   const factsByContentId = new Map();
-  for (const timeline of timelines) {
-    for (const fact of Array.isArray(timeline) ? timeline : []) {
-      if (!isThinkingDetailContentFact(fact)) continue;
-      factsByContentId.set(fact.contentId, Object.freeze({ ...fact }));
-    }
+  for (const fact of timelines.flatMap((timeline) => (Array.isArray(timeline) ? timeline : []))) {
+    if (!isThinkingDetailContentFact(fact)) continue;
+    factsByContentId.set(fact.contentId, Object.freeze({ ...fact }));
   }
   return Object.freeze([...factsByContentId.values()].sort(compareContentFacts));
 }
@@ -135,23 +133,8 @@ export function projectThinkingDetailContentTimeline(messages = [], activityTime
       .filter(Boolean),
   );
   for (const [index, message] of (Array.isArray(messages) ? messages : []).entries()) {
-    if (isThinkingDetailUserInterjection(message)) {
-      const fact = messageContentFact(
-        message,
-        THINKING_DETAIL_CONTENT_KIND.USER_INTERJECTION,
-        index,
-      );
-      if (fact) timeline.push(fact);
-      continue;
-    }
-    if (isThinkingDetailInjectedMessage(message)) {
-      const fact = messageContentFact(
-        message,
-        THINKING_DETAIL_CONTENT_KIND.INJECTED_MESSAGE,
-        index,
-      );
-      if (fact) timeline.push(fact);
-    }
+    const fact = projectMessageContentFact(message, index);
+    if (fact) timeline.push(fact);
   }
   for (const activity of activities) {
     if (
@@ -164,6 +147,16 @@ export function projectThinkingDetailContentTimeline(messages = [], activityTime
     if (fact) timeline.push(fact);
   }
   return reduceThinkingDetailContentTimelines(timeline);
+}
+
+function projectMessageContentFact(message, index) {
+  if (isThinkingDetailUserInterjection(message)) {
+    return messageContentFact(message, THINKING_DETAIL_CONTENT_KIND.USER_INTERJECTION, index);
+  }
+  if (isThinkingDetailInjectedMessage(message)) {
+    return messageContentFact(message, THINKING_DETAIL_CONTENT_KIND.INJECTED_MESSAGE, index);
+  }
+  return null;
 }
 
 export function selectThinkingDetailContentTimeline(message = {}) {

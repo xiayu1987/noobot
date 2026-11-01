@@ -36,6 +36,7 @@ describe("useChatEngine session state log identity", () => {
     });
 
     engine.dispatchAuthoritativeRunStateEvent({
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_RESET,
       sessionId: "s-event",
       dialogProcessId: "dp-event",
@@ -66,6 +67,7 @@ describe("useChatEngine session state log identity", () => {
       deps: { applyTurnRuntimeEvent, applyTurnLifecycleEnvelope },
     });
     const event = {
+      updatedAt: "2026-01-01T00:00:00.000Z",
       type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
       sessionId: "s-event",
       turnScopeId: "turn-event",

@@ -4,7 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { AGENT_CHANNEL_STATE, FrontendRunState, SESSION_RUN_EVENT } from "./constants.js";
-import { AUTHORITATIVE_EVENT_TYPES, TRANSPORT_EVENT_TYPES } from "./eventNormalization.js";
+import {
+  AUTHORITATIVE_EVENT_TYPES,
+  TRANSPORT_EVENT_TYPES,
+} from "@noobot/session-protocol/runtime-event";
 import { deriveTurnEventType, TURN_EVENT } from "@noobot/session-protocol";
 import {
   projectAuthoritativeTerminalTurnState,

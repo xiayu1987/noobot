@@ -38,7 +38,13 @@ test("final acceptance separate model receives revised plan, all phase checklist
       history: [],
       incremental: [{ role: "assistant", content: "最终输出：done" }],
     },
-    result: { output: "最终输出：done" },
+    result: {
+      output: "最终输出：done",
+      traces: [],
+      modelLoopRound: 0,
+      modelMessages: [],
+      turnMessages: [],
+    },
     agentContext: {
       bindings: {
         extensions: {

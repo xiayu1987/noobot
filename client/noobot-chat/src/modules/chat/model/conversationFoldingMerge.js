@@ -7,6 +7,7 @@ import { mergeAttachments } from "./dialogProcessChain.js";
 import { getMessageTransferEnvelopes } from "./transferEnvelopes.js";
 import { getMessageRole } from "./messageIdentity.js";
 import { mergeToolTimelines } from "../runtime/engine/toolTimeline.js";
+import { selectMessageToolTimeline } from "@noobot/event-protocol/tool-timeline";
 import {
   mergeCanonicalActivityTimelines,
   selectMessageActivityTimeline,
@@ -39,8 +40,8 @@ function mergeFoldedTimelines(previousMessage, currentMessage) {
     ...normalizeArray(currentMessage?.tool_calls),
   ];
   previousMessage.toolTimeline = mergeToolTimelines(
-    previousMessage.toolTimeline,
-    currentMessage.toolTimeline,
+    selectMessageToolTimeline(previousMessage),
+    selectMessageToolTimeline(currentMessage),
   );
   previousMessage.activityTimeline = mergeCanonicalActivityTimelines(
     selectMessageActivityTimeline(previousMessage),
@@ -140,7 +141,10 @@ function applyTurnArtifacts(mergedMessages = [], turnArtifacts = new Map()) {
       );
     }
     if (artifacts.toolTimeline.length) {
-      message.toolTimeline = mergeToolTimelines(message.toolTimeline, artifacts.toolTimeline);
+      message.toolTimeline = mergeToolTimelines(
+        selectMessageToolTimeline(message),
+        artifacts.toolTimeline,
+      );
     }
     message.attachments = getMessageAttachments(message);
   }

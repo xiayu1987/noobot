@@ -50,6 +50,8 @@ import { migrateMessageErrorText } from "./message-error-text-migration.js";
 import { migrateTurnTimingLifecycleStart } from "./turn-timing-lifecycle-start-migration.js";
 import { migrateMessageEntityContract } from "./message-entity-contract-migration.js";
 import { migrateRetiredTaskFields } from "./retired-task-fields-migration.js";
+import { migrateSessionArtifactEvents } from "./session-artifact-events-migration.js";
+import { migrateTurnLifecycleRecords } from "./turn-lifecycle-record-migration.js";
 import { SESSION_REPAIR_ERROR_CODE } from "./errors.js";
 import {
   assertLegacyAuthorityEventOutbox,
@@ -801,6 +803,8 @@ const DOCUMENT_MIGRATION_STEPS = Object.freeze([
   dropLegacyTerminalCommits,
   migrateWriteTimeDialogFacts,
   migrateSessionCaller,
+  migrateSessionArtifactEvents,
+  migrateTurnLifecycleRecords,
 ]);
 
 export function migrateSessionDocument(document) {

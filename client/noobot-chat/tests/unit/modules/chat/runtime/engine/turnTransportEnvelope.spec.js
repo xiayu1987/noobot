@@ -126,6 +126,7 @@ describe("turnTransportEnvelope", () => {
 
   it("projects one canonical lifecycle payload while retaining its protocol envelope for audit", () => {
     const lifecycle = createTurnLifecycleEnvelope({
+      updatedAt: "2026-01-01T00:00:00.000Z",
       eventType: TURN_EVENT.PROCESSING_STARTED,
       eventId: "turn-event-1",
       commandId: "turn-command-1",

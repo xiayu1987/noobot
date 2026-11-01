@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { isExecutionAbortError, resolveExecutionAbortMessage } from "@noobot/session-protocol";
+import {
+  assertExecutionNotAborted,
+  isExecutionAbortError,
+  raceExecutionAbort,
+} from "@noobot/session-protocol";
 
 export function resolveWorkflowAgentContext(ctx = {}) {
   return ctx?.agentContext && typeof ctx.agentContext === "object" ? ctx.agentContext : null;
@@ -16,64 +20,28 @@ export function resolveWorkflowRuntimeFromContext(ctx = {}) {
   return runtime && typeof runtime === "object" ? runtime : null;
 }
 
-function createWorkflowAbortError(signal) {
-  const error = new Error(
-    resolveExecutionAbortMessage({
-      abortSignal: signal,
-      fallback: "workflow aborted",
-    }),
-  );
-  error.name = "AbortError";
-  error.code = "ABORT_ERR";
-  return error;
-}
-
 export function isWorkflowAbortError(error, signal) {
   return isExecutionAbortError({ error, abortSignal: signal });
 }
 
 export function throwIfWorkflowAborted(signal) {
-  if (!signal.aborted) return;
-  throw createWorkflowAbortError(signal);
+  assertExecutionNotAborted({ abortSignal: signal });
 }
 
-export function withTimeout(promise, timeoutMs, message = "", { signal = null } = {}) {
+export function withTimeout(promise, timeoutMs, message, { signal }) {
   const ms = Number(timeoutMs);
-  if (signal?.aborted) {
-    const err = new Error("workflow aborted");
-    err.name = "AbortError";
-    err.code = "ABORT_ERR";
-    return Promise.reject(err);
+  if (!Number.isSafeInteger(ms) || ms <= 0) {
+    throw new TypeError("workflow node timeout requires a positive integer");
   }
-  if ((!Number.isFinite(ms) || ms <= 0) && !signal) return promise;
   let timer = null;
-  let abortListener = null;
-  return Promise.race([
-    Promise.resolve(promise).finally(() => {
-      if (timer) clearTimeout(timer);
-      if (signal && abortListener) {
-        signal.removeEventListener("abort", abortListener);
-      }
-    }),
-    new Promise((_, reject) => {
-      if (Number.isFinite(ms) && ms > 0) {
-        timer = setTimeout(() => {
-          const err = new Error(message || `workflow node timeout (${ms}ms)`);
-          err.code = "WORKFLOW_NODE_TIMEOUT";
-          reject(err);
-        }, ms);
-      }
-      if (signal) {
-        abortListener = () => {
-          if (timer) clearTimeout(timer);
-          signal.removeEventListener("abort", abortListener);
-          const err = new Error("workflow aborted");
-          err.name = "AbortError";
-          err.code = "ABORT_ERR";
-          reject(err);
-        };
-        signal.addEventListener("abort", abortListener, { once: true });
-      }
-    }),
-  ]);
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      const err = new Error(message);
+      err.code = "WORKFLOW_NODE_TIMEOUT";
+      reject(err);
+    }, ms);
+  });
+  return raceExecutionAbort(Promise.race([promise, timeout]), { abortSignal: signal }).finally(() =>
+    clearTimeout(timer),
+  );
 }

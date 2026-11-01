@@ -17,6 +17,7 @@ import { isObjectLike } from "@noobot/shared/value";
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 import { createAcceptedAgentExecution } from "../helpers/accepted-run-identity.js";
 import { createSessionCrudServiceStub } from "../helpers/session-crud-service-stub.js";
+import { requiredSessionReads } from "../helpers/session-repo-required-reads.js";
 import {
   applySessionMessageFacts,
   createTestSessionRequiredFields,
@@ -45,6 +46,7 @@ export function harness(initial = {}) {
       return { resolvedParentSessionId: "", sessionDir: TEST_SESSION_DIR };
     },
     async ensureSession() {},
+    ...requiredSessionReads,
     async findById(_u, _s, options = {}) {
       if (!isObjectLike(options)) {
         throw new TypeError("findById options must be { persistenceContext }");

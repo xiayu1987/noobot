@@ -15,16 +15,6 @@ import { createWorkflowNodeViewKey } from "../../runtime/workflowNodeSessionRunt
 import { resolveWorkflowDialogProcessId } from "../../utils/workflowDialogProcessId.js";
 import { text } from "@noobot/shared/value";
 
-function uniqueExecutions(detail = {}) {
-  return [
-    ...(detail.execution ? [detail.execution] : []),
-    ...(Array.isArray(detail.descendantExecutions) ? detail.descendantExecutions : []),
-  ].filter((item, index, values) => {
-    const id = text(item?.executionId);
-    return id && values.findIndex((candidate) => text(candidate?.executionId) === id) === index;
-  });
-}
-
 function describeRuntimeNode(runtimeNode) {
   return {
     nodeSessionId: resolveIsolatedNodeSessionId(runtimeNode),
@@ -66,7 +56,6 @@ function buildLiveProjection({ props, runtimeNodeSessions, nodeViewTransaction, 
     runtimeNodeSessions,
     selectSessionMessages: props.selectSessionMessages,
     selectExecutionDetail: props.selectExecutionDetail,
-    allowEmptyMessages: false,
   });
   if (!detail) {
     return unavailable(
@@ -130,9 +119,8 @@ function applyObservedProjection(context, projection) {
     projection.detail,
   );
   if (!nodeViewTransaction.merge(projection.viewKey, projection.detail)) return;
-  if (projection.detail.executionId)
-    refs.selectedExecutionId.value = text(projection.detail.executionId);
-  const nextAttempts = projection.detail.attemptExecutionIds.map(text);
+  if (projection.detail.executionId) refs.selectedExecutionId.value = projection.detail.executionId;
+  const nextAttempts = projection.detail.attemptExecutionIds;
   if (JSON.stringify(refs.attemptExecutionIds.value) !== JSON.stringify(nextAttempts)) {
     refs.attemptExecutionIds.value = nextAttempts;
   }
@@ -152,7 +140,6 @@ export function createLiveProjectionController(context) {
       runtimeNodeSessions,
       selectSessionMessages: props.selectSessionMessages,
       selectExecutionDetail: props.selectExecutionDetail,
-      allowEmptyMessages: false,
     });
     if (!detail) {
       logUnavailable({
@@ -168,9 +155,11 @@ export function createLiveProjectionController(context) {
     }
     logWorkflowNodeDetailProjection({ props, runtimeNodeSessions }, "live-apply", nodeItem, detail);
     if (!nodeViewTransaction.merge(viewKey, detail)) return false;
-    refs.selectedExecutionId.value = text(detail.executionId);
+    refs.selectedExecutionId.value = detail.executionId;
     refs.attemptExecutionIds.value = detail.attemptExecutionIds;
-    refs.executionDirectory.value = uniqueExecutions(detail);
+    refs.executionDirectory.value = detail.execution
+      ? [detail.execution, ...detail.descendantExecutions]
+      : [];
     if (detail.execution) {
       const hasMessages = detail.messages.length > 0;
       refs.viewerState.value = isTerminalExecutionProjection(detail.execution)
@@ -178,14 +167,35 @@ export function createLiveProjectionController(context) {
           ? "ready"
           : "empty"
         : "streaming";
+    } else {
+      refs.viewerState.value = detail.messages.length ? "ready" : "empty";
     }
     return true;
   }
 
   function watchProjection() {
+    function rejectProjection(candidate, error) {
+      if (!nodeViewTransaction.fail(candidate)) return;
+      refs.viewerError.value = error.message;
+      refs.viewerState.value = "failed";
+    }
     return watch(
-      () => buildLiveProjection(context),
-      (projection) => applyObservedProjection(context, projection),
+      () => {
+        const candidate = nodeViewTransaction.ticket();
+        try {
+          return { candidate, projection: buildLiveProjection(context) };
+        } catch (error) {
+          return { candidate, error };
+        }
+      },
+      ({ candidate, projection, error }) => {
+        if (error) return rejectProjection(candidate, error);
+        try {
+          applyObservedProjection(context, projection);
+        } catch (error) {
+          rejectProjection(candidate, error);
+        }
+      },
       { deep: true },
     );
   }

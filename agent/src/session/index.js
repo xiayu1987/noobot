@@ -313,7 +313,7 @@ export function createSessionFacade(runtime) {
       return sessionMessageService.replaceTurn(bindPersistenceScope(payload));
     },
 
-    async applyTurnLifecycleEvent(payload = {}) {
+    async applyTurnLifecycleEvent(payload) {
       const bindScope = validateSessionProvisionIntent(payload).requested
         ? bindPlacementScope
         : bindPersistenceScope;
@@ -378,10 +378,6 @@ export function createSessionFacade(runtime) {
 
     async getTurnSummaryCheckpointState(payload = {}) {
       return sessionMessageService.getTurnSummaryCheckpointState(bindPersistenceScope(payload));
-    },
-
-    async hasDialogProcessIdInSession(payload = {}) {
-      return sessionMessageService.hasDialogProcessIdInSession(bindPersistenceScope(payload));
     },
 
     async getExecutionTurnLogs(payload = {}) {

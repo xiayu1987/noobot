@@ -54,17 +54,21 @@ function normalizeMessage(message = {}) {
   return { role, content };
 }
 
+function declareToolEvidence(message, declared) {
+  for (const call of message.tool_calls || []) {
+    const id = resolveContextToolCallDeclarationId(call);
+    if (!id) throw new TypeError("auxiliary assistant tool call requires id");
+    if (declared.has(id)) throw new Error(`duplicate auxiliary tool call id: ${id}`);
+    declared.add(id);
+  }
+}
+
 function assertToolEvidenceAlignment(messages = []) {
   const declared = new Set();
   const completed = new Set();
   for (const message of messages) {
     if (message.role === "assistant") {
-      for (const call of message.tool_calls || []) {
-        const id = resolveContextToolCallDeclarationId(call);
-        if (!id) throw new TypeError("auxiliary assistant tool call requires id");
-        if (declared.has(id)) throw new Error(`duplicate auxiliary tool call id: ${id}`);
-        declared.add(id);
-      }
+      declareToolEvidence(message, declared);
       continue;
     }
     if (message.role !== "tool") continue;

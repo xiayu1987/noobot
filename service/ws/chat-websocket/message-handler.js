@@ -15,7 +15,6 @@ import {
 } from "./runtime-events.js";
 import { isAbortLikeError, isSocketCloseRunAbort, isUserStopRunAbort } from "./stop-lifecycle.js";
 import { resetRunState } from "./connection-state.js";
-import { resolveExecutionAbortMessage } from "@noobot/session-protocol/execution-abort";
 import { isTurnLifecycleRejectedError } from "@noobot/session-protocol";
 import {
   AGENT_COMMAND,
@@ -317,15 +316,7 @@ function rejectCommand(context, error, parsedCommand, rawMessage) {
 async function settleAbortedRun(context, error) {
   const { state, buildRunStateSnapshot } = context;
   if (state.currentRunTimedOut) {
-    const timeoutMessage = resolveExecutionAbortMessage({
-      error,
-      abortSignal: state.currentAbortSignal,
-      fallback: "run timeout",
-    });
-    await context.finalizeTimeout(buildRunStateSnapshot(), {
-      description: timeoutMessage,
-      errorObject: { message: timeoutMessage, code: "run_timeout" },
-    });
+    await context.finalizeTimeout(buildRunStateSnapshot());
   } else if (isUserStopRunAbort(state.currentAbortSignal)) {
     await context.finalizeUserStopped(buildRunStateSnapshot());
   } else if (isSocketCloseRunAbort(state.currentAbortSignal)) {

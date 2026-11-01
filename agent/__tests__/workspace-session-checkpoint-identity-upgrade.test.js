@@ -87,7 +87,7 @@ async function downgrade(sessionDir) {
 
 test("v26 preserves all 60 checkpoint identities beyond the receipt window, hashes and subsequent writes", async () =>
   withTemp(async (base) => {
-    const sessionDir = path.join(base, "runtime/session/checkpoint-history");
+    const sessionDir = path.join(base, "runtime/agent/session/checkpoint-history");
     const original = await createHistory(sessionDir, 60);
     const legacy = await downgrade(sessionDir);
     const files = legacy.turnOrder[0].summarySnapshots.map((index) =>
@@ -115,6 +115,11 @@ test("v26 preserves all 60 checkpoint identities beyond the receipt window, hash
       stored.turnOrder[0].summarySnapshots.map((index) => index.contentHash),
       legacy.turnOrder[0].summarySnapshots.map((index) => index.contentHash),
     );
+    const eventsUpgrade = await upgradeSessionMessageIdentity({
+      ...options(base, sessionDir),
+      scopedSessionRoots: ["runtime/agent/session"],
+    });
+    assert.deepEqual(eventsUpgrade.quarantined, []);
     const reloaded = await readSessionArtifact({ storageService, sessionDir });
     assert.deepEqual(reloaded.turnSummaryCheckpoints, original.turnSummaryCheckpoints);
     assert.equal(reloaded.messages.length, 60);
@@ -168,7 +173,7 @@ test("schema18 identity upgrade preserves the complete checkpoint chain beyond 5
     assert.deepEqual(result.quarantined, []);
     assert.equal(result.sessions.length, 1);
     const manifest = await readJson(path.join(sessionDir, "session.json"));
-    assert.equal(manifest.schemaVersion, 19);
+    assert.equal(manifest.schemaVersion, 21);
     assert.equal(manifest.turnOrder[0].summarySnapshots.length, 60);
     assert.deepEqual(
       manifest.turnOrder[0].summarySnapshots.map((index) => index.contentHash),

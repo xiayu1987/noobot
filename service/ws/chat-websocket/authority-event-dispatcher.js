@@ -45,6 +45,47 @@ async function publishAuthorityEvents(events, publishEvent) {
   return { acknowledgements, sendFailed: false };
 }
 
+async function dispatchAuthorityBatch({ session, identity, consumerId, events, publishEvent }) {
+  const invalid = findInvalidAuthorityEvent(events);
+  if (invalid)
+    return {
+      dispatched: false,
+      reason: "invalid_authority_event_envelope",
+      delivered: 0,
+      errors: invalid.errors,
+    };
+  const attempt = await session.recordAuthorityEventAttempts({
+    ...identity,
+    consumerId,
+    eventIds: events.map((item) => clean(item.eventId)),
+  });
+  if (!attempt.recorded) return { dispatched: false, reason: attempt.reason, delivered: 0 };
+  const { acknowledgements, sendFailed } = await publishAuthorityEvents(events, publishEvent);
+  if (acknowledgements.length) {
+    const acknowledged = await session.acknowledgeAuthorityEvents({
+      ...identity,
+      consumerId,
+      acknowledgements,
+    });
+    if (!acknowledged.acknowledged)
+      return { dispatched: false, reason: acknowledged.reason, delivered: 0 };
+  }
+  const delivered = acknowledgements.length;
+  if (sendFailed) return { dispatched: false, reason: "authority_event_send_failed", delivered };
+  return { dispatched: true, delivered };
+}
+
+async function drainDirtyScope(entry, drain) {
+  let delivered = 0;
+  do {
+    entry.dirty = false;
+    const result = await drain();
+    delivered += result.delivered;
+    if (result.dispatched !== true) return { ...result, delivered };
+  } while (entry.dirty);
+  return { dispatched: true, delivered };
+}
+
 async function compactAuthorityEventsIfDue(bot, identity, lastCompactAtBySession) {
   const now = Date.now();
   const accountingKey = `${identity.userId}\u0000${identity.sessionId}\u0000${scopeKey(
@@ -103,46 +144,15 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent, consumer
       }
       const { events } = pending;
       if (!events.length) break;
-      const invalid = findInvalidAuthorityEvent(events);
-      if (invalid) {
-        return {
-          dispatched: false,
-          reason: "invalid_authority_event_envelope",
-          delivered,
-          errors: invalid.errors,
-        };
-      }
-      const attempt = await bot.session.recordAuthorityEventAttempts({
-        ...identity,
+      const result = await dispatchAuthorityBatch({
+        session: bot.session,
+        identity,
         consumerId,
-        eventIds: events.map((item) => clean(item.eventId)),
+        events,
+        publishEvent,
       });
-      if (!attempt.recorded) {
-        return {
-          dispatched: false,
-          reason: attempt.reason,
-          delivered,
-        };
-      }
-      const { acknowledgements, sendFailed } = await publishAuthorityEvents(events, publishEvent);
-      if (acknowledgements.length) {
-        const acknowledged = await bot.session.acknowledgeAuthorityEvents({
-          ...identity,
-          consumerId,
-          acknowledgements,
-        });
-        if (!acknowledged.acknowledged) {
-          return {
-            dispatched: false,
-            reason: acknowledged.reason,
-            delivered,
-          };
-        }
-        delivered += acknowledgements.length;
-      }
-      if (sendFailed) {
-        return { dispatched: false, reason: "authority_event_send_failed", delivered };
-      }
+      delivered += result.delivered;
+      if (!result.dispatched) return { ...result, delivered };
     }
     await compactAuthorityEventsIfDue(bot, identity, lastCompactAtBySession);
     return { dispatched: true, delivered };
@@ -171,24 +181,10 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent, consumer
 
     const entry = { dirty: false, promise: null };
     entry.promise = (async () => {
-      let delivered = 0;
       try {
-        while (true) {
-          entry.dirty = false;
-          const result = await drainAuthorityEvents(payload, publishEvent);
-          delivered += result.delivered;
-          if (result.dispatched !== true) {
-            if (inFlightByScope.get(key) === entry) inFlightByScope.delete(key);
-            return { ...result, delivered };
-          }
-          if (entry.dirty) continue;
-
-          if (inFlightByScope.get(key) === entry) inFlightByScope.delete(key);
-          return { dispatched: true, delivered };
-        }
-      } catch (error) {
+        return await drainDirtyScope(entry, () => drainAuthorityEvents(payload, publishEvent));
+      } finally {
         if (inFlightByScope.get(key) === entry) inFlightByScope.delete(key);
-        throw error;
       }
     })();
     inFlightByScope.set(key, entry);

@@ -279,36 +279,35 @@ test("terminal resolution reads status from the Turn without returning messages"
   assert.equal(JSON.stringify(response).includes('"messages"'), false);
 });
 
-test("noncanonical terminal snapshots are discarded without mutating Turns", () => {
-  const normalized = normalizeSessionEntity(
-    {
-      ...createTestSessionRequiredFields(),
-      sessionId: "legacy",
-      aggregateVersion: 0,
-      messages: [],
-      turnLifecycle: {
-        ...createEmptyTurnLifecycle(),
-        sequence: 1,
-        turns: { t1: { turnScopeId: "t1", state: "completed", revision: 1, sequence: 1 } },
-      },
-      turnTerminalCommits: {
-        t1: {
-          turnScopeId: "t1",
-          terminalStatus: { status: "completed", reason: "run_completed" },
-          messages: Array.from({ length: 100 }, (_, index) => ({
-            attachments: [],
-            role: "assistant",
-            modelMessageId: "mm_turn_lifecycle_session_c_1",
-            content: `large-${index}`,
-          })),
-        },
+test("noncanonical terminal snapshots are rejected without mutating Turns", () => {
+  const source = {
+    ...createTestSessionRequiredFields(),
+    sessionId: "legacy",
+    aggregateVersion: 0,
+    messages: [],
+    turnLifecycle: {
+      ...createEmptyTurnLifecycle(),
+      sequence: 1,
+      turns: { t1: { turnScopeId: "t1", state: "completed", revision: 1, sequence: 1 } },
+    },
+    turnTerminalCommits: {
+      t1: {
+        turnScopeId: "t1",
+        terminalStatus: { status: "completed", reason: "run_completed" },
+        messages: Array.from({ length: 100 }, (_, index) => ({
+          attachments: [],
+          role: "assistant",
+          modelMessageId: "mm_turn_lifecycle_session_c_1",
+          content: `large-${index}`,
+        })),
       },
     },
-    { now },
-  );
-
-  assert.equal(normalized.turnLifecycle.turns.t1.terminalStatus, null);
-  assert.equal(normalized.turnTerminalCommits, undefined);
+  };
+  const before = structuredClone(source);
+  assert.throws(() => normalizeSessionEntity(source, { now }), {
+    code: "TURN_LIFECYCLE_RECORD_INVALID",
+  });
+  assert.deepEqual(source, before);
 });
 
 test("command replay is idempotent and conflicting reuse is rejected", async () => {

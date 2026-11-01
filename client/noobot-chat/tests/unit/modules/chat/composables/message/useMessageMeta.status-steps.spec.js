@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { turnRecordFixture } from "../../helpers/turnRecordFixture.js";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { nextTick, ref } from "vue";
@@ -41,6 +42,7 @@ function applyLifecycle(
   return applyTurnLifecycleEnvelope(
     store.turnRuntimeRegistry,
     createTurnLifecycleEnvelope({
+      updatedAt: "2026-01-01T00:00:00.000Z",
       eventType,
       eventId: `${eventType}:${sessionId}:${turnScopeId}:${revision}`,
       commandId: `${action}:${turnScopeId}`,
@@ -94,7 +96,7 @@ function settleTurn(store, { sessionId, turnScopeId, state }) {
       turnScopeId,
       resolved: true,
       aggregateVersion: 1,
-      turn: {
+      turn: turnRecordFixture({
         continuedByTurnScopeId: "",
         sessionId,
         turnScopeId,
@@ -110,7 +112,7 @@ function settleTurn(store, { sessionId, turnScopeId, state }) {
           turnScopeId,
           dialogProcessId: `dp-${turnScopeId}`,
         }),
-      },
+      }),
     }),
   );
 }
@@ -123,11 +125,17 @@ describe("useMessageMeta status steps", () => {
 
   it("reacts to Registry state transitions for the placeholder turn", async () => {
     const store = useChatStore();
-    const message = { role: "assistant", turnPlaceholder: true, turnScopeId: "turn-1" };
+    const message = {
+      role: "assistant",
+      sessionId: "session-1",
+      turnPlaceholder: true,
+      turnScopeId: "turn-1",
+    };
     const { statusStepState } = useMessageMeta({ getMessageItem: () => message });
 
     expect(statusStepState.value).toBe("");
     applyEvent(store, {
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
       sessionId: "session-1",
       turnScopeId: "turn-1",
@@ -136,6 +144,8 @@ describe("useMessageMeta status steps", () => {
     expect(statusStepState.value).toBe("requesting");
 
     applyEvent(store, {
+      updatedAtMs: 1767225600000,
+      seq: 1,
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       state: "sending",
       sessionId: "session-1",
@@ -146,6 +156,7 @@ describe("useMessageMeta status steps", () => {
     expect(statusStepState.value).toBe("sending");
 
     applyEvent(store, {
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,
       sessionId: "session-1",
       turnScopeId: "turn-1",
@@ -173,15 +184,23 @@ describe("useMessageMeta status steps", () => {
 
   it("follows turn identity rather than message order, object lifetime, or active Session", async () => {
     const store = useChatStore();
-    const message = ref({ role: "assistant", turnPlaceholder: true, turnScopeId: "turn-a" });
+    const message = ref({
+      role: "assistant",
+      sessionId: "session-a",
+      turnPlaceholder: true,
+      turnScopeId: "turn-a",
+    });
     const { statusStepState } = useMessageMeta({ getMessageItem: () => message.value });
 
     applyEvent(store, {
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
       sessionId: "session-a",
       turnScopeId: "turn-a",
     });
     applyEvent(store, {
+      updatedAtMs: 1767225600000,
+      seq: 1,
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       state: "sending",
       sessionId: "session-a",
@@ -189,6 +208,7 @@ describe("useMessageMeta status steps", () => {
     });
     startAuthorityProcessing(store, "session-a", "turn-a");
     applyEvent(store, {
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
       sessionId: "session-b",
       turnScopeId: "turn-b",
@@ -197,11 +217,21 @@ describe("useMessageMeta status steps", () => {
     await nextTick();
     expect(statusStepState.value).toBe("sending");
 
-    message.value = { role: "assistant", turnPlaceholder: true, turnScopeId: "turn-b" };
+    message.value = {
+      role: "assistant",
+      sessionId: "session-b",
+      turnPlaceholder: true,
+      turnScopeId: "turn-b",
+    };
     await nextTick();
     expect(statusStepState.value).toBe("requesting");
 
-    message.value = { role: "assistant", turnPlaceholder: true, turnScopeId: "unknown-turn" };
+    message.value = {
+      role: "assistant",
+      sessionId: "session-b",
+      turnPlaceholder: true,
+      turnScopeId: "unknown-turn",
+    };
     await nextTick();
     expect(statusStepState.value).toBe("");
   });
@@ -210,21 +240,27 @@ describe("useMessageMeta status steps", () => {
     const store = useChatStore();
     const message = {
       role: "assistant",
+      sessionId: "session-1",
       turnScopeId: "internal-turn:child",
       statusTurnScopeId: "client-turn:main",
     };
     applyEvent(store, {
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
       sessionId: "session-1",
       turnScopeId: "client-turn:main",
     });
     applyEvent(store, {
+      updatedAtMs: 1767225600000,
+      seq: 1,
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       state: "sending",
       sessionId: "session-1",
       turnScopeId: "client-turn:main",
     });
     applyEvent(store, {
+      updatedAtMs: 1767225600000,
+      seq: 1,
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       state: "completed",
       sessionId: "session-1",
@@ -253,6 +289,16 @@ describe("useMessageMeta status steps", () => {
     expect(statusStepState.value).toBe("");
   });
 
+  it("does not borrow another session runtime when message session identity is absent", async () => {
+    const store = useChatStore();
+    startAuthorityProcessing(store, "session-1", "shared-turn");
+    store.activeSessionId = "session-1";
+    const message = { role: "assistant", turnScopeId: "shared-turn" };
+    const { statusStepState } = useMessageMeta({ getMessageItem: () => message });
+    await nextTick();
+    expect(statusStepState.value).toBe("");
+  });
+
   it("renders an authoritative child Execution projection without hydrating the Registry", async () => {
     const message = {
       role: "assistant",
@@ -276,6 +322,8 @@ describe("useMessageMeta status steps", () => {
       projectedStatusStepState: "completed",
     };
     applyEvent(store, {
+      updatedAtMs: 1767225600000,
+      seq: 1,
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       state: "completed",
       sessionId: "child-session",
@@ -296,11 +344,14 @@ describe("useMessageMeta status steps", () => {
       projectedStatusStepState: "completed",
     };
     applyEvent(store, {
+      timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
       sessionId: "child-session",
       turnScopeId: "workflow-node:child",
     });
     applyEvent(store, {
+      updatedAtMs: 1767225600000,
+      seq: 1,
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       state: "sending",
       sessionId: "child-session",

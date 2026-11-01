@@ -65,7 +65,12 @@ export function validateSessionCommand(command = {}) {
 
 export function assertSessionCommand(command = {}) {
   const result = validateSessionCommand(command);
-  if (!result.valid) throw new TypeError(`invalid session command: ${result.errors.join(",")}`);
+  if (!result.valid) {
+    throw Object.assign(new TypeError(`invalid session command: ${result.errors.join(",")}`), {
+      code: SESSION_ERROR_CODE.COMMAND_INVALID,
+      protocolErrors: result.errors,
+    });
+  }
   return command;
 }
 export function isSessionAggregateVersion(value) {

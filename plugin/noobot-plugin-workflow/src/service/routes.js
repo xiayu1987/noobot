@@ -14,41 +14,18 @@ import {
   WORKFLOW_RUNTIME_EVENT,
   workflowSessionSnapshotEventId,
 } from "@noobot/event-protocol/workflow-runtime-event";
-import { isCanonicalText, isFunction, isPlainObject } from "@noobot/shared/value";
+import { isFunction, isPlainObject } from "@noobot/shared/value";
+import {
+  requireWorkflowSessionRequest,
+  requireWorkflowSessionDetail,
+} from "@noobot/event-protocol/workflow-session-detail";
 
 export const WORKFLOW_ROUTE_ERROR_CODE = Object.freeze({
-  QUERY_INVALID: "WORKFLOW_ROUTE_QUERY_INVALID",
-  QUERY_REQUIRED: "WORKFLOW_ROUTE_QUERY_REQUIRED",
   REPORT_NOT_FOUND: "WORKFLOW_ROUTE_REPORT_NOT_FOUND",
 });
 
 function routeError(message, statusCode, code) {
   return Object.assign(new Error(message), { statusCode, code });
-}
-
-function readOptionalQuery(query, name, httpStatus) {
-  if (!Object.hasOwn(query, name)) return "";
-  const value = query[name];
-  if (!isCanonicalText(value)) {
-    throw routeError(
-      `${name} query is invalid`,
-      httpStatus.BAD_REQUEST,
-      WORKFLOW_ROUTE_ERROR_CODE.QUERY_INVALID,
-    );
-  }
-  return value;
-}
-
-function readRequiredQuery(query, name, httpStatus) {
-  const value = readOptionalQuery(query, name, httpStatus);
-  if (!value) {
-    throw routeError(
-      `${name} is required`,
-      httpStatus.BAD_REQUEST,
-      WORKFLOW_ROUTE_ERROR_CODE.QUERY_REQUIRED,
-    );
-  }
-  return value;
 }
 
 function createSessionSnapshotEnvelope({
@@ -110,6 +87,16 @@ function logDetail({ userId, sessionId, dialogProcessId, traceId, event, level, 
 function createThinkingDetailHandler(sessions) {
   return async (req, res) => {
     const { userId, sessionId, dialogProcessId: routeDialogProcessId } = req.params;
+    requireWorkflowSessionRequest(
+      {
+        userId,
+        sessionId,
+        routeDialogProcessId,
+        dialogProcessId: req.query.dialogProcessId,
+        turnScopeId: req.query.turnScopeId,
+      },
+      "thinking-detail",
+    );
     const detail = await sessions.readThinkingDetail({
       userId,
       segments: [WORKFLOW_DATA_SCOPE.SESSION, sessionId, routeDialogProcessId],
@@ -130,7 +117,11 @@ function createThinkingDetailHandler(sessions) {
 function createExecutionReportHandler(sessions, httpStatus) {
   return async (req, res) => {
     const { userId, sessionId, dialogProcessId: routeDialogProcessId } = req.params;
-    const dialogProcessId = readRequiredQuery(req.query, "dialogProcessId", httpStatus);
+    const { dialogProcessId } = req.query;
+    requireWorkflowSessionRequest(
+      { userId, sessionId, routeDialogProcessId, dialogProcessId },
+      "execution-report",
+    );
     const report = await sessions.readExecutionReport({
       userId,
       segments: [WORKFLOW_DATA_SCOPE.SESSION, sessionId, routeDialogProcessId],
@@ -165,7 +156,8 @@ export function createWorkflowServiceRouteHandlers(context) {
 
   const sessionDetailHandler = async (req, res) => {
     const { userId, sessionId, dialogProcessId } = req.params;
-    const traceId = readOptionalQuery(req.query, "traceId", httpStatus);
+    const { traceId } = req.query;
+    requireWorkflowSessionRequest({ userId, sessionId, dialogProcessId, traceId }, "detail");
     let snapshot;
     try {
       snapshot = await sessions.readSnapshot({
@@ -196,6 +188,13 @@ export function createWorkflowServiceRouteHandlers(context) {
       sessionSummary,
       meta,
     });
+    const workflowSession = requireWorkflowSessionDetail(
+      {
+        snapshotEnvelope,
+        executionLogs,
+      },
+      { sessionId: sessionSummary.sessionId, authoritySessionId: sessionId, dialogProcessId },
+    );
     void logDetail({
       userId,
       sessionId,
@@ -214,13 +213,7 @@ export function createWorkflowServiceRouteHandlers(context) {
       userId,
       sessionId,
       dialogProcessId,
-      workflowSession: {
-        aggregateVersion,
-        snapshotEnvelope,
-        sessionSummary,
-        executionLogs,
-        meta,
-      },
+      workflowSession,
     });
   };
 

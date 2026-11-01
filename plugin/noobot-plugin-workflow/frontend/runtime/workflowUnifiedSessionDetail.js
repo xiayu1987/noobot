@@ -6,22 +6,31 @@
 import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessId.js";
 import { mergeCanonicalSessionDetail } from "noobot-chat/plugin-api/session-domain";
 import { isTerminalTurnState } from "@noobot/session-protocol/turn-lifecycle";
-import { isWorkflowNodeTerminalStatus } from "@noobot/event-protocol/workflow-runtime-event";
-import { text } from "@noobot/shared/value";
+import {
+  isWorkflowNodeTerminalStatus,
+  selectWorkflowNodeChildExecutionIds,
+} from "@noobot/event-protocol/workflow-runtime-event";
+import { requireWorkflowDetailIdentity } from "@noobot/event-protocol/workflow-session-detail";
+import { requireSessionContentProjection } from "@noobot/session-protocol/session-detail";
+import {
+  requireSelectedExecutionDetail,
+  requireSelectedSessionDocument,
+} from "@noobot/plugin-protocol/frontend";
 
-function contentOnly(value = {}) {
-  const { turnRuntime: _turnRuntime, ...content } = value && typeof value === "object" ? value : {};
+function contentOnly(value) {
+  const { turnRuntime: _turnRuntime, ...content } = value;
   return content;
 }
 
-export function projectSessionMetadata(sessionDoc = {}) {
+export function projectSessionMetadata(sessionDoc) {
+  requireSelectedSessionDocument(sessionDoc, sessionDoc.sessionId);
   const {
     turnRuntime: _turnRuntime,
     sessionId: _sessionId,
     messages: _messages,
     turnTimings: _turnTimings,
     ...metadata
-  } = sessionDoc && typeof sessionDoc === "object" ? sessionDoc : {};
+  } = sessionDoc;
   return metadata;
 }
 
@@ -33,51 +42,49 @@ export function isWorkflowNodeRunning(runtimeNode) {
   return !isWorkflowNodeTerminalStatus(runtimeNode.status);
 }
 
-function createTurnMessageMatcher(turnScopeId, dialogProcessId) {
-  return (item = {}) => {
-    const itemScopeId = text(item?.turnScopeId || item?.metadata?.turnScopeId);
-    const itemDialogId = text(item?.dialogProcessId || item?.metadata?.dialogProcessId);
-    if (turnScopeId && itemScopeId) return itemScopeId === turnScopeId;
-    if (dialogProcessId && itemDialogId) return itemDialogId === dialogProcessId;
-    return !turnScopeId && !dialogProcessId;
-  };
+function createTurnMessageMatcher(turnScopeId) {
+  return (item) => item.turnScopeId === turnScopeId;
 }
 
 function findTurnRoleMessage(messages, role, matchesTurn) {
-  return messages.find((item = {}) => text(item?.role).toLowerCase() === role && matchesTurn(item));
+  return messages.find((item) => item.role === role && matchesTurn(item));
 }
 
-function buildRunningPlaceholderIdentity(matchingUser, { sessionId, scopeId, dialogProcessId }) {
+function buildRunningPlaceholderIdentity({ sessionId, scopeId, dialogProcessId }) {
   return {
-    viewKey: `workflow-node-running:${scopeId || dialogProcessId || text(sessionId)}`,
-    sessionId: text(matchingUser?.sessionId || matchingUser?.metadata?.sessionId || sessionId),
+    viewKey: `workflow-node-running:${sessionId}:${scopeId}`,
+    sessionId,
     turnScopeId: scopeId,
-    dialogProcessId: text(
-      matchingUser?.dialogProcessId || matchingUser?.metadata?.dialogProcessId || dialogProcessId,
-    ),
+    dialogProcessId,
   };
 }
 
 export function createRunningAssistantPlaceholderViewModel(
   messages,
-  { sessionId, turnScopeId, dialogProcessId, running },
+  { sessionId, turnScopeId, running },
 ) {
   if (!running) return null;
-  const scopeId = text(turnScopeId);
-  const normalizedDialogProcessId = text(dialogProcessId);
-  const matchesTurn = createTurnMessageMatcher(scopeId, normalizedDialogProcessId);
+  requireWorkflowDetailIdentity(sessionId, "sessionId");
+  const scopeId = requireWorkflowDetailIdentity(turnScopeId, "turnScopeId");
+  const matchesTurn = createTurnMessageMatcher(scopeId);
   const matchingUser = findTurnRoleMessage(messages, "user", matchesTurn);
   if (!matchingUser) return null;
   if (findTurnRoleMessage(messages, "assistant", matchesTurn)) return null;
-  return buildRunningPlaceholderIdentity(matchingUser, {
+  if (Object.hasOwn(matchingUser, "sessionId") && matchingUser.sessionId !== sessionId) {
+    throw new TypeError("workflow placeholder message belongs to another session");
+  }
+  return buildRunningPlaceholderIdentity({
     sessionId,
     scopeId,
-    dialogProcessId: normalizedDialogProcessId,
+    dialogProcessId: matchingUser.dialogProcessId,
   });
 }
 
-export function mergeUnifiedSessionDetail(base = {}, incoming = {}) {
-  const merged = mergeCanonicalSessionDetail(contentOnly(base), contentOnly(incoming));
+export function mergeUnifiedSessionDetail(base, incoming) {
+  const merged = mergeCanonicalSessionDetail(
+    contentOnly(requireSessionContentProjection(base)),
+    contentOnly(requireSessionContentProjection(incoming)),
+  );
   return {
     ...contentOnly(merged),
     ...(merged.execution ? { execution: contentOnly(merged.execution) } : {}),
@@ -86,15 +93,14 @@ export function mergeUnifiedSessionDetail(base = {}, incoming = {}) {
 
 export function resolveNodeChildExecutionIds(nodeItem, runtimeNodeSessions) {
   const runtimeNode = resolveRuntimeNodeSession(nodeItem, runtimeNodeSessions);
-  const attempts = Array.isArray(runtimeNode.attemptExecutionIds)
-    ? runtimeNode.attemptExecutionIds
-    : [];
-  return Array.from(new Set([runtimeNode.activeChildExecutionId, ...attempts].filter(Boolean)));
+  return selectWorkflowNodeChildExecutionIds(runtimeNode);
 }
 
 export function resolveRuntimeNodeSession(nodeItem, runtimeNodeSessions) {
-  const nodeExecutionId = text(nodeItem.nodeExecutionId);
-  if (!nodeExecutionId) throw new Error("workflow runtime node requires nodeExecutionId");
+  const nodeExecutionId = requireWorkflowDetailIdentity(
+    nodeItem.nodeExecutionId,
+    "nodeExecutionId",
+  );
   const runtimeNode = runtimeNodeSessions.value.find(
     (item) => item.nodeExecutionId === nodeExecutionId,
   );
@@ -103,46 +109,8 @@ export function resolveRuntimeNodeSession(nodeItem, runtimeNodeSessions) {
 }
 
 export function resolveIsolatedNodeSessionId(runtimeNode) {
-  return text(runtimeNode.nodeSessionId);
-}
-
-function resolveDialogProcessId(runtimeNode, execution = {}) {
-  return text(execution.dialogProcessId || resolveWorkflowDialogProcessId(runtimeNode));
-}
-
-function selectIsolatedSessionDocument(isolatedNodeSessionId, selectSessionMessages) {
-  if (!isolatedNodeSessionId) return {};
-  return contentOnly(selectSessionMessages(isolatedNodeSessionId) || {});
-}
-
-function selectExecutionSessionProjection({
-  executionDetail,
-  execution,
-  isolatedNodeSessionId,
-  selectSessionMessages,
-}) {
-  const executionSessionDoc = contentOnly(executionDetail.session);
-  const executionSessionId = text(execution.sessionId || executionSessionDoc.sessionId);
-  const executionOwnsIsolatedSession = Boolean(
-    !isolatedNodeSessionId || !executionSessionId || executionSessionId === isolatedNodeSessionId,
-  );
-  const sessionId = text(isolatedNodeSessionId || executionSessionId);
-  if (executionOwnsIsolatedSession) {
-    return {
-      sessionId,
-      sessionDoc: executionSessionDoc,
-      messages: executionSessionDoc.messages,
-    };
-  }
-  const isolatedSessionDoc = selectIsolatedSessionDocument(
-    isolatedNodeSessionId,
-    selectSessionMessages,
-  );
-  return {
-    sessionId,
-    sessionDoc: text(isolatedSessionDoc.sessionId) ? isolatedSessionDoc : { sessionId },
-    messages: Array.isArray(isolatedSessionDoc.messages) ? isolatedSessionDoc.messages : [],
-  };
+  if (runtimeNode.nodeSessionId === "") return "";
+  return requireWorkflowDetailIdentity(runtimeNode.nodeSessionId, "nodeSessionId");
 }
 
 function buildExecutionSessionMetadata({ sessionDoc, executionId, turnScopeId, dialogProcessId }) {
@@ -154,37 +122,22 @@ function buildExecutionSessionMetadata({ sessionDoc, executionId, turnScopeId, d
   };
 }
 
-function buildExecutionDetailProjection({
-  runtimeNode,
-  childExecutionIds,
-  executionDetail,
-  isolatedNodeSessionId,
-  selectSessionMessages,
-}) {
-  const execution = contentOnly(executionDetail.execution || {});
-  const { sessionId, sessionDoc, messages } = selectExecutionSessionProjection({
-    executionDetail,
-    execution,
-    isolatedNodeSessionId,
-    selectSessionMessages,
-  });
-  const executionId = text(execution.executionId || childExecutionIds[0]);
-  const turnScopeId = text(execution.turnScopeId || runtimeNode.turnScopeId);
-  const dialogProcessId = resolveDialogProcessId(runtimeNode, execution);
+function buildExecutionDetailProjection({ childExecutionIds, executionDetail }) {
+  const execution = contentOnly(executionDetail.execution);
+  const sessionDoc = contentOnly(executionDetail.session);
+  const { sessionId, executionId, turnScopeId, dialogProcessId } = execution;
+  const { messages } = sessionDoc;
   return {
     executionId,
     execution,
-    childExecutions: Array.isArray(executionDetail.children) ? executionDetail.children : [],
-    descendantExecutions: Array.isArray(executionDetail.descendants)
-      ? executionDetail.descendants
-      : [],
+    childExecutions: executionDetail.children,
+    descendantExecutions: executionDetail.descendants,
     attemptExecutionIds: childExecutionIds,
     sessionId,
     messages,
     runningPlaceholderViewModel: createRunningAssistantPlaceholderViewModel(messages, {
       sessionId,
       turnScopeId,
-      dialogProcessId,
       running: !isTerminalExecutionProjection(execution),
     }),
     sessionMetadata: buildExecutionSessionMetadata({
@@ -197,13 +150,7 @@ function buildExecutionDetailProjection({
 }
 
 function selectScopedMessages(messages, turnScopeId) {
-  if (!turnScopeId) return messages;
-  return messages.filter((message = {}) => {
-    const messageTurnScopeId = text(
-      message?.turnScopeId || message?.metadata?.turnScopeId || message?.pluginMeta?.turnScopeId,
-    );
-    return Boolean(messageTurnScopeId) && messageTurnScopeId === turnScopeId;
-  });
+  return messages.filter((message) => message.turnScopeId === turnScopeId);
 }
 
 function buildIsolatedSessionProjection({
@@ -211,26 +158,25 @@ function buildIsolatedSessionProjection({
   childExecutionIds,
   isolatedNodeSessionId,
   selectSessionMessages,
-  allowEmptyMessages,
 }) {
   if (!isolatedNodeSessionId) return null;
-  const sessionDoc = contentOnly(selectSessionMessages(isolatedNodeSessionId));
-  const messages = Array.isArray(sessionDoc.messages) ? sessionDoc.messages : [];
-  const emptyProjectionAllowed = allowEmptyMessages || childExecutionIds.length > 0;
-  if (!messages.length && !emptyProjectionAllowed) return null;
-  const turnScopeId = text(runtimeNode.turnScopeId);
+  const sessionDoc = requireSelectedSessionDocument(
+    selectSessionMessages(isolatedNodeSessionId),
+    isolatedNodeSessionId,
+  );
+  if (sessionDoc === null) return null;
+  const { messages } = sessionDoc;
+  const turnScopeId = requireWorkflowDetailIdentity(runtimeNode.turnScopeId, "turnScopeId");
   const scopedMessages = selectScopedMessages(messages, turnScopeId);
-  if (!scopedMessages.length && !emptyProjectionAllowed) return null;
-  const dialogProcessId = resolveDialogProcessId(runtimeNode);
+  const dialogProcessId = resolveWorkflowDialogProcessId(runtimeNode);
   return {
-    executionId: text(childExecutionIds[0]),
+    executionId: childExecutionIds.length ? childExecutionIds[0] : "",
     attemptExecutionIds: childExecutionIds,
     sessionId: isolatedNodeSessionId,
     messages: scopedMessages,
     runningPlaceholderViewModel: createRunningAssistantPlaceholderViewModel(scopedMessages, {
       sessionId: isolatedNodeSessionId,
       turnScopeId,
-      dialogProcessId,
       running: isWorkflowNodeRunning(runtimeNode),
     }),
     sessionMetadata: {
@@ -246,20 +192,22 @@ export function buildUnifiedSessionDetail({
   runtimeNodeSessions,
   selectSessionMessages,
   selectExecutionDetail,
-  allowEmptyMessages = false,
-} = {}) {
+}) {
   const runtimeNode = resolveRuntimeNodeSession(nodeItem, runtimeNodeSessions);
   const isolatedNodeSessionId = resolveIsolatedNodeSessionId(runtimeNode);
   const childExecutionIds = resolveNodeChildExecutionIds(nodeItem, runtimeNodeSessions);
   if (childExecutionIds.length) {
-    const executionDetail = selectExecutionDetail(childExecutionIds[0]);
-    if (executionDetail) {
+    const executionDetail = requireSelectedExecutionDetail(
+      selectExecutionDetail(childExecutionIds[0]),
+      {
+        executionId: childExecutionIds[0],
+        sessionId: isolatedNodeSessionId || undefined,
+      },
+    );
+    if (executionDetail !== null) {
       return buildExecutionDetailProjection({
-        runtimeNode,
         childExecutionIds,
         executionDetail,
-        isolatedNodeSessionId,
-        selectSessionMessages,
       });
     }
   }
@@ -268,6 +216,5 @@ export function buildUnifiedSessionDetail({
     childExecutionIds,
     isolatedNodeSessionId,
     selectSessionMessages,
-    allowEmptyMessages,
   });
 }

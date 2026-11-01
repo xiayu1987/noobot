@@ -116,7 +116,6 @@ function createRunStateSnapshot(state) {
     snapshotRunState({
       runMeta: state.currentRunMeta,
       abortSignal: state.currentAbortSignal,
-      locale: state.currentLocale,
     });
 }
 
@@ -157,12 +156,12 @@ function registerCloseListener({
       isRunTransportAttached(state.currentRunHandle, state.currentRunTransportBinding);
     const abortRun = closePolicy === CONNECTION_CLOSE_POLICY.ABORT_RUN;
     if (abortRun && state.currentAbortController && transportStillOwned) {
-      const reasonText = decodeCloseReason(reasonBuffer);
       state.currentAbortController.abort(
         createExecutionAbortReason({
           type: EXECUTION_ABORT_TYPE.SOCKET_CLOSE,
-          code: Number(code || 0) || undefined,
-          reason: reasonText || "websocket closed",
+          code,
+          closeReason: decodeCloseReason(reasonBuffer),
+          reason: `websocket closed with code ${code}`,
         }),
       );
     }
@@ -206,7 +205,6 @@ function createConnectionMessageRuntime(context) {
     commitInteractionRequest,
     rejectUnpersistedTurnStatus: createTurnStatusRejection(context),
     resolveBot: context.resolveBot,
-    translateText: context.translateText,
     webSocket: context.webSocket,
     commitTurnLifecycle,
   });

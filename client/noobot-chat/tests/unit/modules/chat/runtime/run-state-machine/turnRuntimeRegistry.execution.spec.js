@@ -9,9 +9,11 @@ import {
   deriveAgentExecutionId,
 } from "@noobot/session-protocol/execution-lifecycle";
 import { validateExecutionQueryPayload } from "@noobot/event-protocol/execution-query";
+import { createTurnLifecycleEnvelope } from "@noobot/session-protocol";
 import {
   applyExecutionSnapshot,
   applyExecutionTree,
+  applyTurnLifecycleEnvelope,
   createTurnRuntimeRegistryState,
   selectExecutionChildren,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
@@ -33,6 +35,82 @@ const execution = (turnScopeId, overrides = {}) => ({
 const applySnapshot = (registry, item) => applyExecutionSnapshot(registry, { execution: item });
 
 describe("Execution Registry authoritative projections", () => {
+  it("rejects lifecycle relation cycles before changing turns, routes or metadata", () => {
+    const registry = createTurnRuntimeRegistryState();
+    applySnapshot(
+      registry,
+      execution("child", {
+        parentExecutionId: id("root"),
+        rootExecutionId: id("root"),
+      }),
+    );
+    const before = structuredClone(registry);
+    const envelope = createTurnLifecycleEnvelope({
+      eventType: "turn.processing_started",
+      eventId: "event-cycle",
+      commandId: "command-cycle",
+      userId: "u1",
+      sessionId: "session-root",
+      parentSessionId: "",
+      turnScopeId: "root",
+      dialogProcessId: "dp-root",
+      presentationMessageId: "message-root",
+      executionId: id("root"),
+      executionKind: "agent",
+      parentExecutionId: id("child"),
+      rootExecutionId: id("root"),
+      revision: 2,
+      sequence: 2,
+      state: "processing",
+      phase: "processing",
+      executionState: "sending",
+      action: "send",
+      capabilities: { actionLocked: true, canStop: true },
+      startedAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:01.000Z",
+    });
+    expect(() => applyTurnLifecycleEnvelope(registry, envelope)).toThrow(/parent cycle/);
+    expect(registry).toEqual(before);
+  });
+
+  it("rejects a cycle before changing execution facts or turn lookup", () => {
+    const registry = createTurnRuntimeRegistryState();
+    applySnapshot(registry, execution("root"));
+    applySnapshot(
+      registry,
+      execution("child", { parentExecutionId: id("root"), rootExecutionId: id("root") }),
+    );
+    const before = structuredClone(registry);
+    expect(() =>
+      applySnapshot(
+        registry,
+        execution("root", {
+          parentExecutionId: id("child"),
+          revision: 2,
+          sequence: 2,
+        }),
+      ),
+    ).toThrow(/parent cycle/);
+    expect(registry).toEqual(before);
+  });
+
+  it("rejects a corrupt batch without keeping an earlier execution", () => {
+    const registry = createTurnRuntimeRegistryState();
+    const before = structuredClone(registry);
+    expect(() =>
+      applyExecutionTree(registry, {
+        tree: {
+          executions: {
+            root: execution("root"),
+            a: execution("a", { parentExecutionId: id("b"), rootExecutionId: id("root") }),
+            b: execution("b", { parentExecutionId: id("a"), rootExecutionId: id("root") }),
+          },
+        },
+      }),
+    ).toThrow(/parent cycle/);
+    expect(registry).toEqual(before);
+  });
+
   it("deduplicates identical coordinates and rejects conflicting facts", () => {
     const registry = createTurnRuntimeRegistryState();
     expect(applySnapshot(registry, execution("root")).applied).toBe(true);

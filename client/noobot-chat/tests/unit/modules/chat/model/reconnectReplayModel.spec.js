@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
+import { turnRecordFixture } from "../helpers/turnRecordFixture.js";
 import {
   createEventEnvelope,
   createReplayBatch as createProtocolReplayBatch,
@@ -69,7 +70,7 @@ describe("reconnectReplayModel", () => {
         sessionId: "s-1",
         sequence: 1,
         activeTurnScopeId: turnScopeId,
-        activeTurn: {
+        activeTurn: turnRecordFixture({
           continuedByTurnScopeId: "",
           sessionId: "s-1",
           turnScopeId,
@@ -79,7 +80,7 @@ describe("reconnectReplayModel", () => {
           sequence: 1,
           state,
           startedAt: "2026-01-01T00:00:00.000Z",
-        },
+        }),
       }),
       snapshotSequence: 1,
     }),
@@ -142,7 +143,7 @@ describe("reconnectReplayModel", () => {
           sessionId: "s-other",
           sequence: 2,
           activeTurnScopeId: "turn-other",
-          activeTurn: {
+          activeTurn: turnRecordFixture({
             continuedByTurnScopeId: "",
             sessionId: "s-other",
             turnScopeId: "turn-other",
@@ -152,7 +153,7 @@ describe("reconnectReplayModel", () => {
             sequence: 2,
             state: "processing",
             startedAt: "2026-01-01T00:00:00.000Z",
-          },
+          }),
         }),
         snapshotSequence: 2,
       }),

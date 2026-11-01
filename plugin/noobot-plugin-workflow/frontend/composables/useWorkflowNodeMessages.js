@@ -18,16 +18,14 @@ export function useWorkflowNodeMessages({
   selectedNodeSessionMetadata,
   selectedNodeSessionId,
 }) {
-  function normalizeNodeMessageForDisplay(messageItem = {}) {
-    const item = messageItem && typeof messageItem === "object" ? messageItem : {};
+  function normalizeNodeMessageForDisplay(messageItem) {
     return {
-      ...item,
+      ...messageItem,
       pluginMessage: false,
-      content: String(item?.content || ""),
     };
   }
 
-  function buildNodeViewMessage(messageItem = {}) {
+  function buildNodeViewMessage(messageItem) {
     return normalizeNodeMessageForDisplay(
       buildViewMessage(messageItem, {
         sessionId: selectedNodeSessionId.value,
@@ -64,10 +62,9 @@ export function useWorkflowNodeMessages({
   });
 
   const displayNodeMessages = computed(() =>
-    (Array.isArray(normalizedNodeSessionMessages.value)
-      ? normalizedNodeSessionMessages.value
-      : []
-    ).map((messageItem) => normalizeNodeMessageForDisplay(messageItem)),
+    normalizedNodeSessionMessages.value.map((messageItem) =>
+      normalizeNodeMessageForDisplay(messageItem),
+    ),
   );
 
   function summarizeMessage(messageItem = {}) {
@@ -81,7 +78,6 @@ export function useWorkflowNodeMessages({
       turnScopeId: text(messageItem?.turnScopeId),
       pending: messageItem?.pending === true,
       contentLength: String(messageItem?.content || "").length,
-      rawEventCount: Array.isArray(messageItem?.rawEvents) ? messageItem.rawEvents.length : 0,
       activityTimelineCount: Array.isArray(messageItem?.activityTimeline)
         ? messageItem.activityTimeline.length
         : 0,
@@ -95,9 +91,7 @@ export function useWorkflowNodeMessages({
   watch(
     () => ({
       sessionId: selectedNodeSessionId.value,
-      source: (Array.isArray(selectedNodeMessages.value) ? selectedNodeMessages.value : []).map(
-        summarizeMessage,
-      ),
+      source: selectedNodeMessages.value.map(summarizeMessage),
       display: displayNodeMessages.value.map(summarizeMessage),
     }),
     (projection) => {

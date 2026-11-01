@@ -7,6 +7,7 @@ import { it, expect } from "vitest";
 import {
   applyTurnLifecycleSnapshot,
   applyTurnRuntimeEvent,
+  applyTurnTerminalResolution,
   createTurnRuntimeRegistryState,
   projectTurnRuntimeView,
   resolveTurnRuntimeByScope,
@@ -21,6 +22,8 @@ import {
   COMPOSER_PRIMARY_ACTION,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
 import { resolveComposerPrimaryAction } from "../../../../../../src/modules/chat/runtime/run-state-machine/composerAction.js";
+import { turnRecordFixture } from "../../helpers/turnRecordFixture.js";
+import { createTurnTerminalResolution } from "@noobot/session-protocol";
 import {
   backendState,
   lifecycle,
@@ -179,6 +182,7 @@ it("keeps stopping after real-time user_stopped until the authoritative summary 
     seq: 2,
   });
   applyTurnRuntimeEvent(registry, {
+    timestamp: 1767225600000,
     type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED,
     sessionId: "s1",
     turnScopeId: "t1",
@@ -292,6 +296,7 @@ it.each([
     prepare(registry) {
       sendStart(registry, { sessionId: "s1", turnScopeId: "t1" });
       applyTurnRuntimeEvent(registry, {
+        updatedAt: "2026-01-01T00:00:00.000Z",
         type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
         eventType: "turn.action_accepted",
         sessionId: "s1",
@@ -300,6 +305,7 @@ it.each([
         sequence: 2,
       });
       applyTurnRuntimeEvent(registry, {
+        updatedAt: "2026-01-01T00:00:00.000Z",
         type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
         eventType: "turn.processing_started",
         sessionId: "s1",
@@ -308,6 +314,7 @@ it.each([
         sequence: 3,
       });
       applyTurnRuntimeEvent(registry, {
+        updatedAt: "2026-01-01T00:00:00.000Z",
         type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
         eventType: "turn.processing_completed",
         sessionId: "s1",
@@ -325,6 +332,7 @@ it.each([
     prepare(registry) {
       sendStart(registry, { sessionId: "s1", turnScopeId: "t1" });
       applyTurnRuntimeEvent(registry, {
+        updatedAt: "2026-01-01T00:00:00.000Z",
         type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
         eventType: "turn.action_accepted",
         sessionId: "s1",
@@ -333,6 +341,7 @@ it.each([
         sequence: 2,
       });
       applyTurnRuntimeEvent(registry, {
+        updatedAt: "2026-01-01T00:00:00.000Z",
         type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
         eventType: "turn.processing_started",
         sessionId: "s1",
@@ -348,6 +357,7 @@ it.each([
         seq: 3,
       });
       applyTurnRuntimeEvent(registry, {
+        timestamp: 1767225600000,
         type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED,
         sessionId: "s1",
         turnScopeId: "t1",
@@ -355,6 +365,7 @@ it.each([
         sequence: 4,
       });
       applyTurnRuntimeEvent(registry, {
+        updatedAt: "2026-01-01T00:00:00.000Z",
         type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
         eventType: "turn.stop_processing_completed",
         sessionId: "s1",
@@ -365,34 +376,68 @@ it.each([
     },
   },
 ])(
-  "allows only the matching authoritative success to settle a retryable $name failure",
+  "hydrates a retryable $name failure without treating it as a resolved terminal",
   ({ prepare, failedPhase, failedState, successEvent }) => {
     const registry = createTurnRuntimeRegistryState();
     prepare(registry);
     const failureTerminalState = failedPhase === "stop" ? "stop_failed" : "completion_failed";
-    const failed = settleTerminal(registry, {
+    const failedTurn = turnRecordFixture({
       state: failureTerminalState,
+      terminalStatus: null,
       revision: 6,
       sequence: 6,
       phase: failedPhase,
-      failure: { message: "retryable" },
-      finalizeIntent: { retryable: true },
+      failure: { code: "finalize_failed", message: "retryable", retryable: true },
+      finalizeIntent: {
+        type: failedPhase === "stop" ? "stop" : "completion",
+        commandId: "retry-finalize",
+        retryable: true,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:01.000Z",
+      },
     });
-    expect(failed.turn).toMatchObject({
+    const unresolved = createTurnTerminalResolution({
+      commandId: "resolve-retry",
+      sessionId: "s1",
+      turnScopeId: "t1",
+      reason: "terminal_status_not_ready",
+      retryable: true,
+      retryAfterMs: 100,
+      turn: failedTurn,
+    });
+    expect(() => applyTurnTerminalResolution(registry, unresolved)).toThrow(
+      "terminal_resolution_unresolved_apply",
+    );
+    expect(
+      applyTurnLifecycleSnapshot(
+        registry,
+        snapshot({
+          sequence: 6,
+          activeTurn: failedTurn,
+        }),
+      ).applied,
+    ).toBe(true);
+    const failed = resolveTurnRuntimeByScope(registry, "t1", { sessionId: "s1" });
+    expect(registry.sessions.s1.activeTurnScopeId).toBe("t1");
+    expect(failed).toMatchObject({
       state: failedState,
       terminal: "error",
       phase: failedPhase,
       failure: { message: "retryable" },
       finalizeIntent: { retryable: true },
+      terminalResolved: false,
     });
-    expect(failed.turn).not.toHaveProperty("error");
+    expect(failed).not.toHaveProperty("error");
     const authoritativeSuccess = applyTurnRuntimeEvent(registry, {
+      updatedAt: "2026-01-01T00:00:00.000Z",
       type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
       eventType: successEvent,
+      state: successEvent === "turn.completed" ? "completed" : "stop_completed",
+      revision: 7,
       sessionId: "s1",
       turnScopeId: "t1",
       dialogProcessId: "dp1",
-      sequence: 7,
+      seq: 7,
     });
     expect(authoritativeSuccess).toMatchObject({ applied: false, reason: "terminal_locked" });
     expect(resolveTurnRuntimeByScope(registry, "t1", { sessionId: "s1" })).toMatchObject({
@@ -403,13 +448,14 @@ it.each([
 it("does not let an early detail acknowledgement settle a Turn", () => {
   const registry = createTurnRuntimeRegistryState();
   const early = applyTurnRuntimeEvent(registry, {
-    type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
+    timestamp: 1767225600000,
+    type: "local_frontend_completion_applied",
     sessionId: "s1",
     turnScopeId: "t1",
     dialogProcessId: "dp1",
     source: "final_session_detail",
   });
-  expect(early).toMatchObject({ applied: false, reason: "missing_state" });
+  expect(early).toMatchObject({ applied: false, reason: "invalid_runtime_event" });
 
   sendStart(registry, { sessionId: "s1", turnScopeId: "t1" });
   lifecycle(registry, {
@@ -459,6 +505,7 @@ it("does not let an early detail acknowledgement settle a Turn", () => {
 it("uses the preallocated Session identity without deferred detail authority", () => {
   const registry = createTurnRuntimeRegistryState();
   applyTurnRuntimeEvent(registry, {
+    timestamp: 1767225600000,
     type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
     sessionId: "backend-session",
     turnScopeId: "t1",
@@ -553,6 +600,7 @@ it("does not let a newer non-terminal snapshot reopen a completed Turn", () => {
 it("uses Session + Turn scope as terminal authority despite a changed dialog route", () => {
   const registry = createTurnRuntimeRegistryState();
   applyTurnRuntimeEvent(registry, {
+    timestamp: 1767225600000,
     type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
     sessionId: "s1",
     turnScopeId: "t1",
@@ -619,6 +667,7 @@ it("completes a normal request when final detail carries a different dialog rout
 it("discards repeated legacy detail acknowledgements and never completes another Turn", () => {
   const registry = createTurnRuntimeRegistryState();
   const confirmation = {
+    timestamp: 1767225600000,
     type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
     sessionId: "s1",
     turnScopeId: "old",

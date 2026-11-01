@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { turnRecord } from "./helpers/turn-record.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
@@ -24,22 +25,28 @@ test("turn deletion removes lifecycle facts and receipts for the deleted scopes"
   const committed = commitTurnDeletion({
     lifecycle: {
       ...createEmptyTurnLifecycle(),
-      activeTurnScopeId: "turn-delete",
+      activeTurnScopeId: "",
       sequence: 8,
       turns: {
-        "turn-keep": {
+        "turn-keep": turnRecord({
           turnScopeId: "turn-keep",
-          state: "completed",
+          state: "stop_completed",
+          phase: "stop",
+          finishedAt: "2026-07-30T00:00:00.000Z",
           continuedByTurnScopeId: "turn-delete",
           revision: 1,
           sequence: 4,
-        },
-        "turn-delete": {
+        }),
+        "turn-delete": turnRecord({
           turnScopeId: "turn-delete",
+          action: "continue",
+          continuationSource: { turnScopeId: "turn-keep", dialogProcessId: "dialog-1" },
           state: "stop_completed",
+          phase: "stop",
+          finishedAt: "2026-07-30T00:00:00.000Z",
           revision: 1,
           sequence: 8,
-        },
+        }),
       },
       commandReceipts: [
         turnReceipt("keep", "turn.completed", "turn-keep"),
@@ -67,21 +74,27 @@ test("turn deletion clears a surviving continuation's reference to the deleted s
       ...createEmptyTurnLifecycle(),
       sequence: 2,
       turns: {
-        source: {
+        source: turnRecord({
           turnScopeId: "source",
+          continuedByTurnScopeId: "continuation",
           dialogProcessId: "source-dialog",
           state: "stop_completed",
+          phase: "stop",
+          finishedAt: "2026-07-30T00:00:00.000Z",
           revision: 1,
           sequence: 1,
-        },
-        continuation: {
+        }),
+        continuation: turnRecord({
           turnScopeId: "continuation",
+          action: "continue",
           dialogProcessId: "continuation-dialog",
           state: "completed",
+          phase: "completion",
+          finishedAt: "2026-07-30T00:00:00.000Z",
           revision: 1,
           sequence: 2,
           continuationSource: { turnScopeId: "source", dialogProcessId: "source-dialog" },
-        },
+        }),
       },
     },
     turnScopeIds: ["source"],

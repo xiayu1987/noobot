@@ -32,6 +32,7 @@ import { projectTurnRuntimeToMessages } from "../../../../../src/modules/chat/ru
 import { text } from "@noobot/shared/value";
 import { createSessionMessageView } from "../../../../../src/modules/chat/runtime/session/messageView.js";
 import { terminalStatusFixture } from "./terminalStatusFixture.js";
+import { turnRecordFixture } from "./turnRecordFixture.js";
 import { jsonResponse, rejectUnexpectedRequest } from "../../../helpers/jsonResponse.js";
 import { createTurnReplaceResponse } from "@noobot/session-protocol/session-mutation-response";
 import { selectMainSessionDetailEntry } from "@noobot/session-protocol/session-detail";
@@ -50,7 +51,7 @@ const terminalResolutionFromUrl = (
   const turnScopeId = decodeURIComponent(match?.[2] || "");
   const completionCommitId = `commit:${sessionId}:${turnScopeId}:${revision}`;
   const failure = state.endsWith("_failed")
-    ? { stage: state.slice(0, -"_failed".length), retryable: false, message: "terminal failure" }
+    ? { code: "terminal_failure", retryable: false, message: "terminal failure" }
     : null;
   return {
     protocolVersion: 2,
@@ -63,24 +64,22 @@ const terminalResolutionFromUrl = (
     reason: "",
     retryAfterMs: 0,
     aggregateVersion: 1,
-    turn: {
+    turn: turnRecordFixture({
       sessionId,
       turnScopeId,
       dialogProcessId: `dp-${turnScopeId}`,
       state,
-      phase: state === "stop_completed" ? "stop" : failure?.stage || "completion",
       revision,
       sequence,
       completionCommitId,
       summaryVersion: 1,
-      finalizeIntent: state === "stop_completed" ? "stop" : "complete",
       failure,
       ...turnTiming,
       terminalStatus: terminalStatusFixture(state, {
         turnScopeId,
         dialogProcessId: `dp-${turnScopeId}`,
       }),
-    },
+    }),
   };
 };
 
@@ -255,17 +254,7 @@ export const createHarness = ({
   });
   const appendMessage = vi.fn(messageView.appendMessage);
   const findMessageByViewKey = vi.fn(messageView.findMessageByViewKey);
-  const upsertCanonicalAssistantMessage = vi.fn((presentationMessageId, identity = {}) => {
-    const normalizedPresentationId = text(presentationMessageId);
-    if (!normalizedPresentationId) return null;
-    const sessionId = text(identity?.sessionId || activeSession.value?.sessionId);
-    const existing = messageView.findMessageByViewKey(sessionId, normalizedPresentationId);
-    if (existing) return existing;
-    return appendMessage(RoleEnum.ASSISTANT, "", [], {
-      ...identity,
-      presentationMessageId: normalizedPresentationId,
-    });
-  });
+  const upsertCanonicalAssistantMessage = vi.fn(messageView.upsertCanonicalAssistantMessage);
 
   const defaultDeps = {
     userId: ref("u-1"),
@@ -387,6 +376,7 @@ export const activateRuntimeTurn = ({
 }) => {
   const registry = turnRuntimeRegistry.value;
   applyTurnRuntimeEvent(registry, {
+    timestamp: 1767225600000,
     type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
     sessionId,
     turnScopeId,
@@ -394,6 +384,7 @@ export const activateRuntimeTurn = ({
   applyTurnLifecycleEnvelope(
     registry,
     createTurnLifecycleEnvelope({
+      updatedAt: "2026-01-01T00:00:00.000Z",
       eventType: "turn.action_accepted",
       eventId: `accepted:${sessionId}:${turnScopeId}:${revision}`,
       commandId,
@@ -415,6 +406,7 @@ export const activateRuntimeTurn = ({
   applyTurnLifecycleEnvelope(
     registry,
     createTurnLifecycleEnvelope({
+      updatedAt: "2026-01-01T00:00:00.000Z",
       eventType: "turn.processing_started",
       eventId: `processing:${sessionId}:${turnScopeId}:${revision + 1}`,
       commandId,
@@ -486,6 +478,7 @@ export const emitAuthorityProcessing = (onEvent, source) => {
   emit(
     lifecycleEvent({
       eventType: "turn.action_accepted",
+      updatedAt: "2026-01-01T00:00:00.000Z",
       eventId: `accepted:${sessionId}:${turnScopeId}`,
       commandId,
       userId,
@@ -506,6 +499,7 @@ export const emitAuthorityProcessing = (onEvent, source) => {
   emit(
     lifecycleEvent({
       eventType: "turn.processing_started",
+      updatedAt: "2026-01-01T00:00:00.000Z",
       eventId: `processing:${sessionId}:${turnScopeId}`,
       commandId,
       userId,
@@ -538,6 +532,7 @@ export const emitAuthorityCompletionRequested = (onEvent, source) => {
     event: StreamEventEnum.TURN_LIFECYCLE,
     data: lifecycleEvent({
       eventType: "turn.processing_completed",
+      updatedAt: "2026-01-01T00:00:00.000Z",
       eventId: `completion-requested:${sessionId}:${turnScopeId}`,
       commandId,
       userId,
@@ -573,6 +568,7 @@ export const emitAuthorityTerminal = (onEvent, source) => {
   onEvent({
     event: StreamEventEnum.TURN_LIFECYCLE,
     data: lifecycleEvent({
+      updatedAt: "2026-01-01T00:00:00.000Z",
       eventType:
         state === "stop_completed"
           ? "turn.stop_completed"

@@ -61,25 +61,37 @@ const AGENT_DUPLICATES = Object.freeze([
   [/function\s+parseIdPatchCommands\s*\(/, "experience id patch parser"],
 ]);
 
+async function measurePackageFile(measurement, file, packageDir, allowed) {
+  for (const { specifier, line } of importReferences(await readRepositoryText(file))) {
+    const foreign =
+      !specifier.startsWith(".") && !allowed.some((prefix) => specifier.startsWith(prefix));
+    if (foreign || escapesDirectory(file, packageDir, specifier)) {
+      addHit(measurement, { file, line, message: `imports ${specifier}` });
+    }
+  }
+}
+
+async function measurePurePackage(measurement, packageDir, allowed) {
+  for (const file of await getFirstPartyFilesUnder([`${packageDir}/src`], SCAN)) {
+    await measurePackageFile(measurement, file, packageDir, allowed);
+  }
+}
+
+async function measureAgentDuplicates(measurement, file) {
+  const source = await readRepositoryText(file);
+  for (const [pattern, label] of AGENT_DUPLICATES) {
+    if (pattern.test(source)) addHit(measurement, { file, message: label });
+  }
+}
+
 async function measure() {
   const measured = emptyRuleMeasurements(CHECK);
   for (const [packageDir, allowed] of Object.entries(PURE_PACKAGE_IMPORTS)) {
-    for (const file of await getFirstPartyFilesUnder([`${packageDir}/src`], SCAN)) {
-      for (const { specifier, line } of importReferences(await readRepositoryText(file))) {
-        const foreign =
-          !specifier.startsWith(".") && !allowed.some((prefix) => specifier.startsWith(prefix));
-        if (foreign || escapesDirectory(file, packageDir, specifier)) {
-          addHit(measured.purePackageImport, { file, line, message: `imports ${specifier}` });
-        }
-      }
-    }
+    await measurePurePackage(measured.purePackageImport, packageDir, allowed);
   }
   await addRemovedPathHits(measured.removedImplementation, REMOVED_PATHS, "must remain removed");
   for (const file of await getFirstPartyFilesUnder(["agent/src"], SCAN)) {
-    const source = await readRepositoryText(file);
-    for (const [pattern, label] of AGENT_DUPLICATES) {
-      if (pattern.test(source)) addHit(measured.agentDuplicate, { file, message: label });
-    }
+    await measureAgentDuplicates(measured.agentDuplicate, file);
   }
   const assetRoots = new Set(
     WORKSPACE_ASSET_SECTIONS.flatMap((section) => WORKSPACE_SECTIONS[section].paths),

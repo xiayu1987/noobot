@@ -5,8 +5,8 @@
  */
 import {
   TURN_EVENT,
+  createTurnFailure,
   createTurnLifecycleCommandId,
-  isTurnLifecycleRejectedError,
 } from "@noobot/session-protocol";
 import { ROOT_PARENT_DIALOG_PROCESS_ID } from "@noobot/agent-transport-protocol";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
@@ -50,12 +50,7 @@ function createConflictTurnRecovery(context) {
 
 async function settlePendingLifecycle(context) {
   if (!context.lifecycle.pending) return;
-  try {
-    const pendingResult = await context.lifecycle.pending;
-    if (pendingResult?.turn) context.lifecycle.latestTurn = pendingResult.turn;
-  } catch {
-    void 0;
-  }
+  await Promise.allSettled([context.lifecycle.pending]);
 }
 
 function resolveFailureContext(context) {
@@ -70,12 +65,15 @@ function resolveFailureContext(context) {
   };
 }
 
-const TURN_FAILED = "turn_failed";
-
 function createFailureCommitter(context) {
   return async function commitCurrentFailure(error, terminalCommand = "error") {
     await settlePendingLifecycle(context);
     const failureContext = resolveFailureContext(context);
+    const failure = createTurnFailure({
+      error,
+      abortSignal: context.state.currentAbortSignal,
+      retryable: false,
+    });
     const commandId = createTurnLifecycleCommandId({
       commandId: failureContext.commandBase,
       eventType: TURN_EVENT.FAILED,
@@ -90,16 +88,8 @@ function createFailureCommitter(context) {
       causationId: commandId,
       eventType: TURN_EVENT.FAILED,
       phase: failureContext.phase,
-      failure: {
-        code: isTurnLifecycleRejectedError(error) ? error.code : TURN_FAILED,
-        message: String(error?.message || "turn failed"),
-        retryable: false,
-      },
-      terminalStatus: {
-        command: terminalCommand,
-        description: String(error?.message || "turn failed"),
-        error,
-      },
+      failure,
+      terminalStatus: { command: terminalCommand, description: failure.message, error },
     });
   };
 }
@@ -146,7 +136,7 @@ async function executeAcceptedRun(context, run, accepted, active) {
     runConfig: run.normalizedRunConfig,
   });
   if (listener.lifecycle.processingStarted) await listener.lifecycle.processingStarted;
-  await finalizeRunResult(context, run, accepted, active);
+  await finalizeRunResult(context, run, accepted);
 }
 
 function createRunHandler(context) {

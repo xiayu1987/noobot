@@ -138,7 +138,7 @@ describe("useChatStore execution projection", () => {
     expect(() => store.selectExecutionDetail(MAIN_EXECUTION_ID)).toThrow(TypeError);
   });
 
-  it("returns nested descendants once and remains safe for malformed relation cycles", () => {
+  it("selects nested descendants from parent facts and rejects corrupt cycles", () => {
     const store = useChatStore();
     applyExecutionTree(store.turnRuntimeRegistry, {
       rootExecutionId: "workflow",
@@ -176,12 +176,15 @@ describe("useChatStore execution projection", () => {
         },
       },
     });
-    store.turnRuntimeRegistry.childExecutionIdsByParentId[GRANDCHILD_AGENT_ID] = [CHILD_AGENT_ID];
-
     expect(store.selectExecutionDescendants("workflow").map((item) => item.executionId)).toEqual([
       CHILD_AGENT_ID,
       GRANDCHILD_AGENT_ID,
     ]);
+    expect(store.selectExecutionDescendants("workflow")[0]).toBe(
+      store.turnRuntimeRegistry.executions[CHILD_AGENT_ID],
+    );
+    store.turnRuntimeRegistry.executions[CHILD_AGENT_ID].parentExecutionId = GRANDCHILD_AGENT_ID;
+    expect(() => store.selectExecutionDescendants("workflow")).toThrow(/parent cycle/);
   });
 
   it("does not create an empty placeholder for lifecycle-only updates", () => {

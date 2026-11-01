@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createSessionNotFoundError } from "@noobot/session-protocol";
 import { parseTurnSummaryCheckpointRequest } from "@noobot/context-protocol/policy/summary-checkpoint-request";
 import { applyTurnSummaryCheckpoint } from "@noobot/context-protocol/policy/summary-checkpoint-transaction";
 
@@ -14,8 +13,7 @@ export async function commitTurnSummaryCheckpoint(payload) {
     userId,
     sessionId,
     async () => {
-      const session = await this.sessionRepo.findById(userId, sessionId, { persistenceContext });
-      if (!session) throw createSessionNotFoundError({ userId, sessionId });
+      const session = await this.sessionRepo.requireById(userId, sessionId, { persistenceContext });
       const result = applyTurnSummaryCheckpoint(session, request, this.now());
       if (result.committed) await this.sessionRepo.save(userId, session, { persistenceContext });
       return result;

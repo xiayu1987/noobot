@@ -10,10 +10,10 @@ import {
   ATTACHMENT_LIFECYCLE,
   ATTACHMENT_LIFECYCLE_SEQUENCE_DOMAIN,
   ATTACHMENT_LIFECYCLE_WIRE_EVENT,
+  ATTACHMENT_LIFECYCLE_SCHEMA_VERSION,
   attachmentLifecycleSequenceScopeId,
   ATTACHMENT_RELATION_TYPE,
   ATTACHMENT_SOURCE,
-  createAttachmentEventId,
   createAttachmentLifecycleEvent,
   findAttachmentRelation,
   projectAttachmentIdentity,
@@ -76,8 +76,7 @@ async function commitParsedLifecycleEvent(runtime, identity, relation) {
   const system = runtime.systemRuntime;
   const event = createAttachmentLifecycleEvent({
     eventType: ATTACHMENT_EVENT_TYPE.PARSED,
-    eventVersion: 1,
-    attachmentEventId: createAttachmentEventId(),
+    eventVersion: ATTACHMENT_LIFECYCLE_SCHEMA_VERSION,
     identity,
     status: ATTACHMENT_LIFECYCLE.PARSED,
     occurredAt: new Date().toISOString(),

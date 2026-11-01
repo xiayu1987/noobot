@@ -3,59 +3,56 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text as clean } from "@noobot/shared/value";
-import { normalizeExecutionIdentity } from "../execution-lifecycle.js";
-import {
-  requireCanonicalTurnScopeId,
-  requireOptionalCanonicalTurnScopeId,
-} from "../identity/turn-scope-identity.js";
 import { deriveAuthoritativeTurnCapabilities } from "./turn-capability.js";
-import { normalizeTurnContinuationSource } from "./turn-continuation.js";
-import { normalizeTurnFailure } from "./turn-failure.js";
-import { normalizeTurnTerminalStatus } from "./turn-terminal.js";
+import { assertTurnRecord } from "./turn-record.js";
+import { collectTurnReplacementTombstoneErrors } from "./turn-replacement.js";
 
 export function snapshotTurn(turn) {
-  const executionIdentity = normalizeExecutionIdentity(turn);
+  assertTurnRecord(turn);
+  const fields = [
+    "sessionId",
+    "parentSessionId",
+    "turnScopeId",
+    "presentationMessageId",
+    "dialogProcessId",
+    "executionId",
+    "executionKind",
+    "parentExecutionId",
+    "rootExecutionId",
+    "origin",
+    "stage",
+    "commandId",
+    "action",
+    "state",
+    "phase",
+    "executionState",
+    "revision",
+    "sequence",
+    "summaryVersion",
+    "completionCommitId",
+    "terminalStatus",
+    "failure",
+    "finalizeIntent",
+    "continuationSource",
+    "continuedByTurnScopeId",
+    "startedAt",
+    "finishedAt",
+    "thinkingFinishedAt",
+    "createdAt",
+    "updatedAt",
+  ];
   return {
-    ...executionIdentity,
-    turnScopeId: requireCanonicalTurnScopeId(turn.turnScopeId),
-    presentationMessageId: clean(turn.presentationMessageId),
-    dialogProcessId: turn.dialogProcessId,
-    commandId: clean(turn.commandId),
-    action: clean(turn.action),
-    state: turn.state,
-    phase: clean(turn.phase),
-    executionState: clean(turn.executionState).toLowerCase(),
-    revision: turn.revision,
-    sequence: turn.sequence,
-    summaryVersion: turn.summaryVersion,
-    completionCommitId: clean(turn.completionCommitId),
-    terminalStatus: normalizeTurnTerminalStatus(turn.terminalStatus),
-    failure: normalizeTurnFailure(turn.failure),
-    finalizeIntent:
-      turn.finalizeIntent && typeof turn.finalizeIntent === "object" ? turn.finalizeIntent : null,
-    continuationSource: normalizeTurnContinuationSource(turn.continuationSource),
-    continuedByTurnScopeId: requireOptionalCanonicalTurnScopeId(turn.continuedByTurnScopeId),
-    startedAt: clean(turn.startedAt),
-    finishedAt: clean(turn.finishedAt),
-    thinkingFinishedAt: clean(turn.thinkingFinishedAt),
+    ...structuredClone(
+      Object.fromEntries(
+        fields.filter((field) => Object.hasOwn(turn, field)).map((field) => [field, turn[field]]),
+      ),
+    ),
     capabilities: deriveAuthoritativeTurnCapabilities(turn),
-    createdAt: clean(turn.createdAt),
-    updatedAt: clean(turn.updatedAt),
   };
 }
 
 export function snapshotReplacedTurn(replacement) {
-  return {
-    turnScopeId: requireCanonicalTurnScopeId(replacement.turnScopeId),
-    replacementDialogProcessId: clean(replacement.replacementDialogProcessId),
-    replacementTurnScopeId: requireCanonicalTurnScopeId(replacement.replacementTurnScopeId),
-    replacementUserMessageUid: clean(replacement.replacementUserMessageUid),
-    requestHash: clean(replacement.requestHash),
-    commandId: clean(replacement.commandId),
-    committedAggregateVersion: replacement.committedAggregateVersion,
-    replacedTurnScopeIds: replacement.replacedTurnScopeIds.map(requireCanonicalTurnScopeId),
-    sequence: replacement.sequence,
-    committedAt: clean(replacement.committedAt),
-  };
+  const errors = collectTurnReplacementTombstoneErrors(replacement, replacement?.sequence);
+  if (errors.length) throw new TypeError(`invalid turn replacement: ${errors.join(",")}`);
+  return { ...replacement, replacedTurnScopeIds: [...replacement.replacedTurnScopeIds] };
 }

@@ -41,8 +41,7 @@ test("execution listener keeps strict attachment lifecycle payloads unchanged up
   };
   const lifecycle = createAttachmentLifecycleEvent({
     eventType: ATTACHMENT_EVENT_TYPE.PARSED,
-    eventVersion: 1,
-    attachmentEventId: "attachment-event-a",
+    eventVersion: 2,
     identity,
     status: ATTACHMENT_LIFECYCLE.PARSED,
     occurredAt: "2026-08-16T00:00:00.000Z",

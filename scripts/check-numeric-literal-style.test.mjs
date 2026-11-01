@@ -22,3 +22,12 @@ test("does not treat digits inside identifiers as literals", () => {
 test("ignores separators inside strings and comments", () => {
   assert.deepEqual(tokensOf('"18_000_000"; `1_0`; // 1_0\n/* 2_0 */'), []);
 });
+
+test("preserves token locations across comments, escaped quotes and templates", () => {
+  const source = '/* 1_0\n */ const n = 2_0;\n"x\\"3_0"; 4_0;\n`5_0`; // 6_0\n7_0;';
+  assert.deepEqual(scanCodeTokens("sample.js", source), [
+    { file: "sample.js", line: 2, column: 15, token: "2_0" },
+    { file: "sample.js", line: 3, column: 11, token: "4_0" },
+    { file: "sample.js", line: 5, column: 1, token: "7_0" },
+  ]);
+});

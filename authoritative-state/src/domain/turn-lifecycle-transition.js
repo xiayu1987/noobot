@@ -5,6 +5,7 @@
  */
 import {
   TURN_ACTION,
+  assertTurnRecord,
   TURN_EVENT,
   TURN_PHASE,
   createCommandRequestHash,
@@ -18,55 +19,29 @@ import {
   isFinalizeRequestTurnEvent,
   isSettlingTurnEvent,
   isTerminalTurnState,
-  MESSAGE_REMOVED_FIELD_NAME,
-  normalizeTurnContinuationSource,
-  normalizeTurnFailure,
   normalizeTurnTerminalStatus,
   validateExecutionIdentity,
+  selectTurnRequestExecutionIdentity,
+  findTurnExecutionIdentityConflict,
+  TURN_REQUEST_EXECUTION_FIELDS,
 } from "@noobot/session-protocol";
-import { isCanonicalText, isPlainObject, text } from "@noobot/shared/value";
-
-export const integer = (value, fallback = 0) =>
-  Number.isInteger(Number(value)) && Number(value) >= 0 ? Number(value) : fallback;
-
-function normalizeOrigin(origin) {
-  if (!isPlainObject(origin)) return {};
-  return Object.fromEntries(
-    Object.entries(origin).sort(([left], [right]) => left.localeCompare(right)),
-  );
-}
-
-const EXECUTION_IDENTITY_FIELDS = Object.freeze([
-  "executionId",
-  "executionKind",
-  "parentExecutionId",
-  "rootExecutionId",
-  "stage",
-]);
-
-function pickExecutionIdentity(source) {
-  return {
-    ...Object.fromEntries(EXECUTION_IDENTITY_FIELDS.map((field) => [field, text(source[field])])),
-    origin: normalizeOrigin(source.origin),
-  };
-}
+import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
 
 function resolveRequestAction(eventType, input, current) {
   if (eventType === TURN_EVENT.STOP_ACCEPTED) return TURN_ACTION.STOP;
-  return text(current ? current.action : input.action);
+  return current ? current.action : input.action;
 }
 
 export function resolveLifecycleTransitionRequest(lifecycle, input, current) {
   const identitySource = current || input;
-  const turnScopeId = text(input.turnScopeId);
-  const commandId = text(input.commandId);
-  const eventType = text(input.eventType);
-  const phase = text(input.phase);
-  const executionIdentity = pickExecutionIdentity(identitySource);
-  const presentationMessageId = text(identitySource.presentationMessageId);
+  const { turnScopeId, commandId, eventType, phase } = input;
+  const executionIdentity = selectTurnRequestExecutionIdentity(identitySource);
+  const presentationMessageId = identitySource.presentationMessageId;
   const dialogProcessId = identitySource.dialogProcessId;
   const action = resolveRequestAction(eventType, input, current);
-  const continuationSource = normalizeTurnContinuationSource(identitySource.continuationSource);
+  const continuationSource = current
+    ? current.continuationSource
+    : (input.continuationSource ?? null);
   return {
     lifecycle,
     input,
@@ -90,56 +65,72 @@ const STORED_IDENTITY_CONFLICTS = Object.freeze([
 
 function findStoredIdentityConflict(input, current) {
   const conflict = STORED_IDENTITY_CONFLICTS.find(([field]) => {
-    const proposed = text(input[field]);
-    return proposed && proposed !== current[field];
+    return Object.hasOwn(input, field) && input[field] !== current[field];
   });
   return conflict ? conflict[1] : "";
 }
 
 function validateRequestIdentity(request) {
-  const { lifecycle, input, current, turnScopeId, commandId, eventType } = request;
-  if (!turnScopeId || !commandId || !text(input.causationId) || !eventType) {
+  const { lifecycle, input, current, turnScopeId, eventType } = request;
+  if (
+    !isCanonicalText(input.turnScopeId) ||
+    !isCanonicalText(input.commandId) ||
+    !isCanonicalText(input.causationId) ||
+    !eventType
+  ) {
     return "invalid_lifecycle_identity";
   }
-  if (Object.hasOwn(input, MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID)) {
-    return "turn_message_id_noncanonical";
-  }
   if (lifecycle.replacedTurns[turnScopeId]) return "turn_replaced";
-  if (!request.presentationMessageId) return "turn_message_identity_incomplete";
+  if (!isCanonicalText(current ? current.presentationMessageId : input.presentationMessageId))
+    return "turn_message_identity_incomplete";
   if (!isCanonicalText(request.dialogProcessId)) return "missing_dialog_process_id";
-  if (!current) return text(input.startedAt) ? "" : "turn_started_at_missing";
+  if (!current) return isCanonicalText(input.startedAt) ? "" : "turn_started_at_missing";
   return findStoredIdentityConflict(input, current);
 }
 
 function requestHashFor(request) {
   const { input } = request;
+  const terminalStatus = normalizeTurnTerminalStatus(input.terminalStatus);
+  const terminalRequest =
+    terminalStatus === null
+      ? null
+      : Object.fromEntries(
+          Object.entries(terminalStatus).filter(([field]) => field !== "updatedAt"),
+        );
   return createCommandRequestHash({
     eventType: request.eventType,
     turnScopeId: request.turnScopeId,
     phase: request.phase,
-    action: text(input.action),
+    action: input.action,
     userMessage:
       input.userMessage && typeof input.userMessage === "object"
         ? {
-            content: text(input.userMessage.content),
-            userMessageId: text(input.userMessage.userMessageId),
-            parentDialogProcessId: text(input.userMessage.parentDialogProcessId),
+            content: input.userMessage.content,
+            userMessageId: input.userMessage.userMessageId,
+            parentDialogProcessId: input.userMessage.parentDialogProcessId,
             messageOrigin: input.userMessage.messageOrigin,
           }
         : null,
-    startedAt: text(input.startedAt),
-    finishedAt: text(input.finishedAt),
+    startedAt: input.startedAt,
+    finishedAt: input.finishedAt,
     presentationMessageId: request.presentationMessageId,
     continuationSource: request.continuationSource,
-    completionCommitId: text(input.completionCommitId),
-    failure: input.failure && typeof input.failure === "object" ? input.failure : null,
-    terminalStatus: normalizeTurnTerminalStatus(input.terminalStatus),
-    ...pickExecutionIdentity(input),
+    completionCommitId: input.completionCommitId,
+    failure: Object.hasOwn(input, "failure") ? input.failure : null,
+    terminalStatus: terminalRequest,
+    ...selectTurnRequestExecutionIdentity(input),
   });
 }
 
 function executionIdentityFailure({ current, executionIdentity, input, turnScopeId }) {
   if (!current) {
+    if (
+      !isPlainObject(executionIdentity.origin) ||
+      TURN_REQUEST_EXECUTION_FIELDS.some(
+        (field) => executionIdentity[field] !== "" && !isCanonicalText(executionIdentity[field]),
+      )
+    )
+      return "execution_identity_invalid";
     const validation = validateExecutionIdentity({
       ...executionIdentity,
       sessionId: input.sessionId,
@@ -147,14 +138,9 @@ function executionIdentityFailure({ current, executionIdentity, input, turnScope
     });
     return validation.valid ? "" : "execution_identity_invalid";
   }
-  const conflict = EXECUTION_IDENTITY_FIELDS.some(
-    (field) => text(input[field]) && text(input[field]) !== executionIdentity[field],
-  );
-  const originConflict =
-    isPlainObject(input.origin) &&
-    Object.keys(input.origin).length > 0 &&
-    JSON.stringify(normalizeOrigin(input.origin)) !== JSON.stringify(executionIdentity.origin);
-  return conflict || originConflict ? "execution_identity_conflict" : "";
+  return findTurnExecutionIdentityConflict(input, executionIdentity)
+    ? "execution_identity_conflict"
+    : "";
 }
 
 function validateCurrentIdentity(request) {
@@ -173,10 +159,10 @@ function validateCurrentIdentity(request) {
 function validateFinalizeCommit(request) {
   const { input, current, eventType, phase, commandId } = request;
   if (isFinalizeRequestTurnEvent(eventType)) {
-    return text(input.completionCommitId) ? "" : "missing_completion_commit_id";
+    return input.completionCommitId ? "" : "missing_completion_commit_id";
   }
-  if (text(input.completionCommitId)) return "unexpected_completion_commit_id";
-  const intentCommandId = text(current?.finalizeIntent?.commandId);
+  if (input.completionCommitId) return "unexpected_completion_commit_id";
+  const intentCommandId = current?.finalizeIntent?.commandId;
   if (isRetryableFinalizeFailureEvent({ eventType, phase, failure: input.failure })) {
     return intentCommandId ? "" : "finalize_intent_missing";
   }
@@ -207,12 +193,6 @@ function validateRequestedAction(request) {
   }
   if (eventType === TURN_EVENT.ACTION_ACCEPTED && continuationSource) {
     return "unexpected_continuation_source";
-  }
-  if (
-    eventType === TURN_EVENT.FAILED &&
-    (!text(request.input.failure?.code) || !text(request.input.failure?.message))
-  ) {
-    return "turn_failure_incomplete";
   }
   const finalizeFailure = validateFinalizeCommit(request);
   if (finalizeFailure) return finalizeFailure;
@@ -261,9 +241,9 @@ function resolveFinalizeType(eventType, phase) {
 function createPendingFinalizeIntent(input, currentIntent, type, nowValue) {
   return {
     type,
-    commandId: text(input.completionCommitId),
+    commandId: input.completionCommitId,
     retryable: true,
-    createdAt: text(currentIntent.createdAt) || nowValue,
+    createdAt: currentIntent ? currentIntent.createdAt : nowValue,
     updatedAt: nowValue,
   };
 }
@@ -277,7 +257,7 @@ function createRetryFinalizeIntent(currentIntent, nowValue) {
 }
 
 function createFinalizeIntent({ input, current, eventType, phase, nowValue }) {
-  const currentIntent = (current || {}).finalizeIntent || {};
+  const currentIntent = current ? current.finalizeIntent : null;
   if (isFinalizeRequestTurnEvent(eventType)) {
     const type = resolveFinalizeType(eventType, phase);
     return createPendingFinalizeIntent(input, currentIntent, type, nowValue);
@@ -286,7 +266,18 @@ function createFinalizeIntent({ input, current, eventType, phase, nowValue }) {
     return createRetryFinalizeIntent(currentIntent, nowValue);
   }
   if (isCompletionCommitTurnEvent(eventType)) return null;
-  return currentIntent.type ? currentIntent : null;
+  if (eventType === TURN_EVENT.FAILED) return null;
+  return currentIntent;
+}
+
+function projectCompletionCoordinates({ input, current, eventType }, state, nowValue) {
+  let summaryVersion = current ? current.summaryVersion : 0;
+  if (Object.hasOwn(input, "summaryVersion")) summaryVersion = input.summaryVersion;
+  let completionCommitId = current ? current.completionCommitId : "";
+  if (isCompletionCommitTurnEvent(eventType)) completionCommitId = input.commandId;
+  let finishedAt = current ? current.finishedAt : "";
+  if (isTerminalTurnState(state)) finishedAt = input.finishedAt || nowValue;
+  return { summaryVersion, completionCommitId, finishedAt };
 }
 
 export function projectLifecycleTransition(request, transition, nowValue) {
@@ -309,22 +300,16 @@ export function projectLifecycleTransition(request, transition, nowValue) {
     executionState: deriveTurnExecutionState(eventType, currentValue.executionState),
     revision,
     sequence,
-    summaryVersion: integer(input.summaryVersion, integer(currentValue.summaryVersion)),
-    completionCommitId: isCompletionCommitTurnEvent(eventType)
-      ? commandId
-      : text(currentValue.completionCommitId),
+    ...projectCompletionCoordinates(request, state, nowValue),
     terminalStatus: normalizeTurnTerminalStatus(
       settling ? input.terminalStatus : currentValue.terminalStatus,
     ),
-    failure: eventType === TURN_EVENT.FAILED ? normalizeTurnFailure(input.failure) : null,
+    failure: eventType === TURN_EVENT.FAILED ? structuredClone(input.failure) : null,
     finalizeIntent: createFinalizeIntent({ input, current, eventType, phase, nowValue }),
     continuationSource: request.continuationSource,
-    continuedByTurnScopeId: text(currentValue.continuedByTurnScopeId),
-    startedAt: current ? current.startedAt : text(input.startedAt),
-    finishedAt: isTerminalTurnState(state)
-      ? text(input.finishedAt) || nowValue
-      : text(currentValue.finishedAt),
-    createdAt: text(currentValue.createdAt) || nowValue,
+    continuedByTurnScopeId: current ? current.continuedByTurnScopeId : "",
+    startedAt: current ? current.startedAt : input.startedAt,
+    createdAt: current ? current.createdAt : nowValue,
     updatedAt: nowValue,
   };
   return { turn, revision, sequence };
@@ -333,6 +318,7 @@ export function projectLifecycleTransition(request, transition, nowValue) {
 export function commitLifecycleTransition(request, projection, requestHash, nowValue) {
   const { lifecycle, turnScopeId, commandId, eventType } = request;
   const { turn, revision, sequence } = projection;
+  assertTurnRecord(turn);
   if (eventType === TURN_EVENT.ACTION_ACCEPTED && request.action === TURN_ACTION.CONTINUE) {
     lifecycle.turns[request.continuationSource.turnScopeId].continuedByTurnScopeId = turnScopeId;
   }

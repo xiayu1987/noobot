@@ -129,68 +129,72 @@ export function projectAuthorityOutboxJournal(records) {
   requireOutbox(Array.isArray(records), "journal records must be an array");
   const byEventId = new Map();
   for (const record of records) {
-    assertAuthorityOutboxJournalRecord(record);
-    const eventId = record.eventId;
-    if (record.op === AUTHORITY_OUTBOX_JOURNAL_OP.COMMIT) {
-      const [committed] = normalizeAuthorityEventOutbox([
-        {
-          eventId,
-          envelope: record.envelope,
-          committedAt: record.committedAt,
-          deliveries: {},
-        },
-      ]);
-      const existing = byEventId.get(eventId);
-      if (existing) {
-        requireOutbox(
-          JSON.stringify(existing.envelope) === JSON.stringify(committed.envelope) &&
-            existing.committedAt === committed.committedAt,
-          `conflicting commit: ${eventId}`,
-        );
-      } else byEventId.set(eventId, committed);
-      continue;
-    }
-    if (record.op === AUTHORITY_OUTBOX_JOURNAL_OP.REMOVE) {
-      byEventId.delete(eventId);
-      continue;
-    }
-    const entry = byEventId.get(eventId);
-    const consumerId = requireOutboxText(record.consumerId, "consumerId");
-    requireOutbox(Boolean(entry), `delivery has no committed event: ${eventId}`);
-    const current = authorityEventConsumerDelivery(entry, consumerId);
-    if (record.op === AUTHORITY_OUTBOX_JOURNAL_OP.ATTEMPT) {
-      requireOutboxTime(record.attemptedAt, "attemptedAt");
-      if (current.deliveredAt) continue;
-      byEventId.set(
-        eventId,
-        withConsumerDelivery(entry, consumerId, {
-          attempts: current.attempts + 1,
-          lastAttemptAt: record.attemptedAt,
-        }),
-      );
-      continue;
-    }
-    if (record.op === AUTHORITY_OUTBOX_JOURNAL_OP.ACK) {
-      requireOutboxTime(record.deliveredAt, "deliveredAt");
-      requireOutbox(
-        record.orderingDomain === entry.envelope.ordering.domain &&
-          record.orderingScopeId === entry.envelope.ordering.scopeId &&
-          record.sequence === entry.envelope.ordering.sequence,
-        `acknowledgement ordering mismatch: ${eventId}`,
-      );
-      if (current.deliveredAt) continue;
-      byEventId.set(
-        eventId,
-        withConsumerDelivery(entry, consumerId, {
-          deliveredAt: record.deliveredAt,
-          orderingDomain: record.orderingDomain,
-          orderingScopeId: record.orderingScopeId,
-          sequence: record.sequence,
-        }),
-      );
-    }
+    applyAuthorityOutboxJournalRecord(byEventId, record);
   }
   return normalizeAuthorityEventOutbox([...byEventId.values()]);
+}
+
+function applyAuthorityOutboxJournalRecord(byEventId, record) {
+  assertAuthorityOutboxJournalRecord(record);
+  const eventId = record.eventId;
+  if (record.op === AUTHORITY_OUTBOX_JOURNAL_OP.COMMIT) {
+    const [committed] = normalizeAuthorityEventOutbox([
+      {
+        eventId,
+        envelope: record.envelope,
+        committedAt: record.committedAt,
+        deliveries: {},
+      },
+    ]);
+    const existing = byEventId.get(eventId);
+    if (existing) {
+      requireOutbox(
+        JSON.stringify(existing.envelope) === JSON.stringify(committed.envelope) &&
+          existing.committedAt === committed.committedAt,
+        `conflicting commit: ${eventId}`,
+      );
+    } else byEventId.set(eventId, committed);
+    return;
+  }
+  if (record.op === AUTHORITY_OUTBOX_JOURNAL_OP.REMOVE) {
+    byEventId.delete(eventId);
+    return;
+  }
+  const entry = byEventId.get(eventId);
+  const consumerId = requireOutboxText(record.consumerId, "consumerId");
+  requireOutbox(Boolean(entry), `delivery has no committed event: ${eventId}`);
+  const current = authorityEventConsumerDelivery(entry, consumerId);
+  if (record.op === AUTHORITY_OUTBOX_JOURNAL_OP.ATTEMPT) {
+    requireOutboxTime(record.attemptedAt, "attemptedAt");
+    if (current.deliveredAt) return;
+    byEventId.set(
+      eventId,
+      withConsumerDelivery(entry, consumerId, {
+        attempts: current.attempts + 1,
+        lastAttemptAt: record.attemptedAt,
+      }),
+    );
+    return;
+  }
+  if (record.op === AUTHORITY_OUTBOX_JOURNAL_OP.ACK) {
+    requireOutboxTime(record.deliveredAt, "deliveredAt");
+    requireOutbox(
+      record.orderingDomain === entry.envelope.ordering.domain &&
+        record.orderingScopeId === entry.envelope.ordering.scopeId &&
+        record.sequence === entry.envelope.ordering.sequence,
+      `acknowledgement ordering mismatch: ${eventId}`,
+    );
+    if (current.deliveredAt) return;
+    byEventId.set(
+      eventId,
+      withConsumerDelivery(entry, consumerId, {
+        deliveredAt: record.deliveredAt,
+        orderingDomain: record.orderingDomain,
+        orderingScopeId: record.orderingScopeId,
+        sequence: record.sequence,
+      }),
+    );
+  }
 }
 
 export function recordAuthorityEventDeliveryAttempt(source, { eventId, consumerId, attemptedAt }) {

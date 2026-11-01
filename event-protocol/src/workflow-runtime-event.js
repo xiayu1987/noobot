@@ -141,6 +141,35 @@ function isPositiveInteger(value) {
   return Number.isInteger(value) && value >= 1;
 }
 
+function collectNodeExecutionReferenceErrors(node) {
+  const errors = [];
+  if (node.activeChildExecutionId !== "" && !isCanonicalText(node.activeChildExecutionId)) {
+    errors.push("invalid_active_child_execution_id");
+  }
+  const attempts = node.attemptExecutionIds;
+  if (
+    !Array.isArray(attempts) ||
+    !attempts.every(isCanonicalText) ||
+    new Set(attempts).size !== attempts.length
+  ) {
+    errors.push("invalid_attempt_execution_ids");
+  }
+  return errors;
+}
+
+export function selectWorkflowNodeChildExecutionIds(node) {
+  if (!isPlainObject(node)) throw new TypeError("workflow node must be an object");
+  const errors = collectNodeExecutionReferenceErrors(node);
+  if (errors.length) throw new TypeError(`invalid workflow node: ${errors.join(",")}`);
+  return [
+    ...new Set(
+      node.activeChildExecutionId === ""
+        ? node.attemptExecutionIds
+        : [node.activeChildExecutionId, ...node.attemptExecutionIds],
+    ),
+  ];
+}
+
 const WORKFLOW_NODE_FACT_FIELDS = Object.freeze([
   "workflowRunId",
   "commandId",
@@ -225,6 +254,7 @@ function isCanonicalPlanningNode(node) {
     hasOnlyFields(node, PLANNING_NODE_FIELDS) &&
     isCanonicalText(node.nodeExecutionId) &&
     isCanonicalText(node.eventId) &&
+    collectNodeExecutionReferenceErrors(node).length === 0 &&
     WORKFLOW_NODE_STATUSES.has(node.status) &&
     isPositiveInteger(node.revision) &&
     isPositiveInteger(node.sequence)
@@ -233,6 +263,7 @@ function isCanonicalPlanningNode(node) {
 
 function validateNodeStateFields(envelope, payload, errors) {
   if (!hasOnlyFields(payload, NODE_STATE_PAYLOAD_FIELDS)) errors.push("unknown_node_state_field");
+  errors.push(...collectNodeExecutionReferenceErrors(payload));
   if (!WORKFLOW_NODE_STATUSES.has(payload.status)) errors.push("missing_node_status");
   if (!isPositiveInteger(envelope?.ordering?.revision)) errors.push("invalid_node_revision");
 }

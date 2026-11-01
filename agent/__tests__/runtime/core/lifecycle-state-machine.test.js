@@ -116,21 +116,22 @@ test("agent lifecycle phase methods and terminal branch payloads are standardize
 
   assert.equal(typeof machine.stop, "undefined");
 
-  machine.userStop({ reason: "user stopped" });
+  const skippedPersistence = {
+    status: "skipped",
+    reason: "non_user_abort",
+    source: "runner_abort_catch",
+    messageCount: 0,
+    systemCount: 0,
+    historyCount: 0,
+    incrementalCount: 0,
+  };
+  machine.userStop({ reason: "user stopped", stoppedSnapshotPersistence: skippedPersistence });
   assert.equal(events.at(-1).data.state, AGENT_LIFECYCLE_BRANCH_STATE.USER_STOPPED);
   assert.equal(events.at(-1).data.branchState, AGENT_LIFECYCLE_BRANCH_STATE.USER_STOPPED);
   assert.equal(events.at(-1).data.stopType, "user_stop");
   assert.equal(events.at(-1).data.canResume, false);
   assert.equal(events.at(-1).data.error, "user stopped");
-  assert.deepEqual(events.at(-1).data.stoppedSnapshotPersistence, {
-    status: "skipped",
-    reason: "missing_persistence_result",
-    source: "lifecycle_stop",
-    messageCount: 0,
-    systemCount: 0,
-    historyCount: 0,
-    incrementalCount: 0,
-  });
+  assert.deepEqual(events.at(-1).data.stoppedSnapshotPersistence, skippedPersistence);
 
   machine.userStop({
     reason: "user stopped",
@@ -149,13 +150,41 @@ test("agent lifecycle phase methods and terminal branch payloads are standardize
   assert.equal(events.at(-1).data.stoppedSnapshotPersistence.messageCount, 2);
   assert.equal(events.at(-1).data.canResume, true);
 
-  machine.userStop({ error: { type: "user_stop" } });
-  assert.equal(events.at(-1).data.error, "user_stop");
+  const eventCount = events.length;
+  assert.throws(() => machine.userStop({ reason: "user stopped" }), /stoppedSnapshotPersistence/);
+  assert.throws(
+    () => machine.userStop({ reason: "", stoppedSnapshotPersistence: skippedPersistence }),
+    /reason text/,
+  );
+  assert.throws(
+    () =>
+      machine.interrupt({
+        reason: "timeout",
+        stopType: "",
+        stoppedSnapshotPersistence: skippedPersistence,
+      }),
+    /protocol abort stopType/,
+  );
+  assert.throws(
+    () =>
+      machine.interrupt({
+        reason: "timeout",
+        stopType: "user_stop",
+        stoppedSnapshotPersistence: skippedPersistence,
+      }),
+    /protocol abort stopType/,
+  );
+  assert.equal(events.length, eventCount);
 
-  machine.interrupt({ reason: "timeout", stopType: "timeout" });
+  machine.interrupt({
+    reason: "run timeout",
+    stopType: "run_timeout",
+    stoppedSnapshotPersistence: skippedPersistence,
+  });
   assert.equal(events.at(-1).data.state, AGENT_LIFECYCLE_BRANCH_STATE.INTERRUPTED);
   assert.equal(events.at(-1).data.branchState, AGENT_LIFECYCLE_BRANCH_STATE.INTERRUPTED);
-  assert.equal(events.at(-1).data.stopType, "timeout");
+  assert.equal(events.at(-1).data.stopType, "run_timeout");
+  assert.equal(events.at(-1).data.error, "run timeout");
   assert.equal(events.at(-1).data.canResume, false);
 
   machine.fail({ error: new Error("boom") });

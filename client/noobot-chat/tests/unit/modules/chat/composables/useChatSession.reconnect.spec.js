@@ -26,7 +26,10 @@ import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model
 import { selectToolTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
 import { selectActivityTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/activityTimeline.js";
 import { FrontendRunState } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
-import { confirmTurnRuntimeDeletion } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import {
+  confirmTurnRuntimeDeletion,
+  selectExecutionChildren,
+} from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { executionTurnKey } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistryIdentity.js";
 import { createAuthoritativeMessageEnvelope } from "../helpers/useReconnectReplayHelper.js";
 import { createExecutionQueryEnvelope } from "@noobot/event-protocol/execution-query";
@@ -565,6 +568,7 @@ describe("useChatSession reconnect replay", () => {
     store.turnRuntimeRegistry.executions["workflow-root"] = {
       executionId: "workflow-root",
       executionKind: "workflow",
+      parentExecutionId: "",
       rootExecutionId: "workflow-root",
       sessionId: "workflow-session",
       turnScopeId: "workflow-turn",
@@ -645,9 +649,11 @@ describe("useChatSession reconnect replay", () => {
       }),
     );
     expect(store.turnRuntimeRegistry.executions[CHILD_AGENT_ID]).toMatchObject(child);
-    expect(store.turnRuntimeRegistry.childExecutionIdsByParentId["workflow-root"]).toEqual([
-      CHILD_AGENT_ID,
-    ]);
+    expect(
+      selectExecutionChildren(store.turnRuntimeRegistry, "workflow-root").map(
+        (item) => item.executionId,
+      ),
+    ).toEqual([CHILD_AGENT_ID]);
     expect(store.turnRuntimeRegistry.executions["workflow-root"]).toMatchObject({
       revision: 2,
       sequence: 3,

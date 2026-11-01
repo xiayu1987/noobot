@@ -85,6 +85,66 @@ export const MESSAGE_CARD_HOST_STATES = Object.freeze(Object.values(MESSAGE_CARD
 
 export const MESSAGE_CARD_HOST_STATE_VERSION = "subSessionMessageRegistryVersion";
 
+export function requireSelectedSessionDocument(document, sessionId) {
+  if (document === null) return null;
+  if (!isPlainObject(document) || document.sessionId !== sessionId || !isCanonicalText(sessionId)) {
+    throw new TypeError("selected session document must carry the requested sessionId");
+  }
+  if (!Array.isArray(document.messages)) {
+    throw new TypeError("selected session document messages must be an array");
+  }
+  return document;
+}
+
+function hasSelectedExecutionIdentity(execution) {
+  return (
+    isPlainObject(execution) &&
+    isCanonicalText(execution.executionId) &&
+    isCanonicalText(execution.sessionId) &&
+    isCanonicalText(execution.turnScopeId)
+  );
+}
+
+function requireSelectedExecutionList(items, rootExecutionId) {
+  const executionIds = new Set([rootExecutionId]);
+  for (const execution of items) {
+    if (!hasSelectedExecutionIdentity(execution)) {
+      throw new TypeError("selected execution list identity is invalid");
+    }
+    if (executionIds.has(execution.executionId)) {
+      throw new TypeError("selected execution list contains a duplicate executionId");
+    }
+    executionIds.add(execution.executionId);
+  }
+}
+
+export function requireSelectedExecutionDetail(detail, { executionId, sessionId }) {
+  if (detail === null) return null;
+  if (!isPlainObject(detail) || !isPlainObject(detail.execution)) {
+    throw new TypeError("selected execution detail must carry an execution");
+  }
+  const execution = detail.execution;
+  if (
+    !isCanonicalText(executionId) ||
+    execution.executionId !== executionId ||
+    !hasSelectedExecutionIdentity(execution)
+  ) {
+    throw new TypeError("selected execution detail identity is invalid");
+  }
+  if (sessionId !== undefined && execution.sessionId !== sessionId) {
+    throw new TypeError("selected execution detail belongs to another session");
+  }
+  if (requireSelectedSessionDocument(detail.session, execution.sessionId) === null) {
+    throw new TypeError("selected execution detail requires a loaded session document");
+  }
+  if (!Array.isArray(detail.children) || !Array.isArray(detail.descendants)) {
+    throw new TypeError("selected execution detail requires children and descendants arrays");
+  }
+  requireSelectedExecutionList(detail.children, executionId);
+  requireSelectedExecutionList(detail.descendants, executionId);
+  return detail;
+}
+
 export const HOST_CAPABILITY_ERROR_CODE = Object.freeze({
   MISSING: "PLUGIN_HOST_CAPABILITY_MISSING",
 });
@@ -103,6 +163,24 @@ function invalidExtensionContext(point, field) {
   return Object.assign(new TypeError(`${point} context invalid: ${field}`), {
     code: EXTENSION_CONTEXT_ERROR_CODE.INVALID,
   });
+}
+
+export function requireRuntimeStreamRouteContext(context) {
+  const point = EXTENSION_POINTS.RUNTIME_STREAM_ROUTE;
+  if (!isPlainObject(context)) throw invalidExtensionContext(point, "context");
+  if (context.source !== "live" && context.source !== "reconnect") {
+    throw invalidExtensionContext(point, "source");
+  }
+  if (!isFunction(context.isCurrentActiveSession)) {
+    throw invalidExtensionContext(point, "isCurrentActiveSession");
+  }
+  if (
+    context.logRuntimeProjectionDiagnostics !== undefined &&
+    !isFunction(context.logRuntimeProjectionDiagnostics)
+  ) {
+    throw invalidExtensionContext(point, "logRuntimeProjectionDiagnostics");
+  }
+  return context;
 }
 
 export function createSessionArtifactPanelContext({

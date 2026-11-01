@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { turnRecord } from "../helpers/turn-record.js";
 import { countCanonicalThinkingDetailEvents } from "@noobot/event-protocol/tool-timeline";
 import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
@@ -193,14 +194,14 @@ test("summary checkpoint receipts survive turn-journal persistence with historic
       activeTurnScopeId: "turn-current",
       sequence: 1,
       turns: {
-        "turn-current": {
+        "turn-current": turnRecord({
           revision: 1,
           sequence: 1,
           turnScopeId: "turn-current",
           dialogProcessId: "dialog-current",
           presentationMessageId: "presentation-current",
           state: "processing",
-        },
+        }),
       },
     };
     await repository.save(userId, applySessionMessageFacts(session), {

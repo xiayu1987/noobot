@@ -100,7 +100,7 @@ describe("useReconnectReplay", () => {
       channelSessionId: "s-1",
     });
 
-    expect(result?.applied).not.toBe(false);
+    expect(result).toEqual({ applied: true, reason: "interaction_request_projected" });
     expect(mocks.setPendingInteractionRequest).toHaveBeenCalledWith(
       expect.objectContaining({
         requestId: "req-late",
@@ -111,5 +111,26 @@ describe("useReconnectReplay", () => {
 
     expect(refs.sending.value).toBe(false);
     vi.useRealTimers();
+  });
+
+  it("rejects interaction replay when the pending interaction consumer fails", async () => {
+    const { api, mocks } = createFixture();
+    const error = new Error("interaction consumer failed");
+    mocks.setPendingInteractionRequest.mockImplementation(() => {
+      throw error;
+    });
+    const interaction = createInteractionEnvelope({
+      requestId: "req-rejected",
+      dialogProcessId: "dp-rejected",
+      interactionType: "confirm",
+      content: "continue?",
+    });
+
+    await expect(
+      api.applyReconnectEvent(interaction.identity.eventType, interaction, {
+        channelSessionId: "s-1",
+      }),
+    ).rejects.toBe(error);
+    expect(mocks.clearPendingInteraction).not.toHaveBeenCalled();
   });
 });

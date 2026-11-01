@@ -3,9 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { SESSION_NOT_FOUND_REASON } from "@noobot/session-protocol";
 import { mergeUserMetaParsedResults } from "@noobot/context-protocol/policy/user-meta-backwrite";
-import { resolveDeletedSessionAs } from "./session-deleted-result.js";
 import { text } from "@noobot/shared/value";
 
 function userMetaSourceError(message, code) {
@@ -35,12 +33,11 @@ export async function recordUserMetaParsedResult(payload = {}) {
   if (!userId || !sessionId || !sourceMessageUid) {
     throw new TypeError("user_meta parsed result requires userId, sessionId and source messageUid");
   }
-  const mutation = this.sessionRepo.withSessionMutation(
+  return this.sessionRepo.withSessionMutation(
     userId,
     sessionId,
     async () => {
-      const session = await this.sessionRepo.findById(userId, sessionId, { persistenceContext });
-      if (!session) return { recorded: false, reason: SESSION_NOT_FOUND_REASON };
+      const session = await this.sessionRepo.requireById(userId, sessionId, { persistenceContext });
       const source = findUserMetaSource(session.messages, sourceMessageUid);
       source.userMetaParsedResults = mergeUserMetaParsedResults(
         source.userMetaParsedResults,
@@ -48,9 +45,8 @@ export async function recordUserMetaParsedResult(payload = {}) {
       );
       session.updatedAt = this.now();
       await this.sessionRepo.save(userId, session, { persistenceContext });
-      return { recorded: true, userMetaParsedResults: source.userMetaParsedResults };
+      return { userMetaParsedResults: source.userMetaParsedResults };
     },
     { persistenceContext },
   );
-  return resolveDeletedSessionAs(mutation, { recorded: false });
 }

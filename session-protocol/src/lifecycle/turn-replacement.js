@@ -5,6 +5,9 @@
  */
 import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
 
+import { collectTurnScopeIdErrors } from "./turn-field-assertions.js";
+import { isCanonicalTurnScopeId } from "../identity/turn-scope-identity.js";
+
 const TURN_REPLACEMENT_PROTOCOL_VERSION = 1;
 const TURN_REPLACEMENT_EVENT = "turn.replaced";
 
@@ -94,4 +97,53 @@ export function createTurnReplacementCommit({
     ...commit,
     replacedTurnScopeIds: Object.freeze([...commit.replacedTurnScopeIds]),
   });
+}
+
+export function collectTurnReplacementTombstoneErrors(replacement, lifecycleSequence) {
+  const errors = [];
+  const turnScopeId = replacement?.turnScopeId;
+  const replacementTurnScopeId = replacement?.replacementTurnScopeId;
+  const replacedTurnScopeIds = Array.isArray(replacement?.replacedTurnScopeIds)
+    ? replacement.replacedTurnScopeIds
+    : [];
+  errors.push(
+    ...collectTurnScopeIdErrors(turnScopeId, {
+      missingCode: "missing_replaced_turn_scope_id",
+      nonCanonicalCode: "non_canonical_replaced_turn_scope_id",
+    }),
+  );
+  if (!isCanonicalText(replacement?.replacementDialogProcessId))
+    errors.push("missing_replacement_dialog_process_id");
+  if (!isCanonicalText(replacement?.requestHash)) errors.push("missing_replacement_request_hash");
+  errors.push(
+    ...collectTurnScopeIdErrors(replacementTurnScopeId, {
+      missingCode: "missing_replacement_turn_scope_id",
+      nonCanonicalCode: "non_canonical_replacement_turn_scope_id",
+    }),
+  );
+  if (!isCanonicalText(replacement?.replacementUserMessageUid))
+    errors.push("missing_replacement_user_message_uid");
+  if (!isCanonicalText(replacement?.commandId)) errors.push("missing_replacement_command_id");
+  if (
+    !Number.isInteger(replacement?.committedAggregateVersion) ||
+    replacement.committedAggregateVersion < 1
+  )
+    errors.push("invalid_replacement_committed_version");
+  if (
+    !replacedTurnScopeIds.length ||
+    !replacedTurnScopeIds.every(isCanonicalTurnScopeId) ||
+    new Set(replacedTurnScopeIds).size !== replacedTurnScopeIds.length ||
+    !replacedTurnScopeIds.includes(turnScopeId)
+  )
+    errors.push("invalid_replaced_turn_scope_ids");
+  if (replacedTurnScopeIds.includes(replacementTurnScopeId))
+    errors.push("replacement_scope_reuses_replaced_scope");
+  if (
+    !Number.isInteger(replacement?.sequence) ||
+    replacement.sequence < 1 ||
+    replacement.sequence > lifecycleSequence
+  )
+    errors.push("invalid_replacement_sequence");
+  if (!isCanonicalText(replacement?.committedAt)) errors.push("missing_replacement_committed_at");
+  return errors;
 }
