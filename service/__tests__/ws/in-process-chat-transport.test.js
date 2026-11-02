@@ -72,6 +72,16 @@ test("client close resolves once and is idempotent", async () => {
   assert.equal(outcome.reason, "client closed");
 });
 
+test("close preserves UTF-8 reasons and rejects invalid input before closing", async () => {
+  const connection = createTransport().openConnection({ authInfo: { userId: "cli-user" } });
+  for (const reason of [null, false, 0, {}, []]) {
+    assert.throws(() => connection.close(reason), /close reason must be a string/);
+    assert.equal(connection.isOpen(), true);
+  }
+  connection.close("用户关闭 🔚");
+  assert.equal((await connection.closed).reason, "用户关闭 🔚");
+});
+
 test("in-process close aborts the running turn and releases the session", async () => {
   const authoritative = createAuthoritativeBot();
   let aborted = false;

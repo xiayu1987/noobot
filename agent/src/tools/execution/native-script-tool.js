@@ -3,6 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { activeRuntimeParams } from "@noobot/shared/runtime-params";
 import { cp, mkdir, mkdtemp, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
@@ -62,6 +64,7 @@ import {
 } from "@noobot/platform-compatibility/process";
 import { cleanupNativeTaskDirectory } from "./native-script-cleanup.js";
 import {
+  NATIVE_SCRIPT_EXECUTION_STATUS,
   NATIVE_SCRIPT_IPC_CHANNEL,
   NATIVE_SCRIPT_IPC_PENDING_CHANNELS,
   NATIVE_SCRIPT_IPC_RESULT_CHANNEL,
@@ -151,11 +154,20 @@ function validateScriptBody(value) {
   return body;
 }
 
-function resolveNativeTerminationMessage({ spawnError, protocolError, timedOut, timeoutMs }) {
+function resolveNativeTerminationMessage({
+  spawnError,
+  protocolError,
+  timedOut,
+  aborted,
+  timeoutMs,
+  scriptResult,
+}) {
   if (spawnError) return spawnError.message;
   if (protocolError) return protocolError;
   if (timedOut) return `native script timed out after ${timeoutMs}ms`;
-  return "native script aborted";
+  if (aborted) return "native script aborted";
+  if (scriptResult?.status === NATIVE_SCRIPT_EXECUTION_STATUS.FAILED) return scriptResult.error;
+  return undefined;
 }
 
 function runGeneratedScript({ scriptPath, cwd, env, timeoutMs, abortSignal, ipcHandlers = {} }) {
@@ -195,7 +207,7 @@ function runGeneratedScript({ scriptPath, cwd, env, timeoutMs, abortSignal, ipcH
       if (!forceKillTimer) {
         forceKillTimer = setTimeout(() => {
           terminationPromise = terminateProcessTree(child, "SIGKILL");
-        }, 2000);
+        }, TIME_THRESHOLDS.tools.nativeScriptForceKillGraceMs);
         forceKillTimer.unref?.();
       }
     };
@@ -253,7 +265,7 @@ function runGeneratedScript({ scriptPath, cwd, env, timeoutMs, abortSignal, ipcH
       await terminationPromise;
       const exitCode = spawnError || code === null ? null : code;
       const observedSignal = spawnError || !signal ? null : signal;
-      if (!spawnError && !timedOut && !aborted && exitCode === 0 && !scriptResult) {
+      if (!spawnError && !timedOut && !aborted && exitCode !== null && !scriptResult) {
         protocolError = "native script execution result is missing";
       }
       const outcome = projectScriptOutcome({
@@ -263,6 +275,7 @@ function runGeneratedScript({ scriptPath, cwd, env, timeoutMs, abortSignal, ipcH
           outputLimitExceeded: false,
           spawnFailed: Boolean(spawnError),
           protocolViolated: Boolean(protocolError),
+          scriptFailed: scriptResult?.status === NATIVE_SCRIPT_EXECUTION_STATUS.FAILED,
           exitCode,
           signal: observedSignal,
         }),
@@ -272,7 +285,9 @@ function runGeneratedScript({ scriptPath, cwd, env, timeoutMs, abortSignal, ipcH
           spawnError,
           protocolError,
           timedOut,
+          aborted,
           timeoutMs,
+          scriptResult,
         }),
       });
       resolve({
@@ -386,7 +401,7 @@ function buildNativeTaskScript({
   roots: { inputRoot, outputRoot, tempRoot },
   libreOfficeExecutable,
 }) {
-  return `import { createNativeScriptRuntime, executeNativeScriptBody } from ${JSON.stringify(new URL("./native-script-runtime.js", import.meta.url).href)};\nimport { publishNativeScriptResult } from ${JSON.stringify(new URL("./native-script-result.js", import.meta.url).href)};\nconst runtime = await createNativeScriptRuntime({ inputRoot: ${JSON.stringify(inputRoot)}, outputRoot: ${JSON.stringify(outputRoot)}, tempRoot: ${JSON.stringify(tempRoot)}, inputMap: ${JSON.stringify(inputMap)}, args: ${JSON.stringify(scriptArguments)}, timeoutMs: ${BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs}, libreOfficeExecutable: ${JSON.stringify(libreOfficeExecutable)} });\ntry { const scriptResult = await executeNativeScriptBody({ body: ${JSON.stringify(body)}, capabilities: runtime.capabilities, timeoutMs: ${BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs} }); await publishNativeScriptResult(scriptResult); } catch (error) { console.error(String(error?.message || "native script failed")); process.exitCode = 1; } finally { await runtime.close(); }`;
+  return `import { activateRuntimeParams } from ${JSON.stringify(import.meta.resolve("@noobot/shared/runtime-params"))};\nactivateRuntimeParams(${JSON.stringify(activeRuntimeParams())});\nconst { createNativeScriptRuntime, executeNativeScriptBody } = await import(${JSON.stringify(new URL("./native-script-runtime.js", import.meta.url).href)});\nimport { publishNativeScriptFailure, publishNativeScriptResult } from ${JSON.stringify(new URL("./native-script-result.js", import.meta.url).href)};\nconst runtime = await createNativeScriptRuntime({ inputRoot: ${JSON.stringify(inputRoot)}, outputRoot: ${JSON.stringify(outputRoot)}, tempRoot: ${JSON.stringify(tempRoot)}, inputMap: ${JSON.stringify(inputMap)}, args: ${JSON.stringify(scriptArguments)}, timeoutMs: ${BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs}, libreOfficeExecutable: ${JSON.stringify(libreOfficeExecutable)} });\ntry { const scriptResult = await executeNativeScriptBody({ body: ${JSON.stringify(body)}, capabilities: runtime.capabilities, timeoutMs: ${BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs} }); await publishNativeScriptResult(scriptResult); } catch (error) { await publishNativeScriptFailure(error); } finally { await runtime.close(); }`;
 }
 
 async function measureNativeOutputs(outputRoot, succeeded) {
@@ -443,11 +458,13 @@ function projectNativeSuccess({
   const { outcome } = result;
   return {
     ...outcome,
+    ...(outcome.ok ? {} : { error: projectNativeOutput(outcome.error, roots) }),
     status: outcome.ok ? "completed" : "failed",
     execution,
     stdout: projectNativeOutput(result.stdout, roots),
     stderr: projectNativeOutput(result.stderr, roots),
-    ...(result.scriptResult?.present
+    ...(result.scriptResult?.status === NATIVE_SCRIPT_EXECUTION_STATUS.RETURNED &&
+    result.scriptResult.present
       ? { [NATIVE_SCRIPT_RESULT_FIELD]: projectNativeResult(result.scriptResult.value, roots) }
       : {}),
     output_file_count: outputFiles.length,
@@ -574,7 +591,7 @@ export function createNativeScriptTool({ agentContext }) {
       name: TOOL_NAME.EXECUTE_NATIVE_SCRIPT,
       metadata: { pathContract: TOOL_PATH_CONTRACTS.nativeInput },
       description: tTool(runtime, "tools.nativeScript.description"),
-      schema: z.object({
+      schema: z.strictObject({
         script_body: z.string().describe(tTool(runtime, "tools.nativeScript.fieldScriptBody")),
         inputs: z
           .array(

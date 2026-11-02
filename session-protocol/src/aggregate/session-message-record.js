@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { isCanonicalText, isPlainObject, text } from "@noobot/shared/value";
-import { MESSAGE_IDENTITY_FIELD } from "../identity/message-identity.js";
+import { MESSAGE_IDENTITY_FIELD, isMessageIdentity } from "../identity/message-identity.js";
 import { isNaturalDialogUserMessage } from "../message-entity-contract.js";
 import {
   MESSAGE_RECORD_REMOVED_FIELDS,
@@ -15,23 +15,19 @@ import {
 } from "../identity/message-identity-schema.js";
 
 export const SESSION_AUTO_TITLE_MAX_LENGTH = 20;
+export const SESSION_MESSAGE_IDENTITY_INVALID = "SESSION_MESSAGE_IDENTITY_INVALID";
 
-export function resolveSessionMessageRecordModelMessageId(record = {}) {
-  return text(record?.role) === "assistant" ? text(record?.[MESSAGE_IDENTITY_FIELD.MODEL]) : "";
-}
-
-export function resolveSessionMessageRecordUserMessageId(record = {}) {
-  return text(record?.role) === "user" ? text(record?.[MESSAGE_IDENTITY_FIELD.USER]) : "";
-}
-
-export function validateSessionMessageRecordIdentity(record = {}) {
+export function validateSessionMessageRecordIdentity(record) {
+  if (!isPlainObject(record)) return ["session_message_record_not_object"];
   const errors = [];
-  if (!text(record?.[MESSAGE_IDENTITY_FIELD.SESSION])) errors.push("session_message_uid_missing");
+  if (!isMessageIdentity(record[MESSAGE_IDENTITY_FIELD.SESSION]))
+    errors.push("session_message_uid_missing");
   if (!isCanonicalText(record?.sessionId)) errors.push("session_message_session_id_missing");
   for (const field of MESSAGE_RECORD_REMOVED_FIELDS) {
     if (Object.hasOwn(record ?? {}, field)) errors.push(`session_message_${field}_removed`);
   }
-  const role = text(record?.role);
+  const role = record.role;
+  if (!isCanonicalText(role)) errors.push("session_message_role_invalid");
   const fields = messageRecordIdentityFieldsFor(role);
   for (const field of fields.forbidden) {
     if (Object.hasOwn(record ?? {}, field)) {
@@ -39,16 +35,20 @@ export function validateSessionMessageRecordIdentity(record = {}) {
     }
   }
   for (const field of fields.required) {
-    if (!text(record?.[field])) errors.push(`session_message_${field}_missing`);
+    if (!isMessageIdentity(record[field])) errors.push(`session_message_${field}_missing`);
+  }
+  for (const field of fields.allowed) {
+    if (fields.required.includes(field) || !Object.hasOwn(record, field)) continue;
+    if (!isMessageIdentity(record[field])) errors.push(`session_message_${field}_invalid`);
   }
   return errors;
 }
 
-export function assertSessionMessageRecordIdentity(record = {}) {
+export function assertSessionMessageRecordIdentity(record) {
   const errors = validateSessionMessageRecordIdentity(record);
   if (!errors.length) return record;
   const error = new TypeError(`invalid session message identity: ${errors.join(",")}`);
-  error.code = "SESSION_MESSAGE_IDENTITY_INVALID";
+  error.code = SESSION_MESSAGE_IDENTITY_INVALID;
   error.validationErrors = errors;
   throw error;
 }
@@ -107,13 +107,11 @@ export function migrateSessionMessageRecordIdentity(record, store) {
   return { record: next, changed: handled.size > 0 };
 }
 
-export function projectSessionMessageRecordIdentity(record = {}) {
-  const identity = {};
-  const messageUid = text(record?.[MESSAGE_IDENTITY_FIELD.SESSION]);
-  if (messageUid) identity[MESSAGE_IDENTITY_FIELD.SESSION] = messageUid;
-  for (const field of messageRecordIdentityFieldsFor(text(record?.role)).allowed) {
-    const value = text(record?.[field]);
-    if (value) identity[field] = value;
+export function projectSessionMessageRecordIdentity(record) {
+  assertSessionMessageRecordIdentity(record);
+  const identity = { [MESSAGE_IDENTITY_FIELD.SESSION]: record[MESSAGE_IDENTITY_FIELD.SESSION] };
+  for (const field of messageRecordIdentityFieldsFor(record.role).allowed) {
+    if (Object.hasOwn(record, field)) identity[field] = record[field];
   }
   return identity;
 }

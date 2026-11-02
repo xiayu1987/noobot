@@ -16,7 +16,6 @@ import {
   SERVICE_STARTUP_STATES,
   assessServiceStartupLiveness,
   readServiceStartupState,
-  resolveServiceStartupStallTimeoutMs,
 } from "@noobot/runtime-events";
 
 const SERVICE_APP_NAME = "noobot-service";
@@ -103,9 +102,7 @@ if (startup.state !== SERVICE_STARTUP_STATES.PENDING)
 const pendingDetail = startup.progress
   ? describeProgress(startup.progress)
   : "service-startup-pending";
-const { liveness, idleMs } = assessServiceStartupLiveness(startup, {
-  stallTimeoutMs: resolveServiceStartupStallTimeoutMs(),
-});
+const { liveness, idleMs } = assessServiceStartupLiveness(startup);
 if (liveness === SERVICE_STARTUP_LIVENESS.UNRESPONSIVE) {
   report(
     SERVICE_STARTUP_STATES.FAILED,

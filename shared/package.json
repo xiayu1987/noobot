@@ -7,6 +7,9 @@
     "test": "node ../scripts/run-with-isolated-tmp.mjs node --test __tests__/*.test.js"
   },
   "exports": {
+    "./testing/runtime-params": "./testing/runtime-params.js",
+    "./runtime-params": "./runtime-params.js",
+    "./runtime-params-node": "./runtime-params-node.js",
     "./best-effort": "./best-effort.js",
     "./config-file": "./config-file.js",
     "./deep-freeze": "./deep-freeze.js",

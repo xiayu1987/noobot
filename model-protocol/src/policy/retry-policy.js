@@ -2,15 +2,28 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { MODEL_ERROR_CODE } from "../protocol/constants.js";
 
-const DEFAULT_RETRY_POLICY = Object.freeze({
-  transport: Object.freeze({ maxAttempts: 3, baseDelayMs: 250 }),
-  reasoningOnly: Object.freeze({ maxAttempts: 1 }),
-  emptyResponse: Object.freeze({ maxAttempts: 3, baseDelayMs: 500 }),
-  toolCallMismatch: Object.freeze({ maxAttempts: 1, downgradeStreaming: true }),
-  providerFallback: Object.freeze({ enabled: false, candidates: Object.freeze([]) }),
-});
+function defaultRetryPolicy() {
+  return Object.freeze({
+    transport: Object.freeze({
+      maxAttempts: TURN_THRESHOLDS.model.transportMaxAttempts,
+      baseDelayMs: TIME_THRESHOLDS.model.transportRetryBaseDelayMs,
+    }),
+    reasoningOnly: Object.freeze({ maxAttempts: TURN_THRESHOLDS.model.reasoningOnlyMaxAttempts }),
+    emptyResponse: Object.freeze({
+      maxAttempts: TURN_THRESHOLDS.model.emptyResponseMaxAttempts,
+      baseDelayMs: TIME_THRESHOLDS.model.emptyResponseRetryBaseDelayMs,
+    }),
+    toolCallMismatch: Object.freeze({
+      maxAttempts: TURN_THRESHOLDS.model.toolCallMismatchMaxAttempts,
+      downgradeStreaming: true,
+    }),
+    providerFallback: Object.freeze({ enabled: false, candidates: Object.freeze([]) }),
+  });
+}
 
 const NO_FINAL_RESPONSE_ERROR_CODES = Object.freeze([
   MODEL_ERROR_CODE.EMPTY_RESPONSE_RETRY_EXHAUSTED,
@@ -31,16 +44,24 @@ export function buildNoFinalResponseRetryPolicy(attemptPolicy = {}) {
 function normalizeAttemptPolicy(defaults, input) {
   const source = input && typeof input === "object" ? input : {};
   const maxAttempts = Number(source.maxAttempts ?? defaults.maxAttempts);
-  return Object.freeze({
+  const out = {
     ...defaults,
     ...source,
     maxAttempts: Number.isFinite(maxAttempts)
       ? Math.max(1, Math.floor(maxAttempts))
       : defaults.maxAttempts,
-  });
+  };
+  if ("baseDelayMs" in defaults) {
+    const baseDelayMs = Number(source.baseDelayMs ?? defaults.baseDelayMs);
+    out.baseDelayMs = Number.isFinite(baseDelayMs)
+      ? Math.max(0, baseDelayMs)
+      : defaults.baseDelayMs;
+  }
+  return Object.freeze(out);
 }
 
 export function normalizeRetryPolicy(input = {}) {
+  const DEFAULT_RETRY_POLICY = defaultRetryPolicy();
   return Object.freeze({
     transport: normalizeAttemptPolicy(DEFAULT_RETRY_POLICY.transport, input.transport),
     reasoningOnly: normalizeAttemptPolicy(DEFAULT_RETRY_POLICY.reasoningOnly, input.reasoningOnly),

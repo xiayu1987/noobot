@@ -299,7 +299,10 @@ test("separate_model summary no longer auto-triggers revision", async () => {
   );
   assert.equal(agentContext.bindings.extensions.harness.state.counters.planRevisionAttempts, 0);
   assert.equal(agentContext.bindings.extensions.harness.state.counters.planRefinementAttempts, 0);
-  assert.equal(agentContext.bindings.extensions.harness.state.counters.planUpdateAttempts, 0);
+  assert.equal(
+    Object.hasOwn(agentContext.bindings.extensions.harness.state.counters, "planUpdateAttempts"),
+    false,
+  );
   assert.equal(agentContext.bindings.extensions.harness.state.pending.planRevision, false);
   assert.equal(agentContext.bindings.extensions.harness.state.pending.planRefinement, false);
 });

@@ -21,7 +21,7 @@ import {
   buildStoredCheckpointReceipts,
   readCheckpointReceiptProjection,
 } from "../session/session-artifact-session/checkpoint-receipts.js";
-import { readVerifiedSnapshot } from "../session/session-artifact-session/turn-materializer.js";
+import { readVerifiedCheckpointIdentity } from "../session/session-artifact-session/turn-materializer.js";
 import { upgradeSessionDirectories } from "./session-upgrade-driver.js";
 import { ignoreSessionProgress } from "./session-directory-walk.js";
 import { backupRewrittenFiles } from "./session-rewrite-backup.js";
@@ -51,13 +51,13 @@ async function planUpgrade({ storageService, sessionDir }) {
   for (const turn of session.turnOrder) {
     let previousCheckpointHash = "";
     for (const index of turn.summarySnapshots) {
-      const { payload } = await readVerifiedSnapshot({
+      const checkpoint = await readVerifiedCheckpointIdentity({
         storageService,
         sessionDir,
         index,
         previousCheckpointHash,
       });
-      if (JSON.stringify(index.messageUids) !== JSON.stringify(payload.summarizedMessageUids))
+      if (JSON.stringify(index.messageUids) !== JSON.stringify(checkpoint.summarizedMessageUids))
         throw checkpointIdentityError(`legacy index UID mismatch: ${index.file}`);
       previousCheckpointHash = index.contentHash;
     }

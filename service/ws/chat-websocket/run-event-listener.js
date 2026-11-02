@@ -151,28 +151,26 @@ export function createRunEventListener({
       if (!isPlainObject(eventData)) {
         throw new TypeError(`invalid ${eventName} data: expected an object`);
       }
-      if (eventName === AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED) {
+      if (
+        eventName === AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED ||
+        eventName === AGENT_RUN_EVENT.TURN_LIFECYCLE_COMMITTED
+      ) {
         const envelope = eventData.envelope;
         const validation = validateProtocolEvent(envelope);
         if (!validation.valid) {
           throw new TypeError(`invalid committed authority event: ${validation.errors.join(",")}`);
         }
         onEventReceived?.(buildEventAudit(eventName, eventData));
-        if (!isFunction(onAuthorityEventCommitted)) {
+        const dispatch =
+          eventName === AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED
+            ? onAuthorityEventCommitted
+            : onCommittedTurnLifecycle;
+        if (!isFunction(dispatch)) {
           throw new Error("authority event dispatcher is required");
         }
-        return onAuthorityEventCommitted(envelope, committedDispatchContext(eventName, eventData));
+        return dispatch(envelope, committedDispatchContext(eventName, eventData));
       }
       onEventReceived?.(buildEventAudit(eventName, eventData));
-      if (eventName === AGENT_RUN_EVENT.TURN_LIFECYCLE_COMMITTED) {
-        if (!isFunction(onCommittedTurnLifecycle)) {
-          throw new Error("turn lifecycle dispatcher is required");
-        }
-        return onCommittedTurnLifecycle(
-          eventData.envelope,
-          committedDispatchContext(eventName, eventData),
-        );
-      }
       if (eventName === AGENT_RUN_EVENT.TURN_COMMITTED) {
         const committedTurn = assertTurnCommittedEventData(eventData);
         return sendEvent(TURN_COMMITTED_WIRE_EVENT, committedTurn);

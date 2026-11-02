@@ -147,6 +147,18 @@ test("file risk schema requires the model declaration", async () => {
   assert.equal(result.ok, true);
 });
 
+test("file risk schema rejects a missing or unknown riskLevel", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-risk-required-"));
+  const tool = getTool(createContext(basePath, { safeConfirm: false }), "read_file");
+  const missing = tool.schema.safeParse({ filePath: "a.txt" });
+  assert.equal(missing.success, false);
+  assert.deepEqual(missing.error.issues[0].path, ["riskLevel"]);
+  const invalid = tool.schema.safeParse({ filePath: "a.txt", riskLevel: "none" });
+  assert.equal(invalid.success, false);
+  assert.equal(invalid.error.issues[0].code, "invalid_value");
+  await fs.rm(basePath, { recursive: true, force: true });
+});
+
 test("server-classified read confirms after normalization and reconfirms each call", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-risk-read-"));
   const secretPath = "private-token-file.txt";
@@ -183,7 +195,7 @@ test("server-classified writes are blocked at the medium-risk confirmation thres
   await assert.rejects(() => fs.stat(target), /ENOENT/);
 });
 
-test("server-classified patch confirmation omits patch content", async () => {
+test("server-classified search and patch confirmations omit query and patch content", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-risk-content-"));
   await fs.writeFile(path.join(basePath, "a.txt"), "one\n", "utf8");
   const requests = [];
@@ -191,14 +203,16 @@ test("server-classified patch confirmation omits patch content", async () => {
   const searchTool = getTool(context, "search");
   const patchTool = getTool(context, "patch_file");
   const query = "highly-secret-query";
-  const text = "caller-private-text";
-  await searchTool.invoke({ source: "text", query, text, riskLevel: "critical" });
+  await searchTool.invoke(
+    { query, riskLevel: "critical" },
+    { signal: new AbortController().signal },
+  );
   const patch =
     "*** Begin Patch\n*** Update File: a.txt\n@@\n-one\n+private-replacement\n*** End Patch\n";
   await patchTool.invoke({ format: "apply_patch", patch, dryRun: false, riskLevel: "low" });
   assert.equal(requests.length, 2);
   const combined = requests.map((item) => item.content).join("\n");
-  for (const sensitive of [query, text, patch, "private-replacement"]) {
+  for (const sensitive of [query, patch, "private-replacement"]) {
     assert.equal(combined.includes(sensitive), false);
   }
 });

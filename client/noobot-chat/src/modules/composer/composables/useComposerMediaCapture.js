@@ -110,7 +110,7 @@ export function useComposerMediaCapture(props, emitAppendUploads, translate) {
       }
       micDurationTimerRef.value = setInterval(() => {
         micDurationSeconds.value += 1;
-      }, 1000);
+      }, TIME_THRESHOLDS.client.micDurationRefreshIntervalMs);
       micAutoStopTimerRef.value = setTimeout(() => {
         if (mediaRecorder.state !== "inactive") {
           ElMessage.info(

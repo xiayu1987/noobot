@@ -10,6 +10,22 @@ export const MODEL_REQUEST_STATUS = Object.freeze({
   FAILED: "failed",
   CANCELLED: "cancelled",
 });
+export const MODEL_INVOCATION_EVENT = Object.freeze({
+  STARTED: "model.invocation.started",
+  ATTEMPT_STARTED: "model.invocation.attempt_started",
+  RETRY_SCHEDULED: "model.invocation.retry_scheduled",
+  SEMANTIC_RETRY: "model.invocation.semantic_retry",
+  STREAMING_MODE_RETRY: "model.invocation.streaming_mode_retry",
+  COMPLETED: "model.invocation.completed",
+  FAILED: "model.invocation.failed",
+  CANCELLED: "model.invocation.cancelled",
+});
+export const MODEL_CONTEXT_TRACE = Object.freeze({
+  EVENT: "model_context_trace",
+  INVOKE_STAGE: "llm_invoke_messages",
+  INVOKE_AUTHORITY: "model_invoke_port",
+  PROTOCOL_VERSION: 2,
+});
 export const MODEL_ERROR_KIND = Object.freeze({
   ABORTED: "aborted",
   AUTHENTICATION: "authentication",
@@ -22,6 +38,7 @@ export const MODEL_ERROR_KIND = Object.freeze({
   REASONING_ONLY: "reasoning_only",
   EMPTY_RESPONSE: "empty_response",
   UNKNOWN: "unknown",
+  CLASSIFICATION: "classification",
 });
 export const MODEL_ERROR_CODE = Object.freeze({
   PROTOCOL: "MODEL_PROTOCOL_ERROR",
@@ -42,4 +59,8 @@ export const MODEL_ATTEMPT_KIND = Object.freeze({
   EMPTY_RESPONSE: "empty_response",
   TOOL_CALL_STREAMING_MISMATCH: "tool_call_streaming_mismatch",
   TOOL_CALL_INVALID: "tool_call_invalid",
+});
+export const MODEL_RESPONSE_SOURCE = Object.freeze({
+  MESSAGE: "message",
+  RESPONSES: "responses",
 });

@@ -66,7 +66,7 @@ export function createTaskCheckTool(ctx = {}) {
       {
         name: TASK_CHECK_TOOL_NAME,
         description: tTool(runtime, "tools.task_check.description"),
-        schema: z.object({
+        schema: z.strictObject({
           checkContent: z.string().describe(tTool(runtime, "tools.task_check.fieldCheckContent")),
         }),
         metadata: {

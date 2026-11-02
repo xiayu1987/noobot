@@ -6,10 +6,10 @@
 
 export const READ_FILE_MANUAL = {
   read_file: {
-    summary: "Read text file content, with optional line range and line numbering.",
+    summary: "Read a text file as cat -n style numbered lines, with optional line range.",
     usage: [
-      "read_file({ filePath, includeLineNumbers, maxLines, riskLevel })",
-      "read_file({ filePath, startLine, endLine, maxLines, includeLineNumbers, riskLevel })",
+      "read_file({ filePath, maxLines, riskLevel })",
+      "read_file({ filePath, startLine, endLine, maxLines, riskLevel })",
     ],
     params: {
       filePath:
@@ -18,12 +18,11 @@ export const READ_FILE_MANUAL = {
       endLine:
         "End line, 1-based, optional. Omit to read up to the maxLines limit; a value past the end of file stops at the last line.",
       maxLines: "Maximum lines returned; prevents a huge file from flooding the context.",
-      includeLineNumbers:
-        "Whether returned content carries line numbers. Enable it before writing a patch so context can be verified.",
       riskLevel:
         "Operation risk level. Must be critical when the read may involve privacy, passwords, tokens, credentials, or secrets.",
     },
     notes: [
+      "Each numberedContent line is a 6-wide right-aligned line number, a tab, then the raw text; the prefix is not file content, so patch context uses only the text after the tab.",
       "Text files only. Use multimodal_parse for images, audio, video, and binary documents.",
       "The response carries totalLines and hasMore; read the next segment while hasMore is true.",
       "For very large files, locate matches with search first, then read the relevant ranges instead of pulling the whole file.",

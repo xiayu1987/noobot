@@ -27,15 +27,6 @@ export function registerToolInputPolicies(register) {
     name: "execute-script-command.tool-input.sh",
   });
   register({
-    toolName: "search",
-    field: "text",
-    maxChars: MAX_CHARS,
-    reason: "semantic_transfer_tool_input",
-    messageKey: "tools.search.textTooLong",
-    enabled: ({ args = {} }) => text(args.source || "files") === "text",
-    name: "search-text.tool-input.txt",
-  });
-  register({
     toolName: "patch_file",
     field: "patch",
     maxChars: MAX_CHARS,

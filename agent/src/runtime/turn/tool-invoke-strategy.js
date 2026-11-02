@@ -66,7 +66,6 @@ export function createBoundLlmToolChoiceInvoker({
       },
       policies: {
         retry: {
-          toolCallMismatch: { maxAttempts: 1, downgradeStreaming: true },
           ...MAIN_FLOW_NO_FINAL_RESPONSE_RETRY,
         },
       },

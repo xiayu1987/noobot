@@ -29,6 +29,7 @@ import {
 } from "../state/configDocumentState.js";
 import { buildConfigNavTree, firstConfigNavPath } from "../state/configNavigation.js";
 import { text } from "@noobot/shared/value";
+import RuntimeParamsPanel from "./RuntimeParamsPanel.vue";
 
 const props = defineProps({
   fetcher: { type: Function, required: true },
@@ -71,6 +72,7 @@ const visibleScopes = computed(() => [
   { name: "user", label: translate("settings.userParams") },
   ...(props.isSuperAdmin ? [{ name: "system", label: translate("settings.systemParams") }] : []),
   { name: CONFIG_SCOPE, label: translate("settings.userConfig") },
+  ...(props.isSuperAdmin ? [{ name: "runtime", label: translate("runtimeParams.title") }] : []),
 ]);
 const editorActions = computed(() => [
   {
@@ -269,6 +271,7 @@ function selectConfigPath(navPath = "") {
 }
 
 function loadActiveScope(scope = activeScope.value) {
+  if (scope === "runtime") return;
   if (scope === CONFIG_SCOPE) {
     loadConfigDocument();
     return;
@@ -279,7 +282,11 @@ function loadActiveScope(scope = activeScope.value) {
 function onScopeChanged(scope = "user") {
   const nextScope = String(scope || "user");
   activeScope.value =
-    nextScope === CONFIG_SCOPE || PARAM_SCOPES.includes(nextScope) ? nextScope : "user";
+    nextScope === CONFIG_SCOPE ||
+    (nextScope === "runtime" && props.isSuperAdmin) ||
+    PARAM_SCOPES.includes(nextScope)
+      ? nextScope
+      : "user";
   loadActiveScope(activeScope.value);
 }
 
@@ -307,7 +314,7 @@ watch(
 watch(
   () => props.isSuperAdmin,
   (isSuperAdmin) => {
-    if (!isSuperAdmin && activeScope.value === "system") {
+    if (!isSuperAdmin && ["system", "runtime"].includes(activeScope.value)) {
       onScopeChanged("user");
     }
   },
@@ -332,8 +339,14 @@ watch(
       :label="scopeItem.label"
       :name="scopeItem.name"
     >
+      <RuntimeParamsPanel
+        v-if="scopeItem.name === 'runtime' && isSuperAdmin"
+        :fetcher="fetcher"
+        :connected="connected"
+        :active="active && activeScope === 'runtime'"
+      />
       <ConfigDocumentForm
-        v-if="scopeItem.name === CONFIG_SCOPE"
+        v-else-if="scopeItem.name === CONFIG_SCOPE"
         :document="configDocument"
         :declarations="configDeclarations"
         :active-path="activeConfigPath"

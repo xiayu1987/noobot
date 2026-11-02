@@ -65,10 +65,9 @@ END
 
 ## 会话接管与落盘（workflow session）
 
-- 插件会在当轮追加一条 `workflowMessage=true` 的消息，`workflowMeta` 内含规划模型输出与节点会话索引。
-- 规划阶段对话会落盘到：
-  - `runtime/plugin-data/workflow/planning/<sessionId>/<dialogProcessId>/planning.json`
-  - `runtime/plugin-data/workflow/planning/<sessionId>/<dialogProcessId>/events.jsonl`（规划与编排事件流）
+- 插件会在当轮追加一条 `pluginMessage=true` 的消息，`pluginMeta` 使用上文的消息 payload 契约，包含语义模型输出与节点会话索引。
+- 语义模型输出是 DSL 解析的唯一输入；空输出或非法 DSL 进入 workflow 失败流程，不用用户原文替代模型结果。
+- 规划消息通过宿主公开消息事件端口提交到所属会话；插件不维护独立的 `planning.json` 或 planning 目录。
 - 每个工作流节点 agent 子会话由 agent 统一入口执行（插件只传策略），并落盘到：
   - `runtime/plugin-data/workflow/session/<sessionId>/<nodeDialogProcessId>/session.json`
   - `runtime/plugin-data/workflow/session/<sessionId>/<nodeDialogProcessId>/session-summary.json`
@@ -78,6 +77,7 @@ END
   - `runtime/plugin-data/workflow/session/<sessionId>/<nodeDialogProcessId>/meta.json`
   - `runtime/plugin-data/workflow/session/<sessionId>/<nodeDialogProcessId>/events.jsonl`（节点事件流）
 - 节点子会话采用 detached 执行与 scoped 落盘，不写入 `runtime/session` 主树；文件结构与主流程 session 落盘保持同构，路径由插件提供。
+- 插件只声明 `session` scope 的相对目录与允许根，具体文件布局和读写由宿主会话端口管理；会话删除时按明确的会话 ID 清理该 scope，不从规划文件推断子会话。
 - 节点子会话会自动禁用 `workflow` 插件（`mode=off`）避免递归触发。
 
 ## Tool policy

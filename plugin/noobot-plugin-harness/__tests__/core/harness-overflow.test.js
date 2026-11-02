@@ -109,7 +109,11 @@ test("overflow after harness summary schedules the harness summary flow again wi
   await guidanceHandler({
     capability: "guidance",
     point: "agent.before_llm_call",
-    ctx: { messageBlocks: { system: [], history: [], incremental: messages }, agentContext },
+    ctx: {
+      turn: 2,
+      messageBlocks: { system: [], history: [], incremental: messages },
+      agentContext,
+    },
     meta: {},
   });
   assert.equal(

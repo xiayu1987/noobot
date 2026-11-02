@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
@@ -12,7 +13,6 @@ import {
   STARTUP_LAUNCH_ID_ENV,
   assessServiceStartupLiveness,
   readServiceStartupState,
-  resolveServiceStartupStallTimeoutMs,
 } from "@noobot/runtime-events";
 import { WORKSPACE_ROOT_ENV } from "@noobot/runtime-topology-protocol/workspace-root";
 import {
@@ -55,8 +55,12 @@ export function createDesktopServiceManager({
   fetchImpl = fetch,
   readStartupState = readServiceStartupState,
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-  crashRestartDelaysMs = [1000, 3000, 10000],
-  crashRestartWindowMs = 10 * 60 * 1000,
+  crashRestartDelaysMs = [
+    TIME_THRESHOLDS.desktop.crashRestartInitialDelayMs,
+    TIME_THRESHOLDS.desktop.crashRestartSecondDelayMs,
+    TIME_THRESHOLDS.desktop.crashRestartFinalDelayMs,
+  ],
+  crashRestartWindowMs = TIME_THRESHOLDS.desktop.crashRestartWindowMs,
   now = () => Date.now(),
 } = {}) {
   let managedServiceProcess = null;
@@ -242,7 +246,10 @@ export function createDesktopServiceManager({
   async function isServiceHealthy() {
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 1500);
+      const timer = setTimeout(
+        () => controller.abort(),
+        TIME_THRESHOLDS.desktop.healthProbeTimeoutMs,
+      );
       const response = await fetchImpl(healthUrl, { signal: controller.signal });
       clearTimeout(timer);
       if (!response.ok) return false;
@@ -256,7 +263,10 @@ export function createDesktopServiceManager({
   async function isAgentProxyHealthy() {
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 1500);
+      const timer = setTimeout(
+        () => controller.abort(),
+        TIME_THRESHOLDS.desktop.healthProbeTimeoutMs,
+      );
       const response = await fetchImpl(agentProxyHealthUrl, { signal: controller.signal });
       clearTimeout(timer);
       if (!response.ok) return false;
@@ -433,7 +443,6 @@ export function createDesktopServiceManager({
   }
 
   async function waitForHealthyService() {
-    const stallTimeoutMs = resolveServiceStartupStallTimeoutMs();
     let lastStatusKey = "";
     while (managedServiceProcess && !startupInterruption) {
       if (await isServiceHealthy()) return;
@@ -443,7 +452,6 @@ export function createDesktopServiceManager({
       }
       const { liveness, idleMs } = assessServiceStartupLiveness(startup, {
         now: now(),
-        stallTimeoutMs,
       });
       if (liveness === SERVICE_STARTUP_LIVENESS.UNRESPONSIVE) {
         throw new Error(

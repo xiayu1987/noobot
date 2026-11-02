@@ -77,3 +77,18 @@ test("phase summary loop threshold preserves the builtin default when absent", (
     BUILTIN_THRESHOLDS.taskSummary.phaseSummaryLoopTurns,
   );
 });
+
+test("summary and task check reject declared invalid thresholds even when the gate is closed", () => {
+  for (const frontendThresholdsEnabled of [false, true]) {
+    for (const invalid of [null, "2", 0, -1, 1.5, Infinity]) {
+      for (const [resolve, field] of [
+        [resolvePhaseSummaryLoopTurns, "phaseSummaryLoopTurns"],
+        [resolveTaskCheckLoopTurns, "taskCheckLoopTurns"],
+      ]) {
+        const runConfig = { frontendThresholdsEnabled, summaryPolicy: { [field]: invalid } };
+        assert.throws(() => resolve({ runConfig }), /positive safe integer/);
+        assert.equal(runConfig.summaryPolicy[field], invalid);
+      }
+    }
+  }
+});

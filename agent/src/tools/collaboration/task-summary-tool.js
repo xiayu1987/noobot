@@ -99,7 +99,7 @@ export function createTaskSummaryTool(ctx = {}) {
     {
       name: TASK_SUMMARY_TOOL_NAME,
       description: tTool(runtime, "tools.task_summary.description"),
-      schema: z.object({
+      schema: z.strictObject({
         summaryContent: z
           .string()
           .describe(tTool(runtime, "tools.task_summary.fieldSummaryContent")),

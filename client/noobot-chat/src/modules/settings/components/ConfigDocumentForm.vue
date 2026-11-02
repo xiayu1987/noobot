@@ -17,9 +17,7 @@ import {
 import { resolveConfigFieldLabel } from "../state/configLabels.js";
 import ConfigSectionEditor from "./ConfigSectionEditor.vue";
 import SettingsActionGroup from "./SettingsActionGroup.vue";
-import SettingsPanelHeader from "./SettingsPanelHeader.vue";
-import SettingsWorkspaceLayout from "./SettingsWorkspaceLayout.vue";
-import SettingsWorkspacePanel from "./SettingsWorkspacePanel.vue";
+import SettingsTreeWorkspace from "./SettingsTreeWorkspace.vue";
 
 const props = defineProps({
   document: { type: Object, required: true },
@@ -88,76 +86,49 @@ watch(
 </script>
 
 <template>
-  <SettingsWorkspaceLayout :loading="loading">
-    <SettingsWorkspacePanel>
-      <SettingsPanelHeader :title="translate('settings.configSections')" />
-      <div class="panel-body noobot-workspace-body">
-        <el-scrollbar class="tree-scroll">
-          <el-tree
-            :data="navTree"
-            node-key="path"
-            :current-node-key="activePath"
-            :props="{ label: 'key', children: 'children' }"
-            :expand-on-click-node="false"
-            highlight-current
-            class="custom-tree"
-            @node-click="handleNodeClick"
-          >
-            <template #default="{ data }">
-              <span class="tree-node">
-                <span class="node-label">{{ treeLabel(data) }}</span>
-                <span v-if="data.exists" class="node-dot" />
-              </span>
-            </template>
-          </el-tree>
-        </el-scrollbar>
+  <SettingsTreeWorkspace
+    :loading="loading"
+    :tree-title="translate('settings.configSections')"
+    :nodes="navTree"
+    label-key="key"
+    :current-node-key="activePath"
+    :expand-on-click-node="false"
+    body-class="editor-body"
+    @node-click="handleNodeClick"
+  >
+    <template #node="{ node }">
+      <span class="node-label">{{ treeLabel(node) }}</span>
+      <span v-if="node.exists" class="node-dot" />
+    </template>
+    <template #editor-left>
+      <el-breadcrumb class="config-breadcrumb" separator="/">
+        <el-breadcrumb-item v-for="(text, index) in breadcrumb" :key="index">
+          <span class="crumb-link" @click="handleBreadcrumb(index)">{{ text }}</span>
+        </el-breadcrumb-item>
+      </el-breadcrumb>
+    </template>
+    <template #editor-right>
+      <SettingsActionGroup :actions="editorActions" @command="emit('save')" />
+    </template>
+    <el-scrollbar v-if="activeNav" class="section-scroll">
+      <div class="section-body">
+        <p v-if="filePath" class="section-file">{{ filePath }}</p>
+        <ConfigSectionEditor
+          :node="activeNav.node"
+          :container="activeContainer"
+          :document="document"
+          :declaration="activeDeclaration"
+          @open-entry="openEntry"
+        />
       </div>
-    </SettingsWorkspacePanel>
-
-    <SettingsWorkspacePanel panel-class="workspace-editor">
-      <SettingsPanelHeader>
-        <template #left>
-          <div class="file-info">
-            <el-breadcrumb class="config-breadcrumb" separator="/">
-              <el-breadcrumb-item v-for="(text, index) in breadcrumb" :key="index">
-                <span class="crumb-link" @click="handleBreadcrumb(index)">{{ text }}</span>
-              </el-breadcrumb-item>
-            </el-breadcrumb>
-          </div>
-        </template>
-        <template #right>
-          <SettingsActionGroup :actions="editorActions" @command="emit('save')" />
-        </template>
-      </SettingsPanelHeader>
-      <div class="panel-body noobot-workspace-body editor-body">
-        <el-scrollbar v-if="activeNav" class="section-scroll">
-          <div class="section-body">
-            <p v-if="filePath" class="section-file">{{ filePath }}</p>
-            <ConfigSectionEditor
-              :node="activeNav.node"
-              :container="activeContainer"
-              :document="document"
-              :declaration="activeDeclaration"
-              @open-entry="openEntry"
-            />
-          </div>
-        </el-scrollbar>
-        <div v-else class="empty-tip">
-          <p>{{ translate("settings.selectConfigSection") }}</p>
-        </div>
-      </div>
-    </SettingsWorkspacePanel>
-  </SettingsWorkspaceLayout>
+    </el-scrollbar>
+    <div v-else class="empty-tip">
+      <p>{{ translate("settings.selectConfigSection") }}</p>
+    </div>
+  </SettingsTreeWorkspace>
 </template>
 
 <style scoped>
-.tree-node {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--noobot-space-xs);
-  min-width: 0;
-}
-
 .node-dot {
   width: 6px;
   height: 6px;

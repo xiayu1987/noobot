@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHarnessBucket } from "../../src/core/bucket-contract.js";
 
 import { createPlanRevisionHelpers } from "../../src/capabilities/handlers/shared/plan/revision-helpers.js";
 import { buildPlanChecklistSystemContent } from "../../src/capabilities/handlers/shared/plan/checklist-context.js";
@@ -21,6 +22,7 @@ function createFixture() {
   const logs = [];
   const ctx = {
     bucket: {
+      ...createHarnessBucket(),
       planAcceptanceStatusByPlanId: {},
       planText: ORIGINAL_PLAN_TEXT,
       globalRevisionCount: 0,
@@ -127,7 +129,7 @@ test("english revision and refinement prompts contain no chinese fallback text",
   const revision = buildPlanningRevisionPromptText({
     locale: "en-US",
     marker: "<m>",
-    data: { currentMainPlansText: "1. a" },
+    data: { currentMainPlansText: "1. a", globalRevisionCount: 0 },
   });
   const refinement = buildPlanningRefinementPromptText({
     locale: "en-US",
@@ -150,7 +152,10 @@ test("refinement targets converge to empty when every main step already has sub 
 
 test("english refinement prompt localizes existing sub-plan sections", () => {
   const { helpers } = createFixture();
-  const bucket = { planText: ["1. Inspect", "1.1 Read config", "2. Ship"].join("\n") };
+  const bucket = {
+    ...createHarnessBucket(),
+    planText: ["1. Inspect", "1.1 Read config", "2. Ship"].join("\n"),
+  };
   const prompt = helpers.buildPlanningRefinementPrompt(
     "en-US",
     bucket,

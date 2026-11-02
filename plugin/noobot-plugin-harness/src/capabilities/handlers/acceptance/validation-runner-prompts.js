@@ -32,6 +32,7 @@ import { applyPhaseAcceptanceReportToPlanStatus } from "../shared/plan/acceptanc
 import { parseMainPlansFromPlanText } from "../shared/plan/text-protocol.js";
 import { resolveLatestCompleteSummaryText } from "../shared/plan/latest-summary-context.js";
 import { text } from "@noobot/shared/value";
+import { requireHarnessStateField } from "../../../core/bucket-contract.js";
 
 export function buildTextAcceptanceValidationResult(sourceText = "") {
   const raw = text(sourceText);
@@ -141,7 +142,11 @@ export function appendPhaseAcceptanceReport(bucket, content) {
 
 export function buildFinalOutputFallbackPhaseAcceptanceText(locale, bucket, state) {
   const checklistCount = parseMainPlansFromPlanText(bucket.planText).length;
-  const signalCount = Number(state.signals.successfulToolCount || 0);
+  const signalCount = requireHarnessStateField(
+    "signals",
+    "successfulToolCount",
+    state.signals.successfulToolCount,
+  );
   return translateI18nText(
     locale,
     HARNESS_I18N_KEYSET.ACCEPTANCE_VALIDATION.PHASE_FINAL_OUTPUT_FALLBACK,

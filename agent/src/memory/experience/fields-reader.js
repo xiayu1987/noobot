@@ -4,15 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  BUILTIN_EXPERIENCE_FIELDS,
+  createBuiltinExperienceFields,
   parseExperienceFieldsText,
 } from "@noobot/memory-protocol/experience/fields";
 
-export async function readExperienceFields(storage, basePath = "") {
-  if (!basePath) return { fields: BUILTIN_EXPERIENCE_FIELDS, fieldsError: null };
+export async function readExperienceFields(storage, basePath = "", locale) {
+  const builtinFields = createBuiltinExperienceFields(locale);
+  if (!basePath) return { fields: builtinFields, fieldsError: null };
   const fieldsPath = storage.experienceFieldsPath(basePath);
   if (!(await storage.fileExists(fieldsPath))) {
-    return { fields: BUILTIN_EXPERIENCE_FIELDS, fieldsError: null };
+    return { fields: builtinFields, fieldsError: null };
   }
   try {
     return {
@@ -20,6 +21,6 @@ export async function readExperienceFields(storage, basePath = "") {
       fieldsError: null,
     };
   } catch (error) {
-    return { fields: BUILTIN_EXPERIENCE_FIELDS, fieldsError: error };
+    return { fields: builtinFields, fieldsError: error };
   }
 }

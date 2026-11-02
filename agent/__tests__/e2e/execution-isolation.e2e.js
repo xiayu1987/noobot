@@ -15,14 +15,22 @@ import { randomUUID } from "node:crypto";
 import { createScriptTool } from "../../src/tools/execution/script-tool.js";
 import { createFileTool } from "../../src/tools/execution/file-tools.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
+import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 
 const execFileAsync = promisify(execFile);
 const TEST_IMAGE = "nikolaik/python-nodejs:python3.12-nodejs26-bookworm";
+const E2E_SESSION_ID = "session:e2e:execution-isolation";
+const E2E_IDENTITY = Object.freeze({
+  sessionId: E2E_SESSION_ID,
+  parentSessionId: "",
+  dialogProcessId: "dialog:e2e:execution-isolation",
+  turnScopeId: "turn:e2e:execution-isolation",
+});
 const TRANSFER_IDENTITY = Object.freeze({
   transferId: "transfer:e2e:execution-isolation",
   presentationMessageId: "message:e2e:execution-isolation",
-  sessionId: "session:e2e:execution-isolation",
-  turnScopeId: "turn:e2e:execution-isolation",
+  sessionId: E2E_SESSION_ID,
+  turnScopeId: E2E_IDENTITY.turnScopeId,
   runId: "run:e2e:execution-isolation",
   producer: { type: "tool", id: "call:e2e:execution-isolation" },
 });
@@ -38,9 +46,9 @@ function buildAgentContext({
   mounts = [],
 }) {
   return createTestAgentExecutionScope(
-    {
+    createTestRuntimeContext({
       basePath,
-      userId,
+      identity: { userId, ...E2E_IDENTITY },
       globalConfig: {
         workspaceRoot,
         security: {
@@ -58,25 +66,19 @@ function buildAgentContext({
       },
       userConfig: {},
       systemRuntime: {
-        userId,
-        sessionId: "session:e2e:execution-isolation",
-        rootSessionId: "session:e2e:execution-isolation",
-        sessionDir: path.join(basePath, "runtime/session", "session:e2e:execution-isolation"),
+        sessionDir: path.join(basePath, "runtime/session", E2E_SESSION_ID),
         isSuperUser,
         config: { safeConfirm: false },
         persistenceScope: null,
       },
-    },
+    }),
     {
       identity: {
         userId,
-        sessionId: "s-1",
-        rootSessionId: "s-1",
-        parentSessionId: "",
-        dialogProcessId: "d-1",
-        turnScopeId: "t-1",
-        runId: "r-1",
-        presentationMessageId: "m-1",
+        ...E2E_IDENTITY,
+        rootSessionId: E2E_SESSION_ID,
+        runId: TRANSFER_IDENTITY.runId,
+        presentationMessageId: TRANSFER_IDENTITY.presentationMessageId,
       },
     },
   );
@@ -107,7 +109,7 @@ describe("execution isolation E2E", { concurrency: false }, () => {
     aliceRoot = path.join(workspaceRoot, "alice");
     const bobRoot = path.join(workspaceRoot, "bob");
     await fs.mkdir(path.join(aliceRoot, "runtime/ops_workdir"), { recursive: true });
-    await fs.mkdir(path.join(aliceRoot, "runtime/session", "session:e2e:execution-isolation"), {
+    await fs.mkdir(path.join(aliceRoot, "runtime/session", E2E_SESSION_ID), {
       recursive: true,
     });
     await fs.mkdir(path.join(bobRoot, "runtime/ops_workdir"), { recursive: true });
@@ -226,19 +228,17 @@ describe("execution isolation E2E", { concurrency: false }, () => {
     const workspaceRead = JSON.parse(
       await tools.get("read_file").invoke({
         filePath: "runtime/ops_workdir/from-script.txt",
-        includeLineNumbers: false,
         riskLevel: "low",
       }),
     );
     const mountRead = JSON.parse(
       await tools.get("read_file").invoke({
         filePath: "/shared/from-script.txt",
-        includeLineNumbers: false,
         riskLevel: "low",
       }),
     );
-    assert.equal(workspaceRead.content, "workspace-from-script");
-    assert.equal(mountRead.content, "mount-from-script");
+    assert.equal(workspaceRead.numberedContent, "     1\tworkspace-from-script");
+    assert.equal(mountRead.numberedContent, "     1\tmount-from-script");
   });
 
   test("ordinary user sandbox global scope intentionally shares the workspace mount", async () => {

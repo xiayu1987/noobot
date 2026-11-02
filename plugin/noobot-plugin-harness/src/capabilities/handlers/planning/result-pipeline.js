@@ -32,7 +32,7 @@ import {
   resolveModelMessages,
 } from "../../../core/message-store.js";
 import { isHarnessInjectedMessage } from "../shared/message/utils.js";
-import { text, isObjectLike } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 const MAX_PLANNING_CAPTURE_ATTEMPTS = WORKFLOW_PARAMS.planning.capture.maxAttempts;
@@ -55,15 +55,8 @@ function resolveDefaultPlanReasonLabel(locale = LOCALE.ZH_CN, reason = "") {
 }
 
 function increasePlanningCaptureAttempts(state = {}) {
-  if (!isObjectLike(state)) return 1;
-  const counters = state.counters && typeof state.counters === "object" ? state.counters : {};
-  const current = Number.isFinite(Number(counters.planningCaptureAttempts))
-    ? Number(counters.planningCaptureAttempts)
-    : 0;
-  const next = current + 1;
-  counters.planningCaptureAttempts = next;
-  state.counters = counters;
-  return next;
+  state.counters.planningCaptureAttempts += 1;
+  return state.counters.planningCaptureAttempts;
 }
 
 function parsePlanningTextProtocol(sourceText = "") {
@@ -163,10 +156,6 @@ function applyPlanText(
     appliedMutation.nextDocument,
   );
   bucket.taskOwner = bucket.taskOwner || getDefaultTaskOwner(state?.locale || LOCALE.ZH_CN);
-  bucket.globalRevisionCount = Number.isFinite(Number(bucket.globalRevisionCount))
-    ? Number(bucket.globalRevisionCount)
-    : 0;
-  if (!Array.isArray(bucket.planRevisions)) bucket.planRevisions = [];
   bucket.planRevisions.push({
     source,
     stage: "main_plan",

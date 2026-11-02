@@ -176,7 +176,7 @@ export function createUserInteractionTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const bridge = runtime.userInteractionBridge || null;
   const interactionAuthority = resolveUserInteractionAuthority(agentContext);
-  const fieldSchema = z.object({
+  const fieldSchema = z.strictObject({
     name: z.string().min(1).describe(tTool(runtime, "tools.user_interaction.fieldName")),
     displayName: z
       .string()
@@ -190,7 +190,7 @@ export function createUserInteractionTool({ agentContext }) {
       .describe(tTool(runtime, "tools.user_interaction.fieldDescription")),
   });
 
-  const fieldsPayloadSchema = z.object({
+  const fieldsPayloadSchema = z.strictObject({
     fields: z
       .array(fieldSchema)
       .default([])
@@ -294,7 +294,7 @@ export function createUserInteractionTool({ agentContext }) {
     {
       name: TOOL_NAME.USER_INTERACTION,
       description: tTool(runtime, "tools.user_interaction.description"),
-      schema: z.object({
+      schema: z.strictObject({
         content: z.string().min(1).describe(tTool(runtime, "tools.user_interaction.fieldContent")),
         timeoutMs: z.number().int().positive().optional(),
         fields: z

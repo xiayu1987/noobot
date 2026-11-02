@@ -201,7 +201,7 @@ export function createScriptTool({ agentContext }) {
       name: EXECUTE_SCRIPT_TOOL_NAME,
       metadata: { pathContract: TOOL_PATH_CONTRACTS.scriptOutput },
       description,
-      schema: z.object({
+      schema: z.strictObject({
         command: z.string().describe(tTool(runtime, "tools.script.fieldCommand")),
         riskLevel: createRiskLevelSchema(runtime, "tools.script.fieldRiskLevel"),
         executionMode: z

@@ -59,6 +59,8 @@ async function waitFor(asyncGetter, { retries = 20, intervalMs = 20 } = {}) {
 }
 
 const MEMORY_RUN_PORTS = Object.freeze({
+  sessionId: "memory-test-session",
+  parentSessionId: "",
   invocationIdentity: createMemoryPostprocessIdentity({
     sessionId: "memory-test-session",
     sourceDialogProcessId: "memory-test-turn",

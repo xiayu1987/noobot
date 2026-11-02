@@ -5,6 +5,7 @@
  */
 
 import { deepFreeze } from "./deep-freeze.js";
+import { bindRuntimeThresholds } from "./runtime-threshold-state.js";
 
 const KiB = 1024;
 const MiB = 1024 * KiB;
@@ -14,7 +15,6 @@ const LENGTH_TIERS = deepFreeze({
   chars: {
     persistedChunk: 40000,
     cleanedText: 120000,
-    wrappedPayload: 200000,
     mainContext: 25000,
     phaseSummary: 220000,
     externalToolHeavy: 350000,
@@ -40,10 +40,6 @@ const LENGTH_TIERS = deepFreeze({
     minTagText: 6,
     htmlProbe: 20000,
   },
-  artifactTextChars: {
-    web2ImgUsefulText: 300000,
-    web2ImgFullText: 500000,
-  },
   bytes: {
     connectorCommandFile: 256 * KiB,
     nativeScriptResult: 256 * KiB,
@@ -62,7 +58,19 @@ const LENGTH_TIERS = deepFreeze({
   },
 });
 
-export const LENGTH_THRESHOLDS = deepFreeze({
+export const DEFAULT_LENGTH_THRESHOLDS = deepFreeze({
+  runtimeEvents: {
+    maxFileBytes: 5 * 1024 * 1024,
+  },
+  modelProxy: {
+    logFileBytes: 10 * 1024 * 1024,
+  },
+  diagnostics: {
+    responseBytes: 2 * 1024 * 1024,
+  },
+  userTemplate: {
+    limitedContentChars: 2000,
+  },
   connectorSecrets: {
     keyBytes: 32,
     initializationVectorBytes: 12,
@@ -117,13 +125,12 @@ export const LENGTH_THRESHOLDS = deepFreeze({
   },
 
   installers: {
+    versionOutputBytes: 64 * 1024,
     openVscodeArchiveBytes: LENGTH_TIERS.bytes.openVscodeArchive,
   },
 
   toolIO: {
     connectorCommandFileBytes: LENGTH_TIERS.bytes.connectorCommandFile,
-
-    connectorOutputChars: LENGTH_TIERS.chars.persistedChunk,
 
     cleanedTextChars: LENGTH_TIERS.chars.cleanedText,
 
@@ -144,17 +151,13 @@ export const LENGTH_THRESHOLDS = deepFreeze({
 
   dataProcessing: {
     responsesFileInputBytes: LENGTH_TIERS.bytes.responsesFileInput,
-
-    web2ImgUsefulTextChars: LENGTH_TIERS.artifactTextChars.web2ImgUsefulText,
-    web2ImgFullTextChars: LENGTH_TIERS.artifactTextChars.web2ImgFullText,
   },
 
   harness: {
+    jsonlFileBytes: 5 * 1024 * 1024,
     jsonlMaxBufferBytes: LENGTH_TIERS.bytes.jsonlBuffer,
 
     relayInjectionMaxChars: LENGTH_TIERS.chars.mainContext,
-
-    wrappedPayloadStringChars: LENGTH_TIERS.chars.wrappedPayload,
   },
 
   pluginMessage: {
@@ -162,10 +165,16 @@ export const LENGTH_THRESHOLDS = deepFreeze({
   },
 
   sessionLog: {
+    maxDebugQueueBytes: 1024 * 1024,
+    messageChars: 4000,
+    identityChars: 160,
+    levelChars: 32,
+    sourceChars: 120,
     maxPayloadBytes: LENGTH_TIERS.bytes.connectorCommandFile,
   },
 
   agentProxy: {
+    maxBodyBytes: 10 * 1024 * 1024,
     webSocketMaxPayloadBytes: LENGTH_TIERS.bytes.attachmentFile,
     webSocketMaxBufferedBytes: LENGTH_TIERS.bytes.jsonlBuffer,
   },
@@ -174,9 +183,11 @@ export const LENGTH_THRESHOLDS = deepFreeze({
     executionEventSegmentBytes: LENGTH_TIERS.bytes.jsonlBuffer,
     turnMaterializerCacheBytes: 128 * MiB,
     verifiedSnapshotCacheBytes: 128 * MiB,
+    verifiedCheckpointIdentityCacheBytes: 16 * MiB,
   },
 
   display: {
+    toolOperationSubjectChars: 96,
     modelContextContentChars: LENGTH_TIERS.displayChars.modelContextContent,
 
     hookProgressTextChars: LENGTH_TIERS.displayChars.hookProgressText,
@@ -201,3 +212,5 @@ export const LENGTH_THRESHOLDS = deepFreeze({
     harnessDynamicPolicyPromptChars: LENGTH_TIERS.contextPreviewChars.dynamicPolicyPrompt,
   },
 });
+
+export const LENGTH_THRESHOLDS = bindRuntimeThresholds("length", DEFAULT_LENGTH_THRESHOLDS);

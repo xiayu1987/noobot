@@ -18,7 +18,6 @@ import {
   AGENT_COMMAND,
   RUN_COMMAND_TYPES,
 } from "@noobot/agent-transport-protocol";
-import { text } from "@noobot/shared/value";
 
 function projectForwardLogIdentity(payload) {
   const envelope = payload ?? {};
@@ -38,14 +37,12 @@ function describeForwardError(error) {
 }
 
 function projectResolvedInteractionIdentity(resolvedEnvelope) {
-  const envelope = resolvedEnvelope ?? {};
-  const identity = envelope.identity ?? {};
-  const ordering = envelope.ordering ?? {};
+  const { identity, payload, ordering } = resolvedEnvelope;
   return {
-    dialogProcessId: text((envelope.payload ?? {}).dialogProcessId),
-    turnScopeId: text(identity.turnScopeId),
-    sessionId: text(identity.sessionId),
-    sequence: Number(ordering.sequence || 0),
+    dialogProcessId: payload.dialogProcessId,
+    turnScopeId: identity.turnScopeId,
+    sessionId: identity.sessionId,
+    sequence: ordering.sequence,
   };
 }
 
@@ -178,15 +175,14 @@ class ChannelFlowMethods {
     });
   }
 
-  settleForwardedInteractionResponse(channel, payload = {}) {
-    const requestId = text((payload?.interaction ?? {}).requestId);
-    if (!requestId) return;
+  settleForwardedInteractionResponse(channel, payload) {
+    const { requestId } = payload.interaction;
     const resolvedEnvelope = channel.pendingInteractionRequests.get(requestId) || null;
     channel.pendingInteractionRequests.delete(requestId);
     if (!resolvedEnvelope) return;
     const resolved = projectResolvedInteractionIdentity(resolvedEnvelope);
     const hasRemainingInteraction = Array.from(channel.pendingInteractionRequests.values()).some(
-      (envelope) => text(envelope.identity.turnScopeId) === resolved.turnScopeId,
+      (envelope) => envelope.identity.turnScopeId === resolved.turnScopeId,
     );
     this.updateConversationState(
       channel,

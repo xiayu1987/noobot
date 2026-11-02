@@ -43,20 +43,6 @@ export const SERVICE_STARTUP_LIVENESS = Object.freeze({
   UNRESPONSIVE: "unresponsive",
 });
 
-export const SERVICE_STARTUP_STALL_TIMEOUT_ENV = "NOOBOT_STARTUP_STALL_TIMEOUT_MS";
-
-export function resolveServiceStartupStallTimeoutMs(env = process.env) {
-  const raw = env[SERVICE_STARTUP_STALL_TIMEOUT_ENV];
-  if (raw === undefined || raw === "") return TIME_THRESHOLDS.service.startupStallTimeoutMs;
-  const value = Number(raw);
-  if (!Number.isSafeInteger(value) || value <= 0) {
-    throw new TypeError(
-      `${SERVICE_STARTUP_STALL_TIMEOUT_ENV} must be a positive integer, got: ${raw}`,
-    );
-  }
-  return value;
-}
-
 export function assessServiceStartupLiveness(
   { heartbeatAt, progressAt },
   { now = Date.now(), stallTimeoutMs = TIME_THRESHOLDS.service.startupStallTimeoutMs } = {},

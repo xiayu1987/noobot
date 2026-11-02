@@ -6,6 +6,7 @@
 import { MEMORY_DOCUMENT_KIND, readMemoryDocumentBody, renderMemoryDocument } from "../document.js";
 import { EXPERIENCE_STRUCTURE_FIELDS } from "./structure.js";
 import { text } from "@noobot/shared/value";
+import { tMemory } from "../locale.js";
 
 const EXPERIENCE_STAGES = Object.freeze(["daily", "weekly", "monthly", "yearly"]);
 
@@ -15,24 +16,32 @@ function contentField(key, title, description) {
   return Object.freeze({ key, title, description });
 }
 
-export const BUILTIN_EXPERIENCE_FIELDS = Object.freeze({
-  daily: Object.freeze([
-    contentField("experiences", "经验", "做成了什么、有效做法"),
-    contentField("lessons", "教训", "踩过的坑、应避免的做法"),
-  ]),
-  weekly: Object.freeze([
-    contentField("experiences", "经验", "本周可复用的有效做法"),
-    contentField("lessons", "教训", "本周反复出现的问题与规避方式"),
-  ]),
-  monthly: Object.freeze([
-    contentField("patterns", "规律（Patterns）", "跨多条记录成立的规律"),
-    contentField("methodologies", "方法论（Methodologies）", "可指导后续行动的改进方法"),
-  ]),
-  yearly: Object.freeze([
-    contentField("principles", "底层原则（Principles）", "跨时间成立的底层原则"),
-    contentField("reflections", "战略反思（Strategic Reflections）", "年度战略层面的反思"),
-  ]),
-});
+export function createBuiltinExperienceFields(locale) {
+  const definition = {
+    daily: ["experiences", "lessons"],
+    weekly: ["experiences", "lessons"],
+    monthly: ["patterns", "methodologies"],
+    yearly: ["principles", "reflections"],
+  };
+  return Object.freeze(
+    Object.fromEntries(
+      Object.entries(definition).map(([stage, keys]) => [
+        stage,
+        Object.freeze(
+          keys.map((key) =>
+            contentField(
+              key,
+              tMemory(`experience.${stage}.${key}.title`, locale),
+              tMemory(`experience.${stage}.${key}.description`, locale),
+            ),
+          ),
+        ),
+      ]),
+    ),
+  );
+}
+
+export const BUILTIN_EXPERIENCE_FIELDS = createBuiltinExperienceFields();
 
 function cleanCell(value) {
   return String(value ?? "")

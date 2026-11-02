@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
 import {
   RUNTIME_EVENTS_SESSION_LOG_CONTROL_KEYS,
@@ -46,7 +47,10 @@ const SESSION_LOG_DEBUG_CONTROL_KEYS = Object.freeze(
   ),
 );
 
-function normalizeSessionLogText(value = "", { fallback = "", maxLength = 4000 } = {}) {
+function normalizeSessionLogText(
+  value = "",
+  { fallback = "", maxLength = LENGTH_THRESHOLDS.sessionLog.messageChars } = {},
+) {
   const normalizedText = text(value || fallback);
   return maxLength > 0 ? normalizedText.slice(0, maxLength) : normalizedText;
 }
@@ -87,7 +91,7 @@ export function resolveSessionLogClientPolicy(options = {}) {
     ),
     limits: {
       maxDebugQueue: QUANTITY_THRESHOLDS.sessionLog.maxDebugQueueSize,
-      maxDebugBytes: QUANTITY_THRESHOLDS.sessionLog.maxDebugQueueBytes,
+      maxDebugBytes: LENGTH_THRESHOLDS.sessionLog.maxDebugQueueBytes,
       debugTtlMs: TIME_THRESHOLDS.client.sessionLogDebugTtlMs,
     },
   };
@@ -135,11 +139,17 @@ export function buildSessionLogRecord(event = {}) {
     throw new Error(`Invalid session log scope: ${scope}`);
   }
   const data = event.data && typeof event.data === "object" ? { ...event.data } : {};
-  const source = normalizeSessionLogText(event.source, { maxLength: 120 });
+  const source = normalizeSessionLogText(event.source, {
+    maxLength: LENGTH_THRESHOLDS.sessionLog.sourceChars,
+  });
   if (!source) throw new Error("Session log source is required");
-  const name = normalizeSessionLogText(event.event, { maxLength: 160 });
+  const name = normalizeSessionLogText(event.event, {
+    maxLength: LENGTH_THRESHOLDS.sessionLog.identityChars,
+  });
   if (!name) throw new Error("Session log event is required");
-  const sessionId = normalizeSessionLogText(event.sessionId, { maxLength: 160 });
+  const sessionId = normalizeSessionLogText(event.sessionId, {
+    maxLength: LENGTH_THRESHOLDS.sessionLog.identityChars,
+  });
   if (scope === RUNTIME_EVENT_SCOPES.SESSION && !sessionId) {
     throw new Error("Session-scoped session log requires sessionId");
   }
@@ -152,12 +162,20 @@ export function buildSessionLogRecord(event = {}) {
     time: normalizeSessionLogTime(event.time),
     source,
     category,
-    level: normalizeSessionLogText(event.level || "info", { maxLength: 32 }).toLowerCase(),
+    level: normalizeSessionLogText(event.level || "info", {
+      maxLength: LENGTH_THRESHOLDS.sessionLog.levelChars,
+    }).toLowerCase(),
     event: name,
     sessionId,
-    dialogProcessId: normalizeSessionLogText(event.dialogProcessId, { maxLength: 160 }),
-    turnScopeId: normalizeSessionLogText(event.turnScopeId, { maxLength: 160 }),
-    message: normalizeSessionLogText(event.message, { maxLength: 4000 }),
+    dialogProcessId: normalizeSessionLogText(event.dialogProcessId, {
+      maxLength: LENGTH_THRESHOLDS.sessionLog.identityChars,
+    }),
+    turnScopeId: normalizeSessionLogText(event.turnScopeId, {
+      maxLength: LENGTH_THRESHOLDS.sessionLog.identityChars,
+    }),
+    message: normalizeSessionLogText(event.message, {
+      maxLength: LENGTH_THRESHOLDS.sessionLog.messageChars,
+    }),
     data,
   };
   if (category === SESSION_LOG_DEBUG_CATEGORY && typeof event.debugType === "string") {

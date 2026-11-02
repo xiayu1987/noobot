@@ -81,16 +81,13 @@ function hasSameCheckpointGrowth(records = []) {
     flows.set(key, flow);
   }
   return [...flows.values()].some((flow) => {
-    flow.sort(
-      (left, right) =>
-        Number(left.data?.invocationSequence || 0) - Number(right.data?.invocationSequence || 0),
-    );
+    flow.sort((left, right) => left.data.invocationSequence - right.data.invocationSequence);
     return flow.some((current, index) => {
       if (index === 0) return false;
       const previous = flow[index - 1];
       return (
-        Number(current.data?.context?.summaryCheckpointRevision || 0) ===
-          Number(previous.data?.context?.summaryCheckpointRevision || 0) &&
+        current.data.context.summaryCheckpointRevision ===
+          previous.data.context.summaryCheckpointRevision &&
         Number(current.data?.messages?.count || 0) > Number(previous.data?.messages?.count || 0)
       );
     });

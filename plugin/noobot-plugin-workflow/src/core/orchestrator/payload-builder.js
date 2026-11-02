@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { WORKFLOW_PHASE_STATUS, WORKFLOW_PHASES } from "../constants.js";
 import { throwIfWorkflowAborted } from "../hooks/runtime.js";
 import { buildWorkflowOrchestrationPayload } from "../orchestration-payload.js";
 import { enrichWorkflowPayload } from "./payload-enrichment.js";
@@ -15,11 +14,9 @@ export async function buildFinalWorkflowPayload({
   signal,
   semanticText,
   semantic,
-  phaseTracker,
   nodeAgentRuns,
   nodeStateSnapshot,
 }) {
-  phaseTracker.start(WORKFLOW_PHASES.PAYLOAD_BUILD);
   throwIfWorkflowAborted(signal);
   const enriched = enrichWorkflowPayload({
     workflowPayload: buildWorkflowOrchestrationPayload({
@@ -31,6 +28,5 @@ export async function buildFinalWorkflowPayload({
     nodeAgentRuns,
     nodeStateSnapshot,
   });
-  phaseTracker.end(WORKFLOW_PHASES.PAYLOAD_BUILD, WORKFLOW_PHASE_STATUS.SUCCEEDED);
   return enriched;
 }

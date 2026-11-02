@@ -233,7 +233,7 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
   );
   expect(preservedCheckResult).toBeTruthy();
   const postCheckpointInvocations = firstInvocations.filter(
-    (invocation) => Number(invocation.data?.context?.summaryCheckpointRevision) >= 1,
+    (invocation) => invocation.data.context.summaryCheckpointRevision >= 1,
   );
   expect(postCheckpointInvocations.length).toBeGreaterThan(0);
   for (const messageUid of preservedCheckpointEvidenceMessageUids) {

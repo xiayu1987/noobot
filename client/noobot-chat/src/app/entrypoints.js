@@ -6,6 +6,7 @@
 import { defineAsyncComponent } from "vue";
 import {
   ElAffix,
+  ElAlert,
   ElAnchor,
   ElAnchorLink,
   ElButton,
@@ -24,6 +25,7 @@ import {
   ElFormItem,
   ElIcon,
   ElInput,
+  ElLoading,
   ElInputNumber,
   ElOption,
   ElPopover,
@@ -80,6 +82,7 @@ export const ConversationStateDebugPanel = asyncVueComponent(
 
 export function installElementPlusComponents(app) {
   app.use(ElAffix);
+  app.use(ElAlert);
   app.use(ElAnchor);
   app.use(ElAnchorLink);
   app.use(ElButton);
@@ -98,6 +101,7 @@ export function installElementPlusComponents(app) {
   app.use(ElFormItem);
   app.use(ElIcon);
   app.use(ElInput);
+  app.use(ElLoading);
   app.use(ElInputNumber);
   app.use(ElOption);
   app.use(ElPopover);

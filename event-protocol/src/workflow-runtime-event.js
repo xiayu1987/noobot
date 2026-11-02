@@ -12,6 +12,35 @@ import { resolveMessageViewKey } from "./message-event.js";
 export const WORKFLOW_RUNTIME_FAMILY = "workflow.runtime";
 export const WORKFLOW_RUNTIME_SCHEMA_VERSION = 1;
 
+export const WORKFLOW_MESSAGE_IDENTITY = Object.freeze({
+  type: "workflow",
+  source: "workflow-plugin",
+  kind: "workflow",
+});
+
+export const WORKFLOW_MESSAGE_PHASE = Object.freeze({
+  PLANNING: "planning",
+  COMPLETED: "completed",
+});
+
+const WORKFLOW_MESSAGE_PHASES = new Set(Object.values(WORKFLOW_MESSAGE_PHASE));
+
+export function requireWorkflowMessagePhase(phase) {
+  if (!WORKFLOW_MESSAGE_PHASES.has(phase)) {
+    throw new TypeError("invalid_workflow_message_phase");
+  }
+  return phase;
+}
+
+export function isWorkflowMessage(message) {
+  return (
+    message?.type === WORKFLOW_MESSAGE_IDENTITY.type &&
+    message.pluginMeta?.source === WORKFLOW_MESSAGE_IDENTITY.source &&
+    message.pluginMeta.kind === WORKFLOW_MESSAGE_IDENTITY.kind &&
+    WORKFLOW_MESSAGE_PHASES.has(message.pluginMeta.phase)
+  );
+}
+
 export const WORKFLOW_RUNTIME_EVENT = Object.freeze({
   PLANNING: "workflow_planning_message_prepared",
   NODE_STATE: "workflow_node_state_committed",
@@ -23,6 +52,35 @@ export const WORKFLOW_SEQUENCE_DOMAIN = Object.freeze({
   NODE_STATE: "workflow-node-state",
   SESSION_SNAPSHOT: "workflow-session-snapshot",
 });
+
+export function admitWorkflowSessionSnapshot({
+  snapshot,
+  appliedAggregateVersion,
+  applyTurnLifecycleSnapshot,
+  applyTurnTimingSnapshot,
+}) {
+  const lifecycleResult = applyTurnLifecycleSnapshot(snapshot.turnLifecycleSnapshot);
+  if (lifecycleResult.applied === false && lifecycleResult.deduplicated !== true) {
+    return { admitted: false, reason: lifecycleResult.reason, lifecycleResult };
+  }
+  const timingResult = applyTurnTimingSnapshot({
+    sessionId: snapshot.sessionId,
+    turnTimings: snapshot.turnTimings,
+  });
+  if (
+    appliedAggregateVersion !== undefined &&
+    snapshot.aggregateVersion <= appliedAggregateVersion
+  ) {
+    return {
+      admitted: false,
+      reason:
+        snapshot.aggregateVersion === appliedAggregateVersion
+          ? "duplicate_snapshot_version"
+          : "stale_snapshot",
+    };
+  }
+  return { admitted: true, lifecycleResult, timingResult, appliedAggregateVersion };
+}
 
 export const WORKFLOW_NODE_STATUS = Object.freeze({
   PENDING: "pending",
@@ -363,4 +421,16 @@ export function compareWorkflowRuntimeFacts(incoming, current) {
     incoming.revision - current.revision || incoming.sequence - current.sequence,
   );
   return Object.freeze({ comparable: true, order, incomingDomain, currentDomain });
+}
+
+export function projectWorkflowPlanningNodeFact({ nodeSession, eventData }) {
+  if (!isCanonicalPlanningNode(nodeSession)) {
+    throw new TypeError("invalid_planning_node");
+  }
+  return {
+    ...nodeSession,
+    authoritySessionId: eventData.authoritySessionId,
+    workflowRunId: eventData.workflowRunId,
+    sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE,
+  };
 }

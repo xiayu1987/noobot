@@ -3,14 +3,20 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
-import { text } from "@noobot/shared/value";
 import { UPSTREAM_TRANSPORT_PHASE } from "../shared/constants.js";
 
 export class UpstreamTransportSupervisor {
-  constructor(WebSocketImpl, { closeGraceMs = 2000 } = {}) {
+  constructor(
+    WebSocketImpl,
+    { closeGraceMs = TIME_THRESHOLDS.agentProxy.upstreamCloseGraceMs } = {},
+  ) {
+    if (!Number.isFinite(closeGraceMs) || closeGraceMs < 0) {
+      throw new TypeError("invalid_close_grace_ms");
+    }
     this.WebSocket = WebSocketImpl;
-    this.closeGraceMs = Math.max(0, Number(closeGraceMs) || 0);
+    this.closeGraceMs = closeGraceMs;
     this.socket = null;
     this.retiredSockets = new Map();
     this.generation = 0;
@@ -36,7 +42,7 @@ export class UpstreamTransportSupervisor {
     const generation = ++this.generation;
     this.socket = socket;
     this.handlers = handlers;
-    this.purpose = text(purpose) || "run";
+    this.purpose = purpose;
     this.phase = UPSTREAM_TRANSPORT_PHASE.CONNECTING;
     this.everConnected = true;
     this.lastSeenAtMs = Date.now();
@@ -78,14 +84,13 @@ export class UpstreamTransportSupervisor {
 
   claimPurpose(purpose = "run") {
     if (!this.socket || this.phase === UPSTREAM_TRANSPORT_PHASE.DISPOSED) return false;
-    this.purpose = text(purpose) || "run";
+    this.purpose = purpose;
     return true;
   }
 
   closeOwnedConnection(connection = null, code = 1000, reason = "closed", { purpose = "" } = {}) {
     if (!connection || !this.isCurrent(connection.socket, connection.generation)) return false;
-    const requiredPurpose = text(purpose);
-    if (requiredPurpose && this.purpose !== requiredPurpose) return false;
+    if (purpose !== "" && this.purpose !== purpose) return false;
     return this.close(code, reason);
   }
 
@@ -122,8 +127,8 @@ export class UpstreamTransportSupervisor {
     return true;
   }
 
-  touch(nowMs = Date.now()) {
-    this.lastSeenAtMs = Number(nowMs || Date.now());
+  touch() {
+    this.lastSeenAtMs = Date.now();
     this.awaitingPong = false;
   }
 

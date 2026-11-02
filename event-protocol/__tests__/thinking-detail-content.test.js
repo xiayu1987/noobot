@@ -147,25 +147,36 @@ test("excludes explicitly marked context-control and internal injected messages"
   assert.deepEqual(projectThinkingDetailContentTimeline([contextControl, internalControl]), []);
 });
 
-test("requires persisted message identity and ignores malformed persisted detail facts", () => {
-  const timeline = projectThinkingDetailContentTimeline([
-    message({ messageUid: "", role: "assistant", type: "tool_call" }),
-    message({ messageUid: "final", role: "assistant", type: "message" }),
-    message({
-      messageUid: "interjection-without-sequence",
-      role: "user",
-      injectedMessage: true,
-      noobotInternalMessageType: "noobot.user_interjection",
-    }),
-  ]);
-
-  assert.deepEqual(timeline, []);
+test("rejects malformed persisted detail facts instead of hiding corruption", () => {
+  assert.throws(
+    () =>
+      projectThinkingDetailContentTimeline([
+        message({
+          messageUid: "interjection-without-sequence",
+          role: "user",
+          injectedMessage: true,
+          noobotInternalMessageType: "noobot.user_interjection",
+        }),
+      ]),
+    /invalid_thinking_content_fact/,
+  );
+  assert.throws(
+    () =>
+      selectThinkingDetailContentTimeline({
+        thinkingContentTimeline: [
+          { contentId: "event:legacy", contentKind: "thinking", text: "legacy" },
+        ],
+      }),
+    /invalid_thinking_content_fact/,
+  );
+  for (const invalid of [null, {}, "", [null], Array(1)]) {
+    assert.throws(() => reduceThinkingDetailContentTimelines(invalid), TypeError);
+  }
+  assert.deepEqual(selectThinkingDetailContentTimeline({}), []);
   assert.deepEqual(
-    selectThinkingDetailContentTimeline({
-      thinkingContentTimeline: [
-        { contentId: "event:legacy", contentKind: "thinking", text: "legacy" },
-      ],
-    }),
+    projectThinkingDetailContentTimeline([
+      message({ messageUid: "final", role: "assistant", type: "message" }),
+    ]),
     [],
   );
 });

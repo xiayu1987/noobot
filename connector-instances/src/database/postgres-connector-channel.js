@@ -3,6 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { CONNECTOR_FAILURE_CODE } from "@noobot/connector-protocol";
 import { text } from "@noobot/shared/value";
 import { connectorFailure, errorMessage, loadDriverModule } from "../channel-result.js";
@@ -12,9 +14,9 @@ import {
   resolveDatabaseConnection,
 } from "./common-db-connector-channel.js";
 
-const POSTGRES_TIMEOUT_MS = 30000;
-const POSTGRES_IDLE_TIMEOUT_MS = 30000;
-const POSTGRES_POOL_MAX = 5;
+const POSTGRES_TIMEOUT_MS = TIME_THRESHOLDS.connectorInstances.postgresTimeoutMs;
+const POSTGRES_IDLE_TIMEOUT_MS = TIME_THRESHOLDS.connectorInstances.postgresIdleTimeoutMs;
+const POSTGRES_POOL_MAX = QUANTITY_THRESHOLDS.connectorInstances.postgresPoolMax;
 const postgresPools = new Map();
 const abortedFailure = () =>
   connectorFailure(CONNECTOR_FAILURE_CODE.ABORTED, "postgres query aborted");

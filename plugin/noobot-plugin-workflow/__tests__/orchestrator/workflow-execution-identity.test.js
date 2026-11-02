@@ -81,7 +81,12 @@ function buildOptions({ subSessionRunner, maxAutoTransitions = 3 } = {}) {
         runConfigPatch,
         metadata,
         persisted: { outputDir: "runtime/plugin-data/workflow/session/s1/child-a" },
-        result: { messages: [{ role: "assistant", content: "done" }] },
+        result: {
+          answer: "done",
+          traces: [],
+          dialogProcessId: strategy.dialogProcessId,
+          messages: [{ messageUid: "message-done", role: "assistant", content: "done" }],
+        },
       })),
   };
 }
@@ -106,7 +111,12 @@ test("runWorkflowExecution carries planning identity through events, strategy an
         sessionId: call.strategy.sessionId,
         dialogProcessId: call.strategy.dialogProcessId,
         persisted: { outputDir: "runtime/plugin-data/workflow/session/s1/child-a" },
-        result: { messages: [{ role: "assistant", content: "done" }] },
+        result: {
+          answer: "done",
+          traces: [],
+          dialogProcessId: call.strategy.dialogProcessId,
+          messages: [{ messageUid: "message-done", role: "assistant", content: "done" }],
+        },
       };
     },
   });
@@ -195,7 +205,12 @@ test("runWorkflowExecution resolves each node task by nodeId even when node name
         sessionId: call.strategy.sessionId,
         dialogProcessId: call.strategy.dialogProcessId,
         persisted: { outputDir: "runtime/plugin-data/workflow/session/s1/child" },
-        result: { messages: [{ role: "assistant", content: "done" }] },
+        result: {
+          answer: "done",
+          traces: [],
+          dialogProcessId: call.strategy.dialogProcessId,
+          messages: [{ messageUid: "message-done", role: "assistant", content: "done" }],
+        },
       };
     },
   });
@@ -465,7 +480,12 @@ test("runWorkflowExecution propagates a terminal commit failure without a second
       },
       sessionId: call.strategy.sessionId,
       dialogProcessId: call.strategy.dialogProcessId,
-      result: { messages: [{ role: "assistant", content: "done" }] },
+      result: {
+        answer: "done",
+        traces: [],
+        dialogProcessId: call.strategy.dialogProcessId,
+        messages: [{ messageUid: "message-done", role: "assistant", content: "done" }],
+      },
     }),
   });
   const repository = options.workflowNodeStateRepository;
@@ -527,7 +547,12 @@ test("runWorkflowExecution releases the runtime instance when the transition lim
         sessionId: call.strategy.sessionId,
         dialogProcessId: call.strategy.dialogProcessId,
         persisted: { outputDir: "runtime/plugin-data/workflow/session/s1/child-limit" },
-        result: { messages: [{ role: "assistant", content: "done" }] },
+        result: {
+          answer: "done",
+          traces: [],
+          dialogProcessId: call.strategy.dialogProcessId,
+          messages: [{ messageUid: "message-done", role: "assistant", content: "done" }],
+        },
       }),
     }),
     ctx,

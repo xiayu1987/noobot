@@ -49,10 +49,9 @@ test("session summary truncation keys are resolvable from the display group", ()
   }
 });
 
-test("memory parser and harness payload previews resolve from their owning groups", () => {
+test("memory parser previews resolve from their owning group", () => {
   assert.equal(typeof LENGTH_THRESHOLDS.memory.parserCandidatePreviewChars, "number");
   assert.equal(typeof LENGTH_THRESHOLDS.memory.parserRawPreviewChars, "number");
-  assert.equal(typeof LENGTH_THRESHOLDS.harness.wrappedPayloadStringChars, "number");
 });
 
 test("context preview group only carries model context payload budgets", () => {

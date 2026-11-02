@@ -93,6 +93,5 @@ export async function toolExecResult(mode, r, extra, options) {
         ? { transferEnvelopes: outputFileEnvelopes }
         : {}),
     ...(outputResources.length ? { outputResources } : {}),
-    includeLineNumbers,
   });
 }

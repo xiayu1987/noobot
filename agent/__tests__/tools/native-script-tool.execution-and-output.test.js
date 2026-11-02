@@ -118,7 +118,7 @@ test("execute_native_script rejects a non-JSON return value", async () => {
   assert.equal(result.ok, false);
   assert.equal("script_result" in result, false);
   assert.match(
-    result.stderr,
+    result.error,
     /script return value must be JSON-serializable: unsupported undefined/,
   );
 });
@@ -140,7 +140,7 @@ test("execute_native_script rejects implicit toJSON and oversized return values"
     );
     assert.equal(result.ok, false);
     assert.equal("script_result" in result, false);
-    assert.match(result.stderr, expected);
+    assert.match(result.error, expected);
   }
 });
 
@@ -440,8 +440,8 @@ await files.writeBase64(target, "not base64 !!");
   );
 
   assert.equal(result.ok, false, JSON.stringify(result));
-  assert.equal(result.code, SCRIPT_FAILURE_CODE.exited);
-  assert.equal(result.exitCode, 1);
-  assert.match(result.stderr, /files\.writeBase64 requires base64 content/);
+  assert.equal(result.code, SCRIPT_FAILURE_CODE.script_failed);
+  assert.equal(result.exitCode, 0);
+  assert.match(result.error, /files\.writeBase64 requires base64 content/);
   assert.equal(result.output_file_count, 0);
 });

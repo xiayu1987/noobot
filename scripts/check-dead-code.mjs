@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { DEVELOPMENT_THRESHOLDS } from "./lib/development-thresholds.mjs";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -55,7 +56,11 @@ export function scanDeadCode(root, configPath) {
   const result = spawnSync(
     process.execPath,
     [knipCli, "--directory", root, "--config", configPath, "--reporter", "json", "--no-progress"],
-    { cwd: root, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 },
+    {
+      cwd: root,
+      encoding: "utf8",
+      maxBuffer: DEVELOPMENT_THRESHOLDS.length.deadCodeOutputBytes,
+    },
   );
   if (result.error) throw result.error;
   if (result.status !== 0 && result.status !== 1) {
@@ -102,7 +107,7 @@ export const CHECK = defineCheck({
       ],
     },
   ],
-  baseline: { unusedFiles: 0, unusedExports: 92, unusedDependencies: 30, exemptions: 3 },
+  baseline: { unusedFiles: 0, unusedExports: 91, unusedDependencies: 30, exemptions: 3 },
   measure: async (usage) =>
     measureDeadCodeReport(scanDeadCode(repositoryRoot, "knip.config.mjs"), usage),
 });

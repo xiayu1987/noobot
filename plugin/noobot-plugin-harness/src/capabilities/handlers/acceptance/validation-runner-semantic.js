@@ -46,6 +46,7 @@ import {
 } from "../shared/workflow/prompts.js";
 import { injectMessageWithPolicy } from "../shared/message/injection-utils.js";
 import { text } from "@noobot/shared/value";
+import { requireHarnessReportIndex } from "../../../core/bucket-contract.js";
 
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
 
@@ -56,7 +57,9 @@ export function scheduleAcceptanceSemanticValidationByInject(ctx = {}, baseRepor
     scheduledEvent: ACCEPTANCE_EVENTS.semanticValidationScheduledByInject,
     setPendingData: ({ bucket, state }) => {
       const finalOutput = text(ctx?.result?.output);
-      const reportIndex = bucket.acceptanceReports.lastIndexOf(baseReport);
+      const reportIndex = requireHarnessReportIndex(
+        bucket.acceptanceReports.lastIndexOf(baseReport),
+      );
       setPendingStateWithMeta(state, "acceptanceSemanticValidation", {
         reportIndex,
         payload: buildSemanticValidationPromptPayload({
@@ -147,7 +150,9 @@ export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}, meta = {
   });
   setPendingStateWithMeta(state, "acceptanceSemanticValidation", null);
   setCaptureFlagStateWithMeta(state, "acceptanceSemanticValidationCapturePending", true);
-  state.flags.acceptanceSemanticValidationCaptureReportIndex = Number(pendingData.reportIndex);
+  state.flags.acceptanceSemanticValidationCaptureReportIndex = requireHarnessReportIndex(
+    pendingData.reportIndex,
+  );
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.ACCEPTANCE,
     event: ACCEPTANCE_EVENTS.semanticValidationPromptInjected,
@@ -163,7 +168,9 @@ export function maybeCaptureAcceptanceSemanticValidationByInject(ctx = {}) {
     isCapturePending: ({ state }) =>
       state.flags.acceptanceSemanticValidationCapturePending === true,
     consumeCaptureMeta: ({ state }) => {
-      const reportIndex = Number(state.flags.acceptanceSemanticValidationCaptureReportIndex);
+      const reportIndex = requireHarnessReportIndex(
+        state.flags.acceptanceSemanticValidationCaptureReportIndex,
+      );
       setCaptureFlagStateWithMeta(state, "acceptanceSemanticValidationCapturePending", false);
       return { reportIndex };
     },

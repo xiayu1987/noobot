@@ -83,7 +83,7 @@ export function createPlanningAgentContext({ counters = {}, scenario = "full" } 
         harness: {
           logs: { planning: [], guidance: [], acceptance: [], review: [] },
           state: {
-            counters: { llmTurns: 0, planUpdateAttempts: 0, ...counters },
+            counters: { llmTurns: 0, ...counters },
             pending: {
               summary: false,
               guidance: null,

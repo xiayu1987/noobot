@@ -67,26 +67,24 @@ export function parseChannelKey(channelKey = "") {
   return Object.freeze(assertChannelKeyIdentity(identity, channelKey));
 }
 
-export function parseRequestQuery(request = null) {
-  try {
-    const requestUrl = new URL(request?.url || "", "http://localhost");
-    return {
-      pathname: text(requestUrl.pathname),
-      apiKey: text(requestUrl.searchParams.get("apikey")),
-      locale: text(requestUrl.searchParams.get("locale")),
-    };
-  } catch {
-    return { pathname: "", apiKey: "", locale: "" };
+function parseRequestUrl(request) {
+  if (typeof request?.url !== "string" || !request.url) {
+    throw new TypeError("request URL required");
   }
+  return new URL(request.url, "http://localhost");
 }
 
-export function parseRequestPathname(request = null) {
-  try {
-    const requestUrl = new URL(request?.url || "", "http://localhost");
-    return text(requestUrl.pathname);
-  } catch {
-    return "";
-  }
+export function parseRequestQuery(request) {
+  const requestUrl = parseRequestUrl(request);
+  return {
+    pathname: requestUrl.pathname,
+    apiKey: text(requestUrl.searchParams.get("apikey")),
+    locale: text(requestUrl.searchParams.get("locale")),
+  };
+}
+
+export function parseRequestPathname(request) {
+  return parseRequestUrl(request).pathname;
 }
 
 export function nowMs() {

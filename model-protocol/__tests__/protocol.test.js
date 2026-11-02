@@ -5,7 +5,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  buildModelReasoningEffortTransport,
   createModelRequest,
   createModelResponse,
   MODEL_ATTEMPT_KIND,
@@ -13,8 +12,6 @@ import {
   MODEL_INPUT_PROCESSING_KIND,
   MODEL_OPERATION_KIND,
   MODEL_PROTOCOL_VERSION,
-  normalizeModelReasoningConfiguration,
-  resolveModelMinimumReasoningEffort,
   listModelLibraryOptions,
   resolveDefaultModelLibraryProvider,
   resolveModelLibraryProvider,
@@ -31,6 +28,7 @@ import {
   MODEL_PROVIDER_CONFIG_CONTRACT,
   MODEL_PROVIDER_DECLARATION_VISIBILITY,
   MODEL_PROMPT_CACHE_FIELDS,
+  requireInvocationScope,
 } from "../src/index.js";
 
 test("model input processing keeps directly readable text out of multimodal parsing", () => {
@@ -179,7 +177,7 @@ const invocation = {
   flow: "agent.main",
   purpose: "main_agent",
   domain: "primary",
-  contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.CHECKPOINT_APPEND_ONLY,
+  contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
 };
 const model = {
   model: "gpt-5",
@@ -562,7 +560,84 @@ test("model request requires one explicit context sequence policy", () => {
   );
   assert.equal(
     createModelRequest({ invocation, model, messages: [] }).invocation.contextSequencePolicy,
-    MODEL_CONTEXT_SEQUENCE_POLICY.CHECKPOINT_APPEND_ONLY,
+    MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
+  );
+});
+
+test("model request metadata is bound to the context sequence policy", () => {
+  const checkpointInvocation = {
+    ...invocation,
+    contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.CHECKPOINT_APPEND_ONLY,
+  };
+  const request = createModelRequest({
+    invocation: checkpointInvocation,
+    model,
+    messages: [],
+    metadata: { context: { summaryCheckpointRevision: 3 } },
+  });
+  assert.deepEqual(request.metadata, { context: { summaryCheckpointRevision: 3 } });
+  assert.equal(Object.isFrozen(request.metadata.context), true);
+  const checkpoint = (metadata) =>
+    createModelRequest({ invocation: checkpointInvocation, model, messages: [], metadata });
+  assert.throws(
+    () => checkpoint(undefined),
+    /metadata\.context is required for checkpoint_append_only/,
+  );
+  assert.throws(
+    () => checkpoint({ context: { summaryCheckpointRevision: 1, extra: true } }),
+    /metadata\.context\.extra is not part of the protocol/,
+  );
+  assert.throws(() => checkpoint({ context: {} }), /must be a non-negative integer/);
+  assert.throws(
+    () => checkpoint({ context: { summaryCheckpointRevision: -1 } }),
+    /must be a non-negative integer/,
+  );
+  assert.throws(
+    () => checkpoint({ context: { summaryCheckpointRevision: 1 }, trace: {} }),
+    /metadata\.trace is not part of the protocol/,
+  );
+  assert.deepEqual(createModelRequest({ invocation, model, messages: [] }).metadata, {});
+  assert.throws(
+    () =>
+      createModelRequest({
+        invocation,
+        model,
+        messages: [],
+        metadata: { context: { summaryCheckpointRevision: 0 } },
+      }),
+    /metadata\.context is only allowed for checkpoint_append_only/,
+  );
+});
+
+test("invocation scope requires canonical session identity", () => {
+  const scope = requireInvocationScope(invocation, "host identity");
+  assert.deepEqual(scope, {
+    sessionId: "s",
+    parentSessionId: "",
+    dialogProcessId: "d",
+    turnScopeId: "t",
+    runId: "run",
+  });
+  assert.equal(Object.isFrozen(scope), true);
+  assert.throws(
+    () => requireInvocationScope(null, "host identity"),
+    /host identity must be an object/,
+  );
+  assert.throws(
+    () => requireInvocationScope({ ...invocation, sessionId: " s" }, "host identity"),
+    /host identity\.sessionId must be canonical non-empty text/,
+  );
+  assert.throws(
+    () => requireInvocationScope({ ...invocation, runId: "" }, "host identity"),
+    /host identity\.runId must be canonical non-empty text/,
+  );
+  assert.throws(
+    () => requireInvocationScope({ ...invocation, parentSessionId: undefined }, "host identity"),
+    /host identity\.parentSessionId must be canonical text/,
+  );
+  assert.throws(
+    () => requireInvocationScope({ ...invocation, parentSessionId: "p " }, "host identity"),
+    /host identity\.parentSessionId must be canonical text/,
   );
 });
 
@@ -709,100 +784,4 @@ test("model operation capabilities are governed only by explicit model configura
       }),
     /does not declare web_search capability/,
   );
-});
-
-test("reasoning transport is declared by the provider, never inferred from a model name", () => {
-  const misleading = {
-    model: "gemini-3.7-flash",
-    reasoning_effort_parameter: "reasoning_effort",
-    reasoning_effort_options: ["low", "high"],
-    reasoning_effort: "high",
-  };
-  assert.deepEqual(buildModelReasoningEffortTransport(misleading, "high"), {
-    reasoning_effort: "high",
-  });
-  const declared = {
-    model: "in-house-model",
-    reasoning_effort_parameter: "thinking_level",
-    reasoning_effort_options: ["low", "medium"],
-  };
-  assert.deepEqual(buildModelReasoningEffortTransport(declared, "medium"), {
-    thinking_level: "medium",
-  });
-});
-
-test("a switch-shaped reasoning parameter carries a boolean on the wire", () => {
-  const provider = {
-    reasoning_effort_parameter: "enable_thinking",
-    reasoning_effort_options: ["none", "medium"],
-  };
-  assert.deepEqual(buildModelReasoningEffortTransport(provider, "medium"), {
-    enable_thinking: true,
-  });
-  assert.deepEqual(buildModelReasoningEffortTransport(provider, "none"), {
-    enable_thinking: false,
-  });
-});
-
-test("reasoning declarations support an open option set without silently defaulting", () => {
-  assert.deepEqual(
-    normalizeModelReasoningConfiguration({
-      reasoning_effort_parameter: "reasoning_effort",
-      reasoning_effort: " Custom-Level ",
-      tool_reasoning_effort: "Tool-Level",
-    }),
-    {
-      reasoning_effort_parameter: "reasoning_effort",
-      reasoning_effort_options: [],
-      reasoning_effort: "Custom-Level",
-      tool_reasoning_effort: "Tool-Level",
-    },
-  );
-  assert.deepEqual(
-    buildModelReasoningEffortTransport(
-      { reasoning_effort_parameter: "reasoning_effort" },
-      "Custom-Level",
-    ),
-    { reasoning_effort: "Custom-Level" },
-  );
-  assert.throws(
-    () => normalizeModelReasoningConfiguration({ reasoning_effort_options: ["low"] }),
-    /reasoning_effort_parameter/,
-  );
-  assert.throws(
-    () =>
-      normalizeModelReasoningConfiguration({
-        reasoning_effort_options: ["low"],
-        reasoning_effort_parameter: "thinking_budget",
-      }),
-    /unsupported model provider reasoning_effort_parameter/,
-  );
-});
-
-test("an effort outside the declared options resolves to the lowest declared level", () => {
-  const normalized = normalizeModelReasoningConfiguration({
-    reasoning_effort_parameter: "reasoning_effort",
-    reasoning_effort_options: ["high", "max"],
-    reasoning_effort: "medium",
-    tool_reasoning_effort: "invalid",
-  });
-  assert.equal(normalized.reasoning_effort, "high");
-  assert.equal(normalized.tool_reasoning_effort, "high");
-  assert.equal(resolveModelMinimumReasoningEffort(normalized), "high");
-});
-
-test("every library provider declares a canonical reasoning contract", () => {
-  for (const option of listModelLibraryOptions()) {
-    const provider = resolveModelLibraryProvider(option.key);
-    assert.deepEqual(
-      normalizeModelReasoningConfiguration(provider),
-      {
-        reasoning_effort_parameter: provider.reasoning_effort_parameter,
-        reasoning_effort_options: provider.reasoning_effort_options,
-        reasoning_effort: provider.reasoning_effort,
-        tool_reasoning_effort: provider.tool_reasoning_effort,
-      },
-      `${option.key} declares a non-canonical reasoning contract`,
-    );
-  }
 });

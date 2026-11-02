@@ -5,15 +5,26 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
+import {
+  createTestResolveModelMessages,
+  ensureTestHookContext,
+  createTestHookContext,
+} from "../helpers/public-runtime-fixtures.js";
 
 import { createCapabilityRuntime } from "../../src/capabilities/runtime.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { resolveFsmTargetByHook, HARNESS_FSM_STATES } from "../../src/fsm/transitions.js";
 import { buildEvent } from "../../src/data/record-builders.js";
+import { createHarnessBucket } from "../../src/core/bucket-contract.js";
 
 test("pending states are auto-cleaned by hook turns without timers", async () => {
   const runtime = createCapabilityRuntime({
+    profile: {
+      planning: { enabled: false },
+      guidance: { enabled: false },
+      acceptance: { enabled: false },
+      review: { enabled: false },
+    },
     handlers: {},
   });
   const ctx = {
@@ -26,6 +37,14 @@ test("pending states are auto-cleaned by hook turns without timers", async () =>
           harness: {
             state: {
               counters: {},
+              pendingMeta: {
+                pending: { guidance: 1, planRevision: 1, acceptanceSemanticValidation: 1 },
+                flags: {
+                  planUpdateCapturePending: 1,
+                  acceptanceSemanticValidationCapturePending: 1,
+                },
+                lastWarnHookTurn: null,
+              },
               flags: {
                 planUpdateCapturePending: true,
                 acceptanceSemanticValidationCapturePending: true,
@@ -50,8 +69,10 @@ test("pending states are auto-cleaned by hook turns without timers", async () =>
       },
     },
   };
-  const meta = { harness: { pendingTtlHookTurns: 1 } };
-  createTestHookContext(ctx);
+  const meta = {
+    harness: { resolveModelMessages: createTestResolveModelMessages(), pendingTtlHookTurns: 1 },
+  };
+  ensureTestHookContext(ctx);
 
   await runtime.runHook(HOOK_POINT.AGENT.BEFORE_LLM_CALL, ctx, meta);
   assert.equal(ctx.agentContext.bindings.extensions.harness.state.pending.planRevision, true);
@@ -148,7 +169,9 @@ test("takeover priority pipeline keeps higher priority takeover effective", asyn
       messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "hello" }] },
     },
   );
-  await runtime.runHook(HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT, ctx, {});
+  await runtime.runHook(HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT, ensureTestHookContext(ctx), {
+    harness: { resolveModelMessages: createTestResolveModelMessages() },
+  });
 
   assert.match(String(ctx.modelContext.messages[0]?.content || ""), /guidance/);
   assert.match(String(ctx.modelContext.messages[1]?.content || ""), /planning/);
@@ -221,8 +244,12 @@ test("capability runtime skips disabled planning guidance and acceptance handler
   }
   assert.deepEqual(runtime.resolveByHook(HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT), ["review"]);
 
-  await runtime.runHook(HOOK_POINT.AGENT.BEFORE_LLM_CALL, ctx, {});
-  await runtime.runHook(HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT, ctx, {});
+  await runtime.runHook(HOOK_POINT.AGENT.BEFORE_LLM_CALL, ensureTestHookContext(ctx), {
+    harness: { resolveModelMessages: createTestResolveModelMessages() },
+  });
+  await runtime.runHook(HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT, ensureTestHookContext(ctx), {
+    harness: { resolveModelMessages: createTestResolveModelMessages() },
+  });
 
   assert.deepEqual(calls, ["review"]);
   assert.equal(calls.includes("planning"), false);
@@ -246,7 +273,12 @@ test("resolveFsmTargetByHook uses rule table consistently", () => {
         bindings: {
           runtime: {},
           tools: [],
-          extensions: { harness: { planText: "1. x" } },
+          extensions: {
+            harness: {
+              ...createHarnessBucket(),
+              planText: "1. x",
+            },
+          },
         },
       },
     },

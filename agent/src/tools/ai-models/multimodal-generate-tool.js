@@ -416,7 +416,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
     {
       name: TOOL_NAME.MULTIMODAL_GENERATE,
       description: tTool(runtime, "tools.multimodal.description"),
-      schema: z.object({
+      schema: z.strictObject({
         generation_content: z
           .string()
           .describe(tTool(runtime, "tools.multimodal.fieldGenerationContent")),

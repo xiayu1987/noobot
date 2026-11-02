@@ -61,7 +61,7 @@ function persistedWorkflow(overrides = {}) {
     pluginMeta: {
       source: "workflow-plugin",
       kind: "workflow",
-      phase: "running",
+      phase: "planning",
       payload: { workflowRunId: "workflow-a" },
     },
     ...overrides,
@@ -90,7 +90,6 @@ describe("selectTurnPresentations", () => {
       role: "assistant",
       type: "workflow",
       turnScopeId: "turn-a",
-      __workflowLiveProjection: true,
       pluginMeta: {
         payload: {
           semantic: {
@@ -125,7 +124,6 @@ describe("selectTurnPresentations", () => {
       ts: 123,
       pending: true,
       type: "workflow",
-      __workflowLiveProjection: true,
     });
   });
 
@@ -500,7 +498,6 @@ describe("selectTurnPresentations", () => {
     expect(result[1]).toMatchObject({
       sessionId: "session-a",
       turnScopeId: "turn-b",
-      __workflowLiveProjection: true,
     });
   });
 
@@ -525,7 +522,6 @@ describe("selectTurnPresentations", () => {
     expect(result[0]).toMatchObject({
       sessionId: "session-a",
       turnScopeId: "turn-a",
-      __workflowLiveProjection: true,
     });
   });
 

@@ -104,7 +104,7 @@ function projectTurn({ current, transition, event, sessionId, turnScopeId }) {
     source: text(event.source || currentValue.source),
     sourceEvent: text(event.sourceEvent || event.type),
     authority: event.authority,
-    finishedAtMs: terminal ? Number(currentValue.finishedAtMs || nowMs) : 0,
+    finishedAtMs: terminal ? Date.parse(finishedAt) : 0,
     startedAt: text(startedAt),
     finishedAt: text(finishedAt),
     continuationSource: event.continuationSource || currentValue.continuationSource || null,

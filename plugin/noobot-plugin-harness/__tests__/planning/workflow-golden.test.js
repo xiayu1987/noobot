@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import test from "node:test";
+import { createTestWorkflowState } from "../helpers/workflow-state.js";
 import assert from "node:assert/strict";
 
 import { resolveGuidancePriorityDecision } from "../../src/capabilities/handlers/planning/plan-update-scheduler.js";
@@ -46,32 +47,36 @@ function createAgentContext({ pending = {}, flags = {} } = {}) {
 }
 
 test("golden: guidance outranks summary_overflow and plan_update", () => {
-  const decision = resolveGuidancePriorityDecision({
-    pending: {
-      summary: true,
-      guidance: { reason: "tool_failures" },
-      planRevision: true,
-      planRevisionContext: { targetMainStepIndexes: [] },
-    },
-    flags: {
-      summaryByCharsPrompted: true,
-    },
-  });
+  const decision = resolveGuidancePriorityDecision(
+    createTestWorkflowState({
+      pending: {
+        summary: true,
+        guidance: "consecutive_failures",
+        planRevision: true,
+        planRevisionContext: { targetMainStepIndexes: [] },
+      },
+      flags: {
+        summaryByCharsPrompted: true,
+      },
+    }),
+  );
   assert.equal(decision.chosenAction, "guidance");
 });
 
 test("golden: guidance outranks plan_update", () => {
-  const decision = resolveGuidancePriorityDecision({
-    pending: {
-      summary: false,
-      guidance: { reason: "tool_failures" },
-      planRevision: true,
-      planRevisionContext: { targetMainStepIndexes: [] },
-    },
-    flags: {
-      summaryByCharsPrompted: false,
-    },
-  });
+  const decision = resolveGuidancePriorityDecision(
+    createTestWorkflowState({
+      pending: {
+        summary: false,
+        guidance: "consecutive_failures",
+        planRevision: true,
+        planRevisionContext: { targetMainStepIndexes: [] },
+      },
+      flags: {
+        summaryByCharsPrompted: false,
+      },
+    }),
+  );
   assert.equal(decision.chosenAction, "guidance");
 });
 
@@ -97,12 +102,12 @@ test("golden: simultaneous workflow candidates follow priority order", () => {
   const baseState = {
     pending: {
       summary: true,
-      guidance: { reason: "tool_failures" },
+      guidance: "consecutive_failures",
       planRevision: true,
       planRevisionContext: { targetMainStepIndexes: [] },
       phaseAcceptance: true,
       analysis: true,
-      acceptanceSemanticValidation: { phase: "final" },
+      acceptanceSemanticValidation: { reportIndex: 0, phase: "final" },
     },
     flags: {
       planningCaptured: true,
@@ -110,7 +115,7 @@ test("golden: simultaneous workflow candidates follow priority order", () => {
     },
   };
 
-  const guidanceFirst = resolveWorkflowActionDecision(baseState);
+  const guidanceFirst = resolveWorkflowActionDecision(createTestWorkflowState(baseState));
   assert.equal(guidanceFirst.chosenAction, "guidance");
   assert.deepEqual(guidanceFirst.deferredActions, [
     "plan_update_revision",
@@ -128,10 +133,12 @@ test("golden: simultaneous workflow candidates follow priority order", () => {
     "acceptance_semantic_validation_deferred_by_phase_acceptance",
   ]);
 
-  const revisionFirst = resolveWorkflowActionDecision({
-    ...baseState,
-    pending: { ...baseState.pending, guidance: null },
-  });
+  const revisionFirst = resolveWorkflowActionDecision(
+    createTestWorkflowState({
+      ...baseState,
+      pending: { ...baseState.pending, guidance: null },
+    }),
+  );
   assert.equal(revisionFirst.chosenAction, "plan_update_revision");
   assert.deepEqual(revisionFirst.blockedActions, [
     "phase_acceptance",
@@ -142,15 +149,17 @@ test("golden: simultaneous workflow candidates follow priority order", () => {
     "acceptance_semantic_validation_deferred_by_phase_acceptance",
   ]);
 
-  const phaseFirst = resolveWorkflowActionDecision({
-    ...baseState,
-    pending: {
-      ...baseState.pending,
-      guidance: null,
-      planRevision: false,
-      planRevisionContext: null,
-    },
-  });
+  const phaseFirst = resolveWorkflowActionDecision(
+    createTestWorkflowState({
+      ...baseState,
+      pending: {
+        ...baseState.pending,
+        guidance: null,
+        planRevision: false,
+        planRevisionContext: null,
+      },
+    }),
+  );
   assert.equal(phaseFirst.chosenAction, "phase_acceptance");
   assert.deepEqual(phaseFirst.blockedActions, [
     "summary_overflow",
@@ -161,16 +170,18 @@ test("golden: simultaneous workflow candidates follow priority order", () => {
     "acceptance_semantic_validation_deferred_by_phase_acceptance",
   ]);
 
-  const summaryBeforeAnalysis = resolveWorkflowActionDecision({
-    ...baseState,
-    pending: {
-      ...baseState.pending,
-      guidance: null,
-      planRevision: false,
-      planRevisionContext: null,
-      phaseAcceptance: false,
-    },
-  });
+  const summaryBeforeAnalysis = resolveWorkflowActionDecision(
+    createTestWorkflowState({
+      ...baseState,
+      pending: {
+        ...baseState.pending,
+        guidance: null,
+        planRevision: false,
+        planRevisionContext: null,
+        phaseAcceptance: false,
+      },
+    }),
+  );
   assert.equal(summaryBeforeAnalysis.chosenAction, "summary_overflow");
   assert.deepEqual(summaryBeforeAnalysis.deferredActions, [
     "acceptance_semantic_validation",
@@ -178,54 +189,60 @@ test("golden: simultaneous workflow candidates follow priority order", () => {
   ]);
   assert.deepEqual(summaryBeforeAnalysis.blockedActions, []);
 
-  const semanticValidationBeforeAnalysis = resolveWorkflowActionDecision({
-    ...baseState,
-    pending: {
-      ...baseState.pending,
-      guidance: null,
-      planRevision: false,
-      planRevisionContext: null,
-      phaseAcceptance: false,
-      summary: false,
-    },
-  });
+  const semanticValidationBeforeAnalysis = resolveWorkflowActionDecision(
+    createTestWorkflowState({
+      ...baseState,
+      pending: {
+        ...baseState.pending,
+        guidance: null,
+        planRevision: false,
+        planRevisionContext: null,
+        phaseAcceptance: false,
+        summary: false,
+      },
+    }),
+  );
   assert.equal(semanticValidationBeforeAnalysis.chosenAction, "acceptance_semantic_validation");
   assert.deepEqual(semanticValidationBeforeAnalysis.deferredActions, ["analysis"]);
   assert.deepEqual(semanticValidationBeforeAnalysis.blockedActions, []);
 
-  const analysisFirst = resolveWorkflowActionDecision({
-    ...baseState,
-    pending: {
-      ...baseState.pending,
-      guidance: null,
-      planRevision: false,
-      planRevisionContext: null,
-      phaseAcceptance: false,
-      summary: false,
-      acceptanceSemanticValidation: null,
-    },
-  });
+  const analysisFirst = resolveWorkflowActionDecision(
+    createTestWorkflowState({
+      ...baseState,
+      pending: {
+        ...baseState.pending,
+        guidance: null,
+        planRevision: false,
+        planRevisionContext: null,
+        phaseAcceptance: false,
+        summary: false,
+        acceptanceSemanticValidation: null,
+      },
+    }),
+  );
   assert.equal(analysisFirst.chosenAction, "analysis");
   assert.deepEqual(analysisFirst.deferredActions, []);
   assert.deepEqual(analysisFirst.blockedActions, []);
 });
 
 test("golden: forced acceptance overrides all simultaneous workflow candidates", () => {
-  const decision = resolveWorkflowActionDecision({
-    pending: {
-      summary: true,
-      guidance: { reason: "tool_failures" },
-      planRevision: true,
-      planRevisionContext: { targetMainStepIndexes: [] },
-      phaseAcceptance: true,
-      analysis: true,
-      acceptanceSemanticValidation: { phase: "final" },
-    },
-    flags: {
-      planningCaptured: true,
-      overflowForceAcceptancePending: true,
-    },
-  });
+  const decision = resolveWorkflowActionDecision(
+    createTestWorkflowState({
+      pending: {
+        summary: true,
+        guidance: "consecutive_failures",
+        planRevision: true,
+        planRevisionContext: { targetMainStepIndexes: [] },
+        phaseAcceptance: true,
+        analysis: true,
+        acceptanceSemanticValidation: { reportIndex: 0, phase: "final" },
+      },
+      flags: {
+        planningCaptured: true,
+        overflowForceAcceptancePending: true,
+      },
+    }),
+  );
   assert.equal(decision.chosenAction, "forced_acceptance");
   assert.deepEqual(decision.deferredActions, [
     "guidance",

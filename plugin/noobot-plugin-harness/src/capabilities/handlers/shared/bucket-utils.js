@@ -3,15 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  DEFAULT_HARNESS_COUNTERS,
-  DEFAULT_HARNESS_FLAGS,
-  DEFAULT_HARNESS_PENDING,
-  DEFAULT_HARNESS_SIGNALS,
-  HARNESS_BUCKET_VERSION,
-} from "./constants.js";
 import { resolveLocale } from "./i18n.js";
-import { isPlainObject, isObjectLike } from "@noobot/shared/value";
+import { isPlainObject } from "@noobot/shared/value";
+import { assertHarnessBucket, createHarnessBucket } from "../../../core/bucket-contract.js";
 
 function ensureObjectField(target, key) {
   if (target[key] === undefined) target[key] = {};
@@ -19,123 +13,20 @@ function ensureObjectField(target, key) {
   return target[key];
 }
 
-function ensureArrayField(target, key) {
-  if (target[key] === undefined) target[key] = [];
-  if (!Array.isArray(target[key])) throw new TypeError(`invalid_harness_array:${key}`);
-  return target[key];
-}
-
-function fillMissingDefaults(target = {}, defaults = {}) {
-  for (const [key, value] of Object.entries(defaults)) {
-    if (target[key] === undefined) target[key] = value;
-  }
-}
-
-function bindStateVersionAlias(bucket = {}, state = {}) {
-  if (!isObjectLike(bucket)) return;
-  if (!isObjectLike(state)) return;
-  const bucketVersion = Number(bucket.__harnessBucketVersion);
-  if (!Number.isFinite(bucketVersion)) {
-    bucket.__harnessBucketVersion = HARNESS_BUCKET_VERSION;
-  }
-  Object.defineProperty(state, "__harnessBucketVersion", {
-    enumerable: true,
-    configurable: true,
-    get() {
-      return Number(bucket.__harnessBucketVersion) || HARNESS_BUCKET_VERSION;
-    },
-    set(nextValue) {
-      const normalized = Number(nextValue);
-      bucket.__harnessBucketVersion = Number.isFinite(normalized)
-        ? normalized
-        : HARNESS_BUCKET_VERSION;
-    },
-  });
-}
-
 export function readHarnessBucket(ctx = {}) {
   const bucket = ctx?.agentContext?.bindings?.extensions?.harness;
-  return isPlainObject(bucket) ? bucket : null;
+  return bucket === undefined ? null : assertHarnessBucket(bucket);
 }
 
 export function ensureHarnessBucket(ctx = {}) {
-  const agentContext =
-    ctx?.agentContext && typeof ctx.agentContext === "object" ? ctx.agentContext : null;
+  const agentContext = ctx?.agentContext;
   if (!agentContext) return null;
+  if (!isPlainObject(agentContext)) throw new TypeError("invalid_harness_object:agentContext");
   const bindings = ensureObjectField(agentContext, "bindings");
   const extensions = ensureObjectField(bindings, "extensions");
-  const bucket = ensureObjectField(extensions, "harness");
-  const state = ensureObjectField(bucket, "state");
-  const existingVersion = Number(bucket.__harnessBucketVersion);
-  const hasExistingState = Object.keys(bucket).some(
-    (key) => key !== "state" && key !== "__harnessBucketVersion",
-  );
-  if (
-    (Number.isFinite(existingVersion) && existingVersion !== HARNESS_BUCKET_VERSION) ||
-    (!Number.isFinite(existingVersion) && hasExistingState)
-  ) {
-    throw new Error(
-      `harness_bucket_migration_required:${Number.isFinite(existingVersion) ? existingVersion : 0}`,
-    );
-  }
-  bindStateVersionAlias(bucket, state);
-
-  const isFastPathReady =
-    bucket.__harnessBucketVersion === HARNESS_BUCKET_VERSION &&
-    typeof bucket.planText === "string" &&
-    Array.isArray(bucket.acceptanceReports) &&
-    Array.isArray(bucket.phaseAcceptanceReports) &&
-    Array.isArray(bucket.reviewReports) &&
-    Array.isArray(bucket.planningRawOutputs) &&
-    isPlainObject(bucket.planAcceptanceStatusByPlanId) &&
-    bucket.logs &&
-    typeof bucket.logs === "object" &&
-    Array.isArray(bucket.logs.planning) &&
-    Array.isArray(bucket.logs.guidance) &&
-    Array.isArray(bucket.logs.acceptance) &&
-    Array.isArray(bucket.logs.review) &&
-    isPlainObject(state.counters) &&
-    isPlainObject(state.flags) &&
-    isPlainObject(state.signals) &&
-    isPlainObject(state.pending);
-
-  if (!isFastPathReady) {
-    const counters = ensureObjectField(state, "counters");
-    const flags = ensureObjectField(state, "flags");
-    const signals = ensureObjectField(state, "signals");
-    const pending = ensureObjectField(state, "pending");
-    fillMissingDefaults(counters, DEFAULT_HARNESS_COUNTERS);
-    fillMissingDefaults(flags, DEFAULT_HARNESS_FLAGS);
-    fillMissingDefaults(signals, DEFAULT_HARNESS_SIGNALS);
-    fillMissingDefaults(pending, DEFAULT_HARNESS_PENDING);
-    ensureArrayField(bucket, "acceptanceReports");
-    ensureArrayField(bucket, "phaseAcceptanceReports");
-    ensureArrayField(bucket, "reviewReports");
-    ensureArrayField(bucket, "planningRawOutputs");
-    ensureArrayField(bucket, "completedDialogProcessIds");
-    ensureObjectField(bucket, "planAcceptanceStatusByPlanId");
-    if (typeof bucket.summaryText !== "string") bucket.summaryText = "";
-    if (typeof bucket.summaryFullText !== "string") bucket.summaryFullText = "";
-    if (typeof bucket.planText !== "string") bucket.planText = "";
-    if (!Number.isFinite(Number(bucket.globalRevisionCount))) bucket.globalRevisionCount = 0;
-    if (!Array.isArray(bucket.lastRevisionChangedMainStepIndexes)) {
-      bucket.lastRevisionChangedMainStepIndexes = [];
-    }
-    if (
-      !("lastPlanningRawOutput" in bucket) ||
-      (bucket.lastPlanningRawOutput && typeof bucket.lastPlanningRawOutput !== "object")
-    ) {
-      bucket.lastPlanningRawOutput = null;
-    }
-    const logs = ensureObjectField(bucket, "logs");
-    ensureArrayField(logs, "planning");
-    ensureArrayField(logs, "guidance");
-    ensureArrayField(logs, "acceptance");
-    ensureArrayField(logs, "review");
-    bucket.__harnessBucketVersion = HARNESS_BUCKET_VERSION;
-  }
-
-  const locale = resolveLocale(ctx);
-  state.locale = locale;
+  if (extensions.harness === undefined) extensions.harness = createHarnessBucket();
+  const bucket = assertHarnessBucket(extensions.harness);
+  const state = bucket.state;
+  state.locale = resolveLocale(ctx);
   return { bucket, state };
 }

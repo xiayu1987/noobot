@@ -18,61 +18,6 @@ import {
   buildAttachmentService,
 } from "./helpers/file-script-length-guards-helper.js";
 
-test("search: text 输入超过上限时由 semantic-transfer 保存附件并直接提示", async () => {
-  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-search-guard-"));
-  let invoked = false;
-  const tool = {
-    async invoke() {
-      invoked = true;
-      throw new Error("search concrete tool must not be invoked for overlong text input");
-    },
-  };
-
-  const runnerResult = await executeToolCall({
-    call: {
-      id: "call_long_search_text",
-      name: "search",
-      args: {
-        source: "text",
-        query: "needle",
-        text: "x".repeat(LENGTH_THRESHOLDS.semanticTransfer.toolInputOverflowChars + 1),
-      },
-    },
-    tool,
-    ...toolCallScope(
-      buildAgentContext(basePath, "u-test", {
-        identity: { sessionId: "s-search" },
-        runtime: {
-          globalConfig: {},
-          attachmentService: buildAttachmentService(),
-        },
-      }),
-    ),
-  });
-  const result = parseToolResult(runnerResult.toolResultText);
-
-  assert.equal(invoked, false);
-  assert.equal(runnerResult.success, false);
-  assert.equal(runnerResult.failureReason, "tool_input_overflow");
-  assert.equal(result.toolName, "search");
-  assert.equal(result.ok, false);
-  assert.equal(result.code, "RECOVERABLE_TOOL_INPUT_OVERFLOW");
-  assert.equal(result.error, "搜索文本过长，请分批搜索");
-  assert.equal(Array.isArray(result.transferEnvelopes), true);
-  assert.equal(result.transferEnvelopes.length, 1);
-  assert.equal(result.transferEnvelopes[0].version, TRANSFER_VERSION);
-  assert.equal(result.transferEnvelopes[0].payload.mode, "attachment");
-  assert.equal(
-    result.transferEnvelopes[0].payload.attachments[0].name,
-    "search-text.tool-input.txt",
-  );
-  assert.equal(
-    typeof result.transferEnvelopes[0].payload.attachments[0].identity.attachmentId,
-    "string",
-  );
-  assert.equal(result.toolInputOverflow?.field, "text");
-});
-
 test("patch_file: patch 超过 semantic-transfer 阈值时保存附件并直接提示", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-guard-"));
   let invoked = false;

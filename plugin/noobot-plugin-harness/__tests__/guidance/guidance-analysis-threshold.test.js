@@ -96,10 +96,11 @@ test("planning counters consume skipped agent turns without owning analysis turn
 });
 
 test("guidance analysis counter consumes skipped turns and ignores same-turn reentry", async () => {
+  const threshold = Math.max(2, FULL_ANALYSIS_TRIGGER_TURNS_THRESHOLD);
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createAgentContext({
     counters: {
-      analysisTurns: FULL_ANALYSIS_TRIGGER_TURNS_THRESHOLD - 2,
+      analysisTurns: threshold - 2,
       lastGuidanceAnalysisCounterTurn: 1,
     },
   });
@@ -109,11 +110,12 @@ test("guidance analysis counter consumes skipped turns and ignores same-turn ree
     messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
     agentContext,
   };
-  await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta: {} });
-  await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta: {} });
+  const meta = { harness: { guidance: { analysis: { turnsThreshold: threshold } } } };
+  await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
+  await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
 
   const counters = agentContext.bindings.extensions.harness.state.counters;
-  assert.equal(counters.analysisTurns, FULL_ANALYSIS_TRIGGER_TURNS_THRESHOLD - 1);
+  assert.equal(counters.analysisTurns, threshold - 1);
   assert.equal(counters.lastGuidanceAnalysisCounterTurn, 2);
 });
 
@@ -184,7 +186,8 @@ test("guidance schedules analysis by scenario-specific turn threshold", async ()
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const beforeProgrammingThreshold = createAgentContext({
     counters: {
-      analysisTurns: PROGRAMMING_ANALYSIS_TRIGGER_TURNS_THRESHOLD - 2,
+      analysisTurns: 0,
+      lastGuidanceAnalysisCounterTurn: 1,
       planUpdateTurns: 0,
       phaseAcceptanceTurns: 0,
     },
@@ -193,6 +196,7 @@ test("guidance schedules analysis by scenario-specific turn threshold", async ()
     capability: "guidance",
     point: "agent.before_llm_call",
     ctx: {
+      turn: 1,
       runConfig: { scenario: "programming" },
       messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
       agentContext: beforeProgrammingThreshold,
@@ -205,7 +209,7 @@ test("guidance schedules analysis by scenario-specific turn threshold", async ()
   );
   assert.equal(
     beforeProgrammingThreshold.bindings.extensions.harness.state.counters.analysisTurns,
-    PROGRAMMING_ANALYSIS_TRIGGER_TURNS_THRESHOLD - 1,
+    0,
   );
 
   const atProgrammingThreshold = createAgentContext({

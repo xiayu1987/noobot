@@ -6,10 +6,10 @@
 
 export const READ_FILE_MANUAL = {
   read_file: {
-    summary: "读取文本文件内容，支持按行区间读取与行号标注。",
+    summary: "读取文本文件，按 cat -n 格式返回带行号内容，支持按行区间读取。",
     usage: [
-      "read_file({ filePath, includeLineNumbers, maxLines, riskLevel })",
-      "read_file({ filePath, startLine, endLine, maxLines, includeLineNumbers, riskLevel })",
+      "read_file({ filePath, maxLines, riskLevel })",
+      "read_file({ filePath, startLine, endLine, maxLines, riskLevel })",
     ],
     params: {
       filePath:
@@ -17,11 +17,11 @@ export const READ_FILE_MANUAL = {
       startLine: "起始行，1-based，可选。省略时从第一行开始。",
       endLine: "结束行，1-based，可选。省略时读到 maxLines 上限，超过文件末尾按末尾截止。",
       maxLines: "最大返回行数，防止超大文件一次性灌入上下文。",
-      includeLineNumbers: "返回内容是否带行号。写补丁前建议开启，便于核对上下文。",
       riskLevel: "操作风险等级。读取可能涉及隐私、密码、令牌、凭证或密钥时必须标记为 critical。",
     },
     notes: [
       "只用于文本类文件。图片、音频、视频与二进制文档改用 multimodal_parse。",
+      "numberedContent 每行为“6 位右对齐行号 + 制表符 + 原文”；行号前缀不属于原文，写补丁上下文只取制表符之后的内容。",
       "返回体含 totalLines 与 hasMore，hasMore 为 true 时继续分段读取。",
       "超大文件建议先用 search 定位命中行，再按行区间精读，不要整文件拉取。",
       "当前路径策略不允许文件工具使用符号链接。",

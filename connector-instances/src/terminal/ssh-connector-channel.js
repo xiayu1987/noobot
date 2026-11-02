@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { randomUUID } from "node:crypto";
 import { CONNECTOR_FAILURE_CODE } from "@noobot/connector-protocol";
 import { isPlainObject, text } from "@noobot/shared/value";
@@ -13,7 +14,7 @@ import {
   loadDriverModule,
 } from "../channel-result.js";
 
-const SSH_COMMAND_TIMEOUT_MS = 30000;
+const SSH_COMMAND_TIMEOUT_MS = TIME_THRESHOLDS.connectorInstances.sshCommandTimeoutMs;
 
 const SSH_DEFAULT_PORT = 22;
 

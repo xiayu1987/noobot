@@ -9,18 +9,11 @@ import { text } from "@noobot/shared/value";
 
 const inputViewCache = new WeakMap();
 
-function closeStripObjects({ zodSchema, jsonSchema }) {
-  const def = zodSchema?._zod?.def;
-  if (def?.type === "object" && def.catchall === undefined) {
-    jsonSchema.additionalProperties = false;
-  }
-}
-
 function exportInputViewParameters(schema) {
   const cached = inputViewCache.get(schema);
   if (cached) return cached;
   const inputSchema = interopZodTransformInputSchema(schema, true);
-  const parameters = z.toJSONSchema(inputSchema, { io: "input", override: closeStripObjects });
+  const parameters = z.toJSONSchema(inputSchema, { io: "input" });
   inputViewCache.set(schema, parameters);
   return parameters;
 }

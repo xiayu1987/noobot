@@ -95,6 +95,32 @@ export function resolveAuthoritativeModelContext(context = {}) {
   return null;
 }
 
+export function requireAuthoritativeModelContext(context) {
+  const modelContext = resolveAuthoritativeModelContext(context);
+  if (!modelContext) {
+    throw new TypeError(`modelContext requires protocolVersion=${MODEL_CONTEXT_PROTOCOL_VERSION}`);
+  }
+  requireMessageBlocks(modelContext.messageBlocks);
+  if (!Array.isArray(modelContext.messages)) {
+    throw new TypeError("modelContext messages must be an array");
+  }
+  return modelContext;
+}
+
+export function resolveAuthoritativeModelMessages({ ctx, resolver, purpose }) {
+  requireAuthoritativeModelContext(ctx);
+  if (typeof resolver !== "function") {
+    throw new TypeError(
+      "capability model messages require the authoritative modelContext resolver",
+    );
+  }
+  const messages = resolver({ ctx, purpose });
+  if (!Array.isArray(messages)) {
+    throw new TypeError("authoritative modelContext resolver must return a message array");
+  }
+  return messages;
+}
+
 function validateModelContextProtocol(modelContext) {
   if (modelContext == null) return [];
   if (!asObject(modelContext)) return ["modelContext should be object"];

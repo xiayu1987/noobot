@@ -14,6 +14,8 @@ import { createPluginServicePorts } from "../services/plugin-service-ports.js";
 import { rateLimit } from "express-rate-limit";
 import { createHttpAdmissionOptions } from "../security/http-admission.js";
 import { text } from "@noobot/shared/value";
+import { registerRuntimeParamsRoutes } from "../routes/runtime-params-routes.js";
+import { RUNTIME_PARAMS_SNAPSHOT_API } from "@noobot/shared/runtime-params";
 
 export async function registerHttpModules(
   app,
@@ -84,6 +86,7 @@ export async function registerHttpModules(
   app.use((req, res, next) => {
     if (
       req.path === "/health" ||
+      req.path === RUNTIME_PARAMS_SNAPSHOT_API ||
       req.path === "/internal/connect" ||
       req.path === "/ide" ||
       req.path.startsWith("/ide/")
@@ -95,6 +98,8 @@ export async function registerHttpModules(
   });
 
   app.param("userId", administrableUserScopeParam);
+
+  registerRuntimeParamsRoutes(app, { requireApiKey, requireSuperAdmin, workspaceRootPath });
 
   registerConfigAndTemplateRoutes(app, {
     requireApiKey,

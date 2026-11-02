@@ -17,7 +17,20 @@ export const AGENT_CONTRACTS = Object.freeze([
     required: [
       [
         "session message entity validates and projects record identity through session-protocol",
-        /projectSessionMessageRecordIdentity\(\s*assertSessionMessageRecordIdentity\(message\)\s*\)/,
+        /projectSessionMessageRecordIdentity\(message\)/,
+      ],
+    ],
+  },
+  {
+    file: "session-protocol/src/aggregate/session-message-record.js",
+    required: [
+      [
+        "record identity projection admits records through the canonical validator",
+        /function projectSessionMessageRecordIdentity\(record\)\s*\{\s*assertSessionMessageRecordIdentity\(record\)/,
+      ],
+      [
+        "record identity admission uses the public message identity predicate",
+        /isMessageIdentity\(record\[MESSAGE_IDENTITY_FIELD\.SESSION\]\)/,
       ],
     ],
   },

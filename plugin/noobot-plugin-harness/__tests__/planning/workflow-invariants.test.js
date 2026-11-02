@@ -6,11 +6,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { enforceWorkflowInvariants } from "../../src/capabilities/handlers/shared/workflow/invariants.js";
+import { createHarnessBucket } from "../../src/core/bucket-contract.js";
 
 function createCtx(pending) {
+  const harness = createHarnessBucket();
+  Object.assign(harness.state.pending, pending);
   return {
     agentContext: {
-      bindings: { extensions: { harness: { state: { pending, flags: {} } } } },
+      bindings: { extensions: { harness } },
     },
   };
 }

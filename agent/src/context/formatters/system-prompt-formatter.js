@@ -8,6 +8,7 @@ import { SYSTEM_PROMPT_FORMATTER_I18N as zhSystemPromptFormatterI18n } from "noo
 import { SYSTEM_PROMPT_FORMATTER_I18N as enSystemPromptFormatterI18n } from "noobot-i18n/agent/locales/en-US/system-prompt";
 import { projectAttachmentMetaForModel } from "../../artifacts/index.js";
 import { isPlainObject, text } from "@noobot/shared/value";
+import { requireSessionCaller } from "@noobot/shared/session-caller";
 
 function toSystemSection(title, content) {
   return `# ${title}\n${content}`;
@@ -108,16 +109,19 @@ function hasConnectorData(connectorStatusSection = {}) {
   return Array.isArray(connectors) && connectors.length > 0;
 }
 
-function normalizeDynamicInfoForSystem(dynamicInfo = {}) {
+function normalizeDynamicInfoForSystem(dynamicInfo) {
   if (!isPlainObject(dynamicInfo)) {
-    return {};
+    throw new TypeError("system context dynamicInfo must be an object");
   }
-  const config = isPlainObject(dynamicInfo.config) ? dynamicInfo.config : {};
+  if (Object.keys(dynamicInfo).length === 0) return {};
+  if (!isPlainObject(dynamicInfo.config)) {
+    throw new TypeError("system context dynamicInfo.config must be an object");
+  }
   return {
-    now: text(dynamicInfo.now),
-    caller: text(dynamicInfo.caller) || "user",
+    now: dynamicInfo.now,
+    caller: requireSessionCaller(dynamicInfo.caller),
     config: {
-      allowUserInteraction: config.allowUserInteraction,
+      allowUserInteraction: dynamicInfo.config.allowUserInteraction,
     },
   };
 }

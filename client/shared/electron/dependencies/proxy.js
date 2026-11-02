@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 import { text, isFunction } from "@noobot/shared/value";
 
@@ -62,7 +63,7 @@ export function getCurlProxyArgs(proxyUrl = "") {
 export async function validateDependencyProxy({
   proxyUrl = "",
   runProcess,
-  timeoutMs = 15000,
+  timeoutMs = TIME_THRESHOLDS.desktop.dependencyProxyProbeTimeoutMs,
 } = {}) {
   const normalized = normalizeDependencyProxyUrl(proxyUrl);
   if (!normalized) return { ok: true, proxyUrl: "", maskedProxyUrl: "" };

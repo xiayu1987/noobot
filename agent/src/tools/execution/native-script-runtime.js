@@ -17,6 +17,7 @@ import {
   projectTaskPathText,
   resolveTaskPath,
 } from "@noobot/path-resolver";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { buildRestrictedProcessEnv } from "@noobot/platform-compatibility/process";
 import {
@@ -330,7 +331,9 @@ function createPageFacade(page, paths) {
         page.waitForSelector(String(selector || ""), options).then(() => undefined),
       waitForLoadState: (state, options) => page.waitForLoadState(state, options),
       waitForTimeout: (timeout) =>
-        page.waitForTimeout(Math.min(30000, Math.max(0, Number(timeout || 0)))),
+        page.waitForTimeout(
+          Math.min(TIME_THRESHOLDS.tools.nativeBrowserMaxWaitMs, Math.max(0, Number(timeout || 0))),
+        ),
       locator: (selector) => createLocatorFacade(page.locator(String(selector || "")), paths),
       screenshot: async (options = {}) => captureScreenshot(page, options, paths.resolveOutput),
       close: (options) => page.close(options),
@@ -397,7 +400,10 @@ export async function createNativeScriptRuntime({
   const declaredDirectoryTokens = new Set([
     createTaskPath({ kind: TASK_PATH_KINDS.OUTPUT, allowRoot: true }),
   ]);
-  const capabilityTimeoutMs = Math.max(1, Number(timeoutMs || 0) - 5000);
+  const capabilityTimeoutMs = Math.max(
+    1,
+    Number(timeoutMs || 0) - TIME_THRESHOLDS.tools.nativeCapabilityGraceMs,
+  );
   await Promise.all([mkdir(outputRoot, { recursive: true }), mkdir(tempRoot, { recursive: true })]);
   const inputRelative = (reference) => {
     const key = text(reference);

@@ -10,6 +10,7 @@ import {
 } from "./extension-registry.js";
 import {
   EXTENSION_POINTS,
+  invokeRuntimeStreamRoute,
   requireRuntimeStreamRouteContext,
 } from "@noobot/plugin-protocol/frontend";
 import { validateProtocolEvent } from "@noobot/event-protocol";
@@ -26,13 +27,13 @@ function executeRuntimeRoutes(
 ) {
   for (const route of routes) {
     try {
-      if (route({ envelope, descriptor, context }) === true) return true;
+      if (invokeRuntimeStreamRoute(route, { envelope, descriptor, context })) return true;
     } catch (error) {
       logDiagnostics("frontend.pluginRuntime.projectorFailed", {
         ...buildDiagnostics(),
         error: String(error?.message || error || ""),
       });
-      console.warn(`[runtime-stream-router] route failed: ${error?.message || error}`);
+      throw error;
     }
   }
   return false;

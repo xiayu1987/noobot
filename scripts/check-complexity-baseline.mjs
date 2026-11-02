@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { DEVELOPMENT_THRESHOLDS } from "./lib/development-thresholds.mjs";
 import path from "node:path";
 import { ESLint } from "eslint";
 import {
@@ -14,8 +15,8 @@ import {
 import { getFirstPartyProductionFiles } from "./quality/source-inventory.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
-const COMPLEXITY_LIMIT = 20;
-const NESTING_LIMIT = 2;
+const COMPLEXITY_LIMIT = DEVELOPMENT_THRESHOLDS.quantity.complexityLimit;
+const NESTING_LIMIT = DEVELOPMENT_THRESHOLDS.quantity.nestingLimit;
 export const LINT_RULES = Object.freeze({
   complexity: ["error", COMPLEXITY_LIMIT],
   "max-lines-per-function": ["error", { max: 150, skipBlankLines: true, skipComments: true }],
@@ -106,12 +107,12 @@ export const CHECK = defineCheck({
   },
   exemptions: [],
   baseline: {
-    complexityCount: 140,
+    complexityCount: 130,
     longFunctionCount: 57,
     maxComplexity: 48,
     nestedTernaryCount: 74,
-    deepNestingCount: 298,
-    longParameterListCount: 44,
+    deepNestingCount: 286,
+    longParameterListCount: 41,
     exemptions: 0,
   },
   measure,

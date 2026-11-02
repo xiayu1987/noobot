@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
 import { getMessageRuntimeChannelState } from "../../chat/runtime/sessionRunStateMachine.js";
 import { summarizeDebugAttachments } from "@noobot/shared/debug-projection";
@@ -38,7 +39,10 @@ export function summarizeDebugMessage(message = {}) {
   };
 }
 
-export function summarizeDebugMessages(messages = [], limit = 12) {
+export function summarizeDebugMessages(
+  messages = [],
+  limit = QUANTITY_THRESHOLDS.client.resendDebugLimit,
+) {
   if (!Array.isArray(messages)) return [];
   const start = Math.max(0, messages.length - limit);
   return messages.slice(start).map((message, offset) => ({

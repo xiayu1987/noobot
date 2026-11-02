@@ -679,10 +679,10 @@ test("executeToolCallInTurn repairs stringified scalar args before start event a
   ]);
 });
 
-test("executeToolCallInTurn leaves unrepairable args untouched and emits no repair event", async () => {
+test("executeToolCallInTurn rejects unrepairable args before invocation and emits no repair event", async () => {
   const events = [];
   let invokedArgs = null;
-  await executeToolCall({
+  const result = await executeToolCall({
     call: { id: "call-no-repair", name: "patch_file", args: { patch: "x", dryRun: "yes" } },
     tool: {
       schema: z.object({ patch: z.string(), dryRun: z.boolean().optional() }),
@@ -697,7 +697,10 @@ test("executeToolCallInTurn leaves unrepairable args untouched and emits no repa
     }),
   });
 
-  assert.deepEqual(invokedArgs, { patch: "x", dryRun: "yes" });
+  assert.equal(invokedArgs, null);
+  assert.deepEqual(JSON.parse(result.toolResultText).details.issues, [
+    { code: "invalid_type", field: "dryRun" },
+  ]);
   assert.equal(
     events.some((event) => event.event === "tool_args_repaired"),
     false,
@@ -792,25 +795,4 @@ test("canonical tool_call_end carries validated mutationRefs", async () => {
   assert.equal(completed.mutationRefs.length, 1);
   assertMutationRef(completed.mutationRefs[0]);
   assert.equal(completed.mutationRefs[0].mutationId, MUTATION_ID);
-});
-
-test("executeToolCall maps schema validation failures to RECOVERABLE_INVALID_INPUT", async () => {
-  const { tool: structuredTool } = await import("@langchain/core/tools");
-  const schemaTool = structuredTool(async () => "unreachable", {
-    name: "demo_schema_tool",
-    description: "demo",
-    schema: z.object({ query: z.string().min(1) }),
-  });
-  const result = await executeToolCall({
-    call: { id: "call-schema-invalid", name: "demo_schema_tool", args: { query: "" } },
-    tool: schemaTool,
-    turn: 1,
-  });
-
-  const payload = JSON.parse(result.toolResultText);
-  assert.equal(payload.ok, false);
-  assert.equal(payload.code, "RECOVERABLE_INVALID_INPUT");
-  assert.match(payload.error, /did not match expected schema/);
-  assert.match(payload.error, /query/);
-  assert.equal(result.success, false);
 });

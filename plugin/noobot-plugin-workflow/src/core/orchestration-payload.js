@@ -5,13 +5,12 @@
  */
 
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-import { text } from "@noobot/shared/value";
+import { text, isCanonicalText } from "@noobot/shared/value";
 
 export function buildWorkflowOrchestrationPayload({ workflowRunId, ctx, semanticText, semantic }) {
-  const resolvedWorkflowRunId = text(workflowRunId);
-  if (!resolvedWorkflowRunId) throw new Error("workflowRunId is required");
+  if (!isCanonicalText(workflowRunId)) throw new TypeError("workflowRunId is required");
   return {
-    workflowRunId: resolvedWorkflowRunId,
+    workflowRunId,
     runMeta: {
       sessionId: ctx.sessionId,
       dialogProcessId: ctx.dialogProcessId,

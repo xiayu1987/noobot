@@ -22,6 +22,8 @@ import {
   isTransientMessageEvent,
   isTransientMessageEventType,
   projectMessageEventContent,
+  projectMessageEventMetadata,
+  projectAuthoritativeFinalMessage,
   projectTurnPresentation,
   resolveMessageEventPresentationId,
   resolveMessageEventModelMessageId,
@@ -38,6 +40,31 @@ import {
 
 const LEGACY_MESSAGE_ID = MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID;
 const OK_RESULT = JSON.stringify({ ok: true });
+
+test("message view projections preserve admitted metadata and reject malformed metadata at admission", () => {
+  const source = payload({ modelAlias: " model alias ", modelName: "model-name" });
+  assert.equal(validateMessageEventPayload(source).valid, true);
+  assert.deepEqual(projectMessageEventMetadata(source), {
+    modelAlias: source.modelAlias,
+    modelName: source.modelName,
+  });
+  for (const field of ["modelAlias", "modelName"]) {
+    assert.equal(validateMessageEventPayload({ ...source, [field]: 42 }).valid, false);
+  }
+  assert.deepEqual(projectMessageEventMetadata(payload()), {});
+  assert.deepEqual(projectAuthoritativeFinalMessage(source), {});
+  const final = payload({
+    eventType: MESSAGE_EVENT_TYPE.AUTHORITATIVE_FINAL_CONTENT,
+    text: "answer",
+    attachments: [{ id: "attachment" }],
+  });
+  assert.equal(validateMessageEventPayload(final).valid, true);
+  assert.deepEqual(projectAuthoritativeFinalMessage(final), {
+    content: "answer",
+    attachments: final.attachments,
+  });
+  assert.notEqual(projectAuthoritativeFinalMessage(final).attachments, final.attachments);
+});
 
 function payload(overrides = {}) {
   return {

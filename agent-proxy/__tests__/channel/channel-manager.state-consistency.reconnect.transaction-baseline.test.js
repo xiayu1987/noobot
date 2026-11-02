@@ -551,7 +551,7 @@ test("an orphan-flagged snapshot is settled once via turn.finalize and the settl
   assert.equal(countPendingCommands(manager, channel, PENDING_COMMAND_KIND.TURN_SNAPSHOT), 0);
 });
 
-test("a failed recovery finalize keeps the original authoritative snapshot and completes reconnect", async () => {
+test("a failed recovery finalize rejects reconnect without publishing the original snapshot", async () => {
   const sessionId = "session-recovery-failed";
   const { manager, channel, forwarded, client, reconnectPromise } =
     setupRecoveryReconnect(sessionId);
@@ -583,14 +583,12 @@ test("a failed recovery finalize keeps the original authoritative snapshot and c
       occurredAt: "2026-01-01T00:00:00.000Z",
     }),
   );
-  await reconnectPromise;
-
-  const entry = getEvent(client, "reconnect_data").data.sessions.find(
-    (item) => item.sessionId === sessionId,
+  await assert.rejects(
+    reconnectPromise,
+    new RegExp(`authoritative_snapshot_failed:${sessionId}:turn_finalize_failed`),
   );
-  assert.equal(entry.replayBatch.snapshot.causality.commandId, snapshotCommandId);
-  assert.equal(entry.replayBatch.snapshot.payload.recovery, "orphan");
-  assert.equal(getEvent(client, "reconnect_complete")?.data?.totalSessions, 1);
+  assert.equal(getEvent(client, "reconnect_data"), null);
+  assert.equal(getEvent(client, "reconnect_complete"), null);
   assert.equal(countPendingCommands(manager, channel, PENDING_COMMAND_KIND.TURN_SNAPSHOT), 0);
 });
 

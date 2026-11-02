@@ -23,6 +23,26 @@ const staleTurn = (overrides = {}) => ({
   turnScopeId: "turn-stale",
   dialogProcessId: "dialog-stale",
   executionId: "agent:turn-stale",
+  executionKind: "agent",
+  rootExecutionId: "agent:turn-stale",
+  parentExecutionId: "",
+  origin: {},
+  stage: "",
+  commandId: "command-stale",
+  action: "send",
+  presentationMessageId: "presentation-stale",
+  executionState: "sending",
+  summaryVersion: 0,
+  completionCommitId: "",
+  terminalStatus: null,
+  failure: null,
+  finalizeIntent: null,
+  continuationSource: null,
+  continuedByTurnScopeId: "",
+  startedAt: "2026-07-18T00:00:00.000Z",
+  createdAt: "2026-07-18T00:00:00.000Z",
+  finishedAt: "",
+  sequence: 3,
   state: TURN_STATE.PROCESSING,
   phase: TURN_PHASE.PROCESSING,
   revision: 3,
@@ -32,10 +52,19 @@ const staleTurn = (overrides = {}) => ({
 
 const dead = async () => ({ alive: false, observedAtMs: OBSERVED_LATE });
 
+const finalizeIntent = (type, commandId = "stable-finalize") => ({
+  type,
+  commandId,
+  retryable: true,
+  createdAt: "2026-07-18T00:00:00.000Z",
+  updatedAt: "2026-07-18T00:00:00.000Z",
+});
+
 test("assessment is pure: finalize wins over liveness, orphan needs a dead observation", () => {
   const finalizeTurn = staleTurn({
     state: TURN_STATE.COMPLETION_REQUESTING,
-    finalizeIntent: { type: "completion", retryable: true },
+    phase: TURN_PHASE.COMPLETION,
+    finalizeIntent: finalizeIntent("completion"),
   });
   assert.equal(
     assessTurnRecovery({ turn: finalizeTurn, observation: { alive: true } }).action,
@@ -67,7 +96,8 @@ test("inspection observes liveness only when the decision depends on it", async 
   const finalize = await inspectTurnRecovery({
     turn: staleTurn({
       state: TURN_STATE.STOPPING,
-      finalizeIntent: { type: "stop", retryable: true },
+      phase: TURN_PHASE.STOP,
+      finalizeIntent: finalizeIntent("stop"),
     }),
     identity: { userId: "u1" },
     inspectExecution,
@@ -154,7 +184,7 @@ test("finalize recovery constructs one revision-bound authority command", async 
     turn: staleTurn({
       state: TURN_STATE.COMPLETION_REQUESTING,
       phase: TURN_PHASE.COMPLETION,
-      finalizeIntent: { type: "completion", commandId: "stable-finalize", retryable: true },
+      finalizeIntent: finalizeIntent("completion"),
     }),
     identity: { userId: "u1", sessionId: "s1" },
     commitTurnLifecycle: async (input) => {
@@ -176,7 +206,7 @@ test("finalize recovery takes priority over orphan failure for a dead completion
     turn: staleTurn({
       state: TURN_STATE.COMPLETION_REQUESTING,
       phase: TURN_PHASE.COMPLETION,
-      finalizeIntent: { type: "completion", commandId: "stable-finalize", retryable: true },
+      finalizeIntent: finalizeIntent("completion"),
     }),
     identity: { userId: "u1", sessionId: "s1" },
     inspectExecution: dead,
@@ -196,11 +226,7 @@ test("stop finalize recovery completes the stop with a command-only terminal sta
     turn: staleTurn({
       state: TURN_STATE.STOPPING,
       phase: TURN_PHASE.STOP,
-      finalizeIntent: {
-        type: "stop",
-        commandId: "stable-stop-finalize",
-        retryable: true,
-      },
+      finalizeIntent: finalizeIntent("stop", "stable-stop-finalize"),
     }),
     identity: { userId: "u1", sessionId: "s1" },
     commitTurnLifecycle: async (input) => {
@@ -219,7 +245,7 @@ test("finalize recovery exposes revision races without retrying a stale decision
     turn: staleTurn({
       state: TURN_STATE.STOPPING,
       phase: TURN_PHASE.STOP,
-      finalizeIntent: { type: "stop", commandId: "stable-stop-finalize", retryable: true },
+      finalizeIntent: finalizeIntent("stop", "stable-stop-finalize"),
     }),
     identity: { userId: "u1", sessionId: "s1" },
     commitTurnLifecycle: async () => {
@@ -243,4 +269,70 @@ test("recovery reports a missing commit port without committing", async () => {
     action: TURN_RECOVERY_ACTION.ORPHAN,
     reason: "lifecycle_commit_unavailable",
   });
+});
+
+test("invalid recovery input is rejected before inspection or commit", async () => {
+  let calls = 0;
+  for (const turn of [staleTurn({ phase: "unknown" }), staleTurn({ turnScopeId: " " }), {}]) {
+    await assert.rejects(
+      recoverActiveTurn({
+        turn,
+        inspectExecution: async () => {
+          calls += 1;
+          return dead();
+        },
+        commitTurnLifecycle: async () => {
+          calls += 1;
+        },
+      }),
+      { code: "TURN_LIFECYCLE_RECORD_INVALID" },
+    );
+  }
+  assert.equal(calls, 0);
+});
+
+test("missing or malformed observation facts never become an orphan decision", async () => {
+  for (const observation of [
+    true,
+    false,
+    {},
+    { alive: false },
+    { alive: "false", observedAtMs: OBSERVED_LATE },
+    { alive: false, observedAtMs: String(OBSERVED_LATE) },
+  ]) {
+    await assert.rejects(
+      recoverActiveTurn({
+        turn: staleTurn(),
+        inspectExecution: async () => observation,
+        commitTurnLifecycle: async () => {
+          assert.fail("invalid observation must not commit");
+        },
+        graceMs: 1,
+      }),
+      { code: "TURN_EXECUTION_OBSERVATION_INVALID" },
+    );
+  }
+});
+
+test("recovery preserves a rejected commit reason and rejects missing commit facts", async () => {
+  for (const committed of [undefined, {}, { applied: false }, { applied: false, reason: " " }]) {
+    await assert.rejects(
+      recoverActiveTurn({
+        turn: staleTurn(),
+        inspectExecution: dead,
+        commitTurnLifecycle: async () => committed,
+        graceMs: 1,
+      }),
+      { code: "TURN_RECOVERY_COMMIT_RESULT_INVALID" },
+    );
+  }
+  const committed = { applied: false, reason: "session_deleted" };
+  const result = await recoverActiveTurn({
+    turn: staleTurn(),
+    inspectExecution: dead,
+    commitTurnLifecycle: async () => committed,
+    graceMs: 1,
+  });
+  assert.equal(result.reason, "session_deleted");
+  assert.equal(result.committed, committed);
 });

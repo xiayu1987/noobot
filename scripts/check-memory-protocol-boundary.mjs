@@ -25,6 +25,9 @@ import { getFirstPartyFilesUnder } from "./quality/source-inventory.mjs";
 
 const SCAN = Object.freeze({ repositoryRoot, extensions: [".js", ".mjs"], includeTests: true });
 const ASSET_PACKAGE_DIR = "user-template/default-user";
+const MEMORY_LOCALE_ENTRY = "memory-protocol/src/locale.js";
+const MEMORY_LOCALE_IMPORT = "noobot-i18n/memory";
+const PURE_LOCALE_ROOTS = Object.freeze(["i18n/src/memory", "i18n/src/shared"]);
 const PURE_PACKAGE_IMPORTS = Object.freeze({
   "memory-protocol": [
     "@noobot/context-protocol/",
@@ -64,10 +67,27 @@ const AGENT_DUPLICATES = Object.freeze([
 async function measurePackageFile(measurement, file, packageDir, allowed) {
   for (const { specifier, line } of importReferences(await readRepositoryText(file))) {
     const foreign =
-      !specifier.startsWith(".") && !allowed.some((prefix) => specifier.startsWith(prefix));
+      !specifier.startsWith(".") &&
+      !allowed.some((prefix) => specifier.startsWith(prefix)) &&
+      !(file === MEMORY_LOCALE_ENTRY && specifier === MEMORY_LOCALE_IMPORT);
     if (foreign || escapesDirectory(file, packageDir, specifier)) {
       addHit(measurement, { file, line, message: `imports ${specifier}` });
     }
+  }
+}
+
+async function measureLocaleFile(measurement, file) {
+  for (const { specifier, line } of importReferences(await readRepositoryText(file))) {
+    const allowed = specifier.startsWith(".")
+      ? PURE_LOCALE_ROOTS.some((root) => !escapesDirectory(file, root, specifier))
+      : PROTOCOL_LEAF_IMPORT_PREFIXES.some((prefix) => specifier.startsWith(prefix));
+    if (!allowed) addHit(measurement, { file, line, message: `imports ${specifier}` });
+  }
+}
+
+async function measureLocaleDependencies(measurement) {
+  for (const file of await getFirstPartyFilesUnder(PURE_LOCALE_ROOTS, SCAN)) {
+    await measureLocaleFile(measurement, file);
   }
 }
 
@@ -89,6 +109,7 @@ async function measure() {
   for (const [packageDir, allowed] of Object.entries(PURE_PACKAGE_IMPORTS)) {
     await measurePurePackage(measured.purePackageImport, packageDir, allowed);
   }
+  await measureLocaleDependencies(measured.purePackageImport);
   await addRemovedPathHits(measured.removedImplementation, REMOVED_PATHS, "must remain removed");
   for (const file of await getFirstPartyFilesUnder(["agent/src"], SCAN)) {
     await measureAgentDuplicates(measured.agentDuplicate, file);

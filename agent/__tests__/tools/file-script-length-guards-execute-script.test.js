@@ -178,7 +178,7 @@ test("execute_script: 可选给 stdout/stderr 加行号", async () => {
     await invokeScript(tool, { command: "printf 'a\\nb\\n'", riskLevel: "low" }),
   );
   assert.equal(defaultResult.ok, true);
-  assert.equal(defaultResult.includeLineNumbers, false);
+  assert.equal(Object.hasOwn(defaultResult, "includeLineNumbers"), false);
   assert.equal(defaultResult.stdout, "a\nb\n");
 
   const withLines = parseToolResult(
@@ -189,9 +189,8 @@ test("execute_script: 可选给 stdout/stderr 加行号", async () => {
     }),
   );
   assert.equal(withLines.ok, true);
-  assert.equal(withLines.includeLineNumbers, true);
-  assert.equal(withLines.stdout, "1 | a\n2 | b");
-  assert.equal(withLines.stderr, "1 | err");
+  assert.equal(withLines.stdout, "     1\ta\n     2\tb");
+  assert.equal(withLines.stderr, "     1\terr");
 });
 
 test("execute_script: foreground 模式保留 shell 管道、stderr 与非零退出码语义", async () => {
@@ -220,9 +219,11 @@ test("execute_script: foreground 模式保留 shell 管道、stderr 与非零退
       riskLevel: "low",
     }),
   );
-  assert.equal(failResult.ok, false);
-  assert.equal(failResult.code, SCRIPT_FAILURE_CODE.exited);
+  assert.equal(failResult.ok, true);
+  assert.equal(failResult.termination, "exited");
   assert.equal(failResult.exitCode, 7);
+  assert.equal("code" in failResult, false);
+  assert.equal("error" in failResult, false);
   assert.equal(failResult.stdout, "partial");
   assert.equal(failResult.stderr.trim(), "boom");
 });

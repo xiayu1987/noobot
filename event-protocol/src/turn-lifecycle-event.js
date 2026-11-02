@@ -4,9 +4,42 @@
  * SPDX-License-Identifier: MIT
  */
 import { TURN_LIFECYCLE_WIRE_EVENT } from "@noobot/session-protocol";
+import { isCanonicalText, stableValue } from "@noobot/shared/value";
 import { createEventEnvelope } from "./envelope.js";
 import { EVENT_FAMILY, getEventFamily, validateProtocolEvent } from "./event-registry.js";
 import { SESSION_SEQUENCE_DOMAIN } from "./turn-snapshot.js";
+
+export function mergeTurnLifecycleEvents(sessionId, events) {
+  if (!isCanonicalText(sessionId) || !Array.isArray(events)) {
+    throw new TypeError("invalid lifecycle merge input");
+  }
+  const byId = new Map();
+  const bySequence = new Map();
+  for (const envelope of events) {
+    const validation = validateProtocolEvent(envelope);
+    if (
+      !validation.valid ||
+      validation.descriptor.family !== EVENT_FAMILY.TURN_LIFECYCLE ||
+      envelope.identity.sessionId !== sessionId
+    ) {
+      throw new TypeError("invalid lifecycle merge envelope");
+    }
+    const { eventId } = envelope.identity;
+    const { sequence } = envelope.ordering;
+    const existing = byId.get(eventId) || bySequence.get(sequence);
+    if (existing) {
+      if (JSON.stringify(stableValue(existing)) !== JSON.stringify(stableValue(envelope))) {
+        throw new TypeError("lifecycle_event_conflict");
+      }
+      continue;
+    }
+    byId.set(eventId, envelope);
+    bySequence.set(sequence, envelope);
+  }
+  return [...bySequence.values()].sort(
+    (left, right) => left.ordering.sequence - right.ordering.sequence,
+  );
+}
 
 export function createTurnLifecycleEventEnvelope(payload, { producer }) {
   const envelope = createEventEnvelope({

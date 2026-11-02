@@ -230,6 +230,17 @@ test("sandbox mode treats unmapped absolute paths as execution paths, never host
   assert.equal(result.resolvedPath, "");
 });
 
+test("resolveToolInputPath resolves inputs normalizing to empty as the workspace root", () => {
+  for (const inputPath of [".", "./", "./.", "a/.."]) {
+    const result = resolveToolInputPath({ inputPath, workspacePath: "/srv/ws" });
+    assert.equal(result.ok, true, inputPath);
+    assert.equal(result.view, TOOL_PATH_VIEWS.WORKSPACE_RELATIVE, inputPath);
+    assert.equal(result.resolvedPath, "/srv/ws", inputPath);
+  }
+  const empty = resolveToolInputPath({ inputPath: "  ", workspacePath: "/srv/ws" });
+  assert.equal(empty.error, TOOL_PATH_RESOLUTION_ERROR.EMPTY_PATH);
+});
+
 test("task-local paths have one token and resolution protocol", () => {
   const output = createTaskPath({ kind: TASK_PATH_KINDS.OUTPUT, relative: "media/result.mp4" });
   assert.equal(output, "output://media/result.mp4");

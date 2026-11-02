@@ -5,6 +5,7 @@
  */
 
 import { deepFreeze } from "./deep-freeze.js";
+import { bindRuntimeThresholds } from "./runtime-threshold-state.js";
 
 const QUANTITY_TIERS = deepFreeze({
   localContext: 2,
@@ -16,7 +17,43 @@ const QUANTITY_TIERS = deepFreeze({
   readableExtractLines: 1200,
 });
 
-export const QUANTITY_THRESHOLDS = deepFreeze({
+export const DEFAULT_QUANTITY_THRESHOLDS = deepFreeze({
+  service: {
+    httpConnectionLimit: 120,
+    httpMutationLimit: 120,
+    httpReadLimit: 600,
+  },
+  runtimeEvents: {
+    maxArchives: 20,
+    maxCachedFiles: 512,
+    batchMaxRecords: 100,
+  },
+  connectorInstances: {
+    mysqlPoolLimit: 4,
+    postgresPoolMax: 5,
+  },
+  eventProtocol: {
+    authorityOutboxPendingBatchSize: 100,
+  },
+  longMemory: {
+    workAssistantCollaborationMaxItems: 5,
+    workQualityStandardsMaxItems: 5,
+    workWorkStyleMaxItems: 5,
+    workToolsMethodsMaxItems: 8,
+    workLongTermProjectsMaxItems: 3,
+    historyPreferencesCommonTopicsMaxItems: 8,
+    socialImportantRelationshipsMaxItems: 5,
+    personalityEmotionalTendenciesMaxItems: 3,
+    personalityTraitsMaxItems: 5,
+    interestsPreferredActivitiesMaxItems: 3,
+    interestsFavoriteMusicMaxItems: 3,
+    interestsFavoriteMoviesMaxItems: 5,
+    interestsFavoriteBooksMaxItems: 5,
+    interestsHobbiesMaxItems: 5,
+  },
+  contextProtocol: {
+    turnSummaryCheckpointReceiptLimit: 50,
+  },
   memory: {
     maxItems: 30,
   },
@@ -43,14 +80,18 @@ export const QUANTITY_THRESHOLDS = deepFreeze({
 
   diagnostics: {
     modelContextPreviewLimit: 40,
-    modelAccessBodyMaxBytes: 4 * 1024 * 1024,
     executionReportSlowestToolCalls: 5,
   },
 
   web: {
+    maxRedirects: 8,
     readableExtractMaxLines: QUANTITY_TIERS.readableExtractLines,
 
     textMaxLines: QUANTITY_TIERS.webTextLines,
+  },
+
+  desktop: {
+    logRetainCount: 5,
   },
 
   harness: {
@@ -65,11 +106,11 @@ export const QUANTITY_THRESHOLDS = deepFreeze({
     completedDialogIds: 80,
 
     incrementalMessageCacheEntries: 200,
-
-    wrappedPayloadMaxDepth: QUANTITY_TIERS.shallowDepth,
   },
 
   client: {
+    resendDebugLimit: 12,
+    toolLogDebugLimit: 20,
     consumedEventIdsLimit: 1000,
 
     executionLogDisplayLimit: QUANTITY_TIERS.smallDisplay,
@@ -103,12 +144,20 @@ export const QUANTITY_THRESHOLDS = deepFreeze({
     maxQueueSize: 500,
 
     maxDebugQueueSize: 100,
-
-    maxDebugQueueBytes: 1024 * 1024,
   },
 
   agentProxy: {
+    fixedWindowMaxRequests: 100,
+    maxChannelEvents: 2000,
+    maxConnections: 1000,
+    httpRateLimitMaxRequests: 180,
+    wsRateLimitMaxUpgrades: 80,
+    ideWsRateLimitMaxUpgrades: 60,
+    ideHttpRateLimitMaxRequests: 2000,
+    maxReplayEvents: 5000,
     invalidUpstreamFrameLimit: 5,
     commandRemovalHistoryLimit: 256,
   },
 });
+
+export const QUANTITY_THRESHOLDS = bindRuntimeThresholds("quantity", DEFAULT_QUANTITY_THRESHOLDS);

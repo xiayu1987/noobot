@@ -16,7 +16,7 @@ import {
   mergeTransferEnvelopes,
 } from "@noobot/semantic-transfer-protocol";
 import { requireAgentDispatchAttachments } from "@noobot/hook-protocol";
-import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export function mergeAttachments(existing = [], incoming = []) {
   return mergeAttachmentsByIdentity(existing, incoming, {
@@ -70,20 +70,12 @@ export function normalizeWorkflowTransferPayload(payload = {}) {
   return { transferEnvelopes: mergeTransferEnvelopes(payload.transferEnvelopes) };
 }
 
-export function getWorkflowTransferPayloadFromResult(result = {}) {
-  return normalizeWorkflowTransferPayload(result);
-}
-
-export function applyWorkflowTransferPayload(target = {}, payload = {}) {
-  if (!isObjectLike(target)) throw new TypeError("workflow transfer target must be an object");
-  const transferPayload = normalizeWorkflowTransferPayload(payload);
-  if (transferPayload.transferEnvelopes.length) {
-    target.transferEnvelopes = mergeTransferEnvelopes(
-      target.transferEnvelopes,
-      transferPayload.transferEnvelopes,
-    );
-  }
-  return target;
+export function getWorkflowTransferPayloadFromResult(result) {
+  return {
+    transferEnvelopes: mergeTransferEnvelopes(
+      ...result.messages.map((message) => message.transferEnvelopes),
+    ),
+  };
 }
 
 export function resolveWorkflowTransferAttachmentReferences(payload = {}) {

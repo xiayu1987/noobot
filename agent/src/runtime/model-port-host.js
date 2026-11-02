@@ -7,8 +7,10 @@ import { randomUUID } from "node:crypto";
 import { createModelRequestExecutor } from "@noobot/model-runtime";
 import {
   MODEL_ERROR_CODE,
+  MODEL_CONTEXT_SEQUENCE_POLICY,
   MODEL_ERROR_KIND,
   ModelProtocolError,
+  requireInvocationScope,
   requireModelPort,
   requireModelSpec,
   validateModelResponse,
@@ -50,31 +52,32 @@ function createObservationPort({ modelState }) {
   });
 }
 
-function buildInvocation(modelState, request = {}) {
-  const baseIdentity = modelState.invocationIdentity;
-  if (!isObjectLike(baseIdentity)) {
-    throw new TypeError("model host requires an explicit invocationIdentity");
-  }
-  const identity = request.invocation || {};
-  for (const field of ["sessionId", "parentSessionId", "dialogProcessId", "turnScopeId", "runId"]) {
-    const requestedValue = text(identity[field]);
-    const hostValue = text(baseIdentity[field]);
-    if (requestedValue && requestedValue !== hostValue) {
-      throw new TypeError(`model invocation.${field} conflicts with host identity`);
+const CALLER_INVOCATION_FIELDS = new Set(["flow", "purpose", "domain", "contextSequencePolicy"]);
+
+function buildInvocation(modelState, invocation) {
+  if (!isPlainObject(invocation)) throw new TypeError("model invocation must be an object");
+  for (const field of Object.keys(invocation)) {
+    if (!CALLER_INVOCATION_FIELDS.has(field)) {
+      throw new TypeError(`model invocation.${field} is owned by the model host`);
     }
   }
   return {
-    requestId: identity.requestId || randomUUID(),
-    invocationId: identity.invocationId || randomUUID(),
-    sessionId: text(baseIdentity.sessionId),
-    parentSessionId: text(baseIdentity.parentSessionId),
-    dialogProcessId: text(baseIdentity.dialogProcessId),
-    turnScopeId: text(baseIdentity.turnScopeId),
-    runId: text(baseIdentity.runId),
-    flow: text(identity.flow),
-    purpose: text(identity.purpose),
-    domain: text(identity.domain),
-    contextSequencePolicy: text(identity.contextSequencePolicy),
+    requestId: randomUUID(),
+    invocationId: randomUUID(),
+    ...modelState.invocationIdentity,
+    flow: invocation.flow,
+    purpose: invocation.purpose,
+    domain: invocation.domain,
+    contextSequencePolicy: invocation.contextSequencePolicy,
+  };
+}
+
+function buildRequestMetadata(modelState, invocation) {
+  if (invocation.contextSequencePolicy !== MODEL_CONTEXT_SEQUENCE_POLICY.CHECKPOINT_APPEND_ONLY) {
+    return undefined;
+  }
+  return {
+    context: { summaryCheckpointRevision: modelState.runtime.summaryCheckpointRevision },
   };
 }
 
@@ -101,12 +104,8 @@ function createModelPort({ resolveTurnModelSpec, modelState }) {
         tools: projectToolsForModel(tools, { strict: options?.toolBinding?.strict === true }),
         options,
         policies,
-        metadata: {
-          context: {
-            summaryCheckpointRevision: modelState.runtime.summaryCheckpointRevision,
-          },
-        },
-        invocation: buildInvocation(modelState, { invocation }),
+        metadata: buildRequestMetadata(modelState, invocation),
+        invocation: buildInvocation(modelState, invocation),
       });
       return validateModelResponse(response);
     },
@@ -123,7 +122,17 @@ function createAgentModelPort(modelState) {
 
 export function createAgentAuxiliaryModelPort({ modelSpec, modelState }) {
   const auxiliaryModelSpec = requireModelSpec(modelSpec);
-  return createModelPort({ modelState, resolveTurnModelSpec: () => auxiliaryModelSpec });
+  const auxiliaryModelState = {
+    ...modelState,
+    invocationIdentity: requireInvocationScope(
+      modelState.invocationIdentity,
+      "agent auxiliary model host identity",
+    ),
+  };
+  return createModelPort({
+    modelState: auxiliaryModelState,
+    resolveTurnModelSpec: () => auxiliaryModelSpec,
+  });
 }
 
 export function requireRuntimeModelHost(runtime) {
@@ -137,19 +146,7 @@ export function initializeAgentModelHost({ runtime, invocationIdentity }) {
   if (!isPlainObject(runtime)) {
     throw new TypeError("agent model host requires runtime");
   }
-  if (!isPlainObject(invocationIdentity)) {
-    throw new TypeError("agent model host requires invocationIdentity");
-  }
-  const identity = Object.freeze({
-    sessionId: text(invocationIdentity.sessionId),
-    parentSessionId: text(invocationIdentity.parentSessionId),
-    dialogProcessId: text(invocationIdentity.dialogProcessId),
-    turnScopeId: text(invocationIdentity.turnScopeId),
-    runId: text(invocationIdentity.runId),
-  });
-  for (const field of ["sessionId", "dialogProcessId", "turnScopeId", "runId"]) {
-    if (!identity[field]) throw new TypeError(`agent model host identity.${field} is required`);
-  }
+  const identity = requireInvocationScope(invocationIdentity, "agent model host identity");
   if (runtime.modelHost) {
     throw new TypeError("agent model host already initialized");
   }

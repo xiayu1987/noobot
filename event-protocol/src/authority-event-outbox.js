@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { validateEventEnvelope } from "./envelope.js";
 export { assertAuthorityOutboxRequest } from "./outbox-request.js";
 import { isPlainObject, text } from "@noobot/shared/value";
@@ -77,7 +78,8 @@ export function migrateLegacyAuthorityEventOutbox(source = []) {
   );
 }
 
-const AUTHORITY_OUTBOX_PENDING_BATCH_SIZE = 100;
+const AUTHORITY_OUTBOX_PENDING_BATCH_SIZE =
+  QUANTITY_THRESHOLDS.eventProtocol.authorityOutboxPendingBatchSize;
 
 export function listPendingAuthorityEvents(source, { consumerId }) {
   const normalizedConsumerId = requireOutboxText(consumerId, "consumerId");

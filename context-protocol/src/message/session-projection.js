@@ -10,6 +10,7 @@ import {
 } from "@noobot/semantic-transfer-protocol";
 import { isPlainObject } from "@noobot/shared/value";
 import { readSessionMessageDraftAttachments } from "@noobot/session-protocol";
+import { assertMessageIdentity } from "@noobot/session-protocol/message-identity";
 import {
   readContextMessageValue,
   readContextMessageArray,
@@ -63,12 +64,6 @@ function requireRecord(record) {
     throw new TypeError("Session Context projection requires a record object");
   }
   return record;
-}
-
-function requireText(value, field) {
-  const normalized = typeof value === "string" ? value.trim() : "";
-  if (!normalized) throw new TypeError(`Session Context projection requires ${field}`);
-  return normalized;
 }
 
 function optionalArray(value, field) {
@@ -126,10 +121,10 @@ function presentText(value) {
   return typeof value === "string" && value.trim() ? value : undefined;
 }
 
-export function projectSessionRecordToContextMessage(record = {}) {
+export function projectSessionRecordToContextMessage(record) {
   const source = requireRecord(record);
-  const messageUid = requireText(source.messageUid, "messageUid");
-  const role = requireText(source.role, "role").toLowerCase();
+  const messageUid = assertMessageIdentity("messageUid", source.messageUid);
+  const role = source.role;
   if (!SESSION_CONTEXT_ROLES.has(role)) {
     throw new TypeError(`Session Context projection rejects role: ${role}`);
   }
@@ -189,7 +184,10 @@ export function projectContextMessageToSessionRecord(message = {}) {
   if (message === null || typeof message !== "object" || Array.isArray(message)) {
     throw new TypeError("Context Session projection requires a message object");
   }
-  const messageUid = requireText(readContextMessageValue(message, "messageUid"), "messageUid");
+  const messageUid = assertMessageIdentity(
+    "messageUid",
+    readContextMessageValue(message, "messageUid"),
+  );
   const role = resolveContextMessageRole(message);
   if (!SESSION_CONTEXT_ROLES.has(role)) {
     throw new TypeError(`Context Session projection rejects role: ${role || "<empty>"}`);

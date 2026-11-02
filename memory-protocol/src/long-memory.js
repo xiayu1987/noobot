@@ -3,7 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { stripMarkdownFence } from "./text.js";
+import { tMemory } from "./locale.js";
 import { MEMORY_DOCUMENT_KIND, readMemoryDocumentBody, renderMemoryDocument } from "./document.js";
 
 const LONG_MEMORY_VALUE_SEPARATOR = "：";
@@ -64,118 +66,106 @@ export function createLongMemoryModel(fields) {
   return Object.freeze({ fields: Object.freeze([...byKey.values()]), byKey });
 }
 
-export const LONG_MEMORY_MODEL = createLongMemoryModel([
-  { key: "personal_info.age", kind: LONG_MEMORY_FIELD_KIND.SINGLE, description: "年龄" },
-  { key: "personal_info.gender", kind: LONG_MEMORY_FIELD_KIND.SINGLE, description: "性别" },
-  { key: "personal_info.occupation", kind: LONG_MEMORY_FIELD_KIND.SINGLE, description: "职业" },
-  { key: "personal_info.education", kind: LONG_MEMORY_FIELD_KIND.SINGLE, description: "教育背景" },
-  { key: "personal_info.location", kind: LONG_MEMORY_FIELD_KIND.SINGLE, description: "城市或地区" },
-  {
-    key: "interests.hobbies",
-    kind: LONG_MEMORY_FIELD_KIND.LIST,
-    maxItems: 5,
-    description: "兴趣爱好",
-  },
-  {
-    key: "interests.favorite_books",
-    kind: LONG_MEMORY_FIELD_KIND.LIST,
-    maxItems: 5,
-    description: "喜欢的书籍",
-  },
-  {
-    key: "interests.favorite_movies",
-    kind: LONG_MEMORY_FIELD_KIND.LIST,
-    maxItems: 5,
-    description: "喜欢的电影",
-  },
-  {
-    key: "interests.favorite_music",
-    kind: LONG_MEMORY_FIELD_KIND.LIST,
-    maxItems: 3,
-    description: "喜欢的音乐类型",
-  },
-  {
-    key: "interests.preferred_activities",
-    kind: LONG_MEMORY_FIELD_KIND.LIST,
-    maxItems: 3,
-    description: "偏好的活动方式",
-  },
-  {
-    key: "personality.traits",
-    kind: LONG_MEMORY_FIELD_KIND.LIST,
-    maxItems: 5,
-    description: "性格特征",
-  },
-  {
-    key: "personality.emotional_tendencies",
-    kind: LONG_MEMORY_FIELD_KIND.LIST,
-    maxItems: 3,
-    description: "情绪倾向",
-  },
-  {
-    key: "personality.decision_style",
-    kind: LONG_MEMORY_FIELD_KIND.SINGLE,
-    description: "决策风格",
-  },
-  { key: "social.social_preference", kind: LONG_MEMORY_FIELD_KIND.SINGLE, description: "社交偏好" },
-  {
-    key: "social.important_relationships",
-    kind: LONG_MEMORY_FIELD_KIND.LIST,
-    maxItems: 5,
-    description: "重要关系信息",
-  },
-  {
-    key: "social.communication_style",
-    kind: LONG_MEMORY_FIELD_KIND.SINGLE,
-    description: "沟通方式",
-  },
-  {
-    key: "history_preferences.preferred_conversation_style",
-    kind: LONG_MEMORY_FIELD_KIND.SINGLE,
-    description: "偏好的对话风格",
-  },
-  {
-    key: "history_preferences.common_topics",
-    kind: LONG_MEMORY_FIELD_KIND.LIST,
-    maxItems: 8,
-    description: "常关注的话题",
-  },
-  {
-    key: "work.role_domain",
-    kind: LONG_MEMORY_FIELD_KIND.SINGLE,
-    description: "职业角色与所在行业领域",
-  },
-  {
-    key: "work.long_term_projects",
-    kind: LONG_MEMORY_FIELD_KIND.LIST,
-    maxItems: 3,
-    description: "长期投入的项目、业务或目标",
-  },
-  {
-    key: "work.tools_methods",
-    kind: LONG_MEMORY_FIELD_KIND.LIST,
-    maxItems: 8,
-    description: "常用的工具、技术与方法",
-  },
-  {
-    key: "work.work_style",
-    kind: LONG_MEMORY_FIELD_KIND.LIST,
-    maxItems: 5,
-    description: "工作方式与习惯（如规划、执行、检查、复盘的做法）",
-  },
-  {
-    key: "work.quality_standards",
-    kind: LONG_MEMORY_FIELD_KIND.LIST,
-    maxItems: 5,
-    description: "对质量与交付结果的判断标准",
-  },
-  {
-    key: "work.assistant_collaboration",
-    kind: LONG_MEMORY_FIELD_KIND.LIST,
-    maxItems: 5,
-    description: "对助手的协作期望（如执行方式、汇报形式、需确认的边界）",
-  },
-]);
+export function createBuiltinLongMemoryModel(locale) {
+  return createLongMemoryModel(
+    [
+      { key: "personal_info.age", kind: LONG_MEMORY_FIELD_KIND.SINGLE },
+      { key: "personal_info.gender", kind: LONG_MEMORY_FIELD_KIND.SINGLE },
+      { key: "personal_info.occupation", kind: LONG_MEMORY_FIELD_KIND.SINGLE },
+      { key: "personal_info.education", kind: LONG_MEMORY_FIELD_KIND.SINGLE },
+      { key: "personal_info.location", kind: LONG_MEMORY_FIELD_KIND.SINGLE },
+      {
+        key: "interests.hobbies",
+        kind: LONG_MEMORY_FIELD_KIND.LIST,
+        maxItems: QUANTITY_THRESHOLDS.longMemory.interestsHobbiesMaxItems,
+      },
+      {
+        key: "interests.favorite_books",
+        kind: LONG_MEMORY_FIELD_KIND.LIST,
+        maxItems: QUANTITY_THRESHOLDS.longMemory.interestsFavoriteBooksMaxItems,
+      },
+      {
+        key: "interests.favorite_movies",
+        kind: LONG_MEMORY_FIELD_KIND.LIST,
+        maxItems: QUANTITY_THRESHOLDS.longMemory.interestsFavoriteMoviesMaxItems,
+      },
+      {
+        key: "interests.favorite_music",
+        kind: LONG_MEMORY_FIELD_KIND.LIST,
+        maxItems: QUANTITY_THRESHOLDS.longMemory.interestsFavoriteMusicMaxItems,
+      },
+      {
+        key: "interests.preferred_activities",
+        kind: LONG_MEMORY_FIELD_KIND.LIST,
+        maxItems: QUANTITY_THRESHOLDS.longMemory.interestsPreferredActivitiesMaxItems,
+      },
+      {
+        key: "personality.traits",
+        kind: LONG_MEMORY_FIELD_KIND.LIST,
+        maxItems: QUANTITY_THRESHOLDS.longMemory.personalityTraitsMaxItems,
+      },
+      {
+        key: "personality.emotional_tendencies",
+        kind: LONG_MEMORY_FIELD_KIND.LIST,
+        maxItems: QUANTITY_THRESHOLDS.longMemory.personalityEmotionalTendenciesMaxItems,
+      },
+      {
+        key: "personality.decision_style",
+        kind: LONG_MEMORY_FIELD_KIND.SINGLE,
+      },
+      { key: "social.social_preference", kind: LONG_MEMORY_FIELD_KIND.SINGLE },
+      {
+        key: "social.important_relationships",
+        kind: LONG_MEMORY_FIELD_KIND.LIST,
+        maxItems: QUANTITY_THRESHOLDS.longMemory.socialImportantRelationshipsMaxItems,
+      },
+      {
+        key: "social.communication_style",
+        kind: LONG_MEMORY_FIELD_KIND.SINGLE,
+      },
+      {
+        key: "history_preferences.preferred_conversation_style",
+        kind: LONG_MEMORY_FIELD_KIND.SINGLE,
+      },
+      {
+        key: "history_preferences.common_topics",
+        kind: LONG_MEMORY_FIELD_KIND.LIST,
+        maxItems: QUANTITY_THRESHOLDS.longMemory.historyPreferencesCommonTopicsMaxItems,
+      },
+      {
+        key: "work.role_domain",
+        kind: LONG_MEMORY_FIELD_KIND.SINGLE,
+      },
+      {
+        key: "work.long_term_projects",
+        kind: LONG_MEMORY_FIELD_KIND.LIST,
+        maxItems: QUANTITY_THRESHOLDS.longMemory.workLongTermProjectsMaxItems,
+      },
+      {
+        key: "work.tools_methods",
+        kind: LONG_MEMORY_FIELD_KIND.LIST,
+        maxItems: QUANTITY_THRESHOLDS.longMemory.workToolsMethodsMaxItems,
+      },
+      {
+        key: "work.work_style",
+        kind: LONG_MEMORY_FIELD_KIND.LIST,
+        maxItems: QUANTITY_THRESHOLDS.longMemory.workWorkStyleMaxItems,
+      },
+      {
+        key: "work.quality_standards",
+        kind: LONG_MEMORY_FIELD_KIND.LIST,
+        maxItems: QUANTITY_THRESHOLDS.longMemory.workQualityStandardsMaxItems,
+      },
+      {
+        key: "work.assistant_collaboration",
+        kind: LONG_MEMORY_FIELD_KIND.LIST,
+        maxItems: QUANTITY_THRESHOLDS.longMemory.workAssistantCollaborationMaxItems,
+      },
+    ].map((field) => ({ ...field, description: tMemory(`longMemory.${field.key}`, locale) })),
+  );
+}
+
+export const LONG_MEMORY_MODEL = createBuiltinLongMemoryModel();
 
 export const LONG_MEMORY_MODEL_FIELDS_SINCE = Object.freeze({
   2: Object.freeze([

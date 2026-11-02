@@ -123,7 +123,7 @@ export function createSkillTool({ agentContext }) {
     {
       name: TOOL_NAME.LIST_SKILLS,
       description: tTool(runtime, "tools.skill.listDescription"),
-      schema: z.object({
+      schema: z.strictObject({
         parentSkill: z.string().optional().describe(tTool(runtime, "tools.skill.fieldParentSkill")),
       }),
     },

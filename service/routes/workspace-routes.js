@@ -17,8 +17,9 @@ import {
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
 import { projectUserVisibleConfigDeclarations } from "@noobot/agent-config-protocol";
-import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
+import { WORKSPACE_LAYOUT, WORKSPACE_ROOT_LAYOUT } from "@noobot/workspace-protocol";
 import { text } from "@noobot/shared/value";
+import { assertRuntimeParamsFileWriteAllowed } from "@noobot/shared/runtime-params-node";
 
 const RESERVED_WORKSPACE_ROOT_DIRS = new Set([
   WORKSPACE_LAYOUT.MEMORY_DIR,
@@ -73,6 +74,11 @@ export function registerWorkspaceRoutes(
   } = {},
 ) {
   const jsonRoute = createJsonRouteWrapper({ translateText });
+  const authorizeWrite = (_req, filePath) =>
+    assertRuntimeParamsFileWriteAllowed(
+      filePath,
+      path.join(workspaceRootPath(), WORKSPACE_ROOT_LAYOUT.RUNTIME_PARAMS_FILE),
+    );
 
   app.post(
     "/internal/workspace/reset/:userId",
@@ -119,6 +125,7 @@ export function registerWorkspaceRoutes(
 
   registerFileCrudRoutes(app, {
     routePrefix: "/internal/workspace/:userId",
+    authorizeWrite,
     resolveRootPath: (req) => workspaceService.ensureUserWorkspace(text(req?.params?.userId)),
     buildWorkspaceTree,
     buildDirectoryArchiveFile,
@@ -248,6 +255,7 @@ export function registerWorkspaceRoutes(
 
   registerFileCrudRoutes(app, {
     routePrefix: "/internal/admin/workspace-all",
+    authorizeWrite,
     resolveRootPath: workspaceRootPath,
     trackMutations: false,
     middleware: [requireApiKey, requireSuperAdmin],

@@ -63,8 +63,11 @@ function compareContentFacts(left = {}, right = {}) {
 
 export function reduceThinkingDetailContentTimelines(...timelines) {
   const factsByContentId = new Map();
-  for (const fact of timelines.flatMap((timeline) => (Array.isArray(timeline) ? timeline : []))) {
-    if (!isThinkingDetailContentFact(fact)) continue;
+  for (const timeline of timelines) {
+    if (!Array.isArray(timeline)) throw new TypeError("invalid_thinking_content_timeline");
+  }
+  for (const fact of timelines.flatMap((timeline) => Array.from(timeline))) {
+    if (!isThinkingDetailContentFact(fact)) throw new TypeError("invalid_thinking_content_fact");
     factsByContentId.set(fact.contentId, Object.freeze({ ...fact }));
   }
   return Object.freeze([...factsByContentId.values()].sort(compareContentFacts));
@@ -73,7 +76,7 @@ export function reduceThinkingDetailContentTimelines(...timelines) {
 function messageContentFact(message = {}, contentKind, index) {
   const identity = messageIdentity(message);
   const value = messageContent(message);
-  if (!identity || !value) return null;
+  if (!value) return null;
   const sequence =
     contentKind === THINKING_DETAIL_CONTENT_KIND.USER_INTERJECTION
       ? message.interjectionSequence
@@ -122,17 +125,16 @@ function activityContentFact(activity) {
 }
 
 export function projectThinkingDetailContentTimeline(messages = [], activityTimeline = []) {
-  const timeline = (Array.isArray(messages) ? messages : []).flatMap((message = {}) =>
-    Array.isArray(message?.thinkingContentTimeline) ? message.thinkingContentTimeline : [],
-  );
+  if (!Array.isArray(messages)) throw new TypeError("invalid_thinking_content_messages");
+  const timeline = messages.flatMap(selectThinkingDetailContentTimeline);
   const activities = mergeCanonicalActivityTimelines(activityTimeline);
   const supersededRelayCorrelationIds = new Set(
-    (Array.isArray(messages) ? messages : [])
+    messages
       .filter((message = {}) => isThinkingDetailInjectedMessage(message))
       .map((message = {}) => text(message?.relayCorrelationId))
       .filter(Boolean),
   );
-  for (const [index, message] of (Array.isArray(messages) ? messages : []).entries()) {
+  for (const [index, message] of messages.entries()) {
     const fact = projectMessageContentFact(message, index);
     if (fact) timeline.push(fact);
   }
@@ -159,8 +161,10 @@ function projectMessageContentFact(message, index) {
   return null;
 }
 
-export function selectThinkingDetailContentTimeline(message = {}) {
-  return (
-    Array.isArray(message?.thinkingContentTimeline) ? message.thinkingContentTimeline : []
-  ).filter(isThinkingDetailContentFact);
+export function selectThinkingDetailContentTimeline(message) {
+  if (!message || typeof message !== "object" || Array.isArray(message)) {
+    throw new TypeError("invalid_thinking_content_message");
+  }
+  if (!Object.hasOwn(message, "thinkingContentTimeline")) return [];
+  return reduceThinkingDetailContentTimelines(message.thinkingContentTimeline);
 }

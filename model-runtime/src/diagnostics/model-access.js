@@ -2,23 +2,26 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { randomUUID } from "node:crypto";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import { createModelRequestExecutor } from "../executor/model-request-executor.js";
 import { createProviderAdapterRegistry } from "../adapters/registry.js";
 import { normalizeRuntimeModelSpec } from "../normalization/spec-normalizer.js";
 import { text, isPlainObject, isObjectLike } from "@noobot/shared/value";
+import { tModelRuntime } from "../locale.js";
 
-const RESPONSE_LIMIT = 2 * 1024 * 1024;
+const RESPONSE_LIMIT = LENGTH_THRESHOLDS.diagnostics.responseBytes;
 const REDACTED = "[REDACTED]";
 const SECRET_FIELD =
   /^(authorization|proxy-authorization|cookie|set-cookie|x-api-key|api[_-]?key|password|secret|access_token)$/i;
 
-function normalizeDiagnosticTools(tools) {
-  if (!Array.isArray(tools)) throw new TypeError("Tools must be an array / 工具定义必须是数组");
+function normalizeDiagnosticTools(tools, locale) {
+  if (!Array.isArray(tools)) throw new TypeError(tModelRuntime(locale, "diagnostic.toolsArray"));
   return tools.map((tool) => {
     if (!isPlainObject(tool)) {
-      throw new TypeError("Invalid tool definition / 工具定义无效");
+      throw new TypeError(tModelRuntime(locale, "diagnostic.invalidTool"));
     }
     if (tool.function || (tool.type && tool.type !== "function")) return tool;
     const { type, input_schema, ...definition } = tool;
@@ -71,22 +74,23 @@ export async function testModelAccess({
   toolBinding,
   preview = false,
   signal,
+  locale,
   fetch: upstreamFetch = globalThis.fetch,
 }) {
   const spec = normalizeRuntimeModelSpec(modelSpec);
   if (body !== undefined && !isPlainObject(body)) {
-    throw new TypeError("Request body must be a JSON object / 请求体必须是 JSON 对象");
+    throw new TypeError(tModelRuntime(locale, "diagnostic.bodyObject"));
   }
   const credential = text(spec.api_key);
   if (!preview && (!credential || credential.includes("${"))) {
-    throw new Error("Model credential is missing / 模型密钥未配置");
+    throw new Error(tModelRuntime(locale, "diagnostic.credentialMissing"));
   }
   const started = performance.now();
   const traces = [];
   const responseReads = [];
   let captured = false;
   const transportFetch = async (url, options = {}) => {
-    if (captured) throw new Error("Diagnostic allows one request / 每次测试只发送一次请求");
+    if (captured) throw new Error(tModelRuntime(locale, "diagnostic.oneRequest"));
     captured = true;
     const actualBody = body === undefined ? JSON.parse(options.body) : body;
     const request = {
@@ -137,15 +141,20 @@ export async function testModelAccess({
     const result = await executor.invoke({
       model: spec,
       messages,
-      tools: normalizeDiagnosticTools(tools ?? body?.tools ?? []),
+      tools: normalizeDiagnosticTools(tools ?? body?.tools ?? [], locale),
       options: {
+        locale,
         streaming: body?.stream === true,
         signal,
         toolBinding:
           toolBinding ?? (body?.tool_choice !== undefined ? { tool_choice: body.tool_choice } : {}),
       },
-      policies: { retry: { transport: { maxAttempts: 1 } } },
+      policies: {
+        retry: { transport: { maxAttempts: TURN_THRESHOLDS.model.diagnosticMaxAttempts } },
+      },
       invocation: {
+        requestId: randomUUID(),
+        invocationId: randomUUID(),
         sessionId: identity,
         parentSessionId: "",
         dialogProcessId: identity,

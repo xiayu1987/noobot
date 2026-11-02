@@ -302,7 +302,17 @@ function proxyUpgradeToHttpUpstream(request, socket, head) {
 
 const httpServer = http.createServer((request, response) => {
   const locale = resolveLocaleFromRequest(request);
-  const pathname = parseRequestPathname(request);
+  let pathname;
+  try {
+    pathname = parseRequestPathname(request);
+  } catch {
+    writeProxyError(response, {
+      statusCode: 400,
+      code: AGENT_PROXY_HTTP_ERROR_CODE.INVALID_REQUEST_URL,
+      locale,
+    });
+    return;
+  }
   const clientIp = getClientIp(request, config.trustedProxies);
   const requestOrigin = text(request?.headers?.origin);
 
@@ -380,7 +390,13 @@ const websocketServer = new WebSocketServer({
 });
 
 httpServer.on("upgrade", (request, socket, head) => {
-  const { pathname } = parseRequestQuery(request);
+  let pathname;
+  try {
+    pathname = parseRequestPathname(request);
+  } catch {
+    socket.destroy();
+    return;
+  }
   const clientIp = getClientIp(request, config.trustedProxies);
   const requestOrigin = text(request?.headers?.origin);
   if (!isIpTrusted(clientIp, config.trustedIps)) {

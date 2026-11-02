@@ -172,6 +172,8 @@ for (const stage of ["acceptance", "terminal"]) {
       const child = spawnSync(
         process.execPath,
         [
+          "--import",
+          import.meta.resolve("@noobot/shared/testing/runtime-params"),
           "--input-type=module",
           "-e",
           `

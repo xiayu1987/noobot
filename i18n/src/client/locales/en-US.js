@@ -3,7 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { runtimeParamsEnUS } from "./runtime-params-en-US.js";
+
 export const enUSMessages = {
+  runtimeParams: runtimeParamsEnUS,
   common: {
     session: "Session",
     sessionArtifacts: "Session artifacts",
@@ -466,6 +469,7 @@ export const enUSMessages = {
     executionReportDuration: "Duration",
     executionReportToolCalls: "Tool Calls",
     executionReportErrors: "Failures",
+    executionReportNonZeroExits: "Non-zero exits",
     executionReportError: "Error",
     executionReportSummaryError: "Execution statistics unavailable",
     executionReportOverview: "Overview",

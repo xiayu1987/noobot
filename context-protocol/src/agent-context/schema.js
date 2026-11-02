@@ -33,14 +33,14 @@ export const AGENT_CONTEXT_MODEL_CONTEXT_SHAPE = Object.freeze({
 });
 
 export const AGENT_CONTEXT_IDENTITY_SHAPE = Object.freeze({
-  userId: "nonEmptyString",
-  sessionId: "nonEmptyString",
-  rootSessionId: "nonEmptyString",
-  parentSessionId: "string",
-  dialogProcessId: "nonEmptyString",
-  turnScopeId: "nonEmptyString",
-  runId: "nonEmptyString",
-  presentationMessageId: "nonEmptyString",
+  userId: "canonicalText",
+  sessionId: "canonicalText",
+  rootSessionId: "canonicalText",
+  parentSessionId: "canonicalOptionalText",
+  dialogProcessId: "canonicalText",
+  turnScopeId: "canonicalText",
+  runId: "canonicalText",
+  presentationMessageId: "canonicalText",
 });
 
 export const AGENT_CONTEXT_ENVIRONMENT_SHAPE = Object.freeze({

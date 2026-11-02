@@ -3,14 +3,16 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { reportRuntimeEventFailure } from "../failure-report.js";
 
-const CLEANUP_INTERVAL_MS = 60 * 1000;
-const DEFAULT_BATCH_FLUSH_MS = 50;
-const DEFAULT_BATCH_MAX_RECORDS = 100;
-const MAX_CACHED_FILES = 512;
+const CLEANUP_INTERVAL_MS = TIME_THRESHOLDS.runtimeEvents.cleanupIntervalMs;
+const DEFAULT_BATCH_FLUSH_MS = TIME_THRESHOLDS.runtimeEvents.batchFlushMs;
+const DEFAULT_BATCH_MAX_RECORDS = QUANTITY_THRESHOLDS.runtimeEvents.batchMaxRecords;
+const MAX_CACHED_FILES = QUANTITY_THRESHOLDS.runtimeEvents.maxCachedFiles;
 const appendQueues = new Map();
 const pendingBatches = new Map();
 const directoryPromises = new Map();

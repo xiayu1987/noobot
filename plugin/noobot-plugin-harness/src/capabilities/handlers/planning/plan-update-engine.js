@@ -6,7 +6,8 @@
 import { CAPABILITY_DOMAIN } from "../shared/constants.js";
 import { appendCapabilityLog } from "../shared/attachment-log-utils.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
-import { text, isObjectLike } from "@noobot/shared/value";
+import { requireHarnessPlanUpdateStage } from "../../../core/bucket-contract.js";
+import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 const PLAN_UPDATE_POLICY = Object.freeze({
@@ -14,57 +15,33 @@ const PLAN_UPDATE_POLICY = Object.freeze({
   MAX_ATTEMPTS_REFINEMENT: WORKFLOW_PARAMS.planning.planUpdate.refinementMaxAttempts,
 });
 
-export function normalizePlanUpdateStage(stage = "") {
-  return text(stage).toLowerCase() === "revision" ? "revision" : "refinement";
-}
-
-function resolveStageAttemptCounterKey(stage = "revision") {
-  return normalizePlanUpdateStage(stage) === "revision"
+function resolveStageAttemptCounterKey(stage) {
+  return requireHarnessPlanUpdateStage(stage) === "revision"
     ? "planRevisionAttempts"
     : "planRefinementAttempts";
 }
 
-function resolveStageAttemptLimit(stage = "revision") {
-  const normalizedStage = normalizePlanUpdateStage(stage);
+function resolveStageAttemptLimit(stage) {
+  const normalizedStage = requireHarnessPlanUpdateStage(stage);
   return normalizedStage === "revision"
     ? Number(PLAN_UPDATE_POLICY.MAX_ATTEMPTS_REVISION)
     : Number(PLAN_UPDATE_POLICY.MAX_ATTEMPTS_REFINEMENT);
 }
 
-export function resolvePlanUpdateAttempts(state = {}, { stage = "revision" } = {}) {
-  if (!isObjectLike(state)) return 0;
-  if (!isObjectLike(state.counters)) state.counters = {};
-  const normalizedStage = normalizePlanUpdateStage(stage);
+export function resolvePlanUpdateAttempts(state, { stage }) {
+  const normalizedStage = requireHarnessPlanUpdateStage(stage);
   const stageKey = resolveStageAttemptCounterKey(normalizedStage);
-  if (Number.isFinite(Number(state.counters[stageKey]))) {
-    return Number(state.counters[stageKey]);
-  }
-  return 0;
+  return state.counters[stageKey];
 }
 
-function syncPlanUpdateAttempts(state = {}, { stage = "revision", next = 0 } = {}) {
-  if (!isObjectLike(state)) return;
-  if (!isObjectLike(state.counters)) state.counters = {};
-  const normalizedStage = normalizePlanUpdateStage(stage);
+function syncPlanUpdateAttempts(state, { stage, next }) {
+  const normalizedStage = requireHarnessPlanUpdateStage(stage);
   const stageKey = resolveStageAttemptCounterKey(normalizedStage);
   state.counters[stageKey] = next;
-  const revisionAttempts = Number.isFinite(Number(state.counters.planRevisionAttempts))
-    ? Number(state.counters.planRevisionAttempts)
-    : 0;
-  const refinementAttempts = Number.isFinite(Number(state.counters.planRefinementAttempts))
-    ? Number(state.counters.planRefinementAttempts)
-    : 0;
-  state.counters.planUpdateAttempts = revisionAttempts + refinementAttempts;
 }
 
-export function canAttemptPlanUpdate(
-  ctx = {},
-  state = {},
-  { increment = false, stage = "revision" } = {},
-) {
-  if (!isObjectLike(state)) return false;
-  if (!isObjectLike(state.counters)) state.counters = {};
-  const normalizedStage = normalizePlanUpdateStage(stage);
+export function canAttemptPlanUpdate(ctx, state, { increment = false, stage }) {
+  const normalizedStage = requireHarnessPlanUpdateStage(stage);
   const current = resolvePlanUpdateAttempts(state, { stage: normalizedStage });
   const stageLimit = resolveStageAttemptLimit(normalizedStage);
   if (current >= stageLimit) {
@@ -92,28 +69,19 @@ function requireTargetMainStepIndexes(owner, targetMainStepIndexes) {
   return targetMainStepIndexes;
 }
 
-export function setPendingPlanUpdate(
-  state,
-  { active = false, stage = "revision", targetMainStepIndexes = [] } = {},
-) {
+export function setPendingPlanUpdate(state, { active = false, stage, targetMainStepIndexes = [] }) {
   const pending = state.pending;
+  const normalizedStage = requireHarnessPlanUpdateStage(stage);
   if (active !== true) {
-    const stageText = text(stage).toLowerCase();
-    if (stageText === "revision") {
-      pending.planRevision = false;
+    if (normalizedStage === "revision") {
+      setPendingStateWithMeta(state, "planRevision", false);
       pending.planRevisionContext = null;
-    } else if (stageText === "refinement") {
-      pending.planRefinement = false;
-      pending.planRefinementContext = null;
     } else {
-      pending.planRevision = false;
-      pending.planRevisionContext = null;
-      pending.planRefinement = false;
+      setPendingStateWithMeta(state, "planRefinement", false);
       pending.planRefinementContext = null;
     }
     return true;
   }
-  const normalizedStage = normalizePlanUpdateStage(stage);
   const normalizedContext = {
     targetMainStepIndexes: requireTargetMainStepIndexes(
       "setPendingPlanUpdate",
@@ -121,31 +89,33 @@ export function setPendingPlanUpdate(
     ),
   };
   if (normalizedStage === "revision") {
-    pending.planRevision = true;
+    setPendingStateWithMeta(state, "planRevision", true);
     pending.planRevisionContext = normalizedContext;
-    pending.planRefinement = false;
+    setPendingStateWithMeta(state, "planRefinement", false);
     pending.planRefinementContext = null;
   } else {
-    pending.planRefinement = true;
+    setPendingStateWithMeta(state, "planRefinement", true);
     pending.planRefinementContext = normalizedContext;
-    pending.planRevision = false;
+    setPendingStateWithMeta(state, "planRevision", false);
     pending.planRevisionContext = null;
   }
   return true;
 }
 
 export function writePlanUpdateCaptureContext(state, { stage, targetMainStepIndexes }) {
-  state.flags.planUpdateCaptureStage = normalizePlanUpdateStage(stage);
-  state.flags.planUpdateCaptureTargetMainStepIndexes = requireTargetMainStepIndexes(
+  const captureStage = requireHarnessPlanUpdateStage(stage);
+  const targets = requireTargetMainStepIndexes(
     "writePlanUpdateCaptureContext",
     targetMainStepIndexes,
   );
+  state.flags.planUpdateCaptureStage = captureStage;
+  state.flags.planUpdateCaptureTargetMainStepIndexes = targets;
 }
 
 export function readPlanUpdateCaptureContext(state) {
   const { planUpdateCaptureStage, planUpdateCaptureTargetMainStepIndexes } = state.flags;
   return {
-    stage: normalizePlanUpdateStage(planUpdateCaptureStage),
+    stage: requireHarnessPlanUpdateStage(planUpdateCaptureStage),
     targetMainStepIndexes: requireTargetMainStepIndexes(
       "readPlanUpdateCaptureContext",
       planUpdateCaptureTargetMainStepIndexes,

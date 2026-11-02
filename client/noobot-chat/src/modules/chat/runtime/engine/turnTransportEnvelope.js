@@ -5,7 +5,7 @@
  */
 import {
   isEventProtocolEnvelope,
-  readProtocolEventReducerInput,
+  projectProtocolEventReducerInput,
   validateProtocolEvent,
 } from "@noobot/event-protocol";
 import {
@@ -80,7 +80,7 @@ export function normalizeTurnTransportEnvelope({ event, data, channelSessionId }
   }
   return {
     event,
-    data: readProtocolEventReducerInput(data).input,
+    data: projectProtocolEventReducerInput(data),
     protocolEnvelope: data,
     family: validation.descriptor.family,
     nonEnvelopeKind: "",

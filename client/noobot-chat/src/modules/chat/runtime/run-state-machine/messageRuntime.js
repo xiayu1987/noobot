@@ -23,6 +23,7 @@ import { isTerminalRunState, resolveStateTerminalOutcome } from "./terminalOutco
 import { isPlainObject } from "@noobot/shared/value";
 
 const MESSAGE_RUNNING_CHANNEL_STATES = Object.freeze([
+  FrontendRunState.PROCESSING,
   AGENT_CHANNEL_STATE.SENDING,
   AGENT_CHANNEL_STATE.RECONNECTING,
   AGENT_CHANNEL_STATE.INTERACTION_PENDING,
@@ -49,9 +50,8 @@ function terminalSnapshotOwnsMessage(stateSnapshot = {}, messageItem = {}, activ
 }
 
 function isRunStateForActiveSession(stateSnapshot = {}, activeSession) {
-  const stateSessionId = trim(stateSnapshot?.sessionId);
-  if (!stateSessionId) return true;
-  return trim(activeSession.sessionId) === stateSessionId;
+  const stateSessionId = stateSnapshot.sessionId;
+  return Boolean(stateSessionId) && activeSession.sessionId === stateSessionId;
 }
 
 function getLatestAssistantMessage(activeSession) {
@@ -112,33 +112,33 @@ const EMPTY_TURN_RUNTIME = Object.freeze({
   startedAt: "",
   finishedAt: "",
   thinkingFinishedAt: "",
-  modelLoopRound: 0,
+  modelLoopRound: null,
 });
 
-export function resolveTurnRuntimeView({ messageItem = {}, runtime = EMPTY_TURN_RUNTIME } = {}) {
+export function resolveTurnRuntimeView({ messageItem = {}, runtime } = {}) {
   const channelState = getMessageRuntimeChannelState(messageItem);
-  const runtimeState = normalizeState(runtime.state);
-  const state = isTerminalRunState(runtimeState)
-    ? runtimeState
-    : normalizeState(runtime.backendState || runtime.state || channelState?.state);
+  const state = normalizeState(runtime === undefined ? channelState.state : runtime.state);
+  const timing = runtime === undefined ? EMPTY_TURN_RUNTIME : runtime;
   const pending = messageItem?.pending === true;
   const terminal = isTerminalRunState(state);
-  const running = !terminal && (pending || MESSAGE_RUNNING_CHANNEL_STATES.includes(state));
+  const running =
+    !terminal &&
+    ((runtime === undefined && pending) || MESSAGE_RUNNING_CHANNEL_STATES.includes(state));
   const inFlightAssistant =
     getMessageRole(messageItem) === "assistant" &&
     (running || (!terminal && MESSAGE_IN_FLIGHT_CHANNEL_STATES.includes(state)));
   return {
     state,
-    displayState: runtime.displayState,
+    displayState: timing.displayState,
     channelState,
     pending,
     running,
     terminal,
     inFlightAssistant,
-    startedAt: runtime.startedAt,
-    finishedAt: runtime.finishedAt,
-    thinkingFinishedAt: runtime.thinkingFinishedAt,
-    modelLoopRound: runtime.modelLoopRound,
+    startedAt: timing.startedAt,
+    finishedAt: timing.finishedAt,
+    thinkingFinishedAt: timing.thinkingFinishedAt,
+    modelLoopRound: timing.modelLoopRound,
   };
 }
 

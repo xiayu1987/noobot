@@ -21,8 +21,9 @@ export async function saveSubcategoryDomainSummary({
   createdAt = "",
   sourceKeys = [],
   fields,
+  locale,
 } = {}) {
-  const schema = buildExperiencePatchSchema(schemaKey, fields);
+  const schema = buildExperiencePatchSchema(schemaKey, fields, locale);
   const safeDomainName = sanitizeFileName(domainName, "");
   if (!safeDomainName || !Array.isArray(categories) || !categories.length) return false;
 

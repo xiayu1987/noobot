@@ -53,17 +53,22 @@ async function collectDocuments(layout, io) {
   return documents;
 }
 
-async function repairDocument(document, { io, backup, report, longMemoryModel }) {
+async function repairDocument(document, { io, backup, report, longMemoryModel, locale }) {
   const entry = (status) => ({ kind: document.kind, relativePath: document.relativePath, status });
   if (!(await io.exists(document.relativePath))) {
     if (!document.required) return null;
-    const text = renderDefaultMemoryDocument(document.kind);
+    const text = renderDefaultMemoryDocument(document.kind, locale);
     await io.writeText(document.relativePath, text);
     report.push(entry(MEMORY_REPAIR_STATUS.CREATED));
     return text;
   }
   const original = await io.readText(document.relativePath);
-  const result = migrateMemoryDocument({ kind: document.kind, text: original, longMemoryModel });
+  const result = migrateMemoryDocument({
+    kind: document.kind,
+    text: original,
+    longMemoryModel,
+    locale,
+  });
   if (result.status === MEMORY_REPAIR_STATUS.CANONICAL) return original;
   await backup(document.relativePath, original);
   await io.writeText(document.relativePath, result.text);
@@ -71,7 +76,7 @@ async function repairDocument(document, { io, backup, report, longMemoryModel })
   return result.text;
 }
 
-export async function repairMemoryWorkspace({ layout, io } = {}) {
+export async function repairMemoryWorkspace({ layout, io, locale } = {}) {
   requireIo(io);
   if (
     !layout?.shortMemory ||
@@ -94,7 +99,7 @@ export async function repairMemoryWorkspace({ layout, io } = {}) {
   }
   let longMemoryModel = LONG_MEMORY_MODEL;
   for (const document of await collectDocuments(layout, io)) {
-    const text = await repairDocument(document, { io, backup, report, longMemoryModel });
+    const text = await repairDocument(document, { io, backup, report, longMemoryModel, locale });
     if (document.kind === MEMORY_DOCUMENT_KIND.LONG_MEMORY_MODEL && text !== null) {
       longMemoryModel = parseLongMemoryModelText(text);
     }

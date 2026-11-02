@@ -309,10 +309,8 @@ test("planning result pipeline rejects sub-plan-only patch payload", async () =>
 
 test("planning result pipeline applies default checklist when retry exhausted", async () => {
   const ctx = createCtx();
-  ctx.agentContext.bindings.extensions.harness.state = {
-    counters: { planningCaptureAttempts: MAX_PLANNING_CAPTURE_ATTEMPTS - 1 },
-    flags: {},
-  };
+  ctx.agentContext.bindings.extensions.harness.state.counters.planningCaptureAttempts =
+    MAX_PLANNING_CAPTURE_ATTEMPTS - 1;
 
   const result = await processPlanningResult(
     ctx,
@@ -355,10 +353,8 @@ test("planning result pipeline keeps waiting when malformed payload is non-empty
 
 test("planning result pipeline records english fallback reason label", async () => {
   const ctx = createCtx();
-  ctx.agentContext.bindings.extensions.harness.state = {
-    counters: { planningCaptureAttempts: MAX_PLANNING_CAPTURE_ATTEMPTS - 1 },
-    flags: {},
-  };
+  ctx.agentContext.bindings.extensions.harness.state.counters.planningCaptureAttempts =
+    MAX_PLANNING_CAPTURE_ATTEMPTS - 1;
 
   const result = await processPlanningResult(
     ctx,

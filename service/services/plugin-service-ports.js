@@ -214,10 +214,7 @@ function createPluginSessionPort({ bot, pluginId, translateText }) {
     let relativeDir;
     if (!Array.isArray(segments)) throw new TypeError("plugin session segments must be an array");
     try {
-      relativeDir = resolvePluginDataRelativePath(
-        normalizedPluginId,
-        ...segments.map((item) => text(item)),
-      );
+      relativeDir = resolvePluginDataRelativePath(normalizedPluginId, ...segments);
     } catch (cause) {
       throw new Error(translateText("common.notFound", locale), { cause });
     }

@@ -13,6 +13,7 @@ import {
 import { renderDefaultMemoryDocument } from "@noobot/memory-protocol/defaults";
 import {
   LONG_MEMORY_MODEL,
+  createBuiltinLongMemoryModel,
   LONG_MEMORY_MODEL_FIELDS_SINCE,
   parseLongMemoryDocument,
   parseLongMemoryModelText,
@@ -88,7 +89,7 @@ function documentBody(text) {
   return newlineIndex < 0 ? "" : normalized.slice(newlineIndex + 1).trim();
 }
 
-function upgradeLongMemoryModel(text) {
+function upgradeLongMemoryModel(text, locale) {
   const kind = MEMORY_DOCUMENT_KIND.LONG_MEMORY_MODEL;
   const fileVersion = readMemoryDocumentVersion(kind, text);
   const currentVersion = currentMemoryDocumentVersion(kind);
@@ -101,17 +102,17 @@ function upgradeLongMemoryModel(text) {
     return "";
   }
   const appended = [];
+  const builtinModel = createBuiltinLongMemoryModel(locale);
   for (let version = fileVersion + 1; version <= currentVersion; version += 1) {
     for (const key of LONG_MEMORY_MODEL_FIELDS_SINCE[version] ?? []) {
-      if (!declared.has(key))
-        appended.push(renderLongMemoryModelLine(LONG_MEMORY_MODEL.byKey.get(key)));
+      if (!declared.has(key)) appended.push(renderLongMemoryModelLine(builtinModel.byKey.get(key)));
     }
   }
   return renderMemoryDocument(kind, [body, ...appended].join("\n"));
 }
 
-function migrateDocumentText(kind, text) {
-  if (kind === MEMORY_DOCUMENT_KIND.LONG_MEMORY_MODEL) return upgradeLongMemoryModel(text);
+function migrateDocumentText(kind, text, locale) {
+  if (kind === MEMORY_DOCUMENT_KIND.LONG_MEMORY_MODEL) return upgradeLongMemoryModel(text, locale);
   return migrateLegacyBody(kind, text);
 }
 
@@ -119,12 +120,13 @@ export function migrateMemoryDocument({
   kind,
   text = "",
   longMemoryModel = LONG_MEMORY_MODEL,
+  locale,
 } = {}) {
   const context = { longMemoryModel };
   if (isValid(kind, text, context)) return { status: MEMORY_REPAIR_STATUS.CANONICAL, text };
-  const migrated = migrateDocumentText(kind, text);
+  const migrated = migrateDocumentText(kind, text, locale);
   if (migrated && isValid(kind, migrated, context)) {
     return { status: MEMORY_REPAIR_STATUS.MIGRATED, text: migrated };
   }
-  return { status: MEMORY_REPAIR_STATUS.RESET, text: renderDefaultMemoryDocument(kind) };
+  return { status: MEMORY_REPAIR_STATUS.RESET, text: renderDefaultMemoryDocument(kind, locale) };
 }

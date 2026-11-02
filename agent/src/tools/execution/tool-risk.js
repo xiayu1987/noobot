@@ -9,7 +9,7 @@ import {
   SECURITY_EVIDENCE_SOURCE,
   SECURITY_RISK_LEVEL,
   createSecurityAssessment,
-  normalizeSecurityRiskLevel,
+  assertSecurityAssessment,
   raiseSecurityAssessment,
   shouldRequireSecurityConfirmation,
 } from "@noobot/security-assessment-protocol";
@@ -32,10 +32,7 @@ export function createToolRiskAssessment(call = {}) {
 }
 
 export function getToolRiskLevel(assessment) {
-  return normalizeSecurityRiskLevel(
-    assessment?.current?.effectiveRiskLevel,
-    SECURITY_RISK_LEVEL.LOW,
-  );
+  return assertSecurityAssessment(assessment?.current).effectiveRiskLevel;
 }
 
 export function runWithToolRiskAssessment(assessment, operation) {

@@ -6,8 +6,8 @@ import http from "node:http";
 import { readFile } from "node:fs/promises";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { testModelAccess, redactModelDiagnostic } from "@noobot/model-runtime/diagnostics";
-import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
-import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { tModelRuntime, resolveLocaleFromAcceptLanguage } from "@noobot/model-runtime/locale";
+import { DEVELOPMENT_THRESHOLDS } from "../../../scripts/lib/development-thresholds.mjs";
 import { publicModelList } from "./config.js";
 import { isPlainObject } from "@noobot/shared/value";
 
@@ -19,17 +19,22 @@ const STATIC_FILES = new Map([
   ["/style.css", ["style.css", "text/css"]],
 ]);
 
-async function readJson(request) {
+async function readJson(request, locale) {
   let size = 0;
   const chunks = [];
   for await (const chunk of request) {
     size += chunk.length;
-    if (size > QUANTITY_THRESHOLDS.diagnostics.modelAccessBodyMaxBytes)
-      throw new Error("Request too large / 请求体过大");
+    if (size > DEVELOPMENT_THRESHOLDS.length.modelAccessBodyMaxBytes)
+      throw new Error(tModelRuntime(locale, "diagnostic.requestTooLarge"));
     chunks.push(chunk);
   }
-  const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-  if (!isPlainObject(body)) throw new Error("Invalid JSON / JSON 无效");
+  let body;
+  try {
+    body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch {
+    throw new Error(tModelRuntime(locale, "diagnostic.invalidJson"));
+  }
+  if (!isPlainObject(body)) throw new Error(tModelRuntime(locale, "diagnostic.invalidJson"));
   return body;
 }
 
@@ -43,6 +48,7 @@ export function createModelAccessServer({ models, execute = testModelAccess }) {
   const token = randomBytes(32).toString("hex");
   const secrets = models.map((model) => model.api_key).filter(Boolean);
   const server = http.createServer(async (request, response) => {
+    const locale = resolveLocaleFromAcceptLanguage(request.headers["accept-language"]);
     const requestSecrets = [...secrets];
     response.setHeader("cache-control", "no-store");
     response.setHeader("x-content-type-options", "nosniff");
@@ -53,14 +59,14 @@ export function createModelAccessServer({ models, execute = testModelAccess }) {
     const controller = new AbortController();
     const timer = setTimeout(
       () => controller.abort(),
-      TIME_THRESHOLDS.diagnostics.modelAccessTimeoutMs,
+      DEVELOPMENT_THRESHOLDS.time.modelAccessTimeoutMs,
     );
     response.on("close", () => controller.abort());
     try {
       const host = request.headers.host;
       const port = server.address().port;
       if (![`127.0.0.1:${port}`, `localhost:${port}`].includes(host)) {
-        sendJson(response, 403, { error: "Invalid host / 主机无效" });
+        sendJson(response, 403, { error: tModelRuntime(locale, "diagnostic.invalidHost") });
         return;
       }
       const origin = request.headers.origin;
@@ -68,7 +74,7 @@ export function createModelAccessServer({ models, execute = testModelAccess }) {
         (origin && origin !== `http://${host}`) ||
         request.headers["sec-fetch-site"] === "cross-site"
       ) {
-        sendJson(response, 403, { error: "Invalid origin / 来源无效" });
+        sendJson(response, 403, { error: tModelRuntime(locale, "diagnostic.invalidOrigin") });
         return;
       }
       const pathname = new URL(request.url, `http://${host}`).pathname;
@@ -84,18 +90,18 @@ export function createModelAccessServer({ models, execute = testModelAccess }) {
         return;
       }
       if (request.method !== "POST" || !["/api/preview", "/api/run"].includes(pathname)) {
-        sendJson(response, 404, { error: "Not found / 未找到" });
+        sendJson(response, 404, { error: tModelRuntime(locale, "diagnostic.notFound") });
         return;
       }
       const supplied = Buffer.from(String(request.headers["x-diagnostic-token"] || ""));
       const expected = Buffer.from(token);
       if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
-        sendJson(response, 403, { error: "Invalid token / 校验失败" });
+        sendJson(response, 403, { error: tModelRuntime(locale, "diagnostic.invalidToken") });
         return;
       }
-      const input = await readJson(request);
+      const input = await readJson(request, locale);
       const selected = models.find((model) => model.alias === input.alias);
-      if (!selected) throw new Error("Model not found / 未找到模型");
+      if (!selected) throw new Error(tModelRuntime(locale, "diagnostic.modelNotFound"));
       const spec = { ...selected };
       for (const field of ["model", "base_url", "api_key"]) {
         if (typeof input[field] === "string" && input[field].trim())
@@ -104,20 +110,22 @@ export function createModelAccessServer({ models, execute = testModelAccess }) {
       if (input.api_key) requestSecrets.push(input.api_key);
       if (input.protocol === "responses") spec.use_responses_api = true;
       else if (input.protocol === "chat") spec.use_responses_api = false;
-      else if (input.protocol !== "default") throw new Error("Invalid protocol / 接口选项无效");
+      else if (input.protocol !== "default")
+        throw new Error(tModelRuntime(locale, "diagnostic.invalidProtocol"));
       const endpoint = new URL(spec.base_url);
       if (
         !["http:", "https:"].includes(endpoint.protocol) ||
         endpoint.username ||
         endpoint.password
       ) {
-        throw new Error("Invalid endpoint / 接口地址无效");
+        throw new Error(tModelRuntime(locale, "diagnostic.invalidEndpoint"));
       }
       const preview = pathname === "/api/preview";
       if (!preview && !isPlainObject(input.body)) {
-        throw new Error("Request body required / 需要请求体");
+        throw new Error(tModelRuntime(locale, "diagnostic.bodyRequired"));
       }
       const result = await execute({
+        locale,
         modelSpec: spec,
         messages: input.messages,
         body: preview ? undefined : input.body,

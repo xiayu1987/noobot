@@ -5,17 +5,15 @@
  */
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { replaceMessageProjection } from "./message-store.js";
-import { resolveAuthoritativeModelContext } from "@noobot/context-protocol/assembly/hook-context";
-import { text } from "@noobot/shared/value";
+import { resolveAuthoritativeModelMessages } from "@noobot/context-protocol/assembly/hook-context";
 
-export function applyAgentResolvedModelMessages(point = "", ctx = {}, options = {}) {
-  if (text(point).toLowerCase() !== HOOK_POINT.AGENT.BEFORE_LLM_CALL) return false;
-  const modelContext = resolveAuthoritativeModelContext(ctx);
-  if (!modelContext || !Array.isArray(modelContext.messages)) return false;
-  const resolver = options.resolveModelMessages;
-  if (typeof resolver !== "function") return false;
-  const resolved = resolver({ ctx, messages: [], purpose: "main_agent" });
-  if (!Array.isArray(resolved)) return false;
+export function applyAgentResolvedModelMessages(point, ctx, options) {
+  if (point !== HOOK_POINT.AGENT.BEFORE_LLM_CALL) return false;
+  const resolved = resolveAuthoritativeModelMessages({
+    ctx,
+    resolver: options.resolveModelMessages,
+    purpose: "main_agent",
+  });
   replaceMessageProjection(ctx, resolved);
   return true;
 }

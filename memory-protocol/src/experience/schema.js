@@ -7,6 +7,7 @@ import { MEMORY_DOCUMENT_KIND } from "../document.js";
 import { BUILTIN_EXPERIENCE_FIELDS } from "./fields.js";
 import { EXPERIENCE_STRUCTURE_FIELDS } from "./structure.js";
 import { text } from "@noobot/shared/value";
+import { tMemory } from "../locale.js";
 
 const {
   domain: DOMAIN_FIELD,
@@ -15,8 +16,6 @@ const {
   subcategory: SUBCATEGORY_FIELD,
 } = EXPERIENCE_STRUCTURE_FIELDS;
 
-const DOCUMENT_TIME_LABEL = "时间";
-const DOCUMENT_EMPTY_VALUE = "（无）";
 export const EXPERIENCE_DOCUMENT_EXTENSION = ".md";
 
 const STAGE_STRUCTURE = Object.freeze({
@@ -38,7 +37,7 @@ const STAGE_STRUCTURE = Object.freeze({
     structureFields: Object.freeze({ category: CATEGORY_FIELD }),
     requiredFields: Object.freeze(["category"]),
     documentPathFields: Object.freeze(["domain", "category"]),
-    sourceLabel: "来源日期",
+    sourceLabelKey: "experience.document.sourceDates",
   }),
   monthly: Object.freeze({
     documentKind: MEMORY_DOCUMENT_KIND.MONTHLY_SUMMARY,
@@ -51,7 +50,7 @@ const STAGE_STRUCTURE = Object.freeze({
     requiredFields: Object.freeze(["category", "subcategory"]),
     hasSubcategory: true,
     documentPathFields: Object.freeze(["domain", "category", "subcategory"]),
-    sourceLabel: "来源周",
+    sourceLabelKey: "experience.document.sourceWeeks",
   }),
   yearly: Object.freeze({
     documentKind: MEMORY_DOCUMENT_KIND.YEARLY_SUMMARY,
@@ -64,7 +63,7 @@ const STAGE_STRUCTURE = Object.freeze({
     requiredFields: Object.freeze(["category", "subcategory"]),
     hasSubcategory: true,
     documentPathFields: Object.freeze(["domain", "category", "subcategory"]),
-    sourceLabel: "来源月",
+    sourceLabelKey: "experience.document.sourceMonths",
   }),
 });
 
@@ -74,14 +73,14 @@ function requireStructure(stage) {
   return structure;
 }
 
-export function buildExperiencePatchSchema(stage, fields = BUILTIN_EXPERIENCE_FIELDS) {
+export function buildExperiencePatchSchema(stage, fields = BUILTIN_EXPERIENCE_FIELDS, locale) {
   const structure = requireStructure(stage);
   const contentFields = fields?.[stage] || BUILTIN_EXPERIENCE_FIELDS[stage];
   const fieldMap = { ...structure.structureFields };
   for (const item of contentFields) {
     fieldMap[item.key] = Object.freeze({ key: item.key, type: "list" });
   }
-  const { structureFields: _ignored, hasSubcategory, ...rest } = structure;
+  const { structureFields: _ignored, hasSubcategory, sourceLabelKey, ...rest } = structure;
   return Object.freeze({
     ...rest,
     structureFields: structure.structureFields,
@@ -90,8 +89,9 @@ export function buildExperiencePatchSchema(stage, fields = BUILTIN_EXPERIENCE_FI
     subFields: hasSubcategory
       ? Object.freeze([SUBCATEGORY_FIELD.key, ...contentFields.map((item) => item.key)])
       : null,
-    timeLabel: DOCUMENT_TIME_LABEL,
-    emptyValueText: DOCUMENT_EMPTY_VALUE,
+    ...(sourceLabelKey ? { sourceLabel: tMemory(sourceLabelKey, locale) } : {}),
+    timeLabel: tMemory("experience.document.time", locale),
+    emptyValueText: tMemory("experience.document.empty", locale),
     sections: Object.freeze(
       contentFields.map((item) => Object.freeze({ heading: `${item.title}：`, field: item.key })),
     ),

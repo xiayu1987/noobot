@@ -62,8 +62,11 @@ class InProcessSocket extends EventEmitter {
 
   close(code = 1000, reason = "") {
     if (this.readyState === SOCKET_CLOSED) return;
+    if (typeof reason !== "string") {
+      throw new TypeError("in-process close reason must be a string");
+    }
     this.readyState = SOCKET_CLOSED;
-    this.emit("close", code, Buffer.from(String(reason || ""), "utf8"));
+    this.emit("close", code, Buffer.from(reason, "utf8"));
   }
 }
 
@@ -89,9 +92,7 @@ export function createInProcessChatTransport({ appDependencies, connectorAccessP
     });
     const closed = new Promise((resolve) => {
       socket.once("close", (code, reasonBuffer) => {
-        const reason = Buffer.isBuffer(reasonBuffer)
-          ? reasonBuffer.toString("utf8")
-          : String(reasonBuffer || "");
+        const reason = reasonBuffer.toString("utf8");
         resolve({ code, reason, exitCode: resolveInProcessExitCode(reason) });
       });
     });

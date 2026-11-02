@@ -41,8 +41,7 @@ test("read_file: reads own workspace through the logical workspace view", async 
 
   assert.equal(result.toolName, "read_file");
   assert.equal(result.ok, true);
-  assert.equal(result.content, '1 | {"ok":true}');
-  assert.equal(result.includeLineNumbers, true);
+  assert.equal(result.numberedContent, '     1\t{"ok":true}');
   assert.deepEqual(result.path, { view: "workspace", path: "runtime/ops_workdir/result.json" });
   assert.equal("resolvedPath" in result, false);
 });
@@ -192,7 +191,7 @@ test("read_file: configured super user can read another user workspace through h
 
   assert.equal(result.toolName, "read_file");
   assert.equal(result.ok, true);
-  assert.equal(result.content, "1 | visible");
+  assert.equal(result.numberedContent, "     1\tvisible");
   assert.deepEqual(result.path, { view: "host", path: otherUserFile });
 });
 
@@ -314,7 +313,7 @@ test("read_file: super user can read an absolute file outside workspace root", a
 
   assert.equal(result.toolName, "read_file");
   assert.equal(result.ok, true);
-  assert.equal(result.content, "1 | visible-outside");
+  assert.equal(result.numberedContent, "     1\tvisible-outside");
   assert.deepEqual(result.path, { view: "host", path: outsideFile });
 });
 
@@ -490,7 +489,7 @@ test("read_file: global sandbox mounts extend the logical workspace view", async
 
   assert.equal(result.toolName, "read_file");
   assert.equal(result.ok, true);
-  assert.equal(result.content, "1 | project-mounted-ok");
+  assert.equal(result.numberedContent, "     1\tproject-mounted-ok");
   assert.deepEqual(result.path, {
     view: "mount",
     mount: "/project",
@@ -574,38 +573,25 @@ test("write_file rejects a symbolic-link parent escape", async () => {
   await assert.rejects(() => fs.access(path.join(outsidePath, "created.txt")));
 });
 
-test("read_file: 默认返回行号且可关闭行号", async () => {
+test("read_file: numberedContent 使用 cat -n 行号格式且不再返回 content", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-read-lines-"));
   await fs.writeFile(path.join(basePath, "lines.txt"), "a\nb\nc\n", "utf8");
   const tools = createFileTool({ agentContext: buildAgentContext(basePath) });
   const tool = tools.find((item) => item?.name === "read_file");
   assert.ok(tool);
 
-  const withLines = parseToolResult(
+  const result = parseToolResult(
     await tool.invoke(
       { riskLevel: "low", filePath: "lines.txt", startLine: 2, endLine: 3 },
       { signal: new AbortController().signal },
     ),
   );
-  assert.equal(withLines.ok, true);
-  assert.equal(withLines.content, "2 | b\n3 | c");
-  assert.equal(withLines.includeLineNumbers, true);
-
-  const withoutLines = parseToolResult(
-    await tool.invoke(
-      {
-        riskLevel: "low",
-        filePath: "lines.txt",
-        startLine: 2,
-        endLine: 3,
-        includeLineNumbers: false,
-      },
-      { signal: new AbortController().signal },
-    ),
-  );
-  assert.equal(withoutLines.ok, true);
-  assert.equal(withoutLines.content, "b\nc");
-  assert.equal(withoutLines.includeLineNumbers, false);
+  assert.equal(result.ok, true);
+  assert.equal(result.numberedContent, "     2\tb\n     3\tc");
+  assert.equal(Object.hasOwn(result, "content"), false);
+  assert.equal(result.startLine, 2);
+  assert.equal(result.endLine, 3);
+  assert.equal(Object.hasOwn(result, "includeLineNumbers"), false);
 });
 
 test("read_file: 起始行超过 EOF 时返回明确范围错误而不是最后一行", async () => {
@@ -684,7 +670,7 @@ test("read_file: 默认读取行数阈值为 1000", async () => {
 
   const result = parseToolResult(
     await tool.invoke(
-      { riskLevel: "low", filePath: "long.txt", includeLineNumbers: false },
+      { riskLevel: "low", filePath: "long.txt" },
       { signal: new AbortController().signal },
     ),
   );
@@ -694,8 +680,8 @@ test("read_file: 默认读取行数阈值为 1000", async () => {
   assert.equal(result.endLine, 1000);
   assert.equal(result.totalLines, 1001);
   assert.equal(result.hasMore, true);
-  assert.equal(result.content.split("\n").length, 1000);
-  assert.equal(result.content.endsWith("line-1000"), true);
+  assert.equal(result.numberedContent.split("\n").length, 1000);
+  assert.equal(result.numberedContent.endsWith("  1000\tline-1000"), true);
 });
 
 test("read_file: endLine 超过 EOF 但内容完整时 hasMore 为 false", async () => {
@@ -723,13 +709,12 @@ test("read_file: endLine 超过 EOF 但内容完整时 hasMore 为 false", async
         startLine: 1,
         endLine: 10,
         maxLines: 10,
-        includeLineNumbers: false,
       },
       { signal: new AbortController().signal },
     ),
   );
 
-  assert.equal(result.content, "line01\nline02\nline03");
+  assert.equal(result.numberedContent, "     1\tline01\n     2\tline02\n     3\tline03");
   assert.equal(result.endLine, 3);
   assert.equal(result.totalLines, 3);
   assert.equal(result.hasMore, false);

@@ -25,10 +25,9 @@ import {
   TURN_STATE,
 } from "@noobot/session-protocol";
 import {
-  EVENT_FAMILY,
   INTERACTION_EVENT_TYPE,
   isTerminalInteractionLifecycle,
-  validateProtocolEvent,
+  mergeTurnLifecycleEvents,
 } from "@noobot/event-protocol";
 import { isTransientMessageEvent } from "@noobot/event-protocol/message-event";
 import { text, isCanonicalText } from "@noobot/shared/value";
@@ -149,23 +148,11 @@ function buildTurnLifecycleReplay(window, sequence) {
 }
 
 function latestLifecycleEntry(channels = [], sessionId = "") {
-  const normalizedSessionId = text(sessionId);
   return (
-    channels
-      .flatMap((channel) =>
-        (channel?.lifecycleWindowsBySessionId?.get(normalizedSessionId) || []).map((envelope) => ({
-          channel,
-          envelope,
-        })),
-      )
-      .sort(
-        (left, right) =>
-          Number(left.envelope?.ordering?.sequence || 0) -
-            Number(right.envelope?.ordering?.sequence || 0) ||
-          Number(left.envelope?.ordering?.revision || 0) -
-            Number(right.envelope?.ordering?.revision || 0),
-      )
-      .at(-1) || null
+    mergeTurnLifecycleEvents(
+      sessionId,
+      channels.flatMap((channel) => channel.lifecycleWindowsBySessionId.get(sessionId) ?? []),
+    ).at(-1) ?? null
   );
 }
 
@@ -305,18 +292,11 @@ class ChannelStoreMethods {
   }
 
   recordTurnLifecycleEnvelope(channel, lifecycleEnvelope) {
-    const { sessionId, eventId } = lifecycleEnvelope.identity;
-    const { sequence } = lifecycleEnvelope.ordering;
+    const { sessionId } = lifecycleEnvelope.identity;
     const current = channel.lifecycleWindowsBySessionId.get(sessionId) ?? [];
-    if (
-      current.some(
-        (item) => item.identity.eventId === eventId || item.ordering.sequence === sequence,
-      )
-    )
-      return null;
-    const next = [...current, lifecycleEnvelope]
-      .sort((left, right) => left.ordering.sequence - right.ordering.sequence)
-      .slice(-config.maxChannelEvents);
+    const next = mergeTurnLifecycleEvents(sessionId, [...current, lifecycleEnvelope]).slice(
+      -config.maxChannelEvents,
+    );
     channel.lifecycleWindowsBySessionId.set(sessionId, next);
     return next;
   }
@@ -328,71 +308,18 @@ class ChannelStoreMethods {
   }
 
   getTurnLifecycleReplayForChannels(channels, sessionId, knownSequence) {
-    const normalizedSessionId = text(sessionId);
-    const mergedBySequence = new Map();
-    for (const channel of channels) {
-      for (const envelope of channel?.lifecycleWindowsBySessionId?.get(normalizedSessionId) || []) {
-        const sequence = Number(envelope?.ordering?.sequence || 0);
-        if (sequence < 1) continue;
-        const existing = mergedBySequence.get(sequence);
-        if (
-          !existing ||
-          Number(envelope?.ordering?.revision || 0) >= Number(existing?.ordering?.revision || 0)
-        ) {
-          mergedBySequence.set(sequence, envelope);
-        }
-      }
-    }
-    const window = Array.from(mergedBySequence.values()).sort(
-      (left, right) =>
-        Number(left?.ordering?.sequence || 0) - Number(right?.ordering?.sequence || 0),
+    const window = mergeTurnLifecycleEvents(
+      sessionId,
+      channels.flatMap((channel) => channel.lifecycleWindowsBySessionId.get(sessionId) ?? []),
     );
     return buildTurnLifecycleReplay(window, knownSequence);
   }
 
-  getActiveTurnLifecycleProjection(channel, sessionId = "") {
-    return this.getActiveTurnLifecycleProjectionForChannels([channel], sessionId);
-  }
-
-  getActiveTurnLifecycleProjectionForChannels(channels = [], sessionId = "") {
-    const normalizedSessionId = text(sessionId);
-    const latestEntry = latestLifecycleEntry(channels, normalizedSessionId);
-    const latest = latestEntry?.envelope || null;
-    const validation = validateProtocolEvent(latest);
-    if (
-      !latest ||
-      !validation.valid ||
-      validation.descriptor?.family !== EVENT_FAMILY.TURN_LIFECYCLE
-    )
-      return null;
-    const lifecycle = latest.payload;
-    const eventType = text(lifecycle?.eventType);
-    const lifecycleState = text(lifecycle?.state);
-    if (isTerminalTurnEvent(eventType) || isTerminalTurnState(lifecycleState)) {
-      return null;
-    }
-    const turnScopeId = text(latest?.identity?.turnScopeId);
-    if (!turnScopeId) return null;
-    const dialogProcessId = text(lifecycle?.dialogProcessId);
-    const conversationState = channels
-      .map((channel) => channel.conversationStateByScope.get(turnScopeId))
-      .filter(Boolean)
-      .sort((left, right) => right.updatedAtMs - left.updatedAtMs)
-      .at(0);
-    const projectedState =
-      text(conversationState?.state) ||
-      (eventType === TURN_EVENT.STOP_ACCEPTED
-        ? AGENT_CHANNEL_STATE.STOPPING
-        : AGENT_CHANNEL_STATE.SENDING);
-    return {
-      ...lifecycle,
-      sessionId: normalizedSessionId,
-      dialogProcessId,
-      turnScopeId,
-      state: projectedState,
-      lifecycleState,
-      authoritativeLifecycle: true,
-    };
+  hasActiveTurnLifecycleForChannels(channels, sessionId) {
+    const latest = latestLifecycleEntry(channels, sessionId);
+    if (!latest) return false;
+    const { eventType, state } = latest.payload;
+    return !isTerminalTurnEvent(eventType) && !isTerminalTurnState(state);
   }
 
   updateConversationState(

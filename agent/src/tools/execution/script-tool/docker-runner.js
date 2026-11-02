@@ -55,7 +55,7 @@ function signalDockerExecution({ containerName, executionToken, executable }, si
         executionToken,
         signal,
       ],
-      { timeout: 10000, windowsHide: true },
+      { timeout: TIME_THRESHOLDS.tools.dockerExecuteTimeoutMs, windowsHide: true },
       () => resolve(),
     );
   });

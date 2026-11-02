@@ -10,6 +10,7 @@ import os from "node:os";
 import path from "node:path";
 
 import {
+  createTestResolveModelMessages,
   createTestHookContext,
   createTestHookManager as createAgentHookManager,
 } from "../helpers/public-runtime-fixtures.js";
@@ -227,7 +228,15 @@ test("dynamic policy changes cannot rewrite the main-flow system prefix after fi
 test("harness policy prompt survives agent-side system message compaction", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
   const hookManager = createAgentHookManager();
-  registerHarnessCore({ hookManager }, { planningGuidanceMode: "inject", basePath, trace: false });
+  registerHarnessCore(
+    { hookManager },
+    {
+      resolveModelMessages: createTestResolveModelMessages(),
+      planningGuidanceMode: "inject",
+      basePath,
+      trace: false,
+    },
+  );
   const ctx = {
     userId: "u-policy-compact",
     sessionId: "s-policy-compact",

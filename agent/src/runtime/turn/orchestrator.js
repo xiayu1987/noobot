@@ -70,69 +70,69 @@ export function createTurnOrchestrator({
   const invokeNoToolsTurnFn = withNoFinalResponseRecovery(rawInvokeNoToolsTurnFn);
   const invokeWithToolsTurnFn = withNoFinalResponseRecovery(rawInvokeWithToolsTurnFn);
 
-  async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
+  async function runFunctionCallLoop({ modelState, loopState, turn: firstTurn = 1 }) {
     const { tools, traces, maxTurns } = loopState;
     const { runtime } = modelState;
     const { abortSignal, eventListener } = runtime;
-    const overMaxTurnsCount = Math.max(0, Number(turn || 0) - Number(maxTurns || 0));
     const loopLimitBufferTurns = DEFAULT_TOOL_LOOP_LIMIT_BUFFER_TURNS;
-    const isOverMaxTurns = overMaxTurnsCount > 0;
-    const isBeyondLoopLimitBuffer = overMaxTurnsCount > loopLimitBufferTurns;
 
-    async function continueForAcceptedUserInterjections(nextTurn = turn + 1) {
-      if (runtime.sealUserInterjectionQueueIfEmpty()) return null;
+    async function consumeAcceptedUserInterjections(turn) {
+      if (runtime.sealUserInterjectionQueueIfEmpty()) return false;
       const consumed = await runtime.consumeUserInterjections();
       if (
         (!Array.isArray(consumed) || consumed.length === 0) &&
         runtime.sealUserInterjectionQueueIfEmpty()
       )
-        return null;
+        return false;
       emitEvent(eventListener, "user_interjections_continued_model_loop", {
         turn,
-        nextTurn,
+        nextTurn: turn + 1,
         count: Array.isArray(consumed) ? consumed.length : 0,
       });
-      return runFunctionCallLoop({ modelState, loopState, turn: nextTurn });
+      return true;
     }
 
-    async function invokeFinalNoToolsTurn({
-      finalTurn = turn,
-      instruction = null,
-      eventName = "main_flow_final_no_tools_turn_enforced",
-    } = {}) {
+    async function completeTurn(turn, { output, modelMessageId, turnMessageStore, modelMessages }) {
+      if (await consumeAcceptedUserInterjections(turn)) return { nextTurn: turn + 1 };
+      return {
+        result: buildLoopResultFn({
+          output,
+          modelMessageId,
+          traces,
+          loopState,
+          turnMessageStore,
+          modelMessages,
+        }),
+      };
+    }
+
+    async function invokeFinalNoToolsTurn(turn, instruction) {
       markMainFlowFinalNoToolsTurnActive(runtime, true);
-      emitEvent(eventListener, eventName, {
-        turn: finalTurn,
+      emitEvent(eventListener, "main_flow_final_no_tools_turn_enforced", {
+        turn,
         reason: text(instruction?.reason),
         source: text(instruction?.source),
       });
+      let noToolsResult;
       try {
-        const noToolsResult = await invokeNoToolsTurnFn({
+        noToolsResult = await invokeNoToolsTurnFn({
           modelState,
           loopState,
-          turn: finalTurn,
+          turn,
           forceToolChoiceNone: true,
-        });
-        const continuedResult = await continueForAcceptedUserInterjections(turn + 1);
-        if (continuedResult) return continuedResult;
-        return buildLoopResultFn({
-          output: noToolsResult.output,
-          modelMessageId: noToolsResult.modelMessageId,
-          traces,
-          loopState,
-          turnMessageStore: noToolsResult.turnMessageStore,
-          modelMessages: noToolsResult.modelMessages,
         });
       } finally {
         markMainFlowFinalNoToolsTurnActive(runtime, false);
         clearMainFlowFinalNoToolsTurnInstruction(runtime);
       }
+      return completeTurn(turn, noToolsResult);
     }
 
-    async function executeTurn() {
+    async function executeTurn(turn) {
       assertNotAbortedFn(abortSignal);
+      const overMaxTurnsCount = Math.max(0, turn - Number(maxTurns || 0));
 
-      if (isOverMaxTurns && loopState?.loopLimitFinalizePrompted !== true) {
+      if (overMaxTurnsCount > 0 && loopState?.loopLimitFinalizePrompted !== true) {
         appendTurnContextControlMessage({
           runtime,
           content: tEngine(runtime, "toolLoopLimitFinalizePrompt", { maxTurns }),
@@ -147,7 +147,7 @@ export function createTurnOrchestrator({
         });
       }
 
-      if (isBeyondLoopLimitBuffer) {
+      if (overMaxTurnsCount > loopLimitBufferTurns) {
         emitEvent(eventListener, "tool_loop_limit_reached", {
           turn,
           maxTurns,
@@ -160,16 +160,7 @@ export function createTurnOrchestrator({
           turn,
           forceToolChoiceNone: true,
         });
-        const continuedResult = await continueForAcceptedUserInterjections(turn + 1);
-        if (continuedResult) return continuedResult;
-        return buildLoopResultFn({
-          output: finalResult.output,
-          modelMessageId: finalResult.modelMessageId,
-          traces,
-          loopState,
-          turnMessageStore: finalResult.turnMessageStore,
-          modelMessages: finalResult.modelMessages,
-        });
+        return completeTurn(turn, finalResult);
       }
 
       resolveLlmForTurnFn(modelState);
@@ -177,35 +168,18 @@ export function createTurnOrchestrator({
       maybeFinalizeNoToolsAfterPhaseSummaryOverflowFn({ modelState, loopState });
       const mainFlowFinalNoToolsInstruction = consumeMainFlowFinalNoToolsTurnInstruction(runtime);
       if (mainFlowFinalNoToolsInstruction) {
-        return invokeFinalNoToolsTurn({
-          finalTurn: turn,
-          instruction: mainFlowFinalNoToolsInstruction,
-          eventName: "main_flow_final_no_tools_turn_enforced",
-        });
+        return invokeFinalNoToolsTurn(turn, mainFlowFinalNoToolsInstruction);
       }
 
       if (!Array.isArray(tools) || tools.length === 0) {
         const noToolsResult = await invokeNoToolsTurnFn({ modelState, loopState, turn });
-        const continuedResult = await continueForAcceptedUserInterjections(turn + 1);
-        if (continuedResult) return continuedResult;
-        return buildLoopResultFn({
-          output: noToolsResult.output,
-          modelMessageId: noToolsResult.modelMessageId,
-          traces,
-          loopState,
-          turnMessageStore: noToolsResult.turnMessageStore,
-          modelMessages: noToolsResult.modelMessages,
-        });
+        return completeTurn(turn, noToolsResult);
       }
 
       const withToolsResult = await invokeWithToolsTurnFn({ modelState, loopState, turn });
       await consumeSummaryCheckpointCommand({ runtime, eventListener, turn });
       if (withToolsResult?.mainFlowFinalNoToolsRequested === true) {
-        return invokeFinalNoToolsTurn({
-          finalTurn: turn,
-          instruction: consumeMainFlowFinalNoToolsTurnInstruction(runtime),
-          eventName: "main_flow_final_no_tools_turn_enforced",
-        });
+        return invokeFinalNoToolsTurn(turn, consumeMainFlowFinalNoToolsTurnInstruction(runtime));
       }
       const { rejectedControlToolBatch } = withToolsResult;
       if (rejectedControlToolBatch) {
@@ -227,18 +201,14 @@ export function createTurnOrchestrator({
             : "task_check_multi_tool_call_rejected",
           { turn, ...rejectedControlToolBatch },
         );
-        return runFunctionCallLoop({ modelState, loopState, turn: turn + 1 });
+        return { nextTurn: turn + 1 };
       }
       const { aiContentText, calls, turnMessageStore, stateCommitter } = withToolsResult;
 
       if (!calls.length) {
-        const continuedResult = await continueForAcceptedUserInterjections(turn + 1);
-        if (continuedResult) return continuedResult;
-        return buildLoopResultFn({
+        return completeTurn(turn, {
           output: aiContentText,
           modelMessageId: withToolsResult.modelMessageId,
-          traces,
-          loopState,
           turnMessageStore,
           modelMessages: requireActiveModelContext(runtime).messages,
         });
@@ -281,15 +251,14 @@ export function createTurnOrchestrator({
         }
       }
 
-      return runFunctionCallLoop({
-        modelState,
-        loopState,
-        turn: turn + Math.max(1, calls.length),
-      });
+      return { nextTurn: turn + Math.max(1, calls.length) };
     }
 
+    let turn = firstTurn;
+    let step;
     try {
-      return await executeTurn();
+      while ((step = await executeTurn(turn)).nextTurn !== undefined) turn = step.nextTurn;
+      return step.result;
     } catch (error) {
       const executionIdentity = getSessionIdsFromAgentContext(modelState.agentContext);
       handleEngineErrorFn({

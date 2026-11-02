@@ -20,10 +20,11 @@ export async function saveWeeklyDomainSummary({
   createdAt = "",
   sourceDates = [],
   fields,
+  locale,
 } = {}) {
   const safeDomainName = sanitizeFileName(domainName, "");
   if (!safeDomainName || !Array.isArray(categories) || !categories.length) return false;
-  const schema = buildExperiencePatchSchema("weekly", fields);
+  const schema = buildExperiencePatchSchema("weekly", fields, locale);
   const weekDir = path.join(storage.weeklySummaryDir(basePath), weekLabel);
 
   let writtenCount = 0;

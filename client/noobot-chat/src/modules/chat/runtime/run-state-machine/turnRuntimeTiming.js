@@ -60,15 +60,26 @@ export function applyTurnTimingSnapshot(registry, snapshot) {
     throw new TypeError(`turn timing snapshot requires turnTimings array: ${sessionId}`);
   }
   const timings = normalizeSnapshotTimings(snapshot.turnTimings);
-  const bucket = ensureSessionBucket(registry, sessionId);
+  const staged = {
+    ...registry,
+    sessions: { ...registry.sessions },
+    routeIndex: { ...registry.routeIndex },
+  };
+  const existing = registry.sessions[sessionId];
+  if (existing) staged.sessions[sessionId] = { ...existing, turns: { ...existing.turns } };
+  const preparedBucket = ensureSessionBucket(staged, sessionId);
   const hydratedTurnScopeIds = [];
   for (const timing of timings) {
     if (isTurnRuntimeDeleted(registry, { sessionId, turnScopeId: timing.turnScopeId })) continue;
-    if (applyTurnTiming(registry, bucket, sessionId, timing).applied) {
+    if (applyTurnTiming(staged, preparedBucket, sessionId, timing).applied) {
       hydratedTurnScopeIds.push(timing.turnScopeId);
     }
   }
-  return hydratedTurnScopeIds.length
-    ? { applied: true, bucket, hydratedTurnScopeIds }
-    : { applied: false, deduplicated: true, reason: "timing_snapshot_unchanged" };
+  if (!hydratedTurnScopeIds.length) {
+    return { applied: false, deduplicated: true, reason: "timing_snapshot_unchanged" };
+  }
+  const bucket = ensureSessionBucket(registry, sessionId);
+  Object.assign(bucket.turns, preparedBucket.turns);
+  Object.assign(registry.routeIndex, staged.routeIndex);
+  return { applied: true, bucket, hydratedTurnScopeIds };
 }

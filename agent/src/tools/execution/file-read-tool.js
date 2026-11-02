@@ -16,8 +16,8 @@ import { tTool } from "../core/tool-i18n.js";
 import { TOOL_NAME } from "../constants/index.js";
 import {
   DEFAULT_READ_MAX_LINES,
-  READ_MAX_LINES_LIMIT,
   formatLinesWithNumbers,
+  READ_MAX_LINES_LIMIT,
   splitLines,
 } from "./file-utils.js";
 import {
@@ -34,7 +34,7 @@ import {
 
 export function createReadFileTool({ agentContext, runtime, workspaceIo }) {
   return structuredTool(
-    async ({ filePath, startLine, endLine, includeLineNumbers, maxLines, riskLevel }) => {
+    async ({ filePath, startLine, endLine, maxLines, riskLevel }) => {
       if (typeof filePath === "string")
         assertValidFileNameFromPath({ filePath, fieldName: "filePath", agentContext });
       const resolvedInput = await resolveFileInput({
@@ -105,9 +105,7 @@ export function createReadFileTool({ agentContext, runtime, workspaceIo }) {
       }
       const end = Math.min(requestedEnd, startLine + maxLines - 1, totalLines);
       const selectedLines = allLines.slice(startLine - 1, end);
-      const content = includeLineNumbers
-        ? formatLinesWithNumbers(selectedLines, startLine)
-        : selectedLines.join("\n");
+      const numberedContent = formatLinesWithNumbers(selectedLines, startLine);
       const resource =
         resolvedInput.resourceRef ||
         (await registerResource({
@@ -124,16 +122,15 @@ export function createReadFileTool({ agentContext, runtime, workspaceIo }) {
         startLine,
         endLine: end,
         totalLines,
-        includeLineNumbers,
         hasMore: end < totalLines,
-        content,
+        numberedContent,
       });
     },
     {
       name: TOOL_NAME.READ_FILE,
       metadata: { pathContract: TOOL_PATH_CONTRACTS.fileRead },
       description: buildFileToolDescription(runtime, "tools.file.readDescription"),
-      schema: z.object({
+      schema: z.strictObject({
         filePath: createFileSourceSchema({
           filePathDescription: tTool(runtime, "tools.file.readFilePathField"),
         }),
@@ -150,11 +147,6 @@ export function createReadFileTool({ agentContext, runtime, workspaceIo }) {
           .min(1)
           .optional()
           .describe(tTool(runtime, "tools.file.readEndLineField")),
-        includeLineNumbers: z
-          .boolean()
-          .optional()
-          .default(true)
-          .describe(tTool(runtime, "tools.file.readIncludeLineNumbersField")),
         maxLines: z
           .number()
           .int()

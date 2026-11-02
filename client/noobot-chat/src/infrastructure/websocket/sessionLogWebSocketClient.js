@@ -8,6 +8,7 @@ import {
   buildSessionLogRecord,
   isSessionLogDebugEvent,
 } from "@noobot/runtime-events/session-log-protocol";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import {
@@ -20,7 +21,7 @@ import { text, isObjectLike } from "@noobot/shared/value";
 const MAX_QUEUE_SIZE = QUANTITY_THRESHOLDS.sessionLog.maxQueueSize;
 const MAX_BATCH_SIZE = QUANTITY_THRESHOLDS.sessionLog.maxBatchSize;
 const DEFAULT_MAX_DEBUG_QUEUE_SIZE = QUANTITY_THRESHOLDS.sessionLog.maxDebugQueueSize;
-const DEFAULT_MAX_DEBUG_QUEUE_BYTES = QUANTITY_THRESHOLDS.sessionLog.maxDebugQueueBytes;
+const DEFAULT_MAX_DEBUG_QUEUE_BYTES = LENGTH_THRESHOLDS.sessionLog.maxDebugQueueBytes;
 const DEFAULT_DEBUG_TTL_MS = TIME_THRESHOLDS.client.sessionLogDebugTtlMs;
 
 const SESSION_LOG_WS_DEBUG_TYPE = "session-log-ws";

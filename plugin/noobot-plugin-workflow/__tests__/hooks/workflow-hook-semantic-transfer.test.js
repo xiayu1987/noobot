@@ -64,7 +64,16 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
           persisted: { outputDir: "/tmp/noobot/workflow/s1/node1" },
           result: {
             answer: 'answer-node-done\n\n[Harness-Review]\n{"status":"pass"}',
-            messages: [{ role: "assistant", content: "message-node-done", type: "message" }],
+            traces: [],
+            dialogProcessId: payload.strategy.dialogProcessId,
+            messages: [
+              {
+                messageUid: "node-message",
+                role: "assistant",
+                content: "message-node-done",
+                type: "message",
+              },
+            ],
           },
         };
       },
@@ -289,7 +298,16 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
         dialogProcessId: "wf_semantic_node_dialog_1",
         result: {
           answer: "semantic-node-done",
-          messages: [{ role: "assistant", content: "semantic-node-done", type: "message" }],
+          traces: [],
+          dialogProcessId: "wf_semantic_node_dialog_1",
+          messages: [
+            {
+              messageUid: "semantic-message",
+              role: "assistant",
+              content: "semantic-node-done",
+              type: "message",
+            },
+          ],
         },
       }),
     },
@@ -396,7 +414,16 @@ test("workflow hook routes final attachment summary composition through semantic
         dialogProcessId: "wf_summary_node_dialog_1",
         result: {
           answer: "summary-node-done",
-          messages: [{ role: "assistant", content: "summary-node-done", type: "message" }],
+          traces: [],
+          dialogProcessId: "wf_summary_node_dialog_1",
+          messages: [
+            {
+              messageUid: "summary-message",
+              role: "assistant",
+              content: "summary-node-done",
+              type: "message",
+            },
+          ],
         },
       }),
     },

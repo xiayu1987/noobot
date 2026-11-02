@@ -83,7 +83,7 @@ export function createModelTool({ agentContext, sessionId }) {
     {
       name: TOOL_NAME.SWITCH_MODEL,
       description: tTool(runtime, "tools.model.description"),
-      schema: z.object({
+      schema: z.strictObject({
         modelName: z.string().describe(tTool(runtime, "tools.model.fieldModelName")),
       }),
     },

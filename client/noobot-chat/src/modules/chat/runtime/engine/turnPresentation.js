@@ -16,6 +16,11 @@ import { mergeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 import { getMessageTransferEnvelopes } from "../../model/transferEnvelopes.js";
 import { isCanonicalText, isPlainObject, text } from "@noobot/shared/value";
 import { resolveMessageViewKey } from "@noobot/event-protocol/message-event";
+import {
+  isWorkflowMessage as isWorkflowPresentationMessage,
+  WORKFLOW_MESSAGE_IDENTITY,
+  WORKFLOW_MESSAGE_PHASE,
+} from "@noobot/event-protocol/workflow-runtime-event";
 
 export const EMPTY_TURN_PRESENTATIONS = Object.freeze([]);
 
@@ -39,23 +44,6 @@ function turnKey(sessionId = "", turnScopeId = "") {
 
 function messageTurnKey(message, containerSessionId) {
   return turnKey(containerSessionId, getMessageTurnScopeId(message));
-}
-
-function workflowPayload(message = {}) {
-  return message?.pluginMeta?.payload && typeof message.pluginMeta.payload === "object"
-    ? message.pluginMeta.payload
-    : {};
-}
-
-function isWorkflowPresentationMessage(message = {}) {
-  const payload = workflowPayload(message);
-  return Boolean(
-    text(message?.type).toLowerCase() === "workflow" ||
-    message?.workflowMessage === true ||
-    (text(message?.pluginMeta?.source).toLowerCase() === "workflow-plugin" &&
-      text(message?.pluginMeta?.kind).toLowerCase() === "workflow") ||
-    text(payload?.workflowRunId),
-  );
 }
 
 function isEmptyAssistantPlaceholder(message = {}) {
@@ -144,22 +132,21 @@ function buildLiveWorkflowPresentationMessage(workflow) {
     presentationMessageId,
     sessionId,
     role: "assistant",
-    type: "workflow",
+    type: WORKFLOW_MESSAGE_IDENTITY.type,
     pluginMessage: true,
     dialogProcessId: text(workflow?.dialogProcessId),
     turnScopeId,
     content: text(workflow?.semanticText),
-    __workflowLiveProjection: true,
     pluginMeta: {
-      source: "workflow-plugin",
-      kind: "workflow",
-      phase: "planning",
+      source: WORKFLOW_MESSAGE_IDENTITY.source,
+      kind: WORKFLOW_MESSAGE_IDENTITY.kind,
+      phase: WORKFLOW_MESSAGE_PHASE.PLANNING,
       payload: workflowPayload,
     },
   };
 }
 
-function mergeWorkflowIntoShell(shell = {}, workflowMessage = {}) {
+function mergeWorkflowIntoShell(shell, workflowMessage) {
   if (isWorkflowPresentationMessage(shell)) return shell;
   const canonicalContent = text(shell?.content);
   const livePlanningContent = text(workflowMessage?.content);
@@ -167,10 +154,10 @@ function mergeWorkflowIntoShell(shell = {}, workflowMessage = {}) {
   const merged = {
     ...shell,
     ...workflowMessage,
-    presentationMessageId: resolveMessageViewKey(shell) || resolveMessageViewKey(workflowMessage),
-    ts: shell?.ts || workflowMessage?.ts,
-    turnScopeId: getMessageTurnScopeId(shell) || getMessageTurnScopeId(workflowMessage),
-    dialogProcessId: shell?.dialogProcessId || workflowMessage?.dialogProcessId || "",
+    presentationMessageId: resolveMessageViewKey(shell),
+    ts: shell.ts,
+    turnScopeId: shell.turnScopeId,
+    dialogProcessId: workflowMessage.dialogProcessId,
     content,
   };
   logThinkingReplayDebug("frontend.turnPresentation.workflowMerged", () => ({
@@ -190,7 +177,7 @@ function mergeWorkflowIntoShell(shell = {}, workflowMessage = {}) {
   return merged;
 }
 
-function mergeTurnStatusIntoAssistant(shell = {}, terminalPresentation = {}) {
+function mergeTurnStatusIntoAssistant(shell, terminalPresentation) {
   const shellContent = text(shell?.content);
   const terminalContent = text(terminalPresentation?.content);
   const content =
@@ -200,15 +187,14 @@ function mergeTurnStatusIntoAssistant(shell = {}, terminalPresentation = {}) {
   return {
     ...shell,
     ...terminalPresentation,
-    presentationMessageId:
-      resolveMessageViewKey(shell) || resolveMessageViewKey(terminalPresentation),
-    turnScopeId: getMessageTurnScopeId(shell) || getMessageTurnScopeId(terminalPresentation),
-    dialogProcessId: shell?.dialogProcessId || terminalPresentation?.dialogProcessId || "",
+    presentationMessageId: resolveMessageViewKey(shell),
+    turnScopeId: shell.turnScopeId,
+    dialogProcessId: terminalPresentation.dialogProcessId,
     content,
     toolTimeline: shell?.toolTimeline || [],
     activityTimeline: shell?.activityTimeline || [],
     attachments: shell?.attachments || [],
-    ts: shell?.ts || terminalPresentation?.ts,
+    ts: shell.ts,
   };
 }
 

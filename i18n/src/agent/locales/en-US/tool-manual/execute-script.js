@@ -17,7 +17,8 @@ export const EXECUTE_SCRIPT_MANUAL = {
         "Script risk level: low, medium, high, or critical. Destructive scripts must be marked critical.",
       executionMode:
         "foreground returns stdout/stderr; oversized and background output return attachments through transfers. Both modes wait for completion.",
-      includeLineNumbers: "Whether output carries line numbers, off by default.",
+      includeLineNumbers:
+        "Whether output carries cat -n style line numbers (number\\ttext), off by default.",
       outputFiles:
         "Absolute paths to deliver as attachments after execution. Reuse returned attachment references verbatim in replies.",
     },
@@ -26,6 +27,7 @@ export const EXECUTE_SCRIPT_MANUAL = {
       "Use paths relative to the current working directory; the interpreter and working directory come from the runtime environment section.",
       "background does not return early, and the command must not use background operators, nohup, or disown.",
       "overflowed marks oversized inline output; read the full result with attachmentRef from transfers.",
+      "ok only means the process exited normally; judge command success by exitCode, where non-zero means the command failed.",
       "Builds, tests, lint, and type checks are the main use here; run them right after changing code.",
     ],
     pitfalls: [

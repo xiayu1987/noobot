@@ -3,7 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createTestModelResponse } from "../helpers/public-runtime-fixtures.js";
+import {
+  createTestModelResponse,
+  createTestHookContext,
+} from "../helpers/public-runtime-fixtures.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -34,6 +37,7 @@ test("resolveCapabilityModelMessages respects empty array from resolver", () => 
     },
     {
       messages: [contextMessage({ role: "user", content: "should-not-fallback" })],
+      ctx: createTestHookContext(),
     },
   );
   assert.deepEqual(result, []);
@@ -66,7 +70,7 @@ test("resolveCapabilityModelMessages preserves authoritative resolver output wit
         ],
       },
     },
-    { ctx: { modelContext: { protocolVersion: 3 } } },
+    { ctx: createTestHookContext() },
   );
   assert.deepEqual(
     resolved.map((item) => item.content),
@@ -89,15 +93,13 @@ test("resolveCapabilityModelMessages delegates the authoritative modelContext to
       },
     },
     {
-      ctx: {
-        modelContext: {
-          protocolVersion: 3,
-          messageBlocks: {
-            history: [contextMessage({ role: "user", content: "history-from-block" })],
-            incremental: [contextMessage({ role: "assistant", content: "incremental-from-block" })],
-          },
+      ctx: createTestHookContext({
+        messageBlocks: {
+          system: [],
+          history: [contextMessage({ role: "user", content: "history-from-block" })],
+          incremental: [contextMessage({ role: "assistant", content: "incremental-from-block" })],
         },
-      },
+      }),
       purpose: "phase_acceptance",
     },
   );
@@ -358,7 +360,7 @@ test("Harness turn completion releases every auxiliary purpose snapshot for the 
     dialogProcessId: "dialog-1",
     modelContext: { checkpointRevision: 0 },
     agentContext: {
-      bindings: { extensions: { harness: { state: { flags: {}, signals: {} } } } },
+      bindings: { extensions: {} },
     },
   };
   const invoker = async ({ messages = [] } = {}) => {
@@ -491,7 +493,7 @@ test("buildCapabilityModelMessages assigns protocol-owned identity to every capa
 
 test("resolveCapabilityModelMessages requires the authoritative resolver", () => {
   assert.throws(
-    () => resolveCapabilityModelMessages({}, { ctx: {} }),
+    () => resolveCapabilityModelMessages({}, { ctx: createTestHookContext() }),
     /authoritative modelContext resolver/,
   );
 });
@@ -507,12 +509,7 @@ test("resolveCapabilityModelMessages does not filter resolver output or use payl
       },
     },
     {
-      ctx: {
-        modelContext: {
-          protocolVersion: 3,
-          messageBlocks: { system: [], history: [], incremental: [] },
-        },
-      },
+      ctx: createTestHookContext(),
       purpose: "analysis",
     },
   );
@@ -526,11 +523,7 @@ test("resolveCapabilityModelMessages does not filter resolver output or use payl
       resolveCapabilityModelMessages(
         {},
         {
-          ctx: {
-            agentContext: {
-              bindings: {},
-            },
-          },
+          ctx: createTestHookContext(),
           purpose: "phase_acceptance",
         },
       ),

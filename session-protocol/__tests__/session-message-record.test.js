@@ -10,14 +10,58 @@ import {
   SESSION_AUTO_TITLE_MAX_LENGTH,
   assertSessionMessageRecordIdentity,
   deriveSessionAutoTitle,
-  resolveSessionMessageRecordModelMessageId,
-  resolveSessionMessageRecordUserMessageId,
+  projectSessionMessageRecordIdentity,
   resolveSessionAutoTitle,
   validateSessionMessageRecordIdentity,
 } from "../src/aggregate/session-message-record.js";
 import { MESSAGE_REMOVED_FIELD_NAME } from "../src/identity/message-identity-schema.js";
 
 const LEGACY_MESSAGE_ID = MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID;
+
+test("record admission and projection reject damaged identities without repairing input", () => {
+  const cases = [
+    ["user", "messageUid"],
+    ["user", "userMessageId"],
+    ["assistant", "modelMessageId"],
+    ["assistant", "presentationMessageId"],
+  ];
+  for (const [role, field] of cases) {
+    for (const value of ["", " x", "x ", "\t", null, undefined, 42, {}]) {
+      const source = {
+        sessionId: "s",
+        role,
+        messageUid: "historical-uid",
+        ...(role === "assistant"
+          ? { modelMessageId: "old-model", presentationMessageId: "old-view" }
+          : {}),
+        [field]: value,
+      };
+      const before = structuredClone(source);
+      assert.notDeepEqual(validateSessionMessageRecordIdentity(source), []);
+      assert.throws(() => projectSessionMessageRecordIdentity(source), {
+        code: "SESSION_MESSAGE_IDENTITY_INVALID",
+      });
+      assert.deepEqual(source, before);
+    }
+  }
+  for (const source of [null, undefined, [], "record"]) {
+    assert.deepEqual(validateSessionMessageRecordIdentity(source), [
+      "session_message_record_not_object",
+    ]);
+  }
+});
+
+test("record projection preserves historical non-prefixed identities and absent optional identity", () => {
+  const source = { sessionId: "s", role: "user", messageUid: "old-uid" };
+  assert.deepEqual(projectSessionMessageRecordIdentity(source), { messageUid: "old-uid" });
+  assert.deepEqual(projectSessionMessageRecordIdentity({ ...source, userMessageId: "client-42" }), {
+    messageUid: "old-uid",
+    userMessageId: "client-42",
+  });
+  assert.throws(() => projectSessionMessageRecordIdentity({ ...source, role: " user " }), {
+    code: "SESSION_MESSAGE_IDENTITY_INVALID",
+  });
+});
 
 test("session message identity reads each role from its own field", () => {
   const assistant = {
@@ -28,10 +72,15 @@ test("session message identity reads each role from its own field", () => {
     presentationMessageId: "pm_a",
   };
   const user = { sessionId: "s", role: "user", messageUid: "sm_u", userMessageId: "msg_u" };
-  assert.equal(resolveSessionMessageRecordModelMessageId(assistant), "msg_m");
-  assert.equal(resolveSessionMessageRecordUserMessageId(user), "msg_u");
-  assert.equal(resolveSessionMessageRecordModelMessageId(user), "");
-  assert.equal(resolveSessionMessageRecordUserMessageId(assistant), "");
+  assert.deepEqual(projectSessionMessageRecordIdentity(assistant), {
+    messageUid: "sm_a",
+    modelMessageId: "msg_m",
+    presentationMessageId: "pm_a",
+  });
+  assert.deepEqual(projectSessionMessageRecordIdentity(user), {
+    messageUid: "sm_u",
+    userMessageId: "msg_u",
+  });
   assert.deepEqual(validateSessionMessageRecordIdentity(assistant), []);
   assert.deepEqual(validateSessionMessageRecordIdentity(user), []);
   assert.deepEqual(

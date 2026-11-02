@@ -9,10 +9,11 @@ import {
   ensureHarnessBucket,
 } from "./handlers/shared/index.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
+import { HarnessPendingTtlHookTurnsSchema } from "../core/options.js";
+import { requireHarnessStateField } from "../core/bucket-contract.js";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
 
-const DEFAULT_PENDING_TTL_HOOK_TURNS = TURN_THRESHOLDS.harness.pendingTtlHookTurns;
 const WARN_COOLDOWN_TURNS = TURN_THRESHOLDS.harness.pendingWarnCooldownTurns;
 const TRACKED_PENDING_KEYS = Object.freeze([
   "guidance",
@@ -35,29 +36,21 @@ const HOOK_TURN_TICK_POINTS = new Set([
   HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT,
 ]);
 
-function normalizePendingTtlHookTurns(meta = {}) {
-  const raw = Number(meta?.harness?.pendingTtlHookTurns);
-  if (!Number.isFinite(raw) || raw < 0) return DEFAULT_PENDING_TTL_HOOK_TURNS;
-  return Math.trunc(raw);
-}
-
 function ensurePendingMeta(state = {}) {
-  if (!isObjectLike(state)) return { pending: {}, flags: {} };
-  if (!isPlainObject(state.pendingMeta)) {
-    state.pendingMeta = {};
-  }
-  if (!isPlainObject(state.pendingMeta.pending)) {
-    state.pendingMeta.pending = {};
-  }
-  if (!isPlainObject(state.pendingMeta.flags)) {
-    state.pendingMeta.flags = {};
-  }
+  if (
+    !isPlainObject(state.pendingMeta) ||
+    !isPlainObject(state.pendingMeta.pending) ||
+    !isPlainObject(state.pendingMeta.flags)
+  )
+    throw new TypeError("invalid_harness_state:pendingMeta");
   return state.pendingMeta;
 }
 
 function resolveCurrentHookTurn(state = {}) {
-  const turn = Number(state?.counters?.hookTurns || 0);
-  return Number.isFinite(turn) && turn >= 0 ? Math.trunc(turn) : 0;
+  const turn = state.counters.hookTurns;
+  if (!Number.isSafeInteger(turn) || turn < 0)
+    throw new TypeError("invalid_harness_state:hookTurns");
+  return turn;
 }
 
 function isPendingKeyActive(key = "", value = null) {
@@ -74,13 +67,14 @@ function isPendingKeyActive(key = "", value = null) {
   return Boolean(value);
 }
 
-export function setPendingStateWithMeta(state = {}, key = "", value = null) {
-  if (!key || !isObjectLike(state)) return false;
-  if (!isObjectLike(state.pending)) state.pending = {};
+export function setPendingStateWithMeta(state, key, value) {
+  requireHarnessStateField("pending", key, value);
   const pendingMeta = ensurePendingMeta(state);
+  const active = isPendingKeyActive(key, value);
+  const hookTurn = active ? resolveCurrentHookTurn(state) : null;
   state.pending[key] = value;
-  if (isPendingKeyActive(key, value)) {
-    pendingMeta.pending[key] = resolveCurrentHookTurn(state);
+  if (active) {
+    pendingMeta.pending[key] = hookTurn;
   } else {
     delete pendingMeta.pending[key];
   }
@@ -94,19 +88,17 @@ export function clearPendingSummaryState(state = {}) {
   const hadCharTrigger = state?.flags?.summaryByCharsPrompted === true;
   setPendingStateWithMeta(state, "summary", false);
   state.pending.summaryCheckpointMessageKeys = null;
-  if (!isObjectLike(state.flags)) state.flags = {};
   state.flags.summaryByCharsPrompted = false;
   return hadPendingSummary || hadCheckpoint || hadCharTrigger;
 }
 
-export function setCaptureFlagStateWithMeta(state = {}, key = "", active = false) {
-  if (!key || !isObjectLike(state)) return false;
-  if (!isObjectLike(state.flags)) state.flags = {};
+export function setCaptureFlagStateWithMeta(state, key, active) {
+  requireHarnessStateField("flags", key, active);
   const pendingMeta = ensurePendingMeta(state);
-  const normalized = active === true;
-  state.flags[key] = normalized;
-  if (normalized) {
-    pendingMeta.flags[key] = resolveCurrentHookTurn(state);
+  const hookTurn = active ? resolveCurrentHookTurn(state) : null;
+  state.flags[key] = active;
+  if (active) {
+    pendingMeta.flags[key] = hookTurn;
   } else {
     delete pendingMeta.flags[key];
     if (key === "planUpdateCapturePending") {
@@ -125,11 +117,10 @@ function shouldTickHookTurn(point = "") {
 }
 
 export function cleanupExpiredPendingOnHook(point = "", ctx = {}, meta = {}) {
+  const ttlTurns = HarnessPendingTtlHookTurnsSchema.parse(meta.harness?.pendingTtlHookTurns);
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
-  const ttlTurns = normalizePendingTtlHookTurns(meta);
   const { state } = holder;
-  if (!isObjectLike(state.counters)) state.counters = {};
   if (shouldTickHookTurn(point)) {
     state.counters.hookTurns = resolveCurrentHookTurn(state) + 1;
   }
@@ -149,12 +140,8 @@ export function cleanupExpiredPendingOnHook(point = "", ctx = {}, meta = {}) {
       delete pendingTurns[key];
       continue;
     }
-    if (!Number.isFinite(Number(pendingTurns[key]))) {
-      pendingTurns[key] = currentTurn;
-      continue;
-    }
-    const ageTurns = currentTurn - Number(pendingTurns[key]);
-    if (ageTurns <= ttlTurns) continue;
+    if (pendingTurns[key] === undefined) throw new TypeError(`invalid_harness_pending_time:${key}`);
+    if (pendingTurns[key] !== null && currentTurn - pendingTurns[key] <= ttlTurns) continue;
     setPendingStateWithMeta(
       state,
       key,
@@ -175,21 +162,16 @@ export function cleanupExpiredPendingOnHook(point = "", ctx = {}, meta = {}) {
       delete flagTurns[key];
       continue;
     }
-    if (!Number.isFinite(Number(flagTurns[key]))) {
-      flagTurns[key] = currentTurn;
-      continue;
-    }
-    const ageTurns = currentTurn - Number(flagTurns[key]);
-    if (ageTurns <= ttlTurns) continue;
+    if (flagTurns[key] === undefined) throw new TypeError(`invalid_harness_pending_time:${key}`);
+    if (flagTurns[key] !== null && currentTurn - flagTurns[key] <= ttlTurns) continue;
     setCaptureFlagStateWithMeta(state, key, false);
     clearedCount += 1;
     clearedFlagKeys.push(key);
   }
 
   if (clearedCount > 0) {
-    const lastWarnTurn = Number(state?.pendingMeta?.lastWarnHookTurn);
-    const shouldWarn =
-      !Number.isFinite(lastWarnTurn) || currentTurn - lastWarnTurn >= WARN_COOLDOWN_TURNS;
+    const lastWarnTurn = state.pendingMeta.lastWarnHookTurn;
+    const shouldWarn = lastWarnTurn === null || currentTurn - lastWarnTurn >= WARN_COOLDOWN_TURNS;
     if (shouldWarn) {
       state.pendingMeta.lastWarnHookTurn = currentTurn;
       const logged = appendCapabilityLog(ctx, {

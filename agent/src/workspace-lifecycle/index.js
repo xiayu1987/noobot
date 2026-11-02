@@ -135,7 +135,6 @@ async function runWorkspaceOperation({
     reportProgress,
   });
   await ensureRuntimeDirectories(base);
-  report.memory = await repairMemorySection(base);
   if (operation !== WORKSPACE_OPERATION.RESET || selected.has(WORKSPACE_SECTION.CONFIG)) {
     const { modelLibraryUpgrade, ...config } = await repairConfigSection({
       base,
@@ -146,6 +145,7 @@ async function runWorkspaceOperation({
     report.config = config;
     report.modelLibraryUpgrade = modelLibraryUpgrade;
   }
+  report.memory = await repairMemorySection(base, baseValues.preferences?.language);
   const assetSections = WORKSPACE_ASSET_SECTIONS.filter((name) => selected.has(name));
   report.assets = await applyWorkspaceAssets({
     base,

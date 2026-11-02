@@ -18,6 +18,13 @@ process.env[WORKSPACE_ROOT_ENV] = resolveConfiguredWorkspaceRoot({
   globalConfigPath: resolveGlobalConfigPath({ serviceDir: serviceRoot, env: process.env }),
   serviceDir: serviceRoot,
 });
+const [{ initializeRuntimeParams }, { WORKSPACE_ROOT_LAYOUT }] = await Promise.all([
+  import("@noobot/shared/runtime-params-node"),
+  import("@noobot/workspace-protocol/layout"),
+]);
+initializeRuntimeParams(
+  path.join(process.env[WORKSPACE_ROOT_ENV], WORKSPACE_ROOT_LAYOUT.RUNTIME_PARAMS_FILE),
+);
 const { runCli } = await import("../cli/noobot.js");
 
 const exitCode = await runCli({ argv: process.argv.slice(2), cwd: invocationCwd, serviceRoot });

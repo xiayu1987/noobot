@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
 
 import {
   parseSummaryOverviewAndDetailFromText,
@@ -426,6 +427,7 @@ test("dynamic policy scenario overrides initial text mode for post-plan followup
       },
     },
   };
+  createTestHookContext(ctx);
   const flags = resolveScenarioPolicyFlagsFromContext(ctx);
   assert.equal(flags.programmingMode, true);
   assert.equal(flags.textMode, false);

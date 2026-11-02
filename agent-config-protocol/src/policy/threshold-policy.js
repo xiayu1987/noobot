@@ -9,50 +9,36 @@ export const RUNTIME_THRESHOLD_SOURCE = Object.freeze({
   FALLBACK: "fallback",
 });
 
-export function normalizePositiveInteger(value, fallback = 0, { requireInteger = false } = {}) {
-  const parsed = Number(value);
-  const fallbackValue = Number.isFinite(Number(fallback)) ? Number(fallback) : 0;
-  if (!Number.isFinite(parsed) || parsed <= 0) return fallbackValue;
-  if (requireInteger && !Number.isInteger(parsed)) return fallbackValue;
-  return Math.floor(parsed);
+export function requirePositiveTurnThreshold(value) {
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new TypeError("turn threshold must be a positive safe integer");
+  }
+  return value;
 }
 
 export function isRuntimeThresholdGateEnabled(source = {}) {
   return source?.frontendThresholdsEnabled === true;
 }
 
-export function resolveRuntimeThresholdOverride({
-  enabled = false,
-  runtimeValue,
-  requireInteger = false,
-} = {}) {
-  if (enabled !== true) return 0;
-  return normalizePositiveInteger(runtimeValue, 0, { requireInteger });
-}
-
 export function resolveGatedThreshold({
   enabled = false,
   runtimeValue,
   fallbackValue,
-  defaultValue = 0,
-  requireInteger = false,
-} = {}) {
-  const runtimeThreshold = resolveRuntimeThresholdOverride({
-    enabled,
-    runtimeValue,
-    requireInteger,
-  });
-  if (runtimeThreshold > 0) {
-    return Object.freeze({ value: runtimeThreshold, source: RUNTIME_THRESHOLD_SOURCE.RUNTIME });
+  defaultValue,
+}) {
+  if (typeof enabled !== "boolean") throw new TypeError("threshold gate must be boolean");
+  if (runtimeValue !== undefined) requirePositiveTurnThreshold(runtimeValue);
+  if (fallbackValue !== undefined) requirePositiveTurnThreshold(fallbackValue);
+  if (defaultValue !== undefined) requirePositiveTurnThreshold(defaultValue);
+  if (enabled && runtimeValue !== undefined) {
+    return Object.freeze({ value: runtimeValue, source: RUNTIME_THRESHOLD_SOURCE.RUNTIME });
   }
-  const normalizedDefault = normalizePositiveInteger(defaultValue, 0, { requireInteger });
-  const value =
-    fallbackValue === undefined
-      ? normalizedDefault
-      : normalizePositiveInteger(fallbackValue, normalizedDefault, { requireInteger });
-  return Object.freeze({ value, source: RUNTIME_THRESHOLD_SOURCE.FALLBACK });
+  return Object.freeze({
+    value: requirePositiveTurnThreshold(fallbackValue === undefined ? defaultValue : fallbackValue),
+    source: RUNTIME_THRESHOLD_SOURCE.FALLBACK,
+  });
 }
 
-export function resolveGatedThresholdValue(input = {}) {
+export function resolveGatedThresholdValue(input) {
   return resolveGatedThreshold(input).value;
 }

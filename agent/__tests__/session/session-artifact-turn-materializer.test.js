@@ -16,13 +16,18 @@ import {
 } from "../../src/session/session-artifact-store.js";
 import {
   createTurnMaterializer,
+  readVerifiedCheckpointIdentity,
   readVerifiedSnapshot,
 } from "../../src/session/session-artifact-session/turn-materializer.js";
 import {
   buildStoredCheckpointReceipts,
   readCheckpointReceiptProjection,
 } from "../../src/session/session-artifact-session/checkpoint-receipts.js";
-import { createVerifiedSnapshotCache } from "../../src/session/session-artifact-session/verified-snapshot-cache.js";
+import {
+  createVerifiedSnapshotCache,
+  readFileIdentity,
+  verifiedSnapshotCache,
+} from "../../src/session/session-artifact-session/verified-snapshot-cache.js";
 import { replaceJournalRecords } from "../../src/session/session-artifact-session/turn-journal-store.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 import { TEST_STORAGE_SERVICE as storageService } from "../helpers/storage-service.js";
@@ -210,25 +215,43 @@ test("byte budget evicts least recently materialized turns", async () =>
     assert.throws(() => createTurnMaterializer({ byteBudget: -1 }), TypeError);
   }));
 
-test("snapshot cache enforces its byte budget, LRU order and immutable payloads", () => {
-  const cache = createVerifiedSnapshotCache({ byteBudget: 2 });
-  const identity = { key: "identity", bytes: 1 };
-  const payload = { records: [{ message: { content: "original" } }] };
+test("snapshot cache tiers enforce independent byte budgets, LRU order and immutability", () => {
+  const cache = createVerifiedSnapshotCache({ payloadByteBudget: 2, identityByteBudget: 1024 });
+  const identity = { key: "identity", bytes: 1, reusable: true };
+  const payload = { checkpointId: "c1", records: [{ message: { content: "original" } }] };
   cache.retain("a", "hash", identity, payload);
   payload.records[0].message.content = "mutated";
-  assert.equal(cache.get("a", "hash", identity).records[0].message.content, "original");
+  assert.equal(cache.payload("a", "hash", identity).records[0].message.content, "original");
   cache.retain("b", "hash", identity, payload);
-  cache.get("a", "hash", identity);
+  cache.payload("a", "hash", identity);
   cache.retain("c", "hash", identity, payload);
-  assert.equal(cache.get("b", "hash", identity), null);
-  assert.equal(cache.cachedBytes(), 2);
+  assert.equal(cache.payload("b", "hash", identity), null);
+  assert.equal(cache.cachedBytes().payload, 2);
+  assert.equal(
+    cache.checkpoint("b", "hash", identity).checkpointId,
+    "c1",
+    "payload eviction keeps the verified checkpoint identity",
+  );
+  assert.equal(Object.hasOwn(cache.checkpoint("b", "hash", identity), "records"), false);
   assert.throws(() => {
-    cache.get("a", "hash", identity).records.push({});
+    cache.payload("a", "hash", identity).records.push({});
   }, TypeError);
-  assert.equal(cache.get("a", "hash", { key: "changed", bytes: 1 }), null);
-  cache.retain("oversize", "hash", { key: "large", bytes: 3 }, payload);
-  assert.equal(cache.get("oversize", "hash", { key: "large", bytes: 3 }), null);
-  assert.throws(() => createVerifiedSnapshotCache({ byteBudget: -1 }), TypeError);
+  assert.equal(cache.payload("a", "hash", { ...identity, key: "changed" }), null);
+  assert.equal(
+    cache.checkpoint("a", "hash", identity),
+    null,
+    "identity mismatch forgets both tiers",
+  );
+  cache.retain("oversize", "hash", { key: "large", bytes: 3, reusable: true }, payload);
+  assert.equal(cache.payload("oversize", "hash", { key: "large", bytes: 3, reusable: true }), null);
+  assert.throws(
+    () => createVerifiedSnapshotCache({ payloadByteBudget: -1, identityByteBudget: 1 }),
+    TypeError,
+  );
+  assert.throws(
+    () => createVerifiedSnapshotCache({ payloadByteBudget: 1, identityByteBudget: -1 }),
+    TypeError,
+  );
 });
 
 test("snapshot cache rejects in-place edits, invalid chain indexes and deleted files", async () =>
@@ -264,18 +287,18 @@ test("snapshot cache rejects in-place edits, invalid chain indexes and deleted f
   }));
 
 test("snapshots verified during the identity guard require stable verification before reuse", () => {
-  const cache = createVerifiedSnapshotCache({ byteBudget: 100 });
+  const cache = createVerifiedSnapshotCache({ payloadByteBudget: 100, identityByteBudget: 100 });
   const recent = { key: "same-stat-identity", bytes: 1, reusable: false };
   const stable = { ...recent, reusable: true };
   const payload = { records: [] };
   cache.retain("snapshot", "hash", recent, payload);
-  assert.equal(cache.get("snapshot", "hash", recent), null);
-  assert.equal(cache.get("snapshot", "hash", stable), null);
+  assert.equal(cache.payload("snapshot", "hash", recent), null);
+  assert.equal(cache.checkpoint("snapshot", "hash", stable), null);
   cache.retain("snapshot", "hash", stable, payload);
-  assert.deepEqual(cache.get("snapshot", "hash", stable), payload);
+  assert.deepEqual(cache.payload("snapshot", "hash", stable), payload);
 });
 
-test("receipt read and write projections share prewarmed snapshots as history grows", async (t) =>
+test("receipt read and write projections reuse verified checkpoint identities as history grows", async (t) =>
   withTemp(async (root) => {
     const base = [message("m1", "user", "question"), message("m2", "assistant", "x".repeat(65536))];
     let reads = 0;
@@ -306,6 +329,41 @@ test("receipt read and write projections share prewarmed snapshots as history gr
         `${count} snapshots: receipt read + write ${(performance.now() - started).toFixed(2)}ms, snapshot reads=${reads}`,
       );
     }
+  }));
+
+test("payload eviction under sequential scans keeps checkpoint identities resident", () => {
+  const cache = createVerifiedSnapshotCache({ payloadByteBudget: 3, identityByteBudget: 1024 });
+  const files = ["a", "b", "c", "d", "e"];
+  const identity = { key: "stable", bytes: 1, reusable: true };
+  for (const file of files)
+    cache.retain(file, "hash", identity, { checkpointId: file, records: [] });
+  for (let scan = 0; scan < 3; scan += 1) {
+    for (const file of files)
+      assert.equal(cache.checkpoint(file, "hash", identity).checkpointId, file);
+  }
+  assert.equal(cache.cachedBytes().payload, 3);
+});
+
+test("pruned snapshots are forgotten from both verified cache tiers", async () =>
+  withTemp(async (root) => {
+    await seedCheckpointedTurn(root);
+    const [index] = (await manifestTurn(root)).summarySnapshots;
+    const file = path.resolve(root, index.file);
+    const identity = await readFileIdentity(file);
+    const options = { storageService, sessionDir: root, index, previousCheckpointHash: "" };
+    await readVerifiedCheckpointIdentity(options);
+    await readVerifiedSnapshot(options);
+    assert.ok(verifiedSnapshotCache.checkpoint(file, index.contentHash, identity));
+    assert.ok(verifiedSnapshotCache.payload(file, index.contentHash, identity));
+    const other = (uid, role) => ({ ...message(uid, role, "next"), turnScopeId: "other" });
+    const { turnSummaryCheckpoints: _omitted, ...replacement } = payloadOf(
+      [other("n1", "user"), other("n2", "assistant")],
+      [],
+    );
+    await writeSessionArtifact({ sessionDir: root, sessionPayload: replacement });
+    await assert.rejects(readFile(file), { code: "ENOENT" });
+    assert.equal(verifiedSnapshotCache.checkpoint(file, index.contentHash, identity), null);
+    assert.equal(verifiedSnapshotCache.payload(file, index.contentHash, identity), null);
   }));
 
 test("session reads expose frozen materialized messages without breaking writers", async () =>

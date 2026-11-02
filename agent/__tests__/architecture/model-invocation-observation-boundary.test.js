@@ -14,6 +14,7 @@ const authorityFile = path.join(
   projectRoot,
   "model-runtime/src/executor/model-request-executor.js",
 );
+const protocolConstantsFile = path.join(projectRoot, "model-protocol/src/protocol/constants.js");
 const productionRoots = [
   path.join(projectRoot, "agent/src"),
   path.join(projectRoot, "model-runtime/src"),
@@ -35,14 +36,20 @@ async function listJavaScriptFiles(directory) {
 
 test("model invocation observation has one provider-attempt authority", async () => {
   const files = (await Promise.all(productionRoots.map(listJavaScriptFiles))).flat();
-  const owners = [];
+  const stageEmitters = [];
+  const stageLiterals = [];
   for (const file of files) {
     const source = await readFile(file, "utf8");
-    if (source.includes('stage: "llm_invoke_messages"')) owners.push(file);
+    if (source.includes("MODEL_CONTEXT_TRACE.INVOKE_STAGE")) stageEmitters.push(file);
+    if (source.includes('"llm_invoke_messages"')) stageLiterals.push(file);
   }
 
-  assert.deepEqual(owners, [authorityFile]);
+  assert.deepEqual(stageEmitters, [authorityFile]);
+  assert.deepEqual(stageLiterals, []);
+  const protocolSource = await readFile(protocolConstantsFile, "utf8");
+  assert.match(protocolSource, /INVOKE_STAGE:\s*"llm_invoke_messages"/);
+  assert.match(protocolSource, /INVOKE_AUTHORITY:\s*"model_invoke_port"/);
   const authoritySource = await readFile(authorityFile, "utf8");
-  assert.match(authoritySource, /authority:\s*"model_invoke_port"/);
+  assert.match(authoritySource, /authority:\s*MODEL_CONTEXT_TRACE\.INVOKE_AUTHORITY/);
   assert.match(authoritySource, /runModelAttempt\(/);
 });

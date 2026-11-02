@@ -56,7 +56,7 @@ export function collectRequestBody(request) {
     const chunks = [];
     request.on("data", (chunk) => {
       totalSize += chunk.length;
-      if (totalSize > config.maxBodySize) {
+      if (totalSize > config.maxBodyBytes) {
         const tooLarge = Object.assign(new Error("request body too large"), {
           code: AGENT_PROXY_HTTP_ERROR_CODE.REQUEST_BODY_TOO_LARGE,
         });

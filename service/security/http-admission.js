@@ -3,13 +3,24 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { ipKeyGenerator } from "express-rate-limit";
 import { text } from "@noobot/shared/value";
 
 const HTTP_ADMISSION_POLICY = Object.freeze({
-  connection: Object.freeze({ limit: 120, windowMs: 60000 }),
-  mutation: Object.freeze({ limit: 120, windowMs: 60000 }),
-  read: Object.freeze({ limit: 600, windowMs: 60000 }),
+  connection: Object.freeze({
+    limit: QUANTITY_THRESHOLDS.service.httpConnectionLimit,
+    windowMs: TIME_THRESHOLDS.service.httpAdmissionWindowMs,
+  }),
+  mutation: Object.freeze({
+    limit: QUANTITY_THRESHOLDS.service.httpMutationLimit,
+    windowMs: TIME_THRESHOLDS.service.httpAdmissionWindowMs,
+  }),
+  read: Object.freeze({
+    limit: QUANTITY_THRESHOLDS.service.httpReadLimit,
+    windowMs: TIME_THRESHOLDS.service.httpAdmissionWindowMs,
+  }),
 });
 
 function requestClass(req = {}) {

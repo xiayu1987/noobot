@@ -113,9 +113,5 @@ export async function resolveSemanticText({ options, ctx, signal, sourceText }) 
     contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
   });
   throwIfWorkflowAborted(signal);
-  const resolvedText = text(result?.output?.text) || sourceText;
-  return {
-    text: resolvedText,
-    traceCount: Array.isArray(result?.traces) ? result.traces.length : 0,
-  };
+  return { text: result.output.text };
 }

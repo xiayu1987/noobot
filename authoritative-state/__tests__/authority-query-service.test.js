@@ -5,7 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
+import { createEmptyTurnLifecycle, SESSION_ERROR_CODE } from "@noobot/session-protocol";
 import {
   buildAuthoritativeExecutionReadModel,
   createAuthoritativeTurnSnapshot,
@@ -188,6 +188,80 @@ test("authority owns terminal readiness decisions", () => {
   assert.equal(resolved.resolved, true);
   assert.equal(resolved.aggregateVersion, 12);
   assert.equal(resolved.turn.terminalStatus.status, "completed");
+});
+
+test("terminal query rejects noncanonical identity before reading lifecycle", () => {
+  for (const field of ["commandId", "sessionId", "turnScopeId"]) {
+    for (const value of [" padded ", "", 42, null, undefined]) {
+      const input = { commandId: "read", sessionId: "s1", turnScopeId: "turn-1", [field]: value };
+      input.lifecycle = new Proxy(
+        {},
+        {
+          get() {
+            throw new Error("lifecycle_read");
+          },
+        },
+      );
+      assert.throws(() => resolveAuthoritativeTurnTerminal(input), TypeError);
+    }
+  }
+});
+
+test("snapshot and terminal reads project the same persisted timing and reject a foreign round owner", () => {
+  const lifecycle = {
+    ...createEmptyTurnLifecycle(),
+    sequence: 2,
+    turns: {
+      "turn-1": turn({
+        state: "completed",
+        phase: "completion",
+        finishedAt: now,
+        terminalStatus: {
+          turnScopeId: "turn-1",
+          dialogProcessId: "dialog-1",
+          status: "completed",
+          reason: "run_completed",
+          description: "",
+          updatedAt: now,
+        },
+      }),
+    },
+  };
+  const input = {
+    lifecycle,
+    turnTimings: [
+      {
+        turnScopeId: "turn-1",
+        dialogProcessId: "dialog-1",
+        thinkingFinishedAt: now,
+        modelLoopRound: 3,
+      },
+    ],
+    commandId: "read",
+    sessionId: "s1",
+    aggregateVersion: 2,
+    turnScopeId: "turn-1",
+    terminalTurnScopeIds: ["turn-1"],
+    recovery: "none",
+    terminalLimit: 10,
+    knownSequence: 0,
+  };
+  const before = structuredClone(input);
+  const snapshot = createAuthoritativeTurnSnapshot(input);
+  const terminal = resolveAuthoritativeTurnTerminal(input);
+  assert.equal(
+    snapshot.recentTerminalTurns[0].thinkingFinishedAt,
+    terminal.turn.thinkingFinishedAt,
+  );
+  assert.equal(terminal.turn.thinkingFinishedAt, now);
+  assert.deepEqual(input, before);
+  const invalid = {
+    ...input,
+    turnTimings: [{ turnScopeId: "turn-1", dialogProcessId: "foreign", modelLoopRound: 3 }],
+  };
+  for (const read of [createAuthoritativeTurnSnapshot, resolveAuthoritativeTurnTerminal]) {
+    assert.throws(() => read(invalid), { code: SESSION_ERROR_CODE.TURN_TIMING_CONFLICT });
+  }
 });
 
 test("authority execution read model excludes conflicting ownership and builds trees", () => {

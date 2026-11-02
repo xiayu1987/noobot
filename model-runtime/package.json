@@ -8,7 +8,8 @@
     ".": "./src/index.js",
     "./adapters": "./src/adapters/index.js",
     "./policies": "./src/policies/index.js",
-    "./diagnostics": "./src/diagnostics/model-access.js"
+    "./diagnostics": "./src/diagnostics/model-access.js",
+    "./locale": "./src/locale.js"
   },
   "scripts": {
     "test": "node ../scripts/run-with-isolated-tmp.mjs node --test __tests__/*.test.js"

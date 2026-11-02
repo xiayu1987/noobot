@@ -13,7 +13,10 @@ import {
   projectMessageEventMetadata,
   resolveMessageEventPresentationId,
 } from "@noobot/event-protocol/message-event";
-import { reduceThinkingDetailContentTimelines } from "@noobot/event-protocol/thinking-detail-content";
+import {
+  reduceThinkingDetailContentTimelines,
+  selectThinkingDetailContentTimeline,
+} from "@noobot/event-protocol/thinking-detail-content";
 import {
   appendConsumedMessageEvent,
   hasConsumedMessageEvent,
@@ -57,6 +60,19 @@ function finalizeAppliedMessageEvent({ targetMessage, event, state, sequence, tr
   return { result: MESSAGE_EVENT_REDUCE_RESULT.APPLIED, applied: true };
 }
 
+function applyFinalMessage(targetMessage, payload) {
+  const projection = projectAuthoritativeFinalMessage(payload);
+  const existingEnvelopes = getMessageTransferEnvelopes(targetMessage);
+  Object.assign(targetMessage, projection);
+  if (projection.transferEnvelopes !== undefined) {
+    targetMessage.transferEnvelopes = mergeTransferEnvelopes(
+      existingEnvelopes,
+      projection.transferEnvelopes,
+    );
+  }
+  targetMessage.attachments = getMessageAttachments(targetMessage);
+}
+
 export function reduceMessageEvent({ targetMessage, state, event }) {
   if (conflicts(targetMessage, event))
     return { result: MESSAGE_EVENT_REDUCE_RESULT.MESSAGE_IDENTITY_CONFLICT };
@@ -77,7 +93,7 @@ export function reduceMessageEvent({ targetMessage, state, event }) {
 
   if (event.payload.eventType === MESSAGE_EVENT_TYPE.USER_INTERJECTION) {
     targetMessage.thinkingContentTimeline = reduceThinkingDetailContentTimelines(
-      targetMessage.thinkingContentTimeline,
+      selectThinkingDetailContentTimeline(targetMessage),
       [event.payload.contentFact],
     );
     targetMessage.hasThinkingDetails = true;
@@ -95,27 +111,7 @@ export function reduceMessageEvent({ targetMessage, state, event }) {
     targetMessage.content = String(targetMessage.content || "") + contentProjection.content;
   } else if (contentProjection.effect === MESSAGE_CONTENT_EFFECT.REPLACE) {
     if (isAuthoritativeFinalContentEvent(event.payload)) {
-      const finalProjection = projectAuthoritativeFinalMessage(event.payload);
-      const existingEnvelopes = getMessageTransferEnvelopes(targetMessage);
-      const existingAttachments = getMessageAttachments(targetMessage);
-      const existingRawAttachments = Array.isArray(targetMessage.attachments)
-        ? [...targetMessage.attachments]
-        : [];
-      Object.assign(targetMessage, finalProjection);
-      if (Array.isArray(finalProjection.transferEnvelopes)) {
-        targetMessage.transferEnvelopes = mergeTransferEnvelopes(
-          existingEnvelopes,
-          finalProjection.transferEnvelopes,
-        );
-      }
-      if (Array.isArray(finalProjection.attachments)) {
-        targetMessage.attachments = finalProjection.attachments;
-      } else if (existingAttachments.length || existingRawAttachments.length) {
-        targetMessage.attachments = existingAttachments.length
-          ? existingAttachments
-          : existingRawAttachments;
-      }
-      targetMessage.attachments = getMessageAttachments(targetMessage);
+      applyFinalMessage(targetMessage, event.payload);
       state.finalContentSequence = sequence;
     } else {
       targetMessage.content = contentProjection.content;

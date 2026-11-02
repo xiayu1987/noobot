@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { dependencySpecs, desktopDependencyTimeouts } from "./specs.js";
 import { createDependencyError, getDependencyErrorMeta, withTimeout } from "./process.js";
 import { getDependencyProxyEnv, maskDependencyProxyUrl } from "./proxy.js";
@@ -308,7 +309,7 @@ export function createDependencyInstaller({
         phase: "dependency",
         message: `Installing ${spec.label}... still running after ${elapsedSeconds}s. Please leave Noobot open and accept any Windows installer prompts if they appear.`,
       });
-    }, 30000);
+    }, TIME_THRESHOLDS.desktop.installerProgressIntervalMs);
     let result;
     try {
       result = await runProcess(installCommand.command, installCommand.args, {

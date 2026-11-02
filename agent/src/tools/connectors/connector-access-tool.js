@@ -104,7 +104,7 @@ export function createConnectorAccessTool({ agentContext }) {
     {
       name: TOOL_NAME.ACCESS_CONNECTOR,
       description: tToolDescription(runtime, TOOL_NAME.ACCESS_CONNECTOR),
-      schema: z.object({
+      schema: z.strictObject({
         connector_id: z
           .string()
           .describe(tToolParamDescription(runtime, TOOL_NAME.ACCESS_CONNECTOR, "connector_id")),

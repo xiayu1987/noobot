@@ -62,7 +62,7 @@ export const DEFAULT_OPTIONS = Object.freeze({
     maxRetry: TURN_THRESHOLDS.harness.jsonl.flushMaxRetry,
     maxBufferEntries: HARNESS_LIMITS.JSONL_MAX_BUFFER_ENTRIES,
     maxBufferBytes: HARNESS_LIMITS.JSONL_MAX_BUFFER_BYTES,
-    maxFileBytes: 5 * 1024 * 1024,
+    maxFileBytes: LENGTH_THRESHOLDS.harness.jsonlFileBytes,
     maxFiles: QUANTITY_THRESHOLDS.harness.jsonlMaxFiles,
   }),
   maxRuns: QUANTITY_THRESHOLDS.harness.maxRuns,
@@ -106,6 +106,12 @@ export const HarnessJsonlFlushStrategySchema = z.object({
     .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxFiles),
 });
 
+export const HarnessPendingTtlHookTurnsSchema = z.coerce
+  .number()
+  .int()
+  .nonnegative()
+  .default(DEFAULT_OPTIONS.pendingTtlHookTurns);
+
 const HarnessOptionsSchema = z
   .object({
     timeoutMs: z.coerce.number().positive().default(DEFAULT_OPTIONS.timeoutMs),
@@ -132,11 +138,7 @@ const HarnessOptionsSchema = z
     acceptance: z.record(z.any()).optional(),
     review: z.record(z.any()).optional(),
     planning: z.record(z.any()).optional(),
-    pendingTtlHookTurns: z.coerce
-      .number()
-      .int()
-      .nonnegative()
-      .default(DEFAULT_OPTIONS.pendingTtlHookTurns),
+    pendingTtlHookTurns: HarnessPendingTtlHookTurnsSchema,
     manifestDebounceMs: z.coerce.number().nonnegative().default(DEFAULT_OPTIONS.manifestDebounceMs),
     flushHookPriority: z.coerce.number().default(DEFAULT_OPTIONS.flushHookPriority),
     flushHookTimeoutMs: z.coerce.number().positive().default(DEFAULT_OPTIONS.flushHookTimeoutMs),

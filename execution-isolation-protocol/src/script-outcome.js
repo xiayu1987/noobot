@@ -6,6 +6,7 @@
 
 export const SCRIPT_TERMINATION = Object.freeze({
   EXITED: "exited",
+  SCRIPT_FAILED: "script_failed",
   SIGNALED: "signaled",
   TIMEOUT: "timeout",
   ABORTED: "aborted",
@@ -16,7 +17,7 @@ export const SCRIPT_TERMINATION = Object.freeze({
 
 export const SCRIPT_FAILURE_CODE = Object.freeze({
   LEGACY_TERMINATION_UNKNOWN: "LEGACY_SCRIPT_TERMINATION_UNKNOWN",
-  [SCRIPT_TERMINATION.EXITED]: "RECOVERABLE_SCRIPT_NON_ZERO_EXIT",
+  [SCRIPT_TERMINATION.SCRIPT_FAILED]: "RECOVERABLE_SCRIPT_FAILED",
   [SCRIPT_TERMINATION.SIGNALED]: "RECOVERABLE_SCRIPT_SIGNALED",
   [SCRIPT_TERMINATION.TIMEOUT]: "RECOVERABLE_SCRIPT_TIMEOUT",
   [SCRIPT_TERMINATION.ABORTED]: "RECOVERABLE_SCRIPT_ABORTED",
@@ -28,6 +29,7 @@ export const SCRIPT_FAILURE_CODE = Object.freeze({
 const TERMINATIONS = new Set(Object.values(SCRIPT_TERMINATION));
 
 const MESSAGE_REQUIRED = new Set([
+  SCRIPT_TERMINATION.SCRIPT_FAILED,
   SCRIPT_TERMINATION.TIMEOUT,
   SCRIPT_TERMINATION.ABORTED,
   SCRIPT_TERMINATION.OUTPUT_LIMIT,
@@ -41,6 +43,7 @@ const RUNNER_FACT_FLAGS = Object.freeze([
   "outputLimitExceeded",
   "spawnFailed",
   "protocolViolated",
+  "scriptFailed",
 ]);
 
 function assertFacts(value, keys) {
@@ -62,15 +65,14 @@ function assertExitCode(exitCode) {
   }
 }
 
-function failureMessage({ termination, exitCode, signal, message }) {
+function failureMessage({ termination, signal, message }) {
   if (MESSAGE_REQUIRED.has(termination)) {
     if (!isNonEmptyText(message)) {
       throw new TypeError(`script outcome ${termination} requires a message`);
     }
     return message;
   }
-  if (termination === SCRIPT_TERMINATION.SIGNALED) return `script terminated by signal ${signal}`;
-  return `script exited with code ${exitCode}`;
+  return `script terminated by signal ${signal}`;
 }
 
 export function projectScriptOutcome(input) {
@@ -89,7 +91,7 @@ export function projectScriptOutcome(input) {
   if (termination === SCRIPT_TERMINATION.SIGNALED && signal === null) {
     throw new TypeError("script outcome signaled requires signal");
   }
-  const ok = termination === SCRIPT_TERMINATION.EXITED && exitCode === 0;
+  const ok = termination === SCRIPT_TERMINATION.EXITED;
   return {
     ok,
     termination,
@@ -99,7 +101,7 @@ export function projectScriptOutcome(input) {
       ? {}
       : {
           code: SCRIPT_FAILURE_CODE[termination],
-          error: failureMessage({ termination, exitCode, signal, message }),
+          error: failureMessage({ termination, signal, message }),
         }),
   };
 }
@@ -117,6 +119,7 @@ export function resolveScriptTermination(facts) {
     outputLimitExceeded,
     spawnFailed,
     protocolViolated,
+    scriptFailed,
     exitCode,
     signal,
   } = facts;
@@ -125,6 +128,7 @@ export function resolveScriptTermination(facts) {
   if (outputLimitExceeded) return SCRIPT_TERMINATION.OUTPUT_LIMIT;
   if (timedOut) return SCRIPT_TERMINATION.TIMEOUT;
   if (aborted) return SCRIPT_TERMINATION.ABORTED;
+  if (scriptFailed) return SCRIPT_TERMINATION.SCRIPT_FAILED;
   if (Number.isInteger(exitCode)) return SCRIPT_TERMINATION.EXITED;
   if (isNonEmptyText(signal)) return SCRIPT_TERMINATION.SIGNALED;
   throw new TypeError("script process ended without exit code or signal");

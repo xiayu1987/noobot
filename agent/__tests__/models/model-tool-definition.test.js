@@ -11,12 +11,12 @@ import { toJsonSchema } from "@langchain/core/utils/json_schema";
 import { projectToolsForModel } from "../../src/models/tool/model-tool-definition.js";
 
 function createSchema() {
-  return z.object({
+  return z.strictObject({
     command: z.string().describe("shell command"),
     includeLineNumbers: z.boolean().optional().default(false),
     maxLines: z.number().int().default(1000),
-    nested: z.object({ x: z.number() }),
-    items: z.array(z.object({ y: z.string() })).optional(),
+    nested: z.strictObject({ x: z.number() }),
+    items: z.array(z.strictObject({ y: z.string() })).optional(),
     loose: z.looseObject({ k: z.string() }).optional(),
   });
 }
@@ -44,7 +44,7 @@ test("projectToolsForModel: differs from langchain export only in required", () 
   assert.ok(!projectedRequired.includes("maxLines"));
 });
 
-test("projectToolsForModel: strip objects closed, loose objects keep catchall", () => {
+test("projectToolsForModel: strict objects closed, loose objects keep catchall", () => {
   const [projected] = projectToolsForModel([createTool()]);
   const { properties, additionalProperties } = projected.function.parameters;
   assert.equal(additionalProperties, false);

@@ -144,7 +144,8 @@ export class MemoryManager {
 
   async maybeSummarize({
     userId,
-    sessionId = "",
+    sessionId,
+    parentSessionId,
     userConfig,
     abortSignal,
     invocationIdentity,
@@ -152,17 +153,13 @@ export class MemoryManager {
     onStageError,
   }) {
     assertNotAborted(abortSignal);
-    if (!invocationIdentity?.dialogProcessId || !invocationIdentity?.turnScopeId) {
-      throw new TypeError("maybeSummarize requires an explicit memory invocationIdentity");
-    }
     if (!isFunction(eventListener?.onEvent)) {
       throw new TypeError("maybeSummarize requires a memory execution eventListener");
     }
     const basePath = this.storage.resolveBasePath(userId);
     const effectiveConfig = mergeConfig(this.globalConfig, userConfig);
-    const promptI18n = resolveMemoryPromptI18n(
-      effectiveConfig?.locale || this.globalConfig?.locale || "zh-CN",
-    );
+    const locale = normalizeLocale(effectiveConfig?.locale || this.globalConfig?.locale);
+    const promptI18n = resolveMemoryPromptI18n(locale);
 
     const unextracted = await this.shortMemory.readItems(basePath);
     assertNotAborted(abortSignal);
@@ -183,7 +180,7 @@ export class MemoryManager {
       modelState: {
         invocationIdentity: {
           sessionId,
-          parentSessionId: "",
+          parentSessionId,
           dialogProcessId: invocationIdentity.dialogProcessId,
           turnScopeId: invocationIdentity.turnScopeId,
           runId: invocationIdentity.runId,
@@ -237,6 +234,7 @@ export class MemoryManager {
         MEMORY_SUMMARY_STAGE.EXPERIENCE_DAILY,
         () =>
           this.experience.runDaily({
+            locale,
             basePath,
             invokeModel,
             promptI18n,
@@ -247,7 +245,7 @@ export class MemoryManager {
       );
     }
 
-    const periodicOptions = { basePath, invokeModel, promptI18n, abortSignal };
+    const periodicOptions = { basePath, invokeModel, promptI18n, abortSignal, locale };
     await runMemorySummaryStage(
       MEMORY_SUMMARY_STAGE.EXPERIENCE_WEEKLY,
       () => this.experience.runWeeklySummaryIfNeeded(periodicOptions),

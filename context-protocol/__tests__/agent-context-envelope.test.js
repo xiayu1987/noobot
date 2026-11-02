@@ -81,9 +81,22 @@ test("agent context envelope requires every identity field explicitly", () => {
     () => createEnvelope({ identity: { sessionId: "s1", dialogProcessId: "d1" } }),
     (error) =>
       ["userId", "rootSessionId", "turnScopeId", "runId", "presentationMessageId"].every((field) =>
-        error.message.includes(`identity.${field} must be a non-empty string`),
-      ) && error.message.includes("identity.parentSessionId must be string"),
+        error.message.includes(`identity.${field} must be canonical non-empty text`),
+      ) &&
+      error.message.includes("identity.parentSessionId must be canonical text or empty string"),
   );
+});
+
+test("agent context identity rejects non-canonical identity text", () => {
+  const envelope = createEnvelope();
+  const result = validateAgentContextEnvelope({
+    ...envelope,
+    identity: { ...envelope.identity, sessionId: " s1", parentSessionId: "p1 " },
+  });
+  assert.equal(result.success, false);
+  const errors = result.errors.join("\n");
+  assert.match(errors, /identity\.sessionId must be canonical non-empty text/);
+  assert.match(errors, /identity\.parentSessionId must be canonical text or empty string/);
 });
 
 test("agent context identity rejects extra keys and accepts an empty root parentSessionId", () => {

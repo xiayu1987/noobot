@@ -43,6 +43,13 @@ export const CHECK = defineCheck({
   },
   exemptions: [
     {
+      id: "memory-document-locale-entry",
+      kind: EXEMPTION_KINDS.PATH_PREFIX,
+      rules: ["directI18nImport"],
+      reason: "memory protocol owns localized built-in model descriptions through its locale entry",
+      match: ["memory-protocol/src/locale.js"],
+    },
+    {
       id: "agent-locale-consumers",
       kind: EXEMPTION_KINDS.PATH_PREFIX,
       rules: ["directI18nImport"],
@@ -75,7 +82,7 @@ export const CHECK = defineCheck({
       kind: EXEMPTION_KINDS.PATH_PREFIX,
       rules: ["directI18nImport"],
       reason: "model runtime renders its modelRuntime.* backend messages",
-      match: ["model-runtime/src/adapters/openai-capability-adapter.js"],
+      match: ["model-runtime/src/locale.js"],
     },
     {
       id: "service-dependency-root",
@@ -85,7 +92,7 @@ export const CHECK = defineCheck({
       match: ["service/bootstrap/create-app-dependencies.js"],
     },
   ],
-  baseline: { directI18nImport: 0, exemptions: 6 },
+  baseline: { directI18nImport: 0, exemptions: 7 },
   measure: async (usage) =>
     measureI18nImports(
       await getFirstPartyCodeFiles({

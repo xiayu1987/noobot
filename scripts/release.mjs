@@ -4,6 +4,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { DEVELOPMENT_THRESHOLDS } from "./lib/development-thresholds.mjs";
 import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -56,7 +57,7 @@ function parseArgs(argv = []) {
 async function gitOutput(args = []) {
   const { stdout } = await execFileAsync("git", args, {
     encoding: "utf8",
-    maxBuffer: 1024 * 1024,
+    maxBuffer: DEVELOPMENT_THRESHOLDS.length.releaseOutputBytes,
   });
   return text(stdout);
 }
@@ -78,7 +79,7 @@ async function assertTagDoesNotExist(tagName = "", remote = "origin") {
   try {
     await execFileAsync("git", ["ls-remote", "--exit-code", "--tags", remote, tagName], {
       encoding: "utf8",
-      maxBuffer: 1024 * 1024,
+      maxBuffer: DEVELOPMENT_THRESHOLDS.length.releaseOutputBytes,
     });
     throw new Error(`Tag ${tagName} already exists on ${remote}.`);
   } catch (error) {
@@ -112,8 +113,8 @@ async function waitForRemoteQuality(branch, commit, { remote = "origin", dryRun 
   if (!/^git@github\.com:|^https:\/\/github\.com\//.test(remoteUrl)) {
     throw new Error(`Remote quality gate requires a GitHub remote, got ${remoteUrl}`);
   }
-  const timeoutMs = 30 * 60 * 1000;
-  const pollMs = 5 * 1000;
+  const timeoutMs = DEVELOPMENT_THRESHOLDS.time.releaseTimeoutMs;
+  const pollMs = DEVELOPMENT_THRESHOLDS.time.releasePollIntervalMs;
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
     let output = "";
@@ -134,7 +135,7 @@ async function waitForRemoteQuality(branch, commit, { remote = "origin", dryRun 
           "--json",
           "databaseId,status,conclusion",
         ],
-        { encoding: "utf8", maxBuffer: 1024 * 1024 },
+        { encoding: "utf8", maxBuffer: DEVELOPMENT_THRESHOLDS.length.releaseOutputBytes },
       );
       output = String(result.stdout || "");
     } catch (error) {

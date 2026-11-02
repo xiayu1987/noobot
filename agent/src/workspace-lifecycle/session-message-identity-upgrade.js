@@ -17,6 +17,7 @@ import {
   SESSION_ARTIFACT_READ_REJECTION_CODES,
   SESSION_ERROR_CODE,
   SESSION_MESSAGE_RECORD_MIGRATION_INVALID,
+  SESSION_MESSAGE_IDENTITY_INVALID,
   assertSessionScopeIdentity,
   isCanonicalParentSessionId,
   isCanonicalSessionId,
@@ -26,6 +27,7 @@ import { isLegacyEventEnvelope, validateEventEnvelope } from "@noobot/event-prot
 import { migrateAttachmentLifecycleOutboxRecords } from "@noobot/event-protocol/attachment-lifecycle-migration";
 import { AttachmentProtocolError } from "@noobot/attachment-protocol";
 import {
+  assertAuthorityOutboxJournalRecord,
   AUTHORITY_OUTBOX_JOURNAL_OP,
   migrateLegacyAuthorityEventOutbox,
 } from "@noobot/event-protocol/outbox";
@@ -77,6 +79,7 @@ const DATA_REJECTION_CODES = new Set([
   ...SESSION_ARTIFACT_READ_REJECTION_CODES,
   PERSISTED_JSON_READ_ERROR_CODE.CORRUPTED,
   SESSION_MESSAGE_RECORD_MIGRATION_INVALID,
+  SESSION_MESSAGE_IDENTITY_INVALID,
   SESSION_ERROR_CODE.COMMAND_RECEIPT_INVALID,
   SESSION_ERROR_CODE.SCOPE_IDENTITY_CONFLICT,
 ]);
@@ -108,12 +111,18 @@ function treeScopeOf({ tree, sessionRoot, sessionDir, sessionId }) {
   return { sessionId, parentSessionId: chain.length > 1 ? chain.at(-2) : "" };
 }
 
-function migrateOutboxRecord(record, index) {
-  const values = Object.values(AUTHORITY_OUTBOX_JOURNAL_OP);
-  if (!isPlainObject(record) || !values.includes(record.op)) {
-    throw upgradeError("outbox_record_invalid", { index });
+function requireUpgradeOutboxRecord(record, index) {
+  try {
+    return assertAuthorityOutboxJournalRecord(record);
+  } catch (error) {
+    throw upgradeError("outbox_record_invalid", { index }, error);
   }
-  if (record.op !== AUTHORITY_OUTBOX_JOURNAL_OP.COMMIT) return { record, changed: false };
+}
+
+function migrateOutboxRecord(record, index) {
+  if (!isPlainObject(record) || record.op !== AUTHORITY_OUTBOX_JOURNAL_OP.COMMIT) {
+    return { record: requireUpgradeOutboxRecord(record, index), changed: false };
+  }
   const migrated = migrateSessionDocumentIdentity(record, MESSAGE_IDENTITY_STORE.OUTBOX);
   const validation = validateEventEnvelope(migrated.document.envelope);
   if (!validation.valid) {
@@ -122,6 +131,7 @@ function migrateOutboxRecord(record, index) {
   if (migrated.document.envelope.identity.eventId !== record.eventId) {
     throw upgradeError("outbox_event_id_mismatch", { index });
   }
+  requireUpgradeOutboxRecord(migrated.document, index);
   return { record: migrated.document, changed: migrated.changed };
 }
 

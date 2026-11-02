@@ -3,10 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
 import { collapsedText as text } from "./normalize.js";
 import { isPlainObject } from "@noobot/shared/value";
-import { assertToolResultObject, decodeToolResultText } from "./tool-result.js";
+import {
+  assertToolResultObject,
+  decodeToolResultText,
+  projectToolResultExitCode,
+} from "./tool-result.js";
 
 function structuredDetail(detail, result) {
   if (result) {
@@ -131,7 +136,16 @@ function patchSummary(value, result) {
     .join(" · ");
 }
 
-export function projectToolOperationSubject(tool, detail, { result = false, maxLength = 96 } = {}) {
+function scriptResultSummary(value) {
+  const exitCode = projectToolResultExitCode(value);
+  return [exitCode ? `exit ${exitCode}` : "", text(value.stdout)].filter(Boolean).join(" · ");
+}
+
+export function projectToolOperationSubject(
+  tool,
+  detail,
+  { result = false, maxLength = LENGTH_THRESHOLDS.display.toolOperationSubjectChars } = {},
+) {
   const toolName = requiredToolName(tool);
   const limit = assertMaxLength(maxLength);
   const value = structuredDetail(detail, result);
@@ -146,7 +160,7 @@ export function projectToolOperationSubject(tool, detail, { result = false, maxL
   } else if (toolName === "patch_file") {
     subject = patchSummary(value, result);
   } else if (["execute_script", "execute_command"].includes(toolName)) {
-    subject = text(result ? value.stdout : value.command || value.script);
+    subject = result ? scriptResultSummary(value) : text(value.command || value.script);
   } else if (toolName === "execute_native_script") {
     subject = nativeScriptSummary(value, result);
   } else if (toolName === "search") {

@@ -7,6 +7,7 @@
   "exports": {
     ".": "./src/shared/index.js",
     "./shared": "./src/shared/index.js",
+    "./memory": "./src/memory/index.js",
     "./agent/backend-messages": "./src/agent/backend-messages.js",
     "./agent/system-text": "./src/agent/system-text.js",
     "./agent/locales/en-US": "./src/agent/locales/en-US.js",

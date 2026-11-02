@@ -251,8 +251,12 @@ export async function ensureRuntimeDirectories(base) {
   });
 }
 
-export function repairMemorySection(base) {
-  return repairWorkspaceMemoryDocuments({ base });
+export async function repairMemorySection(base, fallbackLocale) {
+  const config = await readConfigTarget(path.join(base, WORKSPACE_LAYOUT.CONFIG_FILE));
+  return repairWorkspaceMemoryDocuments({
+    base,
+    locale: config.document?.preferences?.language || fallbackLocale,
+  });
 }
 
 function writeConfigDocumentText(filePath, content) {

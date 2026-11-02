@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { config } from "../../shared/config.js";
 import { CHANNEL_ACTIVITY_PHASE, UPSTREAM_TRANSPORT_PHASE } from "../../shared/constants.js";
 import { createChannelKey, nowMs } from "../../shared/utils.js";
@@ -50,7 +51,9 @@ async function provisionReconnectChannel(manager, socket, session) {
   });
   const deadline = nowMs() + config.reconnectSnapshotTimeoutMs;
   while (channel.transport.phase !== UPSTREAM_TRANSPORT_PHASE.OPEN && nowMs() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await new Promise((resolve) =>
+      setTimeout(resolve, TIME_THRESHOLDS.agentProxy.reconnectPollIntervalMs),
+    );
   }
   return [channelKey];
 }

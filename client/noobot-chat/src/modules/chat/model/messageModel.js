@@ -10,7 +10,7 @@ import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { getMessageAttachments, normalizeArray } from "./messageAttachmentsProjection.js";
 import { findVisibleLastMessage, isPluginInjectedMessage } from "./messageVisibility.js";
 import { foldConversationMessages } from "./conversationFolding.js";
-import { isWorkflowMessageLike } from "./messageWorkflowMeta.js";
+import { isWorkflowMessage as isWorkflowMessageLike } from "@noobot/event-protocol/workflow-runtime-event";
 import { createMessageEventState } from "./messageEventState.js";
 import { isCanonicalText } from "@noobot/shared/value";
 import {

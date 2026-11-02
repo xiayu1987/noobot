@@ -342,3 +342,16 @@ test("terminal unregister detaches the current transport and rejects late public
   );
   assert.equal(frames.length, 0);
 });
+
+test("run transport rejects invalid dependencies before replacing a binding", () => {
+  const handle = registerActiveRun({ userId: "transport-owner", sessionId: "transport-session" });
+  try {
+    const binding = attachRunTransport(handle, async () => true);
+    assert.throws(() => attachRunTransport(null, () => true), TypeError);
+    assert.throws(() => attachRunTransport(handle, null), TypeError);
+    assert.throws(() => attachRunTransport(handle, () => true, { onDiagnostic: {} }), TypeError);
+    assert.equal(isRunTransportAttached(handle, binding), true);
+  } finally {
+    unregisterActiveRun(handle);
+  }
+});

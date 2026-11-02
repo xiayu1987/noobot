@@ -56,7 +56,7 @@ function buildPatchFailurePayload({ error, original, pathRef }) {
     error: error.message,
     path: projectToolPathRef(pathRef),
     details,
-    ...buildLineNumberedNearbyContent(original, details.line),
+    ...(details.line ? buildLineNumberedNearbyContent(original, details.line) : {}),
   };
 }
 
@@ -91,7 +91,7 @@ async function preparePatchExecution({ format, patch, strip, root, agentContext 
 }
 
 function buildPatchSchema(agentContext, runtime) {
-  return z.object({
+  return z.strictObject({
     format: z
       .enum(["unified_diff", "apply_patch"])
       .optional()
@@ -172,9 +172,9 @@ async function buildPatchPlans({ targets, normalizedFormat, workspaceIo }) {
       return;
     }
     const original = originalBuffer.toString("utf8");
-    let nextContent = "";
+    let applied = null;
     try {
-      nextContent =
+      applied =
         normalizedFormat === "unified_diff" && !item.hunks.some((hunk) => hunk.searchOnly)
           ? applyUnifiedHunks(original, item.hunks)
           : applySearchHunks(original, item.hunks);
@@ -190,11 +190,12 @@ async function buildPatchPlans({ targets, normalizedFormat, workspaceIo }) {
     const outputPath = item.resolvedNewPath;
     writePlans.push({
       filePath: outputPath,
-      content: nextContent,
+      content: applied.content,
       pathRef: item.newPathRef,
       expectedSha256: hash(await readContent(outputPath)),
+      repairs: applied.repairs,
     });
-    plannedContents.set(outputPath, Buffer.from(nextContent, "utf8"));
+    plannedContents.set(outputPath, Buffer.from(applied.content, "utf8"));
     if (item.mode === "move" && item.resolvedOldPath !== outputPath) {
       deletePlans.push({
         filePath: item.resolvedOldPath,
@@ -318,6 +319,7 @@ function buildPatchResult({
       ...writePlans.map((item) => ({
         path: projectToolPathRef(item.pathRef),
         action: "write",
+        ...(item.repairs?.length ? { repairs: item.repairs } : {}),
       })),
       ...deletePlans.map((item) => ({
         path: projectToolPathRef(item.pathRef),

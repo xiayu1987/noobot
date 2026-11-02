@@ -44,7 +44,7 @@ function resolveBlockedReasonLabel(locale = LOCALE.ZH_CN, reason = "") {
   return translateI18nText(locale, key) || text(reason);
 }
 
-export function resolvePendingPlanUpdate(state = {}) {
+export function resolvePendingPlanUpdate(state) {
   const { active, stage, targetMainStepIndexes } = resolvePendingPlanUpdateForWorkflow(state);
   return { active, stage, targetMainStepIndexes };
 }
@@ -107,12 +107,12 @@ function guidanceActionFromDecision(decision = {}) {
   };
 }
 
-export function resolveNextGuidanceAction(state = {}) {
+export function resolveNextGuidanceAction(state) {
   return guidanceActionFromDecision(resolveWorkflowActionDecision(state));
 }
 
-function toPendingSnapshot(state = {}) {
-  const pending = state?.pending && typeof state.pending === "object" ? state.pending : {};
+function toPendingSnapshot(state) {
+  const { pending } = state;
   const summaryByCharsPrompted = state?.flags?.summaryByCharsPrompted === true;
   const planUpdate = resolvePendingPlanUpdate(state);
   const unifiedDecision = resolveWorkflowActionDecision(state);
@@ -157,7 +157,7 @@ function toPendingSnapshot(state = {}) {
   };
 }
 
-export function resolveGuidancePriorityDecision(state = {}) {
+export function resolveGuidancePriorityDecision(state) {
   const locale = resolveDecisionLocale(state);
   const unifiedDecision = resolveWorkflowActionDecision(state);
   const nextAction = guidanceActionFromDecision(unifiedDecision);
@@ -171,13 +171,11 @@ export function resolveGuidancePriorityDecision(state = {}) {
     chosenReason,
     chosenReasonLabel: resolveReasonLabel(locale, chosenReason),
     chosenStage: nextAction.stage || "",
-    candidateActions: unifiedDecision.candidateActions || [],
-    deferredActions: (unifiedDecision.candidateActions || []).filter(
-      (label) => label !== chosenAction,
-    ),
-    blockedActions: unifiedDecision.blockedActions || [],
-    blockedReasons: unifiedDecision.blockedReasons || [],
-    blockedReasonLabels: (unifiedDecision.blockedReasons || []).map((reason) =>
+    candidateActions: unifiedDecision.candidateActions,
+    deferredActions: unifiedDecision.candidateActions.filter((label) => label !== chosenAction),
+    blockedActions: unifiedDecision.blockedActions,
+    blockedReasons: unifiedDecision.blockedReasons,
+    blockedReasonLabels: unifiedDecision.blockedReasons.map((reason) =>
       resolveBlockedReasonLabel(locale, reason),
     ),
     pendingSnapshot: toPendingSnapshot(state),

@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { logWorkflowDiagnostics } from "../../debug/loggers/workflowDiagnosticsLogger.js";
+import { projectWorkflowPlanningNodeFact } from "@noobot/event-protocol/workflow-runtime-event";
 import {
-  buildPlannedNodeStateEvent,
   buildWorkflowPlanningHeader,
   evaluateWorkflowNodeStateGate,
 } from "./workflowNodeStateProjection.js";
@@ -87,7 +87,7 @@ export function createWorkflowEventOperations({
     });
     workflowNodeStateRegistry.value = { ...registry, workflows: { ...registry.workflows } };
     const results = nodeSessions.map((nodeSession) =>
-      upsertWorkflowNodeStateEvent(buildPlannedNodeStateEvent({ nodeSession, eventData })),
+      upsertWorkflowNodeStateEvent(projectWorkflowPlanningNodeFact({ nodeSession, eventData })),
     );
     const result = {
       applied: results.some((item) => item.applied === true),

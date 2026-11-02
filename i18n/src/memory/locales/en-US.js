@@ -1,0 +1,55 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+export default {
+  "experience.document.time": "Time",
+  "experience.document.empty": "(None)",
+  "experience.document.sourceDates": "Source dates",
+  "experience.document.sourceWeeks": "Source weeks",
+  "experience.document.sourceMonths": "Source months",
+  "longMemory.personal_info.age": "Age",
+  "longMemory.personal_info.gender": "Gender",
+  "longMemory.personal_info.occupation": "Occupation",
+  "longMemory.personal_info.education": "Education background",
+  "longMemory.personal_info.location": "City or region",
+  "longMemory.interests.hobbies": "Hobbies and interests",
+  "longMemory.interests.favorite_books": "Favorite books",
+  "longMemory.interests.favorite_movies": "Favorite movies",
+  "longMemory.interests.favorite_music": "Favorite music genres",
+  "longMemory.interests.preferred_activities": "Preferred activities",
+  "longMemory.personality.traits": "Personality traits",
+  "longMemory.personality.emotional_tendencies": "Emotional tendencies",
+  "longMemory.personality.decision_style": "Decision style",
+  "longMemory.social.social_preference": "Social preferences",
+  "longMemory.social.important_relationships": "Important relationships",
+  "longMemory.social.communication_style": "Communication style",
+  "longMemory.history_preferences.preferred_conversation_style": "Preferred conversation style",
+  "longMemory.history_preferences.common_topics": "Frequently discussed topics",
+  "longMemory.work.role_domain": "Professional role and industry or domain",
+  "longMemory.work.long_term_projects": "Long-term projects, businesses, or goals",
+  "longMemory.work.tools_methods": "Frequently used tools, technologies, and methods",
+  "longMemory.work.work_style":
+    "Work habits and methods, such as planning, execution, checks, and reviews",
+  "longMemory.work.quality_standards": "Standards for assessing quality and deliverables",
+  "longMemory.work.assistant_collaboration":
+    "Expectations for assistant collaboration, such as execution, reporting, and approval boundaries",
+  "experience.daily.experiences.title": "Experiences",
+  "experience.daily.experiences.description": "Achievements and effective practices",
+  "experience.daily.lessons.title": "Lessons",
+  "experience.daily.lessons.description": "Pitfalls encountered and practices to avoid",
+  "experience.weekly.experiences.title": "Experiences",
+  "experience.weekly.experiences.description":
+    "Effective practices from this week that can be reused",
+  "experience.weekly.lessons.title": "Lessons",
+  "experience.weekly.lessons.description": "Recurring issues this week and how to avoid them",
+  "experience.monthly.patterns.title": "Patterns",
+  "experience.monthly.patterns.description": "Patterns supported by multiple records",
+  "experience.monthly.methodologies.title": "Methodologies",
+  "experience.monthly.methodologies.description": "Improved methods to guide future actions",
+  "experience.yearly.principles.title": "Principles",
+  "experience.yearly.principles.description": "Underlying principles that hold over time",
+  "experience.yearly.reflections.title": "Strategic Reflections",
+  "experience.yearly.reflections.description": "Reflections on the year's strategy",
+};

@@ -4,6 +4,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { chmod, mkdir, open, rm, writeFile } from "node:fs/promises";
 import { execFile, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -264,8 +265,8 @@ async function readInstalledTagName(installedBinaryPath) {
   try {
     const { stdout } = await execFileAsync(installedBinaryPath, ["--version"], {
       encoding: "utf8",
-      timeout: 15000,
-      maxBuffer: 64 * 1024,
+      timeout: TIME_THRESHOLDS.installers.versionCheckTimeoutMs,
+      maxBuffer: LENGTH_THRESHOLDS.installers.versionOutputBytes,
     });
     const installedVersion = String(stdout || "")
       .split(/\r?\n/, 1)[0]

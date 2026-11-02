@@ -12,6 +12,7 @@ Open the local URL printed in the terminal. The app loads the files above using 
 
 ```bash
 npm run test:model-access -- --user admin --port 8765
+npm run test:model-access -- --locale en-US
 npm run test:model-access -- --config /path/to/global.config.json --workspace /path/to/workspace
 ```
 

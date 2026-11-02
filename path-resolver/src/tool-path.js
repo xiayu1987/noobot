@@ -66,7 +66,7 @@ export function classifyToolInputPath(inputPath = "") {
     return buildClassifiedToolPath({ view: TOOL_PATH_VIEWS.EMPTY, raw, normalized: "" });
   }
   const normalized = normalizePathForPlatform(raw);
-  if (!normalized && (raw === "." || raw === "./")) {
+  if (!normalized) {
     return buildClassifiedToolPath({
       view: TOOL_PATH_VIEWS.WORKSPACE_RELATIVE,
       raw,

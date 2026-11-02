@@ -21,9 +21,6 @@ const workspaceRoot = resolveConfiguredWorkspaceRoot({
 const serviceEnv = {
   PORT: runtimeEnv.PORT,
   [WORKSPACE_ROOT_ENV]: workspaceRoot,
-  ...(process.env.NOOBOT_USER_INTERACTION_TIMEOUT_MS
-    ? { NOOBOT_USER_INTERACTION_TIMEOUT_MS: process.env.NOOBOT_USER_INTERACTION_TIMEOUT_MS }
-    : {}),
 };
 
 module.exports = {
@@ -63,6 +60,7 @@ module.exports = {
     },
     {
       name: "noobot-model-proxy",
+      env: { [WORKSPACE_ROOT_ENV]: workspaceRoot },
       cwd: path.join(root, "model-proxy"),
       script: "src/index.js",
       interpreter: process.execPath,

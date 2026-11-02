@@ -80,8 +80,8 @@ async function commitParsedLifecycleEvent(runtime, identity, relation) {
     identity,
     status: ATTACHMENT_LIFECYCLE.PARSED,
     occurredAt: new Date().toISOString(),
-    turnScopeId: text(system.turnScopeId) || undefined,
-    runId: text(system.runId) || undefined,
+    turnScopeId: system.turnScopeId,
+    runId: system.runId,
     relation,
   });
   if (!isFunction(runtime.sessionManager?.commitAuthorityEvent)) {
@@ -134,7 +134,7 @@ export async function backwriteParsedAttachment({
   const sourceIdentity = projectAttachmentIdentity(sourceAttachmentMeta);
   const { identity, name, mimeType, size } = parsedAttachment;
   const updated = await runtime.attachmentService.linkParsedResultToAttachment({
-    userId: text(runtime.systemRuntime.userId),
+    userId: runtime.systemRuntime.userId,
     sourceIdentity,
     targetDescriptor: { identity, name, mimeType, ...(size === undefined ? {} : { size }) },
     producerId: TOOL_NAME.MULTIMODAL_PARSE,

@@ -28,9 +28,7 @@ export function markHarnessTurnLifecycle(point = "", ctx = {}) {
   const { bucket, state } = holder;
   const normalizedPoint = text(point).toLowerCase();
   const dialogProcessId = ctx.dialogProcessId;
-  const completedIds = Array.isArray(bucket.completedDialogProcessIds)
-    ? bucket.completedDialogProcessIds
-    : (bucket.completedDialogProcessIds = []);
+  const completedIds = bucket.completedDialogProcessIds;
 
   if (TURN_START_POINTS.has(normalizedPoint)) {
     state.flags.agentTurnEnded = false;
@@ -68,9 +66,7 @@ export function isHarnessAgentTurnEnded(ctx = {}) {
   const { bucket, state } = holder;
   const dialogProcessId = ctx.dialogProcessId;
   const activeDialogProcessId = text(state?.signals?.activeDialogProcessId);
-  const completedIds = Array.isArray(bucket.completedDialogProcessIds)
-    ? bucket.completedDialogProcessIds
-    : [];
+  const completedIds = bucket.completedDialogProcessIds;
   if (dialogProcessId) {
     if (completedIds.includes(dialogProcessId)) return true;
     if (activeDialogProcessId && activeDialogProcessId !== dialogProcessId) return true;

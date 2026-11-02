@@ -104,11 +104,9 @@ test("run returns exit code and inline output, then removes its output dir", asy
     generatedDataRoot: root,
   });
   assert.deepEqual(result, {
-    ok: false,
+    ok: true,
     termination: "exited",
     exitCode: 3,
-    code: SCRIPT_FAILURE_CODE.exited,
-    error: "script exited with code 3",
     stdout: "out",
     stderr: "err",
   });
@@ -162,9 +160,9 @@ test("runFileBacked keeps output files and reports their sizes", async (t) => {
   const result = await runFileBacked("printf out; printf err >&2; exit 2", root, 5000, null, {
     generatedDataRoot: root,
   });
-  assert.equal(result.ok, false);
+  assert.equal(result.ok, true);
   assert.equal(result.exitCode, 2);
-  assert.equal(result.code, SCRIPT_FAILURE_CODE.exited);
+  assert.equal(result.code, undefined);
   assert.equal(result.stdoutBytes, 3);
   assert.equal(result.stderrBytes, 3);
   assert.equal(result.signal, undefined);

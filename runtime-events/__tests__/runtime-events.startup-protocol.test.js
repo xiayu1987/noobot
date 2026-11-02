@@ -14,11 +14,9 @@ import {
   SERVICE_STARTUP_EVENTS,
   SERVICE_STARTUP_LIVENESS,
   SERVICE_STARTUP_SOURCE,
-  SERVICE_STARTUP_STALL_TIMEOUT_ENV,
   SERVICE_STARTUP_STATES,
   assessServiceStartupLiveness,
   readServiceStartupState,
-  resolveServiceStartupStallTimeoutMs,
   resolveRuntimeEventFile,
   resolveRuntimeEventsConfig,
 } from "../src/index.js";
@@ -233,21 +231,4 @@ test("service startup liveness separates stalled progress from a lost heartbeat"
     ).liveness,
     SERVICE_STARTUP_LIVENESS.ACTIVE,
   );
-});
-
-test("service startup stall timeout env must be a positive integer", () => {
-  assert.equal(
-    resolveServiceStartupStallTimeoutMs({}),
-    TIME_THRESHOLDS.service.startupStallTimeoutMs,
-  );
-  assert.equal(
-    resolveServiceStartupStallTimeoutMs({ [SERVICE_STARTUP_STALL_TIMEOUT_ENV]: "600000" }),
-    600000,
-  );
-  for (const value of ["0", "-1", "1.5", "abc"]) {
-    assert.throws(
-      () => resolveServiceStartupStallTimeoutMs({ [SERVICE_STARTUP_STALL_TIMEOUT_ENV]: value }),
-      TypeError,
-    );
-  }
 });

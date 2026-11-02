@@ -157,7 +157,6 @@ describe("turnProjectionStore convergence", () => {
       authority: "authoritative",
       applied: true,
       reason: "applied",
-      messageEffect: "none",
     });
     expect(result.turnKey).toBeTruthy();
   });

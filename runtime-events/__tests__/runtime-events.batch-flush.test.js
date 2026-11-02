@@ -35,14 +35,21 @@ test("appendJsonLine keeps its asynchronous write alive until the returned promi
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-jsonl-lifecycle-"));
   const file = path.join(root, "pending.jsonl");
   const script = `
-    import { appendJsonLine } from ${JSON.stringify(path.resolve("src/transports/jsonl.js"))};
+    import { appendJsonLine } from ${JSON.stringify(new URL("../src/transports/jsonl.js", import.meta.url).href)};
     await appendJsonLine(process.argv[1], { sequence: 1 });
     process.stdout.write('completed\\n');
   `;
   try {
     const result = await execFileAsync(
       process.execPath,
-      ["--input-type=module", "--eval", script, file],
+      [
+        "--import",
+        import.meta.resolve("@noobot/shared/testing/runtime-params"),
+        "--input-type=module",
+        "--eval",
+        script,
+        file,
+      ],
       {
         cwd: path.resolve("."),
         encoding: "utf8",

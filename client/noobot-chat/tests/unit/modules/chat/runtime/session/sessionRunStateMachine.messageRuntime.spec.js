@@ -49,6 +49,27 @@ function runtimeOf(fields = {}) {
 describe("sessionRunStateMachine message runtime", () => {
   beforeEach(() => installStorage());
 
+  it.each([
+    [FrontendRunState.ACTION_REQUESTING, false, true],
+    [FrontendRunState.CONTINUE_REQUESTING, false, true],
+    [FrontendRunState.FRONTEND_COMPLETION_REQUESTING, true, true],
+    [FrontendRunState.PROCESSING, true, true],
+    [AGENT_CHANNEL_STATE.SENDING, true, true],
+    [AGENT_CHANNEL_STATE.RECONNECTING, true, true],
+    [AGENT_CHANNEL_STATE.INTERACTION_PENDING, true, true],
+    [FrontendRunState.RESEND_REPLACING_TURN, true, true],
+    [FrontendRunState.RESEND_STREAMING, true, true],
+    [FrontendRunState.USER_STOPPING, true, true],
+    [AGENT_CHANNEL_STATE.COMPLETED, false, false],
+  ])(
+    "separates executing and pending assistant semantics for %s",
+    (state, running, inFlightAssistant) => {
+      expect(
+        resolveTurnRuntimeView({ messageItem: { role: "assistant", channelState: { state } } }),
+      ).toMatchObject({ running, inFlightAssistant });
+    },
+  );
+
   it("uses the terminal registry runtime over a stale sending message", () => {
     const view = resolveTurnRuntimeView({
       messageItem: {
@@ -67,7 +88,7 @@ describe("sessionRunStateMachine message runtime", () => {
     });
   });
 
-  it("uses the backend execution state while the registry turn is in flight", () => {
+  it("uses the registry lifecycle projection while the turn is in flight", () => {
     const view = resolveTurnRuntimeView({
       messageItem: { role: "assistant", pending: false },
       runtime: runtimeOf({
@@ -78,9 +99,32 @@ describe("sessionRunStateMachine message runtime", () => {
     });
 
     expect(view).toMatchObject({
-      state: AGENT_CHANNEL_STATE.SENDING,
+      state: FrontendRunState.PROCESSING,
       displayState: "sending",
       running: true,
+      inFlightAssistant: true,
+    });
+  });
+
+  it("does not revive an unloaded registry turn from stale message or backend state", () => {
+    const view = resolveTurnRuntimeView({
+      messageItem: { role: "assistant", pending: true, channelState: { state: "sending" } },
+      runtime: runtimeOf({ backendState: AGENT_CHANNEL_STATE.SENDING }),
+    });
+    expect(view).toMatchObject({ state: "", running: false, inFlightAssistant: false });
+  });
+
+  it("does not let stale backend execution override a registry request phase", () => {
+    const view = resolveTurnRuntimeView({
+      messageItem: { role: "assistant", pending: true },
+      runtime: runtimeOf({
+        state: FrontendRunState.ACTION_REQUESTING,
+        backendState: AGENT_CHANNEL_STATE.SENDING,
+      }),
+    });
+    expect(view).toMatchObject({
+      state: FrontendRunState.ACTION_REQUESTING,
+      running: false,
       inFlightAssistant: true,
     });
   });
@@ -353,17 +397,11 @@ describe("sessionRunStateMachine message runtime", () => {
       dialogProcessId: "d1",
       turnScopeId: "turn-1",
     });
-    expect(
-      resolveTurnRuntimeView({
-        messageItem: sendingMessage,
-        runtime: runtimeOf({ startedAt: "2026-01-01T00:00:00.000Z" }),
-      }),
-    ).toMatchObject({
+    expect(resolveSessionRunMessageRuntimeView(sendingMessage)).toMatchObject({
       state: AGENT_CHANNEL_STATE.SENDING,
       pending: true,
       running: true,
       inFlightAssistant: true,
-      startedAt: "2026-01-01T00:00:00.000Z",
     });
     expect(isMessageRunning(sendingMessage)).toBe(true);
     expect(isMessageInFlightAssistant(sendingMessage)).toBe(true);

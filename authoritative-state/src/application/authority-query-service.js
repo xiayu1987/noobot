@@ -10,6 +10,7 @@ import {
 import {
   createTurnLifecycleSnapshot,
   createTurnTerminalResolution,
+  requireTurnTerminalResolutionIdentity,
   isTurnSnapshotKnownSequence,
   isTurnSnapshotTerminalLimit,
 } from "@noobot/session-protocol/turn-lifecycle";
@@ -71,28 +72,20 @@ export function createAuthoritativeTurnSnapshot({
 export function resolveAuthoritativeTurnTerminal({
   lifecycle: lifecycleSource,
   turnTimings,
-  commandId = "",
-  sessionId = "",
-  turnScopeId = "",
+  commandId,
+  sessionId,
+  turnScopeId,
   aggregateVersion = null,
-} = {}) {
+}) {
   const retryAfterMs = TIME_THRESHOLDS.agent.terminalResolutionRetryDelayMs;
-  const normalizedCommandId = clean(commandId);
-  const normalizedSessionId = clean(sessionId);
-  const normalizedTurnScopeId = clean(turnScopeId);
-  if (!normalizedCommandId || !normalizedSessionId || !normalizedTurnScopeId) {
-    throw new TypeError("terminal resolution requires commandId, sessionId and turnScopeId");
-  }
   const base = {
-    commandId: normalizedCommandId,
-    sessionId: normalizedSessionId,
-    turnScopeId: normalizedTurnScopeId,
+    ...requireTurnTerminalResolutionIdentity({ commandId, sessionId, turnScopeId }),
     aggregateVersion,
   };
   const lifecycle = normalizeTurnLifecycleEntity(lifecycleSource);
-  const lifecycleTurn = lifecycle.turns[normalizedTurnScopeId] || null;
+  const lifecycleTurn = lifecycle.turns[turnScopeId] || null;
   const turn = lifecycleTurn
-    ? { ...projectTurnTiming(lifecycleTurn, turnTimings), sessionId: normalizedSessionId }
+    ? { ...projectTurnTiming(lifecycleTurn, turnTimings), sessionId }
     : null;
   if (!turn) {
     return createTurnTerminalResolution({

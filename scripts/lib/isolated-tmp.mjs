@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { DEVELOPMENT_THRESHOLDS } from "./development-thresholds.mjs";
 import { mkdtempSync, readdirSync, rmSync, statSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -11,7 +12,7 @@ import { WORKSPACE_ROOT_ENV } from "@noobot/runtime-topology-protocol/workspace-
 import { text } from "@noobot/shared/value";
 
 export const ISOLATED_TMP_ENV = "NOOBOT_TEST_TMP_DIR";
-const DEFAULT_TMP_MIN_AGE_MS = 60 * 60 * 1000;
+const DEFAULT_TMP_MIN_AGE_MS = DEVELOPMENT_THRESHOLDS.time.isolatedTmpMinAgeMs;
 
 export function pruneOldest(dir, matches, keep, { minAgeMs = 0, now = Date.now() } = {}) {
   let entries;

@@ -138,11 +138,6 @@ function registerMessageListener({ webSocket, messageHandler, logConnection }) {
   });
 }
 
-function decodeCloseReason(reason) {
-  if (typeof reason === "string") return reason;
-  return Buffer.isBuffer(reason) ? reason.toString("utf8") : "";
-}
-
 function registerCloseListener({
   webSocket,
   state,
@@ -160,7 +155,7 @@ function registerCloseListener({
         createExecutionAbortReason({
           type: EXECUTION_ABORT_TYPE.SOCKET_CLOSE,
           code,
-          closeReason: decodeCloseReason(reasonBuffer),
+          closeReason: reasonBuffer.toString("utf8"),
           reason: `websocket closed with code ${code}`,
         }),
       );

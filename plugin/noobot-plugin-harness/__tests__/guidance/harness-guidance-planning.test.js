@@ -65,7 +65,7 @@ test("harness summary relay without captured plan keeps final acceptance on defa
             flags: { planningCaptured: true, acceptanceRequested: false },
             counters: {
               llmTurns: 16,
-              planUpdateTurns: -100,
+              planUpdateTurns: 0,
               consecutiveToolFailures: 0,
               totalToolFailures: 0,
             },
@@ -227,7 +227,7 @@ test("planning_refinement is scheduled independently after revision main-plan ch
             flags: { planningCaptured: true, acceptanceRequested: false },
             counters: {
               llmTurns: 16,
-              planUpdateTurns: -100,
+              planUpdateTurns: 0,
               consecutiveToolFailures: 0,
               totalToolFailures: 0,
             },

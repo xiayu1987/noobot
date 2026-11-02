@@ -3,6 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { LENGTH_THRESHOLDS } from "../length-thresholds.js";
+import { TIME_THRESHOLDS } from "../time-thresholds.js";
+import { QUANTITY_THRESHOLDS } from "../quantity-thresholds.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -139,24 +142,11 @@ test("execution log controls are centralized and suppress full successful turn d
   });
 });
 
-test("runtime-events storage config falls back on invalid values", () => {
-  const env = {
-    [RUNTIME_EVENTS_CONFIG_ENVS.runtimeEvents.maxFileBytes]: "invalid",
-    [RUNTIME_EVENTS_CONFIG_ENVS.runtimeEvents.retentionDays]: "-1",
-    [RUNTIME_EVENTS_CONFIG_ENVS.runtimeEvents.maxArchives]: "NaN",
-  };
-  assert.equal(
-    resolveRuntimeEventsMaxFileBytes(env),
-    RUNTIME_EVENTS_CONFIG_DEFAULTS.runtimeEvents.maxFileBytes,
-  );
-  assert.equal(
-    resolveRuntimeEventsRetentionDays(env),
-    RUNTIME_EVENTS_CONFIG_DEFAULTS.runtimeEvents.retentionDays,
-  );
-  assert.equal(
-    resolveRuntimeEventsMaxArchives(env),
-    RUNTIME_EVENTS_CONFIG_DEFAULTS.runtimeEvents.maxArchives,
-  );
+test("runtime-events storage reads the canonical runtime thresholds", () => {
+  assert.equal(resolveRuntimeEventsMaxFileBytes(), LENGTH_THRESHOLDS.runtimeEvents.maxFileBytes);
+  assert.equal(resolveRuntimeEventsRetentionDays(), TIME_THRESHOLDS.runtimeEvents.retentionDays);
+  assert.equal(resolveRuntimeEventsMaxArchives(), QUANTITY_THRESHOLDS.runtimeEvents.maxArchives);
+  assert.equal(Object.hasOwn(RUNTIME_EVENTS_CONFIG_ENVS, "runtimeEvents"), false);
 });
 
 test("session log controls honor explicit environment values independently of defaults", () => {

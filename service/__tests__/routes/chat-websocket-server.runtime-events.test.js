@@ -143,3 +143,37 @@ test("chat-websocket-server: service websocket runtime errors write direct syste
     assert.equal(records[0].data.phase, "run");
     assert.equal(records[0].data.error, "run failed");
   }));
+
+test("chat-websocket-server: runtime failure before session binding writes the system log", () =>
+  withRuntimeEventsRoot("noobot-service-runtime-system-", async (workspaceRoot) => {
+    await recordServiceWebSocketRuntimeError({
+      event: "service.websocket.run.failed",
+      error: new Error("session binding failed"),
+      data: { phase: "binding" },
+    });
+    const records = await readJsonl(
+      path.join(workspaceRoot, "system", "runtime", "events", "system", "service", "system.jsonl"),
+    );
+    assert.equal(records.length, 1);
+    assert.equal(records[0].scope, "system");
+    assert.equal(Object.hasOwn(records[0], "sessionId"), false);
+    assert.equal(records[0].event, "service.websocket.run.failed");
+    assert.equal(records[0].data.phase, "binding");
+    assert.equal(records[0].data.error, "session binding failed");
+  }));
+
+test("chat-websocket-server: send failure without a session writes the system log", () =>
+  withRuntimeEventsRoot("noobot-service-send-system-", async (workspaceRoot) => {
+    await recordServiceWebSocketSendFailure({
+      eventName: "error",
+      error: new Error("disconnected"),
+    });
+    const records = await readJsonl(
+      path.join(workspaceRoot, "system", "runtime", "events", "system", "service", "system.jsonl"),
+    );
+    assert.equal(records.length, 1);
+    assert.equal(records[0].scope, "system");
+    assert.equal(Object.hasOwn(records[0], "sessionId"), false);
+    assert.equal(records[0].event, "service.websocket.sendEvent.failed");
+    assert.equal(records[0].data.error, "disconnected");
+  }));

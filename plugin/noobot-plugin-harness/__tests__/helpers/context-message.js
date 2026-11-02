@@ -34,7 +34,7 @@ export function canonicalizeTestContextMessage(message = {}) {
   message.additional_kwargs = {};
   return writeContextMessageMetadata(message, {
     ...metadata,
-    messageUid: metadata.messageUid || createMessageUid(),
+    messageUid: Object.hasOwn(metadata, "messageUid") ? metadata.messageUid : createMessageUid(),
   });
 }
 

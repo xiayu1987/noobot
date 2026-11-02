@@ -192,7 +192,7 @@ export function createMcpTool({ agentContext }) {
     {
       name: TOOL_NAME.CALL_MCP_TASK,
       description: tTool(runtime, "tools.mcp.description"),
-      schema: z.object({
+      schema: z.strictObject({
         mcpName: z.string().describe(tTool(runtime, "tools.mcp.fieldMcpName")),
         task: z.string().describe(tTool(runtime, "tools.mcp.fieldTask")),
       }),

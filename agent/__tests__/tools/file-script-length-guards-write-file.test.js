@@ -205,7 +205,7 @@ test("file tools retain one internal ResourceRef for repeated logical path input
     ),
   );
   assert.equal(read.ok, true, JSON.stringify(read));
-  assert.equal(read.content, "1 | resource-round-trip");
+  assert.equal(read.numberedContent, "     1\tresource-round-trip");
   assert.equal(read.resources[0].resourceId, written.outputResources[0].resourceId);
 });
 
@@ -310,19 +310,17 @@ test("workspace I/O: file tools keep one sandbox display path end to end", async
     await tools.get("read_file").invoke(
       {
         filePath,
-        includeLineNumbers: false,
         riskLevel: "low",
       },
       { signal: new AbortController().signal },
     ),
   );
-  assert.equal(firstRead.content, "alpha\nbeta");
+  assert.equal(firstRead.numberedContent, "     1\talpha\n     2\tbeta");
   assert.deepEqual(firstRead.path, written.path);
 
   const searched = parseToolResult(
     await tools.get("search").invoke(
       {
-        source: "files",
         path: "/workspace/runtime/ops_workdir",
         query: "beta",
         glob: "**/*.txt",
@@ -366,13 +364,12 @@ test("workspace I/O: file tools keep one sandbox display path end to end", async
     await tools.get("read_file").invoke(
       {
         filePath,
-        includeLineNumbers: false,
         riskLevel: "low",
       },
       { signal: new AbortController().signal },
     ),
   );
-  assert.equal(finalRead.content, "alpha\ngamma");
+  assert.equal(finalRead.numberedContent, "     1\talpha\n     2\tgamma");
   assert.equal(
     await fs.readFile(path.join(basePath, "runtime/ops_workdir/sandbox-flow.txt"), "utf8"),
     "alpha\ngamma\n",

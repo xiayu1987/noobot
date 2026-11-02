@@ -5,71 +5,15 @@
  */
 import { spawn } from "node:child_process";
 import { rgPath } from "@vscode/ripgrep";
-import { fatalSystemError, recoverableToolError } from "../../shared/errors/index.js";
+import { fatalSystemError } from "../../shared/errors/index.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import {
-  escapeRegExp,
   isForbiddenWorkspaceRelativePath,
   isOutsideWorkspaceRelativePath,
   normalizeRgPathToRoot,
-  splitLines,
 } from "./file-utils.js";
 import { isPlainObject } from "@noobot/shared/value";
 import { assertNotAborted } from "../../shared/utils/error-utils.js";
-
-function buildSearchMatcher({ query, isRegex, caseSensitive }) {
-  const flags = caseSensitive ? "g" : "gi";
-  try {
-    return new RegExp(isRegex ? query : escapeRegExp(query), flags);
-  } catch (error) {
-    throw recoverableToolError(`invalid search regex: ${error?.message || String(error)}`, {
-      code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
-      details: { field: "query" },
-    });
-  }
-}
-
-export function searchInText({
-  text: inputText,
-  query,
-  isRegex,
-  caseSensitive,
-  contextLines,
-  maxResults,
-}) {
-  const matcher = buildSearchMatcher({ query, isRegex, caseSensitive });
-  const lines = splitLines(inputText);
-  if (inputText.endsWith("\n")) lines.pop();
-  const matches = [];
-  let truncated = false;
-
-  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
-    const lineText = lines[lineIndex];
-    matcher.lastIndex = 0;
-    const hit = matcher.exec(lineText);
-    if (!hit) continue;
-    if (matches.length === maxResults) {
-      truncated = true;
-      break;
-    }
-    const beforeStart = Math.max(0, lineIndex - contextLines);
-    const afterEnd = Math.min(lines.length - 1, lineIndex + contextLines);
-    matches.push({
-      line: lineIndex + 1,
-      column: hit.index + 1,
-      text: lineText,
-      before: lines.slice(beforeStart, lineIndex).map((item, offset) => ({
-        line: beforeStart + offset + 1,
-        text: item,
-      })),
-      after: lines.slice(lineIndex + 1, afterEnd + 1).map((item, offset) => ({
-        line: lineIndex + offset + 2,
-        text: item,
-      })),
-    });
-  }
-  return { matches, truncated };
-}
 
 function runRipgrepSearch({ args, rootPath, maxResults, abortSignal }) {
   return new Promise((resolve, reject) => {

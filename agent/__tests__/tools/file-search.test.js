@@ -12,7 +12,6 @@ import path from "node:path";
 import {
   decodeRipgrepEvent,
   searchFilesWithRipgrep,
-  searchInText,
   toSearchRootRelativePath,
 } from "../../src/tools/execution/file-search.js";
 import { ERROR_CODE, ERROR_LEVEL } from "../../src/shared/errors/index.js";
@@ -47,16 +46,6 @@ test("toSearchRootRelativePath rejects escaping and forbidden rg paths", () => {
       rgFilePath,
     );
   }
-});
-
-test("searchInText marks truncated only when a match exists beyond maxResults", () => {
-  const input = { query: "hit", isRegex: false, caseSensitive: false, contextLines: 0 };
-  const exact = searchInText({ ...input, text: "hit\nhit\nmiss\n", maxResults: 2 });
-  assert.equal(exact.matches.length, 2);
-  assert.equal(exact.truncated, false);
-  const over = searchInText({ ...input, text: "hit\nhit\nhit\n", maxResults: 2 });
-  assert.equal(over.matches.length, 2);
-  assert.equal(over.truncated, true);
 });
 
 test("ripgrep file search does not mark truncated when matches equal maxResults", async () => {

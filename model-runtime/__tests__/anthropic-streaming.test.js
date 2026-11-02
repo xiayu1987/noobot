@@ -11,7 +11,7 @@ import {
   createProviderAdapterRegistry,
   normalizeModelOutput,
 } from "../src/index.js";
-import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
+import { MODEL_CONTEXT_SEQUENCE_POLICY, MODEL_RESPONSE_SOURCE } from "@noobot/model-protocol";
 
 const modelSpec = {
   model: "claude-opus-5",
@@ -183,7 +183,7 @@ for (const adapter of [openAiCompatibleAdapter, anthropicMessagesAdapter]) {
       );
     }
     controller.close();
-    assert.equal(normalizeModelOutput(await running).text, "你好");
+    assert.equal(normalizeModelOutput(await running, MODEL_RESPONSE_SOURCE.MESSAGE).text, "你好");
     assert.equal(ended, true);
   });
 }
@@ -217,7 +217,7 @@ test("Anthropic non-streaming stays non-streaming after tool binding and emits n
       },
     ],
   });
-  assert.equal(normalizeModelOutput(result).text, "done");
+  assert.equal(normalizeModelOutput(result, MODEL_RESPONSE_SOURCE.MESSAGE).text, "done");
   assert.deepEqual(tokens, []);
   assert.equal(ends, 1);
 });
@@ -261,7 +261,7 @@ test("Anthropic reconstructs text, signed thinking, tool JSON and usage across b
     thinking: "reason",
     signature: "signature",
   });
-  const output = normalizeModelOutput(result);
+  const output = normalizeModelOutput(result, MODEL_RESPONSE_SOURCE.MESSAGE);
   assert.equal(output.reasoning, "reason");
   assert.equal(output.finishReason, "tool_use");
   assert.deepEqual(output.toolCalls, [
@@ -327,6 +327,7 @@ const invocation = {
   requestId: "r",
   invocationId: "i",
   sessionId: "s",
+  parentSessionId: "",
   dialogProcessId: "d",
   turnScopeId: "t",
   runId: "run",

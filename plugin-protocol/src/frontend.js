@@ -165,6 +165,13 @@ function invalidExtensionContext(point, field) {
   });
 }
 
+export function invokeRuntimeStreamRoute(route, input) {
+  if (!isFunction(route)) throw new TypeError("invalid_runtime_stream_route");
+  const handled = route(input);
+  if (typeof handled !== "boolean") throw new TypeError("invalid_runtime_stream_route_result");
+  return handled;
+}
+
 export function requireRuntimeStreamRouteContext(context) {
   const point = EXTENSION_POINTS.RUNTIME_STREAM_ROUTE;
   if (!isPlainObject(context)) throw invalidExtensionContext(point, "context");

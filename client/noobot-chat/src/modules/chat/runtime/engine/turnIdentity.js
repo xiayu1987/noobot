@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { isEventProtocolEnvelope } from "@noobot/event-protocol";
-import { text } from "@noobot/shared/value";
+import { isCanonicalTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
+import { isCanonicalText } from "@noobot/shared/value";
 
 const TURN_KEY_PREFIX = "__turn__";
 
@@ -15,14 +15,21 @@ export function createTurnIdentity({
   dialogProcessId = "",
 } = {}) {
   const identity = Object.freeze({
-    sessionId: text(sessionId),
-    turnScopeId: text(turnScopeId),
-    dialogProcessId: text(dialogProcessId),
+    sessionId,
+    turnScopeId,
+    dialogProcessId,
   });
+  if (
+    (sessionId !== "" && !isCanonicalText(sessionId)) ||
+    (turnScopeId !== "" && !isCanonicalTurnScopeId(turnScopeId)) ||
+    (dialogProcessId !== "" && !isCanonicalText(dialogProcessId))
+  ) {
+    throw new TypeError("invalid_turn_identity");
+  }
   return identity;
 }
 
-function resolveEnvelopeTurnIdentity(value = {}) {
+export function resolveEnvelopeTurnIdentity(value) {
   return createTurnIdentity({
     sessionId: value?.identity?.sessionId,
     turnScopeId: value?.identity?.turnScopeId,
@@ -30,18 +37,12 @@ function resolveEnvelopeTurnIdentity(value = {}) {
   });
 }
 
-function resolveRecordTurnIdentity(value = {}, fallback = {}) {
+export function resolveTurnIdentity(value = {}) {
   return createTurnIdentity({
-    sessionId: value?.sessionId || fallback?.sessionId,
-    turnScopeId: value?.turnScopeId || value?.statusTurnScopeId || fallback?.turnScopeId,
-    dialogProcessId: value?.dialogProcessId || fallback?.dialogProcessId,
+    sessionId: value.sessionId,
+    turnScopeId: value.turnScopeId,
+    dialogProcessId: value.dialogProcessId,
   });
-}
-
-export function resolveTurnIdentity(value = {}, fallback = {}) {
-  return isEventProtocolEnvelope(value)
-    ? resolveEnvelopeTurnIdentity(value)
-    : resolveRecordTurnIdentity(value, fallback);
 }
 
 export function createTurnKey(identity = {}) {
@@ -51,11 +52,10 @@ export function createTurnKey(identity = {}) {
 }
 
 export function parseTurnKey(key = "") {
-  const normalized = text(key);
-  if (!normalized.startsWith(TURN_KEY_PREFIX)) return null;
-  const [encodedSessionId = "", encodedTurnScopeId = ""] = normalized
-    .slice(TURN_KEY_PREFIX.length)
-    .split("::");
+  if (!isCanonicalText(key) || !key.startsWith(TURN_KEY_PREFIX)) return null;
+  const parts = key.slice(TURN_KEY_PREFIX.length).split("::");
+  if (parts.length !== 2) return null;
+  const [encodedSessionId, encodedTurnScopeId] = parts;
   if (!encodedSessionId || !encodedTurnScopeId) return null;
   try {
     return createTurnIdentity({

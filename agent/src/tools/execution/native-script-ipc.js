@@ -30,16 +30,28 @@ export function isNativeScriptIpcMessage(value) {
   return Boolean(value) && typeof value === "object" && typeof value.type === "string";
 }
 
+export const NATIVE_SCRIPT_EXECUTION_STATUS = Object.freeze({
+  RETURNED: "returned",
+  FAILED: "failed",
+});
+
+function hasExactKeys(value, expected) {
+  const keys = Object.keys(value);
+  return keys.length === expected.length && expected.every((key) => Object.hasOwn(value, key));
+}
+
 export function isNativeScriptExecutionResult(value) {
-  const keys = value && typeof value === "object" ? Object.keys(value) : [];
-  return (
-    Boolean(value) &&
-    typeof value === "object" &&
-    typeof value.present === "boolean" &&
-    keys.length === (value.present ? 2 : 1) &&
-    keys.every((key) => key === "present" || key === "value") &&
-    (value.present ? Object.hasOwn(value, "value") : !Object.hasOwn(value, "value"))
-  );
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  if (value.status === NATIVE_SCRIPT_EXECUTION_STATUS.FAILED) {
+    return (
+      hasExactKeys(value, ["status", "error"]) &&
+      typeof value.error === "string" &&
+      value.error.trim() !== ""
+    );
+  }
+  if (value.status !== NATIVE_SCRIPT_EXECUTION_STATUS.RETURNED) return false;
+  if (value.present === true) return hasExactKeys(value, ["status", "present", "value"]);
+  return value.present === false && hasExactKeys(value, ["status", "present"]);
 }
 
 export function createPendingInteractionClock({ start, stop }) {

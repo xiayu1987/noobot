@@ -54,7 +54,7 @@ function onEventReceived(run, audit) {
   }
 }
 
-function recordDispatchFailure(run, committedEnvelope, dispatchContext, reason, delivered = 0) {
+function recordDispatchFailure({ run, committedEnvelope, dispatchContext, reason, delivered }) {
   const identity = committedEnvelope.identity || {};
   const payload = committedEnvelope.payload || {};
   void recordServiceWebSocketLifecycle({
@@ -75,50 +75,40 @@ function recordDispatchFailure(run, committedEnvelope, dispatchContext, reason, 
   });
 }
 
-async function dispatchCommittedTurn(context, run, envelope, dispatchContext) {
-  const identity = envelope.identity || {};
-  const payload = envelope.payload || {};
-  try {
-    const dispatch = await context.dispatchAuthorityEvents({
-      userId: payload.userId,
-      sessionId: identity.sessionId,
-      persistenceScope: dispatchContext.persistenceScope,
-    });
-    if (dispatch?.dispatched !== true) {
-      recordDispatchFailure(
-        run,
-        envelope,
-        dispatchContext,
-        dispatch?.reason || "authority_dispatcher_unavailable",
-        dispatch?.delivered,
-      );
-    }
-    return dispatch;
-  } catch (error) {
-    const reason = error?.message || "authority_dispatch_failed";
-    recordDispatchFailure(run, envelope, dispatchContext, reason);
-    return { dispatched: false, reason, delivered: 0 };
-  }
-}
-
-async function dispatchAuthorityEvent(context, run, active, envelope, dispatchContext) {
-  if (isTransientMessageEvent(envelope)) {
-    const sent = await publishRunEvent(active.runHandle, envelope.identity.eventType, envelope);
-    return { dispatched: true, delivered: sent === true ? 1 : 0 };
-  }
+async function dispatchPersistedEvent({ context, run, envelope, dispatchContext, publishEvent }) {
   const dispatch = await context.dispatchAuthorityEvents(
     {
       userId: run.userId,
       sessionId: envelope.identity.sessionId,
       persistenceScope: dispatchContext.persistenceScope,
     },
-    (...args) => publishRunEvent(active.runHandle, ...args),
+    publishEvent,
   );
   if (dispatch?.dispatched === true) return dispatch;
   const reason = dispatch?.reason || "authority_event_dispatch_failed";
   if (!REPLAYABLE_DISPATCH_FAILURES.has(reason)) throw new Error(reason);
-  recordDispatchFailure(run, envelope, dispatchContext, reason, dispatch?.delivered);
+  recordDispatchFailure({
+    run,
+    committedEnvelope: envelope,
+    dispatchContext,
+    reason,
+    delivered: dispatch?.delivered,
+  });
   return { ...dispatch, deliveryDegraded: true };
+}
+
+async function dispatchAuthorityEvent({ context, run, active, envelope, dispatchContext }) {
+  if (isTransientMessageEvent(envelope)) {
+    const sent = await publishRunEvent(active.runHandle, envelope.identity.eventType, envelope);
+    return { dispatched: true, delivered: sent === true ? 1 : 0 };
+  }
+  return dispatchPersistedEvent({
+    context,
+    run,
+    envelope,
+    dispatchContext,
+    publishEvent: (...args) => publishRunEvent(active.runHandle, ...args),
+  });
 }
 
 function startProcessing(context, run, accepted) {
@@ -192,9 +182,9 @@ export function createMessageRunEventListener(context, run, accepted, active) {
       ? (summary) => recordDeliveryTiming(run, summary)
       : null,
     onCommittedTurnLifecycle: (envelope, dispatchContext) =>
-      dispatchCommittedTurn(context, run, envelope, dispatchContext),
+      dispatchPersistedEvent({ context, run, envelope, dispatchContext }),
     onAuthorityEventCommitted: (envelope, dispatchContext) =>
-      dispatchAuthorityEvent(context, run, active, envelope, dispatchContext),
+      dispatchAuthorityEvent({ context, run, active, envelope, dispatchContext }),
     onRootRunning: createRootRunningHandler(context, run, accepted, lifecycle),
   });
   return { eventListener, lifecycle };

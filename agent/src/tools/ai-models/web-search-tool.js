@@ -245,7 +245,7 @@ export function createWebSearchTool({ agentContext }) {
       {
         name: TOOL_NAME.DO_SEARCH_WEB,
         description: tTool(runtime, "tools.do_search_web.description"),
-        schema: z.object({
+        schema: z.strictObject({
           query: z.string().describe(tTool(runtime, "tools.do_search_web.fieldQuery")),
         }),
       },

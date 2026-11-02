@@ -39,7 +39,6 @@ function logCardRender(stage) {
     dialogProcessId: payload.runMeta.dialogProcessId,
     turnScopeId: props.messageItem.turnScopeId,
     workflowRunId: payload.workflowRunId,
-    liveProjection: props.messageItem.__workflowLiveProjection === true,
     pluginPhase: props.messageItem.pluginMeta.phase,
     contentLength: content.length,
     assistantBodyPresent: Boolean(content.trim()),

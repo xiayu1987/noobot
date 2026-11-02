@@ -65,6 +65,10 @@ test("processing-start persistence rejection is observed while Agent execution i
     )?.data;
     assert.equal(receipt?.outcome, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED);
     assert.equal(receipt?.error?.code, "session_not_found");
+    assert.deepEqual(authoritative.committed(), [TURN_EVENT.ACTION_ACCEPTED, TURN_EVENT.FAILED]);
+    const failedTurn = authoritative.lifecycle().turns["turn-processing-rejected"];
+    assert.equal(failedTurn.state, "action_failed");
+    assert.equal(failedTurn.failure.code, "session_not_found");
     assert.deepEqual(Object.keys(receipt).sort(), [
       "commandId",
       "commandType",

@@ -38,6 +38,7 @@ class MockWebSocket {
 
 async function importClient() {
   vi.resetModules();
+  await import("@noobot/shared/testing/runtime-params");
   return import("../../../../src/infrastructure/websocket/sessionLogWebSocketClient.js");
 }
 

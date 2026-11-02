@@ -200,7 +200,7 @@ export function validateSecurityAssessment(value) {
   return Object.freeze({ valid: errors.length === 0, errors: Object.freeze(errors) });
 }
 
-function assertSecurityAssessment(value) {
+export function assertSecurityAssessment(value) {
   const validation = validateSecurityAssessment(value);
   if (!validation.valid) {
     throw new TypeError(`invalid security assessment: ${validation.errors.join(",")}`);

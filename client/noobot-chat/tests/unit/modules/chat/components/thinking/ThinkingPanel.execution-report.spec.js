@@ -161,6 +161,7 @@ describe("ThinkingPanel execution report", () => {
                 read_file: {
                   calls: 2,
                   failures: 0,
+                  nonZeroExits: 0,
                   timedCount: 2,
                   totalDurationMs: 400,
                   maxDurationMs: 300,
@@ -168,6 +169,7 @@ describe("ThinkingPanel execution report", () => {
                 execute: {
                   calls: 1,
                   failures: 1,
+                  nonZeroExits: 1,
                   timedCount: 1,
                   totalDurationMs: 3000,
                   maxDurationMs: 3000,
@@ -175,6 +177,7 @@ describe("ThinkingPanel execution report", () => {
                 search: {
                   calls: 1,
                   failures: 0,
+                  nonZeroExits: 0,
                   timedCount: 0,
                   totalDurationMs: 0,
                   maxDurationMs: 0,
@@ -235,9 +238,9 @@ describe("ThinkingPanel execution report", () => {
         ...item.findAll("dd").map((dd) => dd.text()),
       ]);
     expect(rows).toEqual([
-      ["execute", "1", "1", "3.0s", "3.0s", "3.0s"],
-      ["read_file", "2", "0", "400ms", "200ms", "300ms"],
-      ["search", "1", "0", "-", "-", "-"],
+      ["execute", "1", "1", "1", "3.0s", "3.0s", "3.0s"],
+      ["read_file", "2", "0", "0", "400ms", "200ms", "300ms"],
+      ["search", "1", "0", "0", "-", "-", "-"],
     ]);
     expect(drawer.find('[data-testid="execution-report-slowest"]').text()).toContain("execute");
     const subject = drawer.find('[data-testid="execution-report-slowest-subject"]');

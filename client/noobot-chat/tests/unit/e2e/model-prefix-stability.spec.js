@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from "vitest";
 import { auditModelPrefixStability } from "../../e2e/protocol/helpers/model-message-assertions.js";
-import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
+import { MODEL_CONTEXT_SEQUENCE_POLICY, MODEL_CONTEXT_TRACE } from "@noobot/model-protocol";
 
 function trace({
   id,
@@ -18,7 +18,7 @@ function trace({
   dialogProcessId = "dialog-1",
 } = {}) {
   return {
-    event: "model_context_trace",
+    event: MODEL_CONTEXT_TRACE.EVENT,
     sessionId: "session-1",
     parentSessionId: "",
     dialogProcessId,
@@ -26,7 +26,10 @@ function trace({
     data: {
       invocationId: id,
       invocation: { flow: "agent.main", purpose, domain: "primary", contextSequencePolicy },
-      context: { summaryCheckpointRevision: revision },
+      context:
+        contextSequencePolicy === MODEL_CONTEXT_SEQUENCE_POLICY.CHECKPOINT_APPEND_ONLY
+          ? { summaryCheckpointRevision: revision }
+          : undefined,
       messages: { fingerprints },
     },
   };

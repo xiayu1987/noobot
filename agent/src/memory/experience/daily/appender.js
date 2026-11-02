@@ -20,10 +20,11 @@ export async function appendDailyDomainResults({
   results = [],
   createdAt = "",
   fields,
+  locale,
 } = {}) {
   const normalizedResults = Array.isArray(results) ? results : [];
   if (!basePath || !normalizedResults.length) return false;
-  const schema = buildExperiencePatchSchema("daily", fields);
+  const schema = buildExperiencePatchSchema("daily", fields, locale);
   const dateKey = toDateKey(createdAt);
   const dayDir = storage.dailySummaryDateDir(basePath, dateKey);
   await storage.ensureDir(dayDir);

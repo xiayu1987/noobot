@@ -12,7 +12,7 @@ import {
 } from "../helpers/public-runtime-fixtures.js";
 
 import { ensureHarnessBucket } from "../../src/capabilities/handlers/shared/index.js";
-import { HARNESS_BUCKET_VERSION } from "../../src/capabilities/handlers/shared/constants.js";
+import { migrateHarnessBucket } from "../../src/core/bucket-migration.js";
 import {
   markContextMessageSummarized,
   resolveContextMessageSummarized,
@@ -35,16 +35,15 @@ test("ensureHarnessBucket fast-path keeps initialized references stable", async 
             planningRawOutputs: [],
             lastPlanningRawOutput: null,
             logs: { planning: [], guidance: [], acceptance: [], review: [] },
-            __harnessBucketVersion: HARNESS_BUCKET_VERSION,
+            __harnessBucketVersion: 11,
           },
         },
       },
     },
   };
   ensureTestAgentExecutionScope(ctx);
-  ctx.agentContext.bindings.extensions.harness.state.__harnessBucketVersion =
-    HARNESS_BUCKET_VERSION;
 
+  migrateHarnessBucket(ctx);
   const first = ensureHarnessBucket(ctx);
   assert.ok(first);
   const refs = {

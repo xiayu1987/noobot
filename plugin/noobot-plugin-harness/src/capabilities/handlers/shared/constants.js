@@ -60,21 +60,23 @@ export const GUIDANCE_WEB_TOOL_NAMES = [...WORKFLOW_PARAMS.guidance.web.toolName
 export const TASK_ACCEPTANCE_TOOL_NAME = WORKFLOW_PARAMS.acceptance.tools.taskAcceptanceToolName;
 export const PLAN_REFINEMENT_TOOL_NAME = WORKFLOW_PARAMS.planning.tools.planRefinementToolName;
 
-export const HARNESS_BUCKET_VERSION = 10;
+export const HARNESS_BUCKET_VERSION = 14;
 
 export const DEFAULT_HARNESS_COUNTERS = Object.freeze({
   llmTurns: 0,
   lastPlanningCounterTurn: 0,
+  lastGuidanceAnalysisCounterTurn: 0,
+  lastGuidanceSummaryCounterTurn: 0,
+  planningCaptureAttempts: 0,
+  summaryTurns: 0,
   analysisTurns: 0,
   planUpdateTurns: 0,
   phaseAcceptanceTurns: 0,
-  summaryRounds: 0,
   hookTurns: 0,
   consecutiveToolFailures: 0,
   totalToolFailures: 0,
   planRevisionAttempts: 0,
   planRefinementAttempts: 0,
-  planUpdateAttempts: 0,
 });
 
 export const DEFAULT_HARNESS_FLAGS = Object.freeze({

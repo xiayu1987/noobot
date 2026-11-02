@@ -8,6 +8,7 @@ import {
   MODEL_PROTOCOL_NAME,
   MODEL_PROTOCOL_VERSION,
   MODEL_REQUEST_STATUS,
+  MODEL_RESPONSE_SOURCE,
 } from "./constants.js";
 import { MODEL_OPERATION_KIND, normalizeModelOperationResult } from "./operation.js";
 import { MODEL_ADAPTER_ID } from "../model/model-adapter.js";
@@ -16,6 +17,14 @@ import { text } from "@noobot/shared/value";
 const MODEL_ATTEMPT_STATUSES = new Set(Object.values(MODEL_ATTEMPT_STATUS));
 const MODEL_ATTEMPT_KINDS = new Set(Object.values(MODEL_ATTEMPT_KIND));
 const MODEL_ADAPTER_IDS = new Set(Object.values(MODEL_ADAPTER_ID));
+const MODEL_RESPONSE_SOURCES = new Set(Object.values(MODEL_RESPONSE_SOURCE));
+
+export function requireModelResponseSource(value) {
+  if (!MODEL_RESPONSE_SOURCES.has(value)) {
+    throw new TypeError(`invalid model response source: ${text(value) || "missing"}`);
+  }
+  return value;
+}
 
 function normalizeModelExecutionProvider(provider = {}) {
   const adapterId = text(provider?.adapterId);

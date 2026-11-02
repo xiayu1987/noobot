@@ -3,7 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { asEventProtocolEnvelope, validateProtocolEvent } from "@noobot/event-protocol";
+import {
+  asEventProtocolEnvelope,
+  validateProtocolEvent,
+  EVENT_FAMILY,
+} from "@noobot/event-protocol";
 import { isTransientMessageEvent } from "@noobot/event-protocol/message-event";
 import { RUNTIME_EVENT_CATEGORIES } from "@noobot/runtime-events";
 import { STREAM_DELTA_DEBUG_TYPE } from "@noobot/shared/runtime-events-config";
@@ -13,7 +17,7 @@ import {
   hasAgentTransportNonEnvelopePayloadContract,
   validateAgentTransportNonEnvelopePayload,
 } from "@noobot/agent-transport-protocol";
-import { isTerminalTurnEvent, TURN_LIFECYCLE_WIRE_EVENT } from "@noobot/session-protocol";
+import { isTerminalTurnEvent } from "@noobot/session-protocol";
 import { recordServiceWebSocketSendFailure } from "./runtime-events.js";
 import { text } from "@noobot/shared/value";
 
@@ -65,33 +69,35 @@ function validateOutboundPayload(protocolEnvelope, eventName, data, logConnectio
   return false;
 }
 
-function resolveEventType(protocolEnvelope, data) {
-  if (protocolEnvelope) return text(protocolEnvelope.identity?.eventType);
-  return text(data?.eventType || data?.messageEvent?.eventType);
-}
-
-function createTransportDiagnostic({
-  protocolEnvelope,
-  data,
-  eventType,
-  transportContext,
-  webSocket,
-}) {
-  return {
-    eventId: text(protocolEnvelope?.identity?.eventId || data?.eventId),
-    eventType: eventType || text(protocolEnvelope?.identity?.eventType),
-    presentationMessageId: text(data?.presentationMessageId),
+function createTransportDiagnostic({ protocolEnvelope, eventName, transportContext, webSocket }) {
+  const diagnostic = {
+    eventType: eventName,
     runHandleId: text(transportContext?.runHandleId),
     bindingId: text(transportContext?.bindingId),
     readyState: webSocket.readyState,
   };
+  if (!protocolEnvelope) return diagnostic;
+  return {
+    ...diagnostic,
+    eventId: protocolEnvelope.identity.eventId,
+    eventType: protocolEnvelope.identity.eventType,
+    sessionId: protocolEnvelope.identity.sessionId,
+    turnScopeId: protocolEnvelope.identity.turnScopeId,
+    dialogProcessId: protocolEnvelope.payload.dialogProcessId,
+    parentSessionId: protocolEnvelope.payload.parentSessionId,
+    presentationMessageId: protocolEnvelope.payload.presentationMessageId,
+    lifecycleSequence: protocolEnvelope.ordering.sequence,
+  };
 }
 
-function classifyOutboundEvent(eventName, eventType) {
+function classifyOutboundEvent(protocolEnvelope) {
   return {
-    authorityEnvelope: false,
-    toolFrame: eventType === "tool_call_start" || eventType === "tool_call_end",
-    terminalLifecycle: eventName === TURN_LIFECYCLE_WIRE_EVENT && isTerminalTurnEvent(eventType),
+    toolFrame:
+      protocolEnvelope?.protocol.family === EVENT_FAMILY.MESSAGE_TIMELINE &&
+      ["tool_call_start", "tool_call_end"].includes(protocolEnvelope.payload.eventType),
+    terminalLifecycle:
+      protocolEnvelope?.protocol.family === EVENT_FAMILY.TURN_LIFECYCLE &&
+      isTerminalTurnEvent(protocolEnvelope.payload.eventType),
   };
 }
 
@@ -99,7 +105,6 @@ function logRejectedTransport({
   logConnection,
   eventName,
   eventType,
-  data,
   readyState,
   transportDiagnostic,
   toolFrame,
@@ -111,9 +116,7 @@ function logRejectedTransport({
       eventName,
       eventType,
       readyState,
-      sessionId: data?.sessionId,
-      dialogProcessId: data?.dialogProcessId,
-      turnScopeId: data?.turnScopeId,
+      ...transportDiagnostic,
     });
   }
   if (authorityEnvelope) {
@@ -124,13 +127,7 @@ function logRejectedTransport({
   }
   if (terminalLifecycle) {
     logConnection("service.authorityOutbox.terminalSendRejected", {
-      eventId: data?.eventId,
-      eventType,
-      sequence: Number(data?.sequence || 0),
-      sessionId: data?.sessionId,
-      parentSessionId: data?.parentSessionId,
-      dialogProcessId: data?.dialogProcessId,
-      turnScopeId: data?.turnScopeId,
+      ...transportDiagnostic,
       readyState,
     });
   }
@@ -140,7 +137,6 @@ function logSuccessfulTransport({
   logConnection,
   eventName,
   eventType,
-  payload,
   sequence,
   readyState,
   transportDiagnostic,
@@ -154,9 +150,7 @@ function logSuccessfulTransport({
       eventName,
       eventType,
       seq: sequence,
-      sessionId: payload.sessionId,
-      dialogProcessId: payload.dialogProcessId,
-      turnScopeId: payload.turnScopeId,
+      ...transportDiagnostic,
     });
   }
   if (authorityEnvelope) {
@@ -173,25 +167,19 @@ function logSuccessfulTransport({
   }
   if (terminalLifecycle) {
     logConnection("service.authorityOutbox.terminalSent", {
-      eventId: payload.eventId,
-      eventType,
-      lifecycleSequence: Number(payload.sequence || 0),
+      ...transportDiagnostic,
       transportSequence: sequence,
-      sessionId: payload.sessionId,
-      parentSessionId: payload.parentSessionId,
-      dialogProcessId: payload.dialogProcessId,
-      turnScopeId: payload.turnScopeId,
     });
   }
 }
 
-function recordSendFailure({ state, eventName, payload, error }) {
+function recordSendFailure({ state, eventName, transportDiagnostic, error }) {
   void recordServiceWebSocketSendFailure({
     eventName: text(eventName),
     userId: state.currentRunMeta?.userId || "",
-    dialogProcessId: payload.dialogProcessId,
-    sessionId: payload.sessionId,
-    turnScopeId: payload.turnScopeId,
+    dialogProcessId: transportDiagnostic.dialogProcessId,
+    sessionId: transportDiagnostic.sessionId,
+    turnScopeId: transportDiagnostic.turnScopeId,
     error,
   });
 }
@@ -249,16 +237,15 @@ export function createOutboundEventSender({ webSocket, state, logConnection }) {
   return function sendEvent(eventName, data, transportContext = {}) {
     const protocolEnvelope = getProtocolEnvelope(data);
     if (!validateOutboundPayload(protocolEnvelope, eventName, data, logConnection)) return false;
-    const eventType = resolveEventType(protocolEnvelope, data);
     const transportDiagnostic = createTransportDiagnostic({
       protocolEnvelope,
-      data,
-      eventType,
+      eventName,
       transportContext,
       webSocket,
     });
+    const eventType = transportDiagnostic.eventType;
     const classification = {
-      ...classifyOutboundEvent(eventName, eventType),
+      ...classifyOutboundEvent(protocolEnvelope),
       authorityEnvelope: Boolean(protocolEnvelope),
       transientDelta: Boolean(protocolEnvelope) && isTransientMessageEvent(protocolEnvelope),
     };
@@ -267,7 +254,6 @@ export function createOutboundEventSender({ webSocket, state, logConnection }) {
         logConnection,
         eventName,
         eventType,
-        data,
         readyState: webSocket.readyState,
         transportDiagnostic,
         ...classification,
@@ -278,7 +264,6 @@ export function createOutboundEventSender({ webSocket, state, logConnection }) {
     const eventContext = {
       eventName,
       eventType,
-      payload: data,
       sequence,
       transportDiagnostic,
       ...classification,

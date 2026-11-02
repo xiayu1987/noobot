@@ -46,6 +46,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     test: {
+      setupFiles: ["../../shared/testing/runtime-params.js"],
       environment: "jsdom",
       include: [
         "tests/unit/**/*.spec.js",

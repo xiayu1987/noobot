@@ -39,15 +39,8 @@ function snapshotError(message, code) {
   return error;
 }
 
-export async function readVerifiedSnapshot({
-  storageService,
-  sessionDir,
-  index,
-  previousCheckpointHash,
-}) {
-  const file = index.file;
-  const artifactPath = resolveSummarySnapshotPath(sessionDir, file);
-  const identityBeforeRead = await readFileIdentity(artifactPath).catch((error) => {
+async function readRegisteredSnapshotIdentity(artifactPath, file) {
+  return readFileIdentity(artifactPath).catch((error) => {
     if (!isMissingPersistencePathError(error)) throw error;
 
     const failure = snapshotError(
@@ -57,41 +50,74 @@ export async function readVerifiedSnapshot({
     failure.cause = error;
     throw failure;
   });
-  const cached = verifiedSnapshotCache.get(artifactPath, index.contentHash, identityBeforeRead);
-  const payload = cached || (await readJsonWithStorage({ storageService, artifactPath }));
+}
+
+function assertSnapshotLinksIndex(snapshot, index, previousCheckpointHash) {
+  if (
+    snapshot.previousCheckpointHash !== previousCheckpointHash ||
+    snapshot.checkpointId !== index.checkpointId ||
+    snapshot.checkpointRevision !== index.checkpointRevision
+  ) {
+    throw snapshotError(
+      `summary snapshot does not match its manifest index: ${index.file}`,
+      SESSION_ERROR_CODE.SUMMARY_SNAPSHOT_INDEX_MISMATCH,
+    );
+  }
+}
+
+async function verifySnapshotFromDisk({ storageService, artifactPath, index, identity }) {
+  const payload = await readJsonWithStorage({ storageService, artifactPath });
   if (
     !isPlainObject(payload) ||
     payload.schemaVersion !== SESSION_ARTIFACT_SUMMARY_SNAPSHOT_SCHEMA_VERSION ||
     !Array.isArray(payload.records) ||
-    Object.hasOwn(payload, "messages") ||
-    payload.previousCheckpointHash !== previousCheckpointHash ||
-    payload.checkpointId !== index.checkpointId ||
-    payload.checkpointRevision !== index.checkpointRevision
+    Object.hasOwn(payload, "messages")
   ) {
     throw snapshotError(
-      `summary snapshot does not match its manifest index: ${file}`,
+      `summary snapshot does not match its manifest index: ${index.file}`,
       SESSION_ERROR_CODE.SUMMARY_SNAPSHOT_INDEX_MISMATCH,
     );
   }
-  if (!cached && summarySnapshotContentHash(payload) !== index.contentHash) {
+  if (summarySnapshotContentHash(payload) !== index.contentHash) {
     throw snapshotError(
-      `summary snapshot hash mismatch: ${file}`,
+      `summary snapshot hash mismatch: ${index.file}`,
       SESSION_ERROR_CODE.SUMMARY_SNAPSHOT_HASH_MISMATCH,
     );
   }
-
-  if (!cached) {
-    assertIncrementalJournalRecords(payload.records, artifactPath);
-    const identityAfterRead = await readFileIdentity(artifactPath);
-    if (identityBeforeRead.key !== identityAfterRead.key) {
-      throw snapshotError(
-        `summary snapshot changed during verification: ${file}`,
-        SESSION_ERROR_CODE.SUMMARY_SNAPSHOT_HASH_MISMATCH,
-      );
-    }
-    verifiedSnapshotCache.retain(artifactPath, index.contentHash, identityBeforeRead, payload);
+  assertIncrementalJournalRecords(payload.records, artifactPath);
+  const identityAfterRead = await readFileIdentity(artifactPath);
+  if (identity.key !== identityAfterRead.key) {
+    throw snapshotError(
+      `summary snapshot changed during verification: ${index.file}`,
+      SESSION_ERROR_CODE.SUMMARY_SNAPSHOT_HASH_MISMATCH,
+    );
   }
-  return { payload, identity: identityBeforeRead };
+  return verifiedSnapshotCache.retain(artifactPath, index.contentHash, identity, payload);
+}
+
+async function readVerifiedTier(
+  tier,
+  { storageService, sessionDir, index, previousCheckpointHash },
+) {
+  const artifactPath = resolveSummarySnapshotPath(sessionDir, index.file);
+  const identity = await readRegisteredSnapshotIdentity(artifactPath, index.file);
+  const verified =
+    verifiedSnapshotCache[tier](artifactPath, index.contentHash, identity) ||
+    (await verifySnapshotFromDisk({ storageService, artifactPath, index, identity }))[tier];
+  assertSnapshotLinksIndex(verified, index, previousCheckpointHash);
+  return { [tier]: verified, identity };
+}
+
+export async function readVerifiedCheckpointIdentity(options) {
+  return (await readVerifiedTier("checkpoint", options)).checkpoint;
+}
+
+export async function readVerifiedSnapshot(options) {
+  return readVerifiedTier("payload", options);
+}
+
+export function forgetVerifiedSnapshot(sessionDir, file) {
+  verifiedSnapshotCache.forget(resolveSummarySnapshotPath(sessionDir, file));
 }
 
 function sameLink(link, index) {

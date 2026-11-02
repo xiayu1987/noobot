@@ -432,6 +432,31 @@ export async function upsertTurnTiming({
   );
 }
 
+function assertReusedTurnAttachments({ committed, prepared, sessionId }) {
+  const committedAttachments = dedupeAttachments(committed);
+  const preparedAttachments = dedupeAttachments(prepared);
+  const committedIdentities = projectCanonicalAttachmentIdentities(committedAttachments, sessionId);
+  const preparedIdentities = projectCanonicalAttachmentIdentities(preparedAttachments, sessionId);
+  if (JSON.stringify(committedIdentities) !== JSON.stringify(preparedIdentities)) {
+    throw new TypeError("reused Turn attachments do not match Session authority");
+  }
+  const immutableFields = [
+    "attachmentId",
+    "sessionId",
+    "attachmentSource",
+    "path",
+    "relativePath",
+    "contentSha256",
+  ];
+  const changed = committedAttachments.some((attachment, index) =>
+    immutableFields.some(
+      (field) =>
+        String(attachment?.[field] ?? "") !== String(preparedAttachments[index]?.[field] ?? ""),
+    ),
+  );
+  if (changed) throw new TypeError("reused Turn attachments do not match Session authority");
+}
+
 export async function assertReusedUserTurnIdentity({
   userId,
   sessionId,
@@ -464,37 +489,11 @@ export async function assertReusedUserTurnIdentity({
     throw new TypeError("reused Turn dialogProcessId does not match Session authority");
   }
   if (Array.isArray(attachments)) {
-    const committedAttachments = dedupeAttachments(targetMessage.attachments);
-    const preparedAttachments = dedupeAttachments(attachments);
-    const immutableFields = [
-      "attachmentId",
-      "sessionId",
-      "attachmentSource",
-      "path",
-      "relativePath",
-      "contentSha256",
-    ];
-    const committedAttachmentIdentities = projectCanonicalAttachmentIdentities(
-      committedAttachments,
+    assertReusedTurnAttachments({
+      committed: targetMessage.attachments,
+      prepared: attachments,
       sessionId,
-    );
-    const preparedAttachmentIdentities = projectCanonicalAttachmentIdentities(
-      preparedAttachments,
-      sessionId,
-    );
-    if (
-      JSON.stringify(committedAttachmentIdentities) !== JSON.stringify(preparedAttachmentIdentities)
-    ) {
-      throw new TypeError("reused Turn attachments do not match Session authority");
-    }
-    for (const [index, committed] of committedAttachments.entries()) {
-      const prepared = preparedAttachments[index];
-      for (const field of immutableFields) {
-        if (String(committed?.[field] ?? "") !== String(prepared?.[field] ?? "")) {
-          throw new TypeError("reused Turn attachments do not match Session authority");
-        }
-      }
-    }
+    });
   }
   return {
     asserted: true,

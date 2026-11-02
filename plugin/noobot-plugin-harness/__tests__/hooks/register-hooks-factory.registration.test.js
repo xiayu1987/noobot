@@ -7,7 +7,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createRegisterHarnessHooks } from "../../src/core/hooks.js";
-import { invokeTestHookHandler } from "../helpers/public-runtime-fixtures.js";
+import {
+  createTestResolveModelMessages,
+  createTestHookContext,
+  invokeTestHookHandler,
+} from "../helpers/public-runtime-fixtures.js";
 
 test("createRegisterHarnessHooks wires trace/flush handlers and executes success flow", async () => {
   const calls = [];
@@ -48,6 +52,7 @@ test("createRegisterHarnessHooks wires trace/flush handlers and executes success
   });
 
   const options = {
+    resolveModelMessages: createTestResolveModelMessages(),
     tracePriority: 20,
     timeoutMs: 1000,
     planningGuidanceMode: "inject",
@@ -84,7 +89,7 @@ test("createRegisterHarnessHooks wires trace/flush handlers and executes success
   const traceResult = await invokeTestHookHandler(
     handlers.get("agent.before_llm_call").handler,
     "agent.before_llm_call",
-    { userId: "u1" },
+    createTestHookContext({ userId: "u1" }),
     hookAbortController.signal,
   );
   assert.deepEqual(traceResult, { fsmState: "planning", fsmRejected: false });
@@ -144,6 +149,7 @@ test("createRegisterHarnessHooks emits hook_error and rethrows when trace handle
   registerHarnessHooks({
     hookManager,
     options: {
+      resolveModelMessages: createTestResolveModelMessages(),
       tracePriority: 20,
       timeoutMs: 1000,
       planningGuidanceMode: "inject",

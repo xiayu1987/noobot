@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { DEVELOPMENT_THRESHOLDS } from "./lib/development-thresholds.mjs";
 import {
   addHit,
   defineCheck,
@@ -13,7 +14,7 @@ import { readRepositoryText, repositoryRoot } from "./quality/repository-files.m
 import { getFirstPartyCodeFiles } from "./quality/source-inventory.mjs";
 import { countEffectiveCodeLines } from "./quality/effective-line-count.mjs";
 
-const MAX_EFFECTIVE_LINES = 800;
+const MAX_EFFECTIVE_LINES = DEVELOPMENT_THRESHOLDS.quantity.maxEffectiveLines;
 
 async function measure() {
   const measured = emptyRuleMeasurements(CHECK);

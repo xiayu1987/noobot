@@ -12,7 +12,6 @@ export function createRuntimeConfigService({
   readWorkspaceConfigParams,
   globalConfigBuilder,
   BotManager,
-  setApiKeyTtlMs,
   setGlobalConfigRaw,
   setGlobalConfig,
   setBot,
@@ -29,7 +28,6 @@ export function createRuntimeConfigService({
 
     const persistedGlobalConfig = builtConfig?.persistedConfig;
     const resolvedGlobalConfig = builtConfig?.resolvedConfig || {};
-    setApiKeyTtlMs(Number(resolvedGlobalConfig?.auth?.apiKeyTtlMs || 24 * 60 * 60 * 1000));
     const pluginRuntimeBundle = await createSessionPluginRuntimeBundle({
       pluginRootDir: startupContext.paths.pluginRootDir,
     });

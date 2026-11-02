@@ -270,7 +270,7 @@ export function createHelpTool({ agentContext } = {}) {
     {
       name: HELP_TOOL_NAME,
       description: tTool(runtime, "tools.help.description"),
-      schema: z.object({
+      schema: z.strictObject({
         command: z.string().optional().describe(tTool(runtime, "tools.help.fieldCommand")),
       }),
     },

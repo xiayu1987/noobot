@@ -3,6 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { timingSafeEqual } from "node:crypto";
 import { text } from "@noobot/shared/value";
 
@@ -78,7 +80,10 @@ export function buildSecurityHeaders() {
   };
 }
 
-export function createFixedWindowRateLimiter({ windowMs = 60000, maxRequests = 100 } = {}) {
+export function createFixedWindowRateLimiter({
+  windowMs = TIME_THRESHOLDS.agentProxy.fixedWindowMs,
+  maxRequests = QUANTITY_THRESHOLDS.agentProxy.fixedWindowMaxRequests,
+} = {}) {
   const buckets = new Map();
 
   return {

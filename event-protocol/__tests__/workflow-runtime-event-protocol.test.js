@@ -10,6 +10,7 @@ import { getEventFamily } from "@noobot/event-protocol";
 import { MESSAGE_REMOVED_FIELD_NAME, createTurnLifecycleSnapshot } from "@noobot/session-protocol";
 import {
   compareWorkflowRuntimeFacts,
+  projectWorkflowPlanningNodeFact,
   createWorkflowRuntimeEnvelope,
   validateWorkflowRuntimeEnvelope,
   WORKFLOW_RUNTIME_EVENT,
@@ -17,6 +18,27 @@ import {
   workflowSessionSnapshotEventId,
   selectWorkflowNodeChildExecutionIds,
 } from "@noobot/event-protocol/workflow-runtime-event";
+
+test("planning projects node ordering facts without using the planning sequence", () => {
+  const nodeSession = {
+    nodeExecutionId: "node-1",
+    eventId: "node-event-1",
+    status: "running",
+    revision: 2,
+    sequence: 3,
+    activeChildExecutionId: "",
+    attemptExecutionIds: [],
+  };
+  const fact = projectWorkflowPlanningNodeFact({
+    nodeSession,
+    eventData: { authoritySessionId: "root-1", workflowRunId: "run-1", sequence: 99 },
+  });
+  assert.equal(fact.sequence, 3);
+  assert.equal(fact.eventId, "node-event-1");
+  assert.equal(fact.sequenceDomain, WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE);
+  assert.equal(compareWorkflowRuntimeFacts({ ...fact, revision: 3 }, fact).order, 1);
+  assert.equal(Object.hasOwn(nodeSession, "sequenceDomain"), false);
+});
 
 test("constructs the canonical workflow snapshot envelope at its producing boundary", () => {
   const envelope = createWorkflowRuntimeEnvelope({

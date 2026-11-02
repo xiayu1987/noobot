@@ -53,6 +53,22 @@ function createReport() {
 }
 
 describe("executionReportModel persistence timing", () => {
+  it("shows command non-zero exits separately from tool failures", () => {
+    const report = createReport();
+    report.summary.metrics.tools.toolStats = {
+      execute_script: {
+        calls: 3,
+        failures: 1,
+        nonZeroExits: 2,
+        timedCount: 3,
+        totalDurationMs: 30,
+        maxDurationMs: 10,
+      },
+    };
+    const [row] = buildExecutionReportView(report, translate).tools;
+    expect(row.failures).toBe(1);
+    expect(row.nonZeroExits).toBe(2);
+  });
   it("shows execution, framework and shared projection time when present", () => {
     const report = createReport();
     Object.assign(report.summary.metrics.tools, { totalExecutionMs: 3000, totalFrameworkMs: 4000 });

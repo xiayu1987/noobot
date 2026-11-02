@@ -11,28 +11,30 @@ let nextRunHandleId = 0;
 let nextTransportBindingId = 0;
 
 function initializeInterjectionQueue(handle) {
-  if (!Array.isArray(handle.userInterjectionQueue)) handle.userInterjectionQueue = [];
-  if (!(handle.userInterjectionCommandIds instanceof Set)) {
-    handle.userInterjectionCommandIds = new Set();
-  }
-  if (typeof handle.userInterjectionQueueOpen !== "boolean") {
-    handle.userInterjectionQueueOpen = true;
-  }
-  if (!handle.userInterjectionConsumptionTail) {
-    handle.userInterjectionConsumptionTail = Promise.resolve();
-  }
-  if (!handle.userInterjectionAcceptanceTail) {
-    handle.userInterjectionAcceptanceTail = Promise.resolve();
-  }
-  if (!(handle.userInterjectionAcceptanceByCommandId instanceof Map)) {
-    handle.userInterjectionAcceptanceByCommandId = new Map();
-  }
-  if (!Number.isInteger(handle.userInterjectionPendingAcceptanceCount)) {
-    handle.userInterjectionPendingAcceptanceCount = 0;
-  }
-  if (!Number.isInteger(handle.userInterjectionSequence)) {
-    handle.userInterjectionSequence = 0;
-  }
+  handle.userInterjectionQueue = [];
+  handle.userInterjectionCommandIds = new Set();
+  handle.userInterjectionQueueOpen = true;
+  handle.userInterjectionConsumptionTail = Promise.resolve();
+  handle.userInterjectionAcceptanceTail = Promise.resolve();
+  handle.userInterjectionAcceptanceByCommandId = new Map();
+  handle.userInterjectionPendingAcceptanceCount = 0;
+  handle.userInterjectionSequence = 0;
+}
+
+function requireInterjectionQueue(handle) {
+  const valid = [
+    Array.isArray(handle.userInterjectionQueue),
+    handle.userInterjectionCommandIds instanceof Set,
+    typeof handle.userInterjectionQueueOpen === "boolean",
+    handle.userInterjectionConsumptionTail instanceof Promise,
+    handle.userInterjectionAcceptanceTail instanceof Promise,
+    handle.userInterjectionAcceptanceByCommandId instanceof Map,
+    Number.isSafeInteger(handle.userInterjectionPendingAcceptanceCount),
+    handle.userInterjectionPendingAcceptanceCount >= 0,
+    Number.isSafeInteger(handle.userInterjectionSequence),
+    handle.userInterjectionSequence >= 0,
+  ];
+  if (!valid.every(Boolean)) throw new TypeError("invalid_run_interjection_state");
 }
 
 export function normalizeRunIdentityPart(value = "") {
@@ -67,8 +69,9 @@ export function registerActiveRun(handle = {}) {
       configurable: false,
       writable: false,
     });
+    initializeInterjectionQueue(handle);
   }
-  initializeInterjectionQueue(handle);
+  requireInterjectionQueue(handle);
   const keys = buildRunRegistryKeys(handle);
   handle.registryKeys = [...new Set([...(handle.registryKeys || []), ...keys])];
   for (const key of keys) activeRunRegistry.set(key, handle);
@@ -76,7 +79,7 @@ export function registerActiveRun(handle = {}) {
 }
 
 export function enqueueUserInterjection(handle = {}, interjection = {}, commitAuthority) {
-  initializeInterjectionQueue(handle);
+  requireInterjectionQueue(handle);
   if (!handle.userInterjectionQueueOpen) {
     const error = new Error("active turn is stopping");
     error.code = "active_turn_stopping";
@@ -125,12 +128,12 @@ export function enqueueUserInterjection(handle = {}, interjection = {}, commitAu
 }
 
 export function closeUserInterjectionQueue(handle = {}) {
-  initializeInterjectionQueue(handle);
+  requireInterjectionQueue(handle);
   handle.userInterjectionQueueOpen = false;
 }
 
 export function sealUserInterjectionQueueIfEmpty(handle = {}) {
-  initializeInterjectionQueue(handle);
+  requireInterjectionQueue(handle);
   if (!handle.userInterjectionQueueOpen) return true;
   if (handle.userInterjectionQueue.length || handle.userInterjectionPendingAcceptanceCount > 0) {
     return false;
@@ -140,8 +143,8 @@ export function sealUserInterjectionQueueIfEmpty(handle = {}) {
 }
 
 export function consumeUserInterjections(handle = {}, consumer) {
-  initializeInterjectionQueue(handle);
-  if (typeof consumer !== "function") {
+  requireInterjectionQueue(handle);
+  if (!isFunction(consumer)) {
     return Promise.reject(new TypeError("user interjection consumer is required"));
   }
   const consume = async () => {
@@ -166,12 +169,15 @@ export function consumeUserInterjections(handle = {}, consumer) {
   return result;
 }
 
-export function attachRunTransport(handle = {}, send = null, { onDiagnostic = null } = {}) {
-  if (!handle || typeof send !== "function") return null;
+export function attachRunTransport(handle, send, { onDiagnostic = null } = {}) {
+  if (!handle || !isFunction(send)) throw new TypeError("run transport requires a handle and send");
+  if (onDiagnostic !== null && !isFunction(onDiagnostic)) {
+    throw new TypeError("run transport onDiagnostic must be a function or null");
+  }
   const binding = Object.freeze({
     id: `run-transport-${++nextTransportBindingId}`,
     send,
-    onDiagnostic: typeof onDiagnostic === "function" ? onDiagnostic : null,
+    onDiagnostic,
   });
   handle.transportBinding = binding;
   return binding;
@@ -187,17 +193,15 @@ export function isRunTransportAttached(handle = {}, binding = null) {
   return Boolean(handle && binding && handle.transportBinding === binding);
 }
 
-export async function publishRunEvent(handle = {}, eventName, data = {}) {
-  const binding = handle?.transportBinding;
+export async function publishRunEvent(handle, eventName, data) {
+  const binding = handle.transportBinding;
   const diagnostic = {
-    eventId: text(data?.event?.eventId || data?.eventId),
-    eventType: text(data?.event?.eventType || data?.eventType || eventName),
-    presentationMessageId: text(data?.event?.presentationMessageId || data?.presentationMessageId),
+    eventName,
     runHandleId: text(handle?.runHandleId),
     bindingId: text(binding?.id),
     bindingCurrent: Boolean(binding && handle?.transportBinding === binding),
   };
-  if (!binding || typeof binding.send !== "function") return false;
+  if (!binding) return false;
   binding.onDiagnostic?.({ ...diagnostic, stage: "publish_started" });
   try {
     const delivered =

@@ -14,6 +14,7 @@ let directory;
 afterEach(async () => {
   vi.unstubAllEnvs();
   vi.resetModules();
+  await import("@noobot/shared/testing/runtime-params");
   if (directory) await fs.rm(directory, { recursive: true, force: true });
 });
 

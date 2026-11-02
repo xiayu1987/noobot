@@ -494,7 +494,12 @@ test("workflow hook in before_agent_dispatch mode can request skipping main agen
             revision: 4,
             sequence: 4,
           },
-          result: { messages: [{ role: "assistant", content: "done" }] },
+          result: {
+            answer: "done",
+            traces: [],
+            dialogProcessId: payload.strategy.dialogProcessId,
+            messages: [{ messageUid: "message-done", role: "assistant", content: "done" }],
+          },
         };
       },
     },
@@ -568,8 +573,8 @@ test("workflow plugin cleans workflow runtime dirs when session is deleted", asy
       basePath: tempRoot,
     });
 
-    assert.deepEqual(cleanupResult.deletedRelatedSessionIds, ["workflow-node-session"]);
-    assert.deepEqual(cleanupResult.retainedRelatedSessionIds, ["retained-workflow-node-session"]);
+    assert.deepEqual(cleanupResult.deletedRelatedSessionIds, []);
+    assert.deepEqual(cleanupResult.retainedRelatedSessionIds, []);
     await assert.rejects(
       fs.stat(path.join(tempRoot, "runtime/plugin-data/workflow/session/s-delete")),
     );

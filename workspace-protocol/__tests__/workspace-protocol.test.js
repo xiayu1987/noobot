@@ -48,6 +48,11 @@ test("plugin data path rejects traversal and invalid segments", () => {
   assert.throws(() => resolvePluginDataRelativePath("..", "x"), TypeError);
   assert.throws(() => resolvePluginDataRelativePath("workflow", "a/b"), TypeError);
   assert.equal(isWorkspacePathSegment("a..b"), false);
+  for (const segment of [1, null, undefined, {}, ["session"], " session", "session "]) {
+    assert.equal(isWorkspacePathSegment(segment), false);
+    assert.throws(() => resolvePluginDataRelativePath("workflow", segment), TypeError);
+    assert.throws(() => resolvePluginDataRelativePath(segment, "session"), TypeError);
+  }
 });
 
 test("sections normalize and reject unknown names", () => {

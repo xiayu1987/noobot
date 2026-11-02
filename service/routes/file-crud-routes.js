@@ -87,6 +87,7 @@ export function registerFileCrudRoutes(
     resolveMutationRoot = null,
     trackMutations = false,
     readMutations = false,
+    authorizeWrite = null,
   } = {},
 ) {
   const keys = { ...DEFAULT_I18N_KEYS, ...i18nKeys };
@@ -241,6 +242,7 @@ export function registerFileCrudRoutes(
             rename,
             remove: rm,
           });
+        if (authorizeWrite) await authorizeWrite(req, absolutePath);
         const result = trackMutations
           ? await applyFileMutation({
               filePath: absolutePath,

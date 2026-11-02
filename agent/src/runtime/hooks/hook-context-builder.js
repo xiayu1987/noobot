@@ -15,7 +15,7 @@ import {
   validateHookContextProtocol,
 } from "@noobot/context-protocol/assembly/hook-context";
 import { emitAgentContextProtocolDebug } from "../../observability/agent-context-protocol-debug.js";
-import { HOOK_POINT } from "@noobot/hook-protocol";
+import { HOOK_POINT, requireHookTurn } from "@noobot/hook-protocol";
 import { readActiveModelContext } from "../active-model-context.js";
 import { isPlainObject, text } from "@noobot/shared/value";
 
@@ -68,7 +68,10 @@ function normalizeHookFields(point, safeRaw, hookFields) {
     ...pickNullable(safeRaw, ["phase", "status", "startedAt", "endedAt"]),
     durationMs: toFiniteNumberOrNull(safeRaw?.durationMs),
     ...pickNullable(safeRaw, ["agentContext", "result", "error"]),
-    turn: toFiniteNumberOrNull(safeRaw?.turn),
+    turn:
+      point === HOOK_POINT.AGENT.BEFORE_LLM_CALL
+        ? requireHookTurn(safeRaw)
+        : (safeRaw.turn ?? null),
     mode: safeRaw?.mode ? String(safeRaw.mode) : null,
     ...normalizeToolCallFields(safeRaw),
     ...pickNullable(safeRaw, ["payload"]),

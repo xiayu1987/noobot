@@ -48,9 +48,9 @@ function tCheckInput(agentContext = {}, key = "") {
   return tTool(getRuntimeFromAgentContext(agentContext), keyMap[text(key)] || "");
 }
 
-function resolveToolPathErrorText(agentContext = {}, resolution = {}, fieldName = "filePath") {
+function resolveToolPathErrorText(agentContext, resolution, fieldName) {
   const keyMap = {
-    [TOOL_PATH_RESOLUTION_ERROR.EMPTY_PATH]: "tools.file.pathErrorRequired",
+    [TOOL_PATH_RESOLUTION_ERROR.EMPTY_PATH]: "tools.input.fieldRequired",
     [TOOL_PATH_RESOLUTION_ERROR.HOST_ABSOLUTE_NOT_ALLOWED]:
       "tools.file.pathErrorHostAbsoluteNotAllowed",
     [TOOL_PATH_RESOLUTION_ERROR.SANDBOX_PATH_NOT_ALLOWED]: "tools.file.pathErrorSandboxNotAllowed",

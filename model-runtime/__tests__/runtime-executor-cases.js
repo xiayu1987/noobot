@@ -12,8 +12,10 @@ import {
 } from "../src/index.js";
 import {
   MODEL_CONTEXT_SEQUENCE_POLICY,
+  MODEL_CONTEXT_TRACE,
   MODEL_ERROR_KIND,
   MODEL_OPERATION_KIND,
+  MODEL_RESPONSE_SOURCE,
   validateModelResponse,
 } from "@noobot/model-protocol";
 
@@ -81,6 +83,7 @@ test("streaming mode retries once in the opposite direction and caches the succe
     classifyError: () => ({ retryable: false, kind: MODEL_ERROR_KIND.UNKNOWN }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: ({ streaming }) => {
       requestedModes.push(streaming);
       return {
@@ -123,6 +126,7 @@ test("non-streaming preference also falls back to streaming and caches it", asyn
     classifyError: () => ({ retryable: false, kind: MODEL_ERROR_KIND.UNKNOWN }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: ({ streaming }) => {
       requestedModes.push(streaming);
       return {
@@ -149,6 +153,7 @@ test("explicit model errors do not trigger an opposite streaming mode", async ()
     classifyError: () => ({ retryable: false, kind: MODEL_ERROR_KIND.AUTHENTICATION }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: ({ streaming }) => {
       requestedModes.push(streaming);
       return {
@@ -176,6 +181,7 @@ test("streaming mode is not retried after output has started", async () => {
     classifyError: () => ({ retryable: false, kind: MODEL_ERROR_KIND.UNKNOWN }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: ({ streaming }) => {
       requestedModes.push(streaming);
       return {
@@ -212,6 +218,7 @@ test("caller abort rethrows the frozen abort reason unchanged without any retry"
     classifyError: () => ({ retryable: true, kind: MODEL_ERROR_KIND.UNKNOWN }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: ({ streaming }) => {
       requestedModes.push(streaming);
       return {
@@ -251,9 +258,10 @@ test("executor is the single attempt and retry authority", async () => {
   let attempts = 0;
   const adapter = {
     id: "openai-compatible",
-    classifyError: () => ({ retryable: true }),
+    classifyError: () => ({ retryable: true, kind: MODEL_ERROR_KIND.TEMPORARY_UNAVAILABLE }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: () => ({
       invoke: async () => {
         attempts += 1;
@@ -288,6 +296,7 @@ test("executor observation protocol cannot be overridden with model credentials"
     classifyError: () => ({ retryable: false }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: () => ({ invoke: async () => ({ content: "ok" }) }),
   };
   const port = createModelRequestExecutor({
@@ -314,6 +323,7 @@ test("tool-call mismatch streaming downgrade is one-way within an invocation", a
     classifyError: () => ({ retryable: false }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: ({ streaming }) => {
       streamingAttempts.push(streaming);
       const client = {
@@ -360,6 +370,7 @@ test("non-streaming invocation never enables streaming during semantic retries",
     classifyError: () => ({ retryable: false }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: ({ streaming }) => {
       streamingAttempts.push(streaming);
       const client = {
@@ -394,6 +405,7 @@ test("tool calls are not discarded when the provider also returns reasoning", as
     classifyError: () => ({ retryable: false }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: () => ({
       invoke: async () => {
         calls += 1;
@@ -438,11 +450,12 @@ test("Responses continuation metadata remains valid canonical model output", asy
     classifyError: () => ({ retryable: false }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    resolveResponseSource: () => MODEL_RESPONSE_SOURCE.RESPONSES,
     createClient: () => ({
       invoke: async () => ({
         content: "analysis complete",
         additional_kwargs: { reasoning: responseReasoning },
-        response_metadata: { output: responseOutput, finish_reason: "stop" },
+        response_metadata: { output: responseOutput, status: "completed" },
       }),
     }),
   };
@@ -464,9 +477,10 @@ test("executor is the single model context trace authority at each provider atte
   let attempts = 0;
   const adapter = {
     id: "openai-compatible",
-    classifyError: () => ({ retryable: true }),
+    classifyError: () => ({ retryable: true, kind: MODEL_ERROR_KIND.TEMPORARY_UNAVAILABLE }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: () => {
       const client = {
         invoke: async () => {
@@ -486,7 +500,10 @@ test("executor is the single model context trace authority at each provider atte
   });
 
   await port.invoke({
-    invocation,
+    invocation: {
+      ...invocation,
+      contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.CHECKPOINT_APPEND_ONLY,
+    },
     model: { ...model, alias: "primary" },
     messages: [{ role: "user", content: "hello", additional_kwargs: { messageUid: "m1" } }],
     tools: [{ name: "read_file" }],
@@ -494,18 +511,18 @@ test("executor is the single model context trace authority at each provider atte
     policies: { retry: { transport: { maxAttempts: 2, baseDelayMs: 0 } } },
   });
 
-  const traces = events.filter(({ type }) => type === "model_context_trace");
+  const traces = events.filter(({ type }) => type === MODEL_CONTEXT_TRACE.EVENT);
   assert.equal(traces.length, 2);
   assert.deepEqual(
     traces.map(({ data }) => data.invocationSequence),
     [1, 2],
   );
-  assert.equal(traces[0].data.stage, "llm_invoke_messages");
-  assert.equal(traces[0].data.authority, "model_invoke_port");
-  assert.equal(traces[0].data.protocolVersion, 2);
+  assert.equal(traces[0].data.stage, MODEL_CONTEXT_TRACE.INVOKE_STAGE);
+  assert.equal(traces[0].data.authority, MODEL_CONTEXT_TRACE.INVOKE_AUTHORITY);
+  assert.equal(traces[0].data.protocolVersion, MODEL_CONTEXT_TRACE.PROTOCOL_VERSION);
   assert.equal(
     traces[0].data.invocation.contextSequencePolicy,
-    MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
+    MODEL_CONTEXT_SEQUENCE_POLICY.CHECKPOINT_APPEND_ONLY,
   );
   assert.equal(traces[0].data.context.summaryCheckpointRevision, 3);
   assert.equal(traces[0].data.model.boundToolCount, 1);
@@ -548,6 +565,7 @@ test("non-chat operations execute only through the resolved provider adapter", a
     classifyError: () => ({ retryable: false }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: () => ({ invoke: async () => ({ content: "unused" }) }),
     executeOperation: async ({ operation }) => {
       calls.push(operation);
@@ -591,6 +609,7 @@ function createInvalidToolCallAdapter(invalidAttempts) {
     classifyError: () => ({ retryable: false }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: ({ streaming }) => {
       streamingAttempts.push(streaming);
       return {

@@ -15,7 +15,6 @@ import {
 } from "@noobot/agent-transport-protocol";
 import { isActionableTurnRecovery } from "@noobot/session-protocol";
 import { TURN_SNAPSHOT_TERMINAL_LIMIT } from "@noobot/session-protocol/turn-lifecycle";
-import { text } from "@noobot/shared/value";
 import { PENDING_COMMAND_KIND } from "../../command-registry.js";
 
 export function groupReconnectChannels(manager, channelKeys) {
@@ -93,9 +92,9 @@ async function settleFlaggedRecovery(manager, request, socket, snapshotResult) {
     level: "warn",
     event: "agentProxy.reconnect.recovery.finalizeFailed",
     sessionId,
-    data: { sessionId, commandId, recovery, reason: text(finalized?.reason) },
+    data: { sessionId, commandId, recovery, reason: finalized.reason },
   });
-  return snapshotResult;
+  return finalized;
 }
 
 function startSnapshotRequest(manager, socket, sessionId, channels, knownSequence) {
@@ -133,7 +132,7 @@ function createSessionReplay(manager, sessionId, channels, knownSequence) {
     sessionId,
     knownSequence,
   );
-  const cachedActiveTurn = manager.getActiveTurnLifecycleProjectionForChannels(channels, sessionId);
+  const hasActiveTurn = manager.hasActiveTurnLifecycleForChannels(channels, sessionId);
   const pendingInteractions = collectPendingInteractions(channels);
   const replayBatch = createReplayBatch({
     sessionId,
@@ -142,7 +141,7 @@ function createSessionReplay(manager, sessionId, channels, knownSequence) {
     events: lifecycleReplay.events,
     pendingInteractions,
   });
-  const snapshotRequired = lifecycleReplay.hasReplayGap || Boolean(cachedActiveTurn);
+  const snapshotRequired = lifecycleReplay.hasReplayGap || hasActiveTurn;
   manager.logSessionEvent?.(channels[0], {
     category: "transport",
     event: "agentProxy.reconnect.pendingInteractionProjection",

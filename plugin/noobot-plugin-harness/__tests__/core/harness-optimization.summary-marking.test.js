@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHarnessBucket } from "../../src/core/bucket-contract.js";
 
 import {
   captureGuidanceSummaryCheckpoint,
@@ -99,7 +100,7 @@ test("summary checkpoint requests restored incremental messages missing from the
     tool_calls: [{ id: "resumed", function: { name: "read_file" } }],
   };
   stampRoundIdentity([restoredCall, restoredResult, resumedCall]);
-  const state = { pending: {} };
+  let state = createHarnessBucket().state;
   const ctx = createTestHookContext(
     {
       dialogProcessId: "dp-1",
@@ -133,6 +134,7 @@ test("summary checkpoint requests restored incremental messages missing from the
   );
   replaceMessageProjection(ctx, [resumedCall]);
 
+  state = ctx.agentContext.bindings.extensions.harness.state;
   const ids = captureGuidanceSummaryCheckpoint(ctx, state);
   const markedCount = await markGuidanceSummarizedMessages(ctx, {});
 
@@ -182,7 +184,7 @@ test("summary checkpoint covers persisted history and active incremental message
     additional_kwargs: { messageUid: "incremental-result" },
   };
   stampRoundIdentity([incrementalCall, incrementalResult]);
-  const state = { pending: {} };
+  const state = createHarnessBucket().state;
   const ctx = createTestHookContext(
     {
       agentContext: {
@@ -240,7 +242,7 @@ test("summary checkpoint accepts unsummarized persisted history as part of the p
     additional_kwargs: { messageUid: "history-result-message" },
   };
   stampRoundIdentity([historyCall, historyResult], "dp-history", "turn-history");
-  const state = { pending: {} };
+  const state = createHarnessBucket().state;
   const ctx = createTestHookContext(
     {
       agentContext: {
@@ -294,7 +296,7 @@ test("summary checkpoint keeps one guidance and the newly completed summary inje
     additional_kwargs: { messageUid: "old-summary" },
   };
   stampRoundIdentity([oldGuidance, latestGuidance, oldSummary]);
-  const state = { pending: {} };
+  const state = createHarnessBucket().state;
   const ctx = createTestHookContext(
     {
       dialogProcessId: "dp-1",

@@ -7,6 +7,7 @@ import { stat } from "node:fs/promises";
 import { deepFreeze } from "@noobot/shared/deep-freeze";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { projectCheckpointIdentity } from "@noobot/session-protocol/summary-checkpoint-storage";
 
 export async function readFileIdentity(file) {
   const info = await stat(file, { bigint: true });
@@ -18,52 +19,99 @@ export async function readFileIdentity(file) {
   };
 }
 
-export function createVerifiedSnapshotCache({ byteBudget }) {
-  if (!Number.isSafeInteger(byteBudget) || byteBudget < 0) {
-    throw new TypeError("snapshot cache requires a non-negative integer byteBudget");
+function requireBudget(value, label) {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new TypeError(`snapshot cache requires a non-negative integer ${label}`);
   }
+}
+
+function createByteLru(byteBudget) {
   const entries = new Map();
   let bytes = 0;
   function remove(file) {
     const entry = entries.get(file);
-    if (entry) bytes -= entry.identity.bytes;
+    if (!entry) return;
+    bytes -= entry.bytes;
     entries.delete(file);
   }
-  return Object.freeze({
-    get(file, contentHash, identity) {
-      if (identity.reusable === false) return null;
+  return {
+    remove,
+    get(file) {
       const entry = entries.get(file);
       if (!entry) return null;
-      if (
-        entry.identity.reusable === false ||
-        entry.contentHash !== contentHash ||
-        entry.identity.key !== identity.key
-      ) {
-        remove(file);
-        return null;
-      }
       entries.delete(file);
       entries.set(file, entry);
-      return entry.payload;
+      return entry;
     },
-    retain(file, contentHash, identity, payload) {
+    set(file, entry) {
       remove(file);
-      if (identity.bytes > byteBudget) return;
-      entries.set(file, {
-        contentHash,
-        identity,
-        payload: deepFreeze(structuredClone(payload)),
-      });
-      bytes += identity.bytes;
+      if (entry.bytes > byteBudget) return;
+      entries.set(file, entry);
+      bytes += entry.bytes;
       for (const candidate of entries.keys()) {
         if (bytes <= byteBudget) break;
         remove(candidate);
       }
     },
-    cachedBytes: () => bytes,
+    bytes: () => bytes,
+  };
+}
+
+export function createVerifiedSnapshotCache({ payloadByteBudget, identityByteBudget }) {
+  requireBudget(payloadByteBudget, "payloadByteBudget");
+  requireBudget(identityByteBudget, "identityByteBudget");
+  const identities = createByteLru(identityByteBudget);
+  const payloads = createByteLru(payloadByteBudget);
+
+  function forget(file) {
+    identities.remove(file);
+    payloads.remove(file);
+  }
+
+  function matches(entry, contentHash, identity) {
+    return (
+      identity.reusable === true &&
+      entry.identity.reusable === true &&
+      entry.contentHash === contentHash &&
+      entry.identity.key === identity.key
+    );
+  }
+
+  function lookup(tier, file, contentHash, identity) {
+    const entry = tier.get(file);
+    if (!entry) return null;
+    if (matches(entry, contentHash, identity)) return entry.value;
+    forget(file);
+    return null;
+  }
+
+  return Object.freeze({
+    checkpoint: (file, contentHash, identity) => lookup(identities, file, contentHash, identity),
+    payload: (file, contentHash, identity) => lookup(payloads, file, contentHash, identity),
+    forget,
+    retain(file, contentHash, identity, payload) {
+      forget(file);
+      const checkpoint = deepFreeze(structuredClone(projectCheckpointIdentity(payload)));
+      const frozenPayload = deepFreeze(structuredClone(payload));
+      identities.set(file, {
+        contentHash,
+        identity,
+        value: checkpoint,
+        bytes: Buffer.byteLength(JSON.stringify(checkpoint)),
+      });
+      payloads.set(file, {
+        contentHash,
+        identity,
+        value: frozenPayload,
+        bytes: identity.bytes,
+      });
+      return { checkpoint, payload: frozenPayload };
+    },
+    cachedBytes: () => ({ identity: identities.bytes(), payload: payloads.bytes() }),
   });
 }
 
 export const verifiedSnapshotCache = createVerifiedSnapshotCache({
-  byteBudget: LENGTH_THRESHOLDS.artifact.verifiedSnapshotCacheBytes,
+  payloadByteBudget: LENGTH_THRESHOLDS.artifact.verifiedSnapshotCacheBytes,
+  identityByteBudget: LENGTH_THRESHOLDS.artifact.verifiedCheckpointIdentityCacheBytes,
 });

@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import path from "node:path";
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import {
   MESSAGE_REMOVED_FIELD_NAME,
@@ -66,14 +66,14 @@ function legacyOutboxCommit() {
   };
 }
 
-async function downgradeToSchema12(sessionDir) {
+async function downgradeToSchema12(sessionDir, legacyUserId = LEGACY_USER_ID) {
   const manifestFile = path.join(sessionDir, "session.json");
   const manifest = await readJson(manifestFile);
   const [turn] = manifest.turnOrder;
   const journalFile = path.join(sessionDir, turn.file);
   const records = readJournalLines(await readFile(journalFile, "utf8")).map((record) => {
     if (record.messageUid !== "m1") return record;
-    const message = { ...record.message, [LEGACY_MESSAGE_ID]: LEGACY_USER_ID };
+    const message = { ...record.message, [LEGACY_MESSAGE_ID]: legacyUserId };
     return { ...record, message, hash: messageHash(message) };
   });
   const journalText = jsonl(records);
@@ -179,6 +179,32 @@ test("v9 upgrade migrates schema 12 message identity, backs up rewritten files a
       second.quarantined.map((item) => item.path),
       [badUnit],
     );
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+test("identity upgrade quarantines non-canonical legacy identity without rewriting source", async () => {
+  const harness = buildHarness();
+  const { sessionRepo, root } = await harness.setup();
+  try {
+    const sessionDir = await saveCanonicalSession(sessionRepo);
+    await downgradeToSchema12(sessionDir, " padded-client-id ");
+    const manifestFile = path.join(sessionDir, "session.json");
+    const manifest = await readJson(manifestFile);
+    const files = [
+      manifestFile,
+      path.join(sessionDir, manifest.turnOrder[0].file),
+      path.join(sessionDir, "authority-outbox", "outbox.jsonl"),
+    ];
+    const before = await Promise.all(files.map((file) => readFile(file)));
+    const options = v9Options(root);
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const report = await upgradeSessionMessageIdentity(options);
+      assert.deepEqual(report.sessions, []);
+      assert.equal(report.quarantined.length, 1);
+      assert.deepEqual(await Promise.all(files.map((file) => readFile(file))), before);
+    }
   } finally {
     await harness.cleanup();
   }
@@ -363,6 +389,55 @@ test("v9 upgrade quarantines outbox commits whose v3 envelope fails validation",
     );
     assert.match(JSON.stringify(result.quarantined[0].error), /outbox_envelope_invalid/);
     assert.equal((await readJson(path.join(sessionDir, "session.json"))).schemaVersion, 12);
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+test("v9 upgrade quarantines invalid delivery records without repairing identity and continues healthy sessions", async () => {
+  const harness = buildHarness();
+  const { sessionRepo, root } = await harness.setup();
+  try {
+    const badSessionDir = await saveCanonicalSession(sessionRepo);
+    const healthySessionDir = path.join(
+      root,
+      "alice",
+      WORKSPACE_LAYOUT.AGENT_SESSION_DIR,
+      SESSION_ID,
+    );
+    await cp(badSessionDir, healthySessionDir, { recursive: true });
+    await downgradeToSchema12(healthySessionDir);
+    await downgradeToSchema12(badSessionDir);
+    const missingConsumer = {
+      op: "attempt",
+      eventId: "event-1",
+      attemptedAt: "2026-01-01T00:00:05.000Z",
+    };
+    await writeOutbox(badSessionDir, [legacyOutboxCommit(), missingConsumer]);
+    const badOutboxPath = path.join(badSessionDir, "authority-outbox", "outbox.jsonl");
+    const originalOutbox = await readFile(badOutboxPath);
+
+    const base = path.join(root, "alice");
+    const result = await upgradeSessionMessageIdentity({
+      base,
+      backupBase: path.join(root, "layout-backup"),
+      scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS,
+      storageService: TEST_STORAGE_SERVICE,
+    });
+
+    assert.deepEqual(
+      result.sessions.map((item) => item.sessionId),
+      [SESSION_ID],
+    );
+    assert.equal(result.quarantined.length, 1);
+    assert.equal(result.quarantined[0].path, path.relative(base, badSessionDir));
+    assert.match(JSON.stringify(result.quarantined[0].error), /outbox_record_invalid/);
+    assert.equal((await readJson(path.join(badSessionDir, "session.json"))).schemaVersion, 12);
+    assert.deepEqual(await readFile(badOutboxPath), originalOutbox);
+    assert.equal(
+      (await readJson(path.join(healthySessionDir, "session.json"))).schemaVersion,
+      SESSION_ARTIFACT_SCHEMA_VERSION,
+    );
   } finally {
     await harness.cleanup();
   }

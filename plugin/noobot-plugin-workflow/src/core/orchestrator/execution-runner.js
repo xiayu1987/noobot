@@ -12,7 +12,6 @@ import {
   resolveWorkflowUpstreamActionSteps,
 } from "../../workflow/adapter.js";
 import { isWorkflowAbortError, throwIfWorkflowAborted } from "../hooks/runtime.js";
-import { getWorkflowTransferPayloadFromResult } from "../hooks/attachments.js";
 import { resolveSemanticNodeForPendingStep, runNodeAgent } from "../hooks/node-agent.js";
 import { buildWorkflowUpstreamAttachmentResults } from "../hooks/node-upstream-messages.js";
 import {
@@ -55,7 +54,7 @@ function resolveStepItemRefs(item) {
     actionNodeStateId: step.actionNodeStateId,
     stepId: step.stepId,
     stepIndex: step.stepIndex,
-    transferEnvelopes: getWorkflowTransferPayloadFromResult(subSession.result).transferEnvelopes,
+    transferEnvelopes: item.transferEnvelopes,
   };
 }
 
@@ -266,6 +265,7 @@ async function runWaveStep({
     step,
     action: action.action,
     subSession: action.subSession,
+    transferEnvelopes: action.transferEnvelopes,
     nodeIdentity,
     upstreamNodeResults,
     order: idx,

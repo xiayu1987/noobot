@@ -5,7 +5,7 @@
  */
 import { resolveWorkflowThresholdModeFromContext } from "./prompts.js";
 import { WORKFLOW_PARAMS } from "../../../../core/workflow-params.js";
-import { isObjectLike } from "@noobot/shared/value";
+import { assertHarnessState } from "../../../../core/bucket-contract.js";
 
 function resolvePlanRefinementEnabledForContext(ctx = {}, meta = {}) {
   const explicit = meta?.harness?.planRefinementEnabled;
@@ -14,18 +14,15 @@ function resolvePlanRefinementEnabledForContext(ctx = {}, meta = {}) {
   return WORKFLOW_PARAMS.modeThresholds[mode].planning.planRefinement.enabled === true;
 }
 
-export function syncPlanRefinementPolicyFlag(ctx = {}, state = {}, meta = {}) {
+export function syncPlanRefinementPolicyFlag(ctx, state, meta = {}) {
+  assertHarnessState(state);
   const enabled = resolvePlanRefinementEnabledForContext(ctx, meta);
-  if (isObjectLike(state)) {
-    if (!isObjectLike(state.flags)) state.flags = {};
-    state.flags.planRefinementEnabled = enabled;
-  }
+  state.flags.planRefinementEnabled = enabled;
   return enabled;
 }
 
-export function clearPendingPlanRefinement(state = {}) {
-  if (!isObjectLike(state)) return false;
-  if (!isObjectLike(state.pending)) state.pending = {};
+export function clearPendingPlanRefinement(state) {
+  assertHarnessState(state);
   state.pending.planRefinement = false;
   state.pending.planRefinementContext = null;
   return true;

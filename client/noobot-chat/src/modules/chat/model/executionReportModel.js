@@ -120,6 +120,7 @@ function buildToolRows(toolStats) {
       tool,
       calls: stats.calls,
       failures: stats.failures,
+      nonZeroExits: stats.nonZeroExits,
       totalDuration: timed ? formatDuration(stats.totalDurationMs) : "-",
       totalRatio: ratioOf(stats.totalDurationMs, maxTotal),
       avgDuration: timed ? formatDuration(stats.totalDurationMs / stats.timedCount) : "-",

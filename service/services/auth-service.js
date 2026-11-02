@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeTimeMs } from "#agent/config";
 import { isSuperAdminRole, SUPER_ADMIN_ROLE } from "#agent/utils";
 import { randomBytes } from "node:crypto";
 import { HTTP_STATUS } from "#agent/constants";
@@ -14,8 +13,6 @@ import {
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
 import { isCanonicalText, text } from "@noobot/shared/value";
-
-const DEFAULT_API_KEY_TTL_MS = TIME_THRESHOLDS.service.apiKeyTtlMs;
 
 export const USER_SCOPE_POLICY = Object.freeze({
   ADMINISTRABLE: "administrable",
@@ -29,22 +26,9 @@ function assertUserScopePolicy(policy) {
   return policy;
 }
 
-export function createAuthService({
-  initialApiKeyTtlMs = DEFAULT_API_KEY_TTL_MS,
-  translateText,
-} = {}) {
+export function createAuthService({ translateText } = {}) {
   const apiKeyStore = new Map();
-  let apiKeyTtlMs = normalizeTimeMs(initialApiKeyTtlMs, {
-    fallback: DEFAULT_API_KEY_TTL_MS,
-    min: 1000,
-  });
-
-  function setApiKeyTtlMs(nextApiKeyTtlMs = DEFAULT_API_KEY_TTL_MS) {
-    apiKeyTtlMs = normalizeTimeMs(nextApiKeyTtlMs, {
-      fallback: DEFAULT_API_KEY_TTL_MS,
-      min: 1000,
-    });
-  }
+  const apiKeyTtlMs = TIME_THRESHOLDS.service.apiKeyTtlMs;
 
   function issueApiKey({ userId, role }) {
     if (!isCanonicalText(userId)) throw new TypeError("issueApiKey requires canonical userId");
@@ -162,7 +146,6 @@ export function createAuthService({
   }
 
   return {
-    setApiKeyTtlMs,
     issueApiKey,
     resolveAuthByApiKey,
     isForbiddenUserScope,

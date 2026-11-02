@@ -42,6 +42,7 @@ import { resolvePendingPlanUpdateForWorkflow } from "../shared/workflow/schedule
 import { enforceWorkflowInvariants } from "../shared/workflow/invariants.js";
 import { buildHarnessInjectedMessage } from "../shared/message/injected-message-utils.js";
 import { text } from "@noobot/shared/value";
+import { assertHarnessState } from "../../../core/bucket-contract.js";
 
 const ACCEPTANCE_DECISION = WORKFLOW_PARAMS.acceptance.decisions;
 const ACCEPTANCE_REQUESTED_ACTION = ACCEPTANCE_DECISION.requestedAction;
@@ -92,8 +93,8 @@ function resolveAcceptanceDecision({
   holder = null,
   forceAcceptanceDueToOverflow = false,
 } = {}) {
-  const state = holder?.state || {};
-  const pending = state?.pending && typeof state.pending === "object" ? state.pending : {};
+  const state = assertHarnessState(holder.state);
+  const { pending } = state;
   const candidateActions = [];
   const blockedActions = [];
   const blockedReasons = [];

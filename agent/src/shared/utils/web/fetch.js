@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { recoverableToolError } from "../../errors/index.js";
 import { ERROR_CODE } from "../../errors/constants.js";
@@ -60,7 +61,7 @@ export async function browserLikeFetch(url, options = {}) {
     headers = {},
     method = "GET",
     redirect = "follow",
-    maxRedirects = 8,
+    maxRedirects = QUANTITY_THRESHOLDS.web.maxRedirects,
     ...rest
   } = options || {};
 

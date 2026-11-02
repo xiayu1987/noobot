@@ -9,7 +9,10 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { createTestHookManager as createAgentHookManager } from "../helpers/public-runtime-fixtures.js";
+import {
+  createTestResolveModelMessages,
+  createTestHookManager as createAgentHookManager,
+} from "../helpers/public-runtime-fixtures.js";
 import { registerHarnessCore } from "../../src/index.js";
 
 import { isHarnessPromptMessage } from "../../src/capabilities/handlers/shared/message/injected-message-utils.js";
@@ -17,7 +20,15 @@ import { isHarnessPromptMessage } from "../../src/capabilities/handlers/shared/m
 test("harness plugin injects prompt into before_llm_call messages", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
   const hookManager = createAgentHookManager();
-  registerHarnessCore({ hookManager }, { planningGuidanceMode: "inject", basePath, trace: false });
+  registerHarnessCore(
+    { hookManager },
+    {
+      resolveModelMessages: createTestResolveModelMessages(),
+      planningGuidanceMode: "inject",
+      basePath,
+      trace: false,
+    },
+  );
 
   const messagesCtx = {
     userId: "u2",
@@ -41,6 +52,7 @@ test("harness plugin exposes capability handler skeleton and hook mapping in man
   registerHarnessCore(
     { hookManager },
     {
+      resolveModelMessages: createTestResolveModelMessages(),
       planningGuidanceMode: "inject",
       basePath,
       promptPolicy: false,

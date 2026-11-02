@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { HOOK_POINT } from "@noobot/hook-protocol";
+import { HOOK_POINT, requireHookTurn } from "@noobot/hook-protocol";
 import { synchronizeTaskAcceptanceTool } from "../acceptance/index.js";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
@@ -103,17 +103,12 @@ function resolvePlanningTriggeredActions({ planUpdate = false, phaseAcceptance =
 }
 
 function consumePlanningTurnIncrement(state = {}, ctx = {}) {
-  const counters = state?.counters || {};
-  const currentTurn = Number(ctx?.turn);
-  const previousTurn = Number(counters.lastPlanningCounterTurn || 0);
-  let increment = 1;
-  if (Number.isFinite(currentTurn) && currentTurn > 0) {
-    increment =
-      Number.isFinite(previousTurn) && previousTurn > 0
-        ? Math.max(1, Math.trunc(currentTurn) - Math.trunc(previousTurn))
-        : 1;
-    counters.lastPlanningCounterTurn = Math.trunc(currentTurn);
-  }
+  const counters = state.counters;
+  const currentTurn = requireHookTurn(ctx);
+  const previousTurn = counters.lastPlanningCounterTurn;
+  if (currentTurn <= previousTurn) return 0;
+  const increment = previousTurn > 0 ? currentTurn - previousTurn : 1;
+  counters.lastPlanningCounterTurn = currentTurn;
   return increment;
 }
 
@@ -127,9 +122,8 @@ const PRIMARY_TOOL_HOOK_POINTS = Object.freeze([
 function accumulatePlanningTurnCounters(state, ctx) {
   const turnIncrement = consumePlanningTurnIncrement(state, ctx);
   state.counters.llmTurns += turnIncrement;
-  state.counters.planUpdateTurns = Number(state.counters.planUpdateTurns || 0) + turnIncrement;
-  state.counters.phaseAcceptanceTurns =
-    Number(state.counters.phaseAcceptanceTurns || 0) + turnIncrement;
+  state.counters.planUpdateTurns += turnIncrement;
+  state.counters.phaseAcceptanceTurns += turnIncrement;
 }
 
 function logPlanningThresholdSnapshot(ctx, state, thresholds, reached) {
@@ -256,8 +250,8 @@ function readPlanningPendingSnapshotRaw(state) {
 }
 
 function applyPlanningTurnThresholds(ctx, meta, state, decision) {
-  accumulatePlanningTurnCounters(state, ctx);
   const thresholds = resolvePlanningTurnThresholds(ctx, meta);
+  accumulatePlanningTurnCounters(state, ctx);
   const reached = {
     planUpdateTurns: state.counters.planUpdateTurns >= thresholds.planUpdateTriggerTurnsThreshold,
     phaseAcceptanceTurns:
@@ -374,6 +368,7 @@ function inactivePlanningResult(capability, point) {
 }
 
 async function handlePlanningBeforeLlmCall({ capability, point, ctx, meta }) {
+  resolvePlanningTurnThresholds(ctx, meta);
   const current = ensureHarnessBucket(ctx);
   if (current?.state?.flags?.acceptanceReviewing === true) {
     return inactivePlanningResult(capability, point);

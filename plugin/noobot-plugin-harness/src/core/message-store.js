@@ -9,30 +9,15 @@ import {
   replaceContextProjection,
   writeContextBlocks,
 } from "@noobot/context-protocol/mutation/context";
-import { MODEL_CONTEXT_PROTOCOL_VERSION } from "@noobot/context-protocol/agent-context/schema";
-import { resolveAuthoritativeModelContext } from "@noobot/context-protocol/assembly/hook-context";
-import { isObjectLike } from "@noobot/shared/value";
+import { requireAuthoritativeModelContext as resolveHolder } from "@noobot/context-protocol/assembly/hook-context";
 
-function resolveHolder(ctx = {}) {
-  const modelContext = resolveAuthoritativeModelContext(ctx);
-  if (!modelContext) {
-    throw new TypeError(
-      `Harness model-message operations require modelContext protocolVersion=${MODEL_CONTEXT_PROTOCOL_VERSION}`,
-    );
-  }
-  return modelContext;
+export function resolveModelMessages(ctx) {
+  const modelContext = resolveHolder(ctx);
+  return modelContext.messages;
 }
 
-export function resolveModelMessages(ctx = {}) {
+export function resolveModelMessageBlocks(ctx) {
   const modelContext = resolveHolder(ctx);
-  return Array.isArray(modelContext.messages) ? modelContext.messages : [];
-}
-
-export function resolveModelMessageBlocks(ctx = {}) {
-  const modelContext = resolveHolder(ctx);
-  if (!isObjectLike(modelContext.messageBlocks)) {
-    throw new TypeError("Harness modelContext requires canonical messageBlocks");
-  }
   return modelContext.messageBlocks;
 }
 

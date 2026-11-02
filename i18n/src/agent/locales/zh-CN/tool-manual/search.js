@@ -6,15 +6,12 @@
 
 export const SEARCH_MANUAL = {
   search: {
-    summary: "搜索文件或给定文本，返回命中行与上下文。",
+    summary: "在工作区文件中搜索，返回命中行与上下文。",
     usage: [
-      'search({ source: "files", query, glob, path, isRegex, caseSensitive, contextLines, maxResults, riskLevel })',
-      'search({ source: "text", query, text, isRegex, caseSensitive, contextLines, maxResults, riskLevel })',
+      "search({ query, glob, path, isRegex, caseSensitive, contextLines, maxResults, riskLevel })",
     ],
     params: {
-      source: "搜索来源。files 搜工作区文件，text 搜 text 参数里给定的字符串。",
       query: "必填且不能为空的关键词或正则。不要用空字符串调用。",
-      text: "待搜索文本，仅 source 为 text 时使用。",
       path: "限定搜索的文件或目录，可选。缩小范围能显著提速。",
       glob: "文件名匹配，例如 *.js。",
       isRegex: "是否按正则解释 query。",

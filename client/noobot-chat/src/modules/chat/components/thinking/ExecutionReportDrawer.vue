@@ -166,6 +166,10 @@ watch(
                 <dd :class="{ 'execution-report-failed': tool.failures }">{{ tool.failures }}</dd>
               </div>
               <div>
+                <dt>{{ translate("message.executionReportNonZeroExits") }}</dt>
+                <dd>{{ tool.nonZeroExits }}</dd>
+              </div>
+              <div>
                 <dt>{{ translate("message.executionReportTotalDuration") }}</dt>
                 <dd>{{ tool.totalDuration }}</dd>
               </div>

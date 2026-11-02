@@ -15,7 +15,10 @@ import {
 import { mergeMessagePresentationFacets } from "./messagePresentation.js";
 import { getMessageAttachments, normalizeArray } from "./messageAttachmentsProjection.js";
 import { resolveMessageTurnScopeMergeKey } from "./conversationFoldingIdentity.js";
-import { reduceThinkingDetailContentTimelines } from "@noobot/event-protocol/thinking-detail-content";
+import {
+  reduceThinkingDetailContentTimelines,
+  selectThinkingDetailContentTimeline,
+} from "@noobot/event-protocol/thinking-detail-content";
 import { text } from "@noobot/shared/value";
 
 function mergeFoldedContent(previousMessage, currentMessage) {
@@ -48,8 +51,8 @@ function mergeFoldedTimelines(previousMessage, currentMessage) {
     selectMessageActivityTimeline(currentMessage),
   );
   previousMessage.thinkingContentTimeline = reduceThinkingDetailContentTimelines(
-    previousMessage.thinkingContentTimeline,
-    currentMessage.thinkingContentTimeline,
+    selectThinkingDetailContentTimeline(previousMessage),
+    selectThinkingDetailContentTimeline(currentMessage),
   );
   previousMessage.hasThinkingDetails =
     previousMessage.hasThinkingDetails === true || currentMessage.hasThinkingDetails === true;

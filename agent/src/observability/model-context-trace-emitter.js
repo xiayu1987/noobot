@@ -6,9 +6,10 @@
 
 import { emitEvent } from "../events/index.js";
 import { text } from "@noobot/shared/value";
+import { MODEL_CONTEXT_TRACE } from "@noobot/model-protocol";
 
 export function emitModelContextTrace(eventListener, stage, payload) {
   const normalizedStage = text(stage);
   if (!normalizedStage) throw new TypeError("model context trace stage is required");
-  emitEvent(eventListener, "model_context_trace", { ...payload, stage: normalizedStage });
+  emitEvent(eventListener, MODEL_CONTEXT_TRACE.EVENT, { ...payload, stage: normalizedStage });
 }

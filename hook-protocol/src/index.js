@@ -9,4 +9,5 @@ export * from "./runtime.js";
 export * from "./phase-status.js";
 export * from "./session-deletion.js";
 export * from "./runtime-identity.js";
+export { requireHookTurn } from "./turn.js";
 export { requireAgentDispatchAttachments } from "./agent-dispatch.js";

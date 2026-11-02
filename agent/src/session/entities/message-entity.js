@@ -14,7 +14,6 @@ import { assertMutationRef } from "@noobot/file-mutation-protocol";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import {
   assertSessionMessageEntity,
-  assertSessionMessageRecordIdentity,
   normalizeTurnCommitMetadata,
   projectSessionMessageRecordIdentity,
   resolveSessionMessageRecordDialogProcessId,
@@ -202,7 +201,7 @@ function applyMessageToolFields(target, message) {
 
 export function normalizeMessageEntity(message) {
   const normalizedAttachments = dedupeSessionAttachmentRefs(message.attachments);
-  const identity = projectSessionMessageRecordIdentity(assertSessionMessageRecordIdentity(message));
+  const identity = projectSessionMessageRecordIdentity(message);
   const normalizedMessage = Object.assign(createBaseMessageEntity(message), identity);
   const turnCommit = normalizeTurnCommitMetadata(message?.turnCommit);
   if (turnCommit) normalizedMessage.turnCommit = turnCommit;

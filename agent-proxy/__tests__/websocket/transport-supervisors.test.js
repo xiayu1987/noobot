@@ -27,6 +27,29 @@ class FakeWebSocket extends EventEmitter {
   }
 }
 
+test("upstream supervisor rejects invalid grace periods without constructing a socket", () => {
+  for (const closeGraceMs of [-1, NaN, Infinity, "5", null]) {
+    assert.throws(
+      () => new UpstreamTransportSupervisor(FakeWebSocket, { closeGraceMs }),
+      /invalid_close_grace_ms/,
+    );
+  }
+  assert.equal(new UpstreamTransportSupervisor(FakeWebSocket, { closeGraceMs: 0 }).closeGraceMs, 0);
+});
+
+test("upstream supervisor does not normalize connection ownership filters", () => {
+  const supervisor = new UpstreamTransportSupervisor(FakeWebSocket);
+  const connection = supervisor.connect("ws://run");
+  for (const purpose of [" run ", null, false]) {
+    assert.equal(supervisor.closeOwnedConnection(connection, 1000, "closed", { purpose }), false);
+    assert.equal(supervisor.socket, connection.socket);
+  }
+  assert.equal(
+    supervisor.closeOwnedConnection(connection, 1000, "closed", { purpose: "run" }),
+    true,
+  );
+});
+
 test("upstream supervisor ignores close callbacks from a replaced generation", () => {
   FakeWebSocket.instances = [];
   const supervisor = new UpstreamTransportSupervisor(FakeWebSocket);

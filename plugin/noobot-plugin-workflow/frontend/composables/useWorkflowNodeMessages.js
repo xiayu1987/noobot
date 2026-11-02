@@ -109,8 +109,8 @@ export function useWorkflowNodeMessages({
   );
 
   const selectedActionNodeStates = computed(() => {
-    const nodeItem = selectedRuntimeNode.value || selectedNode.value || {};
-    return Array.isArray(nodeItem?.actionNodeStates) ? nodeItem.actionNodeStates : [];
+    const nodeItem = selectedRuntimeNode.value;
+    return nodeItem === null ? [] : nodeItem.actionNodeStates;
   });
 
   watch(

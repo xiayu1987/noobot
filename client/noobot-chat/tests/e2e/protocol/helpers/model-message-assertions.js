@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { expect } from "@playwright/test";
-import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
+import { MODEL_CONTEXT_SEQUENCE_POLICY, MODEL_CONTEXT_TRACE } from "@noobot/model-protocol";
 import { text } from "@noobot/shared/value";
 
 export function assertModelInvocationTrace(record, { rootSessionId } = {}) {
-  expect(record.event).toBe("model_context_trace");
-  expect(record.data?.stage).toBe("llm_invoke_messages");
-  expect(record.data?.authority).toBe("model_invoke_port");
-  expect(record.data?.protocolVersion).toBe(2);
+  expect(record.event).toBe(MODEL_CONTEXT_TRACE.EVENT);
+  expect(record.data?.stage).toBe(MODEL_CONTEXT_TRACE.INVOKE_STAGE);
+  expect(record.data?.authority).toBe(MODEL_CONTEXT_TRACE.INVOKE_AUTHORITY);
+  expect(record.data?.protocolVersion).toBe(MODEL_CONTEXT_TRACE.PROTOCOL_VERSION);
   expect(Object.values(MODEL_CONTEXT_SEQUENCE_POLICY)).toContain(
     record.data?.invocation?.contextSequencePolicy,
   );
@@ -52,8 +52,15 @@ export function assertModelInvocationTrace(record, { rootSessionId } = {}) {
   for (const fingerprint of messages.fingerprints) {
     expect(fingerprint).toMatch(/^[a-f0-9]{64}$/);
   }
-  expect(Number.isInteger(record.data?.context?.summaryCheckpointRevision)).toBe(true);
-  expect(record.data.context.summaryCheckpointRevision).toBeGreaterThanOrEqual(0);
+  if (
+    record.data.invocation.contextSequencePolicy ===
+    MODEL_CONTEXT_SEQUENCE_POLICY.CHECKPOINT_APPEND_ONLY
+  ) {
+    expect(Number.isInteger(record.data.context?.summaryCheckpointRevision)).toBe(true);
+    expect(record.data.context.summaryCheckpointRevision).toBeGreaterThanOrEqual(0);
+  } else {
+    expect(record.data.context).toBeUndefined();
+  }
   const previewMissingMessageUids = messages.preview.filter(
     (message) => !message.messageUid,
   ).length;
@@ -156,8 +163,8 @@ export function auditModelPrefixStability(records = []) {
     for (let index = 1; index < entries.length; index += 1) {
       const previous = entries[index - 1].record;
       const current = entries[index].record;
-      const previousRevision = Number(previous.data?.context?.summaryCheckpointRevision || 0);
-      const currentRevision = Number(current.data?.context?.summaryCheckpointRevision || 0);
+      const previousRevision = previous.data.context.summaryCheckpointRevision;
+      const currentRevision = current.data.context.summaryCheckpointRevision;
       const previousFingerprints = previous.data?.messages?.fingerprints || [];
       const currentFingerprints = current.data?.messages?.fingerprints || [];
       if (currentRevision < previousRevision) {

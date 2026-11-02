@@ -3,6 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 const WEB_SEARCH_I18N = Object.freeze({
   bodyFormatInvalid: {
@@ -37,8 +39,8 @@ const WEB_SEARCH_I18N = Object.freeze({
 
 const SEARX_INSTANCES_YAML_URL =
   "https://raw.githubusercontent.com/searxng/searx-instances/master/searxinstances/instances.yml";
-const REMOTE_INSTANCE_CACHE_TTL_MS = 60 * 60 * 1000;
-const LIMITED_CONTENT_CHARS = 2000;
+const REMOTE_INSTANCE_CACHE_TTL_MS = TIME_THRESHOLDS.userTemplate.remoteInstanceCacheTtlMs;
+const LIMITED_CONTENT_CHARS = LENGTH_THRESHOLDS.userTemplate.limitedContentChars;
 let remoteInstanceCache = null;
 
 function tWebSearch(locale, key) {

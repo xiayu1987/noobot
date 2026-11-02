@@ -15,6 +15,7 @@ import {
   resolveTurnRuntimeByScope,
   selectCurrentTurnRuntime,
   selectSessionTurnRuntime,
+  selectTurnMessageRuntime,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { AGENT_CHANNEL_STATE } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
 import {
@@ -56,6 +57,22 @@ const lifecycleEvent = ({ eventType, eventId, state, phase, executionState, revi
   });
 
 describe("turnRuntimeRegistry: hydration and snapshots", () => {
+  it("keeps unloaded model rounds distinct from persisted timing facts", () => {
+    const registry = createTurnRuntimeRegistryState();
+    const identity = { sessionId: "child", turnScopeId: "child-turn" };
+    expect(selectTurnMessageRuntime(registry, identity).modelLoopRound).toBeNull();
+    applyTurnTimingSnapshot(registry, {
+      sessionId: identity.sessionId,
+      turnTimings: [
+        { turnScopeId: identity.turnScopeId, dialogProcessId: "child-dialog", modelLoopRound: 4 },
+      ],
+    });
+    expect(selectTurnMessageRuntime(registry, identity).modelLoopRound).toBe(4);
+    expect(
+      selectTurnMessageRuntime(registry, { ...identity, sessionId: "parent" }).modelLoopRound,
+    ).toBeNull();
+  });
+
   it("produces the same Registry projection from realtime events and snapshot plus ordered tail", () => {
     const events = [
       lifecycleEvent({

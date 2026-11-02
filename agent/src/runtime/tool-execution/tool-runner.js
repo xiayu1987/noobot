@@ -56,6 +56,7 @@ import {
 import { isPlainObject, text } from "@noobot/shared/value";
 import { projectMutationRefs } from "@noobot/file-mutation-protocol";
 import { repairToolCallArgs } from "./tool-args-repair.js";
+import { assertToolInputMatchesSchema } from "./tool-input-validation.js";
 import { validateRuntimeToolCall } from "@noobot/context-protocol/tool/context-policy";
 import { assertToolCallTiming } from "@noobot/event-protocol/tool-timing";
 
@@ -458,6 +459,7 @@ async function handleToolInvocationError(state, error) {
 
 async function invokeConfiguredTool(state) {
   try {
+    assertToolInputMatchesSchema(state.tool, state.call.args, state.runtime);
     const startedAt = performance.now();
     try {
       state.rawResult = await raceWithAbort(

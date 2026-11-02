@@ -91,6 +91,6 @@ test("protocol envelope rejects incomplete execution identity", () => {
         execution: TEST_AGENT_EXECUTION,
         messageBlocks: { system: [], history: [], incremental: [] },
       }),
-    /identity\.turnScopeId must be a non-empty string/,
+    /identity\.turnScopeId must be canonical non-empty text/,
   );
 });

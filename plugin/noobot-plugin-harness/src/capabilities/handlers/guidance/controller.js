@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { HOOK_POINT } from "@noobot/hook-protocol";
+import { HOOK_POINT, requireHookTurn } from "@noobot/hook-protocol";
 import { resolveToolCallName } from "@noobot/shared/tool-name";
 import { resolveContextMessageSummarized } from "@noobot/context-protocol/message/codec";
 import { relaySeparateModelOutputAsUserMessage } from "../shared/relay-model-output.js";
@@ -47,8 +47,7 @@ import { HARNESS_PLANNING_GUIDANCE_MODE } from "../../../core/constants.js";
 import { resolveWorkflowThresholdModeFromContext } from "../shared/workflow/prompts.js";
 import { enforceWorkflowInvariants } from "../shared/workflow/invariants.js";
 import {
-  normalizeClampedPositiveInteger,
-  normalizePositiveInteger,
+  resolveAnalysisThresholdWithSource,
   resolveGatedThresholdWithSource,
 } from "../shared/threshold-utils.js";
 import { text, isObjectLike } from "@noobot/shared/value";
@@ -72,18 +71,15 @@ function resolveGuidanceAnalysisTurnsThreshold(ctx = {}, meta = {}) {
   const modeThresholds = WORKFLOW_PARAMS.modeThresholds || {};
   const thresholdMode = resolveWorkflowThresholdModeFromContext(ctx);
   const scopedMode = modeThresholds[thresholdMode] || modeThresholds.full || {};
-  const runtimeThreshold = normalizeClampedPositiveInteger(
-    meta?.harness?.guidance?.analysis?.turnsThreshold,
-  );
+  const threshold = resolveAnalysisThresholdWithSource({
+    runtimeValue: meta?.harness?.guidance?.analysis?.turnsThreshold,
+    scopedValue: scopedMode?.guidance?.analysis?.turnsThreshold,
+    defaultValue: WORKFLOW_PARAMS.guidance.analysis.turnsThreshold,
+  });
   return {
     mode: modeThresholds[thresholdMode] ? thresholdMode : "full",
-    turnsThreshold:
-      runtimeThreshold ||
-      normalizePositiveInteger(
-        scopedMode?.guidance?.analysis?.turnsThreshold,
-        WORKFLOW_PARAMS.guidance.analysis.turnsThreshold,
-      ),
-    source: runtimeThreshold ? "runtime" : "workflow_params",
+    turnsThreshold: threshold.value,
+    source: threshold.source,
   };
 }
 
@@ -109,22 +105,15 @@ function maybeScheduleGuidanceSummary(ctx = {}, meta = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder?.state) return false;
   const state = holder.state;
-  if (!isObjectLike(state.counters)) state.counters = {};
   if (state.pending?.summary === true) return false;
-  const currentTurn = Number(ctx?.turn);
-  const previousTurn = Number(state.counters.lastGuidanceSummaryCounterTurn || 0);
-  let turnIncrement = 1;
-  if (Number.isFinite(currentTurn) && currentTurn > 0) {
-    const normalizedTurn = Math.trunc(currentTurn);
-    if (Number.isFinite(previousTurn) && previousTurn > 0) {
-      if (normalizedTurn <= Math.trunc(previousTurn)) return false;
-      turnIncrement = Math.max(1, normalizedTurn - Math.trunc(previousTurn));
-    }
-    state.counters.lastGuidanceSummaryCounterTurn = normalizedTurn;
-  }
-  state.counters.summaryTurns = Number(state.counters.summaryTurns || 0) + turnIncrement;
-  const currentChars = resolveUnsummarizedMessageChars(ctx?.modelContext?.messages);
+  const currentTurn = requireHookTurn(ctx);
+  const previousTurn = state.counters.lastGuidanceSummaryCounterTurn;
+  if (currentTurn <= previousTurn) return false;
+  const turnIncrement = previousTurn > 0 ? currentTurn - previousTurn : 1;
   const threshold = resolveGuidanceSummaryThresholds(ctx, meta);
+  state.counters.lastGuidanceSummaryCounterTurn = currentTurn;
+  state.counters.summaryTurns += turnIncrement;
+  const currentChars = resolveUnsummarizedMessageChars(ctx?.modelContext?.messages);
   const reachedTurnsSummary = state.counters.summaryTurns > threshold.turnsThreshold;
   const reachedCharsSummary = currentChars > LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD;
 
@@ -157,8 +146,7 @@ function isSummaryOnToolBurstThresholdEnabled(meta = {}) {
 
 function maybeScheduleSummaryByToolBurst(ctx = {}, meta = {}) {
   if (!isSummaryOnToolBurstThresholdEnabled(meta)) return false;
-  const threshold = Number(resolveGuidanceSummaryThresholds(ctx, meta).turnsThreshold);
-  if (!Number.isFinite(threshold) || threshold <= 0) return false;
+  const threshold = resolveGuidanceSummaryThresholds(ctx, meta).turnsThreshold;
   const calls = Array.isArray(ctx?.calls) ? ctx.calls : [];
   if (!Array.isArray(calls) || calls.length < threshold) return false;
   const holder = ensureHarnessBucket(ctx);
@@ -189,24 +177,17 @@ function maybeScheduleGuidanceAnalysis(ctx = {}, meta = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder?.state) return false;
   const state = holder.state;
-  if (!isObjectLike(state.counters)) state.counters = {};
   if (shouldSkipAnalysisForTrailingToolCallContent(ctx?.modelContext?.messages)) return false;
   if (!isMainPlanReadyForGuidanceAnalysis(holder.bucket, state, meta)) return false;
   if (state.pending?.summary === true) return false;
   if (state.pending?.analysis === true) return false;
-  const currentTurn = Number(ctx?.turn);
-  const previousTurn = Number(state.counters.lastGuidanceAnalysisCounterTurn || 0);
-  let turnIncrement = 1;
-  if (Number.isFinite(currentTurn) && currentTurn > 0) {
-    const normalizedTurn = Math.trunc(currentTurn);
-    if (Number.isFinite(previousTurn) && previousTurn > 0) {
-      if (normalizedTurn <= Math.trunc(previousTurn)) return false;
-      turnIncrement = Math.max(1, normalizedTurn - Math.trunc(previousTurn));
-    }
-    state.counters.lastGuidanceAnalysisCounterTurn = normalizedTurn;
-  }
-  state.counters.analysisTurns = Number(state.counters.analysisTurns || 0) + turnIncrement;
+  const currentTurn = requireHookTurn(ctx);
+  const previousTurn = state.counters.lastGuidanceAnalysisCounterTurn;
+  if (currentTurn <= previousTurn) return false;
+  const turnIncrement = previousTurn > 0 ? currentTurn - previousTurn : 1;
   const threshold = resolveGuidanceAnalysisTurnsThreshold(ctx, meta);
+  state.counters.lastGuidanceAnalysisCounterTurn = currentTurn;
+  state.counters.analysisTurns += turnIncrement;
   if (state.counters.analysisTurns < threshold.turnsThreshold) {
     return false;
   }
@@ -283,14 +264,11 @@ async function executeGuidanceWorkflowAction({
       executedPrimary = firstChanged === true;
 
       const holder = ensureHarnessBucket(ctx);
-      const pending =
-        holder?.state?.pending && typeof holder.state.pending === "object"
-          ? holder.state.pending
-          : {};
+      const { pending } = holder.state;
       const hasGuidanceFollowupPending =
         pending.summary === true || Boolean(pending.guidance) || pending.analysis === true;
       if (hasGuidanceFollowupPending) {
-        const followupAction = resolveNextGuidanceAction(holder?.state || {});
+        const followupAction = resolveNextGuidanceAction(holder.state);
         const followupChanged = await runGuidanceBySeparateModel(ctx, meta, {
           action: followupAction.action,
         });
@@ -382,13 +360,15 @@ async function handleAfterLlmCall(ctx, meta) {
 }
 
 async function handleBeforeLlmCall(ctx, meta) {
+  resolveGuidanceSummaryThresholds(ctx, meta);
+  resolveGuidanceAnalysisTurnsThreshold(ctx, meta);
   const holder = ensureHarnessBucket(ctx);
   if (holder?.state?.flags?.acceptanceReviewing === true) return false;
   const invariantChanged =
     enforceWorkflowInvariants(ctx, { domain: CAPABILITY_DOMAIN.GUIDANCE }) === true;
   const summaryScheduleChanged = maybeScheduleGuidanceSummary(ctx, meta) === true;
   const scheduleChanged = maybeScheduleGuidanceAnalysis(ctx, meta) === true;
-  const state = holder?.state || {};
+  const state = holder.state;
   const nextAction = resolveNextGuidanceAction(state);
   const decision = resolveGuidancePriorityDecision(state);
   const lifecycle = await runWorkflowLifecycle(ctx, {

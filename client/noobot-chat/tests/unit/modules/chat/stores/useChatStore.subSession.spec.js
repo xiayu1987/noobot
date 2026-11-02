@@ -277,6 +277,7 @@ describe("sub-session realtime message projection", () => {
       protocolVersion: 2,
       eventType: "turn.terminal_resolved",
       commandId: "resolve-child-terminal",
+      generatedAt: "2026-11-01T00:00:00.000Z",
       resolved: true,
       retryable: false,
       reason: "",
@@ -495,6 +496,7 @@ describe("sub-session realtime message projection", () => {
             turnScopeId: "workflow-node:node-1",
             dialogProcessId: "dialog-1",
             thinkingFinishedAt: "2026-07-31T08:43:59.859Z",
+            modelLoopRound: 5,
           },
         ],
       }),
@@ -517,6 +519,7 @@ describe("sub-session realtime message projection", () => {
       startedAt: "2026-07-31T08:42:28.213Z",
       finishedAt: "2026-07-31T08:43:59.859Z",
       thinkingFinishedAt: "2026-07-31T08:43:59.859Z",
+      modelLoopRound: 5,
       terminal: "completed",
     });
   });

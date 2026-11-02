@@ -43,7 +43,6 @@
 | ---------------- | ---------------- | ------------------------ | --------- | ----------------------------------------------------------------- |
 | `write_file`     | `content`        | 超过 write-file 输入阈值 | `input`   | 保存完整输入并返回 attachment envelope；具体工具不执行            |
 | `execute_script` | `command`        | 超过脚本输入阈值         | `input`   | 保存完整命令并返回 attachment envelope；具体工具不执行            |
-| `search`         | `text`           | `source=text` 且超过阈值 | `input`   | 保存完整文本并返回 attachment envelope；具体工具不执行            |
 | `patch_file`     | `patch`          | 超过 patch 阈值          | `input`   | 保存完整 patch 并返回 attachment envelope；具体工具不执行         |
 | `task_summary`   | `summaryContent` | 强制附件策略             | `input`   | 保存小结内容，将 envelope 合并进工具结果后继续执行 `task_summary` |
 

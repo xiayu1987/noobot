@@ -5,7 +5,12 @@
  */
 
 import { canonicalizeTestContextMessage } from "./context-message.js";
-import { createModelContext, resolveModelFinalMessages } from "@noobot/context-protocol";
+import {
+  attachModelContext,
+  createModelContext,
+  requireAuthoritativeModelContext,
+  resolveModelFinalMessages,
+} from "@noobot/context-protocol";
 import {
   assertMainFlowControlPort,
   createSummaryCheckpointInstruction,
@@ -24,13 +29,13 @@ import {
 import { createModelResponse, MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import { migrateHarnessBucket } from "../../src/core/bucket-migration.js";
 
-import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 let testScopeSequence = 0;
 let testTransferSequence = 0;
 let testModelResponseSequence = 0;
 
 export function createTestModelResponse(
-  outputText,
+  outputText = "",
   {
     reasoning = "",
     toolCalls = [],
@@ -39,35 +44,42 @@ export function createTestModelResponse(
     content = undefined,
     responseOutput = undefined,
     responseReasoning = undefined,
-    attempts = null,
+    attempts,
     identity = {},
   } = {},
 ) {
   testModelResponseSequence += 1;
   const sequence = testModelResponseSequence;
   const output = {
-    text: String(outputText ?? ""),
-    reasoning: String(reasoning ?? ""),
-    toolCalls: Array.isArray(toolCalls) ? toolCalls : [],
-    finishReason: String(finishReason ?? ""),
-    usage: isPlainObject(usage) ? usage : {},
-    ...(typeof content === "string" || Array.isArray(content) ? { content } : {}),
-    ...(Array.isArray(responseOutput) ? { responseOutput } : {}),
-    ...(isPlainObject(responseReasoning) ? { responseReasoning } : {}),
+    text: outputText,
+    reasoning,
+    toolCalls,
+    finishReason,
+    usage,
+    ...(content !== undefined ? { content } : {}),
+    ...(responseOutput !== undefined ? { responseOutput } : {}),
+    ...(responseReasoning !== undefined ? { responseReasoning } : {}),
   };
   const normalizedAttempts =
-    Array.isArray(attempts) && attempts.length
-      ? attempts
-      : [{ attempt: 1, status: "completed", kind: "response", streaming: false, output }];
+    attempts === undefined
+      ? [{ attempt: 1, status: "completed", kind: "response", streaming: false, output }]
+      : attempts;
+  const {
+    sessionId = `test-model-session-${sequence}`,
+    parentSessionId = "",
+    dialogProcessId = `test-model-dialog-${sequence}`,
+    turnScopeId = `test-model-turn-${sequence}`,
+    runId = `test-model-run-${sequence}`,
+  } = identity;
   return createModelResponse({
     invocation: {
       requestId: `test-model-request-${sequence}`,
       invocationId: `test-model-invocation-${sequence}`,
-      sessionId: String(identity.sessionId || `test-model-session-${sequence}`),
-      parentSessionId: String(identity.parentSessionId || ""),
-      dialogProcessId: String(identity.dialogProcessId || `test-model-dialog-${sequence}`),
-      turnScopeId: String(identity.turnScopeId || `test-model-turn-${sequence}`),
-      runId: String(identity.runId || `test-model-run-${sequence}`),
+      sessionId,
+      parentSessionId,
+      dialogProcessId,
+      turnScopeId,
+      runId,
       flow: "harness.test",
       purpose: "harness_test",
       domain: "test",
@@ -257,6 +269,7 @@ function createTestRuntimeBinding({ userId, runtime, systemRuntime }) {
 
 export function ensureTestHookContext(ctx = {}) {
   if (!isObjectLike(ctx)) return ctx;
+  if (!Object.hasOwn(ctx, "turn")) ctx.turn = 1;
   ensureTestAgentExecutionScope(ctx);
   const explicitIdentity =
     ctx.activeTurnIdentity && typeof ctx.activeTurnIdentity === "object"
@@ -283,23 +296,23 @@ export function ensureTestHookContext(ctx = {}) {
       canonicalizeTestContextMessage(message);
       if (role === "system" || role === "developer") continue;
       const metadata = message.additional_kwargs;
-      if (!text(metadata.dialogProcessId)) metadata.dialogProcessId = dialogProcessId;
-      if (!text(metadata.turnScopeId)) metadata.turnScopeId = turnScopeId;
+      if (!Object.hasOwn(metadata, "dialogProcessId")) metadata.dialogProcessId = dialogProcessId;
+      if (!Object.hasOwn(metadata, "turnScopeId")) metadata.turnScopeId = turnScopeId;
     }
   };
   stampRoundIdentity(ctx.messageBlocks?.system);
   stampRoundIdentity(ctx.messageBlocks?.history);
   stampRoundIdentity(ctx.messageBlocks?.incremental);
-  if (ctx.modelContext?.protocolVersion !== 3) {
-    ctx.modelContext = createModelContext({
-      messageBlocks: ctx.messageBlocks || { system: [], history: [], incremental: [] },
-      activeTurnIdentity,
-    });
-    ctx.contextProtocolVersion = 2;
+  if (!Object.hasOwn(ctx, "modelContext")) {
+    attachModelContext(
+      ctx,
+      createModelContext({
+        messageBlocks: ctx.messageBlocks ?? { system: [], history: [], incremental: [] },
+        activeTurnIdentity,
+      }),
+    );
   }
-  if (!ctx.modelContext.activeTurnIdentity) {
-    ctx.modelContext.activeTurnIdentity = activeTurnIdentity;
-  }
+  requireAuthoritativeModelContext(ctx);
   delete ctx.messageBlocks;
   delete ctx.activeTurnIdentity;
   injectTestHookRuntimeIdentity(ctx, identitySources, activeTurnIdentity);
@@ -343,18 +356,8 @@ export function createTestHookContext(ctx = {}, context = {}) {
   });
 }
 
-export function getTestContextMessages(ctx = {}) {
-  return ctx?.modelContext?.messages || [];
-}
-
-export function getTestContextMessageBlocks(ctx = {}) {
-  return (
-    ctx?.modelContext?.messageBlocks || {
-      system: [],
-      history: [],
-      incremental: [],
-    }
-  );
+export function getTestContextMessages(ctx) {
+  return requireAuthoritativeModelContext(ctx).messages;
 }
 
 export function createTestHookManager() {
@@ -379,18 +382,11 @@ export function invokeTestHookHandler(handler, point, ctx, signal) {
 
 export function createTestResolveModelMessages() {
   return ({ ctx = {} } = {}) => {
-    const modelContext = ctx?.modelContext;
-    if (modelContext?.protocolVersion !== 3) {
-      throw new Error("test model resolver requires modelContext protocolVersion=3");
-    }
-    const blocks = modelContext.messageBlocks;
-    if (!isObjectLike(blocks)) {
-      throw new Error("test model resolver requires authoritative messageBlocks");
-    }
+    const { messageBlocks: blocks } = requireAuthoritativeModelContext(ctx);
     return resolveModelFinalMessages({
-      systemMessages: Array.isArray(blocks.system) ? blocks.system : [],
-      historyMessages: Array.isArray(blocks.history) ? blocks.history : [],
-      incrementalMessages: Array.isArray(blocks.incremental) ? blocks.incremental : [],
+      systemMessages: blocks.system,
+      historyMessages: blocks.history,
+      incrementalMessages: blocks.incremental,
     }).messages;
   };
 }

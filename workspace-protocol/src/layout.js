@@ -8,6 +8,7 @@ export const WORKSPACE_LAYOUT_VERSION = 30;
 
 export const WORKSPACE_ROOT_LAYOUT = Object.freeze({
   USERS_FILE: "user.json",
+  RUNTIME_PARAMS_FILE: "runtime-params.json",
   CONFIG_PARAMS_FILE: "config-params.json",
 });
 
@@ -67,16 +68,16 @@ export const WORKSPACE_USER_CONFIGURATION_ENTRIES = Object.freeze([
 export const WORKSPACE_PATH_SEGMENT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,159}$/;
 
 export function isWorkspacePathSegment(value) {
-  const segment = String(value ?? "");
-  return WORKSPACE_PATH_SEGMENT_PATTERN.test(segment) && !segment.includes("..");
+  return (
+    typeof value === "string" && WORKSPACE_PATH_SEGMENT_PATTERN.test(value) && !value.includes("..")
+  );
 }
 
 function requireSegment(value, label) {
-  const segment = String(value ?? "").trim();
-  if (!isWorkspacePathSegment(segment)) {
-    throw new TypeError(`invalid workspace ${label}: ${segment}`);
+  if (!isWorkspacePathSegment(value)) {
+    throw new TypeError(`invalid workspace ${label}`);
   }
-  return segment;
+  return value;
 }
 
 function joinRelative(root, pluginId, segments) {

@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { joinClientPath } from "../../path-resolver.js";
 import fs from "node:fs";
 import { desktopDependencyTimeouts } from "./specs.js";
@@ -233,7 +234,13 @@ export function createDependencyDetector({
     return false;
   }
 
-  async function waitForDependencyInstalled(spec, { timeoutMs = 90000, intervalMs = 3000 } = {}) {
+  async function waitForDependencyInstalled(
+    spec,
+    {
+      timeoutMs = TIME_THRESHOLDS.desktop.dependencyDetectTimeoutMs,
+      intervalMs = TIME_THRESHOLDS.desktop.dependencyDetectIntervalMs,
+    } = {},
+  ) {
     appendEarlyLog(
       `[dependency:wait:start] label=${spec?.label || ""}; platform=${process.platform}; managedCommand=${spec?.managedCommand || ""}; timeoutMs=${timeoutMs}; intervalMs=${intervalMs}`,
     );

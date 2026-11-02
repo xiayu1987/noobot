@@ -84,6 +84,7 @@ export class MemoryPostProcessService {
   async runMemorySummarizeFlow({
     userId,
     sessionId,
+    parentSessionId,
     userConfig = {},
     identity,
     memoryEventListener,
@@ -110,6 +111,7 @@ export class MemoryPostProcessService {
         await this.memory.maybeSummarize({
           userId,
           sessionId,
+          parentSessionId,
           userConfig,
           abortSignal: memorySummaryAbortController.signal,
           invocationIdentity: identity,
@@ -207,6 +209,7 @@ export class MemoryPostProcessService {
     this.scheduleMemorySummarizeFlow({
       userId,
       sessionId,
+      parentSessionId,
       userConfig,
       identity,
       memoryEventListener,

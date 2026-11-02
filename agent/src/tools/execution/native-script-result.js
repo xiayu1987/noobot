@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-import { NATIVE_SCRIPT_IPC_CHANNEL } from "./native-script-ipc.js";
+import { text } from "@noobot/shared/value";
+import { NATIVE_SCRIPT_EXECUTION_STATUS, NATIVE_SCRIPT_IPC_CHANNEL } from "./native-script-ipc.js";
 
 function normalizeNativeScriptJsonValue(value, seen = new WeakSet()) {
   if (value === null || ["string", "boolean"].includes(typeof value)) return value;
@@ -63,7 +64,8 @@ function normalizeJsonObject(value, seen) {
 }
 
 function serializeNativeScriptResult(value) {
-  if (value === undefined) return { present: false };
+  if (value === undefined)
+    return { status: NATIVE_SCRIPT_EXECUTION_STATUS.RETURNED, present: false };
   let normalized;
   let serialized;
   try {
@@ -79,18 +81,28 @@ function serializeNativeScriptResult(value) {
       `script return value exceeds ${LENGTH_THRESHOLDS.nativeScript.resultBytes} bytes`,
     );
   }
-  return { present: true, value: normalized };
+  return { status: NATIVE_SCRIPT_EXECUTION_STATUS.RETURNED, present: true, value: normalized };
 }
 
-export async function publishNativeScriptResult(value) {
+function sendExecutionResult(payload) {
   if (typeof process.send !== "function") {
     throw new Error("native script result channel is unavailable");
   }
-  const payload = serializeNativeScriptResult(value);
-  await new Promise((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     process.send({ type: NATIVE_SCRIPT_IPC_CHANNEL.EXECUTION_RESULT, payload }, (error) => {
       if (error) reject(error);
       else resolve();
     });
+  });
+}
+
+export function publishNativeScriptResult(value) {
+  return sendExecutionResult(serializeNativeScriptResult(value));
+}
+
+export function publishNativeScriptFailure(error) {
+  return sendExecutionResult({
+    status: NATIVE_SCRIPT_EXECUTION_STATUS.FAILED,
+    error: text(error instanceof Error ? error.message : error),
   });
 }

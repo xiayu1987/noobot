@@ -8,7 +8,6 @@ import assert from "node:assert/strict";
 
 import {
   canAttemptPlanUpdate,
-  normalizePlanUpdateStage,
   readPlanUpdateCaptureContext,
   resolvePlanUpdateAttempts,
   setPendingPlanUpdate,
@@ -16,27 +15,57 @@ import {
 } from "../../src/capabilities/handlers/planning/plan-update-engine.js";
 import { setCaptureFlagStateWithMeta } from "../../src/capabilities/pending-cleanup.js";
 import { WORKFLOW_PARAMS } from "../../src/core/workflow-params.js";
+import {
+  createHarnessBucket,
+  requireHarnessPlanUpdateStage,
+} from "../../src/core/bucket-contract.js";
 
 const PLAN_UPDATE_POLICY = Object.freeze({
   MAX_ATTEMPTS_REVISION: WORKFLOW_PARAMS.planning.planUpdate.revisionMaxAttempts,
   MAX_ATTEMPTS_REFINEMENT: WORKFLOW_PARAMS.planning.planUpdate.refinementMaxAttempts,
 });
 
-test("normalizePlanUpdateStage keeps revision and defaults others to refinement", () => {
-  assert.equal(normalizePlanUpdateStage("revision"), "revision");
-  assert.equal(normalizePlanUpdateStage("REFINEMENT"), "refinement");
-  assert.equal(normalizePlanUpdateStage(""), "refinement");
+test("plan update stage requires an exact declared stage before state changes", () => {
+  assert.equal(requireHarnessPlanUpdateStage("revision"), "revision");
+  assert.equal(requireHarnessPlanUpdateStage("refinement"), "refinement");
+  for (const stage of [undefined, null, "", "REFINEMENT", " revision", "other", 1]) {
+    const { state } = createHarnessBucket();
+    const before = structuredClone(state);
+    assert.throws(
+      () => requireHarnessPlanUpdateStage(stage),
+      /invalid_harness_state:planUpdateStage/,
+    );
+    for (const operation of [
+      () => canAttemptPlanUpdate({}, state, { increment: true, stage }),
+      () => setPendingPlanUpdate(state, { active: true, stage, targetMainStepIndexes: [1] }),
+      () => setPendingPlanUpdate(state, { active: false, stage }),
+      () => writePlanUpdateCaptureContext(state, { stage, targetMainStepIndexes: [1] }),
+    ]) {
+      assert.throws(operation, /invalid_harness_state:planUpdateStage/);
+    }
+    assert.deepEqual(state, before);
+  }
+});
+
+test("capture context validates all fields before writing", () => {
+  const { state } = createHarnessBucket();
+  const before = structuredClone(state);
+  assert.throws(
+    () => writePlanUpdateCaptureContext(state, { stage: "revision", targetMainStepIndexes: null }),
+    /requires targetMainStepIndexes array/,
+  );
+  assert.deepEqual(state, before);
 });
 
 test("canAttemptPlanUpdate increments revision/refinement counters independently", () => {
-  const state = { counters: { planUpdateAttempts: 0 } };
+  const { state } = createHarnessBucket();
   assert.equal(canAttemptPlanUpdate({}, state, { increment: true, stage: "revision" }), true);
   assert.equal(canAttemptPlanUpdate({}, state, { increment: true, stage: "refinement" }), true);
   assert.equal(resolvePlanUpdateAttempts(state, { stage: "revision" }), 1);
   assert.equal(resolvePlanUpdateAttempts(state, { stage: "refinement" }), 1);
   assert.equal(state.counters.planRevisionAttempts, 1);
   assert.equal(state.counters.planRefinementAttempts, 1);
-  assert.equal(state.counters.planUpdateAttempts, 2);
+  assert.equal(Object.hasOwn(state.counters, "planUpdateAttempts"), false);
 });
 
 test("canAttemptPlanUpdate respects stage-specific max attempts", () => {
@@ -50,18 +79,14 @@ test("canAttemptPlanUpdate respects stage-specific max attempts", () => {
   assert.equal(canAttemptPlanUpdate({}, state, { increment: false, stage: "refinement" }), false);
 });
 
-test("unified attempts no longer block revision/refinement", () => {
-  const state = {
-    counters: {
-      planUpdateAttempts: Number.MAX_SAFE_INTEGER,
-    },
-  };
+test("fresh stage counters permit revision/refinement independently", () => {
+  const { state } = createHarnessBucket();
   assert.equal(canAttemptPlanUpdate({}, state, { increment: false, stage: "revision" }), true);
   assert.equal(canAttemptPlanUpdate({}, state, { increment: false, stage: "refinement" }), true);
 });
 
 test("setPendingPlanUpdate manages independent revision/refinement pending fields", () => {
-  const state = { pending: {} };
+  const { state } = createHarnessBucket();
   setPendingPlanUpdate(state, {
     active: true,
     stage: "revision",
@@ -85,7 +110,7 @@ test("setPendingPlanUpdate manages independent revision/refinement pending field
 });
 
 test("plan update capture context is cleared when the capture flag is released", () => {
-  const state = { flags: {} };
+  const state = { flags: {}, pendingMeta: { pending: {}, flags: {}, lastWarnHookTurn: null } };
   writePlanUpdateCaptureContext(state, {
     stage: "revision",
     targetMainStepIndexes: [1, 2],

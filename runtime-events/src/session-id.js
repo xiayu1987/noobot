@@ -3,12 +3,16 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
 import { text } from "@noobot/shared/value";
 
 const INVALID_OPTIONAL_SESSION_IDS = new Set(["undefined", "null"]);
 
-export function normalizeOptionalSessionId(value, { maxLength = 160 } = {}) {
+export function normalizeOptionalSessionId(
+  value,
+  { maxLength = LENGTH_THRESHOLDS.sessionLog.identityChars } = {},
+) {
   const sessionId = text(value);
   if (!sessionId || INVALID_OPTIONAL_SESSION_IDS.has(sessionId.toLowerCase())) return "";
   return maxLength > 0 ? sessionId.slice(0, maxLength) : sessionId;

@@ -8,20 +8,20 @@ import {
   hydrateCheckpointReceipts,
   storeCheckpointReceipts,
 } from "@noobot/session-protocol/summary-checkpoint-storage";
-import { readVerifiedSnapshot } from "./turn-materializer.js";
+import { readVerifiedCheckpointIdentity } from "./turn-materializer.js";
 
 async function readCheckpointIdentitySource({ storageService, sessionDir, session }) {
   const source = createCheckpointIdentitySource(session);
   for (const turn of session.turnOrder) {
     let previousCheckpointHash = "";
     for (const index of turn.summarySnapshots) {
-      const { payload } = await readVerifiedSnapshot({
+      const checkpoint = await readVerifiedCheckpointIdentity({
         storageService,
         sessionDir,
         index,
         previousCheckpointHash,
       });
-      source.collect(turn, index, payload);
+      source.collect(turn, index, checkpoint);
       previousCheckpointHash = index.contentHash;
     }
   }

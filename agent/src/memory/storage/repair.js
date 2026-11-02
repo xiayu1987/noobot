@@ -32,10 +32,11 @@ function createRepairIo(base, backupBase) {
   };
 }
 
-export async function repairWorkspaceMemoryDocuments({ base, now = new Date() }) {
+export async function repairWorkspaceMemoryDocuments({ base, locale, now = new Date() }) {
   const stamp = now.toISOString().replace(/[:.]/g, "-");
   const backupBase = path.join(base, MEMORY_REPAIR_BACKUP_DIR, stamp);
   return repairMemoryWorkspace({
+    locale,
     io: createRepairIo(base, backupBase),
     layout: {
       shortMemory: MEMORY_RELATIVE_PATHS.SHORT_MEMORY,

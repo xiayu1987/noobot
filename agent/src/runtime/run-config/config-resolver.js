@@ -15,7 +15,6 @@ export function resolvePhaseSummaryLoopTurns({ runConfig = {} } = {}) {
     enabled: isRuntimeThresholdGateEnabled(runConfig),
     runtimeValue: runConfig?.summaryPolicy?.phaseSummaryLoopTurns,
     defaultValue: BUILTIN_THRESHOLDS.taskSummary.phaseSummaryLoopTurns,
-    requireInteger: true,
   });
 }
 
@@ -24,7 +23,6 @@ export function resolveTaskCheckLoopTurns({ runConfig = {} } = {}) {
     enabled: isRuntimeThresholdGateEnabled(runConfig),
     runtimeValue: runConfig?.summaryPolicy?.taskCheckLoopTurns,
     defaultValue: BUILTIN_THRESHOLDS.taskCheck.taskCheckLoopTurns,
-    requireInteger: true,
   });
 }
 

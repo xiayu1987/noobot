@@ -25,7 +25,8 @@
     "@noobot/shared": "file:../shared",
     "@noobot/runtime-events": "file:../runtime-events",
     "@noobot/runtime-topology-protocol": "file:../runtime-topology-protocol",
-    "@noobot/event-protocol": "file:../event-protocol"
+    "@noobot/event-protocol": "file:../event-protocol",
+    "@noobot/workspace-protocol": "file:../workspace-protocol"
   },
   "devDependencies": {
     "@noobot/attachment-protocol": "file:../attachment-protocol"

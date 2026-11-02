@@ -10,6 +10,7 @@ import {
   createSessionArtifactNotFoundError,
   createSessionUnavailableReason,
   createTurnTerminalResolution,
+  requireTurnTerminalResolutionIdentity,
 } from "@noobot/session-protocol";
 import { requireTurnLookupKey } from "@noobot/session-protocol/turn-lookup-key";
 import {
@@ -79,22 +80,15 @@ export class SessionCrudService {
     commandId,
     persistenceContext,
   }) {
-    const normalizedSessionId = text(sessionId);
-    const normalizedTurnScopeId = text(turnScopeId);
-    const normalizedCommandId = text(commandId);
-    if (!userId || !normalizedSessionId) {
-      throw new TypeError("terminal resolution requires userId and sessionId");
-    }
+    const identity = requireTurnTerminalResolutionIdentity({ commandId, sessionId, turnScopeId });
     const bundle = await this.getSessionBundle({
       userId,
-      sessionId: normalizedSessionId,
+      sessionId,
       persistenceContext,
     });
     if (!bundle.exists || !bundle.session) {
       return createTurnTerminalResolution({
-        commandId: normalizedCommandId,
-        sessionId: normalizedSessionId,
-        turnScopeId: normalizedTurnScopeId,
+        ...identity,
         reason: SESSION_NOT_FOUND_REASON,
       });
     }
@@ -102,9 +96,7 @@ export class SessionCrudService {
       lifecycle: bundle.session.turnLifecycle,
       turnTimings: bundle.session.turnTimings,
       aggregateVersion: bundle.session.aggregateVersion,
-      commandId: normalizedCommandId,
-      sessionId: normalizedSessionId,
-      turnScopeId: normalizedTurnScopeId,
+      ...identity,
     });
   }
 

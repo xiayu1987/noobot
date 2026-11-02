@@ -87,7 +87,7 @@ export function applySnapshotResults(manager, sessionsMap, snapshotResults) {
       logResolvedSnapshot(manager, request.channel, request, snapshotSequence);
       continue;
     }
-    const reason = text(request.result?.reason || "snapshot_failed");
+    const { reason } = request.result;
     manager.logSessionEvent(request.channel, {
       category: "transport",
       level: "warn",

@@ -13,6 +13,7 @@ import {
 } from "@noobot/agent-config-protocol";
 import { getEnabledProviders, resolveModelSpecByAlias } from "noobot-agent/model";
 import { loadGlobalConfig } from "../../src/config/core/global-config-loader.js";
+import { tModelRuntime } from "@noobot/model-runtime/locale";
 
 async function optionalJson(filePath) {
   try {
@@ -23,8 +24,9 @@ async function optionalJson(filePath) {
   }
 }
 
-export async function loadTestModels({ configPath, workspaceRoot, userId = "admin" }) {
-  if (!/^[a-zA-Z0-9_-]+$/.test(userId)) throw new Error("Invalid user ID / 用户 ID 无效");
+export async function loadTestModels({ configPath, workspaceRoot, userId = "admin", locale }) {
+  if (!/^[a-zA-Z0-9_-]+$/.test(userId))
+    throw new Error(tModelRuntime(locale, "diagnostic.invalidUserId"));
   const [rawGlobal, rawUser, workspaceParams, userParams] = await Promise.all([
     loadGlobalConfig(configPath),
     optionalJson(path.join(workspaceRoot, userId, "config.json")),

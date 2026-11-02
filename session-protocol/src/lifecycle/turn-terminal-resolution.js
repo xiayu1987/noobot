@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text as clean, isObjectLike } from "@noobot/shared/value";
+import { text as clean, isObjectLike, isCanonicalText } from "@noobot/shared/value";
 import { requireCanonicalTurnScopeId } from "../identity/turn-scope-identity.js";
 import { snapshotTurn } from "./turn-projection.js";
 import { collectTurnRecordErrors } from "./turn-record.js";
@@ -24,10 +24,17 @@ function isPositiveInteger(value) {
   return Number.isInteger(value) && value > 0;
 }
 
+export function requireTurnTerminalResolutionIdentity({ commandId, sessionId, turnScopeId }) {
+  if (!isCanonicalText(commandId) || !isCanonicalText(sessionId)) {
+    throw new TypeError("terminal resolution requires commandId and sessionId as canonical text");
+  }
+  return { commandId, sessionId, turnScopeId: requireCanonicalTurnScopeId(turnScopeId) };
+}
+
 export function createTurnTerminalResolution({
-  commandId = "",
-  sessionId = "",
-  turnScopeId = "",
+  commandId,
+  sessionId,
+  turnScopeId,
   resolved = false,
   retryable = false,
   reason = "",
@@ -35,26 +42,28 @@ export function createTurnTerminalResolution({
   turn = null,
   aggregateVersion = null,
   generatedAt = new Date().toISOString(),
-} = {}) {
+}) {
   if (retryable === true ? !isPositiveInteger(retryAfterMs) : retryAfterMs !== undefined) {
     throw new TypeError(
       "terminal resolution retryAfterMs must be a positive integer only when retryable",
     );
   }
-  return {
+  const identity = requireTurnTerminalResolutionIdentity({ commandId, sessionId, turnScopeId });
+  const response = {
     protocolVersion: TURN_TERMINAL_RESOLUTION_PROTOCOL_VERSION,
     eventType: TURN_TERMINAL_RESOLVED_EVENT,
-    commandId: clean(commandId),
-    sessionId: clean(sessionId),
-    turnScopeId: requireCanonicalTurnScopeId(turnScopeId),
-    resolved: resolved === true,
-    retryable: retryable === true,
-    reason: clean(reason),
+    ...identity,
+    resolved,
+    retryable,
+    reason,
     retryAfterMs: retryable === true ? retryAfterMs : 0,
-    aggregateVersion: aggregateVersion == null ? null : Number(aggregateVersion),
-    turn: turn ? snapshotTurn(turn) : null,
-    generatedAt: clean(generatedAt),
+    aggregateVersion,
+    turn,
+    generatedAt,
   };
+  const validation = validateTurnTerminalResolution(response);
+  if (!validation.valid) throw new TypeError(validation.errors.join(", "));
+  return { ...response, turn: turn === null ? null : snapshotTurn(turn) };
 }
 
 function collectResolvedTurnErrors(response) {
@@ -85,6 +94,12 @@ function collectResolvedTurnErrors(response) {
 export function validateTurnTerminalResolution(response) {
   if (!isObjectLike(response)) return { valid: false, errors: ["invalid_terminal_resolution"] };
   const errors = [];
+  for (const field of ["commandId", "sessionId", "turnScopeId", "generatedAt"]) {
+    if (!isCanonicalText(response[field])) errors.push(`invalid_${field}`);
+  }
+  if (typeof response.resolved !== "boolean") errors.push("invalid_resolved");
+  if (typeof response.retryable !== "boolean") errors.push("invalid_retryable");
+  if (response.reason !== "" && !isCanonicalText(response.reason)) errors.push("invalid_reason");
   if (response.protocolVersion !== TURN_TERMINAL_RESOLUTION_PROTOCOL_VERSION)
     errors.push("unsupported_terminal_resolution_version");
   if (clean(response.eventType) !== TURN_TERMINAL_RESOLVED_EVENT)

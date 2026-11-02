@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { app, dialog, ipcMain } from "electron";
 import { runBestEffort } from "@noobot/shared/best-effort";
 import { resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports";
@@ -46,11 +47,8 @@ const agentProxyOrigin = String(
 ).replace(/\/$/, "");
 const agentProxyHealthUrl = `${agentProxyOrigin}/health`;
 const defaultClientUrl = resolveDesktopClientUrl(process.env);
-const agentProxyStartupTimeoutMs = Number.parseInt(
-  process.env.NOOBOT_AGENT_PROXY_STARTUP_TIMEOUT_MS || "60000",
-  10,
-);
-const pollIntervalMs = Number.parseInt(process.env.NOOBOT_STARTUP_POLL_MS || "1000", 10);
+const agentProxyStartupTimeoutMs = TIME_THRESHOLDS.desktop.agentProxyStartupTimeoutMs;
+const pollIntervalMs = TIME_THRESHOLDS.desktop.startupPollIntervalMs;
 const startupDebugEnabled = /^(1|true|yes|on)$/i.test(
   String(process.env.NOOBOT_STARTUP_DEBUG || ""),
 );
@@ -267,7 +265,7 @@ setTimeout(() => {
       operationName: "desktop.startBoot.timer",
     });
   }
-}, 5000);
+}, TIME_THRESHOLDS.desktop.windowRecoveryDelayMs);
 app.on("activate", () => {
   if (getMainWindow() && !getMainWindow().isDestroyed()) {
     showMainWindow();

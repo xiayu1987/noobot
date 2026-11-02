@@ -5,8 +5,19 @@
  */
 
 import { deepFreeze } from "./deep-freeze.js";
+import { bindRuntimeThresholds } from "./runtime-threshold-state.js";
 
-export const TURN_THRESHOLDS = deepFreeze({
+export const DEFAULT_TURN_THRESHOLDS = deepFreeze({
+  model: {
+    transportMaxAttempts: 3,
+    reasoningOnlyMaxAttempts: 1,
+    emptyResponseMaxAttempts: 3,
+    toolCallMismatchMaxAttempts: 1,
+    diagnosticMaxAttempts: 1,
+  },
+  modelRuntime: {
+    anthropicPauseTurnMaxContinuations: 3,
+  },
   agent: {
     maxToolLoopTurns: 2000,
 
@@ -107,3 +118,5 @@ export const TURN_THRESHOLDS = deepFreeze({
     admissionMaxRetries: 3,
   },
 });
+
+export const TURN_THRESHOLDS = bindRuntimeThresholds("turn", DEFAULT_TURN_THRESHOLDS);

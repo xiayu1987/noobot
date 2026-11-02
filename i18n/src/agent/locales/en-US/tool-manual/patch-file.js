@@ -23,9 +23,11 @@ export const PATCH_FILE_MANUAL = {
     },
     notes: [
       "This is the preferred way to edit existing files. Favor exact-context patches over hand-computed unified diff line counts.",
-      "When a patch fails, read_file again for the current content before retrying instead of iterating on stale context. Failures carry totalLines, plus nearbyContent when the mismatched line is inside the file.",
+      "When a patch fails, read_file again for the current content before retrying instead of iterating on stale context. On mismatch, details carry line/expected/actual for the first differing line of the closest candidate, plus totalLines and nearbyContent; with no candidate only expected is given.",
       "Patching can continue after other tools or formatters edit a file. file_mutation_conflict means the file changed after this patch read it; reread and rebuild the patch. The aggregate diff shows the overall file changes during this turn; aggregate.externalChangeCount reports observed external changes.",
       "Multiple edits to the same file can share one patch, which cuts round trips.",
+      "apply_patch locates hunks by exact content. If the content occurs more than once, it fails as ambiguous with candidateLines; add an `@@ L<line>` anchor to pick the nearest exact match.",
+      "If context/removal lines carry read_file line-number prefixes that are all present, consecutive, and match the file, they are stripped and reported in changes[].repairs; prefixed added lines are rejected.",
       "changes[].action reports the intent declared by the patch (write or delete), not that the write already happened. To confirm content actually landed, check whether changes[].mutation and the top-level mutations are non-empty. Under dryRun the action is still write while mutation is always null.",
     ],
     pitfalls: [

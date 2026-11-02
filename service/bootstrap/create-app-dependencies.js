@@ -80,11 +80,9 @@ export async function createAppDependencies({
   } = workspaceUsersService;
 
   const authService = createAuthService({
-    initialApiKeyTtlMs: Number(globalConfig?.auth?.apiKeyTtlMs || 24 * 60 * 60 * 1000),
     translateText,
   });
   const {
-    setApiKeyTtlMs,
     issueApiKey,
     resolveAuthByApiKey,
     requireApiKey,
@@ -130,7 +128,6 @@ export async function createAppDependencies({
     readWorkspaceConfigParams,
     globalConfigBuilder: configBuilder,
     BotManager,
-    setApiKeyTtlMs,
     setGlobalConfigRaw: (nextGlobalConfigRaw) => {
       globalConfigRaw = nextGlobalConfigRaw;
     },

@@ -9,6 +9,19 @@ import assert from "node:assert/strict";
 import { composeSystemInfoSections } from "../../src/context/formatters/system-prompt-formatter.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
+test("system runtime projection rejects missing caller without inventing user ownership", () => {
+  const dynamicInfo = { now: "2026-08-05T12:00:00.000Z", config: {} };
+  const before = structuredClone(dynamicInfo);
+  assert.throws(() => composeSystemInfoSections({ dynamicInfo }));
+  assert.deepEqual(dynamicInfo, before);
+  assert.throws(() => composeSystemInfoSections({ dynamicInfo: null }));
+  assert.throws(() => composeSystemInfoSections({ dynamicInfo: { caller: SESSION_CALLER.USER } }));
+  assert.equal(
+    composeSystemInfoSections({ locale: "en-US", dynamicInfo: {} }).join("\n").includes('"caller"'),
+    false,
+  );
+});
+
 test("composeSystemInfoSections omits conditional sections when data is empty", () => {
   const sections = composeSystemInfoSections({
     locale: "en-US",
@@ -36,7 +49,7 @@ test("composeSystemInfoSections includes MCP/connectors/attachments when data ex
     locale: "en-US",
     systemPrompt: "base",
     staticInfo: { a: 1 },
-    dynamicInfo: { b: 2 },
+    dynamicInfo: {},
     scenarioSection: { key: "coding" },
     workspaceDirectories: ["runtime"],
     modelSection: { current: { name: "gpt" } },

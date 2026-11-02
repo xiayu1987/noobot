@@ -27,8 +27,12 @@ export function watchRuntimeNodeRebound({ props, flowNodes, refs }) {
       const previous = refs.selectedRuntimeNode.value;
       if (!previous) return;
       const current = findCurrentWorkflowRuntimeNode(previous, flowNodes?.value);
-      if (!current || current === previous) return;
+      if (current === previous) return;
       refs.selectedRuntimeNode.value = current;
+      if (current === null) {
+        refs.selectedRuntimeStep.value = null;
+        return;
+      }
       props.logWorkflowDiagnostics("frontend.workflowNodeDetail.runtimeNodeRebound", {
         ...runtimeIdentity(current),
         nodeSessionId: text(refs.selectedNodeSessionId.value),

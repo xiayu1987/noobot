@@ -6,7 +6,8 @@
 import { routeWorkflowDiagnosticsPayload } from "./runtime/workflowDiagnosticsRoute.js";
 import { createPluginActivationResult, PLUGIN_SURFACE } from "@noobot/plugin-protocol";
 import { EVENT_FAMILY } from "@noobot/event-protocol";
-import { isPlainObject, text, isFunction } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
+import { isWorkflowMessage } from "@noobot/event-protocol/workflow-runtime-event";
 import { requireWorkflowSessionRequest } from "@noobot/event-protocol/workflow-session-detail";
 
 function routeWorkflowRuntimeEvent({ envelope, descriptor, context = {} } = {}) {
@@ -82,17 +83,6 @@ function createWorkflowSessionService(authenticatedRequest) {
   });
 }
 
-function isWorkflowMessageLike(messageItem = {}) {
-  const type = text(messageItem?.type).toLowerCase();
-  const pluginMeta = isPlainObject(messageItem?.pluginMeta) ? messageItem.pluginMeta : null;
-  const source = text(pluginMeta?.source).toLowerCase();
-  const kind = text(pluginMeta?.kind).toLowerCase();
-  const phase = text(pluginMeta?.phase).toLowerCase();
-  return (
-    type === "workflow" && source === "workflow-plugin" && kind === "workflow" && Boolean(phase)
-  );
-}
-
 export async function activate(ctx = {}) {
   const contribute = ctx?.contributeExtension;
   const points = ctx?.extensionPoints;
@@ -111,7 +101,7 @@ export async function activate(ctx = {}) {
     capability: "message.panel.workflow",
     exclusiveGroup: "message.panel.workflow",
     priority: 100,
-    when: (context = {}) => isWorkflowMessageLike(context?.messageItem),
+    when: (context = {}) => isWorkflowMessage(context?.messageItem),
     resolveProps: (context = {}) => ({
       messageItem: context.messageItem,
       userId: text(context.userId),

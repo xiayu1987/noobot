@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createCommittedTurnLifecycleEnvelope } from "@noobot/authoritative-state/application";
+import { listPendingAuthorityEvents } from "@noobot/event-protocol";
 import {
   AUTHORITY_EVENT_CONSUMER,
   createAuthorityEventDispatcher,
@@ -93,7 +94,7 @@ test("authority outbox publishes child lifecycle under the persisted child sessi
   assert.equal(events[0]?.data?.ordering?.revision, 2);
 });
 
-test("authority dispatcher rejects an invalid lifecycle envelope before delivery side effects", async () => {
+test("authority outbox rejects an invalid lifecycle envelope before delivery side effects", async () => {
   const calls = { attempts: 0, sends: 0, acknowledgements: 0 };
   const invalidEnvelope = {
     eventId: "invalid-event",
@@ -102,10 +103,13 @@ test("authority dispatcher rejects an invalid lifecycle envelope before delivery
   };
   const bot = {
     session: {
-      async getPendingAuthorityEvents() {
+      async getPendingAuthorityEvents({ consumerId }) {
         return {
           found: true,
-          events: [{ eventId: invalidEnvelope.eventId, envelope: invalidEnvelope }],
+          events: listPendingAuthorityEvents(
+            [{ eventId: invalidEnvelope.eventId, envelope: invalidEnvelope }],
+            { consumerId },
+          ),
         };
       },
       async recordAuthorityEventAttempts() {
@@ -127,13 +131,13 @@ test("authority dispatcher rejects an invalid lifecycle envelope before delivery
     },
   });
 
-  const result = await dispatchAuthorityEvents({
-    userId: "user-1",
-    sessionId: "session-invalid",
-    persistenceScope: null,
-  });
-
-  assert.equal(result.dispatched, false);
-  assert.equal(result.reason, "invalid_authority_event_envelope");
+  await assert.rejects(
+    dispatchAuthorityEvents({
+      userId: "user-1",
+      sessionId: "session-invalid",
+      persistenceScope: null,
+    }),
+    /invalid envelope/,
+  );
   assert.deepEqual(calls, { attempts: 0, sends: 0, acknowledgements: 0 });
 });

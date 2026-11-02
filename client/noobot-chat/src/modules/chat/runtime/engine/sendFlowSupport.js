@@ -4,14 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { getMessageTurnScopeId } from "../../model/messageIdentity.js";
-import { normalizeTrimmedString } from "./utils.js";
 import { createSecureId } from "@noobot/shared/secure-identity";
 
 export function createTurnScopeId() {
   return createSecureId("client-turn");
 }
 
-export function isEventForCurrentTurn(data = {}, botMessage = {}) {
+export function isEventForCurrentTurn(data, botMessage) {
   const botTurnScopeId = getMessageTurnScopeId(botMessage);
-  return normalizeTrimmedString(data?.turnScopeId) === botTurnScopeId;
+  return Boolean(botTurnScopeId) && data.turnScopeId === botTurnScopeId;
 }

@@ -6,7 +6,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readOptionalJsonObjectConfigSync } from "@noobot/shared/config-file";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -35,8 +35,6 @@ const DEFAULT_CONFIG = {
   harnessFlowHeaderKey: "x-harness-flow",
   sessionIdHeaderKey: "x-harness-session-id",
   parentSessionIdHeaderKey: "parentsessionid",
-  maxLogFileSizeBytes: 10 * 1024 * 1024,
-  retainMs: 60 * 60 * 1000,
 };
 
 function loadConfig(configFilePath = CONFIG_FILE_PATH) {
@@ -44,32 +42,57 @@ function loadConfig(configFilePath = CONFIG_FILE_PATH) {
     filePath: configFilePath,
     defaultValue: {},
   });
-  return { ...DEFAULT_CONFIG, ...parsed };
+  for (const key of ["maxLogFileSizeBytes", "retainMs"]) {
+    if (Object.hasOwn(parsed, key))
+      throw new Error(
+        `${key} was moved to workspace/runtime-params.json; remove it from model-proxy.config.json`,
+      );
+  }
+  const config = { ...DEFAULT_CONFIG, ...parsed };
+  for (const key of [
+    "proxyHost",
+    "logDir",
+    "logPrefix",
+    "unknownModelName",
+    "unknownFlowName",
+    "unknownSessionId",
+    "modelNameHeaderKey",
+    "parentSessionIdHeaderKey",
+  ]) {
+    if (typeof config[key] !== "string" || !config[key].trim()) {
+      throw new Error(`Invalid model-proxy config: ${key} must be a non-empty string`);
+    }
+  }
+  config.proxies = normalizeProxyEntries(config.proxies);
+  return config;
 }
 
-function normalizeProxyEntries(rawEntries = []) {
+function normalizeProxyEntries(rawEntries) {
   if (!Array.isArray(rawEntries) || !rawEntries.length) {
-    return [...DEFAULT_CONFIG.proxies];
+    throw new Error("Invalid model-proxy config: proxies must be a non-empty array");
   }
 
   const usedPorts = new Set();
   const normalized = [];
 
   for (let index = 0; index < rawEntries.length; index += 1) {
-    const item = rawEntries[index] || {};
+    const item = rawEntries[index];
+    if (!isPlainObject(item)) {
+      throw new Error(`Invalid model-proxy config: proxies[${index}] must be an object`);
+    }
     const rawTarget = text(item.targetUrl);
-    if (!rawTarget) continue;
+    const target = new URL(rawTarget);
+    if (!["http:", "https:"].includes(target.protocol)) {
+      throw new Error(`Invalid model-proxy config: proxies[${index}].targetUrl must use HTTP(S)`);
+    }
 
-    let localPort = Number(item.localPort);
+    const localPort = item.localPort;
     if (!Number.isInteger(localPort) || localPort <= 0 || localPort > 65535) {
-      localPort = DEFAULT_CONFIG.proxies[0].localPort + index;
+      throw new Error(`Invalid model-proxy config: proxies[${index}].localPort is invalid`);
     }
 
     if (usedPorts.has(localPort)) {
-      console.error(
-        `[model-proxy] Duplicate localPort in config: ${localPort}, skip target ${rawTarget}`,
-      );
-      continue;
+      throw new Error(`Invalid model-proxy config: duplicate localPort ${localPort}`);
     }
 
     usedPorts.add(localPort);
@@ -79,7 +102,7 @@ function normalizeProxyEntries(rawEntries = []) {
     });
   }
 
-  return normalized.length ? normalized : [...DEFAULT_CONFIG.proxies];
+  return normalized;
 }
 
 function normalizeHeaderKeyCandidates(primaryKeys = [], fallbackKeys = []) {
@@ -92,4 +115,4 @@ function normalizeHeaderKeyCandidates(primaryKeys = [], fallbackKeys = []) {
   return Array.from(new Set(keys));
 }
 
-export { DEFAULT_CONFIG, loadConfig, normalizeHeaderKeyCandidates, normalizeProxyEntries };
+export { DEFAULT_CONFIG, loadConfig, normalizeHeaderKeyCandidates };

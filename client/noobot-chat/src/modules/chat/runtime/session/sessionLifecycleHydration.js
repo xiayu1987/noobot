@@ -8,7 +8,7 @@ import { isTerminalTurnState } from "@noobot/session-protocol";
 import { getMessageTurnScopeId } from "../../model/messageIdentity.js";
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
 import { sessionRuntimeId } from "../run-state-machine/turnRuntimeRegistry.js";
-import { text, isObjectLike } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
 
 export function installSessionLifecycleHydration({
   sessions,
@@ -32,7 +32,7 @@ export function installSessionLifecycleHydration({
         .map((replacement) => text(replacement?.turnScopeId))
         .filter(Boolean),
     }));
-    if (isObjectLike(snapshot)) {
+    if (snapshot !== undefined && snapshot !== null) {
       const result = chatStore.applyTurnLifecycleSnapshot(snapshot);
       const activeTurn = snapshot.activeTurn;
 

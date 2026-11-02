@@ -3,16 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { LENGTH_THRESHOLDS } from "./length-thresholds.js";
+import { TIME_THRESHOLDS } from "./time-thresholds.js";
+import { QUANTITY_THRESHOLDS } from "./quantity-thresholds.js";
 
 import { deepFreeze } from "./deep-freeze.js";
 import { text, isObjectLike } from "./value.js";
 
 export const RUNTIME_EVENTS_CONFIG_ENVS = deepFreeze({
-  runtimeEvents: {
-    maxFileBytes: "NOOBOT_RUNTIME_EVENTS_MAX_FILE_BYTES",
-    retentionDays: "NOOBOT_RUNTIME_EVENTS_RETENTION_DAYS",
-    maxArchives: "NOOBOT_RUNTIME_EVENTS_MAX_ARCHIVES",
-  },
   sessionLogControls: {
     log: {
       state: "NOOBOT_RUNTIME_EVENT_STATE_LOG",
@@ -72,11 +70,6 @@ export const RUNTIME_EVENTS_CONFIG_ENVS = deepFreeze({
 });
 
 export const RUNTIME_EVENTS_CONFIG_DEFAULTS = deepFreeze({
-  runtimeEvents: {
-    maxFileBytes: 5 * 1024 * 1024,
-    retentionDays: 7,
-    maxArchives: 20,
-  },
   sessionLogControls: {
     log: {
       state: true,
@@ -269,14 +262,6 @@ const HOOK_RUNTIME_EVENT_VERBOSE_VALUES = deepFreeze([
   "yes",
 ]);
 
-function resolveNonNegativeIntegerEnv(env, name, fallback) {
-  const raw = env?.[name];
-  if (raw === undefined || raw === "") return fallback;
-  const value = Number.parseInt(String(raw), 10);
-  if (!Number.isFinite(value) || value < 0) return fallback;
-  return value;
-}
-
 function resolveBooleanEnv(env, name, fallback) {
   const raw = env?.[name];
   if (raw === undefined || raw === "") return fallback;
@@ -286,28 +271,16 @@ function resolveBooleanEnv(env, name, fallback) {
   return fallback;
 }
 
-export function resolveRuntimeEventsMaxFileBytes(env = process.env) {
-  return resolveNonNegativeIntegerEnv(
-    env,
-    RUNTIME_EVENTS_CONFIG_ENVS.runtimeEvents.maxFileBytes,
-    RUNTIME_EVENTS_CONFIG_DEFAULTS.runtimeEvents.maxFileBytes,
-  );
+export function resolveRuntimeEventsMaxFileBytes() {
+  return LENGTH_THRESHOLDS.runtimeEvents.maxFileBytes;
 }
 
-export function resolveRuntimeEventsRetentionDays(env = process.env) {
-  return resolveNonNegativeIntegerEnv(
-    env,
-    RUNTIME_EVENTS_CONFIG_ENVS.runtimeEvents.retentionDays,
-    RUNTIME_EVENTS_CONFIG_DEFAULTS.runtimeEvents.retentionDays,
-  );
+export function resolveRuntimeEventsRetentionDays() {
+  return TIME_THRESHOLDS.runtimeEvents.retentionDays;
 }
 
-export function resolveRuntimeEventsMaxArchives(env = process.env) {
-  return resolveNonNegativeIntegerEnv(
-    env,
-    RUNTIME_EVENTS_CONFIG_ENVS.runtimeEvents.maxArchives,
-    RUNTIME_EVENTS_CONFIG_DEFAULTS.runtimeEvents.maxArchives,
-  );
+export function resolveRuntimeEventsMaxArchives() {
+  return QUANTITY_THRESHOLDS.runtimeEvents.maxArchives;
 }
 
 export function resolveRuntimeEventsSessionLogControls(env = process.env) {

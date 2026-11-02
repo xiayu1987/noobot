@@ -8,7 +8,7 @@ export const FILE_TOOL_SCHEMA = {
   read_file: {
     description: {
       key: "tools.file.readDescription",
-      text: "Read text file content (line numbers enabled by default).",
+      text: 'Read a text file; each numberedContent line is "lineNumber\\ttext" and the prefix is not file content.',
     },
     params: {
       filePath: {
@@ -22,10 +22,6 @@ export const FILE_TOOL_SCHEMA = {
       endLine: {
         key: "tools.file.readEndLineField",
         text: "End line (1-based); a value past the end of file stops at the last line.",
-      },
-      includeLineNumbers: {
-        key: "tools.file.readIncludeLineNumbersField",
-        text: "Whether content includes line numbers.",
       },
       maxLines: {
         key: "tools.file.readMaxLinesField",
@@ -54,13 +50,9 @@ export const FILE_TOOL_SCHEMA = {
   search: {
     description: {
       key: "tools.search.description",
-      text: "Search files or text, returning matched lines with context.",
+      text: "Search workspace files, returning matched lines with context.",
     },
     params: {
-      source: {
-        key: "tools.search.fieldSource",
-        text: "Search source: files or text.",
-      },
       query: {
         key: "tools.search.fieldQuery",
         text: "Required non-empty keyword or regex. Do not call search with an empty string.",
@@ -75,15 +67,11 @@ export const FILE_TOOL_SCHEMA = {
       },
       path: {
         key: "tools.search.fieldPath",
-        text: "File or directory to search. Only applies when source=files; ignored when source=text.",
+        text: "File or directory to search.",
       },
       glob: {
         key: "tools.search.fieldGlob",
-        text: "File pattern, e.g. *.js. Only applies when source=files; ignored when source=text.",
-      },
-      text: {
-        key: "tools.search.fieldText",
-        text: "Text to search. Required and must be non-empty when source=text.",
+        text: "File pattern, e.g. *.js.",
       },
       contextLines: {
         key: "tools.search.fieldContextLines",
@@ -99,7 +87,6 @@ export const FILE_TOOL_SCHEMA = {
       },
     },
     texts: {
-      "tools.search.textRequired": "When source=text, a non-empty text to search is required.",
       "tools.search.pathKindUnsupported": "path must be a file or directory.",
     },
   },

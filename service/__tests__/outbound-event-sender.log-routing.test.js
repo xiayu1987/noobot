@@ -15,6 +15,8 @@ import {
 import { RUNTIME_EVENT_CATEGORIES } from "@noobot/runtime-events";
 import { STREAM_DELTA_DEBUG_TYPE } from "@noobot/shared/runtime-events-config";
 import { createOutboundEventSender } from "../ws/chat-websocket/outbound-event-sender.js";
+import { TURN_EVENT, TURN_LIFECYCLE_WIRE_EVENT } from "@noobot/session-protocol";
+import { createTestLifecycleEnvelope } from "./routes/chat-websocket-server.turn-lifecycle.fixtures.js";
 
 function messageEnvelope({ eventId, sequence, payload }) {
   return createEventEnvelope({
@@ -90,6 +92,12 @@ test("persistent message event eventSent keeps the default backend-websocket rou
   });
   assert.equal(await sendEvent(MESSAGE_EVENT_WIRE_EVENT, finalContent), true);
   assert.equal(eventSentRouting(logs, "evt-final"), undefined);
+  const sent = logs.find((item) => item.event === "service.authorityOutbox.eventSent");
+  assert.equal(sent.data.sessionId, "root-session");
+  assert.equal(sent.data.turnScopeId, "turn-1");
+  assert.equal(sent.data.dialogProcessId, "dialog-1");
+  assert.equal(sent.data.presentationMessageId, "presentation-1");
+  assert.equal(sent.data.lifecycleSequence, 1);
 });
 
 function createSlowSender() {
@@ -105,6 +113,22 @@ function createSlowSender() {
   });
   return { sendEvent, logs };
 }
+
+test("terminal delivery diagnostics classify the payload and retain envelope ownership", async () => {
+  const { sendEvent, logs } = createSender();
+  const envelope = createTestLifecycleEnvelope({
+    eventId: "terminal-diagnostic",
+    eventType: TURN_EVENT.COMPLETED,
+    sequence: 3,
+  });
+  assert.equal(await sendEvent(TURN_LIFECYCLE_WIRE_EVENT, envelope), true);
+  const terminal = logs.find((entry) => entry.event === "service.authorityOutbox.terminalSent");
+  assert.ok(terminal);
+  assert.equal(terminal.data.eventId, envelope.identity.eventId);
+  assert.equal(terminal.data.sessionId, envelope.identity.sessionId);
+  assert.equal(terminal.data.dialogProcessId, envelope.payload.dialogProcessId);
+  assert.equal(terminal.data.lifecycleSequence, 3);
+});
 
 function slowFinalContent() {
   return messageEnvelope({

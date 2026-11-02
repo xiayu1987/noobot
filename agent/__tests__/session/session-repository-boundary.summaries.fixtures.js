@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { mkdtemp, rm } from "node:fs/promises";
 import { resolveCanonicalToolTimelineStatus } from "@noobot/event-protocol/tool-timeline";
-import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
+import { canonicalSessionMessages } from "../helpers/canonical-session-messages.js";
 
 export async function withTempWorkspace(fn) {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-session-boundary-"));
@@ -20,25 +20,7 @@ export async function withTempWorkspace(fn) {
 }
 
 export function canonicalMessages(messages, sessionId, namespace = "summary") {
-  return messages.map((message, index) => {
-    const turnScopeId = String(message?.turnScopeId || `turn-${namespace}-${index + 1}`);
-
-    const roleIdentity = {
-      ...(message?.role === "assistant" ? { modelMessageId: `mm_${namespace}_${index + 1}` } : {}),
-      ...(["assistant", "tool"].includes(message?.role)
-        ? { presentationMessageId: `pm_${turnScopeId}` }
-        : {}),
-    };
-    return {
-      sessionId,
-      messageUid: String(message?.messageUid || `sm_${namespace}_${index + 1}`),
-      ts: TEST_MESSAGE_TS,
-      dialogProcessId: String(message?.dialogProcessId || `dialog-${turnScopeId}`),
-      turnScopeId,
-      ...roleIdentity,
-      ...message,
-    };
-  });
+  return canonicalSessionMessages(messages, sessionId, namespace);
 }
 
 export function fileToolResultText(filePath, extra) {

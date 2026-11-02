@@ -83,6 +83,41 @@ test("local server protects credential-bearing requests and preserves omitted pa
   assert.equal((await fetch(`${base}/`)).status, 200);
 });
 
+test("diagnostic HTTP errors follow Accept-Language and pass locale to execution", async (context) => {
+  let receivedLocale;
+  const server = createModelAccessServer({
+    models: [{ alias: "test", model: "test", base_url: "https://example.test/v1" }],
+    execute: async ({ locale }) => {
+      receivedLocale = locale;
+      return { ok: true };
+    },
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => {
+    server.closeAllConnections();
+    server.close();
+  });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const { token } = await (await fetch(`${base}/api/models`)).json();
+  for (const [locale, expected] of [
+    ["en-US", "Invalid JSON"],
+    ["zh-CN", "JSON 无效"],
+  ]) {
+    const headers = { "x-diagnostic-token": token, "accept-language": locale };
+    const result = await (
+      await fetch(`${base}/api/preview`, { method: "POST", headers, body: "{" })
+    ).json();
+    assert.equal(result.error, expected);
+    await fetch(`${base}/api/preview`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ alias: "test", protocol: "default" }),
+    });
+    assert.equal(receivedLocale, locale);
+  }
+});
+
 test("imports proxy logs, JSON bodies, and exported diagnostics", () => {
   const body = { model: "gpt-test", input: [{ role: "user", content: "OK?" }], temperature: 0.7 };
   const log = `[Request]\nURL: /v1/responses\nBody:\n${JSON.stringify(body)}\n========================\n[Terminal]\nStatus: 400\nBody:\n{}`;

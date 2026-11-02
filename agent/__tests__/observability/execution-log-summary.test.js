@@ -16,7 +16,16 @@ function toolLog(phase, tool, toolCallId, extra = {}) {
     data:
       phase === "call"
         ? { tool, toolCallId, args: {}, ...extra }
-        : { tool, toolCallId, durationMs: 1, persistDurationMs: 0, ...extra },
+        : {
+            tool,
+            toolCallId,
+            durationMs: 1,
+            persistDurationMs: 0,
+            result: JSON.stringify(
+              extra.success === false ? { ok: false, error: "failed", code: "E" } : { ok: true },
+            ),
+            ...extra,
+          },
   };
 }
 

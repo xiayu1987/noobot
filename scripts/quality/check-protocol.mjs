@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { DEVELOPMENT_THRESHOLDS } from "../lib/development-thresholds.mjs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -20,8 +21,8 @@ export const EXEMPTION_KINDS = Object.freeze({
 });
 const EXEMPTION_KIND_SET = new Set(Object.values(EXEMPTION_KINDS));
 const MEASUREMENT_KEYS = new Set(["total", "files", "samples"]);
-const REPORTED_SAMPLE_LIMIT = 80;
-const TOP_FILE_LIMIT = 10;
+const REPORTED_SAMPLE_LIMIT = DEVELOPMENT_THRESHOLDS.quantity.reportedSampleLimit;
+const TOP_FILE_LIMIT = DEVELOPMENT_THRESHOLDS.quantity.topFileLimit;
 const repositoryRoot = path.resolve(import.meta.dirname, "../..");
 
 function requireText(value, label) {

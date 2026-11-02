@@ -42,7 +42,7 @@ const REVIEW_ISSUE_RULES = Object.freeze([
   },
   {
     code: "tool_failures_observed",
-    when: ({ state = {} } = {}) => Number(state?.counters?.totalToolFailures || 0) > 0,
+    when: ({ state } = {}) => state.counters.totalToolFailures > 0,
   },
   {
     code: "runtime_error_observed",
@@ -77,8 +77,8 @@ export function buildReviewReport(point = "", ctx = {}) {
     summary: {
       planningCaptured: state.flags.planningCaptured === true,
       acceptanceRequested: state.flags.acceptanceRequested === true,
-      successfulToolCount: state.signals.successfulToolCount || 0,
-      totalToolFailures: state.counters.totalToolFailures || 0,
+      successfulToolCount: state.signals.successfulToolCount,
+      totalToolFailures: state.counters.totalToolFailures,
       pendingAcceptanceItems: acceptance?.summary?.pending ?? null,
       semanticValidationStatus: semanticValidation?.status ?? null,
       semanticValidationConsistent: semanticValidation?.consistent ?? null,

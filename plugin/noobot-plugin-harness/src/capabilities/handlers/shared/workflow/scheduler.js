@@ -5,6 +5,7 @@
  */
 import { WORKFLOW_PARAMS } from "../../../../core/workflow-params.js";
 import { text } from "@noobot/shared/value";
+import { assertHarnessState } from "../../../../core/bucket-contract.js";
 
 const GUIDANCE_DECISION = WORKFLOW_PARAMS.guidance.decisions;
 const ACCEPTANCE_DECISION = WORKFLOW_PARAMS.acceptance.decisions;
@@ -42,12 +43,12 @@ const WORKFLOW_ACTION_EXECUTOR = Object.freeze(
   ),
 );
 
-function normalizePending(state = {}) {
-  return state?.pending && typeof state.pending === "object" ? state.pending : {};
+export function resolvePendingPlanUpdateForWorkflow(state) {
+  return readPendingPlanUpdate(assertHarnessState(state));
 }
 
-export function resolvePendingPlanUpdateForWorkflow(state = {}) {
-  const pending = normalizePending(state);
+function readPendingPlanUpdate(state) {
+  const { pending } = state;
   if (pending.planRevision === true) {
     return {
       active: true,
@@ -57,7 +58,7 @@ export function resolvePendingPlanUpdateForWorkflow(state = {}) {
       targetMainStepIndexes: pending.planRevisionContext.targetMainStepIndexes,
     };
   }
-  if (state?.flags?.planRefinementEnabled === false) {
+  if (state.flags.planRefinementEnabled === false) {
     return { active: false, stage: "", action: "", reason: "", targetMainStepIndexes: [] };
   }
   if (pending.planRefinement === true) {
@@ -72,16 +73,16 @@ export function resolvePendingPlanUpdateForWorkflow(state = {}) {
   return { active: false, stage: "", action: "", reason: "", targetMainStepIndexes: [] };
 }
 
-function isForcedAcceptancePending(state = {}) {
-  return state?.flags?.overflowForceAcceptancePending === true;
+function isForcedAcceptancePending(state) {
+  return state.flags.overflowForceAcceptancePending === true;
 }
 
-function collectWorkflowCandidates(state = {}) {
-  const pending = normalizePending(state);
+function collectWorkflowCandidates(state) {
+  const { pending } = state;
   const candidates = [];
   if (pending.guidance) candidates.push(GUIDANCE_DECISION.label.guidance);
 
-  const planUpdate = resolvePendingPlanUpdateForWorkflow(state);
+  const planUpdate = readPendingPlanUpdate(state);
   if (planUpdate.active) candidates.push(planUpdate.action);
 
   if (pending.summary === true) {
@@ -111,9 +112,9 @@ function collectWorkflowCandidates(state = {}) {
   return candidates;
 }
 
-function resolveBlockReason(action = "", state = {}) {
-  const pending = normalizePending(state);
-  const planUpdate = resolvePendingPlanUpdateForWorkflow(state);
+function resolveBlockReason(action, state) {
+  const { pending } = state;
+  const planUpdate = readPendingPlanUpdate(state);
   if (action === ACCEPTANCE_DECISION.action.phaseAcceptance) {
     if (state?.flags?.planningCaptured !== true)
       return "phase_acceptance_blocked_by_planning_not_captured";
@@ -179,7 +180,8 @@ export function resolveWorkflowActionExecutor(action = "") {
   return WORKFLOW_ACTION_EXECUTOR[text(action)] || "none";
 }
 
-export function resolveWorkflowActionDecision(state = {}) {
+export function resolveWorkflowActionDecision(state) {
+  assertHarnessState(state);
   const candidateActions = collectWorkflowCandidates(state);
   if (isForcedAcceptancePending(state)) {
     return {

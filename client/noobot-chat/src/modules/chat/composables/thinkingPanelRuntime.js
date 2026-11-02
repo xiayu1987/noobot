@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { onBeforeUnmount, ref, watch } from "vue";
 import {
   formatDurationMs,
@@ -74,7 +75,7 @@ export function useThinkingRuntime(props, getRuntimeView) {
     if (timer) return;
     timer = setInterval(() => {
       nowTick.value = nowMs();
-    }, 1000);
+    }, TIME_THRESHOLDS.client.thinkingElapsedRefreshIntervalMs);
   }
 
   function stopTimer() {

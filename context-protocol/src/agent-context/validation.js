@@ -15,13 +15,17 @@ import {
   AGENT_CONTEXT_PROTOCOL_VERSION,
   MODEL_CONTEXT_PROTOCOL_VERSION,
 } from "./schema.js";
-import { isPlainObject } from "@noobot/shared/value";
+import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
 
 const FIELD_TYPES = Object.freeze({
   string: { label: "string", check: (value) => typeof value === "string" },
-  nonEmptyString: {
-    label: "a non-empty string",
-    check: (value) => typeof value === "string" && value !== "",
+  canonicalText: {
+    label: "canonical non-empty text",
+    check: (value) => isCanonicalText(value),
+  },
+  canonicalOptionalText: {
+    label: "canonical text or empty string",
+    check: (value) => value === "" || isCanonicalText(value),
   },
   boolean: { label: "boolean", check: (value) => typeof value === "boolean" },
   array: { label: "array", check: (value) => Array.isArray(value) },

@@ -15,7 +15,7 @@ import {
 } from "./helpers/file-script-length-guards-helper.js";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
-test("search: 支持搜索文件和文本", async () => {
+test("search: 按 path 与 glob 搜索文件", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-search-"));
   await fs.mkdir(path.join(basePath, "src"), { recursive: true });
   await fs.writeFile(path.join(basePath, "src", "a.js"), "alpha\nbeta\nAlpha2\n", "utf8");
@@ -28,7 +28,6 @@ test("search: 支持搜索文件和文本", async () => {
     await tool.invoke(
       {
         riskLevel: "low",
-        source: "files",
         query: "alpha",
         path: "src",
         glob: "*.js",
@@ -42,22 +41,6 @@ test("search: 支持搜索文件和文本", async () => {
   assert.deepEqual(fileResult.matches[0].path, { view: "workspace", path: "src/a.js" });
   assert.equal(fileResult.matches[0].line, 1);
   assert.equal(fileResult.matches[1].line, 3);
-
-  const textResult = parseToolResult(
-    await tool.invoke(
-      {
-        riskLevel: "low",
-        source: "text",
-        query: "b.t",
-        isRegex: true,
-        text: "aa\nbet\ncc",
-      },
-      { signal: new AbortController().signal },
-    ),
-  );
-  assert.equal(textResult.ok, true);
-  assert.equal(textResult.matches.length, 1);
-  assert.equal(textResult.matches[0].line, 2);
 });
 
 test("search: super admin can search an external host directory", async () => {
@@ -75,7 +58,6 @@ test("search: super admin can search an external host directory", async () => {
     await tool.invoke(
       {
         riskLevel: "low",
-        source: "files",
         query: "external-search-token",
         path: externalRoot,
       },
@@ -114,7 +96,6 @@ test("search: global sandbox mount is searched through its logical target", asyn
     await tool.invoke(
       {
         riskLevel: "low",
-        source: "files",
         query: "mounted-search-token",
         path: "/shared-code",
       },
@@ -138,7 +119,6 @@ test("search: query schema rejects an empty string before tool execution", async
   assert.ok(searchTool);
 
   const parsed = searchTool.schema.safeParse({
-    source: "files",
     query: "",
     riskLevel: "low",
   });
@@ -162,27 +142,12 @@ test("search: files search rejects promptly when runtime abort signal is already
   await assert.rejects(
     () =>
       tool.invoke(
-        { riskLevel: "low", source: "files", query: "alpha", path: "src", glob: "*.js" },
+        { riskLevel: "low", query: "alpha", path: "src", glob: "*.js" },
         { signal: abortController.signal },
       ),
     (error) =>
       error?.name === "AbortError" ||
       /stop requested|aborted/i.test(String(error?.message || error)),
-  );
-});
-
-test("search: source=text 缺少 text 时抛出可恢复的输入错误", async () => {
-  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-search-empty-"));
-  const tools = createFileTool({ agentContext: buildAgentContext(basePath) });
-  const tool = tools.find((item) => item?.name === "search");
-
-  await assert.rejects(
-    () =>
-      tool.invoke(
-        { riskLevel: "low", source: "text", query: "beta" },
-        { signal: new AbortController().signal },
-      ),
-    (error) => error.code === "RECOVERABLE_INVALID_INPUT" && error.details.field === "text",
   );
 });
 

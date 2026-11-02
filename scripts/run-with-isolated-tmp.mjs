@@ -21,7 +21,15 @@ const { dir: runTmpDir, created } = acquireIsolatedTmpDir({
   keep: KEEP_TMP_DIRS,
 });
 
-const child = spawn(command, commandArgs, {
+const runtimeArgs =
+  command === "node"
+    ? [
+        "--import",
+        new URL("../shared/testing/runtime-params.js", import.meta.url).href,
+        ...commandArgs,
+      ]
+    : commandArgs;
+const child = spawn(command, runtimeArgs, {
   stdio: "inherit",
   env: buildIsolatedTmpEnv(runTmpDir),
 });

@@ -192,8 +192,8 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
       [
         "按顺序各调用一次且只调用以下七个规范工具：",
         `1) write_file 写 ${generatedFilePath}，内容 CASE036-TOOL-CONTENT，overwrite=true，riskLevel=low；`,
-        `2) read_file 读取 ${generatedFilePath} 且不显示行号，riskLevel=low；`,
-        "3) search 使用 source=text 在文本 CASE036-SEARCH-TARGET 中查 SEARCH-TARGET，riskLevel=low；",
+        `2) read_file 读取 ${generatedFilePath}，riskLevel=low；`,
+        `3) search 在 ${generatedFilePath} 中查 CASE036-TOOL-CONTENT，riskLevel=low；`,
         `4) patch_file 对 ${generatedFileName} 应用这个精确 unified diff，dryRun=false、root=${runOpsWorkdir()}、strip=1、riskLevel=low：--- a/${generatedFileName} +++ b/${generatedFileName} @@ -1 +1 @@ -CASE036-TOOL-CONTENT +CASE036-PATCH-CONTENT；`,
         "5) execute_script 执行 printf CASE036-SCRIPT，foreground、riskLevel=low；",
         "6) list_skills 使用空参数；",
@@ -307,7 +307,7 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
     "CASE036-TOOL-CONTENT",
   );
   expect(String(results.find((event) => event.data?.tool === "search")?.data?.result)).toContain(
-    "SEARCH-TARGET",
+    "CASE036-TOOL-CONTENT",
   );
 
   const modelTraces = modelInvocationTraces(

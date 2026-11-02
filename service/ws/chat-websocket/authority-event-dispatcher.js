@@ -3,10 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { validateProtocolEvent } from "@noobot/event-protocol";
+import { assertAuthorityOutboxRequest } from "@noobot/event-protocol/outbox";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { validateSessionPersistenceScope } from "@noobot/session-protocol";
-import { text as clean, isFunction } from "@noobot/shared/value";
+import { isFunction } from "@noobot/shared/value";
 
 export const AUTHORITY_EVENT_CONSUMER = Object.freeze({
   WEBSOCKET: "service.websocket",
@@ -19,45 +19,26 @@ function scopeKey(persistenceScope) {
   return persistenceScope === null ? "" : persistenceScope.scopeId;
 }
 
-function findInvalidAuthorityEvent(events) {
-  for (const item of events) {
-    const eventId = clean(item?.eventId);
-    const validation = validateProtocolEvent(item?.envelope);
-    if (!eventId || eventId !== clean(item?.envelope?.identity?.eventId) || !validation.valid) {
-      return validation;
-    }
-  }
-  return null;
-}
-
 async function publishAuthorityEvents(events, publishEvent) {
   const acknowledgements = [];
   for (const item of events) {
     const sent = await publishEvent(item.envelope.identity.eventType, item.envelope);
     if (sent !== true) return { acknowledgements, sendFailed: true };
     acknowledgements.push({
-      eventId: clean(item.eventId),
-      orderingDomain: clean(item.envelope.ordering.domain),
-      orderingScopeId: clean(item.envelope.ordering.scopeId),
-      sequence: Number(item.envelope.ordering.sequence),
+      eventId: item.eventId,
+      orderingDomain: item.envelope.ordering.domain,
+      orderingScopeId: item.envelope.ordering.scopeId,
+      sequence: item.envelope.ordering.sequence,
     });
   }
   return { acknowledgements, sendFailed: false };
 }
 
 async function dispatchAuthorityBatch({ session, identity, consumerId, events, publishEvent }) {
-  const invalid = findInvalidAuthorityEvent(events);
-  if (invalid)
-    return {
-      dispatched: false,
-      reason: "invalid_authority_event_envelope",
-      delivered: 0,
-      errors: invalid.errors,
-    };
   const attempt = await session.recordAuthorityEventAttempts({
     ...identity,
     consumerId,
-    eventIds: events.map((item) => clean(item.eventId)),
+    eventIds: events.map((item) => item.eventId),
   });
   if (!attempt.recorded) return { dispatched: false, reason: attempt.reason, delivered: 0 };
   const { acknowledgements, sendFailed } = await publishAuthorityEvents(events, publishEvent);
@@ -108,7 +89,7 @@ async function compactAuthorityEventsIfDue(bot, identity, lastCompactAtBySession
 }
 
 export function createAuthorityEventDispatcher({ resolveBot, sendEvent, consumerId }) {
-  const normalizedConsumerId = clean(consumerId);
+  const normalizedConsumerId = consumerId;
   if (!KNOWN_CONSUMERS.has(normalizedConsumerId)) {
     throw new Error(`authority event consumerId is required: ${normalizedConsumerId || "<empty>"}`);
   }
@@ -120,13 +101,10 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent, consumer
 
   const drainAuthorityEvents = async ({ userId, sessionId, persistenceScope }, publishEvent) => {
     const identity = {
-      userId: clean(userId),
-      sessionId: clean(sessionId),
+      userId,
+      sessionId,
       persistenceScope,
     };
-    if (!identity.userId || !identity.sessionId) {
-      return { dispatched: false, reason: "missing_session_identity", delivered: 0 };
-    }
     const bot = resolveBot();
     let delivered = 0;
     const consumerId = normalizedConsumerId;
@@ -168,11 +146,8 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent, consumer
         `invalid authority dispatch persistenceScope: ${scopeValidation.errors.join(",")}`,
       );
     }
-    const key = [
-      clean(payload.userId),
-      clean(payload.sessionId),
-      scopeKey(payload.persistenceScope),
-    ].join("::");
+    assertAuthorityOutboxRequest({ ...payload, consumerId }, "pending");
+    const key = [payload.userId, payload.sessionId, scopeKey(payload.persistenceScope)].join("::");
     const active = inFlightByScope.get(key);
     if (active) {
       active.dirty = true;

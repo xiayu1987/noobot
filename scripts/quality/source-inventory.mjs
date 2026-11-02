@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { DEVELOPMENT_THRESHOLDS } from "../lib/development-thresholds.mjs";
 import { execFile } from "node:child_process";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
@@ -130,7 +131,7 @@ async function gitIgnoredPaths(repositoryRoot, relativePaths) {
   const child = execFileAsync("git", ["check-ignore", "--stdin", "-z"], {
     cwd: repositoryRoot,
     encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024,
+    maxBuffer: DEVELOPMENT_THRESHOLDS.length.sourceInventoryOutputBytes,
   });
   child.child.stdin.end(relativePaths.join("\0"));
   try {

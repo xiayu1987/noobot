@@ -7,26 +7,46 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import { convertToOpenAITool } from "@langchain/core/utils/function_calling";
-import { createModelRequestExecutor } from "@noobot/model-runtime";
-import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
-import { buildTools } from "noobot-agent/tools";
-import { sanitizeUserConfig } from "noobot-agent/config";
-import {
-  createConfigValueLookup,
-  mergeConfigParamLayers,
-  normalizeConfigParamsDocument,
-  resolveConfigTemplates,
-} from "@noobot/agent-config-protocol";
-import { loadGlobalConfig } from "../src/config/core/global-config-loader.js";
-import { createAgentContextEnvelope } from "@noobot/context-protocol";
-import { createPresentationMessageId } from "@noobot/session-protocol/message-identity";
-import { createAgentExecutionScope } from "../src/context/agent-execution-scope.js";
-import {
-  createMainFlowControlPort,
-  createMainFlowControlState,
-} from "../src/runtime/main-flow-control.js";
-import { resolveDefaultModelSpec, resolveModelSpecByName } from "noobot-agent/model";
 import { text, isFunction } from "@noobot/shared/value";
+import { initializeRuntimeParams } from "@noobot/shared/runtime-params-node";
+import { WORKSPACE_ROOT_LAYOUT } from "@noobot/workspace-protocol/layout";
+import { tModelRuntime } from "@noobot/model-runtime/locale";
+
+const args = parseArgs(process.argv.slice(2));
+const { resolvedWorkspaceRoot, resolvedGlobalConfigPath } = resolveScriptPaths(args);
+initializeRuntimeParams(
+  path.join(resolvedWorkspaceRoot, WORKSPACE_ROOT_LAYOUT.RUNTIME_PARAMS_FILE),
+);
+const [
+  { createModelRequestExecutor },
+  { MODEL_CONTEXT_SEQUENCE_POLICY },
+  { buildTools },
+  { sanitizeUserConfig },
+  {
+    createConfigValueLookup,
+    mergeConfigParamLayers,
+    normalizeConfigParamsDocument,
+    resolveConfigTemplates,
+  },
+  { loadGlobalConfig },
+  { createAgentContextEnvelope },
+  { createPresentationMessageId },
+  { createAgentExecutionScope },
+  { createMainFlowControlPort, createMainFlowControlState },
+  { resolveDefaultModelSpec, resolveModelSpecByName },
+] = await Promise.all([
+  import("@noobot/model-runtime"),
+  import("@noobot/model-protocol"),
+  import("noobot-agent/tools"),
+  import("noobot-agent/config"),
+  import("@noobot/agent-config-protocol"),
+  import("../src/config/core/global-config-loader.js"),
+  import("@noobot/context-protocol"),
+  import("@noobot/session-protocol/message-identity"),
+  import("../src/context/agent-execution-scope.js"),
+  import("../src/runtime/main-flow-control.js"),
+  import("noobot-agent/model"),
+]);
 
 function parseArgs(argv = []) {
   const out = {
@@ -229,20 +249,18 @@ function resolveModelSpecAllowDisabled({
   return null;
 }
 
-async function selectToolsInteractive(tools = []) {
+async function selectToolsInteractive(tools = [], locale) {
   const source = Array.isArray(tools) ? tools : [];
   if (!source.length) return source;
   if (!process.stdin.isTTY || !process.stdout.isTTY) return source;
   const toolNames = source.map((tool) => text(tool?.name));
-  console.log("[tool-schema-check] 可选工具：");
+  console.log(`[tool-schema-check] ${tModelRuntime(locale, "diagnostic.availableTools")}`);
   toolNames.forEach((name, index) => {
     console.log(`${index + 1}. ${name}`);
   });
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
-    const answer = String(
-      await rl.question("输入要测试的工具编号/名称（逗号分隔，直接回车=全部）："),
-    )
+    const answer = String(await rl.question(tModelRuntime(locale, "diagnostic.selectTools")))
       .trim()
       .toLowerCase();
     if (!answer) return source;
@@ -268,11 +286,6 @@ async function selectToolsInteractive(tools = []) {
 }
 
 async function main() {
-  const args = parseArgs(process.argv.slice(2));
-  const { resolvedWorkspaceRoot, resolvedGlobalConfigPath } = resolveScriptPaths({
-    globalConfigPath: args.globalConfigPath,
-    workspaceRoot: args.workspaceRoot,
-  });
   const rawGlobalConfig = await loadGlobalConfig(resolvedGlobalConfigPath);
   const rawUserConfig = await readOptionalJson(
     path.join(resolvedWorkspaceRoot, args.userId, "config.json"),
@@ -291,6 +304,7 @@ async function main() {
     lookup,
   });
   const userConfig = sanitizeUserConfig(resolveConfigTemplates(rawUserConfig, { lookup }));
+  const locale = userConfig.preferences?.language || globalConfig.preferences?.language;
   const agentContext = createMinimalAgentContext({
     userId: args.userId,
     globalConfig,
@@ -301,7 +315,7 @@ async function main() {
   const requestedTools = filterToolsByNames(mergedTools, args.toolNames);
   const targetTools = args.toolNames.length
     ? requestedTools
-    : await selectToolsInteractive(requestedTools);
+    : await selectToolsInteractive(requestedTools, locale);
 
   if (!targetTools.length) {
     console.log("[tool-schema-check] no tools matched");
@@ -400,11 +414,7 @@ async function main() {
             role: "user",
             content:
               args.prompt ||
-              [
-                "请调用工具完成测试。",
-                `工具名：${boundToolName}`,
-                "要求：必须发起一次 tool call；参数可使用最小可行占位值。",
-              ].join("\n"),
+              tModelRuntime(locale, "diagnostic.toolTestPrompt", { name: boundToolName }),
           },
         ],
         tools: [boundTool],

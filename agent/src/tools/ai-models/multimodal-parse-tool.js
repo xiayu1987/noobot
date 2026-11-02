@@ -312,7 +312,7 @@ export function createMultimodalParseTool({ agentContext }) {
       name: TOOL_NAME.MULTIMODAL_PARSE,
       metadata: { pathContract: TOOL_PATH_CONTRACTS.multimodalInput },
       description: tTool(runtime, "tools.multimodalParse.description"),
-      schema: z.object({
+      schema: z.strictObject({
         inputs: z
           .array(
             createFileInputSchema({

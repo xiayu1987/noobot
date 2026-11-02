@@ -21,28 +21,40 @@ function runnerFacts(overrides) {
     outputLimitExceeded: false,
     spawnFailed: false,
     protocolViolated: false,
+    scriptFailed: false,
     ...ABSENT,
     ...overrides,
   };
 }
 
-test("exit 0 is the only successful outcome and carries no failure fields", () => {
-  assert.deepEqual(
-    projectScriptOutcome({ termination: SCRIPT_TERMINATION.EXITED, exitCode: 0, signal: null }),
-    { ok: true, termination: "exited", exitCode: 0 },
-  );
+test("a process that exits is a successful run regardless of exit code", () => {
+  for (const exitCode of [0, 1, 2]) {
+    assert.deepEqual(
+      projectScriptOutcome({ termination: SCRIPT_TERMINATION.EXITED, exitCode, signal: null }),
+      { ok: true, termination: "exited", exitCode },
+    );
+  }
 });
 
-test("non-zero exit fails with string code and exitCode kept separately", () => {
+test("script_failed requires a message and keeps the exit code", () => {
   assert.deepEqual(
-    projectScriptOutcome({ termination: SCRIPT_TERMINATION.EXITED, exitCode: 2, signal: null }),
+    projectScriptOutcome({
+      termination: SCRIPT_TERMINATION.SCRIPT_FAILED,
+      exitCode: 0,
+      signal: null,
+      message: "boom",
+    }),
     {
       ok: false,
-      termination: "exited",
-      exitCode: 2,
-      code: SCRIPT_FAILURE_CODE.exited,
-      error: "script exited with code 2",
+      termination: "script_failed",
+      exitCode: 0,
+      code: SCRIPT_FAILURE_CODE.script_failed,
+      error: "boom",
     },
+  );
+  assert.throws(
+    () => projectScriptOutcome({ termination: "script_failed", exitCode: 0, signal: null }),
+    /requires a message/,
   );
 });
 
@@ -104,6 +116,8 @@ test("termination resolution prefers runner facts and never treats a missing sta
   assert.equal(resolve({ outputLimitExceeded: true, timedOut: true }), "output_limit");
   assert.equal(resolve({ timedOut: true, signal: "SIGTERM" }), "timeout");
   assert.equal(resolve({ aborted: true, exitCode: 0 }), "aborted");
+  assert.equal(resolve({ aborted: true, scriptFailed: true, exitCode: 0 }), "aborted");
+  assert.equal(resolve({ scriptFailed: true, exitCode: 0 }), "script_failed");
   assert.equal(resolve({ exitCode: 0 }), "exited");
   assert.equal(resolve({ signal: "SIGKILL" }), "signaled");
   assert.throws(() => resolve({}), /without exit code or signal/);

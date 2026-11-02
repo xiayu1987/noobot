@@ -5,6 +5,8 @@
  */
 
 import { text } from "@noobot/shared/value";
+import { HookExecutionError, HOOK_OUTCOME_STATUS } from "./runtime.js";
+import { HOOK_POINT } from "./points.js";
 
 function normalizeSessionIds(sessionIds = []) {
   if (!Array.isArray(sessionIds)) return [];
@@ -33,6 +35,15 @@ function collectSessionDeletionResultIds(hookResult = {}, field = "") {
 }
 
 export function collectSessionDeletionHookResult(hookResult = {}) {
+  if (!Array.isArray(hookResult.outcomes)) {
+    throw new TypeError("session deletion hook requires outcomes");
+  }
+  if (hookResult.outcomes.some((outcome) => outcome.status !== HOOK_OUTCOME_STATUS.OK)) {
+    throw new HookExecutionError({
+      point: HOOK_POINT.SERVICE.AFTER_SESSION_DELETE,
+      outcomes: hookResult.outcomes,
+    });
+  }
   return Object.freeze({
     deletedRelatedSessionIds: Object.freeze(
       collectSessionDeletionResultIds(hookResult, "deletedRelatedSessionIds"),

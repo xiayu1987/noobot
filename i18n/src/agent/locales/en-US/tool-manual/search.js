@@ -6,16 +6,12 @@
 
 export const SEARCH_MANUAL = {
   search: {
-    summary: "Search workspace files or a given string, returning matched lines with context.",
+    summary: "Search workspace files, returning matched lines with context.",
     usage: [
-      "search({ source: 'files', query, glob, path, isRegex, caseSensitive, contextLines, maxResults, riskLevel })",
-      "search({ source: 'text', query, text, isRegex, caseSensitive, contextLines, maxResults, riskLevel })",
+      "search({ query, glob, path, isRegex, caseSensitive, contextLines, maxResults, riskLevel })",
     ],
     params: {
-      source:
-        "Search source. files searches workspace files; text searches the string given in the text param.",
       query: "Required non-empty keyword or regex. Do not call with an empty string.",
-      text: "Text to search, used only when source is text.",
       path: "Restrict the search to a file or directory, optional. Narrowing the scope speeds things up noticeably.",
       glob: "File name pattern, e.g. *.js.",
       isRegex: "Whether query is interpreted as a regex.",

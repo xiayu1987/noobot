@@ -11,6 +11,7 @@ import {
   projectToolOperationSubject,
   projectToolOperationSummary,
 } from "../src/tool-presentation.js";
+import { projectToolResultExitCode } from "../src/tool-result.js";
 
 test("operation subject is the summary without the tool name prefix", () => {
   const args = { command: "npm test" };
@@ -60,21 +61,12 @@ test("search subjects show the searched directory reference including the worksp
       {
         ok: true,
         query: "foo",
-        source: "files",
         path: { view: "workspace", path: "." },
         matches: [],
       },
       { result: true },
     ),
     "search · foo · . · 0 matches",
-  );
-  assert.equal(
-    projectToolOperationSummary(
-      "search",
-      { ok: true, query: "foo", source: "text", matches: [{}] },
-      { result: true },
-    ),
-    "search · foo · 1 matches",
   );
 });
 
@@ -105,6 +97,18 @@ test("overflowed results show the overflow message for every tool", () => {
       "result moved to a source reference",
     );
   }
+  assert.equal(projectToolResultExitCode(overflow), null);
+});
+
+test("script result subjects mark non-zero exits", () => {
+  const subject = (detail) =>
+    projectToolOperationSubject("execute_script", detail, { result: true });
+  assert.equal(subject({ ok: true, termination: "exited", exitCode: 0, stdout: "done" }), "done");
+  assert.equal(
+    subject({ ok: true, termination: "exited", exitCode: 1, stdout: "no match" }),
+    "exit 1 · no match",
+  );
+  assert.equal(subject({ ok: true, termination: "exited", exitCode: 2, stdout: "" }), "exit 2");
 });
 
 test("non-canonical tool path references are rejected instead of displayed", () => {

@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 import {
   HOOK_EXECUTION,
@@ -134,7 +135,10 @@ async function invokeHandler({ registration, point, context, parentSignal }) {
   }
 }
 
-export function createHookManager({ defaultTimeoutMs = 3000, onError = null } = {}) {
+export function createHookManager({
+  defaultTimeoutMs = TIME_THRESHOLDS.hooks.defaultTimeoutMs,
+  onError = null,
+} = {}) {
   const registry = new Map();
   let sequence = 0;
 

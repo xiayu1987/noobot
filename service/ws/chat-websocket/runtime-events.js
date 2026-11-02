@@ -21,9 +21,8 @@ export function recordServiceWebSocketSendFailure({
   error = null,
 } = {}) {
   const normalizedSessionId = text(sessionId);
-  if (!normalizedSessionId) return Promise.resolve({ ok: true, skipped: true });
   return writeRuntimeEvent({
-    scope: "session",
+    scope: normalizedSessionId ? "session" : "system",
     source: "service",
     channel: RUNTIME_EVENT_CHANNELS.DIRECT,
     category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
@@ -56,9 +55,8 @@ export function recordServiceWebSocketRuntimeError({
   data = {},
 } = {}) {
   const normalizedSessionId = trimRuntimeText(sessionId);
-  if (!normalizedSessionId) return Promise.resolve({ ok: true, skipped: true });
   return writeRuntimeEvent({
-    scope: "session",
+    scope: normalizedSessionId ? "session" : "system",
     source: "service",
     channel: RUNTIME_EVENT_CHANNELS.DIRECT,
     category: RUNTIME_EVENT_CATEGORIES.SYSTEM,

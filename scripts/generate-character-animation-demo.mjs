@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { DEVELOPMENT_THRESHOLDS } from "./lib/development-thresholds.mjs";
 import { mkdir, readFile, rm } from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
@@ -246,12 +247,14 @@ try {
       console.error(`[character-demo] ${response.status()} ${response.url()}`);
   });
   await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: "networkidle" });
-  await page.waitForFunction(() => window.__characterDemoReady === true, { timeout: 30000 });
+  await page.waitForFunction(() => window.__characterDemoReady === true, {
+    timeout: DEVELOPMENT_THRESHOLDS.time.animationDemoReadyTimeoutMs,
+  });
   for (let frame = 0; frame < 76; frame += 1) {
     await page.screenshot({
       path: path.join(frameRoot, `frame-${String(frame).padStart(3, "0")}.png`),
     });
-    await page.waitForTimeout(100);
+    await page.waitForTimeout(DEVELOPMENT_THRESHOLDS.time.animationDemoFrameIntervalMs);
   }
 } finally {
   await browser.close();

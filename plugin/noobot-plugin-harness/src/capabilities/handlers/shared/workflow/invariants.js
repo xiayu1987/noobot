@@ -10,17 +10,10 @@ import { readHarnessBucket } from "../bucket-utils.js";
 
 const SHARED_EVENTS = WORKFLOW_PARAMS.logging.events.shared;
 
-function ensureObject(source = {}) {
-  return source && typeof source === "object" ? source : {};
-}
-
 export function enforceWorkflowInvariants(ctx = {}, { domain = "" } = {}) {
   const harness = readHarnessBucket(ctx);
   if (!harness) return false;
-  const state = ensureObject(harness.state);
-  harness.state = state;
-  state.pending = ensureObject(state.pending);
-  state.flags = ensureObject(state.flags);
+  const { state } = harness;
   let changed = false;
   const violations = [];
 

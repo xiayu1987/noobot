@@ -28,7 +28,6 @@ test("unified attempts no longer block revision scheduling in planning handler",
   const agentContext = createPlanningAgentContext({
     counters: {
       planUpdateTurns: FULL_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD - 1,
-      planUpdateAttempts: MAX_PLAN_UPDATE_ATTEMPTS,
     },
   });
   const ctx = {
@@ -52,7 +51,7 @@ test("inject refinement-only flow consumes refinement attempts", async () => {
       planRefinement: true,
       planRefinementContext: { targetMainStepIndexes: [1] },
     },
-    counters: { planRevisionAttempts: 0, planRefinementAttempts: 0, planUpdateAttempts: 0 },
+    counters: { planRevisionAttempts: 0, planRefinementAttempts: 0 },
   });
   const meta = { harness: { planningGuidanceMode: "inject", capabilityModelInvoker: null } };
 
@@ -70,7 +69,10 @@ test("inject refinement-only flow consumes refinement attempts", async () => {
   };
   await handler({ capability: "guidance", point: "agent.after_llm_call", ctx: afterCtx, meta });
   assert.equal(agentContext.bindings.extensions.harness.state.counters.planRefinementAttempts, 1);
-  assert.equal(agentContext.bindings.extensions.harness.state.counters.planUpdateAttempts, 1);
+  assert.equal(
+    Object.hasOwn(agentContext.bindings.extensions.harness.state.counters, "planUpdateAttempts"),
+    false,
+  );
 });
 
 test("separate_model refinement-only flow runs planning_refinement then guidance followup", async () => {
@@ -82,7 +84,7 @@ test("separate_model refinement-only flow runs planning_refinement then guidance
       planRefinement: true,
       planRefinementContext: { targetMainStepIndexes: [1] },
     },
-    counters: { planRevisionAttempts: 0, planRefinementAttempts: 0, planUpdateAttempts: 0 },
+    counters: { planRevisionAttempts: 0, planRefinementAttempts: 0 },
   });
   const meta = {
     harness: {
@@ -119,7 +121,7 @@ test("separate_model refinement-only flow runs planning_refinement then guidance
 
 test("planning revision followup uses dynamic programming scenario over initial text scenario", async () => {
   const agentContext = createAgentContext({
-    counters: { llmTurns: 16, planUpdateTurns: -100 },
+    counters: { llmTurns: 16, planUpdateTurns: 0 },
   });
   agentContext.bindings.runtime = {
     runConfig: { scenario: "text" },
@@ -215,7 +217,6 @@ test("separate_model skips planning_revision when revision attempts already reac
     counters: {
       planRevisionAttempts: MAX_PLAN_UPDATE_ATTEMPTS,
       planRefinementAttempts: 0,
-      planUpdateAttempts: MAX_PLAN_UPDATE_ATTEMPTS,
     },
   });
   const meta = {
@@ -251,7 +252,6 @@ test("separate_model summary does not consume refinement attempts", async () => 
     counters: {
       planRevisionAttempts: 0,
       planRefinementAttempts: MAX_PLAN_UPDATE_ATTEMPTS,
-      planUpdateAttempts: MAX_PLAN_UPDATE_ATTEMPTS,
     },
   });
   const meta = {

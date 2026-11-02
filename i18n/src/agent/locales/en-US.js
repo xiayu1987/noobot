@@ -18,7 +18,6 @@ export default {
   "tools.file.writeContentTooLong": "File content is too long. Please write in batches.",
   "tools.file.readContentTooLong": "File content is too long. Please read in batches.",
   "tools.input.tooLong": "Tool input is too long and was saved as an attachment.",
-  "tools.search.textTooLong": "Search text is too long. Please search in smaller chunks.",
   "tools.patch.patchContentTooLong":
     "Patch content is too long. Please apply in batches or split the patch and try again.",
   "tools.result.toolResultOverflow": ({ measuredLength }) =>
@@ -31,8 +30,11 @@ export default {
     "The current path policy does not allow file tools to use symbolic links.",
   "tools.file.readLineRangeOutOfBounds": ({ startLine, endLine, totalLines }) =>
     `Invalid read line range: requested ${startLine}-${endLine ?? "end"}, file has ${totalLines} lines`,
-  "tools.file.pathErrorRequired": (params = {}) =>
-    `${String(params.field || "filePath")} is required.`,
+  "tools.input.fieldRequired": ({ field }) => `${field} is required.`,
+  "tools.input.unknownFields": ({ keys }) => `Unsupported fields: ${keys}.`,
+  "tools.input.invalidOption": ({ field, values }) => `${field} must be one of: ${values}.`,
+  "tools.input.invalidType": ({ field, expected }) => `${field} must be of type ${expected}.`,
+  "tools.input.invalidValue": ({ field, code }) => `${field} violates its constraint (${code}).`,
   "tools.file.pathErrorHostAbsoluteNotAllowed":
     "The current principal cannot access host absolute paths.",
   "tools.file.pathErrorSandboxNotAllowed":
@@ -87,6 +89,31 @@ export default {
   "modelRuntime.httpStatus.500": "Server error while processing the request; try again later",
   "modelRuntime.httpStatus.503": "The service is currently overloaded; try again later",
   "modelRuntime.imagesTaskIdMissing": "Task ID is missing",
+  "modelRuntime.diagnostic.toolsArray": "Tools must be an array",
+  "modelRuntime.diagnostic.invalidTool": "Invalid tool definition",
+  "modelRuntime.diagnostic.bodyObject": "Request body must be a JSON object",
+  "modelRuntime.diagnostic.credentialMissing": "Model credential is missing",
+  "modelRuntime.diagnostic.oneRequest": "Diagnostic allows one request",
+  "modelRuntime.diagnostic.requestTooLarge": "Request too large",
+  "modelRuntime.diagnostic.invalidJson": "Invalid JSON",
+  "modelRuntime.diagnostic.invalidHost": "Invalid host",
+  "modelRuntime.diagnostic.invalidOrigin": "Invalid origin",
+  "modelRuntime.diagnostic.notFound": "Not found",
+  "modelRuntime.diagnostic.invalidToken": "Invalid token",
+  "modelRuntime.diagnostic.modelNotFound": "Model not found",
+  "modelRuntime.diagnostic.invalidProtocol": "Invalid protocol",
+  "modelRuntime.diagnostic.invalidEndpoint": "Invalid endpoint",
+  "modelRuntime.diagnostic.bodyRequired": "Request body required",
+  "modelRuntime.diagnostic.invalidPort": "Invalid port",
+  "modelRuntime.diagnostic.availableTools": "Available tools:",
+  "modelRuntime.diagnostic.selectTools":
+    "Enter tool numbers/names to test (comma-separated; Enter selects all): ",
+  "modelRuntime.diagnostic.toolTestPrompt": ({ name } = {}) =>
+    `Call a tool to complete the test.\nTool name: ${name}\nMake exactly one tool call; use minimal valid placeholder arguments.`,
+  "modelRuntime.diagnostic.invalidUserId": "Invalid user ID",
+  "modelRuntime.diagnostic.startUrl": ({ url } = {}) => `Noobot model access test: ${url}`,
+  "modelRuntime.diagnostic.modelsLoaded": ({ count } = {}) =>
+    `${count} models loaded. Ctrl+C to exit.`,
   "modelRuntime.imagesTaskFailed": "Task failed",
   "modelRuntime.imagesTaskTimeout": ({ id } = {}) => `Task timed out: ${id}`,
 };

@@ -68,7 +68,7 @@ test("PM2 ecosystem assigns runtime environment to the owning process", () => {
     );
     assert.equal(apps.get("noobot-client")?.env?.CADDY_ADDR, ":31060");
     assert.equal(apps.get("noobot-client")?.env?.AGENT_PROXY_UPSTREAM, "127.0.0.1:31062");
-    assert.equal(apps.get("noobot-model-proxy")?.env, undefined);
+    assert.deepEqual(apps.get("noobot-model-proxy")?.env, { NOOBOT_WORKSPACE_ROOT: workspaceRoot });
   } finally {
     restoreTopologyEnv(previous);
     fs.rmSync(configDir, { recursive: true, force: true });

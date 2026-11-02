@@ -120,7 +120,7 @@ export function selectTurnMessageRuntime(
     startedAt: "",
     finishedAt: "",
     thinkingFinishedAt: "",
-    modelLoopRound: 0,
+    modelLoopRound: null,
   };
   const normalizedTurnScopeId = defaultRuntimeView.turnScopeId;
   const turn = normalizedTurnScopeId
@@ -162,7 +162,7 @@ export function selectTurnMessageRuntime(
     startedAt: text(turn.startedAt),
     finishedAt: text(turn.finishedAt),
     thinkingFinishedAt: text(turn.timing?.thinkingFinishedAt),
-    modelLoopRound: turn.timing?.modelLoopRound ?? 0,
+    modelLoopRound: turn.timing?.modelLoopRound ?? null,
   };
 }
 
@@ -171,10 +171,7 @@ export function resolveLatestStoppedTurn(registry, sessionId) {
   return (
     Object.values(bucket?.turns || {})
       .filter((turn) => turn.terminal === "user_stopped")
-      .sort(
-        (left, right) =>
-          (right.finishedAtMs || right.updatedAtMs) - (left.finishedAtMs || left.updatedAtMs),
-      )[0] || null
+      .sort((left, right) => right.finishedAtMs - left.finishedAtMs)[0] || null
   );
 }
 
@@ -193,7 +190,7 @@ export function resolveLatestContinuableStoppedTurn(registry, sessionId) {
       .sort((left, right) => {
         const sequenceDelta = right.lifecycleSeq - left.lifecycleSeq;
         if (sequenceDelta) return sequenceDelta;
-        return (right.finishedAtMs || right.updatedAtMs) - (left.finishedAtMs || left.updatedAtMs);
+        return right.finishedAtMs - left.finishedAtMs;
       })[0] || null
   );
 }

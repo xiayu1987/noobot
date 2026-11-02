@@ -3,7 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { WORKFLOW_SEQUENCE_DOMAIN } from "@noobot/event-protocol/workflow-runtime-event";
+import {
+  WORKFLOW_SEQUENCE_DOMAIN,
+  admitWorkflowSessionSnapshot,
+} from "@noobot/event-protocol/workflow-runtime-event";
 import { logWorkflowDiagnostics } from "../../debug/loggers/workflowDiagnosticsLogger.js";
 
 export function buildSnapshotContextFacet(snapshot) {
@@ -33,48 +36,36 @@ export function buildSubSessionSnapshotRegistryEntry({ current, snapshot, messag
   };
 }
 
-function lifecycleRejected(lifecycleResult) {
-  return lifecycleResult.applied === false && lifecycleResult.deduplicated !== true;
-}
-
-function resolveStaleReason(aggregateVersion, appliedAggregateVersion) {
-  return aggregateVersion === appliedAggregateVersion
-    ? "duplicate_snapshot_version"
-    : "stale_snapshot";
-}
-
 export function evaluateSubSessionSnapshotAdmission({
   snapshot,
   current,
   applyTurnLifecycleSnapshot,
   applyTurnTimingSnapshot,
 }) {
-  const lifecycleResult = applyTurnLifecycleSnapshot(snapshot.turnLifecycleSnapshot);
-  if (lifecycleRejected(lifecycleResult)) {
-    return {
-      admitted: false,
-      result: { applied: false, reason: lifecycleResult.reason, lifecycleResult },
-    };
-  }
-  const timingResult = applyTurnTimingSnapshot({
-    sessionId: snapshot.sessionId,
-    turnTimings: snapshot.turnTimings,
-  });
-  const { aggregateVersion } = snapshot;
   const appliedAggregateVersion =
     current.sequenceByDomain[WORKFLOW_SEQUENCE_DOMAIN.SESSION_SNAPSHOT];
-  if (appliedAggregateVersion !== undefined && aggregateVersion <= appliedAggregateVersion) {
-    const reason = resolveStaleReason(aggregateVersion, appliedAggregateVersion);
-    logWorkflowDiagnostics("frontend.workflowSubSession.snapshotRejected", () => ({
-      sessionId: snapshot.sessionId,
-      parentSessionId: snapshot.parentSessionId,
-      workflowRunId: snapshot.workflowRunId,
-      nodeExecutionId: snapshot.nodeExecutionId,
-      appliedAggregateVersion,
-      ...buildSnapshotContextFacet(snapshot),
-      reason,
-    }));
-    return { admitted: false, result: { applied: false, reason, current } };
+  const admission = admitWorkflowSessionSnapshot({
+    snapshot,
+    appliedAggregateVersion,
+    applyTurnLifecycleSnapshot,
+    applyTurnTimingSnapshot,
+  });
+  if (admission.admitted) return admission;
+  const { reason, lifecycleResult } = admission;
+  if (lifecycleResult) {
+    return {
+      admitted: false,
+      result: { applied: false, reason, lifecycleResult },
+    };
   }
-  return { admitted: true, lifecycleResult, timingResult, appliedAggregateVersion };
+  logWorkflowDiagnostics("frontend.workflowSubSession.snapshotRejected", () => ({
+    sessionId: snapshot.sessionId,
+    parentSessionId: snapshot.parentSessionId,
+    workflowRunId: snapshot.workflowRunId,
+    nodeExecutionId: snapshot.nodeExecutionId,
+    appliedAggregateVersion,
+    ...buildSnapshotContextFacet(snapshot),
+    reason,
+  }));
+  return { admitted: false, result: { applied: false, reason, current } };
 }

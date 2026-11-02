@@ -11,6 +11,39 @@ function findings(source) {
   return findScatteredThresholds(source).map(({ line, name, rule }) => [line, name, rule.category]);
 }
 
+test("detects inline timers, waiting calls, default arguments and environment defaults", () => {
+  const results = findings(
+    [
+      "setTimeout(() => {}, 1500);",
+      "globalThis.setInterval(work, 3000);",
+      "await page.waitForTimeout(500);",
+      "function load({ timeoutMs = 4000 } = {}) {}",
+      "const delay = Number(process.env.REQUEST_TIMEOUT_MS || 6000);",
+      "const ttl = envTimeMs('API_TTL_MS', 7000);",
+      "const limit = envNumber('MAX_CONNECTIONS', 'maxConnections', 80, 1);",
+      "const HTTP_REQUEST_TIMEOUT_MS = 5000;",
+      "const deadline = Date.now() + 180000;",
+    ].join("\n"),
+  );
+  assert.deepEqual(
+    results.map((result) => result[2]),
+    ["time", "time", "time", "time", "time", "time", "quantity", "time", "time"],
+  );
+});
+
+test("ports and fixed status enumerations are not thresholds", () => {
+  assert.deepEqual(
+    findings(
+      [
+        "const config = { port: envNumber('AGENT_PROXY_PORT', 'proxyPort', 12345, 1) };",
+        "const EXIT_CODES = Object.freeze({ timeout: 1, failed: 2 });",
+        "const HTTP_TOO_MANY_REQUESTS = 429;",
+      ].join("\n"),
+    ),
+    [],
+  );
+});
+
 test("classifies constant declarations and properties by threshold category", () => {
   assert.deepEqual(
     findings(

@@ -47,20 +47,6 @@ export const WORKFLOW_TRACE = Object.freeze({
   STAGE_FAILED: "workflow_failed",
 });
 
-export const WORKFLOW_PHASES = Object.freeze({
-  HOOK_RECEIVED: "hook_received",
-  SEMANTIC_RESOLUTION: "semantic_resolution",
-  WORKFLOW_EXECUTION: "workflow_execution",
-  PAYLOAD_BUILD: "payload_build",
-});
-
-export const WORKFLOW_PHASE_STATUS = Object.freeze({
-  STARTED: "started",
-  SUCCEEDED: "succeeded",
-  FAILED: "failed",
-  SKIPPED: "skipped",
-});
-
 export const WORKFLOW_ATTACHMENT_SCOPE = Object.freeze({
   USER_ALL: "user:*",
 });

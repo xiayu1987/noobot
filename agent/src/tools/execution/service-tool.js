@@ -150,7 +150,7 @@ export function createServiceTool({ agentContext }) {
     {
       name: TOOL_NAME.CALL_SERVICE,
       description: tTool(runtime, "tools.service.description"),
-      schema: z.object({
+      schema: z.strictObject({
         serviceName: z.string().describe(tTool(runtime, "tools.service.fieldServiceName")),
         endpointName: z.string().describe(tTool(runtime, "tools.service.fieldEndpointName")),
         custom_param: z

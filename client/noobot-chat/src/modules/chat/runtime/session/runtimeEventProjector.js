@@ -32,20 +32,13 @@ export function createRuntimeEventProjector({
       eventState: text(event?.state || event?.backendState),
       resultApplied: result?.applied === true,
       resultReason: text(result?.reason),
-      canonicalSessionId: text(result?.canonicalSessionId || result?.turn?.sessionId),
+      canonicalSessionId: text(result?.canonicalSessionId),
       canonicalTurnScopeId: text(result?.turn?.turnScopeId),
       canonicalState: text(result?.turn?.state),
       canonicalTerminal: result?.turn?.terminal || null,
       activeBucketTurnScopeId: text(activeBucket?.activeTurnScopeId),
     }));
-    return {
-      ...result,
-      messageEffect: {
-        projected: Boolean(result?.turn),
-        state: result?.turn?.state || "",
-        terminal: result?.turn?.terminal || "",
-      },
-    };
+    return result;
   };
 
   return submitTurnRuntimeEvent;

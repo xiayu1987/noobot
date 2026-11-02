@@ -76,7 +76,15 @@ test("workflow hook injects upstream node result attachments into downstream sub
           dialogProcessId: `dialog-${nodeName}`,
           result: {
             answer: `answer-${nodeName}`,
-            messages: [{ role: "assistant", content: `result-${nodeName}` }],
+            traces: [],
+            dialogProcessId: `dialog-${nodeName}`,
+            messages: [
+              {
+                messageUid: `message-${nodeName}`,
+                role: "assistant",
+                content: `result-${nodeName}`,
+              },
+            ],
           },
         };
       },
@@ -185,7 +193,15 @@ test("workflow hook injects one upstream action attachments into multiple direct
           dialogProcessId: `dialog-${nodeName}`,
           result: {
             answer: `answer-${nodeName}`,
-            messages: [{ role: "assistant", content: `result-${nodeName}` }],
+            traces: [],
+            dialogProcessId: `dialog-${nodeName}`,
+            messages: [
+              {
+                messageUid: `message-${nodeName}`,
+                role: "assistant",
+                content: `result-${nodeName}`,
+              },
+            ],
           },
         };
       },

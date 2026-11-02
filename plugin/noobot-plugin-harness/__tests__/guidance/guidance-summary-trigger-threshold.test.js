@@ -21,7 +21,7 @@ test("guidance summary threshold by turns is independent from plan update attemp
   const guidanceHandler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createPlanningAgentContext({
-    counters: { summaryTurns: FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD + 1, planUpdateAttempts: 0 },
+    counters: { summaryTurns: FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD + 1 },
   });
   const ctx = {
     messageBlocks: {
@@ -41,7 +41,10 @@ test("guidance summary threshold by turns is independent from plan update attemp
   agentContext.bindings.extensions.harness.state.pending.summary = false;
   await planningHandler({ capability: "planning", point: "agent.before_llm_call", ctx, meta: {} });
   assert.equal(agentContext.bindings.extensions.harness.state.pending.summary, false);
-  assert.equal(agentContext.bindings.extensions.harness.state.counters.planUpdateAttempts, 0);
+  assert.equal(
+    Object.hasOwn(agentContext.bindings.extensions.harness.state.counters, "planUpdateAttempts"),
+    false,
+  );
   const planningLogs = agentContext.bindings.extensions.harness.logs.planning;
   assert.equal(
     planningLogs.some((item = {}) => item?.event === "workflow_priority_decision"),
@@ -163,14 +166,17 @@ test("guidance summary threshold by chars is independent from plan update attemp
   agentContext.bindings.extensions.harness.state.pending.summary = false;
   await planningHandler({ capability: "planning", point: "agent.before_llm_call", ctx, meta: {} });
   assert.equal(agentContext.bindings.extensions.harness.state.pending.summary, false);
-  assert.equal(agentContext.bindings.extensions.harness.state.counters.planUpdateAttempts, 0);
+  assert.equal(
+    Object.hasOwn(agentContext.bindings.extensions.harness.state.counters, "planUpdateAttempts"),
+    false,
+  );
 });
 
 test("guidance schedules summary after a single model tool burst reaches summary threshold when enabled", async () => {
   const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
   const guidanceHandler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createPlanningAgentContext({
-    counters: { llmTurns: 1, planUpdateAttempts: 0 },
+    counters: { llmTurns: 1 },
   });
   const calls = Array.from({ length: FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD }, (_item, index) => ({
     id: `call_${index}`,
@@ -253,7 +259,7 @@ test("guidance schedules summary after a single model tool burst reaches summary
 test("planning does not schedule tool-burst summary by default", async () => {
   const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createPlanningAgentContext({
-    counters: { llmTurns: 1, planUpdateAttempts: 0 },
+    counters: { llmTurns: 1 },
   });
   const calls = Array.from({ length: FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD }, (_item, index) => ({
     id: `call_default_off_${index}`,

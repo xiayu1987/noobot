@@ -48,14 +48,13 @@ test("read_file: reads a model attachment through its canonical identity", async
       {
         riskLevel: "low",
         filePath: "attachment:v1:s-1/model/native-output-1",
-        includeLineNumbers: false,
       },
       { signal: new AbortController().signal },
     ),
   );
 
   assert.equal(result.ok, true);
-  assert.equal(result.content, "native output");
+  assert.equal(result.numberedContent, "     1\tnative output");
   assert.equal(result.fileName, "report.txt");
   assert.deepEqual(result.path, { view: "attachment", identity });
 });
@@ -82,7 +81,6 @@ test("read_file: 超级管理员可以读取工作区外文件", async () => {
         {
           riskLevel: "low",
           filePath: outsidePath,
-          includeLineNumbers: false,
         },
         { signal: new AbortController().signal },
       ),
@@ -104,13 +102,12 @@ test("read_file: 超级管理员可以读取工作区外文件", async () => {
       {
         riskLevel: "low",
         filePath: outsidePath,
-        includeLineNumbers: false,
       },
       { signal: new AbortController().signal },
     ),
   );
   assert.equal(result.ok, true);
-  assert.equal(result.content, "outside\ncontent");
+  assert.equal(result.numberedContent, "     1\toutside\n     2\tcontent");
 });
 
 test("read_file: 越界错误不暴露宿主 allowedRoots", async () => {
@@ -131,7 +128,7 @@ test("read_file: 越界错误不暴露宿主 allowedRoots", async () => {
   await assert.rejects(
     () =>
       readTool.invoke(
-        { riskLevel: "low", filePath: outsidePath, includeLineNumbers: false },
+        { riskLevel: "low", filePath: outsidePath },
         { signal: new AbortController().signal },
       ),
     (error) => {
@@ -240,13 +237,12 @@ test("read_file: 相对路径固定基于用户 workspace", async () => {
       {
         riskLevel: "low",
         filePath: "noobot/client/noobot-chat/src/app/ChatMessageNavigator.vue",
-        includeLineNumbers: false,
       },
       { signal: new AbortController().signal },
     ),
   );
   assert.equal(result.ok, true);
-  assert.equal(result.content, "navigator");
+  assert.equal(result.numberedContent, "     1\tnavigator");
 });
 
 test("read_file: host 模式拒绝未配置的 /project 沙箱路径", async () => {
@@ -274,7 +270,6 @@ test("read_file: host 模式拒绝未配置的 /project 沙箱路径", async () 
         {
           riskLevel: "low",
           filePath: "/project/client/noobot-chat/src/app/ChatMessageNavigator.vue",
-          includeLineNumbers: false,
         },
         { signal: new AbortController().signal },
       ),

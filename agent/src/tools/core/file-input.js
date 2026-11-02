@@ -30,7 +30,7 @@ export function createFileSourceSchema({ filePathDescription, attachmentRefDescr
 }
 
 export function createFileInputSchema(options = {}) {
-  return z.object({ source: createFileSourceSchema(options) }).strict();
+  return z.strictObject({ source: createFileSourceSchema(options) });
 }
 
 export async function resolveFileInput({

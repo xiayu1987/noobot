@@ -3,7 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { runtimeParamsZhCN } from "./runtime-params-zh-CN.js";
+
 export const zhCNMessages = {
+  runtimeParams: runtimeParamsZhCN,
   common: {
     session: "会话",
     sessionArtifacts: "Session 产物",
@@ -462,6 +465,7 @@ export const zhCNMessages = {
     executionReportDuration: "耗时",
     executionReportToolCalls: "工具调用",
     executionReportErrors: "失败",
+    executionReportNonZeroExits: "非零退出",
     executionReportError: "错误",
     executionReportSummaryError: "执行统计不可用",
     executionReportOverview: "概览",

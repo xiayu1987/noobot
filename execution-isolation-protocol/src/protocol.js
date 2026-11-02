@@ -57,7 +57,9 @@ const EXECUTION_ISOLATION_DEFAULTS = Object.freeze({
     scope: DOCKER_CONTAINER_SCOPE.USER,
     containerName: "noobot-workspace-sandbox",
     image: "nikolaik/python-nodejs:python3.12-nodejs26-bookworm",
-    lockWaitTimeoutMs: TIME_THRESHOLDS.tools.dockerLockWaitTimeoutMs,
+    get lockWaitTimeoutMs() {
+      return TIME_THRESHOLDS.tools.dockerLockWaitTimeoutMs;
+    },
   }),
 });
 

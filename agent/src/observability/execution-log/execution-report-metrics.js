@@ -9,6 +9,10 @@ import { normalizeSecurityRiskLevel } from "@noobot/security-assessment-protocol
 import { resolveData, resolveTimestampMs, resolveToolName } from "./execution-log-fields.js";
 import { text } from "@noobot/shared/value";
 import { assertToolCallTiming } from "@noobot/event-protocol/tool-timing";
+import {
+  decodeToolResultText,
+  projectToolResultExitCode,
+} from "@noobot/event-protocol/tool-result";
 
 const SLOWEST_TOOL_CALL_LIMIT = QUANTITY_THRESHOLDS.diagnostics.executionReportSlowestToolCalls;
 
@@ -53,6 +57,7 @@ function trackToolCall(acc, { log, data }, phase) {
     entry.durationMs = data.durationMs;
     entry.persistDurationMs = data.persistDurationMs;
     entry.success = data.success === true;
+    entry.exitCode = projectToolResultExitCode(decodeToolResultText(data.result));
     entry.riskLevel = normalizeSecurityRiskLevel(data.riskLevel);
   }
   acc.toolCalls.set(toolCallId, entry);
@@ -118,6 +123,7 @@ function summarizeToolCalls(toolCalls) {
     const stats = (toolStats[entry.tool] ||= {
       calls: 0,
       failures: 0,
+      nonZeroExits: 0,
       timedCount: 0,
       totalDurationMs: 0,
       maxDurationMs: 0,
@@ -125,6 +131,7 @@ function summarizeToolCalls(toolCalls) {
     stats.calls += 1;
     if (!entry.ended) continue;
     if (entry.success === false) stats.failures += 1;
+    if (entry.exitCode) stats.nonZeroExits += 1;
     increment(riskLevels, entry.riskLevel);
     const { durationMs, persistDurationMs } = entry;
     if (!Number.isFinite(durationMs) || !Number.isFinite(persistDurationMs)) {

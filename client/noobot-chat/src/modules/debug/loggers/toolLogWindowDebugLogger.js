@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
 import { acceptsDebugSink, emitLazyDebug, isDebugTypeEnabled } from "./lazyDebugSink.js";
 import { text } from "@noobot/shared/value";
@@ -65,7 +66,10 @@ export function summarizeToolLogWindowItem(item = {}, index = 0) {
   };
 }
 
-export function summarizeToolLogWindow(items = [], limit = 20) {
+export function summarizeToolLogWindow(
+  items = [],
+  limit = QUANTITY_THRESHOLDS.client.toolLogDebugLimit,
+) {
   const source = Array.isArray(items) ? items : [];
   const start = Math.max(0, source.length - Math.max(1, Number(limit) || 20));
   return source.slice(start).map((item, index) => summarizeToolLogWindowItem(item, start + index));

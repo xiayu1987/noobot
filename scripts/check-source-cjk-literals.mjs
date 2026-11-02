@@ -118,29 +118,9 @@ export const CHECK = defineCheck({
       "language endonym",
     ),
     fileExemption(
-      "experience-field-model",
-      "memory-protocol/src/experience/fields.js",
-      "default user experience field model",
-    ),
-    fileExemption(
-      "experience-document-labels",
-      "memory-protocol/src/experience/schema.js",
-      "persisted memory document labels",
-    ),
-    fileExemption(
-      "long-memory-field-model",
-      "memory-protocol/src/long-memory.js",
-      "default long memory field model",
-    ),
-    fileExemption(
       "memory-document-migration",
       "memory-repair/src/document-migration.js",
       "legacy memory document title for migration",
-    ),
-    fileExemption(
-      "bilingual-model-diagnostics",
-      "model-runtime/src/diagnostics/model-access.js",
-      "bilingual diagnostic errors",
     ),
     fileExemption("pii-field-names", "sanitize/src/index.js", "matches Chinese PII field names"),
     fileExemption(
@@ -154,7 +134,7 @@ export const CHECK = defineCheck({
       "self-contained bilingual service template",
     ),
   ],
-  baseline: { cjkLiteral: 0, exemptions: 25 },
+  baseline: { cjkLiteral: 0, exemptions: 21 },
   measure,
 });
 

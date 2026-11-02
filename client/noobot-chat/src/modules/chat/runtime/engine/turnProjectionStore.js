@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { reduceMessageEvent, MESSAGE_EVENT_REDUCE_RESULT } from "./messageEventReducer.js";
-import { createTurnKey, messageOwnsTurn, resolveTurnIdentity } from "./turnIdentity.js";
+import { createTurnKey, messageOwnsTurn, resolveEnvelopeTurnIdentity } from "./turnIdentity.js";
 import { createTurnObservation } from "./turnObservation.js";
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
 import {
@@ -89,7 +89,7 @@ export function dispatchTurnEnvelope({ targetMessage, envelope, source }) {
   const reducerObservedAtMs = Date.now();
   const eventTimestamp = envelope.occurredAt;
   const eventTimestampMs = Date.parse(eventTimestamp);
-  const identity = resolveTurnIdentity(envelope);
+  const identity = resolveEnvelopeTurnIdentity(envelope);
   const turnKey = createTurnKey(identity);
   const observe = (values = {}) => {
     const observation = createTurnObservation({

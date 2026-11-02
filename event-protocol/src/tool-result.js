@@ -28,6 +28,15 @@ export function encodeToolResultObject(value) {
   return JSON.stringify(assertToolResultObject(value));
 }
 
+export function projectToolResultExitCode(value) {
+  const result = assertToolResultObject(value);
+  if (result.ok !== true || result.termination !== "exited") return null;
+  if (!Number.isInteger(result.exitCode)) {
+    throw new TypeError("tool_result_exited_exit_code_required");
+  }
+  return result.exitCode;
+}
+
 export function toolResultOverflow({ message, transferEnvelopes }) {
   if (!isNonEmptyText(message)) throw new TypeError("tool_result_overflow_message_required");
   if (!Array.isArray(transferEnvelopes) || !transferEnvelopes.length) {

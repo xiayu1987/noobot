@@ -37,6 +37,32 @@ const LEGACY_METADATA = [
   "",
 ].join("\n");
 
+test("English model upgrades localize appended fields and preserve user declarations", () => {
+  const text = "NOOBOT_LONG_MEMORY_MODEL/1\n\nwork.tech_stack | list:2 | 自定义说明\n";
+  const result = migrateMemoryDocument({
+    kind: MEMORY_DOCUMENT_KIND.LONG_MEMORY_MODEL,
+    text,
+    locale: "en-US",
+  });
+  assert.equal(result.status, MEMORY_REPAIR_STATUS.MIGRATED);
+  assert.match(result.text, /work.tech_stack \| list:2 \| 自定义说明/);
+  const english = parseLongMemoryModelText(
+    renderDefaultMemoryDocument(MEMORY_DOCUMENT_KIND.LONG_MEMORY_MODEL, "en-US"),
+  );
+  const upgraded = parseLongMemoryModelText(result.text);
+  for (const key of LONG_MEMORY_MODEL_FIELDS_SINCE[2]) {
+    assert.equal(upgraded.byKey.get(key).description, english.byKey.get(key).description);
+  }
+  assert.deepEqual(
+    migrateMemoryDocument({
+      kind: MEMORY_DOCUMENT_KIND.LONG_MEMORY_MODEL,
+      text: result.text,
+      locale: "zh-CN",
+    }),
+    { status: MEMORY_REPAIR_STATUS.CANONICAL, text: result.text },
+  );
+});
+
 test("canonical documents are left untouched", () => {
   const text = "NOOBOT_LONG_MEMORY/1\n\npersonal_info.occupation：工程师\n";
   assert.deepEqual(migrateMemoryDocument({ kind: MEMORY_DOCUMENT_KIND.LONG_MEMORY, text }), {

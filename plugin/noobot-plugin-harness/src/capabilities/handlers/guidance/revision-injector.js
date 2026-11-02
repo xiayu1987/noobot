@@ -20,11 +20,11 @@ import { parseMainPlansFromPlanText } from "../shared/plan/text-protocol.js";
 import { resolvePendingPlanUpdate } from "../planning/plan-update-scheduler.js";
 import {
   canAttemptPlanUpdate,
-  normalizePlanUpdateStage,
   readPlanUpdateCaptureContext,
   setPendingPlanUpdate,
   writePlanUpdateCaptureContext,
 } from "../planning/plan-update-engine.js";
+import { requireHarnessPlanUpdateStage } from "../../../core/bucket-contract.js";
 import {
   applyRevisedPlanFromText,
   buildNextPhaseRelayContent,
@@ -55,7 +55,7 @@ export function schedulePlanUpdateByInject(
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
-  const normalizedStage = normalizePlanUpdateStage(stage);
+  const normalizedStage = requireHarnessPlanUpdateStage(stage);
   const normalizedPreferredTargetMainStepIndexes = targetMainStepIndexes
     .map((item) => Number(item))
     .filter((item) => Number.isFinite(item) && item > 0);

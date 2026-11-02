@@ -3,7 +3,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { ChatOpenAI } from "@langchain/openai";
-import { MODEL_PROVIDER_ID, resolveModelUseResponsesApi } from "@noobot/model-protocol";
+import {
+  MODEL_PROVIDER_ID,
+  MODEL_RESPONSE_SOURCE,
+  resolveModelUseResponsesApi,
+} from "@noobot/model-protocol";
 import {
   applyPromptCacheMessages,
   compileProviderModelKwargs,
@@ -121,6 +125,11 @@ export const openAiCompatibleAdapter = Object.freeze({
   },
   prepareMessages({ modelSpec, messages }) {
     return applyPromptCacheMessages(normalizeRuntimeModelSpec(modelSpec), messages);
+  },
+  resolveResponseSource({ modelSpec }) {
+    return resolveModelUseResponsesApi(normalizeRuntimeModelSpec(modelSpec))
+      ? MODEL_RESPONSE_SOURCE.RESPONSES
+      : MODEL_RESPONSE_SOURCE.MESSAGE;
   },
   executeOperation(input) {
     return executeOpenAiOperation(input);

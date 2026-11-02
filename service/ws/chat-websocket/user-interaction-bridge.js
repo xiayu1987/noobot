@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { createHash, randomBytes } from "node:crypto";
-import { resolveUserInteractionTimeoutMs } from "@noobot/shared/time-thresholds";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
@@ -21,7 +21,7 @@ import {
 } from "./pending-interaction-registry.js";
 import { isPlainObject, text, isFunction } from "@noobot/shared/value";
 
-const USER_INTERACTION_TIMEOUT_MS = resolveUserInteractionTimeoutMs();
+const USER_INTERACTION_TIMEOUT_MS = TIME_THRESHOLDS.service.userInteractionTimeoutMs;
 
 function normalizeInteractionTimeoutMs(timeoutMs, fallbackTimeoutMs = USER_INTERACTION_TIMEOUT_MS) {
   const normalizedFallbackTimeoutMs =
@@ -95,14 +95,16 @@ async function handleInteractionTimeout({
       requestId,
       reason: commitError?.message || "interaction_authority_commit_failed",
     });
+    throw new AggregateError([commitError, error], "interaction timeout terminal commit failed", {
+      cause: commitError,
+    });
   }
-  requestItem.recordLifecycle("service.websocket.interaction.terminalSent", {
+  requestItem.recordLifecycle("service.websocket.interaction.terminalCommitted", {
     interactionId,
     requestId,
     lifecycle: "failed",
     reason: "timeout",
     timeoutMs: effectiveTimeoutMs,
-    sendStarted: true,
   });
   rejectInteraction(error);
 }

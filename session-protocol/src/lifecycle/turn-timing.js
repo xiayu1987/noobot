@@ -101,7 +101,8 @@ export function projectTurnTiming(turn, timings) {
   const timing = timings
     .map((item) => normalizeTurnTimingRecord(item))
     .find((item) => item.turnScopeId === turn.turnScopeId);
-  if (!timing?.thinkingFinishedAt) return turn;
+  if (!timing) return turn;
   assertTurnTimingOwnership(timing, turn.dialogProcessId);
+  if (!timing.thinkingFinishedAt) return turn;
   return { ...turn, thinkingFinishedAt: timing.thinkingFinishedAt };
 }

@@ -5,12 +5,14 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHarnessBucket } from "../../src/core/bucket-contract.js";
 
 import { createPlanRevisionHelpers } from "../../src/capabilities/handlers/shared/plan/revision-helpers.js";
 
 test("planning revision resets acceptance status for changed plan items only", () => {
   const ctx = {
     bucket: {
+      ...createHarnessBucket(),
       planText: ["1. 主计划一", "1.1 子计划一", "2. 主计划二"].join("\n"),
       globalRevisionCount: 0,
       lastRevisionChangedMainStepIndexes: [],

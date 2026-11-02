@@ -11,18 +11,9 @@ import {
   runCheckWhenMain,
 } from "./quality/check-protocol.mjs";
 import { readRepositoryText, repositoryRoot } from "./quality/repository-files.mjs";
-import { getFirstPartyFilesUnder } from "./quality/source-inventory.mjs";
+import { getFirstPartyFilesUnder, getFirstPartySourceRoots } from "./quality/source-inventory.mjs";
+import { parse } from "espree";
 
-const SCANNED_DIRECTORIES = Object.freeze([
-  "agent",
-  "agent-proxy",
-  "client",
-  "i18n",
-  "model-proxy",
-  "plugin",
-  "service",
-  "workflow",
-]);
 const CATEGORY_RULES = [
   {
     category: "length",
@@ -31,24 +22,25 @@ const CATEGORY_RULES = [
     namePattern:
       /(CHARS?|BYTES?|STRING(?:_?LENGTH)?|TEXT|PREVIEW|CONTENT|EXTENSION_?LENGTH|TRUNCATE_?LENGTH)/i,
     propPattern:
-      /^(?:maxChars|maxLength|maxStringLength|maxBytes|previewChars|contentChars|textChars|maxBufferBytes|maxFileSizeBytes|maxTotalSizeBytes)$/i,
+      /^(?:maxChars|maxLength|maxStringLength|maxBytes|previewChars|contentChars|textChars|maxBuffer|maxBufferBytes|maxFileSizeBytes|maxTotalSizeBytes|\w+Bytes|\w+Chars)$/i,
   },
   {
     category: "quantity",
     importPath: "@noobot/shared/quantity-thresholds",
     symbol: "QUANTITY_THRESHOLDS",
-    namePattern: /(ITEMS?|COUNT|LIMIT|LINES?|RESULTS?|FILES?|ENTRIES|CONCURRENCY|DEPTH|SIZE)$/i,
+    namePattern:
+      /(ITEMS?|COUNT|LIMIT|LINES?|RESULTS?|FILES?|ENTRIES|CONCURRENCY|CONNECTIONS|REQUESTS|DEPTH|SIZE)$/i,
     propPattern:
-      /^(?:maxItems|maxFileCount|maxSubAgentDepth|maxLines|maxResults|maxFiles|maxEntries|maxBufferEntries|maxSize|limit|concurrency|maxRuns)$/i,
+      /^(?:maxItems|maxFileCount|maxSubAgentDepth|maxLines|maxResults|maxFiles|maxEntries|maxBufferEntries|maxSize|limit|concurrency|maxRuns|maxConnections|maxChannelEvents|maxReplayEvents|maxRequests|\w+MaxRecords|maxRedirects)$/i,
   },
   {
     category: "time",
     importPath: "@noobot/shared/time-thresholds",
     symbol: "TIME_THRESHOLDS",
     namePattern:
-      /(TIMEOUT|INTERVAL|DELAY|TTL|AGE|RETENTION|GRACE|DURATION|POLL|DEBOUNCE).*?(MS|SECONDS|DAYS)?$/i,
+      /(TIMEOUT|INTERVAL|DELAY|TTL|MAX_?AGE|(?:^|_)AGE(?:_|$)|RETENTION|GRACE|DURATION|POLL|DEBOUNCE).*?(MS|SECONDS|DAYS)?$/i,
     propPattern:
-      /^(?:timeoutMs|intervalMs|delayMs|ttlMs|maxAgeMs|retentionMs|graceMs|durationSeconds|maxRunAgeDays)$/i,
+      /^(?:timeout|windowMs|staleMs|pollMs|retainMs|timeoutMs|intervalMs|delayMs|ttlMs|maxAgeMs|retentionMs|graceMs|durationSeconds|maxRunAgeDays|\w+(?:Timeout|Interval|Delay|Ttl|Retention|Window|Grace|Flush)Ms)$/i,
   },
   {
     category: "turn",
@@ -60,108 +52,121 @@ const CATEGORY_RULES = [
   },
 ];
 
-function maskRegionCharacter(cursor, char, next) {
-  const masked = char === "\n" ? "\n" : " ";
-  if (cursor.state === "lineComment") {
-    if (char === "\n") cursor.state = "code";
-    return masked;
-  }
-  if (cursor.state === "blockComment") {
-    if (char !== "*" || next !== "/") return masked;
-    cursor.index += 1;
-    cursor.state = "code";
-    return "  ";
-  }
-  if (char === "\\") {
-    cursor.index += 1;
-    return "  ";
-  }
-  if (char === cursor.quote) {
-    cursor.state = "code";
-    cursor.quote = "";
-  }
-  return masked;
-}
-
-function maskCodeCharacter(cursor, char, next) {
-  if (char === "/" && (next === "/" || next === "*")) {
-    cursor.index += 1;
-    cursor.state = next === "/" ? "lineComment" : "blockComment";
-    return "  ";
-  }
-  if (char !== '"' && char !== "'" && char !== "`") return char;
-  cursor.quote = char;
-  cursor.state = "string";
-  return " ";
-}
-
-function stripCommentsAndStrings(text) {
-  let out = "";
-  const cursor = { index: 0, state: "code", quote: "" };
-  for (; cursor.index < text.length; cursor.index += 1) {
-    const char = text[cursor.index];
-    const next = text[cursor.index + 1];
-    out +=
-      cursor.state === "code"
-        ? maskCodeCharacter(cursor, char, next)
-        : maskRegionCharacter(cursor, char, next);
-  }
-  return out;
-}
-
-function lineAndColumn(text, index) {
-  const before = text.slice(0, index);
-  const lines = before.split(/\r?\n/);
-  return {
-    line: lines.length,
-    column: lines[lines.length - 1].length + 1,
-  };
-}
-
-function isAllowedNumericExpression(expr) {
-  const trimmed = expr.trim();
-  if (!trimmed) return true;
-  if (trimmed === "0") return true;
-  if (/^(?:Number\.)?MAX_SAFE_INTEGER\b/.test(trimmed)) return true;
-  if (/\b(?:LENGTH|QUANTITY|TIME|TURN)_THRESHOLDS\b/.test(trimmed)) return true;
-  return false;
-}
-
-function expressionLooksNumeric(expr) {
-  const trimmed = expr.trim();
-  if (!trimmed) return false;
-  if (isAllowedNumericExpression(trimmed)) return false;
-  return /^[0-9]/.test(trimmed) || /^[A-Z0-9_]+\s*[*/+-]\s*[0-9]/i.test(trimmed);
-}
-
 function classifyName(name, pattern) {
-  for (const rule of CATEGORY_RULES) {
-    if (rule[pattern].test(name)) return rule;
-  }
-  return null;
+  if (/(?:VERSION|SCHEMA_VERSION)$/.test(name)) return null;
+  if (name === "HTTP_TOO_MANY_REQUESTS") return null;
+  return CATEGORY_RULES.find((rule) => rule[pattern].test(name)) ?? null;
 }
 
-const DECLARATION =
-  /\b(?:export\s+)?(?:const|let|var)\s+(?<name>[A-Z_$][\w$]*)\s*=\s*(?<expr>[^;\n]+)/g;
-const PROPERTY = /\b(?<name>[A-Za-z_$][\w$]*)\s*:\s*(?<expr>[^,\n}]+)/g;
+function scriptSource(text) {
+  const scripts = [...text.matchAll(/^<script\b[^>]*>([\s\S]*?)<\/script>/gm)];
+  if (!scripts.length) return /^<template\b/m.test(text) ? "" : text;
+  return scripts.map((match) => {
+    const start = match.index + match[0].indexOf(">") + 1;
+    return text.slice(0, start).replace(/[^\n]/g, " ") + match[1];
+  });
+}
 
-function findPatternThresholds(code, pattern, namePattern) {
-  const findings = [];
-  for (const match of code.matchAll(pattern)) {
-    const { name, expr } = match.groups;
-    const rule = classifyName(name, namePattern);
-    if (!rule || !expressionLooksNumeric(expr)) continue;
-    findings.push({ ...lineAndColumn(code, match.index), name, expr: expr.trim(), rule });
+function numeric(node) {
+  if (!node) return false;
+  if (node.type === "Literal")
+    return (
+      typeof node.value === "number" || (typeof node.value === "string" && /^\d+$/.test(node.value))
+    );
+  if (node.type === "UnaryExpression")
+    return ["+", "-"].includes(node.operator) && numeric(node.argument);
+  return node.type === "BinaryExpression" && numeric(node.left) && numeric(node.right);
+}
+
+function collectCallThreshold(node, add) {
+  const name = node.callee.name || node.callee.property?.name || "";
+  if (["setTimeout", "setInterval"].includes(name)) {
+    add("timeoutMs", node.arguments[1], node.arguments[1]);
+    return;
   }
+  if (/^env(?:TimeMs|Number)$/.test(name)) {
+    const value = node.arguments[name === "envNumber" ? 2 : 1];
+    add(String(node.arguments[0]?.value), value, value, "namePattern");
+    return;
+  }
+  if (/timeout|delay|sleep/i.test(name)) add("timeoutMs", node.arguments[0], node.arguments[0]);
+}
+
+function scanScript(script) {
+  const tree = parse(script, {
+    ecmaVersion: "latest",
+    sourceType: "module",
+    ecmaFeatures: { jsx: true },
+    loc: true,
+    range: true,
+  });
+  const findings = [];
+  const seen = new Set();
+  const add = (name, value, location, pattern = "propPattern") => {
+    const rule = classifyName(name, pattern);
+    if (!rule || !numeric(value) || (value.type === "Literal" && Number(value.value) === 0)) return;
+    const identity = `${value.range[0]}:${rule.category}`;
+    if (seen.has(identity)) return;
+    seen.add(identity);
+    findings.push({
+      line: location.loc.start.line,
+      column: location.loc.start.column + 1,
+      name,
+      expr: script.slice(...value.range),
+      rule,
+    });
+  };
+  function visit(node, parent, fixed = false) {
+    if (!node || typeof node !== "object") return;
+    const fixedEnumeration =
+      fixed ||
+      (node.type === "VariableDeclarator" &&
+        /_(?:CODES?|STATUS(?:ES)?|STATES?)$/.test(node.id?.name || ""));
+    if (!fixedEnumeration) {
+      if (node.type === "VariableDeclarator" && node.id.type === "Identifier") {
+        add(
+          node.id.name,
+          node.init,
+          parent,
+          /^[A-Z_$][\w$]*$/.test(node.id.name) ? "namePattern" : "propPattern",
+        );
+      }
+      if (node.type === "Property" && !node.computed)
+        add(node.key.name || String(node.key.value), node.value, node);
+      if (node.type === "AssignmentPattern" && node.left.type === "Identifier")
+        add(node.left.name, node.right, node);
+      if (node.type === "CallExpression") collectCallThreshold(node, add);
+      if (
+        node.type === "BinaryExpression" &&
+        ["+", "-"].includes(node.operator) &&
+        /^Date\.now\(\)$|^performance\.now\(\)$/.test(script.slice(...node.left.range))
+      )
+        add("timeoutMs", node.right, node.right);
+      if (
+        node.type === "LogicalExpression" &&
+        ["||", "??"].includes(node.operator) &&
+        /process\.env\b/.test(script.slice(...node.left.range))
+      ) {
+        const envKey = script
+          .slice(...node.left.range)
+          .match(/process\.env(?:\.([A-Z][A-Z_0-9]+)|\[["']([^"']+)["']\])/);
+        const name = envKey?.[1] || envKey?.[2] || parent?.id?.name || parent?.key?.name || "";
+        add(name, node.right, node.right, "namePattern");
+      }
+    }
+    for (const [key, value] of Object.entries(node)) {
+      if (["loc", "range"].includes(key)) continue;
+      if (Array.isArray(value)) value.forEach((child) => visit(child, node, fixedEnumeration));
+      else if (value && typeof value === "object") visit(value, node, fixedEnumeration);
+    }
+  }
+  visit(tree);
   return findings;
 }
 
 export function findScatteredThresholds(text) {
-  const code = stripCommentsAndStrings(text);
-  return [
-    [DECLARATION, "namePattern"],
-    [PROPERTY, "propPattern"],
-  ].flatMap(([pattern, namePattern]) => findPatternThresholds(code, pattern, namePattern));
+  const source = scriptSource(text);
+  return (Array.isArray(source) ? source : [source]).flatMap(scanScript);
 }
 
 export async function measureSharedThresholds(files) {
@@ -188,9 +193,13 @@ function categoryRule(category) {
   };
 }
 
+const THRESHOLD_DECLARATION_FILES =
+  /^(?:shared\/(?:time|turn|quantity|length)-thresholds\.js|scripts\/lib\/development-thresholds\.mjs)$/;
+
 export const CHECK = defineCheck({
   id: "shared-thresholds",
-  description: "Length, quantity, time, and turn thresholds live in shared/*-thresholds.js",
+  description:
+    "Length, quantity, time, and turn thresholds live in shared/*-thresholds.js or development-thresholds",
   rules: Object.fromEntries(
     CATEGORY_RULES.map(({ category }) => [category, categoryRule(category)]),
   ),
@@ -198,11 +207,13 @@ export const CHECK = defineCheck({
   baseline: { length: 0, quantity: 0, time: 0, turn: 0, exemptions: 0 },
   measure: async () =>
     measureSharedThresholds(
-      await getFirstPartyFilesUnder(SCANNED_DIRECTORIES, {
-        repositoryRoot,
-        extensions: [".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".vue"],
-        includeTests: false,
-      }),
+      (
+        await getFirstPartyFilesUnder(await getFirstPartySourceRoots({ repositoryRoot }), {
+          repositoryRoot,
+          extensions: [".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".vue"],
+          includeTests: false,
+        })
+      ).filter((file) => !THRESHOLD_DECLARATION_FILES.test(file)),
     ),
 });
 

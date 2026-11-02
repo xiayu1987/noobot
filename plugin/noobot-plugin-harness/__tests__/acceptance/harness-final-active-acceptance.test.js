@@ -233,7 +233,7 @@ test("task acceptance clears queued summary, pauses only during review, and is e
       },
     },
   );
-  const state = {
+  let state = {
     flags: { summaryByCharsPrompted: true },
     counters: { summaryTurns: 0 },
     signals: { successfulToolCount: 1 },
@@ -254,6 +254,7 @@ test("task acceptance clears queued summary, pauses only during review, and is e
     },
   };
   await hookManager.emit("agent.before_turn", createTestHookContext({ agentContext }));
+  state = agentContext.bindings.extensions.harness.state;
   state.pending.summary = true;
   state.pending.summaryCheckpointMessageKeys = ["stale-checkpoint-message"];
   state.flags.summaryByCharsPrompted = true;

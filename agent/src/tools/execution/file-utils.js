@@ -19,12 +19,17 @@ export function splitLines(content) {
   return content.split(/\r?\n/);
 }
 
-export function formatLinesWithNumbers(lines, startLine) {
-  return lines.map((lineText, index) => `${startLine + index} | ${lineText}`).join("\n");
+const LINE_NUMBER_WIDTH = 6;
+export const LINE_NUMBER_PREFIX_PATTERN = /^ *(\d+)\t/;
+
+function formatLineNumberPrefix(lineNumber) {
+  return `${String(lineNumber).padStart(LINE_NUMBER_WIDTH)}\t`;
 }
 
-export function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+export function formatLinesWithNumbers(lines, startLine) {
+  return lines
+    .map((lineText, index) => `${formatLineNumberPrefix(startLine + index)}${lineText}`)
+    .join("\n");
 }
 
 export function normalizeSlash(value) {

@@ -25,6 +25,8 @@ const translations = {
     withoutTools: "不绑定工具",
     withTools: "绑定工具",
     toolDefinitions: "工具定义（JSON 数组）",
+    echoDescription: "返回传入文本",
+    echoTextDescription: "要返回的文本",
     toolChoice: "工具选择策略",
     toolsHint:
       "编辑工具名称、描述和参数 schema，生成请求后可逐项修改。工具调用结果会展示，不会执行工具。导入日志会载入其中的工具定义。",
@@ -93,6 +95,8 @@ const translations = {
     withoutTools: "Without tools",
     withTools: "Bind tools",
     toolDefinitions: "Tool definitions (JSON array)",
+    echoDescription: "Return the supplied text",
+    echoTextDescription: "Text to echo",
     toolChoice: "Tool choice policy",
     toolsHint:
       "Edit tool names, descriptions and parameter schemas, then generate and inspect the request. Returned tool calls are displayed without execution. Log import loads its tool definitions.",

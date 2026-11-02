@@ -66,10 +66,16 @@ export {
 
 export {
   createTurnTerminalResolution,
+  requireTurnTerminalResolutionIdentity,
   TURN_TERMINAL_RESOLUTION_PROTOCOL_VERSION,
   TURN_TERMINAL_RESOLVED_EVENT,
   validateTurnTerminalResolution,
 } from "./lifecycle/turn-terminal-resolution.js";
+
+export {
+  requireTurnExecutionObservation,
+  requireTurnRecoveryCommitResult,
+} from "./lifecycle/turn-recovery.js";
 
 export const TURN_LIFECYCLE_PROTOCOL_VERSION = 1;
 export const TURN_LIFECYCLE_WIRE_EVENT = "turn_lifecycle";

@@ -5,8 +5,10 @@
  */
 import OpenAI from "openai";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-import { pickLocaleText } from "noobot-i18n/shared";
-import { BACKEND_I18N } from "noobot-i18n/agent/backend-messages";
+import {
+  tModelRuntime as modelRuntimeText,
+  modelHttpStatusFallback as httpStatusFallback,
+} from "../locale.js";
 import {
   MODEL_IMAGE_GENERATION_API_TYPE,
   MODEL_OPERATION_KIND,
@@ -18,17 +20,6 @@ import { isPlainObject, text } from "@noobot/shared/value";
 const POLL_INTERVAL_MS = TIME_THRESHOLDS.tools.imagesAsyncPollIntervalMs;
 const TIMEOUT_MS = TIME_THRESHOLDS.tools.imagesAsyncTimeoutMs;
 const RATIO_SIZE = /^(auto|\d+(?:\.\d+)?:\d+(?:\.\d+)?)$/i;
-
-function modelRuntimeText(locale, key, params) {
-  return pickLocaleText({ locale, dict: BACKEND_I18N, key: `modelRuntime.${key}`, params });
-}
-
-function httpStatusFallback(locale, status) {
-  const key = `modelRuntime.httpStatus.${status}`;
-  return Object.hasOwn(BACKEND_I18N, key)
-    ? pickLocaleText({ locale, dict: BACKEND_I18N, key })
-    : "";
-}
 
 function normalizeBaseUrl(baseUrl = "") {
   const withoutTrailingSlashes = (value) => {

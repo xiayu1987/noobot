@@ -6,7 +6,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createTestHookManager as createAgentHookManager } from "../helpers/public-runtime-fixtures.js";
+import {
+  createTestResolveModelMessages,
+  createTestHookManager as createAgentHookManager,
+} from "../helpers/public-runtime-fixtures.js";
 import { registerHarnessCore } from "../../src/index.js";
 import { createModelContext } from "@noobot/context-protocol";
 import { canonicalizeTestMessageBlocks } from "../helpers/context-message.js";
@@ -27,6 +30,7 @@ test("harness capability hook can take over tool calls", async () => {
   registerHarnessCore(
     { hookManager },
     {
+      resolveModelMessages: createTestResolveModelMessages(),
       planningGuidanceMode: "inject",
       trace: false,
       promptPolicy: false,
@@ -73,6 +77,7 @@ test("harness capability hook can force inject system message in mid hooks", asy
   registerHarnessCore(
     { hookManager },
     {
+      resolveModelMessages: createTestResolveModelMessages(),
       planningGuidanceMode: "inject",
       trace: false,
       promptPolicy: false,
@@ -121,6 +126,7 @@ test("harness capability hook can take over and remove agent internal forced mes
   registerHarnessCore(
     { hookManager },
     {
+      resolveModelMessages: createTestResolveModelMessages(),
       planningGuidanceMode: "inject",
       trace: false,
       promptPolicy: false,
@@ -194,6 +200,7 @@ test("harness message takeover keeps system context before injected ctx messages
   registerHarnessCore(
     { hookManager },
     {
+      resolveModelMessages: createTestResolveModelMessages(),
       planningGuidanceMode: "inject",
       trace: false,
       promptPolicy: false,
@@ -251,6 +258,7 @@ test("harness ctx message takeover writes through message store views", async ()
   registerHarnessCore(
     { hookManager },
     {
+      resolveModelMessages: createTestResolveModelMessages(),
       planningGuidanceMode: "inject",
       trace: false,
       promptPolicy: false,
@@ -314,6 +322,7 @@ test("harness agent system takeover does not write ctx message store", async () 
   registerHarnessCore(
     { hookManager },
     {
+      resolveModelMessages: createTestResolveModelMessages(),
       planningGuidanceMode: "inject",
       trace: false,
       promptPolicy: false,
@@ -365,6 +374,7 @@ test("harness ctx message takeover syncs store when removal dedupes injection", 
   registerHarnessCore(
     { hookManager },
     {
+      resolveModelMessages: createTestResolveModelMessages(),
       planningGuidanceMode: "inject",
       trace: false,
       promptPolicy: false,
@@ -435,6 +445,7 @@ test("harness ctx message takeover ignores id markers echoed in tool results", a
   registerHarnessCore(
     { hookManager },
     {
+      resolveModelMessages: createTestResolveModelMessages(),
       planningGuidanceMode: "inject",
       trace: false,
       promptPolicy: false,

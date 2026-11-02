@@ -94,7 +94,15 @@ test("workflow hook fails the parent workflow and stops downstream after a sub-a
           dialogProcessId: `dialog-${nodeName}`,
           result: {
             answer: `answer-${nodeName}`,
-            messages: [{ role: "assistant", content: `result-${nodeName}` }],
+            traces: [],
+            dialogProcessId: `dialog-${nodeName}`,
+            messages: [
+              {
+                messageUid: `message-${nodeName}`,
+                role: "assistant",
+                content: `result-${nodeName}`,
+              },
+            ],
           },
         };
       },

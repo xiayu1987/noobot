@@ -389,6 +389,37 @@ describe("workflow node session view ownership", () => {
     wrapper.unmount();
   });
 
+  it("clears the previous runtime node when the opened step has no owning node", async () => {
+    const routedStep = step("routed");
+    const { wrapper, state, viewer } = mountViewer({
+      fetcher: vi.fn(async () => detailResponse("session-routed", "done", "dialog-routed")),
+      sessionDocs: reactive({}),
+      runtimeNodes: [routedStep],
+      flowNodeItems: [],
+    });
+    viewer.openWorkflowNodePanel({ nodeId: "previous", actionNodeStates: [] });
+    await viewer.openNodeSession(routedStep, { fromHistory: true, traceId: "trace-1" });
+    expect(state.selectedRuntimeNode.value).toBeNull();
+    wrapper.unmount();
+  });
+
+  it("clears the runtime selection when its node disappears", async () => {
+    const routedStep = step("routed");
+    const node = { nodeId: "action-routed", actionNodeStates: [{ steps: [routedStep] }] };
+    const { wrapper, state, viewer, flowNodes } = mountViewer({
+      fetcher: vi.fn(),
+      sessionDocs: reactive({}),
+      flowNodeItems: [node],
+    });
+    viewer.openWorkflowNodePanel(node);
+    state.selectedRuntimeStep.value = routedStep;
+    flowNodes.value = [];
+    await nextTick();
+    expect(state.selectedRuntimeNode.value).toBeNull();
+    expect(state.selectedRuntimeStep.value).toBeNull();
+    wrapper.unmount();
+  });
+
   it("rebinds the selected runtime node when its live projection changes", async () => {
     const initialStep = step("live");
     const initialNode = {

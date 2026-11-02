@@ -47,15 +47,6 @@ function envNumber(name, fileKey, defaultValue, min = 0, max = Number.POSITIVE_I
   });
 }
 
-function envTimeMs(name, fileKey, defaultValue, min = 0, max = Number.POSITIVE_INFINITY) {
-  return Math.floor(
-    normalizeNumber(getRawConfigValue(name, fileKey, defaultValue), defaultValue, {
-      min,
-      max,
-    }),
-  );
-}
-
 function envString(name, fileKey, defaultValue) {
   return String(getRawConfigValue(name, fileKey, defaultValue)).trim();
 }
@@ -109,88 +100,23 @@ export const config = {
     "connectTokenAllowLoopback",
     true,
   ),
-  channelRetentionMs: envTimeMs(
-    "AGENT_PROXY_CHANNEL_RETENTION_MS",
-    "channelRetentionMs",
-    10 * 60 * 1000,
-    10000,
-  ),
-  apiKeyRetentionMs: envTimeMs(
-    "AGENT_PROXY_API_KEY_RETENTION_MS",
-    "apiKeyRetentionMs",
-    24 * 60 * 60 * 1000,
-    60000,
-  ),
-  maxChannelEvents: envNumber("AGENT_PROXY_MAX_CHANNEL_EVENTS", "maxChannelEvents", 2000, 100),
-  cleanupIntervalMs: envTimeMs("AGENT_PROXY_CLEANUP_INTERVAL_MS", "cleanupIntervalMs", 15000, 5000),
-  maxConnections: envNumber("AGENT_PROXY_MAX_CONNECTIONS", "maxConnections", 1000, 10),
-  wsHeartbeatIntervalMs: envTimeMs(
-    "AGENT_PROXY_WS_HEARTBEAT_INTERVAL_MS",
-    "wsHeartbeatIntervalMs",
-    TIME_THRESHOLDS.agentProxy.webSocketHeartbeatIntervalMs,
-    1000,
-  ),
-  wsHeartbeatTimeoutMs: envTimeMs(
-    "AGENT_PROXY_WS_HEARTBEAT_TIMEOUT_MS",
-    "wsHeartbeatTimeoutMs",
-    TIME_THRESHOLDS.agentProxy.webSocketHeartbeatTimeoutMs,
-    1000,
-  ),
-  wsMaxPayloadBytes: envNumber(
-    "AGENT_PROXY_WS_MAX_PAYLOAD_BYTES",
-    "wsMaxPayloadBytes",
-    LENGTH_THRESHOLDS.agentProxy.webSocketMaxPayloadBytes,
-    1024,
-  ),
-  wsMaxBufferedBytes: envNumber(
-    "AGENT_PROXY_WS_MAX_BUFFERED_BYTES",
-    "wsMaxBufferedBytes",
-    LENGTH_THRESHOLDS.agentProxy.webSocketMaxBufferedBytes,
-    1024,
-  ),
-  maxBodySize: envNumber("AGENT_PROXY_MAX_BODY_SIZE", "maxBodySize", 10 * 1024 * 1024, 1024 * 1024),
-  requestIdTtlMs: envTimeMs(
-    "AGENT_PROXY_REQUEST_ID_TTL_MS",
-    "requestIdTtlMs",
-    11 * 60 * 1000,
-    5000,
-  ),
-  invalidUpstreamFrameWindowMs: envTimeMs(
-    "AGENT_PROXY_INVALID_UPSTREAM_FRAME_WINDOW_MS",
-    "invalidUpstreamFrameWindowMs",
-    TIME_THRESHOLDS.agentProxy.invalidUpstreamFrameWindowMs,
-    1000,
-  ),
-  invalidUpstreamFrameLimit: envNumber(
-    "AGENT_PROXY_INVALID_UPSTREAM_FRAME_LIMIT",
-    "invalidUpstreamFrameLimit",
-    QUANTITY_THRESHOLDS.agentProxy.invalidUpstreamFrameLimit,
-    1,
-  ),
-  reconnectSnapshotTimeoutMs: envTimeMs(
-    "AGENT_PROXY_RECONNECT_SNAPSHOT_TIMEOUT_MS",
-    "reconnectSnapshotTimeoutMs",
-    TIME_THRESHOLDS.agentProxy.reconnectSnapshotTimeoutMs,
-    1000,
-  ),
-  turnLifecycleReceiptTimeoutMs: envTimeMs(
-    "AGENT_PROXY_TURN_LIFECYCLE_RECEIPT_TIMEOUT_MS",
-    "turnLifecycleReceiptTimeoutMs",
-    TIME_THRESHOLDS.agentProxy.turnLifecycleReceiptTimeoutMs,
-    100,
-  ),
-  turnLifecycleDeliveryMaxAttempts: envNumber(
-    "AGENT_PROXY_TURN_LIFECYCLE_DELIVERY_MAX_ATTEMPTS",
-    "turnLifecycleDeliveryMaxAttempts",
-    TURN_THRESHOLDS.transport.turnLifecycleDeliveryMaxAttempts,
-    1,
-  ),
-  httpUpstreamTimeoutMs: envTimeMs(
-    "AGENT_PROXY_HTTP_UPSTREAM_TIMEOUT_MS",
-    "httpUpstreamTimeoutMs",
-    60000,
-    5000,
-  ),
+  channelRetentionMs: TIME_THRESHOLDS.agentProxy.channelRetentionMs,
+  apiKeyRetentionMs: TIME_THRESHOLDS.agentProxy.apiKeyRetentionMs,
+  maxChannelEvents: QUANTITY_THRESHOLDS.agentProxy.maxChannelEvents,
+  cleanupIntervalMs: TIME_THRESHOLDS.agentProxy.cleanupIntervalMs,
+  maxConnections: QUANTITY_THRESHOLDS.agentProxy.maxConnections,
+  wsHeartbeatIntervalMs: TIME_THRESHOLDS.agentProxy.webSocketHeartbeatIntervalMs,
+  wsHeartbeatTimeoutMs: TIME_THRESHOLDS.agentProxy.webSocketHeartbeatTimeoutMs,
+  wsMaxPayloadBytes: LENGTH_THRESHOLDS.agentProxy.webSocketMaxPayloadBytes,
+  wsMaxBufferedBytes: LENGTH_THRESHOLDS.agentProxy.webSocketMaxBufferedBytes,
+  maxBodyBytes: LENGTH_THRESHOLDS.agentProxy.maxBodyBytes,
+  requestIdTtlMs: TIME_THRESHOLDS.agentProxy.requestIdTtlMs,
+  invalidUpstreamFrameWindowMs: TIME_THRESHOLDS.agentProxy.invalidUpstreamFrameWindowMs,
+  invalidUpstreamFrameLimit: QUANTITY_THRESHOLDS.agentProxy.invalidUpstreamFrameLimit,
+  reconnectSnapshotTimeoutMs: TIME_THRESHOLDS.agentProxy.reconnectSnapshotTimeoutMs,
+  turnLifecycleReceiptTimeoutMs: TIME_THRESHOLDS.agentProxy.turnLifecycleReceiptTimeoutMs,
+  turnLifecycleDeliveryMaxAttempts: TURN_THRESHOLDS.transport.turnLifecycleDeliveryMaxAttempts,
+  httpUpstreamTimeoutMs: TIME_THRESHOLDS.agentProxy.httpUpstreamTimeoutMs,
   trustedOrigins: envList("AGENT_PROXY_TRUSTED_ORIGINS", "trustedOrigins", ""),
   trustedIps: envList("AGENT_PROXY_TRUSTED_IPS", "trustedIps", ""),
   trustedProxies: envList("AGENT_PROXY_TRUSTED_PROXIES", "trustedProxies", ""),
@@ -200,71 +126,31 @@ export const config = {
     true,
   ),
   wsRateLimitEnabled: envBoolean("AGENT_PROXY_WS_RATE_LIMIT_ENABLED", "wsRateLimitEnabled", true),
-  httpRateLimitWindowMs: envTimeMs(
-    "AGENT_PROXY_HTTP_RATE_LIMIT_WINDOW_MS",
-    "httpRateLimitWindowMs",
-    60000,
-    1000,
-  ),
-  httpRateLimitMaxRequests: envNumber(
-    "AGENT_PROXY_HTTP_RATE_LIMIT_MAX_REQUESTS",
-    "httpRateLimitMaxRequests",
-    180,
-    10,
-  ),
-  wsRateLimitWindowMs: envTimeMs(
-    "AGENT_PROXY_WS_RATE_LIMIT_WINDOW_MS",
-    "wsRateLimitWindowMs",
-    60000,
-    1000,
-  ),
-  wsRateLimitMaxUpgrades: envNumber(
-    "AGENT_PROXY_WS_RATE_LIMIT_MAX_UPGRADES",
-    "wsRateLimitMaxUpgrades",
-    80,
-    5,
-  ),
+  httpRateLimitWindowMs: TIME_THRESHOLDS.agentProxy.httpRateLimitWindowMs,
+  httpRateLimitMaxRequests: QUANTITY_THRESHOLDS.agentProxy.httpRateLimitMaxRequests,
+  wsRateLimitWindowMs: TIME_THRESHOLDS.agentProxy.wsRateLimitWindowMs,
+  wsRateLimitMaxUpgrades: QUANTITY_THRESHOLDS.agentProxy.wsRateLimitMaxUpgrades,
   ideWsRateLimitEnabled: envBoolean(
     "AGENT_PROXY_IDE_WS_RATE_LIMIT_ENABLED",
     "ideWsRateLimitEnabled",
     true,
   ),
-  ideWsRateLimitWindowMs: envTimeMs(
-    "AGENT_PROXY_IDE_WS_RATE_LIMIT_WINDOW_MS",
-    "ideWsRateLimitWindowMs",
-    60000,
-    1000,
-  ),
-  ideWsRateLimitMaxUpgrades: envNumber(
-    "AGENT_PROXY_IDE_WS_RATE_LIMIT_MAX_UPGRADES",
-    "ideWsRateLimitMaxUpgrades",
-    60,
-    5,
-  ),
+  ideWsRateLimitWindowMs: TIME_THRESHOLDS.agentProxy.ideWsRateLimitWindowMs,
+  ideWsRateLimitMaxUpgrades: QUANTITY_THRESHOLDS.agentProxy.ideWsRateLimitMaxUpgrades,
   ideHttpRateLimitEnabled: envBoolean(
     "AGENT_PROXY_IDE_HTTP_RATE_LIMIT_ENABLED",
     "ideHttpRateLimitEnabled",
     true,
   ),
-  ideHttpRateLimitWindowMs: envTimeMs(
-    "AGENT_PROXY_IDE_HTTP_RATE_LIMIT_WINDOW_MS",
-    "ideHttpRateLimitWindowMs",
-    60000,
-    1000,
-  ),
-  ideHttpRateLimitMaxRequests: envNumber(
-    "AGENT_PROXY_IDE_HTTP_RATE_LIMIT_MAX_REQUESTS",
-    "ideHttpRateLimitMaxRequests",
-    2000,
-    50,
-  ),
+  ideHttpRateLimitWindowMs: TIME_THRESHOLDS.agentProxy.ideHttpRateLimitWindowMs,
+  ideHttpRateLimitMaxRequests: QUANTITY_THRESHOLDS.agentProxy.ideHttpRateLimitMaxRequests,
   exposeUpstreamErrorDetail: envBoolean(
     "AGENT_PROXY_EXPOSE_UPSTREAM_ERROR_DETAIL",
     "exposeUpstreamErrorDetail",
     false,
   ),
   replayOnReconnect: envBoolean("AGENT_PROXY_REPLAY_ON_RECONNECT", "replayOnReconnect", false),
-  maxReplayEvents: envNumber("AGENT_PROXY_MAX_REPLAY_EVENTS", "maxReplayEvents", 5000, 100),
+  maxReplayEvents: QUANTITY_THRESHOLDS.agentProxy.maxReplayEvents,
   upstreamHttpStripPrefix: normalizePathPrefix(
     envString("AGENT_PROXY_UPSTREAM_HTTP_STRIP_PREFIX", "upstreamHttpStripPrefix", "/api"),
   ),

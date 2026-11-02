@@ -99,7 +99,7 @@ export function createWriteFileTool({ agentContext, runtime, workspaceIo }) {
       name: TOOL_NAME.WRITE_FILE,
       metadata: { pathContract: TOOL_PATH_CONTRACTS.fileWrite },
       description: buildFileToolDescription(runtime, "tools.file.writeDescription"),
-      schema: z.object({
+      schema: z.strictObject({
         filePath: createFileSourceSchema({
           filePathDescription: tTool(runtime, "tools.file.writeFilePathField"),
         }),

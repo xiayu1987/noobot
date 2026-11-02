@@ -15,6 +15,26 @@ const modelSpec = {
   reasoning_effort_options: ["none", "low", "high"],
 };
 
+test("diagnostic input errors are localized before and during execution", async () => {
+  for (const [locale, bodyError, toolsError, credentialError] of [
+    [
+      "en-US",
+      "Request body must be a JSON object",
+      "Tools must be an array",
+      "Model credential is missing",
+    ],
+    ["zh-CN", "请求体必须是 JSON 对象", "工具定义必须是数组", "模型密钥未配置"],
+  ]) {
+    await assert.rejects(testModelAccess({ modelSpec, body: [], locale }), { message: bodyError });
+    await assert.rejects(testModelAccess({ modelSpec: { ...modelSpec, api_key: "" }, locale }), {
+      message: credentialError,
+    });
+    const result = await testModelAccess({ modelSpec, tools: {}, locale, preview: true });
+    assert.equal(result.ok, false);
+    assert.equal(result.error.message, toolsError);
+  }
+});
+
 const diagnosticTool = {
   type: "function",
   function: {

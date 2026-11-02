@@ -28,16 +28,7 @@ test("session deletion hook results expose explicit related session identities",
   assert.deepEqual(result.retainedRelatedSessionIds, ["node-3"]);
   assert.deepEqual(
     collectSessionDeletionHookResult({
-      outcomes: [
-        { status: "ok", value: result },
-        {
-          status: "failed",
-          value: {
-            deletedRelatedSessionIds: ["ignored"],
-            retainedRelatedSessionIds: ["ignored"],
-          },
-        },
-      ],
+      outcomes: [{ status: "ok", value: result }],
     }),
     {
       deletedRelatedSessionIds: ["node-1", "node-2"],
@@ -49,6 +40,27 @@ test("session deletion hook results expose explicit related session identities",
     "node-1",
     "node-2",
   ]);
+});
+
+test("session deletion reports hook failures instead of returning successful cleanup", async () => {
+  const manager = createHookManager();
+  const cause = new Error("cleanup failed");
+  manager.on(
+    HOOK_POINT.SERVICE.AFTER_SESSION_DELETE,
+    () => {
+      throw cause;
+    },
+    { id: "cleanup-failure" },
+  );
+  await assert.rejects(
+    manager.emit(HOOK_POINT.SERVICE.AFTER_SESSION_DELETE, {}),
+    (error) => error instanceof HookExecutionError && error.cause === cause,
+  );
+  assert.throws(
+    () => collectSessionDeletionHookResult({ outcomes: [{ status: "failed", error: cause }] }),
+    (error) => error instanceof HookExecutionError && error.cause === cause,
+  );
+  assert.throws(() => collectSessionDeletionHookResult({}), TypeError);
 });
 
 test("hook point descriptors own cancellation policy", () => {

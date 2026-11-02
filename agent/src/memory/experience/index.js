@@ -65,8 +65,8 @@ export class ExperienceManager {
     });
   }
 
-  async readExperienceFields(basePath = "") {
-    const { fields, fieldsError } = await readExperienceFields(this.storage, basePath);
+  async readExperienceFields(basePath = "", locale) {
+    const { fields, fieldsError } = await readExperienceFields(this.storage, basePath, locale);
     if (fieldsError) {
       await this.appendParseErrorLog({
         basePath,
@@ -152,7 +152,13 @@ export class ExperienceManager {
     return dedupeTextList([...modelDomains, ...(metadata?.domainNames || [])]);
   }
 
-  async appendDailyDomainResults({ basePath = "", results = [], createdAt = "", fields } = {}) {
+  async appendDailyDomainResults({
+    basePath = "",
+    results = [],
+    createdAt = "",
+    fields,
+    locale,
+  } = {}) {
     return appendDailyDomainResults({
       storage: this.storage,
       readMetadata: (bp) => this.readMetadata(bp),
@@ -161,6 +167,7 @@ export class ExperienceManager {
       results,
       createdAt,
       fields,
+      locale,
     });
   }
 
@@ -176,8 +183,9 @@ export class ExperienceManager {
     invokeModel = null,
     promptI18n = {},
     abortSignal,
+    locale,
   } = {}) {
-    const fields = await this.readExperienceFields(basePath);
+    const fields = await this.readExperienceFields(basePath, locale);
     return runWeeklySummaryIfNeeded({
       storage: this.storage,
       invokeModel,
@@ -190,7 +198,7 @@ export class ExperienceManager {
         this.mergeStageDocuments("daily", this.storage.dailySummaryDir(bp), dateKeys),
       normalizeWeeklySummary: (raw, fallback, options) =>
         this.normalizeDomainSummary("weekly", raw, fallback, { ...options, fields }),
-      saveWeeklySummary: (params) => this.saveWeeklyDomainSummary({ ...params, fields }),
+      saveWeeklySummary: (params) => this.saveWeeklyDomainSummary({ ...params, fields, locale }),
       readMetadata: (bp) => this.readMetadata(bp),
       writeMetadata: (bp, metadata) => this.writeMetadata(bp, metadata),
       readExperienceModel: (bp) => this.readExperienceModel(bp),
@@ -210,8 +218,9 @@ export class ExperienceManager {
     invokeModel = null,
     promptI18n = {},
     abortSignal,
+    locale,
   } = {}) {
-    const fields = await this.readExperienceFields(basePath);
+    const fields = await this.readExperienceFields(basePath, locale);
     return runMonthlySummaryIfNeeded({
       storage: this.storage,
       invokeModel,
@@ -224,7 +233,7 @@ export class ExperienceManager {
         this.mergeStageDocuments("weekly", this.storage.weeklySummaryDir(bp), weekKeys),
       normalizeMonthlySummary: (raw, fallback, options) =>
         this.normalizeDomainSummary("monthly", raw, fallback, { ...options, fields }),
-      saveMonthlySummary: (params) => this.saveMonthlyDomainSummary({ ...params, fields }),
+      saveMonthlySummary: (params) => this.saveMonthlyDomainSummary({ ...params, fields, locale }),
       readExperienceModel: (bp) => this.readExperienceModel(bp),
       upsertModelEntries: (bp, entries) => this.upsertExperienceModelEntries(bp, entries),
     });
@@ -242,8 +251,9 @@ export class ExperienceManager {
     invokeModel = null,
     promptI18n = {},
     abortSignal,
+    locale,
   } = {}) {
-    const fields = await this.readExperienceFields(basePath);
+    const fields = await this.readExperienceFields(basePath, locale);
     return runYearlySummaryIfNeeded({
       storage: this.storage,
       invokeModel,
@@ -256,7 +266,7 @@ export class ExperienceManager {
         this.mergeStageDocuments("monthly", this.storage.monthlySummaryDir(bp), monthKeys),
       normalizeYearlySummary: (raw, fallback, options) =>
         this.normalizeDomainSummary("yearly", raw, fallback, { ...options, fields }),
-      saveYearlySummary: (params) => this.saveYearlyDomainSummary({ ...params, fields }),
+      saveYearlySummary: (params) => this.saveYearlyDomainSummary({ ...params, fields, locale }),
       readExperienceModel: (bp) => this.readExperienceModel(bp),
       upsertModelEntries: (bp, entries) => this.upsertExperienceModelEntries(bp, entries),
     });
@@ -268,10 +278,11 @@ export class ExperienceManager {
     promptI18n = {},
     promptPayload = [],
     createdAt = "",
+    locale,
   } = {}) {
     if (typeof invokeModel !== "function") return false;
     const knownDomainNames = await this.collectKnownDomainNames(basePath);
-    const fields = await this.readExperienceFields(basePath);
+    const fields = await this.readExperienceFields(basePath, locale);
     const lessonPrompt = buildDailyExperiencePrompt({
       promptI18n,
       fields,
@@ -295,6 +306,7 @@ export class ExperienceManager {
       results: normalizedResults,
       createdAt,
       fields,
+      locale,
     });
   }
 }

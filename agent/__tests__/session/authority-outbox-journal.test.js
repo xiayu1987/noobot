@@ -46,6 +46,8 @@ test(
         const child = spawn(
           process.execPath,
           [
+            "--import",
+            import.meta.resolve("@noobot/shared/testing/runtime-params"),
             "--input-type=module",
             "-e",
             `

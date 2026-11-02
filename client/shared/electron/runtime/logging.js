@@ -3,15 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import fs from "node:fs";
 import os from "node:os";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { clientFilePath as path } from "../../path-resolver.js";
 import { createDesktopRuntimeEventWriter } from "./runtime-events.js";
 
 const desktopAppName = "Noobot";
-const DEFAULT_DESKTOP_LOG_MAX_BYTES = LENGTH_THRESHOLDS.desktopLogging.maxFileBytes;
-const DEFAULT_DESKTOP_LOG_RETAIN = 5;
 
 const desktopLogQueues = new Map();
 
@@ -23,11 +23,6 @@ export const DESKTOP_LOG_FILES = Object.freeze({
   AGENT_PROXY: "agent-proxy.log",
   FRONTEND: "frontend.log",
 });
-
-function resolvePositiveInteger(value, fallback) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
-}
 
 async function rotateDesktopLog(filePath, retain, content) {
   await fs.promises.rm(`${filePath}.${retain}`, { force: true });
@@ -45,14 +40,8 @@ export function appendDesktopLogLine(
   filePath,
   line,
   {
-    maxBytes = resolvePositiveInteger(
-      process.env.NOOBOT_DESKTOP_LOG_MAX_BYTES,
-      DEFAULT_DESKTOP_LOG_MAX_BYTES,
-    ),
-    retain = resolvePositiveInteger(
-      process.env.NOOBOT_DESKTOP_LOG_RETAIN,
-      DEFAULT_DESKTOP_LOG_RETAIN,
-    ),
+    maxBytes = LENGTH_THRESHOLDS.desktopLogging.maxFileBytes,
+    retain = QUANTITY_THRESHOLDS.desktop.logRetainCount,
   } = {},
 ) {
   const previous = desktopLogQueues.get(filePath) || Promise.resolve();
@@ -283,5 +272,5 @@ export function installEarlyDiagnostics({ app, moduleUrl, filename, dirname } = 
     appendEarlyLog(
       `[main:timer] 3000ms after module load; isReady=${app.isReady()}; whenReadyState=pending-or-resolved`,
     );
-  }, 3000);
+  }, TIME_THRESHOLDS.desktop.startupProgressReplayDelayMs);
 }

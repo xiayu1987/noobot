@@ -17,6 +17,7 @@ describe("workflow node message projection", () => {
       content: "final result",
     };
     const selectedNodeMessages = ref([]);
+    const selectedRuntimeNode = ref(null);
     const selectedNodeSessionMetadata = ref({});
     const selectedNodeTurnTimings = ref([]);
     let messages;
@@ -29,8 +30,8 @@ describe("workflow node message projection", () => {
               isImageMime: vi.fn(() => false),
               logWorkflowDiagnostics: vi.fn(),
             },
-            selectedNode: ref({ sessionId: "child-session" }),
-            selectedRuntimeNode: ref(null),
+            selectedNode: ref({ sessionId: "child-session", actionNodeStates: [{ steps: [] }] }),
+            selectedRuntimeNode,
             selectedNodeMessages,
             selectedNodeSessionMetadata,
             selectedNodeTurnTimings,
@@ -42,6 +43,13 @@ describe("workflow node message projection", () => {
     );
 
     expect(messages.displayNodeMessages.value).toEqual([]);
+    expect(messages.selectedActionNodeStates.value).toEqual([]);
+    selectedRuntimeNode.value = { actionNodeStates: [{ steps: [] }] };
+    expect(messages.selectedActionNodeStates.value).toBe(
+      selectedRuntimeNode.value.actionNodeStates,
+    );
+    selectedRuntimeNode.value = null;
+    expect(messages.selectedActionNodeStates.value).toEqual([]);
     selectedNodeMessages.value = [final];
     await nextTick();
 

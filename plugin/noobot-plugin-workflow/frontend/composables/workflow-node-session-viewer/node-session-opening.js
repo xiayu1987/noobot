@@ -82,7 +82,7 @@ function beginOpen(context, prepared) {
   refs.viewerVisible.value = true;
   refs.viewerError.value = "";
   const owningRuntimeNode = findWorkflowOwningRuntimeNode(canonicalNodeItem, flowNodes?.value);
-  if (owningRuntimeNode) refs.selectedRuntimeNode.value = owningRuntimeNode;
+  refs.selectedRuntimeNode.value = owningRuntimeNode;
   props.logWorkflowDiagnostics("frontend.workflowNodeDetail.owningRuntimeNodeResolved", {
     nodeSessionId: resolveIsolatedNodeSessionId(canonicalRuntimeNode),
     dialogProcessId: route.dialogProcessId,

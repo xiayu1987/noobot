@@ -18,9 +18,11 @@ export const PATCH_FILE_MANUAL = {
     },
     notes: [
       "这是修改既有文件的首选手段，优先使用精确上下文补丁，避免手算 unified diff 行数。",
-      "补丁失败时先重新 read_file 拿到当前真实内容再改，不要在旧上下文上反复试。失败结果带 totalLines；失配行在文件范围内时另带 nearbyContent。",
+      "补丁失败时先重新 read_file 拿到当前真实内容再改，不要在旧上下文上反复试。失配时 details 给出最接近候选的首个不一致行 line/expected/actual，并带 totalLines 与 nearbyContent；无候选时只给 expected。",
       "文件经其他工具或格式化器修改后仍可继续打补丁。file_mutation_conflict 表示本次补丁读取后文件又发生变化，需要重新读取并重建补丁。聚合 diff 展示本轮文件的总体变化；aggregate.externalChangeCount 标识其中观察到的外部修改次数。",
       "同一文件多处改动可放在一个补丁里，减少往返。",
+      "apply_patch 按内容完全匹配定位；同一内容出现多处时报歧义并给出 candidateLines，需用 `@@ L行号` 锚点指定，锚点取最近的完全匹配处。",
+      "上下文/删除行误带 read_file 行号前缀时，若全部带前缀、行号连续且与原文一致，会自动剥离并在 changes[].repairs 标注；新增行带前缀直接报错。",
       "changes[].action 表示补丁声明的意图（write 或 delete），不代表已经落盘；判断是否真的写入要看 changes[].mutation 与顶层 mutations 是否为空。dryRun 时 action 仍是 write 而 mutation 恒为 null。",
     ],
     pitfalls: [

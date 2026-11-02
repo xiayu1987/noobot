@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import test from "node:test";
+import { createTestWorkflowState } from "../helpers/workflow-state.js";
 import assert from "node:assert/strict";
 
 import {
@@ -14,108 +15,126 @@ import {
 
 test("scheduler priority: guidance > revision > refinement > summary > analysis", () => {
   assert.deepEqual(
-    resolveNextGuidanceAction({
-      flags: { summaryByCharsPrompted: true },
-      pending: {
-        summary: true,
-        guidance: "consecutive_failures",
-        planRevision: true,
-        planRevisionContext: { targetMainStepIndexes: [] },
-      },
-    }),
+    resolveNextGuidanceAction(
+      createTestWorkflowState({
+        flags: { summaryByCharsPrompted: true },
+        pending: {
+          summary: true,
+          guidance: "consecutive_failures",
+          planRevision: true,
+          planRevisionContext: { targetMainStepIndexes: [] },
+        },
+      }),
+    ),
     { action: "guidance", stage: "", reason: "pending_guidance" },
   );
 
   assert.deepEqual(
-    resolveNextGuidanceAction({
-      pending: {
-        summary: true,
-        guidance: "consecutive_failures",
-        planRevision: true,
-        planRevisionContext: { targetMainStepIndexes: [] },
-      },
-    }),
+    resolveNextGuidanceAction(
+      createTestWorkflowState({
+        pending: {
+          summary: true,
+          guidance: "consecutive_failures",
+          planRevision: true,
+          planRevisionContext: { targetMainStepIndexes: [] },
+        },
+      }),
+    ),
     { action: "guidance", stage: "", reason: "pending_guidance" },
   );
 
   assert.deepEqual(
-    resolveNextGuidanceAction({
-      pending: {
-        summary: false,
-        guidance: "consecutive_failures",
-        planRevision: true,
-        planRevisionContext: { targetMainStepIndexes: [] },
-      },
-    }),
+    resolveNextGuidanceAction(
+      createTestWorkflowState({
+        pending: {
+          summary: false,
+          guidance: "consecutive_failures",
+          planRevision: true,
+          planRevisionContext: { targetMainStepIndexes: [] },
+        },
+      }),
+    ),
     { action: "guidance", stage: "", reason: "pending_guidance" },
   );
 
   assert.deepEqual(
-    resolveNextGuidanceAction({
-      pending: {
-        summary: false,
-        guidance: null,
-        planRevision: true,
-        planRevisionContext: { targetMainStepIndexes: [] },
-      },
-    }),
+    resolveNextGuidanceAction(
+      createTestWorkflowState({
+        pending: {
+          summary: false,
+          guidance: null,
+          planRevision: true,
+          planRevisionContext: { targetMainStepIndexes: [] },
+        },
+      }),
+    ),
     { action: "plan_update", stage: "revision", reason: "pending_revision" },
   );
 
   assert.deepEqual(
-    resolveNextGuidanceAction({
-      pending: {
-        summary: false,
-        guidance: null,
-        planRefinement: true,
-        planRefinementContext: { targetMainStepIndexes: [1] },
-      },
-    }),
+    resolveNextGuidanceAction(
+      createTestWorkflowState({
+        pending: {
+          summary: false,
+          guidance: null,
+          planRefinement: true,
+          planRefinementContext: { targetMainStepIndexes: [1] },
+        },
+      }),
+    ),
     { action: "plan_update", stage: "refinement", reason: "pending_refinement" },
   );
 
   assert.deepEqual(
-    resolveNextGuidanceAction({
-      pending: {
-        summary: true,
-        guidance: null,
-        analysis: true,
-        planRevision: false,
-        planRefinement: false,
-      },
-    }),
+    resolveNextGuidanceAction(
+      createTestWorkflowState({
+        pending: {
+          summary: true,
+          guidance: null,
+          analysis: true,
+          planRevision: false,
+          planRefinement: false,
+        },
+      }),
+    ),
     { action: "summary", stage: "", reason: "pending_summary_turns" },
   );
 
   assert.deepEqual(
-    resolveNextGuidanceAction({
-      pending: { summary: true, guidance: null, planRevision: false, planRefinement: false },
-    }),
+    resolveNextGuidanceAction(
+      createTestWorkflowState({
+        pending: { summary: true, guidance: null, planRevision: false, planRefinement: false },
+      }),
+    ),
     { action: "summary", stage: "", reason: "pending_summary_turns" },
   );
 });
 
 test("scheduler resolves independent revision/refinement pending fields", () => {
-  const resolved = resolvePendingPlanUpdate({
-    pending: {
-      planRevision: true,
-      planRevisionContext: {
-        targetMainStepIndexes: [1, 2],
+  const resolved = resolvePendingPlanUpdate(
+    createTestWorkflowState({
+      pending: {
+        planRevision: true,
+        planRevisionContext: {
+          targetMainStepIndexes: [1, 2],
+        },
       },
-    },
-  });
+    }),
+  );
   assert.deepEqual(resolved, {
     active: true,
     stage: "revision",
     targetMainStepIndexes: [1, 2],
   });
   assert.deepEqual(
-    resolveNextGuidanceAction({
-      pending: {
-        planRevision: true,
-        planRevisionContext: { targetMainStepIndexes: [] },
-      },
-    }),
+    resolveNextGuidanceAction(
+      createTestWorkflowState({
+        pending: {
+          planRevision: true,
+          planRevisionContext: { targetMainStepIndexes: [] },
+        },
+      }),
+    ),
     {
       action: "plan_update",
       stage: "revision",
@@ -125,18 +144,20 @@ test("scheduler resolves independent revision/refinement pending fields", () => 
 });
 
 test("priority decision snapshot exposes chosen and blocked actions", () => {
-  const decision = resolveGuidancePriorityDecision({
-    pending: {
-      summary: true,
-      guidance: null,
-      planRevision: true,
-      planRevisionContext: { targetMainStepIndexes: [] },
-      phaseAcceptance: true,
-    },
-    flags: {
-      summaryByCharsPrompted: false,
-    },
-  });
+  const decision = resolveGuidancePriorityDecision(
+    createTestWorkflowState({
+      pending: {
+        summary: true,
+        guidance: null,
+        planRevision: true,
+        planRevisionContext: { targetMainStepIndexes: [] },
+        phaseAcceptance: true,
+      },
+      flags: {
+        summaryByCharsPrompted: false,
+      },
+    }),
+  );
   assert.equal(decision.chosenAction, "plan_update_revision");
   assert.equal(decision.chosenReason, "pending_revision");
   assert.match(String(decision.chosenReasonLabel || ""), /待处理的计划修订|revision/i);
@@ -150,59 +171,69 @@ test("priority decision snapshot exposes chosen and blocked actions", () => {
 });
 
 test("scheduler defers summary when phase acceptance is ready", () => {
-  const decision = resolveGuidancePriorityDecision({
-    pending: {
-      summary: true,
-      phaseAcceptance: true,
-    },
-    flags: {
-      summaryByCharsPrompted: true,
-      planningCaptured: true,
-    },
-  });
+  const decision = resolveGuidancePriorityDecision(
+    createTestWorkflowState({
+      pending: {
+        summary: true,
+        phaseAcceptance: true,
+      },
+      flags: {
+        summaryByCharsPrompted: true,
+        planningCaptured: true,
+      },
+    }),
+  );
   assert.equal(decision.chosenAction, "none");
   assert.deepEqual(decision.blockedActions, ["summary_overflow"]);
   assert.deepEqual(decision.pendingSnapshot.phaseAcceptance?.blockedBy, []);
 });
 
 test("priority decision exposes localized reason labels by locale", () => {
-  const zhDecision = resolveGuidancePriorityDecision({
-    locale: "zh-CN",
-    pending: { guidance: "consecutive_failures" },
-    flags: {},
-  });
-  const enDecision = resolveGuidancePriorityDecision({
-    locale: "en-US",
-    pending: { guidance: "consecutive_failures" },
-    flags: {},
-  });
+  const zhDecision = resolveGuidancePriorityDecision(
+    createTestWorkflowState({
+      locale: "zh-CN",
+      pending: { guidance: "consecutive_failures" },
+      flags: {},
+    }),
+  );
+  const enDecision = resolveGuidancePriorityDecision(
+    createTestWorkflowState({
+      locale: "en-US",
+      pending: { guidance: "consecutive_failures" },
+      flags: {},
+    }),
+  );
   assert.match(String(zhDecision.chosenReasonLabel || ""), /优先执行 guidance|待处理/);
   assert.match(String(enDecision.chosenReasonLabel || ""), /prioritize guidance/i);
 });
 
 test("when revision and refinement are both pending, scheduler always prefers revision", () => {
-  const resolved = resolvePendingPlanUpdate({
-    pending: {
-      planRevision: true,
-      planRevisionContext: { targetMainStepIndexes: [1] },
-      planRefinement: true,
-      planRefinementContext: { targetMainStepIndexes: [2] },
-    },
-  });
+  const resolved = resolvePendingPlanUpdate(
+    createTestWorkflowState({
+      pending: {
+        planRevision: true,
+        planRevisionContext: { targetMainStepIndexes: [1] },
+        planRefinement: true,
+        planRefinementContext: { targetMainStepIndexes: [2] },
+      },
+    }),
+  );
   assert.deepEqual(resolved, {
     active: true,
     stage: "revision",
     targetMainStepIndexes: [1],
   });
 
-  const action = resolveNextGuidanceAction({
-    pending: {
-      planRevision: true,
-      planRevisionContext: { targetMainStepIndexes: [1] },
-      planRefinement: true,
-      planRefinementContext: { targetMainStepIndexes: [2] },
-    },
-  });
+  const action = resolveNextGuidanceAction(
+    createTestWorkflowState({
+      pending: {
+        planRevision: true,
+        planRevisionContext: { targetMainStepIndexes: [1] },
+        planRefinement: true,
+        planRefinementContext: { targetMainStepIndexes: [2] },
+      },
+    }),
+  );
   assert.deepEqual(action, {
     action: "plan_update",
     stage: "revision",

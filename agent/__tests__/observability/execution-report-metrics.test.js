@@ -17,6 +17,7 @@ test("report aggregates full tool timing separately from shared projection check
     log("tool_call_end", 1, {
       tool: "read_file",
       toolCallId: "timed",
+      result: '{"ok":true}',
       success: true,
       durationMs: 80,
       persistDurationMs: 20,
@@ -77,6 +78,7 @@ test("summarizeExecutionMetrics pairs tool calls by id and uses end risk level",
     log("tool_call_end", 2, {
       tool: "read_file",
       toolCallId: "a",
+      result: '{"ok":true}',
       success: true,
       durationMs: 2000,
       persistDurationMs: 30,
@@ -85,6 +87,7 @@ test("summarizeExecutionMetrics pairs tool calls by id and uses end risk level",
     log("tool_call_end", 6, {
       tool: "execute_script",
       toolCallId: "b",
+      result: '{"ok":false,"error":"boom","code":"E"}',
       success: false,
       durationMs: 5000,
       persistDurationMs: 70,
@@ -93,15 +96,30 @@ test("summarizeExecutionMetrics pairs tool calls by id and uses end risk level",
     log("tool_call_start", 7, { tool: "search", toolCallId: "c", args: {} }),
   ]);
   assert.deepEqual(metrics.tools.toolStats, {
-    read_file: { calls: 1, failures: 0, timedCount: 1, totalDurationMs: 2000, maxDurationMs: 2000 },
+    read_file: {
+      calls: 1,
+      failures: 0,
+      nonZeroExits: 0,
+      timedCount: 1,
+      totalDurationMs: 2000,
+      maxDurationMs: 2000,
+    },
     execute_script: {
       calls: 1,
       failures: 1,
+      nonZeroExits: 0,
       timedCount: 1,
       totalDurationMs: 5000,
       maxDurationMs: 5000,
     },
-    search: { calls: 1, failures: 0, timedCount: 0, totalDurationMs: 0, maxDurationMs: 0 },
+    search: {
+      calls: 1,
+      failures: 0,
+      nonZeroExits: 0,
+      timedCount: 0,
+      totalDurationMs: 0,
+      maxDurationMs: 0,
+    },
   });
   assert.deepEqual(metrics.tools.riskLevels, { low: 1, critical: 1 });
   assert.equal(metrics.tools.totalToolDurationMs, 7000);
@@ -126,6 +144,7 @@ test("summarizeExecutionMetrics counts one failure per toolCallId despite extra 
     log("tool_call_end", 2, {
       tool: "execute_script",
       toolCallId: "x",
+      result: '{"ok":false,"error":"boom","code":"E"}',
       success: false,
       durationMs: 2000,
       persistDurationMs: 0,
@@ -133,6 +152,7 @@ test("summarizeExecutionMetrics counts one failure per toolCallId despite extra 
     log("tool_call_end", 2, {
       tool: "execute_script",
       toolCallId: "x",
+      result: '{"ok":false,"error":"boom","code":"E"}',
       success: false,
       durationMs: 2000,
       persistDurationMs: 0,
@@ -141,6 +161,7 @@ test("summarizeExecutionMetrics counts one failure per toolCallId despite extra 
   assert.deepEqual(metrics.tools.toolStats.execute_script, {
     calls: 1,
     failures: 1,
+    nonZeroExits: 0,
     timedCount: 1,
     totalDurationMs: 2000,
     maxDurationMs: 2000,
@@ -178,5 +199,43 @@ test("timing cannot redefine end duration or silently target a missing call", ()
   assert.throws(
     () => summarizeExecutionMetrics([log("tool_call_timing", 0, { ...timing, executionMs: -1 })]),
     /invalid tool timing/,
+  );
+});
+
+test("summarizeExecutionMetrics counts non-zero exits separately from tool failures", () => {
+  const scriptEnd = (toolCallId, result) =>
+    log("tool_call_end", 1, {
+      tool: "execute_script",
+      toolCallId,
+      result: JSON.stringify(result),
+      success: result.ok,
+      durationMs: 10,
+      persistDurationMs: 1,
+    });
+  const metrics = summarizeExecutionMetrics([
+    log("tool_call_start", 0, { tool: "execute_script", toolCallId: "zero", args: {} }),
+    log("tool_call_start", 0, { tool: "execute_script", toolCallId: "nonzero", args: {} }),
+    log("tool_call_start", 0, { tool: "execute_script", toolCallId: "timeout", args: {} }),
+    scriptEnd("zero", { ok: true, termination: "exited", exitCode: 0 }),
+    scriptEnd("nonzero", { ok: true, termination: "exited", exitCode: 1 }),
+    scriptEnd("timeout", { ok: false, termination: "timeout", code: "T", error: "timed out" }),
+  ]);
+  assert.equal(metrics.tools.toolStats.execute_script.failures, 1);
+  assert.equal(metrics.tools.toolStats.execute_script.nonZeroExits, 1);
+});
+
+test("summarizeExecutionMetrics rejects tool_call_end without a decodable result", () => {
+  assert.throws(
+    () =>
+      summarizeExecutionMetrics([
+        log("tool_call_end", 1, {
+          tool: "read_file",
+          toolCallId: "a",
+          success: true,
+          durationMs: 1,
+          persistDurationMs: 0,
+        }),
+      ]),
+    TypeError,
   );
 });

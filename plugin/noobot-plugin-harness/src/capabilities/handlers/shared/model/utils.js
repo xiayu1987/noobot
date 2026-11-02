@@ -3,7 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject, text, isFunction } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
+import { resolveAuthoritativeModelMessages } from "@noobot/context-protocol/assembly/hook-context";
 import { HARNESS_PLANNING_GUIDANCE_MODE } from "../../../../core/constants.js";
 
 export function resolvePlanningGuidanceMode(meta = {}) {
@@ -57,18 +58,11 @@ export function resolveCapabilityModelName(meta = {}, { purpose = "", domain = "
 }
 
 export function resolveCapabilityModelMessages(meta = {}, { ctx = {}, purpose = "" } = {}) {
-  const resolver = meta?.harness?.resolveModelMessages;
-  if (!isFunction(resolver)) {
-    throw new Error("capability model messages require the authoritative modelContext resolver");
-  }
-  const resolved = resolver({
+  return resolveAuthoritativeModelMessages({
     ctx,
+    resolver: meta?.harness?.resolveModelMessages,
     purpose: text(purpose),
   });
-  if (!Array.isArray(resolved)) {
-    throw new Error("authoritative modelContext resolver must return a message array");
-  }
-  return resolved;
 }
 
 export function resolveCapabilityToolAllowlist(meta = {}, purpose = "") {

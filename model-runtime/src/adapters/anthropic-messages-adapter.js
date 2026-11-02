@@ -2,12 +2,17 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 import { normalizeRuntimeModelSpec } from "../normalization/spec-normalizer.js";
 import { classifyTransportError } from "../policies/default-retry-policy.js";
 import { cacheControlValueForRuntime } from "../policies/cache-policy-engine.js";
 import { convertToOpenAITool } from "@langchain/core/utils/function_calling";
-import { MODEL_OPERATION_KIND, MODEL_WEB_SEARCH_INSTRUCTION } from "@noobot/model-protocol";
+import {
+  MODEL_OPERATION_KIND,
+  MODEL_RESPONSE_SOURCE,
+  MODEL_WEB_SEARCH_INSTRUCTION,
+} from "@noobot/model-protocol";
 import { readAnthropicMessageStream } from "./anthropic-message-stream.js";
 import { text, isObjectLike } from "@noobot/shared/value";
 
@@ -17,7 +22,8 @@ const ANTHROPIC_SERVER_WEB_SEARCH_TOOL = Object.freeze({
   name: "web_search",
 });
 const ANTHROPIC_PAUSE_TURN_STOP_REASON = "pause_turn";
-const ANTHROPIC_PAUSE_TURN_MAX_CONTINUATIONS = 3;
+const ANTHROPIC_PAUSE_TURN_MAX_CONTINUATIONS =
+  TURN_THRESHOLDS.modelRuntime.anthropicPauseTurnMaxContinuations;
 const ANTHROPIC_DOCUMENT_MIME_TYPE = "application/pdf";
 
 function splitDataUrl(value = "") {
@@ -476,6 +482,9 @@ export const anthropicMessagesAdapter = Object.freeze({
   },
   prepareMessages({ messages }) {
     return messages;
+  },
+  resolveResponseSource() {
+    return MODEL_RESPONSE_SOURCE.MESSAGE;
   },
   executeOperation(input) {
     return executeAnthropicOperation(input);

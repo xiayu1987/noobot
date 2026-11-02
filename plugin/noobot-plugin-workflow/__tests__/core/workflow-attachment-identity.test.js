@@ -6,13 +6,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { formatAttachmentIdentityRef } from "@noobot/attachment-protocol";
-import { TRANSFER_VERSION, TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
+import {
+  TRANSFER_VERSION,
+  TRANSFER_REASON,
+  TRANSFER_ERROR_CODE,
+} from "@noobot/semantic-transfer-protocol";
 
 import {
   mergeAttachments,
   resolveNodeInputAttachments,
   resolveWorkflowTransferAttachmentReferences,
+  getWorkflowTransferPayloadFromResult,
 } from "../../src/core/hooks/attachments.js";
+import { createV2AttachmentTransferEnvelope } from "../helpers/workflow-hook-session-strategy-helper.js";
 
 const base = {
   attachmentId: "shared",
@@ -26,6 +32,34 @@ const baseIdentity = {
   sessionId: base.sessionId,
   attachmentSource: base.attachmentSource,
 };
+
+test("workflow reads transfers from canonical session result messages and rejects conflicting facts", () => {
+  const envelope = createV2AttachmentTransferEnvelope({ attachmentId: "result-attachment" });
+  const result = {
+    messages: [
+      { messageUid: "assistant-1", transferEnvelopes: [envelope] },
+      { messageUid: "tool-1", transferEnvelopes: [envelope] },
+      { messageUid: "user-1" },
+    ],
+  };
+  const original = structuredClone(result);
+  assert.deepEqual(getWorkflowTransferPayloadFromResult(result).transferEnvelopes, [envelope]);
+  assert.deepEqual(result, original);
+  assert.deepEqual(getWorkflowTransferPayloadFromResult({ messages: [] }).transferEnvelopes, []);
+  const conflict = structuredClone(envelope);
+  conflict.payload.attachments[0].name = "conflict.txt";
+  assert.throws(
+    () =>
+      getWorkflowTransferPayloadFromResult({
+        messages: [{ transferEnvelopes: [envelope] }, { transferEnvelopes: [conflict] }],
+      }),
+    { code: TRANSFER_ERROR_CODE.IDENTITY_CONFLICT },
+  );
+  assert.throws(
+    () => getWorkflowTransferPayloadFromResult({ transferEnvelopes: [envelope] }),
+    TypeError,
+  );
+});
 
 test("workflow attachment merge isolates equal ids across session and source", () => {
   const merged = mergeAttachments(

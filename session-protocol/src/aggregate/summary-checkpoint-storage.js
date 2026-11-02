@@ -32,6 +32,23 @@ export function assertCheckpointIdentity(payload, owner, index) {
   return payload;
 }
 
+const CHECKPOINT_IDENTITY_FIELDS = Object.freeze([
+  "sessionId",
+  "turnId",
+  "turnScopeId",
+  "dialogProcessId",
+  "checkpointId",
+  "checkpointRevision",
+  "committedAt",
+  "previousCheckpointHash",
+  "persistedMessageUids",
+  "summarizedMessageUids",
+]);
+
+export function projectCheckpointIdentity(payload) {
+  return Object.fromEntries(CHECKPOINT_IDENTITY_FIELDS.map((key) => [key, payload[key]]));
+}
+
 export function projectCheckpointReceipt(receipt, payload) {
   for (const key of ["checkpointId", "checkpointRevision", "committedAt"])
     if (receipt[key] !== payload[key]) throw checkpointIdentityError(`receipt ${key} mismatch`);

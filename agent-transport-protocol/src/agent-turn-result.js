@@ -34,6 +34,11 @@ function rejectAgentTurnResult(reason) {
   return error;
 }
 
+export function assertAgentTurnMessages(messages) {
+  if (!isTurnMessageList(messages)) throw rejectAgentTurnResult("has invalid turnMessages");
+  return messages;
+}
+
 export function assertAgentTurnResult(result) {
   if (!isPlainObject(result)) throw rejectAgentTurnResult("must be a plain object");
   for (const [field, isValid] of Object.entries(REQUIRED_FIELDS)) {

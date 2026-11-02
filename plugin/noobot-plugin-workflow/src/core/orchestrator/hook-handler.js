@@ -7,7 +7,6 @@
 import { parseWorkflowSemantic } from "../../workflow/adapter.js";
 import { resolveWorkflowLocaleFromContext } from "../i18n.js";
 import { isWorkflowAbortError, throwIfWorkflowAborted } from "../hooks/runtime.js";
-import { createPhaseTracker } from "../hooks/phase.js";
 import { prepareWorkflowPlanningMessage } from "./planning-message.js";
 import {
   buildWorkflowPlanningNodeSessions,
@@ -33,13 +32,10 @@ export async function handleBeforeAgentDispatch({ hookManager, options, ctx, sig
     modelMessages: [],
     modelLoopRound: 0,
   });
-  const phaseTracker = createPhaseTracker();
 
   const { sourceText, skipped } = await receiveWorkflowSource({
-    options,
     ctx,
     signal,
-    phaseTracker,
   });
   if (skipped) return createBotDispatchPass({ owner: "workflow" });
 
@@ -52,7 +48,6 @@ export async function handleBeforeAgentDispatch({ hookManager, options, ctx, sig
       ctx,
       signal,
       sourceText,
-      phaseTracker,
     });
     throwIfWorkflowAborted(signal);
     const semantic = parseWorkflowSemantic({
@@ -81,7 +76,6 @@ export async function handleBeforeAgentDispatch({ hookManager, options, ctx, sig
       semantic,
       workflowRunId,
       initialNodeStateSnapshot,
-      phaseTracker,
     });
     const { workflowPayload, nodeTransferEnvelopes } = await buildFinalWorkflowPayload({
       workflowRunId,
@@ -89,7 +83,6 @@ export async function handleBeforeAgentDispatch({ hookManager, options, ctx, sig
       signal,
       semanticText,
       semantic,
-      phaseTracker,
       nodeAgentRuns,
       nodeStateSnapshot,
     });

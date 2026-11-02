@@ -11,12 +11,7 @@ import test from "node:test";
 
 import { RUNTIME_EVENT_SCOPES, writeRuntimeEvent } from "../src/index.js";
 
-import {
-  persistSession,
-  readJsonl,
-  tempRoot,
-  useRuntimeEventsEnv,
-} from "./runtime-events-test-fixtures.js";
+import { persistSession, readJsonl, tempRoot } from "./runtime-events-test-fixtures.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 test("session runtime event requires userId and sessionId", async () => {
@@ -214,7 +209,6 @@ test("runtime event jsonl transport appends without rotating below max file byte
     parentSessionId: "",
     caller: SESSION_CALLER.USER,
   });
-  useRuntimeEventsEnv({ storage: { maxFileBytes: 1024 * 1024 } });
   const first = await writeRuntimeEvent({
     source: "agent",
     scope: "session",
@@ -225,7 +219,6 @@ test("runtime event jsonl transport appends without rotating below max file byte
     sessionId: "rotation-1",
     data: { message: "small" },
   });
-  useRuntimeEventsEnv({ storage: { maxFileBytes: 1024 * 1024 } });
   const second = await writeRuntimeEvent({
     source: "agent",
     scope: "session",

@@ -17,6 +17,12 @@ import {
 const turn = (sessionId, turnScopeId) => ({ sessionId, turnScopeId });
 
 describe("turnUiStore lifecycle", () => {
+  it("keeps unowned messages stateless and rejects noncanonical identities", () => {
+    expect(getTurnUiState({ sessionId: "session-a", statusTurnScopeId: "turn-1" })).toBeNull();
+    expect(() => getTurnUiState(turn(" session-a", "turn-1"))).toThrow("invalid_turn_identity");
+    expect(() => getTurnUiState(turn("session-a", null))).toThrow("invalid_turn_identity");
+    expect(getTurnUiState(turn("session-a", "turn-1"))).not.toBeNull();
+  });
   afterEach(() => {
     clearSessionTurnUiStates("session-a");
     clearSessionTurnUiStates("session-b");

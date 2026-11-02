@@ -153,4 +153,35 @@ describe("sessionLifecycleHydration", () => {
   it("does not schedule discovery when the snapshot was rejected", () => {
     expect(installWithActiveTurn("processing", false)).not.toHaveBeenCalled();
   });
+
+  it("submits malformed declared snapshots to protocol admission instead of treating them as missing", () => {
+    for (const snapshot of [false, 0, "snapshot", []]) {
+      const applyTurnLifecycleSnapshot = vi.fn(() => ({
+        applied: false,
+        reason: "invalid_turn_lifecycle_snapshot",
+      }));
+      const scheduleTerminalResolution = vi.fn();
+      installSessionLifecycleHydration({
+        sessions: ref([{ sessionId: "session-1", messages: [], turnLifecycleSnapshot: snapshot }]),
+        activeSessionId: ref("session-1"),
+        chatStore: { applyTurnLifecycleSnapshot, pruneTerminalTurns: vi.fn() },
+        scheduleTerminalResolution,
+      });
+      expect(applyTurnLifecycleSnapshot).toHaveBeenCalledWith(snapshot);
+      expect(scheduleTerminalResolution).not.toHaveBeenCalled();
+    }
+  });
+
+  it("leaves absent snapshots unloaded without submitting fabricated facts", () => {
+    for (const snapshot of [undefined, null]) {
+      const applyTurnLifecycleSnapshot = vi.fn();
+      installSessionLifecycleHydration({
+        sessions: ref([{ sessionId: "session-1", messages: [], turnLifecycleSnapshot: snapshot }]),
+        activeSessionId: ref("session-1"),
+        chatStore: { applyTurnLifecycleSnapshot, pruneTerminalTurns: vi.fn() },
+        scheduleTerminalResolution: vi.fn(),
+      });
+      expect(applyTurnLifecycleSnapshot).not.toHaveBeenCalled();
+    }
+  });
 });

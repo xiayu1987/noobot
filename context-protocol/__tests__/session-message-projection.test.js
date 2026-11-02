@@ -42,8 +42,8 @@ function transferEnvelope({ transferId = "transfer-1", content = "payload" } = {
 test("Session Record projection preserves explicit canonical facts", () => {
   const envelope = transferEnvelope();
   const projected = projectSessionRecordToContextMessage({
-    messageUid: " message-1 ",
-    role: "ASSISTANT",
+    messageUid: "message-1",
+    role: "assistant",
     content: "result",
     transferEnvelopes: [envelope],
   });
@@ -57,12 +57,12 @@ test("Session Record projection preserves explicit canonical facts", () => {
 test("Session Record projection never infers identity or role", () => {
   assert.throws(
     () => projectSessionRecordToContextMessage({ role: "user", content: "missing identity" }),
-    /requires messageUid/,
+    /invalid messageUid/,
   );
   assert.throws(
     () =>
       projectSessionRecordToContextMessage({ messageUid: "message-1", content: "missing role" }),
-    /requires role/,
+    /rejects role/,
   );
   assert.throws(
     () =>
@@ -125,7 +125,31 @@ test("context to session projection rejects missing identity and non-object inpu
   assert.throws(
     () =>
       projectContextMessageToSessionRecord({ role: "user", content: "x", additional_kwargs: {} }),
-    /requires messageUid/,
+    /invalid messageUid/,
   );
   assert.throws(() => projectContextMessageToSessionRecord(null), /requires a message object/);
+});
+
+test("session projection rejects identity repairs and noncanonical session roles", () => {
+  for (const messageUid of [" message-1 ", "", null, 7]) {
+    const source = { messageUid, role: "assistant", content: "result" };
+    const before = structuredClone(source);
+    assert.throws(() => projectSessionRecordToContextMessage(source), /invalid messageUid/);
+    assert.deepEqual(source, before);
+    assert.throws(
+      () =>
+        projectContextMessageToSessionRecord({
+          role: "assistant",
+          content: "result",
+          additional_kwargs: { messageUid },
+        }),
+      /invalid messageUid/,
+    );
+  }
+  for (const role of ["ASSISTANT", " assistant ", "ai", null]) {
+    assert.throws(
+      () => projectSessionRecordToContextMessage({ messageUid: "message-1", role }),
+      /rejects role/,
+    );
+  }
 });

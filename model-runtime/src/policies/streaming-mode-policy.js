@@ -4,6 +4,7 @@
  */
 
 import { text } from "@noobot/shared/value";
+import { MODEL_ERROR_KIND } from "@noobot/model-protocol";
 
 const EXPLICIT_ERROR_CODES = new Set([
   "aborted",
@@ -48,22 +49,19 @@ export function resolvePreferredStreaming({ requested, cached } = {}) {
   return typeof cached === "boolean" ? cached : requested === true;
 }
 
-function isExplicitModelError(error = {}) {
-  const code = text(error?.code || error?.kind || error?.cause?.code).toLowerCase();
+function isExplicitProviderError(error) {
+  const code = text(error?.code || error?.cause?.code).toLowerCase();
   if (EXPLICIT_ERROR_CODES.has(code)) return true;
   const message = String(error?.message || error || "").toLowerCase();
   return EXPLICIT_ERROR_TEXT.some((inputText) => message.includes(inputText));
 }
 
-export function mayRetryWithAlternateStreaming(
-  error = {},
-  streamedTokens = 0,
-  classification = {},
-) {
-  const classifiedKind = text(classification?.kind || classification?.code).toLowerCase();
+export function mayRetryWithAlternateStreaming(error, streamedTokens, classification) {
+  const classifiedKind = classification.kind.toLowerCase();
   return (
-    Number(streamedTokens || 0) === 0 &&
-    !isExplicitModelError(error) &&
+    classification.kind !== MODEL_ERROR_KIND.CLASSIFICATION &&
+    streamedTokens === 0 &&
+    !isExplicitProviderError(error) &&
     !EXPLICIT_ERROR_CODES.has(classifiedKind)
   );
 }

@@ -29,11 +29,19 @@ import { SCRIPT_FAILURE_CODE } from "@noobot/execution-isolation-protocol";
 after(closeAllBrowserSessions);
 
 test("native script execution result IPC accepts only its exact protocol shape", () => {
-  assert.equal(isNativeScriptExecutionResult({ present: false }), true);
-  assert.equal(isNativeScriptExecutionResult({ present: true, value: null }), true);
-  assert.equal(isNativeScriptExecutionResult({ present: false, value: null }), false);
-  assert.equal(isNativeScriptExecutionResult({ present: true }), false);
-  assert.equal(isNativeScriptExecutionResult({ present: true, value: null, legacy: true }), false);
+  const returned = (extra) => ({ status: "returned", ...extra });
+  assert.equal(isNativeScriptExecutionResult(returned({ present: false })), true);
+  assert.equal(isNativeScriptExecutionResult(returned({ present: true, value: null })), true);
+  assert.equal(isNativeScriptExecutionResult({ status: "failed", error: "boom" }), true);
+  assert.equal(isNativeScriptExecutionResult({ present: false }), false);
+  assert.equal(isNativeScriptExecutionResult(returned({ present: false, value: null })), false);
+  assert.equal(isNativeScriptExecutionResult(returned({ present: true })), false);
+  assert.equal(
+    isNativeScriptExecutionResult(returned({ present: true, value: null, legacy: true })),
+    false,
+  );
+  assert.equal(isNativeScriptExecutionResult({ status: "failed", error: " " }), false);
+  assert.equal(isNativeScriptExecutionResult({ status: "failed", error: "x", value: 1 }), false);
 });
 
 test("execute_native_script rejects host runtime escape syntax before execution", async () => {
@@ -178,12 +186,12 @@ test("execute_native_script rejects non-canonical capability call signatures", a
       expected: /libreoffice\.convert.*requires one options object/,
     },
   ];
-  for (const item of cases) {
+  for (const { expected, ...input } of cases) {
     const result = JSON.parse(
-      await tool.invoke(item, { configurable: { transferIdentity: IDENTITY } }),
+      await tool.invoke(input, { configurable: { transferIdentity: IDENTITY } }),
     );
     assert.equal(result.ok, false);
-    assert.match(result.stderr, item.expected);
+    assert.match(result.error, expected);
   }
 });
 
@@ -206,9 +214,9 @@ await files.writeText(target, "must not exist");
   );
 
   assert.equal(result.ok, false);
-  assert.equal(result.code, SCRIPT_FAILURE_CODE.exited);
-  assert.equal(result.exitCode, 1);
-  assert.match(result.stderr, /output path must be a safe relative path without parent traversal/);
+  assert.equal(result.code, SCRIPT_FAILURE_CODE.script_failed);
+  assert.equal(result.exitCode, 0);
+  assert.match(result.error, /output path must be a safe relative path without parent traversal/);
   await assert.rejects(fs.access(path.join(parentPath, "unauthorized-parent")));
 });
 
@@ -229,8 +237,8 @@ await output.tempFile("report.txt", directory);
   );
 
   assert.equal(result.ok, false);
-  assert.match(result.stderr, /requires tempDirectoryToken before fileName/);
-  assert.doesNotMatch(result.stderr, /temp:\/\/report\.txt\/temp:\/\//);
+  assert.match(result.error, /requires tempDirectoryToken before fileName/);
+  assert.doesNotMatch(result.error, /temp:\/\/report\.txt\/temp:\/\//);
 });
 
 test("execute_native_script rejects a temporary file token as LibreOffice outputDirectory", async () => {
@@ -257,11 +265,8 @@ await libreoffice.convert({
   );
 
   assert.equal(result.ok, false);
-  assert.match(
-    result.stderr,
-    /outputDirectory requires output\.directory or output\.tempDirectory/,
-  );
-  assert.doesNotMatch(result.stderr, /output:\/\/temp:/);
+  assert.match(result.error, /outputDirectory requires output\.directory or output\.tempDirectory/);
+  assert.doesNotMatch(result.error, /output:\/\/temp:/);
 });
 
 test("execute_native_script requires task paths for file reads and output tokens for writes", async () => {
@@ -281,7 +286,7 @@ test("execute_native_script requires task paths for file reads and output tokens
       ),
     );
     assert.equal(result.ok, false);
-    assert.match(result.stderr, /task path|output:\/\//);
+    assert.match(result.error, /task path|output:\/\//);
   }
 });
 
@@ -362,5 +367,5 @@ await page.goto("file:///etc/passwd");
     ),
   );
   assert.equal(result.ok, false);
-  assert.match(result.stderr, /HTTP\(S\)/);
+  assert.match(result.error, /HTTP\(S\)/);
 });

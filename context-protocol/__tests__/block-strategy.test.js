@@ -156,7 +156,7 @@ test("current message protocol rejects text without persisted identity", () => {
         ...EMPTY_BLOCKS,
         currentUserMessage: record("user", "current"),
       }),
-    /requires messageUid/,
+    /invalid messageUid/,
   );
   assert.throws(
     () =>

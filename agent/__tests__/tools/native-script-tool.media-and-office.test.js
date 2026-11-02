@@ -90,8 +90,8 @@ await libreoffice.convert({ input: source, outputDirectory: output.directory, ou
   assert.equal(result.ok, false);
   assert.equal(result.status, "failed");
   assert.equal(result.output_file_count, 0);
-  assert.match(result.stderr, /LibreOffice conversion/);
-  assert.doesNotMatch(result.stderr, /\/tmp\/noobot-native-|runtime\/native_tasks|\/home\/xiayu/);
+  assert.match(result.error, /LibreOffice conversion/);
+  assert.doesNotMatch(result.error, /\/tmp\/noobot-native-|runtime\/native_tasks|\/home\/xiayu/);
 });
 
 test("execute_native_script converts a declared input token with LibreOffice", async (t) => {

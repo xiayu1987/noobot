@@ -17,7 +17,8 @@ import {
 } from "../workflow/prompts.js";
 import { resetPlanAcceptanceStatusForPlanChange } from "./acceptance-status.js";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
-import { text, isObjectLike } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
+import { assertHarnessBucket } from "../../../../core/bucket-contract.js";
 
 const PLAN_MUTATION_KEYS = HARNESS_I18N_KEYSET.PLAN_MUTATION;
 
@@ -83,21 +84,12 @@ export function createPlanRevisionHelpers({
   appendCapabilityLog,
   ensureHarnessBucket,
 } = {}) {
-  function ensurePlanTextBucket(bucket = {}) {
-    if (!isObjectLike(bucket)) return {};
-    if (typeof bucket.planText !== "string") bucket.planText = "";
-    if (!Number.isFinite(Number(bucket.globalRevisionCount))) bucket.globalRevisionCount = 0;
-    if (!Array.isArray(bucket.lastRevisionChangedMainStepIndexes))
-      bucket.lastRevisionChangedMainStepIndexes = [];
-    return bucket;
-  }
-
   function resolveRefinementTargetMainSteps(
     bucket = {},
     state = {},
     { preferredTargetMainStepIndexes = [] } = {},
   ) {
-    const normalizedBucket = ensurePlanTextBucket(bucket);
+    const normalizedBucket = assertHarnessBucket(bucket);
     const mainPlans = parseMainPlansFromPlanText(normalizedBucket.planText);
     if (!mainPlans.length) return [];
     const mainPlanMap = new Map(
@@ -133,10 +125,10 @@ export function createPlanRevisionHelpers({
       targetMainStepIndexes = [],
     } = {},
   ) {
-    const holder = ensureHarnessBucket?.(ctx);
+    const holder = ensureHarnessBucket(ctx);
     if (!holder) return false;
     const { bucket, state } = holder;
-    ensurePlanTextBucket(bucket);
+    assertHarnessBucket(bucket);
     const payloadText = text(sourceText);
     if (!payloadText) return false;
 
@@ -158,9 +150,8 @@ export function createPlanRevisionHelpers({
     if (applied) bucket.planText = mutationResult.nextPlanText;
 
     if (normalizedStage === "revision") {
-      if (applied) bucket.globalRevisionCount = Number(bucket.globalRevisionCount || 0) + 1;
+      if (applied) bucket.globalRevisionCount += 1;
     } else {
-      if (!Array.isArray(bucket.planRefinementRecords)) bucket.planRefinementRecords = [];
       bucket.planRefinementRecords.push({
         source,
         stage: "refinement",
@@ -190,7 +181,6 @@ export function createPlanRevisionHelpers({
       );
     }
     state.flags.planningCaptured = text(bucket.planText).length > 0;
-    if (!Array.isArray(bucket.planRevisions)) bucket.planRevisions = [];
     bucket.planRevisions.push({
       source,
       stage: normalizedStage,
@@ -224,7 +214,7 @@ export function createPlanRevisionHelpers({
   }
 
   function resolveRefinementTargetMainStepIndexesAfterRevision(bucket = {}) {
-    const normalizedBucket = ensurePlanTextBucket(bucket);
+    const normalizedBucket = assertHarnessBucket(bucket);
     const changedTargetMainStepIndexes = normalizeMainStepIndexes(
       normalizedBucket.lastRevisionChangedMainStepIndexes,
     );

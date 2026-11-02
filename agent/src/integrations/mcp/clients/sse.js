@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { recoverableToolError } from "../../../shared/errors/index.js";
 import { runBestEffort } from "@noobot/shared/best-effort";
 import { streamServerSentEvents } from "@noobot/shared/event-stream";
@@ -182,7 +183,7 @@ export class SseMcpClient extends BaseMcpClient {
             },
           }),
         );
-      }, 30000);
+      }, TIME_THRESHOLDS.mcp.requestTimeoutMs);
       this._pending.set(requestId, { resolve, reject, timer });
     });
 

@@ -3,75 +3,64 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isPlainObject } from "@noobot/shared/value";
+import { assertAgentTurnMessages } from "@noobot/agent-transport-protocol/agent-turn-result";
 
-import { isPlainObject, text } from "@noobot/shared/value";
-
-function applyPatch(item = {}, patch = {}) {
+function applyPatch(item, patch) {
+  if (!isPlainObject(patch))
+    throw new TypeError("current turn message patch must be a plain object");
   const nextItem = { ...item };
-  for (const [key, value] of Object.entries(patch || {})) {
+  for (const [key, value] of Object.entries(patch)) {
     if (value === undefined) delete nextItem[key];
     else nextItem[key] = value;
   }
   return nextItem;
 }
 
-function cloneItems(values = []) {
-  return (Array.isArray(values) ? values : []).map((item) => ({ ...(item || {}) }));
+function cloneMessages(messages) {
+  return assertAgentTurnMessages(messages).map((message) => ({ ...message }));
 }
 
-function createCurrentTurnStore(values = []) {
-  const items = cloneItems(values);
+export function createCurrentTurnMessagesStore(messages = []) {
+  const items = cloneMessages(messages);
+  function replace(messagesToKeep) {
+    const nextItems = cloneMessages(messagesToKeep);
+    items.splice(0, items.length, ...nextItems);
+    return items.length;
+  }
   return {
-    items,
-    push(value = {}) {
-      const normalizedValue = value && typeof value === "object" ? { ...value } : {};
-      items.push(normalizedValue);
-      return normalizedValue;
+    push(message) {
+      const nextItems = cloneMessages([...items, message]);
+      const next = nextItems[nextItems.length - 1];
+      items.push(next);
+      return next;
     },
     updateLast(patch = {}, matcher = null) {
       for (let index = items.length - 1; index >= 0; index -= 1) {
-        if (typeof matcher === "function" && !matcher(items[index] || {})) continue;
-        items[index] = applyPatch(items[index], patch);
+        if (typeof matcher === "function" && !matcher(items[index])) continue;
+        const nextItems = [...items];
+        nextItems[index] = applyPatch(items[index], patch);
+        assertAgentTurnMessages(nextItems);
+        items[index] = nextItems[index];
         return items[index];
       }
       return null;
     },
-    toArray() {
-      return cloneItems(items);
-    },
-  };
-}
-
-function assertTurnMessage(message) {
-  if (!isPlainObject(message) || !text(message.messageUid)) {
-    throw new TypeError("current turn message requires messageUid");
-  }
-  return message;
-}
-
-export function createCurrentTurnMessagesStore(messages = []) {
-  const store = createCurrentTurnStore(messages.map(assertTurnMessage));
-  const { items } = store;
-  return {
-    push(message) {
-      return store.push(assertTurnMessage(message));
-    },
-    updateLast: store.updateLast,
     updateWhere(patch = {}, matcher = null) {
       let updatedCount = 0;
-      for (let index = 0; index < items.length; index += 1) {
-        if (typeof matcher === "function" && !matcher(items[index] || {}, index)) continue;
-        items[index] = applyPatch(items[index], patch);
+      const nextItems = items.map((item, index) => {
+        if (typeof matcher === "function" && !matcher(item, index)) return item;
         updatedCount += 1;
-      }
+        return applyPatch(item, patch);
+      });
+      assertAgentTurnMessages(nextItems);
+      items.splice(0, items.length, ...nextItems);
       return updatedCount;
     },
-    replaceAll(messagesToKeep) {
-      const nextItems = cloneItems(messagesToKeep.map(assertTurnMessage));
-      items.splice(0, items.length, ...nextItems);
-      return items.length;
+    replaceAll: replace,
+    toArray() {
+      return cloneMessages(items);
     },
-    toArray: store.toArray,
   };
 }
 

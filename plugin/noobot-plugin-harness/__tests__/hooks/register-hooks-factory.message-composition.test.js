@@ -11,6 +11,7 @@ import { createRegisterHarnessHooks } from "../../src/core/hooks.js";
 import { appendMessage } from "../../src/core/message-store.js";
 import { resolveModelFinalMessages as resolveMainModelFinalMessages } from "@noobot/context-protocol";
 import {
+  createTestResolveModelMessages,
   createTestHookContext,
   invokeTestHookHandler,
 } from "../helpers/public-runtime-fixtures.js";
@@ -64,6 +65,7 @@ test("createRegisterHarnessHooks leaves plain messages un-compacted without mess
   registerHarnessHooks({
     hookManager,
     options: {
+      resolveModelMessages: createTestResolveModelMessages(),
       tracePriority: 20,
       timeoutMs: 1000,
       planningGuidanceMode: "inject",

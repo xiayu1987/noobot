@@ -29,14 +29,14 @@ test("read_file: 具体工具不判断大文件，原始内容交由 semantic-tr
 
   const result = parseToolResult(
     await tool.invoke(
-      { riskLevel: "low", filePath: "large.txt", includeLineNumbers: false },
+      { riskLevel: "low", filePath: "large.txt" },
       { signal: new AbortController().signal },
     ),
   );
 
   assert.equal(result.toolName, "read_file");
   assert.equal(result.ok, true);
-  assert.equal(result.content.length, 8001);
+  assert.equal(result.numberedContent, `     1\t${"y".repeat(8001)}`);
   assert.equal(result.contentOmitted, undefined);
   assert.equal(result.transferEnvelopes, undefined);
 });
@@ -67,7 +67,6 @@ test("read_file: 大文件结果由 semantic-transfer 返回源文件引用而�
     {
       riskLevel: "low",
       filePath: "runtime/ops_workdir/large_test_file.txt",
-      includeLineNumbers: true,
       maxLines: 500,
     },
     { signal: new AbortController().signal },
@@ -76,7 +75,7 @@ test("read_file: 大文件结果由 semantic-transfer 返回源文件引用而�
 
   assert.equal(rawResult.toolName, "read_file");
   assert.equal(rawResult.ok, true);
-  assert.equal(rawResult.content.length > 8000, true);
+  assert.equal(rawResult.numberedContent.length > 8000, true);
   assert.equal(rawResult.contentOmitted, undefined);
   assert.deepEqual(rawResult.path, {
     view: "workspace",
@@ -106,7 +105,7 @@ test("read_file: 大文件结果由 semantic-transfer 返回源文件引用而�
   assert.equal(result.toolName, "read_file");
   assert.equal(result.ok, true);
   assert.equal(result.path, undefined);
-  assert.equal(result.content, undefined);
+  assert.equal(result.numberedContent, undefined);
   assert.equal(JSON.stringify(result).includes(workspaceRoot), false);
   const envelope = result.transferEnvelopes?.[0] || {};
   assert.equal(result.overflowed, true);

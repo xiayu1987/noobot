@@ -18,7 +18,6 @@ import { RUNTIME_EVENTS_CONFIG_ENVS } from "@noobot/shared/runtime-events-config
 const ENV_GROUPS = Object.freeze({
   log: RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.log,
   debug: RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.debug,
-  storage: RUNTIME_EVENTS_CONFIG_ENVS.runtimeEvents,
   executionLog: RUNTIME_EVENTS_CONFIG_ENVS.executionLogControls,
 });
 

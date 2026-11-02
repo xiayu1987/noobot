@@ -17,12 +17,11 @@ export function createTurnObservation({
   applied = false,
   reason = "",
   finalState = "",
-  messageEffect = "none",
   ...details
 } = {}) {
   return {
     requestedSessionId: text(requestedSessionId),
-    canonicalSessionId: text(canonicalSessionId || requestedSessionId),
+    canonicalSessionId: text(canonicalSessionId),
     turnKey: text(turnKey),
     eventId: text(eventId),
     sequence: Number(sequence || 0),
@@ -31,7 +30,6 @@ export function createTurnObservation({
     applied: applied === true,
     reason: text(reason),
     finalState: text(finalState),
-    messageEffect: text(messageEffect || "none") || "none",
     ...details,
   };
 }

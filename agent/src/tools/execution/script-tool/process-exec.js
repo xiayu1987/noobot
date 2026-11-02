@@ -227,6 +227,7 @@ function resolveProcessOutcome({ termination, code, signal, spawnError, timeoutM
     outputLimitExceeded: termination.outputLimitExceeded,
     spawnFailed: Boolean(spawnError),
     protocolViolated: false,
+    scriptFailed: false,
     exitCode,
     signal: observedSignal,
   });

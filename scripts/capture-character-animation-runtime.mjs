@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { DEVELOPMENT_THRESHOLDS } from "./lib/development-thresholds.mjs";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { execFile } from "node:child_process";
@@ -73,7 +74,10 @@ try {
     ),
     page.locator(".connect-btn").click(),
   ]);
-  await page.locator(".status-btn.connected").waitFor({ state: "visible", timeout: 30000 });
+  await page.locator(".status-btn.connected").waitFor({
+    state: "visible",
+    timeout: DEVELOPMENT_THRESHOLDS.time.animationCaptureStepTimeoutMs,
+  });
   await page.locator(".new-chat-btn").click();
   await page.locator(".composer-icon-btn").first().click();
   const pluginButton = page
@@ -104,38 +108,47 @@ try {
   const artifactCanvas = page
     .getByTestId("session-artifact-panel")
     .locator(`[data-animation-id="${animationId}"] canvas`);
-  const generationDeadline = Date.now() + 180000;
+  const generationDeadline = Date.now() + DEVELOPMENT_THRESHOLDS.time.animationGenerationTimeoutMs;
   while (
     Date.now() < generationDeadline &&
     !(await artifactCanvas.isVisible().catch(() => false))
   ) {
     await capture(page);
 
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(DEVELOPMENT_THRESHOLDS.time.animationCapturePollIntervalMs);
   }
-  await artifactCanvas.waitFor({ state: "visible", timeout: 30000 });
+  await artifactCanvas.waitFor({
+    state: "visible",
+    timeout: DEVELOPMENT_THRESHOLDS.time.animationCaptureStepTimeoutMs,
+  });
   const statusRow = page.locator(".message-status-steps").last();
-  await statusRow.waitFor({ state: "visible", timeout: 30000 });
+  await statusRow.waitFor({
+    state: "visible",
+    timeout: DEVELOPMENT_THRESHOLDS.time.animationCaptureStepTimeoutMs,
+  });
 
   for (let index = 0; index < 180; index += 1) {
     await capture(page);
-    await page.waitForTimeout(67);
+    await page.waitForTimeout(DEVELOPMENT_THRESHOLDS.time.animationCaptureFrameIntervalMs);
   }
-  await statusRow.waitFor({ state: "visible", timeout: 180000 });
+  await statusRow.waitFor({
+    state: "visible",
+    timeout: DEVELOPMENT_THRESHOLDS.time.animationCaptureRunTimeoutMs,
+  });
   await page.waitForFunction(
     (node) => !node.classList.contains("is-running"),
     await statusRow.elementHandle(),
-    { timeout: 180000 },
+    { timeout: DEVELOPMENT_THRESHOLDS.time.animationCaptureRunTimeoutMs },
   );
   await page.locator(".message-status-steps .el-step__head.is-success").last().waitFor({
     state: "visible",
-    timeout: 30000,
+    timeout: DEVELOPMENT_THRESHOLDS.time.animationCaptureStepTimeoutMs,
   });
-  await page.waitForTimeout(1000);
+  await page.waitForTimeout(DEVELOPMENT_THRESHOLDS.time.animationCapturePollIntervalMs);
   await capture(page);
 
   await page.locator(".session-item.active .session-delete-btn").click();
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(DEVELOPMENT_THRESHOLDS.time.animationCaptureSettleMs);
   await context.close();
 } finally {
   await browser.close();

@@ -27,10 +27,9 @@ import {
   SEARCH_CONTEXT_LINES_LIMIT,
   SEARCH_MAX_RESULTS_LIMIT,
 } from "./file-utils.js";
-import { searchFilesWithRipgrep, searchInText } from "./file-search.js";
+import { searchFilesWithRipgrep } from "./file-search.js";
 import {
   RESOURCE_OPERATION,
-  RESOURCE_SCOPE,
   SECURITY_EVIDENCE_SOURCE,
   classifyResourceRisk,
 } from "@noobot/security-assessment-protocol";
@@ -38,12 +37,7 @@ import { confirmToolOperation, createRiskLevelSchema } from "./tool-risk.js";
 import { buildFileToolDescription, resolveFileResourceRiskScope } from "./file-tool-shared.js";
 
 function buildSearchSchema(runtime) {
-  return z.object({
-    source: z
-      .enum(["files", "text"])
-      .optional()
-      .default("files")
-      .describe(tTool(runtime, "tools.search.fieldSource")),
+  return z.strictObject({
     query: z.string().min(1).describe(tTool(runtime, "tools.search.fieldQuery")),
     isRegex: z
       .boolean()
@@ -57,7 +51,6 @@ function buildSearchSchema(runtime) {
       .describe(tTool(runtime, "tools.search.fieldCaseSensitive")),
     path: z.string().optional().default(".").describe(tTool(runtime, "tools.search.fieldPath")),
     glob: z.string().optional().default("").describe(tTool(runtime, "tools.search.fieldGlob")),
-    text: z.string().optional().describe(tTool(runtime, "tools.search.fieldText")),
     contextLines: z
       .number()
       .int()
@@ -75,49 +68,6 @@ function buildSearchSchema(runtime) {
       .default(DEFAULT_SEARCH_MAX_RESULTS)
       .describe(tTool(runtime, "tools.search.fieldMaxResults")),
     riskLevel: createRiskLevelSchema(runtime, "tools.search.fieldRiskLevel"),
-  });
-}
-
-async function searchTextSource({
-  agentContext,
-  runtime,
-  query,
-  text: inputText,
-  isRegex,
-  caseSensitive,
-  contextLines,
-  maxResults,
-  riskLevel,
-}) {
-  await confirmToolOperation({
-    agentContext,
-    runtime,
-    declaredRiskLevel: riskLevel,
-    serverEvidence: {
-      source: SECURITY_EVIDENCE_SOURCE.NORMALIZED_RESOURCE,
-      riskLevel: classifyResourceRisk({
-        operation: RESOURCE_OPERATION.SEARCH,
-        scope: RESOURCE_SCOPE.WORKSPACE,
-      }),
-    },
-    toolName: TOOL_NAME.SEARCH,
-    operation: "search provided text",
-    reason: "The model-declared risk and server-classified risk are combined at the highest level.",
-  });
-  const result = searchInText({
-    text: inputText,
-    query,
-    isRegex,
-    caseSensitive,
-    contextLines,
-    maxResults,
-  });
-  return toToolJsonResult(TOOL_NAME.SEARCH, {
-    ok: true,
-    source: "text",
-    query,
-    resources: [],
-    ...result,
   });
 }
 
@@ -241,7 +191,6 @@ async function searchFilesSource({
   });
   return toToolJsonResult(TOOL_NAME.SEARCH, {
     ok: true,
-    source: "files",
     query,
     path: projectToolPathRef(searchPathRef),
     glob,
@@ -252,36 +201,15 @@ async function searchFilesSource({
 
 async function runSearch({ agentContext, runtime, args, abortSignal }) {
   const {
-    source,
     query,
     isRegex,
     caseSensitive,
     path: inputPath,
     glob,
-    text: inputText,
     contextLines,
     maxResults,
     riskLevel,
   } = args;
-  if (source === "text") {
-    if (!inputText) {
-      throw recoverableToolError(tTool(runtime, "tools.search.textRequired"), {
-        code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
-        details: { field: "text" },
-      });
-    }
-    return searchTextSource({
-      agentContext,
-      runtime,
-      query,
-      text: inputText,
-      isRegex,
-      caseSensitive,
-      contextLines,
-      maxResults,
-      riskLevel,
-    });
-  }
   return searchFilesSource({
     agentContext,
     runtime,

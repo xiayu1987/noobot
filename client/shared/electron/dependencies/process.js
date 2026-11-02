@@ -3,11 +3,16 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 
 export function createDependencyProcessTools({ appendEarlyLog = () => {} } = {}) {
-  function runProcess(command, args = [], { timeoutMs = 120000, env, cwd } = {}) {
+  function runProcess(
+    command,
+    args = [],
+    { timeoutMs = TIME_THRESHOLDS.desktop.dependencyProcessTimeoutMs, env, cwd } = {},
+  ) {
     return new Promise((resolve) => {
       const startedAt = Date.now();
       const commandLine = [command, ...args].join(" ");

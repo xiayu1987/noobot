@@ -21,7 +21,7 @@ import {
 import { safeError } from "../data/record-builders.js";
 import { WORKFLOW_PARAMS } from "../core/workflow-params.js";
 import { applyAgentResolvedModelMessages } from "../core/model-message-context.js";
-import { text, isFunction, isObjectLike, isPlainObject } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 
 async function runInternalGlobalBootstrap(point = "", ctx = {}, meta = {}) {
   const bootstrap = meta?.harness?.globalBootstrap;
@@ -31,17 +31,13 @@ async function runInternalGlobalBootstrap(point = "", ctx = {}, meta = {}) {
 
 function isMainPlanReady(bucket = null) {
   if (!bucket) return true;
-  const state = bucket?.state && typeof bucket.state === "object" ? bucket.state : {};
-  if (state?.flags?.planningCaptured === true) return true;
-  return Boolean(text(bucket?.planText));
+  if (bucket.state.flags.planningCaptured) return true;
+  return Boolean(text(bucket.planText));
 }
 
 function markPlanningCapturedIfPlanReady(bucket = null) {
   if (!bucket || !isMainPlanReady(bucket)) return;
-  const state = bucket?.state && typeof bucket.state === "object" ? bucket.state : null;
-  if (!isObjectLike(state)) return;
-  if (!isPlainObject(state.flags)) state.flags = {};
-  state.flags.planningCaptured = true;
+  bucket.state.flags.planningCaptured = true;
 }
 
 function prepareMainPlanningState(point = "", ctx = {}, capabilities = []) {

@@ -61,6 +61,7 @@ test("authoritative lifecycle replay is session-scoped, ordered, and deduplicate
       "turn_lifecycle",
       authoritativeLifecycle({
         ...envelope,
+        occurredAt: "2026-01-01T00:00:00.000Z",
         eventType:
           envelope.eventId === "e1" || envelope.eventId === "e2"
             ? TURN_EVENT.PROCESSING_STARTED

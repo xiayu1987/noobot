@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { randomUUID } from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { filePath as path } from "@noobot/path-resolver";
@@ -231,9 +232,9 @@ async function releaseOwnedLock(lockPath, ownerToken) {
 
 export class FileMutationCoordinator {
   constructor({
-    timeoutMs = 30000,
-    staleMs = 60000,
-    pollMs = 10,
+    timeoutMs = TIME_THRESHOLDS.fileMutation.lockTimeoutMs,
+    staleMs = TIME_THRESHOLDS.fileMutation.lockStaleMs,
+    pollMs = TIME_THRESHOLDS.fileMutation.lockPollIntervalMs,
     timeoutMessage = "file mutation lock timeout",
     timeoutErrorCode = "FILE_MUTATION_BUSY",
     operationName = "fileMutation.refreshLock",

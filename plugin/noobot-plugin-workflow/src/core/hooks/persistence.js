@@ -5,7 +5,6 @@
  */
 
 import {
-  applyWorkflowTransferPayload,
   normalizeWorkflowTransferPayload,
   resolveWorkflowTransferAttachmentReferences,
 } from "./attachments.js";
@@ -20,31 +19,18 @@ import {
   mergeTransferEnvelopes,
 } from "@noobot/semantic-transfer-protocol";
 import { requirePluginMessagePayload } from "@noobot/plugin-protocol/plugin-message-payload";
-import { text, isFunction, isObjectLike } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
 import { createMessageUid, createModelMessageId } from "@noobot/session-protocol/message-identity";
 import { assertAgentTurnResult } from "@noobot/agent-transport-protocol/agent-turn-result";
+import { assertSessionExecutionResult } from "@noobot/agent-transport-protocol/session-execution-result";
+import {
+  WORKFLOW_MESSAGE_IDENTITY,
+  WORKFLOW_MESSAGE_PHASE,
+  requireWorkflowMessagePhase,
+} from "@noobot/event-protocol/workflow-runtime-event";
 
-function resolveSubSessionResult(subSession) {
-  return subSession?.result && typeof subSession.result === "object" ? subSession.result : {};
-}
-
-function findLastAssistantContent(messages) {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const messageItem = messages[index] || {};
-    const role = text(messageItem?.role).toLowerCase();
-    if (role && role !== "assistant") continue;
-    const content = text(messageItem?.content);
-    if (content) return content;
-  }
-  return "";
-}
-
-export function resolveSubSessionFinalOutput(subSession = {}) {
-  const result = resolveSubSessionResult(subSession);
-  const messages = Array.isArray(result?.messages) ? result.messages : [];
-  const lastAssistantContent = findLastAssistantContent(messages);
-  if (lastAssistantContent) return lastAssistantContent;
-  return text(result?.answer);
+export function resolveSubSessionFinalOutput(subSession) {
+  return assertSessionExecutionResult(subSession.result).answer;
 }
 
 export function stripHarnessReviewAppendix(inputText = "") {
@@ -146,18 +132,6 @@ function requireSemanticTransferContent(ctx, purpose) {
   return semanticTransferContent;
 }
 
-function applyNodeResultTransfer(subSession, transferPayload) {
-  const result = subSession.result;
-  if (!isObjectLike(result)) return;
-  applyWorkflowTransferPayload(result, transferPayload);
-  if (!Array.isArray(result.messages) || !result.messages.length) return;
-  const lastIndex = result.messages.length - 1;
-  result.messages[lastIndex] = applyWorkflowTransferPayload(
-    { ...(result.messages[lastIndex] || {}) },
-    transferPayload,
-  );
-}
-
 export async function persistWorkflowNodeResultAttachment({
   ctx = {},
   subSession = null,
@@ -165,7 +139,6 @@ export async function persistWorkflowNodeResultAttachment({
   nodeIdentity = null,
 } = {}) {
   const locale = resolveWorkflowLocaleFromContext(ctx);
-  if (!subSession) return normalizeWorkflowTransferPayload();
   const cleanOutput = stripHarnessReviewAppendix(resolveSubSessionFinalOutput(subSession));
   if (!cleanOutput) return normalizeWorkflowTransferPayload();
   const { identity, nodeName, nodeId, normalizedTransition } = resolveNodeResultIdentity({
@@ -200,11 +173,8 @@ export async function persistWorkflowNodeResultAttachment({
   if (!transferPayload.transferEnvelopes.length) {
     throw new Error("Workflow node result transfer produced no V2 envelope");
   }
-  applyNodeResultTransfer(subSession, transferPayload);
   return transferPayload;
 }
-
-const WORKFLOW_MESSAGE_PHASES = Object.freeze(new Set(["planning", "completed"]));
 
 async function transferWorkflowFinalAttachment({
   transferReferenceBlock = "",
@@ -314,8 +284,8 @@ function pickNonEmptyTimelines(messageEventProjection) {
 
 function buildWorkflowPluginMeta({ normalizedPhase, workflowPayload }) {
   return {
-    source: "workflow-plugin",
-    kind: "workflow",
+    source: WORKFLOW_MESSAGE_IDENTITY.source,
+    kind: WORKFLOW_MESSAGE_IDENTITY.kind,
     phase: normalizedPhase,
     payload: requirePluginMessagePayload(workflowPayload),
   };
@@ -330,10 +300,7 @@ async function upsertWorkflowMessage({
   nodeTransferEnvelopes,
   phase,
 }) {
-  const normalizedPhase = text(phase);
-  if (!WORKFLOW_MESSAGE_PHASES.has(normalizedPhase)) {
-    throw new Error("Workflow message requires an explicit planning or completed phase");
-  }
+  const normalizedPhase = requireWorkflowMessagePhase(phase);
   const { turnMessages } = assertAgentTurnResult(agentResult);
   const dialogProcessId = ctx.dialogProcessId;
   const { transferEnvelopes, attachmentReferenceBlock } = await resolveWorkflowTransferParts({
@@ -359,7 +326,7 @@ async function upsertWorkflowMessage({
     role: "assistant",
     messageUid,
     modelMessageId,
-    type: "workflow",
+    type: WORKFLOW_MESSAGE_IDENTITY.type,
     chatPresentation: true,
     presentationMessageId,
     ...pickNonEmptyTimelines(messageEventProjection),
@@ -387,13 +354,13 @@ async function upsertWorkflowMessage({
 export function appendWorkflowPlanningMessage(payload) {
   return upsertWorkflowMessage({
     ...payload,
-    phase: "planning",
+    phase: WORKFLOW_MESSAGE_PHASE.PLANNING,
   });
 }
 
 export function publishWorkflowFinalMessage(payload) {
   return upsertWorkflowMessage({
     ...payload,
-    phase: "completed",
+    phase: WORKFLOW_MESSAGE_PHASE.COMPLETED,
   });
 }

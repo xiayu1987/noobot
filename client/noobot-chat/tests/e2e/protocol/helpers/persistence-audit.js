@@ -17,6 +17,7 @@ import { readSessionArtifact, StorageService } from "noobot-agent/session";
 import { PROTOCOL_TIMEOUTS } from "./protocol-timeouts.js";
 
 import { text } from "@noobot/shared/value";
+import { MODEL_CONTEXT_TRACE } from "@noobot/model-protocol";
 export function workspaceRoot() {
   return requireWorkspaceRootEnv();
 }
@@ -406,9 +407,9 @@ export async function readSessionExecutionEventTree(
 export function modelInvocationTraces(records) {
   return records.filter(
     (record) =>
-      record.event === "model_context_trace" &&
-      record.data?.stage === "llm_invoke_messages" &&
-      record.data?.authority === "model_invoke_port",
+      record.event === MODEL_CONTEXT_TRACE.EVENT &&
+      record.data?.stage === MODEL_CONTEXT_TRACE.INVOKE_STAGE &&
+      record.data?.authority === MODEL_CONTEXT_TRACE.INVOKE_AUTHORITY,
   );
 }
 

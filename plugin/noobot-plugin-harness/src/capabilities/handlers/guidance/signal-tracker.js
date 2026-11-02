@@ -8,31 +8,35 @@ import { resolveSummaryScope } from "@noobot/context-protocol/policy/summary";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { resolveModelMessageBlocks } from "../../../core/message-store.js";
+import { requireHarnessStateField } from "../../../core/bucket-contract.js";
 import {
   resolveContextMessageKey,
   resolveContextSessionMessageUid,
 } from "@noobot/context-protocol/message/codec";
-import { text, isObjectLike } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
 
 const FAILURE_THRESHOLD = Object.freeze({
   CONSECUTIVE: WORKFLOW_PARAMS.guidance.failureThreshold.consecutive,
   ACCUMULATED: WORKFLOW_PARAMS.guidance.failureThreshold.accumulated,
 });
 
-function resolveSummaryMarkBlocks(ctx = {}) {
+function resolveSummaryMarkBlocks(ctx) {
   const blocks = resolveModelMessageBlocks(ctx);
   return {
-    history: Array.isArray(blocks.history) ? blocks.history : [],
-    incremental: Array.isArray(blocks.incremental) ? blocks.incremental : [],
+    history: blocks.history,
+    incremental: blocks.incremental,
   };
 }
 
-export function captureGuidanceSummaryCheckpoint(ctx = {}, state = {}) {
-  if (!isObjectLike(state)) return [];
+export function captureGuidanceSummaryCheckpoint(ctx, state) {
+  requireHarnessStateField(
+    "pending",
+    "summaryCheckpointMessageKeys",
+    state.pending.summaryCheckpointMessageKeys,
+  );
   const blocks = resolveSummaryMarkBlocks(ctx);
   const summaryScope = resolveSummaryScope(blocks);
   const messageKeys = [...new Set(summaryScope.checkpointMessages.map(resolveContextMessageKey))];
-  state.pending = state.pending && typeof state.pending === "object" ? state.pending : {};
   state.pending.summaryCheckpointMessageKeys = messageKeys;
   return messageKeys;
 }

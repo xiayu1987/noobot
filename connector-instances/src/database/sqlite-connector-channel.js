@@ -3,12 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { CONNECTOR_FAILURE_CODE } from "@noobot/connector-protocol";
 import { text } from "@noobot/shared/value";
 import { connectorFailure, errorMessage, loadDriverModule } from "../channel-result.js";
 import { queryOutput, requireConnectionSource } from "./common-db-connector-channel.js";
 
-const SQLITE_TIMEOUT_MS = 30000;
+const SQLITE_TIMEOUT_MS = TIME_THRESHOLDS.connectorInstances.sqliteTimeoutMs;
 const sqliteDatabases = new Map();
 
 function databaseKey(channelKey) {

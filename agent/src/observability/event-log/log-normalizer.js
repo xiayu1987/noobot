@@ -6,6 +6,7 @@
 
 import { ACTIVITY_EVENT_TYPES } from "@noobot/event-protocol/message-event";
 import { text } from "@noobot/shared/value";
+import { MODEL_CONTEXT_TRACE } from "@noobot/model-protocol";
 
 const ERROR_EVENT_SUFFIX_RE = /(_error|_aborted)$/i;
 const SEMANTIC_TRANSFER_EVENTS = new Set(["semantic_transfer_validation"]);
@@ -28,7 +29,7 @@ export function classifyExecutionEvent(event = "") {
   if (String(event || "").startsWith("agent.contextIdentity.")) {
     return { category: "context_identity", type: "context_identity_debug" };
   }
-  if (event === "model_context_trace") {
+  if (event === MODEL_CONTEXT_TRACE.EVENT) {
     return { category: "model_context_trace", type: "model_context_trace_debug" };
   }
   if (SEMANTIC_TRANSFER_EVENTS.has(text(event))) {

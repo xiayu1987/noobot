@@ -20,6 +20,7 @@ export {
   createTurnLifecycleReceipt,
   createTurnLifecycleSnapshot,
   createTurnTerminalResolution,
+  requireTurnTerminalResolutionIdentity,
   collectTurnReplacementTombstoneErrors,
   isAuthoritativeTurnLifecycleEnvelope,
   validateSessionProvisionIntent,

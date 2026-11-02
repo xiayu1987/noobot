@@ -84,17 +84,13 @@ export function pruneTerminalTurns(
   const latestStoppedScope = text(resolveLatestContinuableStoppedTurn(registry, id)?.turnScopeId);
   const terminalTurns = Object.values(bucket.turns)
     .filter((turn) => Boolean(turn.terminal))
-    .sort(
-      (left, right) =>
-        Number(right.finishedAtMs || right.updatedAtMs || 0) -
-        Number(left.finishedAtMs || left.updatedAtMs || 0),
-    );
+    .sort((left, right) => right.finishedAtMs - left.finishedAtMs);
   const removedTurnScopeIds = [];
   let retainedUnprotectedCount = 0;
   for (const turn of terminalTurns) {
     const scope = text(turn.turnScopeId);
     if (scope === selectedScope || scope === latestStoppedScope || referenced.has(scope)) continue;
-    const finishedAtMs = Number(turn.finishedAtMs || turn.updatedAtMs || 0);
+    const finishedAtMs = turn.finishedAtMs;
     const tooOld = maxAgeMs >= 0 && finishedAtMs > 0 && Number(nowMs) - finishedAtMs > maxAgeMs;
     const overCount = retainCount >= 0 && retainedUnprotectedCount >= retainCount;
     if (tooOld || overCount) {

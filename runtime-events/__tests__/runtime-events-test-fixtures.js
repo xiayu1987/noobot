@@ -15,7 +15,6 @@ export { initializeSessionTree, markSessionDeleted, persistSession } from "../sr
 export const FIXTURE_USER_ID = "admin";
 
 const CONTROL_ENV_NAMES = [
-  ...Object.values(RUNTIME_EVENTS_CONFIG_ENVS.runtimeEvents),
   ...Object.values(RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.log),
   ...Object.values(RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.debug),
 ];

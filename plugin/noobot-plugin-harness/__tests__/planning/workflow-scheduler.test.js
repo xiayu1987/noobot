@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import test from "node:test";
+import { createTestWorkflowState } from "../helpers/workflow-state.js";
 import assert from "node:assert/strict";
 
 import {
@@ -35,15 +36,17 @@ test("workflow scheduler order is described by one flow/subflow config item", ()
 });
 
 test("workflow scheduler keeps cache-friendly business order", () => {
-  const decision = resolveWorkflowActionDecision({
-    pending: {
-      summary: true,
-      guidance: { reason: "tool_failures" },
-      planRevision: true,
-      planRevisionContext: { targetMainStepIndexes: [] },
-    },
-    flags: { summaryByCharsPrompted: true, planningCaptured: true },
-  });
+  const decision = resolveWorkflowActionDecision(
+    createTestWorkflowState({
+      pending: {
+        summary: true,
+        guidance: "consecutive_failures",
+        planRevision: true,
+        planRevisionContext: { targetMainStepIndexes: [] },
+      },
+      flags: { summaryByCharsPrompted: true, planningCaptured: true },
+    }),
+  );
 
   assert.equal(decision.chosenAction, "guidance");
   assert.equal(decision.chosenReason, "pending_guidance");
@@ -52,13 +55,15 @@ test("workflow scheduler keeps cache-friendly business order", () => {
 });
 
 test("workflow scheduler lets phase acceptance run before summary when no hard blocker exists", () => {
-  const decision = resolveWorkflowActionDecision({
-    pending: {
-      summary: true,
-      phaseAcceptance: true,
-    },
-    flags: { summaryByCharsPrompted: true, planningCaptured: true },
-  });
+  const decision = resolveWorkflowActionDecision(
+    createTestWorkflowState({
+      pending: {
+        summary: true,
+        phaseAcceptance: true,
+      },
+      flags: { summaryByCharsPrompted: true, planningCaptured: true },
+    }),
+  );
 
   assert.equal(decision.chosenAction, "phase_acceptance");
   assert.equal(decision.chosenReason, "phase_acceptance_pending");
@@ -68,20 +73,22 @@ test("workflow scheduler lets phase acceptance run before summary when no hard b
 });
 
 test("workflow scheduler hard overflow forced acceptance overrides normal actions", () => {
-  const decision = resolveWorkflowActionDecision({
-    pending: {
-      summary: true,
-      guidance: { reason: "tool_failures" },
-      planRevision: true,
-      planRevisionContext: { targetMainStepIndexes: [] },
-      phaseAcceptance: true,
-    },
-    flags: {
-      summaryByCharsPrompted: true,
-      planningCaptured: true,
-      overflowForceAcceptancePending: true,
-    },
-  });
+  const decision = resolveWorkflowActionDecision(
+    createTestWorkflowState({
+      pending: {
+        summary: true,
+        guidance: "consecutive_failures",
+        planRevision: true,
+        planRevisionContext: { targetMainStepIndexes: [] },
+        phaseAcceptance: true,
+      },
+      flags: {
+        summaryByCharsPrompted: true,
+        planningCaptured: true,
+        overflowForceAcceptancePending: true,
+      },
+    }),
+  );
 
   assert.equal(decision.chosenAction, "forced_acceptance");
   assert.equal(decision.chosenReason, "overflow_force_acceptance");
@@ -95,16 +102,18 @@ test("workflow scheduler hard overflow forced acceptance overrides normal action
 });
 
 test("workflow scheduler skips pending plan refinement when refinement is disabled", () => {
-  const decision = resolveWorkflowActionDecision({
-    pending: {
-      planRefinement: true,
-      planRefinementContext: { targetMainStepIndexes: [1, 2] },
-    },
-    flags: {
-      planningCaptured: true,
-      planRefinementEnabled: false,
-    },
-  });
+  const decision = resolveWorkflowActionDecision(
+    createTestWorkflowState({
+      pending: {
+        planRefinement: true,
+        planRefinementContext: { targetMainStepIndexes: [1, 2] },
+      },
+      flags: {
+        planningCaptured: true,
+        planRefinementEnabled: false,
+      },
+    }),
+  );
 
   assert.notEqual(decision.chosenAction, "plan_update_refinement");
 });

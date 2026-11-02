@@ -67,7 +67,23 @@ function buildUnifiedFilePatch({ oldPath, newPath, hunks }) {
   return { mode, oldPath, newPath, hunks };
 }
 
+const APPLY_PATCH_ANCHOR_PATTERN = /^@@ L(\d+)\s*$/;
+
+function parseApplyPatchAnchor(header) {
+  const match = APPLY_PATCH_ANCHOR_PATTERN.exec(header);
+  if (!match) return {};
+  const anchorLine = Number(match[1]);
+  if (anchorLine < 1) {
+    throw recoverableToolError(`invalid apply_patch line anchor: ${header}`, {
+      code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
+      details: { field: "patch", hint: "Line anchors are 1-based, e.g. @@ L42." },
+    });
+  }
+  return { anchorLine };
+}
+
 function parseApplyPatchHunk(lines, startIndex) {
+  const anchor = parseApplyPatchAnchor(lines[startIndex]);
   let index = startIndex + 1;
   const hunkLines = [];
   while (
@@ -81,7 +97,7 @@ function parseApplyPatchHunk(lines, startIndex) {
     }
     index += 1;
   }
-  return { index, hunk: { lines: hunkLines } };
+  return { index, hunk: { ...anchor, lines: hunkLines } };
 }
 
 function stripDiffPath(rawPath, strip) {

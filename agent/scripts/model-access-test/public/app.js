@@ -79,7 +79,11 @@ function syncToolMode() {
 async function api(path, input) {
   const response = await fetch(path, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-diagnostic-token": token },
+    headers: {
+      "content-type": "application/json",
+      "x-diagnostic-token": token,
+      "accept-language": document.documentElement.lang,
+    },
     body: json(input),
     signal: controller.signal,
   });
@@ -264,10 +268,10 @@ element("tool-definitions").value = json([
     type: "function",
     function: {
       name: "diagnostic_echo",
-      description: "Return the supplied text / 返回传入文本",
+      description: translate("echoDescription"),
       parameters: {
         type: "object",
-        properties: { text: { type: "string", description: "Text to echo / 要返回的文本" } },
+        properties: { text: { type: "string", description: translate("echoTextDescription") } },
         required: ["text"],
         additionalProperties: false,
       },

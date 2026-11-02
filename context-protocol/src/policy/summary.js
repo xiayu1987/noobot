@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
 import {
   isInjectedMessage,
@@ -516,7 +517,8 @@ export function collectDialogScopedMessagesToSummarize(
   );
 }
 
-export const TURN_SUMMARY_CHECKPOINT_RECEIPT_LIMIT = 50;
+export const TURN_SUMMARY_CHECKPOINT_RECEIPT_LIMIT =
+  QUANTITY_THRESHOLDS.contextProtocol.turnSummaryCheckpointReceiptLimit;
 export const TURN_SUMMARY_CHECKPOINT_STATE_ERROR_CODE = "INVALID_TURN_SUMMARY_CHECKPOINT_STATE";
 
 function invalidCheckpointState(detail) {

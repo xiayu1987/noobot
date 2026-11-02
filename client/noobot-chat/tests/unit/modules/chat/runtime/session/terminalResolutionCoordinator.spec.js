@@ -38,6 +38,7 @@ function response({
   return {
     protocolVersion: 2,
     eventType: "turn.terminal_resolved",
+    generatedAt: "2026-11-01T00:00:00.000Z",
     commandId: "resolve-1",
     sessionId: "s-1",
     turnScopeId: "t-1",

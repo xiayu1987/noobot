@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { StreamEventEnum } from "../../model/chatConstants.js";
-import { normalizeTrimmedString } from "./utils.js";
 import { logResendDebug, summarizeDebugMessage } from "../../../debug/loggers/resendDebugLogger.js";
 import { normalizeTurnTransportEnvelope } from "./turnTransportEnvelope.js";
 import { isEventForCurrentTurn } from "./sendFlowSupport.js";
@@ -54,11 +53,11 @@ function routePostProjectionEvent(event, data, context) {
   } = context;
   const isInteractionForCurrentChannel =
     protocolEnvelope?.protocol?.family === EVENT_FAMILY.INTERACTION_REQUEST &&
-    normalizeTrimmedString(channelSessionId) === normalizeTrimmedString(sessionId);
+    channelSessionId === sessionId;
   if (
     event !== StreamEventEnum.ATTACHMENT_LIFECYCLE &&
     !isInteractionForCurrentChannel &&
-    !isEventForCurrentTurn(data || {}, botMessage)
+    !isEventForCurrentTurn(data, botMessage)
   )
     return true;
   if (

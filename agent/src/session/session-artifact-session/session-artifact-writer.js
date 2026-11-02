@@ -21,6 +21,7 @@ import {
 import { readOptionalJsonWithStorage, writeJsonWithStorage } from "./artifact-json-io.js";
 import { buildStoredCheckpointReceipts } from "./checkpoint-receipts.js";
 import { buildSessionListFacts } from "./session-list-facts.js";
+import { forgetVerifiedSnapshot } from "./turn-materializer.js";
 import {
   compareTurnPlacement,
   dialogLogicalOrder,
@@ -295,24 +296,31 @@ function collectReferencedSnapshots(turnOrder) {
   );
 }
 
-async function pruneTurnSnapshotDir(turnDir, turnDirName, referencedSnapshots) {
+async function pruneTurnSnapshotDir({ sessionDir, turnDir, turnDirName, referencedSnapshots }) {
   for (const entry of await readdir(turnDir, { withFileTypes: true })) {
     if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
     const relative = path
       .join(SESSION_ARTIFACT_FILE_NAMES.turnSnapshotsDir, turnDirName, entry.name)
       .replaceAll("\\", "/");
-    if (!referencedSnapshots.has(relative))
-      await rm(path.join(turnDir, entry.name), { force: true });
+    if (referencedSnapshots.has(relative)) continue;
+    await rm(path.join(turnDir, entry.name), { force: true });
+    forgetVerifiedSnapshot(sessionDir, relative);
   }
 }
 
 async function pruneUnreferencedSnapshots(files, turnOrder) {
   const referencedSnapshots = collectReferencedSnapshots(turnOrder);
+  const sessionDir = path.dirname(files.session);
   try {
     for (const turnEntry of await readdir(files.turnSnapshotsDir, { withFileTypes: true })) {
       if (!turnEntry.isDirectory()) continue;
       const turnDir = path.join(files.turnSnapshotsDir, turnEntry.name);
-      await pruneTurnSnapshotDir(turnDir, turnEntry.name, referencedSnapshots);
+      await pruneTurnSnapshotDir({
+        sessionDir,
+        turnDir,
+        turnDirName: turnEntry.name,
+        referencedSnapshots,
+      });
     }
   } catch (error) {
     ignoreMissingDirectory(error);

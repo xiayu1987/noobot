@@ -13,6 +13,7 @@ test("composeSystemInfoSections omits connector prompt blocks when no connector 
     systemPrompt: "base",
     staticInfo: { cwd: "/tmp" },
     dynamicInfo: {
+      caller: "user",
       config: {
         allowUserInteraction: true,
         selectedConnectorIds: [],

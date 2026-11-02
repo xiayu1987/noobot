@@ -16,6 +16,7 @@ import { WORKFLOW_ACTION_TYPE, isWorkflowActionType } from "workflow";
 import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
 import {
   mergeAttachmentReferences,
+  getWorkflowTransferPayloadFromResult,
   resolveNodeInputAttachments,
   resolveWorkflowTransferAttachmentReferences,
 } from "./attachments.js";
@@ -28,6 +29,8 @@ import {
 import { isWorkflowAbortError, throwIfWorkflowAborted, withTimeout } from "./runtime.js";
 import { resolveWorkflowRunIdentity } from "../workflow-run-identity.js";
 import { text, isObjectLike } from "@noobot/shared/value";
+import { mergeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
+import { assertSessionExecutionResult } from "@noobot/agent-transport-protocol/session-execution-result";
 
 function buildWorkflowNodeInstruction(step = {}) {
   const locale = text(step?.locale);
@@ -81,7 +84,7 @@ export async function runNodeAgent({
     nodeInputAttachments,
     upstreamAttachmentSystemMessage,
   });
-  const { subSession, childFailed } = await runWorkflowNodeSubSession({
+  const { subSession, childFailed, transferEnvelopes } = await runWorkflowNodeSubSession({
     options,
     ctx,
     signal,
@@ -102,6 +105,7 @@ export async function runNodeAgent({
     hookPayload,
     subSession,
     childFailed,
+    transferEnvelopes,
   });
 }
 
@@ -152,8 +156,13 @@ function collectUpstreamAttachmentReferences(upstreamNodeResults) {
 async function runWorkflowNodeSubSession(params) {
   try {
     const subSession = await executeWorkflowNodeSubSession(params);
-    if (subSession) await persistWorkflowNodeSubSession(params, subSession);
-    return { subSession, childFailed: false };
+    const result = assertSessionExecutionResult(subSession.result);
+    const transferred = await persistWorkflowNodeSubSession(params, subSession);
+    const transferEnvelopes = mergeTransferEnvelopes(
+      getWorkflowTransferPayloadFromResult(result).transferEnvelopes,
+      transferred.transferEnvelopes,
+    );
+    return { subSession, childFailed: false, transferEnvelopes };
   } catch (error) {
     if (isWorkflowAbortError(error, params.signal)) throw error;
     if (!isObjectLike(error?.lifecycle)) throw error;
@@ -280,7 +289,7 @@ function resolveNodeAgentTimeout(options) {
 
 async function persistWorkflowNodeSubSession(params, subSession) {
   throwIfWorkflowAborted(params.signal);
-  await persistWorkflowNodeResultAttachment({
+  return persistWorkflowNodeResultAttachment({
     ctx: params.ctx,
     subSession,
     transition: params.transition,
@@ -294,13 +303,14 @@ async function resolveNodeAgentResult({
   hookPayload,
   subSession,
   childFailed,
+  transferEnvelopes,
 }) {
   if (childFailed) return { action: null, subSession };
   const emitted = await hookManager.emit(HOOK_POINT.WORKFLOW.NODE_AGENT_EXECUTE, hookPayload, {
     signal,
   });
   throwIfWorkflowAborted(signal);
-  return { action: resolveNodeAgentDecision(emitted.outcomes), subSession };
+  return { action: resolveNodeAgentDecision(emitted.outcomes), subSession, transferEnvelopes };
 }
 
 export const NODE_AGENT_DEFAULT_ACTION = Object.freeze({ type: WORKFLOW_ACTION_TYPE.SUBMIT });

@@ -99,7 +99,7 @@ describe("runtime stream projector boundary", () => {
     expect(projector).not.toHaveBeenCalled();
   });
 
-  it("reports invalid projector values and continues to a valid projector", () => {
+  it("rejects invalid projectors before invoking any later projector", () => {
     const logRuntimeProjectionDiagnostics = vi.fn();
     const projector = vi.fn(() => true);
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -108,19 +108,19 @@ describe("runtime stream projector boundary", () => {
       provide: () => [null, {}, projector],
     });
     try {
-      expect(
+      expect(() =>
         routeRuntimeStreamEvent(workflowNodeEvent(), {
           source: "live",
           isCurrentActiveSession: () => true,
           logRuntimeProjectionDiagnostics,
         }),
-      ).toBe(true);
-      expect(projector).toHaveBeenCalledOnce();
+      ).toThrow("invalid_runtime_stream_route");
+      expect(projector).not.toHaveBeenCalled();
       expect(
         logRuntimeProjectionDiagnostics.mock.calls.filter(
           ([event]) => event === "frontend.pluginRuntime.projectorFailed",
         ),
-      ).toHaveLength(2);
+      ).toHaveLength(1);
       expect(logRuntimeProjectionDiagnostics).toHaveBeenCalledWith(
         "frontend.pluginRuntime.gatewayEvaluated",
         expect.objectContaining({ projectorCount: 1 }),
@@ -201,7 +201,7 @@ describe("runtime stream projector boundary", () => {
       ],
     });
     try {
-      expect(
+      expect(() =>
         routeRuntimeStreamEvent(workflowNodeEvent(), {
           source: "reconnect",
           isCurrentActiveSession: () => true,
@@ -209,7 +209,7 @@ describe("runtime stream projector boundary", () => {
           turnScopeId: "active-turn",
           logRuntimeProjectionDiagnostics,
         }),
-      ).toBe(false);
+      ).toThrow("projector failed");
       expect(logRuntimeProjectionDiagnostics).toHaveBeenCalledWith(
         "frontend.pluginRuntime.projectorFailed",
         expect.objectContaining({

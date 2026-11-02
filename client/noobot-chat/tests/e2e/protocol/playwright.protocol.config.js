@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import "@noobot/shared/testing/runtime-params";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";

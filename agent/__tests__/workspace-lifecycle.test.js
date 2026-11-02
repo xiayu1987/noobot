@@ -80,6 +80,48 @@ async function listBackupFiles(userPath) {
   return { stampDir: path.join(backupRoot, stamp), stamps: await readdir(backupRoot) };
 }
 
+test("memory creation and repair use the persisted user language and preserve existing models", async () => {
+  const fixture = await createFixture();
+  try {
+    await fixture.write("config.json", JSON.stringify(USER_CONFIG));
+    await repairUserWorkspace(fixture.options);
+    for (const [file, kind] of [
+      ["memory/long-memory-model.md", MEMORY_DOCUMENT_KIND.LONG_MEMORY_MODEL],
+      ["memory/experience-fields.md", MEMORY_DOCUMENT_KIND.EXPERIENCE_FIELDS],
+    ]) {
+      const english = renderDefaultMemoryDocument(kind, "en-US");
+      assert.equal(await fixture.read(file), english);
+      await fixture.write(file, "invalid document");
+      await repairUserWorkspace(fixture.options);
+      assert.equal(await fixture.read(file), english);
+    }
+    const custom = "NOOBOT_LONG_MEMORY_MODEL/2\n\nwork.tech_stack | list:2 | 用户自定义说明\n";
+    await fixture.write("memory/long-memory-model.md", custom);
+    await fixture.write("config.json", JSON.stringify(BASE_VALUES));
+    await repairUserWorkspace(fixture.options);
+    assert.equal(await fixture.read("memory/long-memory-model.md"), custom);
+    assert.equal(
+      await fixture.read("memory/experience-fields.md"),
+      renderDefaultMemoryDocument(MEMORY_DOCUMENT_KIND.EXPERIENCE_FIELDS, "en-US"),
+    );
+  } finally {
+    await fixture.restore();
+  }
+});
+
+test("new English workspaces and memory reset use the configured language", async () => {
+  const fixture = await createFixture();
+  try {
+    await ensureUserWorkspace({ ...fixture.options, baseValues: USER_CONFIG });
+    const expected = renderDefaultMemoryDocument(MEMORY_DOCUMENT_KIND.LONG_MEMORY_MODEL, "en-US");
+    assert.equal(await fixture.read("memory/long-memory-model.md"), expected);
+    await resetUserWorkspace({ ...fixture.options, sections: ["memory"] });
+    assert.equal(await fixture.read("memory/long-memory-model.md"), expected);
+  } finally {
+    await fixture.restore();
+  }
+});
+
 test("ensure creates a new workspace from the protocols and the asset package", async () => {
   const fixture = await createFixture();
   try {

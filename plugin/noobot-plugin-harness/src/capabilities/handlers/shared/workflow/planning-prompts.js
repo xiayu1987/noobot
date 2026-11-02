@@ -6,6 +6,7 @@
 import { LOCALE } from "../constants.js";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
 import { WORKFLOW_PARAMS } from "../../../../core/workflow-params.js";
+import { requireHarnessRevisionCount } from "../../../../core/bucket-contract.js";
 import {
   buildPlanningMainPatchProtocolText as buildPlanningMainPatchProtocolCoreText,
   buildPlanningRefinementPatchProtocolText as buildPlanningRefinementPatchProtocolCoreText,
@@ -82,15 +83,12 @@ export function buildPlanningMainPrompt(options = {}) {
 
 export function buildPlanningRevisionPromptText(options = {}) {
   const { locale, marker, data } = normalizePromptOptions(options);
-  const globalRevisionCount = data.globalRevisionCount ?? 0;
+  const revisionCount = requireHarnessRevisionCount(data.globalRevisionCount);
   const currentMainPlansText = data.currentMainPlansText ?? "";
   const includeCurrentMainPlans = data.includeCurrentMainPlans ?? true;
   const mainPlansText =
     text(currentMainPlansText) ||
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_EMPTY_TEXT);
-  const revisionCount = Number.isFinite(Number(globalRevisionCount))
-    ? Number(globalRevisionCount)
-    : 0;
   const currentPlanSection =
     includeCurrentMainPlans === false
       ? []

@@ -2,17 +2,17 @@
 
 本文件只维护当前规则与任务状态。旧编号、提交记录和历次测试明细已移到[历史档案](message-identity-architecture-history.md)，查历史时再读，不以档案里的待办作为当前任务。
 
-核实日期：2026-11-01（Asia/Shanghai）。代码基线：HEAD `238ff0cd5` 加当前未提交工作树；布局版本 **30**、会话 artifact schema **21**、上下文 snapshot **6**。工作树包含其他主题改动，不能把全部差异归为消息身份任务。
+核实日期：2026-11-02（Asia/Shanghai）。代码基线：HEAD `238ff0cd5` 加当前未提交工作树；布局版本 **30**、会话 artifact schema **21**、上下文 snapshot **6**。工作树包含其他主题改动，不能把全部差异归为消息身份任务。
 
 ## 1. 现在是什么状态
 
-**基础身份协议、T01–T07、V04 和多项收敛切片已经完成；整体尚未完成。当前没有已确认的剩余开发任务，仍有 6 组待核实事项（V06 已部分收敛），以及 3 组生产验证/操作事项。** 这些是工作分组数量，不代表原始缺陷数量，也不计算完成百分比。
+**基础身份协议、T01–T07、V01–V04、V06–V07 和多项收敛切片已经完成；整体尚未完成。当前没有已确认的剩余开发任务，仍有 V05 一组待核实事项，以及 3 组生产验证/操作事项。** 这些是工作分组数量，不代表原始缺陷数量，也不计算完成百分比。
 
 | 状态              | 含义                                                           | 去哪里看        |
 | ----------------- | -------------------------------------------------------------- | --------------- |
 | 已完成            | 只关闭列明的实现范围，不代表同一旧编号的其他内容完成           | 第 3 节         |
 | 未完成            | 已确认的开发任务已关闭；后续核实发现的问题在第 4 节登记        | 第 4 节         |
-| 待核实            | 缺少足够的协议、调用链或集成证据，不能先定为缺陷或完成         | 第 5 节 V01–V07 |
+| 待核实            | 缺少足够的协议、调用链或集成证据，不能先定为缺陷或完成         | 第 5 节 V05     |
 | 生产待验证/待授权 | 测试不能替代生产证据；只读核实可继续，部署、停服和删除单独授权 | 第 6 节 O01–O03 |
 
 阅读顺序：继续推进先读第 5 节，核实后的开发问题在第 4 节登记；要部署，读第 6 节。每项状态只在所属章节维护。旧编号仅用于追溯，不再使用“182 整项”“31 切片5h”等编号安排工作。
@@ -140,6 +140,22 @@
 - **集成覆盖**：新增 4 条隔离工作区集成用例，覆盖运行中删除后的生命周期提交、最终持久化、消息持久化与计时写入之间的删除，以及已调度记忆后处理报告 `SESSION_DELETED`；均断言无残留、不重建会话。detached 测试替身已补齐必存在读取契约。
 - **边界**：验证基于隔离工作区，不代替生产存量；最终全仓与质量结果见第 7 节。
 
+### V06 子会话计时与详情来源：已完成
+
+- **终态工厂契约**：[turn-terminal-resolution.js](../session-protocol/src/lifecycle/turn-terminal-resolution.js) 的 `createTurnTerminalResolution` 对可选字段提供协议缺省，并立即运行完整 `validateTurnTerminalResolution`；缺失身份、非法标志、空未决原因及 resolved 响应缺少合法 turn 均拒绝。`turn-terminal-resolution-input.test.js` 覆盖合法缺省结果可被同一校验器接受，以及非法输入不被清洗或改写。工厂缺省不是验证器外的第二套规则。
+- **计时事实来源**：[authority-query-service.js](../authoritative-state/src/application/authority-query-service.js) 的权威快照和终态解析都通过 `projectTurnTiming` 合并 lifecycle 与 `turnTimings`，没有第二套计时计算。`admitWorkflowSessionSnapshot` 的 aggregateVersion、lifecycle sequence 与 timing 各守其版本域；事件协议和前端专项验证旧 aggregate 仍可推进更新的 lifecycle/timing，生命周期陈旧则阻止后续 timing，计时冲突抛错且更正后可重放。不得将这些域强行合并为一个版本闸门。
+- **未加载语义**：[turnRuntimeSelectors.js](../client/noobot-chat/src/modules/chat/runtime/run-state-machine/turnRuntimeSelectors.js) 在无回合时返回 `modelLoopRound: null`，已加载回合读取 `turn.timing?.modelLoopRound ?? null`，不把未加载伪装成 0。
+- **详情消费链**：主详情只从经过 `requireSessionDetailDocument` 校验的 `mainEntry` 读取 lifecycle、timing 和 messages；[sessionLifecycleHydration.js](../client/noobot-chat/src/modules/chat/runtime/session/sessionLifecycleHydration.js) 只应用会话权威 snapshot；workflow execution detail 通过 `requireSelectedExecutionDetail` 读取所选 session；REST snapshot 通过统一 workflow runtime event 合并；子会话 snapshot 经 `admitWorkflowSessionSnapshot` 准入；thinking-detail timeline 由已准入消息及 activity 投影。没有证据支持额外并行的计时事实源。
+- **边界**：以上关闭代码契约与所读调用链，不代表生产历史快照已合规；隔离迁移和生产存量仍归 O01/O02。
+
+### V01–V03、V07 历史定位与协议边界审计：已完成
+
+- **V01**：workflow 请求、插件端口、节点归属、附件 transfer、语义结果、消息路由、频道恢复和错误闭环已逐项登记当前入口与协议。删除语义输出回落原始输入和旧 traces 旁路；交互超时提交失败保留提交错误与超时错误，不再伪称网络已投递。
+- **V02**：登记消息投影及视图键的生产消费者与准入链；空投影、可选元数据和集合复制按各自协议保留，不另建修补规则。
+- **V03**：harness bucket **v14** 统一当前状态断言与显式迁移，登记 counters 推进、完成和重置职责；删除无消费者的 summaryRounds。canonical ledger 先验证候选集合，再提交更新。
+- **V07**：负向夹具保留显式损坏输入，共享合法消息夹具；会话消息双向投影复用公开身份断言，删除身份裁剪与会话角色大小写转换。隔离浏览器核实错误通知，不扩大为生产 E2E。
+- **证据与边界**：逐项符号、调用链和裁定见[核实记录](message-identity-verification-audit.md)，最终代码验证见第 7 节；历史八条原始样本及生产存量不在这些关闭范围内。
+
 ## 4. 未完成：已确认存在的代码问题
 
 当前无已确认的剩余开发任务；T01–T07 的列明范围均已关闭。第 5 节核实出具体问题后，在本节登记协议依据、动作与验收条件。存在 `text()`、默认参数或 catch 本身不等于缺陷，禁止机械删除合法 UI 状态或诊断能力。
@@ -148,40 +164,43 @@
 
 这些条目仍是开放任务；“待核实”不等于已完成，也不等于代码一定有缺陷。核实后应删除过期登记，或把确认的问题移入第 4 节；不能在两处同时维护状态。
 
-| ID / 旧编号                                  | 核实范围                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | 完成核实的条件                                                                                                         |
-| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| V01 / 26、27、31、32、182 的其他旧定位       | 协议/传输/代理/工作流的剩余登记，包括 ctx 身份补位、planning revision、caller 白名单、cleanup planning.json、上游 handler、socket/频道状态、replay 回执、诊断私有字段及工具风险/系统 prompt。完整原定位见档案原 5.3 的 26/27/31/32/182 和原第 7 节尾项；已明确拆出的 T01–T07 不重复处理                                                                                                                                                                                                                                             | 对每个旧定位给出当前符号、生产调用者和协议依据；判断已删除、合法缺省或实际缺陷。不能把旧行号和“约 13 处”直接当当前事实 |
-| V02 / 186                                    | `event-protocol/src/message-event.js` 的 projectMessageEventMetadata / projectAuthoritativeFinalMessage 等视图入口仍有 text/Array.isArray；准入已收严，需确认下游是否重复校验或另有输入语义                                                                                                                                                                                                                                                                                                                                         | 列明每个导出的生产调用链与入口校验；未匹配事件返回空投影等合法探测语义有协议和测试依据                                 |
-| V03 / 173/175/177                            | harness/workflow 的 ledger、counters、恢复状态与结果规则，除 T05 外仍未闭环。已搜索到 bucket-migration、pending-cleanup、guidance controller 等多处补字段/数值转换，需区分显式迁移和当前运行读取                                                                                                                                                                                                                                                                                                                                    | 明确每项状态的创建者、版本与唯一写者；迁移和运行时职责分开；确认的问题形成具体修复任务                                 |
-| V05 / 49                                     | sessions.json、历史空 identity.messageId 与“前缀只约束新值”的旧登记；历史提到 8 条空身份，不是当前复核数量                                                                                                                                                                                                                                                                                                                                                                                                                          | 只读重新取证，区分当前 schema、历史迁移输入与冻结日志；给出样本范围、版本和处置依据，不因未命中搜索关闭                |
-| V06 / 方案一后续、102/106 的非 workflow 部分 | 已收敛：终态解析由 coordinator `settleResponse` 唯一校验，删除前端重复校验、可重试包装、补值与重放缓存；协议 `validateTurnTerminalResolution` 删除默认参数与 turn 兜底。仍待核实：`createTurnTerminalResolution` 工厂默认值及 `clean()` 与校验器契约是否一致；计时一个写入源、两条读取通道（`createAuthoritativeTurnSnapshot`/`resolveAuthoritativeTurnTerminal`）待协议裁定；selector 中 `modelLoopRound ?? 0` 是否混淆未加载与 0；sessionLifecycleHydration、applyExecutionDetail/applyRestSnapshot、thinking-detail-content 路径 | 从权威执行/会话文档追踪到计时和详情消费者，证明身份/时间唯一来源；错误与合法未加载有分别测试                           |
-| V07 / 测试侧与零散旧尾项                     | 已登记的 Object.assign 工厂旁路有部分修复；其余 harness 夹具、canonicalMessages 重复、时间戳夹具及浏览器 errorHandler 实测仍缺完整复核                                                                                                                                                                                                                                                                                                                                                                                              | 区分生产风险、测试旁路和纯重构；实际生产故障形成任务，僵尸测试/重复夹具清理后运行相关回归                              |
+| ID / 旧编号 | 核实范围                                                                                                   | 完成核实的条件                                                                                          |
+| ----------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| V05 / 49    | sessions.json、历史空 identity.messageId 与“前缀只约束新值”的旧登记；历史提到 8 条空身份，不是当前复核数量 | 只读重新取证，区分当前 schema、历史迁移输入与冻结日志；给出样本范围、版本和处置依据，不因未命中搜索关闭 |
 
-V01 是旧登记审计任务，不是“已确认仍存在的一大包缺陷”。档案保留全部旧定位用于逐项销账，避免整理时丢项；后续继续审计应缩小这个分组，不能再追加无验收条件的长列表。
+V01–V03、V07 的销账依据见第 3 节及核实记录。V05 扫描未命中不能替代历史样本定位，仍需取得原始样本或能追溯其版本与来源的记录。
 
 ## 6. 生产验证与需要授权的操作
 
-| ID                    | 当前状态与剩余动作                                                                                                                        | 验收 / 授权边界                                                                                                                                                        |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| O01 存量合规与升级    | 代码为布局30/schema21/snapshot6；旧记录只读核实 admin/xiayu 布局25、6份缺事件集合文档。本轮未重新核查生产数据，不能当作当前数量或当前版本 | 先只读按协议检查 backwrites、checkpoint、journal、事件集合及生命周期迁移前提并输出报告；生产升级/重启单独授权。布局号不能替代内容校验                                  |
-| O02 停服副本演练      | v6 transfer 的逐文件备份/写入/回滚不是跨文件事务；历史尚无完整停服副本演练证据                                                            | 保留同一时点完整备份，在隔离副本通过启动准备入口升级，检查 failed/quarantined、哈希链、manifest 和后续写入；中断恢复整个备份，不手改布局。停止生产写者及正式部署须授权 |
-| O03 孤儿 summary 缓存 | rebuilt summary 已从会话事实重建，旧迁移改写入口已删除；历史登记20份孤儿缓存，未重新审计数量和来源                                        | 先只读确认无读取依赖及可重建性，给出准确删除清单；删除生产文件须授权                                                                                                   |
+| ID                    | 当前状态与剩余动作                                                                                                                                                                 | 验收 / 授权边界                                                                                                                                                        |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| O01 存量合规与升级    | 代码为布局30/schema21/snapshot6。仓库工作区只读核查覆盖59份会话；7份 xiayu outbox 的 attempt 缺 `consumerId`，已修复启动迁移漏校验，但尚未处理或重扫存量；不代表生产当前数量或版本 | 部署准备时按实际安装插件范围只读检查 backwrites、checkpoint、journal、事件集合及生命周期迁移前提；生产升级/重启单独授权。布局号不能替代内容校验                        |
+| O02 停服副本演练      | v6 transfer 的逐文件备份/写入/回滚不是跨文件事务；历史尚无完整停服副本演练证据                                                                                                     | 保留同一时点完整备份，在隔离副本通过启动准备入口升级，检查 failed/quarantined、哈希链、manifest 和后续写入；中断恢复整个备份，不手改布局。停止生产写者及正式部署须授权 |
+| O03 孤儿 summary 缓存 | rebuilt summary 已从会话事实重建，旧迁移改写入口已删除；历史登记20份孤儿缓存，未重新审计数量和来源                                                                                 | 先只读确认无读取依赖及可重建性，给出准确删除清单；删除生产文件须授权                                                                                                   |
 
 历史 v9 迁移函数不是读取期兼容旁路：最低支持版本未提高前，不能因名字含 legacy 或旧字段就删除整档升级链。退役须按版本支持范围和调用证据处理。提交也须单独授权；不得把其他主题工作树差异混入本主题。
 
 ## 7. 核实与验证记录
 
-**T01–T07、V04 已完成实现与验证，V06 已收敛部分同批验证；未执行生产升级或其他生产操作。** 实现范围见第 3 节对应条目，生产边界仍归 O01/O02。
+**T01–T07、V01–V04、V06–V07 已完成列明实现与验证；未执行生产升级或其他生产操作。** 实现范围见第 3 节，V05 仍开放，生产边界仍归 O01–O03。
 
-- V04/V06 最终版本：session-protocol **302/302**，日志：[协议专项](../workspace/admin/runtime/ops_workdir/v06-protocol.log)；全仓 `PASSED exit=0`，日志：[执行结果](../workspace/admin/runtime/ops_workdir/v06-all.log)、[完整运行](../test-results/test-runs/npm-2026-11-01T09-38-57-150Z.log)。agent 工作区有 1 项既有条件跳过（`attachment-source-path-and-stream.test.js` 声明 `skip: getuid()===0`，当前以 root 运行），不在本轮差异中，不计为通过。质量门禁 **48/48**，日志：[最终质量检查](../workspace/admin/runtime/ops_workdir/v06-quality.log)；按实测收紧基线 complexityCount **141→140**、deepNestingCount **299→298**、fallbackChain **278→272**，未新增豁免。早于 V06 改动的 V04 中间日志不作为最终结论。
+- 本轮 V05 代码复验：model-proxy 专项 **18/18**；当前工作树全仓 `PASSED exit=0`，日志：[V05 全仓复验](../workspace/admin/runtime/ops_workdir/v05-all-current.log)；质量门禁 **48/48**，日志：[V05 质量复验](../workspace/admin/runtime/ops_workdir/v05-quality-current.log)。质量实测 rawTypeof **432**、unusedExports **91**，均等于既有基线；未调整基线或新增豁免。此前报告的格式、rawTypeof 与 unusedExports 三项失败在当前版本复验中均未复现。
+- V05 存量与迁移：仓库工作区限定范围 **59** 份会话读取和身份校验通过，**7** 份 xiayu outbox attempt 缺 `consumerId`；升级漏校验已修复，坏会话隔离、源字节不变及健康会话继续升级专项 **10/10**。报告见[存量核查](message-identity-stock-audit.md)及[扫描数据](../workspace/admin/runtime/ops_workdir/v05-readonly-audit.json)。扫描不覆盖生产、备份、隔离目录、归档或仓库外插件安装；七份存量尚未升级或重扫。
 
-- T07 迁移与监听专项 **3/3**，日志：[隔离迁移及监听](../workspace/admin/runtime/ops_workdir/t07-agent-contract.log)；前端专项 **6/6**，日志：[live/reconnect 去重](../workspace/admin/runtime/ops_workdir/t07-client.log)。最终修复后的全仓退出码 **0**，日志：[完整运行](../test-results/test-runs/npm-2026-11-01T06-54-14-685Z.log)、[执行结果](../workspace/admin/runtime/ops_workdir/t07-final-all.log)；质量门禁 **48/48**，退出码 **0**，日志：[最终质量检查](../workspace/admin/runtime/ops_workdir/t07-final-quality.log)。通过抽取冲突检查降低嵌套并合并重复导入修复门禁，未调整基线或新增豁免；隔离测试不代替生产存量抽样。
+- 本轮 V06 收尾：session-protocol 工作区历史结果 **302/302**（此前最终 V06 记录）；新增执行报告 UI 专项 **5/5**；最新全仓 `PASSED exit=0`，日志：[V 审计全仓复验](../workspace/admin/runtime/ops_workdir/v-audit-resume-final-all.log)；质量门禁 **48/48**，日志：[V 审计质量复验](../workspace/admin/runtime/ops_workdir/v-audit-resume-final-quality.log)。全仓包含本轮测试字段修正。质量初次失败由 `.tmp` 中不属于源码的临时配置备份触发；备份逐字节校验后移入 ops 工作区，未改内容、未放宽规则。`git diff --check` 通过。
+- V06 代码审计：工厂结果由协议完整校验；权威快照与终态查询复用 `projectTurnTiming`；aggregateVersion、lifecycle sequence、timing 分域处理由事件协议与前端 admission 回归明确覆盖；未加载轮次为 `null`。主详情、hydration、workflow execution detail/REST snapshot、子会话 snapshot 与 thinking-detail 的权威输入已逐入口核实，详见第 3 节 V06。
+- V02 投影消费映射与 V03 bucket v14 状态写者已完成核实，详见核实记录。当前运行断言与历史版本转换职责分开；字段推进和完成重置共用同一权威状态，不维护推算副本。
+- V05 当前工作区核查报告见[存量核查](message-identity-stock-audit.md)，逐会话结果见 `v05-readonly-audit.json`。本轮 `rg` 复核历史档案及核实记录，历史档案第 439 行仍只登记“8 条空 identity.messageId 复核”，未提供八条原始数据的路径与版本。这不证明所有历史来源均已排查。59 份扫描未命中不能替代样本定位，V05 保持开放。七份 outbox `consumerId` 异常与历史八条空消息身份是不同问题。
 
-- T06 相关工作区 **229 项通过**，日志：[配置与 workflow 回归](../workspace/admin/runtime/ops_workdir/t06-related.log)。包含最终语言枚举复用与无用导出清理的全仓退出码 **0**，日志：[完整运行](../test-results/test-runs/npm-2026-11-01T06-35-17-732Z.log)、[执行结果](../workspace/admin/runtime/ops_workdir/t06-final-all.log)。质量门禁复验 **48/48**，退出码 **0**，日志：[最终质量检查](../workspace/admin/runtime/ops_workdir/t06-final-quality.log)。未调整基线或新增豁免。
+- V04/V06 最终版本：session-protocol **302/302**，日志：[协议专项](../workspace/admin/runtime/ops_workdir/v06-protocol.log)；全仓 `PASSED exit=0`，日志：[执行结果](../workspace/admin/runtime/ops_workdir/v06-all.log)、完整日志 `test-results/test-runs/npm-2026-11-01T09-38-57-150Z.log` 当前已不在仓库，保留原路径记录。agent 工作区有 1 项既有条件跳过（`attachment-source-path-and-stream.test.js` 声明 `skip: getuid()===0`，当前以 root 运行），不在本轮差异中，不计为通过。质量门禁 **48/48**，日志：[最终质量检查](../workspace/admin/runtime/ops_workdir/v06-quality.log)；按实测收紧基线 complexityCount **141→140**、deepNestingCount **299→298**、fallbackChain **278→272**，未新增豁免。早于 V06 改动的 V04 中间日志不作为最终结论。
 
-- T05 契约专项 **18/18**，失败、取消、跳过均为 0，日志：[结果、hook 与持久化](../workspace/admin/runtime/ops_workdir/t05-contract.log)。包含新增回归的全仓退出码 **0**，日志：[完整运行](../test-results/test-runs/npm-2026-11-01T06-15-13-352Z.log)、[执行结果](../workspace/admin/runtime/ops_workdir/t05-all.log)。质量门禁复验 **48/48**，退出码 **0**，日志：[最终质量检查](../workspace/admin/runtime/ops_workdir/t05-final-quality.log)；rawTypeof 基线按实测 **453→452** 收紧，未新增豁免。
+- T07 迁移与监听专项 **3/3**，日志：[隔离迁移及监听](../workspace/admin/runtime/ops_workdir/t07-agent-contract.log)；前端专项 **6/6**，日志：[live/reconnect 去重](../workspace/admin/runtime/ops_workdir/t07-client.log)。最终修复后的全仓退出码 **0**，日志：完整日志 `test-results/test-runs/npm-2026-11-01T06-54-14-685Z.log` 当前已不在仓库，保留原路径记录、[执行结果](../workspace/admin/runtime/ops_workdir/t07-final-all.log)；质量门禁 **48/48**，退出码 **0**，日志：[最终质量检查](../workspace/admin/runtime/ops_workdir/t07-final-quality.log)。通过抽取冲突检查降低嵌套并合并重复导入修复门禁，未调整基线或新增豁免；隔离测试不代替生产存量抽样。
 
-- T03 最终全仓退出码 **0**，日志：[完整运行](../test-results/test-runs/npm-2026-11-01T06-01-20-471Z.log)、[执行结果](../workspace/admin/runtime/ops_workdir/t03-final-all.log)。Node 专项 **44/44**，日志：[协议与路由](../workspace/admin/runtime/ops_workdir/t03-node.log)；前端 6 文件 **59/59**，日志：[详情与展示](../workspace/admin/runtime/ops_workdir/t03-client.log)。质量门禁 **48/48**，日志：[质量检查](../workspace/admin/runtime/ops_workdir/t03-quality.log)。删除无用参数与重复规则，rawTypeof 基线按实测 **454→453** 收紧，未新增豁免。
+- T06 相关工作区 **229 项通过**，日志：[配置与 workflow 回归](../workspace/admin/runtime/ops_workdir/t06-related.log)。包含最终语言枚举复用与无用导出清理的全仓退出码 **0**，日志：完整日志 `test-results/test-runs/npm-2026-11-01T06-35-17-732Z.log` 当前已不在仓库，保留原路径记录、[执行结果](../workspace/admin/runtime/ops_workdir/t06-final-all.log)。质量门禁复验 **48/48**，退出码 **0**，日志：[最终质量检查](../workspace/admin/runtime/ops_workdir/t06-final-quality.log)。未调整基线或新增豁免。
+
+- T05 契约专项 **18/18**，失败、取消、跳过均为 0，日志：[结果、hook 与持久化](../workspace/admin/runtime/ops_workdir/t05-contract.log)。包含新增回归的全仓退出码 **0**，日志：完整日志 `test-results/test-runs/npm-2026-11-01T06-15-13-352Z.log` 当前已不在仓库，保留原路径记录、[执行结果](../workspace/admin/runtime/ops_workdir/t05-all.log)。质量门禁复验 **48/48**，退出码 **0**，日志：[最终质量检查](../workspace/admin/runtime/ops_workdir/t05-final-quality.log)；rawTypeof 基线按实测 **453→452** 收紧，未新增豁免。
+
+- T03 最终全仓退出码 **0**，日志：完整日志 `test-results/test-runs/npm-2026-11-01T06-01-20-471Z.log` 当前已不在仓库，保留原路径记录、[执行结果](../workspace/admin/runtime/ops_workdir/t03-final-all.log)。Node 专项 **44/44**，日志：[协议与路由](../workspace/admin/runtime/ops_workdir/t03-node.log)；前端 6 文件 **59/59**，日志：[详情与展示](../workspace/admin/runtime/ops_workdir/t03-client.log)。质量门禁 **48/48**，日志：[质量检查](../workspace/admin/runtime/ops_workdir/t03-quality.log)。删除无用参数与重复规则，rawTypeof 基线按实测 **454→453** 收紧，未新增豁免。
 
 - T04 最终全仓退出码 **0**，日志：[执行结果](../workspace/admin/runtime/ops_workdir/t04-final-all.log)（完整日志 `npm-2026-11-01T05-19-46-022Z.log` 当前已不在仓库，保留执行结果中的原路径记录），其中 session-protocol **296/296**、前端 **1577/1577**，包含生命周期关系拒绝无残留回归。前端专项 **27/27**，日志：[专项结果](../workspace/admin/runtime/ops_workdir/t04-client-final.log)。质量门禁 **48/48**、退出码 **0**，日志：[质量检查](../workspace/admin/runtime/ops_workdir/t04-final-quality.log)。删除旧子索引的生产及测试引用，未调整质量基线或新增豁免。
 
@@ -197,6 +216,6 @@ V01 是旧登记审计任务，不是“已确认仍存在的一大包缺陷”�
 
 ## 8. 下一步顺序
 
-1. V01–V03、V05–V07 持续销账；优先 V06 剩余项（工厂默认值契约、计时读取通道裁定、`modelLoopRound` 未加载语义、hydration/REST 快照/thinking-detail 路径）。每完成一个范围就更新所属条目，不再追加切片日记。
+1. V05 取得历史八条原始样本或可追溯来源记录后只读核验；现有范围扫描不能替代样本定位。其余 V 项列明范围已完成。
 2. 核实确认的新代码问题进入第 4 节，先明确协议与生产调用链，再完成实现及验证。
 3. O01–O03 留到部署准备与授权阶段；代码测试通过不能把它们自动关闭。

@@ -5,6 +5,7 @@
  */
 
 import { deepFreeze } from "./deep-freeze.js";
+import { bindRuntimeThresholds } from "./runtime-threshold-state.js";
 
 const SECOND_MS = 1000;
 const MINUTE_MS = 60 * SECOND_MS;
@@ -34,9 +35,58 @@ const TIME_TIERS = deepFreeze({
   micDurationSeconds: 60,
 });
 
-export const TIME_THRESHOLDS = deepFreeze({
-  diagnostics: {
-    modelAccessTimeoutMs: 2 * MINUTE_MS,
+export const DEFAULT_TIME_THRESHOLDS = deepFreeze({
+  installers: {
+    versionCheckTimeoutMs: 15000,
+  },
+  modelProxy: {
+    logRetentionMs: 60 * 60 * 1000,
+  },
+  model: {
+    emptyResponseRetryBaseDelayMs: 500,
+    transportRetryBaseDelayMs: 250,
+  },
+  hooks: {
+    defaultTimeoutMs: 3000,
+  },
+  fileMutation: {
+    lockPollIntervalMs: 10,
+    lockStaleMs: 60000,
+    lockTimeoutMs: 30000,
+  },
+  runtimeEvents: {
+    retentionDays: 7,
+    cleanupIntervalMs: 60 * 1000,
+    batchFlushMs: 50,
+  },
+  connectorInstances: {
+    postgresIdleTimeoutMs: 30000,
+    sshCommandTimeoutMs: 30000,
+    mysqlTimeoutMs: 30000,
+    postgresTimeoutMs: 30000,
+    sqliteTimeoutMs: 30000,
+  },
+  userTemplate: {
+    remoteInstanceCacheTtlMs: 60 * 60 * 1000,
+  },
+  mcp: {
+    requestTimeoutMs: 30000,
+  },
+  desktop: {
+    agentProxyStartupTimeoutMs: 60000,
+    startupPollIntervalMs: 1000,
+    crashRestartInitialDelayMs: 1000,
+    crashRestartSecondDelayMs: 3000,
+    crashRestartFinalDelayMs: 10000,
+    dependencyDetectIntervalMs: 3000,
+    dependencyDetectTimeoutMs: 90000,
+    dependencyProcessTimeoutMs: 120000,
+    dependencyProxyProbeTimeoutMs: 15000,
+    crashRestartWindowMs: 10 * 60 * 1000,
+    installerProgressIntervalMs: 30000,
+    startupProgressReplayDelayMs: 3000,
+    windowRecoveryDelayMs: 5000,
+    healthProbeTimeoutMs: 1500,
   },
   agent: {
     runTimeoutMs: TIME_TIERS.eightHoursMs,
@@ -54,6 +104,10 @@ export const TIME_THRESHOLDS = deepFreeze({
   },
 
   tools: {
+    nativeBrowserMaxWaitMs: 30000,
+    nativeCapabilityGraceMs: 5000,
+    dockerExecuteTimeoutMs: 10000,
+    nativeScriptForceKillGraceMs: 2000,
     executeScriptTimeoutMs: TIME_TIERS.fiveMinutesMs,
     browserDevtoolsPortPollIntervalMs: 250,
     imagesAsyncPollIntervalMs: TIME_TIERS.fiveSecondsMs,
@@ -65,6 +119,18 @@ export const TIME_THRESHOLDS = deepFreeze({
   },
 
   agentProxy: {
+    fixedWindowMs: 60000,
+    upstreamCloseGraceMs: 2000,
+    reconnectPollIntervalMs: 25,
+    channelRetentionMs: 10 * 60 * 1000,
+    apiKeyRetentionMs: 24 * 60 * 60 * 1000,
+    cleanupIntervalMs: 15000,
+    requestIdTtlMs: 11 * 60 * 1000,
+    httpUpstreamTimeoutMs: 60000,
+    httpRateLimitWindowMs: 60000,
+    wsRateLimitWindowMs: 60000,
+    ideWsRateLimitWindowMs: 60000,
+    ideHttpRateLimitWindowMs: 60000,
     webSocketHeartbeatIntervalMs: TIME_TIERS.standardCommandMs,
     webSocketHeartbeatTimeoutMs: TIME_TIERS.startupMs,
     dataPlaneMetricsIntervalMs: 10000,
@@ -85,11 +151,6 @@ export const TIME_THRESHOLDS = deepFreeze({
     touchPersistIntervalMs: TIME_TIERS.standardCommandMs,
     portProbeTimeoutMs: TIME_TIERS.fastProbeMs,
     waitProbeTimeoutMs: 350,
-  },
-
-  web: {
-    browserDefaultTimeoutMs: TIME_TIERS.standardCommandMs,
-    browserNetworkIdleTimeoutMs: 4500,
   },
 
   harness: {
@@ -118,6 +179,8 @@ export const TIME_THRESHOLDS = deepFreeze({
   },
 
   client: {
+    micDurationRefreshIntervalMs: 1000,
+    thinkingElapsedRefreshIntervalMs: 1000,
     chatMessageNavigatorScrollLockMs: 1400,
     wsReconnectTimeoutMs: 15000,
     sessionLogReconnectBaseDelayMs: TIME_TIERS.oneSecondMs,
@@ -134,6 +197,7 @@ export const TIME_THRESHOLDS = deepFreeze({
   },
 
   service: {
+    httpAdmissionWindowMs: 60000,
     apiKeyTtlMs: TIME_TIERS.oneDayMs,
     orphanedTurnRecoveryGraceMs: TIME_TIERS.standardCommandMs,
     userInteractionTimeoutMs: 10 * MINUTE_MS,
@@ -148,8 +212,4 @@ export const TIME_THRESHOLDS = deepFreeze({
   },
 });
 
-export function resolveUserInteractionTimeoutMs(env = process.env) {
-  const configured = Number(env?.NOOBOT_USER_INTERACTION_TIMEOUT_MS);
-  if (Number.isFinite(configured) && configured >= 1000) return Math.floor(configured);
-  return TIME_THRESHOLDS.service.userInteractionTimeoutMs;
-}
+export const TIME_THRESHOLDS = bindRuntimeThresholds("time", DEFAULT_TIME_THRESHOLDS);

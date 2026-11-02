@@ -10,6 +10,29 @@ import assert from "node:assert/strict";
 import { normalizeMessageEntity } from "../../src/session/entities.js";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
+test("message normalization rejects damaged identities instead of trimming or omitting them", () => {
+  for (const field of ["messageUid", "userMessageId"]) {
+    for (const value of [" padded ", "", null, 12]) {
+      const source = {
+        attachments: [],
+        sessionId: "s_fixture",
+        role: "user",
+        content: "hello",
+        messageUid: "historical-uid",
+        userMessageId: "client-id",
+        messageOrigin: "natural",
+        ts: TEST_MESSAGE_TS,
+        [field]: value,
+      };
+      const before = structuredClone(source);
+      assert.throws(() => normalizeMessageEntity(source), {
+        code: "SESSION_MESSAGE_IDENTITY_INVALID",
+      });
+      assert.deepEqual(source, before);
+    }
+  }
+});
+
 test("normalizeMessageEntity preserves the canonical internal control message type", () => {
   const normalized = normalizeMessageEntity({
     attachments: [],

@@ -11,7 +11,7 @@ import { isMutationRef } from "@noobot/file-mutation-protocol";
 import { validateUserInterjectionFact } from "./thinking-detail-content-fact.js";
 import { decodeToolResultText, isToolResultError } from "./tool-result.js";
 import { MESSAGE_REMOVED_FIELD_NAME } from "@noobot/session-protocol";
-import { isCanonicalText, isPlainObject, text } from "@noobot/shared/value";
+import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
 
 export const MESSAGE_EVENT_WIRE_EVENT = "message_event";
 export const MESSAGE_EVENT_SEQUENCE_DOMAIN = "message-event";
@@ -159,10 +159,11 @@ export function resolveMessageEventPresentationId(payload) {
   return payload.presentationMessageId;
 }
 
-export function resolveMessageViewKey(message = {}) {
-  return text(message?.role) === "assistant"
-    ? text(message?.presentationMessageId)
-    : text(message?.messageUid);
+export function resolveMessageViewKey(message) {
+  const key = message.role === "assistant" ? message.presentationMessageId : message.messageUid;
+  if (key === undefined || key === "") return "";
+  if (!isCanonicalText(key)) throw new TypeError("message view key must be canonical text");
+  return key;
 }
 
 const NONCANONICAL_PAYLOAD_FIELDS = Object.freeze([
@@ -184,6 +185,11 @@ function validatePayloadEnvelope(value) {
   );
   if (!isCanonicalText(value.presentationMessageId)) errors.push("missing_presentation_message_id");
   if (!isCanonicalText(value.dialogProcessId)) errors.push("missing_dialog_process_id");
+  for (const field of ["modelAlias", "modelName"]) {
+    if (value[field] !== undefined && typeof value[field] !== "string") {
+      errors.push(`invalid_${field}`);
+    }
+  }
   for (const field of ["modelMessageId", "workflowRunId", "nodeExecutionId"]) {
     if (value[field] !== undefined && !isCanonicalText(value[field])) {
       errors.push(`invalid_${field}`);
@@ -346,8 +352,7 @@ export function projectMessageEventContent(event) {
 
 export function projectMessageEventMetadata(event) {
   const metadata = {};
-  const modelAlias = text(event.modelAlias);
-  const modelName = text(event.modelName);
+  const { modelAlias, modelName } = event;
   if (modelAlias) metadata.modelAlias = modelAlias;
   if (modelName) metadata.modelName = modelName;
   return Object.freeze(metadata);
@@ -356,10 +361,10 @@ export function projectMessageEventMetadata(event) {
 export function projectAuthoritativeFinalMessage(event) {
   if (!isAuthoritativeFinalContentEvent(event)) return Object.freeze({});
   const projection = { content: event.text };
-  if (Array.isArray(event.attachments) && event.attachments.length > 0) {
+  if (event.attachments?.length > 0) {
     projection.attachments = Object.freeze([...event.attachments]);
   }
-  if (Array.isArray(event.transferEnvelopes) && event.transferEnvelopes.length > 0) {
+  if (event.transferEnvelopes?.length > 0) {
     projection.transferEnvelopes = Object.freeze([...event.transferEnvelopes]);
   }
   return Object.freeze(projection);

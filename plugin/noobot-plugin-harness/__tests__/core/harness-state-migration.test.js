@@ -51,7 +51,7 @@ test("explicit hook-boundary migration normalizes plan-update counters and pendi
   const holder = ensureHarnessBucket(ctx);
   assert.ok(holder);
   const { state } = holder;
-  assert.equal(state.counters.planUpdateAttempts, 3);
+  assert.equal(Object.hasOwn(state.counters, "planUpdateAttempts"), false);
   assert.equal(state.counters.planRevisionAttempts, 3);
   assert.equal(state.counters.planRefinementAttempts, 0);
   assert.equal(state.counters.lastPlanningCounterTurn, 0);
@@ -67,7 +67,7 @@ test("explicit hook-boundary migration normalizes plan-update counters and pendi
   assert.equal(state.flags.planUpdateCapturePending, false);
   assert.equal("planRevisionCapturePending" in state.flags, false);
   assert.equal(holder.bucket.__harnessBucketVersion, HARNESS_BUCKET_VERSION);
-  assert.equal(state.__harnessBucketVersion, HARNESS_BUCKET_VERSION);
+  assert.equal(Object.hasOwn(state, "__harnessBucketVersion"), false);
 });
 
 test("v4 to v5 migration removes bucket.taskChecklist fields without rewriting plan-update state", () => {
@@ -158,7 +158,13 @@ test("v5 to v6 migration removes duplicated fields from persisted acceptance rep
     fromVersion: 5,
     toVersion: HARNESS_BUCKET_VERSION,
   });
-  for (const report of [lastAcceptanceReport, listedReport, reviewEmbedded, lastReviewEmbedded]) {
+  const migrated = ensureHarnessBucket(ctx).bucket;
+  for (const report of [
+    migrated.lastAcceptanceReport,
+    ...migrated.acceptanceReports,
+    migrated.reviewReports[0].acceptanceReport,
+    migrated.lastReviewReport.acceptanceReport,
+  ]) {
     assert.equal("taskChecklist" in report, false);
     assert.equal("planText" in report.plan, false);
     assert.equal(report.planText, "1. 主计划");
@@ -212,7 +218,12 @@ test("v6 to v7 migration removes dead checklist item fields and keeps index unto
     fromVersion: 6,
     toVersion: HARNESS_BUCKET_VERSION,
   });
-  for (const report of [lastAcceptanceReport, listedReport, reviewEmbedded]) {
+  const migrated = ensureHarnessBucket(ctx).bucket;
+  for (const report of [
+    migrated.lastAcceptanceReport,
+    ...migrated.acceptanceReports,
+    migrated.reviewReports[0].acceptanceReport,
+  ]) {
     assert.deepEqual(report.finalPlanChecklist, [
       { index: 1.1, mainStepIndex: 1, isMainStep: false, task: "子计划", status: "pending" },
     ]);
@@ -288,7 +299,7 @@ test("v8 to v9 migration removes dead capture and final-output flags", () => {
   assert.equal(holder.state.flags.planUpdateCapturePending, false);
 });
 
-test("ensureHarnessBucket keeps state version as alias of bucket version", () => {
+test("ensureHarnessBucket keeps version only on bucket after migration", () => {
   const ctx = {
     agentContext: {
       bindings: {
@@ -309,10 +320,8 @@ test("ensureHarnessBucket keeps state version as alias of bucket version", () =>
   migrateHarnessBucket(ctx);
   const holder = ensureHarnessBucket(ctx);
   assert.ok(holder);
-  assert.equal(holder.state.__harnessBucketVersion, HARNESS_BUCKET_VERSION);
-  holder.state.__harnessBucketVersion = HARNESS_BUCKET_VERSION;
   assert.equal(holder.bucket.__harnessBucketVersion, HARNESS_BUCKET_VERSION);
-  assert.equal(holder.state.__harnessBucketVersion, HARNESS_BUCKET_VERSION);
+  assert.equal(Object.hasOwn(holder.state, "__harnessBucketVersion"), false);
 });
 
 function createV9Ctx(extra = {}) {
@@ -380,7 +389,7 @@ test("v9 to v10 migration drops a non-object lastAcceptanceReport and keeps a pl
   assert.deepEqual(ensureHarnessBucket(plain).bucket.lastAcceptanceReport, report);
 });
 
-test("current-version bucket missing phase reports or state sections is refilled", () => {
+test("current-version bucket missing phase reports or state sections is rejected without repair", () => {
   const ctx = {
     agentContext: {
       bindings: {
@@ -400,8 +409,9 @@ test("current-version bucket missing phase reports or state sections is refilled
     },
   };
   ensureTestAgentExecutionScope(ctx);
-  const { bucket, state } = ensureHarnessBucket(ctx);
-  assert.deepEqual(bucket.phaseAcceptanceReports, []);
-  assert.equal(typeof state.flags, "object");
-  assert.equal(typeof state.signals, "object");
+  const bucket = ctx.agentContext.bindings.extensions.harness;
+  const before = structuredClone(bucket);
+  assert.throws(() => ensureHarnessBucket(ctx), /invalid_harness_state/);
+  assert.throws(() => migrateHarnessBucket(ctx), /invalid_harness_state/);
+  assert.deepEqual(bucket, before);
 });

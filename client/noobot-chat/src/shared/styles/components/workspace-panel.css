@@ -1,5 +1,6 @@
 .noobot-workspace-panel {
   display: flex;
+  min-width: 0;
   flex-direction: column;
   overflow: hidden;
   background: color-mix(in srgb, var(--noobot-panel-bg) 64%, transparent);

@@ -12,6 +12,10 @@ import {
 
 test("message summary keeps empty string content instead of dropping the field", () => {
   const summary = buildMessageSummary({
+    sessionId: "s1",
+    messageUid: "sm_1",
+    modelMessageId: "mm_1",
+    presentationMessageId: "pm-1",
     attachments: [],
     role: "assistant",
     type: "message",
@@ -22,6 +26,10 @@ test("message summary keeps empty string content instead of dropping the field",
 
 test("display summary of a mid-turn tool_call assistant message keeps string content", () => {
   const summary = buildDisplayMessageSummary({
+    sessionId: "s1",
+    messageUid: "sm_1",
+    modelMessageId: "mm_1",
+    presentationMessageId: "pm-1",
     attachments: [],
     role: "assistant",
     type: "message",
@@ -35,6 +43,10 @@ test("display summary of a mid-turn tool_call assistant message keeps string con
 
 test("display summary of a tool_call promoted by activity keeps empty string content", () => {
   const summary = buildDisplayMessageSummary({
+    sessionId: "s1",
+    messageUid: "sm_1",
+    modelMessageId: "mm_1",
+    presentationMessageId: "pm-1",
     attachments: [],
     role: "assistant",
     type: "tool_call",

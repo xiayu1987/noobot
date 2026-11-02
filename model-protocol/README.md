@@ -1,3 +1,55 @@
 # @noobot/model-protocol
 
 Versioned, side-effect-free model request, response, policy and host-port contracts.
+
+Tool execution consumes only canonical `output.toolCalls`. For the Responses API,
+the complete terminal `responseOutput` is authoritative for call order, identity and
+arguments. Streaming deltas serve progress presentation and must neither override
+nor merge with terminal arguments. Function-call arguments must decode to a plain
+object; custom-tool input maps to `{ input }`, and computer-call action maps to
+`computer_use` with `{ action }`. Provider-managed calls do not execute as host tools.
+Invalid terminal arguments are classified as protocol-invalid calls without falling
+back to streaming arguments.
+
+Each provider adapter must declare its response source through
+`resolveResponseSource({ modelSpec })`, returning `MODEL_RESPONSE_SOURCE.MESSAGE` or
+`MODEL_RESPONSE_SOURCE.RESPONSES`; normalization never infers the source from response
+shape. A `RESPONSES` result requires terminal `output` and `status`; its `finishReason`
+is `status`, or `incomplete_details.reason` when the status is `incomplete`, and any
+missing fact raises `ModelProtocolError`. A `MESSAGE` result takes `finishReason` from
+`finish_reason`. Streaming tool-call mismatch recovery applies only to `MESSAGE` results.
+
+Invocation observation uses `MODEL_INVOCATION_EVENT`. Each failed provider attempt is
+recorded in `execution.attempts`; a terminal invocation failure emits exactly one
+`FAILED` event with the protocol-projected attempt count, error code and error kind.
+Retryable attempts do not emit terminal failure. Aborted invocations emit `CANCELLED`
+instead of `FAILED`; successful invocations emit `COMPLETED`.
+
+Observation starts after request validation and provider resolution. Failures in
+credential resolution, response-source resolution, client creation/decorating or
+operation setup emit `FAILED` with zero attempts when no provider attempt has begun;
+they never fabricate a provider attempt. Once started, transport and response
+normalization failures record `FAILED` attempts through the same recording path.
+Terminal `failedAttempts` is projected from those records and preserves each attempt's
+own number, category, error code and error kind. Intermediate failures followed by
+success remain in `execution.attempts` and emit only `COMPLETED` as the terminal event.
+Cancellation does not record a failed attempt and never emits `FAILED`.
+An error-classifier exception or invalid result is explicitly classified as
+`classification`, with `classificationError` retaining the classifier error text;
+it cannot trigger transport or streaming-mode retries. The original invocation
+exception is rethrown unchanged. Classification is evaluated once per error per invocation.
+`classifyModelFailure` is the only classification entry and always returns a frozen
+`{ kind, retryable, classificationError }`. Only `ModelProtocolError` carries a declared
+classification; every other error is classified by the adapter's `classifyError`, whose
+`kind` must be a `MODEL_ERROR_KIND` other than `classification` and whose `retryable` must
+be boolean, otherwise the failure is classified as `classification`.
+The model host alone mints `invocation.requestId` and `invocation.invocationId` per call;
+callers only describe `flow`, `purpose`, `domain` and `contextSequencePolicy`. Session scope is
+validated as canonical text by `requireInvocationScope`; the executor validates and never
+generates identity. Retry `maxAttempts` and `baseDelayMs` are normalized only by
+`normalizeRetryPolicy`.
+`request.metadata` only allows `context`, bound to `contextSequencePolicy`:
+`checkpoint_append_only` requires a non-negative integer `context.summaryCheckpointRevision`;
+every other policy must not carry it.
+Context observation uses `MODEL_CONTEXT_TRACE` (`EVENT`, `INVOKE_STAGE`, `INVOKE_AUTHORITY`,
+`PROTOCOL_VERSION`); modules must not restate these literals.

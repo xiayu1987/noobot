@@ -3,6 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { CONNECTOR_FAILURE_CODE } from "@noobot/connector-protocol";
 import { text } from "@noobot/shared/value";
 import { connectorFailure, errorMessage, loadDriverModule } from "../channel-result.js";
@@ -12,8 +14,8 @@ import {
   resolveDatabaseConnection,
 } from "./common-db-connector-channel.js";
 
-const MYSQL_TIMEOUT_MS = 30000;
-const MYSQL_POOL_LIMIT = 4;
+const MYSQL_TIMEOUT_MS = TIME_THRESHOLDS.connectorInstances.mysqlTimeoutMs;
+const MYSQL_POOL_LIMIT = QUANTITY_THRESHOLDS.connectorInstances.mysqlPoolLimit;
 const mysqlPools = new Map();
 const abortedFailure = () =>
   connectorFailure(CONNECTOR_FAILURE_CODE.ABORTED, "mysql query aborted");

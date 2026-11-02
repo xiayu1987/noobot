@@ -74,7 +74,11 @@ export function createNodeResult(nodeName, overrides = {}) {
     dialogProcessId: `dialog-${nodeName}`,
     result: {
       answer: `answer-${nodeName}`,
-      messages: [{ role: "assistant", content: `result-${nodeName}` }],
+      traces: [],
+      dialogProcessId: `dialog-${nodeName}`,
+      messages: [
+        { messageUid: `message-${nodeName}`, role: "assistant", content: `result-${nodeName}` },
+      ],
     },
     ...overrides,
   };

@@ -7,7 +7,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { MESSAGE_ORIGIN, isDialogUserMessageRecord } from "@noobot/session-protocol";
+import { canonicalSessionMessages } from "../helpers/canonical-session-messages.js";
 import {
   buildSessionArtifactFileMap,
   readSessionArtifact,
@@ -19,7 +19,6 @@ import {
   applySessionMessageFacts,
   createTestSessionRequiredFields,
 } from "../helpers/session-message-facts.js";
-import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 import { TEST_STORAGE_SERVICE } from "../helpers/storage-service.js";
 
 export const TEST_TURN = "turn-1";
@@ -47,41 +46,8 @@ export async function buildPersistedDisplaySummary(sessionPayload) {
   return buildSessionDisplaySummary(await persistSessionManifest(sessionPayload));
 }
 
-function roleIdentityOf(message, index, turnScopeId) {
-  if (message.role === "assistant") {
-    return {
-      modelMessageId: `mm_fixture_${index + 1}`,
-      presentationMessageId: `pm_${turnScopeId}`,
-    };
-  }
-  if (message.role === "tool") return { presentationMessageId: `pm_${turnScopeId}` };
-  if (message.role === "user" && !message.injectedMessage) {
-    return { userMessageId: `um_fixture_${index + 1}` };
-  }
-  return {};
-}
-
-function entityContractOf(message) {
-  return isDialogUserMessageRecord(message) ? { messageOrigin: MESSAGE_ORIGIN.NATURAL } : {};
-}
-
 export function canonicalMessages(messages, sessionId) {
-  return messages.map((message, index) => {
-    const turnScopeId = Object.hasOwn(message, "turnScopeId")
-      ? message.turnScopeId
-      : `turn-fixture-${index + 1}`;
-    return {
-      sessionId,
-      messageUid: `sm_fixture_${index + 1}`,
-      ts: TEST_MESSAGE_TS,
-      attachments: [],
-      ...roleIdentityOf(message, index, turnScopeId),
-      ...entityContractOf(message),
-      dialogProcessId: `dialog-${turnScopeId}`,
-      turnScopeId,
-      ...message,
-    };
-  });
+  return canonicalSessionMessages(messages, sessionId);
 }
 
 export async function writeSessionArtifact({ sessionPayload, ...options }) {

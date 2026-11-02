@@ -8,7 +8,7 @@ export const FILE_TOOL_SCHEMA = {
   read_file: {
     description: {
       key: "tools.file.readDescription",
-      text: "读取文本文件内容（默认带行号）。",
+      text: "读取文本文件；numberedContent 每行为“行号\\t原文”，行号前缀不属于原文。",
     },
     params: {
       filePath: {
@@ -22,10 +22,6 @@ export const FILE_TOOL_SCHEMA = {
       endLine: {
         key: "tools.file.readEndLineField",
         text: "结束行（1-based），超过文件末尾按末尾截止。",
-      },
-      includeLineNumbers: {
-        key: "tools.file.readIncludeLineNumbersField",
-        text: "content 是否带行号。",
       },
       maxLines: {
         key: "tools.file.readMaxLinesField",
@@ -54,13 +50,9 @@ export const FILE_TOOL_SCHEMA = {
   search: {
     description: {
       key: "tools.search.description",
-      text: "搜索文件或文本，返回命中行与上下文。",
+      text: "在工作区文件中搜索，返回命中行与上下文。",
     },
     params: {
-      source: {
-        key: "tools.search.fieldSource",
-        text: "搜索来源：files 或 text。",
-      },
       query: {
         key: "tools.search.fieldQuery",
         text: "必填且不能为空的关键词或正则；不要使用空字符串调用 search。",
@@ -75,15 +67,11 @@ export const FILE_TOOL_SCHEMA = {
       },
       path: {
         key: "tools.search.fieldPath",
-        text: "搜索的文件或目录；仅 source=files 时生效，source=text 时该字段不参与检索。",
+        text: "搜索的文件或目录。",
       },
       glob: {
         key: "tools.search.fieldGlob",
-        text: "文件匹配，例如 *.js；仅 source=files 时生效，source=text 时该字段不参与检索。",
-      },
-      text: {
-        key: "tools.search.fieldText",
-        text: "待搜索文本；source=text 时必填且不能为空，缺失会直接报错而不是返回空命中。",
+        text: "文件匹配，例如 *.js。",
       },
       contextLines: {
         key: "tools.search.fieldContextLines",
@@ -99,8 +87,6 @@ export const FILE_TOOL_SCHEMA = {
       },
     },
     texts: {
-      "tools.search.textRequired":
-        "source=text 时必须提供非空的 text；如需按路径搜索请改用 source=files。",
       "tools.search.pathKindUnsupported": "path 必须是文件或目录。",
     },
   },

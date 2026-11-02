@@ -11,6 +11,7 @@ import {
   assertToolResultObject,
   decodeToolResultText,
   encodeToolResultObject,
+  projectToolResultExitCode,
   toolResultOverflow,
 } from "../src/tool-result.js";
 
@@ -109,4 +110,16 @@ test("tool result objects encode only when they satisfy the contract", () => {
   assert.equal(encodeToolResultObject({ ok: true }), '{"ok":true}');
   assert.throws(() => encodeToolResultObject(null), rejects(TOOL_RESULT_ERROR.NOT_OBJECT));
   assert.throws(() => assertToolResultObject({ ok: 1 }), rejects(TOOL_RESULT_ERROR.OK_NOT_BOOLEAN));
+});
+
+test("exit code projection reads only completed script exits", () => {
+  assert.equal(projectToolResultExitCode({ ok: true, termination: "exited", exitCode: 0 }), 0);
+  assert.equal(projectToolResultExitCode({ ok: true, termination: "exited", exitCode: 1 }), 1);
+  assert.equal(projectToolResultExitCode({ ok: true }), null);
+  const legacyFailure = { ok: false, error: "x", code: "E", termination: "exited", exitCode: 2 };
+  assert.equal(projectToolResultExitCode(legacyFailure), null);
+  assert.throws(
+    () => projectToolResultExitCode({ ok: true, termination: "exited" }),
+    /tool_result_exited_exit_code_required/,
+  );
 });

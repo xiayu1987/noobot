@@ -5,10 +5,12 @@
  */
 import { HARNESS_BUCKET_VERSION } from "../capabilities/handlers/shared/constants.js";
 import { isPlainObject, text } from "@noobot/shared/value";
+import { assertHarnessBucket, initializeLegacyHarnessBucket } from "./bucket-contract.js";
 
 function objectField(target = {}, key = "") {
   const value = target?.[key];
   if (isPlainObject(value)) return value;
+  if (value !== undefined) throw new TypeError(`invalid_harness_object:${key}`);
   target[key] = {};
   return target[key];
 }
@@ -150,7 +152,8 @@ function dropMalformedLastAcceptanceReport(bucket = {}) {
 }
 
 function ensurePlanAcceptanceStatusMap(bucket = {}) {
-  const map = objectField(bucket, "planAcceptanceStatusByPlanId");
+  if (!isPlainObject(bucket.planAcceptanceStatusByPlanId)) bucket.planAcceptanceStatusByPlanId = {};
+  const map = bucket.planAcceptanceStatusByPlanId;
   for (const [planId, entry] of Object.entries(map)) {
     if (!isPlainObject(entry)) delete map[planId];
   }
@@ -171,11 +174,42 @@ const MIGRATION_STEPS = Object.freeze([
       dropMalformedLastAcceptanceReport(bucket);
     },
   },
+  {
+    toVersion: 11,
+    migrate: ({ state }) => {
+      delete state.__harnessBucketVersion;
+      delete objectField(state, "counters").planUpdateAttempts;
+    },
+  },
+  { toVersion: 12, migrate: ({ bucket }) => initializeLegacyHarnessBucket(bucket) },
+  {
+    toVersion: 13,
+    migrate: ({ bucket }) => {
+      for (const field of ["planRevisions", "planRefinementRecords"]) {
+        if (bucket[field] === undefined) bucket[field] = [];
+      }
+    },
+  },
+  {
+    toVersion: 14,
+    migrate: ({ state }) => {
+      delete objectField(state, "counters").summaryRounds;
+    },
+  },
 ]);
 
 export function migrateHarnessBucket(ctx = {}) {
-  const bucket = resolveHarnessBucket(ctx);
-  if (!bucket) return { migrated: false, fromVersion: null, toVersion: null };
+  const persistedBucket = resolveHarnessBucket(ctx);
+  if (!persistedBucket) return { migrated: false, fromVersion: null, toVersion: null };
+  if (persistedBucket.__harnessBucketVersion === HARNESS_BUCKET_VERSION) {
+    assertHarnessBucket(persistedBucket);
+    return {
+      migrated: false,
+      fromVersion: HARNESS_BUCKET_VERSION,
+      toVersion: HARNESS_BUCKET_VERSION,
+    };
+  }
+  const bucket = structuredClone(persistedBucket);
   const state = objectField(bucket, "state");
   const bucketVersion = Number(bucket.__harnessBucketVersion);
   const stateVersion = Number(state.__harnessBucketVersion);
@@ -185,6 +219,7 @@ export function migrateHarnessBucket(ctx = {}) {
       ? stateVersion
       : 0;
   if (fromVersion === HARNESS_BUCKET_VERSION) {
+    assertHarnessBucket(bucket);
     return { migrated: false, fromVersion, toVersion: HARNESS_BUCKET_VERSION };
   }
   if (fromVersion < 0 || fromVersion > HARNESS_BUCKET_VERSION) {
@@ -195,5 +230,8 @@ export function migrateHarnessBucket(ctx = {}) {
   }
   delete state.__harnessBucketVersion;
   bucket.__harnessBucketVersion = HARNESS_BUCKET_VERSION;
+  assertHarnessBucket(bucket);
+  for (const key of Object.keys(persistedBucket)) delete persistedBucket[key];
+  Object.assign(persistedBucket, bucket);
   return { migrated: true, fromVersion, toVersion: HARNESS_BUCKET_VERSION };
 }

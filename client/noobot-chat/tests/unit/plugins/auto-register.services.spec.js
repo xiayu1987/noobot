@@ -82,6 +82,7 @@ describe("external frontend plugin service boundary", () => {
 
   beforeEach(async () => {
     vi.resetModules();
+    await import("@noobot/shared/testing/runtime-params");
     ({ registerExternalFrontendPlugins } = await import("../../../src/plugins/auto-register.js"));
     captured.contexts.length = 0;
     captured.activate = null;
