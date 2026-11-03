@@ -77,7 +77,6 @@ export function projectTurnRuntimeView(sessionId, turn) {
   const displayState = turnRuntimeDisplayState(turn);
   return {
     sessionId: normalizedSessionId,
-    parentSessionId: text(turn?.parentSessionId),
     turnScopeId: text(turn?.turnScopeId),
     dialogProcessId: text(turn?.dialogProcessId),
     action: text(turn?.action),
@@ -136,7 +135,6 @@ export function selectTurnMessageRuntime(
     backendState: turn.backendState || "",
     displayState: turnRuntimeDisplayState(turn),
     sessionId: turn.sessionId,
-    parentSessionId: turn.parentSessionId || "",
     turnScopeId: turn.turnScopeId,
     dialogProcessId: turn.dialogProcessId || "",
     source: turn.source || "",

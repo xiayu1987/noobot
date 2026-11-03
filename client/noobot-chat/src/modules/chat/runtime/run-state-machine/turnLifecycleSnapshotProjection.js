@@ -98,7 +98,6 @@ function projectSnapshotIdentity(source, sessionId, turnScopeId) {
     turnScopeId,
     dialogProcessId: source.dialogProcessId,
     presentationMessageId: source.presentationMessageId,
-    parentSessionId: source.parentSessionId,
     continuationSource: source.continuationSource,
     continuedByTurnScopeId: source.continuedByTurnScopeId,
   };

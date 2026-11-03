@@ -13,14 +13,13 @@ import {
 
 const childTurn = {
   sessionId: "child-1",
-  parentSessionId: "parent-1",
   dialogProcessId: "dp-1",
   turnScopeId: "t-1",
   state: "running",
 };
 
 describe("turnRuntimeStoreDiagnostics identity", () => {
-  it("attributes a child turn to the child session and declares the parent explicitly", () => {
+  it("attributes a child turn to the child session without copying the parent session", () => {
     const builders = [
       buildTurnEvaluatedDiagnostics({
         reducer: "applyTurnRuntimeEvent",
@@ -34,27 +33,26 @@ describe("turnRuntimeStoreDiagnostics identity", () => {
     for (const diagnostics of builders) {
       expect(diagnostics).toMatchObject({
         sessionId: "child-1",
-        parentSessionId: "parent-1",
         dialogProcessId: "dp-1",
         turnScopeId: "t-1",
       });
       expect(diagnostics).not.toHaveProperty("nodeSessionId");
+      expect(diagnostics).not.toHaveProperty("parentSessionId");
       const record = buildLazyDebugRecord("turn-runtime-diagnostics", "e", diagnostics);
       expect(record.sessionId).toBe("child-1");
-      expect(record.parentSessionId).toBe("parent-1");
+      expect(record).not.toHaveProperty("parentSessionId");
     }
   });
 
   it("takes identity wholly from the input when the reducer resolved no turn", () => {
     const diagnostics = buildTurnEvaluatedDiagnostics({
       reducer: "applyTurnLifecycleEnvelope",
-      input: { sessionId: "child-2", parentSessionId: "parent-2", turnScopeId: "t-2" },
+      input: { sessionId: "child-2", turnScopeId: "t-2" },
       result: { turn: null, applied: false, reason: "invalid_authoritative_envelope" },
       applied: false,
     });
     expect(diagnostics).toMatchObject({
       sessionId: "child-2",
-      parentSessionId: "parent-2",
       dialogProcessId: "",
       turnScopeId: "t-2",
       applied: false,
@@ -65,13 +63,12 @@ describe("turnRuntimeStoreDiagnostics identity", () => {
   it("never mixes identity fields across the turn and the input", () => {
     const diagnostics = buildTurnEvaluatedDiagnostics({
       reducer: "applyTurnRuntimeEvent",
-      input: { sessionId: "s-in", parentSessionId: "p-in", dialogProcessId: "dp-in" },
+      input: { sessionId: "s-in", dialogProcessId: "dp-in" },
       result: { turn: { sessionId: "s-turn", turnScopeId: "t-turn" } },
       applied: true,
     });
     expect(diagnostics).toMatchObject({
       sessionId: "s-turn",
-      parentSessionId: "",
       dialogProcessId: "",
       turnScopeId: "t-turn",
     });

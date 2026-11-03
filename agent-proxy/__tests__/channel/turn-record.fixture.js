@@ -17,7 +17,6 @@ export function snapshotTurnRecord(fields) {
   const terminal = isTerminalTurnState(state);
   const timestamp = "2026-08-17T00:00:00.000Z";
   return {
-    parentSessionId: "",
     executionId: deriveAgentExecutionId({ turnScopeId }),
     executionKind: "agent",
     rootExecutionId: deriveAgentExecutionId({ turnScopeId }),

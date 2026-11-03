@@ -65,6 +65,16 @@ function collectTurnTimingErrors(turnTimings) {
   return errors;
 }
 
+function collectTurnLifecycleSnapshotErrors(entry) {
+  const validation = validateTurnLifecycleSnapshot(entry.turnLifecycleSnapshot);
+  if (!validation.valid) {
+    return validation.errors.map((error) => `invalid_turn_lifecycle_snapshot:${error}`);
+  }
+  return entry.turnLifecycleSnapshot.sessionId === entry.sessionId
+    ? []
+    : ["snapshot_lifecycle_session_mismatch"];
+}
+
 function collectAvailableDetailEntryErrors(entry) {
   const errors = collectExactFieldErrors(entry, AVAILABLE_DETAIL_ENTRY_FIELDS);
   if (!isCanonicalText(entry.sessionId)) errors.push("invalid_session_id");
@@ -77,12 +87,7 @@ function collectAvailableDetailEntryErrors(entry) {
   if (!isCanonicalText(entry.title)) errors.push("invalid_title");
   if (!isSessionAggregateVersion(entry.aggregateVersion)) errors.push("invalid_aggregate_version");
   errors.push(...collectTurnTimingErrors(entry.turnTimings));
-  if (
-    !validateTurnLifecycleSnapshot(entry.turnLifecycleSnapshot).valid ||
-    entry.turnLifecycleSnapshot.sessionId !== entry.sessionId
-  ) {
-    errors.push("invalid_turn_lifecycle_snapshot");
-  }
+  errors.push(...collectTurnLifecycleSnapshotErrors(entry));
   if (
     collectSessionArtifactEventIdentityErrors(entry.sessionArtifactEvents, entry.sessionId).length
   ) {

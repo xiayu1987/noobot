@@ -51,7 +51,6 @@ function envelopeCoordinateDecision(existing, envelope, fingerprint) {
 function commitEnvelopeProjection(registry, envelope, result, { fingerprint, executionRegistry }) {
   if (result.turn) {
     Object.assign(result.turn, {
-      parentSessionId: envelope.parentSessionId,
       presentationMessageId: envelope.presentationMessageId,
       authoritativeEventId: envelope.eventId,
       authoritativeEventFingerprint: fingerprint,

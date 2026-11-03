@@ -15,10 +15,10 @@ import {
   selectExecution,
 } from "../run-state-machine/turnRuntimeRegistry.js";
 
-function buildStopCommand({ target, executionId }) {
+function buildStopCommand({ channel, target, executionId }) {
   return createTurnStopCommand({
     identity: buildAgentCommandIdentity(AGENT_COMMAND.STOP, {
-      channel: target,
+      channel,
       turn: { turnScopeId: target.turnScopeId },
     }),
     concurrency: { expectedTurnRevision: target.revision },
@@ -104,7 +104,11 @@ export function stopActiveTurn({
   }
   return requestStop({
     target: turnRuntime,
-    stopPayload: buildStopCommand({ target: turnRuntime, executionId: "" }),
+    stopPayload: buildStopCommand({
+      channel: currentSession,
+      target: turnRuntime,
+      executionId: "",
+    }),
     chatWebSocketClient,
     applyRunStateEvent,
   });
@@ -123,7 +127,11 @@ export function stopExecution({
   }
   return requestStop({
     target: execution,
-    stopPayload: buildStopCommand({ target: execution, executionId: execution.executionId }),
+    stopPayload: buildStopCommand({
+      channel: execution,
+      target: execution,
+      executionId: execution.executionId,
+    }),
     chatWebSocketClient,
     applyRunStateEvent,
   });

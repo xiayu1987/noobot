@@ -57,6 +57,7 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
     const { engine, deps, canStop, activeSession, turnRuntimeRegistry } = createHarness({
       sessionId: "backend-stop-payload",
     });
+    activeSession.value.parentSessionId = "parent-session";
     activateRuntimeTurn({
       turnRuntimeRegistry,
       sessionId: "backend-stop-payload",

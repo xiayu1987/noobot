@@ -42,7 +42,11 @@ import {
 import { isTerminalTurnState, TURN_PHASE, TURN_STATE } from "./lifecycle/turn-state.js";
 import { isSessionCaller } from "@noobot/shared/session-caller";
 import { collectTurnReplacementTombstoneErrors } from "./lifecycle/turn-replacement.js";
-import { snapshotReplacedTurn, snapshotTurn } from "./lifecycle/turn-projection.js";
+import {
+  collectSnapshotTurnFieldErrors,
+  snapshotReplacedTurn,
+  snapshotTurn,
+} from "./lifecycle/turn-projection.js";
 import {
   isActionableTurnRecovery,
   isTurnRecoveryAction,
@@ -245,7 +249,7 @@ export function validateTurnLifecycleSnapshot(snapshot = {}) {
       continue;
     }
     if (!isCanonicalText(turn.sessionId)) errors.push("missing_turn_session_id");
-    errors.push(...collectParentSessionIdErrors(turn.parentSessionId));
+    errors.push(...collectSnapshotTurnFieldErrors(turn));
     errors.push(...collectSnapshotRuntimeErrors(turn));
     if (turn.sessionId !== snapshot.sessionId) errors.push("turn_session_identity_mismatch");
     if (Number.isInteger(turn.sequence) && turn.sequence >= 1 && turn.sequence > snapshot.sequence)

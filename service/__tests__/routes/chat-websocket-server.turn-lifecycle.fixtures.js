@@ -304,7 +304,6 @@ export function installLifecycleSnapshotReader(authoritative) {
         terminalTurnScopeIds: Object.keys(lifecycle.turns),
         commandId,
         sessionId,
-        parentSessionId: "",
         knownSequence,
         terminalLimit,
         recovery,

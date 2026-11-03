@@ -62,15 +62,12 @@ test("authority builds active and terminal snapshot from one lifecycle rule", ()
     commandId: "snapshot-1",
     sessionId: "s1",
     terminalTurnScopeIds: ["turn-0"],
-    parentSessionId: "parent-1",
     knownSequence: 3,
     terminalLimit: 10,
     recovery: "none",
     generatedAt: now,
   });
   assert.equal(snapshot.activeTurn.startedAt, now);
-  assert.equal(snapshot.activeTurn.parentSessionId, "parent-1");
-  assert.equal(snapshot.recentTerminalTurns[0].parentSessionId, "parent-1");
   assert.equal(snapshot.activeTurn.thinkingFinishedAt, "2026-07-29T23:59:00.000Z");
   assert.equal(Object.hasOwn(snapshot.activeTurn, "thinkingStartedAt"), false);
   assert.deepEqual(
@@ -92,7 +89,6 @@ test("authority snapshot carries the read-side recovery annotation verbatim", ()
     turnTimings: [],
     commandId: "snapshot-recovery",
     sessionId: "s1",
-    parentSessionId: "",
     terminalTurnScopeIds: [],
     recovery: "finalize",
     knownSequence: 0,
@@ -130,7 +126,6 @@ test("authority snapshots only terminal Turns represented by canonical messages"
     recovery: "none",
     commandId: "snapshot-message-projection",
     sessionId: "s1",
-    parentSessionId: "",
     knownSequence: 0,
     terminalLimit: 10,
     generatedAt: now,
@@ -154,7 +149,6 @@ test("authority owns terminal readiness decisions", () => {
       turnTimings: [],
       commandId: "resolve-1",
       sessionId: "s1",
-      parentSessionId: "",
       turnScopeId: "missing",
     }).reason,
     "turn_not_found",
@@ -165,7 +159,6 @@ test("authority owns terminal readiness decisions", () => {
       turnTimings: [],
       commandId: "resolve-1",
       sessionId: "s1",
-      parentSessionId: "",
       turnScopeId: "turn-1",
     }).reason,
     "turn_not_terminal",
@@ -190,11 +183,9 @@ test("authority owns terminal readiness decisions", () => {
     aggregateVersion: 12,
     commandId: "resolve-1",
     sessionId: "s1",
-    parentSessionId: "parent-terminal",
     turnScopeId: "turn-1",
   });
   assert.equal(resolved.resolved, true);
-  assert.equal(resolved.turn.parentSessionId, "parent-terminal");
   assert.equal(resolved.aggregateVersion, 12);
   assert.equal(resolved.turn.terminalStatus.status, "completed");
 });
@@ -248,7 +239,6 @@ test("snapshot and terminal reads project the same persisted timing and reject a
     ],
     commandId: "read",
     sessionId: "s1",
-    parentSessionId: "",
     aggregateVersion: 2,
     turnScopeId: "turn-1",
     terminalTurnScopeIds: ["turn-1"],

@@ -489,6 +489,43 @@ test("deleting one session does not invalidate another session display summary",
   });
 });
 
+test("cached display summary with an invalid turn lifecycle snapshot is rebuilt on detail read", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u-summary-invalid-snapshot";
+    await initializeUserWorkspace(workspaceRoot, userId);
+    const runtime = createTestSessionServices({ workspaceRoot });
+    await provisionTestSession(runtime, {
+      userId,
+      sessionId: "stale",
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
+    const { sessionRepository } = runtime.repositories;
+    await sessionRepository.ensureSessionDisplaySummary(userId, "stale", {
+      persistenceContext: sessionRepository.treePersistenceContext(userId, "stale"),
+    });
+    const summaryFile = path.join(
+      workspaceRoot,
+      userId,
+      "runtime",
+      "session",
+      "stale",
+      "session-summary.json",
+    );
+    const cached = JSON.parse(await readFile(summaryFile, "utf8"));
+    cached.turnLifecycleSnapshot.recentTerminalTurns = [{ parentSessionId: "residual" }];
+    await writeFile(summaryFile, JSON.stringify(cached), "utf8");
+
+    const detail = await runtime.sessionCrudService.getSessionDisplayData({
+      userId,
+      sessionId: "stale",
+    });
+    assert.equal(detail.sessions[0].availability, "available");
+    const rebuilt = JSON.parse(await readFile(summaryFile, "utf8"));
+    assert.deepEqual(rebuilt.turnLifecycleSnapshot.recentTerminalTurns, []);
+  });
+});
+
 test("summary session detail projects an unreadable tree child as unavailable without attachment projection", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u-summary-unreadable-child";

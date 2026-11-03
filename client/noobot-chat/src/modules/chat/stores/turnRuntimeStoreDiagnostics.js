@@ -12,7 +12,6 @@ function count(value) {
 function turnIdentity(source) {
   return {
     sessionId: text(source?.sessionId),
-    parentSessionId: text(source?.parentSessionId),
     dialogProcessId: text(source?.dialogProcessId),
     turnScopeId: text(source?.turnScopeId),
   };

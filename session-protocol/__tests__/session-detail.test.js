@@ -119,10 +119,9 @@ test("available detail entry is projected from the display summary without extra
 });
 
 test("detail entry rejects snapshot and artifact events owned by another session", () => {
-  assert.ok(
-    collectSessionDetailEntryErrors(
-      availableEntry({ turnLifecycleSnapshot: snapshot("s-other") }),
-    ).includes("invalid_turn_lifecycle_snapshot"),
+  assert.deepEqual(
+    collectSessionDetailEntryErrors(availableEntry({ turnLifecycleSnapshot: snapshot("s-other") })),
+    ["snapshot_lifecycle_session_mismatch"],
   );
   assert.ok(
     collectSessionDetailEntryErrors(

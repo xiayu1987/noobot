@@ -91,7 +91,6 @@ function projectTurn({ current, transition, event, sessionId, turnScopeId }) {
     ...currentValue,
     ...transition.next,
     sessionId,
-    parentSessionId: text(event.parentSessionId || currentValue.parentSessionId),
     turnScopeId,
     dialogProcessId: text(event.dialogProcessId || currentValue.dialogProcessId),
     action: transition.next.action,

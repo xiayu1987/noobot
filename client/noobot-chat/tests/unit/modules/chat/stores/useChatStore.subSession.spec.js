@@ -299,7 +299,6 @@ describe("sub-session realtime message projection", () => {
     const completed = store.selectSubSessionMessages("child-session");
     expect(completed.status).toBe("completed");
     expect(completed.turnRuntime).toMatchObject({
-      parentSessionId: identity.parentSessionId,
       turnScopeId: identity.turnScopeId,
       terminal: "completed",
     });

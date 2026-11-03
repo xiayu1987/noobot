@@ -21,6 +21,7 @@ import { requireSessionAggregateVersion } from "@noobot/session-protocol";
 import {
   TURN_RECOVERY_ACTION,
   TURN_SNAPSHOT_TERMINAL_LIMIT,
+  validateTurnLifecycleSnapshot,
 } from "@noobot/session-protocol/turn-lifecycle";
 
 export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 37;
@@ -87,6 +88,7 @@ export function isSessionDisplaySummaryCurrent(payload = null, sessionManifest =
     return false;
   if (Number(payload?.stats?.messageCount || 0) !== sessionManifest?.messageOrder?.length)
     return false;
+  if (!validateTurnLifecycleSnapshot(payload.turnLifecycleSnapshot).valid) return false;
   return payload.source.revision === createSessionDisplaySourceRevision(sessionManifest);
 }
 

@@ -149,6 +149,16 @@ test("turn lifecycle snapshot carries authoritative replacement tombstones", () 
 
   assert.deepEqual(validateTurnLifecycleSnapshot(snapshot), { valid: true, errors: [] });
   assert.deepEqual(
+    validateTurnLifecycleSnapshot({
+      ...snapshot,
+      recentTerminalTurns: snapshot.recentTerminalTurns.map((turn) => ({
+        ...turn,
+        parentSessionId: "parent-session",
+      })),
+    }).errors,
+    snapshot.recentTerminalTurns.map(() => "unexpected_snapshot_turn_field:parentSessionId"),
+  );
+  assert.deepEqual(
     snapshot.replacedTurns.map((item) => item.turnScopeId),
     ["turn-old", "turn-tail"],
   );
