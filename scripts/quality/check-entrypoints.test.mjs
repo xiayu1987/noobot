@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
-import { readdir } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 import { QUALITY_STEPS } from "./quality-steps.mjs";
 import { readRepositoryJson, repositoryPathExists } from "./repository-files.mjs";
@@ -75,4 +75,23 @@ test("MCP test service tests run only from test:all with its own installed depen
   assert.match(scripts["test:all"], /npm --prefix scripts\/mcp-test-service test/);
   assert.match(scripts["test:quality-config"], /!\(mcp-test-service\)/);
   assert.match(scripts["install:all"], /npm run -s install:mcp-test-service/);
+});
+
+test("CI native runtime contracts use the initialized isolated test runner", async () => {
+  for (const workflow of ["quality-checks.yml", "release-desktop-assets.yml"]) {
+    const source = await readFile(
+      new URL(`../../.github/workflows/${workflow}`, import.meta.url),
+      "utf8",
+    );
+    const commands = source
+      .split("\n")
+      .filter((line) => line.includes("run:") && line.includes("native-script-platform.test.js"));
+    assert.equal(commands.length, workflow === "quality-checks.yml" ? 1 : 2);
+    for (const command of commands) {
+      assert.equal(
+        command.trim(),
+        "run: node scripts/run-with-isolated-tmp.mjs node --test agent/__tests__/tools/native-script-platform.test.js",
+      );
+    }
+  }
 });
