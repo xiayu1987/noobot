@@ -9,7 +9,6 @@ import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { addressPort, resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports";
-import { requireWorkspaceRootEnv } from "@noobot/runtime-topology-protocol/workspace-root";
 import { validateModelObservationPolicyCoverage } from "./helpers/model-observation-policy.js";
 import { PROTOCOL_TIMEOUTS } from "./helpers/protocol-timeouts.js";
 import { text } from "@noobot/shared/value";
@@ -36,8 +35,6 @@ function resolveBaseUrl(value) {
 }
 
 validateModelObservationPolicyCoverage(path.join(protocolRoot, "specs"));
-
-requireWorkspaceRootEnv();
 
 export default defineConfig({
   testDir: path.join(protocolRoot, "specs"),

@@ -69,3 +69,10 @@ test("test:all runs tests only and leaves repository checks to check:quality", a
   const scripts = await rootScripts();
   assert.doesNotMatch(scripts["test:all"], /\bcheck:|scripts\/check-/);
 });
+
+test("MCP test service tests run only from test:all with its own installed dependencies", async () => {
+  const scripts = await rootScripts();
+  assert.match(scripts["test:all"], /npm --prefix scripts\/mcp-test-service test/);
+  assert.match(scripts["test:quality-config"], /!\(mcp-test-service\)/);
+  assert.match(scripts["install:all"], /npm run -s install:mcp-test-service/);
+});

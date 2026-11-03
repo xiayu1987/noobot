@@ -3,7 +3,7 @@
 Independent Streamable HTTP MCP server using the official MCP SDK. The `echo` tool returns its required `text` argument unchanged. Invalid arguments produce MCP tool errors. No Noobot runtime code is imported by the server.
 
 ```sh
-npm --prefix scripts/mcp-test-service ci
+npm run install:mcp-test-service
 npm --prefix scripts/mcp-test-service test
 npm --prefix scripts/mcp-test-service start
 ```

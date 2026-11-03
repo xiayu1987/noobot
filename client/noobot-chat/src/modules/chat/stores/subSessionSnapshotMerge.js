@@ -19,7 +19,7 @@ export function summarizeSubSessionMessage(message = {}) {
   };
 }
 
-export function subSessionMessageIdentity(message = {}) {
+function subSessionMessageIdentity(message = {}) {
   return resolveMessageViewKey(message);
 }
 

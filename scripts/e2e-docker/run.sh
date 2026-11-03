@@ -95,7 +95,7 @@ teardown() {
 }
 
 start_mcp() {
-  npm --prefix "$MCP_PROJECT" ci --ignore-scripts || return 1
+  npm --prefix "$ROOT_DIR" run -s install:mcp-test-service || return 1
   docker run -d --rm --name "$MCP_CONTAINER" --network "$NETWORK" \
     -v "$MCP_PROJECT:/app:ro" -w /app --entrypoint node \
     "$IMAGE" server.mjs >/dev/null || return 1
