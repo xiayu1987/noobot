@@ -13,6 +13,21 @@ import { createTestModelHost } from "../helpers/test-model-host.js";
 
 const IMAGE_PROVIDER_BASE_URL = "https://image-provider.example.test";
 
+function jsonResponse(body, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+function textResponse(body, status) {
+  return new Response(body, { status, headers: { "content-type": "text/plain" } });
+}
+
+function binaryResponse(body) {
+  return new Response(body, { headers: { "content-type": "image/png" } });
+}
+
 async function rejectUnexpectedFetch() {
   throw new Error("multimodal_generate must not fetch when modelPort is injected");
 }
@@ -87,13 +102,7 @@ test("multimodal_generate: failed image generation returns diagnostics and stabl
     userConfig: {},
     sharedTools: {
       async fetch() {
-        return {
-          ok: false,
-          status: 426,
-          async text() {
-            return "WebSocket upgrade required (Upgrade: websocket)";
-          },
-        };
+        return textResponse("WebSocket upgrade required (Upgrade: websocket)", 426);
       },
     },
   };
@@ -381,35 +390,19 @@ test("multimodal_generate: images_async polls task endpoint without websocket ha
         requestedUrls.push(`${String(init?.method || "GET").toUpperCase()} ${String(url || "")}`);
         requestedHeaders.push({ ...init.headers });
         if (String(url || "").endsWith("/v1/images/generations")) {
-          return {
-            ok: true,
-            async text() {
-              return JSON.stringify({ data: [{ task_id: "task-1" }] });
-            },
-          };
+          return jsonResponse({ data: [{ task_id: "task-1" }] });
         }
         if (String(url || "").endsWith("/v1/tasks/task-1")) {
-          return {
-            ok: true,
-            async text() {
-              return JSON.stringify({
-                status: "completed",
-                result_data: [
-                  {
-                    b64_json: `data:image/png;base64,${Buffer.from("fake-image").toString("base64")}`,
-                  },
-                ],
-              });
-            },
-          };
+          return jsonResponse({
+            status: "completed",
+            result_data: [
+              {
+                b64_json: `data:image/png;base64,${Buffer.from("fake-image").toString("base64")}`,
+              },
+            ],
+          });
         }
-        return {
-          ok: false,
-          status: 426,
-          async text() {
-            return "WebSocket upgrade required (Upgrade: websocket)";
-          },
-        };
+        return textResponse("WebSocket upgrade required (Upgrade: websocket)", 426);
       },
     },
   };
@@ -474,43 +467,22 @@ test("multimodal_generate: images_async uses the configured provider base URL", 
         requested.push(`${String(init?.method || "GET").toUpperCase()} ${String(url || "")}`);
         if (init?.body) bodies.push(JSON.parse(String(init.body)));
         if (String(url || "") === `${IMAGE_PROVIDER_BASE_URL}/v1/images/generations`) {
-          return {
-            ok: true,
-            async text() {
-              return JSON.stringify({ id: "task-unified-1777017804-vskdh190" });
-            },
-          };
+          return jsonResponse({ id: "task-unified-1777017804-vskdh190" });
         }
         if (
           String(url || "") ===
           `${IMAGE_PROVIDER_BASE_URL}/v1/tasks/task-unified-1777017804-vskdh190`
         ) {
-          return {
-            ok: true,
-            async text() {
-              return JSON.stringify({
-                status: "completed",
-                progress: 100,
-                result_data: [{ url: "https://cdn.example.com/generated-cat.png" }],
-              });
-            },
-          };
+          return jsonResponse({
+            status: "completed",
+            progress: 100,
+            result_data: [{ url: "https://cdn.example.com/generated-cat.png" }],
+          });
         }
         if (String(url || "") === "https://cdn.example.com/generated-cat.png") {
-          return {
-            ok: true,
-            async arrayBuffer() {
-              return Buffer.from("fake-generated-cat");
-            },
-          };
+          return binaryResponse(Buffer.from("fake-generated-cat"));
         }
-        return {
-          ok: false,
-          status: 404,
-          async text() {
-            return "unexpected url";
-          },
-        };
+        return textResponse("unexpected url", 404);
       },
     },
   };
@@ -579,20 +551,9 @@ test("multimodal_generate: images_async normalizes chatgpt base path to official
       async fetch(url, init = {}) {
         requestedUrls.push(`${String(init?.method || "GET").toUpperCase()} ${String(url || "")}`);
         if (String(url || "") === `${IMAGE_PROVIDER_BASE_URL}/v1/images/generations`) {
-          return {
-            ok: true,
-            async text() {
-              return JSON.stringify({ data: [{ task_id: "task-426" }] });
-            },
-          };
+          return jsonResponse({ data: [{ task_id: "task-426" }] });
         }
-        return {
-          ok: false,
-          status: 426,
-          async text() {
-            return "WebSocket upgrade required (Upgrade: websocket)";
-          },
-        };
+        return textResponse("WebSocket upgrade required (Upgrade: websocket)", 426);
       },
     },
   };
@@ -648,22 +609,12 @@ test("multimodal_generate: images_async applies official parameter defaults and 
       async fetch(url, init = {}) {
         if (init?.body) bodies.push(JSON.parse(String(init.body)));
         if (String(url || "").endsWith("/v1/images/generations")) {
-          return {
-            ok: true,
-            async text() {
-              return JSON.stringify({ id: `task-${bodies.length}` });
-            },
-          };
+          return jsonResponse({ id: `task-${bodies.length}` });
         }
-        return {
-          ok: true,
-          async text() {
-            return JSON.stringify({
-              status: "completed",
-              result_data: [{ b64_json: Buffer.from("fake-image").toString("base64") }],
-            });
-          },
-        };
+        return jsonResponse({
+          status: "completed",
+          result_data: [{ b64_json: Buffer.from("fake-image").toString("base64") }],
+        });
       },
     },
   };
@@ -719,20 +670,9 @@ test("multimodal_generate: images_async adds official HTTP status hints to diagn
     sharedTools: {
       async fetch(url) {
         if (String(url || "").endsWith("/v1/images/generations")) {
-          return {
-            ok: true,
-            async text() {
-              return JSON.stringify({ id: "task-private" });
-            },
-          };
+          return jsonResponse({ id: "task-private" });
         }
-        return {
-          ok: false,
-          status: 404,
-          async text() {
-            return JSON.stringify({ error: "not found (request_id: req_404)" });
-          },
-        };
+        return jsonResponse({ error: "not found (request_id: req_404)" }, 404);
       },
     },
   };

@@ -14,8 +14,13 @@ import {
   resolvePromptCacheHeaders,
 } from "../policies/cache-policy-engine.js";
 import { normalizeRuntimeModelSpec } from "../normalization/spec-normalizer.js";
-import { classifyTransportError } from "../policies/default-retry-policy.js";
-import { executeOpenAiOperation } from "./openai-capability-adapter.js";
+import {
+  executeOpenAiOperation,
+  resolveOpenAiOperationStreamingModes,
+} from "./openai-capability-adapter.js";
+import { classifyOpenAiError } from "./openai-error-classification.js";
+import { guardResponsesStream } from "./openai-responses-stream.js";
+import { createResponseModeFetch, unwrapModelProtocolError } from "./response-mode.js";
 import { isObjectLike } from "@noobot/shared/value";
 
 function applyInvocationOverrides(target, overrides = {}) {
@@ -42,11 +47,26 @@ export function orderOpenAiResponsesRequestBody(request = {}) {
   return { ...stableRequest, input };
 }
 
-function applyOpenAiResponsesRequestOrder(client) {
-  const responses = client.responses;
-  const completionWithRetry = responses.completionWithRetry.bind(responses);
-  responses.completionWithRetry = (request, requestOptions) =>
-    completionWithRetry(orderOpenAiResponsesRequestBody(request), requestOptions);
+async function surfaceProtocolError(call) {
+  try {
+    return await call();
+  } catch (error) {
+    throw unwrapModelProtocolError(error);
+  }
+}
+
+function guardOpenAiClient(client) {
+  const { responses, completions } = client;
+  const responsesCompletion = responses.completionWithRetry.bind(responses);
+  responses.completionWithRetry = async (request, requestOptions) => {
+    const result = await surfaceProtocolError(() =>
+      responsesCompletion(orderOpenAiResponsesRequestBody(request), requestOptions),
+    );
+    return request?.stream === true ? guardResponsesStream(result) : result;
+  };
+  const completionsCompletion = completions.completionWithRetry.bind(completions);
+  completions.completionWithRetry = (request, requestOptions) =>
+    surfaceProtocolError(() => completionsCompletion(request, requestOptions));
   return client;
 }
 
@@ -65,7 +85,7 @@ export function bindOpenAiCompatibleTools(
     ...requestOverrides,
     ...(["auto", "required", "none"].includes(toolChoice) ? { tool_choice: toolChoice } : {}),
   });
-  return applyOpenAiResponsesRequestOrder(bound);
+  return guardOpenAiClient(bound);
 }
 
 export function createOpenAiCompatibleClient({
@@ -74,8 +94,7 @@ export function createOpenAiCompatibleClient({
   streaming = false,
   headers = {},
   flow = "agent.main",
-  fetch: transportFetch,
-  maxRetries,
+  fetch: transportFetch = globalThis.fetch,
 }) {
   const spec = normalizeRuntimeModelSpec(modelSpec);
   const useResponsesApi = resolveModelUseResponsesApi(spec);
@@ -93,8 +112,10 @@ export function createOpenAiCompatibleClient({
   const configuration = {
     defaultHeaders,
     ...(spec.base_url ? { baseURL: spec.base_url } : {}),
-    ...(transportFetch ? { fetch: transportFetch } : {}),
-    ...(maxRetries !== undefined ? { maxRetries } : {}),
+    fetch: createResponseModeFetch({
+      requestedStreaming: streaming === true,
+      fetch: transportFetch,
+    }),
   };
   const sampling = spec.temperature !== undefined ? { temperature: spec.temperature } : {};
   const client = new ChatOpenAI({
@@ -106,17 +127,18 @@ export function createOpenAiCompatibleClient({
     apiKey: credential,
     configuration,
     useResponsesApi,
-    ...(maxRetries !== undefined ? { maxRetries } : {}),
+
+    maxRetries: 0,
     ...(promptCacheKey ? { promptCacheKey } : {}),
     ...(Object.keys(modelKwargs).length ? { modelKwargs } : {}),
   });
   applyInvocationOverrides(client, modelKwargs);
-  return applyOpenAiResponsesRequestOrder(client);
+  return guardOpenAiClient(client);
 }
 
 export const openAiCompatibleAdapter = Object.freeze({
   id: "openai-compatible",
-  classifyError: classifyTransportError,
+  classifyError: classifyOpenAiError,
   createClient(input) {
     return createOpenAiCompatibleClient(input);
   },
@@ -133,5 +155,8 @@ export const openAiCompatibleAdapter = Object.freeze({
   },
   executeOperation(input) {
     return executeOpenAiOperation(input);
+  },
+  resolveOperationStreamingModes(input) {
+    return resolveOpenAiOperationStreamingModes(input);
   },
 });

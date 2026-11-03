@@ -14,6 +14,7 @@ import {
   MODEL_CONTEXT_SEQUENCE_POLICY,
   MODEL_CONTEXT_TRACE,
   MODEL_ERROR_KIND,
+  MODEL_INVOCATION_EVENT,
   MODEL_OPERATION_KIND,
   MODEL_RESPONSE_SOURCE,
   validateModelResponse,
@@ -571,6 +572,7 @@ test("non-chat operations execute only through the resolved provider adapter", a
       calls.push(operation);
       return { rawText: "searched", sources: [] };
     },
+    resolveOperationStreamingModes: () => [false],
   };
   const executor = createModelRequestExecutor({
     registry: { resolve: () => adapter },
@@ -587,7 +589,13 @@ test("non-chat operations execute only through the resolved provider adapter", a
   assert.equal(response.result.rawText, "searched");
 
   const unsupported = createModelRequestExecutor({
-    registry: { resolve: () => ({ ...adapter, executeOperation: undefined }) },
+    registry: {
+      resolve: () => ({
+        ...adapter,
+        executeOperation: undefined,
+        resolveOperationStreamingModes: undefined,
+      }),
+    },
     credentialPort: { resolve: () => "secret" },
   });
   await assert.rejects(
@@ -686,4 +694,84 @@ test("non-streaming invalid tool calls fail with a typed error instead of being 
   );
   assert.equal(state.calls, 1);
   assert.deepEqual(streamingAttempts, [false]);
+});
+
+function createOperationAdapter({ modes, fail }) {
+  const calls = [];
+  return {
+    calls,
+    adapter: {
+      id: "openai-compatible",
+      classifyError: () => ({ kind: MODEL_ERROR_KIND.UNKNOWN, retryable: false }),
+      bindTools: ({ client }) => client,
+      prepareMessages: ({ messages }) => messages,
+      resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
+      createClient: () => ({ invoke: async () => ({ content: "unused" }) }),
+      executeOperation: async ({ streaming }) => {
+        calls.push(streaming);
+        if (fail(streaming)) throw new Error(`mode ${streaming} rejected`);
+        return { rawText: "searched", sources: [] };
+      },
+      resolveOperationStreamingModes: () => modes,
+    },
+  };
+}
+
+const webSearchRequest = {
+  invocation,
+  model,
+  messages: [],
+  operation: { kind: MODEL_OPERATION_KIND.WEB_SEARCH, input: { query: "latest" } },
+};
+
+test("operation switches to the declared alternate mode once and caches it", async () => {
+  const { adapter, calls } = createOperationAdapter({
+    modes: [false, true],
+    fail: (streaming) => streaming === false,
+  });
+  const events = [];
+  const executor = createModelRequestExecutor({
+    registry: { resolve: () => adapter },
+    credentialPort: { resolve: () => "secret" },
+    observationPort: { emit: (type) => events.push(type) },
+  });
+  const first = await executor.invoke(webSearchRequest);
+  assert.deepEqual(calls, [false, true]);
+  assert.equal(
+    events.filter((type) => type === MODEL_INVOCATION_EVENT.STREAMING_MODE_RETRY).length,
+    1,
+  );
+  assert.deepEqual(
+    first.execution.attempts.map(({ status, streaming }) => [status, streaming]),
+    [
+      ["failed", false],
+      ["completed", true],
+    ],
+  );
+  await executor.invoke(webSearchRequest);
+  assert.deepEqual(calls, [false, true, true]);
+});
+
+test("operation declaring a single mode never switches", async () => {
+  const { adapter, calls } = createOperationAdapter({ modes: [false], fail: () => true });
+  const executor = createModelRequestExecutor({
+    registry: { resolve: () => adapter },
+    credentialPort: { resolve: () => "secret" },
+  });
+  await assert.rejects(executor.invoke(webSearchRequest), /mode false rejected/);
+  await assert.rejects(
+    executor.invoke({ ...webSearchRequest, options: { streaming: true } }),
+    /mode false rejected/,
+  );
+  assert.deepEqual(calls, [false, false]);
+});
+
+test("provider registry rejects an operation adapter without paired streaming modes", () => {
+  const { adapter } = createOperationAdapter({ modes: [false], fail: () => false });
+  for (const key of ["executeOperation", "resolveOperationStreamingModes"]) {
+    assert.throws(
+      () => createProviderAdapterRegistry([{ ...adapter, [key]: undefined }]),
+      /must declare executeOperation and resolveOperationStreamingModes together/,
+    );
+  }
 });

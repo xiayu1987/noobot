@@ -133,8 +133,7 @@ export async function testModelAccess({
     .list()
     .map((adapter) => ({
       ...adapter,
-      createClient: (input) =>
-        adapter.createClient({ ...input, fetch: transportFetch, maxRetries: 0 }),
+      createClient: (input) => adapter.createClient({ ...input, fetch: transportFetch }),
     }));
   const executor = createModelRequestExecutor({
     registry: createProviderAdapterRegistry(adapters),

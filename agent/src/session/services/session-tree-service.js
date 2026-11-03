@@ -38,6 +38,31 @@ export class SessionTreeService {
     return [...collected];
   }
 
+  async planSessionBranchDeletion(userId, rootSessionIds) {
+    const sessionTree = await this.treeRepo.getTree(userId);
+    const agentScopes = await this.sessionRepo.listAgentSessionScopes(userId);
+    const ids = new Set(this.collectBranchesSessionIds(rootSessionIds, sessionTree));
+    const queue = [...ids];
+    for (let index = 0; index < queue.length; index++) {
+      const children = [...agentScopes].filter(
+        ([, scope]) => scope.parentSessionId === queue[index],
+      );
+      for (const [id] of children) {
+        this.collectBranchSessionIds(id, sessionTree).forEach((childId) => {
+          if (ids.has(childId)) return;
+          ids.add(childId);
+          queue.push(childId);
+        });
+      }
+    }
+    return new Map(
+      [...ids].map((id) => [
+        id,
+        this.sessionRepo.resolveSessionPersistenceContext(userId, id, { sessionTree, agentScopes }),
+      ]),
+    );
+  }
+
   async deleteSessionBranch({ userId, sessionIds }) {
     const rootSessionIds = Array.isArray(sessionIds)
       ? [...new Set(sessionIds.map((id) => text(id)))]
@@ -48,30 +73,27 @@ export class SessionTreeService {
       });
     }
 
-    let toDelete = this.collectBranchesSessionIds(
-      rootSessionIds,
-      await this.treeRepo.getTree(userId),
-    );
+    let toDelete = await this.planSessionBranchDeletion(userId, rootSessionIds);
     let deletedSessionIds = null;
     while (!deletedSessionIds) {
-      const planned = toDelete;
+      const planned = [...toDelete.keys()];
       deletedSessionIds = await this.sessionRepo.withSessionLifecycleMutations(
         userId,
         planned,
         async () => {
-          const lockedBranch = this.collectBranchesSessionIds(
-            rootSessionIds,
-            await this.treeRepo.getTree(userId),
-          );
+          const lockedBranch = await this.planSessionBranchDeletion(userId, rootSessionIds);
           const plannedSet = new Set(planned);
-          if (lockedBranch.some((id) => !plannedSet.has(id))) {
-            toDelete = [...new Set([...planned, ...lockedBranch])];
+          const branchChanged =
+            lockedBranch.size !== plannedSet.size ||
+            [...lockedBranch.keys()].some((id) => !plannedSet.has(id));
+          if (branchChanged) {
+            toDelete = lockedBranch;
             return null;
           }
           await this.sessionRepo.markSessionsDeleted(userId, planned);
           for (const id of planned) {
             await this.sessionRepo.delete(userId, id, {
-              persistenceContext: this.sessionRepo.treePersistenceContext(userId, id),
+              persistenceContext: lockedBranch.get(id),
             });
           }
           await this.treeRepo.withLock(userId, async () => {

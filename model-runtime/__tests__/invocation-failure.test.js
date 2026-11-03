@@ -150,6 +150,27 @@ test("transport exhaustion preserves each attempt error instead of filling from 
     h.terminals()[0].payload.failedAttempts.map(({ error }) => error.code),
     ["FIRST", "SECOND"],
   );
+  const { payload } = h.terminals()[0];
+  assert.equal(payload.message, "second");
+  assert.deepEqual(
+    payload.failedAttempts.map(({ error }) => error),
+    [
+      {
+        message: "first",
+        code: "FIRST",
+        kind: MODEL_ERROR_KIND.RATE_LIMIT,
+        retryable: true,
+        classificationError: null,
+      },
+      {
+        message: "second",
+        code: "SECOND",
+        kind: MODEL_ERROR_KIND.RATE_LIMIT,
+        retryable: true,
+        classificationError: null,
+      },
+    ],
+  );
 });
 
 test("classification failure is explicit, never retries, and preserves the original exception", async () => {
@@ -258,6 +279,7 @@ test("operation transport failure records its attempt and emits one failed event
       executeOperation: async () => {
         throw original;
       },
+      resolveOperationStreamingModes: () => [false],
     },
   });
   await assert.rejects(

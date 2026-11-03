@@ -97,6 +97,7 @@ test("turn replacement atomically removes lifecycle projection and outbox state"
     turnTimings: [],
     commandId: "snapshot-replaced",
     sessionId: "session-1",
+    parentSessionId: "",
     knownSequence: 0,
     terminalLimit: 10,
     terminalTurnScopeIds: [],

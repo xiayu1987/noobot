@@ -245,6 +245,7 @@ export function validateTurnLifecycleSnapshot(snapshot = {}) {
       continue;
     }
     if (!isCanonicalText(turn.sessionId)) errors.push("missing_turn_session_id");
+    errors.push(...collectParentSessionIdErrors(turn.parentSessionId));
     errors.push(...collectSnapshotRuntimeErrors(turn));
     if (turn.sessionId !== snapshot.sessionId) errors.push("turn_session_identity_mismatch");
     if (Number.isInteger(turn.sequence) && turn.sequence >= 1 && turn.sequence > snapshot.sequence)

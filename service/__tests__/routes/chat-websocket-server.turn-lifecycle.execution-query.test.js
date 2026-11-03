@@ -79,6 +79,7 @@ test("finalize recovery is idempotent across repeated service recovery attempts"
             terminalTurnScopeIds: Object.keys(lifecycle.turns),
             commandId,
             sessionId,
+            parentSessionId: "",
             knownSequence,
             terminalLimit,
             recovery,

@@ -15,6 +15,9 @@ CONNECT_CODE_FILE="${NOOBOT_E2E_CONNECT_CODE_FILE:-$SCRIPT_DIR/connect-code.loca
 MYSQL_PASSWORD_FILE="${NOOBOT_E2E_MYSQL_PASSWORD_FILE:-$SCRIPT_DIR/mysql-password.local}"
 SOURCE_WORKSPACE="$ROOT_DIR/workspace"
 E2E_WORKSPACE="$ROOT_DIR/.e2e-workspace"
+MCP_PROJECT="$ROOT_DIR/scripts/mcp-test-service"
+MCP_CONTAINER="$(node --input-type=module -e "import { MCP_TEST_SERVICE } from '$MCP_PROJECT/config.mjs'; console.log(MCP_TEST_SERVICE.hostname)")"
+NETWORK="noobot-e2e-network"
 
 eval "$(env -i PATH="$PATH" node "$ROOT_DIR/scripts/lib/runtime-topology-cli.mjs" --shell)"
 CLIENT_PORT="${NOOBOT_TOPOLOGY_CLIENT_ADDR##*:}"
@@ -77,31 +80,70 @@ wait_ready() {
   log "ready: http://127.0.0.1:${HOST_PORT}"
 }
 
-cmd_up() {
-  if container_running; then
-    log "already running"
-    return 0
+stop_container() {
+  if docker container inspect "$1" >/dev/null 2>&1; then
+    docker rm -f "$1" >/dev/null
   fi
-  docker image inspect "$IMAGE" >/dev/null 2>&1 || cmd_build
-  node "$SCRIPT_DIR/prepare-workspace.mjs" "$SOURCE_WORKSPACE" "$E2E_WORKSPACE" "$ROOT_DIR/service/config/global.config.json"
-  docker run -d --rm --name "$CONTAINER" \
+}
+
+teardown() {
+  stop_container "$CONTAINER"
+  stop_container "$MCP_CONTAINER"
+  if docker network inspect "$NETWORK" >/dev/null 2>&1; then
+    docker network rm "$NETWORK" >/dev/null
+  fi
+}
+
+start_mcp() {
+  npm --prefix "$MCP_PROJECT" ci --ignore-scripts || return 1
+  docker run -d --rm --name "$MCP_CONTAINER" --network "$NETWORK" \
+    -v "$MCP_PROJECT:/app:ro" -w /app --entrypoint node \
+    "$IMAGE" server.mjs >/dev/null || return 1
+  local deadline=$((SECONDS + READY_TIMEOUT_S))
+  until docker exec "$MCP_CONTAINER" node --input-type=module -e \
+    'import { MCP_TEST_SERVICE as c } from "./config.mjs"; const r = await fetch(`http://127.0.0.1:${c.port}/health`); if (!r.ok) process.exit(1);' >/dev/null 2>&1; do
+    if ((SECONDS >= deadline)); then
+      log "mcp test service not ready after ${READY_TIMEOUT_S}s"
+      docker logs --tail 80 "$MCP_CONTAINER" || true
+      return 1
+    fi
+    sleep 2
+  done
+}
+
+start_service() {
+  node "$SCRIPT_DIR/prepare-workspace.mjs" "$SOURCE_WORKSPACE" "$E2E_WORKSPACE" "$ROOT_DIR/service/config/global.config.json" || return 1
+  docker run -d --rm --name "$CONTAINER" --network "$NETWORK" \
     -e NOOBOT_ROOT="$ROOT_DIR" \
     -v "$ROOT_DIR:$ROOT_DIR" \
     -v "$E2E_WORKSPACE:$SOURCE_WORKSPACE" \
+    -v "$E2E_WORKSPACE/global.config.json:$ROOT_DIR/service/config/global.config.json:ro" \
     --mount "type=volume,dst=$ROOT_DIR/client/noobot-chat/dist" \
     --mount "type=volume,dst=$ROOT_DIR/client/noobot-chat/node_modules/.vite" \
     --mount "type=volume,dst=$ROOT_DIR/model-proxy/logs" \
     --add-host=host.docker.internal:host-gateway \
     -p "127.0.0.1:${HOST_PORT}:${CLIENT_PORT}" \
     -w "$ROOT_DIR" \
-    "$IMAGE" >/dev/null
+    "$IMAGE" >/dev/null || return 1
   wait_ready
 }
 
-cmd_down() {
+cmd_up() {
   if container_running; then
-    docker stop "$CONTAINER" >/dev/null
+    log "already running"
+    return 0
   fi
+  teardown
+  docker image inspect "$IMAGE" >/dev/null 2>&1 || cmd_build
+  docker network create "$NETWORK" >/dev/null
+  if ! start_mcp || ! start_service; then
+    teardown
+    return 1
+  fi
+}
+
+cmd_down() {
+  teardown
   log "stopped"
 }
 

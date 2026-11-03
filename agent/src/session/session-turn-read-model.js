@@ -57,6 +57,7 @@ export function createSessionTurnLifecycleSnapshot({
     terminalTurnScopeIds: collectSessionPresentationTurnScopeIds(session),
     commandId,
     sessionId: session.sessionId,
+    parentSessionId: session.parentSessionId,
     knownSequence,
     terminalLimit,
     recovery,

@@ -18,10 +18,18 @@ shape. A `RESPONSES` result requires terminal `output` and `status`; its `finish
 is `status`, or `incomplete_details.reason` when the status is `incomplete`, and any
 missing fact raises `ModelProtocolError`. A `MESSAGE` result takes `finishReason` from
 `finish_reason`. Streaming tool-call mismatch recovery applies only to `MESSAGE` results.
+An adapter that supports operations declares `executeOperation` together with
+`resolveOperationStreamingModes({ modelSpec, operation })`, which returns a non-empty list of
+distinct booleans (`requireOperationStreamingModes`). The executor uses the preferred mode
+when declared, otherwise the first declared mode, and switches only to a declared mode.
 
 Invocation observation uses `MODEL_INVOCATION_EVENT`. Each failed provider attempt is
 recorded in `execution.attempts`; a terminal invocation failure emits exactly one
-`FAILED` event with the protocol-projected attempt count, error code and error kind.
+`FAILED` event with the protocol-projected attempt count, error message, error code and
+error kind. Every attempt error is projected only by `projectModelAttemptError` as a
+frozen `{ message, code, kind, retryable, classificationError }`; `execution.attempts`,
+`STREAMING_MODE_RETRY` and `FAILED.failedAttempts` share that shape. `message` is the
+original error text and may be empty.
 Retryable attempts do not emit terminal failure. Aborted invocations emit `CANCELLED`
 instead of `FAILED`; successful invocations emit `COMPLETED`.
 
@@ -31,7 +39,7 @@ operation setup emit `FAILED` with zero attempts when no provider attempt has be
 they never fabricate a provider attempt. Once started, transport and response
 normalization failures record `FAILED` attempts through the same recording path.
 Terminal `failedAttempts` is projected from those records and preserves each attempt's
-own number, category, error code and error kind. Intermediate failures followed by
+own number, category and attempt error. Intermediate failures followed by
 success remain in `execution.attempts` and emit only `COMPLETED` as the terminal event.
 Cancellation does not record a failed attempt and never emits `FAILED`.
 An error-classifier exception or invalid result is explicitly classified as
@@ -43,6 +51,14 @@ exception is rethrown unchanged. Classification is evaluated once per error per 
 classification; every other error is classified by the adapter's `classifyError`, whose
 `kind` must be a `MODEL_ERROR_KIND` other than `classification` and whose `retryable` must
 be boolean, otherwise the failure is classified as `classification`.
+Adapters classify only structured error fields (`name`, `code`, `status`) along the
+`cause` chain; message text never decides retries. A successful provider response whose
+transfer mode differs from the requested one (SSE exactly when streaming was requested)
+is a `ModelProtocolError` with kind `response_mode_mismatch` and code
+`MODEL_RESPONSE_MODE_MISMATCH`, not retryable. The executor switches the streaming mode
+once, before any streamed token, unless the kind is `aborted`, `authentication`,
+`rate_limit` or `classification`. Provider SDK retries are disabled; the executor is
+the only retry authority.
 The model host alone mints `invocation.requestId` and `invocation.invocationId` per call;
 callers only describe `flow`, `purpose`, `domain` and `contextSequencePolicy`. Session scope is
 validated as canonical text by `requireInvocationScope`; the executor validates and never

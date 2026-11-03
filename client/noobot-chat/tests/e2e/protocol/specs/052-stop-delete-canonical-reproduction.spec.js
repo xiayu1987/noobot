@@ -107,6 +107,17 @@ test("@core PBE-052 回答显示后发送、锁失败、停止并删除的 canon
     timeoutMs: PROTOCOL_TIMEOUTS.model,
   });
 
+  const firstTurnAssistants = (await readTurnRecords(turnDirectory))
+    .map((record) => record.message)
+    .filter(
+      (message) =>
+        message?.role === "assistant" && message.turnScopeId === firstSend.identity.turnScopeId,
+    );
+  expect(firstTurnAssistants.length).toBeGreaterThan(0);
+  expect(firstTurnAssistants.filter((message) => message.chatPresentation === true)).toHaveLength(
+    1,
+  );
+
   const lockPath = path.join(
     workspaceRoot(),
     noobot.userId,
@@ -176,8 +187,10 @@ test("@core PBE-052 回答显示后发送、锁失败、停止并删除的 canon
   await expect
     .poll(async () => {
       try {
-        await fs.mkdir(lockPath);
-        await fs.writeFile(path.join(lockPath, "owner"), `${process.pid}:e2e-lock-failure`, "utf8");
+        await fs.writeFile(lockPath, `${process.pid}:e2e-lock-failure`, {
+          encoding: "utf8",
+          flag: "wx",
+        });
         return true;
       } catch (error) {
         if (error?.code === "EEXIST") return false;
@@ -226,7 +239,7 @@ test("@core PBE-052 回答显示后发送、锁失败、停止并删除的 canon
         .toBe(false);
     }
   } finally {
-    await fs.rm(lockPath, { recursive: true, force: true });
+    await fs.rm(lockPath, { force: true });
     await fs.rm(toolStartedMarker, { force: true });
     await fs.rm(toolFinishedMarker, { force: true });
   }
@@ -238,19 +251,10 @@ test("@core PBE-052 回答显示后发送、锁失败、停止并删除的 canon
       const scoped = records.filter(
         (record) => record.turnScopeId === secondSend.identity.turnScopeId,
       );
-      return (
-        scoped.some(
-          (record) =>
-            record.event === "tool_call_end" &&
-            record.data?.tool === "execute_script" &&
-            record.data?.success === false &&
-            /lock|mutation|busy|timeout/i.test(String(record.data?.result || "")),
-        ) &&
-        scoped.some(
-          (record) =>
-            record.event === "turn_orchestrator_error" &&
-            /lock|mutation|busy|timeout/i.test(String(record.data?.message || "")),
-        )
+      return scoped.some(
+        (record) =>
+          record.event === "turn_orchestrator_error" &&
+          record.data?.error?.code === "SESSION_MUTATION_BUSY",
       );
     },
     { timeoutMs: PROTOCOL_TIMEOUTS.model },
@@ -319,17 +323,12 @@ test("@core PBE-052 回答显示后发送、锁失败、停止并删除的 canon
   await expect
     .poll(async () => {
       const records = await readTurnRecords(turnDirectory);
-      const firstTurnAssistants = records.filter(
-        (record) =>
-          record?.message?.role === "assistant" &&
-          record.message.turnScopeId === firstSend.identity.turnScopeId,
-      );
-      return {
-        assistantCount: firstTurnAssistants.length,
-        canonicalCount: firstTurnAssistants.filter(
-          (record) => record.message.chatPresentation === true,
-        ).length,
-      };
+      return records
+        .map((record) => record.message)
+        .filter(
+          (message) =>
+            message?.role === "assistant" && message.turnScopeId === firstSend.identity.turnScopeId,
+        );
     })
-    .toEqual({ assistantCount: 3, canonicalCount: 1 });
+    .toEqual(firstTurnAssistants);
 });

@@ -236,14 +236,12 @@ class SessionCrudMethods {
   }
 
   async delete(userId, sessionId, { persistenceContext } = {}) {
-    const scope = await this.locateSessionScope(userId, sessionId, persistenceContext);
-    if (!scope) return false;
+    const scope = await this.requireSessionScope(userId, sessionId, persistenceContext);
     await fsRm(scope.sessionDir, { recursive: true, force: true });
     if (scope.indexed) {
       await this.removeSessionSummaries(userId, [sessionId]);
       await this.removeSessionDisplaySummaries(userId, [sessionId]);
     }
-    return true;
   }
 }
 

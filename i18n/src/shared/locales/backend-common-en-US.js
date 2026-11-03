@@ -119,6 +119,7 @@ export const BACKEND_COMMON_EN_US = {
   "session.parentSessionNotFoundPossiblyDeleted": "parent session not found (possibly deleted)",
   "session.workspaceNotInitialized": "workspace not initialized",
   "session.treeNodeMissing": "session is not registered in the session tree",
+  "session.persistenceOwnerConflict": "session persistence is owned by more than one location",
   "status.disconnectedFromHistory": "disconnected from history",
   "ws.badRequest": "Bad Request",
   "ws.commandDispatchFailed": "command dispatch failed",

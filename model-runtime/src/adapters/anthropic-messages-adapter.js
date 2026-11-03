@@ -12,11 +12,14 @@ import {
   MODEL_OPERATION_KIND,
   MODEL_RESPONSE_SOURCE,
   MODEL_WEB_SEARCH_INSTRUCTION,
+  ModelProtocolError,
 } from "@noobot/model-protocol";
 import { readAnthropicMessageStream } from "./anthropic-message-stream.js";
-import { text, isObjectLike } from "@noobot/shared/value";
+import { assertResponseMode, responseMediaType } from "./response-mode.js";
+import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
 
 const ANTHROPIC_VERSION = "2023-06-01";
+const JSON_MEDIA_TYPE = "application/json";
 const ANTHROPIC_SERVER_WEB_SEARCH_TOOL = Object.freeze({
   type: "web_search_20250305",
   name: "web_search",
@@ -49,12 +52,35 @@ function baseMessagesUrl(baseUrl = "") {
   return /\/v1$/i.test(value) ? `${value}/messages` : `${value}/v1/messages`;
 }
 
-function parseJson(value, fallback = {}) {
-  if (isObjectLike(value)) return value;
+function toolUseInput(call, fn) {
+  if (isPlainObject(call.args)) return call.args;
+  let input;
   try {
-    return JSON.parse(String(value || ""));
-  } catch {
-    return fallback;
+    input = JSON.parse(fn.arguments);
+  } catch (cause) {
+    throw invalidToolUseInput(call, cause);
+  }
+  if (!isPlainObject(input)) throw invalidToolUseInput(call);
+  return input;
+}
+
+function invalidToolUseInput(call, cause) {
+  return new ModelProtocolError("Anthropic tool_use input must be a JSON object", {
+    cause,
+    details: { toolCallId: String(call.id || call.call_id || "") },
+  });
+}
+
+async function upstreamErrorMessage(response) {
+  const body = await response.text();
+  if (responseMediaType(response) !== JSON_MEDIA_TYPE) return body.trim();
+  try {
+    return text(JSON.parse(body)?.error?.message);
+  } catch (cause) {
+    throw new ModelProtocolError("Anthropic error response declares JSON but is not JSON", {
+      cause,
+      details: { status: response.status },
+    });
   }
 }
 
@@ -140,7 +166,7 @@ function convertMessages(messages = []) {
           type: "tool_use",
           id,
           name: String(fn.name || call.name || ""),
-          input: parseJson(fn.arguments ?? call.args, {}),
+          input: toolUseInput(call, fn),
         });
       }
       output.push({ role: "assistant", content: content.length ? content : "" });
@@ -310,16 +336,16 @@ async function requestAnthropicMessages({
     signal: signal || undefined,
   });
   if (!response.ok) {
-    const body = await response.text();
-    const parsed = parseJson(body, { error: { message: body } });
-    const error = new Error(parsed?.error?.message || `Anthropic API returned ${response.status}`);
+    const error = new Error(
+      (await upstreamErrorMessage(response)) || `Anthropic API returned ${response.status}`,
+    );
     error.status = response.status;
-    error.response = parsed;
     throw error;
   }
-  if (payload.stream === true) return readAnthropicMessageStream(response, { onText, signal });
-  const body = await response.text();
-  return parseJson(body, { error: { message: body } });
+  const requestedStreaming = payload.stream === true;
+  await assertResponseMode({ requestedStreaming, response });
+  if (requestedStreaming) return readAnthropicMessageStream(response, { onText, signal });
+  return response.json();
 }
 
 function textFromAnthropicBlocks(blocks = []) {
@@ -490,6 +516,10 @@ export const anthropicMessagesAdapter = Object.freeze({
   },
   executeOperation(input) {
     return executeAnthropicOperation(input);
+  },
+
+  resolveOperationStreamingModes() {
+    return [false];
   },
 });
 

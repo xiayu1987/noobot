@@ -21,10 +21,6 @@ export function useWorkflowMessageCardState(props, emit, translate) {
   const semanticPreviewExpanded = ref(false);
 
   const {
-    selectedExecutionId,
-    executionDirectory,
-    attemptExecutionIds,
-    selectExecution,
     workflowMeta,
     workflowPayload,
     semanticFlowtos,
@@ -59,6 +55,10 @@ export function useWorkflowMessageCardState(props, emit, translate) {
     });
 
   const {
+    selectedExecutionId,
+    executionDirectory,
+    attemptExecutionIds,
+    selectExecution,
     fetchSelectedNodeExecutionReport,
     handleOpenThinkingDetails,
     resolveStatusLabel,

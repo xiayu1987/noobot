@@ -47,8 +47,32 @@ export function classifyModelFailure(error, classify) {
   }
 }
 
+export function projectModelAttemptError({
+  message,
+  code,
+  kind,
+  retryable,
+  classificationError,
+} = {}) {
+  if (typeof message !== "string") {
+    throw new TypeError("model attempt error message must be text");
+  }
+  if (code !== null && (typeof code !== "string" || !code)) {
+    throw new TypeError("model attempt error code must be non-empty text or null");
+  }
+  if (!MODEL_ERROR_KINDS.has(kind)) {
+    throw new TypeError("model attempt error kind must be a MODEL_ERROR_KIND");
+  }
+  if (typeof retryable !== "boolean") {
+    throw new TypeError("model attempt error retryable must be boolean");
+  }
+  requireClassificationError(kind, classificationError);
+  return Object.freeze({ message, code, kind, retryable, classificationError });
+}
+
 export function projectModelInvocationFailure({
   attemptCount,
+  message,
   code,
   kind,
   failedAttempts,
@@ -56,6 +80,9 @@ export function projectModelInvocationFailure({
 } = {}) {
   if (!Number.isInteger(attemptCount) || attemptCount < 0) {
     throw new TypeError("model invocation failure attemptCount must be a non-negative integer");
+  }
+  if (typeof message !== "string") {
+    throw new TypeError("model invocation failure message must be text");
   }
   if (code !== null && (typeof code !== "string" || !code)) {
     throw new TypeError("model invocation failure code must be non-empty text or null");
@@ -80,27 +107,15 @@ export function projectModelInvocationFailure({
     if (!Object.values(MODEL_ATTEMPT_KIND).includes(attempt.kind)) {
       throw new TypeError("failed model attempt kind must be non-empty text");
     }
-    const errorCode = attempt.error?.code;
-    const errorKind = attempt.error?.kind;
-    if (errorCode !== null && (typeof errorCode !== "string" || !errorCode)) {
-      throw new TypeError("failed model attempt error code must be non-empty text or null");
-    }
-    if (typeof errorKind !== "string" || !errorKind) {
-      throw new TypeError("failed model attempt error kind must be non-empty text");
-    }
-    requireClassificationError(errorKind, attempt.error.classificationError);
     return Object.freeze({
       attempt: attempt.attempt,
       kind: attempt.kind,
-      error: Object.freeze({
-        code: errorCode,
-        kind: errorKind,
-        classificationError: attempt.error.classificationError,
-      }),
+      error: projectModelAttemptError(attempt.error),
     });
   });
   return Object.freeze({
     attemptCount,
+    message,
     code,
     kind,
     classificationError,

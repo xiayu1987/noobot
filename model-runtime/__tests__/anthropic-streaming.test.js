@@ -11,7 +11,12 @@ import {
   createProviderAdapterRegistry,
   normalizeModelOutput,
 } from "../src/index.js";
-import { MODEL_CONTEXT_SEQUENCE_POLICY, MODEL_RESPONSE_SOURCE } from "@noobot/model-protocol";
+import {
+  MODEL_CONTEXT_SEQUENCE_POLICY,
+  MODEL_ERROR_CODE,
+  MODEL_ERROR_KIND,
+  MODEL_RESPONSE_SOURCE,
+} from "@noobot/model-protocol";
 
 const modelSpec = {
   model: "claude-opus-5",
@@ -417,9 +422,9 @@ test("Anthropic duplicate message_start reports the stream error on the alternat
   const retry = events.filter((event) => event.type === "model.invocation.streaming_mode_retry");
   assert.equal(retry.length, 1);
   assert.equal(retry[0].data.nextStreaming, false);
-  assert.equal(retry[0].data.error.code, "ANTHROPIC_STREAM_INVALID");
+  assert.equal(retry[0].data.error.code, MODEL_ERROR_CODE.PROTOCOL);
   assert.match(retry[0].data.error.message, /unexpected message_start/);
-  assert.equal(result.execution.attempts[0].error.code, "ANTHROPIC_STREAM_INVALID");
+  assert.equal(result.execution.attempts[0].error.code, MODEL_ERROR_CODE.PROTOCOL);
 });
 
 test("Anthropic streamed tokens prevent the existing executor from replaying a failed response", async () => {
@@ -517,7 +522,10 @@ test("Anthropic streaming rejects a JSON response instead of emitting a buffered
         },
       ],
     }),
-    /expected an SSE response/,
+    {
+      code: MODEL_ERROR_CODE.RESPONSE_MODE_MISMATCH,
+      kind: MODEL_ERROR_KIND.RESPONSE_MODE_MISMATCH,
+    },
   );
   assert.deepEqual(tokens, []);
 });

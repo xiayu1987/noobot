@@ -32,6 +32,7 @@ export function createAuthoritativeTurnSnapshot({
   turnTimings,
   commandId,
   sessionId,
+  parentSessionId,
   knownSequence,
   terminalLimit,
   terminalTurnScopeIds,
@@ -48,13 +49,13 @@ export function createAuthoritativeTurnSnapshot({
   const terminalTurnScopes = new Set(terminalTurnScopeIds);
   const lifecycleActiveTurn = selectLifecycleActiveTurn(lifecycle);
   const activeTurn = lifecycleActiveTurn
-    ? { ...projectTurnTiming(lifecycleActiveTurn, turnTimings), sessionId }
+    ? { ...projectTurnTiming(lifecycleActiveTurn, turnTimings), sessionId, parentSessionId }
     : null;
   const recentTerminalTurns = Object.values(lifecycle.turns)
     .filter((turn) => terminalTurnScopes.has(turn.turnScopeId) && isTerminalTurnState(turn.state))
     .sort((left, right) => Number(right.sequence) - Number(left.sequence))
     .slice(0, terminalLimit)
-    .map((turn) => ({ ...projectTurnTiming(turn, turnTimings), sessionId }));
+    .map((turn) => ({ ...projectTurnTiming(turn, turnTimings), sessionId, parentSessionId }));
   return createTurnLifecycleSnapshot({
     commandId,
     sessionId,
@@ -74,6 +75,7 @@ export function resolveAuthoritativeTurnTerminal({
   turnTimings,
   commandId,
   sessionId,
+  parentSessionId,
   turnScopeId,
   aggregateVersion = null,
 }) {
@@ -85,7 +87,7 @@ export function resolveAuthoritativeTurnTerminal({
   const lifecycle = normalizeTurnLifecycleEntity(lifecycleSource);
   const lifecycleTurn = lifecycle.turns[turnScopeId] || null;
   const turn = lifecycleTurn
-    ? { ...projectTurnTiming(lifecycleTurn, turnTimings), sessionId }
+    ? { ...projectTurnTiming(lifecycleTurn, turnTimings), sessionId, parentSessionId }
     : null;
   if (!turn) {
     return createTurnTerminalResolution({

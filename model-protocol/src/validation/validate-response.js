@@ -8,7 +8,7 @@ import {
   MODEL_PROTOCOL_VERSION,
   MODEL_REQUEST_STATUS,
 } from "../protocol/constants.js";
-import { requireInvocationIdentity } from "../protocol/invocation.js";
+import { projectModelAttemptError, requireInvocationIdentity } from "../protocol/invocation.js";
 import { MODEL_OPERATION_KIND, normalizeModelOperationResult } from "../protocol/operation.js";
 import { hasUsableModelChatOutput } from "../protocol/output.js";
 import { text, isPlainObject } from "@noobot/shared/value";
@@ -101,7 +101,9 @@ function validateAttempt(value, index) {
   if (typeof attempt.streaming !== "boolean")
     throw new TypeError(`${path}.streaming must be a boolean`);
   if (attempt.output !== undefined) validateOutput(attempt.output, `${path}.output`);
-  if (attempt.error !== undefined) requirePlainObject(attempt.error, `${path}.error`);
+  if (attempt.error !== undefined) {
+    projectModelAttemptError(requirePlainObject(attempt.error, `${path}.error`));
+  }
   if (attempt.status === "completed" && attempt.output === undefined) {
     throw new TypeError(`${path}.output is required for a completed attempt`);
   }

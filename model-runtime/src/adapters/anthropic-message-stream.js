@@ -3,11 +3,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { streamServerSentEvents } from "@noobot/shared/event-stream";
+import { ModelProtocolError } from "@noobot/model-protocol";
 
 function invalidStream(message) {
-  return Object.assign(new Error(`invalid Anthropic message stream: ${message}`), {
-    code: "ANTHROPIC_STREAM_INVALID",
-  });
+  return new ModelProtocolError(`invalid Anthropic message stream: ${message}`);
 }
 
 async function applyBlockDelta(entry, delta, onText) {
@@ -100,13 +99,7 @@ async function applyMessageEvent(message, openBlocks, event, onText) {
 }
 
 export async function readAnthropicMessageStream(response, { onText, signal }) {
-  if (
-    !response.headers.get("content-type")?.toLowerCase().includes("text/event-stream") ||
-    !response.body
-  ) {
-    await response.body?.cancel();
-    throw invalidStream("expected an SSE response body");
-  }
+  if (!response.body) throw invalidStream("missing SSE response body");
   let message = null;
   const openBlocks = new Map();
   for await (const { data } of streamServerSentEvents(response.body)) {
@@ -116,7 +109,6 @@ export async function readAnthropicMessageStream(response, { onText, signal }) {
     if (event.type === "error") {
       const error = new Error(event.error?.message || "Anthropic stream failed");
       error.code = event.error?.type;
-      error.response = event;
       throw error;
     }
     if (event.type === "message_start") {

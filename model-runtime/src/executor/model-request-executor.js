@@ -20,9 +20,11 @@ import {
   normalizeRetryPolicy,
   NOOP_OBSERVATION_PORT,
   requireModelResponseSource,
+  projectModelAttemptError,
   projectModelInvocationFailure,
   requireCredentialPort,
   requireObservationPort,
+  requireOperationStreamingModes,
   SYSTEM_CLOCK_PORT,
 } from "@noobot/model-protocol";
 import { normalizeMessages } from "../normalization/message-normalizer.js";
@@ -166,13 +168,11 @@ export function createModelRequestExecutor({
           kind,
           attemptStreaming,
           output,
-          error: {
+          error: projectModelAttemptError({
             message: String(error?.message ?? error),
             code: text(error?.code) || null,
-            kind: classification.kind,
-            retryable: classification.retryable,
-            classificationError: classification.classificationError,
-          },
+            ...classification,
+          }),
         });
       };
       const recordingAttempt = async (kind, attemptStreaming, run) => {
@@ -200,19 +200,16 @@ export function createModelRequestExecutor({
           MODEL_INVOCATION_EVENT.FAILED,
           projectModelInvocationFailure({
             attemptCount: totalAttempts,
+            message: String(error?.message ?? error),
             code: text(error?.code) || null,
             kind: classification.kind,
             classificationError: classification.classificationError,
             failedAttempts: attempts
               .filter(({ status }) => status === MODEL_ATTEMPT_STATUS.FAILED)
-              .map((attempt) => ({
-                attempt: attempt.attempt,
-                kind: attempt.kind,
-                error: {
-                  code: attempt.error.code,
-                  kind: attempt.error.kind,
-                  classificationError: attempt.error.classificationError,
-                },
+              .map(({ attempt, kind, error: attemptError }) => ({
+                attempt,
+                kind,
+                error: attemptError,
               })),
           }),
         );
@@ -260,13 +257,8 @@ export function createModelRequestExecutor({
         if (delayMs > 0) await clock.sleep(delayMs);
         return true;
       };
-      const executeOperation = async (credential) => {
-        if (!isFunction(adapter.executeOperation)) {
-          throw new TypeError(
-            `provider adapter ${adapter.id} does not support operation: ${requestBase.operation.kind}`,
-          );
-        }
-        const result = await executeTransportRetry({
+      const invokeOperationTransport = (credential) =>
+        executeTransportRetry({
           policy: retry.transport,
           clock,
           classify,
@@ -277,13 +269,14 @@ export function createModelRequestExecutor({
             observe(MODEL_INVOCATION_EVENT.ATTEMPT_STARTED, {
               attempt: totalAttempts,
               operationKind: requestBase.operation.kind,
-              streaming: false,
+              streaming,
             });
-            return recordingAttempt(MODEL_ATTEMPT_KIND.TRANSPORT, false, () =>
+            return recordingAttempt(MODEL_ATTEMPT_KIND.TRANSPORT, streaming, () =>
               adapter.executeOperation({
                 modelSpec: requestBase.model,
                 credential,
                 operation: requestBase.operation,
+                streaming,
                 headers: buildInvocationHeaders({
                   model: requestBase.model,
                   invocation,
@@ -298,7 +291,31 @@ export function createModelRequestExecutor({
             );
           },
         });
-        const output = await recordingAttempt(MODEL_ATTEMPT_KIND.RESPONSE, false, () =>
+      const attemptOperationTransport = async (credential, modes) => {
+        try {
+          return await invokeOperationTransport(credential);
+        } catch (error) {
+          const switchable = modes.includes(alternateStreamingMode(streaming));
+          if (!switchable || !switchStreamingMode(error)) throw error;
+          return invokeOperationTransport(credential);
+        }
+      };
+      const executeOperation = async (credential) => {
+        if (!isFunction(adapter.executeOperation)) {
+          throw new TypeError(
+            `provider adapter ${adapter.id} does not support operation: ${requestBase.operation.kind}`,
+          );
+        }
+        const modes = requireOperationStreamingModes(
+          adapter.resolveOperationStreamingModes({
+            modelSpec: requestBase.model,
+            operation: requestBase.operation,
+          }),
+        );
+        if (!modes.includes(streaming)) [streaming] = modes;
+        const result = await attemptOperationTransport(credential, modes);
+        streamingModes.set(streamingCacheKey, streaming);
+        const output = await recordingAttempt(MODEL_ATTEMPT_KIND.RESPONSE, streaming, () =>
           normalizeModelOutput(
             { content: result.value?.rawText || "" },
             MODEL_RESPONSE_SOURCE.MESSAGE,
@@ -307,7 +324,6 @@ export function createModelRequestExecutor({
         pushAttempt({
           status: MODEL_ATTEMPT_STATUS.COMPLETED,
           kind: MODEL_ATTEMPT_KIND.RESPONSE,
-          attemptStreaming: false,
           output,
         });
         return respond(output, result.value);
@@ -383,7 +399,7 @@ export function createModelRequestExecutor({
         });
       const switchStreamingMode = (error) => {
         if (requestBase.options.signal?.aborted || alternateStreamingAttempted) return false;
-        if (!mayRetryWithAlternateStreaming(error, attemptState.streamedTokens, classify(error))) {
+        if (!mayRetryWithAlternateStreaming(attemptState.streamedTokens, classify(error))) {
           return false;
         }
         alternateStreamingAttempted = true;

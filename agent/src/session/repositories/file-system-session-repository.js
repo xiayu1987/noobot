@@ -5,6 +5,7 @@
  */
 import { SessionMutationCoordinator } from "../session-mutation-coordinator.js";
 import { sessionAccessMethods } from "./file-system-session-repository/access-methods.js";
+import { agentSessionMethods } from "./file-system-session-repository/agent-session-methods.js";
 import { sessionArtifactMethods } from "./file-system-session-repository/artifact-methods.js";
 import { sessionCrudMethods } from "./file-system-session-repository/crud-methods.js";
 import { installRepositoryMethods } from "./file-system-session-repository/install-methods.js";
@@ -36,6 +37,7 @@ export class FileSystemSessionRepository {
 installRepositoryMethods(
   FileSystemSessionRepository,
   sessionLifecycleMethods,
+  agentSessionMethods,
   sessionSummaryMethods,
   sessionAccessMethods,
   sessionArtifactMethods,

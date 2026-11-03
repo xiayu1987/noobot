@@ -5,12 +5,15 @@
  */
 import { test, expect } from "../fixtures/noobot.fixture.js";
 import { SESSION_ARTIFACT_SCHEMA_VERSION } from "@noobot/session-protocol";
+import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { fixedAttachment, selectPlugins } from "../helpers/browser-actions.js";
 import { assertNoForbiddenErrors } from "../helpers/log-assertions.js";
 import {
   readSessionExecutionEvents,
+  readJson,
   readSessionFact,
   readSessionRuntimeEvents,
+  sessionRoot,
 } from "../helpers/persistence-audit.js";
 import { assertCommandChain, lifecycleForSession } from "../helpers/scenario-assertions.js";
 import {
@@ -105,7 +108,10 @@ test("@core PBE-029 统一 Session 协议闭环审计", async ({ noobot, protoco
   const persisted = await readSessionFact(noobot.userId, noobot.sessionId);
   expect(Number.isSafeInteger(persisted.aggregateVersion)).toBe(true);
   expect(persisted.aggregateVersion).toBeGreaterThanOrEqual(5);
-  expect("messages" in persisted).toBe(false);
+  const storedSession = await readJson(
+    path.join(await sessionRoot(noobot.userId, noobot.sessionId), "session.json"),
+  );
+  expect("messages" in storedSession).toBe(false);
   expect(new Set(persisted.turnOrder.map((turn) => turn.turnScopeId)).size).toBe(
     persisted.turnOrder.length,
   );

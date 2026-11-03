@@ -4,16 +4,18 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { cp, mkdir, readdir, readFile, rm, stat } from "node:fs/promises";
+import { cp, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { normalizeKnownConfigKeys } from "@noobot/agent-config-protocol";
 import { resolveConfiguredSuperUserId } from "noobot-agent/utils/super-user";
 import {
+  WORKSPACE_LAYOUT,
   WORKSPACE_ROOT_LAYOUT,
   WORKSPACE_USER_CONFIGURATION_ENTRIES,
   isWorkspacePathSegment,
 } from "../../workspace-protocol/src/layout.js";
 import { text } from "@noobot/shared/value";
+import { mcpTestServers } from "../mcp-test-service/config.mjs";
 
 function requireAbsoluteDir(value, label) {
   const dir = text(value);
@@ -64,9 +66,11 @@ async function prepareE2eWorkspace({ sourceRoot, targetRoot, globalConfigPath })
   if (source === target) throw new Error("e2e workspace must differ from the source workspace");
   const userIds = await readWorkspaceUserIds(source, configPath);
   await mkdir(target, { recursive: true });
-  for (const entry of await readdir(target)) {
-    await rm(path.join(target, entry), { recursive: true, force: true });
-  }
+  const globalConfig = JSON.parse(await readFile(configPath, "utf8"));
+  globalConfig.mcp_servers = mcpTestServers();
+  await writeFile(path.join(target, "global.config.json"), JSON.stringify(globalConfig, null, 2), {
+    mode: 0o600,
+  });
   const copied = [];
   for (const file of Object.values(WORKSPACE_ROOT_LAYOUT)) {
     if (await copyEntry(source, target, file)) copied.push(file);
@@ -77,6 +81,14 @@ async function prepareE2eWorkspace({ sourceRoot, targetRoot, globalConfigPath })
       const relative = path.join(userId, entry);
       if (await copyEntry(source, target, relative)) copied.push(relative);
     }
+    const userConfigRelative = path.join(userId, WORKSPACE_LAYOUT.CONFIG_FILE);
+    if (!copied.includes(userConfigRelative)) {
+      throw new Error(`e2e workspace user ${userId} requires ${userConfigRelative} in source`);
+    }
+    const userConfigPath = path.join(target, userConfigRelative);
+    const userConfig = JSON.parse(await readFile(userConfigPath, "utf8"));
+    userConfig.mcp_servers = mcpTestServers();
+    await writeFile(userConfigPath, JSON.stringify(userConfig, null, 2), { mode: 0o600 });
   }
   return { userIds, copied };
 }

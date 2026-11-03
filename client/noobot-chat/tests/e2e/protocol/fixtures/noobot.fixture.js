@@ -172,9 +172,19 @@ async function auditModelObservation({ userId, sessionId, policy, testInfo }) {
   if (validationError) throw validationError;
 }
 
+async function readSessionDetail({ page, apiKey, userId, sessionId }) {
+  const response = await page.request.get(
+    `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`,
+    { headers: { "x-api-key": apiKey } },
+  );
+  expect(response.ok(), "session detail read must succeed before artifact audit").toBe(true);
+  const detail = await response.json();
+  expect(detail.ok).toBe(true);
+  return detail;
+}
+
 async function auditSessionSummaryPersistence({
-  page,
-  apiKey,
+  detail,
   userId,
   sessionId,
   expectation,
@@ -184,13 +194,6 @@ async function auditSessionSummaryPersistence({
   await fs.mkdir(outputDir, { recursive: true });
   let audit;
   try {
-    const response = await page.request.get(
-      `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`,
-      { headers: { "x-api-key": apiKey } },
-    );
-    expect(response.ok(), "session detail read must succeed before artifact audit").toBe(true);
-    const detail = await response.json();
-    expect(detail.ok).toBe(true);
     if (expectation === MODEL_CALL_EXPECTATION.REQUIRED) {
       expect(detail.exists).toBe(true);
       expect(detail.sessions.length).toBeGreaterThan(0);
@@ -266,21 +269,21 @@ export const test = artifactTest.extend({
         failures.push(error);
       }
       try {
-        await auditSessionSummaryPersistence({
+        const detail = await readSessionDetail({
           page,
           apiKey: connectConfig.apiKey,
           userId: credentials.userId,
           sessionId,
-          expectation: policy.expectation,
-          testInfo,
         });
-      } catch (error) {
-        failures.push(error);
-      }
-      try {
-        await registerSuiteSession({
+        if (detail.exists) {
+          await registerSuiteSession({ userId: credentials.userId, sessionId });
+        }
+        await auditSessionSummaryPersistence({
+          detail,
           userId: credentials.userId,
           sessionId,
+          expectation: policy.expectation,
+          testInfo,
         });
       } catch (error) {
         failures.push(error);

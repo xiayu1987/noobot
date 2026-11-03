@@ -12,7 +12,14 @@ import {
   orderOpenAiResponsesRequestBody,
   normalizeModelOutput,
 } from "../src/index.js";
-import { MODEL_RESPONSE_SOURCE } from "@noobot/model-protocol";
+import {
+  MODEL_ERROR_CODE,
+  MODEL_ERROR_KIND,
+  MODEL_RESPONSE_SOURCE,
+  ModelProtocolError,
+} from "@noobot/model-protocol";
+import { openAiCompatibleAdapter } from "../src/adapters/openai-compatible-adapter.js";
+import { classifyTransportError } from "../src/policies/default-retry-policy.js";
 import { HumanMessage } from "@langchain/core/messages";
 
 const sdkTool = {
@@ -170,6 +177,78 @@ test("OpenAI Responses requests serialize stable settings and tools before input
 
   assert.equal(result.id, "resp_test");
   assert.deepEqual(Object.keys(transportedRequest), ["model", "tools", "input"]);
+});
+
+function responsesStreamClient(events) {
+  const client = createOpenAiCompatibleClient({
+    credential: "test-key",
+    modelSpec: {
+      model: "gpt-6-astra",
+      operatorId: "openai",
+      adapterId: "openai-compatible",
+      base_url: "http://localhost",
+      use_responses_api: true,
+      reasoning_effort_parameter: "reasoning_effort",
+      reasoning_effort_options: ["none", "low", "medium", "high", "xhigh", "max"],
+    },
+  });
+  client.responses.client = {
+    responses: {
+      async create() {
+        return (async function* stream() {
+          yield* events;
+        })();
+      },
+    },
+  };
+  return client;
+}
+
+async function drainResponsesStream(client) {
+  const stream = await client.responses.completionWithRetry({ input: [], stream: true });
+  for await (const event of stream) void event;
+}
+
+for (const [code, classification] of [
+  ["server_error", { kind: MODEL_ERROR_KIND.TEMPORARY_UNAVAILABLE, retryable: true }],
+  ["rate_limit_exceeded", { kind: MODEL_ERROR_KIND.RATE_LIMIT, retryable: true }],
+  ["invalid_prompt", { kind: MODEL_ERROR_KIND.UNKNOWN, retryable: false }],
+]) {
+  test(`OpenAI Responses stream classifies response.failed ${code}`, async () => {
+    const message = `upstream ${code}`;
+    const client = responsesStreamClient([
+      {
+        type: "response.failed",
+        sequence_number: 0,
+        response: { id: "resp_failed", status: "failed", error: { code, message } },
+      },
+    ]);
+    const error = await drainResponsesStream(client).then(
+      () => assert.fail("response.failed must reject the stream"),
+      (value) => value,
+    );
+    assert.equal(error.code, code);
+    assert.equal(error.message, message);
+    assert.deepEqual(openAiCompatibleAdapter.classifyError(error), classification);
+  });
+}
+
+test("Responses failure codes stay scoped to the OpenAI adapter", () => {
+  assert.deepEqual(classifyTransportError({ code: "server_error" }), {
+    kind: MODEL_ERROR_KIND.UNKNOWN,
+    retryable: false,
+  });
+});
+
+test("OpenAI Responses stream rejects response.failed without upstream error facts", async () => {
+  const client = responsesStreamClient([
+    { type: "response.failed", response: { id: "resp_failed", status: "failed" } },
+  ]);
+  await assert.rejects(drainResponsesStream(client), (error) => {
+    assert.equal(error instanceof ModelProtocolError, true);
+    assert.equal(error.code, MODEL_ERROR_CODE.PROTOCOL);
+    return true;
+  });
 });
 
 test("openai-compatible adapter applies bound invocation overrides without mutating model defaults", () => {
@@ -424,3 +503,49 @@ test("Claude uses top-level automatic caching and Qwen uses message-level cachin
   });
   assert.deepEqual(qwenBlocks[0].content[1], { type: "image_url", image_url: "x" });
 });
+
+function modeMismatchClient({ streaming, useResponsesApi, contentType, body }) {
+  const calls = [];
+  const client = createOpenAiCompatibleClient({
+    credential: "test-key",
+    streaming,
+    modelSpec: {
+      model: "gpt-6-astra",
+      operatorId: "openai",
+      adapterId: "openai-compatible",
+      base_url: "http://localhost/v1",
+      use_responses_api: useResponsesApi,
+      reasoning_effort_parameter: "reasoning_effort",
+      reasoning_effort_options: ["none", "low", "medium", "high"],
+    },
+    fetch: async (url) => {
+      calls.push(url);
+      return new Response(body, { status: 200, headers: { "content-type": contentType } });
+    },
+  });
+  return { client, calls };
+}
+
+for (const useResponsesApi of [true, false]) {
+  const api = useResponsesApi ? "Responses" : "Completions";
+  for (const streaming of [false, true]) {
+    test(`OpenAI ${api} rejects a ${streaming ? "JSON" : "SSE"} answer to a ${
+      streaming ? "stream" : "non-stream"
+    } request without SDK retries`, async () => {
+      const { client, calls } = modeMismatchClient({
+        streaming,
+        useResponsesApi,
+        contentType: streaming ? "application/json" : "text/event-stream",
+        body: streaming ? '{"id":"resp_json"}' : 'data: {"id":"resp_sse"}\n\n',
+      });
+      await assert.rejects(client.invoke([new HumanMessage("hi")]), (error) => {
+        assert.equal(error instanceof ModelProtocolError, true);
+        assert.equal(error.code, MODEL_ERROR_CODE.RESPONSE_MODE_MISMATCH);
+        assert.equal(error.kind, MODEL_ERROR_KIND.RESPONSE_MODE_MISMATCH);
+        assert.equal(error.details.requestedStreaming, streaming);
+        return true;
+      });
+      assert.equal(calls.length, 1);
+    });
+  }
+}

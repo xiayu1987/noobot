@@ -5,13 +5,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { executeOpenAiOperation } from "../src/adapters/openai-capability-adapter.js";
-import { MODEL_OPERATION_KIND } from "@noobot/model-protocol";
+import {
+  MODEL_ERROR_CODE,
+  MODEL_IMAGE_GENERATION_API_TYPE,
+  MODEL_OPERATION_KIND,
+  ModelProtocolError,
+} from "@noobot/model-protocol";
 
 test("Web Search forces the search tool and returns text with url_citation sources", async () => {
   let request;
   const result = await executeOpenAiOperation({
     modelSpec: { model: "gpt-5.5", base_url: "https://example.test/v1" },
     credential: "key",
+    streaming: false,
     operation: {
       kind: MODEL_OPERATION_KIND.WEB_SEARCH,
       input: { query: "latest" },
@@ -58,6 +64,7 @@ test("Responses image generation sends the prompt through the canonical input fi
   await executeOpenAiOperation({
     modelSpec: { model: "gpt-5.4", base_url: "https://example.test/v1" },
     credential: "key",
+    streaming: false,
     operation: {
       kind: MODEL_OPERATION_KIND.IMAGE_GENERATION,
       input: { prompt: "draw a small red square" },
@@ -83,6 +90,7 @@ test("Responses image generation sends the prompt through the canonical input fi
     ],
     tools: [{ type: "image_generation", size: "1024x1024" }],
     tool_choice: "required",
+    stream: false,
   });
 });
 
@@ -91,6 +99,7 @@ test("multimodal parse maps multiple image and document attachments to one Respo
   const result = await executeOpenAiOperation({
     modelSpec: { model: "gpt-5.4", base_url: "https://example.test/v1" },
     credential: "key",
+    streaming: false,
     operation: {
       kind: MODEL_OPERATION_KIND.MULTIMODAL_PARSE,
       input: {
@@ -136,6 +145,7 @@ test("multimodal parse maps documents to Responses API input_file", async () => 
   await executeOpenAiOperation({
     modelSpec: { model: "gpt-5.4" },
     credential: "key",
+    streaming: false,
     operation: {
       kind: MODEL_OPERATION_KIND.MULTIMODAL_PARSE,
       input: {
@@ -171,6 +181,7 @@ test("multimodal parse maps normalized audio to Responses API input_audio", asyn
   await executeOpenAiOperation({
     modelSpec: { model: "gpt-5.4" },
     credential: "key",
+    streaming: false,
     operation: {
       kind: MODEL_OPERATION_KIND.MULTIMODAL_PARSE,
       input: {
@@ -201,6 +212,7 @@ test("multimodal parse maps video to an OpenAI Responses API file input", async 
   await executeOpenAiOperation({
     modelSpec: { model: "gpt-5.4" },
     credential: "key",
+    streaming: false,
     operation: {
       kind: MODEL_OPERATION_KIND.MULTIMODAL_PARSE,
       input: {
@@ -225,4 +237,112 @@ test("multimodal parse maps video to an OpenAI Responses API file input", async 
     file_data: "data:video/mp4;base64,AQ==",
     filename: "a.mp4",
   });
+});
+
+test("capability operations reject a streamed answer as a response mode mismatch", async () => {
+  const calls = [];
+  const sse = () =>
+    new Response('data: {"id":"resp_sse"}\n\n', {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    });
+  const operations = [
+    {
+      modelSpec: { model: "gpt-5.5", base_url: "https://example.test/v1" },
+      operation: { kind: MODEL_OPERATION_KIND.WEB_SEARCH, input: { query: "q" }, options: {} },
+    },
+    {
+      modelSpec: {
+        model: "img",
+        base_url: "https://example.test/v1",
+        multimodal_generation: {
+          support_generation: { api_type: MODEL_IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC },
+        },
+      },
+      operation: {
+        kind: MODEL_OPERATION_KIND.IMAGE_GENERATION,
+        input: { prompt: "p" },
+        options: {},
+      },
+    },
+  ];
+  for (const input of operations) {
+    await assert.rejects(
+      executeOpenAiOperation({
+        ...input,
+        credential: "key",
+        streaming: false,
+        fetchImpl: async (url) => {
+          calls.push(url);
+          return sse();
+        },
+      }),
+      (error) => {
+        assert.equal(error instanceof ModelProtocolError, true);
+        assert.equal(error.code, MODEL_ERROR_CODE.RESPONSE_MODE_MISMATCH);
+        return true;
+      },
+    );
+  }
+  assert.deepEqual(calls.map(String), [
+    "https://example.test/v1/responses",
+    "https://example.test/v1/images/generations",
+  ]);
+});
+
+async function* responsesEvents(events) {
+  yield* events;
+}
+
+function webSearchWithStream(events) {
+  return executeOpenAiOperation({
+    modelSpec: { model: "gpt-5.5", base_url: "https://example.test/v1" },
+    credential: "key",
+    streaming: true,
+    operation: { kind: MODEL_OPERATION_KIND.WEB_SEARCH, input: { query: "q" }, options: {} },
+    openAiClientFactory: () => ({
+      responses: {
+        create: async (body) => {
+          assert.equal(body.stream, true);
+          return responsesEvents(events);
+        },
+      },
+    }),
+  });
+}
+
+test("streamed capability operations accept only response.completed", async () => {
+  const result = await webSearchWithStream([
+    { type: "response.output_text.delta", delta: "partial" },
+    { type: "response.completed", response: { output_text: "done", output: [] } },
+  ]);
+  assert.equal(result.rawText, "done");
+  for (const events of [
+    [
+      {
+        type: "response.incomplete",
+        response: { id: "r1", incomplete_details: { reason: "max_output_tokens" } },
+      },
+    ],
+    [{ type: "response.output_text.delta", delta: "partial" }],
+  ]) {
+    await assert.rejects(webSearchWithStream(events), ModelProtocolError);
+  }
+});
+
+test("capability operations reject a non-boolean streaming mode before any request", async () => {
+  let created = false;
+  await assert.rejects(
+    executeOpenAiOperation({
+      modelSpec: { model: "gpt-5.5" },
+      credential: "key",
+      operation: { kind: MODEL_OPERATION_KIND.WEB_SEARCH, input: { query: "q" }, options: {} },
+      openAiClientFactory: () => {
+        created = true;
+        return {};
+      },
+    }),
+    /requestedStreaming must be boolean/,
+  );
+  assert.equal(created, false);
 });

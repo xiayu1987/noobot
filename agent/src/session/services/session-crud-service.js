@@ -94,6 +94,7 @@ export class SessionCrudService {
     }
     return resolveAuthoritativeTurnTerminal({
       lifecycle: bundle.session.turnLifecycle,
+      parentSessionId: bundle.session.parentSessionId,
       turnTimings: bundle.session.turnTimings,
       aggregateVersion: bundle.session.aggregateVersion,
       ...identity,

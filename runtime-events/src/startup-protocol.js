@@ -35,6 +35,7 @@ const TERMINAL_STATE_BY_EVENT = new Map([
 export const SERVICE_STARTUP_PROGRESS_STAGES = Object.freeze({
   LAYOUT_UPGRADE: "layoutUpgrade",
   DISPLAY_SUMMARY: "displaySummary",
+  TURN_RECOVERY: "turnRecovery",
 });
 
 export const SERVICE_STARTUP_LIVENESS = Object.freeze({

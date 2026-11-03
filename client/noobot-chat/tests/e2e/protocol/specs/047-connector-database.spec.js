@@ -80,10 +80,7 @@ test("@full PBE-047 添加 MySQL 连接器、选择、查询及上下文与 Sess
   request,
 }, testInfo) => {
   test.setTimeout(PROTOCOL_TIMEOUTS.model * 2 + PROTOCOL_TIMEOUTS.audit);
-  await sendMessage(
-    noobot.page,
-    uniquePrompt(testInfo, "provision a local connector quality-assurance session; reply with OK"),
-  );
+  await sendMessage(noobot.page, uniquePrompt(testInfo, "只回复 OK。"));
   const provisionCommand = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
   expect(provisionCommand.session).toEqual({
     createIfAbsent: true,

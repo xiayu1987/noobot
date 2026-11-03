@@ -6,12 +6,21 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   classifyModelFailure,
+  projectModelAttemptError,
   projectModelInvocationFailure,
   MODEL_ERROR_KIND,
   ModelProtocolError,
 } from "../src/index.js";
+const attemptError = (code, kind) => ({
+  message: `${code} message`,
+  code,
+  kind,
+  retryable: false,
+  classificationError: null,
+});
 const failure = () => ({
   attemptCount: 2,
+  message: "LAST message",
   code: "LAST",
   kind: MODEL_ERROR_KIND.TIMEOUT,
   classificationError: null,
@@ -19,21 +28,22 @@ const failure = () => ({
     {
       attempt: 1,
       kind: "transport",
-      error: { code: "FIRST", kind: MODEL_ERROR_KIND.RATE_LIMIT, classificationError: null },
+      error: attemptError("FIRST", MODEL_ERROR_KIND.RATE_LIMIT),
     },
     {
       attempt: 2,
       kind: "response",
-      error: { code: "LAST", kind: MODEL_ERROR_KIND.TIMEOUT, classificationError: null },
+      error: attemptError("LAST", MODEL_ERROR_KIND.TIMEOUT),
     },
   ],
 });
 test("failure projection preserves independent attempt facts and freezes the result", () => {
   const result = projectModelInvocationFailure(failure());
   assert.deepEqual(
-    result.failedAttempts.map(({ error }) => error.code),
-    ["FIRST", "LAST"],
+    result.failedAttempts.map(({ error }) => error.message),
+    ["FIRST message", "LAST message"],
   );
+  assert.equal(result.message, "LAST message");
   assert.ok(Object.isFrozen(result.failedAttempts));
   assert.ok(Object.isFrozen(result.failedAttempts[0].error));
 });
@@ -44,13 +54,25 @@ test("zero-attempt setup failure is valid without a fabricated provider attempt"
     [],
   );
 });
-for (const field of ["code", "kind", "classificationError"]) {
+for (const field of ["message", "code", "kind", "retryable", "classificationError"]) {
   test(`failure projection rejects missing attempt error.${field}`, () => {
     const input = failure();
     delete input.failedAttempts[0].error[field];
     assert.throws(() => projectModelInvocationFailure(input), TypeError);
   });
 }
+test("failure projection rejects a missing terminal message", () => {
+  const input = failure();
+  delete input.message;
+  assert.throws(() => projectModelInvocationFailure(input), TypeError);
+});
+test("attempt error projection keeps an empty upstream message and rejects invalid fields", () => {
+  const valid = attemptError("E", MODEL_ERROR_KIND.TIMEOUT);
+  assert.equal(projectModelAttemptError({ ...valid, message: "" }).message, "");
+  for (const change of [{ message: 1 }, { retryable: "yes" }, { kind: "invented" }, { code: "" }]) {
+    assert.throws(() => projectModelAttemptError({ ...valid, ...change }), TypeError);
+  }
+});
 test("failure projection rejects invalid attempt identity and category", () => {
   for (const change of [{ attempt: 0 }, { attempt: 3 }, { kind: "invented" }]) {
     const input = failure();

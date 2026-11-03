@@ -139,3 +139,13 @@ export async function recoverActiveTurn({
     committed,
   };
 }
+
+export function createServiceRestartRecoveryPolicy({ observedAtMs }) {
+  if (!Number.isFinite(observedAtMs)) {
+    throw new TypeError("service restart recovery requires a finite observedAtMs");
+  }
+  return {
+    inspectExecution: async () => ({ alive: false, observedAtMs }),
+    graceMs: 0,
+  };
+}

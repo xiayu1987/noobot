@@ -16,6 +16,8 @@ import {
   resolveModelImageGenerationApiType,
 } from "@noobot/model-protocol";
 import { isPlainObject, text } from "@noobot/shared/value";
+import { createResponseModeFetch, unwrapModelProtocolError } from "./response-mode.js";
+import { collectResponsesStream } from "./openai-responses-stream.js";
 
 const RATIO_SIZE = /^(auto|\d+(?:\.\d+)?:\d+(?:\.\d+)?)$/i;
 
@@ -264,22 +266,47 @@ function extractResponsesImages(output = []) {
   return artifacts;
 }
 
+function usesImagesAsync({ modelSpec, operation }) {
+  return (
+    operation.kind === MODEL_OPERATION_KIND.IMAGE_GENERATION &&
+    resolveModelImageGenerationApiType(modelSpec) === MODEL_IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC
+  );
+}
+
+export function resolveOpenAiOperationStreamingModes({ modelSpec, operation }) {
+  return usesImagesAsync({ modelSpec, operation }) ? [false] : [false, true];
+}
+
 export async function executeOpenAiOperation({
+  fetchImpl = globalThis.fetch,
+  streaming,
+  ...input
+}) {
+  try {
+    return await runOpenAiOperation({
+      ...input,
+      streaming,
+      fetchImpl: createResponseModeFetch({ requestedStreaming: streaming, fetch: fetchImpl }),
+    });
+  } catch (error) {
+    throw unwrapModelProtocolError(error);
+  }
+}
+
+async function runOpenAiOperation({
   modelSpec,
   credential,
   operation,
+  streaming,
   headers = {},
   signal,
-  fetchImpl = globalThis.fetch,
+  fetchImpl,
   clock = { sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) },
   locale = "zh-CN",
   mapMultimodalAttachment = mapOpenAiMultimodalAttachment,
   openAiClientFactory = (config) => new OpenAI(config),
 }) {
-  if (
-    operation.kind === MODEL_OPERATION_KIND.IMAGE_GENERATION &&
-    resolveModelImageGenerationApiType(modelSpec) === MODEL_IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC
-  ) {
+  if (usesImagesAsync({ modelSpec, operation })) {
     return executeImagesAsync({
       modelSpec,
       credential,
@@ -296,23 +323,29 @@ export async function executeOpenAiOperation({
     apiKey: credential,
     ...(modelSpec.base_url ? { baseURL: modelSpec.base_url } : {}),
     defaultHeaders: headers,
+    fetch: fetchImpl,
+    maxRetries: 0,
   });
-  if (operation.kind === MODEL_OPERATION_KIND.WEB_SEARCH) {
+  const createResponse = async (body) => {
     const result = await client.responses.create(
-      {
-        model: modelSpec.model,
-        instructions: MODEL_WEB_SEARCH_INSTRUCTION,
-        input: [
-          {
-            role: "user",
-            content: [{ type: "input_text", text: text(operation.input.query) }],
-          },
-        ],
-        tools: [{ type: "web_search" }],
-        tool_choice: "required",
-      },
+      { ...body, stream: streaming },
       { signal: signal || undefined },
     );
+    return streaming ? collectResponsesStream(result) : result;
+  };
+  if (operation.kind === MODEL_OPERATION_KIND.WEB_SEARCH) {
+    const result = await createResponse({
+      model: modelSpec.model,
+      instructions: MODEL_WEB_SEARCH_INSTRUCTION,
+      input: [
+        {
+          role: "user",
+          content: [{ type: "input_text", text: text(operation.input.query) }],
+        },
+      ],
+      tools: [{ type: "web_search" }],
+      tool_choice: "required",
+    });
     return {
       rawText: resolveResponsesOutputText(result),
       sources: extractResponsesUrlCitations(result?.output),
@@ -320,46 +353,40 @@ export async function executeOpenAiOperation({
   }
   if (operation.kind === MODEL_OPERATION_KIND.MULTIMODAL_PARSE) {
     const attachmentContent = operation.input.attachments.map(mapMultimodalAttachment);
-    const result = await client.responses.create(
-      {
-        model: modelSpec.model,
-        input: [
-          {
-            role: "user",
-            content: [
-              { type: "input_text", text: text(operation.input.prompt) },
-              ...attachmentContent,
-            ],
-          },
-        ],
-      },
-      { signal: signal || undefined },
-    );
+    const result = await createResponse({
+      model: modelSpec.model,
+      input: [
+        {
+          role: "user",
+          content: [
+            { type: "input_text", text: text(operation.input.prompt) },
+            ...attachmentContent,
+          ],
+        },
+      ],
+    });
     return {
       rawText: resolveResponsesOutputText(result),
       output: Array.isArray(result?.output) ? result.output : [],
     };
   }
   if (operation.kind === MODEL_OPERATION_KIND.IMAGE_GENERATION) {
-    const result = await client.responses.create(
-      {
-        model: modelSpec.model,
-        input: [
-          {
-            role: "user",
-            content: [{ type: "input_text", text: text(operation.input.prompt) }],
-          },
-        ],
-        tools: [
-          {
-            type: "image_generation",
-            size: text(operation.options.size) || "1024x1024",
-          },
-        ],
-        tool_choice: "required",
-      },
-      { signal: signal || undefined },
-    );
+    const result = await createResponse({
+      model: modelSpec.model,
+      input: [
+        {
+          role: "user",
+          content: [{ type: "input_text", text: text(operation.input.prompt) }],
+        },
+      ],
+      tools: [
+        {
+          type: "image_generation",
+          size: text(operation.options.size) || "1024x1024",
+        },
+      ],
+      tool_choice: "required",
+    });
     return {
       rawText: resolveResponsesOutputText(result),
       imageArtifacts: extractResponsesImages(result?.output),

@@ -148,7 +148,7 @@ async function assertFileMutationArtifacts(page, records, turnScopeId, filePath)
     .locator(".mutation-file-item");
   await expect(writeCard).toHaveCount(1);
   await writeCard.click();
-  const writeDialog = page.locator(".generated-file-preview-drawer");
+  const writeDialog = page.locator(".generated-file-preview-drawer:visible");
   await expect(writeDialog).toBeVisible();
   await expect(writeDialog.locator(".mutation-file-content")).toContainText("CASE036-TOOL-CONTENT");
   await expect(page).toHaveURL(/overlay=file-preview/);
@@ -161,7 +161,7 @@ async function assertFileMutationArtifacts(page, records, turnScopeId, filePath)
     .locator(".mutation-file-item");
   await expect(updateCard).toHaveCount(1);
   await updateCard.click();
-  const updateDialog = page.locator(".generated-file-preview-drawer");
+  const updateDialog = page.locator(".generated-file-preview-drawer:visible");
   await expect(updateDialog).toBeVisible();
   await expect(updateDialog.locator(".mutation-diff-split")).toBeVisible();
   await expect(updateDialog.locator(".mutation-diff-pane")).toHaveCount(2);

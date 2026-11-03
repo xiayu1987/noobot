@@ -117,6 +117,7 @@ export const BACKEND_COMMON_ZH_CN = {
   "session.parentSessionNotFoundPossiblyDeleted": "未找到父会话（可能已删除）",
   "session.workspaceNotInitialized": "工作区未初始化",
   "session.treeNodeMissing": "会话未登记在会话树中",
+  "session.persistenceOwnerConflict": "会话持久化归属存在多个位置",
   "status.disconnectedFromHistory": "已断开历史连接",
   "ws.badRequest": "请求无效",
   "ws.commandDispatchFailed": "命令分发失败",

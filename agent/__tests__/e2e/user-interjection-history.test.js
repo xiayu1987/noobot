@@ -20,6 +20,10 @@ import { createCanonicalMessageEventSessionManager } from "../helpers/canonical-
 import { createAcceptedRunIdentity } from "../helpers/accepted-run-identity.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 import { createTestSessionRunPayload } from "../helpers/session-run-payload.js";
+import { createTestAttachmentService } from "../helpers/test-runtime-context.js";
+import { TEST_MODEL_GLOBAL_CONFIG } from "../helpers/test-model-config.js";
+import { createSummaryCheckpointInstruction } from "@noobot/context-protocol/policy/main-flow-control";
+import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
 
 test("session execution preserves every user interjection into the next model history", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-user-interjection-e2e-"));
@@ -83,6 +87,8 @@ test("session execution preserves every user interjection into the next model hi
       const userMessage = {
         messageUid,
         id: messageUid,
+        userMessageId: messageUid,
+        ts: "2026-09-18T00:00:00.000Z",
         role: "user",
         type: "message",
         content: "start task",
@@ -92,6 +98,7 @@ test("session execution preserves every user interjection into the next model hi
         dialogProcessId: payload.dialogProcessId,
         turnScopeId: payload.turnScopeId,
         messageOrigin: "natural",
+        attachments: [],
         summarized: false,
       };
       persistedTurns.push(userMessage);
@@ -103,18 +110,23 @@ test("session execution preserves every user interjection into the next model hi
   };
 
   const engine = createTestSessionExecutionEngine({
-    globalConfig: {},
+    globalConfig: { ...TEST_MODEL_GLOBAL_CONFIG, workspaceRoot: root },
     session,
     memory: {
       async captureDialogToShortMemory() {},
       async maybeSummarize() {},
     },
     attach: {
+      ...createTestAttachmentService(),
       async ingest() {
         throw new Error("user interjection e2e carries no raw attachments");
       },
     },
-    skill: {},
+    skill: {
+      async listSkills() {
+        return [];
+      },
+    },
     configService: {
       async loadUserConfig() {
         return {};
@@ -129,13 +141,13 @@ test("session execution preserves every user interjection into the next model hi
       },
     },
     errorLogger: { async log() {} },
-    botManager: {},
     agentRunner: async ({ agentContext, currentUserMessage }) => {
       const runtime = agentContext.bindings.runtime;
       const modelContext = createModelContext({
         activeTurnIdentity: { dialogProcessId, turnScopeId },
         messageBlocks: agentContext.context.modelContext.messageBlocks,
       });
+      runtime.activeMessageContext = modelContext;
       for (const interjection of interjections) {
         appendUserInterjectionMessage({
           runtime,
@@ -146,13 +158,14 @@ test("session execution preserves every user interjection into the next model hi
         });
       }
       await runtime.commitSummaryCheckpoint({
-        summaryCompletion: {
+        summaryCompletion: createSummaryCheckpointInstruction({
           source: "e2e.task_summary",
           summarizedMessageUids: [currentUserMessage.messageUid],
-        },
+        }),
       });
       runtime.currentTurnMessages.push({
         messageUid: "assistant:e2e:final",
+        modelMessageId: "assistant:e2e:final",
         role: "assistant",
         type: "message",
         content: "completed",
@@ -164,9 +177,9 @@ test("session execution preserves every user interjection into the next model hi
         output: "completed",
         modelMessageId: "assistant:e2e:final",
         traces: [],
+        modelLoopRound: 0,
         turnMessages: runtime.currentTurnMessages.toArray(),
         modelMessages: modelContext.messageBlocks.incremental,
-        currentUserMessage,
       };
     },
   });
@@ -224,13 +237,18 @@ test("session execution preserves every user interjection into the next model hi
       assert.equal(interjection.summarized, false);
     }
 
-    const nextHistory = resolveModelHistoryMessages({ sourceMessages: persistedTurns });
+    const nextHistory = resolveModelHistoryMessages({
+      sourceMessages: persistedTurns.map(projectSessionRecordToContextMessage),
+    });
     assert.deepEqual(
       [
         ...new Set(
           nextHistory
-            .filter((message) => message.injectedMessageType === "noobot.user_interjection")
-            .map((message) => message.messageUid),
+            .filter(
+              (message) =>
+                message.additional_kwargs.injectedMessageType === "noobot.user_interjection",
+            )
+            .map((message) => message.additional_kwargs.messageUid),
         ),
       ],
       interjections.map(({ messageUid }) => messageUid),

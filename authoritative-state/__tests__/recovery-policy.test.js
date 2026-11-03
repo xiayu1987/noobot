@@ -13,6 +13,7 @@ import {
 } from "@noobot/session-protocol/turn-lifecycle";
 import {
   assessTurnRecovery,
+  createServiceRestartRecoveryPolicy,
   inspectTurnRecovery,
   recoverActiveTurn,
 } from "../src/application/recovery-policy.js";
@@ -335,4 +336,35 @@ test("recovery preserves a rejected commit reason and rejects missing commit fac
   });
   assert.equal(result.reason, "session_deleted");
   assert.equal(result.committed, committed);
+});
+
+test("service restart policy orphans a fresh active turn without a grace period", async () => {
+  const observedAtMs = Date.parse("2026-07-18T00:00:05.000Z");
+  const commands = [];
+  const result = await recoverActiveTurn({
+    turn: staleTurn(),
+    identity: { userId: "u1", sessionId: "s1" },
+    ...createServiceRestartRecoveryPolicy({ observedAtMs }),
+    commitTurnLifecycle: async (command) => {
+      commands.push(command);
+      return { applied: true };
+    },
+  });
+  assert.equal(result.recovered, true);
+  assert.equal(result.action, TURN_RECOVERY_ACTION.ORPHAN);
+  assert.equal(commands[0].eventType, TURN_EVENT.FAILED);
+});
+
+test("service restart policy keeps a pending finalize intent as finalize", async () => {
+  const policy = createServiceRestartRecoveryPolicy({ observedAtMs: OBSERVED_LATE });
+  const assessment = await inspectTurnRecovery({
+    turn: staleTurn({
+      state: TURN_STATE.STOPPING,
+      phase: TURN_PHASE.STOP,
+      finalizeIntent: finalizeIntent("stop"),
+    }),
+    ...policy,
+  });
+  assert.equal(assessment.action, TURN_RECOVERY_ACTION.FINALIZE);
+  assert.throws(() => createServiceRestartRecoveryPolicy({}), TypeError);
 });

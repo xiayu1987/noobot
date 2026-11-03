@@ -6,33 +6,12 @@
 import { text } from "@noobot/shared/value";
 import { MODEL_ERROR_KIND } from "@noobot/model-protocol";
 
-const EXPLICIT_ERROR_CODES = new Set([
-  "aborted",
-  "authentication",
-  "authorization",
-  "credential_missing",
-  "content_policy",
-  "context_length",
-  "invalid_api_key",
-  "quota_exceeded",
-  "rate_limit",
+const MODE_INDEPENDENT_ERROR_KINDS = new Set([
+  MODEL_ERROR_KIND.ABORTED,
+  MODEL_ERROR_KIND.AUTHENTICATION,
+  MODEL_ERROR_KIND.RATE_LIMIT,
+  MODEL_ERROR_KIND.CLASSIFICATION,
 ]);
-
-const EXPLICIT_ERROR_TEXT = [
-  "context length",
-  "context window",
-  "maximum context",
-  "content policy",
-  "invalid api key",
-  "incorrect api key",
-  "quota exceeded",
-  "insufficient quota",
-  "permission denied",
-  "not authorized",
-  "authentication failed",
-  "request was cancelled",
-  "request was canceled",
-];
 
 export function streamingProviderCacheKey({ model = {}, operation = {}, tools = [] } = {}) {
   return JSON.stringify([
@@ -49,21 +28,8 @@ export function resolvePreferredStreaming({ requested, cached } = {}) {
   return typeof cached === "boolean" ? cached : requested === true;
 }
 
-function isExplicitProviderError(error) {
-  const code = text(error?.code || error?.cause?.code).toLowerCase();
-  if (EXPLICIT_ERROR_CODES.has(code)) return true;
-  const message = String(error?.message || error || "").toLowerCase();
-  return EXPLICIT_ERROR_TEXT.some((inputText) => message.includes(inputText));
-}
-
-export function mayRetryWithAlternateStreaming(error, streamedTokens, classification) {
-  const classifiedKind = classification.kind.toLowerCase();
-  return (
-    classification.kind !== MODEL_ERROR_KIND.CLASSIFICATION &&
-    streamedTokens === 0 &&
-    !isExplicitProviderError(error) &&
-    !EXPLICIT_ERROR_CODES.has(classifiedKind)
-  );
+export function mayRetryWithAlternateStreaming(streamedTokens, classification) {
+  return streamedTokens === 0 && !MODE_INDEPENDENT_ERROR_KINDS.has(classification.kind);
 }
 
 export function alternateStreamingMode(mode) {

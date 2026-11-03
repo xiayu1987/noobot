@@ -18,6 +18,7 @@ import {
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
 import { tool as structuredTool } from "@langchain/core/tools";
 import { z } from "zod";
+import { MODEL_ERROR_CODE, ModelProtocolError } from "@noobot/model-protocol";
 
 const sdkTool = {
   type: "function",
@@ -476,6 +477,66 @@ test("Anthropic Messages adapter sends the configured 1h cache_control ttl", asy
     });
     await client.invoke([{ role: "user", content: "hello" }]);
     assert.deepEqual(body.cache_control, { type: "ephemeral", ttl: "1h" });
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+for (const [label, args] of [
+  ["malformed JSON", "{x:"],
+  ["a non-object value", "[1]"],
+]) {
+  test(`Anthropic tool_use input rejects ${label} arguments`, () => {
+    assert.throws(
+      () =>
+        convertMessages([
+          {
+            role: "assistant",
+            content: "",
+            tool_calls: [{ id: "call_bad", function: { name: "run", arguments: args } }],
+          },
+        ]),
+      (error) =>
+        error instanceof ModelProtocolError &&
+        error.code === MODEL_ERROR_CODE.PROTOCOL &&
+        error.details.toolCallId === "call_bad",
+    );
+  });
+}
+
+test("Anthropic non-JSON error body surfaces as the upstream message with status", async () => {
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response("gateway overloaded\n", { status: 502 });
+  try {
+    await assert.rejects(
+      anthropicMessagesAdapter.executeOperation({
+        credential: "sk-test",
+        modelSpec: anthropicOperationSpec,
+        operation: { kind: "multimodal_parse", input: { prompt: "describe", attachments: [] } },
+      }),
+      (error) => error.message === "gateway overloaded" && error.status === 502,
+    );
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test("Anthropic error body declared as JSON but malformed is a protocol error", async () => {
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response("<html>bad gateway</html>", {
+      status: 502,
+      headers: { "content-type": "application/json" },
+    });
+  try {
+    await assert.rejects(
+      anthropicMessagesAdapter.executeOperation({
+        credential: "sk-test",
+        modelSpec: anthropicOperationSpec,
+        operation: { kind: "multimodal_parse", input: { prompt: "describe", attachments: [] } },
+      }),
+      (error) => error instanceof ModelProtocolError && error.details.status === 502,
+    );
   } finally {
     globalThis.fetch = previousFetch;
   }

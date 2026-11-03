@@ -28,6 +28,7 @@ function readTurnSnapshot({
 export function readAnnotatedTurnSnapshot({
   bot,
   inspectExecution,
+  graceMs,
   commandId,
   knownSequence,
   terminalLimit,
@@ -44,13 +45,14 @@ export function readAnnotatedTurnSnapshot({
     knownSequence,
     terminalLimit,
     resolveRecovery: async (turn) =>
-      (await inspectTurnRecovery({ turn, identity, inspectExecution })).action,
+      (await inspectTurnRecovery({ turn, identity, inspectExecution, graceMs })).action,
   });
 }
 
 export function recoverPersistedTurn({
   turn,
   inspectExecution,
+  graceMs,
   commitTurnLifecycle,
   userId,
   sessionId,
@@ -59,6 +61,7 @@ export function recoverPersistedTurn({
     turn,
     identity: { userId, sessionId },
     inspectExecution,
+    graceMs,
     commitTurnLifecycle,
   });
 }
@@ -66,6 +69,7 @@ export function recoverPersistedTurn({
 export async function finalizeTurnSnapshot({
   bot,
   inspectExecution,
+  graceMs,
   commitTurnLifecycle,
   commandId,
   terminalLimit,
@@ -78,6 +82,7 @@ export async function finalizeTurnSnapshot({
     ...identity,
     bot,
     inspectExecution,
+    graceMs,
     commandId,
     knownSequence: 0,
     terminalLimit,
@@ -88,6 +93,7 @@ export async function finalizeTurnSnapshot({
     ...identity,
     turn: initial.snapshot.activeTurn,
     inspectExecution,
+    graceMs,
     commitTurnLifecycle,
   });
   if (!recovered.recovered) {
@@ -98,6 +104,7 @@ export async function finalizeTurnSnapshot({
     ...identity,
     bot,
     inspectExecution,
+    graceMs,
     commandId,
     knownSequence: 0,
     terminalLimit,

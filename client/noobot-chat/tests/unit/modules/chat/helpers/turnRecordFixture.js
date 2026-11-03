@@ -32,6 +32,7 @@ export function turnRecordFixture(fields = {}) {
     action,
     phase,
     sessionId: "s1",
+    parentSessionId: "",
     presentationMessageId: `msg-${turnScopeId}`,
     commandId: `command-${turnScopeId}`,
     executionId: deriveAgentExecutionId({ turnScopeId }),

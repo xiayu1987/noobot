@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { SERVICE_STARTUP_PROGRESS_STAGES } from "@noobot/runtime-events";
+import { recoverServiceRestartTurns } from "./recover-service-restart-turns.js";
 
 function describeFailure(userId, stage, error) {
   return {
@@ -37,6 +38,7 @@ function collectLayoutUpgradeFailures(userId, layoutUpgrades = []) {
 export async function prepareUserWorkspaces({ userIds, bot, reportProgress }) {
   const results = [];
   const failures = [];
+  let recoveredTurnCount = 0;
   for (const [index, userId] of userIds.entries()) {
     const userProgress = { userId, userIndex: index + 1, userCount: userIds.length };
     try {
@@ -69,6 +71,29 @@ export async function prepareUserWorkspaces({ userIds, bot, reportProgress }) {
     } catch (error) {
       failures.push(describeFailure(userId, "sessionDisplaySummary", error));
     }
+    try {
+      const recovery = await recoverServiceRestartTurns({
+        bot,
+        userId,
+        onProgress: (progress) =>
+          reportProgress({
+            ...userProgress,
+            stage: SERVICE_STARTUP_PROGRESS_STAGES.TURN_RECOVERY,
+            upgradeId: "",
+            ...progress,
+          }),
+      });
+      recoveredTurnCount += recovery.recoveredSessionIds.length;
+      failures.push(
+        ...recovery.failures.map((failure) => ({
+          userId,
+          stage: SERVICE_STARTUP_PROGRESS_STAGES.TURN_RECOVERY,
+          ...failure,
+        })),
+      );
+    } catch (error) {
+      failures.push(describeFailure(userId, SERVICE_STARTUP_PROGRESS_STAGES.TURN_RECOVERY, error));
+    }
   }
   return {
     userCount: userIds.length,
@@ -76,6 +101,7 @@ export async function prepareUserWorkspaces({ userIds, bot, reportProgress }) {
       (count, result) => count + (result.rebuiltSessionIds?.length || 0),
       0,
     ),
+    recoveredTurnCount,
     failures,
   };
 }

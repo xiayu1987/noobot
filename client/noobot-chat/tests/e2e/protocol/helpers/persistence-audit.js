@@ -92,7 +92,13 @@ export async function readJson(filePath) {
 }
 
 export async function readSessionFact(userId, sessionId) {
-  return readJson(path.join(await sessionRoot(userId, sessionId), "session.json"));
+  return readSessionArtifact({
+    storageService: new StorageService({
+      atomicRenameRetryDelaysMs: [],
+      platform: process.platform,
+    }),
+    sessionDir: await sessionRoot(userId, sessionId),
+  });
 }
 
 async function findFilesNamed(directory, filename) {
@@ -273,13 +279,7 @@ export async function auditSessionSummaryArtifacts(
 }
 
 export async function readSessionTurnMessages(userId, sessionId) {
-  const session = await readSessionArtifact({
-    storageService: new StorageService({
-      atomicRenameRetryDelaysMs: [],
-      platform: process.platform,
-    }),
-    sessionDir: await sessionRoot(userId, sessionId),
-  });
+  const session = await readSessionFact(userId, sessionId);
   return session.messages;
 }
 

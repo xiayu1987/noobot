@@ -6,6 +6,7 @@
 export function turnRecord(overrides = {}) {
   const { turnScopeId = "turn-1" } = overrides;
   return {
+    parentSessionId: "",
     turnScopeId,
     presentationMessageId: "message-1",
     dialogProcessId: "dialog-1",
