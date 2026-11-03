@@ -4,11 +4,22 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, open, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { MODEL_LIBRARY_VERSION, listModelLibraryOptions } from "@noobot/model-protocol";
 import { upgradeGlobalModelLibrary } from "../bootstrap/upgrade-global-model-library.js";
+
+async function fileSnapshot(filePath) {
+  const handle = await open(filePath, "r");
+  try {
+    const content = await handle.readFile("utf8");
+    const { mtimeMs, ino, dev } = await handle.stat();
+    return { content, mtimeMs, ino, dev };
+  } finally {
+    await handle.close();
+  }
+}
 
 for (const versioned of [false, true]) {
   test(`direct service startup upgrades ${versioned ? "versioned" : "legacy"} global config once`, async () => {
@@ -40,10 +51,9 @@ for (const versioned of [false, true]) {
       const backups = (await readdir(root)).filter((name) => name.endsWith(".bak"));
       assert.equal(backups.length, 1);
       assert.equal(await readFile(path.join(root, backups[0]), "utf8"), original);
-      const before = await stat(filePath);
+      const before = await fileSnapshot(filePath);
       assert.equal((await upgradeGlobalModelLibrary(filePath)).changed, false);
-      assert.equal(await readFile(filePath, "utf8"), upgradedText);
-      assert.equal((await stat(filePath)).mtimeMs, before.mtimeMs);
+      assert.deepEqual(await fileSnapshot(filePath), before);
       assert.equal((await readdir(root)).filter((name) => name.endsWith(".bak")).length, 1);
     } finally {
       await rm(root, { recursive: true, force: true });

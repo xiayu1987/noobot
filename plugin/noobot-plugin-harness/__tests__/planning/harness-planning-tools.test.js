@@ -7,6 +7,7 @@ import {
   createTestHookContext,
   createTestModelResponse,
 } from "../helpers/public-runtime-fixtures.js";
+import { assertToolResultObject } from "@noobot/event-protocol/tool-result-v24";
 import {
   assert,
   assertFlatCapabilityMessages,
@@ -159,6 +160,7 @@ test("harness planning injects refinement tool and tool call runs plugin-side re
     },
   );
   assert.equal(toolResult?.ok, true);
+  assertToolResultObject(toolResult);
   assert.equal(toolResult?.status, "completed");
   assert.equal(agentContext.bindings.extensions.harness.state.flags.planRefinementRequested, true);
   assert.equal(
@@ -287,6 +289,8 @@ test("harness exposes plan refinement before capture and the tool owns its not-r
   );
   assert.equal(result.ok, false);
   assert.equal(result.status, "not_ready");
+  assert.equal(result.code, "plan_refinement_not_ready");
+  assertToolResultObject(result);
 });
 
 test("harness planning allows tool-call turn without assistant text when planning tools are allowed", async () => {
@@ -335,6 +339,67 @@ test("harness planning allows tool-call turn without assistant text when plannin
     true,
   );
 });
+
+for (const outcome of ["converged", "disabled", "invalid_refinement_payload", "model_failed"]) {
+  test(`harness refinement ${outcome} returns a valid tool result`, async () => {
+    const hookManager = createAgentHookManager();
+    let toolInvocation = false;
+    registerHarnessCore(
+      { hookManager },
+      {
+        trace: false,
+        promptPolicy: false,
+        planningGuidanceMode: "separate_model",
+        capabilityModelInvoker: async () => {
+          if (toolInvocation && outcome === "model_failed") throw new Error("model unavailable");
+          return createTestModelResponse(toolInvocation ? "invalid refinement" : "1. 执行核心任务");
+        },
+      },
+    );
+    const ctx = createTestHookContext({
+      userId: "refinement-result-user",
+      sessionId: `refinement-${outcome}`,
+      dialogProcessId: `refinement-${outcome}-dialog`,
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [{ role: "user", content: "开始任务" }],
+      },
+      agentContext: { bindings: { tools: [], extensions: { harness: {} } } },
+    });
+    await hookManager.emit("agent.before_llm_call", ctx);
+    const tool = ctx.agentContext.bindings.tools.find(
+      (candidate) => candidate.name === "request_plan_refinement",
+    );
+    assert.ok(tool);
+    const bucket = ctx.agentContext.bindings.extensions.harness;
+    bucket.state.flags.planningCaptured = true;
+    if (outcome === "converged") bucket.planText = "";
+    if (outcome === "disabled") {
+      ctx.agentContext.bindings.runtime = {
+        runConfig: { scenarioProfile: { key: "programming" } },
+      };
+    }
+    toolInvocation = true;
+    const result = await tool.invoke(
+      {},
+      {
+        signal: new AbortController().signal,
+        configurable: { noobotHookContext: ctx },
+      },
+    );
+    assertToolResultObject(result);
+    assert.equal(result.status, outcome);
+    assert.equal(result.ok, outcome === "converged");
+    if (!result.ok) {
+      assert.equal(
+        result.code,
+        outcome === "disabled" ? "plan_refinement_disabled" : "plan_refinement_failed",
+      );
+      assert.equal(Object.hasOwn(result, "reason"), false);
+    }
+  });
+}
 
 test("harness planning separate model uses resolved planning tool allowlist", async () => {
   const hookManager = createAgentHookManager();

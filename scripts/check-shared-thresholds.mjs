@@ -13,6 +13,7 @@ import {
 import { readRepositoryText, repositoryRoot } from "./quality/repository-files.mjs";
 import { getFirstPartyFilesUnder, getFirstPartySourceRoots } from "./quality/source-inventory.mjs";
 import { parse } from "espree";
+import { vueScriptRegions } from "./lib/vue-script-regions.mjs";
 
 const CATEGORY_RULES = [
   {
@@ -56,15 +57,6 @@ function classifyName(name, pattern) {
   if (/(?:VERSION|SCHEMA_VERSION)$/.test(name)) return null;
   if (name === "HTTP_TOO_MANY_REQUESTS") return null;
   return CATEGORY_RULES.find((rule) => rule[pattern].test(name)) ?? null;
-}
-
-function scriptSource(text) {
-  const scripts = [...text.matchAll(/^<script\b[^>]*>([\s\S]*?)<\/script>/gm)];
-  if (!scripts.length) return /^<template\b/m.test(text) ? "" : text;
-  return scripts.map((match) => {
-    const start = match.index + match[0].indexOf(">") + 1;
-    return text.slice(0, start).replace(/[^\n]/g, " ") + match[1];
-  });
 }
 
 function numeric(node) {
@@ -164,9 +156,10 @@ function scanScript(script) {
   return findings;
 }
 
-export function findScatteredThresholds(text) {
-  const source = scriptSource(text);
-  return (Array.isArray(source) ? source : [source]).flatMap(scanScript);
+export function findScatteredThresholds(text, filename = "source.js") {
+  return vueScriptRegions(filename, text).flatMap(({ source, offset }) =>
+    scanScript(text.slice(0, offset).replace(/[^\r\n]/g, " ") + source),
+  );
 }
 
 export async function measureSharedThresholds(files) {
@@ -174,6 +167,7 @@ export async function measureSharedThresholds(files) {
   for (const file of files) {
     for (const { line, name, expr, rule } of findScatteredThresholds(
       await readRepositoryText(file),
+      file,
     )) {
       addHit(measured[rule.category], {
         file,

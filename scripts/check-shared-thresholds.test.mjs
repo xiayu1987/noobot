@@ -109,3 +109,27 @@ test("preserves locations after multiline comments and escaped string delimiters
     ],
   );
 });
+
+test("Vue scripts use SFC parsing and preserve locations across both script blocks", () => {
+  const source = [
+    '<template><div title="maxItems: 99">maxTurns: 20</div></template>',
+    '<script data-note="a > b">',
+    "export const MAX_COUNT = 12;",
+    "</script>",
+    "<script setup>",
+    "const options = { maxTurns: 8 };",
+    "</script>",
+  ].join("\n");
+  assert.deepEqual(
+    findScatteredThresholds(source, "component.vue").map(({ line, name }) => [line, name]),
+    [
+      [3, "MAX_COUNT"],
+      [6, "maxTurns"],
+    ],
+  );
+  assert.deepEqual(findScatteredThresholds("<template><div /></template>", "empty.vue"), []);
+  assert.throws(
+    () => findScatteredThresholds("<template><div></template>", "broken.vue"),
+    /Vue SFC parse failed/,
+  );
+});

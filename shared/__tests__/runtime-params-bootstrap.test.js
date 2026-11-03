@@ -17,7 +17,7 @@ import { createDefaultRuntimeParamsDocument } from "../runtime-params.js";
 const repository = fileURLToPath(new URL("../../", import.meta.url));
 const repositoryUrl = (relative) => new URL(relative, new URL("../../", import.meta.url)).href;
 
-function hookScript({ root, replacements = {} }) {
+function hookScript({ replacements = {} } = {}) {
   const sources = Object.fromEntries(
     Object.entries(replacements).map(([relative, source]) => [repositoryUrl(relative), source]),
   );
@@ -31,7 +31,7 @@ function hookScript({ root, replacements = {} }) {
       },
       load(url, context, next) {
         if (url === 'test:electron') return {format: 'module', shortCircuit: true,
-          source: ${JSON.stringify(`export const app = {getPath: () => ${JSON.stringify(root)}};`)}};
+          source: 'export const app = {getPath: () => process.env.NOOBOT_TEST_ELECTRON_ROOT};'};
         if (Object.hasOwn(replacements, url))
           return {format: 'module', source: replacements[url], shortCircuit: true};
         return next(url, context);
@@ -40,13 +40,13 @@ function hookScript({ root, replacements = {} }) {
   `;
 }
 
-function runProbe(script, env) {
+function runProbe(script, env, root) {
   const inherited = { ...process.env };
   delete inherited.NOOBOT_WORKSPACE_ROOT;
   delete inherited.NOOBOT_GLOBAL_CONFIG_PATH;
   return spawnSync(process.execPath, ["--input-type=module", "-e", script], {
     cwd: path.join(repository, "service"),
-    env: { ...inherited, ...env },
+    env: { ...inherited, ...env, NOOBOT_TEST_ELECTRON_ROOT: root },
     encoding: "utf8",
   });
 }
@@ -112,7 +112,7 @@ test("snapshot-owning entries install the persisted revision before loading busi
   ];
   for (const { entry, argv = [], env = {}, replacements } of entries) {
     const script = `
-      ${hookScript({ root, replacements })}
+      ${hookScript({ replacements })}
       process.argv.push(...${JSON.stringify(argv)});
       const {readFileSync} = await import('node:fs');
       globalThis.fetch = async (url, options) => {
@@ -121,7 +121,7 @@ test("snapshot-owning entries install the persisted revision before loading busi
       };
       await import(${JSON.stringify(repositoryUrl(entry))});
     `;
-    const child = runProbe(script, { NOOBOT_GLOBAL_CONFIG_PATH: config, ...env });
+    const child = runProbe(script, { NOOBOT_GLOBAL_CONFIG_PATH: config, ...env }, root);
     assert.equal(child.status, 0, `${entry}: ${child.stderr}`);
     assert.deepEqual(JSON.parse(child.stdout), { revision: 1, value: 42, proxy: 4096 }, entry);
   }
@@ -133,7 +133,7 @@ test("processes without a snapshot import their modules and read fixed threshold
   const modules = ["runtime-events/src/index.js", "client/shared/electron/runtime/services.js"];
   for (const modulePath of modules) {
     const script = `
-      ${hookScript({ root })}
+      ${hookScript()}
       await import(${JSON.stringify(repositoryUrl(modulePath))});
       const {TIME_THRESHOLDS} = await import(${JSON.stringify(repositoryUrl("shared/time-thresholds.js"))});
       const {QUANTITY_THRESHOLDS} = await import(${JSON.stringify(repositoryUrl("shared/quantity-thresholds.js"))});
@@ -142,7 +142,7 @@ test("processes without a snapshot import their modules and read fixed threshold
         QUANTITY_THRESHOLDS.runtimeEvents !== undefined,
       ]));
     `;
-    const child = runProbe(script, {});
+    const child = runProbe(script, {}, root);
     assert.equal(child.status, 0, `${modulePath}: ${child.stderr}`);
     const [stallTimeoutMs, hasRuntimeEvents] = JSON.parse(child.stdout.trim().split("\n").at(-1));
     assert.ok(Number.isSafeInteger(stallTimeoutMs), modulePath);

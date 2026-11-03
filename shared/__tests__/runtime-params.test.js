@@ -74,6 +74,19 @@ test("invalid values, unknown keys, fixed constraints and inconsistent bounds ar
     assert.throws(() => validateRuntimeOverrides(overrides));
 });
 
+test("override keys come from the catalog and cannot inject object properties", () => {
+  for (const name of ["__proto__", "constructor", "prototype", "toString"]) {
+    assert.throws(() => validateRuntimeOverrides(JSON.parse(`{"${name}":42}`)), {
+      code: "UNKNOWN_RUNTIME_PARAM",
+    });
+  }
+  const overrides = validateRuntimeOverrides({ [key]: 42 });
+  assert.equal(Object.getPrototypeOf(overrides), Object.prototype);
+  assert.deepEqual(overrides, { [key]: 42 });
+  const definition = RUNTIME_PARAM_CATALOG.find((item) => item.key === key);
+  assert.deepEqual(validateRuntimeOverrides({ [key]: definition.defaultValue }), {});
+});
+
 test("save is atomic, audited, revision guarded, and does not change the active snapshot", (t) => {
   const { file, store } = fixture(t);
   const saved = store.save({ revision: 0, overrides: { [key]: 42 } }, "admin");
@@ -134,11 +147,11 @@ test("a lock replaced during save reports corruption and keeps the work failure 
 test("invalid requests never create a parameter document", (t) => {
   const { file, store } = fixture(t);
   assert.throws(() => store.save({ revision: 0, overrides: { [key]: -1 } }, "admin"));
-  assert.equal(fs.existsSync(file), false);
+  assert.throws(() => fs.readFileSync(file), { code: "ENOENT" });
   assert.throws(() =>
     validateRuntimeParamsDocument({ ...createDefaultRuntimeParamsDocument(), revision: 1 }),
   );
-  fs.writeFileSync(file, "{");
+  fs.writeFileSync(file, "{", { flag: "wx" });
   assert.throws(
     () => readRuntimeParamsDocument(file),
     (error) =>

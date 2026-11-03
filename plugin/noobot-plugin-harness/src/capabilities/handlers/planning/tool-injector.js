@@ -39,7 +39,8 @@ function createPlanRefinementTool({ state, meta }) {
           ok: false,
           status: "not_ready",
           tool: PLAN_REFINEMENT_TOOL_NAME,
-          reason: translateI18nText(
+          code: "plan_refinement_not_ready",
+          error: translateI18nText(
             locale,
             HARNESS_I18N_KEYSET.PLAN_REFINEMENT_TOOL.NOT_READY_REASON,
           ),
@@ -51,7 +52,8 @@ function createPlanRefinementTool({ state, meta }) {
           ok: false,
           status: "disabled",
           tool: PLAN_REFINEMENT_TOOL_NAME,
-          reason: "plan_refinement_disabled",
+          code: "plan_refinement_disabled",
+          error: "plan_refinement_disabled",
         };
       }
       if (state.flags.planRefinementRequested === true) {
@@ -63,9 +65,9 @@ function createPlanRefinementTool({ state, meta }) {
         source: "planning_refinement_tool",
         targetMainStepIndexes: args.targetMainStepIndexes ?? [],
       });
-      if (refinementResult?.status === "converged") {
+      if (refinementResult.status === "converged") {
         return {
-          ok: false,
+          ok: true,
           status: "converged",
           tool: PLAN_REFINEMENT_TOOL_NAME,
           reason: translateI18nText(
@@ -74,12 +76,13 @@ function createPlanRefinementTool({ state, meta }) {
           ),
         };
       }
-      if (refinementResult?.applied !== true) {
+      if (refinementResult.applied !== true) {
         return {
           ok: false,
-          status: String(refinementResult?.status || "failed"),
+          status: refinementResult.status,
           tool: PLAN_REFINEMENT_TOOL_NAME,
-          reason: translateI18nText(locale, HARNESS_I18N_KEYSET.PLAN_REFINEMENT_TOOL.FAILED_REASON),
+          code: "plan_refinement_failed",
+          error: translateI18nText(locale, HARNESS_I18N_KEYSET.PLAN_REFINEMENT_TOOL.FAILED_REASON),
         };
       }
       return {

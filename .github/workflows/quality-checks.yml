@@ -38,7 +38,7 @@ jobs:
         run: npm ci
 
       - name: Verify Linux native script runtime contract
-        run: node --test agent/__tests__/tools/native-script-platform.test.js
+        run: node scripts/run-with-isolated-tmp.mjs node --test agent/__tests__/tools/native-script-platform.test.js
 
       - name: Run lightweight code quality checks
         run: npm run check:quality

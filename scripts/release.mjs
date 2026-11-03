@@ -50,7 +50,10 @@ function parseArgs(argv = []) {
   }
   args.version = normalizeVersion(args.version);
   assertVersion(args.version);
-  if (!args.remote) throw new Error("--remote cannot be empty");
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(args.remote))
+    throw new Error(
+      "--remote must be a remote name containing only letters, digits, dots, underscores or hyphens",
+    );
   return args;
 }
 
@@ -77,7 +80,7 @@ async function assertTagDoesNotExist(tagName = "", remote = "origin") {
   const existingTag = await gitOutput(["tag", "--list", tagName]);
   if (existingTag) throw new Error(`Tag ${tagName} already exists locally.`);
   try {
-    await execFileAsync("git", ["ls-remote", "--exit-code", "--tags", remote, tagName], {
+    await execFileAsync("git", ["ls-remote", "--exit-code", "--tags", "--", remote, tagName], {
       encoding: "utf8",
       maxBuffer: DEVELOPMENT_THRESHOLDS.length.releaseOutputBytes,
     });
@@ -89,9 +92,9 @@ async function assertTagDoesNotExist(tagName = "", remote = "origin") {
 }
 
 async function resolveBranch(explicitBranch = "") {
-  if (explicitBranch) return explicitBranch;
-  const branch = await gitOutput(["branch", "--show-current"]);
+  const branch = explicitBranch || (await gitOutput(["branch", "--show-current"]));
   if (!branch) throw new Error("Could not resolve current branch. Pass --branch <name>.");
+  await gitOutput(["check-ref-format", "--branch", branch]);
   return branch;
 }
 
@@ -109,7 +112,7 @@ async function waitForRemoteQuality(branch, commit, { remote = "origin", dryRun 
     console.log(`[release][dry-run] wait for Quality Checks on ${remote}/${branch} at ${commit}`);
     return;
   }
-  const remoteUrl = await gitOutput(["remote", "get-url", remote]);
+  const remoteUrl = await gitOutput(["remote", "get-url", "--", remote]);
   if (!/^git@github\.com:|^https:\/\/github\.com\//.test(remoteUrl)) {
     throw new Error(`Remote quality gate requires a GitHub remote, got ${remoteUrl}`);
   }
@@ -196,7 +199,7 @@ async function main() {
   await runOrPrint("git", ["commit", "-m", `chore: release ${tagName}`], args);
   if (!args.skipPush) {
     const commit = await gitOutput(["rev-parse", "HEAD"]);
-    await runOrPrint("git", ["push", args.remote, branch], args);
+    await runOrPrint("git", ["push", "--", args.remote, branch], args);
     await waitForRemoteQuality(branch, commit, args);
   }
   const tagArgs = releaseNotes
@@ -204,7 +207,7 @@ async function main() {
     : ["tag", tagName];
   await runOrPrint("git", tagArgs, args);
   if (!args.skipPush) {
-    await runOrPrint("git", ["push", args.remote, tagName], args);
+    await runOrPrint("git", ["push", "--", args.remote, tagName], args);
   }
   console.log(`[release] ${tagName} is ready`);
 }

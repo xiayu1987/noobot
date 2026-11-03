@@ -30,6 +30,7 @@ import { uniquePrompt } from "../helpers/turn-scenarios.js";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
 import { runOpsWorkdirPath, runOpsWorkdir } from "../helpers/run-ops-workdir.js";
+import { decodeToolResultText } from "@noobot/event-protocol/tool-result-v24";
 
 const HARNESS_COMPLETION_TIMEOUT_MS = PROTOCOL_TIMEOUTS.harness;
 const HARNESS_AUDIT_TIMEOUT_MS = PROTOCOL_TIMEOUTS.audit;
@@ -124,16 +125,12 @@ function assertAuxiliaryObserverProjection(mainMessages = [], auxiliaryTraces = 
 
 function toolResultName(message = {}) {
   if (message.role !== "tool") return "";
-  return String(toolResultPayload(message)?.toolName || "").trim();
+  return message.toolName;
 }
 
 function toolResultPayload(message = {}) {
   if (message.role !== "tool") return null;
-  try {
-    return JSON.parse(String(message.content || "{}"));
-  } catch {
-    return null;
-  }
+  return decodeToolResultText(message.content);
 }
 
 function toolCallId(call = {}) {
@@ -421,4 +418,16 @@ test("@full PBE-033 Harness 低轮次完整流程与模型注入闭环", async (
   );
   expect(calledToolNames.filter((name) => name === "request_plan_refinement")).toHaveLength(1);
   expect(calledToolNames.filter((name) => name === "request_task_acceptance")).toHaveLength(1);
+  for (const toolName of ["request_plan_refinement", "request_task_acceptance"]) {
+    const calls = messages.flatMap((message) =>
+      (message.tool_calls || []).filter((call) => toolCallName(call) === toolName),
+    );
+    const results = messages.filter(
+      (message) => message.role === "tool" && message.tool_call_id === toolCallId(calls[0]),
+    );
+    expect(results, `${toolName} must have a matching result`).toHaveLength(1);
+    expect(toolResultName(results[0])).toBe(toolName);
+    const result = toolResultPayload(results[0]);
+    expect(result.ok, JSON.stringify(result)).toBe(true);
+  }
 });

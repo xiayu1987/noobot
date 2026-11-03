@@ -6,6 +6,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
+import { rateLimit } from "express-rate-limit";
+import { createHttpAdmissionOptions } from "../../security/http-admission.js";
 import { SUPER_ADMIN_ROLE } from "#agent/utils";
 import { createAuthService, USER_SCOPE_POLICY } from "../../services/auth-service.js";
 import { createServicePluginHost } from "../../services/service-plugin-host.js";
@@ -50,9 +52,10 @@ function pluginEntry() {
 
 async function withScopedApp(run) {
   const authService = createAuthService({ translateText: (key) => key });
-  const { requireApiKey, createUserScopeParam, issueApiKey } = authService;
+  const { requireApiKey, createUserScopeParam, issueApiKey, resolveAuthByApiKey } = authService;
   const enforceUserScopeParam = createUserScopeParam(USER_SCOPE_POLICY.ADMINISTRABLE);
   const app = express();
+  app.use(rateLimit(createHttpAdmissionOptions({ resolveAuthByApiKey })));
   app.use(requireApiKey);
   app.param("userId", enforceUserScopeParam);
   app.get("/main/:userId", (_req, res) => res.json({ ok: true }));

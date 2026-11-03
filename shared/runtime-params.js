@@ -83,7 +83,7 @@ const ORDERED_PAIRS = [
 
 export function validateRuntimeOverrides(overrides) {
   requireObject(overrides, "overrides");
-  const output = {};
+  const validated = new Map();
   for (const [key, value] of Object.entries(overrides)) {
     const definition = byKey.get(key);
     if (!definition?.editable)
@@ -91,10 +91,9 @@ export function validateRuntimeOverrides(overrides) {
     if (!Number.isSafeInteger(value) || value < definition.minimum || value > definition.maximum) {
       throw runtimeParamsError("INVALID_RUNTIME_PARAM_VALUE", `invalid value for ${key}`);
     }
-    if (value !== definition.defaultValue) output[key] = value;
+    if (value !== definition.defaultValue) validated.set(definition.key, value);
   }
-  const valueFor = (key) =>
-    Object.hasOwn(output, key) ? output[key] : byKey.get(key).defaultValue;
+  const valueFor = (key) => (validated.has(key) ? validated.get(key) : byKey.get(key).defaultValue);
   for (const [lower, upper] of ORDERED_PAIRS) {
     if (valueFor(lower) > valueFor(upper))
       throw runtimeParamsError(
@@ -102,7 +101,7 @@ export function validateRuntimeOverrides(overrides) {
         `${lower} must not exceed ${upper}`,
       );
   }
-  return output;
+  return Object.fromEntries(validated);
 }
 
 function validateAuditChanges(changes) {

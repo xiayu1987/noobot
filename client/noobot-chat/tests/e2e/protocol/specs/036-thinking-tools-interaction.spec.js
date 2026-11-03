@@ -41,6 +41,7 @@ import {
 } from "../helpers/thinking-tool-assertions.js";
 import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
 import { runOpsWorkdir, runOpsWorkdirPath } from "../helpers/run-ops-workdir.js";
+import { MCP_TEST_SERVICE } from "../../../../../../scripts/mcp-test-service/config.mjs";
 
 const EXPECTED_TOOLS = Object.freeze([
   "write_file",
@@ -375,7 +376,7 @@ test("@full PBE-043 普通用户原生、多模态与外部工具结果闭环", 
         "4) call_service 调用 weather_service.get_weather，queryString.city=Shanghai，custom_param=j1；",
         "5) do_search_web 搜索 Noobot GitHub；",
         "6) help 使用 command=--experience；",
-        "7) call_mcp_task 调用 china-railway，任务为查询上海到苏州的可用能力；",
+        `7) call_mcp_task 调用 ${MCP_TEST_SERVICE.name}，任务为只调用一次 echo，text 为 CASE043-MCP-ECHO，原样返回结果；`,
         "每一步必须等到工具返回后再继续。最终按七个工具的真实返回逐项报告成功或失败，不得把未调用的工具报告为已执行。",
       ].join(" "),
     ),
@@ -423,4 +424,15 @@ test("@full PBE-043 普通用户原生、多模态与外部工具结果闭环", 
   expect(parseCall.data.args.model_name).toBe(noobot.modelAlias);
   const parseResult = results.find((event) => event.data.toolCallId === parseCall.data.toolCallId);
   expect(parseResult.data.success, parseResult.data.result).toBe(true);
+  const mcpCall = calls.find((event) => event.data.tool === "call_mcp_task");
+  expect(mcpCall.data.args.mcpName).toBe(MCP_TEST_SERVICE.name);
+  const mcpResult = results.find((event) => event.data.toolCallId === mcpCall.data.toolCallId);
+  expect(mcpResult.data.success, mcpResult.data.result).toBe(true);
+  const mcpEvents = await readSessionExecutionEventTree(noobot.userId, noobot.sessionId);
+  const echoResults = mcpEvents.filter(
+    (event) => event.event === "tool_call_end" && event.data?.tool === "echo",
+  );
+  expect(echoResults).toHaveLength(1);
+  expect(echoResults[0].data.success, echoResults[0].data.result).toBe(true);
+  expect(echoResults[0].data.result).toContain("CASE043-MCP-ECHO");
 });
