@@ -8,8 +8,11 @@ import { text } from "@noobot/shared/value";
 
 export function createSerializedWindowIndex({ field, limit } = {}) {
   const fieldName = text(field);
-  const maximum = Math.max(1, Number(limit) || 0);
   if (!fieldName) throw new TypeError("createSerializedWindowIndex requires field");
+  if (!Number.isInteger(limit) || limit < 1) {
+    throw new TypeError("createSerializedWindowIndex requires positive integer limit");
+  }
+  const maximum = limit;
   const indexes = new WeakMap();
 
   function valuesOf(owner = {}) {

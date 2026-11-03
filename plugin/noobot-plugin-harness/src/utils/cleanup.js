@@ -10,7 +10,6 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { text } from "@noobot/shared/value";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const RUN_WRITE_LOCK_STALE_MS = TIME_THRESHOLDS.harness.runWriteLockStaleMs;
 
 function isMissingPathError(error) {
   return error?.code === "ENOENT" || error?.code === "ENOTDIR";
@@ -80,7 +79,7 @@ async function isRunWriteLocked(runDirPath) {
   const lockPath = path.join(runDirPath, HARNESS_FILES.RUN_WRITE_LOCK);
   const stat = await statIfPresent(lockPath);
   if (!stat) return false;
-  if (Date.now() - stat.mtimeMs <= RUN_WRITE_LOCK_STALE_MS) return true;
+  if (Date.now() - stat.mtimeMs <= TIME_THRESHOLDS.harness.runWriteLockStaleMs) return true;
   await unlinkIfPresent(lockPath);
   return false;
 }

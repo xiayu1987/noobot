@@ -46,22 +46,23 @@ END
 
 ## 配置契约
 
-`src/core/options.js` 是配置字段、类型与默认值的唯一事实源。面向用户的常用 JSON 配置如下：
+`src/core/options.js` 是配置字段、类型与校验规则的唯一事实源。数值字段未配置时取默认值（时间与轮数默认值在调用时读取运行时参数 `TIME_THRESHOLDS.workflow` / `TURN_THRESHOLDS.workflow`）；已配置但非整数或低于下限时直接抛 `TypeError`，不回退默认值。面向用户的常用 JSON 配置如下：
 
 - `enabled: boolean`（默认 `true`）
 - `mode: "on" | "off"`（默认 `off`）
 - `semanticPrompt: string`（可覆盖默认 DSL 提示词）
 - `semanticModel: string`（语义模型名）
-- `maxAutoTransitions: number`（默认 `50`）
+- `maxAutoTransitions: integer >= 1`（默认 `50`）
 - `parallelNodeExecution: boolean`（默认 `false`，开启后同一批 pending 节点并发派发 agent）
-- `maxParallelNodeAgents: number`（默认 `10`，并发上限）
-- `priority: number`（默认 `10`）
-- `timeoutMs: number`（默认 `18000000`）
-- `miniRunnerMaxTurns: number`（默认 `3`，语义模型 mini-runner 轮数上限）
-- `nodeAgentTimeoutMs: number`（默认 `18000000`，单个节点 Agent 超时）
-- `denyToolNames: string[]`（可选；插件侧声明应禁用的工具名列表，默认值为多 agent 协作三件套）
+- `maxParallelNodeAgents: integer >= 1`（默认 `10`，并发上限）
+- `priority: integer >= 0`（默认 `10`）
+- `timeoutMs: integer >= 1`（默认运行时参数 `time.workflow.timeoutMs`）
+- `miniRunnerMaxTurns: integer >= 1`（默认运行时参数 `turn.workflow.miniRunnerMaxTurns`，语义模型 mini-runner 轮数上限）
+- `nodeAgentTimeoutMs: integer >= 1000`（默认运行时参数 `time.workflow.nodeAgentTimeoutMs`，单个节点 Agent 超时）
+- `mode` 只接受 `"on"` / `"off"`，其他值抛 `TypeError`
+- `denyToolNames: string[]`（可选；插件侧声明应禁用的工具名列表，默认为空）
 
-宿主可通过 JavaScript API 注入执行、模型调用、消息解析、落盘、节点状态仓库和扩展挂载函数；这些端口同样由 `normalizeOptions()` 校验，不属于用户 JSON 配置。未知配置不会成为运行时行为。
+宿主可通过 JavaScript API 注入执行、模型调用、消息解析、落盘、节点状态仓库和扩展挂载函数；这些端口由 `resolveWorkflowAgentHostCapabilities()` 校验，不属于用户 JSON 配置。未知配置不会成为运行时行为。
 
 ## 会话接管与落盘（workflow session）
 

@@ -14,7 +14,6 @@ import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { text } from "@noobot/shared/value";
 
 const snapshots = new Map();
-const maxEntries = QUANTITY_THRESHOLDS.harness.incrementalMessageCacheEntries;
 
 function snapshotKey(ctx = {}, purpose = "") {
   const sessionId = ctx.sessionId;
@@ -42,7 +41,8 @@ function buildCurrentContext(ctx = {}, messages = []) {
 }
 
 function pruneSnapshots() {
-  while (snapshots.size > maxEntries) snapshots.delete(snapshots.keys().next().value);
+  while (snapshots.size > QUANTITY_THRESHOLDS.harness.incrementalMessageCacheEntries)
+    snapshots.delete(snapshots.keys().next().value);
 }
 
 export function resolveAuxiliarySnapshotMessages({ ctx = {}, purpose = "", messages = [] } = {}) {

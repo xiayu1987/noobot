@@ -17,7 +17,6 @@ import {
 } from "@noobot/hook-protocol";
 import { isPlainObject, text } from "@noobot/shared/value";
 
-const HOOK_PROGRESS_TEXT_LIMIT = LENGTH_THRESHOLDS.display.hookProgressTextChars;
 const HOOK_PROGRESS_VERBOSE_ENABLED_VALUES = new Set([
   "1",
   "true",
@@ -132,8 +131,8 @@ function sanitizeForHookClient(value, depth = 0, seen = new WeakSet()) {
 
 function truncateHookProgressText(value) {
   const inputText = String(value ?? "");
-  return inputText.length > HOOK_PROGRESS_TEXT_LIMIT
-    ? `${inputText.slice(0, HOOK_PROGRESS_TEXT_LIMIT)}...`
+  return inputText.length > LENGTH_THRESHOLDS.display.hookProgressTextChars
+    ? `${inputText.slice(0, LENGTH_THRESHOLDS.display.hookProgressTextChars)}...`
     : inputText;
 }
 

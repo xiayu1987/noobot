@@ -3,6 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import http from "node:http";
 import https from "node:https";
 import { config } from "../shared/config.js";
@@ -56,7 +58,7 @@ export function collectRequestBody(request) {
     const chunks = [];
     request.on("data", (chunk) => {
       totalSize += chunk.length;
-      if (totalSize > config.maxBodyBytes) {
+      if (totalSize > LENGTH_THRESHOLDS.agentProxy.maxBodyBytes) {
         const tooLarge = Object.assign(new Error("request body too large"), {
           code: AGENT_PROXY_HTTP_ERROR_CODE.REQUEST_BODY_TOO_LARGE,
         });
@@ -144,7 +146,7 @@ export function proxyHttpRequest(request, response) {
       method,
       path: `${targetUrl.pathname}${targetUrl.search}`,
       headers: requestHeaders,
-      timeout: config.httpUpstreamTimeoutMs,
+      timeout: TIME_THRESHOLDS.agentProxy.httpUpstreamTimeoutMs,
     },
     (upstreamResponse) => {
       const statusCode = Number(upstreamResponse?.statusCode || 502);
@@ -191,7 +193,7 @@ export function proxyHttpRequest(request, response) {
       method,
       pathname: targetUrl?.pathname || "",
       statusCode: 502,
-      timeoutMs: config.httpUpstreamTimeoutMs,
+      timeoutMs: TIME_THRESHOLDS.agentProxy.httpUpstreamTimeoutMs,
       timedOut: upstreamTimedOut || String(error?.message || "") === "upstream timeout",
       error,
     });

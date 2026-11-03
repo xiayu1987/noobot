@@ -20,23 +20,14 @@ export function isRuntimeThresholdGateEnabled(source = {}) {
   return source?.frontendThresholdsEnabled === true;
 }
 
-export function resolveGatedThreshold({
-  enabled = false,
-  runtimeValue,
-  fallbackValue,
-  defaultValue,
-}) {
+export function resolveGatedThreshold({ enabled = false, runtimeValue, fallbackValue }) {
   if (typeof enabled !== "boolean") throw new TypeError("threshold gate must be boolean");
   if (runtimeValue !== undefined) requirePositiveTurnThreshold(runtimeValue);
-  if (fallbackValue !== undefined) requirePositiveTurnThreshold(fallbackValue);
-  if (defaultValue !== undefined) requirePositiveTurnThreshold(defaultValue);
+  requirePositiveTurnThreshold(fallbackValue);
   if (enabled && runtimeValue !== undefined) {
     return Object.freeze({ value: runtimeValue, source: RUNTIME_THRESHOLD_SOURCE.RUNTIME });
   }
-  return Object.freeze({
-    value: requirePositiveTurnThreshold(fallbackValue === undefined ? defaultValue : fallbackValue),
-    source: RUNTIME_THRESHOLD_SOURCE.FALLBACK,
-  });
+  return Object.freeze({ value: fallbackValue, source: RUNTIME_THRESHOLD_SOURCE.FALLBACK });
 }
 
 export function resolveGatedThresholdValue(input) {

@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  createTestHarnessMeta,
   createTestResolveModelMessages,
   ensureTestHookContext,
   createTestHookContext,
@@ -169,9 +170,11 @@ test("takeover priority pipeline keeps higher priority takeover effective", asyn
       messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "hello" }] },
     },
   );
-  await runtime.runHook(HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT, ensureTestHookContext(ctx), {
-    harness: { resolveModelMessages: createTestResolveModelMessages() },
-  });
+  await runtime.runHook(
+    HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT,
+    ensureTestHookContext(ctx),
+    createTestHarnessMeta({ resolveModelMessages: createTestResolveModelMessages() }),
+  );
 
   assert.match(String(ctx.modelContext.messages[0]?.content || ""), /guidance/);
   assert.match(String(ctx.modelContext.messages[1]?.content || ""), /planning/);
@@ -244,12 +247,16 @@ test("capability runtime skips disabled planning guidance and acceptance handler
   }
   assert.deepEqual(runtime.resolveByHook(HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT), ["review"]);
 
-  await runtime.runHook(HOOK_POINT.AGENT.BEFORE_LLM_CALL, ensureTestHookContext(ctx), {
-    harness: { resolveModelMessages: createTestResolveModelMessages() },
-  });
-  await runtime.runHook(HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT, ensureTestHookContext(ctx), {
-    harness: { resolveModelMessages: createTestResolveModelMessages() },
-  });
+  await runtime.runHook(
+    HOOK_POINT.AGENT.BEFORE_LLM_CALL,
+    ensureTestHookContext(ctx),
+    createTestHarnessMeta({ resolveModelMessages: createTestResolveModelMessages() }),
+  );
+  await runtime.runHook(
+    HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT,
+    ensureTestHookContext(ctx),
+    createTestHarnessMeta({ resolveModelMessages: createTestResolveModelMessages() }),
+  );
 
   assert.deepEqual(calls, ["review"]);
   assert.equal(calls.includes("planning"), false);

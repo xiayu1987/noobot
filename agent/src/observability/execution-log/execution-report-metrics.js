@@ -14,8 +14,6 @@ import {
   projectToolResultExitCode,
 } from "@noobot/event-protocol/tool-result";
 
-const SLOWEST_TOOL_CALL_LIMIT = QUANTITY_THRESHOLDS.diagnostics.executionReportSlowestToolCalls;
-
 function resolveSpanMs(startMs, endMs) {
   if (startMs == null || endMs == null) return null;
   return Math.max(0, endMs - startMs);
@@ -161,7 +159,7 @@ function summarizeToolCalls(toolCalls) {
   }
   const slowestToolCalls = timedCalls
     .sort((left, right) => right.durationMs - left.durationMs)
-    .slice(0, SLOWEST_TOOL_CALL_LIMIT);
+    .slice(0, QUANTITY_THRESHOLDS.diagnostics.executionReportSlowestToolCalls);
   const totalToolDurationMs = timedCalls.reduce((sum, call) => sum + call.durationMs, 0);
   return {
     toolStats,

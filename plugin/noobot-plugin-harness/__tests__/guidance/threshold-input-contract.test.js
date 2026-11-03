@@ -20,7 +20,7 @@ const invalidValues = [null, "2", 0, -1, 1.5, NaN, Infinity, {}, Number.MAX_SAFE
 
 test("threshold contract rejects malformed declared facts without coercion or fallback", () => {
   for (const runtimeValue of invalidValues) {
-    const input = { runtimeValue, scopedValue: 3, defaultValue: 4 };
+    const input = { runtimeValue, fallbackValue: 3 };
     assert.throws(() => resolveAnalysisThresholdWithSource(input));
     for (const frontendThresholdsEnabled of [false, true]) {
       assert.throws(() =>
@@ -31,14 +31,15 @@ test("threshold contract rejects malformed declared facts without coercion or fa
       );
     }
   }
-  assert.deepEqual(resolveAnalysisThresholdWithSource({ runtimeValue: 11 }), {
+  assert.deepEqual(resolveAnalysisThresholdWithSource({ runtimeValue: 11, fallbackValue: 3 }), {
     value: 11,
     source: "runtime",
   });
-  assert.deepEqual(resolveAnalysisThresholdWithSource({ scopedValue: 3, defaultValue: 4 }), {
+  assert.deepEqual(resolveAnalysisThresholdWithSource({ fallbackValue: 3 }), {
     value: 3,
-    source: "workflow_params",
+    source: "fallback",
   });
+  assert.throws(() => resolveAnalysisThresholdWithSource({ runtimeValue: 11 }), TypeError);
 });
 
 test("invalid guidance and planning thresholds reject before mutating harness state", async () => {

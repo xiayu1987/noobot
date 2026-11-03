@@ -12,7 +12,6 @@ import {
 } from "@noobot/memory-protocol/document";
 import { renderDefaultMemoryDocument } from "@noobot/memory-protocol/defaults";
 import {
-  LONG_MEMORY_MODEL,
   createBuiltinLongMemoryModel,
   LONG_MEMORY_MODEL_FIELDS_SINCE,
   parseLongMemoryDocument,
@@ -116,12 +115,10 @@ function migrateDocumentText(kind, text, locale) {
   return migrateLegacyBody(kind, text);
 }
 
-export function migrateMemoryDocument({
-  kind,
-  text = "",
-  longMemoryModel = LONG_MEMORY_MODEL,
-  locale,
-} = {}) {
+export function migrateMemoryDocument({ kind, text = "", longMemoryModel, locale } = {}) {
+  if (kind === MEMORY_DOCUMENT_KIND.LONG_MEMORY && !longMemoryModel) {
+    throw new TypeError("longMemoryModel is required to migrate a long memory document");
+  }
   const context = { longMemoryModel };
   if (isValid(kind, text, context)) return { status: MEMORY_REPAIR_STATUS.CANONICAL, text };
   const migrated = migrateDocumentText(kind, text, locale);

@@ -7,14 +7,12 @@ import { nowMs } from "../../modules/chat/model/timeFields.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { isCanonicalText } from "@noobot/shared/value";
 const CHAT_MESSAGE_NAVIGATOR_SCROLL_LOCK_KEY = "__noobotChatNavPendingAnchor";
-export const CHAT_MESSAGE_NAVIGATOR_SCROLL_LOCK_MS =
-  TIME_THRESHOLDS.client.chatMessageNavigatorScrollLockMs;
 
 export function lockChatMessageScrollSyncToAnchor(wrapRef, anchor) {
   if (!isCanonicalText(anchor)) throw new TypeError("chat message scroll lock requires anchor");
   wrapRef[CHAT_MESSAGE_NAVIGATOR_SCROLL_LOCK_KEY] = {
     anchor,
-    expiresAt: nowMs() + CHAT_MESSAGE_NAVIGATOR_SCROLL_LOCK_MS,
+    expiresAt: nowMs() + TIME_THRESHOLDS.client.chatMessageNavigatorScrollLockMs,
   };
 }
 

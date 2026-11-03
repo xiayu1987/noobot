@@ -20,7 +20,6 @@ const TURN_START_POINTS = new Set([
 
   HOOK_POINT.AGENT.BEFORE_LLM_CALL,
 ]);
-const MAX_COMPLETED_DIALOG_IDS = QUANTITY_THRESHOLDS.harness.completedDialogIds;
 
 export function markHarnessTurnLifecycle(point = "", ctx = {}) {
   const holder = ensureHarnessBucket(ctx);
@@ -52,8 +51,8 @@ export function markHarnessTurnLifecycle(point = "", ctx = {}) {
   if (!dialogProcessId) return true;
   if (!completedIds.includes(dialogProcessId)) {
     completedIds.push(dialogProcessId);
-    if (completedIds.length > MAX_COMPLETED_DIALOG_IDS) {
-      completedIds.splice(0, completedIds.length - MAX_COMPLETED_DIALOG_IDS);
+    if (completedIds.length > QUANTITY_THRESHOLDS.harness.completedDialogIds) {
+      completedIds.splice(0, completedIds.length - QUANTITY_THRESHOLDS.harness.completedDialogIds);
     }
   }
   return true;

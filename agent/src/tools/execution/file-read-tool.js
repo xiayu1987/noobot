@@ -14,12 +14,8 @@ import { registerResource } from "../core/resource-broker.js";
 import { createFileSourceSchema, resolveFileInput } from "../core/file-input.js";
 import { tTool } from "../core/tool-i18n.js";
 import { TOOL_NAME } from "../constants/index.js";
-import {
-  DEFAULT_READ_MAX_LINES,
-  formatLinesWithNumbers,
-  READ_MAX_LINES_LIMIT,
-  splitLines,
-} from "./file-utils.js";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { formatLinesWithNumbers, splitLines } from "./file-utils.js";
 import {
   RESOURCE_OPERATION,
   SECURITY_EVIDENCE_SOURCE,
@@ -151,9 +147,9 @@ export function createReadFileTool({ agentContext, runtime, workspaceIo }) {
           .number()
           .int()
           .min(1)
-          .max(READ_MAX_LINES_LIMIT)
+          .max(QUANTITY_THRESHOLDS.toolIO.readMaxLinesLimit)
           .optional()
-          .default(DEFAULT_READ_MAX_LINES)
+          .default(QUANTITY_THRESHOLDS.toolIO.readMaxLines)
           .describe(tTool(runtime, "tools.file.readMaxLinesField")),
         riskLevel: createRiskLevelSchema(runtime, "tools.file.readRiskLevelField"),
       }),

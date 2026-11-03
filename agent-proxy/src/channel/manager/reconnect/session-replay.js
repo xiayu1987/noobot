@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { randomUUID } from "node:crypto";
-import { config } from "../../../shared/config.js";
 import { createReplayBatch } from "@noobot/event-protocol";
 import {
   AGENT_COMMAND,
@@ -52,7 +52,7 @@ function createSnapshotPromise(manager, snapshotChannel, commandId, socket) {
   return new Promise((resolve) => {
     const timeout = setTimeout(
       () => cancelPendingSnapshot(manager, snapshotChannel, commandId, "snapshot_timeout"),
-      config.reconnectSnapshotTimeoutMs,
+      TIME_THRESHOLDS.agentProxy.reconnectSnapshotTimeoutMs,
     );
     manager.commandRegistry.register(commandId, {
       ...pendingSnapshot(snapshotChannel),

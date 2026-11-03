@@ -7,17 +7,12 @@ import { isPlainObject, text } from "@noobot/shared/value";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
-import { BUILTIN_THRESHOLDS, normalizeTimeMs, resolveTimeMs } from "#agent/config";
+import { normalizeTimeMs, resolveTimeMs } from "#agent/config";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 const CURRENT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_COMMAND = "openvscode-server";
 export const DEFAULT_HOST = "127.0.0.1";
-export const DEFAULT_START_TIMEOUT_MS = BUILTIN_THRESHOLDS.openvscode.startTimeoutMs;
-const DEFAULT_IDLE_TIMEOUT_MS = BUILTIN_THRESHOLDS.openvscode.idleTimeoutMs;
-export const DEFAULT_CLEANUP_INTERVAL_MS = TIME_THRESHOLDS.openvscode.cleanupIntervalMs;
-export const DEFAULT_SHUTDOWN_GRACE_MS = TIME_THRESHOLDS.openvscode.shutdownGraceMs;
-export const DEFAULT_TOUCH_PERSIST_INTERVAL_MS = TIME_THRESHOLDS.openvscode.touchPersistIntervalMs;
 export const IDE_PATH_PREFIX = "/ide";
 export const IDE_TOKEN_QUERY_KEY = "tkn";
 
@@ -46,20 +41,20 @@ export function getOpenVSCodeConfig(globalConfig = {}) {
     host:
       String(process.env.OPENVSCODE_SERVER_HOST || source.host || DEFAULT_HOST).trim() ||
       DEFAULT_HOST,
-    startTimeoutMs: DEFAULT_START_TIMEOUT_MS,
-    idleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS,
+    startTimeoutMs: TIME_THRESHOLDS.openvscode.startTimeoutMs,
+    idleTimeoutMs: TIME_THRESHOLDS.openvscode.idleTimeoutMs,
     cleanupIntervalMs: resolveOpenVSCodeTimeMs({
       envName: "OPENVSCODE_SERVER_CLEANUP_INTERVAL_MS",
       source,
       key: "cleanupIntervalMs",
-      fallback: DEFAULT_CLEANUP_INTERVAL_MS,
+      fallback: TIME_THRESHOLDS.openvscode.cleanupIntervalMs,
       min: 1000,
     }),
     shutdownGraceMs: resolveOpenVSCodeTimeMs({
       envName: "OPENVSCODE_SERVER_SHUTDOWN_GRACE_MS",
       source,
       key: "shutdownGraceMs",
-      fallback: DEFAULT_SHUTDOWN_GRACE_MS,
+      fallback: TIME_THRESHOLDS.openvscode.shutdownGraceMs,
       min: 0,
     }),
     extraArgs: Array.isArray(source.extraArgs)

@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { MEMORY_DOCUMENT_KIND } from "@noobot/memory-protocol/document";
 import { renderDefaultMemoryDocument } from "@noobot/memory-protocol/defaults";
 import {
-  LONG_MEMORY_MODEL,
+  createBuiltinLongMemoryModel,
   LONG_MEMORY_MODEL_FIELDS_SINCE,
   parseLongMemoryModelText,
   renderLongMemoryModelLine,
@@ -65,10 +65,17 @@ test("English model upgrades localize appended fields and preserve user declarat
 
 test("canonical documents are left untouched", () => {
   const text = "NOOBOT_LONG_MEMORY/1\n\npersonal_info.occupation：工程师\n";
-  assert.deepEqual(migrateMemoryDocument({ kind: MEMORY_DOCUMENT_KIND.LONG_MEMORY, text }), {
-    status: MEMORY_REPAIR_STATUS.CANONICAL,
-    text,
-  });
+  assert.deepEqual(
+    migrateMemoryDocument({
+      kind: MEMORY_DOCUMENT_KIND.LONG_MEMORY,
+      text,
+      longMemoryModel: createBuiltinLongMemoryModel(),
+    }),
+    {
+      status: MEMORY_REPAIR_STATUS.CANONICAL,
+      text,
+    },
+  );
 });
 
 test("legacy experience model title migrates into the canonical header", () => {
@@ -107,8 +114,13 @@ test("documents without a deterministic rule are reset", () => {
     migrateMemoryDocument({
       kind: MEMORY_DOCUMENT_KIND.LONG_MEMORY,
       text: "1. legacy numbered memory\n",
+      longMemoryModel: createBuiltinLongMemoryModel(),
     }),
     { status: MEMORY_REPAIR_STATUS.RESET, text: "NOOBOT_LONG_MEMORY/1\n" },
+  );
+  assert.throws(
+    () => migrateMemoryDocument({ kind: MEMORY_DOCUMENT_KIND.LONG_MEMORY, text: "" }),
+    TypeError,
   );
   assert.deepEqual(
     migrateMemoryDocument({
@@ -235,7 +247,7 @@ const USER_LONG_MEMORY_MODEL = [
 ].join("\n");
 
 const V2_FIELD_LINES = LONG_MEMORY_MODEL_FIELDS_SINCE[2].map((key) =>
-  renderLongMemoryModelLine(LONG_MEMORY_MODEL.byKey.get(key)),
+  renderLongMemoryModelLine(createBuiltinLongMemoryModel().byKey.get(key)),
 );
 
 test("a v1 field protocol upgrades by appending only fields introduced after v1", () => {
@@ -313,10 +325,17 @@ test("long memory values are validated against the user field protocol", async (
 
 test("fields removed from the user protocol do not reset the value document", () => {
   const text = "NOOBOT_LONG_MEMORY/1\n\nremoved.field：保留\n";
-  assert.deepEqual(migrateMemoryDocument({ kind: MEMORY_DOCUMENT_KIND.LONG_MEMORY, text }), {
-    status: MEMORY_REPAIR_STATUS.CANONICAL,
-    text,
-  });
+  assert.deepEqual(
+    migrateMemoryDocument({
+      kind: MEMORY_DOCUMENT_KIND.LONG_MEMORY,
+      text,
+      longMemoryModel: createBuiltinLongMemoryModel(),
+    }),
+    {
+      status: MEMORY_REPAIR_STATUS.CANONICAL,
+      text,
+    },
+  );
 });
 
 test("user experience fields are kept and broken ones are reset", () => {

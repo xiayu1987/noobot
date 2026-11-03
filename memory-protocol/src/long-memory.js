@@ -165,8 +165,6 @@ export function createBuiltinLongMemoryModel(locale) {
   );
 }
 
-export const LONG_MEMORY_MODEL = createBuiltinLongMemoryModel();
-
 export const LONG_MEMORY_MODEL_FIELDS_SINCE = Object.freeze({
   2: Object.freeze([
     "work.role_domain",
@@ -312,7 +310,7 @@ export function renderLongMemoryModelLine(field) {
   return `${field.key} | ${renderFieldKind(field)} | ${field.description}`;
 }
 
-export function renderLongMemoryModelText(model = LONG_MEMORY_MODEL) {
+export function renderLongMemoryModelText(model) {
   const lines = model.fields.map(renderLongMemoryModelLine);
   return renderMemoryDocument(MEMORY_DOCUMENT_KIND.LONG_MEMORY_MODEL, lines.join("\n"));
 }

@@ -11,10 +11,7 @@ import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { runBestEffort } from "@noobot/shared/best-effort";
 import {
-  DEFAULT_CLEANUP_INTERVAL_MS,
   DEFAULT_HOST,
-  DEFAULT_START_TIMEOUT_MS,
-  DEFAULT_TOUCH_PERSIST_INTERVAL_MS,
   IDE_PATH_PREFIX,
   IDE_TOKEN_QUERY_KEY,
   getOpenVSCodeConfig,
@@ -74,7 +71,8 @@ export function createOpenVSCodeService({
     instance.lastAccessAt = new Date(nowMs).toISOString();
     if (
       persist ||
-      nowMs - Number(instance.lastAccessPersistedAtMs || 0) >= DEFAULT_TOUCH_PERSIST_INTERVAL_MS
+      nowMs - Number(instance.lastAccessPersistedAtMs || 0) >=
+        TIME_THRESHOLDS.openvscode.touchPersistIntervalMs
     ) {
       instance.lastAccessPersistedAtMs = nowMs;
       void runBestEffort(() => persistInstance(instance), {
@@ -227,12 +225,8 @@ export function createOpenVSCodeService({
     return null;
   }
 
-  async function waitForInstance(
-    instance = {},
-    timeoutMs = DEFAULT_START_TIMEOUT_MS,
-    getSpawnError = () => null,
-  ) {
-    const deadline = Date.now() + Number(timeoutMs || DEFAULT_START_TIMEOUT_MS);
+  async function waitForInstance(instance, timeoutMs, getSpawnError) {
+    const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       const spawnError = typeof getSpawnError === "function" ? getSpawnError() : null;
       if (spawnError) throw spawnError;
@@ -400,7 +394,7 @@ export function createOpenVSCodeService({
 
   async function cleanupIdleInstances({ force = false } = {}) {
     const openVSCodeConfig = getOpenVSCodeConfig(getGlobalConfig());
-    const idleTimeoutMs = Number(openVSCodeConfig.idleTimeoutMs || 0);
+    const { idleTimeoutMs } = openVSCodeConfig;
     if (!force && idleTimeoutMs <= 0) return { stopped: 0, total: instancesByUser.size };
     const nowMs = Date.now();
     let stopped = 0;
@@ -429,7 +423,7 @@ export function createOpenVSCodeService({
       void runBestEffort(cleanupIdleInstances, {
         operationName: "openvscode.cleanupIdleInstances",
       });
-    }, openVSCodeConfig.cleanupIntervalMs || DEFAULT_CLEANUP_INTERVAL_MS);
+    }, openVSCodeConfig.cleanupIntervalMs);
     cleanupTimer.unref?.();
   }
 

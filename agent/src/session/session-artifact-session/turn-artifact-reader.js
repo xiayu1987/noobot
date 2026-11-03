@@ -7,7 +7,7 @@ import { createSessionArtifactNotFoundError } from "@noobot/session-protocol";
 import { buildSessionArtifactFileMap } from "../session-artifact-files.js";
 import { readOptionalJsonWithStorage } from "./artifact-json-io.js";
 import { assertCanonicalSessionManifest } from "./turn-journal-store.js";
-import { turnMaterializer } from "./turn-materializer.js";
+import { getTurnMaterializer } from "./turn-materializer.js";
 import {
   matchesTurnLookupKey,
   requireTurnLookupKey,
@@ -20,7 +20,7 @@ async function materializeTurn({ storageService, sessionDir, item }) {
     committedBytes: item.committedBytes,
     turnScopeId: item.turnScopeId,
     dialogProcessId: item.dialogProcessId,
-    messages: await turnMaterializer.materialize({ storageService, sessionDir, item }),
+    messages: await getTurnMaterializer().materialize({ storageService, sessionDir, item }),
     summarySnapshots: item.summarySnapshots,
   };
 }

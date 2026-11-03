@@ -6,13 +6,6 @@
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { I18N_TEXT as HARNESS_I18N_TEXT, LOCALE as HARNESS_LOCALE } from "../../../i18n.js";
 
-export const FAILURE_THRESHOLD = Object.freeze({
-  CONSECUTIVE: WORKFLOW_PARAMS.guidance.failureThreshold.consecutive,
-  ACCUMULATED: WORKFLOW_PARAMS.guidance.failureThreshold.accumulated,
-});
-
-export const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD =
-  WORKFLOW_PARAMS.guidance.summary.messageCharsThreshold;
 export const LLM_SUMMARY_OVERFLOW_POLICY = Object.freeze({
   FORCE_ACCEPTANCE_WHEN_STILL_OVERFLOW:
     WORKFLOW_PARAMS.guidance.summary.overflowPolicy.forceAcceptanceWhenStillOverflow,

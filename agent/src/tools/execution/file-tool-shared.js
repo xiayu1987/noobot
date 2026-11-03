@@ -8,7 +8,8 @@ import { RESOURCE_SCOPE } from "@noobot/security-assessment-protocol";
 import { canUseHostPathsForWorkspaceTools, projectToolPathRef } from "../core/check-tool-input.js";
 import { resolveConfiguredPathPolicy } from "../../config/core/path-policy-adapter.js";
 import { resolveFileMutationRoot } from "./file-mutation-service.js";
-import { formatLinesWithNumbers, PATCH_FAILURE_CONTEXT_RADIUS, splitLines } from "./file-utils.js";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { formatLinesWithNumbers, splitLines } from "./file-utils.js";
 import { tTool } from "../core/tool-i18n.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { createFileMutationLocator } from "@noobot/file-mutation-protocol";
@@ -18,8 +19,9 @@ export function buildLineNumberedNearbyContent(content, targetLine) {
   const lines = splitLines(content);
   if (content.endsWith("\n")) lines.pop();
   const totalLines = lines.length;
-  const start = Math.max(1, targetLine - PATCH_FAILURE_CONTEXT_RADIUS);
-  const end = Math.min(totalLines, targetLine + PATCH_FAILURE_CONTEXT_RADIUS);
+  const radius = QUANTITY_THRESHOLDS.toolIO.patchFailureContextRadius;
+  const start = Math.max(1, targetLine - radius);
+  const end = Math.min(totalLines, targetLine + radius);
   if (start > end) return { totalLines };
   return {
     totalLines,

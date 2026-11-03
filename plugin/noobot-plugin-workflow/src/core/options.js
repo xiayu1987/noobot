@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { WORKFLOW_PLUGIN_DEFAULTS } from "./constants.js";
 import { isFunction, text } from "@noobot/shared/value";
 
@@ -17,24 +19,28 @@ export function resolveWorkflowDenyToolNames(input = null) {
   return Array.from(new Set(normalized));
 }
 
-function normalizePriority(input = null) {
-  const value = Number(input);
-  if (!Number.isFinite(value)) return WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_PRIORITY;
-  return Math.max(0, Math.floor(value));
+function isConfigured(value) {
+  return value !== undefined && value !== null;
 }
 
-function normalizeTimeoutMs(input = null) {
-  const value = Number(input);
-  if (!Number.isFinite(value) || value <= 0) return WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_TIMEOUT_MS;
-  return Math.floor(value);
-}
-
-function normalizeNodeAgentTimeoutMs(input = null) {
-  const value = Number(input);
-  if (!Number.isFinite(value) || value <= 0) {
-    return WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_NODE_AGENT_TIMEOUT_MS;
+function resolveIntegerOption(source, name, { minimum, resolveDefault }) {
+  const value = source[name];
+  if (!isConfigured(value)) return resolveDefault();
+  if (!Number.isInteger(value) || value < minimum) {
+    throw new TypeError(`workflow option ${name} must be an integer >= ${minimum}`);
   }
-  return Math.floor(value);
+  return value;
+}
+
+function resolveMode(source) {
+  if (!isConfigured(source.mode)) return WORKFLOW_PLUGIN_DEFAULTS.MODE_OFF;
+  const mode = text(source.mode).toLowerCase();
+  if (mode === WORKFLOW_PLUGIN_DEFAULTS.MODE_ON || mode === WORKFLOW_PLUGIN_DEFAULTS.MODE_OFF) {
+    return mode;
+  }
+  throw new TypeError(
+    `workflow option mode must be "${WORKFLOW_PLUGIN_DEFAULTS.MODE_ON}" or "${WORKFLOW_PLUGIN_DEFAULTS.MODE_OFF}"`,
+  );
 }
 
 const WORKFLOW_AGENT_HOST_CAPABILITIES = Object.freeze([
@@ -56,38 +62,40 @@ export function resolveWorkflowAgentHostCapabilities(input = {}) {
 
 export function normalizeOptions(input = {}) {
   const source = input && typeof input === "object" ? input : {};
-  const mode = (text(source?.mode) || WORKFLOW_PLUGIN_DEFAULTS.MODE_OFF).toLowerCase();
-  const maxAutoTransitions = Number(source?.maxAutoTransitions);
-  const maxParallelNodeAgents = Number(source?.maxParallelNodeAgents);
-  const miniRunnerMaxTurns = Number(source?.miniRunnerMaxTurns);
 
   return {
     enabled: source?.enabled !== false,
-    mode:
-      mode === WORKFLOW_PLUGIN_DEFAULTS.MODE_ON
-        ? WORKFLOW_PLUGIN_DEFAULTS.MODE_ON
-        : WORKFLOW_PLUGIN_DEFAULTS.MODE_OFF,
+    mode: resolveMode(source),
     semanticPrompt:
       typeof source?.semanticPrompt === "string" && source.semanticPrompt.trim()
         ? source.semanticPrompt.trim()
         : "",
     semanticModel: text(source?.semanticModel),
-    maxAutoTransitions:
-      Number.isFinite(maxAutoTransitions) && maxAutoTransitions > 0
-        ? Math.floor(maxAutoTransitions)
-        : WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_AUTO_TRANSITIONS,
+    maxAutoTransitions: resolveIntegerOption(source, "maxAutoTransitions", {
+      minimum: 1,
+      resolveDefault: () => WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_AUTO_TRANSITIONS,
+    }),
     parallelNodeExecution: source?.parallelNodeExecution === true,
-    maxParallelNodeAgents:
-      Number.isFinite(maxParallelNodeAgents) && maxParallelNodeAgents > 0
-        ? Math.floor(maxParallelNodeAgents)
-        : WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_PARALLEL_NODE_AGENTS,
-    miniRunnerMaxTurns:
-      Number.isFinite(miniRunnerMaxTurns) && miniRunnerMaxTurns > 0
-        ? Math.floor(miniRunnerMaxTurns)
-        : WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MINI_RUNNER_MAX_TURNS,
-    nodeAgentTimeoutMs: normalizeNodeAgentTimeoutMs(source?.nodeAgentTimeoutMs),
-    priority: normalizePriority(source?.priority),
-    timeoutMs: normalizeTimeoutMs(source?.timeoutMs),
+    maxParallelNodeAgents: resolveIntegerOption(source, "maxParallelNodeAgents", {
+      minimum: 1,
+      resolveDefault: () => WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_PARALLEL_NODE_AGENTS,
+    }),
+    miniRunnerMaxTurns: resolveIntegerOption(source, "miniRunnerMaxTurns", {
+      minimum: 1,
+      resolveDefault: () => TURN_THRESHOLDS.workflow.miniRunnerMaxTurns,
+    }),
+    nodeAgentTimeoutMs: resolveIntegerOption(source, "nodeAgentTimeoutMs", {
+      minimum: 1000,
+      resolveDefault: () => TIME_THRESHOLDS.workflow.nodeAgentTimeoutMs,
+    }),
+    priority: resolveIntegerOption(source, "priority", {
+      minimum: 0,
+      resolveDefault: () => WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_PRIORITY,
+    }),
+    timeoutMs: resolveIntegerOption(source, "timeoutMs", {
+      minimum: 1,
+      resolveDefault: () => TIME_THRESHOLDS.workflow.timeoutMs,
+    }),
     denyToolNames: resolveWorkflowDenyToolNames(source?.denyToolNames),
   };
 }

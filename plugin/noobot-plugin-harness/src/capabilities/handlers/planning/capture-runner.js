@@ -38,17 +38,13 @@ import {
 import { applyDynamicPolicyPromptFromText } from "../shared/workflow/dynamic-policy-prompt.js";
 import { resolveModelMessageBlocks, resolveModelMessages } from "../../../core/message-store.js";
 import { text, isObjectLike } from "@noobot/shared/value";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
-const MAX_PLANNING_CAPTURE_ATTEMPTS = WORKFLOW_PARAMS.planning.capture.maxAttempts;
 const PLANNING_RAW_OUTPUT_LIMIT = WORKFLOW_PARAMS.planning.capture.rawOutputLimit;
 
-const PLANNING_COMPACT_TEXT_MAX_CHARS = WORKFLOW_PARAMS.planning.capture.compactTextMaxChars;
-const PLANNING_RAW_OUTPUT_PREVIEW_MAX_CHARS =
-  WORKFLOW_PARAMS.planning.capture.rawOutputPreviewMaxChars;
-const PLANNING_CONTEXT_GOAL_MAX_CHARS = WORKFLOW_PARAMS.planning.capture.contextGoalMaxChars;
-
-function compactText(inputText = "", maxChars = PLANNING_COMPACT_TEXT_MAX_CHARS) {
+function compactText(inputText, maxChars) {
   const raw = String(inputText || "")
     .replace(/\s+/g, " ")
     .trim();
@@ -89,7 +85,7 @@ function recordPlanningRawOutput(
       source: entry.source,
       chars: rawText.length,
       parsedCount: entry.parsedCount,
-      preview: compactText(rawText, PLANNING_RAW_OUTPUT_PREVIEW_MAX_CHARS),
+      preview: compactText(rawText, LENGTH_THRESHOLDS.display.planningRawOutputPreviewChars),
     },
   });
   return true;
@@ -142,11 +138,17 @@ function buildPlanningContextSummary(ctx = {}, meta = {}, locale = LOCALE.ZH_CN)
     .find((item) => text(item?.role).toLowerCase() === "user");
   const latestUserGoalText =
     resolveLatestUserMessageText(ctx) ||
-    compactText(extractRawTextContent(latestUserMessage?.content), PLANNING_CONTEXT_GOAL_MAX_CHARS);
+    compactText(
+      extractRawTextContent(latestUserMessage?.content),
+      LENGTH_THRESHOLDS.contextPreview.planningContextGoalChars,
+    );
   return {
     locale,
     turn: Number.isFinite(Number(ctx?.turn)) ? Number(ctx.turn) : undefined,
-    latestUserGoal: compactText(latestUserGoalText, PLANNING_CONTEXT_GOAL_MAX_CHARS),
+    latestUserGoal: compactText(
+      latestUserGoalText,
+      LENGTH_THRESHOLDS.contextPreview.planningContextGoalChars,
+    ),
     operationDirectory: resolveOperationDirectoryContext(ctx),
     sceneTools: resolveSceneToolNames(ctx),
     toolAllowlist: resolvePlanningToolAllowlist(meta),
@@ -221,7 +223,7 @@ function handleAfterLlmPlanningProcessResult(ctx = {}, processed = {}, state = {
       event: PLANNING_EVENTS.checklistRetryScheduled,
       detail: {
         attempts: processed.attempts,
-        maxAttempts: MAX_PLANNING_CAPTURE_ATTEMPTS,
+        maxAttempts: TURN_THRESHOLDS.harness.planning.captureMaxAttempts,
         emptyResponse: processed.emptyResponse === true,
       },
     });
@@ -270,7 +272,10 @@ async function handleSeparateModelPlanningProcessResult({
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
       event: PLANNING_EVENTS.checklistRetryScheduledBySeparateModel,
-      detail: { attempts: processed.attempts, maxAttempts: MAX_PLANNING_CAPTURE_ATTEMPTS },
+      detail: {
+        attempts: processed.attempts,
+        maxAttempts: TURN_THRESHOLDS.harness.planning.captureMaxAttempts,
+      },
     });
     return true;
   }

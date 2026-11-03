@@ -9,9 +9,9 @@ import {
   TEXT_PREVIEW_EXTS,
   OFFICE_EXTS,
   MARKDOWN_MIMES,
-  NON_IMAGE_PREVIEW_MAX_BYTES,
 } from "./constants.js";
 import { text } from "@noobot/shared/value";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
 function getFileExtension(fileName = "") {
   const normalized = text(fileName).toLowerCase();
@@ -102,7 +102,7 @@ export function isNonImagePreviewOverSizeLimit({
 } = {}) {
   if (isImagePreviewType(mimeType, fileName, isImageMimeChecker)) return false;
   const size = resolveKnownFileSize(fileItem);
-  return size !== null && size > NON_IMAGE_PREVIEW_MAX_BYTES;
+  return size !== null && size > LENGTH_THRESHOLDS.clientPreview.nonImageMaxBytes;
 }
 
 export function isAudioPreviewMime(mimeType = "") {

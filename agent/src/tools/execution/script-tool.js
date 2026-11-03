@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { mkdir } from "node:fs/promises";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { TOOL_PATH_CONTRACTS } from "@noobot/path-resolver";
 import { resolveAgentRuntimePathContext } from "../../context/runtime-path-context.js";
 import { tool as structuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import {
-  BUILTIN_THRESHOLDS,
   isSandboxExecutionView,
   resolveSandboxProviderExecutable,
   resolveToolExecutionPolicy,
@@ -97,7 +97,7 @@ export function createScriptTool({ agentContext }) {
       const normalizedCommand = String(command || "");
       const requestedExecutionMode = normalizeExecutionMode(executionMode);
       const shouldIncludeLineNumbers = includeLineNumbers === true;
-      const timeout = BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs;
+      const timeout = TIME_THRESHOLDS.tools.executeScriptTimeoutMs;
       const abortSignal = toolConfig.signal;
       const generatedDataRoot = text(runtime.systemRuntime.sessionDir);
       if (!generatedDataRoot) throw new Error("session directory is required for script output");

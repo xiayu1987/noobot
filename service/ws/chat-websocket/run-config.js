@@ -3,19 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { BUILTIN_THRESHOLDS, normalizeTimeMs, resolveTimeMs } from "#agent/config";
+import { normalizeTimeMs, resolveTimeMs } from "#agent/config";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { isPlainObject } from "@noobot/shared/value";
 
-const DEFAULT_RUN_TIMEOUT_MS = BUILTIN_THRESHOLDS.runTimeoutMs;
-const MIN_RUN_TIMEOUT_MS = TIME_THRESHOLDS.agent.minRunTimeoutMs;
-const MAX_RUN_TIMEOUT_MS = TIME_THRESHOLDS.agent.maxRunTimeoutMs;
-
 function resolveRunTimeoutMs(rawValue) {
   return normalizeTimeMs(rawValue, {
-    fallback: DEFAULT_RUN_TIMEOUT_MS,
-    min: MIN_RUN_TIMEOUT_MS,
-    max: MAX_RUN_TIMEOUT_MS,
+    fallback: TIME_THRESHOLDS.agent.runTimeoutMs,
+    min: TIME_THRESHOLDS.agent.minRunTimeoutMs,
+    max: TIME_THRESHOLDS.agent.maxRunTimeoutMs,
   });
 }
 
@@ -25,9 +21,9 @@ function resolveConfigRunTimeoutMs(config = {}) {
   if (!hasCanonical) return undefined;
   return resolveTimeMs(source, {
     key: "runTimeoutMs",
-    fallback: DEFAULT_RUN_TIMEOUT_MS,
-    min: MIN_RUN_TIMEOUT_MS,
-    max: MAX_RUN_TIMEOUT_MS,
+    fallback: TIME_THRESHOLDS.agent.runTimeoutMs,
+    min: TIME_THRESHOLDS.agent.minRunTimeoutMs,
+    max: TIME_THRESHOLDS.agent.maxRunTimeoutMs,
   });
 }
 
@@ -36,7 +32,7 @@ export async function resolveEffectiveRunTimeoutMs({ runConfig = {} } = {}) {
   if (runConfigTimeoutMs !== undefined && runConfigTimeoutMs !== null) {
     return resolveRunTimeoutMs(runConfigTimeoutMs);
   }
-  return resolveRunTimeoutMs(DEFAULT_RUN_TIMEOUT_MS);
+  return resolveRunTimeoutMs(TIME_THRESHOLDS.agent.runTimeoutMs);
 }
 
 export function summarizePluginConfig(plugins = {}) {

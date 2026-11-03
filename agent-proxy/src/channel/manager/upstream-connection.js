@@ -3,6 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { config } from "../../shared/config.js";
 import {
   CHANNEL_ACTIVITY_PHASE,
@@ -73,7 +75,7 @@ class UpstreamConnectionMethods {
     channel.retention.phase = CHANNEL_RETENTION_PHASE.TERMINAL_RETAINED;
     channel.retention.terminalStatus = terminalStatus;
     channel.updatedAtMs = nowMs();
-    channel.retention.cleanupAfterMs = nowMs() + config.channelRetentionMs;
+    channel.retention.cleanupAfterMs = nowMs() + TIME_THRESHOLDS.agentProxy.channelRetentionMs;
     this.logChannelEvent(channel, {
       category: "state",
       event: "agentProxy.channel.terminal",
@@ -252,11 +254,11 @@ class UpstreamConnectionMethods {
     const locator = error?.frameLocator;
     if (!locator) return false;
     const currentMs = nowMs();
-    const windowStartMs = currentMs - config.invalidUpstreamFrameWindowMs;
+    const windowStartMs = currentMs - TIME_THRESHOLDS.agentProxy.invalidUpstreamFrameWindowMs;
     const recent = (channel.invalidUpstreamFrameAtMs || []).filter((atMs) => atMs > windowStartMs);
     recent.push(currentMs);
     channel.invalidUpstreamFrameAtMs = recent;
-    if (recent.length > config.invalidUpstreamFrameLimit) return false;
+    if (recent.length > QUANTITY_THRESHOLDS.agentProxy.invalidUpstreamFrameLimit) return false;
     this.logChannelEvent(channel, {
       category: "transport",
       level: "warn",
@@ -266,7 +268,7 @@ class UpstreamConnectionMethods {
         ...locator,
         error: String(error.message || ""),
         invalidFramesInWindow: recent.length,
-        invalidFrameLimit: config.invalidUpstreamFrameLimit,
+        invalidFrameLimit: QUANTITY_THRESHOLDS.agentProxy.invalidUpstreamFrameLimit,
       },
     });
     return true;

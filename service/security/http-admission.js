@@ -8,20 +8,14 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { ipKeyGenerator } from "express-rate-limit";
 import { text } from "@noobot/shared/value";
 
-const HTTP_ADMISSION_POLICY = Object.freeze({
-  connection: Object.freeze({
-    limit: QUANTITY_THRESHOLDS.service.httpConnectionLimit,
-    windowMs: TIME_THRESHOLDS.service.httpAdmissionWindowMs,
-  }),
-  mutation: Object.freeze({
-    limit: QUANTITY_THRESHOLDS.service.httpMutationLimit,
-    windowMs: TIME_THRESHOLDS.service.httpAdmissionWindowMs,
-  }),
-  read: Object.freeze({
-    limit: QUANTITY_THRESHOLDS.service.httpReadLimit,
-    windowMs: TIME_THRESHOLDS.service.httpAdmissionWindowMs,
-  }),
-});
+function resolveHttpAdmissionPolicies() {
+  const windowMs = TIME_THRESHOLDS.service.httpAdmissionWindowMs;
+  return Object.freeze({
+    connection: Object.freeze({ limit: QUANTITY_THRESHOLDS.service.httpConnectionLimit, windowMs }),
+    mutation: Object.freeze({ limit: QUANTITY_THRESHOLDS.service.httpMutationLimit, windowMs }),
+    read: Object.freeze({ limit: QUANTITY_THRESHOLDS.service.httpReadLimit, windowMs }),
+  });
+}
 
 function requestClass(req = {}) {
   if (req.path === "/health") return "exempt";
@@ -33,7 +27,7 @@ function requestClass(req = {}) {
 
 export function createHttpAdmissionOptions({
   resolveAuthByApiKey = () => null,
-  policies = HTTP_ADMISSION_POLICY,
+  policies = resolveHttpAdmissionPolicies(),
 } = {}) {
   const windowDurations = new Set(Object.values(policies).map((policy) => policy.windowMs));
   if (windowDurations.size !== 1) {

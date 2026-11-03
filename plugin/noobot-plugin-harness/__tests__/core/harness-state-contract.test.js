@@ -134,7 +134,10 @@ test("pending writers record the current hook turn and missing runtime times are
   assert.equal(state.pendingMeta.pending.analysis, 4);
   delete state.pendingMeta.pending.analysis;
   assert.throws(
-    () => cleanupExpiredPendingOnHook("agent.before_turn", ctx),
+    () =>
+      cleanupExpiredPendingOnHook("agent.before_turn", ctx, {
+        harness: { pendingTtlHookTurns: 1 },
+      }),
     /invalid_harness_pending_time/,
   );
   assert.equal(Object.hasOwn(state.pendingMeta.pending, "analysis"), false);

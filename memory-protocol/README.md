@@ -33,7 +33,7 @@
 
 ## 长期记忆协议
 
-内置常量 `LONG_MEMORY_MODEL` 是字段的唯一代码定义，只用于首次生成和兜底。工作区的 `long-memory-model.md` 由它渲染，用户可以增删改字段，运行时只读这份文件；解析失败时回落内置字段：
+`createBuiltinLongMemoryModel(locale)` 是内置字段的唯一代码定义，调用时才读取 `longMemory.*MaxItems` 阈值，模块加载时不构建。工作区的 `long-memory-model.md` 由它渲染，用户可以增删改字段，运行时只读这份文件；文件缺失时使用内置字段，解析失败时使用内置字段并通过 `modelError` 显式上报：
 
 ```
 NOOBOT_LONG_MEMORY_MODEL/2

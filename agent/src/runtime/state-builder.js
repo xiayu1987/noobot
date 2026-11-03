@@ -3,7 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { BUILTIN_THRESHOLDS } from "../config/index.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { buildContextMessageBlocks } from "../context/assembly/message-builder.js";
 import {
   getAgentContextEnvelope,
@@ -37,13 +38,12 @@ import { applyActiveModelSpec } from "../models/runtime/model-manager.js";
 
 function resolveLoopConfig(resolvers, runConfig) {
   return {
-    maxToolLoopTurns: BUILTIN_THRESHOLDS.maxToolLoopTurns,
+    maxToolLoopTurns: TURN_THRESHOLDS.agent.maxToolLoopTurns,
     phaseSummaryLoopTurns: resolvers.resolvePhaseSummaryLoopTurnsFn({ runConfig }),
     taskCheckLoopTurns: resolvers.resolveTaskCheckLoopTurnsFn({ runConfig }),
-    phaseSummaryMessageCharsThreshold:
-      BUILTIN_THRESHOLDS.taskSummary.phaseSummaryMessageCharsThreshold,
-    helpPromptLoopTurns: BUILTIN_THRESHOLDS.help.helpPromptLoopTurns,
-    toolFailureHelpCount: BUILTIN_THRESHOLDS.help.toolFailureHelpCount,
+    phaseSummaryMessageCharsThreshold: LENGTH_THRESHOLDS.context.phaseSummaryMessageChars,
+    helpPromptLoopTurns: TURN_THRESHOLDS.agent.helpPromptLoopTurns,
+    toolFailureHelpCount: TURN_THRESHOLDS.agent.toolFailureHelpCount,
   };
 }
 

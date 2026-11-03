@@ -14,15 +14,15 @@ import {
   writePlanUpdateCaptureContext,
 } from "../../src/capabilities/handlers/planning/plan-update-engine.js";
 import { setCaptureFlagStateWithMeta } from "../../src/capabilities/pending-cleanup.js";
-import { WORKFLOW_PARAMS } from "../../src/core/workflow-params.js";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import {
   createHarnessBucket,
   requireHarnessPlanUpdateStage,
 } from "../../src/core/bucket-contract.js";
 
 const PLAN_UPDATE_POLICY = Object.freeze({
-  MAX_ATTEMPTS_REVISION: WORKFLOW_PARAMS.planning.planUpdate.revisionMaxAttempts,
-  MAX_ATTEMPTS_REFINEMENT: WORKFLOW_PARAMS.planning.planUpdate.refinementMaxAttempts,
+  MAX_ATTEMPTS_REVISION: TURN_THRESHOLDS.harness.planning.planUpdateRevisionMaxAttempts,
+  MAX_ATTEMPTS_REFINEMENT: TURN_THRESHOLDS.harness.planning.planUpdateRefinementMaxAttempts,
 });
 
 test("plan update stage requires an exact declared stage before state changes", () => {

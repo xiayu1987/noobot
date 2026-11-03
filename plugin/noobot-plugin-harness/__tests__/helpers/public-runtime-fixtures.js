@@ -28,6 +28,8 @@ import {
 } from "@noobot/semantic-transfer-protocol";
 import { createModelResponse, MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import { migrateHarnessBucket } from "../../src/core/bucket-migration.js";
+import { HARNESS_PLANNING_GUIDANCE_MODE } from "../../src/core/constants.js";
+import { normalizeOptions } from "../../src/core/options.js";
 
 import { text, isObjectLike } from "@noobot/shared/value";
 let testScopeSequence = 0;
@@ -378,6 +380,15 @@ export function invokeTestHookHandler(handler, point, ctx, signal) {
     handlerId: `test.${point}`,
     signal,
   });
+}
+
+export function createTestHarnessMeta(harness = {}) {
+  return {
+    harness: {
+      ...normalizeOptions({ planningGuidanceMode: HARNESS_PLANNING_GUIDANCE_MODE.INJECT }),
+      ...harness,
+    },
+  };
 }
 
 export function createTestResolveModelMessages() {

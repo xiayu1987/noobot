@@ -98,12 +98,16 @@ test("snapshot-owning entries install the persisted revision before loading busi
     {
       entry: "agent-proxy/agent-proxy.js",
       env: workspaceEnv,
-      replacements: { "agent-proxy/src/server/main.js": report },
+      replacements: {
+        "agent-proxy/src/server/main.js": `${report}\nexport async function startAgentProxy() {}`,
+      },
     },
     {
       entry: "model-proxy/src/index.js",
       env: workspaceEnv,
-      replacements: { "model-proxy/src/main.js": report },
+      replacements: {
+        "model-proxy/src/main.js": `${report}\nexport function startModelProxy() {}`,
+      },
     },
   ];
   for (const { entry, argv = [], env = {}, replacements } of entries) {

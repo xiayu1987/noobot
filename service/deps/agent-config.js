@@ -6,7 +6,6 @@
 
 export {
   BUILTIN_SCENARIOS,
-  BUILTIN_THRESHOLDS,
   createGlobalConfigBuilder,
   hasOwnConfigKey,
   mergeConfig,

@@ -3,7 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { config } from "../../shared/config.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { nowMs, resolveMessageEventTrace } from "../../shared/utils.js";
 import { localizeAgentProxyError } from "noobot-i18n/agent-proxy";
 import {
@@ -172,7 +174,7 @@ class SubscriberBroadcastMethods {
       channel.subscribers.delete(socket);
       channel.updatedAtMs = nowMs();
       if (!channel.subscribers.size && channel.retention.terminalStatus) {
-        channel.retention.cleanupAfterMs = nowMs() + config.channelRetentionMs;
+        channel.retention.cleanupAfterMs = nowMs() + TIME_THRESHOLDS.agentProxy.channelRetentionMs;
       }
     }
     for (const channelKey of socket.__agentProxyChannelKeys) {
@@ -324,7 +326,7 @@ class SubscriberBroadcastMethods {
     }
     delivery.timer = setTimeout(
       () => this._retryPendingLifecycleDelivery(targetSocket, delivery.eventId),
-      config.turnLifecycleReceiptTimeoutMs,
+      TIME_THRESHOLDS.agentProxy.turnLifecycleReceiptTimeoutMs,
     );
     delivery.timer.unref?.();
     return sendResult;
@@ -347,7 +349,7 @@ class SubscriberBroadcastMethods {
       clearTimeout(delivery.timer);
       delivery.timer = null;
     }
-    if (delivery.attempts >= config.turnLifecycleDeliveryMaxAttempts) {
+    if (delivery.attempts >= TURN_THRESHOLDS.transport.turnLifecycleDeliveryMaxAttempts) {
       this.logSessionEvent(delivery.channel, {
         category: "transport",
         level: "error",
@@ -454,7 +456,10 @@ class SubscriberBroadcastMethods {
     if (targetSocket.readyState !== this.WebSocket.OPEN) {
       return { result: "skipped", reason: "socket_not_open" };
     }
-    if (Number(targetSocket.bufferedAmount || 0) > config.wsMaxBufferedBytes) {
+    if (
+      Number(targetSocket.bufferedAmount || 0) >
+      LENGTH_THRESHOLDS.agentProxy.webSocketMaxBufferedBytes
+    ) {
       try {
         targetSocket.close(1008, "slow_consumer");
       } catch (error) {

@@ -7,6 +7,7 @@ import { HOOK_POINT, requireHookTurn } from "@noobot/hook-protocol";
 import { synchronizeTaskAcceptanceTool } from "../acceptance/index.js";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import {
   CAPABILITY_DOMAIN,
   appendCapabilityLog,
@@ -32,31 +33,24 @@ import { text } from "@noobot/shared/value";
 const PLANNING_DECISION = WORKFLOW_PARAMS.planning.decisions;
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
-const DEFAULT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD =
-  WORKFLOW_PARAMS.planning.planUpdate.triggerTurnsThreshold;
-const DEFAULT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD =
-  WORKFLOW_PARAMS.acceptance.phase.triggerTurnsThreshold;
 const PLANNING_THRESHOLD_SNAPSHOT_EVENT = "planning_threshold_snapshot";
 
 function resolvePlanningTurnThresholds(ctx = {}, meta = {}) {
-  const modeThresholds = WORKFLOW_PARAMS.modeThresholds || {};
   const thresholdMode = resolveWorkflowThresholdModeFromContext(ctx);
-  const scopedMode = modeThresholds[thresholdMode] || modeThresholds.full;
+  const scopedMode = TURN_THRESHOLDS.harness.modeThresholds[thresholdMode];
   const harness = meta?.harness || {};
   const planUpdate = resolveGatedThresholdWithSource({
     meta,
     runtimeValue: harness.planning?.planUpdate?.triggerTurnsThreshold,
-    scopedValue: scopedMode?.planning?.planUpdate?.triggerTurnsThreshold,
-    defaultValue: DEFAULT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
+    fallbackValue: scopedMode.planUpdateTriggerTurns,
   });
   const phaseAcceptance = resolveGatedThresholdWithSource({
     meta,
     runtimeValue: harness.acceptance?.phase?.triggerTurnsThreshold,
-    scopedValue: scopedMode?.acceptance?.phase?.triggerTurnsThreshold,
-    defaultValue: DEFAULT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
+    fallbackValue: scopedMode.phaseAcceptanceTriggerTurns,
   });
   return {
-    mode: modeThresholds[thresholdMode] ? thresholdMode : "full",
+    mode: thresholdMode,
     planUpdateTriggerTurnsThreshold: planUpdate.value,
     phaseAcceptanceTriggerTurnsThreshold: phaseAcceptance.value,
     planUpdateThresholdSource: planUpdate.source,

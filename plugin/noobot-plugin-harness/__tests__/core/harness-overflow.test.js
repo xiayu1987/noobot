@@ -6,11 +6,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { WORKFLOW_PARAMS } from "../../src/core/workflow-params.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
 import { readTestMainFlowControl } from "../helpers/public-runtime-fixtures.js";
 
-const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD = WORKFLOW_PARAMS.guidance.summary.messageCharsThreshold;
+const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD = LENGTH_THRESHOLDS.context.harnessSummaryMessageChars;
 
 async function finishGuidanceSummaryRound(
   guidanceHandler,

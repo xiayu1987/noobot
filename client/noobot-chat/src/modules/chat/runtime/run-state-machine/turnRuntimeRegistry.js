@@ -34,8 +34,6 @@ export {
 } from "./turnRuntimeSelectors.js";
 
 export {
-  DEFAULT_TERMINAL_MAX_AGE_MS,
-  DEFAULT_TERMINAL_RETAIN_PER_SESSION,
   confirmTurnRuntimeDeletion,
   pruneTerminalTurns,
   removeSessionRuntime,

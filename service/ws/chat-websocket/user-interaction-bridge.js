@@ -21,13 +21,14 @@ import {
 } from "./pending-interaction-registry.js";
 import { isPlainObject, text, isFunction } from "@noobot/shared/value";
 
-const USER_INTERACTION_TIMEOUT_MS = TIME_THRESHOLDS.service.userInteractionTimeoutMs;
-
-function normalizeInteractionTimeoutMs(timeoutMs, fallbackTimeoutMs = USER_INTERACTION_TIMEOUT_MS) {
+function normalizeInteractionTimeoutMs(
+  timeoutMs,
+  fallbackTimeoutMs = TIME_THRESHOLDS.service.userInteractionTimeoutMs,
+) {
   const normalizedFallbackTimeoutMs =
     Number.isInteger(fallbackTimeoutMs) && fallbackTimeoutMs > 0
       ? fallbackTimeoutMs
-      : USER_INTERACTION_TIMEOUT_MS;
+      : TIME_THRESHOLDS.service.userInteractionTimeoutMs;
   const normalizedTimeoutMs = Number(timeoutMs);
   if (!Number.isInteger(normalizedTimeoutMs) || normalizedTimeoutMs <= 0) {
     return normalizedFallbackTimeoutMs;
@@ -155,7 +156,7 @@ export function createUserInteractionBridge({
   commitInteractionRequest,
   translateText,
   getCurrentLocale = () => "",
-  interactionTimeoutMs = USER_INTERACTION_TIMEOUT_MS,
+  interactionTimeoutMs = TIME_THRESHOLDS.service.userInteractionTimeoutMs,
 } = {}) {
   const interactionOwnerUserId = text(ownerUserId);
   if (!interactionOwnerUserId) throw new TypeError("ownerUserId is required");

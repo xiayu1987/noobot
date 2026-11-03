@@ -5,7 +5,7 @@
  */
 import { LOCALE } from "../constants.js";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
-import { WORKFLOW_PARAMS } from "../../../../core/workflow-params.js";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { requireHarnessRevisionCount } from "../../../../core/bucket-contract.js";
 import {
   buildPlanningMainPatchProtocolText as buildPlanningMainPatchProtocolCoreText,
@@ -16,10 +16,6 @@ import { buildDynamicPolicyPromptProtocolInstruction } from "./dynamic-policy-pr
 import { normalizePromptOptions } from "./prompt-options.js";
 import { buildScenarioPolicyPromptText } from "./scenario-policy-prompts.js";
 import { text } from "@noobot/shared/value";
-
-const PLAN_UPDATE_POLICY = Object.freeze({
-  MAX_ATTEMPTS_REVISION: WORKFLOW_PARAMS.planning.planUpdate.revisionMaxAttempts,
-});
 
 export function buildPostPlanUserFollowupPrompt(locale = LOCALE.ZH_CN, stage = "planning") {
   const normalizedStage = (text(stage) || "planning").toLowerCase();
@@ -106,7 +102,7 @@ export function buildPlanningRevisionPromptText(options = {}) {
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REVISION_STATUS_HEADER),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REVISION_COUNT_LINE, {
       revisionCount,
-      maxAttempts: Number(PLAN_UPDATE_POLICY.MAX_ATTEMPTS_REVISION),
+      maxAttempts: TURN_THRESHOLDS.harness.planning.planUpdateRevisionMaxAttempts,
     }),
     ...currentPlanSection,
     buildPlanningRevisionPatchProtocolCoreText(locale),

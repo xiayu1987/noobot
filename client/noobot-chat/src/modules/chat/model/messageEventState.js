@@ -16,16 +16,20 @@ export function createMessageEventState() {
   };
 }
 
-const CONSUMED_EVENT_LIMIT = QUANTITY_THRESHOLDS.client.consumedEventIdsLimit;
-const consumedMessageEvents = createSerializedWindowIndex({
-  field: "consumedEventIds",
-  limit: CONSUMED_EVENT_LIMIT,
-});
+let consumedMessageEvents = null;
+
+function consumedMessageEventIndex() {
+  consumedMessageEvents ??= createSerializedWindowIndex({
+    field: "consumedEventIds",
+    limit: QUANTITY_THRESHOLDS.client.consumedEventIdsLimit,
+  });
+  return consumedMessageEvents;
+}
 
 export function hasConsumedMessageEvent(state, eventId) {
-  return consumedMessageEvents.has(state, eventId);
+  return consumedMessageEventIndex().has(state, eventId);
 }
 
 export function appendConsumedMessageEvent(state, eventId) {
-  return consumedMessageEvents.append(state, eventId);
+  return consumedMessageEventIndex().append(state, eventId);
 }

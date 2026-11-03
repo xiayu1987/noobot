@@ -18,12 +18,6 @@ import {
 import { closeWebSocket, WEB_SOCKET_CLOSE_CODE } from "./closeWebSocket.js";
 import { text, isObjectLike } from "@noobot/shared/value";
 
-const MAX_QUEUE_SIZE = QUANTITY_THRESHOLDS.sessionLog.maxQueueSize;
-const MAX_BATCH_SIZE = QUANTITY_THRESHOLDS.sessionLog.maxBatchSize;
-const DEFAULT_MAX_DEBUG_QUEUE_SIZE = QUANTITY_THRESHOLDS.sessionLog.maxDebugQueueSize;
-const DEFAULT_MAX_DEBUG_QUEUE_BYTES = LENGTH_THRESHOLDS.sessionLog.maxDebugQueueBytes;
-const DEFAULT_DEBUG_TTL_MS = TIME_THRESHOLDS.client.sessionLogDebugTtlMs;
-
 const SESSION_LOG_WS_DEBUG_TYPE = "session-log-ws";
 
 export function createSessionLogWebSocketClient({
@@ -42,9 +36,9 @@ export function createSessionLogWebSocketClient({
   let policy = {
     debug: {},
     limits: {
-      maxDebugQueue: DEFAULT_MAX_DEBUG_QUEUE_SIZE,
-      maxDebugBytes: DEFAULT_MAX_DEBUG_QUEUE_BYTES,
-      debugTtlMs: DEFAULT_DEBUG_TTL_MS,
+      maxDebugQueue: QUANTITY_THRESHOLDS.sessionLog.maxDebugQueueSize,
+      maxDebugBytes: LENGTH_THRESHOLDS.sessionLog.maxDebugQueueBytes,
+      debugTtlMs: TIME_THRESHOLDS.client.sessionLogDebugTtlMs,
     },
   };
   let disposed = false;
@@ -197,7 +191,7 @@ export function createSessionLogWebSocketClient({
       droppedDebugCount += 1;
     }
     const sourceQueue = reliableQueue.length ? reliableQueue : debugQueue;
-    const count = Math.min(sourceQueue.length, MAX_BATCH_SIZE);
+    const count = Math.min(sourceQueue.length, QUANTITY_THRESHOLDS.sessionLog.maxBatchSize);
     while (inFlight.length < count) {
       const entry = sourceQueue.shift();
       if (!entry.reliable) debugQueueBytes -= entry.bytes;
@@ -227,13 +221,13 @@ export function createSessionLogWebSocketClient({
       limits: {
         maxDebugQueue: Number.isFinite(Number(nextPolicy.limits?.maxDebugQueue))
           ? Math.max(0, Number(nextPolicy.limits.maxDebugQueue))
-          : DEFAULT_MAX_DEBUG_QUEUE_SIZE,
+          : QUANTITY_THRESHOLDS.sessionLog.maxDebugQueueSize,
         maxDebugBytes: Number.isFinite(Number(nextPolicy.limits?.maxDebugBytes))
           ? Math.max(0, Number(nextPolicy.limits.maxDebugBytes))
-          : DEFAULT_MAX_DEBUG_QUEUE_BYTES,
+          : LENGTH_THRESHOLDS.sessionLog.maxDebugQueueBytes,
         debugTtlMs: Number.isFinite(Number(nextPolicy.limits?.debugTtlMs))
           ? Math.max(0, Number(nextPolicy.limits.debugTtlMs))
-          : DEFAULT_DEBUG_TTL_MS,
+          : TIME_THRESHOLDS.client.sessionLogDebugTtlMs,
       },
     };
     for (let index = debugQueue.length - 1; index >= 0; index -= 1) {
@@ -282,7 +276,7 @@ export function createSessionLogWebSocketClient({
       debugQueueBytes += bytes;
     } else {
       const reliableInFlight = inFlight.filter((entry) => entry.reliable).length;
-      if (reliableQueue.length + reliableInFlight >= MAX_QUEUE_SIZE) {
+      if (reliableQueue.length + reliableInFlight >= QUANTITY_THRESHOLDS.sessionLog.maxQueueSize) {
         rejectedReliableCount += 1;
         return false;
       }

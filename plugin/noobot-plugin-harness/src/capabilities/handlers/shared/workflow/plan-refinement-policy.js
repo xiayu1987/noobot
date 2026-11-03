@@ -11,7 +11,7 @@ function resolvePlanRefinementEnabledForContext(ctx = {}, meta = {}) {
   const explicit = meta?.harness?.planRefinementEnabled;
   if (typeof explicit === "boolean") return explicit;
   const mode = resolveWorkflowThresholdModeFromContext(ctx);
-  return WORKFLOW_PARAMS.modeThresholds[mode].planning.planRefinement.enabled === true;
+  return WORKFLOW_PARAMS.modePolicies[mode].planRefinementEnabled === true;
 }
 
 export function syncPlanRefinementPolicyFlag(ctx, state, meta = {}) {

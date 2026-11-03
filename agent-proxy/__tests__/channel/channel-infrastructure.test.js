@@ -3,13 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { ChannelEventJournal } from "../../src/channel/channel-event-journal.js";
 import { CommandRegistry, PENDING_COMMAND_KIND } from "../../src/channel/command-registry.js";
 import { ChannelManager } from "../../src/channel/channel-manager.js";
 import { initializeDownstreamSocketState } from "../../src/websocket/downstream-socket-state.js";
-import { config } from "../../src/shared/config.js";
 import {
   createTurnLifecycleEnvelope,
   createTurnLifecycleReceipt,
@@ -195,7 +196,7 @@ test("subscriber delivery closes a slow consumer at the backpressure boundary", 
   let closeReason = "";
   const socket = {
     readyState: 1,
-    bufferedAmount: config.wsMaxBufferedBytes + 1,
+    bufferedAmount: LENGTH_THRESHOLDS.agentProxy.webSocketMaxBufferedBytes + 1,
     close(_code, reason) {
       closeReason = reason;
     },
@@ -456,7 +457,11 @@ test("unacknowledged lifecycle exhausts retries and retires the unreliable socke
     data: canonicalTurnLifecycle(lifecycle),
   });
 
-  for (let attempt = 1; attempt < config.turnLifecycleDeliveryMaxAttempts; attempt += 1) {
+  for (
+    let attempt = 1;
+    attempt < TURN_THRESHOLDS.transport.turnLifecycleDeliveryMaxAttempts;
+    attempt += 1
+  ) {
     assert.equal(manager._retryPendingLifecycleDelivery(socket, "event-timeout"), true);
   }
   assert.equal(manager._retryPendingLifecycleDelivery(socket, "event-timeout"), false);
@@ -526,7 +531,11 @@ test("terminal lifecycle supersedes an unacknowledged state instead of waiting b
 
   assert.equal(manager._retryPendingLifecycleDelivery(socket, "event-drop-processing"), false);
 
-  for (let attempt = 1; attempt <= config.turnLifecycleDeliveryMaxAttempts; attempt += 1) {
+  for (
+    let attempt = 1;
+    attempt <= TURN_THRESHOLDS.transport.turnLifecycleDeliveryMaxAttempts;
+    attempt += 1
+  ) {
     manager._retryPendingLifecycleDelivery(socket, "event-drop-completed");
   }
   const exhausted = logged.find(

@@ -14,8 +14,6 @@ import {
   resolveDatabaseConnection,
 } from "./common-db-connector-channel.js";
 
-const MYSQL_TIMEOUT_MS = TIME_THRESHOLDS.connectorInstances.mysqlTimeoutMs;
-const MYSQL_POOL_LIMIT = QUANTITY_THRESHOLDS.connectorInstances.mysqlPoolLimit;
 const mysqlPools = new Map();
 const abortedFailure = () =>
   connectorFailure(CONNECTOR_FAILURE_CODE.ABORTED, "mysql query aborted");
@@ -37,9 +35,9 @@ function getMysqlPool(mysql, conn, channelKey) {
     password: conn.password || undefined,
     database: conn.database || undefined,
     waitForConnections: true,
-    connectionLimit: MYSQL_POOL_LIMIT,
+    connectionLimit: QUANTITY_THRESHOLDS.connectorInstances.mysqlPoolLimit,
     queueLimit: 0,
-    connectTimeout: MYSQL_TIMEOUT_MS,
+    connectTimeout: TIME_THRESHOLDS.connectorInstances.mysqlTimeoutMs,
   });
   mysqlPools.set(key, { pool, createdAt: Date.now() });
   return pool;
@@ -68,7 +66,10 @@ export async function executeMysqlCommand({ command, connectionInfo, channelKey,
   try {
     connection = await pool.getConnection();
     abortSignal?.addEventListener("abort", abortConnection, { once: true });
-    const [rows] = await connection.query({ sql, timeout: MYSQL_TIMEOUT_MS });
+    const [rows] = await connection.query({
+      sql,
+      timeout: TIME_THRESHOLDS.connectorInstances.mysqlTimeoutMs,
+    });
     return queryOutput(rows);
   } catch (error) {
     if (aborted) return abortedFailure();

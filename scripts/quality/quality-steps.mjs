@@ -26,6 +26,7 @@ export const QUALITY_STEPS = Object.freeze([
   "check:agent-plugin-decoupling",
   "check:numeric-literal-style",
   "check:shared-thresholds",
+  "check:runtime-threshold-reads",
   "check:cross-platform-compat",
   "check:platform-compatibility-boundary",
   "check:workspace-runtime-dependencies",

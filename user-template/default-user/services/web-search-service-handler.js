@@ -39,8 +39,6 @@ const WEB_SEARCH_I18N = Object.freeze({
 
 const SEARX_INSTANCES_YAML_URL =
   "https://raw.githubusercontent.com/searxng/searx-instances/master/searxinstances/instances.yml";
-const REMOTE_INSTANCE_CACHE_TTL_MS = TIME_THRESHOLDS.userTemplate.remoteInstanceCacheTtlMs;
-const LIMITED_CONTENT_CHARS = LENGTH_THRESHOLDS.userTemplate.limitedContentChars;
 let remoteInstanceCache = null;
 
 function tWebSearch(locale, key) {
@@ -72,7 +70,10 @@ function parseSearxInstancesYaml(yamlText) {
 
 async function loadRemoteInstances(fetcher, registryAttempt) {
   const now = Date.now();
-  if (remoteInstanceCache && now - remoteInstanceCache.fetchedAt < REMOTE_INSTANCE_CACHE_TTL_MS) {
+  if (
+    remoteInstanceCache &&
+    now - remoteInstanceCache.fetchedAt < TIME_THRESHOLDS.userTemplate.remoteInstanceCacheTtlMs
+  ) {
     return remoteInstanceCache.instances;
   }
   try {
@@ -96,7 +97,7 @@ async function readResponseData(res, { textCleaner, requestUrl, locale }) {
   const raw = await res.text();
   const cleaned = String(textCleaner.cleanAny(raw, { contentType, url: requestUrl }));
   const finalText =
-    cleaned.length < LIMITED_CONTENT_CHARS
+    cleaned.length < LENGTH_THRESHOLDS.userTemplate.limitedContentChars
       ? `${cleaned}\n\n${tWebSearch(locale, "resultContentLimited")}`
       : cleaned;
   return {

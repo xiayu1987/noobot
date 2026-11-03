@@ -111,7 +111,12 @@ export function createVerifiedSnapshotCache({ payloadByteBudget, identityByteBud
   });
 }
 
-export const verifiedSnapshotCache = createVerifiedSnapshotCache({
-  payloadByteBudget: LENGTH_THRESHOLDS.artifact.verifiedSnapshotCacheBytes,
-  identityByteBudget: LENGTH_THRESHOLDS.artifact.verifiedCheckpointIdentityCacheBytes,
-});
+let verifiedSnapshotCache = null;
+
+export function getVerifiedSnapshotCache() {
+  verifiedSnapshotCache ??= createVerifiedSnapshotCache({
+    payloadByteBudget: LENGTH_THRESHOLDS.artifact.verifiedSnapshotCacheBytes,
+    identityByteBudget: LENGTH_THRESHOLDS.artifact.verifiedCheckpointIdentityCacheBytes,
+  });
+  return verifiedSnapshotCache;
+}

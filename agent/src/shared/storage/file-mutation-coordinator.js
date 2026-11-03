@@ -8,7 +8,7 @@ import { randomUUID } from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { filePath as path } from "@noobot/path-resolver";
 import { runBestEffort } from "@noobot/shared/best-effort";
-import { requirePositiveInteger, text } from "@noobot/shared/value";
+import { requireFunctionDependencies, requirePositiveInteger, text } from "@noobot/shared/value";
 import { fsMkdir, fsOpen, fsReadFile, fsReaddir, fsRename, fsRm, fsStat } from "./fs-adapter.js";
 
 const WAITER_TICKET_WIDTH = 16;
@@ -195,6 +195,11 @@ async function reclaimStaleLock(lockPath) {
 
 const COORDINATOR_OWNER = "FileMutationCoordinator";
 
+export function readConfiguredLockTiming() {
+  const { lockTimeoutMs, lockStaleMs, lockPollIntervalMs } = TIME_THRESHOLDS.fileMutation;
+  return { timeoutMs: lockTimeoutMs, staleMs: lockStaleMs, pollMs: lockPollIntervalMs };
+}
+
 function requireText(name, value) {
   const normalized = text(value);
   if (!normalized) throw new TypeError(`${COORDINATOR_OWNER} requires non-empty ${name}`);
@@ -232,24 +237,44 @@ async function releaseOwnedLock(lockPath, ownerToken) {
 
 export class FileMutationCoordinator {
   constructor({
-    timeoutMs = TIME_THRESHOLDS.fileMutation.lockTimeoutMs,
-    staleMs = TIME_THRESHOLDS.fileMutation.lockStaleMs,
-    pollMs = TIME_THRESHOLDS.fileMutation.lockPollIntervalMs,
+    readTiming = readConfiguredLockTiming,
     timeoutMessage = "file mutation lock timeout",
     timeoutErrorCode = "FILE_MUTATION_BUSY",
     operationName = "fileMutation.refreshLock",
+    ...unknownOptions
   } = {}) {
-    this.timeoutMs = requirePositiveInteger(COORDINATOR_OWNER, "timeoutMs", timeoutMs);
-    this.staleMs = requirePositiveInteger(COORDINATOR_OWNER, "staleMs", staleMs);
-    this.pollMs = requirePositiveInteger(COORDINATOR_OWNER, "pollMs", pollMs);
+    const unknownKeys = Object.keys(unknownOptions);
+    if (unknownKeys.length) {
+      throw new TypeError(
+        `${COORDINATOR_OWNER} received unknown options: ${unknownKeys.join(", ")}`,
+      );
+    }
+    requireFunctionDependencies(COORDINATOR_OWNER, { readTiming });
+    this.readTiming = readTiming;
     this.timeoutMessage = requireText("timeoutMessage", timeoutMessage);
     this.timeoutErrorCode = requireText("timeoutErrorCode", timeoutErrorCode);
     this.operationName = requireText("operationName", operationName);
-    this.transientCreateWindowMs = Math.max(
-      this.pollMs,
-      Math.min(this.staleMs, TRANSIENT_EXCLUSIVE_CREATE_WINDOW_MS),
-    );
     this.asyncHeldLocks = new AsyncLocalStorage();
+  }
+
+  lockTimingField(field) {
+    return requirePositiveInteger(COORDINATOR_OWNER, field, this.readTiming()[field]);
+  }
+
+  get timeoutMs() {
+    return this.lockTimingField("timeoutMs");
+  }
+
+  get staleMs() {
+    return this.lockTimingField("staleMs");
+  }
+
+  get pollMs() {
+    return this.lockTimingField("pollMs");
+  }
+
+  get transientCreateWindowMs() {
+    return Math.max(this.pollMs, Math.min(this.staleMs, TRANSIENT_EXCLUSIVE_CREATE_WINDOW_MS));
   }
 
   async run(lockPath, operation) {

@@ -12,8 +12,6 @@ import { BOT_MANAGE_LOG_EVENT, BOT_MANAGE_LOG_SOURCE } from "../config/constants
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { isAbortError } from "../../shared/utils/error-utils.js";
 
-const DEFAULT_MEMORY_SUMMARY_TIMEOUT_MS = TIME_THRESHOLDS.memory.summaryTimeoutMs;
-
 export class MemoryPostProcessService {
   constructor({ globalConfig, session, memory, errorLogger }) {
     this.globalConfig = globalConfig;
@@ -31,7 +29,7 @@ export class MemoryPostProcessService {
     if (userMemoryTimeout > 0) return userMemoryTimeout;
     return resolveTimeMs(this.globalConfig?.memory, {
       key: "summarizeTimeoutMs",
-      fallback: DEFAULT_MEMORY_SUMMARY_TIMEOUT_MS,
+      fallback: TIME_THRESHOLDS.memory.summaryTimeoutMs,
       min: 1,
     });
   }

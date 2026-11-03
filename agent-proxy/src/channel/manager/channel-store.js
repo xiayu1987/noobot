@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { config } from "../../shared/config.js";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import {
   CHANNEL_ACTIVITY_PHASE,
   CHANNEL_RETENTION_PHASE,
@@ -295,7 +295,7 @@ class ChannelStoreMethods {
     const { sessionId } = lifecycleEnvelope.identity;
     const current = channel.lifecycleWindowsBySessionId.get(sessionId) ?? [];
     const next = mergeTurnLifecycleEvents(sessionId, [...current, lifecycleEnvelope]).slice(
-      -config.maxChannelEvents,
+      -QUANTITY_THRESHOLDS.agentProxy.maxChannelEvents,
     );
     channel.lifecycleWindowsBySessionId.set(sessionId, next);
     return next;

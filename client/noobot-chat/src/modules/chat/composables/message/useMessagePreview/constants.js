@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
 export const MARKDOWN_EXTS = new Set(["md", "markdown", "mdx"]);
 export const IMAGE_EXTS = new Set([
@@ -111,4 +110,3 @@ export const MARKDOWN_MIMES = new Set([
   "application/markdown",
   "application/x-markdown",
 ]);
-export const NON_IMAGE_PREVIEW_MAX_BYTES = LENGTH_THRESHOLDS.clientPreview.nonImageMaxBytes;

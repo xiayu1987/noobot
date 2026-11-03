@@ -174,11 +174,6 @@ export default {
         description:
           "Turn or attempt count threshold used by harness planning plan update refinement max attempts.",
       },
-      planUpdateTriggerTurns: {
-        name: "Harness planning plan update trigger turns",
-        description:
-          "Turn or attempt count threshold used by harness planning plan update trigger turns.",
-      },
       captureMaxAttempts: {
         name: "Harness planning capture max attempts",
         description:
@@ -192,14 +187,6 @@ export default {
       },
     },
     guidance: {
-      summaryTurns: {
-        name: "Harness guidance summary turns",
-        description: "Turn or attempt count threshold used by harness guidance summary turns.",
-      },
-      analysisTurns: {
-        name: "Harness guidance analysis turns",
-        description: "Turn or attempt count threshold used by harness guidance analysis turns.",
-      },
       failureConsecutive: {
         name: "Harness consecutive failure threshold",
         description: "Consecutive failure count that triggers guidance analysis.",
@@ -207,13 +194,6 @@ export default {
       failureAccumulated: {
         name: "Harness accumulated failure threshold",
         description: "Accumulated failure count that triggers guidance analysis.",
-      },
-    },
-    acceptance: {
-      phaseTriggerTurns: {
-        name: "Harness acceptance phase trigger turns",
-        description:
-          "Turn or attempt count threshold used by harness acceptance phase trigger turns.",
       },
     },
   },

@@ -14,9 +14,6 @@ import {
   resolveDatabaseConnection,
 } from "./common-db-connector-channel.js";
 
-const POSTGRES_TIMEOUT_MS = TIME_THRESHOLDS.connectorInstances.postgresTimeoutMs;
-const POSTGRES_IDLE_TIMEOUT_MS = TIME_THRESHOLDS.connectorInstances.postgresIdleTimeoutMs;
-const POSTGRES_POOL_MAX = QUANTITY_THRESHOLDS.connectorInstances.postgresPoolMax;
 const postgresPools = new Map();
 const abortedFailure = () =>
   connectorFailure(CONNECTOR_FAILURE_CODE.ABORTED, "postgres query aborted");
@@ -37,11 +34,11 @@ function getPostgresPool(pg, conn, channelKey) {
     user: conn.user,
     password: conn.password || undefined,
     database: conn.database,
-    statement_timeout: POSTGRES_TIMEOUT_MS,
-    query_timeout: POSTGRES_TIMEOUT_MS,
-    connectionTimeoutMillis: POSTGRES_TIMEOUT_MS,
-    idleTimeoutMillis: POSTGRES_IDLE_TIMEOUT_MS,
-    max: POSTGRES_POOL_MAX,
+    statement_timeout: TIME_THRESHOLDS.connectorInstances.postgresTimeoutMs,
+    query_timeout: TIME_THRESHOLDS.connectorInstances.postgresTimeoutMs,
+    connectionTimeoutMillis: TIME_THRESHOLDS.connectorInstances.postgresTimeoutMs,
+    idleTimeoutMillis: TIME_THRESHOLDS.connectorInstances.postgresIdleTimeoutMs,
+    max: QUANTITY_THRESHOLDS.connectorInstances.postgresPoolMax,
   });
   postgresPools.set(key, { pool, createdAt: Date.now() });
   return pool;
@@ -82,8 +79,8 @@ export async function executePostgresCommand({ command, connectionInfo, channelK
     abortSignal?.addEventListener("abort", abortClient, { once: true });
     const result = await client.query({
       text: sql,
-      statement_timeout: POSTGRES_TIMEOUT_MS,
-      query_timeout: POSTGRES_TIMEOUT_MS,
+      statement_timeout: TIME_THRESHOLDS.connectorInstances.postgresTimeoutMs,
+      query_timeout: TIME_THRESHOLDS.connectorInstances.postgresTimeoutMs,
     });
     return queryOutput(queryPayload(result));
   } catch (error) {

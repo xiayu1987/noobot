@@ -16,8 +16,6 @@ import { text } from "@noobot/shared/value";
 
 export const DEFAULT_BROWSER_PROFILE_NAME = "default";
 const DEVTOOLS_PORT_FILE = "DevToolsActivePort";
-const DEVTOOLS_PORT_READ_ATTEMPTS = TURN_THRESHOLDS.tools.browserDevtoolsPortReadAttempts;
-const DEVTOOLS_PORT_READ_INTERVAL_MS = TIME_THRESHOLDS.tools.browserDevtoolsPortPollIntervalMs;
 
 const sessions = new Map();
 
@@ -46,7 +44,11 @@ export function resolveBrowserProfileDirectory({ profileRoot, userId, profileNam
 
 async function readDevToolsEndpoint(profileDirectory) {
   const portFile = path.join(profileDirectory, DEVTOOLS_PORT_FILE);
-  for (let attempt = 0; attempt < DEVTOOLS_PORT_READ_ATTEMPTS; attempt += 1) {
+  for (
+    let attempt = 0;
+    attempt < TURN_THRESHOLDS.tools.browserDevtoolsPortReadAttempts;
+    attempt += 1
+  ) {
     try {
       const [port] = (await readFile(portFile, "utf8")).split("\n");
       const parsed = Number(text(port));
@@ -54,7 +56,9 @@ async function readDevToolsEndpoint(profileDirectory) {
     } catch {
       void 0;
     }
-    await new Promise((resolve) => setTimeout(resolve, DEVTOOLS_PORT_READ_INTERVAL_MS));
+    await new Promise((resolve) =>
+      setTimeout(resolve, TIME_THRESHOLDS.tools.browserDevtoolsPortPollIntervalMs),
+    );
   }
   throw new Error("browser devtools endpoint did not become available");
 }

@@ -28,6 +28,7 @@ export const SEARCH_MANUAL = {
     ],
     pitfalls: [
       "An empty query fails outright; there is no list-everything semantics.",
+      "Without isRegex the query is matched literally, so `a|b` is not an alternation.",
       "When sizing a change, exclude session snapshots, build output, and dependency directories, or historical files will inflate the count.",
     ],
   },

@@ -21,12 +21,7 @@ import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { registerResource } from "../core/resource-broker.js";
 import { tTool } from "../core/tool-i18n.js";
 import { TOOL_NAME } from "../constants/index.js";
-import {
-  DEFAULT_SEARCH_CONTEXT_LINES,
-  DEFAULT_SEARCH_MAX_RESULTS,
-  SEARCH_CONTEXT_LINES_LIMIT,
-  SEARCH_MAX_RESULTS_LIMIT,
-} from "./file-utils.js";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { searchFilesWithRipgrep } from "./file-search.js";
 import {
   RESOURCE_OPERATION,
@@ -55,17 +50,17 @@ function buildSearchSchema(runtime) {
       .number()
       .int()
       .min(0)
-      .max(SEARCH_CONTEXT_LINES_LIMIT)
+      .max(QUANTITY_THRESHOLDS.toolIO.searchContextLinesLimit)
       .optional()
-      .default(DEFAULT_SEARCH_CONTEXT_LINES)
+      .default(QUANTITY_THRESHOLDS.toolIO.searchContextLines)
       .describe(tTool(runtime, "tools.search.fieldContextLines")),
     maxResults: z
       .number()
       .int()
       .min(1)
-      .max(SEARCH_MAX_RESULTS_LIMIT)
+      .max(QUANTITY_THRESHOLDS.toolIO.searchMaxResultsLimit)
       .optional()
-      .default(DEFAULT_SEARCH_MAX_RESULTS)
+      .default(QUANTITY_THRESHOLDS.toolIO.searchMaxResults)
       .describe(tTool(runtime, "tools.search.fieldMaxResults")),
     riskLevel: createRiskLevelSchema(runtime, "tools.search.fieldRiskLevel"),
   });

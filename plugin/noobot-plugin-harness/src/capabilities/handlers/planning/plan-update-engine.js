@@ -6,15 +6,11 @@
 import { CAPABILITY_DOMAIN } from "../shared/constants.js";
 import { appendCapabilityLog } from "../shared/attachment-log-utils.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { requireHarnessPlanUpdateStage } from "../../../core/bucket-contract.js";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
-const PLAN_UPDATE_POLICY = Object.freeze({
-  MAX_ATTEMPTS_REVISION: WORKFLOW_PARAMS.planning.planUpdate.revisionMaxAttempts,
-  MAX_ATTEMPTS_REFINEMENT: WORKFLOW_PARAMS.planning.planUpdate.refinementMaxAttempts,
-});
-
 function resolveStageAttemptCounterKey(stage) {
   return requireHarnessPlanUpdateStage(stage) === "revision"
     ? "planRevisionAttempts"
@@ -24,8 +20,8 @@ function resolveStageAttemptCounterKey(stage) {
 function resolveStageAttemptLimit(stage) {
   const normalizedStage = requireHarnessPlanUpdateStage(stage);
   return normalizedStage === "revision"
-    ? Number(PLAN_UPDATE_POLICY.MAX_ATTEMPTS_REVISION)
-    : Number(PLAN_UPDATE_POLICY.MAX_ATTEMPTS_REFINEMENT);
+    ? TURN_THRESHOLDS.harness.planning.planUpdateRevisionMaxAttempts
+    : TURN_THRESHOLDS.harness.planning.planUpdateRefinementMaxAttempts;
 }
 
 export function resolvePlanUpdateAttempts(state, { stage }) {

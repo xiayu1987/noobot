@@ -5,4 +5,14 @@
  */
 import { activateRuntimeParams, createDefaultRuntimeParamsDocument } from "../runtime-params.js";
 
-activateRuntimeParams(createDefaultRuntimeParamsDocument());
+export const TEST_RUNTIME_OVERRIDES_ENV = "NOOBOT_TEST_RUNTIME_OVERRIDES";
+
+function testRuntimeOverrides() {
+  const encoded = process.env[TEST_RUNTIME_OVERRIDES_ENV];
+  return encoded === undefined ? {} : JSON.parse(encoded);
+}
+
+activateRuntimeParams({
+  ...createDefaultRuntimeParamsDocument(),
+  overrides: testRuntimeOverrides(),
+});

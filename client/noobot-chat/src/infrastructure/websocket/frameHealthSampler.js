@@ -6,8 +6,6 @@
 
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
-const TOP_SCRIPT_LIMIT = QUANTITY_THRESHOLDS.client.frameHealthTopScriptLimit;
-
 function roundMs(value) {
   return Number.isFinite(value) ? Math.round(value * 10) / 10 : null;
 }
@@ -85,7 +83,9 @@ export function createFrameHealthSampler() {
       scriptMs: roundMs(scriptMs),
       renderMs: roundMs(renderMs),
       styleLayoutMs: roundMs(styleLayoutMs),
-      topScripts: scripts.slice(0, TOP_SCRIPT_LIMIT).map(summarizeScript),
+      topScripts: scripts
+        .slice(0, QUANTITY_THRESHOLDS.client.frameHealthTopScriptLimit)
+        .map(summarizeScript),
     };
   }
 

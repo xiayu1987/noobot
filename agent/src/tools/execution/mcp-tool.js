@@ -7,7 +7,7 @@ import { tool as structuredTool } from "@langchain/core/tools";
 import { runBestEffort } from "@noobot/shared/best-effort";
 import { z } from "zod";
 import { createMcpAgentTools } from "../../integrations/mcp/index.js";
-import { BUILTIN_THRESHOLDS } from "../../config/index.js";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import {
   getSessionIdsFromAgentContext,
   getRuntimeFromAgentContext,
@@ -85,7 +85,7 @@ function buildSubSessionRunConfigPatch(runtime, mcpToolset) {
     streaming: config.streaming,
     selectedConnectorIds: config.selectedConnectorIds,
     toolPolicy: { mode: TOOL_POLICY_MODE.CUSTOM_ONLY, customTools: mcpToolset.tools },
-    maxToolLoopTurns: BUILTIN_THRESHOLDS.subTasks.callMcpTaskMaxToolLoopTurns,
+    maxToolLoopTurns: TURN_THRESHOLDS.subTasks.callMcpTaskMaxToolLoopTurns,
     sharedTools: runtime.sharedTools,
   };
 }

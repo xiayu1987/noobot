@@ -9,43 +9,19 @@ import assert from "node:assert/strict";
 import {
   createGuidanceHandler,
   createPlanningHandler,
-  LLM_SUMMARY_THRESHOLD,
   FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD,
-  FULL_ANALYSIS_TRIGGER_TURNS_THRESHOLD,
   PROGRAMMING_SUMMARY_TRIGGER_TURNS_THRESHOLD,
-  PROGRAMMING_ANALYSIS_TRIGGER_TURNS_THRESHOLD,
   FULL_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
   PROGRAMMING_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
   FULL_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
   PROGRAMMING_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
   TEXT_SUMMARY_TRIGGER_TURNS_THRESHOLD,
-  TEXT_ANALYSIS_TRIGGER_TURNS_THRESHOLD,
   TEXT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
   TEXT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
   createPlanningAgentContext,
-  WORKFLOW_PARAMS,
 } from "../helpers/guidance-plan-update-threshold-helper.js";
 
 test("guidance summary and planning plan-update thresholds use full-mode defaults", async () => {
-  assert.equal(WORKFLOW_PARAMS.planning.summary, undefined);
-  assert.equal(WORKFLOW_PARAMS.guidance.summary.turnsThreshold, LLM_SUMMARY_THRESHOLD);
-  assert.equal(WORKFLOW_PARAMS.modeThresholds.full.planning.summary, undefined);
-  assert.equal(
-    WORKFLOW_PARAMS.modeThresholds.full.guidance.summary.turnsThreshold,
-    FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD,
-  );
-  assert.equal(
-    WORKFLOW_PARAMS.modeThresholds.full.guidance.analysis.turnsThreshold,
-    FULL_ANALYSIS_TRIGGER_TURNS_THRESHOLD,
-  );
-  assert.equal(
-    WORKFLOW_PARAMS.modeThresholds.programming.guidance.analysis.turnsThreshold,
-    PROGRAMMING_ANALYSIS_TRIGGER_TURNS_THRESHOLD,
-  );
-  assert.equal(
-    WORKFLOW_PARAMS.modeThresholds.text.guidance.analysis.turnsThreshold,
-    TEXT_ANALYSIS_TRIGGER_TURNS_THRESHOLD,
-  );
   const guidanceHandler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createPlanningAgentContext({

@@ -18,12 +18,11 @@ test("turn thresholds reject malformed declared facts regardless of gate or prec
   for (const value of invalidValues) {
     assert.throws(() => requirePositiveTurnThreshold(value), TypeError);
     for (const enabled of [false, true]) {
-      for (const field of ["runtimeValue", "fallbackValue", "defaultValue"]) {
+      for (const field of ["runtimeValue", "fallbackValue"]) {
         const input = {
           enabled,
           runtimeValue: 2,
           fallbackValue: 3,
-          defaultValue: 4,
           [field]: value,
         };
         assert.throws(() => resolveGatedThreshold(input), TypeError);
@@ -40,11 +39,11 @@ test("runtime gate discovery only enables explicit boolean true", () => {
   for (const source of [{ frontendThresholdsEnabled: "true" }, {}, undefined, null]) {
     assert.equal(isRuntimeThresholdGateEnabled(source), false);
   }
-  assert.throws(() => resolveGatedThreshold({ enabled: "true", defaultValue: 4 }), TypeError);
+  assert.throws(() => resolveGatedThreshold({ enabled: "true", fallbackValue: 4 }), TypeError);
 });
 
 test("threshold selection preserves explicit scope and source without manufacturing defaults", () => {
-  const input = { runtimeValue: 6, fallbackValue: 11, defaultValue: 20 };
+  const input = { runtimeValue: 6, fallbackValue: 11 };
   assert.deepEqual(resolveGatedThreshold({ ...input, enabled: true }), {
     value: 6,
     source: RUNTIME_THRESHOLD_SOURCE.RUNTIME,
@@ -53,10 +52,18 @@ test("threshold selection preserves explicit scope and source without manufactur
     value: 11,
     source: RUNTIME_THRESHOLD_SOURCE.FALLBACK,
   });
-  assert.equal(resolveGatedThresholdValue({ defaultValue: 20 }), 20);
-  assert.equal(resolveGatedThresholdValue({ enabled: true, runtimeValue: 6 }), 6);
+  assert.equal(resolveGatedThresholdValue({ fallbackValue: 20 }), 20);
+  assert.equal(
+    resolveGatedThresholdValue({ enabled: true, runtimeValue: 6, fallbackValue: 20 }),
+    6,
+  );
   assert.equal(Object.isFrozen(resolveGatedThreshold(input)), true);
-  for (const input of [undefined, {}, { enabled: false, runtimeValue: 6 }]) {
+  for (const input of [
+    undefined,
+    {},
+    { enabled: false, runtimeValue: 6 },
+    { enabled: true, runtimeValue: 6 },
+  ]) {
     assert.throws(() => resolveGatedThresholdValue(input), TypeError);
   }
 });

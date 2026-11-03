@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-export { BUILTIN_THRESHOLDS } from "./core/builtin-thresholds.js";
 export {
   AGENT_CONFIG_PROTOCOL_NAME,
   AGENT_CONFIG_PROTOCOL_VERSION,

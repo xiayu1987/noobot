@@ -27,12 +27,6 @@ import {
 import { isPlainObject, text } from "@noobot/shared/value";
 import { previewTransferText } from "@noobot/semantic-transfer-protocol";
 
-const FOREGROUND_INLINE_CHARS = LENGTH_THRESHOLDS.semanticTransfer.toolResultInlineChars;
-const FOREGROUND_PREVIEW_CHARS = LENGTH_THRESHOLDS.semanticTransfer.previewChars;
-const OUTPUT_ARTIFACT_MAX_BYTES = LENGTH_THRESHOLDS.attachments.maxFileSizeBytes;
-const FORCE_KILL_GRACE_MS = TIME_THRESHOLDS.tools.processForceKillGraceMs;
-const SETTLE_GRACE_MS = TIME_THRESHOLDS.tools.processSettleGraceMs;
-
 function resolveOutputDir(sessionDir, kind) {
   return path.join(
     resolveSessionGeneratedDataRoot(sessionDir, kind),
@@ -84,12 +78,12 @@ async function readOutputPreview(filePath, overflowed) {
   if (!overflowed) return readFile(filePath, "utf8");
   const file = await open(filePath, "r");
   try {
-    const bytes = Buffer.alloc(FOREGROUND_PREVIEW_CHARS * 4);
+    const bytes = Buffer.alloc(LENGTH_THRESHOLDS.semanticTransfer.previewChars * 4);
     const { bytesRead } = await file.read(bytes, 0, bytes.length, 0);
     const decoded = new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(0, bytesRead), {
       stream: true,
     });
-    return previewTransferText(decoded, FOREGROUND_PREVIEW_CHARS);
+    return previewTransferText(decoded, LENGTH_THRESHOLDS.semanticTransfer.previewChars);
   } finally {
     await file.close();
   }
@@ -117,12 +111,15 @@ function createTerminationController(child, abortSignal, timeoutMs, onTerminate,
     if (!forceKillTimer) {
       forceKillTimer = setTimeout(
         () => void terminateProcessTree(child, "SIGKILL"),
-        FORCE_KILL_GRACE_MS,
+        TIME_THRESHOLDS.tools.processForceKillGraceMs,
       );
       forceKillTimer.unref?.();
     }
     if (!settleTimer && typeof onSettle === "function") {
-      settleTimer = setTimeout(() => onSettle(), FORCE_KILL_GRACE_MS + SETTLE_GRACE_MS);
+      settleTimer = setTimeout(
+        () => onSettle(),
+        TIME_THRESHOLDS.tools.processForceKillGraceMs + TIME_THRESHOLDS.tools.processSettleGraceMs,
+      );
       settleTimer.unref?.();
     }
   };
@@ -186,7 +183,9 @@ async function finalizeOutputFiles(files) {
   return {
     stdoutBytes: stdoutStat.size,
     stderrBytes: stderrStat.size,
-    inlineOverflow: stdoutChars > FOREGROUND_INLINE_CHARS || stderrChars > FOREGROUND_INLINE_CHARS,
+    inlineOverflow:
+      stdoutChars > LENGTH_THRESHOLDS.semanticTransfer.toolResultInlineChars ||
+      stderrChars > LENGTH_THRESHOLDS.semanticTransfer.toolResultInlineChars,
   };
 }
 
@@ -202,7 +201,7 @@ function startTermination(child, files, abortSignal, timeoutMs, options, onSettl
     },
   );
   const outputPipeOptions = {
-    maxBytes: OUTPUT_ARTIFACT_MAX_BYTES,
+    maxBytes: LENGTH_THRESHOLDS.attachments.maxFileSizeBytes,
     onLimit: () => termination.terminate("output_limit"),
   };
   return { termination, outputPipeOptions };
@@ -211,7 +210,7 @@ function startTermination(child, files, abortSignal, timeoutMs, options, onSettl
 function resolveTerminationMessage(termination, spawnError, timeoutMs) {
   if (spawnError) return spawnError.message;
   if (termination.outputLimitExceeded) {
-    return `command output exceeded ${OUTPUT_ARTIFACT_MAX_BYTES} bytes`;
+    return `command output exceeded ${LENGTH_THRESHOLDS.attachments.maxFileSizeBytes} bytes`;
   }
   if (termination.timedOut) return `command timed out after ${timeoutMs}ms`;
   if (termination.aborted) return "command aborted";
@@ -241,7 +240,10 @@ function resolveProcessOutcome({ termination, code, signal, spawnError, timeoutM
 
 function pickOutputLimitFields(termination) {
   return termination.outputLimitExceeded
-    ? { outputLimitExceeded: true, outputLimitBytes: OUTPUT_ARTIFACT_MAX_BYTES }
+    ? {
+        outputLimitExceeded: true,
+        outputLimitBytes: LENGTH_THRESHOLDS.attachments.maxFileSizeBytes,
+      }
     : {};
 }
 

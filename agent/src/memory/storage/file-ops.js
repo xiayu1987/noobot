@@ -5,7 +5,7 @@
  */
 import { access, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
-import { MEMORY_FILE_SPLIT_MAX_CHARS, getMemoryFileSplitMaxChars } from "../constants.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import {
   ATOMIC_RENAME_RETRY_DELAYS_MS,
   writeFileAtomic,
@@ -72,7 +72,7 @@ export async function listTextFilesRecursive(dirPath = "", extension = ".md") {
 
 export async function writeText(filePath, content = "") {
   const text = String(content || "");
-  const chunks = splitTextIntoChunks(text, getMemoryFileSplitMaxChars());
+  const chunks = splitTextIntoChunks(text, LENGTH_THRESHOLDS.memory.fileSplitChars);
   const [firstChunk, ...restChunks] = chunks.length ? chunks : [""];
   await writeFile(filePath, firstChunk, "utf8");
 
@@ -116,7 +116,7 @@ function escapeRegExp(text = "") {
   return String(text || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-export function splitTextIntoChunks(text = "", maxChars = MEMORY_FILE_SPLIT_MAX_CHARS) {
+export function splitTextIntoChunks(text, maxChars) {
   const normalizedText = String(text || "");
   const safeMaxChars = Number(maxChars);
   if (!Number.isFinite(safeMaxChars) || safeMaxChars <= 0) return [normalizedText];

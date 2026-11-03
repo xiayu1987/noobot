@@ -13,7 +13,7 @@ import {
   assertCanonicalSessionManifest,
   turnArtifactRequiresRewrite,
 } from "./turn-journal-store.js";
-import { turnMaterializer } from "./turn-materializer.js";
+import { getTurnMaterializer } from "./turn-materializer.js";
 
 async function readCanonicalManifest({ storageService, sessionDir }) {
   const files = buildSessionArtifactFileMap(sessionDir);
@@ -29,7 +29,11 @@ async function readCanonicalManifest({ storageService, sessionDir }) {
 async function materializeOrderedMessages({ storageService, sessionDir, turnItems, references }) {
   const messagesByUid = new Map();
   for (const item of turnItems) {
-    for (const message of await turnMaterializer.materialize({ storageService, sessionDir, item }))
+    for (const message of await getTurnMaterializer().materialize({
+      storageService,
+      sessionDir,
+      item,
+    }))
       messagesByUid.set(message.messageUid, message);
   }
   return references.map(({ messageUid }) => messagesByUid.get(messageUid));

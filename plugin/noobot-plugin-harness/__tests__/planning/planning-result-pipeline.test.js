@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { canonicalizeTestContextMessage } from "../helpers/context-message.js";
 
 import { WORKFLOW_PARAMS } from "../../src/core/workflow-params.js";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { LOCALE } from "../../src/capabilities/handlers/shared/index.js";
 import { processPlanningResult } from "../../src/capabilities/handlers/planning/result-pipeline.js";
 import { replaceMessages } from "../../src/core/message-store.js";
@@ -17,7 +18,7 @@ import {
   resolveContextInjectedMessageType,
 } from "@noobot/context-protocol/message/codec";
 
-const MAX_PLANNING_CAPTURE_ATTEMPTS = WORKFLOW_PARAMS.planning.capture.maxAttempts;
+const MAX_PLANNING_CAPTURE_ATTEMPTS = TURN_THRESHOLDS.harness.planning.captureMaxAttempts;
 
 function createCtx() {
   return createTestHookContext({
@@ -28,9 +29,9 @@ function createCtx() {
 }
 
 test("workflow params define plan refinement defaults by scenario mode", () => {
-  assert.equal(WORKFLOW_PARAMS.modeThresholds.full.planning.planRefinement.enabled, true);
-  assert.equal(WORKFLOW_PARAMS.modeThresholds.text.planning.planRefinement.enabled, true);
-  assert.equal(WORKFLOW_PARAMS.modeThresholds.programming.planning.planRefinement.enabled, false);
+  assert.equal(WORKFLOW_PARAMS.modePolicies.full.planRefinementEnabled, true);
+  assert.equal(WORKFLOW_PARAMS.modePolicies.text.planRefinementEnabled, true);
+  assert.equal(WORKFLOW_PARAMS.modePolicies.programming.planRefinementEnabled, false);
 });
 
 test("planning result pipeline captures plan text directly", async () => {
@@ -60,7 +61,7 @@ test("planning result pipeline captures plan text directly", async () => {
 });
 
 test("planning result pipeline disables plan refinement by default in programming scenario", async () => {
-  assert.equal(WORKFLOW_PARAMS.modeThresholds.programming.planning.planRefinement.enabled, false);
+  assert.equal(WORKFLOW_PARAMS.modePolicies.programming.planRefinementEnabled, false);
 
   const ctx = createCtx();
   ctx.runConfig = {
@@ -133,7 +134,7 @@ test("planning result pipeline honors explicit plan refinement disablement outsi
 });
 
 test("planning result pipeline enables plan refinement by default in text scenario", async () => {
-  assert.equal(WORKFLOW_PARAMS.modeThresholds.text.planning.planRefinement.enabled, true);
+  assert.equal(WORKFLOW_PARAMS.modePolicies.text.planRefinementEnabled, true);
 
   const ctx = createCtx();
   ctx.runConfig = {

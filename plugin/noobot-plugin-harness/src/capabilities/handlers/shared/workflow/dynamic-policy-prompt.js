@@ -9,8 +9,6 @@ import { text, isObjectLike } from "@noobot/shared/value";
 import { readHarnessBucket } from "../bucket-utils.js";
 
 export const DYNAMIC_POLICY_PROMPT_BLOCK = "HARNESS_DYNAMIC_POLICY_PROMPT";
-const MAX_DYNAMIC_POLICY_PROMPT_CHARS =
-  LENGTH_THRESHOLDS.contextPreview.harnessDynamicPolicyPromptChars;
 const VALID_SCENARIOS = new Set(["general", "text", "programming"]);
 
 function normalizeText(value = "") {
@@ -24,8 +22,11 @@ function normalizeScenario(value = "") {
 
 function clipPrompt(inputText = "") {
   const normalized = normalizeText(inputText);
-  if (normalized.length <= MAX_DYNAMIC_POLICY_PROMPT_CHARS) return normalized;
-  return normalized.slice(0, MAX_DYNAMIC_POLICY_PROMPT_CHARS).trim();
+  if (normalized.length <= LENGTH_THRESHOLDS.contextPreview.harnessDynamicPolicyPromptChars)
+    return normalized;
+  return normalized
+    .slice(0, LENGTH_THRESHOLDS.contextPreview.harnessDynamicPolicyPromptChars)
+    .trim();
 }
 
 function extractProtocolBody(inputText = "") {

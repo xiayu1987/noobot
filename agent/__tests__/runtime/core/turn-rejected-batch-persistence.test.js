@@ -14,7 +14,7 @@ import { invokeWithToolsTurn } from "../../../src/runtime/turn/turn-executor.js"
 import { createTurnOrchestrator } from "../../../src/runtime/turn/orchestrator.js";
 import { materializeStoppedAssistantDraft } from "../../../src/runtime/tool-execution/stopped-assistant-draft.js";
 import { currentAssistantDraft } from "../../../src/events/message-event-stream.js";
-import { DEFAULT_TOOL_LOOP_LIMIT_BUFFER_TURNS } from "../../../src/runtime/constants/index.js";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { createTestModelPort, prepareTestTurnExecution } from "./turn-runtime-test-helper.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
@@ -172,7 +172,7 @@ test("a rejected control batch retries with the single tool prompt", async () =>
 test("crossing the loop buffer finalizes without another tools call", async () => {
   const { calls, runLoop } = createOrchestratorHarness();
   const maxTurns = 3;
-  const turn = maxTurns + DEFAULT_TOOL_LOOP_LIMIT_BUFFER_TURNS + 1;
+  const turn = maxTurns + TURN_THRESHOLDS.agent.toolLoopLimitBufferTurns + 1;
 
   const result = await runLoop({ maxTurns }, turn);
 

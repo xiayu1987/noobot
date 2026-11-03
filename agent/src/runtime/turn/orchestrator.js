@@ -7,7 +7,7 @@ import { collectScopedMessagesToSummarize } from "@noobot/context-protocol/polic
 import { TOOL_NAME } from "../../tools/constants/index.js";
 import { emitEvent } from "../../events/index.js";
 import { tEngine } from "../i18n-adapter.js";
-import { DEFAULT_TOOL_LOOP_LIMIT_BUFFER_TURNS } from "../constants/index.js";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/policy/injected-message";
 import { handleEngineError } from "../errors/index.js";
 import {
@@ -74,7 +74,7 @@ export function createTurnOrchestrator({
     const { tools, traces, maxTurns } = loopState;
     const { runtime } = modelState;
     const { abortSignal, eventListener } = runtime;
-    const loopLimitBufferTurns = DEFAULT_TOOL_LOOP_LIMIT_BUFFER_TURNS;
+    const loopLimitBufferTurns = TURN_THRESHOLDS.agent.toolLoopLimitBufferTurns;
 
     async function consumeAcceptedUserInterjections(turn) {
       if (runtime.sealUserInterjectionQueueIfEmpty()) return false;

@@ -8,16 +8,15 @@ import { text } from "@noobot/shared/value";
 
 const cleanupIntervals = new Map();
 
-export function ensureIntervalCleanupTask(
-  name = "",
-  task = () => {},
-  intervalMs = 0,
-  { unref = true } = {},
-) {
+export function ensureIntervalCleanupTask(name, task, intervalMs, { unref = true } = {}) {
   const taskName = text(name);
-  if (!taskName || typeof task !== "function") return null;
-  const normalizedInterval = Number(intervalMs);
-  if (!Number.isFinite(normalizedInterval) || normalizedInterval <= 0) return null;
+  if (!taskName) throw new TypeError("cleanup task requires a name");
+  if (typeof task !== "function")
+    throw new TypeError(`cleanup task ${taskName} requires a function`);
+  const normalizedInterval = intervalMs;
+  if (!Number.isSafeInteger(normalizedInterval) || normalizedInterval <= 0) {
+    throw new TypeError(`cleanup task ${taskName} requires a positive integer interval`);
+  }
 
   const existing = cleanupIntervals.get(taskName);
   if (existing?.timer) return existing.timer;

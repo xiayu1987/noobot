@@ -13,14 +13,14 @@ import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { isPlainObject, text } from "@noobot/shared/value";
 
 const CONNECTION_PROFILE_STORAGE_KEY = "noobot_connection_profile";
-const ADMISSION_MAX_RETRIES = TURN_THRESHOLDS.client.admissionMaxRetries;
-const ADMISSION_MIN_DELAY_MS = TIME_THRESHOLDS.client.admissionRetryMinDelayMs;
-const ADMISSION_MAX_DELAY_MS = TIME_THRESHOLDS.client.admissionRetryMaxDelayMs;
 
 function admissionRetryDelayMs(response) {
   const seconds = Number(response?.headers?.get?.("retry-after"));
   const delayMs = Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 0;
-  return Math.min(ADMISSION_MAX_DELAY_MS, Math.max(ADMISSION_MIN_DELAY_MS, delayMs));
+  return Math.min(
+    TIME_THRESHOLDS.client.admissionRetryMaxDelayMs,
+    Math.max(TIME_THRESHOLDS.client.admissionRetryMinDelayMs, delayMs),
+  );
 }
 
 function waitMs(delayMs) {
@@ -29,7 +29,11 @@ function waitMs(delayMs) {
 
 async function fetchWithAdmissionRetry(runFetch, { isStale = () => false } = {}) {
   let res = await runFetch();
-  for (let attempt = 0; res.status === 429 && attempt < ADMISSION_MAX_RETRIES; attempt += 1) {
+  for (
+    let attempt = 0;
+    res.status === 429 && attempt < TURN_THRESHOLDS.client.admissionMaxRetries;
+    attempt += 1
+  ) {
     await waitMs(admissionRetryDelayMs(res));
     if (isStale()) return null;
     res = await runFetch();

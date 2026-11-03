@@ -3,7 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { BUILTIN_THRESHOLDS, mergeConfig } from "../../config/index.js";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+import { mergeConfig } from "../../config/index.js";
 import {
   isRuntimeThresholdGateEnabled,
   resolveGatedThresholdValue,
@@ -14,7 +15,7 @@ export function resolvePhaseSummaryLoopTurns({ runConfig = {} } = {}) {
   return resolveGatedThresholdValue({
     enabled: isRuntimeThresholdGateEnabled(runConfig),
     runtimeValue: runConfig?.summaryPolicy?.phaseSummaryLoopTurns,
-    defaultValue: BUILTIN_THRESHOLDS.taskSummary.phaseSummaryLoopTurns,
+    fallbackValue: TURN_THRESHOLDS.agent.phaseSummaryLoopTurns,
   });
 }
 
@@ -22,7 +23,7 @@ export function resolveTaskCheckLoopTurns({ runConfig = {} } = {}) {
   return resolveGatedThresholdValue({
     enabled: isRuntimeThresholdGateEnabled(runConfig),
     runtimeValue: runConfig?.summaryPolicy?.taskCheckLoopTurns,
-    defaultValue: BUILTIN_THRESHOLDS.taskCheck.taskCheckLoopTurns,
+    fallbackValue: TURN_THRESHOLDS.agent.taskCheckLoopTurns,
   });
 }
 

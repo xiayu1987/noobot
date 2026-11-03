@@ -4,7 +4,7 @@
 
 ## 入口
 
-- `migrateMemoryDocument({ kind, text, longMemoryModel })`：迁移单个文档，返回 `{ status, text }`。`longMemoryModel` 是校验长期记忆值文档用的字段协议，省略时使用内置字段。
+- `migrateMemoryDocument({ kind, text, longMemoryModel })`：迁移单个文档，返回 `{ status, text }`。`longMemoryModel` 是校验长期记忆值文档用的字段协议，`kind` 为 `long_memory` 时必填，缺失时抛 `TypeError`。
   - `canonical`：已符合当前协议，不需要写入。
   - `migrated`：命中确定性的旧格式规则。经验模型和元数据去掉旧标题行后补协议头；日/周/月/年小结直接补协议头。
   - `reset`：没有确定性规则（例如旧格式长期记忆、无法解析的字段协议），返回 `@noobot/memory-protocol/defaults` 生成的默认文档。

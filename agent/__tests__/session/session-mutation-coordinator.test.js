@@ -12,9 +12,15 @@ import { SessionMutationCoordinator } from "../../src/session/session-mutation-c
 import { resetFsAdapter, setFsAdapter } from "../../src/shared/storage/fs-adapter.js";
 import { withTemp } from "./session-artifact-store-v2.test-helpers.js";
 
+function fixedLockTiming(timing) {
+  return { readTiming: () => timing };
+}
+
 test("mutation coordinator distinguishes nested re-entry from concurrent callers", async () =>
   withTemp(async (root) => {
-    const coordinator = new SessionMutationCoordinator({ timeoutMs: 2000, pollMs: 2 });
+    const coordinator = new SessionMutationCoordinator(
+      fixedLockTiming({ timeoutMs: 2000, staleMs: 60000, pollMs: 2 }),
+    );
     const lockPath = path.join(root, ".lock");
     const order = [];
     let signalFirstEntered;
@@ -35,7 +41,9 @@ test("mutation coordinator distinguishes nested re-entry from concurrent callers
 
 test("mutation coordinator does not treat work escaping a released lock as re-entry", async () =>
   withTemp(async (root) => {
-    const coordinator = new SessionMutationCoordinator({ timeoutMs: 2000, pollMs: 2 });
+    const coordinator = new SessionMutationCoordinator(
+      fixedLockTiming({ timeoutMs: 2000, staleMs: 60000, pollMs: 2 }),
+    );
     const lockPath = path.join(root, ".lock");
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     let inside = 0;
@@ -69,7 +77,9 @@ test("mutation coordinator uses an atomic lock file and removes it after release
 
 test("mutation coordinator replaces stale file locks", async () =>
   withTemp(async (root) => {
-    const coordinator = new SessionMutationCoordinator({ staleMs: 10, pollMs: 2 });
+    const coordinator = new SessionMutationCoordinator(
+      fixedLockTiming({ timeoutMs: 30000, staleMs: 10, pollMs: 2 }),
+    );
     const staleTime = new Date(Date.now() - 1000);
     const fileLock = path.join(root, "file.lock");
     await writeFile(fileLock, "stale-owner", "utf8");
@@ -81,7 +91,9 @@ test("mutation coordinator replaces stale file locks", async () =>
 
 test("mutation coordinator treats Windows EPERM for an existing file as lock contention", async () =>
   withTemp(async (root) => {
-    const coordinator = new SessionMutationCoordinator({ staleMs: 10, pollMs: 2 });
+    const coordinator = new SessionMutationCoordinator(
+      fixedLockTiming({ timeoutMs: 30000, staleMs: 10, pollMs: 2 }),
+    );
     const lockPath = path.join(root, "windows-existing.lock");
     await writeFile(lockPath, "999999999:abandoned", "utf8");
     const staleTime = new Date(Date.now() - 1000);
@@ -114,7 +126,9 @@ test("mutation coordinator treats Windows EPERM for an existing file as lock con
 
 test("mutation coordinator preserves EPERM when no competing lock exists", async () =>
   withTemp(async (root) => {
-    const coordinator = new SessionMutationCoordinator({ staleMs: 10, pollMs: 2 });
+    const coordinator = new SessionMutationCoordinator(
+      fixedLockTiming({ timeoutMs: 30000, staleMs: 10, pollMs: 2 }),
+    );
     const lockPath = path.join(root, "forbidden.lock");
     setFsAdapter({
       open: async (target, flags, ...args) => {
@@ -138,11 +152,9 @@ test("mutation coordinator preserves EPERM when no competing lock exists", async
 
 test("mutation coordinator retries a transient EPERM when the lock file is not visible", async () =>
   withTemp(async (root) => {
-    const coordinator = new SessionMutationCoordinator({
-      timeoutMs: 3000,
-      staleMs: 5000,
-      pollMs: 2,
-    });
+    const coordinator = new SessionMutationCoordinator(
+      fixedLockTiming({ timeoutMs: 3000, staleMs: 5000, pollMs: 2 }),
+    );
     const lockPath = path.join(root, "delete-pending.lock");
     let deniedAttempts = 0;
     setFsAdapter({
@@ -171,7 +183,7 @@ test("mutation coordinator retries a transient EPERM when the lock file is not v
 
 test("mutation coordinator heartbeat prevents stale takeover by another coordinator", async () =>
   withTemp(async (root) => {
-    const options = { timeoutMs: 3000, staleMs: 1200, pollMs: 10 };
+    const options = fixedLockTiming({ timeoutMs: 3000, staleMs: 1200, pollMs: 10 });
     const firstCoordinator = new SessionMutationCoordinator(options);
     const secondCoordinator = new SessionMutationCoordinator(options);
     const lockPath = path.join(root, "heartbeat.lock");
@@ -193,7 +205,7 @@ test("mutation coordinator heartbeat prevents stale takeover by another coordina
 
 test("mutation coordinator heartbeat remains ahead of a short stale threshold", async () =>
   withTemp(async (root) => {
-    const options = { timeoutMs: 2000, staleMs: 30, pollMs: 2 };
+    const options = fixedLockTiming({ timeoutMs: 2000, staleMs: 30, pollMs: 2 });
     const firstCoordinator = new SessionMutationCoordinator(options);
     const secondCoordinator = new SessionMutationCoordinator(options);
     const lockPath = path.join(root, "short-heartbeat.lock");
@@ -224,7 +236,7 @@ test("mutation coordinator heartbeat remains ahead of a short stale threshold", 
 
 test("mutation coordinator elects one waiter to reclaim a stale lock", async () =>
   withTemp(async (root) => {
-    const options = { timeoutMs: 2000, staleMs: 20, pollMs: 1 };
+    const options = fixedLockTiming({ timeoutMs: 2000, staleMs: 20, pollMs: 1 });
     const lockPath = path.join(root, "contended-stale.lock");
     const staleTime = new Date(Date.now() - 1000);
     await writeFile(lockPath, "999999999:abandoned", "utf8");

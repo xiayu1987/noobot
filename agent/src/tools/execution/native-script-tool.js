@@ -49,7 +49,7 @@ import {
   classifyToolExecutionRisk,
 } from "@noobot/security-assessment-protocol";
 import { confirmToolOperation, createRiskLevelSchema } from "./tool-risk.js";
-import { BUILTIN_THRESHOLDS, mergeConfig } from "../../config/index.js";
+import { mergeConfig } from "../../config/index.js";
 import { persistTransferArtifacts } from "../../transfer-adapter/index.js";
 import { resolveMimeTypeFromFileName } from "@noobot/attachment-protocol/mime";
 import { parse } from "acorn";
@@ -401,7 +401,8 @@ function buildNativeTaskScript({
   roots: { inputRoot, outputRoot, tempRoot },
   libreOfficeExecutable,
 }) {
-  return `import { activateRuntimeParams } from ${JSON.stringify(import.meta.resolve("@noobot/shared/runtime-params"))};\nactivateRuntimeParams(${JSON.stringify(activeRuntimeParams())});\nconst { createNativeScriptRuntime, executeNativeScriptBody } = await import(${JSON.stringify(new URL("./native-script-runtime.js", import.meta.url).href)});\nimport { publishNativeScriptFailure, publishNativeScriptResult } from ${JSON.stringify(new URL("./native-script-result.js", import.meta.url).href)};\nconst runtime = await createNativeScriptRuntime({ inputRoot: ${JSON.stringify(inputRoot)}, outputRoot: ${JSON.stringify(outputRoot)}, tempRoot: ${JSON.stringify(tempRoot)}, inputMap: ${JSON.stringify(inputMap)}, args: ${JSON.stringify(scriptArguments)}, timeoutMs: ${BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs}, libreOfficeExecutable: ${JSON.stringify(libreOfficeExecutable)} });\ntry { const scriptResult = await executeNativeScriptBody({ body: ${JSON.stringify(body)}, capabilities: runtime.capabilities, timeoutMs: ${BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs} }); await publishNativeScriptResult(scriptResult); } catch (error) { await publishNativeScriptFailure(error); } finally { await runtime.close(); }`;
+  const timeoutMs = TIME_THRESHOLDS.tools.executeScriptTimeoutMs;
+  return `import { activateRuntimeParams } from ${JSON.stringify(import.meta.resolve("@noobot/shared/runtime-params"))};\nactivateRuntimeParams(${JSON.stringify(activeRuntimeParams())});\nconst { createNativeScriptRuntime, executeNativeScriptBody } = await import(${JSON.stringify(new URL("./native-script-runtime.js", import.meta.url).href)});\nimport { publishNativeScriptFailure, publishNativeScriptResult } from ${JSON.stringify(new URL("./native-script-result.js", import.meta.url).href)};\nconst runtime = await createNativeScriptRuntime({ inputRoot: ${JSON.stringify(inputRoot)}, outputRoot: ${JSON.stringify(outputRoot)}, tempRoot: ${JSON.stringify(tempRoot)}, inputMap: ${JSON.stringify(inputMap)}, args: ${JSON.stringify(scriptArguments)}, timeoutMs: ${timeoutMs}, libreOfficeExecutable: ${JSON.stringify(libreOfficeExecutable)} });\ntry { const scriptResult = await executeNativeScriptBody({ body: ${JSON.stringify(body)}, capabilities: runtime.capabilities, timeoutMs: ${timeoutMs} }); await publishNativeScriptResult(scriptResult); } catch (error) { await publishNativeScriptFailure(error); } finally { await runtime.close(); }`;
 }
 
 async function measureNativeOutputs(outputRoot, succeeded) {
@@ -549,7 +550,7 @@ export function createNativeScriptTool({ agentContext }) {
           scriptPath,
           cwd: taskRoot,
           env: buildRestrictedProcessEnv({ home: taskRoot, temp: roots.tempRoot }),
-          timeoutMs: BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs,
+          timeoutMs: TIME_THRESHOLDS.tools.executeScriptTimeoutMs,
           abortSignal: toolConfig.signal,
           ipcHandlers: createNativeScriptIpcHandlers({
             runtime,

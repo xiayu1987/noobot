@@ -8,7 +8,6 @@ import { ElMessage } from "element-plus";
 import { nowMs } from "../../chat/model/timeFields.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
-const MIC_MAX_DURATION_SECONDS = TIME_THRESHOLDS.client.micMaxDurationSeconds;
 const MIC_SLIDE_CANCEL_THRESHOLD = 44;
 
 export function useComposerMediaCapture(props, emitAppendUploads, translate) {
@@ -114,11 +113,13 @@ export function useComposerMediaCapture(props, emitAppendUploads, translate) {
       micAutoStopTimerRef.value = setTimeout(() => {
         if (mediaRecorder.state !== "inactive") {
           ElMessage.info(
-            translate("composer.recordingMaxReached", { max: MIC_MAX_DURATION_SECONDS }),
+            translate("composer.recordingMaxReached", {
+              max: TIME_THRESHOLDS.client.micMaxDurationSeconds,
+            }),
           );
           mediaRecorder.stop();
         }
-      }, MIC_MAX_DURATION_SECONDS * 1000);
+      }, TIME_THRESHOLDS.client.micMaxDurationSeconds * 1000);
       micRecorderRef.value = mediaRecorder;
       micRecording.value = true;
     } catch (error) {

@@ -3,12 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import test from "node:test";
 import assert from "node:assert/strict";
 
 import { ChannelManager } from "../../src/channel/channel-manager.js";
 import { CHANNEL_ACTIVITY_PHASE } from "../../src/shared/constants.js";
-import { config } from "../../src/shared/config.js";
 import { createChannelKey } from "../../src/shared/utils.js";
 import {
   canonicalInteractionRequest,
@@ -336,7 +336,11 @@ test("locatable invalid upstream frames are dropped without closing upstream", (
     "session-invalid-frame-drop",
   );
 
-  for (let index = 0; index < config.invalidUpstreamFrameLimit; index += 1) {
+  for (
+    let index = 0;
+    index < QUANTITY_THRESHOLDS.agentProxy.invalidUpstreamFrameLimit;
+    index += 1
+  ) {
     emitLocatableInvalidFrame(index);
   }
 
@@ -350,7 +354,11 @@ test("invalid upstream frames beyond the window limit close upstream", () => {
     "session-invalid-frame-limit",
   );
 
-  for (let index = 0; index <= config.invalidUpstreamFrameLimit; index += 1) {
+  for (
+    let index = 0;
+    index <= QUANTITY_THRESHOLDS.agentProxy.invalidUpstreamFrameLimit;
+    index += 1
+  ) {
     emitLocatableInvalidFrame(index);
   }
 

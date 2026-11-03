@@ -11,7 +11,7 @@ import {
 import { deepFreeze } from "@noobot/shared/deep-freeze";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { isPlainObject } from "@noobot/shared/value";
-import { readFileIdentity, verifiedSnapshotCache } from "./verified-snapshot-cache.js";
+import { getVerifiedSnapshotCache, readFileIdentity } from "./verified-snapshot-cache.js";
 import { isMissingPersistencePathError } from "../../shared/storage/json-file-reader.js";
 import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
 import { readJsonWithStorage } from "./artifact-json-io.js";
@@ -92,7 +92,7 @@ async function verifySnapshotFromDisk({ storageService, artifactPath, index, ide
       SESSION_ERROR_CODE.SUMMARY_SNAPSHOT_HASH_MISMATCH,
     );
   }
-  return verifiedSnapshotCache.retain(artifactPath, index.contentHash, identity, payload);
+  return getVerifiedSnapshotCache().retain(artifactPath, index.contentHash, identity, payload);
 }
 
 async function readVerifiedTier(
@@ -102,7 +102,7 @@ async function readVerifiedTier(
   const artifactPath = resolveSummarySnapshotPath(sessionDir, index.file);
   const identity = await readRegisteredSnapshotIdentity(artifactPath, index.file);
   const verified =
-    verifiedSnapshotCache[tier](artifactPath, index.contentHash, identity) ||
+    getVerifiedSnapshotCache()[tier](artifactPath, index.contentHash, identity) ||
     (await verifySnapshotFromDisk({ storageService, artifactPath, index, identity }))[tier];
   assertSnapshotLinksIndex(verified, index, previousCheckpointHash);
   return { [tier]: verified, identity };
@@ -117,7 +117,7 @@ export async function readVerifiedSnapshot(options) {
 }
 
 export function forgetVerifiedSnapshot(sessionDir, file) {
-  verifiedSnapshotCache.forget(resolveSummarySnapshotPath(sessionDir, file));
+  getVerifiedSnapshotCache().forget(resolveSummarySnapshotPath(sessionDir, file));
 }
 
 function sameLink(link, index) {
@@ -262,6 +262,11 @@ export function createTurnMaterializer({ byteBudget }) {
   });
 }
 
-export const turnMaterializer = createTurnMaterializer({
-  byteBudget: LENGTH_THRESHOLDS.artifact.turnMaterializerCacheBytes,
-});
+let turnMaterializer = null;
+
+export function getTurnMaterializer() {
+  turnMaterializer ??= createTurnMaterializer({
+    byteBudget: LENGTH_THRESHOLDS.artifact.turnMaterializerCacheBytes,
+  });
+  return turnMaterializer;
+}

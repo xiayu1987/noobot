@@ -6,7 +6,7 @@
 import { GUIDANCE_REASON, TOOL_NAME_SET, ensureHarnessBucket } from "./deps.js";
 import { resolveSummaryScope } from "@noobot/context-protocol/policy/summary";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
-import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { resolveModelMessageBlocks } from "../../../core/message-store.js";
 import { requireHarnessStateField } from "../../../core/bucket-contract.js";
 import {
@@ -14,11 +14,6 @@ import {
   resolveContextSessionMessageUid,
 } from "@noobot/context-protocol/message/codec";
 import { text } from "@noobot/shared/value";
-
-const FAILURE_THRESHOLD = Object.freeze({
-  CONSECUTIVE: WORKFLOW_PARAMS.guidance.failureThreshold.consecutive,
-  ACCUMULATED: WORKFLOW_PARAMS.guidance.failureThreshold.accumulated,
-});
 
 function resolveSummaryMarkBlocks(ctx) {
   const blocks = resolveModelMessageBlocks(ctx);
@@ -96,9 +91,13 @@ export function updateFailureCounters(ctx = {}, failed = false) {
   if (failed) {
     state.counters.consecutiveToolFailures += 1;
     state.counters.totalToolFailures += 1;
-    if (state.counters.consecutiveToolFailures >= FAILURE_THRESHOLD.CONSECUTIVE) {
+    if (
+      state.counters.consecutiveToolFailures >= TURN_THRESHOLDS.harness.guidance.failureConsecutive
+    ) {
       setPendingStateWithMeta(state, "guidance", GUIDANCE_REASON.CONSECUTIVE_FAILURES);
-    } else if (state.counters.totalToolFailures >= FAILURE_THRESHOLD.ACCUMULATED) {
+    } else if (
+      state.counters.totalToolFailures >= TURN_THRESHOLDS.harness.guidance.failureAccumulated
+    ) {
       setPendingStateWithMeta(state, "guidance", GUIDANCE_REASON.ACCUMULATED_FAILURES);
     }
     return true;

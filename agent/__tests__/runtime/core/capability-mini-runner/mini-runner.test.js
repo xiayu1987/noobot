@@ -10,10 +10,8 @@ import { tool as structuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import assert from "node:assert/strict";
 
-import {
-  MAX_MINI_RUNNER_TOOL_TURNS,
-  createAgentCapabilityModelInvoker,
-} from "../../../../src/runtime/capability-runner/index.js";
+import { createAgentCapabilityModelInvoker } from "../../../../src/runtime/capability-runner/index.js";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { createTestAgentExecutionScope } from "../../../helpers/agent-execution-scope.js";
 import {
   createModelResponse,
@@ -318,7 +316,7 @@ test("mini-runner requires the authoritative host ModelPort", async () => {
 test("mini-runner enforces the configured tool-turn limit and finalizes through ModelPort", async () => {
   const toolCall = { text: "", toolCalls: [{ id: "c1", name: "echo", args: {} }] };
   const modelPort = createModelPort([
-    ...Array.from({ length: MAX_MINI_RUNNER_TOOL_TURNS }, () => toolCall),
+    ...Array.from({ length: TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns }, () => toolCall),
     { text: "finalized" },
   ]);
   const tool = { name: "echo" };
@@ -332,7 +330,7 @@ test("mini-runner enforces the configured tool-turn limit and finalizes through 
 
   assert.equal(result.output.text, "finalized");
   assert.equal(validateModelResponse(result), result);
-  assert.equal(modelPort.requests.length, MAX_MINI_RUNNER_TOOL_TURNS + 1);
+  assert.equal(modelPort.requests.length, TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns + 1);
 });
 
 function bindPresentation(runtime) {

@@ -5,15 +5,6 @@
  */
 import { access } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
-import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
-
-export const DEFAULT_READ_MAX_LINES = QUANTITY_THRESHOLDS.toolIO.readMaxLines;
-export const READ_MAX_LINES_LIMIT = QUANTITY_THRESHOLDS.toolIO.readMaxLinesLimit;
-export const DEFAULT_SEARCH_MAX_RESULTS = QUANTITY_THRESHOLDS.toolIO.searchMaxResults;
-export const SEARCH_MAX_RESULTS_LIMIT = QUANTITY_THRESHOLDS.toolIO.searchMaxResultsLimit;
-export const DEFAULT_SEARCH_CONTEXT_LINES = QUANTITY_THRESHOLDS.toolIO.searchContextLines;
-export const SEARCH_CONTEXT_LINES_LIMIT = QUANTITY_THRESHOLDS.toolIO.searchContextLinesLimit;
-export const PATCH_FAILURE_CONTEXT_RADIUS = QUANTITY_THRESHOLDS.toolIO.patchFailureContextRadius;
 
 export function splitLines(content) {
   return content.split(/\r?\n/);

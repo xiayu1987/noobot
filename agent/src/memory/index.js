@@ -5,7 +5,8 @@
  */
 import { resolveDefaultModelSpec, resolveModelSpecByName } from "../models/index.js";
 import { createAgentAuxiliaryModelPort } from "../runtime/model-port-host.js";
-import { BUILTIN_THRESHOLDS, mergeConfig } from "../config/index.js";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { mergeConfig } from "../config/index.js";
 import { normalizeLocale } from "noobot-i18n/shared";
 import { SYSTEM_PROMPT_FORMATTER_I18N as zhSystemPromptI18n } from "noobot-i18n/agent/locales/zh-CN/system-prompt";
 import { SYSTEM_PROMPT_FORMATTER_I18N as enSystemPromptI18n } from "noobot-i18n/agent/locales/en-US/system-prompt";
@@ -22,10 +23,7 @@ import { ExperienceManager } from "./experience/index.js";
 import { trimPromptPayloadByCharLimit } from "./utils/payload-trimmer.js";
 import { assertNotAborted } from "../shared/utils/error-utils.js";
 import { MEMORY_SUMMARY_STAGE, runMemorySummaryStage } from "./stage-runner.js";
-import {
-  MEMORY_LONG_PROMPT_PAYLOAD_MAX_CHARS,
-  MEMORY_LONG_PROMPT_PAYLOAD_SHRINK_RATIO,
-} from "./constants.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import { isFunction, text } from "@noobot/shared/value";
 
@@ -163,12 +161,10 @@ export class MemoryManager {
 
     const unextracted = await this.shortMemory.readItems(basePath);
     assertNotAborted(abortSignal);
-    const memoryMaxItems = BUILTIN_THRESHOLDS.memoryMaxItems;
-    const shouldUpdateLongMemory = unextracted.length >= memoryMaxItems;
+    const shouldUpdateLongMemory = unextracted.length >= QUANTITY_THRESHOLDS.memory.maxItems;
     const promptPayload = unextracted.map((item) => ({ records: item.records }));
     const longMemoryPromptPayload = trimPromptPayloadByCharLimit(promptPayload, {
-      maxChars: MEMORY_LONG_PROMPT_PAYLOAD_MAX_CHARS,
-      shrinkRatio: MEMORY_LONG_PROMPT_PAYLOAD_SHRINK_RATIO,
+      maxChars: LENGTH_THRESHOLDS.memory.longPromptPayloadChars,
     });
 
     const modelSpec = resolveMemoryModelSpec({

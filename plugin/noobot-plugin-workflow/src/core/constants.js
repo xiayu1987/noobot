@@ -3,9 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
-import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-
 import { resolvePluginDataRelativePath } from "@noobot/workspace-protocol";
 
 export const PLUGIN_ID = "workflow";
@@ -28,12 +25,9 @@ export const WORKFLOW_HOOKS = Object.freeze({
 export const WORKFLOW_PLUGIN_DEFAULTS = Object.freeze({
   MODE_OFF: "off",
   MODE_ON: "on",
-  DEFAULT_TIMEOUT_MS: TIME_THRESHOLDS.workflow.timeoutMs,
   DEFAULT_PRIORITY: 10,
   DEFAULT_MAX_AUTO_TRANSITIONS: 50,
   DEFAULT_MAX_PARALLEL_NODE_AGENTS: 10,
-  DEFAULT_NODE_AGENT_TIMEOUT_MS: TIME_THRESHOLDS.workflow.nodeAgentTimeoutMs,
-  DEFAULT_MINI_RUNNER_MAX_TURNS: TURN_THRESHOLDS.workflow.miniRunnerMaxTurns,
 });
 
 export const WORKFLOW_SEMANTIC = Object.freeze({

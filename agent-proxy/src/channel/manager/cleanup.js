@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { config } from "../../shared/config.js";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import {
   CHANNEL_RETENTION_PHASE,
   CHANNEL_ACTIVITY_PHASE,
@@ -23,13 +23,13 @@ class CleanupMethods {
         channel.transport.phase === UPSTREAM_TRANSPORT_PHASE.IDLE &&
         channel.activity.phase === CHANNEL_ACTIVITY_PHASE.IDLE &&
         !channel.subscribers.size &&
-        currentMs - channel.updatedAtMs > config.channelRetentionMs;
+        currentMs - channel.updatedAtMs > TIME_THRESHOLDS.agentProxy.channelRetentionMs;
       if (!canCleanupTerminal && !canCleanupIdle) continue;
       this.closeUpstreamChannel(channel, 1000, UPSTREAM_CLOSE_REASON.CLEANUP);
       this.deleteChannel(channelKey);
     }
     for (const [apiKey, identityItem] of this.apiKeyIdentityStore.entries()) {
-      if (currentMs - identityItem.updatedAtMs > config.apiKeyRetentionMs) {
+      if (currentMs - identityItem.updatedAtMs > TIME_THRESHOLDS.agentProxy.apiKeyRetentionMs) {
         this.apiKeyIdentityStore.delete(apiKey);
       }
     }

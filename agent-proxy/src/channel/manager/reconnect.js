@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-import { config } from "../../shared/config.js";
 import { CHANNEL_ACTIVITY_PHASE, UPSTREAM_TRANSPORT_PHASE } from "../../shared/constants.js";
 import { createChannelKey, nowMs } from "../../shared/utils.js";
 import { writeAgentProxyRouteLifecycleEvent } from "../../runtime-events/ws-runtime-events.js";
@@ -49,7 +48,7 @@ async function provisionReconnectChannel(manager, socket, session) {
     initialCommands: [],
     purpose: "reconnect_session",
   });
-  const deadline = nowMs() + config.reconnectSnapshotTimeoutMs;
+  const deadline = nowMs() + TIME_THRESHOLDS.agentProxy.reconnectSnapshotTimeoutMs;
   while (channel.transport.phase !== UPSTREAM_TRANSPORT_PHASE.OPEN && nowMs() < deadline) {
     await new Promise((resolve) =>
       setTimeout(resolve, TIME_THRESHOLDS.agentProxy.reconnectPollIntervalMs),

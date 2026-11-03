@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import {
   LONG_MEMORY_ERROR_CODE,
   LONG_MEMORY_FIELD_KIND,
-  LONG_MEMORY_MODEL,
+  createBuiltinLongMemoryModel,
   applyLongMemoryPatch,
   createLongMemoryModel,
   isSameLongMemory,
@@ -61,10 +61,16 @@ test("model requires unique valid fields", () => {
 });
 
 test("canonical model declares the built-in long memory fields", () => {
-  assert.equal(LONG_MEMORY_MODEL.fields.length, 24);
-  assert.equal(LONG_MEMORY_MODEL.byKey.get("history_preferences.common_topics").maxItems, 8);
-  assert.equal(LONG_MEMORY_MODEL.byKey.get("personal_info.location").kind, "single");
-  assert.equal(LONG_MEMORY_MODEL.byKey.get("work.assistant_collaboration").maxItems, 5);
+  assert.equal(createBuiltinLongMemoryModel().fields.length, 24);
+  assert.equal(
+    createBuiltinLongMemoryModel().byKey.get("history_preferences.common_topics").maxItems,
+    8,
+  );
+  assert.equal(createBuiltinLongMemoryModel().byKey.get("personal_info.location").kind, "single");
+  assert.equal(
+    createBuiltinLongMemoryModel().byKey.get("work.assistant_collaboration").maxItems,
+    5,
+  );
 });
 
 test("document round-trips and rejects malformed content", () => {
@@ -161,10 +167,10 @@ test("prompt rendering shows list usage and limit", () => {
 });
 
 test("model text round-trips the built-in fields and accepts user fields", () => {
-  const text = renderLongMemoryModelText();
+  const text = renderLongMemoryModelText(createBuiltinLongMemoryModel());
   assert.ok(text.startsWith(`${LONG_MEMORY_MODEL_HEADER}\n`));
   const parsed = parseLongMemoryModelText(text);
-  assert.deepEqual(parsed.fields, LONG_MEMORY_MODEL.fields);
+  assert.deepEqual(parsed.fields, createBuiltinLongMemoryModel().fields);
   const custom = parseLongMemoryModelText(
     [
       LONG_MEMORY_MODEL_HEADER,

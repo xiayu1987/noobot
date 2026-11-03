@@ -9,7 +9,6 @@ import assert from "node:assert/strict";
 import {
   createGuidanceHandler,
   createPlanningHandler,
-  LLM_SUMMARY_THRESHOLD,
   LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD,
   FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD,
   FULL_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
@@ -294,14 +293,17 @@ test("planning does not schedule tool-burst summary by default", async () => {
 test("planning does not schedule tool-burst summary when summary is already pending or task_summary is returned", async () => {
   const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
   const alreadyPendingContext = createPlanningAgentContext({
-    counters: { llmTurns: LLM_SUMMARY_THRESHOLD },
+    counters: { llmTurns: FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD },
   });
   alreadyPendingContext.bindings.extensions.harness.state.pending.summary = true;
-  const burstCalls = Array.from({ length: LLM_SUMMARY_THRESHOLD }, (_item, index) => ({
-    id: `call_pending_${index}`,
-    name: `tool_${index}`,
-    args: {},
-  }));
+  const burstCalls = Array.from(
+    { length: FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD },
+    (_item, index) => ({
+      id: `call_pending_${index}`,
+      name: `tool_${index}`,
+      args: {},
+    }),
+  );
 
   await planningHandler({
     capability: "planning",

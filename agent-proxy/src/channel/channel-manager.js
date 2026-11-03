@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { channelstoreMethods } from "./manager/channel-store.js";
 import { subscriberbroadcastMethods } from "./manager/subscriber-broadcast.js";
 import { upstreamconnectionMethods } from "./manager/upstream-connection.js";
@@ -13,7 +14,6 @@ import { UpstreamTransportSupervisor } from "../websocket/upstream-transport-sup
 import { CommandRegistry } from "./command-registry.js";
 import { nowMs } from "../shared/utils.js";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
-import { config } from "../shared/config.js";
 import { ChannelEventJournal } from "./channel-event-journal.js";
 import { resolveOptionalSessionId } from "@noobot/runtime-events/session-id";
 import { text } from "@noobot/shared/value";
@@ -40,13 +40,14 @@ export class ChannelManager {
     this.channelStore = new Map();
     this.commandRegistry = new CommandRegistry({
       now: nowMs,
-      ttlMs: config.requestIdTtlMs,
+      ttlMs: TIME_THRESHOLDS.agentProxy.requestIdTtlMs,
       onRemove: (removal) => this.logCommandRemoval(removal),
       maxRemovals: QUANTITY_THRESHOLDS.agentProxy.commandRemovalHistoryLimit,
     });
     this.apiKeyIdentityStore = new Map();
     this.createUpstreamTransport = () => new UpstreamTransportSupervisor(WebSocket);
-    this.createEventJournal = () => new ChannelEventJournal({ maxEvents: config.maxChannelEvents });
+    this.createEventJournal = () =>
+      new ChannelEventJournal({ maxEvents: QUANTITY_THRESHOLDS.agentProxy.maxChannelEvents });
     this.successfulDataPlaneMetrics = {
       windowStartedAtMs: Date.now(),
       upstreamMessages: 0,

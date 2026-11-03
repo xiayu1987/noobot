@@ -11,4 +11,5 @@ import { initializeRuntimeParams } from "@noobot/shared/runtime-params-node";
 initializeRuntimeParams(
   path.join(requireWorkspaceRootEnv(), WORKSPACE_ROOT_LAYOUT.RUNTIME_PARAMS_FILE),
 );
-await import("./src/server/main.js");
+const { startAgentProxy } = await import("./src/server/main.js");
+await startAgentProxy();

@@ -9,6 +9,8 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { HOOK_POINT } from "@noobot/hook-protocol";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 import { normalizeOptions } from "../../src/core/options.js";
 import {
@@ -84,13 +86,30 @@ test("normalizeOptions applies workflow execution defaults", () => {
     enabled: true,
     mode: "on",
   });
-  assert.equal(options.timeoutMs, WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_TIMEOUT_MS);
+  assert.equal(options.timeoutMs, TIME_THRESHOLDS.workflow.timeoutMs);
+  assert.equal(options.nodeAgentTimeoutMs, TIME_THRESHOLDS.workflow.nodeAgentTimeoutMs);
   assert.equal(options.maxAutoTransitions, WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_AUTO_TRANSITIONS);
   assert.equal(
     options.maxParallelNodeAgents,
     WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_PARALLEL_NODE_AGENTS,
   );
-  assert.equal(options.miniRunnerMaxTurns, WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MINI_RUNNER_MAX_TURNS);
+  assert.equal(options.miniRunnerMaxTurns, TURN_THRESHOLDS.workflow.miniRunnerMaxTurns);
+});
+
+test("normalizeOptions rejects invalid configured values", () => {
+  const invalidInputs = [
+    { timeoutMs: 0 },
+    { timeoutMs: "12345" },
+    { nodeAgentTimeoutMs: 999 },
+    { maxAutoTransitions: 1.5 },
+    { maxParallelNodeAgents: -1 },
+    { miniRunnerMaxTurns: Number.NaN },
+    { priority: -1 },
+    { mode: "auto" },
+  ];
+  for (const input of invalidInputs) {
+    assert.throws(() => normalizeOptions(input), TypeError, JSON.stringify(input));
+  }
 });
 
 test("normalizeOptions keeps valid workflow execution overrides", () => {

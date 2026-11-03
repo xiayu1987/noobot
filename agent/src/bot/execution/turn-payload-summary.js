@@ -8,12 +8,10 @@ import { isPlainObject } from "@noobot/shared/value";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { pickMessageOriginField } from "@noobot/session-protocol";
 
-const SESSION_TURN_FULL_CONTENT_PREVIEW_CHARS =
-  LENGTH_THRESHOLDS.display.sessionSummaryArrayItemChars;
-const SESSION_TURN_FULL_RAW_MODEL_PREVIEW_CHARS =
-  LENGTH_THRESHOLDS.display.sessionSummaryArrayItemChars;
-
-function previewString(value = "", maxChars = SESSION_TURN_FULL_CONTENT_PREVIEW_CHARS) {
+function previewString(
+  value = "",
+  maxChars = LENGTH_THRESHOLDS.display.sessionSummaryArrayItemChars,
+) {
   const text = String(value || "");
   if (text.length <= maxChars) return text;
   return `${text.slice(0, maxChars)}…`;
@@ -49,7 +47,7 @@ function summarizeRawModelContent(value = null) {
       kind: "string",
       present: value.length > 0,
       length: value.length,
-      preview: previewString(value, SESSION_TURN_FULL_RAW_MODEL_PREVIEW_CHARS),
+      preview: previewString(value, LENGTH_THRESHOLDS.display.sessionSummaryArrayItemChars),
     };
   }
   if (Array.isArray(value)) {
@@ -71,7 +69,7 @@ export function summarizeSessionTurnPayload(fullTurnPayload = {}) {
       length: content.length,
       bytes: Buffer.byteLength(content, "utf8"),
       preview: previewString(content),
-      truncated: content.length > SESSION_TURN_FULL_CONTENT_PREVIEW_CHARS,
+      truncated: content.length > LENGTH_THRESHOLDS.display.sessionSummaryArrayItemChars,
     },
     toolCalls: summarizeArray(fullTurnPayload.tool_calls),
     toolCallId: fullTurnPayload.tool_call_id || "",

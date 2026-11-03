@@ -10,10 +10,8 @@ import os from "node:os";
 import path from "node:path";
 
 import { createTestSessionExecutionEngine } from "../../helpers/session-execution-engine.js";
-import {
-  AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS,
-  AGENT_PLUGIN_HARNESS_HOOK_MIN_TIMEOUT_MS,
-} from "../../../src/bot/session/run-config-plugin-preparer.js";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 function createWorkspaceService(basePath) {
   return { getWorkspacePath: () => basePath };
@@ -32,7 +30,7 @@ test("SessionExecutionEngine activates harness by Manifest id", async () => {
       plugins: {
         harness: {
           planningGuidanceMode: "separate_model",
-          miniRunnerMaxTurns: AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS + 10,
+          miniRunnerMaxTurns: TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns + 10,
           timeoutMs: 1,
         },
       },
@@ -42,8 +40,14 @@ test("SessionExecutionEngine activates harness by Manifest id", async () => {
   assert.equal(prepared.plugins.harness.enabled, true);
   assert.equal(prepared.plugins.harness.mode, "on");
   assert.equal(prepared.plugins.harness.basePath, basePath);
-  assert.equal(prepared.plugins.harness.miniRunnerMaxTurns, AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS);
-  assert.equal(prepared.plugins.harness.timeoutMs, AGENT_PLUGIN_HARNESS_HOOK_MIN_TIMEOUT_MS);
+  assert.equal(
+    prepared.plugins.harness.miniRunnerMaxTurns,
+    TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns,
+  );
+  assert.equal(
+    prepared.plugins.harness.timeoutMs,
+    TIME_THRESHOLDS.capability.harnessHookMinTimeoutMs,
+  );
   assert.equal(typeof prepared.plugins.harness.capabilityModelInvoker, "function");
   assert.equal(typeof prepared.hookManager.emit, "function");
   assert.equal(Object.hasOwn(prepared.hookManager, "runtime"), false);

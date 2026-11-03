@@ -5,8 +5,9 @@
  */
 
 import { filePath as path } from "@noobot/path-resolver";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
-import { MIME_TO_EXTENSION, MAX_EXTENSION_LENGTH } from "../constants.js";
+import { MIME_TO_EXTENSION } from "../constants.js";
 import { normalizeAttachmentOwnerMeta, normalizeAttachmentTurnScopeMeta } from "../meta-ops.js";
 import { safeStr } from "../../shared/utils/shared-utils.js";
 import {
@@ -28,7 +29,8 @@ export function buildPublicRecord(basePath, record) {
 }
 
 export function normalizeExtension(fileName, mimeType) {
-  const fromName = path.extname(safeStr(fileName)).slice(0, MAX_EXTENSION_LENGTH);
+  const maxLength = LENGTH_THRESHOLDS.display.attachmentExtensionChars;
+  const fromName = path.extname(safeStr(fileName)).slice(0, maxLength);
   if (fromName) return fromName;
-  return (MIME_TO_EXTENSION[safeStr(mimeType).toLowerCase()] || "").slice(0, MAX_EXTENSION_LENGTH);
+  return (MIME_TO_EXTENSION[safeStr(mimeType).toLowerCase()] || "").slice(0, maxLength);
 }

@@ -3,8 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { HOOK_PHASE_STATUS } from "@noobot/hook-protocol/phase-status";
 import { resolvePluginDataRelativePath } from "@noobot/workspace-protocol";
 
@@ -43,11 +41,6 @@ export const HARNESS_FLUSH_REASONS = Object.freeze({
   NONE: "",
   TERMINAL: "terminal",
   ERROR: "error",
-});
-
-export const HARNESS_LIMITS = Object.freeze({
-  JSONL_MAX_BUFFER_ENTRIES: QUANTITY_THRESHOLDS.harness.jsonlMaxBufferEntries,
-  JSONL_MAX_BUFFER_BYTES: LENGTH_THRESHOLDS.harness.jsonlMaxBufferBytes,
 });
 
 export const HARNESS_FILES = Object.freeze({

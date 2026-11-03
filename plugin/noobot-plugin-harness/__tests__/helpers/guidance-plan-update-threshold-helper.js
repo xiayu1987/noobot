@@ -9,36 +9,33 @@ import {
 } from "../helpers/context-aware-handler-fixtures.js";
 import { runPlanUpdateAfterSummary } from "../../src/capabilities/handlers/guidance/model-runner.js";
 import { WORKFLOW_PARAMS } from "../../src/core/workflow-params.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 export { WORKFLOW_PARAMS };
 
-export const LLM_SUMMARY_THRESHOLD = WORKFLOW_PARAMS.guidance.summary.turnsThreshold;
+const MODE_THRESHOLDS = TURN_THRESHOLDS.harness.modeThresholds;
+
 export const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD =
-  WORKFLOW_PARAMS.guidance.summary.messageCharsThreshold;
-export const MAX_PLAN_UPDATE_ATTEMPTS = WORKFLOW_PARAMS.planning.planUpdate.revisionMaxAttempts;
-export const FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD =
-  WORKFLOW_PARAMS.modeThresholds.full.guidance.summary.turnsThreshold;
-export const FULL_ANALYSIS_TRIGGER_TURNS_THRESHOLD =
-  WORKFLOW_PARAMS.modeThresholds.full.guidance.analysis.turnsThreshold;
-export const PROGRAMMING_SUMMARY_TRIGGER_TURNS_THRESHOLD =
-  WORKFLOW_PARAMS.modeThresholds.programming.guidance.summary.turnsThreshold;
-export const PROGRAMMING_ANALYSIS_TRIGGER_TURNS_THRESHOLD =
-  WORKFLOW_PARAMS.modeThresholds.programming.guidance.analysis.turnsThreshold;
-export const FULL_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD =
-  WORKFLOW_PARAMS.modeThresholds.full.planning.planUpdate.triggerTurnsThreshold;
-export const PROGRAMMING_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD =
-  WORKFLOW_PARAMS.modeThresholds.programming.planning.planUpdate.triggerTurnsThreshold;
+  LENGTH_THRESHOLDS.context.harnessSummaryMessageChars;
+export const MAX_PLAN_UPDATE_ATTEMPTS =
+  TURN_THRESHOLDS.harness.planning.planUpdateRevisionMaxAttempts;
+export const FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD = MODE_THRESHOLDS.full.summaryTurns;
+export const FULL_ANALYSIS_TRIGGER_TURNS_THRESHOLD = MODE_THRESHOLDS.full.analysisTurns;
+export const FULL_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD = MODE_THRESHOLDS.full.planUpdateTriggerTurns;
 export const FULL_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD =
-  WORKFLOW_PARAMS.modeThresholds.full.acceptance.phase.triggerTurnsThreshold;
+  MODE_THRESHOLDS.full.phaseAcceptanceTriggerTurns;
+export const PROGRAMMING_SUMMARY_TRIGGER_TURNS_THRESHOLD = MODE_THRESHOLDS.programming.summaryTurns;
+export const PROGRAMMING_ANALYSIS_TRIGGER_TURNS_THRESHOLD =
+  MODE_THRESHOLDS.programming.analysisTurns;
+export const PROGRAMMING_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD =
+  MODE_THRESHOLDS.programming.planUpdateTriggerTurns;
 export const PROGRAMMING_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD =
-  WORKFLOW_PARAMS.modeThresholds.programming.acceptance.phase.triggerTurnsThreshold;
-export const TEXT_SUMMARY_TRIGGER_TURNS_THRESHOLD =
-  WORKFLOW_PARAMS.modeThresholds.text.guidance.summary.turnsThreshold;
-export const TEXT_ANALYSIS_TRIGGER_TURNS_THRESHOLD =
-  WORKFLOW_PARAMS.modeThresholds.text.guidance.analysis.turnsThreshold;
-export const TEXT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD =
-  WORKFLOW_PARAMS.modeThresholds.text.planning.planUpdate.triggerTurnsThreshold;
+  MODE_THRESHOLDS.programming.phaseAcceptanceTriggerTurns;
+export const TEXT_SUMMARY_TRIGGER_TURNS_THRESHOLD = MODE_THRESHOLDS.text.summaryTurns;
+export const TEXT_ANALYSIS_TRIGGER_TURNS_THRESHOLD = MODE_THRESHOLDS.text.analysisTurns;
+export const TEXT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD = MODE_THRESHOLDS.text.planUpdateTriggerTurns;
 export const TEXT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD =
-  WORKFLOW_PARAMS.modeThresholds.text.acceptance.phase.triggerTurnsThreshold;
+  MODE_THRESHOLDS.text.phaseAcceptanceTriggerTurns;
 
 export function createAgentContext({ planText = "1. 主任务\n", pending = {}, counters = {} } = {}) {
   return {

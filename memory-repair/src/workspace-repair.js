@@ -5,7 +5,10 @@
  */
 import { isFunction } from "@noobot/shared/value";
 import { MEMORY_DOCUMENT_KIND } from "@noobot/memory-protocol/document";
-import { LONG_MEMORY_MODEL, parseLongMemoryModelText } from "@noobot/memory-protocol/long-memory";
+import {
+  createBuiltinLongMemoryModel,
+  parseLongMemoryModelText,
+} from "@noobot/memory-protocol/long-memory";
 import {
   renderDefaultMemoryDocument,
   renderDefaultShortMemoryText,
@@ -97,7 +100,7 @@ export async function repairMemoryWorkspace({ layout, io, locale } = {}) {
       status: MEMORY_REPAIR_STATUS.CREATED,
     });
   }
-  let longMemoryModel = LONG_MEMORY_MODEL;
+  let longMemoryModel = createBuiltinLongMemoryModel(locale);
   for (const document of await collectDocuments(layout, io)) {
     const text = await repairDocument(document, { io, backup, report, longMemoryModel, locale });
     if (document.kind === MEMORY_DOCUMENT_KIND.LONG_MEMORY_MODEL && text !== null) {

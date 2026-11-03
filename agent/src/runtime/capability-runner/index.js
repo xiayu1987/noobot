@@ -25,10 +25,8 @@ import { createCapabilityModelStep } from "./model-step.js";
 import { createCapabilityToolBinding, runCapabilityToolTurns } from "./tool-turns.js";
 import { text } from "@noobot/shared/value";
 
-export const MAX_MINI_RUNNER_TOOL_TURNS = TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns;
-
 export function createAgentCapabilityModelInvoker({
-  maxTurns = MAX_MINI_RUNNER_TOOL_TURNS,
+  maxTurns,
   toolAllowlist = [],
   enableToolBinding = false,
   pluginId,
@@ -41,10 +39,11 @@ export function createAgentCapabilityModelInvoker({
   const flowPrefix = requireCapabilityFlowPrefix(pluginId);
   const effectiveConfig = validateConfigSnapshot(configSnapshot).config;
   const baseAllowPolicy = resolveAllowPolicy(toolAllowlist);
+  const turnCap = TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns;
   const maxTurnCount =
     Number.isFinite(Number(maxTurns)) && Number(maxTurns) > 0
-      ? Math.min(Number(maxTurns), MAX_MINI_RUNNER_TOOL_TURNS)
-      : MAX_MINI_RUNNER_TOOL_TURNS;
+      ? Math.min(Number(maxTurns), turnCap)
+      : turnCap;
 
   return async function capabilityModelInvoker({
     purpose,

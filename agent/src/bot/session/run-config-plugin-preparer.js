@@ -41,10 +41,6 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { commitPluginArtifact, getPluginArtifact } from "./plugin-artifact-committer.js";
 import { isPlainObject, text, isFunction } from "@noobot/shared/value";
 
-export const AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS = TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns;
-export const AGENT_PLUGIN_HARNESS_HOOK_MIN_TIMEOUT_MS =
-  TIME_THRESHOLDS.capability.harnessHookMinTimeoutMs;
-
 function plainObject(value) {
   return isPlainObject(value) ? value : {};
 }
@@ -194,19 +190,18 @@ export class RunConfigPluginPreparer {
     const hasExecutionIntent = Boolean(agentContributions?.executionIntent);
 
     if (hasAgentLifecycle || hasExecutionIntent) {
+      const turnCap = TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns;
       next.miniRunnerMaxTurns =
         Number.isFinite(Number(next.miniRunnerMaxTurns)) && Number(next.miniRunnerMaxTurns) > 0
-          ? Math.min(Number(next.miniRunnerMaxTurns), AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS)
-          : AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS;
+          ? Math.min(Number(next.miniRunnerMaxTurns), turnCap)
+          : turnCap;
       next.resolveModelMessages = this.createPluginResolveModelMessages();
     }
 
     if (hasAgentLifecycle) {
-      if (
-        !Number.isFinite(Number(next.timeoutMs)) ||
-        Number(next.timeoutMs) < AGENT_PLUGIN_HARNESS_HOOK_MIN_TIMEOUT_MS
-      ) {
-        next.timeoutMs = AGENT_PLUGIN_HARNESS_HOOK_MIN_TIMEOUT_MS;
+      const minTimeoutMs = TIME_THRESHOLDS.capability.harnessHookMinTimeoutMs;
+      if (!Number.isFinite(Number(next.timeoutMs)) || Number(next.timeoutMs) < minTimeoutMs) {
+        next.timeoutMs = minTimeoutMs;
       }
       next.capabilityModelInvoker = createAgentCapabilityModelInvoker({
         maxTurns: next.miniRunnerMaxTurns,

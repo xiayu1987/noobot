@@ -43,7 +43,6 @@ import {
 import { TOOL_CALL_MODE, TOOL_DATA_MODE, TOOL_NAME } from "../constants/index.js";
 import { text } from "@noobot/shared/value";
 
-const MAX_RESPONSES_FILE_INPUT_BYTES = LENGTH_THRESHOLDS.dataProcessing.responsesFileInputBytes;
 const require = createRequire(import.meta.url);
 
 let sharpModule;
@@ -188,17 +187,17 @@ export function createMultimodalParseTool({ agentContext }) {
         (total, inputFileStat) => total + Number(inputFileStat.size || 0),
         0,
       );
-      if (totalFileSizeBytes >= MAX_RESPONSES_FILE_INPUT_BYTES) {
+      if (totalFileSizeBytes >= LENGTH_THRESHOLDS.dataProcessing.responsesFileInputBytes) {
         throw recoverableToolError(
           tTool(runtime, "tools.multimodalParse.fileTooLarge", {
-            maxSizeMB: MAX_RESPONSES_FILE_INPUT_BYTES / (1000 * 1000),
+            maxSizeMB: LENGTH_THRESHOLDS.dataProcessing.responsesFileInputBytes / (1000 * 1000),
           }),
           {
             code: ERROR_CODE.RECOVERABLE_ATTACHMENT_FILE_SIZE_LIMIT_EXCEEDED,
             details: {
               fileCount: inputFiles.length,
               totalFileSizeBytes,
-              maxFileSizeBytesExclusive: MAX_RESPONSES_FILE_INPUT_BYTES,
+              maxFileSizeBytesExclusive: LENGTH_THRESHOLDS.dataProcessing.responsesFileInputBytes,
             },
           },
         );

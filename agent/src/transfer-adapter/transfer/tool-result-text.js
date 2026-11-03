@@ -21,26 +21,21 @@ import {
 } from "../storage/attachment-adapter.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
-export const DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS =
-  LENGTH_THRESHOLDS.semanticTransfer.toolResultInlineChars;
-const DEFAULT_PREVIEW_CHARS = LENGTH_THRESHOLDS.semanticTransfer.previewChars;
-
-export function resolveToolResultInlineTextLimit(
-  runtime = {},
-  fallback = DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS,
-) {
+export function resolveToolResultInlineTextLimit(runtime = {}) {
   const userLimit = runtime?.userConfig?.tools?.maxToolResultChars;
   const globalLimit = runtime?.globalConfig?.tools?.maxToolResultChars;
   const limit = userLimit === undefined ? globalLimit : userLimit;
-  return requireTransferCharLimit(limit === undefined ? fallback : limit);
+  return requireTransferCharLimit(
+    limit === undefined ? LENGTH_THRESHOLDS.semanticTransfer.toolResultInlineChars : limit,
+  );
 }
 
 function buildTextResultFields({
   text = "",
   transferEnvelopes = [],
-  inlineMaxChars = DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS,
-  previewChars = DEFAULT_PREVIEW_CHARS,
-  forcePreview = false,
+  inlineMaxChars,
+  previewChars,
+  forcePreview,
 } = {}) {
   const normalizedText = String(text || "");
   const normalizedTransferEnvelopes = normalizeTransferEnvelopes(transferEnvelopes);
@@ -75,7 +70,7 @@ export async function materializeTextForToolResult({
   meta = {},
   alwaysPersist = false,
   inlineMaxChars = null,
-  previewChars = DEFAULT_PREVIEW_CHARS,
+  previewChars = LENGTH_THRESHOLDS.semanticTransfer.previewChars,
   forcePreview = false,
   identity = null,
   scenario = "tool",

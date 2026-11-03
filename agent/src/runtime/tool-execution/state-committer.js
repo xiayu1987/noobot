@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TOOL_RESULT_TRACE_TRUNCATE_LENGTH } from "../constants/index.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import {
   getSystemRuntimeFromRuntime,
   resolveRuntimeTurnScopeId,
@@ -218,7 +218,7 @@ export function createStateCommitter({
         traces.push({
           tool: resolvedCallName,
           args: call?.args || {},
-          result: normalizedToolResultText.slice(0, TOOL_RESULT_TRACE_TRUNCATE_LENGTH),
+          result: normalizedToolResultText.slice(0, LENGTH_THRESHOLDS.display.toolResultTraceChars),
         });
       }
       appendToolResultModelMessage({

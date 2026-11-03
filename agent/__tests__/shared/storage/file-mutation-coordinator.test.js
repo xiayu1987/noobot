@@ -12,6 +12,10 @@ import { FileMutationCoordinator } from "../../../src/shared/storage/file-mutati
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function fixedLockTiming(timing) {
+  return { readTiming: () => timing };
+}
+
 async function lockFixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "noobot-coordinator-"));
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -20,7 +24,9 @@ async function lockFixture(t) {
 
 test("nested run inside a held lock reenters without deadlock", async (t) => {
   const lockPath = await lockFixture(t);
-  const coordinator = new FileMutationCoordinator({ timeoutMs: 2000 });
+  const coordinator = new FileMutationCoordinator(
+    fixedLockTiming({ timeoutMs: 2000, staleMs: 60000, pollMs: 10 }),
+  );
   const result = await coordinator.run(lockPath, () =>
     coordinator.run(lockPath, async () => "nested"),
   );
@@ -31,7 +37,9 @@ for (const owner of ["", `${process.pid}:live-owner`]) {
   test(`fresh lock with ${owner ? "live" : "unfinished"} owner cannot be reclaimed`, async (t) => {
     const lockPath = await lockFixture(t);
     await writeFile(lockPath, owner);
-    const coordinator = new FileMutationCoordinator({ timeoutMs: 30, staleMs: 60000, pollMs: 2 });
+    const coordinator = new FileMutationCoordinator(
+      fixedLockTiming({ timeoutMs: 30, staleMs: 60000, pollMs: 2 }),
+    );
     await assert.rejects(
       coordinator.run(lockPath, () => assert.fail("must not enter")),
       {
@@ -44,7 +52,9 @@ for (const owner of ["", `${process.pid}:live-owner`]) {
 
 test("continuations spawned inside a lock must reacquire it after release", async (t) => {
   const lockPath = await lockFixture(t);
-  const coordinator = new FileMutationCoordinator({ timeoutMs: 5000 });
+  const coordinator = new FileMutationCoordinator(
+    fixedLockTiming({ timeoutMs: 5000, staleMs: 60000, pollMs: 10 }),
+  );
   let active = 0;
   let peak = 0;
   const guarded = () =>

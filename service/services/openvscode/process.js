@@ -6,7 +6,7 @@
 import net from "node:net";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { terminateProcessTree } from "@noobot/platform-compatibility/process";
-import { DEFAULT_HOST, DEFAULT_SHUTDOWN_GRACE_MS } from "./config.js";
+import { DEFAULT_HOST } from "./config.js";
 
 export function isProcessAlive(pid = 0) {
   const value = Number(pid || 0);
@@ -47,17 +47,14 @@ export function allocatePort(host = DEFAULT_HOST) {
     });
   });
 }
-export function stopInstanceBestEffort(
-  instance = {},
-  { forceAfterMs = DEFAULT_SHUTDOWN_GRACE_MS } = {},
-) {
+export function stopInstanceBestEffort(instance, { forceAfterMs }) {
   const pid = Number(instance?.pid || 0);
   if (!Number.isInteger(pid) || pid <= 0) return;
   const child = { pid, kill: (signal) => process.kill(pid, signal) };
   void terminateProcessTree(child, "SIGTERM").catch((error) => {
     console.warn(`[openvscode] graceful process termination failed: ${error?.message || error}`);
   });
-  if (Number(forceAfterMs || 0) > 0) {
+  if (forceAfterMs > 0) {
     const timer = setTimeout(() => {
       if (!isProcessAlive(pid)) return;
       void terminateProcessTree(child, "SIGKILL").catch((error) => {

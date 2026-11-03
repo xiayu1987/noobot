@@ -52,6 +52,12 @@ test("serialized window index keeps the wire array bounded", () => {
   assert.deepEqual(owner.eventIds, ["b", "c"]);
 });
 
+test("serialized window index rejects a limit that is not a positive integer", () => {
+  for (const limit of [0, -1, 1.5, "2", undefined]) {
+    assert.throws(() => createSerializedWindowIndex({ field: "eventIds", limit }), TypeError);
+  }
+});
+
 test("latest fact selection projects only the bounded result", () => {
   let projected = 0;
   const selected = selectLatestOrderedFacts([{ sequence: 3 }, { sequence: 1 }, { sequence: 2 }], {

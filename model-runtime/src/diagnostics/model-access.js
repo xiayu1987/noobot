@@ -12,7 +12,6 @@ import { normalizeRuntimeModelSpec } from "../normalization/spec-normalizer.js";
 import { text, isPlainObject, isObjectLike } from "@noobot/shared/value";
 import { tModelRuntime } from "../locale.js";
 
-const RESPONSE_LIMIT = LENGTH_THRESHOLDS.diagnostics.responseBytes;
 const REDACTED = "[REDACTED]";
 const SECRET_FIELD =
   /^(authorization|proxy-authorization|cookie|set-cookie|x-api-key|api[_-]?key|password|secret|access_token)$/i;
@@ -56,14 +55,21 @@ async function readResponsePreview(response) {
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-    chunks.push(Buffer.from(value.subarray(0, Math.max(0, RESPONSE_LIMIT - size))));
+    chunks.push(
+      Buffer.from(
+        value.subarray(0, Math.max(0, LENGTH_THRESHOLDS.diagnostics.responseBytes - size)),
+      ),
+    );
     size += value.byteLength;
-    if (size > RESPONSE_LIMIT) {
+    if (size > LENGTH_THRESHOLDS.diagnostics.responseBytes) {
       void reader.cancel().catch(() => undefined);
       break;
     }
   }
-  return { body: Buffer.concat(chunks).toString("utf8"), truncated: size > RESPONSE_LIMIT };
+  return {
+    body: Buffer.concat(chunks).toString("utf8"),
+    truncated: size > LENGTH_THRESHOLDS.diagnostics.responseBytes,
+  };
 }
 
 export async function testModelAccess({

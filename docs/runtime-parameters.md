@@ -20,6 +20,13 @@
 
 运行参数只接受范围内的整数；最小值/默认值/最大值等关联关系由协议统一验证。单位由键名后缀决定并由目录统一显示，说明文案不重复维护单位。
 
+## 读取约定
+
+- 可编辑阈值只在代码执行时读取 `*_THRESHOLDS.group.key`；模块顶层不得取叶子值、不得把阈值复制进常量、配置对象或导出别名，也不得在顶层实例化会读取阈值的单例。
+- 依赖阈值的单例由入口组装时创建或在首次调用时惰性创建；进程入口先初始化快照，再导入并显式调用启动函数。
+- 测试统一经 `@noobot/shared/testing/runtime-params` 安装快照；覆盖值通过 `NOOBOT_TEST_RUNTIME_OVERRIDES`（JSON）注入，并经协议校验，非法值直接失败。
+- `npm run check:runtime-threshold-reads` 守护以上约定：`moduleScopeRead` 检查顶层读取，`importWithoutSnapshot` 在未安装快照的新进程中逐个导入库导出，两项基线均为 0。
+
 ## 保存与恢复
 
 管理接口为 `GET/PUT /internal/admin/runtime-params`；前端通过 `/api` 代理访问。PUT 请求为 `{ revision, overrides }`，覆盖对象是本次完整目标集合。恢复默认会删除覆盖值。

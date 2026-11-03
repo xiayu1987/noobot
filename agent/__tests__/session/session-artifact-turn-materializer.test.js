@@ -25,8 +25,8 @@ import {
 } from "../../src/session/session-artifact-session/checkpoint-receipts.js";
 import {
   createVerifiedSnapshotCache,
+  getVerifiedSnapshotCache,
   readFileIdentity,
-  verifiedSnapshotCache,
 } from "../../src/session/session-artifact-session/verified-snapshot-cache.js";
 import { replaceJournalRecords } from "../../src/session/session-artifact-session/turn-journal-store.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
@@ -353,8 +353,8 @@ test("pruned snapshots are forgotten from both verified cache tiers", async () =
     const options = { storageService, sessionDir: root, index, previousCheckpointHash: "" };
     await readVerifiedCheckpointIdentity(options);
     await readVerifiedSnapshot(options);
-    assert.ok(verifiedSnapshotCache.checkpoint(file, index.contentHash, identity));
-    assert.ok(verifiedSnapshotCache.payload(file, index.contentHash, identity));
+    assert.ok(getVerifiedSnapshotCache().checkpoint(file, index.contentHash, identity));
+    assert.ok(getVerifiedSnapshotCache().payload(file, index.contentHash, identity));
     const other = (uid, role) => ({ ...message(uid, role, "next"), turnScopeId: "other" });
     const { turnSummaryCheckpoints: _omitted, ...replacement } = payloadOf(
       [other("n1", "user"), other("n2", "assistant")],
@@ -362,8 +362,8 @@ test("pruned snapshots are forgotten from both verified cache tiers", async () =
     );
     await writeSessionArtifact({ sessionDir: root, sessionPayload: replacement });
     await assert.rejects(readFile(file), { code: "ENOENT" });
-    assert.equal(verifiedSnapshotCache.checkpoint(file, index.contentHash, identity), null);
-    assert.equal(verifiedSnapshotCache.payload(file, index.contentHash, identity), null);
+    assert.equal(getVerifiedSnapshotCache().checkpoint(file, index.contentHash, identity), null);
+    assert.equal(getVerifiedSnapshotCache().payload(file, index.contentHash, identity), null);
   }));
 
 test("session reads expose frozen materialized messages without breaking writers", async () =>

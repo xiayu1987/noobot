@@ -16,8 +16,6 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 const fsmStateCache = new Map();
 const fsmStateLastAccessed = new Map();
-const FSM_CACHE_MAX_AGE_MS = TIME_THRESHOLDS.harness.fsmCacheMaxAgeMs;
-const FSM_CACHE_CLEANUP_INTERVAL_MS = TIME_THRESHOLDS.harness.fsmCacheCleanupIntervalMs;
 
 function touchFsmState(runId = "") {
   if (!runId) return;
@@ -32,6 +30,11 @@ function getFsmState(runId = "") {
 
 function setFsmState(runId = "", state = HARNESS_FSM_STATES.IDLE) {
   if (!runId) return;
+  ensureIntervalCleanupTask(
+    "harness_fsm_state_cache_cleanup",
+    cleanupStaleFsmStates,
+    TIME_THRESHOLDS.harness.fsmCacheCleanupIntervalMs,
+  );
   fsmStateCache.set(runId, state);
   touchFsmState(runId);
 }
@@ -45,16 +48,10 @@ function deleteFsmState(runId = "") {
 function cleanupStaleFsmStates() {
   const now = Date.now();
   for (const [runId, lastAccessed] of fsmStateLastAccessed.entries()) {
-    if (now - lastAccessed <= FSM_CACHE_MAX_AGE_MS) continue;
+    if (now - lastAccessed <= TIME_THRESHOLDS.harness.fsmCacheMaxAgeMs) continue;
     deleteFsmState(runId);
   }
 }
-
-ensureIntervalCleanupTask(
-  "harness_fsm_state_cache_cleanup",
-  cleanupStaleFsmStates,
-  FSM_CACHE_CLEANUP_INTERVAL_MS,
-);
 
 async function resolveCurrentFsmState(paths, options = {}) {
   if (!paths?.runId || options.fsmEnabled === false) {

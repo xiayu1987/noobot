@@ -6,7 +6,6 @@
 import { resolveAttachmentAccessMeta } from "../../../infrastructure/api/attachments/attachmentAccess.js";
 import { getMessageTransferEnvelopes } from "./transferEnvelopes.js";
 import { getMessageTimestamp, nowIso, nowMs } from "./timeFields.js";
-import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { getMessageAttachments, normalizeArray } from "./messageAttachmentsProjection.js";
 import { findVisibleLastMessage, isPluginInjectedMessage } from "./messageVisibility.js";
 import { foldConversationMessages } from "./conversationFolding.js";
@@ -21,8 +20,6 @@ import {
   buildMessageTimelineFacet,
   pickOwnFields,
 } from "./messageModelFacets.js";
-
-const EXECUTION_LOG_DISPLAY_LIMIT = QUANTITY_THRESHOLDS.client.executionLogDisplayLimit;
 
 const MESSAGE_IDENTITY_FIELDS = Object.freeze([
   "messageUid",
@@ -105,7 +102,6 @@ function buildViewMessage(messageItem, { sessionId, userId }) {
 }
 
 export {
-  EXECUTION_LOG_DISPLAY_LIMIT,
   buildAppendMessage,
   buildViewMessage,
   normalizeMessageAttachments,

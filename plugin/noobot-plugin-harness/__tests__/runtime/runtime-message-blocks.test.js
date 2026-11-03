@@ -10,6 +10,7 @@ import { canonicalizeTestContextMessage, contextMessage } from "../helpers/conte
 import { createCapabilityRuntime } from "../../src/capabilities/runtime.js";
 import { resolveModelFinalMessages as resolveMainModelFinalMessages } from "@noobot/context-protocol";
 import {
+  createTestHarnessMeta,
   createTestResolveModelMessages,
   ensureTestHookContext,
 } from "../helpers/public-runtime-fixtures.js";
@@ -80,14 +81,12 @@ test("capability runtime runs global bootstrap before capability handlers", asyn
     ensureTestHookContext(
       withModelContext({ messageBlocks: { system: [], history: [], incremental: [] } }),
     ),
-    {
-      harness: {
-        resolveModelMessages: createTestResolveModelMessages(),
-        globalBootstrap: async () => {
-          calls.push("globalBootstrap");
-        },
+    createTestHarnessMeta({
+      resolveModelMessages: createTestResolveModelMessages(),
+      globalBootstrap: async () => {
+        calls.push("globalBootstrap");
       },
-    },
+    }),
   );
 
   assert.deepEqual(calls, ["globalBootstrap", "planning"]);
@@ -115,7 +114,7 @@ test("capability runtime exposes resolved capability profile to handlers", async
     ensureTestHookContext(
       withModelContext({ messageBlocks: { system: [], history: [], incremental: [] } }),
     ),
-    { harness: { resolveModelMessages: createTestResolveModelMessages() } },
+    createTestHarnessMeta({ resolveModelMessages: createTestResolveModelMessages() }),
   );
 
   assert.equal(capturedProfile?.planning?.enabled, false);
@@ -159,9 +158,11 @@ test("capability runtime keeps planning first without blocking later before_llm_
     messageBlocks: { system: [], history: [], incremental: [] },
   });
 
-  const results = await runtime.runHook("agent.before_llm_call", ensureTestHookContext(ctx), {
-    harness: { resolveModelMessages: createTestResolveModelMessages() },
-  });
+  const results = await runtime.runHook(
+    "agent.before_llm_call",
+    ensureTestHookContext(ctx),
+    createTestHarnessMeta({ resolveModelMessages: createTestResolveModelMessages() }),
+  );
 
   assert.deepEqual(calls, ["planning", "guidance", "acceptance"]);
   assert.deepEqual(
@@ -207,9 +208,11 @@ test("capability runtime does not block guidance when plan text exists but captu
     messageBlocks: { system: [], history: [], incremental: [] },
   });
 
-  await runtime.runHook("agent.before_llm_call", ensureTestHookContext(ctx), {
-    harness: { resolveModelMessages: createTestResolveModelMessages() },
-  });
+  await runtime.runHook(
+    "agent.before_llm_call",
+    ensureTestHookContext(ctx),
+    createTestHarnessMeta({ resolveModelMessages: createTestResolveModelMessages() }),
+  );
 
   assert.deepEqual(calls, ["planning", "guidance", "acceptance"]);
   assert.equal(ctx.agentContext.bindings.extensions.harness.state.flags.planningCaptured, true);
@@ -232,8 +235,10 @@ test("capability runtime delegates before_llm_call messages to agent resolver", 
     },
   });
   const calls = [];
-  await runtime.runHook("agent.before_llm_call", ensureTestHookContext(ctx), {
-    harness: {
+  await runtime.runHook(
+    "agent.before_llm_call",
+    ensureTestHookContext(ctx),
+    createTestHarnessMeta({
       resolveModelMessages: ({ ctx: resolverCtx = {} } = {}) => {
         calls.push("resolveModelMessages");
         return [
@@ -245,8 +250,8 @@ test("capability runtime delegates before_llm_call messages to agent resolver", 
           ),
         ];
       },
-    },
-  });
+    }),
+  );
 
   assert.deepEqual(calls, ["resolveModelMessages"]);
   assert.deepEqual(
@@ -288,9 +293,11 @@ test("capability runtime filters summarized messages from incremental blocks by 
     },
   });
 
-  await runtime.runHook("agent.before_llm_call", ensureTestHookContext(ctx), {
-    harness: { resolveModelMessages: resolveFromBlocks },
-  });
+  await runtime.runHook(
+    "agent.before_llm_call",
+    ensureTestHookContext(ctx),
+    createTestHarnessMeta({ resolveModelMessages: resolveFromBlocks }),
+  );
 
   assert.deepEqual(
     ctx.modelContext.messages.map((item) => item.content),
@@ -327,9 +334,11 @@ test("capability runtime does not let resolver reintroduce summarized messages",
     },
   });
 
-  await runtime.runHook("agent.before_llm_call", ensureTestHookContext(ctx), {
-    harness: { resolveModelMessages: resolveFromBlocks },
-  });
+  await runtime.runHook(
+    "agent.before_llm_call",
+    ensureTestHookContext(ctx),
+    createTestHarnessMeta({ resolveModelMessages: resolveFromBlocks }),
+  );
 
   assert.deepEqual(
     ctx.modelContext.messages.map((item) => item.content),
@@ -362,18 +371,22 @@ test("capability runtime applies message blocks only once per runtime turn conte
   });
   const originalMessageBlocks = ctx.modelContext.messageBlocks;
 
-  await runtime.runHook("agent.before_llm_call", ensureTestHookContext(ctx), {
-    harness: { resolveModelMessages: resolveFromBlocks },
-  });
+  await runtime.runHook(
+    "agent.before_llm_call",
+    ensureTestHookContext(ctx),
+    createTestHarnessMeta({ resolveModelMessages: resolveFromBlocks }),
+  );
   assert.equal(ctx.modelContext.messageBlocks, originalMessageBlocks);
   appendMessage(
     ctx,
     canonicalizeTestContextMessage({ role: "assistant", content: "after-first-call" }),
     { block: "incremental" },
   );
-  await runtime.runHook("agent.before_llm_call", ensureTestHookContext(ctx), {
-    harness: { resolveModelMessages: resolveFromBlocks },
-  });
+  await runtime.runHook(
+    "agent.before_llm_call",
+    ensureTestHookContext(ctx),
+    createTestHarnessMeta({ resolveModelMessages: resolveFromBlocks }),
+  );
 
   assert.deepEqual(
     ctx.modelContext.messages.map((item) => item.content),
@@ -405,9 +418,11 @@ test("capability runtime keeps repeated unsummarized guidance across tool rounds
     },
   });
 
-  await runtime.runHook("agent.before_llm_call", ensureTestHookContext(ctx), {
-    harness: { resolveModelMessages: resolveFromBlocks },
-  });
+  await runtime.runHook(
+    "agent.before_llm_call",
+    ensureTestHookContext(ctx),
+    createTestHarnessMeta({ resolveModelMessages: resolveFromBlocks }),
+  );
   appendMessage(
     ctx,
     canonicalizeTestContextMessage({
@@ -438,9 +453,11 @@ test("capability runtime keeps repeated unsummarized guidance across tool rounds
     { block: "incremental" },
   );
 
-  await runtime.runHook("agent.before_llm_call", ensureTestHookContext(ctx), {
-    harness: { resolveModelMessages: resolveFromBlocks },
-  });
+  await runtime.runHook(
+    "agent.before_llm_call",
+    ensureTestHookContext(ctx),
+    createTestHarnessMeta({ resolveModelMessages: resolveFromBlocks }),
+  );
 
   assert.deepEqual(
     ctx.modelContext.messageBlocks.incremental.map((item) => item.content),
@@ -512,9 +529,11 @@ test("capability runtime preserves history and incremental user messages in bloc
     },
   });
 
-  await runtime.runHook("agent.before_llm_call", ensureTestHookContext(ctx), {
-    harness: { resolveModelMessages: resolveFromBlocks },
-  });
+  await runtime.runHook(
+    "agent.before_llm_call",
+    ensureTestHookContext(ctx),
+    createTestHarnessMeta({ resolveModelMessages: resolveFromBlocks }),
+  );
 
   const userTextIndexes = ctx.modelContext.messages
     .map((item, index) => ({ item, index }))
@@ -569,9 +588,11 @@ test("capability runtime does not remove same-text user from a different turn", 
     },
   });
 
-  await runtime.runHook("agent.before_llm_call", ensureTestHookContext(ctx), {
-    harness: { resolveModelMessages: resolveFromBlocks },
-  });
+  await runtime.runHook(
+    "agent.before_llm_call",
+    ensureTestHookContext(ctx),
+    createTestHarnessMeta({ resolveModelMessages: resolveFromBlocks }),
+  );
 
   const userTextIndexes = ctx.modelContext.messages
     .map((item, index) => ({ item, index }))
@@ -621,7 +642,7 @@ test("capability runtime keeps later flows running when one flow fails", async (
         messageBlocks: { system: [], history: [], incremental: [] },
       }),
     ),
-    { harness: { resolveModelMessages: createTestResolveModelMessages() } },
+    createTestHarnessMeta({ resolveModelMessages: createTestResolveModelMessages() }),
   );
 
   assert.deepEqual(calls, ["planning", "guidance", "acceptance"]);

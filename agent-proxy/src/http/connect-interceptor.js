@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { config } from "../shared/config.js";
 import { AGENT_PROXY_HTTP_ERROR_CODE } from "../shared/constants.js";
 import { resolveLocaleFromRequest } from "noobot-i18n/agent-proxy";
@@ -85,7 +86,7 @@ export async function interceptConnectRequest(request, response, channelManager)
       method,
       headers: forwardedHeaders,
       body: ["GET", "HEAD"].includes(method) ? undefined : requestBodyBuffer,
-      signal: AbortSignal.timeout(config.httpUpstreamTimeoutMs),
+      signal: AbortSignal.timeout(TIME_THRESHOLDS.agentProxy.httpUpstreamTimeoutMs),
     });
   } catch (error) {
     writeProxyError(response, {

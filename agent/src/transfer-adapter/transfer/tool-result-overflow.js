@@ -7,7 +7,6 @@ import { isPlainObject, text } from "@noobot/shared/value";
 import { decodeToolResultText, toolResultOverflow } from "@noobot/event-protocol/tool-result";
 import { toToolJsonResult } from "../../tools/core/tool-json-result.js";
 import {
-  DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS,
   materializeTextForToolResult,
   resolveToolResultInlineTextLimit,
 } from "./tool-result-text.js";
@@ -96,7 +95,7 @@ export async function normalizeToolResultOverflow({
 } = {}) {
   const parsed = decodeToolResultText(toolResultText);
   const rawText = toolResultText;
-  const maxChars = resolveToolResultInlineTextLimit(runtime, DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS);
+  const maxChars = resolveToolResultInlineTextLimit(runtime);
   if (rawText.length <= maxChars) {
     return {
       toolResultText: rawText,

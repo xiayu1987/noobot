@@ -22,8 +22,6 @@ const ANTHROPIC_SERVER_WEB_SEARCH_TOOL = Object.freeze({
   name: "web_search",
 });
 const ANTHROPIC_PAUSE_TURN_STOP_REASON = "pause_turn";
-const ANTHROPIC_PAUSE_TURN_MAX_CONTINUATIONS =
-  TURN_THRESHOLDS.modelRuntime.anthropicPauseTurnMaxContinuations;
 const ANTHROPIC_DOCUMENT_MIME_TYPE = "application/pdf";
 
 function splitDataUrl(value = "") {
@@ -386,7 +384,11 @@ async function executeAnthropicServerToolTurn({
 }) {
   const messages = [{ role: "user", content }];
   const collected = [];
-  for (let attempt = 0; attempt <= ANTHROPIC_PAUSE_TURN_MAX_CONTINUATIONS; attempt += 1) {
+  for (
+    let attempt = 0;
+    attempt <= TURN_THRESHOLDS.modelRuntime.anthropicPauseTurnMaxContinuations;
+    attempt += 1
+  ) {
     const parsed = await requestAnthropicMessages({
       spec,
       credential,

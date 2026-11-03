@@ -17,8 +17,6 @@ import {
 } from "@noobot/model-protocol";
 import { isPlainObject, text } from "@noobot/shared/value";
 
-const POLL_INTERVAL_MS = TIME_THRESHOLDS.tools.imagesAsyncPollIntervalMs;
-const TIMEOUT_MS = TIME_THRESHOLDS.tools.imagesAsyncTimeoutMs;
 const RATIO_SIZE = /^(auto|\d+(?:\.\d+)?:\d+(?:\.\d+)?)$/i;
 
 function normalizeBaseUrl(baseUrl = "") {
@@ -217,7 +215,10 @@ async function executeImagesAsync({
   }
   const taskUrl = buildApiUrl(baseUrl, `/v1/tasks/${encodeURIComponent(id)}`);
   const startedAt = Date.now();
-  while (Date.now() - startedAt < Number(options.timeoutMs || TIMEOUT_MS)) {
+  while (
+    Date.now() - startedAt <
+    Number(options.timeoutMs || TIME_THRESHOLDS.tools.imagesAsyncTimeoutMs)
+  ) {
     const task = normalizeTask(
       await requestJson({ fetchImpl, url: taskUrl, headers: requestHeaders, signal, locale }),
     );
@@ -237,7 +238,9 @@ async function executeImagesAsync({
       error.capabilityUnavailable = true;
       throw error;
     }
-    await clock.sleep(Number(options.pollIntervalMs || POLL_INTERVAL_MS));
+    await clock.sleep(
+      Number(options.pollIntervalMs || TIME_THRESHOLDS.tools.imagesAsyncPollIntervalMs),
+    );
   }
   const error = new Error(modelRuntimeText(locale, "imagesTaskTimeout", { id }));
   error.capabilityUnavailable = true;

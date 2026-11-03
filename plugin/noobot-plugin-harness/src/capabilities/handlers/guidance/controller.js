@@ -8,6 +8,8 @@ import { resolveToolCallName } from "@noobot/shared/tool-name";
 import { resolveContextMessageSummarized } from "@noobot/context-protocol/message/codec";
 import { relaySeparateModelOutputAsUserMessage } from "../shared/relay-model-output.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import {
   CAPABILITY_DOMAIN,
@@ -55,7 +57,6 @@ import { text, isObjectLike } from "@noobot/shared/value";
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 const GUIDANCE_DECISION = WORKFLOW_PARAMS.guidance.decisions;
 const TASK_SUMMARY_TOOL_NAME = WORKFLOW_PARAMS.planning.tools.summaryToolName;
-const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD = WORKFLOW_PARAMS.guidance.summary.messageCharsThreshold;
 
 function resolveUnsummarizedMessageChars(messages = []) {
   if (!Array.isArray(messages)) return 0;
@@ -68,34 +69,27 @@ function resolveUnsummarizedMessageChars(messages = []) {
 }
 
 function resolveGuidanceAnalysisTurnsThreshold(ctx = {}, meta = {}) {
-  const modeThresholds = WORKFLOW_PARAMS.modeThresholds || {};
   const thresholdMode = resolveWorkflowThresholdModeFromContext(ctx);
-  const scopedMode = modeThresholds[thresholdMode] || modeThresholds.full || {};
   const threshold = resolveAnalysisThresholdWithSource({
     runtimeValue: meta?.harness?.guidance?.analysis?.turnsThreshold,
-    scopedValue: scopedMode?.guidance?.analysis?.turnsThreshold,
-    defaultValue: WORKFLOW_PARAMS.guidance.analysis.turnsThreshold,
+    fallbackValue: TURN_THRESHOLDS.harness.modeThresholds[thresholdMode].analysisTurns,
   });
   return {
-    mode: modeThresholds[thresholdMode] ? thresholdMode : "full",
+    mode: thresholdMode,
     turnsThreshold: threshold.value,
     source: threshold.source,
   };
 }
 
 function resolveGuidanceSummaryThresholds(ctx = {}, meta = {}) {
-  const modeThresholds = WORKFLOW_PARAMS.modeThresholds || {};
   const thresholdMode = resolveWorkflowThresholdModeFromContext(ctx);
-  const scopedMode = modeThresholds[thresholdMode] || modeThresholds.full || {};
-  const scoped = scopedMode?.guidance?.summary || {};
   const summary = resolveGatedThresholdWithSource({
     meta,
     runtimeValue: meta?.harness?.guidance?.summary?.turnsThreshold,
-    scopedValue: scoped?.turnsThreshold,
-    defaultValue: WORKFLOW_PARAMS.guidance.summary.turnsThreshold,
+    fallbackValue: TURN_THRESHOLDS.harness.modeThresholds[thresholdMode].summaryTurns,
   });
   return {
-    mode: modeThresholds[thresholdMode] ? thresholdMode : "full",
+    mode: thresholdMode,
     turnsThreshold: summary.value,
     source: summary.source,
   };
@@ -114,8 +108,9 @@ function maybeScheduleGuidanceSummary(ctx = {}, meta = {}) {
   state.counters.lastGuidanceSummaryCounterTurn = currentTurn;
   state.counters.summaryTurns += turnIncrement;
   const currentChars = resolveUnsummarizedMessageChars(ctx?.modelContext?.messages);
+  const charsThreshold = LENGTH_THRESHOLDS.context.harnessSummaryMessageChars;
   const reachedTurnsSummary = state.counters.summaryTurns > threshold.turnsThreshold;
-  const reachedCharsSummary = currentChars > LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD;
+  const reachedCharsSummary = currentChars > charsThreshold;
 
   if (!reachedTurnsSummary && !reachedCharsSummary) {
     if (!reachedCharsSummary) state.flags.summaryByCharsPrompted = false;
@@ -133,7 +128,7 @@ function maybeScheduleGuidanceSummary(ctx = {}, meta = {}) {
       thresholdMode: threshold.mode,
       thresholdSource: threshold.source,
       triggerTurns: threshold.turnsThreshold,
-      charsThreshold: LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD,
+      charsThreshold,
       unsummarizedChars: currentChars,
     },
   });

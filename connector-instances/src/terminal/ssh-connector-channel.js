@@ -14,8 +14,6 @@ import {
   loadDriverModule,
 } from "../channel-result.js";
 
-const SSH_COMMAND_TIMEOUT_MS = TIME_THRESHOLDS.connectorInstances.sshCommandTimeoutMs;
-
 const SSH_DEFAULT_PORT = 22;
 
 function resolveSshConnection(connectionInfo) {
@@ -28,7 +26,7 @@ function resolveSshConnection(connectionInfo) {
     port: source.port === undefined || source.port === "" ? SSH_DEFAULT_PORT : Number(source.port),
     username: text(source.username),
     password: source.password === undefined ? "" : String(source.password),
-    timeoutMs: SSH_COMMAND_TIMEOUT_MS,
+    timeoutMs: TIME_THRESHOLDS.connectorInstances.sshCommandTimeoutMs,
   };
 }
 

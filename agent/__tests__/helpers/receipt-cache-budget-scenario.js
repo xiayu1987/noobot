@@ -13,7 +13,7 @@ import {
   buildStoredCheckpointReceipts,
   readCheckpointReceiptProjection,
 } from "../../src/session/session-artifact-session/checkpoint-receipts.js";
-import { verifiedSnapshotCache } from "../../src/session/session-artifact-session/verified-snapshot-cache.js";
+import { getVerifiedSnapshotCache } from "../../src/session/session-artifact-session/verified-snapshot-cache.js";
 import { createTestSessionRequiredFields } from "./session-message-facts.js";
 import { TEST_STORAGE_SERVICE as storageService } from "./storage-service.js";
 import {
@@ -76,7 +76,7 @@ await withTemp(async (root) => {
   const options = { storageService: countedStorage, sessionDir: root, session };
   await readCheckpointReceiptProjection(options);
   assert.equal(reads, SNAPSHOT_COUNT, "first projection verifies every snapshot from disk");
-  assert.ok(verifiedSnapshotCache.cachedBytes().payload <= payloadBudget);
+  assert.ok(getVerifiedSnapshotCache().cachedBytes().payload <= payloadBudget);
 
   reads = 0;
   for (let scan = 0; scan < 3; scan += 1) {

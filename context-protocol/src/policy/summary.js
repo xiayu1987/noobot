@@ -517,8 +517,6 @@ export function collectDialogScopedMessagesToSummarize(
   );
 }
 
-export const TURN_SUMMARY_CHECKPOINT_RECEIPT_LIMIT =
-  QUANTITY_THRESHOLDS.contextProtocol.turnSummaryCheckpointReceiptLimit;
 export const TURN_SUMMARY_CHECKPOINT_STATE_ERROR_CODE = "INVALID_TURN_SUMMARY_CHECKPOINT_STATE";
 
 function invalidCheckpointState(detail) {
@@ -570,10 +568,9 @@ export function assertTurnSummaryCheckpointState(state, turnScopeId) {
   }
   requireCheckpointInteger(state.checkpointRevision, "checkpointRevision", 0);
   if (!Array.isArray(state.receipts)) throw invalidCheckpointState("receipts must be an array");
-  if (state.receipts.length > TURN_SUMMARY_CHECKPOINT_RECEIPT_LIMIT) {
-    throw invalidCheckpointState(
-      `receipts must not exceed ${TURN_SUMMARY_CHECKPOINT_RECEIPT_LIMIT}`,
-    );
+  const receiptLimit = QUANTITY_THRESHOLDS.contextProtocol.turnSummaryCheckpointReceiptLimit;
+  if (state.receipts.length > receiptLimit) {
+    throw invalidCheckpointState(`receipts must not exceed ${receiptLimit}`);
   }
   state.receipts.forEach(assertSummaryReceipt);
   state.receipts.forEach((receipt, index) => {
@@ -641,7 +638,9 @@ export function appendTurnSummaryCheckpointReceipt(state, receipt) {
   return {
     ...state,
     checkpointRevision: receipt.checkpointRevision,
-    receipts: [...state.receipts, receipt].slice(-TURN_SUMMARY_CHECKPOINT_RECEIPT_LIMIT),
+    receipts: [...state.receipts, receipt].slice(
+      -QUANTITY_THRESHOLDS.contextProtocol.turnSummaryCheckpointReceiptLimit,
+    ),
   };
 }
 

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { resolveCapabilityProfile } from "../capabilities/profile.js";
-import { HARNESS_LIMITS, HARNESS_PLANNING_GUIDANCE_MODE } from "./constants.js";
+import { HARNESS_PLANNING_GUIDANCE_MODE } from "./constants.js";
 import { WORKFLOW_PARAMS } from "./workflow-params.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
@@ -20,137 +20,125 @@ export function resolveHarnessDenyToolNames(input = null) {
 
 export const DEFAULT_HARNESS_DENY_TOOL_NAMES = Object.freeze(["task_summary"]);
 
-export const DEFAULT_OPTIONS = Object.freeze({
-  enabled: true,
-  trace: true,
-  promptPolicy: true,
-  finalResponseGuard: true,
-  writeContextSnapshot: true,
-  writePrompts: true,
-  policyMode: "warn",
-  promptPriority: 80,
-  tracePriority: 20,
-  timeoutMs: TIME_THRESHOLDS.harness.hookTimeoutMs,
-  capabilityModelTimeoutMs: TIME_THRESHOLDS.harness.capabilityModelTimeoutMs,
-  maxPreviewChars: LENGTH_THRESHOLDS.display.harnessPreviewChars,
-  planningGuidanceMode: HARNESS_PLANNING_GUIDANCE_MODE.SEPARATE_MODEL,
-  summaryOnToolBurstThreshold: false,
-  summaryDetailSaveToAttachment: false,
-  capabilityModelInvoker: null,
-  capabilityModelByPurpose: Object.freeze({}),
-  stepModels: Object.freeze({}),
-  guidance: Object.freeze({}),
-  capabilityToolAllowlist: [],
-  capabilityToolAllowlistByPurpose: Object.freeze({}),
-  miniRunnerMaxTurns: TURN_THRESHOLDS.harness.miniRunnerMaxTurns,
-  miniRunnerToolAllowlist: [],
-  acceptance: Object.freeze({
-    semanticValidation: WORKFLOW_PARAMS.acceptance.semanticValidation.enabled,
-  }),
-  review: Object.freeze({
-    attachToFinalOutput: false,
-  }),
-  pendingTtlHookTurns: TURN_THRESHOLDS.harness.pendingTtlHookTurns,
-  manifestDebounceMs: TIME_THRESHOLDS.harness.manifestDebounceMs,
-  flushHookPriority: 5,
-  flushHookTimeoutMs: TIME_THRESHOLDS.harness.flushHookTimeoutMs,
-  jsonlFlushStrategy: Object.freeze({
+function createDefaultOptions() {
+  return {
+    enabled: true,
+    trace: true,
+    promptPolicy: true,
+    finalResponseGuard: true,
+    writeContextSnapshot: true,
+    writePrompts: true,
+    policyMode: "warn",
+    promptPriority: 80,
+    tracePriority: 20,
+    timeoutMs: TIME_THRESHOLDS.harness.hookTimeoutMs,
+    capabilityModelTimeoutMs: TIME_THRESHOLDS.harness.capabilityModelTimeoutMs,
+    maxPreviewChars: LENGTH_THRESHOLDS.display.harnessPreviewChars,
+    planningGuidanceMode: HARNESS_PLANNING_GUIDANCE_MODE.SEPARATE_MODEL,
+    summaryOnToolBurstThreshold: false,
+    summaryDetailSaveToAttachment: false,
+    capabilityModelInvoker: null,
+    capabilityModelByPurpose: Object.freeze({}),
+    stepModels: Object.freeze({}),
+    guidance: Object.freeze({}),
+    capabilityToolAllowlist: [],
+    capabilityToolAllowlistByPurpose: Object.freeze({}),
+    miniRunnerMaxTurns: TURN_THRESHOLDS.harness.miniRunnerMaxTurns,
+    miniRunnerToolAllowlist: [],
+    acceptance: {
+      semanticValidation: WORKFLOW_PARAMS.acceptance.semanticValidation.enabled,
+    },
+    review: {
+      attachToFinalOutput: false,
+    },
+    pendingTtlHookTurns: TURN_THRESHOLDS.harness.pendingTtlHookTurns,
+    manifestDebounceMs: TIME_THRESHOLDS.harness.manifestDebounceMs,
+    flushHookPriority: 5,
+    flushHookTimeoutMs: TIME_THRESHOLDS.harness.flushHookTimeoutMs,
+    jsonlFlushStrategy: createDefaultJsonlFlushStrategy(),
+    maxRuns: QUANTITY_THRESHOLDS.harness.maxRuns,
+    maxRunAgeDays: TIME_THRESHOLDS.harness.maxRunAgeDays,
+    cleanupGraceMs: TIME_THRESHOLDS.harness.cleanupGraceMs,
+    fsmEnabled: true,
+    denyToolNames: DEFAULT_HARNESS_DENY_TOOL_NAMES,
+    promptText: "",
+    finalResponseText: "",
+  };
+}
+
+function createDefaultJsonlFlushStrategy() {
+  return {
     maxSize: QUANTITY_THRESHOLDS.harness.jsonlFlushMaxSize,
     maxTime: TIME_THRESHOLDS.harness.jsonlFlushMaxTimeMs,
     onTerminal: true,
     onError: true,
     maxRetry: TURN_THRESHOLDS.harness.jsonl.flushMaxRetry,
-    maxBufferEntries: HARNESS_LIMITS.JSONL_MAX_BUFFER_ENTRIES,
-    maxBufferBytes: HARNESS_LIMITS.JSONL_MAX_BUFFER_BYTES,
+    maxBufferEntries: QUANTITY_THRESHOLDS.harness.jsonlMaxBufferEntries,
+    maxBufferBytes: LENGTH_THRESHOLDS.harness.jsonlMaxBufferBytes,
     maxFileBytes: LENGTH_THRESHOLDS.harness.jsonlFileBytes,
     maxFiles: QUANTITY_THRESHOLDS.harness.jsonlMaxFiles,
-  }),
-  maxRuns: QUANTITY_THRESHOLDS.harness.maxRuns,
-  maxRunAgeDays: TIME_THRESHOLDS.harness.maxRunAgeDays,
-  cleanupGraceMs: TIME_THRESHOLDS.harness.cleanupGraceMs,
-  fsmEnabled: true,
-  denyToolNames: DEFAULT_HARNESS_DENY_TOOL_NAMES,
-  promptText: "",
-  finalResponseText: "",
-});
+  };
+}
 
-export const HarnessJsonlFlushStrategySchema = z.object({
-  maxSize: z.coerce.number().positive().default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxSize),
-  maxTime: z.coerce.number().nonnegative().default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxTime),
-  onTerminal: z.boolean().default(DEFAULT_OPTIONS.jsonlFlushStrategy.onTerminal),
-  onError: z.boolean().default(DEFAULT_OPTIONS.jsonlFlushStrategy.onError),
-  maxRetry: z.coerce
-    .number()
-    .int()
-    .nonnegative()
-    .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxRetry),
-  maxBufferEntries: z.coerce
-    .number()
-    .int()
-    .positive()
-    .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxBufferEntries),
-  maxBufferBytes: z.coerce
-    .number()
-    .int()
-    .positive()
-    .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxBufferBytes),
-  maxFileBytes: z.coerce
-    .number()
-    .int()
-    .nonnegative()
-    .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxFileBytes),
-  maxFiles: z.coerce
-    .number()
-    .int()
-    .nonnegative()
-    .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxFiles),
-});
+export function createHarnessJsonlFlushStrategySchema() {
+  const defaults = createDefaultJsonlFlushStrategy();
+  return z.object({
+    maxSize: z.coerce.number().positive().default(defaults.maxSize),
+    maxTime: z.coerce.number().nonnegative().default(defaults.maxTime),
+    onTerminal: z.boolean().default(defaults.onTerminal),
+    onError: z.boolean().default(defaults.onError),
+    maxRetry: z.coerce.number().int().nonnegative().default(defaults.maxRetry),
+    maxBufferEntries: z.coerce.number().int().positive().default(defaults.maxBufferEntries),
+    maxBufferBytes: z.coerce.number().int().positive().default(defaults.maxBufferBytes),
+    maxFileBytes: z.coerce.number().int().nonnegative().default(defaults.maxFileBytes),
+    maxFiles: z.coerce.number().int().nonnegative().default(defaults.maxFiles),
+  });
+}
 
-export const HarnessPendingTtlHookTurnsSchema = z.coerce
-  .number()
-  .int()
-  .nonnegative()
-  .default(DEFAULT_OPTIONS.pendingTtlHookTurns);
+export const HarnessPendingTtlHookTurnsSchema = z.number().int().nonnegative();
 
-const HarnessOptionsSchema = z
-  .object({
-    timeoutMs: z.coerce.number().positive().default(DEFAULT_OPTIONS.timeoutMs),
-    capabilityModelTimeoutMs: z.coerce
-      .number()
-      .positive()
-      .default(DEFAULT_OPTIONS.capabilityModelTimeoutMs),
-    planningGuidanceMode: z
-      .enum(Object.values(HARNESS_PLANNING_GUIDANCE_MODE))
-      .default(DEFAULT_OPTIONS.planningGuidanceMode),
-    planRefinementEnabled: z.boolean().optional(),
-    summaryOnToolBurstThreshold: z.boolean().default(DEFAULT_OPTIONS.summaryOnToolBurstThreshold),
-    summaryDetailSaveToAttachment: z
-      .boolean()
-      .default(DEFAULT_OPTIONS.summaryDetailSaveToAttachment),
-    capabilityModelInvoker: z.custom(isFunction).nullable().default(null),
-    capabilityModelByPurpose: z.record(z.any()).default({}),
-    stepModels: z.record(z.any()).default({}),
-    guidance: z.record(z.any()).optional(),
-    capabilityToolAllowlist: z.array(z.any()).default(DEFAULT_OPTIONS.capabilityToolAllowlist),
-    capabilityToolAllowlistByPurpose: z.record(z.any()).default({}),
-    miniRunnerMaxTurns: z.coerce.number().positive().default(DEFAULT_OPTIONS.miniRunnerMaxTurns),
-    miniRunnerToolAllowlist: z.array(z.any()).default(DEFAULT_OPTIONS.miniRunnerToolAllowlist),
-    acceptance: z.record(z.any()).optional(),
-    review: z.record(z.any()).optional(),
-    planning: z.record(z.any()).optional(),
-    pendingTtlHookTurns: HarnessPendingTtlHookTurnsSchema,
-    manifestDebounceMs: z.coerce.number().nonnegative().default(DEFAULT_OPTIONS.manifestDebounceMs),
-    flushHookPriority: z.coerce.number().default(DEFAULT_OPTIONS.flushHookPriority),
-    flushHookTimeoutMs: z.coerce.number().positive().default(DEFAULT_OPTIONS.flushHookTimeoutMs),
-    jsonlFlushStrategy: HarnessJsonlFlushStrategySchema.default(DEFAULT_OPTIONS.jsonlFlushStrategy),
-    maxRuns: z.coerce.number().positive().default(DEFAULT_OPTIONS.maxRuns),
-    maxRunAgeDays: z.coerce.number().positive().default(DEFAULT_OPTIONS.maxRunAgeDays),
-    cleanupGraceMs: z.coerce.number().nonnegative().default(DEFAULT_OPTIONS.cleanupGraceMs),
-    fsmEnabled: z.boolean().default(DEFAULT_OPTIONS.fsmEnabled),
-    capabilityProfile: z.any().optional(),
-    capabilityHandlers: z.any().optional(),
-  })
-  .loose();
+function createHarnessOptionsSchema(defaults) {
+  return z
+    .object({
+      timeoutMs: z.coerce.number().positive().default(defaults.timeoutMs),
+      capabilityModelTimeoutMs: z.coerce
+        .number()
+        .positive()
+        .default(defaults.capabilityModelTimeoutMs),
+      planningGuidanceMode: z
+        .enum(Object.values(HARNESS_PLANNING_GUIDANCE_MODE))
+        .default(defaults.planningGuidanceMode),
+      planRefinementEnabled: z.boolean().optional(),
+      summaryOnToolBurstThreshold: z.boolean().default(defaults.summaryOnToolBurstThreshold),
+      summaryDetailSaveToAttachment: z.boolean().default(defaults.summaryDetailSaveToAttachment),
+      capabilityModelInvoker: z.custom(isFunction).nullable().default(null),
+      capabilityModelByPurpose: z.record(z.any()).default({}),
+      stepModels: z.record(z.any()).default({}),
+      guidance: z.record(z.any()).default({}),
+      capabilityToolAllowlist: z.array(z.any()).default([]),
+      capabilityToolAllowlistByPurpose: z.record(z.any()).default({}),
+      miniRunnerMaxTurns: z.coerce.number().positive().default(defaults.miniRunnerMaxTurns),
+      miniRunnerToolAllowlist: z.array(z.any()).default([]),
+      acceptance: z.record(z.any()).default({}),
+      review: z.record(z.any()).default({}),
+      planning: z.record(z.any()).optional(),
+      pendingTtlHookTurns: z.coerce
+        .number()
+        .pipe(HarnessPendingTtlHookTurnsSchema)
+        .default(defaults.pendingTtlHookTurns),
+      manifestDebounceMs: z.coerce.number().nonnegative().default(defaults.manifestDebounceMs),
+      flushHookPriority: z.coerce.number().default(defaults.flushHookPriority),
+      flushHookTimeoutMs: z.coerce.number().positive().default(defaults.flushHookTimeoutMs),
+      jsonlFlushStrategy: createHarnessJsonlFlushStrategySchema().prefault({}),
+      maxRuns: z.coerce.number().positive().default(defaults.maxRuns),
+      maxRunAgeDays: z.coerce.number().positive().default(defaults.maxRunAgeDays),
+      cleanupGraceMs: z.coerce.number().nonnegative().default(defaults.cleanupGraceMs),
+      fsmEnabled: z.boolean().default(defaults.fsmEnabled),
+      capabilityProfile: z.any().optional(),
+      capabilityHandlers: z.any().optional(),
+    })
+    .loose();
+}
 
 function normalizeModelByPurpose(...items) {
   const out = {};
@@ -177,8 +165,9 @@ export function assertHarnessAgentHostCapabilities(options) {
 }
 
 export function normalizeOptions(userOptions = {}, api = {}) {
-  const merged = { ...DEFAULT_OPTIONS, ...(userOptions || {}), ...(api.options?.harness || {}) };
-  const safe = HarnessOptionsSchema.parse(merged);
+  const defaults = createDefaultOptions();
+  const merged = { ...defaults, ...(userOptions || {}), ...(api.options?.harness || {}) };
+  const safe = createHarnessOptionsSchema(defaults).parse(merged);
   if (
     safe.capabilityModelTimeoutMs + TIME_THRESHOLDS.harness.capabilityModelHookGraceMs >
     safe.timeoutMs
@@ -188,17 +177,12 @@ export function normalizeOptions(userOptions = {}, api = {}) {
     );
   }
 
-  const capabilityToolAllowlist = Array.isArray(safe.capabilityToolAllowlist)
-    ? safe.capabilityToolAllowlist.map((item) => text(item)).filter(Boolean)
-    : DEFAULT_OPTIONS.capabilityToolAllowlist;
-  const capabilityToolAllowlistByPurpose = isPlainObject(safe.capabilityToolAllowlistByPurpose)
-    ? Object.fromEntries(
-        Object.entries(safe.capabilityToolAllowlistByPurpose).map(([purpose, value]) => [
-          text(purpose),
-          Array.isArray(value) ? value.map((item) => text(item)).filter(Boolean) : [],
-        ]),
-      )
-    : DEFAULT_OPTIONS.capabilityToolAllowlistByPurpose;
+  const capabilityToolAllowlistByPurpose = Object.fromEntries(
+    Object.entries(safe.capabilityToolAllowlistByPurpose).map(([purpose, value]) => [
+      text(purpose),
+      Array.isArray(value) ? value.map((item) => text(item)).filter(Boolean) : [],
+    ]),
+  );
   const capabilityModelByPurpose = normalizeModelByPurpose(
     safe.capabilityModelByPurpose,
     safe.stepModels,
@@ -208,39 +192,16 @@ export function normalizeOptions(userOptions = {}, api = {}) {
     ...safe,
     capabilityModelByPurpose,
     stepModels: capabilityModelByPurpose,
-    guidance:
-      safe.guidance && typeof safe.guidance === "object" ? safe.guidance : DEFAULT_OPTIONS.guidance,
-    capabilityToolAllowlist,
+    capabilityToolAllowlist: safe.capabilityToolAllowlist.map((item) => text(item)).filter(Boolean),
     capabilityToolAllowlistByPurpose,
-    miniRunnerMaxTurns: safe.miniRunnerMaxTurns,
-    miniRunnerToolAllowlist: Array.isArray(safe.miniRunnerToolAllowlist)
-      ? safe.miniRunnerToolAllowlist.map((item) => text(item)).filter(Boolean)
-      : DEFAULT_OPTIONS.miniRunnerToolAllowlist,
-    acceptance: {
-      ...(DEFAULT_OPTIONS.acceptance || {}),
-      ...(safe.acceptance && typeof safe.acceptance === "object" ? safe.acceptance : {}),
-    },
-    review: {
-      ...(DEFAULT_OPTIONS.review || {}),
-      ...(safe.review && typeof safe.review === "object" ? safe.review : {}),
-    },
-    pendingTtlHookTurns: safe.pendingTtlHookTurns,
-    jsonlFlushStrategy: {
-      ...DEFAULT_OPTIONS.jsonlFlushStrategy,
-      ...safe.jsonlFlushStrategy,
-    },
+    miniRunnerToolAllowlist: safe.miniRunnerToolAllowlist.map((item) => text(item)).filter(Boolean),
+    acceptance: { ...defaults.acceptance, ...safe.acceptance },
+    review: { ...defaults.review, ...safe.review },
     capabilityProfile: resolveCapabilityProfile(safe.capabilityProfile),
     capabilityHandlers:
       safe.capabilityHandlers && typeof safe.capabilityHandlers === "object"
         ? safe.capabilityHandlers
         : {},
-    manifestDebounceMs: safe.manifestDebounceMs,
-    flushHookPriority: safe.flushHookPriority,
-    flushHookTimeoutMs: safe.flushHookTimeoutMs,
-    maxRuns: safe.maxRuns,
-    maxRunAgeDays: safe.maxRunAgeDays,
-    cleanupGraceMs: safe.cleanupGraceMs,
-    fsmEnabled: safe.fsmEnabled !== false,
     denyToolNames: resolveHarnessDenyToolNames(safe?.denyToolNames),
   };
   for (const key of Object.keys(normalizedOptions)) {

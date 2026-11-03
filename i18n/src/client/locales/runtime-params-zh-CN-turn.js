@@ -154,10 +154,6 @@ export default {
         name: "Harness规划计划更新细化最大尝试",
         description: "Harness规划计划更新细化最大尝试使用的轮次或尝试次数阈值。",
       },
-      planUpdateTriggerTurns: {
-        name: "Harness规划计划更新触发轮次",
-        description: "Harness规划计划更新触发轮次使用的轮次或尝试次数阈值。",
-      },
       captureMaxAttempts: {
         name: "Harness规划捕获最大尝试",
         description: "Harness规划捕获最大尝试使用的轮次或尝试次数阈值。",
@@ -170,14 +166,6 @@ export default {
       },
     },
     guidance: {
-      summaryTurns: {
-        name: "Harness引导摘要轮次",
-        description: "Harness引导摘要轮次使用的轮次或尝试次数阈值。",
-      },
-      analysisTurns: {
-        name: "Harness引导分析轮次",
-        description: "Harness引导分析轮次使用的轮次或尝试次数阈值。",
-      },
       failureConsecutive: {
         name: "Harness 连续失败触发次数",
         description: "连续失败达到此次数时触发引导分析。",
@@ -185,12 +173,6 @@ export default {
       failureAccumulated: {
         name: "Harness 累计失败触发次数",
         description: "累计失败达到此次数时触发引导分析。",
-      },
-    },
-    acceptance: {
-      phaseTriggerTurns: {
-        name: "Harness验收阶段触发轮次",
-        description: "Harness验收阶段触发轮次使用的轮次或尝试次数阈值。",
       },
     },
   },

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import {
   CAPABILITY_DOMAIN,
   HARNESS_I18N_KEYSET,
@@ -35,7 +36,6 @@ import { isHarnessInjectedMessage } from "../shared/message/utils.js";
 import { text } from "@noobot/shared/value";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
-const MAX_PLANNING_CAPTURE_ATTEMPTS = WORKFLOW_PARAMS.planning.capture.maxAttempts;
 const DEFAULT_PLAN_REASON_I18N_KEY = Object.freeze({
   planning_empty_response: HARNESS_I18N_KEYSET.PLANNING_RESULT.DEFAULT_REASON_EMPTY_RESPONSE,
   planning_invalid_nonempty_response:
@@ -235,7 +235,7 @@ export async function processPlanningResult(
     const applied = applyPlanText(ctx, bucket, state, responseText, source, meta);
     if (!applied) {
       const attempts = increasePlanningCaptureAttempts(state);
-      const shouldRetry = attempts < MAX_PLANNING_CAPTURE_ATTEMPTS;
+      const shouldRetry = attempts < TURN_THRESHOLDS.harness.planning.captureMaxAttempts;
       if (shouldRetry) {
         return {
           captured: false,
@@ -267,7 +267,7 @@ export async function processPlanningResult(
   }
 
   const attempts = increasePlanningCaptureAttempts(state);
-  const shouldRetry = attempts < MAX_PLANNING_CAPTURE_ATTEMPTS;
+  const shouldRetry = attempts < TURN_THRESHOLDS.harness.planning.captureMaxAttempts;
   if (shouldRetry) {
     return {
       captured: false,

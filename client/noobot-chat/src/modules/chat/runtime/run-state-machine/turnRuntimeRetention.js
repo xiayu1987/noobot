@@ -16,8 +16,7 @@ import {
   resolveTurnRuntimeByScope,
 } from "./turnRuntimeSelectors.js";
 
-export const DEFAULT_TERMINAL_RETAIN_PER_SESSION = 10;
-export const DEFAULT_TERMINAL_MAX_AGE_MS = TIME_THRESHOLDS.client.terminalTurnRetentionMs;
+const TERMINAL_RETAIN_PER_SESSION = 10;
 
 export function removeTurnRuntime(registry, turnScopeId, { sessionId }) {
   const scope = requireOptionalCanonicalTurnScopeId(turnScopeId);
@@ -71,8 +70,8 @@ export function pruneTerminalTurns(
   {
     sessionId,
     referencedTurnScopeIds,
-    retainCount = DEFAULT_TERMINAL_RETAIN_PER_SESSION,
-    maxAgeMs = DEFAULT_TERMINAL_MAX_AGE_MS,
+    retainCount = TERMINAL_RETAIN_PER_SESSION,
+    maxAgeMs = TIME_THRESHOLDS.client.terminalTurnRetentionMs,
     nowMs = Date.now(),
   },
 ) {

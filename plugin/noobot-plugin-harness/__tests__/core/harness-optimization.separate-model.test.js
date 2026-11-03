@@ -11,6 +11,7 @@ import { HOOK_POINT } from "@noobot/hook-protocol";
 import { createPlanningHandler } from "../helpers/context-aware-handler-fixtures.js";
 import { relaySeparateModelOutputAsUserMessage } from "../../src/capabilities/handlers/shared/index.js";
 import {
+  createTestHarnessMeta,
   createTestHookContext,
   createTestModelResponse,
 } from "../helpers/public-runtime-fixtures.js";
@@ -162,8 +163,8 @@ test("relaySeparateModelOutputAsUserMessage is blocked after agent turn ended", 
     agentContext: { payload: {} },
   });
 
-  await runtime.runHook(HOOK_POINT.AGENT.BEFORE_TURN, ctx, {});
-  await runtime.runHook(HOOK_POINT.AGENT.AFTER_TURN, ctx, {});
+  await runtime.runHook(HOOK_POINT.AGENT.BEFORE_TURN, ctx, createTestHarnessMeta());
+  await runtime.runHook(HOOK_POINT.AGENT.AFTER_TURN, ctx, createTestHarnessMeta());
 
   const relayed = relaySeparateModelOutputAsUserMessage(ctx, {
     purpose: "planning",

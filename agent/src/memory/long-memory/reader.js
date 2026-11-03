@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  LONG_MEMORY_MODEL,
+  createBuiltinLongMemoryModel,
   parseLongMemoryDocumentState,
   parseLongMemoryModelText,
 } from "@noobot/memory-protocol/long-memory";
@@ -12,7 +12,7 @@ import {
 async function readLongMemoryModel(storage, basePath) {
   const modelPath = storage.longMemoryModelPath(basePath);
   if (!(await storage.fileExists(modelPath))) {
-    return { model: LONG_MEMORY_MODEL, modelError: null };
+    return { model: createBuiltinLongMemoryModel(), modelError: null };
   }
   try {
     return {
@@ -20,7 +20,7 @@ async function readLongMemoryModel(storage, basePath) {
       modelError: null,
     };
   } catch (error) {
-    return { model: LONG_MEMORY_MODEL, modelError: error };
+    return { model: createBuiltinLongMemoryModel(), modelError: error };
   }
 }
 

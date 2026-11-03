@@ -12,7 +12,7 @@ import { parseExperienceModelText } from "../src/experience/model-text.js";
 import { parseExperienceMetadataText } from "../src/experience/metadata.js";
 import { parseExperienceFieldsText, renderExperienceFieldsText } from "../src/experience/fields.js";
 import {
-  LONG_MEMORY_MODEL,
+  createBuiltinLongMemoryModel,
   parseLongMemoryDocument,
   parseLongMemoryModelText,
   renderLongMemoryModelText,
@@ -23,7 +23,7 @@ test("every memory document kind has a canonical default document", () => {
     assert.equal(hasMemoryDocumentHeader(kind, renderDefaultMemoryDocument(kind)), true, kind);
   }
   parseLongMemoryDocument(
-    LONG_MEMORY_MODEL,
+    createBuiltinLongMemoryModel(),
     renderDefaultMemoryDocument(MEMORY_DOCUMENT_KIND.LONG_MEMORY),
   );
   parseExperienceMetadataText(
@@ -35,7 +35,7 @@ test("default long memory model document is rendered from the built-in fields", 
   const parsed = parseLongMemoryModelText(
     renderDefaultMemoryDocument(MEMORY_DOCUMENT_KIND.LONG_MEMORY_MODEL),
   );
-  assert.deepEqual(parsed.fields, LONG_MEMORY_MODEL.fields);
+  assert.deepEqual(parsed.fields, createBuiltinLongMemoryModel().fields);
 });
 
 test("default experience model round-trips through the model text protocol", () => {

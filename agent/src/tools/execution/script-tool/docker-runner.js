@@ -16,7 +16,6 @@ import { scriptRuntimeError } from "./script-errors.js";
 
 const execFileAsync = promisify(execFile);
 
-const DOCKER_FORCE_KILL_GRACE_MS = TIME_THRESHOLDS.tools.processForceKillGraceMs;
 const DOCKER_CLEANUP_SCRIPT = `
 token=$1
 signal=$2
@@ -108,7 +107,7 @@ function terminateDockerExecution(built) {
   void signalDockerExecution(built, "TERM");
   const forceKillTimer = setTimeout(
     () => void signalDockerExecution(built, "KILL"),
-    DOCKER_FORCE_KILL_GRACE_MS,
+    TIME_THRESHOLDS.tools.processForceKillGraceMs,
   );
   forceKillTimer.unref?.();
 }

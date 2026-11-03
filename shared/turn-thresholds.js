@@ -86,7 +86,6 @@ export const DEFAULT_TURN_THRESHOLDS = deepFreeze({
     planning: {
       planUpdateRevisionMaxAttempts: 20,
       planUpdateRefinementMaxAttempts: 20,
-      planUpdateTriggerTurns: 4,
       captureMaxAttempts: 2,
     },
 
@@ -95,14 +94,8 @@ export const DEFAULT_TURN_THRESHOLDS = deepFreeze({
     },
 
     guidance: {
-      summaryTurns: 8,
-      analysisTurns: 10,
       failureConsecutive: 3,
       failureAccumulated: 10,
-    },
-
-    acceptance: {
-      phaseTriggerTurns: 9,
     },
   },
 

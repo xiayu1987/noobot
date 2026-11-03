@@ -4,12 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import {
-  PLUGIN_ID,
-  WORKFLOW_DATA_SCOPE,
-  WORKFLOW_PLUGIN_DEFAULTS,
-  resolveWorkflowDataRelativePath,
-} from "../constants.js";
+import { PLUGIN_ID, WORKFLOW_DATA_SCOPE, resolveWorkflowDataRelativePath } from "../constants.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { createWorkflowNodeOrigin } from "@noobot/session-protocol/execution-lifecycle";
 import { WORKFLOW_ACTION_TYPE, isWorkflowActionType } from "workflow";
@@ -173,7 +168,7 @@ async function runWorkflowNodeSubSession(params) {
 async function executeWorkflowNodeSubSession(params) {
   const request = createWorkflowNodeSubSessionRequest(params);
   throwIfWorkflowAborted(params.signal);
-  const timeoutMs = resolveNodeAgentTimeout(params.options);
+  const timeoutMs = params.options.nodeAgentTimeoutMs;
   const runPromise = Promise.resolve(params.options.subSessionRunner(request));
   try {
     const result = await withTimeout(
@@ -278,13 +273,6 @@ function buildWorkflowNodeSubSessionMetadata(params) {
     workflowSessionId: ctx.sessionId,
     upstreamWorkflowNodeResults: params.upstreamNodeResults,
   };
-}
-
-function resolveNodeAgentTimeout(options) {
-  const configured = Number(options?.nodeAgentTimeoutMs);
-  return Number.isFinite(configured)
-    ? Math.max(1000, Math.floor(configured))
-    : WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_NODE_AGENT_TIMEOUT_MS;
 }
 
 async function persistWorkflowNodeSubSession(params, subSession) {

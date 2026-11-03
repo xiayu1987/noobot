@@ -9,7 +9,6 @@ import { text } from "@noobot/shared/value";
 import { connectorFailure, errorMessage, loadDriverModule } from "../channel-result.js";
 import { queryOutput, requireConnectionSource } from "./common-db-connector-channel.js";
 
-const SQLITE_TIMEOUT_MS = TIME_THRESHOLDS.connectorInstances.sqliteTimeoutMs;
 const sqliteDatabases = new Map();
 
 function databaseKey(channelKey) {
@@ -43,7 +42,7 @@ export async function executeSqliteCommand({ command, connectionInfo, channelKey
   if (!loaded.ok) return loaded.failure;
   try {
     const db = getSqliteDatabase(loaded.driver, channelKey, filePath);
-    db.pragma(`busy_timeout = ${SQLITE_TIMEOUT_MS}`);
+    db.pragma(`busy_timeout = ${TIME_THRESHOLDS.connectorInstances.sqliteTimeoutMs}`);
     if (looksLikeQuery(sql)) return queryOutput(db.prepare(sql).all());
     const runResult = db.prepare(sql).run();
     return queryOutput({

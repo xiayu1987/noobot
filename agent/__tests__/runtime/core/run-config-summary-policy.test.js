@@ -6,7 +6,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
-import { BUILTIN_THRESHOLDS } from "../../../src/config/index.js";
 import {
   resolvePhaseSummaryLoopTurns,
   resolveTaskCheckLoopTurns,
@@ -17,7 +16,7 @@ test("phase summary loop threshold requires the explicit frontend threshold mode
     resolvePhaseSummaryLoopTurns({
       runConfig: { summaryPolicy: { phaseSummaryLoopTurns: 1 } },
     }),
-    BUILTIN_THRESHOLDS.taskSummary.phaseSummaryLoopTurns,
+    TURN_THRESHOLDS.agent.phaseSummaryLoopTurns,
   );
   assert.equal(
     resolvePhaseSummaryLoopTurns({
@@ -35,7 +34,7 @@ test("phase summary loop threshold requires the explicit frontend threshold mode
         pluginModelConfig: { harness: { phaseSummaryLoopTurns: 3 } },
       },
     }),
-    BUILTIN_THRESHOLDS.taskSummary.phaseSummaryLoopTurns,
+    TURN_THRESHOLDS.agent.phaseSummaryLoopTurns,
   );
 });
 
@@ -44,7 +43,7 @@ test("task check threshold requires the explicit frontend threshold mode", () =>
     resolveTaskCheckLoopTurns({
       runConfig: { summaryPolicy: { taskCheckLoopTurns: 2 } },
     }),
-    BUILTIN_THRESHOLDS.taskCheck.taskCheckLoopTurns,
+    TURN_THRESHOLDS.agent.taskCheckLoopTurns,
   );
   assert.equal(
     resolveTaskCheckLoopTurns({
@@ -59,23 +58,13 @@ test("task check threshold requires the explicit frontend threshold mode", () =>
     resolveTaskCheckLoopTurns({
       runConfig: { taskCheckLoopTurns: 1, pluginModelConfig: { taskCheckLoopTurns: 3 } },
     }),
-    BUILTIN_THRESHOLDS.taskCheck.taskCheckLoopTurns,
+    TURN_THRESHOLDS.agent.taskCheckLoopTurns,
   );
   assert.equal(resolveTaskCheckLoopTurns(), TURN_THRESHOLDS.agent.taskCheckLoopTurns);
 });
 
-test("main phase summary builtin threshold is twenty turns", () => {
-  assert.equal(
-    BUILTIN_THRESHOLDS.taskSummary.phaseSummaryLoopTurns,
-    TURN_THRESHOLDS.agent.phaseSummaryLoopTurns,
-  );
-});
-
 test("phase summary loop threshold preserves the builtin default when absent", () => {
-  assert.equal(
-    resolvePhaseSummaryLoopTurns(),
-    BUILTIN_THRESHOLDS.taskSummary.phaseSummaryLoopTurns,
-  );
+  assert.equal(resolvePhaseSummaryLoopTurns(), TURN_THRESHOLDS.agent.phaseSummaryLoopTurns);
 });
 
 test("summary and task check reject declared invalid thresholds even when the gate is closed", () => {

@@ -7,10 +7,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readOptionalJsonObjectConfigSync } from "@noobot/shared/config-file";
 import { RUNTIME_PORT_TOPOLOGY } from "@noobot/runtime-topology-protocol/ports";
-import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
-import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { text } from "@noobot/shared/value";
 
 export function loadFileConfig(
@@ -100,23 +96,6 @@ export const config = {
     "connectTokenAllowLoopback",
     true,
   ),
-  channelRetentionMs: TIME_THRESHOLDS.agentProxy.channelRetentionMs,
-  apiKeyRetentionMs: TIME_THRESHOLDS.agentProxy.apiKeyRetentionMs,
-  maxChannelEvents: QUANTITY_THRESHOLDS.agentProxy.maxChannelEvents,
-  cleanupIntervalMs: TIME_THRESHOLDS.agentProxy.cleanupIntervalMs,
-  maxConnections: QUANTITY_THRESHOLDS.agentProxy.maxConnections,
-  wsHeartbeatIntervalMs: TIME_THRESHOLDS.agentProxy.webSocketHeartbeatIntervalMs,
-  wsHeartbeatTimeoutMs: TIME_THRESHOLDS.agentProxy.webSocketHeartbeatTimeoutMs,
-  wsMaxPayloadBytes: LENGTH_THRESHOLDS.agentProxy.webSocketMaxPayloadBytes,
-  wsMaxBufferedBytes: LENGTH_THRESHOLDS.agentProxy.webSocketMaxBufferedBytes,
-  maxBodyBytes: LENGTH_THRESHOLDS.agentProxy.maxBodyBytes,
-  requestIdTtlMs: TIME_THRESHOLDS.agentProxy.requestIdTtlMs,
-  invalidUpstreamFrameWindowMs: TIME_THRESHOLDS.agentProxy.invalidUpstreamFrameWindowMs,
-  invalidUpstreamFrameLimit: QUANTITY_THRESHOLDS.agentProxy.invalidUpstreamFrameLimit,
-  reconnectSnapshotTimeoutMs: TIME_THRESHOLDS.agentProxy.reconnectSnapshotTimeoutMs,
-  turnLifecycleReceiptTimeoutMs: TIME_THRESHOLDS.agentProxy.turnLifecycleReceiptTimeoutMs,
-  turnLifecycleDeliveryMaxAttempts: TURN_THRESHOLDS.transport.turnLifecycleDeliveryMaxAttempts,
-  httpUpstreamTimeoutMs: TIME_THRESHOLDS.agentProxy.httpUpstreamTimeoutMs,
   trustedOrigins: envList("AGENT_PROXY_TRUSTED_ORIGINS", "trustedOrigins", ""),
   trustedIps: envList("AGENT_PROXY_TRUSTED_IPS", "trustedIps", ""),
   trustedProxies: envList("AGENT_PROXY_TRUSTED_PROXIES", "trustedProxies", ""),
@@ -126,31 +105,22 @@ export const config = {
     true,
   ),
   wsRateLimitEnabled: envBoolean("AGENT_PROXY_WS_RATE_LIMIT_ENABLED", "wsRateLimitEnabled", true),
-  httpRateLimitWindowMs: TIME_THRESHOLDS.agentProxy.httpRateLimitWindowMs,
-  httpRateLimitMaxRequests: QUANTITY_THRESHOLDS.agentProxy.httpRateLimitMaxRequests,
-  wsRateLimitWindowMs: TIME_THRESHOLDS.agentProxy.wsRateLimitWindowMs,
-  wsRateLimitMaxUpgrades: QUANTITY_THRESHOLDS.agentProxy.wsRateLimitMaxUpgrades,
   ideWsRateLimitEnabled: envBoolean(
     "AGENT_PROXY_IDE_WS_RATE_LIMIT_ENABLED",
     "ideWsRateLimitEnabled",
     true,
   ),
-  ideWsRateLimitWindowMs: TIME_THRESHOLDS.agentProxy.ideWsRateLimitWindowMs,
-  ideWsRateLimitMaxUpgrades: QUANTITY_THRESHOLDS.agentProxy.ideWsRateLimitMaxUpgrades,
   ideHttpRateLimitEnabled: envBoolean(
     "AGENT_PROXY_IDE_HTTP_RATE_LIMIT_ENABLED",
     "ideHttpRateLimitEnabled",
     true,
   ),
-  ideHttpRateLimitWindowMs: TIME_THRESHOLDS.agentProxy.ideHttpRateLimitWindowMs,
-  ideHttpRateLimitMaxRequests: QUANTITY_THRESHOLDS.agentProxy.ideHttpRateLimitMaxRequests,
   exposeUpstreamErrorDetail: envBoolean(
     "AGENT_PROXY_EXPOSE_UPSTREAM_ERROR_DETAIL",
     "exposeUpstreamErrorDetail",
     false,
   ),
   replayOnReconnect: envBoolean("AGENT_PROXY_REPLAY_ON_RECONNECT", "replayOnReconnect", false),
-  maxReplayEvents: QUANTITY_THRESHOLDS.agentProxy.maxReplayEvents,
   upstreamHttpStripPrefix: normalizePathPrefix(
     envString("AGENT_PROXY_UPSTREAM_HTTP_STRIP_PREFIX", "upstreamHttpStripPrefix", "/api"),
   ),

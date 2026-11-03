@@ -10,8 +10,6 @@ import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { text } from "@noobot/shared/value";
 
-const MIN_TAG_TEXT_LENGTH = LENGTH_THRESHOLDS.toolIO.webMinTagTextChars;
-
 export function cleanAndDedupTextLines(
   input = "",
   maxLines = QUANTITY_THRESHOLDS.web.textMaxLines,
@@ -78,7 +76,7 @@ function removeNoiseNodes(doc) {
   }
 }
 
-function removeShortTextNodes(doc, minLength = MIN_TAG_TEXT_LENGTH) {
+function removeShortTextNodes(doc, minLength = LENGTH_THRESHOLDS.toolIO.webMinTagTextChars) {
   const targets = doc.querySelectorAll(
     "p,span,a,li,td,th,label,button,strong,em,b,i,small,time,figcaption,summary,dd,dt,blockquote,code,pre,h1,h2,h3,h4,h5,h6,div",
   );

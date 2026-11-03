@@ -9,9 +9,6 @@ import { LENGTH_THRESHOLDS } from "./length-thresholds.js";
 import { QUANTITY_THRESHOLDS } from "./quantity-thresholds.js";
 import { isPlainObject, text, isObjectLike, stableValue } from "./value.js";
 
-const DEFAULT_PREVIEW_LIMIT = QUANTITY_THRESHOLDS.diagnostics.modelContextPreviewLimit;
-const DEFAULT_CONTENT_CHARS = LENGTH_THRESHOLDS.display.modelContextContentChars;
-
 function readMetadata(message = {}) {
   const metadata = isObjectLike(message) ? message.additional_kwargs : null;
   return isObjectLike(metadata) ? metadata : {};
@@ -170,13 +167,15 @@ function messageTraceItem(message = {}, index = 0, block = "") {
   const content = resolveContent(message);
   return {
     ...messageEvidenceItem(message, index, block),
-    contentPreview: content.replace(/\s+/g, " ").slice(0, DEFAULT_CONTENT_CHARS),
+    contentPreview: content
+      .replace(/\s+/g, " ")
+      .slice(0, LENGTH_THRESHOLDS.display.modelContextContentChars),
   };
 }
 
 export function summarizeDiagnosticMessages(
   messages = [],
-  { limit = DEFAULT_PREVIEW_LIMIT, block = "" } = {},
+  { limit = QUANTITY_THRESHOLDS.diagnostics.modelContextPreviewLimit, block = "" } = {},
 ) {
   const source = Array.isArray(messages) ? messages : [];
   const safeLimit = Math.max(0, Number(limit) || 0);
@@ -192,7 +191,10 @@ export function summarizeDiagnosticMessages(
   };
 }
 
-export function summarizeDiagnosticBlocks(blocks = null, { limit = DEFAULT_PREVIEW_LIMIT } = {}) {
+export function summarizeDiagnosticBlocks(
+  blocks = null,
+  { limit = QUANTITY_THRESHOLDS.diagnostics.modelContextPreviewLimit } = {},
+) {
   const safeBlocks = isPlainObject(blocks) ? blocks : {};
   return {
     system: summarizeDiagnosticMessages(safeBlocks.system, { limit, block: "system" }),

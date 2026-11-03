@@ -14,7 +14,6 @@ import { requireHarnessStateField } from "../core/bucket-contract.js";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
 
-const WARN_COOLDOWN_TURNS = TURN_THRESHOLDS.harness.pendingWarnCooldownTurns;
 const TRACKED_PENDING_KEYS = Object.freeze([
   "guidance",
   "analysis",
@@ -171,7 +170,9 @@ export function cleanupExpiredPendingOnHook(point = "", ctx = {}, meta = {}) {
 
   if (clearedCount > 0) {
     const lastWarnTurn = state.pendingMeta.lastWarnHookTurn;
-    const shouldWarn = lastWarnTurn === null || currentTurn - lastWarnTurn >= WARN_COOLDOWN_TURNS;
+    const shouldWarn =
+      lastWarnTurn === null ||
+      currentTurn - lastWarnTurn >= TURN_THRESHOLDS.harness.pendingWarnCooldownTurns;
     if (shouldWarn) {
       state.pendingMeta.lastWarnHookTurn = currentTurn;
       const logged = appendCapabilityLog(ctx, {

@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import {
-  CHAT_MESSAGE_NAVIGATOR_SCROLL_LOCK_MS,
   createChatMessageScrollSync,
   lockChatMessageScrollSyncToAnchor,
 } from "../../../src/app/runtime/chatMessageScrollSync.js";
@@ -93,7 +93,7 @@ describe("chat message scroll sync", () => {
       });
 
       lockChatMessageScrollSyncToAnchor(wrapRef, "message-4");
-      vi.advanceTimersByTime(CHAT_MESSAGE_NAVIGATOR_SCROLL_LOCK_MS + 1);
+      vi.advanceTimersByTime(TIME_THRESHOLDS.client.chatMessageNavigatorScrollLockMs + 1);
       syncCurrentMessageAnchorId();
 
       expect(currentMessageAnchorId.value).toBe("message-3");
