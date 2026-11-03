@@ -22,23 +22,20 @@ export function enqueueDockerContainerTask({
   if (!Number.isInteger(waitTimeout) || waitTimeout < 100) {
     throw new TypeError("enqueueDockerContainerTask requires protocol lockWaitTimeoutMs");
   }
-  const waitPromise = Promise.race([
-    waitForPrevious,
-    new Promise((_, reject) => {
-      const timer = setTimeout(() => {
-        reject(
-          Object.assign(new Error("docker container queue lock wait timeout"), {
-            code: "DOCKER_CONTAINER_QUEUE_LOCK_TIMEOUT",
-            details: {
-              containerName: key,
-              lockWaitTimeoutMs: waitTimeout,
-            },
-          }),
-        );
-      }, waitTimeout);
-      waitForPrevious.finally(() => clearTimeout(timer));
-    }),
-  ]);
+  const { promise: lockWaitTimeout, reject } = Promise.withResolvers();
+  const timer = setTimeout(() => {
+    reject(
+      Object.assign(new Error("docker container queue lock wait timeout"), {
+        code: "DOCKER_CONTAINER_QUEUE_LOCK_TIMEOUT",
+        details: {
+          containerName: key,
+          lockWaitTimeoutMs: waitTimeout,
+        },
+      }),
+    );
+  }, waitTimeout);
+  waitForPrevious.finally(() => clearTimeout(timer));
+  const waitPromise = Promise.race([waitForPrevious, lockWaitTimeout]);
   if (queueDepthBefore > 0) {
     logDebug("[execute_script][docker_queue_waiting]", {
       containerName: key,

@@ -10,6 +10,7 @@ import { normalizeTurnTimingRecord } from "../lifecycle/turn-timing.js";
 import { validateTurnLifecycleSnapshot } from "../turn-lifecycle.js";
 import {
   SESSION_SUMMARY_AVAILABILITY,
+  collectExactFieldErrors,
   collectSessionSummaryEntryErrors,
 } from "./sessions-summary.js";
 import { isSessionCaller } from "@noobot/shared/session-caller";
@@ -37,18 +38,6 @@ function detailInvalid(reason, validationErrors = []) {
     code: SESSION_ERROR_CODE.SESSION_DETAIL_PAYLOAD_INVALID,
     validationErrors,
   });
-}
-
-function collectExactFieldErrors(value, fields) {
-  const expected = new Set(fields);
-  const errors = [];
-  for (const field of fields) {
-    if (!Object.hasOwn(value, field)) errors.push(`missing_${field}`);
-  }
-  for (const field of Object.keys(value)) {
-    if (!expected.has(field)) errors.push(`unexpected_${field}`);
-  }
-  return errors;
 }
 
 function collectTurnTimingErrors(turnTimings) {

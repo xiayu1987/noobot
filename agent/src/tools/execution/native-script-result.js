@@ -26,14 +26,11 @@ function normalizeNativeScriptJsonValue(value, seen = new WeakSet()) {
 
 function normalizeJsonArray(value, seen) {
   const ownKeys = Reflect.ownKeys(value);
-  const expectedKeys = new Set([
-    ...Array.from({ length: value.length }, (_item, index) => String(index)),
-    "length",
-  ]);
+  const expectedKeys = new Set([...Array.from(Array(value.length).keys(), String), "length"]);
   if (ownKeys.some((key) => typeof key !== "string" || !expectedKeys.has(key))) {
     throw new TypeError("array contains a non-JSON property");
   }
-  return Array.from({ length: value.length }, (_item, index) => {
+  return Array.from(Array(value.length).keys(), (index) => {
     const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
     if (!descriptor || !Object.hasOwn(descriptor, "value")) {
       throw new TypeError("array contains an empty or accessor element");

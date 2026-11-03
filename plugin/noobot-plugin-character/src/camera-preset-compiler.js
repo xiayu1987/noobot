@@ -42,7 +42,7 @@ function requireSubjects(characters, ids) {
 }
 
 function shotTimes(shot, samples) {
-  return Array.from({ length: samples }, (_, index) =>
+  return Array.from(Array(samples).keys(), (index) =>
     index === samples - 1
       ? shot.start + shot.duration
       : shot.start + (shot.duration * index) / (samples - 1),

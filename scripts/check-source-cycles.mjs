@@ -37,7 +37,10 @@ async function buildImportGraph(root, modules) {
 }
 
 function canonicalCycle(ring) {
-  const rotations = ring.map((_, index) => [...ring.slice(index), ...ring.slice(0, index)]);
+  const rotations = Array.from(ring.keys(), (index) => [
+    ...ring.slice(index),
+    ...ring.slice(0, index),
+  ]);
   rotations.sort((left, right) => left.join("\n").localeCompare(right.join("\n")));
   return rotations[0];
 }

@@ -15,6 +15,7 @@
     "./deep-freeze": "./deep-freeze.js",
     "./debug-projection": "./debug-projection.js",
     "./length-thresholds": "./length-thresholds.js",
+    "./linked-abort": "./linked-abort.js",
     "./message-diagnostics": "./message-diagnostics.js",
     "./migration": "./migration.js",
     "./quantity-thresholds": "./quantity-thresholds.js",

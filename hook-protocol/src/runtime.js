@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { createLinkedAbortScope } from "@noobot/shared/linked-abort";
 
 import {
   HOOK_EXECUTION,
@@ -46,19 +47,6 @@ function createHookAbortError({ point = "", handlerId = "", timeoutMs = 0 } = {}
   return error;
 }
 
-function createLinkedAbortController(parentSignal = null) {
-  const controller = new AbortController();
-  let removeParentListener = () => {};
-  if (parentSignal?.aborted) {
-    controller.abort(parentSignal.reason);
-  } else if (typeof parentSignal?.addEventListener === "function") {
-    const abortFromParent = () => controller.abort(parentSignal.reason);
-    parentSignal.addEventListener("abort", abortFromParent, { once: true });
-    removeParentListener = () => parentSignal.removeEventListener("abort", abortFromParent);
-  }
-  return { controller, removeParentListener };
-}
-
 function requireParentAbortReason(signal = null) {
   if (signal?.reason !== undefined) return signal.reason;
   const error = new Error("hook invocation aborted by parent signal");
@@ -69,40 +57,24 @@ function requireParentAbortReason(signal = null) {
 
 async function invokeHandler({ registration, point, context, parentSignal }) {
   const startedAt = Date.now();
-  const { controller, removeParentListener } = createLinkedAbortController(parentSignal);
   const timeoutMs = registration.timeoutMs;
-  const timeoutError = createHookAbortError({ point, handlerId: registration.id, timeoutMs });
-  let timer = null;
-  let removeInvocationAbortListener = () => {};
-  const abortPromise = new Promise((_, reject) => {
-    if (controller.signal.aborted) {
-      reject(controller.signal.reason || new Error(`hook aborted: ${point}#${registration.id}`));
-      return;
-    }
-    const rejectOnAbort = () => {
-      reject(controller.signal.reason || new Error(`hook aborted: ${point}#${registration.id}`));
-    };
-    controller.signal.addEventListener("abort", rejectOnAbort, { once: true });
-    removeInvocationAbortListener = () =>
-      controller.signal.removeEventListener("abort", rejectOnAbort);
+  const abortScope = createLinkedAbortScope({
+    parentSignal,
+    timeoutMs,
+    createTimeoutReason: () =>
+      createHookAbortError({ point, handlerId: registration.id, timeoutMs }),
   });
-  if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
-    timer = setTimeout(() => {
-      controller.abort(timeoutError);
-    }, timeoutMs);
-  }
   try {
-    const value = await Promise.race([
+    const value = await abortScope.race(
       Promise.resolve().then(() =>
         registration.handler(context, {
           protocolVersion: HOOK_PROTOCOL_VERSION,
           point,
           handlerId: registration.id,
-          signal: controller.signal,
+          signal: abortScope.signal,
         }),
       ),
-      abortPromise,
-    ]);
+    );
     return Object.freeze({
       protocolVersion: HOOK_PROTOCOL_VERSION,
       point,
@@ -116,7 +88,7 @@ async function invokeHandler({ registration, point, context, parentSignal }) {
     const status =
       error?.code === "HOOK_TIMEOUT"
         ? HOOK_OUTCOME_STATUS.TIMED_OUT
-        : controller.signal.aborted
+        : abortScope.signal.aborted
           ? HOOK_OUTCOME_STATUS.ABORTED
           : HOOK_OUTCOME_STATUS.FAILED;
     return Object.freeze({
@@ -129,9 +101,7 @@ async function invokeHandler({ registration, point, context, parentSignal }) {
       error,
     });
   } finally {
-    if (timer) clearTimeout(timer);
-    removeInvocationAbortListener();
-    removeParentListener();
+    abortScope.dispose();
   }
 }
 

@@ -48,7 +48,7 @@ function isParentSessionId(value) {
   return value === "" || isCanonicalText(value);
 }
 
-function collectExactFieldErrors(entry, fields) {
+export function collectExactFieldErrors(entry, fields) {
   const expected = new Set(fields);
   const errors = [];
   for (const field of fields) {

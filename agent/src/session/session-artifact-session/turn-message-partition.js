@@ -65,7 +65,7 @@ export function splitSessionMessages(messages, dialogOrder) {
       locationBySourceIndex.set(sourceIndex, { turnId: turn.turnId, messageIndex });
     });
   }
-  const messageOrder = source.map((_, sourceIndex) => {
+  const messageOrder = Array.from(source.keys(), (sourceIndex) => {
     const location = locationBySourceIndex.get(sourceIndex);
     return { turnId: location.turnId, messageIndex: location.messageIndex };
   });

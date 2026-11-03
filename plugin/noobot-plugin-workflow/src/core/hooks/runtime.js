@@ -33,14 +33,12 @@ export function withTimeout(promise, timeoutMs, message, { signal }) {
   if (!Number.isSafeInteger(ms) || ms <= 0) {
     throw new TypeError("workflow node timeout requires a positive integer");
   }
-  let timer = null;
-  const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => {
-      const err = new Error(message);
-      err.code = "WORKFLOW_NODE_TIMEOUT";
-      reject(err);
-    }, ms);
-  });
+  const { promise: timeout, reject } = Promise.withResolvers();
+  const timer = setTimeout(() => {
+    const err = new Error(message);
+    err.code = "WORKFLOW_NODE_TIMEOUT";
+    reject(err);
+  }, ms);
   return raceExecutionAbort(Promise.race([promise, timeout]), { abortSignal: signal }).finally(() =>
     clearTimeout(timer),
   );

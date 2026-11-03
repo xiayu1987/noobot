@@ -6,7 +6,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { AGENT_COMMAND } from "@noobot/agent-transport-protocol";
 import { deriveAgentExecutionId } from "@noobot/session-protocol/execution-lifecycle";
+import { createTurnLifecycleSnapshot } from "@noobot/session-protocol";
 import { createHarness, activateRuntimeTurn } from "../helpers/useChatEngineHarness.js";
+import { turnRecordFixture } from "../helpers/turnRecordFixture.js";
 import {
   AGENT_CHANNEL_STATE,
   FrontendRunState,
@@ -14,6 +16,7 @@ import {
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import {
   applyExecutionSnapshot,
+  applyTurnLifecycleSnapshot,
   selectTurnRuntimeByScope,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 
@@ -102,6 +105,48 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
       action: "stop",
       commandId: "stop:turn-stop-payload",
     });
+  });
+
+  it("stopSending derives parentSessionId from session container after snapshot hydration", () => {
+    const { engine, deps, activeSession, turnRuntimeRegistry } = createHarness({
+      sessionId: "child-snapshot-stop",
+    });
+    activeSession.value.parentSessionId = "parent-of-snapshot-child";
+    const snapshot = createTurnLifecycleSnapshot({
+      commandId: "snapshot:child-snapshot-stop",
+      sessionId: "child-snapshot-stop",
+      sequence: 3,
+      activeTurnScopeId: "turn-snapshot-stop",
+      recentTerminalTurns: [],
+      replacedTurns: [],
+      unchanged: false,
+      recovery: "none",
+      generatedAt: "2026-01-01T00:00:00.000Z",
+      activeTurn: turnRecordFixture({
+        sessionId: "child-snapshot-stop",
+        turnScopeId: "turn-snapshot-stop",
+        dialogProcessId: "dp-snapshot-stop",
+        state: "processing",
+        revision: 3,
+        sequence: 3,
+      }),
+    });
+    const applied = applyTurnLifecycleSnapshot(turnRuntimeRegistry.value, snapshot);
+    expect(applied.applied).toBe(true);
+    turnRuntimeRegistry.value = { ...turnRuntimeRegistry.value };
+    deps.chatWebSocketClient.requestStop.mockReturnValue(true);
+
+    expect(engine.stopSending()).toBe(true);
+    expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledWith(
+      expect.objectContaining({
+        commandId: "stop:turn-snapshot-stop",
+        identity: {
+          sessionId: "child-snapshot-stop",
+          parentSessionId: "parent-of-snapshot-child",
+          turnScopeId: "turn-snapshot-stop",
+        },
+      }),
+    );
   });
 
   it("stopSending can stop a refreshed in-flight assistant with channelState but no pending flag", async () => {
