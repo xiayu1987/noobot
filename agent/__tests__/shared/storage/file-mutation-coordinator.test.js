@@ -5,7 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, readFile, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { FileMutationCoordinator } from "../../../src/shared/storage/file-mutation-coordinator.js";
@@ -33,8 +33,8 @@ test("nested run inside a held lock reenters without deadlock", async (t) => {
   assert.equal(result, "nested");
 });
 
-for (const owner of ["", `${process.pid}:live-owner`]) {
-  test(`fresh lock with ${owner ? "live" : "unfinished"} owner cannot be reclaimed`, async (t) => {
+for (const owner of ["", "live-owner"]) {
+  test(`fresh lock with ${owner ? "heartbeat" : "unfinished"} owner cannot be reclaimed`, async (t) => {
     const lockPath = await lockFixture(t);
     await writeFile(lockPath, owner);
     const coordinator = new FileMutationCoordinator(
@@ -49,6 +49,37 @@ for (const owner of ["", `${process.pid}:live-owner`]) {
     assert.equal(await readFile(lockPath, "utf8"), owner);
   });
 }
+
+test("stale heartbeat lock is reclaimed even when its owner names a live process id", async (t) => {
+  const lockPath = await lockFixture(t);
+  await writeFile(lockPath, `${process.pid}:reused-pid-owner`);
+  const expired = new Date(Date.now() - 120000);
+  await utimes(lockPath, expired, expired);
+  const coordinator = new FileMutationCoordinator(
+    fixedLockTiming({ timeoutMs: 2000, staleMs: 60000, pollMs: 2 }),
+  );
+  assert.equal(await coordinator.run(lockPath, async () => "entered"), "entered");
+});
+
+test("held lock with a refreshing heartbeat is not reclaimed by a contender", async (t) => {
+  const lockPath = await lockFixture(t);
+  const coordinator = new FileMutationCoordinator(
+    fixedLockTiming({ timeoutMs: 2000, staleMs: 300, pollMs: 10 }),
+  );
+  let contenderEntered = false;
+  await coordinator.run(lockPath, async () => {
+    const contender = new FileMutationCoordinator(
+      fixedLockTiming({ timeoutMs: 900, staleMs: 300, pollMs: 10 }),
+    );
+    await assert.rejects(
+      contender.run(lockPath, async () => {
+        contenderEntered = true;
+      }),
+      { code: "FILE_MUTATION_BUSY" },
+    );
+  });
+  assert.equal(contenderEntered, false);
+});
 
 test("continuations spawned inside a lock must reacquire it after release", async (t) => {
   const lockPath = await lockFixture(t);

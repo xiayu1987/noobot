@@ -102,8 +102,13 @@ test("save is atomic, audited, revision guarded, and does not change the active 
   });
   assert.throws(() => store.save({ revision: 1, overrides: { [key]: -1 } }, "admin"));
   assert.equal(fs.readFileSync(file, "utf8"), before);
-  const lockRecord = (pid) => `${pid}:00000000-0000-4000-8000-000000000000`;
-  fs.writeFileSync(`${file}.lock`, lockRecord(process.pid));
+  const lockRecord = "00000000-0000-4000-8000-000000000000";
+  fs.writeFileSync(`${file}.lock`, lockRecord);
+  assert.throws(() => store.save({ revision: 1, overrides: {} }, "admin"), {
+    code: "RUNTIME_PARAMS_BUSY",
+    statusCode: 409,
+  });
+  fs.writeFileSync(`${file}.lock`, `${process.pid}:${lockRecord}`);
   assert.throws(() => store.save({ revision: 1, overrides: {} }, "admin"), {
     code: "RUNTIME_PARAMS_BUSY",
     statusCode: 409,
@@ -114,10 +119,9 @@ test("save is atomic, audited, revision guarded, and does not change the active 
     statusCode: 500,
   });
   assert.equal(fs.readFileSync(file, "utf8"), before);
-  const exited = spawnSync(process.execPath, ["-e", "process.stdout.write(String(process.pid))"], {
-    encoding: "utf8",
-  });
-  fs.writeFileSync(`${file}.lock`, lockRecord(Number(exited.stdout)));
+  fs.writeFileSync(`${file}.lock`, lockRecord);
+  const expired = new Date(Date.now() - 120000);
+  fs.utimesSync(`${file}.lock`, expired, expired);
   const restored = store.save({ revision: 1, overrides: {} }, "admin");
   assert.equal(restored.revision, 2);
   assert.deepEqual(restored.overrides, {});
@@ -134,7 +138,7 @@ test("a lock replaced during save reports corruption and keeps the work failure 
   const workFailure = new Error("active snapshot unavailable");
   const store = createRuntimeParamsStore(file, {
     active: () => {
-      fs.writeFileSync(`${file}.lock`, `${process.pid}:00000000-0000-4000-8000-000000000001`);
+      fs.writeFileSync(`${file}.lock`, "00000000-0000-4000-8000-000000000001");
       throw workFailure;
     },
   });

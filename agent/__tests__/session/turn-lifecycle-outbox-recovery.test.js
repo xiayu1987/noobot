@@ -7,7 +7,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { mkdir, readFile, rename, rm } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm, utimes } from "node:fs/promises";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol";
 import { projectCommittedTurnOutbox } from "@noobot/event-protocol/turn-outbox";
 import { createEmptyAuthorityOutboxCheckpoint } from "@noobot/event-protocol/outbox";
@@ -197,6 +198,15 @@ for (const stage of ["acceptance", "terminal"]) {
       );
       assert.equal(child.error, undefined, child.stderr);
       assert.equal(child.signal, "SIGKILL", child.stderr);
+      const abandoned = new Date(Date.now() - 2 * TIME_THRESHOLDS.fileMutation.lockStaleMs);
+      const entries = await readdir(h.root, { recursive: true, withFileTypes: true });
+      const locks = entries.filter(
+        (entry) => entry.isFile() && /\.(mutation-)?lock$/.test(entry.name),
+      );
+      assert.ok(locks.length > 0, "killed writer must leave its lock behind");
+      for (const entry of locks) {
+        await utimes(path.join(entry.parentPath, entry.name), abandoned, abandoned);
+      }
       assert.deepEqual(await readAuthorityOutboxRecords(h.sessionDir), beforeRecords);
       const bytes = await readFile(h.sessionFile, "utf8");
       const receipts = JSON.parse(bytes).turnLifecycle.commandReceipts;

@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { isPlainObject } from "./value.js";
+import { TIME_THRESHOLDS } from "./time-thresholds.js";
 import {
   activateRuntimeParams,
   activeRuntimeParams,
@@ -45,17 +46,6 @@ export function initializeRuntimeParams(filePath) {
   return document;
 }
 
-function isProcessAlive(pid) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    if (error.code === "ESRCH") return false;
-    if (error.code === "EPERM") return true;
-    throw error;
-  }
-}
-
 function lockCorrupted(lockFile, reason) {
   return runtimeParamsError(
     "RUNTIME_PARAMS_LOCK_CORRUPTED",
@@ -66,16 +56,18 @@ function lockCorrupted(lockFile, reason) {
 
 function readLockOwner(lockFile) {
   const text = fs.readFileSync(lockFile, "utf8");
-  const match = /^([1-9]\d*):([0-9a-f-]{36})$/.exec(text);
-  if (!match || !Number.isSafeInteger(Number(match[1])))
-    throw lockCorrupted(lockFile, "has no valid owner");
-  return { pid: Number(match[1]), text };
+  if (!text) throw lockCorrupted(lockFile, "has no owner");
+  return { text, modifiedAt: fs.statSync(lockFile).mtimeMs };
 }
 
-function busyError(owner) {
+function isLockFresh(owner) {
+  return Date.now() - owner.modifiedAt < TIME_THRESHOLDS.fileMutation.lockStaleMs;
+}
+
+function busyError(lockFile) {
   return runtimeParamsError(
     "RUNTIME_PARAMS_BUSY",
-    `runtime parameter store is locked by process ${owner}`,
+    `runtime parameter store is locked: ${lockFile}`,
     409,
   );
 }
@@ -112,20 +104,20 @@ function reclaimStaleLock(lockPath, owner) {
   const claimedOwner = readLockOwner(claimed);
   if (claimedOwner.text !== owner.text) {
     restoreReplacedLock(claimed, lockPath);
-    throw busyError(claimedOwner.pid);
+    throw busyError(lockPath);
   }
   fs.unlinkSync(claimed);
   return true;
 }
 
 function acquireStoreLock(lockPath) {
-  const record = `${process.pid}:${randomUUID()}`;
+  const record = randomUUID();
   const candidate = `${lockPath}.${randomUUID()}.owner`;
   fs.writeFileSync(candidate, record, { mode: 0o600, flag: "wx" });
   try {
     while (!publishLock(candidate, lockPath)) {
       const owner = readLockOwner(lockPath);
-      if (isProcessAlive(owner.pid)) throw busyError(owner.pid);
+      if (isLockFresh(owner)) throw busyError(lockPath);
       reclaimStaleLock(lockPath, owner);
     }
     return record;

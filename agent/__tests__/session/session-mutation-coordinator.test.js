@@ -70,7 +70,7 @@ test("mutation coordinator uses an atomic lock file and removes it after release
     const coordinator = new SessionMutationCoordinator();
     const lockPath = path.join(root, ".lock");
     await coordinator.run(lockPath, async () => {
-      assert.match(await readFile(lockPath, "utf8"), /^\d+:[0-9a-f-]+$/i);
+      assert.match(await readFile(lockPath, "utf8"), /^[0-9a-f-]{36}$/i);
     });
     await assert.rejects(access(lockPath), { code: "ENOENT" });
   }));

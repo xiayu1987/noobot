@@ -23,17 +23,8 @@ function heartbeatInterval(staleMs) {
   return Math.max(1, Math.floor(staleMs / 3));
 }
 
-export function isOwnerProcessAlive(ownerToken) {
-  const match = /^(\d+):/.exec(String(ownerToken || ""));
-  if (!match) return false;
-  const pid = Number(match[1]);
-  if (!Number.isSafeInteger(pid) || pid <= 0) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return error?.code !== "ESRCH";
-  }
+export function isHeartbeatFresh(lockStat, staleMs) {
+  return Date.now() - lockStat.mtimeMs <= staleMs;
 }
 
 async function cleanupBestEffort(operation, operationName, lockPath) {
@@ -61,12 +52,6 @@ function parseWaiterTicket(name, settledPrefix) {
   return Number.isSafeInteger(ticket) ? ticket : null;
 }
 
-function waiterOwnerToken(name, ownerToken) {
-  if (ownerToken) return ownerToken;
-  const match = /-(\d+)-[0-9a-f-]+$/i.exec(name);
-  return match ? `${match[1]}:` : "";
-}
-
 function readFileIfPresent(filePath) {
   return fsReadFile(filePath, "utf8").catch((error) => {
     if (error?.code === "ENOENT") return "";
@@ -74,19 +59,16 @@ function readFileIfPresent(filePath) {
   });
 }
 
-async function inspectWaiter(waiterPath, name, staleMs) {
+async function inspectWaiter(waiterPath, staleMs) {
   const waiterStat = await fsStat(waiterPath);
-  const storedOwner = await readFileIfPresent(waiterPath);
-  const ownerToken = waiterOwnerToken(name, storedOwner);
-  if (isOwnerProcessAlive(ownerToken)) return waiterStat;
-  if (!/^\d+:/.test(ownerToken) && Date.now() - waiterStat.mtimeMs <= staleMs) return waiterStat;
+  if (isHeartbeatFresh(waiterStat, staleMs)) return waiterStat;
   await fsRm(waiterPath, { force: true });
   return null;
 }
 
-async function inspectWaiterIfPresent(waiterPath, name, staleMs) {
+async function inspectWaiterIfPresent(waiterPath, staleMs) {
   try {
-    return await inspectWaiter(waiterPath, name, staleMs);
+    return await inspectWaiter(waiterPath, staleMs);
   } catch (error) {
     if (error?.code === "ENOENT") return null;
     throw error;
@@ -106,16 +88,16 @@ async function listLiveWaiters(lockPath, staleMs) {
     const choosing = name.startsWith(choosingPrefix);
     if (!choosing && ticket === null) continue;
     const waiterPath = path.join(parent, name);
-    if (await inspectWaiterIfPresent(waiterPath, name, staleMs))
+    if (await inspectWaiterIfPresent(waiterPath, staleMs))
       live.push({ name, path: waiterPath, choosing, ticket });
   }
   return live;
 }
 
-async function createWaiter(lockPath, staleMs, ownerId, ownerToken) {
+async function createWaiter(lockPath, staleMs, ownerToken) {
   const parent = path.dirname(lockPath);
   const { choosingPrefix, settledPrefix } = waiterNames(lockPath);
-  const choosingPath = path.join(parent, `${choosingPrefix}${ownerId}`);
+  const choosingPath = path.join(parent, `${choosingPrefix}${ownerToken}`);
   const choosingHandle = await fsOpen(choosingPath, "wx");
   try {
     await choosingHandle.writeFile(ownerToken, "utf8");
@@ -132,7 +114,7 @@ async function createWaiter(lockPath, staleMs, ownerId, ownerToken) {
     const ticket = maxTicket + 1;
     if (!Number.isSafeInteger(ticket)) throw new Error("file mutation waiter ticket overflow");
     const ticketText = String(ticket).padStart(WAITER_TICKET_WIDTH, "0");
-    const waiterPath = path.join(parent, `${settledPrefix}${ticketText}-${ownerId}`);
+    const waiterPath = path.join(parent, `${settledPrefix}${ticketText}-${ownerToken}`);
     const waiterHandle = await fsOpen(waiterPath, "wx");
     try {
       await waiterHandle.writeFile(ownerToken, "utf8");
@@ -282,21 +264,20 @@ export class FileMutationCoordinator {
     const heldLocks = this.asyncHeldLocks.getStore();
     if (heldLocks?.get(key)?.released === false) return operation();
     const deadline = Date.now() + this.timeoutMs;
-    const ownerUuid = randomUUID();
-    const owner = { id: `${process.pid}-${ownerUuid}`, token: `${process.pid}:${ownerUuid}` };
-    const handle = await this.acquireAsWaiter(key, owner, deadline);
-    return this.runHolding({ key, handle, ownerToken: owner.token }, operation);
+    const ownerToken = randomUUID();
+    const handle = await this.acquireAsWaiter(key, ownerToken, deadline);
+    return this.runHolding({ key, handle, ownerToken }, operation);
   }
 
-  async acquireAsWaiter(key, owner, deadline) {
+  async acquireAsWaiter(key, ownerToken, deadline) {
     await fsMkdir(path.dirname(key), { recursive: true });
-    const waiter = await createWaiter(key, this.staleMs, owner.id, owner.token);
+    const waiter = await createWaiter(key, this.staleMs, ownerToken);
     const heartbeat = startHeartbeat(waiter.handle, this.staleMs, this.operationName, {
       lockPath: key,
       phase: "waiting",
     });
     try {
-      return await this.acquire(key, waiter.name, owner.token, deadline);
+      return await this.acquire(key, waiter.name, ownerToken, deadline);
     } finally {
       clearInterval(heartbeat);
       await cleanupBestEffort(() => waiter.handle.close(), "fileMutation.closeWaiter", key);
@@ -346,9 +327,7 @@ export class FileMutationCoordinator {
       return true;
     }
     contention.transientSince = 0;
-    const ownerToken = await readFileIfPresent(key);
-    if (isOwnerProcessAlive(ownerToken)) return false;
-    if (!/^\d+:/.test(ownerToken) && Date.now() - current.mtimeMs <= this.staleMs) return false;
+    if (isHeartbeatFresh(current, this.staleMs)) return false;
     await reclaimStaleLock(key);
     return true;
   }

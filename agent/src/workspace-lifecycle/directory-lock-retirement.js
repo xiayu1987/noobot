@@ -3,11 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { lstat, readFile, readdir, rmdir, unlink } from "node:fs/promises";
+import { lstat, readdir, rmdir, stat, unlink } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { readDirectoryEntriesIfPresent } from "../shared/storage/dir-entries.js";
-import { isOwnerProcessAlive } from "../shared/storage/file-mutation-coordinator.js";
+import {
+  isHeartbeatFresh,
+  readConfiguredLockTiming,
+} from "../shared/storage/file-mutation-coordinator.js";
 
 function retirementError(code, lockPath) {
   const error = new Error(`directory lock retirement cannot proceed: ${lockPath}`);
@@ -22,9 +25,11 @@ async function retireDirectory(lockPath) {
     throw retirementError("DIRECTORY_LOCK_CONTENT_INVALID", lockPath);
   }
   if (entries.includes("owner")) {
-    const owner = await readFile(path.join(lockPath, "owner"), "utf8");
-    if (isOwnerProcessAlive(owner)) throw retirementError("DIRECTORY_LOCK_OWNER_ALIVE", lockPath);
-    await unlink(path.join(lockPath, "owner"));
+    const ownerPath = path.join(lockPath, "owner");
+    if (isHeartbeatFresh(await stat(ownerPath), readConfiguredLockTiming().staleMs)) {
+      throw retirementError("DIRECTORY_LOCK_OWNER_ALIVE", lockPath);
+    }
+    await unlink(ownerPath);
   }
   await rmdir(lockPath);
   return true;
