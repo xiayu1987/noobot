@@ -11,6 +11,7 @@ import {
   resolveGuidanceSummaryInstructionSelection,
 } from "./summary-matrix.js";
 import { normalizePromptOptions } from "./prompt-options.js";
+import { HARNESS_SCENARIO } from "./matrix-resolver.js";
 import { buildScenarioPolicyPromptText } from "./scenario-policy-prompts.js";
 import { text } from "@noobot/shared/value";
 
@@ -27,8 +28,7 @@ export function buildGuidanceFailurePromptText({
   locale = LOCALE.ZH_CN,
   marker = "",
   reason = "",
-  programmingMode = false,
-  textMode = false,
+  scenario,
   dynamicPolicyPrompt = "",
   includeWorkflowPolicy = false,
 } = {}) {
@@ -45,8 +45,7 @@ export function buildGuidanceFailurePromptText({
     includeWorkflowPolicy === false
       ? ""
       : buildScenarioPolicyPromptText(locale, {
-          programmingMode,
-          textMode,
+          scenario,
           dynamicPolicyPrompt,
         }),
   ]
@@ -55,13 +54,15 @@ export function buildGuidanceFailurePromptText({
 }
 
 export function buildGuidanceSummaryInstructionPromptText(options = {}) {
-  const { locale, marker, programmingMode, textMode, dynamicPolicyPrompt } =
-    normalizePromptOptions(options);
+  const { locale, marker, scenario, dynamicPolicyPrompt } = normalizePromptOptions(options);
   const includeWorkflowPolicy = options?.includeWorkflowPolicy === true;
-  const selection = resolveGuidanceSummaryInstructionSelection({ programmingMode, textMode });
-  const overviewSample = programmingMode
+  const selection = resolveGuidanceSummaryInstructionSelection({ scenario });
+  const isProgramming = scenario === HARNESS_SCENARIO.PROGRAMMING;
+  const isText = scenario === HARNESS_SCENARIO.TEXT;
+  const isGeneral = scenario === HARNESS_SCENARIO.GENERAL;
+  const overviewSample = isProgramming
     ? "1. [plan=2][status=done][evidence=...][file=src/example.js][method=handleRequest][line=10-20,35,48-52] ..."
-    : textMode
+    : isText
       ? translateI18nText(
           locale,
           HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_TEXT_OVERVIEW_SAMPLE,
@@ -69,22 +70,21 @@ export function buildGuidanceSummaryInstructionPromptText(options = {}) {
       : "1. [plan=2][status=done][evidence=...][file=-][line=-] ...";
   const nextSuggestionSample = translateI18nText(
     locale,
-    programmingMode
+    isProgramming
       ? HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_PROGRAMMING_NEXT_ACTION_SAMPLE
-      : textMode
+      : isText
         ? HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_TEXT_NEXT_ACTION_SAMPLE
         : HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_ACTION_NEXT_ACTION_SAMPLE,
   );
-  const riskSampleKey = programmingMode
+  const riskSampleKey = isProgramming
     ? HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_SAMPLE_RISK_HIGH_PROGRAMMING
     : HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_SAMPLE_RISK_HIGH;
-  const riskSample =
-    textMode && !programmingMode
-      ? translateI18nText(
-          locale,
-          HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_TEXT_RISK_SAMPLE,
-        )
-      : translateI18nText(locale, riskSampleKey);
+  const riskSample = isText
+    ? translateI18nText(
+        locale,
+        HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_TEXT_RISK_SAMPLE,
+      )
+    : translateI18nText(locale, riskSampleKey);
   return [
     text(marker),
     "[HARNESS_SUMMARY_INSTRUCTION]",
@@ -103,38 +103,38 @@ export function buildGuidanceSummaryInstructionPromptText(options = {}) {
     nextSuggestionSample,
     "[SUMMARY_END]",
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_RULES),
-    programmingMode
+    isProgramming
       ? translateI18nText(
           locale,
           HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_PROGRAMMING_RULES,
         )
       : "",
-    textMode
+    isText
       ? translateI18nText(
           locale,
           HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_TEXT_SCENARIO_RULES,
         )
       : "",
-    programmingMode
+    isProgramming
       ? translateI18nText(
           locale,
           HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_PROGRAMMING_NEXT_ACTION_RULES,
         )
       : "",
-    !programmingMode && textMode
+    isText
       ? translateI18nText(
           locale,
           HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_TEXT_NEXT_ACTION_RULES,
         )
       : "",
-    !programmingMode && !textMode
+    isGeneral
       ? translateI18nText(
           locale,
           HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_ACTION_NEXT_ACTION_RULES,
         )
       : "",
     includeWorkflowPolicy
-      ? buildScenarioPolicyPromptText(locale, { programmingMode, textMode, dynamicPolicyPrompt })
+      ? buildScenarioPolicyPromptText(locale, { scenario, dynamicPolicyPrompt })
       : "",
   ]
     .filter(Boolean)
@@ -142,21 +142,21 @@ export function buildGuidanceSummaryInstructionPromptText(options = {}) {
 }
 
 export function buildGuidanceSummaryProtocolPromptText(options = {}) {
-  const { locale, programmingMode, textMode } = normalizePromptOptions(options);
+  const { locale, scenario } = normalizePromptOptions(options);
   return [
     buildGuidanceSummarySelectionProfileText(options),
-    buildSummaryPatchProtocolCoreText({ locale, programmingMode, textMode }),
+    buildSummaryPatchProtocolCoreText({ locale, scenario }),
   ]
     .filter(Boolean)
     .join("\n");
 }
 
 export function buildGuidanceSummaryPromptText(options = {}) {
-  const { locale, programmingMode, textMode } = normalizePromptOptions(options);
+  const { locale, scenario } = normalizePromptOptions(options);
   return [
     buildGuidanceSummarySelectionProfileText(options),
     buildGuidanceSummaryInstructionPromptText(options),
-    buildSummaryPatchProtocolCoreText({ locale, programmingMode, textMode }),
+    buildSummaryPatchProtocolCoreText({ locale, scenario }),
   ]
     .filter(Boolean)
     .join("\n");

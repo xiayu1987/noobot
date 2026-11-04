@@ -14,6 +14,7 @@ import {
 } from "./protocols.js";
 import { buildDynamicPolicyPromptProtocolInstruction } from "./dynamic-policy-prompt.js";
 import { normalizePromptOptions } from "./prompt-options.js";
+import { HARNESS_SCENARIO } from "./matrix-resolver.js";
 import { buildScenarioPolicyPromptText } from "./scenario-policy-prompts.js";
 import { text } from "@noobot/shared/value";
 
@@ -33,8 +34,7 @@ export function buildPostPlanUserFollowupPrompt(locale = LOCALE.ZH_CN, stage = "
 }
 
 export function buildPlanningMainPrompt(options = {}) {
-  const { locale, marker, data, programmingMode, textMode, dynamicPolicyPrompt } =
-    normalizePromptOptions(options);
+  const { locale, marker, data, scenario, dynamicPolicyPrompt } = normalizePromptOptions(options);
   const includeWorkflowPolicy = options?.includeWorkflowPolicy === true;
   const goal =
     text(data.userGoal) ||
@@ -46,11 +46,12 @@ export function buildPlanningMainPrompt(options = {}) {
     locale,
     HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_MAIN_CURRENT_TASK_GOAL_PROTOCOL,
   );
-  const goalPromptKey = programmingMode
-    ? HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_MAIN_PROMPT_GOAL_PROGRAMMING_FAST
-    : textMode
-      ? HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_MAIN_PROMPT_GOAL_TEXT
-      : HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_MAIN_PROMPT_GOAL_ACTION;
+  const goalPromptKey =
+    scenario === HARNESS_SCENARIO.PROGRAMMING
+      ? HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_MAIN_PROMPT_GOAL_PROGRAMMING_FAST
+      : scenario === HARNESS_SCENARIO.TEXT
+        ? HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_MAIN_PROMPT_GOAL_TEXT
+        : HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_MAIN_PROMPT_GOAL_ACTION;
   return [
     text(marker),
     translateI18nText(locale, goalPromptKey),
@@ -63,7 +64,7 @@ export function buildPlanningMainPrompt(options = {}) {
     currentTaskGoalProtocol,
     "",
     includeWorkflowPolicy
-      ? buildScenarioPolicyPromptText(locale, { programmingMode, textMode, dynamicPolicyPrompt })
+      ? buildScenarioPolicyPromptText(locale, { scenario, dynamicPolicyPrompt })
       : "",
     "",
     buildDynamicPolicyPromptProtocolInstruction(locale),

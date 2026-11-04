@@ -65,7 +65,7 @@ test("planning result pipeline disables plan refinement by default in programmin
 
   const ctx = createCtx();
   ctx.runConfig = {
-    scenarioProfile: { key: "programming" },
+    scenario: "programming",
   };
 
   const result = await processPlanningResult(
@@ -91,7 +91,7 @@ test("planning result pipeline disables plan refinement by default in programmin
 test("planning result pipeline allows explicit plan refinement enablement in programming scenario", async () => {
   const ctx = createCtx();
   ctx.runConfig = {
-    scenarioProfile: { key: "programming" },
+    scenario: "programming",
   };
 
   const result = await processPlanningResult(
@@ -138,7 +138,7 @@ test("planning result pipeline enables plan refinement by default in text scenar
 
   const ctx = createCtx();
   ctx.runConfig = {
-    scenarioProfile: { key: "text" },
+    scenario: "text",
   };
   const result = await processPlanningResult(
     ctx,

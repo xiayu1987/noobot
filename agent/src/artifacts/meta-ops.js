@@ -25,26 +25,20 @@ function rethrowAsInvalidCanonicalAttachment(error) {
   throw invalidCanonicalAttachmentError(String(error?.message || error), error);
 }
 
+function cleanMetaValue(value) {
+  if (value === undefined || value === null) return null;
+  if (typeof value === "string") return safeStr(value) || null;
+  if (isPlainObject(value)) return cleanPlainObject(value);
+  if (Array.isArray(value)) return value.length ? value : null;
+  return value;
+}
+
 function cleanPlainObject(value = {}) {
   if (!isPlainObject(value)) return null;
   const out = {};
   for (const [key, child] of Object.entries(value)) {
-    if (child === undefined || child === null) continue;
-    if (typeof child === "string") {
-      const normalized = safeStr(child);
-      if (normalized) out[key] = normalized;
-      continue;
-    }
-    if (isPlainObject(child)) {
-      const nested = cleanPlainObject(child);
-      if (nested) out[key] = nested;
-      continue;
-    }
-    if (Array.isArray(child)) {
-      if (child.length) out[key] = child;
-      continue;
-    }
-    out[key] = child;
+    const normalized = cleanMetaValue(child);
+    if (normalized !== null) out[key] = normalized;
   }
   return Object.keys(out).length ? out : null;
 }

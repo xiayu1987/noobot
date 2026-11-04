@@ -4,38 +4,17 @@
  * SPDX-License-Identifier: MIT
  */
 import { LOCALE } from "../constants.js";
-import { isTextScenarioKey } from "./matrix-resolver.js";
+import { resolveHarnessScenarioFromOptions } from "./matrix-resolver.js";
 import { text } from "@noobot/shared/value";
-
-function resolveTextModeFromPromptSource(source = {}, data = {}) {
-  return (
-    source.textMode === true ||
-    source.isTextMode === true ||
-    data.textMode === true ||
-    data.isTextMode === true ||
-    isTextScenarioKey(source.scenario) ||
-    isTextScenarioKey(source.scenarioKey) ||
-    isTextScenarioKey(source?.scenarioProfile?.key) ||
-    isTextScenarioKey(data.scenario) ||
-    isTextScenarioKey(data.scenarioKey) ||
-    isTextScenarioKey(data?.scenarioProfile?.key)
-  );
-}
 
 export function normalizePromptOptions(options = {}) {
   const source = options && typeof options === "object" ? options : {};
   const data = source.data && typeof source.data === "object" ? source.data : {};
-  const programmingMode =
-    source.programmingMode === true ||
-    source.isProgrammingMode === true ||
-    data.programmingMode === true;
-  const textMode = !programmingMode && resolveTextModeFromPromptSource(source, data);
   return {
     locale: source.locale || LOCALE.ZH_CN,
     marker: text(source.marker),
     data,
-    programmingMode,
-    textMode,
-    dynamicPolicyPrompt: text(source.dynamicPolicyPrompt || data.dynamicPolicyPrompt),
+    scenario: resolveHarnessScenarioFromOptions(source),
+    dynamicPolicyPrompt: text(source.dynamicPolicyPrompt),
   };
 }

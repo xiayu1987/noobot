@@ -102,7 +102,7 @@ test("summary prompts require file and line in every scenario, method only in pr
 
   const programmingPrompt = buildGuidanceSummaryPromptText({
     locale: "zh-CN",
-    programmingMode: true,
+    scenario: "programming",
   });
   assert.match(programmingPrompt, /\[NEXT_EXECUTION_SUGGESTION\]/);
   assert.match(programmingPrompt, /\[NEXT_ACTION\]/);
@@ -130,7 +130,7 @@ test("summary prompts require file and line in every scenario, method only in pr
 
   const programmingProtocol = buildSummaryPatchProtocolText({
     locale: "en-US",
-    programmingMode: true,
+    scenario: "programming",
   });
   assert.match(programmingProtocol, /exactly one \[NEXT_ACTION\] text block/);
   assert.match(programmingProtocol, /action=edit\|test\|inspect\|ask_user\|final/);
@@ -156,21 +156,21 @@ test("summary selection matrix uses explicit scenario without workflow mode", ()
       fields: ["plan", "status", "evidence", "file", "line"],
     },
     {
-      options: { locale: "zh-CN", textMode: true },
+      options: { locale: "zh-CN", scenario: "text" },
       scenario: "text",
       promptId: "guidance_summary_instruction/text",
       protocolId: "summary_patch_v1/text",
       fields: ["plan", "status", "evidence", "file", "line", "path", "text"],
     },
     {
-      options: { locale: "zh-CN", textMode: true },
+      options: { locale: "zh-CN", scenario: "text" },
       scenario: "text",
       promptId: "guidance_summary_instruction/text",
       protocolId: "summary_patch_v1/text",
       fields: ["plan", "status", "evidence", "file", "line", "path", "text"],
     },
     {
-      options: { locale: "zh-CN", programmingMode: true },
+      options: { locale: "zh-CN", scenario: "programming" },
       scenario: "programming",
       promptId: "guidance_summary_instruction/programming",
       protocolId: "summary_patch_v1/programming",
@@ -201,7 +201,7 @@ test("summary selection matrix uses explicit scenario without workflow mode", ()
 test("text scenario summary prompt consumes external text and records path/text separately from protocol", () => {
   const instruction = buildGuidanceSummaryInstructionPromptText({
     locale: "zh-CN",
-    textMode: true,
+    scenario: "text",
   });
   assert.match(instruction, /文本场景附加建议/);
   assert.match(
@@ -219,7 +219,7 @@ test("text scenario summary prompt consumes external text and records path/text 
 
   const protocol = buildGuidanceSummaryProtocolPromptText({
     locale: "zh-CN",
-    textMode: true,
+    scenario: "text",
   });
   assert.match(protocol, /summary_patch_v1/);
   assert.match(protocol, /path=\[文件路径\|-\]/);
@@ -231,7 +231,7 @@ test("text scenario summary prompt consumes external text and records path/text 
 
   const combined = buildGuidanceSummaryPromptText({
     locale: "zh-CN",
-    textMode: true,
+    scenario: "text",
   });
   assert.match(combined, /文本场景附加建议/);
   assert.match(
@@ -331,7 +331,7 @@ test("programming scenario uses programming action policy", () => {
   const prompt = buildPlanningMainPrompt({
     locale: "zh-CN",
     data: { userGoal: "修复 bug" },
-    programmingMode: true,
+    scenario: "programming",
   });
   assert.match(prompt, /生成用于编程场景的可执行计划/);
   assert.doesNotMatch(prompt, /\[HARNESS_SCENARIO_POLICY\]/);
@@ -387,7 +387,7 @@ test("text scenario post-plan followup suggests consuming external text promptly
   assert.doesNotMatch(executionPrompt, /\[HARNESS_SCENARIO_POLICY\]/);
 
   const riskPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "revision", {
-    data: { scenario: "text" },
+    scenario: "text",
   });
   assert.doesNotMatch(
     riskPrompt,
@@ -400,7 +400,7 @@ test("text scenario post-plan followup suggests consuming external text promptly
 
 test("text-mode post-plan followup follows text deliverable-batch policy from resolved flags", () => {
   const prompt = buildPostPlanUserFollowupPrompt("zh-CN", "planning", {
-    textMode: true,
+    scenario: "text",
   });
   assert.match(prompt, /具体推进方式遵守系统场景策略/);
   assert.doesNotMatch(prompt, /\[HARNESS_SCENARIO_POLICY\]/);
@@ -429,8 +429,7 @@ test("dynamic policy scenario overrides initial text mode for post-plan followup
   };
   createTestHookContext(ctx);
   const flags = resolveScenarioPolicyFlagsFromContext(ctx);
-  assert.equal(flags.programmingMode, true);
-  assert.equal(flags.textMode, false);
+  assert.equal(flags.scenario, "programming");
 
   const prompt = buildPostPlanUserFollowupPrompt("zh-CN", "planning", flags);
   assert.match(prompt, /具体推进方式遵守系统场景策略/);
@@ -442,14 +441,14 @@ test("dynamic policy scenario overrides initial text mode for post-plan followup
 
 test("text scenario consumption wording is advisory instead of mandatory", () => {
   const texts = [
-    buildDefaultScenarioPolicyText("zh-CN", { textMode: true }),
-    buildGuidanceSummaryInstructionPromptText({ locale: "zh-CN", textMode: true }),
-    buildGuidanceSummaryProtocolPromptText({ locale: "zh-CN", textMode: true }),
+    buildDefaultScenarioPolicyText("zh-CN", { scenario: "text" }),
+    buildGuidanceSummaryInstructionPromptText({ locale: "zh-CN", scenario: "text" }),
+    buildGuidanceSummaryProtocolPromptText({ locale: "zh-CN", scenario: "text" }),
     buildPostPlanUserFollowupPrompt("zh-CN", "planning", { scenario: "text" }),
     buildPlanningMainPrompt({
       locale: "zh-CN",
       data: { userGoal: "整理长文本" },
-      textMode: true,
+      scenario: "text",
     }),
   ].join("\n");
   assert.match(texts, /建议|优先|尽量|降低/);
@@ -471,7 +470,7 @@ test("programming prompts add action-first execution principles only in programm
   const programmingPlanningPrompt = buildPlanningMainPrompt({
     locale: "zh-CN",
     data: { userGoal: "修复 bug" },
-    programmingMode: true,
+    scenario: "programming",
   });
   assert.match(programmingPlanningPrompt, /生成用于编程场景的可执行计划/);
   assert.doesNotMatch(programmingPlanningPrompt, /\[HARNESS_SCENARIO_POLICY\]/);
@@ -507,7 +506,7 @@ test("programming prompts add action-first execution principles only in programm
   const programmingResponsibilityPrompt = buildWorkflowResponsibilityConstraintUserPrompt(
     "zh-CN",
     "planning",
-    { programmingMode: true },
+    { scenario: "programming" },
   );
   assert.doesNotMatch(programmingResponsibilityPrompt, /\[HARNESS_SCENARIO_POLICY\]/);
   assert.doesNotMatch(programmingResponsibilityPrompt, /编程场景策略/);
@@ -523,14 +522,14 @@ test("programming acceptance prompts include risk taxonomy without changing text
   const programmingPhasePrompt = buildPhaseAcceptanceRequestPromptText({
     locale: "zh-CN",
     data: { requestPayload: { acceptanceType: "phase" } },
-    programmingMode: true,
+    scenario: "programming",
   });
   assert.match(programmingPhasePrompt, /验收 ID\+PATCH 协议/);
 
   const programmingFinalPrompt = buildAcceptanceValidationRequestPromptText({
     locale: "zh-CN",
     data: { requestPayload: { finalOutput: "done" } },
-    programmingMode: true,
+    scenario: "programming",
   });
   assert.match(programmingFinalPrompt, /验收 ID\+PATCH 协议/);
 });

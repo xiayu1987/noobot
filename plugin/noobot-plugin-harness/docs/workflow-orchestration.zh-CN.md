@@ -9,6 +9,25 @@ English version: `docs/workflow-orchestration.md`
 3. 各流程传给模型（或注入主模型）的消息顺序。
 4. 统一执行范式。
 
+## 上下文场景契约
+
+`@noobot/agent-config-protocol` 的 `RunConfigResolver.resolveScenarioRunConfig`
+负责生成 `runConfig.scenario`。Bot Hook 通过 `ctx.runConfig` 传递该配置，
+Agent Hook 通过 `ctx.agentContext.bindings.runtime.runConfig` 提供该配置。
+显式 Hook 配置存在时，以该配置整体为准，包括 `full` 或未设置场景的情况。
+Harness 仅读取其 `scenario` 字段；`scenarioProfile` 描述已解析的能力，
+不承担第二个场景选择入口。运行场景 `full` 对应 Harness 的 `general`。
+
+`HARNESS_DYNAMIC_POLICY_PROMPT` 协议独立承担按当前意图替换提示词策略的职责。
+`bindings.extensions.harness.dynamicPolicyPrompt` 中经协议解析的记录决定当前提示词场景，
+包括 `general`；提示词和摘要协议选择均服从该场景。
+工作流调度阈值仍采用已解析的运行场景，动态提示词策略不改写工具权限或运行配置。
+
+提示词构建器只接收顶层 `scenario` 这一个场景选择参数。显式 `scenario` 为权威来源，包括 `general`；
+只有未传入 `scenario` 时，策略选择才读取 Hook 配置。
+`data` 只承载提示词内容，不承担场景选择。`scenarioKey`、`scenarioProfile.key`、
+`programmingMode` / `textMode` 及 `isProgrammingMode` / `isTextMode` 不属于提示词输入契约。
+
 ## 统一执行范式
 
 Planning / Guidance / Acceptance / Review 统一采用下表范式：

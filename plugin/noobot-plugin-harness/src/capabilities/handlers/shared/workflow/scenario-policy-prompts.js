@@ -6,6 +6,7 @@
 import { LOCALE } from "../constants.js";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
 import { DYNAMIC_POLICY_PROMPT_BLOCK } from "./dynamic-policy-prompt.js";
+import { resolveHarnessScenarioFromOptions } from "./matrix-resolver.js";
 import { text } from "@noobot/shared/value";
 
 const SCENARIO_POLICY_I18N_KEY_BY_SCENARIO = Object.freeze({
@@ -14,27 +15,17 @@ const SCENARIO_POLICY_I18N_KEY_BY_SCENARIO = Object.freeze({
   programming: HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.SCENARIO_POLICY_PROGRAMMING,
 });
 
-function resolveScenarioPolicyScenario({ programmingMode = false, textMode = false } = {}) {
-  if (programmingMode === true) return "programming";
-  if (textMode === true) return "text";
-  return "general";
-}
-
 export function buildDefaultScenarioPolicyText(locale = LOCALE.ZH_CN, options = {}) {
-  const scenario = resolveScenarioPolicyScenario(options);
+  const scenario = resolveHarnessScenarioFromOptions(options);
   const key =
     SCENARIO_POLICY_I18N_KEY_BY_SCENARIO[scenario] || SCENARIO_POLICY_I18N_KEY_BY_SCENARIO.general;
   return translateI18nText(locale, key);
 }
 
-export function buildScenarioPolicyPromptText(
-  locale = LOCALE.ZH_CN,
-  { programmingMode = false, textMode = false, dynamicPolicyPrompt = "" } = {},
-) {
-  const scenario = resolveScenarioPolicyScenario({ programmingMode, textMode });
-  const dynamicPrompt = text(dynamicPolicyPrompt);
-  const body =
-    dynamicPrompt || buildDefaultScenarioPolicyText(locale, { programmingMode, textMode });
+export function buildScenarioPolicyPromptText(locale = LOCALE.ZH_CN, options = {}) {
+  const scenario = resolveHarnessScenarioFromOptions(options);
+  const dynamicPrompt = text(options.dynamicPolicyPrompt);
+  const body = dynamicPrompt || buildDefaultScenarioPolicyText(locale, { scenario });
   if (!body) return "";
   return [
     "[HARNESS_SCENARIO_POLICY]",
@@ -94,14 +85,8 @@ export function buildWorkflowResponsibilityConstraintUserPrompt(
       : "",
   ].filter(Boolean);
   const base = baseParts.join("\n");
-  const programmingMode = options?.programmingMode === true || options?.isProgrammingMode === true;
-  const textMode = !programmingMode && (options?.textMode === true || options?.isTextMode === true);
   if (options?.includeWorkflowPolicy !== true) return base;
-  const policy = buildScenarioPolicyPromptText(locale, {
-    programmingMode,
-    textMode,
-    dynamicPolicyPrompt: options?.dynamicPolicyPrompt,
-  });
+  const policy = buildScenarioPolicyPromptText(locale, options);
   if (!policy) return base;
   return [base, "", policy].filter(Boolean).join("\n");
 }

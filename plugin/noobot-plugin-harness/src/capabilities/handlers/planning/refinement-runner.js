@@ -79,10 +79,7 @@ export async function runPlanningRefinementBySeparateModel(
   const { bucket, state } = holder;
   const invoker = readCapabilityModelInvoker(meta);
   const locale = state?.locale || LOCALE.ZH_CN;
-  const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(
-    ctx,
-    meta,
-  );
+  const { scenario, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(ctx);
   const explicitTargetIndexes = targetMainStepIndexes
     .map((item) => Number(item))
     .filter((item) => Number.isFinite(item) && item > 0);
@@ -117,8 +114,7 @@ export async function runPlanningRefinementBySeparateModel(
     .map((item = {}) => text(item?.content))
     .filter(Boolean);
   const workflowPolicyPrompt = buildScenarioPolicyPromptText(locale, {
-    programmingMode,
-    textMode,
+    scenario,
     dynamicPolicyPrompt,
   });
   const refinementMessages = buildCapabilityProtocolModelMessages({
@@ -127,8 +123,7 @@ export async function runPlanningRefinementBySeparateModel(
     protocolPrompt: refinementTask,
     workflowPolicyPrompt,
     responsibilityPrompt: buildWorkflowResponsibilityConstraintUserPrompt(locale, "refinement", {
-      programmingMode,
-      textMode,
+      scenario,
       dynamicPolicyPrompt,
       includeWorkflowPolicy: false,
     }),

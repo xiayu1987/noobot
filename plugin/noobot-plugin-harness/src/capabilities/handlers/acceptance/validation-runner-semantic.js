@@ -74,7 +74,7 @@ export function scheduleAcceptanceSemanticValidationByInject(ctx = {}, baseRepor
   });
 }
 
-export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}, meta = {}) {
+export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
@@ -83,10 +83,7 @@ export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}, meta = {
   const messages = resolveModelMessages(ctx);
   if (!messages) return false;
   const locale = state.locale || LOCALE.ZH_CN;
-  const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(
-    ctx,
-    meta,
-  );
+  const { scenario, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(ctx);
   const promptPayload = pendingData.payload;
   const mainPlanContext = resolveAcceptanceMainPlanContext(promptPayload, bucket);
   const requestPayload = resolveAcceptanceValidationRequestPayload(promptPayload);
@@ -104,8 +101,7 @@ export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}, meta = {
     locale,
     marker: getAcceptanceSemanticValidationMarker(locale),
     data: { requestPayload },
-    programmingMode,
-    textMode,
+    scenario,
   });
   const systemInjection = injectMessageWithPolicy(ctx, {
     role: "system",
@@ -138,8 +134,7 @@ export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}, meta = {
   injectMessageWithPolicy(ctx, {
     role: "user",
     content: buildWorkflowResponsibilityConstraintUserPrompt(locale, "final_acceptance", {
-      programmingMode,
-      textMode,
+      scenario,
       dynamicPolicyPrompt,
       includeWorkflowPolicy: false,
     }),
@@ -217,6 +212,7 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
   }
   const invoker = readCapabilityModelInvoker(meta);
   const locale = state.locale || LOCALE.ZH_CN;
+  const scenarioPolicy = resolveScenarioPolicyFlagsFromContext(ctx);
   const finalOutput = text(ctx?.result?.output);
   const promptPayload = buildSemanticValidationPromptPayload({
     bucket,
@@ -232,7 +228,8 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
     data: {
       requestPayload,
     },
-    ...resolveScenarioPolicyFlagsFromContext(ctx, meta),
+    scenario: scenarioPolicy.scenario,
+    dynamicPolicyPrompt: scenarioPolicy.dynamicPolicyPrompt,
     includeWorkflowPolicy: false,
     includeProtocol: false,
   });
@@ -252,11 +249,9 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
     phaseReportsContents: phaseReportsPrompts,
     requestContent: prompt,
     protocolContent: buildAcceptancePatchProtocolText({ locale, mode: "final" }),
-    workflowPolicyPrompt: buildScenarioPolicyPromptText(
-      locale,
-      resolveScenarioPolicyFlagsFromContext(ctx, meta),
-    ),
-    ...resolveScenarioPolicyFlagsFromContext(ctx, meta),
+    workflowPolicyPrompt: buildScenarioPolicyPromptText(locale, scenarioPolicy),
+    scenario: scenarioPolicy.scenario,
+    dynamicPolicyPrompt: scenarioPolicy.dynamicPolicyPrompt,
   });
   let response = null;
   try {

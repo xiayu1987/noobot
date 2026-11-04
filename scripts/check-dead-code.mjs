@@ -107,7 +107,7 @@ export const CHECK = defineCheck({
       ],
     },
   ],
-  baseline: { unusedFiles: 0, unusedExports: 84, unusedDependencies: 30, exemptions: 3 },
+  baseline: { unusedFiles: 0, unusedExports: 80, unusedDependencies: 29, exemptions: 3 },
   measure: async (usage) =>
     measureDeadCodeReport(scanDeadCode(repositoryRoot, "knip.config.mjs"), usage),
 });

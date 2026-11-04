@@ -27,36 +27,26 @@ const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 export function buildGuidancePromptContent(
   locale = LOCALE.ZH_CN,
   reason = "",
-  {
-    includeMarker = false,
-    programmingMode = false,
-    textMode = false,
-    dynamicPolicyPrompt = "",
-    includeWorkflowPolicy = true,
-  } = {},
+  { includeMarker = false, scenario, dynamicPolicyPrompt = "", includeWorkflowPolicy = true } = {},
 ) {
   return buildGuidanceFailurePromptText({
     locale,
     marker: includeMarker ? getGuidanceMarker(locale) : "",
     reason,
-    programmingMode,
-    textMode,
+    scenario,
     dynamicPolicyPrompt,
     includeWorkflowPolicy,
   });
 }
 
-export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}, { action = "auto", meta = {} } = {}) {
+export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}, { action = "auto" } = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
   const locale = state?.locale || LOCALE.ZH_CN;
   const messages = resolveModelMessages(ctx);
   if (!messages) return false;
-  const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(
-    ctx,
-    meta,
-  );
+  const { scenario, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(ctx);
 
   const requestedAction = (text(action) || "auto").toLowerCase();
   const allowSummary = requestedAction === "auto" || requestedAction === "summary";
@@ -98,8 +88,7 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}, { action = "auto", 
       content: buildGuidanceSummaryPromptText({
         locale,
         marker: getGuidanceSummaryMarker(locale),
-        programmingMode,
-        textMode,
+        scenario,
         dynamicPolicyPrompt,
         includeWorkflowPolicy: false,
       }),
@@ -112,8 +101,7 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}, { action = "auto", 
     injectMessageWithPolicy(ctx, {
       role: "user",
       content: buildWorkflowResponsibilityConstraintUserPrompt(locale, "summary", {
-        programmingMode,
-        textMode,
+        scenario,
         dynamicPolicyPrompt,
         includeWorkflowPolicy: false,
       }),
@@ -138,8 +126,7 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}, { action = "auto", 
     role: "user",
     content: buildGuidancePromptContent(locale, reason, {
       includeMarker: true,
-      programmingMode,
-      textMode,
+      scenario,
       dynamicPolicyPrompt,
       includeWorkflowPolicy: false,
     }),

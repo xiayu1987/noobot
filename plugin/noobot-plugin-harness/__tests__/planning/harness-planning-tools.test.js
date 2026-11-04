@@ -198,11 +198,10 @@ test("harness planning does not inject refinement tool by default in programming
   const agentContext = {
     bindings: {
       runtime: {
-        runConfig: { scenarioProfile: { key: "programming" } },
+        runConfig: { scenario: "programming" },
         systemRuntime: {
           userId: "u11-rp",
           sessionId: "s11-rp",
-          runConfig: { scenarioProfile: { key: "programming" } },
         },
       },
       tools: [{ name: "read_file", invoke: async () => ({ ok: true }) }],
@@ -377,7 +376,7 @@ for (const outcome of ["converged", "disabled", "invalid_refinement_payload", "m
     if (outcome === "converged") bucket.planText = "";
     if (outcome === "disabled") {
       ctx.agentContext.bindings.runtime = {
-        runConfig: { scenarioProfile: { key: "programming" } },
+        runConfig: { scenario: "programming" },
       };
     }
     toolInvocation = true;

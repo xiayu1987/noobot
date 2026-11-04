@@ -237,6 +237,29 @@ for (const [name, evidence, reason] of [
   });
 }
 
+test("v21 quarantines guidance facts missing activityId without inferring it from eventId", async () => {
+  await withBase(async (options) => {
+    const fact = { ...guidanceFact };
+    delete fact.activityId;
+    const sessionDir = await writeSession(options.base, {
+      messages: [message("u1", [guidanceFact]), message("u2"), message("u3", [fact])],
+      evidence: [],
+    });
+    const manifestFile = path.join(sessionDir, "session.json");
+    const manifest = await readJson(manifestFile);
+    const files = [
+      manifestFile,
+      ...manifest.turnOrder[0].summarySnapshots.map((entry) => path.join(sessionDir, entry.file)),
+    ];
+    const before = await Promise.all(files.map((file) => readFile(file)));
+    const result = await upgradeSessionActivityTimeline(options);
+    assert.equal(result.sessions.length, 0);
+    assert.equal(result.quarantined.length, 1);
+    assert.match(JSON.stringify(result.quarantined[0].error), /activity_fact_unrecognized/);
+    assert.deepEqual(await Promise.all(files.map((file) => readFile(file))), before);
+  });
+});
+
 test("v21 leaves canonical sessions untouched", async () => {
   await withBase(async (options) => {
     const sessionDir = await writeSession(options.base, {

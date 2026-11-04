@@ -328,3 +328,34 @@ test("golden: planningCaptured=false blocks phase_acceptance execution", async (
   assert.equal(decisionLog?.detail?.chosenReason, "phase_acceptance_blocked");
   assert.equal(executionLog?.detail?.executedPrimary, false);
 });
+
+test("golden: phase acceptance defers semantic validation without losing its pending request", async () => {
+  const handler = createAcceptanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const semanticRequest = { reportIndex: 0, phase: "final" };
+  const agentContext = createAgentContext({
+    pending: { phaseAcceptance: true, acceptanceSemanticValidation: semanticRequest },
+  });
+  await handler({
+    capability: "acceptance",
+    point: "agent.before_llm_call",
+    ctx: {
+      agentContext,
+      messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
+    },
+    meta: {},
+  });
+  const bucket = agentContext.bindings.extensions.harness;
+  const decision = bucket.logs.acceptance.find(
+    (item) => item.event === "workflow_priority_decision",
+  ).detail;
+  assert.equal(decision.chosenAction, "phase_acceptance");
+  assert.deepEqual(decision.candidateActions, [
+    "phase_acceptance",
+    "acceptance_semantic_validation",
+  ]);
+  assert.deepEqual(decision.blockedActions, ["acceptance_semantic_validation"]);
+  assert.deepEqual(decision.blockedReasons, [
+    "acceptance_semantic_validation_deferred_by_primary_choice",
+  ]);
+  assert.deepEqual(bucket.state.pending.acceptanceSemanticValidation, semanticRequest);
+});

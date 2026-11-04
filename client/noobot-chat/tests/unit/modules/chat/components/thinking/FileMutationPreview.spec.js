@@ -28,7 +28,10 @@ function mutationRef(overrides = {}) {
 function mountPreview(props = {}) {
   return mount(FileMutationPreview, {
     props: { translate: (key) => key, ...props },
-    global: createElementPlusMountOptions(),
+    global: createElementPlusMountOptions({
+      "el-descriptions": true,
+      "el-descriptions-item": true,
+    }),
   });
 }
 
@@ -77,5 +80,65 @@ describe("FileMutationPreview", () => {
     expect(wrapper.get(".mutation-file-content").text()).toBe(
       "message.mutationSnapshotState.deleted",
     );
+  });
+
+  it.each(["resolve", "reject"])(
+    "ignores an obsolete file request that later %ss after switching to diff",
+    async (settlement) => {
+      const pending = Promise.withResolvers();
+      const service = {
+        getFile: vi.fn().mockReturnValue(pending.promise),
+        getDiff: vi.fn().mockResolvedValue({ diff: null }),
+      };
+      const wrapper = mountPreview({ mutations: [mutationRef()], service });
+      wrapper.findComponent({ name: "ElTabsTestStub" }).vm.$emit("tab-change", "diff");
+      await flushPromises();
+      if (settlement === "resolve") pending.resolve({ content: "obsolete file" });
+      else pending.reject(new Error("obsolete error"));
+      await flushPromises();
+      expect(service.getDiff).toHaveBeenCalledOnce();
+      expect(wrapper.find("el-alert").exists()).toBe(false);
+      expect(wrapper.find("el-skeleton").exists()).toBe(false);
+      expect(wrapper.get(".mutation-file-content").text()).toBe("");
+    },
+  );
+
+  it("keeps loading until the current request completes when an older request resolves", async () => {
+    const first = Promise.withResolvers();
+    const second = Promise.withResolvers();
+    const getFile = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const wrapper = mountPreview({ mutations: [mutationRef()], service: { getFile } });
+    await wrapper.setProps({ mutations: [mutationRef({ mutationId: "mutation-2" })] });
+    first.resolve({ content: "obsolete file" });
+    await flushPromises();
+    expect(wrapper.find("el-skeleton").exists()).toBe(true);
+    second.resolve({ content: "current file" });
+    await flushPromises();
+    expect(wrapper.get(".mutation-file-content").text()).toBe("current file");
+    expect(wrapper.find("el-skeleton").exists()).toBe(false);
+  });
+
+  it("invalidates a pending request when the selection changes on the metadata tab", async () => {
+    const pending = Promise.withResolvers();
+    const getFile = vi.fn().mockReturnValue(pending.promise);
+    const wrapper = mountPreview({ mutations: [mutationRef()], service: { getFile } });
+    wrapper.findComponent({ name: "ElTabsTestStub" }).vm.$emit("tab-change", "metadata");
+    await wrapper.setProps({ mutations: [mutationRef({ mutationId: "mutation-2" })] });
+    pending.reject(new Error("obsolete error"));
+    await flushPromises();
+    expect(getFile).toHaveBeenCalledOnce();
+    expect(wrapper.find("el-alert").exists()).toBe(false);
+    expect(wrapper.find("el-skeleton").exists()).toBe(false);
+  });
+
+  it.each([
+    ["file", "message.mutationFileServiceUnavailable"],
+    ["diff", "message.mutationDiffServiceUnavailable"],
+  ])("reports the missing %s service", async (tab, message) => {
+    const wrapper = mountPreview({ mutations: [mutationRef()] });
+    wrapper.findComponent({ name: "ElTabsTestStub" }).vm.$emit("tab-change", tab);
+    await flushPromises();
+    expect(wrapper.get("el-alert").attributes("title")).toBe(message);
+    expect(wrapper.find("el-skeleton").exists()).toBe(false);
   });
 });

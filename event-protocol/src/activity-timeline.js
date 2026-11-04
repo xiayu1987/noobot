@@ -14,6 +14,10 @@ const ACTIVITY_WIRE_EVENT_TYPES = Object.freeze(
   new Set([...ACTIVITY_EVENT_TYPES, MESSAGE_EVENT_TYPE.ACTIVITY_DELTA]),
 );
 
+export const ACTIVITY_TIMELINE_ERROR_CODE = Object.freeze({
+  FACT_INVALID: "ACTIVITY_TIMELINE_FACT_INVALID",
+});
+
 export const ACTIVITY_TIMELINE_FACT_FIELDS = Object.freeze(
   new Set([
     "eventId",
@@ -140,7 +144,9 @@ export function mergeCanonicalActivityTimelines(...timelines) {
   const byIdentity = new Map();
   for (const fact of timelines.flat()) {
     if (!isCanonicalActivityTimelineFact(fact)) {
-      throw new TypeError("activity timeline contains a noncanonical fact");
+      throw Object.assign(new TypeError("activity timeline contains a noncanonical fact"), {
+        code: ACTIVITY_TIMELINE_ERROR_CODE.FACT_INVALID,
+      });
     }
     const identity = fact.activityId;
     const previous = byIdentity.get(identity);

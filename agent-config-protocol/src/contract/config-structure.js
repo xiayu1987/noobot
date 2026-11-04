@@ -419,30 +419,32 @@ export function projectConfigDocumentForScope(
   );
 }
 
+function projectProviderDeclaration(provider) {
+  const declaration = {};
+  if (!isPlainObject(provider)) return Object.freeze(declaration);
+  for (const [field, contract] of Object.entries(MODEL_PROVIDER_AGENT_CONFIG_CONTRACT.properties)) {
+    if (
+      contract?.access !== SYSTEM ||
+      contract.declarationVisibility !== MODEL_PROVIDER_DECLARATION_VISIBILITY.USER ||
+      !Object.prototype.hasOwnProperty.call(provider, field)
+    ) {
+      continue;
+    }
+    declaration[field] = structuredClone(provider[field]);
+  }
+  return Object.freeze(declaration);
+}
+
 export function projectUserVisibleConfigDeclarations(document = {}) {
   const providers = document?.providers;
   if (!isPlainObject(providers)) {
     return Object.freeze({ providers: Object.freeze({}) });
   }
   const projectedProviders = Object.fromEntries(
-    Object.entries(providers).map(([providerId, provider]) => {
-      const declaration = {};
-      if (isPlainObject(provider)) {
-        for (const [field, contract] of Object.entries(
-          MODEL_PROVIDER_AGENT_CONFIG_CONTRACT.properties,
-        )) {
-          if (
-            contract?.access !== SYSTEM ||
-            contract.declarationVisibility !== MODEL_PROVIDER_DECLARATION_VISIBILITY.USER ||
-            !Object.prototype.hasOwnProperty.call(provider, field)
-          ) {
-            continue;
-          }
-          declaration[field] = structuredClone(provider[field]);
-        }
-      }
-      return [providerId, Object.freeze(declaration)];
-    }),
+    Object.entries(providers).map(([providerId, provider]) => [
+      providerId,
+      projectProviderDeclaration(provider),
+    ]),
   );
   return Object.freeze({ providers: Object.freeze(projectedProviders) });
 }

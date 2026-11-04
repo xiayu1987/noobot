@@ -6,6 +6,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import path from "node:path";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import {
   buildExecutionReport,
   EXECUTION_REPORT_PROTOCOL,
@@ -100,6 +101,29 @@ test("scoped repositories keep all artifacts and metadata in their execution dir
     assert.equal((await readJson(scope.sessionFile)).parentSessionId, "parent-a");
     await sessionRepo.ensureSessionDisplaySummary("alice", "child-a", options);
     assert.equal((await readJson(scope.sessionSummaryFile)).sessionId, "child-a");
+    const manifestBefore = await readFile(scope.sessionFile);
+    const cached = await sessionRepo.ensureSessionDisplaySummary("alice", "child-a", options);
+    assert.equal(cached.rebuilt, false);
+    assert.deepEqual(
+      await sessionRepo.readSessionDisplaySummary("alice", "child-a", options),
+      cached.summary,
+    );
+    await rm(scope.sessionSummaryFile);
+    const recovered = await sessionRepo.ensureSessionDisplaySummary("alice", "child-a", options);
+    assert.equal(recovered.rebuilt, true);
+    assert.deepEqual(recovered.summary, cached.summary);
+    assert.deepEqual(await readFile(scope.sessionFile), manifestBefore);
+    const facade = createSessionFacade(runtime);
+    const snapshotRequest = { sessionDir: scope.sessionDir };
+    const snapshot = await facade.readScopedSessionSnapshot(snapshotRequest);
+    const corruptCache = "{invalid-summary-json";
+    await writeFile(scope.sessionSummaryFile, corruptCache);
+    assert.deepEqual(await facade.readScopedSessionSnapshot(snapshotRequest), snapshot);
+    assert.equal(await readFile(scope.sessionSummaryFile, "utf8"), corruptCache);
+    await rm(scope.sessionSummaryFile);
+    assert.deepEqual(await facade.readScopedSessionSnapshot(snapshotRequest), snapshot);
+    assert.equal(await sessionRepo.storageService.exists(scope.sessionSummaryFile), false);
+    assert.deepEqual(await readFile(scope.sessionFile), manifestBefore);
     assert.equal(
       (
         await readExecutionLogs({

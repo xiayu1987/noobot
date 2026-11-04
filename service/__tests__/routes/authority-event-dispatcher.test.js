@@ -17,6 +17,98 @@ function createPendingEvent(eventId, sessionId) {
   return { eventId: envelope.identity.eventId, envelope };
 }
 
+test("authority dispatcher confirms the sent prefix before propagating a publisher error", async () => {
+  const first = createPendingEvent("authority-prefix", "s-prefix");
+  const second = createPendingEvent("authority-retry", "s-prefix");
+  let pending = [first, second];
+  const failure = new Error("publisher unavailable");
+  const sent = [];
+  const bot = {
+    session: {
+      async getPendingAuthorityEvents() {
+        return { found: true, events: pending };
+      },
+      async recordAuthorityEventAttempts() {
+        return { recorded: true };
+      },
+      async acknowledgeAuthorityEvents({ acknowledgements }) {
+        const ids = new Set(acknowledgements.map((item) => item.eventId));
+        pending = pending.filter((item) => !ids.has(item.eventId));
+        return { acknowledged: true };
+      },
+      async compactAuthorityEvents() {},
+    },
+  };
+  const dispatch = createAuthorityEventDispatcher({
+    consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
+    resolveBot: () => bot,
+    sendEvent: async (_type, envelope) => {
+      if (envelope.identity.eventId === second.eventId) throw failure;
+      sent.push(envelope.identity.eventId);
+      return true;
+    },
+  });
+  const payload = { userId: "u1", sessionId: "s-prefix", persistenceScope: null };
+  await assert.rejects(dispatch(payload), (error) => error === failure);
+  assert.deepEqual(pending, [second]);
+  const result = await dispatch(payload, async (_type, envelope) => {
+    sent.push(envelope.identity.eventId);
+    return true;
+  });
+  assert.deepEqual(result, { dispatched: true, delivered: 1 });
+  assert.deepEqual(sent, [first.eventId, second.eventId]);
+  assert.deepEqual(pending, []);
+});
+
+test("authority dispatcher retains both publisher and acknowledgement failures", async () => {
+  const events = [createPendingEvent("prefix", "s-both"), createPendingEvent("retry", "s-both")];
+  const failure = new Error("publisher failed");
+  const acknowledgementFailure = new Error("acknowledgement storage failed");
+  let throwAcknowledgement = false;
+  let acknowledgedIds;
+  const dispatch = createAuthorityEventDispatcher({
+    consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
+    resolveBot: () => ({
+      session: {
+        async getPendingAuthorityEvents() {
+          return { found: true, events };
+        },
+        async recordAuthorityEventAttempts() {
+          return { recorded: true };
+        },
+        async acknowledgeAuthorityEvents({ acknowledgements }) {
+          acknowledgedIds = acknowledgements.map((item) => item.eventId);
+          if (throwAcknowledgement) throw acknowledgementFailure;
+          return { acknowledged: false, reason: "session_save_failed" };
+        },
+      },
+    }),
+    sendEvent: (_type, envelope) => {
+      if (envelope.identity.eventId === "retry") throw failure;
+      return true;
+    },
+  });
+  await assert.rejects(
+    dispatch({ userId: "u1", sessionId: "s-both", persistenceScope: null }),
+    (error) => {
+      assert.ok(error instanceof AggregateError);
+      assert.equal(error.errors[0], failure);
+      assert.equal(error.errors[1].message, "session_save_failed");
+      return true;
+    },
+  );
+  assert.deepEqual(acknowledgedIds, ["prefix"]);
+  throwAcknowledgement = true;
+  await assert.rejects(
+    dispatch({ userId: "u1", sessionId: "s-both", persistenceScope: null }),
+    (error) => {
+      assert.ok(error instanceof AggregateError);
+      assert.deepEqual(error.errors, [failure, acknowledgementFailure]);
+      return true;
+    },
+  );
+});
+
 test("authority dispatcher reports ack failure without counting the sent events", async () => {
   const item = createPendingEvent("authority-event-ack-failed", "s-ack-failed");
   const bot = {

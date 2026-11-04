@@ -7,6 +7,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  ACTIVITY_TIMELINE_ERROR_CODE,
   isCanonicalActivityTimelineFact,
   mergeCanonicalActivityTimelines,
   projectCanonicalActivityTimelineEvent,
@@ -327,4 +328,18 @@ test("canonical activity facts require an integer sequence", () => {
     () => mergeCanonicalActivityTimelines([{ ...fact, sequence: "1" }]),
     /noncanonical fact/,
   );
+});
+
+test("invalid activity facts expose a protocol error without repairing the input", () => {
+  const valid = projectCanonicalActivityTimelineEvent(activityEnvelope());
+  const { activityId: _activityId, ...missingIdentity } = valid;
+  for (const fact of [missingIdentity, { ...valid, sequence: "1" }, null]) {
+    const before = structuredClone(fact);
+    assert.throws(() => mergeCanonicalActivityTimelines([fact]), {
+      name: "TypeError",
+      code: ACTIVITY_TIMELINE_ERROR_CODE.FACT_INVALID,
+      message: "activity timeline contains a noncanonical fact",
+    });
+    assert.deepEqual(fact, before);
+  }
 });

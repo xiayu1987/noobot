@@ -17,53 +17,43 @@ import {
 } from "../../context/agent-context-accessor.js";
 import { text } from "@noobot/shared/value";
 
-export function extractGeneratedMediaCandidates(aiContent) {
-  if (!Array.isArray(aiContent)) return [];
-  const mediaCandidates = [];
+function inlineMediaPayload(contentPart, url) {
+  const sourceData = text(contentPart.source?.data);
+  if (text(contentPart.source?.type).toLowerCase() === "base64" && sourceData) {
+    return {
+      mimeType: text(contentPart.source.media_type).toLowerCase(),
+      contentBase64: sourceData,
+    };
+  }
+  return url.startsWith("data:") ? parseDataUrl(url) : null;
+}
+
+export function classifyGeneratedMedia(aiContent) {
+  const inlineCandidates = [];
+  const remoteUrls = [];
+  if (!Array.isArray(aiContent)) return { inlineCandidates, remoteUrls };
   let mediaIndex = 0;
   for (const contentPart of aiContent) {
     if (!isModelOutputArtifactContentBlock(contentPart)) continue;
-    const partType = text(contentPart?.type).toLowerCase();
-
-    const imageUrl = text(contentPart?.image_url?.url);
-    const videoUrl = text(contentPart?.video_url?.url);
-    const directUrl = text(contentPart?.url);
-    const sourceType = text(contentPart?.source?.type).toLowerCase();
-    const sourceMediaType = text(contentPart?.source?.media_type).toLowerCase();
-    const sourceData = text(contentPart?.source?.data);
-    const chosenUrl = imageUrl || videoUrl || directUrl;
     mediaIndex += 1;
-
-    if (sourceType === "base64" && sourceData) {
-      mediaCandidates.push({
-        mediaType: partType.includes("video") ? "video" : "image",
-        mimeType: sourceMediaType || MIME_TYPE.APPLICATION_OCTET_STREAM,
-        contentBase64: sourceData,
-        fileName: sanitizeGeneratedArtifactName(
-          `${partType || "media"}_${mediaIndex}`,
-          sourceMediaType,
-          mediaIndex,
-        ),
-      });
-      continue;
-    }
-
-    if (chosenUrl.startsWith("data:")) {
-      const parsedDataUrl = parseDataUrl(chosenUrl);
-      if (!parsedDataUrl) continue;
-      mediaCandidates.push({
-        mediaType: partType.includes("video") ? "video" : "image",
-        mimeType: parsedDataUrl.mimeType,
-        contentBase64: parsedDataUrl.contentBase64,
-        fileName: sanitizeGeneratedArtifactName(
-          `${partType || "media"}_${mediaIndex}`,
-          parsedDataUrl.mimeType,
-          mediaIndex,
-        ),
-      });
-    }
+    const url =
+      text(contentPart.image_url?.url) || text(contentPart.video_url?.url) || text(contentPart.url);
+    if (/^https?:\/\//i.test(url)) remoteUrls.push(url);
+    const payload = inlineMediaPayload(contentPart, url);
+    if (!payload) continue;
+    const partType = text(contentPart.type).toLowerCase();
+    inlineCandidates.push({
+      mediaType: partType.includes("video") ? "video" : "image",
+      mimeType: payload.mimeType || MIME_TYPE.APPLICATION_OCTET_STREAM,
+      contentBase64: payload.contentBase64,
+      fileName: sanitizeGeneratedArtifactName(
+        `${partType || "media"}_${mediaIndex}`,
+        payload.mimeType,
+        mediaIndex,
+      ),
+    });
   }
-  return mediaCandidates;
+  return { inlineCandidates, remoteUrls };
 }
 
 export async function fetchRemoteMediaArtifact(
@@ -133,33 +123,13 @@ export async function persistModelGeneratedArtifacts({
   const { attachmentService } = runtime;
   const userId = text(runtime.systemRuntime.userId);
   if (!userId) throw new TypeError("persistModelGeneratedArtifacts requires systemRuntime.userId");
-  const fetchImpl = runtime.sharedTools.fetch;
-  const localMediaCandidates = extractGeneratedMediaCandidates(aiContent);
-  const remoteMediaCandidates = [];
-  if (Array.isArray(aiContent)) {
-    let remoteMediaIndex = 0;
-
-    const fetchPromises = [];
-    for (const contentPart of aiContent) {
-      if (!isModelOutputArtifactContentBlock(contentPart)) continue;
-      const imageUrl = text(contentPart?.image_url?.url);
-      const videoUrl = text(contentPart?.video_url?.url);
-      const directUrl = text(contentPart?.url);
-      const remoteUrl = imageUrl || videoUrl || directUrl;
-      if (!/^https?:\/\//i.test(remoteUrl)) continue;
-      remoteMediaIndex += 1;
-
-      fetchPromises.push(fetchRemoteMediaArtifact(remoteUrl, fetchImpl, remoteMediaIndex, runtime));
-    }
-
-    if (fetchPromises.length > 0) {
-      const results = await Promise.all(fetchPromises);
-      for (const remoteArtifact of results) {
-        if (remoteArtifact) remoteMediaCandidates.push(remoteArtifact);
-      }
-    }
-  }
-  const allMediaCandidates = [...localMediaCandidates, ...remoteMediaCandidates];
+  const { inlineCandidates, remoteUrls } = classifyGeneratedMedia(aiContent);
+  const remoteCandidates = await Promise.all(
+    remoteUrls.map((url, index) =>
+      fetchRemoteMediaArtifact(url, runtime.sharedTools.fetch, index + 1, runtime),
+    ),
+  );
+  const allMediaCandidates = [...inlineCandidates, ...remoteCandidates.filter(Boolean)];
   if (!allMediaCandidates.length) return [];
   const ownership = resolveGeneratedArtifactOwnership(runtime, dialogProcessId);
   if (!text(modelMessageId) || !ownership.sessionId || !ownership.turnScopeId) {

@@ -26,6 +26,49 @@ export function isTurnLifecycleShape(lifecycle) {
   );
 }
 
+function collectLifecycleRecordErrors(lifecycle, field, collectRecordErrors, errors) {
+  for (const [key, record] of Object.entries(lifecycle[field])) {
+    if (!isPlainObject(record)) {
+      errors.push(`invalid_lifecycle_record:${field}:${key}`);
+      continue;
+    }
+    errors.push(...collectRecordErrors(record));
+    if (!isCanonicalTurnScopeId(record.turnScopeId) || record.turnScopeId !== key) {
+      errors.push(`lifecycle_record_identity_mismatch:${field}:${key}`);
+    }
+    if (
+      !Number.isInteger(record.sequence) ||
+      record.sequence < 1 ||
+      record.sequence > lifecycle.sequence
+    ) {
+      errors.push(`invalid_lifecycle_record_sequence:${field}:${key}`);
+    }
+  }
+}
+
+function collectTurnContinuationRelationErrors(lifecycle, turn, errors) {
+  if (isPlainObject(turn.continuationSource)) {
+    const source = lifecycle.turns[turn.continuationSource.turnScopeId];
+    if (
+      !source ||
+      source.state !== "stop_completed" ||
+      source.dialogProcessId !== turn.continuationSource.dialogProcessId ||
+      source.continuedByTurnScopeId !== turn.turnScopeId ||
+      source.sequence >= turn.sequence
+    )
+      errors.push("turn_continuation_source_relation_mismatch");
+  }
+  if (turn.continuedByTurnScopeId) {
+    const target = lifecycle.turns[turn.continuedByTurnScopeId];
+    if (
+      !target ||
+      target.continuationSource?.turnScopeId !== turn.turnScopeId ||
+      target.continuationSource?.dialogProcessId !== turn.dialogProcessId
+    )
+      errors.push("turn_continuation_target_relation_mismatch");
+  }
+}
+
 export function assertTurnLifecycleRecordIntegrity(lifecycle) {
   if (!isTurnLifecycleShape(lifecycle)) {
     throw Object.assign(new TypeError("invalid turn lifecycle: invalid_turn_lifecycle_shape"), {
@@ -37,52 +80,17 @@ export function assertTurnLifecycleRecordIntegrity(lifecycle) {
   if (!Number.isInteger(lifecycle.sequence) || lifecycle.sequence < 0) {
     errors.push("invalid_lifecycle_sequence");
   }
-  for (const field of ["turns", "replacedTurns"]) {
-    for (const [key, record] of Object.entries(lifecycle[field])) {
-      if (!isPlainObject(record)) {
-        errors.push(`invalid_lifecycle_record:${field}:${key}`);
-        continue;
-      }
-      errors.push(
-        ...(field === "turns"
-          ? collectTurnRecordErrors(record)
-          : collectTurnReplacementTombstoneErrors(record, lifecycle.sequence)),
-      );
-      if (!isCanonicalTurnScopeId(record.turnScopeId) || record.turnScopeId !== key) {
-        errors.push(`lifecycle_record_identity_mismatch:${field}:${key}`);
-      }
-      if (
-        !Number.isInteger(record.sequence) ||
-        record.sequence < 1 ||
-        record.sequence > lifecycle.sequence
-      ) {
-        errors.push(`invalid_lifecycle_record_sequence:${field}:${key}`);
-      }
-    }
-  }
+  collectLifecycleRecordErrors(lifecycle, "turns", collectTurnRecordErrors, errors);
+  collectLifecycleRecordErrors(
+    lifecycle,
+    "replacedTurns",
+    (record) => collectTurnReplacementTombstoneErrors(record, lifecycle.sequence),
+    errors,
+  );
   const active = lifecycle.activeTurnScopeId;
   for (const turn of Object.values(lifecycle.turns)) {
     if (!isPlainObject(turn)) continue;
-    if (turn.continuationSource !== null && isPlainObject(turn.continuationSource)) {
-      const source = lifecycle.turns[turn.continuationSource.turnScopeId];
-      if (
-        !source ||
-        source.state !== "stop_completed" ||
-        source.dialogProcessId !== turn.continuationSource.dialogProcessId ||
-        source.continuedByTurnScopeId !== turn.turnScopeId ||
-        source.sequence >= turn.sequence
-      )
-        errors.push("turn_continuation_source_relation_mismatch");
-    }
-    if (turn.continuedByTurnScopeId) {
-      const target = lifecycle.turns[turn.continuedByTurnScopeId];
-      if (
-        !target ||
-        target.continuationSource?.turnScopeId !== turn.turnScopeId ||
-        target.continuationSource?.dialogProcessId !== turn.dialogProcessId
-      )
-        errors.push("turn_continuation_target_relation_mismatch");
-    }
+    collectTurnContinuationRelationErrors(lifecycle, turn, errors);
   }
   if (
     active !== "" &&

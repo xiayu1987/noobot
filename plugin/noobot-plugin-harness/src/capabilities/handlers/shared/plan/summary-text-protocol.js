@@ -83,31 +83,21 @@ export function mergeSummaryText(existingText = "", incomingText = "") {
   if (!incoming) return current;
 
   const patchCommands = parseSummaryPatchCommands(incoming);
-  if (patchCommands.length) {
-    const map = new Map(
-      parseSummaryItemsFromText(current).map((item = {}) => [Number(item.id), item]),
-    );
-    for (const command of patchCommands) {
-      const id = Number(command.id);
-      if (!Number.isFinite(id) || id <= 0) continue;
-      if (command.action === "DELETE") {
-        map.delete(id);
-        continue;
-      }
-      const content = text(command.content);
-      if (!content) continue;
-      map.set(id, { id, content });
+  if (!patchCommands.length) {
+    const incomingItems = parseSummaryItemsFromText(incoming);
+    if (incomingItems.length) return renderSummaryItems(incomingItems);
+    return [current, incoming].filter(Boolean).join("\n");
+  }
+
+  const map = new Map(parseSummaryItemsFromText(current).map((item) => [item.id, item]));
+  for (const { action, id, content } of patchCommands) {
+    if (action === "DELETE") {
+      map.delete(id);
+      continue;
     }
-    const rendered = renderSummaryItems([...map.values()]);
-    if (rendered) return rendered;
+    map.set(id, { id, content });
   }
-
-  const incomingItems = parseSummaryItemsFromText(incoming);
-  if (incomingItems.length) {
-    return renderSummaryItems(incomingItems);
-  }
-
-  return [current, incoming].filter(Boolean).join("\n");
+  return renderSummaryItems([...map.values()]);
 }
 
 export function parseSummaryOverviewAndDetailFromText(summaryText = "") {

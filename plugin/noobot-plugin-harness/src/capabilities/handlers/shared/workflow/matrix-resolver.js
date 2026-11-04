@@ -20,71 +20,26 @@ function isProgrammingScenarioKey(value = "") {
   return normalizeScenarioKey(value) === HARNESS_SCENARIO.PROGRAMMING;
 }
 
-export function isTextScenarioKey(value = "") {
+function isTextScenarioKey(value = "") {
   return normalizeScenarioKey(value) === HARNESS_SCENARIO.TEXT;
-}
-
-function resolveRunConfigCandidatesFromContext(ctx = {}) {
-  const runtime = ctx?.agentContext?.bindings?.runtime || null;
-  return [
-    ctx?.runConfig,
-    runtime?.runConfig,
-    runtime?.systemRuntime?.runConfig,
-    ctx?.agentContext?.runConfig,
-  ].filter((item) => item && typeof item === "object");
-}
-
-function scenarioCandidatesFromOptions(options = {}) {
-  const source = options && typeof options === "object" ? options : {};
-  const data = source.data && typeof source.data === "object" ? source.data : {};
-  return [
-    source.scenario,
-    source.scenarioKey,
-    source.scenarioProfile?.key,
-    data.scenario,
-    data.scenarioKey,
-    data.scenarioProfile?.key,
-  ];
-}
-
-function scenarioCandidatesFromRunConfig(runConfig = {}) {
-  return [runConfig?.scenario, runConfig?.scenarioKey, runConfig?.scenarioProfile?.key];
 }
 
 export function resolveHarnessScenarioFromOptions(options = {}) {
   const source = options && typeof options === "object" ? options : {};
-  const data = source.data && typeof source.data === "object" ? source.data : {};
-  if (
-    source.programmingMode === true ||
-    source.isProgrammingMode === true ||
-    data.programmingMode === true
-  ) {
-    return HARNESS_SCENARIO.PROGRAMMING;
-  }
-  if (
-    source.textMode === true ||
-    source.isTextMode === true ||
-    data.textMode === true ||
-    data.isTextMode === true
-  ) {
-    return HARNESS_SCENARIO.TEXT;
-  }
-  for (const candidate of scenarioCandidatesFromOptions(source)) {
-    if (isProgrammingScenarioKey(candidate)) return HARNESS_SCENARIO.PROGRAMMING;
-    if (isTextScenarioKey(candidate)) return HARNESS_SCENARIO.TEXT;
-  }
+  if (isProgrammingScenarioKey(source.scenario)) return HARNESS_SCENARIO.PROGRAMMING;
+  if (isTextScenarioKey(source.scenario)) return HARNESS_SCENARIO.TEXT;
   return HARNESS_SCENARIO.GENERAL;
 }
 
 export function resolveHarnessScenarioFromContext(ctx = {}, options = {}) {
-  const optionScenario = resolveHarnessScenarioFromOptions(options);
-  if (optionScenario !== HARNESS_SCENARIO.GENERAL) return optionScenario;
-  for (const runConfig of resolveRunConfigCandidatesFromContext(ctx)) {
-    for (const candidate of scenarioCandidatesFromRunConfig(runConfig)) {
-      if (isProgrammingScenarioKey(candidate)) return HARNESS_SCENARIO.PROGRAMMING;
-      if (isTextScenarioKey(candidate)) return HARNESS_SCENARIO.TEXT;
-    }
+  if (Object.hasOwn(options, "scenario")) {
+    return resolveHarnessScenarioFromOptions(options);
   }
+  const runConfig = Object.hasOwn(ctx, "runConfig")
+    ? ctx.runConfig
+    : ctx?.agentContext?.bindings?.runtime?.runConfig;
+  if (isProgrammingScenarioKey(runConfig?.scenario)) return HARNESS_SCENARIO.PROGRAMMING;
+  if (isTextScenarioKey(runConfig?.scenario)) return HARNESS_SCENARIO.TEXT;
   return HARNESS_SCENARIO.GENERAL;
 }
 
@@ -95,25 +50,13 @@ export function resolveWorkflowThresholdModeFromContext(ctx = {}) {
   return "full";
 }
 
-export function resolveProgrammingModeFromContext(ctx = {}) {
-  return resolveWorkflowThresholdModeFromContext(ctx) === "programming";
-}
-
-export function resolveTextModeFromContext(ctx = {}) {
-  return resolveWorkflowThresholdModeFromContext(ctx) === "text";
-}
-
 export function resolveScenarioPolicyFlagsFromContext(ctx = {}) {
   const dynamicPolicyPromptRecord = resolveActiveDynamicPolicyPromptFromContext(ctx);
-  const dynamicScenario = text(dynamicPolicyPromptRecord?.scenario);
-  const dynamicProgrammingMode = dynamicScenario === HARNESS_SCENARIO.PROGRAMMING;
-  const dynamicTextMode = dynamicScenario === HARNESS_SCENARIO.TEXT;
-  const programmingMode =
-    dynamicProgrammingMode || (!dynamicTextMode && resolveProgrammingModeFromContext(ctx));
-  const textMode = !programmingMode && (dynamicTextMode || resolveTextModeFromContext(ctx));
+  const scenario = dynamicPolicyPromptRecord
+    ? dynamicPolicyPromptRecord.scenario
+    : resolveHarnessScenarioFromContext(ctx);
   return {
-    programmingMode,
-    textMode,
+    scenario,
     dynamicPolicyPrompt: dynamicPolicyPromptRecord?.prompt || "",
     dynamicPolicyPromptRecord,
   };

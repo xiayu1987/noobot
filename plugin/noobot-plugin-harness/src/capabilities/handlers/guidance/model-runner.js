@@ -106,11 +106,8 @@ export async function runPendingPlanUpdateBySeparateModel(ctx = {}, meta = {}) {
   return runPlanUpdateAfterSummary(ctx, meta);
 }
 
-function buildPlanRevisionModelMessages({ ctx, meta, locale, bucket, modelMessages }) {
-  const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(
-    ctx,
-    meta,
-  );
+function buildPlanRevisionModelMessages({ ctx, locale, bucket, modelMessages }) {
+  const { scenario, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(ctx);
   const revisionContextMessages = buildPlanChecklistContextMessages({
     locale,
     planText: bucket?.planText,
@@ -123,13 +120,11 @@ function buildPlanRevisionModelMessages({ ctx, meta, locale, bucket, modelMessag
     contextMessages: revisionContextMessages,
     protocolPrompt: buildPlanningRevisionPrompt(locale, bucket),
     workflowPolicyPrompt: buildScenarioPolicyPromptText(locale, {
-      programmingMode,
-      textMode,
+      scenario,
       dynamicPolicyPrompt,
     }),
     responsibilityPrompt: buildWorkflowResponsibilityConstraintUserPrompt(locale, "revision", {
-      programmingMode,
-      textMode,
+      scenario,
       dynamicPolicyPrompt,
       includeWorkflowPolicy: false,
     }),
@@ -161,7 +156,6 @@ export async function runPlanUpdateAfterSummary(ctx = {}, meta = {}, { baseMessa
   }
   const revisionMessagesFinal = buildPlanRevisionModelMessages({
     ctx,
-    meta,
     locale,
     bucket,
     modelMessages,
@@ -574,11 +568,8 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
   const { bucket, state } = holder;
   const invoker = readCapabilityModelInvoker(meta);
   const locale = state?.locale || LOCALE.ZH_CN;
-  const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(
-    ctx,
-    meta,
-  );
-  const policy = { locale, programmingMode, textMode, dynamicPolicyPrompt };
+  const { scenario, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(ctx);
+  const policy = { locale, scenario, dynamicPolicyPrompt };
   const request = selectGuidanceRequest({ ctx, state, action, policy });
   if (!request) return false;
   const { purpose, workflowPurpose, reason } = request;

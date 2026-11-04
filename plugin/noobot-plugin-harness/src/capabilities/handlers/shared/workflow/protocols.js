@@ -133,34 +133,27 @@ function resolveSummaryPatchProtocolOptions(input = LOCALE.ZH_CN) {
   if (isPlainObject(input)) {
     return {
       locale: resolveLocale(input.locale),
-      programmingMode: input.programmingMode === true || input.isProgrammingMode === true,
-      textMode: input.textMode === true || input.isTextMode === true,
-      scenario: input.scenario,
-      scenarioKey: input.scenarioKey,
-      scenarioProfile: input.scenarioProfile,
-      data: input.data,
+      scenario: resolveHarnessScenarioFromOptions(input),
     };
   }
   return {
     locale: resolveLocale(input),
-    programmingMode: false,
-    textMode: false,
+    scenario: HARNESS_SCENARIO.GENERAL,
   };
 }
 
-const SUMMARY_PROTOCOL_SCENARIO = HARNESS_SCENARIO;
 const SUMMARY_PROTOCOL_COMMAND_KEYS_BY_SCENARIO = Object.freeze({
-  [SUMMARY_PROTOCOL_SCENARIO.GENERAL]: Object.freeze({
+  [HARNESS_SCENARIO.GENERAL]: Object.freeze({
     addKey: HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_GENERAL_ADD_COMMAND,
     updateKey: HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_GENERAL_UPDATE_COMMAND,
     overviewFields: Object.freeze(["plan", "status", "evidence", "file", "line"]),
   }),
-  [SUMMARY_PROTOCOL_SCENARIO.TEXT]: Object.freeze({
+  [HARNESS_SCENARIO.TEXT]: Object.freeze({
     addKey: HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_TEXT_ADD_COMMAND,
     updateKey: HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_TEXT_UPDATE_COMMAND,
     overviewFields: Object.freeze(["plan", "status", "evidence", "file", "line", "path", "text"]),
   }),
-  [SUMMARY_PROTOCOL_SCENARIO.PROGRAMMING]: Object.freeze({
+  [HARNESS_SCENARIO.PROGRAMMING]: Object.freeze({
     addKey: HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_PROGRAMMING_ADD_COMMAND,
     updateKey: HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_PROGRAMMING_UPDATE_COMMAND,
     overviewFields: Object.freeze(["plan", "status", "evidence", "file", "method", "line"]),
@@ -168,10 +161,10 @@ const SUMMARY_PROTOCOL_COMMAND_KEYS_BY_SCENARIO = Object.freeze({
 });
 
 function resolveSummaryProtocolRuleKeys({ scenario } = {}) {
-  if (scenario === SUMMARY_PROTOCOL_SCENARIO.PROGRAMMING) {
+  if (scenario === HARNESS_SCENARIO.PROGRAMMING) {
     return [HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_PROGRAMMING_RULES];
   }
-  if (scenario === SUMMARY_PROTOCOL_SCENARIO.TEXT) {
+  if (scenario === HARNESS_SCENARIO.TEXT) {
     return [
       HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_TEXT_DELIVERY_RULES,
       HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_TEXT_RULES,
@@ -185,14 +178,14 @@ export function resolveSummaryPatchProtocolSelection(options = LOCALE.ZH_CN) {
   const scenario = resolveHarnessScenarioFromOptions(normalized);
   const command =
     SUMMARY_PROTOCOL_COMMAND_KEYS_BY_SCENARIO[scenario] ||
-    SUMMARY_PROTOCOL_COMMAND_KEYS_BY_SCENARIO[SUMMARY_PROTOCOL_SCENARIO.GENERAL];
+    SUMMARY_PROTOCOL_COMMAND_KEYS_BY_SCENARIO[HARNESS_SCENARIO.GENERAL];
   const ruleKeys = resolveSummaryProtocolRuleKeys({ scenario });
   return Object.freeze({
     scenario,
     protocolFamily: "summary_text_v2 + summary_patch_v1",
     protocolId: `summary_patch_v1/${scenario}`,
     nextActionProtocolId:
-      scenario === SUMMARY_PROTOCOL_SCENARIO.TEXT ? "next_action/text" : "next_action/default",
+      scenario === HARNESS_SCENARIO.TEXT ? "next_action/text" : "next_action/default",
     addCommandKey: command.addKey,
     updateCommandKey: command.updateKey,
     deleteCommandKey: HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_DELETE_COMMAND,

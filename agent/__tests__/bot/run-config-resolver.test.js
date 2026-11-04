@@ -80,7 +80,7 @@ test("resolveToolBindings should keep custom_only as the complete tool boundary"
     },
   };
   const runConfig = {
-    scenario: "coding",
+    scenario: "programming",
     toolPolicy: {
       mode: "custom_only",
       customTools: [{ name: "help" }],

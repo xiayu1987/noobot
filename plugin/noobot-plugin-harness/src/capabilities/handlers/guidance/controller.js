@@ -272,11 +272,11 @@ async function executeGuidanceWorkflowAction({
       }
     }
   } else if (nextAction.action === "summary" || nextAction.action === "guidance") {
-    const result = maybeInjectGuidanceOrSummaryPrompt(ctx, { action: nextAction.action, meta });
+    const result = maybeInjectGuidanceOrSummaryPrompt(ctx, { action: nextAction.action });
     changed = result || changed;
     executedPrimary = result === true;
   } else if (nextAction.action === "plan_update") {
-    const result = maybeInjectPlanUpdatePrompt(ctx, meta);
+    const result = maybeInjectPlanUpdatePrompt(ctx);
     changed = result || changed;
     executedPrimary = result === true;
   }

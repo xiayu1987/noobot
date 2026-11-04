@@ -144,9 +144,8 @@ function buildChecklistFromParsedPlan(parsedPlan) {
     const mainTask = text(main?.content);
     if (!Number.isFinite(mainId) || !mainTask) continue;
     checklist.push(createChecklistItem({ mainId, task: mainTask }));
-    const subPlans = Array.isArray(subPlansByMainId[String(mainId)])
-      ? subPlansByMainId[String(mainId)]
-      : [];
+    const subPlans = subPlansByMainId[String(mainId)];
+    if (!Array.isArray(subPlans)) continue;
     for (const sub of subPlans) {
       const subIndex = Number(sub?.subIndex);
       const subTask = text(sub?.content);

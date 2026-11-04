@@ -130,23 +130,19 @@ function resolveWorkflowExecutionMetrics(ctx = {}, { domain = "", startCursor = 
   if (!holder) return { retryCount: 0, errorCode: "" };
   const logs = holder?.bucket?.logs?.[domain];
   if (!Array.isArray(logs)) return { retryCount: 0, errorCode: "" };
-  const begin = Number.isFinite(Number(startCursor)) ? Math.max(0, Number(startCursor)) : 0;
-  const slice = logs.slice(begin);
+  const begin = Number.isFinite(Number(startCursor))
+    ? Math.trunc(Math.max(0, Number(startCursor)))
+    : 0;
   let retryCount = 0;
   let errorCode = "";
-  for (const item of slice) {
-    const eventName = text(item?.event);
+  for (let index = begin; index < logs.length; index += 1) {
+    const eventName = text(logs[index]?.event);
     if (!eventName) continue;
     if (eventName === WORKFLOW_EVENTS.reasoningRetryScheduled) {
       retryCount += 1;
       continue;
     }
-    if (!errorCode) {
-      const candidate = resolveEventErrorCode(eventName);
-      if (candidate) {
-        errorCode = candidate;
-      }
-    }
+    if (!errorCode) errorCode = resolveEventErrorCode(eventName);
   }
   return { retryCount, errorCode };
 }
@@ -205,12 +201,14 @@ export async function runWorkflowLifecycle(
     changed: false,
   };
   let caughtError = null;
+  let metrics;
   try {
     execution = (await execute(decision)) || execution;
   } catch (error) {
     caughtError = error;
+    throw error;
   } finally {
-    const metrics = resolveWorkflowExecutionMetrics(ctx, {
+    metrics = resolveWorkflowExecutionMetrics(ctx, {
       domain,
       startCursor: logCursor,
     });
@@ -230,16 +228,15 @@ export async function runWorkflowLifecycle(
       retryCount: metrics.retryCount,
       errorCode: metrics.errorCode || resolveThrownErrorCode(caughtError),
     });
-    if (caughtError) throw caughtError;
-    return {
-      decision,
-      execution: {
-        requestedAction: execution.requestedAction || "none",
-        executedPrimary: execution.executedPrimary === true,
-        executedFollowup: execution.executedFollowup === true,
-        changed: execution.changed === true,
-      },
-      metrics,
-    };
   }
+  return {
+    decision,
+    execution: {
+      requestedAction: execution.requestedAction || "none",
+      executedPrimary: execution.executedPrimary === true,
+      executedFollowup: execution.executedFollowup === true,
+      changed: execution.changed === true,
+    },
+    metrics,
+  };
 }

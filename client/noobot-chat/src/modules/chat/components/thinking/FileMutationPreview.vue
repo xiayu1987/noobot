@@ -49,46 +49,46 @@ function mutationSummary(mutation) {
   return `${translateOperation(mutation.operation)} · ${mutationLineCounts(mutation)}`;
 }
 
-async function loadTab(tab) {
-  const mutation = selectedMutation.value;
-  if (!mutation) return;
-  const generation = ++requestGeneration;
-  const requestedMutationId = mutation.mutationId;
-  const requestedSessionId = props.sessionId;
-  const requestedSessionScope = mutation.sessionScope;
-  loading.value = true;
-  error.value = "";
-  try {
-    if (tab === tabs.DIFF) {
-      if (!isFunction(props.service?.getDiff)) {
-        throw new Error(props.translate("message.mutationDiffServiceUnavailable"));
-      }
-      const payload = await props.service.getDiff({
-        userId: props.userId,
-        sessionId: requestedSessionId,
-        sessionScope: requestedSessionScope,
-        mutationId: requestedMutationId,
-      });
-      if (generation !== requestGeneration) return;
-
+const tabLoaders = Object.freeze({
+  [tabs.DIFF]: {
+    method: "getDiff",
+    unavailableKey: "message.mutationDiffServiceUnavailable",
+    apply(payload) {
       diff.value = payload.diff;
-    } else if (tab === tabs.FILE) {
-      if (!isFunction(props.service?.getFile)) {
-        throw new Error(props.translate("message.mutationFileServiceUnavailable"));
-      }
-      const payload = await props.service.getFile({
-        userId: props.userId,
-        sessionId: requestedSessionId,
-        sessionScope: requestedSessionScope,
-        mutationId: requestedMutationId,
-      });
-      if (generation !== requestGeneration) return;
-
+    },
+  },
+  [tabs.FILE]: {
+    method: "getFile",
+    unavailableKey: "message.mutationFileServiceUnavailable",
+    apply(payload) {
       fileContent.value =
         payload.content === null
           ? props.translate(`message.mutationSnapshotState.${payload.snapshot}`)
           : payload.content;
-    }
+    },
+  },
+});
+
+async function loadTab(tab) {
+  const mutation = selectedMutation.value;
+  if (!mutation) return;
+
+  const generation = ++requestGeneration;
+  const loader = tabLoaders[tab];
+  loading.value = Boolean(loader);
+  error.value = "";
+  if (!loader) return;
+  try {
+    const fetchPayload = props.service?.[loader.method];
+    if (!isFunction(fetchPayload)) throw new Error(props.translate(loader.unavailableKey));
+    const payload = await fetchPayload.call(props.service, {
+      userId: props.userId,
+      sessionId: props.sessionId,
+      sessionScope: mutation.sessionScope,
+      mutationId: mutation.mutationId,
+    });
+    if (generation !== requestGeneration) return;
+    loader.apply(payload);
   } catch (loadError) {
     if (generation !== requestGeneration) return;
     error.value = String(
@@ -100,7 +100,7 @@ async function loadTab(tab) {
 }
 function changeTab(tab) {
   activeTab.value = tab;
-  if (tab === tabs.DIFF || tab === tabs.FILE) void loadTab(tab);
+  if (tabLoaders[tab]) void loadTab(tab);
 }
 watch(
   [selectedIndex, mutationId],

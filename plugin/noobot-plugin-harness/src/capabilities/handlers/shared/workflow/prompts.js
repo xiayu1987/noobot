@@ -8,8 +8,6 @@ export {
   resolveGuidanceSummaryPromptProtocolSelection,
 } from "./summary-matrix.js";
 export {
-  resolveProgrammingModeFromContext,
-  resolveTextModeFromContext,
   resolveScenarioPolicyFlagsFromContext,
   resolveWorkflowThresholdModeFromContext,
 } from "./matrix-resolver.js";

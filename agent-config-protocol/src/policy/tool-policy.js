@@ -79,14 +79,12 @@ export function resolveToolBindings({ sourceTools = [], runConfig = {} } = {}) {
   else if (mode === "append_custom") tools = [...source, ...customTools];
   const allow = new Set(normalizeStringList(policy.allowToolNames));
 
-  if (Array.isArray(runConfig?.pluginTools)) {
-    for (const contribution of runConfig.pluginTools) {
-      const name = text(contribution?.name);
-      if (name) allow.add(name);
-    }
+  const pluginTools = Array.isArray(runConfig?.pluginTools) ? runConfig.pluginTools : [];
+  for (const contribution of pluginTools) {
+    const name = text(contribution?.name);
+    if (name) allow.add(name);
   }
-  const scenario = text(runConfig.scenario || runConfig.scenarioProfile?.key).toLowerCase();
-  if (mode !== "custom_only" && (scenario === "coding" || scenario === "programming")) {
+  if (mode !== "custom_only" && runConfig.scenario === "programming") {
     for (const name of PROGRAMMING_REQUIRED_TOOL_NAMES) allow.add(name);
   }
   if (allow.size) tools = tools.filter((item) => allow.has(String(item?.name || "")));

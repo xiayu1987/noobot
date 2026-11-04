@@ -115,7 +115,7 @@ function requireUpgradeOutboxRecord(record, index) {
   try {
     return assertAuthorityOutboxJournalRecord(record);
   } catch (error) {
-    throw upgradeError("outbox_record_invalid", { index }, error);
+    throw upgradeError("outbox_record_invalid", { index, validationError: error.message }, error);
   }
 }
 
@@ -194,6 +194,7 @@ async function repairStagedSession({ storageService, stagingDir, expectScope }) 
   }
   const scope = await expectScope(source);
   const migration = normalizeSessionDocumentForCurrentProtocol(source, { now: MIGRATION_NOW });
+  const outbox = await migrateOutboxJournal(stagingDir, migration.legacyAuthorityEventOutbox);
   await writeSessionArtifact({
     storageService,
     sessionDir: stagingDir,
@@ -202,7 +203,6 @@ async function repairStagedSession({ storageService, stagingDir, expectScope }) 
     now: MIGRATION_NOW,
     predecessor: SESSION_ARTIFACT_PREDECESSOR.LEGACY_REWRITE,
   });
-  const outbox = await migrateOutboxJournal(stagingDir, migration.legacyAuthorityEventOutbox);
   await resegmentMigratedCheckpointBaselines({ sessionDir: stagingDir });
   return {
     scope,

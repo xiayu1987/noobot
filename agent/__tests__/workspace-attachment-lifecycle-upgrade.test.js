@@ -18,6 +18,7 @@ import { attachmentLifecycleSequenceScopeId } from "@noobot/attachment-protocol"
 import { buildHarness } from "./session/scoped-session-repositories.fixtures.js";
 import { v9Options, jsonl } from "./helpers/session-identity-upgrade.fixtures.js";
 import { upgradeSessionMessageIdentity } from "../src/workspace-lifecycle/session-message-identity-upgrade.js";
+import { upgradeWorkspaceLayout } from "../src/workspace-lifecycle/sections.js";
 import { readAuthorityOutbox } from "../src/session/authority-outbox-store/outbox-journal.js";
 
 function commit(sessionId, eventId, legacyId) {
@@ -129,4 +130,56 @@ test("v30 upgrades attachment journal identity, preserves delivery and isolates 
   assert.equal(repeated.quarantined.length, 1);
   assert.deepEqual(await fileBytes(directories["z-valid"]), validAfter);
   assert.deepEqual(await fileBytes(directories["a-broken"]), brokenBefore);
+});
+
+test("v29 startup isolates current-schema invalid delivery before writer recovery and upgrades healthy sessions", async (t) => {
+  const harness = buildHarness();
+  const { root, sessionRepo } = await harness.setup();
+  t.after(() => harness.cleanup());
+  const options = v9Options(root);
+  const directories = {};
+  for (const sessionId of ["a-invalid-delivery", "z-valid-delivery"]) {
+    const persistenceContext = sessionRepo.treePersistenceContext("alice", sessionId);
+    await sessionRepo.ensureSession({
+      userId: "alice",
+      sessionId,
+      parentSessionId: "",
+      caller: "user",
+      persistenceContext,
+    });
+    const scope = await sessionRepo.requireSessionScope("alice", sessionId, persistenceContext);
+    directories[sessionId] = scope.sessionDir;
+    const first = commit(sessionId, "e1", "old-1");
+    const attempt = { op: "attempt", eventId: "e1", attemptedAt: first.committedAt };
+    if (sessionId === "z-valid-delivery") attempt.consumerId = "c1";
+    const directory = path.join(scope.sessionDir, "authority-outbox");
+    await mkdir(directory, { recursive: true });
+    await writeFile(path.join(directory, "outbox.jsonl"), jsonl([first, attempt]));
+  }
+  const layoutFile = path.join(options.base, "runtime/workspace-layout-state.json");
+  await writeFile(layoutFile, JSON.stringify({ version: 29 }));
+  const invalidBefore = await fileBytes(directories["a-invalid-delivery"]);
+  const applied = await upgradeWorkspaceLayout({ ...options, created: false });
+  assert.equal(
+    applied.some((item) => item.failed),
+    false,
+  );
+  const upgrade = applied.find((item) => item.toVersion === 30);
+  assert.equal(upgrade.result.quarantined.length, 1);
+  assert.equal(upgrade.result.sessions.length, 1);
+  assert.match(JSON.stringify(upgrade.result.quarantined[0]), /outbox_record_invalid/);
+  assert.match(JSON.stringify(upgrade.result.quarantined[0]), /consumerId/);
+  assert.deepEqual(await fileBytes(directories["a-invalid-delivery"]), invalidBefore);
+  assert.equal(JSON.parse(await readFile(layoutFile, "utf8")).version, 30);
+  const outbox = await readAuthorityOutbox(directories["z-valid-delivery"]);
+  assert.equal(outbox[0].deliveries.c1.attempts, 1);
+  assert.equal(validateProtocolEvent(outbox[0].envelope).valid, true);
+  const healthyAfter = await fileBytes(directories["z-valid-delivery"]);
+  const repeated = await upgradeWorkspaceLayout({ ...options, created: false });
+  assert.equal(
+    repeated.some((item) => item.failed),
+    false,
+  );
+  assert.deepEqual(await fileBytes(directories["a-invalid-delivery"]), invalidBefore);
+  assert.deepEqual(await fileBytes(directories["z-valid-delivery"]), healthyAfter);
 });

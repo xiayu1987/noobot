@@ -23,30 +23,19 @@ import {
 import { text } from "@noobot/shared/value";
 
 function hasPendingToolCallPair(messages = []) {
-  if (!Array.isArray(messages) || !messages.length) return false;
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const msg = messages[index] || {};
-    const role = text(msg?.role).toLowerCase();
-    if (role !== "assistant") continue;
-    const calls = Array.isArray(msg?.tool_calls) ? msg.tool_calls : [];
-    if (!calls.length) return false;
-    const callIds = new Set(calls.map(resolveContextToolCallDeclarationId).filter(Boolean));
-    if (!callIds.size) return false;
-    const matchedToolIds = new Set();
-    for (let cursor = index + 1; cursor < messages.length; cursor += 1) {
-      const next = messages[cursor] || {};
-      if (text(next?.role).toLowerCase() !== "tool") continue;
-      const toolCallId = resolveContextToolResultCallId(next);
-      if (toolCallId && callIds.has(toolCallId)) matchedToolIds.add(toolCallId);
-    }
-    return matchedToolIds.size < callIds.size;
+  const index = messages.findLastIndex(
+    (message) => text(message?.role).toLowerCase() === "assistant",
+  );
+  if (index < 0) return false;
+  const calls = messages[index].tool_calls;
+  if (!Array.isArray(calls) || !calls.length) return false;
+  const pendingIds = new Set(calls.map(resolveContextToolCallDeclarationId).filter(Boolean));
+  for (let cursor = index + 1; cursor < messages.length; cursor += 1) {
+    const next = messages[cursor];
+    if (text(next?.role).toLowerCase() !== "tool") continue;
+    pendingIds.delete(resolveContextToolResultCallId(next));
   }
-  return false;
-}
-
-function resolveSystemContextMessages(ctx = {}) {
-  const list = resolveModelMessageBlocks(ctx).system;
-  return Array.isArray(list) ? list : null;
+  return pendingIds.size > 0;
 }
 
 function dedupeExists(messages = [], target = {}) {
@@ -107,16 +96,13 @@ export function injectMessageWithPolicy(
     isSystemLikeMessageRole(resolvedRole) &&
     normalizedInjectAt === "append" &&
     hasPendingToolCallPair(messages);
-  if (shouldProtectContinuity) {
-    const systemContextMessages = resolveSystemContextMessages(ctx);
-    if (systemContextMessages) {
-      if (dedupe && dedupeExists(systemContextMessages, message)) {
-        return { injected: false, target: "agent_system", deduped: true };
-      }
-      appendMessage(ctx, message, { block: "system" });
-      persistHarnessRecordToCurrentTurn(ctx, record, persistToCurrentTurn);
-      return { injected: true, target: "agent_system" };
-    }
+  const target = shouldProtectContinuity ? "agent_system" : "ctx_messages";
+  if (
+    shouldProtectContinuity &&
+    dedupe &&
+    dedupeExists(resolveModelMessageBlocks(ctx).system, message)
+  ) {
+    return { injected: false, target, deduped: true };
   }
 
   if (normalizedInjectAt === "prepend") {
@@ -127,5 +113,5 @@ export function injectMessageWithPolicy(
     });
   }
   persistHarnessRecordToCurrentTurn(ctx, record, persistToCurrentTurn);
-  return { injected: true, target: "ctx_messages" };
+  return { injected: true, target };
 }

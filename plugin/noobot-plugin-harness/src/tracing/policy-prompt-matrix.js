@@ -10,7 +10,6 @@ import {
   resolveHarnessScenarioFromContext,
 } from "../capabilities/handlers/shared/workflow/matrix-resolver.js";
 import { resolveActiveDynamicPolicyPromptFromContext } from "../capabilities/handlers/shared/workflow/dynamic-policy-prompt.js";
-import { text } from "@noobot/shared/value";
 
 const POLICY_PROMPT_KEY_BY_SCENARIO = Object.freeze({
   [HARNESS_SCENARIO.GENERAL]: HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY_GENERAL,
@@ -40,9 +39,7 @@ function buildPolicyPromptSelectionProfileText(selection = {}) {
   ].join("\n");
 }
 
-function buildDynamicPolicyPromptSelection(dynamicPolicyPrompt = {}) {
-  const scenario =
-    text(dynamicPolicyPrompt?.scenario) || HARNESS_SCENARIO.GENERAL || HARNESS_SCENARIO.GENERAL;
+function buildDynamicPolicyPromptSelection({ scenario }) {
   return Object.freeze({
     scenario,
     policyPromptId: `harness_policy/dynamic/${scenario}`,

@@ -103,7 +103,7 @@ export function schedulePlanUpdateByInject(
   });
 }
 
-export function maybeInjectPlanUpdatePrompt(ctx = {}, meta = {}) {
+export function maybeInjectPlanUpdatePrompt(ctx = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
@@ -125,10 +125,7 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}, meta = {}) {
     });
     return false;
   }
-  const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(
-    ctx,
-    meta,
-  );
+  const { scenario, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(ctx);
   const systemChecklistContent = buildPlanChecklistSystemContent({
     locale,
     planText: bucket?.planText,
@@ -160,8 +157,7 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}, meta = {}) {
   injectMessageWithPolicy(ctx, {
     role: "user",
     content: buildWorkflowResponsibilityConstraintUserPrompt(locale, pendingData.stage, {
-      programmingMode,
-      textMode,
+      scenario,
       dynamicPolicyPrompt,
       includeWorkflowPolicy: false,
     }),

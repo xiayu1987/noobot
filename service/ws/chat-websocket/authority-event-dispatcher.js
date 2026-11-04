@@ -22,7 +22,12 @@ function scopeKey(persistenceScope) {
 async function publishAuthorityEvents(events, publishEvent) {
   const acknowledgements = [];
   for (const item of events) {
-    const sent = await publishEvent(item.envelope.identity.eventType, item.envelope);
+    let sent;
+    try {
+      sent = await publishEvent(item.envelope.identity.eventType, item.envelope);
+    } catch (error) {
+      return { acknowledgements, sendFailed: true, publishFailure: { error } };
+    }
     if (sent !== true) return { acknowledgements, sendFailed: true };
     acknowledgements.push({
       eventId: item.eventId,
@@ -34,6 +39,20 @@ async function publishAuthorityEvents(events, publishEvent) {
   return { acknowledgements, sendFailed: false };
 }
 
+async function acknowledgePublishedEvents(session, request, publishFailure) {
+  try {
+    const result = await session.acknowledgeAuthorityEvents(request);
+    if (!result.acknowledged && publishFailure) throw new Error(result.reason);
+    return result;
+  } catch (error) {
+    if (!publishFailure) throw error;
+    throw new AggregateError(
+      [publishFailure.error, error],
+      "authority event publishing and acknowledgement failed",
+    );
+  }
+}
+
 async function dispatchAuthorityBatch({ session, identity, consumerId, events, publishEvent }) {
   const attempt = await session.recordAuthorityEventAttempts({
     ...identity,
@@ -41,16 +60,20 @@ async function dispatchAuthorityBatch({ session, identity, consumerId, events, p
     eventIds: events.map((item) => item.eventId),
   });
   if (!attempt.recorded) return { dispatched: false, reason: attempt.reason, delivered: 0 };
-  const { acknowledgements, sendFailed } = await publishAuthorityEvents(events, publishEvent);
+  const { acknowledgements, sendFailed, publishFailure } = await publishAuthorityEvents(
+    events,
+    publishEvent,
+  );
   if (acknowledgements.length) {
-    const acknowledged = await session.acknowledgeAuthorityEvents({
-      ...identity,
-      consumerId,
-      acknowledgements,
-    });
+    const acknowledged = await acknowledgePublishedEvents(
+      session,
+      { ...identity, consumerId, acknowledgements },
+      publishFailure,
+    );
     if (!acknowledged.acknowledged)
       return { dispatched: false, reason: acknowledged.reason, delivered: 0 };
   }
+  if (publishFailure) throw publishFailure.error;
   const delivered = acknowledgements.length;
   if (sendFailed) return { dispatched: false, reason: "authority_event_send_failed", delivered };
   return { dispatched: true, delivered };

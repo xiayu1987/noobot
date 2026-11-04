@@ -5,6 +5,15 @@
  */
 import { isCanonicalText, isFunction, isPlainObject } from "@noobot/shared/value";
 
+function assertFinalizationPort(name, port, methods) {
+  for (const method of methods) {
+    if (isFunction(port?.[method])) continue;
+    const error = new TypeError(`session finalization requires ${name}.${method}`);
+    error.code = "SESSION_FINALIZATION_PORT_INVALID";
+    throw error;
+  }
+}
+
 export function assertSessionFinalizationContext({
   lifecycle,
   runtimeEventListener,
@@ -15,13 +24,7 @@ export function assertSessionFinalizationContext({
     ["lifecycle", lifecycle, ["enterPersisting", "enterMemory"]],
     ["runtimeEventListener", runtimeEventListener, ["onEvent", "flush"]],
   ]) {
-    for (const method of methods) {
-      if (!isFunction(port?.[method])) {
-        const error = new TypeError(`session finalization requires ${name}.${method}`);
-        error.code = "SESSION_FINALIZATION_PORT_INVALID";
-        throw error;
-      }
-    }
+    assertFinalizationPort(name, port, methods);
   }
   if (parentDialogProcessId !== "" && !isCanonicalText(parentDialogProcessId)) {
     throw new TypeError(

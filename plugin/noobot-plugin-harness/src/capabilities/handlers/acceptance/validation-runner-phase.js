@@ -41,7 +41,7 @@ import { text } from "@noobot/shared/value";
 
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
 
-export function maybeInjectPhaseAcceptancePrompt(ctx = {}, meta = {}) {
+export function maybeInjectPhaseAcceptancePrompt(ctx = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
@@ -49,10 +49,7 @@ export function maybeInjectPhaseAcceptancePrompt(ctx = {}, meta = {}) {
   const messages = resolveModelMessages(ctx);
   if (!messages) return false;
   const locale = state.locale || LOCALE.ZH_CN;
-  const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(
-    ctx,
-    meta,
-  );
+  const { scenario, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(ctx);
   const {
     summaryReportsContents,
     planContextContent,
@@ -65,7 +62,6 @@ export function maybeInjectPhaseAcceptancePrompt(ctx = {}, meta = {}) {
     phase: true,
     requestPayload: buildPhaseAcceptanceRequestPayload({ bucket, state }),
     ctx,
-    meta,
   });
   pushRoleMessage(ctx, messages, "system", protocolContent);
   for (const content of summaryReportsContents) {
@@ -81,8 +77,7 @@ export function maybeInjectPhaseAcceptancePrompt(ctx = {}, meta = {}) {
     messages,
     "user",
     buildWorkflowResponsibilityConstraintUserPrompt(locale, "phase_acceptance", {
-      programmingMode,
-      textMode,
+      scenario,
       dynamicPolicyPrompt,
       includeWorkflowPolicy: false,
     }),
@@ -132,10 +127,11 @@ export async function runPhaseAcceptanceBySeparateModel(
   const shouldRun = forceRun === true || shouldRunFromPending;
   if (!shouldRun) return false;
   if (!shouldUseSeparateModel(meta)) {
-    return forceRun === true ? false : maybeInjectPhaseAcceptancePrompt(ctx, meta);
+    return forceRun === true ? false : maybeInjectPhaseAcceptancePrompt(ctx);
   }
   const invoker = readCapabilityModelInvoker(meta);
   const locale = state.locale || LOCALE.ZH_CN;
+  const scenarioPolicy = resolveScenarioPolicyFlagsFromContext(ctx);
   const {
     summaryReportsContents,
     planContextContent,
@@ -148,7 +144,6 @@ export async function runPhaseAcceptanceBySeparateModel(
     phase: true,
     requestPayload: buildPhaseAcceptanceRequestPayload({ bucket, state }),
     ctx,
-    meta,
     includeWorkflowPolicy: false,
   });
   const agentMessages = filterHistoricalSummaryRelayMessages(
@@ -183,11 +178,9 @@ export async function runPhaseAcceptanceBySeparateModel(
           phaseReportsContents,
           requestContent,
           protocolContent,
-          workflowPolicyPrompt: buildScenarioPolicyPromptText(
-            locale,
-            resolveScenarioPolicyFlagsFromContext(ctx, meta),
-          ),
-          ...resolveScenarioPolicyFlagsFromContext(ctx, meta),
+          workflowPolicyPrompt: buildScenarioPolicyPromptText(locale, scenarioPolicy),
+          scenario: scenarioPolicy.scenario,
+          dynamicPolicyPrompt: scenarioPolicy.dynamicPolicyPrompt,
         }),
         ctx,
         toolAllowlist: resolveCapabilityToolAllowlist(meta, "phase_acceptance"),
@@ -254,6 +247,7 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
     return false;
   }
   const locale = state.locale || LOCALE.ZH_CN;
+  const scenarioPolicy = resolveScenarioPolicyFlagsFromContext(ctx);
   const requestPayload = buildPhaseAcceptanceRequestPayload({ bucket, state });
   const {
     summaryReportsContents,
@@ -267,7 +261,6 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
     phase: true,
     requestPayload,
     ctx,
-    meta,
     includeWorkflowPolicy: false,
   });
   if (!shouldUseSeparateModel(meta)) {
@@ -310,11 +303,9 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
           phaseReportsContents,
           requestContent,
           protocolContent,
-          workflowPolicyPrompt: buildScenarioPolicyPromptText(
-            locale,
-            resolveScenarioPolicyFlagsFromContext(ctx, meta),
-          ),
-          ...resolveScenarioPolicyFlagsFromContext(ctx, meta),
+          workflowPolicyPrompt: buildScenarioPolicyPromptText(locale, scenarioPolicy),
+          scenario: scenarioPolicy.scenario,
+          dynamicPolicyPrompt: scenarioPolicy.dynamicPolicyPrompt,
         }),
         ctx,
         toolAllowlist: resolveCapabilityToolAllowlist(meta, "phase_acceptance_before_final"),

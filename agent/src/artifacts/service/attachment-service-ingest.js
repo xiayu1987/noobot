@@ -94,6 +94,26 @@ export async function saveAttachmentRecord({
   return record;
 }
 
+function indexRecordsByClientAttachmentId(attachments) {
+  const byClientId = new Map();
+  for (const record of Object.values(attachments)) {
+    const clientAttachmentId = safeStr(record?.clientAttachmentId);
+
+    if (clientAttachmentId && !byClientId.has(clientAttachmentId)) {
+      byClientId.set(clientAttachmentId, record);
+    }
+  }
+  return byClientId;
+}
+
+function assertReusableContent(existing, contentSha256) {
+  if (safeStr(existing.contentSha256) && safeStr(existing.contentSha256) !== contentSha256) {
+    const error = new Error("clientAttachmentId cannot be reused for different attachment content");
+    error.code = "CLIENT_ATTACHMENT_ID_CONFLICT";
+    throw error;
+  }
+}
+
 export async function ingestAttachments(
   service,
   { userId, sessionId = "", attachmentSource = "user", attachments },
@@ -172,29 +192,17 @@ export async function ingestAttachments(
 
   return withAttachIndexLock(basePath, scope, async () => {
     const index = await readAttachIndex(basePath, scope);
+    const byClientId = indexRecordsByClientAttachmentId(index.attachments);
     const saved = [];
 
     for (const { item, name, normalizedMime, bytes } of prepared) {
       const clientAttachmentId = safeStr(item?.clientAttachmentId);
       const contentSha256 = createHash("sha256").update(bytes).digest("hex");
-      if (clientAttachmentId) {
-        const existing = Object.values(index.attachments || {}).find(
-          (record) => safeStr(record?.clientAttachmentId) === clientAttachmentId,
-        );
-        if (existing) {
-          if (
-            safeStr(existing?.contentSha256) &&
-            safeStr(existing.contentSha256) !== contentSha256
-          ) {
-            const error = new Error(
-              "clientAttachmentId cannot be reused for different attachment content",
-            );
-            error.code = "CLIENT_ATTACHMENT_ID_CONFLICT";
-            throw error;
-          }
-          saved.push(existing);
-          continue;
-        }
+      const existing = clientAttachmentId ? byClientId.get(clientAttachmentId) : undefined;
+      if (existing) {
+        assertReusableContent(existing, contentSha256);
+        saved.push(existing);
+        continue;
       }
 
       const record = await saveAttachmentRecord({
@@ -207,6 +215,7 @@ export async function ingestAttachments(
         clientAttachmentId,
         contentSha256,
       });
+      if (clientAttachmentId) byClientId.set(clientAttachmentId, record);
       saved.push(record);
     }
 

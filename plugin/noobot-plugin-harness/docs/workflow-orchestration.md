@@ -9,6 +9,29 @@ This document describes:
 3. Message order passed to model (or injected to main model) for each flow.
 4. Unified workflow pattern.
 
+## Context scenario contract
+
+`RunConfigResolver.resolveScenarioRunConfig` in `@noobot/agent-config-protocol` owns
+the resolved `runConfig.scenario`. Bot hooks carry this configuration in
+`ctx.runConfig`; Agent hooks expose it through
+`ctx.agentContext.bindings.runtime.runConfig`. When an explicit hook configuration
+exists, it is authoritative as a whole, including `full` or an unset scenario.
+Harness reads only its `scenario` field: `scenarioProfile` describes the resolved
+capabilities, and is not a second scenario selector. `full` selects Harness `general`.
+
+The `HARNESS_DYNAMIC_POLICY_PROMPT` protocol independently replaces the prompt
+policy for the current intent. Its validated record in
+`bindings.extensions.harness.dynamicPolicyPrompt` owns the active prompt scenario,
+including `general`; prompt and summary protocol selection follow that scenario.
+Workflow scheduling thresholds continue to use the resolved run scenario.
+Dynamic prompt policies do not rewrite tool permissions or runtime configuration.
+
+Prompt builders accept a single top-level `scenario` selector. An explicit `scenario`
+is authoritative, including `general`; only an absent `scenario` lets policy
+selection read the Hook configuration. `data` carries prompt content, not scenario
+selectors. `scenarioKey`, `scenarioProfile.key`, `programmingMode` / `textMode`, and
+`isProgrammingMode` / `isTextMode` are not prompt inputs.
+
 ## Unified Workflow Pattern
 
 Planning, guidance, acceptance, and review follow the matrix below:

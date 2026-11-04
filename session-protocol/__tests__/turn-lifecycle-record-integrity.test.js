@@ -76,3 +76,49 @@ for (const source of [
     });
   });
 }
+
+test("lifecycle integrity reports record errors in field order without mutating input", () => {
+  const source = lifecycle();
+  source.turns["invalid-turn"] = null;
+  source.replacedTurns["invalid-replacement"] = [];
+  const before = structuredClone(source);
+  assert.throws(() => assertTurnLifecycleRecordIntegrity(source), {
+    code: "TURN_LIFECYCLE_RECORD_INVALID",
+    protocolErrors: [
+      "invalid_lifecycle_record:turns:invalid-turn",
+      "invalid_lifecycle_record:replacedTurns:invalid-replacement",
+    ],
+  });
+  assert.deepEqual(source, before);
+});
+
+test("lifecycle integrity validates both directions of continuation relationships", () => {
+  const source = createEmptyTurnLifecycle();
+  source.sequence = 2;
+  source.turns = {
+    "turn-1": turnRecord({
+      state: "stop_completed",
+      phase: "stop",
+      executionState: "user_stopped",
+      finishedAt: "2026-07-30T00:01:00.000Z",
+      continuedByTurnScopeId: "turn-2",
+    }),
+    "turn-2": turnRecord({
+      turnScopeId: "turn-2",
+      sequence: 2,
+      dialogProcessId: "dialog-2",
+      continuationSource: { turnScopeId: "turn-1", dialogProcessId: "dialog-1" },
+    }),
+  };
+  assert.equal(assertTurnLifecycleRecordIntegrity(source), source);
+  source.turns["turn-2"].continuationSource.dialogProcessId = "wrong-dialog";
+  const before = structuredClone(source);
+  assert.throws(() => assertTurnLifecycleRecordIntegrity(source), {
+    code: "TURN_LIFECYCLE_RECORD_INVALID",
+    protocolErrors: [
+      "turn_continuation_target_relation_mismatch",
+      "turn_continuation_source_relation_mismatch",
+    ],
+  });
+  assert.deepEqual(source, before);
+});

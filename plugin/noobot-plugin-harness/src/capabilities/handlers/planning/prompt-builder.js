@@ -158,20 +158,19 @@ function buildPlanningContextSummaryPrompt(locale = LOCALE.ZH_CN, ctx = {}, meta
   ].join("\n");
 }
 
-function buildPlanningPromptBase(locale = LOCALE.ZH_CN, _ctx = {}, _meta = {}, options = {}) {
+function buildPlanningPromptBase(locale = LOCALE.ZH_CN, ctx = {}, options = {}) {
   const userGoal =
-    resolveLatestUserMessageText(_ctx) ||
+    resolveLatestUserMessageText(ctx) ||
     translateI18nText(
       locale,
       HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_LATEST_USER_GOAL_FALLBACK,
     );
-  const { programmingMode, textMode } = resolveScenarioPolicyFlagsFromContext(_ctx, _meta);
+  const { scenario } = resolveScenarioPolicyFlagsFromContext(ctx);
   return buildPlanningMainPrompt({
     locale,
     marker: getPlanningPromptMarker(locale),
     data: { userGoal },
-    programmingMode,
-    textMode,
+    scenario,
     includeWorkflowPolicy: options?.includeWorkflowPolicy !== false,
   });
 }
@@ -223,13 +222,9 @@ export function buildPlanningMessagePlan(
     planText: bucket.planText,
     bucket,
   });
-  const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(
-    ctx,
-    meta,
-  );
+  const { scenario, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(ctx);
   const workflowPolicyPrompt = buildScenarioPolicyPromptText(locale, {
-    programmingMode,
-    textMode,
+    scenario,
     dynamicPolicyPrompt,
   });
   return createMessagePlan([
@@ -255,7 +250,7 @@ export function buildPlanningMessagePlan(
       kind: "planning_task",
       injectRole: "user",
       separateRole: "task",
-      content: taskContent || buildPlanningPromptBase(locale, ctx, meta, { includeWorkflowPolicy }),
+      content: taskContent || buildPlanningPromptBase(locale, ctx, { includeWorkflowPolicy }),
     },
     {
       kind: "planning_workflow_policy",
@@ -268,8 +263,7 @@ export function buildPlanningMessagePlan(
       injectRole: "user",
       separateRole: "task",
       content: buildWorkflowResponsibilityConstraintUserPrompt(locale, "planning", {
-        programmingMode,
-        textMode,
+        scenario,
         dynamicPolicyPrompt,
         includeWorkflowPolicy,
       }),

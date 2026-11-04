@@ -17,6 +17,7 @@ import {
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 import { applySessionMessageFacts } from "../helpers/session-message-facts.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import { ACTIVITY_TIMELINE_ERROR_CODE } from "@noobot/event-protocol/activity-timeline";
 
 function canonicalTransferEnvelope(sessionId) {
   return {
@@ -165,5 +166,67 @@ test("failed Session repair projects an unavailable list item", async () => {
     const unavailable = summaries.find((item) => item.sessionId === sessionId);
     assert.equal(unavailable.availability, "unavailable");
     assert.ok(unavailable.unavailableReason.code);
+  });
+});
+
+test("invalid source activity projects one unavailable session and preserves healthy reads", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u1";
+    const sessionId = "invalid-activity-source";
+    const healthyId = "healthy-activity-source";
+    await initializeUserWorkspace(workspaceRoot, userId);
+    const runtime = createTestSessionServices({ workspaceRoot });
+    const repository = runtime.repositories.sessionRepository;
+    for (const id of [sessionId, healthyId]) {
+      await provisionTestSession(runtime, {
+        userId,
+        sessionId: id,
+        parentSessionId: "",
+        caller: SESSION_CALLER.USER,
+      });
+    }
+    const context = repository.treePersistenceContext(userId, sessionId);
+    const scope = await repository.requireSessionScope(userId, sessionId, context);
+    const sourceBytes = await readFile(scope.sessionFile);
+    const source = await repository.requireById(userId, sessionId, {
+      persistenceContext: context,
+    });
+    source.messages = canonicalMessages(
+      [{ role: "assistant", content: "analysis", activityTimeline: [{ eventId: "missing-id" }] }],
+      sessionId,
+      "invalid_activity",
+    );
+    const sourceBefore = structuredClone(source);
+    const requireById = repository.requireById.bind(repository);
+    repository.requireById = async (owner, id, options) =>
+      id === sessionId ? source : requireById(owner, id, options);
+
+    const expectedReason = {
+      code: ACTIVITY_TIMELINE_ERROR_CODE.FACT_INVALID,
+      message: "activity timeline contains a noncanonical fact",
+    };
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const maintenance = await runtime.sessionCrudService.maintainSessionDisplaySummaries({
+        userId,
+      });
+      assert.deepEqual(maintenance.failures, [{ sessionId, ...expectedReason }]);
+      const { sessions } = await runtime.sessionCrudService.getAllSessionSummaries({ userId });
+      const unavailable = sessions.find((entry) => entry.sessionId === sessionId);
+      assert.equal(unavailable.availability, "unavailable");
+      assert.deepEqual(unavailable.unavailableReason, expectedReason);
+      assert.equal(
+        sessions.find((entry) => entry.sessionId === healthyId).availability,
+        "available",
+      );
+      const detail = await runtime.sessionCrudService.getSessionDisplayData({ userId, sessionId });
+      assert.deepEqual(detail.sessions, [unavailable]);
+      const healthy = await runtime.sessionCrudService.getSessionDisplayData({
+        userId,
+        sessionId: healthyId,
+      });
+      assert.equal(healthy.sessions[0].availability, "available");
+    }
+    assert.deepEqual(source, sourceBefore);
+    assert.deepEqual(await readFile(scope.sessionFile), sourceBytes);
   });
 });

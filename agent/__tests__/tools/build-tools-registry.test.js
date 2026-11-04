@@ -230,7 +230,7 @@ test("buildTools: coding 场景不能绕过 enabled=false 的工具配置", asyn
         basePath: "/tmp",
         runConfig: {
           hookManager: null,
-          scenario: "coding",
+          scenario: "programming",
         },
       },
     }),

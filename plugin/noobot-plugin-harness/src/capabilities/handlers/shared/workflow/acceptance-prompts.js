@@ -95,8 +95,7 @@ export function buildAllSummaryReportSystemContents(options = {}) {
 }
 
 export function buildPhaseAcceptanceRequestPromptText(options = {}) {
-  const { locale, marker, data, programmingMode, textMode, dynamicPolicyPrompt } =
-    normalizePromptOptions(options);
+  const { locale, marker, data, scenario, dynamicPolicyPrompt } = normalizePromptOptions(options);
   const payload =
     data.requestPayload ?? data.payload ?? options?.requestPayload ?? options?.payload ?? {};
   const payloadText = JSON.stringify(payload || {}, null, 2);
@@ -106,7 +105,7 @@ export function buildPhaseAcceptanceRequestPromptText(options = {}) {
     text(marker),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PHASE_ACCEPTANCE_REQUEST_GOAL),
     includeWorkflowPolicy
-      ? buildScenarioPolicyPromptText(locale, { programmingMode, textMode, dynamicPolicyPrompt })
+      ? buildScenarioPolicyPromptText(locale, { scenario, dynamicPolicyPrompt })
       : "",
     includeProtocol ? buildAcceptancePatchProtocolText({ locale, mode: "phase" }) : "",
     translateI18nText(
@@ -120,8 +119,7 @@ export function buildPhaseAcceptanceRequestPromptText(options = {}) {
 }
 
 export function buildAcceptanceValidationRequestPromptText(options = {}) {
-  const { locale, marker, data, programmingMode, textMode, dynamicPolicyPrompt } =
-    normalizePromptOptions(options);
+  const { locale, marker, data, scenario, dynamicPolicyPrompt } = normalizePromptOptions(options);
   const payload =
     data.requestPayload ?? data.payload ?? options?.requestPayload ?? options?.payload ?? null;
   const payloadText = JSON.stringify(payload || {}, null, 2);
@@ -131,7 +129,7 @@ export function buildAcceptanceValidationRequestPromptText(options = {}) {
     text(marker),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.FINAL_ACCEPTANCE_REQUEST_GOAL),
     includeWorkflowPolicy
-      ? buildScenarioPolicyPromptText(locale, { programmingMode, textMode, dynamicPolicyPrompt })
+      ? buildScenarioPolicyPromptText(locale, { scenario, dynamicPolicyPrompt })
       : "",
     includeProtocol ? buildAcceptancePatchProtocolText({ locale, mode: "final" }) : "",
     payloadText,

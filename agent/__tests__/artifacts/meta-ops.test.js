@@ -10,6 +10,7 @@ import {
   mapAttachmentRecordsToMetas,
   normalizeAttachmentMetas,
   normalizeAttachmentTurnScopeMeta,
+  normalizeAttachmentOwnerMeta,
   attachmentMatchKeys,
   projectCanonicalAttachmentIdentity,
 } from "../../src/artifacts/meta-ops.js";
@@ -144,6 +145,32 @@ test("nested attachment metadata normalizers preserve only canonical fields", ()
     dialogProcessId: "dialog_1",
     sessionId: "s1",
   });
+});
+
+test("owner metadata cleans nested empty values while preserving false, zero and arrays", () => {
+  const tags = ["", null, "tag"];
+  const source = {
+    owner: {
+      type: " model ",
+      id: " model-1 ",
+      nested: { label: " kept ", enabled: false, count: 0, empty: { label: " " } },
+      tags,
+      absent: undefined,
+      nil: null,
+      blank: " ",
+      emptyList: [],
+    },
+  };
+  const before = structuredClone(source);
+  const owner = normalizeAttachmentOwnerMeta(source);
+  assert.deepEqual(owner, {
+    type: "model",
+    id: "model-1",
+    nested: { label: "kept", enabled: false, count: 0 },
+    tags,
+  });
+  assert.equal(owner.tags, tags);
+  assert.deepEqual(source, before);
 });
 
 test("mapAttachmentRecordsToMetas projects canonical runtime records without inferring facts", () => {

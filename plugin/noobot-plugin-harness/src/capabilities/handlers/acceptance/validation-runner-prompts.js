@@ -92,8 +92,7 @@ export function buildFinalAcceptanceSemanticValidationMessages({
   requestContent = "",
   protocolContent = "",
   workflowPolicyPrompt = "",
-  programmingMode = false,
-  textMode = false,
+  scenario,
   dynamicPolicyPrompt = "",
 } = {}) {
   const hasRequest = text(requestContent);
@@ -107,8 +106,7 @@ export function buildFinalAcceptanceSemanticValidationMessages({
     workflowPolicyPrompt: hasRequest ? workflowPolicyPrompt : "",
     responsibilityPrompt: hasRequest
       ? buildWorkflowResponsibilityConstraintUserPrompt(locale, "final_acceptance", {
-          programmingMode,
-          textMode,
+          scenario,
           dynamicPolicyPrompt,
           includeWorkflowPolicy: false,
         })
@@ -179,7 +177,6 @@ export function buildAcceptancePromptParts({
   requestPayload = {},
   phase = false,
   ctx = {},
-  meta = {},
   includeWorkflowPolicy = true,
 } = {}) {
   const mainPlanContext = resolveAcceptanceMainPlanContext(
@@ -203,17 +200,13 @@ export function buildAcceptancePromptParts({
         data: { latestCompleteSummaryText: resolveLatestCompleteSummaryText({ bucket, ctx }) },
       })
     : [];
-  const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(
-    ctx,
-    meta,
-  );
+  const { scenario, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(ctx);
   const requestContent = phase
     ? buildPhaseAcceptanceRequestPromptText({
         locale,
         marker: getPhaseAcceptanceRequestMarker(locale),
         data: { requestPayload },
-        programmingMode,
-        textMode,
+        scenario,
         dynamicPolicyPrompt,
         includeWorkflowPolicy,
         includeProtocol: false,
@@ -222,8 +215,7 @@ export function buildAcceptancePromptParts({
         locale,
         marker: getAcceptanceSemanticValidationMarker(locale),
         data: { requestPayload },
-        programmingMode,
-        textMode,
+        scenario,
         dynamicPolicyPrompt,
         includeWorkflowPolicy,
         includeProtocol: false,
@@ -249,8 +241,7 @@ export function buildPhaseAcceptanceMessages({
   requestContent = "",
   protocolContent = "",
   workflowPolicyPrompt = "",
-  programmingMode = false,
-  textMode = false,
+  scenario,
   dynamicPolicyPrompt = "",
 } = {}) {
   const hasRequest = text(requestContent);
@@ -266,8 +257,7 @@ export function buildPhaseAcceptanceMessages({
     workflowPolicyPrompt: hasRequest ? workflowPolicyPrompt : "",
     responsibilityPrompt: hasRequest
       ? buildWorkflowResponsibilityConstraintUserPrompt(locale, "phase_acceptance", {
-          programmingMode,
-          textMode,
+          scenario,
           dynamicPolicyPrompt,
           includeWorkflowPolicy: false,
         })

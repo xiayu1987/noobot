@@ -17,6 +17,119 @@ import {
 } from "../helpers/public-runtime-fixtures.js";
 import { contextMessage } from "../helpers/context-message.js";
 import { markContextMessageSummarized } from "@noobot/context-protocol/message/codec";
+import { replaceContextProjection } from "@noobot/context-protocol/mutation/context";
+
+test("system injection preserves pending parallel tool calls and appends once", () => {
+  for (const completedIds of [[], ["call-1"], ["call-1", "call-1"], ["call-1", "call-2"]]) {
+    const assistant = contextMessage({
+      messageUid: "parallel-assistant",
+      role: "assistant",
+      content: "",
+      tool_calls: ["call-1", "call-2"].map((id) => ({
+        id,
+        name: "read_file",
+        args: {},
+        type: "tool_call",
+      })),
+    });
+    const results = completedIds.map((id, index) =>
+      contextMessage({
+        messageUid: `result-${index}`,
+        role: "tool",
+        content: "done",
+        tool_call_id: id,
+      }),
+    );
+    const ctx = createTestHookContext(
+      {},
+      {
+        messageBlocks: { system: [], history: [], incremental: [assistant, ...results] },
+      },
+    );
+    const before = [...ctx.modelContext.messageBlocks.incremental];
+    const result = injectMessageWithPolicy(ctx, {
+      content: "pending-safe context",
+      injectedMessageType: "planning_context_summary",
+    });
+    assert.deepEqual(result, {
+      injected: true,
+      target: new Set(completedIds).size === 2 ? "ctx_messages" : "agent_system",
+    });
+    assert.deepEqual(ctx.modelContext.messageBlocks.incremental, before);
+    assert.equal(ctx.modelContext.messageBlocks.system.length, 1);
+    assert.equal(
+      ctx.modelContext.messages.filter((message) => message.content === "pending-safe context")
+        .length,
+      1,
+    );
+  }
+});
+
+test("pending-call dedupe checks system messages excluded from the current projection", () => {
+  const system = contextMessage({
+    messageUid: "existing-system",
+    role: "system",
+    content: "existing context",
+  });
+  const assistant = contextMessage({
+    messageUid: "pending-assistant",
+    role: "assistant",
+    content: "",
+    tool_calls: [{ id: "call-1", name: "read_file", args: {}, type: "tool_call" }],
+  });
+  const ctx = createTestHookContext(
+    {},
+    {
+      messageBlocks: { system: [system], history: [], incremental: [assistant] },
+    },
+  );
+  replaceContextProjection(ctx.modelContext, [assistant]);
+  assert.deepEqual(
+    injectMessageWithPolicy(ctx, {
+      content: "existing context",
+      dedupe: true,
+      injectedMessageType: "planning_context_summary",
+    }),
+    {
+      injected: false,
+      target: "agent_system",
+      deduped: true,
+    },
+  );
+  assert.deepEqual(ctx.modelContext.messages, [assistant]);
+  assert.deepEqual(ctx.modelContext.messageBlocks.system, [system]);
+});
+
+test("the latest assistant message closes earlier tool-call continuity checks", () => {
+  const ctx = createTestHookContext(
+    {},
+    {
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [
+          contextMessage({
+            messageUid: "old-call",
+            role: "assistant",
+            content: "",
+            tool_calls: [{ id: "old", name: "read_file", args: {}, type: "tool_call" }],
+          }),
+          contextMessage({ messageUid: "latest-answer", role: "assistant", content: "finished" }),
+        ],
+      },
+    },
+  );
+  assert.deepEqual(
+    injectMessageWithPolicy(ctx, {
+      content: "next context",
+      injectedMessageType: "planning_context_summary",
+    }),
+    {
+      injected: true,
+      target: "ctx_messages",
+    },
+  );
+});
 
 test("dynamic harness main-flow system injections stay in system block", () => {
   const ctx = createTestHookContext();
