@@ -6,7 +6,8 @@
 
 :root {
   --noobot-font-sans:
-    Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei",
+    Arial, sans-serif;
   --noobot-font-mono:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
     monospace;
@@ -36,7 +37,7 @@
   --noobot-letter-spacing-caps: 0.5px;
   --noobot-letter-spacing-caps-wide: 0.65px;
 
-  --noobot-btn-font-weight: var(--noobot-font-weight-semibold);
+  --noobot-btn-font-weight: var(--noobot-font-weight-medium);
   --noobot-msg-avatar-font-size: var(--noobot-font-size-sm);
   --noobot-msg-meta-font-size: var(--noobot-font-size-sm);
   --noobot-msg-file-size-font-size: var(--noobot-font-size-xs);

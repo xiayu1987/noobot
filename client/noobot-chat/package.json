@@ -49,6 +49,7 @@
     "@noobot/semantic-transfer-protocol": "file:../../semantic-transfer-protocol",
     "@noobot/session-protocol": "file:../../session-protocol",
     "@noobot/shared": "file:../../shared",
+    "@noobot/workspace-protocol": "file:../../workspace-protocol",
     "@noobot/timeline-runtime": "file:../../timeline-runtime",
     "@tanstack/vue-virtual": "^3.13.45",
     "@vue/devtools-api": "^8.2.1",
@@ -61,7 +62,6 @@
   },
   "devDependencies": {
     "@noobot/sanitize": "file:../../sanitize",
-    "@noobot/workspace-protocol": "file:../../workspace-protocol",
     "@playwright/test": "^1.64.1",
     "@vitejs/plugin-vue": "^6.0.10",
     "@vue/test-utils": "^2.5.1",

@@ -5,6 +5,8 @@
 -->
 <script setup>
 import { computed } from "vue";
+import { ElMessage } from "element-plus";
+import { WORKSPACE_DIRECTORY_TREE_PROPS } from "@noobot/workspace-protocol/directory-tree";
 import { Document, Folder } from "@element-plus/icons-vue";
 import SettingsPanelHeader from "./SettingsPanelHeader.vue";
 import SettingsWorkspacePanel from "./SettingsWorkspacePanel.vue";
@@ -14,6 +16,7 @@ import WorkspaceParamTreeSection from "./WorkspaceParamTreeSection.vue";
 const props = defineProps({
   activeResourceSection: { type: String, default: "directory" },
   tree: { type: Array, default: () => [] },
+  loadTreeChildren: { type: Function, required: true },
   allWorkspaceTree: { type: Array, default: () => [] },
   systemParamTreeData: { type: Array, default: () => [] },
   userParamTreeData: { type: Array, default: () => [] },
@@ -64,6 +67,21 @@ function sectionClass(name) {
     "resource-collapse-item--collapsed": !!sectionValue.value && sectionValue.value !== name,
   };
 }
+async function loadDirectoryNode(node, resolve, reject, source) {
+  if (node.level === 0) {
+    resolve(source === "all" ? props.allWorkspaceTree : props.tree);
+    return;
+  }
+  try {
+    resolve(await props.loadTreeChildren(node.data.path, source));
+  } catch (error) {
+    ElMessage.error(error.message);
+    reject();
+  }
+}
+
+const loadUserNode = (node, resolve, reject) => loadDirectoryNode(node, resolve, reject, "user");
+const loadAllNode = (node, resolve, reject) => loadDirectoryNode(node, resolve, reject, "all");
 </script>
 
 <template>
@@ -113,9 +131,12 @@ function sectionClass(name) {
           </div>
           <el-scrollbar class="tree-scroll">
             <el-tree
+              v-if="!loadingTree"
               :data="tree"
               node-key="path"
-              :props="{ label: 'label', children: 'children' }"
+              :props="WORKSPACE_DIRECTORY_TREE_PROPS"
+              lazy
+              :load="loadUserNode"
               highlight-current
               class="custom-tree"
               @node-click="(data) => $emit('open-file', data, 'user')"
@@ -171,9 +192,12 @@ function sectionClass(name) {
             element-loading-background="var(--noobot-mask-bg)"
           >
             <el-tree
+              v-if="!loadingAllTree && activeResourceSection === 'all-workspace'"
               :data="allWorkspaceTree"
               node-key="path"
-              :props="{ label: 'label', children: 'children' }"
+              :props="WORKSPACE_DIRECTORY_TREE_PROPS"
+              lazy
+              :load="loadAllNode"
               highlight-current
               class="custom-tree"
               @node-click="(data) => $emit('open-file', data, 'all')"

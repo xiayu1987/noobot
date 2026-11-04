@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.js",
     "./layout": "./src/layout.js",
+    "./directory-tree": "./src/directory-tree.js",
     "./sections": "./src/sections.js",
     "./asset-sync": "./src/asset-sync.js",
     "./layout-migration": "./src/layout-migration.js",

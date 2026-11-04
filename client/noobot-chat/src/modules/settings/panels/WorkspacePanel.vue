@@ -65,6 +65,9 @@ const activeResourceSection = ref("directory");
 const resetDialogVisible = ref(false);
 const resetDialogMode = ref("user");
 const resetDialogSections = ref([]);
+const loadedSections = new Set();
+const pendingSections = new Map();
+let resourceGeneration = 0;
 const { translate } = useLocale();
 const RESET_SECTION_OPTIONS = [
   { value: "memory", label: "memory" },
@@ -110,41 +113,51 @@ function toParamTreeData(list = []) {
 
 async function loadTree() {
   if (!props.connected || !props.userId) return;
+  const generation = resourceGeneration;
   loadingTree.value = true;
   try {
-    const res = await getWorkspaceTreeApi({ userId: props.userId }, { fetcher: props.fetcher });
-    const data = await res.json();
-    if (!res.ok || !data.ok)
-      throw new Error(data.error || translate("settings.loadingWorkspaceFailed"));
-    tree.value = data.tree || [];
-  } catch (error) {
-    ElMessage.error(error.message || translate("settings.loadingWorkspaceFailed"));
+    const nodes = await loadTreeChildren("", "user");
+    if (generation === resourceGeneration) tree.value = nodes;
   } finally {
-    loadingTree.value = false;
+    if (generation === resourceGeneration) loadingTree.value = false;
   }
 }
 
 async function loadAllWorkspaceTree() {
   if (!props.connected || !props.isSuperAdmin) return;
+  const generation = resourceGeneration;
   loadingAllTree.value = true;
   try {
-    const res = await getWorkspaceAllTreeApi({ fetcher: props.fetcher });
-    const data = await res.json();
-    if (!res.ok || !data.ok)
-      throw new Error(data.error || translate("settings.loadingAllWorkspaceFailed"));
-    allWorkspaceTree.value = data.tree || [];
-  } catch (error) {
-    ElMessage.error(error.message || translate("settings.loadingAllWorkspaceFailed"));
+    const nodes = await loadTreeChildren("", "all");
+    if (generation === resourceGeneration) allWorkspaceTree.value = nodes;
   } finally {
-    loadingAllTree.value = false;
+    if (generation === resourceGeneration) loadingAllTree.value = false;
   }
+}
+
+async function loadTreeChildren(path = "", source = "user") {
+  if (!props.connected || !props.userId || (source === "all" && !props.isSuperAdmin)) {
+    throw new Error(translate("settings.loadingWorkspaceFailed"));
+  }
+  const generation = resourceGeneration;
+  const res =
+    source === "all"
+      ? await getWorkspaceAllTreeApi({ fetcher: props.fetcher, path })
+      : await getWorkspaceTreeApi({ userId: props.userId, path }, { fetcher: props.fetcher });
+  const data = await res.json();
+  if (!res.ok || !data.ok)
+    throw new Error(data.error || translate("settings.loadingWorkspaceFailed"));
+  if (!Array.isArray(data.tree)) throw new TypeError("workspace directory response requires tree");
+  return generation === resourceGeneration ? data.tree : [];
 }
 
 async function loadParamCatalog(scope = "system") {
   if (!props.connected) return;
+  const generation = resourceGeneration;
   const normalizedScope = text(scope).toLowerCase() === "user" ? "user" : "system";
-  if (normalizedScope === "system") loadingSystemParamCatalog.value = true;
-  else loadingUserParamCatalog.value = true;
+  const loadingCatalog =
+    normalizedScope === "system" ? loadingSystemParamCatalog : loadingUserParamCatalog;
+  loadingCatalog.value = true;
   try {
     const res = await getConfigParamCatalogApi({
       scope: normalizedScope,
@@ -153,26 +166,50 @@ async function loadParamCatalog(scope = "system") {
     const data = await res.json();
     if (!res.ok || !data.ok)
       throw new Error(data.error || translate("settings.loadingParamCatalogFailed"));
+    if (!Array.isArray(data.catalog))
+      throw new TypeError("parameter catalog response requires catalog");
+    if (generation !== resourceGeneration) return;
     if (normalizedScope === "system") {
-      systemParamCatalog.value = Array.isArray(data.catalog) ? data.catalog : [];
+      systemParamCatalog.value = data.catalog;
     } else {
-      userParamCatalog.value = Array.isArray(data.catalog) ? data.catalog : [];
+      userParamCatalog.value = data.catalog;
     }
-  } catch (error) {
-    ElMessage.error(error.message || translate("settings.loadingParamCatalogFailed"));
   } finally {
-    if (normalizedScope === "system") loadingSystemParamCatalog.value = false;
-    else loadingUserParamCatalog.value = false;
+    if (generation === resourceGeneration) loadingCatalog.value = false;
   }
 }
 
 async function refreshAll() {
-  await Promise.all([
-    loadTree(),
-    loadParamCatalog("system"),
-    loadParamCatalog("user"),
-    props.isSuperAdmin ? loadAllWorkspaceTree() : Promise.resolve(),
-  ]);
+  loadedSections.clear();
+  await loadActiveSection();
+}
+
+async function loadActiveSection() {
+  if (!props.active || !props.connected || !props.userId) return;
+  const section = activeResourceSection.value;
+  const loaders = {
+    directory: loadTree,
+    "all-workspace": props.isSuperAdmin ? loadAllWorkspaceTree : null,
+    "system-params": () => loadParamCatalog("system"),
+    "user-params": () => loadParamCatalog("user"),
+  };
+  if (!loaders[section] || loadedSections.has(section)) return;
+  if (pendingSections.has(section)) return pendingSections.get(section);
+  const generation = resourceGeneration;
+  const pending = loaders[section]()
+    .then(() => {
+      if (generation === resourceGeneration) loadedSections.add(section);
+    })
+    .catch((error) => {
+      if (generation === resourceGeneration) {
+        ElMessage.error(error.message || translate("settings.loadingWorkspaceFailed"));
+      }
+    })
+    .finally(() => {
+      if (pendingSections.get(section) === pending) pendingSections.delete(section);
+    });
+  pendingSections.set(section, pending);
+  return pending;
 }
 
 async function reloadActiveFile() {
@@ -444,34 +481,36 @@ function handleEditorAction(command = "") {
 }
 
 watch(
-  () => props.active,
-  (isActive) => {
-    if (isActive) refreshAll();
-  },
-  { immediate: true },
-);
-
-watch(
-  () => props.userId,
+  [() => props.userId, () => props.connected, () => props.isSuperAdmin],
   () => {
-    if (props.active) refreshAll();
-  },
-);
-
-watch(
-  () => props.connected,
-  (isConnected) => {
-    if (isConnected && props.active) refreshAll();
-  },
-);
-
-watch(
-  () => props.isSuperAdmin,
-  (isSuperAdmin) => {
-    if (!isSuperAdmin && activeResourceSection.value === "all-workspace") {
+    resourceGeneration += 1;
+    loadedSections.clear();
+    pendingSections.clear();
+    tree.value = [];
+    allWorkspaceTree.value = [];
+    systemParamCatalog.value = [];
+    userParamCatalog.value = [];
+    loadingTree.value = false;
+    loadingAllTree.value = false;
+    loadingSystemParamCatalog.value = false;
+    loadingUserParamCatalog.value = false;
+    if (!props.isSuperAdmin && activeResourceSection.value === "all-workspace") {
       activeResourceSection.value = "directory";
     }
   },
+  { flush: "sync" },
+);
+
+watch(
+  [
+    () => props.active,
+    () => props.connected,
+    () => props.userId,
+    () => props.isSuperAdmin,
+    activeResourceSection,
+  ],
+  loadActiveSection,
+  { immediate: true },
 );
 </script>
 
@@ -480,6 +519,7 @@ watch(
     <WorkspaceResourcePanel
       v-model:active-resource-section="activeResourceSection"
       :tree="tree"
+      :load-tree-children="loadTreeChildren"
       :all-workspace-tree="allWorkspaceTree"
       :system-param-tree-data="systemParamTreeData"
       :user-param-tree-data="userParamTreeData"

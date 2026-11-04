@@ -316,7 +316,7 @@ defineExpose({
       @remove-upload="onRemoveUpload"
     />
 
-    <div class="composer noobot-composer-surface">
+    <div class="composer">
       <el-collapse-transition>
         <div v-show="effectiveMorePanelVisible" class="more-panel-overlay">
           <div class="more-panel noobot-overlay-card">
@@ -433,12 +433,12 @@ defineExpose({
 <style scoped>
 .composer-wrapper {
   --composer-row-gap: var(--noobot-space-sm);
-  --composer-icon-size: var(--noobot-control-icon-size-lg);
-  --composer-icon-radius: var(--noobot-radius-lg);
-  --composer-send-height: var(--noobot-control-icon-size-lg);
-  --composer-send-padding-x: 20px;
+  --composer-icon-size: var(--noobot-control-icon-size);
+  --composer-icon-radius: var(--noobot-radius-sm);
+  --composer-send-height: var(--noobot-control-icon-size);
+  --composer-send-padding-x: 16px;
 
-  padding: 0 var(--noobot-space-2xl) var(--noobot-space-2xl);
+  padding: var(--noobot-space-sm) var(--noobot-space-2xl) var(--noobot-space-xl);
   background: var(--noobot-panel-bg);
   position: relative;
   width: 100%;
@@ -452,7 +452,7 @@ defineExpose({
 
 .composer-drop-overlay {
   position: absolute;
-  inset: 0 24px 24px;
+  inset: var(--noobot-space-sm) var(--noobot-space-2xl) var(--noobot-space-xl);
   z-index: 120;
   display: flex;
   align-items: center;
@@ -477,8 +477,19 @@ defineExpose({
   padding: var(--noobot-space-md) var(--noobot-space-xl);
   display: flex;
   flex-direction: column;
-  gap: var(--noobot-space-md);
+  gap: var(--noobot-space-sm);
   width: 100%;
+  border: 1px solid var(--noobot-panel-border);
+  border-radius: var(--noobot-radius-lg);
+  box-shadow: var(--noobot-shadow-raised);
+  transition:
+    border-color var(--noobot-duration-fast) var(--noobot-ease-standard),
+    box-shadow var(--noobot-duration-fast) var(--noobot-ease-standard);
+}
+
+.composer:focus-within {
+  border-color: var(--noobot-accent-border);
+  box-shadow: var(--noobot-focus-ring), var(--noobot-shadow-raised);
 }
 
 .more-panel-overlay {
@@ -549,17 +560,19 @@ defineExpose({
     --composer-icon-radius: var(--noobot-radius-xs);
     --composer-send-height: var(--noobot-control-icon-size);
     --composer-send-padding-x: 16px;
-    padding: 0 var(--noobot-space-md) calc(var(--noobot-space-md) + env(safe-area-inset-bottom));
+    padding: var(--noobot-space-xs) var(--noobot-space-xl)
+      calc(var(--noobot-space-lg) + env(safe-area-inset-bottom));
   }
   .composer-drop-overlay {
-    inset: 0 12px calc(12px + env(safe-area-inset-bottom));
+    inset: var(--noobot-space-xs) var(--noobot-space-xl)
+      calc(var(--noobot-space-lg) + env(safe-area-inset-bottom));
   }
   .composer-drop-target {
     min-height: 76px;
     border-radius: var(--noobot-radius-md);
   }
   .composer {
-    padding: var(--noobot-space-sm) var(--noobot-space-md);
+    padding: var(--noobot-space-md) var(--noobot-space-lg);
     border-radius: var(--noobot-radius-md);
   }
   .more-panel-overlay {

@@ -329,7 +329,7 @@ describe("AppShell chat message navigator", () => {
       ".chat-content-body.right-tool-panel-docked,\n  .chat-composer-body.right-tool-panel-docked {\n    padding-right: 96px;",
     );
     expect(appShellLayoutSource).toContain(
-      ".chat-composer-body.right-tool-panel-open {\n    padding-right: 268px;",
+      ".chat-composer-body.right-tool-panel-open {\n    padding-right: calc(var(--noobot-side-panel-width) + 32px);",
     );
     expect(appShellLayoutSource).toContain(".chat-composer-body {\n  flex-shrink: 0;");
     expect(appShellLayoutSource).not.toContain(".main-content {\n    padding-right: 268px;");

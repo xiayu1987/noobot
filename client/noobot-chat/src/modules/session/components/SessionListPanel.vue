@@ -363,10 +363,10 @@ watch(
 }
 
 .session-list-inner {
-  padding: var(--noobot-space-2xs) var(--noobot-space-md) var(--noobot-space-xs);
+  padding: var(--noobot-space-lg) var(--noobot-space-md) var(--noobot-space-lg);
   display: flex;
   flex-direction: column;
-  gap: var(--noobot-space-2xs);
+  gap: var(--noobot-space-sm);
 }
 
 .session-date-collapse {
@@ -375,8 +375,8 @@ watch(
 }
 
 .session-date-collapse :deep(.el-collapse-item__header) {
-  height: 36px;
-  padding: 0 var(--noobot-space-lg);
+  height: var(--noobot-control-height-sm);
+  padding: 0 var(--noobot-space-sm);
   border: 0;
   background: transparent;
   color: var(--noobot-text-secondary);
@@ -412,8 +412,8 @@ watch(
 .session-item {
   display: flex;
   align-items: center;
-  gap: var(--noobot-space-xs);
-  padding: var(--noobot-space-xs) var(--noobot-space-sm);
+  gap: var(--noobot-space-sm);
+  padding: var(--noobot-space-sm);
   cursor: pointer;
   border-radius: var(--noobot-radius-sm);
   transition:
@@ -444,8 +444,9 @@ watch(
 }
 
 .session-icon-wrapper {
-  width: 32px;
-  height: 32px;
+  width: var(--noobot-control-icon-size-sm);
+  height: var(--noobot-control-icon-size-sm);
+  flex: 0 0 var(--noobot-control-icon-size-sm);
   border-radius: var(--noobot-radius-xs);
   background: transparent;
   display: flex;
@@ -497,6 +498,8 @@ watch(
 
 .session-item:hover .session-rename-btn,
 .session-item:hover .session-delete-btn,
+.session-item:focus-within .session-rename-btn,
+.session-item:focus-within .session-delete-btn,
 .session-item.active .session-rename-btn,
 .session-item.active .session-delete-btn {
   opacity: 1;

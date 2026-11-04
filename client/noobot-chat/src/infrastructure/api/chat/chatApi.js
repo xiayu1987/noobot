@@ -247,14 +247,16 @@ export async function postOpenVSCodeServerApi({ userId = "" }, { fetcher }) {
   });
 }
 
-export async function getWorkspaceTreeApi({ userId = "" }, { fetcher }) {
-  const runFetch = requireFetcher(fetcher);
-  return runFetch(`/api/internal/workspace/${encodeURIComponent(userId)}/tree`);
+export async function getWorkspaceTreeApi({ userId = "", path = "" }, { fetcher }) {
+  return runFileFetch(fetcher, `/api/internal/workspace/${encodeURIComponent(userId)}/tree`, {
+    query: path ? { path } : {},
+  });
 }
 
-export async function getWorkspaceAllTreeApi({ fetcher }) {
-  const runFetch = requireFetcher(fetcher);
-  return runFetch("/api/internal/admin/workspace-all/tree");
+export async function getWorkspaceAllTreeApi({ fetcher, path = "" }) {
+  return runFileFetch(fetcher, "/api/internal/admin/workspace-all/tree", {
+    query: path ? { path } : {},
+  });
 }
 
 export async function getWorkspaceAllFileApi({ path = "" }, { fetcher }) {
@@ -375,9 +377,10 @@ export async function getRegularUsersApi({ fetcher }) {
   return runFetch("/api/internal/admin/users");
 }
 
-export async function getTemplateTreeApi({ fetcher }) {
-  const runFetch = requireFetcher(fetcher);
-  return runFetch("/api/internal/admin/template/tree");
+export async function getTemplateTreeApi({ fetcher, path = "" }) {
+  return runFileFetch(fetcher, "/api/internal/admin/template/tree", {
+    query: path ? { path } : {},
+  });
 }
 
 export async function getTemplateFileApi({ path = "" }, { fetcher }) {

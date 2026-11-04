@@ -26,10 +26,10 @@
   --noobot-msg-code-block-bg: var(--noobot-base-slate-900);
   --noobot-msg-code-block-text: var(--noobot-base-slate-200);
 
-  --noobot-msg-avatar-size: 30px;
-  --noobot-msg-stack-gap: 14px;
-  --noobot-msg-bubble-pad-y: 8px;
-  --noobot-msg-bubble-pad-x: 12px;
+  --noobot-msg-avatar-size: 28px;
+  --noobot-msg-stack-gap: 10px;
+  --noobot-msg-bubble-pad-y: 12px;
+  --noobot-msg-bubble-pad-x: 18px;
   --noobot-msg-corner-accent-radius: var(--noobot-radius-md);
   --noobot-msg-file-thumb-size: 34px;
   --noobot-msg-file-icon-size: 18px;
@@ -40,4 +40,10 @@
   --noobot-msg-markdown-pre-padding: 12px;
   --noobot-msg-table-cell-padding-y: 8px;
   --noobot-msg-table-cell-padding-x: 10px;
+}
+
+:root:not([data-theme="light"]) {
+  --noobot-msg-user-bg: #1e3058;
+  --noobot-msg-user-border: var(--noobot-msg-user-bg);
+  --noobot-msg-user-text: #e8edf5;
 }

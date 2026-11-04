@@ -1,27 +1,31 @@
 :root[data-theme="light"] {
-  --noobot-app-bg: var(--noobot-base-slate-50);
+  --noobot-app-bg: var(--noobot-surface-sidebar);
   --noobot-panel-bg: var(--noobot-base-white);
-  --noobot-panel-head-bg: var(--noobot-base-slate-50);
+  --noobot-shadow-raised:
+    0 2px 6px color-mix(in srgb, var(--noobot-base-slate-900) 3%, transparent),
+    0 12px 32px color-mix(in srgb, var(--noobot-base-slate-900) 5%, transparent);
+  --noobot-panel-head-bg: color-mix(
+    in srgb,
+    var(--noobot-panel-bg) 60%,
+    var(--noobot-surface-sidebar)
+  );
   --noobot-panel-border: color-mix(in srgb, var(--noobot-base-slate-900) 8%, transparent);
   --noobot-control-bg: color-mix(
     in srgb,
-    var(--noobot-base-white) 96%,
-    var(--noobot-base-slate-50)
+    var(--noobot-base-white) 60%,
+    var(--noobot-surface-sidebar)
   );
   --noobot-control-menu-bg: var(--noobot-base-white);
   --noobot-divider: color-mix(in srgb, var(--noobot-base-slate-900) 8%, transparent);
   --noobot-mask-bg: color-mix(in srgb, var(--noobot-base-slate-900) 24%, transparent);
   --noobot-danger-soft: color-mix(in srgb, var(--noobot-base-red-500) 12%, transparent);
-  --noobot-panel-muted: color-mix(in srgb, var(--noobot-base-slate-900) 6%, transparent);
+  --noobot-panel-muted: color-mix(in srgb, var(--noobot-base-slate-900) 3%, transparent);
   --noobot-overlay-border: color-mix(
     in srgb,
     var(--noobot-base-blue-500) 18%,
     var(--noobot-panel-border)
   );
   --noobot-overlay-outline: color-mix(in srgb, var(--noobot-base-white) 70%, transparent);
-  --noobot-input-ring-focus:
-    0 0 0 1px var(--noobot-accent-border),
-    0 0 5px color-mix(in srgb, var(--noobot-accent) 22%, transparent);
   --noobot-runtime-glow: 0 0 9px color-mix(in srgb, var(--noobot-accent) 22%, transparent);
   --noobot-runtime-border: color-mix(in srgb, var(--noobot-accent) 34%, var(--noobot-panel-border));
   --noobot-attachment-hover-border: color-mix(

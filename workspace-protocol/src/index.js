@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 export * from "./layout.js";
+export * from "./directory-tree.js";
 export * from "./sections.js";
 export * from "./asset-sync.js";
 export * from "./layout-migration.js";

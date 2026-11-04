@@ -1,8 +1,9 @@
 :root {
-  --noobot-btn-radius: var(--noobot-radius-xs);
+  --noobot-btn-radius: var(--noobot-radius-sm);
   --noobot-btn-transition:
     background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
-    border-color var(--noobot-duration-normal) var(--noobot-ease-standard), color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    border-color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    color var(--noobot-duration-normal) var(--noobot-ease-standard),
     opacity var(--noobot-duration-normal) var(--noobot-ease-standard);
   --noobot-btn-disabled-opacity: 0.6;
   --noobot-btn-muted-disabled-opacity: 0.5;

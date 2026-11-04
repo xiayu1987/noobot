@@ -7,14 +7,14 @@ import path from "node:path";
 import { readdir } from "node:fs/promises";
 import { safeJoin } from "#agent/utils";
 import { text } from "@noobot/shared/value";
+import { createWorkspaceDirectoryEntry } from "@noobot/workspace-protocol/directory-tree";
 
 function isWorkspaceControlEntry(name = "") {
   const normalized = text(name);
   return normalized.endsWith(".mutation-lock") || normalized.endsWith(".mutation-locks");
 }
 
-export async function buildWorkspaceTree(rootPath, currentPath = "", depth = 0, maxDepth = 12) {
-  if (depth > maxDepth) return [];
+export async function buildWorkspaceTree(rootPath, currentPath = "") {
   const absolutePath = currentPath ? safeJoin(rootPath, currentPath) : rootPath;
   const directoryEntries = (await readdir(absolutePath, { withFileTypes: true }))
     .filter(
@@ -32,14 +32,11 @@ export async function buildWorkspaceTree(rootPath, currentPath = "", depth = 0, 
     const relativePath = currentPath
       ? path.posix.join(currentPath, directoryEntry.name)
       : directoryEntry.name;
-    const node = {
+    const node = createWorkspaceDirectoryEntry({
       label: directoryEntry.name,
       path: relativePath,
       type: directoryEntry.isDirectory() ? "dir" : "file",
-    };
-    if (directoryEntry.isDirectory()) {
-      node.children = await buildWorkspaceTree(rootPath, relativePath, depth + 1, maxDepth);
-    }
+    });
     nodes.push(node);
   }
   return nodes;

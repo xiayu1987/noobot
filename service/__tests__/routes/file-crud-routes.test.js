@@ -426,7 +426,6 @@ test("workspace tree excludes workspace mutation control directories", async () 
         label: "admin",
         path: "admin",
         type: "dir",
-        children: [],
       },
     ]);
   } finally {

@@ -8,7 +8,7 @@
 }
 
 .noobot-flat-card:hover {
-  border-color: var(--noobot-panel-border);
+  border-color: color-mix(in srgb, var(--noobot-accent) 28%, var(--noobot-panel-border));
 }
 
 .noobot-soft-card {
@@ -36,21 +36,6 @@
 .noobot-overlay-card-header {
   background: var(--noobot-panel-head-bg);
   border-bottom: 1px solid var(--noobot-overlay-border);
-}
-
-.noobot-composer-surface {
-  box-sizing: border-box;
-  background: var(--noobot-surface-sidebar);
-  border: 1px solid color-mix(in srgb, var(--noobot-accent) 24%, var(--noobot-panel-border));
-  border-radius: var(--noobot-radius-md);
-  transition:
-    border-color var(--noobot-duration-slow) var(--noobot-ease-standard),
-    box-shadow var(--noobot-duration-slow) var(--noobot-ease-standard);
-}
-
-.noobot-composer-surface:focus-within {
-  border-color: var(--noobot-accent-border);
-  box-shadow: var(--noobot-focus-ring);
 }
 
 .noobot-drop-surface {
@@ -206,7 +191,7 @@
   border-radius: var(--noobot-radius-xs);
   color: var(--noobot-text-secondary);
   background: transparent;
-  overflow: hidden;
+  min-width: 0;
   transition: border-color var(--noobot-duration-normal) var(--noobot-ease-standard);
 }
 
@@ -240,6 +225,7 @@
 .message-status-steps__dot {
   position: relative;
   z-index: 1;
+  flex-shrink: 0;
   width: 6px;
   height: 6px;
   border-radius: var(--noobot-radius-circle);
@@ -250,14 +236,13 @@
 .message-status-steps__title {
   max-width: 100%;
   margin-top: var(--noobot-space-xs);
-  font-size: var(--noobot-thinking-status-font-size);
-  line-height: var(--noobot-line-height-none);
+  padding-inline: var(--noobot-space-3xs);
+  font-size: var(--noobot-font-size-xs);
+  line-height: var(--noobot-line-height-comfortable);
   font-weight: var(--noobot-font-weight-regular);
   color: var(--noobot-thinking-muted);
-  letter-spacing: var(--noobot-letter-spacing-caps);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  letter-spacing: var(--noobot-letter-spacing-none);
+  overflow-wrap: anywhere;
 }
 
 .message-status-steps__item.is-success .message-status-steps__dot {
@@ -284,7 +269,7 @@
 .message-status-steps.is-running
   .message-status-steps__item.is-process
   .message-status-steps__title {
-  letter-spacing: var(--noobot-letter-spacing-caps-wide);
+  letter-spacing: var(--noobot-letter-spacing-none);
 }
 
 .message-status-steps__item.is-error .message-status-steps__dot {

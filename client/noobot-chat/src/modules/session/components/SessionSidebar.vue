@@ -159,8 +159,8 @@ const { translate } = useLocale();
 
 <style scoped>
 .sidebar {
-  width: 260px;
-  min-width: 260px;
+  width: var(--noobot-side-panel-width);
+  min-width: var(--noobot-side-panel-width);
   background: var(--noobot-surface-sidebar);
   border-right: 1px solid var(--noobot-border-weak);
   display: flex;
@@ -173,12 +173,12 @@ const { translate } = useLocale();
 }
 
 .sidebar.collapsed {
-  width: 68px;
-  min-width: 68px;
+  width: 56px;
+  min-width: 56px;
 }
 
 .brand {
-  padding: var(--noobot-space-xl) var(--noobot-space-xl) var(--noobot-space-md);
+  padding: var(--noobot-space-sm) var(--noobot-space-xl);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -211,9 +211,9 @@ const { translate } = useLocale();
 }
 
 .brand-text {
-  font-size: var(--noobot-font-size-lg);
-  font-weight: var(--noobot-font-weight-bold);
-  color: var(--noobot-text-accent);
+  font-size: var(--noobot-font-size-md);
+  font-weight: var(--noobot-font-weight-semibold);
+  color: var(--noobot-text-strong);
   letter-spacing: var(--noobot-letter-spacing-none);
   white-space: nowrap;
 }
@@ -248,10 +248,10 @@ const { translate } = useLocale();
 }
 
 .sidebar-header {
-  padding: 0 var(--noobot-space-md) var(--noobot-space-md);
+  padding: var(--noobot-space-2xs) var(--noobot-space-lg) var(--noobot-space-xl);
   display: flex;
   flex-direction: column;
-  gap: var(--noobot-space-sm);
+  gap: var(--noobot-space-lg);
   border-bottom: 1px solid var(--noobot-border-weak);
 }
 
@@ -270,12 +270,12 @@ const { translate } = useLocale();
 .custom-input :deep(.el-input__wrapper.is-focus),
 .custom-input :deep(.el-input__wrapper:hover) {
   background-color: transparent;
-  box-shadow: var(--noobot-input-ring-focus);
+  box-shadow: var(--noobot-focus-ring);
 }
 
 .custom-input :deep(.el-input__inner) {
   color: var(--noobot-text-main);
-  height: var(--noobot-control-icon-size-lg);
+  height: var(--noobot-control-height-md);
 }
 
 .input-icon {
@@ -306,10 +306,10 @@ const { translate } = useLocale();
 .new-chat-btn {
   flex: 1 1 0;
   min-width: 0;
-  height: var(--noobot-control-icon-size-lg);
+  height: var(--noobot-control-height-md);
   border-radius: var(--noobot-radius-xs);
   font-weight: var(--noobot-font-weight-semibold);
-  letter-spacing: var(--noobot-letter-spacing-caps);
+  letter-spacing: var(--noobot-letter-spacing-none);
 }
 
 .new-chat-btn {

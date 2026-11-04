@@ -29,6 +29,7 @@ import {
 import { buildContentDisposition } from "./content-disposition.js";
 import { recordFileAccessDebug } from "../runtime-events/file-access-debug.js";
 import { text, isFunction } from "@noobot/shared/value";
+import { readWorkspaceDirectoryPath } from "@noobot/workspace-protocol/directory-tree";
 
 const DEFAULT_I18N_KEYS = {
   treeFailed: "common.loadWorkspaceTreeFailed",
@@ -156,7 +157,12 @@ export function registerFileCrudRoutes(
       async (req, res) => {
         const root = await resolveRootPath(req);
         await mkdir(root, { recursive: true });
-        const tree = await buildWorkspaceTree(root);
+        const relativePath = decodeRequestInput(
+          () => readWorkspaceDirectoryPath(req.query),
+          (error) => error instanceof TypeError,
+        );
+        decodeRequestInput(() => safeJoin(root, relativePath), isPathOutOfScopeError);
+        const tree = await buildWorkspaceTree(root, relativePath);
         res.json(buildTreeResponse({ req, root, tree }));
       },
       { fallbackErrorKey: keys.treeFailed },

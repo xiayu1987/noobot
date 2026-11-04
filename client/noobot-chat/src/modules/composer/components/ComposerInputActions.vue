@@ -172,6 +172,7 @@ function onInputKeydown(event) {
 }
 
 .composer-icon-btn {
+  margin-left: 0;
   width: var(--composer-icon-size);
   height: var(--composer-icon-size);
   min-width: var(--composer-icon-size);
@@ -247,17 +248,13 @@ function onInputKeydown(event) {
 
 @media (max-width: 480px) {
   .composer-row {
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    gap: var(--noobot-space-2xs);
   }
-  .composer-row .send-btn-wrap {
-    grid-column: 1 / -1;
-    width: 100%;
-    margin-top: var(--noobot-space-2xs);
-    margin-left: 0px;
-    justify-self: stretch;
+  .composer-row .chat-input :deep(.el-textarea__inner) {
+    font-size: var(--noobot-font-size-md);
   }
   .composer-row .send-btn {
-    width: 100%;
+    padding-inline: var(--noobot-space-md);
   }
 }
 </style>

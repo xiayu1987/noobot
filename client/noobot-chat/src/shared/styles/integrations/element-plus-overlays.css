@@ -3,7 +3,7 @@
 .el-message-box {
   background: var(--noobot-panel-bg);
   border: 1px solid var(--noobot-panel-border);
-  box-shadow: none;
+  box-shadow: var(--noobot-shadow-raised);
 }
 
 .el-drawer__header,

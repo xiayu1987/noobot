@@ -11,11 +11,6 @@
   border-color: var(--noobot-panel-border);
 }
 
-.composer:focus-within {
-  border-color: var(--noobot-accent-border);
-  box-shadow: var(--noobot-focus-ring);
-}
-
 .interaction-form .el-input__wrapper {
   color: var(--noobot-text-main);
   background: transparent;

@@ -571,7 +571,7 @@ defineExpose({
 
   .chat-content-body.right-tool-panel-open,
   .chat-composer-body.right-tool-panel-open {
-    padding-right: 268px;
+    padding-right: calc(var(--noobot-side-panel-width) + 32px);
   }
 }
 
@@ -592,8 +592,8 @@ defineExpose({
 
 .chat-message-nav-panel {
   box-sizing: border-box;
-  width: 236px;
-  max-width: 24vw;
+  width: var(--noobot-side-panel-width);
+  max-width: var(--noobot-side-panel-width);
   min-height: 0;
   overflow: visible;
   padding: var(--noobot-space-md);
@@ -645,8 +645,9 @@ defineExpose({
 }
 
 .connector-overview-panel {
-  width: 236px;
-  max-width: 24vw;
+  box-sizing: border-box;
+  width: var(--noobot-side-panel-width);
+  max-width: var(--noobot-side-panel-width);
   padding: var(--noobot-space-md);
   background: var(--noobot-panel-bg);
   transition:
@@ -724,6 +725,14 @@ defineExpose({
 
 .chat-message-nav-title-group {
   display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--noobot-space-xs);
+  min-width: 0;
+}
+
+.chat-message-nav-title-group > div {
+  display: flex;
   align-items: center;
   gap: var(--noobot-space-xs);
   min-width: 0;
@@ -756,7 +765,10 @@ defineExpose({
 }
 
 .chat-message-nav-title {
-  display: inline-flex;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: var(--noobot-font-size-md);
   font-weight: var(--noobot-font-weight-bold);
   line-height: var(--noobot-line-height-tight);
@@ -764,7 +776,7 @@ defineExpose({
 
 .chat-message-nav-count {
   display: block;
-  margin-top: var(--noobot-space-3xs);
+  flex-shrink: 0;
   font-size: var(--noobot-font-size-xs);
   font-weight: var(--noobot-font-weight-semibold);
   color: var(--noobot-text-secondary);

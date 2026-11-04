@@ -1,13 +1,10 @@
 :root[data-theme="light"] {
-  --noobot-surface-sidebar: color-mix(
-    in srgb,
-    var(--noobot-base-slate-50) 84%,
-    var(--noobot-base-white)
-  );
+  --noobot-surface-sidebar: #f3f4f6;
   --noobot-surface-soft: color-mix(in srgb, var(--noobot-base-slate-900) 4%, transparent);
-  --noobot-surface-soft-hover: color-mix(in srgb, var(--noobot-base-slate-900) 8%, transparent);
-  --noobot-surface-item-hover: color-mix(in srgb, var(--noobot-base-slate-900) 6%, transparent);
-  --noobot-surface-primary-soft: color-mix(in srgb, var(--noobot-base-blue-500) 12%, transparent);
+  --noobot-surface-soft-hover: color-mix(in srgb, var(--noobot-base-slate-900) 5%, transparent);
+  --noobot-surface-item-hover: color-mix(in srgb, var(--noobot-base-slate-900) 4%, transparent);
+  --noobot-surface-primary-soft: color-mix(in srgb, var(--noobot-base-blue-500) 7%, transparent);
+  --noobot-border-primary: color-mix(in srgb, var(--noobot-base-blue-500) 24%, transparent);
   --noobot-border-weak: color-mix(in srgb, var(--noobot-base-slate-900) 6%, transparent);
   --noobot-text-strong: var(--noobot-base-slate-900);
   --noobot-text-main: var(--noobot-base-slate-800);

@@ -1,45 +1,25 @@
 :root {
   --noobot-app-bg: var(--noobot-surface-sidebar);
-  --noobot-focus-ring:
-    0 0 0 1px var(--noobot-accent-border),
-    0 0 5px color-mix(in srgb, var(--noobot-accent) 28%, transparent);
+  --noobot-focus-ring: 0 0 0 3px color-mix(in srgb, var(--noobot-accent) 20%, transparent);
+  --noobot-shadow-raised:
+    0 2px 6px color-mix(in srgb, var(--noobot-base-black) 12%, transparent),
+    0 12px 32px color-mix(in srgb, var(--noobot-base-black) 22%, transparent);
   --noobot-focus-outline: 2px solid var(--noobot-accent);
   --noobot-focus-outline-offset: 2px;
   --noobot-runtime-glow: 0 0 9px color-mix(in srgb, var(--noobot-accent) 24%, transparent);
   --noobot-runtime-border: color-mix(in srgb, var(--noobot-accent) 38%, var(--noobot-panel-border));
-  --noobot-panel-bg: color-mix(
-    in srgb,
-    var(--noobot-surface-sidebar) 92%,
-    var(--noobot-base-slate-800)
-  );
-  --noobot-panel-head-bg: color-mix(
-    in srgb,
-    var(--noobot-surface-sidebar) 86%,
-    var(--noobot-base-slate-800)
-  );
-  --noobot-panel-border: color-mix(in srgb, var(--noobot-base-slate-400) 10%, transparent);
-  --noobot-control-bg: color-mix(
-    in srgb,
-    var(--noobot-surface-sidebar) 90%,
-    var(--noobot-base-black)
-  );
-  --noobot-control-menu-bg: color-mix(
-    in srgb,
-    var(--noobot-surface-sidebar) 94%,
-    var(--noobot-base-black)
-  );
-  --noobot-divider: color-mix(in srgb, var(--noobot-base-slate-400) 10%, transparent);
-  --noobot-mask-bg: color-mix(in srgb, var(--noobot-base-slate-900) 52%, transparent);
+  --noobot-panel-bg: #050505;
+  --noobot-panel-head-bg: var(--noobot-panel-bg);
+  --noobot-panel-border: color-mix(in srgb, var(--noobot-base-slate-400) 16%, transparent);
+  --noobot-control-bg: #0a0a0a;
+  --noobot-control-menu-bg: var(--noobot-control-bg);
+  --noobot-divider: color-mix(in srgb, var(--noobot-base-slate-400) 12%, transparent);
+  --noobot-mask-bg: color-mix(in srgb, var(--noobot-base-black) 60%, transparent);
   --noobot-danger-soft: color-mix(in srgb, var(--noobot-base-red-500) 16%, transparent);
-  --noobot-panel-muted: color-mix(in srgb, var(--noobot-base-slate-500) 8%, transparent);
-  --noobot-overlay-border: color-mix(
-    in srgb,
-    var(--noobot-base-blue-500) 18%,
-    var(--noobot-panel-border)
-  );
+  --noobot-panel-muted: var(--noobot-surface-soft);
+  --noobot-overlay-border: var(--noobot-panel-border);
   --noobot-overlay-outline: color-mix(in srgb, var(--noobot-base-white) 46%, transparent);
   --noobot-input-ring: 0 0 0 1px var(--noobot-panel-border);
-  --noobot-input-ring-focus: 0 0 0 2px color-mix(in srgb, var(--noobot-accent) 30%, transparent);
   --noobot-attachment-hover-bg: var(--noobot-surface-soft-hover);
   --noobot-attachment-hover-border: color-mix(
     in srgb,

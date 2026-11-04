@@ -1,8 +1,8 @@
 :root {
-  --noobot-radius-xs: 4px;
-  --noobot-radius-sm: 6px;
-  --noobot-radius-md: 8px;
-  --noobot-radius-lg: 10px;
+  --noobot-radius-xs: 8px;
+  --noobot-radius-sm: 10px;
+  --noobot-radius-md: 12px;
+  --noobot-radius-lg: 16px;
   --noobot-radius-pill: 999px;
   --noobot-radius-circle: 50%;
   --noobot-space-xs: 6px;
@@ -11,8 +11,8 @@
   --noobot-space-sm: 8px;
   --noobot-space-md: 10px;
   --noobot-space-lg: 12px;
-  --noobot-space-xl: 14px;
-  --noobot-space-2xl: 18px;
+  --noobot-space-xl: 16px;
+  --noobot-space-2xl: 24px;
   --noobot-control-height-sm: 30px;
   --noobot-control-height-md: 34px;
   --noobot-control-height-lg: 38px;
@@ -20,11 +20,12 @@
   --noobot-control-icon-size: 32px;
   --noobot-control-icon-size-sm: 28px;
   --noobot-control-icon-size-lg: 36px;
+  --noobot-side-panel-width: 240px;
   --noobot-side-panel-collapsed-width: 44px;
-  --noobot-header-height: 64px;
-  --noobot-header-height-mobile: 56px;
-  --noobot-panel-header-height: 46px;
-  --noobot-sidebar-header-height: 60px;
+  --noobot-header-height: 52px;
+  --noobot-header-height-mobile: 48px;
+  --noobot-panel-header-height: 40px;
+  --noobot-sidebar-header-height: 52px;
   --noobot-layer-mobile-mask: 18;
   --noobot-layer-mobile-sidebar: 100;
   --noobot-layer-floating-action: 2001;

@@ -159,4 +159,14 @@ const { translate } = useLocale();
   margin-left: auto;
   margin-right: auto;
 }
+
+@media (max-width: 768px) {
+  .base-message-bubble {
+    --noobot-msg-bubble-pad-x: var(--noobot-space-md);
+  }
+
+  .base-message-shell.user .base-message-bubble {
+    width: 100%;
+  }
+}
 </style>

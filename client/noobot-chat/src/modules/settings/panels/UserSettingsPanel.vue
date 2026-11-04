@@ -7,6 +7,7 @@
 import { createSecureUuid } from "@noobot/shared/secure-identity";
 import { computed, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
+import { WORKSPACE_DIRECTORY_TREE_PROPS } from "@noobot/workspace-protocol/directory-tree";
 import { Plus, Refresh } from "@element-plus/icons-vue";
 import {
   getRegularUsersApi,
@@ -148,15 +149,33 @@ async function loadTemplateTree() {
   if (!props.connected) return;
   templateLoadingTree.value = true;
   try {
-    const res = await getTemplateTreeApi({ fetcher: props.fetcher });
-    const data = await res.json();
-    if (!res.ok || !data.ok)
-      throw new Error(data.error || translate("settings.loadTemplateDirFailed"));
-    templateTree.value = data.tree || [];
+    templateTree.value = await fetchTemplateDirectory("");
   } catch (error) {
     ElMessage.error(error.message || translate("settings.loadTemplateDirFailed"));
   } finally {
     templateLoadingTree.value = false;
+  }
+}
+
+async function fetchTemplateDirectory(path) {
+  const res = await getTemplateTreeApi({ fetcher: props.fetcher, path });
+  const data = await res.json();
+  if (!res.ok || !data.ok)
+    throw new Error(data.error || translate("settings.loadTemplateDirFailed"));
+  if (!Array.isArray(data.tree)) throw new TypeError("template directory response requires tree");
+  return data.tree;
+}
+
+async function loadTemplateNode(node, resolve, reject) {
+  if (node.level === 0) {
+    resolve(templateTree.value);
+    return;
+  }
+  try {
+    resolve(await fetchTemplateDirectory(node.data.path));
+  } catch (error) {
+    ElMessage.error(error.message);
+    reject();
   }
 }
 
@@ -436,9 +455,12 @@ watch(
           <div class="panel-body noobot-workspace-body">
             <el-scrollbar class="tree-scroll">
               <el-tree
+                v-if="!templateLoadingTree"
                 :data="templateTree"
                 node-key="path"
-                :props="{ label: 'label', children: 'children' }"
+                :props="WORKSPACE_DIRECTORY_TREE_PROPS"
+                lazy
+                :load="loadTemplateNode"
                 @node-click="openTemplateFile"
                 highlight-current
                 class="custom-tree"

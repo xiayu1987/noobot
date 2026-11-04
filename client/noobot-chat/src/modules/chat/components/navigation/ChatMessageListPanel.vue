@@ -271,7 +271,7 @@ defineExpose({
   display: flex;
   flex-direction: column;
   --msg-list-edge-gap: var(--noobot-space-2xl);
-  --msg-list-row-gap: var(--noobot-space-2xl);
+  --msg-list-row-gap: var(--noobot-space-xl);
 }
 
 .msg-virtual-space {
@@ -325,8 +325,8 @@ defineExpose({
   .msg-list-inner {
     padding: 0 max(var(--noobot-space-md), env(safe-area-inset-right)) 0
       max(var(--noobot-space-md), env(safe-area-inset-left));
-    --msg-list-edge-gap: var(--noobot-space-lg);
-    --msg-list-row-gap: var(--noobot-space-xs);
+    --msg-list-edge-gap: var(--noobot-space-xl);
+    --msg-list-row-gap: var(--noobot-space-lg);
   }
 }
 </style>
