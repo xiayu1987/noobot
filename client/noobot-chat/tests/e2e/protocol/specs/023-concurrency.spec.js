@@ -8,6 +8,7 @@ import { connectThroughUi, readE2eCredentials } from "../fixtures/auth.fixture.j
 import { editLatestUserMessage } from "../helpers/browser-actions.js";
 import { sendAndStop, uniquePrompt } from "../helpers/turn-scenarios.js";
 import { commandsForSession, waitForCommand } from "../helpers/scenario-assertions.js";
+import { waitForReconnect } from "../helpers/reconnect-scenarios.js";
 
 test("@full PBE-023 Session version 冲突", async ({
   noobot,
@@ -61,12 +62,20 @@ test("@full PBE-023 Session version 冲突", async ({
 
 test("@full PBE-024 停止命令幂等性", async ({ noobot, protocolCapture }, testInfo) => {
   const { sendMessage } = await import("../helpers/browser-actions.js");
-  await sendMessage(noobot.page, uniquePrompt(testInfo, "long run for concurrent stop"));
+  await sendMessage(
+    noobot.page,
+    uniquePrompt(testInfo, "调用 execute_script 执行 sleep 30，等待实际结果后回复 DONE。"),
+  );
   const send = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
   await expect(noobot.page.locator(".stop-float-btn")).toBeVisible();
   const secondPage = await noobot.page.context().newPage();
+  const receivedAtStart = protocolCapture.websocketReceived.length;
   await secondPage.goto(`/?session=${encodeURIComponent(noobot.sessionId)}`);
-  await connectThroughUi(secondPage, readE2eCredentials());
+  await waitForReconnect(protocolCapture, receivedAtStart);
+  await expect(secondPage.locator(".session-item.active")).toHaveAttribute(
+    "data-session-id",
+    noobot.sessionId,
+  );
   await expect(secondPage.locator(".stop-float-btn")).toBeVisible();
   await Promise.all([
     noobot.page.locator(".stop-float-btn").evaluate((button) => button.click()),

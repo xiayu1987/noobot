@@ -17,8 +17,12 @@ export function readE2eCredentials(env = process.env) {
 }
 
 export async function connectThroughUi(page, credentials) {
-  await page.locator(".custom-input input").first().fill(credentials.userId);
-  await page.locator(".connect-input input").fill(credentials.connectCode);
+  await page
+    .getByRole("textbox", { name: /^(Enter User ID|输入 User ID)$/ })
+    .fill(credentials.userId);
+  await page
+    .getByRole("textbox", { name: /^(Enter Connection Code|输入连接码)$/ })
+    .fill(credentials.connectCode);
   const responsePromise = page.waitForResponse(
     (response) =>
       response.url().endsWith("/api/internal/connect") &&

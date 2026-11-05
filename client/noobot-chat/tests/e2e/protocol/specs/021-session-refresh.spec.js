@@ -9,7 +9,7 @@ import {
   sendMessage,
   waitForNaturalCompletion,
 } from "../helpers/browser-actions.js";
-import { reloadAndWaitForReconnect } from "../helpers/reconnect-scenarios.js";
+import { reloadAndWaitForReconnect, waitForReconnect } from "../helpers/reconnect-scenarios.js";
 import { commandsForSession, waitForCommand } from "../helpers/scenario-assertions.js";
 import { sendAndStop, continueAndStop, uniquePrompt } from "../helpers/turn-scenarios.js";
 
@@ -69,9 +69,13 @@ test("@core PBE-022 停止后关闭浏览器再打开并继续", async ({
   });
   await noobot.page.close();
   const page = await noobot.page.context().newPage();
+  const receivedAtStart = protocolCapture.websocketReceived.length;
   await page.goto(`/?session=${encodeURIComponent(noobot.sessionId)}`);
-  const { connectThroughUi, readE2eCredentials } = await import("../fixtures/auth.fixture.js");
-  await connectThroughUi(page, readE2eCredentials());
+  await waitForReconnect(protocolCapture, receivedAtStart);
+  await expect(page.locator(".session-item.active")).toHaveAttribute(
+    "data-session-id",
+    noobot.sessionId,
+  );
   const continued = await continueAndStop({
     page,
     capture: protocolCapture,

@@ -168,6 +168,7 @@ const messageVirtualizer = useVirtualizer(
     getScrollElement: () => (listRef.value === null ? null : listRef.value.wrapRef),
     initialRect: { height: messageListInitialViewportHeightPx, width: 0 },
     overscan: messageListVirtualOverscan,
+    paddingStart: messageAnchorScrollOffsetPx,
     scrollPaddingStart: messageAnchorScrollOffsetPx,
   })),
 );
@@ -229,7 +230,6 @@ defineExpose({
             :data-index="virtualRow.index"
             class="msg-virtual-row"
             :class="{
-              'is-first': virtualRow.index === 0,
               'is-last': virtualRow.index === renderedMessages.length - 1,
             }"
             :style="{ transform: `translateY(${virtualRow.start}px)` }"
@@ -283,10 +283,6 @@ defineExpose({
   left: 0;
   width: 100%;
   padding-bottom: var(--noobot-msg-list-row-gap);
-}
-
-.msg-virtual-row.is-first {
-  padding-top: var(--noobot-msg-list-edge-gap);
 }
 
 .msg-virtual-row.is-last {

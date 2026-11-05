@@ -660,12 +660,23 @@ describe("ChatMessageListPanel virtual navigation", () => {
 
     wrapper.vm.scrollToMessageAnchor(targetAnchorId);
 
-    const { messageListEstimatedRowHeightPx, messageAnchorScrollOffsetPx } =
-      QUANTITY_THRESHOLDS.client;
+    const { messageListEstimatedRowHeightPx } = QUANTITY_THRESHOLDS.client;
     expect(wrap.scrollTo).toHaveBeenCalledWith({
-      top: messageListEstimatedRowHeightPx - messageAnchorScrollOffsetPx,
+      top: messageListEstimatedRowHeightPx,
       behavior: "auto",
     });
+  });
+
+  it("keeps the first anchor at the navigation offset when scrolling to the start", async () => {
+    const { wrapper, wrap } = await mountVirtualPanel();
+    const firstAnchorId = wrapper.vm.getMessageAnchorId(messages[0], 0);
+
+    wrapper.vm.scrollToMessageAnchor(firstAnchorId);
+
+    expect(wrap.scrollTo).toHaveBeenCalledWith({ top: 0, behavior: "auto" });
+    expect(wrapper.find('.msg-virtual-row[data-index="0"]').attributes("style")).toContain(
+      `translateY(${QUANTITY_THRESHOLDS.client.messageAnchorScrollOffsetPx}px)`,
+    );
   });
 
   it("throws when the anchor is not part of the rendered messages", async () => {
