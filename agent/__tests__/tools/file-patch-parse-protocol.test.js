@@ -70,6 +70,77 @@ test("file-patch apply: line anchor selects the nearest exact match", () => {
   assert.deepEqual(result, { content: "x\na\ny\n", repairs: [] });
 });
 
+test("file-patch apply: ordered anchored hunks update repeated icons", () => {
+  const [filePatch] = parseApplyPatch(
+    "*** Begin Patch\n*** Update File: a.txt\n@@ L1\n-icon\n+hidden icon\n@@ L3\n-icon\n+hidden icon\n@@\n-label\n*** End Patch",
+  );
+  assert.deepEqual(applySearchHunks("icon\ngap\nicon\nlabel\n", filePatch.hunks), {
+    content: "hidden icon\ngap\nhidden icon\n",
+    repairs: [],
+  });
+});
+
+test("file-patch apply: out-of-order hunks report source location and cursor", () => {
+  for (const hunk of [
+    { anchorLine: 1, lines: [del("x"), add("X")] },
+    { lines: [del("x"), add("X")] },
+    { lines: [del(numbered(1, "x")), add("X")] },
+    { anchorLine: 1, lines: [add("insert")] },
+  ]) {
+    assert.throws(
+      () => applySearchHunks("x\na\nb\n", [{ lines: [del("b")] }, hunk]),
+      (error) => {
+        assert.equal(error.code, "RECOVERABLE_INVALID_INPUT");
+        assert.equal(error.message, "patch hunks overlap or are out of order");
+        assert.equal(error.details.line, 1);
+        assert.equal(error.details.cursorLine, 4);
+        assert.equal(error.details.anchorLine, hunk.anchorLine);
+        return true;
+      },
+    );
+  }
+});
+
+test("file-patch apply: anchor before cursor cannot select a later duplicate", () => {
+  assert.throws(
+    () =>
+      applySearchHunks("x\na\nx\n", [
+        { lines: [del("a")] },
+        { anchorLine: 1, lines: [del("x"), add("X")] },
+      ]),
+    (error) =>
+      error.message === "patch hunks overlap or are out of order" &&
+      error.details.line === 1 &&
+      error.details.cursorLine === 3,
+  );
+  assert.equal(
+    applySearchHunks("x\na\nx\n", [{ lines: [del("a")] }, { lines: [del("x"), add("X")] }]).content,
+    "x\nX\n",
+  );
+});
+
+test("file-patch apply: overlapping search hunks differ from missing context", () => {
+  assert.throws(
+    () =>
+      applySearchHunks("a\nb\nc\n", [
+        { lines: [ctx("a"), ctx("b")] },
+        { lines: [ctx("b"), del("c")] },
+      ]),
+    (error) =>
+      error.message === "patch hunks overlap or are out of order" &&
+      error.details.line === 2 &&
+      error.details.cursorLine === 3,
+  );
+  assert.throws(
+    () =>
+      applySearchHunks("a\nb\n", [
+        { lines: [del("a")] },
+        { anchorLine: 1, lines: [del("missing")] },
+      ]),
+    (error) => error.message === "apply_patch hunk context does not match target file",
+  );
+});
+
 test("file-patch apply: read_file prefixes are stripped and reported", () => {
   const lines = [ctx(numbered(2, "b")), del(numbered(3, "c")), add("C")];
   for (const apply of [

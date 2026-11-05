@@ -93,7 +93,7 @@ export const FILE_TOOL_SCHEMA = {
   patch_file: {
     description: {
       key: "tools.patch_file.description",
-      text: "Read/search the file first, then use its complete returned path; omit root and do not add project, a/, or b/ prefixes.",
+      text: "Read/search the file first, then use its complete returned path; omit root and do not add project, a/, or b/ prefixes. Order non-overlapping hunks by their locations in the original file. In apply_patch, @@ L<line> selects the nearest exact match; anchors do not reset the cursor.",
     },
     params: {
       patch: {

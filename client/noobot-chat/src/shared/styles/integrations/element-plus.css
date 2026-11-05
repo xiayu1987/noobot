@@ -128,7 +128,6 @@
 .noobot-model-select-control .el-select__wrapper {
   min-height: var(--noobot-control-height-lg);
   height: var(--noobot-control-height-lg);
-  box-sizing: border-box;
   border-radius: var(--noobot-radius-md);
   background: color-mix(in srgb, var(--noobot-control-bg) 94%, var(--noobot-accent));
   border-color: color-mix(in srgb, var(--noobot-panel-border) 78%, transparent);
@@ -145,11 +144,6 @@
 .noobot-model-select-control .el-select__selected-item,
 .noobot-model-select-control .el-select__placeholder {
   min-width: 0;
-  color: var(--noobot-text-main);
-}
-
-.noobot-model-select-control .el-select__placeholder.is-transparent {
-  color: var(--noobot-text-secondary);
 }
 
 .el-input__wrapper.is-focus,

@@ -76,8 +76,4 @@ const emit = defineEmits(["insert-param"]);
   position: static;
   min-height: 80px;
 }
-
-.empty-tip :deep(.el-empty__description p) {
-  color: var(--noobot-text-secondary);
-}
 </style>

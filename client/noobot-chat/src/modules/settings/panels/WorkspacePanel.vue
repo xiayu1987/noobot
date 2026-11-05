@@ -576,10 +576,6 @@ watch(
   overflow: hidden;
 }
 
-.empty-tip :deep(.el-empty__description p) {
-  color: var(--noobot-text-secondary);
-}
-
 @media (max-width: 768px) {
   .workspace-layout {
     overflow: visible;

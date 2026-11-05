@@ -14,6 +14,36 @@ import {
   parseToolResult,
 } from "./helpers/file-script-length-guards-helper.js";
 
+test("patch_file: out-of-order anchors return diagnostics without partial writes", async (t) => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-order-"));
+  t.after(() => fs.rm(basePath, { recursive: true, force: true }));
+  const target = path.join(basePath, "a.txt");
+  const original = "icon\ngap\nicon\nlabel\n";
+  await fs.writeFile(target, original, "utf8");
+  const tool = createFileTool({ agentContext: buildAgentContext(basePath) }).find(
+    (item) => item?.name === "patch_file",
+  );
+  const result = parseToolResult(
+    await tool.invoke(
+      {
+        riskLevel: "low",
+        patch:
+          "*** Begin Patch\n*** Update File: a.txt\n@@\n-label\n@@ L1\n-icon\n+hidden icon\n*** End Patch",
+      },
+      { signal: new AbortController().signal },
+    ),
+  );
+  assert.equal(result.ok, false);
+  assert.equal(result.code, "RECOVERABLE_INVALID_INPUT");
+  assert.equal(result.error, "patch hunks overlap or are out of order");
+  assert.deepEqual(result.path, { view: "workspace", path: "a.txt" });
+  assert.equal(result.details.line, 1);
+  assert.equal(result.details.cursorLine, 5);
+  assert.equal(result.details.anchorLine, 1);
+  assert.match(result.nearbyContent, /^ {5}1\ticon$/m);
+  assert.equal(await fs.readFile(target, "utf8"), original);
+});
+
 test("patch_file: 不填 format 时仍自动识别旧 apply_patch 格式", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-autodetect-"));
   await fs.writeFile(path.join(basePath, "a.txt"), "one\ntwo\nthree\n", "utf8");

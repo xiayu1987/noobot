@@ -196,7 +196,7 @@ function locateSearchHunk({ originalLines, hunk, searchStart, repairs }) {
   if (!pattern.length) {
     return { start: hunk.anchorLine ? hunk.anchorLine - 1 : searchStart, lines: hunk.lines };
   }
-  const starts = findFullMatches(originalLines, pattern, searchStart);
+  const starts = findFullMatches(originalLines, pattern, hunk.anchorLine ? 0 : searchStart);
   if (starts.length === 1) return { start: starts[0], lines: hunk.lines };
   if (starts.length > 1) {
     if (hunk.anchorLine) return { start: nearestStart(starts, hunk.anchorLine), lines: hunk.lines };
@@ -210,9 +210,13 @@ function locateSearchHunk({ originalLines, hunk, searchStart, repairs }) {
     });
   }
   const repaired = stripLineNumberPrefixes(hunk.lines, originalLines);
-  if (repaired && repaired.start >= searchStart) {
+  if (repaired) {
     repairs.push(repaired.repair);
     return { start: repaired.start, lines: repaired.lines };
+  }
+  if (searchStart > 0 && !hunk.anchorLine) {
+    const earlierStarts = findFullMatches(originalLines, pattern, 0);
+    if (earlierStarts.length) return { start: earlierStarts[0], lines: hunk.lines };
   }
   throw recoverableToolError("apply_patch hunk context does not match target file", {
     code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
@@ -235,7 +239,13 @@ export function applySearchHunks(originalContent, hunks) {
     if (located.start < searchStart || located.start > originalLines.length) {
       throw recoverableToolError("patch hunks overlap or are out of order", {
         code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
-        details: { field: "patch", line: located.start + 1 },
+        details: {
+          field: "patch",
+          line: located.start + 1,
+          cursorLine: searchStart + 1,
+          ...(hunk.anchorLine ? { anchorLine: hunk.anchorLine } : {}),
+          hint: "Order non-overlapping hunks by their locations in the original file; anchors do not reset the cursor.",
+        },
       });
     }
     const newBlock = located.lines.filter((line) => line.type !== "-").map((line) => line.text);

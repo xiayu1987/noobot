@@ -126,7 +126,6 @@
   background: color-mix(in srgb, var(--noobot-panel-bg) 52%, transparent);
   border: 1px solid transparent;
   box-shadow: none;
-  border-radius: var(--noobot-radius-sm);
   transition:
     background var(--noobot-duration-fast) var(--noobot-ease-standard),
     border-color var(--noobot-duration-fast) var(--noobot-ease-standard);

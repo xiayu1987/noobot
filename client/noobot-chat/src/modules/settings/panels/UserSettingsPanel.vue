@@ -417,7 +417,7 @@ watch(
                   class="row-input"
                 />
                 <el-button
-                  class="dark-btn action-btn noobot-action-btn noobot-icon-button noobot-flat-icon-btn"
+                  class="dark-btn noobot-action-btn noobot-icon-button noobot-flat-icon-btn"
                   @click="regenerateSingleUserConnectCode(idx)"
                   :title="translate('settings.regenerateConnectCode')"
                   >↻</el-button
@@ -530,10 +530,6 @@ watch(
 
 .code-row .row-input {
   flex: 1;
-}
-
-.action-btn {
-  padding: 0;
 }
 
 .allow-ide-row {

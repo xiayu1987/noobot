@@ -134,7 +134,7 @@ function syncRawDraft(text) {
       <span v-if="hint" class="field-hint">{{ hint }}</span>
     </div>
     <div v-if="description || constraintText" class="field-meta">
-      <span v-if="description" class="field-description">{{ description }}</span>
+      <span v-if="description">{{ description }}</span>
       <span v-if="constraintText" class="field-constraint">{{ constraintText }}</span>
     </div>
 
@@ -224,7 +224,7 @@ function syncRawDraft(text) {
           type="textarea"
           :autosize="{ minRows: 3, maxRows: 12 }"
           spellcheck="false"
-          class="field-input field-raw"
+          class="field-input"
           :placeholder="translate('settings.configRawPlaceholder')"
           @update:model-value="syncRawDraft"
         />
@@ -290,12 +290,7 @@ function syncRawDraft(text) {
   line-height: var(--noobot-line-height-body);
 }
 
-.field-description {
-  color: var(--noobot-text-secondary);
-}
-
-.field-constraint,
-.field-scope {
+.field-constraint {
   white-space: nowrap;
 }
 
@@ -317,10 +312,6 @@ function syncRawDraft(text) {
 
 .field-sampling-toggle {
   flex: none;
-}
-
-.field-raw {
-  max-width: none;
 }
 
 .field-error {

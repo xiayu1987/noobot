@@ -49,9 +49,18 @@ describe("MonotonicMessageActions", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("renders only when visible", () => {
-    expect(mountActions({ visible: true }).text()).toContain(
-      translateMessageKey("zh-CN", "message.monotonicEdit"),
-    );
+    const wrapper = mountActions({ visible: true });
+    for (const [selector, key] of [
+      [".is-primary", "message.monotonicEdit"],
+      [".is-danger", "message.monotonicDelete"],
+    ]) {
+      const button = wrapper.find(`button${selector}`);
+      const label = translateMessageKey("zh-CN", key);
+      expect(button.attributes("aria-label")).toBe(label);
+      expect(button.attributes("title")).toBe(label);
+      expect(button.text()).toBe("");
+      expect(button.find("svg").attributes("aria-hidden")).toBe("true");
+    }
     expect(mountActions({ visible: false }).find(".monotonic-message-actions").exists()).toBe(
       false,
     );

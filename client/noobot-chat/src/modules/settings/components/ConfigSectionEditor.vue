@@ -160,7 +160,8 @@ function entryLabel(key) {
   gap: var(--noobot-space-md);
 }
 
-.entry-toolbar {
+.entry-toolbar,
+.scalar-entry {
   display: flex;
   align-items: center;
   gap: var(--noobot-space-xs);
@@ -170,15 +171,10 @@ function entryLabel(key) {
   width: 200px;
 }
 
-.field-list {
+.field-list,
+.entry-list {
   display: flex;
   flex-direction: column;
-}
-
-.scalar-entry {
-  display: flex;
-  align-items: center;
-  gap: var(--noobot-space-xs);
 }
 
 .scalar-entry-field {
@@ -187,8 +183,6 @@ function entryLabel(key) {
 }
 
 .entry-list {
-  display: flex;
-  flex-direction: column;
   gap: var(--noobot-space-xs);
 }
 

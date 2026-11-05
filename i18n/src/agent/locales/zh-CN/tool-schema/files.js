@@ -93,7 +93,7 @@ export const FILE_TOOL_SCHEMA = {
   patch_file: {
     description: {
       key: "tools.patch_file.description",
-      text: "先 read_file/search 确认文件，再按返回的完整 path 修改；省略 root，不要自行添加 project、a/ 或 b/ 前缀。",
+      text: "先 read_file/search 确认文件，再按返回的完整 path 修改；省略 root，不要自行添加 project、a/ 或 b/ 前缀。同一文件的 hunk 按原文顺序排列且不得重叠；apply_patch 用 @@ L行号 选择最近的完全匹配处，锚点不重置游标。",
     },
     params: {
       patch: {
