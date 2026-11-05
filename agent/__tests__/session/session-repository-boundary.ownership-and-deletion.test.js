@@ -67,7 +67,7 @@ test("session/execution repositories should keep file ownership boundaries", asy
     await runtime.repositories.executionRepository.appendLog(
       userId,
       sessionId,
-      { event: "start", dialogProcessId: "dp-1" },
+      { event: "start", dialogProcessId: "dp-1", ts: "2026-01-01T00:00:00.000Z" },
       { persistenceContext: treeContext },
     );
     assert.equal(

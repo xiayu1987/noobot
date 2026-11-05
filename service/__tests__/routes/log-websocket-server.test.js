@@ -98,6 +98,7 @@ test("log-websocket-server: writes session logs by category", () =>
         port,
         payload: {
           source: "client",
+          channel: "ws",
           category: "state",
           event: "state.changed",
           scope: "session",
@@ -136,6 +137,7 @@ test("log-websocket-server: announces the effective client policy before ACK", (
           port,
           payload: {
             source: "client",
+            channel: "ws",
             category: "state",
             event: "state.policy",
             scope: "session",
@@ -180,6 +182,7 @@ test("log-websocket-server: mixed batches ACK after reliable writes without wait
           events: [
             {
               source: "client",
+              channel: "ws",
               category: "debug",
               debugType: "tool-log-window",
               event: "debug.pending",
@@ -188,6 +191,7 @@ test("log-websocket-server: mixed batches ACK after reliable writes without wait
             },
             {
               source: "client",
+              channel: "ws",
               scope: "session",
               category: "state",
               event: "state.reliable",
@@ -220,6 +224,7 @@ test("log-websocket-server: reliable write failures return error and never ACK",
       port: server.address().port,
       payload: {
         source: "client",
+        channel: "ws",
         scope: "session",
         category: "state",
         event: "state.failed",
@@ -256,6 +261,7 @@ test("log-websocket-server: records are owned by the authenticated user, not the
       port: server.address().port,
       payload: {
         source: "client",
+        channel: "ws",
         scope: "session",
         category: "state",
         event: "state.spoofed",
@@ -283,7 +289,7 @@ test("log-websocket-server: batches containing a record without category return 
     });
     const { server, registered } = await startLogServer();
     try {
-      const base = { source: "client", scope: "session", sessionId: "s-batch" };
+      const base = { source: "client", channel: "ws", scope: "session", sessionId: "s-batch" };
       const messages = await sendLogWs({
         port: server.address().port,
         payload: {
@@ -319,6 +325,7 @@ test("log-websocket-server: writes tool log window debug to its dedicated file",
           port,
           payload: {
             source: "frontend",
+            channel: "ws",
             category: "debug",
             level: "debug",
             debugType: "tool-log-window",
@@ -355,6 +362,7 @@ test("log-websocket-server: writes to the user runtime session events directory"
     const result = await writeSessionLogEvent({
       userId: "u1",
       source: "client",
+      channel: "ws",
       category: "message",
       event: "message.created",
       scope: "session",
@@ -399,6 +407,7 @@ test("log-websocket-server: works when chat websocket server is registered first
         port,
         payload: {
           source: "client",
+          channel: "ws",
           category: "system",
           event: "system.log",
           scope: "session",
@@ -428,6 +437,7 @@ test("log-websocket-server: skips registered debug types by default", () =>
     });
     const result = await writeSessionLogEvent({
       source: "client",
+      channel: "ws",
       userId: "u1",
       category: "debug",
       debugType: "state-machine",
@@ -453,6 +463,7 @@ test("log-websocket-server: rejects debug logs without a registered debug type",
       () =>
         writeSessionLogEvent({
           source: "client",
+          channel: "ws",
           userId: "u1",
           category: "debug",
           scope: "session",
@@ -477,12 +488,40 @@ test("log-websocket-server: rejects records without an explicit scope", () =>
       () =>
         writeSessionLogEvent({
           source: "client",
+          channel: "ws",
           userId: "u1",
           category: "state",
           sessionId: "s-noscope",
           event: "state.noscope",
         }),
       /Invalid runtime event scope: undefined/,
+    );
+  }));
+
+test("log-websocket-server: rejects records whose sender did not declare a session log channel", () =>
+  withRuntimeEventsRoot("noobot-session-logs-", async (workspaceRoot) => {
+    await initializeSessionTree(workspaceRoot, "u1");
+    await persistSession(workspaceRoot, "u1", {
+      sessionId: "s-nochannel",
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
+    const base = {
+      source: "client",
+      userId: "u1",
+      scope: "session",
+      category: "state",
+      sessionId: "s-nochannel",
+      event: "state.nochannel",
+    };
+    await assert.rejects(
+      () => writeSessionLogEvent(base),
+      /Invalid session log channel: undefined/,
+    );
+    // direct 属于服务端直写通道，会话日志上报方不能声明。
+    await assert.rejects(
+      () => writeSessionLogEvent({ ...base, channel: "direct" }),
+      /Invalid session log channel: direct/,
     );
   }));
 
@@ -498,6 +537,7 @@ test("log-websocket-server: rejects records without an explicit category", () =>
       () =>
         writeSessionLogEvent({
           source: "client",
+          channel: "ws",
           userId: "u1",
           scope: "session",
           sessionId: "s-nocategory",
@@ -522,6 +562,7 @@ test("log-websocket-server: debug records follow only their debugType switch", (
         });
         const debug = await writeSessionLogEvent({
           source: "client",
+          channel: "ws",
           userId: "u1",
           category: "debug",
           debugType: "state-machine",
@@ -533,6 +574,7 @@ test("log-websocket-server: debug records follow only their debugType switch", (
         assert.notEqual(debug.skipped, true);
         const system = await writeSessionLogEvent({
           source: "client",
+          channel: "ws",
           userId: "u1",
           category: "system",
           scope: "session",
@@ -558,6 +600,7 @@ test("log-websocket-server: failed writes are not reported as written", () =>
         () =>
           writeSessionLogEvent({
             source: "client",
+            channel: "ws",
             userId: "u1",
             category: "state",
             sessionId: "s-failed",
@@ -567,6 +610,7 @@ test("log-websocket-server: failed writes are not reported as written", () =>
       );
       const written = await writeSessionLogEvent({
         source: "client",
+        channel: "ws",
         userId: "u1",
         category: "state",
         scope: "session",

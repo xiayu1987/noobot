@@ -9,11 +9,12 @@
 }
 
 .noobot-workspace-head {
-  height: var(--noobot-panel-header-height);
+  min-height: var(--noobot-panel-header-height);
+  flex-shrink: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 var(--noobot-space-lg);
+  padding: var(--noobot-workspace-head-padding);
   background: transparent;
   border-bottom: 1px solid color-mix(in srgb, var(--noobot-divider) 70%, transparent);
 }
@@ -151,11 +152,7 @@
     position: static;
     inset: auto;
     min-height: 96px;
-    padding: var(--noobot-space-xl) 0;
-  }
-
-  .noobot-workspace-layout .panel-head {
-    padding: 0 var(--noobot-space-md);
+    padding: var(--noobot-workspace-empty-padding);
   }
 
   .noobot-workspace-layout .active-file {

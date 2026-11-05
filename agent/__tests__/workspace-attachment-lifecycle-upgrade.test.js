@@ -13,7 +13,11 @@ import {
   validateProtocolEvent,
   reduceAttachmentLifecycle,
 } from "@noobot/event-protocol";
-import { WORKSPACE_LAYOUT_UPGRADES, planWorkspaceLayoutUpgrades } from "@noobot/workspace-protocol";
+import {
+  WORKSPACE_LAYOUT_UPGRADES,
+  WORKSPACE_LAYOUT_VERSION,
+  planWorkspaceLayoutUpgrades,
+} from "@noobot/workspace-protocol";
 import { attachmentLifecycleSequenceScopeId } from "@noobot/attachment-protocol";
 import { buildHarness } from "./session/scoped-session-repositories.fixtures.js";
 import { v9Options, jsonl } from "./helpers/session-identity-upgrade.fixtures.js";
@@ -91,9 +95,10 @@ test("v30 upgrades attachment journal identity, preserves delivery and isolates 
     if (sessionId === "a-broken") records.push(commit(sessionId, "e2", "old-1"));
     await writeFile(path.join(dir, "outbox.jsonl"), jsonl(records));
   }
-  assert.deepEqual(planWorkspaceLayoutUpgrades({ installedVersion: 29 }), [
-    WORKSPACE_LAYOUT_UPGRADES.at(-1),
-  ]);
+  assert.deepEqual(
+    planWorkspaceLayoutUpgrades({ installedVersion: 29 }),
+    WORKSPACE_LAYOUT_UPGRADES.filter((upgrade) => upgrade.toVersion > 29),
+  );
   const brokenBefore = await fileBytes(directories["a-broken"]);
   const validBefore = await fileBytes(directories["z-valid"]);
   const upgraded = await upgradeSessionMessageIdentity(v9Options(root));
@@ -170,7 +175,7 @@ test("v29 startup isolates current-schema invalid delivery before writer recover
   assert.match(JSON.stringify(upgrade.result.quarantined[0]), /outbox_record_invalid/);
   assert.match(JSON.stringify(upgrade.result.quarantined[0]), /consumerId/);
   assert.deepEqual(await fileBytes(directories["a-invalid-delivery"]), invalidBefore);
-  assert.equal(JSON.parse(await readFile(layoutFile, "utf8")).version, 30);
+  assert.equal(JSON.parse(await readFile(layoutFile, "utf8")).version, WORKSPACE_LAYOUT_VERSION);
   const outbox = await readAuthorityOutbox(directories["z-valid-delivery"]);
   assert.equal(outbox[0].deliveries.c1.attempts, 1);
   assert.equal(validateProtocolEvent(outbox[0].envelope).valid, true);

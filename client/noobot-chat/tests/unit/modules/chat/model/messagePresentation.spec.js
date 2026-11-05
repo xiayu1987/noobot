@@ -99,6 +99,7 @@ describe("message presentation status steps", () => {
 
   it("keeps one status-step presentation across refresh, continuation, and completion", () => {
     const identity = {
+      ts: "2026-01-01T00:00:00.000Z",
       role: "assistant",
       sessionId: "child-session",
       turnScopeId: "workflow-node:child",

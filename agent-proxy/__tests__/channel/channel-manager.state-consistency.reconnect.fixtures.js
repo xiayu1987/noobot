@@ -70,6 +70,9 @@ export function authoritativeLifecycle(fields = {}) {
     summaryVersion: terminal ? 1 : 0,
     completionCommitId: terminal ? `commit-${fields.eventId}` : "",
     updatedAt: "2026-01-01T00:00:00.000Z",
+    occurredAt: "2026-01-01T00:00:00.000Z",
+    startedAt: "2026-01-01T00:00:00.000Z",
+    finishedAt: terminal ? "2026-01-01T00:00:00.000Z" : "",
     ...fields,
   });
   return createTurnLifecycleEventEnvelope(payload, {

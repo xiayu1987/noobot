@@ -34,6 +34,8 @@ const typographyTemplateFiles = [path.join(projectRoot, "src/shared/utils/markdo
 const typographyDeclaration =
   /(?<![-\w])["']?(?<property>--[\w-]*(?:font|line-height|letter-spacing)[\w-]*|font|font-family|font-size|font-weight|line-height|letter-spacing)["']?\s*:\s*(?:"(?<quotedValue>[^"]*)"|(?<plainValue>[^;{}]+))/g;
 const allowedTypographyValue = /^(?:var\(--[\w-]+\)|inherit|initial|unset|0)$/;
+const sharedLayoutToken =
+  /(?<![-\w])--noobot-(?:content-[\w-]+|side-panel-[\w-]+|workspace-(?:head|empty)-padding|msg-(?:list-[\w-]+|bubble-pad-[xy]))\s*:/;
 const formContractFiles = [
   {
     filePath: path.join(projectRoot, "src/shared/styles/integrations/element-plus.css"),
@@ -101,14 +103,17 @@ function isTokenDeclaration(filePath, line) {
   return /^\s*--[\w-]+\s*:/.test(line) || filePath.endsWith("markdown-copy.js");
 }
 
-function inspectEmptyStyleRules(filePath, source) {
-  const styleRegions = filePath.endsWith(".vue")
+function getStyleRegions(filePath, source) {
+  return filePath.endsWith(".vue")
     ? Array.from(source.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi), (match) => ({
         source: match[1],
         offset: (match.index || 0) + match[0].indexOf(match[1]),
       }))
     : [{ source, offset: 0 }];
-  for (const region of styleRegions) {
+}
+
+function inspectEmptyStyleRules(filePath, source) {
+  for (const region of getStyleRegions(filePath, source)) {
     inspectEmptyStyleRegion(filePath, source, region);
   }
 }
@@ -121,6 +126,50 @@ function inspectEmptyStyleRegion(filePath, source, region) {
     violations.push(
       `${path.relative(repoRoot, filePath)}:${lineNumber}: empty style rule is forbidden`,
     );
+  }
+}
+
+function inspectAnimationTokens(filePath, source) {
+  for (const region of getStyleRegions(filePath, source)) {
+    const css = region.source.replace(/\/\*[\s\S]*?\*\//g, (comment) =>
+      comment.replace(/[^\r\n]/g, " "),
+    );
+    for (const match of css.matchAll(
+      /(?<![-\w])animation(?:-duration|-delay|-timing-function)?\s*:\s*([^;{}]+)/g,
+    )) {
+      const value = match[1].replace(/var\(--[\w-]+\)/g, "");
+      if (
+        !/(?:\b\d*\.?\d+m?s\b|\bease(?:-in-out|-in|-out)?\b|\blinear\b|\bcubic-bezier\s*\(|\bsteps\s*\()/.test(
+          value,
+        )
+      )
+        continue;
+      const lineNumber = source.slice(0, region.offset + match.index).split(/\r?\n/).length;
+      violations.push(
+        `${path.relative(repoRoot, filePath)}:${lineNumber}: animation duration, delay and easing must use shared design tokens`,
+      );
+    }
+  }
+}
+
+function inspectSpacing(filePath, source) {
+  for (const region of getStyleRegions(filePath, source)) {
+    const css = region.source.replace(/\/\*[\s\S]*?\*\//g, (comment) =>
+      comment.replace(/[^\r\n]/g, " "),
+    );
+    for (const match of css.matchAll(
+      /(?<![-\w])(?:padding|margin|gap|row-gap|column-gap)(?:-(?:top|right|bottom|left|inline(?:-start|-end)?|block(?:-start|-end)?))?\s*:\s*([^;{}]+)/g,
+    )) {
+      // Keep 1px optical and screen-reader adjustments; layout spacing uses tokens.
+      const hasLiteralSpacing = Array.from(match[1].matchAll(/-?(\d*\.?\d+)px\b/g)).some(
+        (value) => Number(value[1]) > 1,
+      );
+      if (!hasLiteralSpacing) continue;
+      const lineNumber = source.slice(0, region.offset + match.index).split(/\r?\n/).length;
+      violations.push(
+        `${path.relative(repoRoot, filePath)}:${lineNumber}: spacing above 1px must reference a shared design token`,
+      );
+    }
   }
 }
 
@@ -206,6 +255,11 @@ function inspectFixedLayers(filePath, source) {
 }
 
 function inspectStyleLine(filePath, line, index) {
+  if (sharedLayoutToken.test(line) && !isTokenDeclaration(filePath, line)) {
+    violations.push(
+      `${path.relative(repoRoot, filePath)}:${index + 1}: shared layout and message spacing tokens must be declared in src/shared/styles/tokens`,
+    );
+  }
   for (const [message, pattern] of checks) {
     if (!pattern.test(line)) continue;
     if (
@@ -223,6 +277,8 @@ function inspectFile(filePath) {
   if (filePath.endsWith(".css") || filePath.endsWith(".vue")) {
     inspectTypography(filePath, source);
     inspectEmptyStyleRules(filePath, source);
+    inspectAnimationTokens(filePath, source);
+    inspectSpacing(filePath, source);
     inspectResponsiveBreakpoints(filePath, source);
     inspectFixedLayers(filePath, source);
   } else if (typographyTemplateFiles.includes(filePath)) {
@@ -240,6 +296,22 @@ function inspectFile(filePath) {
   )
     return;
   inspectDropdownContracts(filePath, source);
+  inspectRichContentContract(filePath, source);
+}
+
+function inspectRichContentContract(filePath, source) {
+  if (!/class="[^"]*\bnoobot-rich-content\b/.test(source)) return;
+  for (const region of getStyleRegions(filePath, source)) {
+    const css = region.source.replace(/\/\*[\s\S]*?\*\//g, (comment) =>
+      comment.replace(/[^\r\n]/g, " "),
+    );
+    for (const match of css.matchAll(/:deep\(/g)) {
+      const lineNumber = source.slice(0, region.offset + match.index).split(/\r?\n/).length;
+      violations.push(
+        `${path.relative(repoRoot, filePath)}:${lineNumber}: rendered Markdown styles must be defined in shared/styles/components/rich-content.css`,
+      );
+    }
+  }
 }
 
 function inspectIconButtonVariants(filePath, source) {

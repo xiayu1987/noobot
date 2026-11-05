@@ -32,6 +32,7 @@ test("child interaction authority commits through the protocol persistence scope
     const runtime = createSessionServices(
       { workspaceRoot },
       {
+        now: () => new Date().toISOString(),
         attachmentService: new AttachmentService({ workspaceRoot }),
         scopedSessionRoots: resolveScopedSessionRoots([
           { pluginId: "workflow", scopedSessionRoots: ["session"] },
@@ -110,6 +111,7 @@ test("interaction authority bridge leaves identity rejection to the event protoc
     const runtime = createSessionServices(
       { workspaceRoot },
       {
+        now: () => new Date().toISOString(),
         attachmentService: new AttachmentService({ workspaceRoot }),
         scopedSessionRoots: resolveScopedSessionRoots([]),
       },

@@ -102,8 +102,11 @@ function assertSummaryShape(summary) {
 function resolveDurationMs(startedAt, finishedAt) {
   const startMs = Date.parse(startedAt);
   const endMs = Date.parse(finishedAt);
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return null;
-  return Math.max(0, endMs - startMs);
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) {
+    throw invalidReport("startedAt and finishedAt must be ISO instants");
+  }
+  if (endMs < startMs) throw invalidReport("finishedAt precedes startedAt");
+  return endMs - startMs;
 }
 
 function assertReportShape(report) {
@@ -132,8 +135,8 @@ export function buildExecutionReport({
   dialogProcessId,
   turnScopeId = "",
   caller = "",
-  startedAt = "",
-  finishedAt = "",
+  startedAt,
+  finishedAt,
   executionSummary = null,
   summaryError = null,
   error = null,

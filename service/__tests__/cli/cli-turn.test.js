@@ -14,6 +14,7 @@ import {
   TURN_PHASE,
   createTurnLifecycleEnvelope,
   deriveTurnState,
+  isTerminalTurnState,
 } from "@noobot/session-protocol";
 import {
   EVENT_FAMILY,
@@ -61,6 +62,7 @@ function lifecycle(turn, eventType, revision, { phase = TURN_EVENT_PHASE[eventTy
     eventType === TURN_EVENT.COMPLETED || eventType === TURN_EVENT.STOP_COMPLETED
       ? { completionCommitId: `commit-${revision}`, summaryVersion: 1 }
       : {};
+  const state = deriveTurnState(eventType, phase);
   const payload = createTurnLifecycleEnvelope({
     eventType,
     eventId: nextEventId("lifecycle"),
@@ -73,10 +75,12 @@ function lifecycle(turn, eventType, revision, { phase = TURN_EVENT_PHASE[eventTy
     revision,
     sequence: revision,
     phase,
-    state: deriveTurnState(eventType, phase),
+    state,
     executionId: "ex-1",
     occurredAt: OCCURRED_AT,
     updatedAt: OCCURRED_AT,
+    startedAt: OCCURRED_AT,
+    finishedAt: isTerminalTurnState(state) ? OCCURRED_AT : "",
     ...completion,
   });
   return {

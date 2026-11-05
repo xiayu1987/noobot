@@ -76,6 +76,7 @@ describe("chatEngine streamHandlers transport boundary", () => {
 
   it("projects a parsed-result relation onto the canonical user attachment", () => {
     const userMessage = {
+      ts: "2026-01-01T00:00:00.000Z",
       role: "user",
       attachments: [{ ...identity, name: "source.docx" }],
     };
@@ -91,6 +92,7 @@ describe("chatEngine streamHandlers transport boundary", () => {
 
   it("uses the stable identity and does not infer ownership from client draft ids", () => {
     const userMessage = {
+      ts: "2026-01-01T00:00:00.000Z",
       role: "user",
       attachments: [{ ...identity, clientAttachmentId: "draft-client-id" }],
     };
@@ -105,6 +107,7 @@ describe("chatEngine streamHandlers transport boundary", () => {
 
   it("does not project lifecycle facts onto a draft without canonical identity", () => {
     const userMessage = {
+      ts: "2026-01-01T00:00:00.000Z",
       role: "user",
       attachments: [{ clientAttachmentId: "draft-attachment:1", name: "source.docx" }],
     };
@@ -131,7 +134,11 @@ describe("chatEngine streamHandlers transport boundary", () => {
 
   it("deduplicates a persisted authority event across live and reconnect delivery", async () => {
     const incoming = parsedEvent();
-    const userMessage = { role: "user", attachments: [{ ...identity }] };
+    const userMessage = {
+      ts: "2026-01-01T00:00:00.000Z",
+      role: "user",
+      attachments: [{ ...identity }],
+    };
     const context = {
       activeSession: { value: { messages: [userMessage] } },
       makeViewAttachments,
@@ -159,6 +166,7 @@ describe("chatEngine streamHandlers transport boundary", () => {
     const makeViewMessage = (message) =>
       buildViewMessage(message, { sessionId: "session-1", userId: "user-1" });
     const userMessage = makeViewMessage({
+      ts: "2026-01-01T00:00:00.000Z",
       role: "user",
       content: "",
       sessionId: "session-1",

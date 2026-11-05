@@ -128,13 +128,10 @@ export function createChatEngineSender({
       turnScopeId,
     });
     debugLogger.begin({ request });
-    const turnStartedAtMs = Date.now();
-    const startedAt = new Date(turnStartedAtMs).toISOString();
     applyRunStateEvent({
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
       sessionId,
       turnScopeId,
-      startedAt,
       source: "send_flow",
     });
     const {

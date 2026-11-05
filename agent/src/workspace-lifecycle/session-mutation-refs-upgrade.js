@@ -35,7 +35,6 @@ import { upgradeSessionDirectories } from "./session-upgrade-driver.js";
 
 const UPGRADE_INVALID_CODE = "WORKSPACE_SESSION_MUTATION_REFS_UPGRADE_INVALID";
 const QUARANTINE_KIND = WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MUTATION_REFS;
-const MIGRATION_NOW = () => new Date().toISOString();
 
 const LEGACY_FILE_MUTATION_VERSION = 2;
 const FILE_MUTATION_TOOLS = new Set([TOOL_NAME.WRITE_FILE, TOOL_NAME.PATCH_FILE]);
@@ -222,7 +221,6 @@ async function applyPlan({ storageService, stagingDir, plan }) {
     sessionDir: stagingDir,
     sessionPayload: plan.session,
     atomic: true,
-    now: MIGRATION_NOW,
     predecessor: SESSION_ARTIFACT_PREDECESSOR.CANONICAL,
   });
 }

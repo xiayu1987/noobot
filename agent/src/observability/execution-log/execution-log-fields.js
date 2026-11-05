@@ -5,6 +5,7 @@
  */
 
 import { text } from "@noobot/shared/value";
+import { isCanonicalMessageTimestamp } from "@noobot/session-protocol";
 
 export const TOOL_CALL_START_EVENT = "tool_call_start";
 export const TOOL_CALL_END_EVENT = "tool_call_end";
@@ -18,8 +19,10 @@ export function resolveToolName(log) {
 }
 
 export function resolveTimestampMs(log) {
-  const ms = Date.parse(String(log.ts || ""));
-  return Number.isFinite(ms) ? ms : null;
+  if (!isCanonicalMessageTimestamp(log.ts)) {
+    throw new TypeError("execution log requires canonical ISO ts");
+  }
+  return Date.parse(log.ts);
 }
 
 export function isFailedToolResult(log) {

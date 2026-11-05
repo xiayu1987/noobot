@@ -11,6 +11,7 @@ import {
   projectSessionRunEvent,
   projectTurnLifecycleRuntimeEvent,
 } from "@noobot/session-protocol/runtime-event";
+import { TURN_TERMINAL_STATES } from "@noobot/session-protocol";
 
 const authoritative = () => ({
   type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
@@ -124,3 +125,41 @@ test("unknown event types and nested identity copies cannot enter runtime projec
   delete input.sessionId;
   assert.throws(() => projectSessionRunEvent({ ...input, raw: { sessionId: "s1" } }));
 });
+
+for (const state of TURN_TERMINAL_STATES) {
+  test(`terminal authoritative state ${state} requires the Authority finishedAt`, () => {
+    assert.throws(
+      () => projectSessionRunEvent({ ...authoritative(), state }),
+      /missing_runtime_terminal_finishedAt/,
+    );
+    const finishedAt = "2026-01-01T00:00:07.000Z";
+    assert.equal(
+      projectSessionRunEvent({ ...authoritative(), state, finishedAt }).finishedAt,
+      finishedAt,
+    );
+  });
+}
+
+for (const field of ["startedAt", "finishedAt", "thinkingFinishedAt"]) {
+  test(`non-authoritative events cannot carry ${field}`, () => {
+    const local = createLocalSessionRunEvent(
+      { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED, turnScopeId: "t1" },
+      1000,
+    );
+    assert.throws(
+      () => projectSessionRunEvent({ ...local, [field]: "2026-01-01T00:00:00.000Z" }),
+      new RegExp(`runtime_${field}_requires_authority`),
+    );
+    const transport = {
+      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+      state: "sending",
+      seq: 1,
+      updatedAtMs: 1000,
+      [field]: "2026-01-01T00:00:00.000Z",
+    };
+    assert.throws(
+      () => projectSessionRunEvent(transport),
+      new RegExp(`runtime_${field}_requires_authority`),
+    );
+  });
+}

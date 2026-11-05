@@ -74,7 +74,7 @@ function onRemoveUpload(clientAttachmentId) {
 
 <style scoped>
 .selected-connectors-row {
-  max-width: 800px;
+  max-width: var(--noobot-content-max-width);
   margin: 0 auto var(--noobot-space-md);
   padding: 0 var(--noobot-space-2xs);
   display: flex;

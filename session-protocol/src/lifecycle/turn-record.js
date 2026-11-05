@@ -190,3 +190,23 @@ export function assertTurnRecord(turn) {
     });
   return turn;
 }
+
+/**
+ * Reads the accepted Turn a run executes. The Turn record is the single source of
+ * its Authority timing (startedAt); callers never derive or default it.
+ */
+export function requireAcceptedTurnRecord(lifecycle, { turnScopeId, dialogProcessId }) {
+  const turn = isPlainObject(lifecycle?.turns) ? lifecycle.turns[turnScopeId] : undefined;
+  if (!turn) {
+    throw Object.assign(new TypeError(`accepted Turn not found: ${turnScopeId}`), {
+      code: "TURN_LIFECYCLE_TURN_NOT_FOUND",
+    });
+  }
+  assertTurnRecord(turn);
+  if (turn.dialogProcessId !== dialogProcessId) {
+    throw Object.assign(new TypeError(`accepted Turn dialogProcessId mismatch: ${turnScopeId}`), {
+      code: "TURN_LIFECYCLE_IDENTITY_MISMATCH",
+    });
+  }
+  return turn;
+}

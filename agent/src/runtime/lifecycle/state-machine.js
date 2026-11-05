@@ -8,7 +8,7 @@ import { resolveErrorMessage } from "../../shared/utils/error-utils.js";
 import { EXECUTION_ABORT_TYPE } from "@noobot/session-protocol/execution-abort";
 import { AGENT_RUN_EVENT } from "../../events/run-event.js";
 import { emitEvent } from "../../events/emitter.js";
-import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
+import { isFunction, isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 
 export const AGENT_LIFECYCLE_STATE = Object.freeze({
   INITIALIZING: "initializing",
@@ -87,11 +87,8 @@ function assertExecutionIdentityUnchanged(executionIdentity, origin, extra) {
   }
 }
 
-export function createAgentLifecycleMachine({
-  eventListener = null,
-  now = () => new Date().toISOString(),
-  basePayload = {},
-} = {}) {
+export function createAgentLifecycleMachine({ eventListener = null, now, basePayload = {} } = {}) {
+  if (!isFunction(now)) throw new TypeError("agent lifecycle requires now function");
   if (typeof basePayload.resumeFromStoppedSnapshot !== "boolean") {
     throw new TypeError("agent lifecycle requires resumeFromStoppedSnapshot");
   }
@@ -132,7 +129,7 @@ export function createAgentLifecycleMachine({
       state,
       branchState,
       previousState,
-      timestamp: typeof now === "function" ? now() : new Date().toISOString(),
+      timestamp: now(),
       sessionId: normalizeText(extra?.sessionId ?? basePayload?.sessionId),
       dialogProcessId: normalizeText(extra?.dialogProcessId ?? basePayload?.dialogProcessId),
       turnScopeId: normalizeText(extra?.turnScopeId ?? basePayload?.turnScopeId),

@@ -124,7 +124,8 @@ watch(
   position: relative;
   display: flex;
   flex-direction: column;
-  margin: 0 max(var(--noobot-space-2xl), calc(50% - 400px)) var(--noobot-space-md);
+  margin: 0 var(--noobot-content-inset-right) var(--noobot-space-md)
+    var(--noobot-content-inset-left);
   padding: var(--noobot-space-lg) var(--noobot-space-xl);
   max-height: min(72vh, 560px);
   overflow: hidden;
@@ -203,7 +204,7 @@ watch(
 
 @media (max-width: 768px) {
   .interaction-card {
-    margin: 0 var(--noobot-space-md) var(--noobot-space-sm);
+    margin-bottom: var(--noobot-space-sm);
     padding: var(--noobot-space-md);
     max-height: 62vh;
   }

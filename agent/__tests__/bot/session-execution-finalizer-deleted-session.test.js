@@ -12,6 +12,7 @@ import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import { SessionExecutionFinalizer } from "../../src/bot/execution/finalizer.js";
 import { SessionTurnPersister } from "../../src/bot/execution/turn-persister.js";
 import { pathExists as exists, withProvisionedSessions } from "../helpers/provisioned-sessions.js";
+import { testWallClock } from "../helpers/session-services.js";
 
 const USER_ID = "u1";
 const TARGET_SESSION_ID = "running-target";
@@ -28,7 +29,7 @@ function createHarness(session) {
   const effects = [];
   const finalizer = new SessionExecutionFinalizer({
     session,
-    turnPersister: new SessionTurnPersister({ session }),
+    turnPersister: new SessionTurnPersister({ session, now: testWallClock }),
     memoryPostProcessService: {
       resolveMemoryPostProcessAsyncEnabled: () => true,
       async runMemoryPostProcessFlow() {
@@ -45,7 +46,7 @@ function createHarness(session) {
     caller: SESSION_CALLER.USER,
     dialogProcessId: "dp-running",
     turnScopeId: "turn-running",
-    thinkingStartedAt: "2026-11-01T00:00:00.000Z",
+    startedAt: "2026-11-01T00:00:00.000Z",
     agentResult: createAgentTurnResult({
       output: "late answer",
       traces: [],

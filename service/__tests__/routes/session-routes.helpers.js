@@ -54,6 +54,7 @@ export function createSessionApp(options = {}) {
   registerSessionRoutes(app, {
     bot: {
       session: {
+        readServerNow: () => TEST_MESSAGE_TS,
         getSessionDisplayData: async () => ({}),
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),

@@ -139,13 +139,13 @@ export function useChatSession({
     logThinkingReplayDebug("frontend.lifecycle.terminalDiscoveryScheduled", () => ({
       sessionId: normalizedSessionId,
       turnScopeId: normalizedTurnScopeId,
-      source: resolutionMetadata.source || "",
-      revision: Number(resolutionMetadata.revision || 0),
-      sequence: Number(resolutionMetadata.sequence || 0),
-      state: resolutionMetadata.state || "",
-      executionState: resolutionMetadata.executionState || "",
-      startedAt: resolutionMetadata.startedAt || "",
-      finishedAt: resolutionMetadata.finishedAt || "",
+      source: resolutionMetadata.source,
+      revision: resolutionMetadata.revision,
+      sequence: resolutionMetadata.sequence,
+      state: resolutionMetadata.state,
+      executionState: resolutionMetadata.executionState,
+      startedAt: resolutionMetadata.startedAt,
+      finishedAt: resolutionMetadata.finishedAt,
       resolverReady: Boolean(resolveDiscoveredTerminalTurn),
     }));
     if (resolveDiscoveredTerminalTurn) {
@@ -588,7 +588,6 @@ export function useChatSession({
     stopSending: stopSendingWithComposerActionState,
     stopExecution: chatEngine.stopExecution,
     prepareMonotonicMessageAction: chatEngine.prepareMonotonicMessageAction,
-    cascadeDeleteMessagesFrom: chatEngine.cascadeDeleteMessagesFrom,
     deleteMonotonicMessage: chatEngine.deleteMonotonicMessage,
     resendMonotonicMessage: chatEngine.resendMonotonicMessage,
     refreshSessionConnectors: connectorPanel.refreshSessionConnectors,

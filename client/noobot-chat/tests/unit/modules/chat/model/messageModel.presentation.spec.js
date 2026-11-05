@@ -75,6 +75,7 @@ describe("messageModel presentation identity", () => {
         {
           presentationMessageId: "assistant-presentation-1",
           chatPresentation: false,
+          ts: "2026-01-01T00:00:00.000Z",
           role: "assistant",
           type: "tool_call",
           content: "inspect first",
@@ -93,6 +94,7 @@ describe("messageModel presentation identity", () => {
         {
           presentationMessageId: "assistant-presentation-1",
           chatPresentation: false,
+          ts: "2026-01-01T00:00:00.000Z",
           role: "assistant",
           type: "tool_call",
           content: "verify next",
@@ -102,6 +104,7 @@ describe("messageModel presentation identity", () => {
         {
           presentationMessageId: "assistant-presentation-1",
           chatPresentation: true,
+          ts: "2026-01-01T00:00:00.000Z",
           role: "assistant",
           type: "message",
           content: "Final answer",
@@ -130,6 +133,7 @@ describe("messageModel presentation identity", () => {
         {
           presentationMessageId: "assistant-presentation-1",
           chatPresentation: true,
+          ts: "2026-01-01T00:00:00.000Z",
           role: "assistant",
           content: "First answer",
           turnScopeId: "client-turn:duplicate-presentation",
@@ -137,6 +141,7 @@ describe("messageModel presentation identity", () => {
         {
           presentationMessageId: "assistant-presentation-1",
           chatPresentation: true,
+          ts: "2026-01-01T00:00:00.000Z",
           role: "assistant",
           content: "Second answer",
           turnScopeId: "client-turn:duplicate-presentation",
@@ -153,6 +158,7 @@ describe("messageModel presentation identity", () => {
       [
         {
           messageUid: "sm-control-1",
+          ts: "2026-01-01T00:00:00.000Z",
           role: "user",
           type: "context_control",
           content: "periodic task check control",
@@ -163,6 +169,7 @@ describe("messageModel presentation identity", () => {
         },
         {
           messageUid: "sm-user-1",
+          ts: "2026-01-01T00:00:00.000Z",
           role: "user",
           content: "real workflow node task",
           turnScopeId: "workflow-node:control-1",
@@ -183,6 +190,7 @@ describe("messageModel presentation identity", () => {
       [
         {
           presentationMessageId: "msg-chat-running",
+          ts: "2026-01-01T00:00:00.000Z",
           role: "assistant",
           type: "message",
           content: "",
@@ -191,6 +199,7 @@ describe("messageModel presentation identity", () => {
         },
         {
           presentationMessageId: "msg-chat-running",
+          ts: "2026-01-01T00:00:00.000Z",
           role: "assistant",
           type: "tool_call",
           content: "",

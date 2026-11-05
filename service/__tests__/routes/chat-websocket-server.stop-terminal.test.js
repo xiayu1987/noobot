@@ -314,7 +314,6 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
       commandId: "turn-idle-stop",
       causationId: "turn-idle-stop",
       eventType: "turn.action_accepted",
-      startedAt: "2026-07-18T00:00:00.000Z",
       phase: "action",
       action: "send",
       dialogProcessId: "dp-idle-stop",
@@ -328,7 +327,7 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
       phase: "processing",
     },
   ]) {
-    const seeded = transitionTurnLifecycle(lifecycle, event);
+    const seeded = transitionTurnLifecycle(lifecycle, event, () => "2026-01-01T00:00:00.000Z");
     assert.equal(seeded.applied, true);
     lifecycle = seeded.lifecycle;
   }
@@ -338,6 +337,7 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
         createAcceptedAgentExecutionIdentity({ turnScopeId }),
       runSession: async () => ({}),
       session: {
+        readServerNow: () => new Date().toISOString(),
         getRootSessionSelectedConnectorIds: async () => [],
         applyTurnLifecycleEvent: async (event = {}) => {
           lifecycleEvents.push(event);
@@ -355,6 +355,7 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
             event: acceptFakeAgentTurnLifecycleEvent(lifecycle, event).lifecycleEvent,
             eventOutbox: authorityEventOutbox,
             createEventId: () => `idle-stop-authority-event-${++authorityEventSequence}`,
+            now: () => "2026-01-01T00:00:00.000Z",
             materializeTerminal: event.terminalStatus
               ? ({ terminalStatus }) => ({
                   materialized: true,
@@ -503,19 +504,22 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
     );
     assert.equal(lifecycle.activeTurnScopeId, "");
     assert.equal(lifecycle.turns["turn-idle-stop"]?.state, "stop_completed");
-    const nextAction = transitionTurnLifecycle(lifecycle, {
-      sessionId: "session-idle-stop",
-      turnScopeId: "turn-after-idle-stop",
-      ...createAcceptedAgentExecutionIdentity({ turnScopeId: "turn-after-idle-stop" }),
-      commandId: "turn-after-idle-stop",
-      causationId: "turn-after-idle-stop",
-      eventType: "turn.action_accepted",
-      startedAt: "2026-07-18T00:00:00.000Z",
-      phase: "action",
-      action: "send",
-      dialogProcessId: "dp-after-idle-stop",
-      presentationMessageId: "msg-after-idle-stop",
-    });
+    const nextAction = transitionTurnLifecycle(
+      lifecycle,
+      {
+        sessionId: "session-idle-stop",
+        turnScopeId: "turn-after-idle-stop",
+        ...createAcceptedAgentExecutionIdentity({ turnScopeId: "turn-after-idle-stop" }),
+        commandId: "turn-after-idle-stop",
+        causationId: "turn-after-idle-stop",
+        eventType: "turn.action_accepted",
+        phase: "action",
+        action: "send",
+        dialogProcessId: "dp-after-idle-stop",
+        presentationMessageId: "msg-after-idle-stop",
+      },
+      () => "2026-01-01T00:00:00.000Z",
+    );
     assert.equal(nextAction.applied, true);
   } finally {
     await closeServer(server);

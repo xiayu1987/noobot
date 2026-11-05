@@ -100,6 +100,9 @@ export function persistedUserMessage({
   };
 }
 
+// Authority startedAt the initializer reads from the accepted Turn.
+export const ACCEPTED_TURN_STARTED_AT = "2026-07-30T00:00:00.000Z";
+
 export function createRunner({
   botHookManager = createTestBotHookManager(),
   agentRunner = async () => createCanonicalHandledResult("ok"),
@@ -110,9 +113,9 @@ export function createRunner({
 
   initializeRunSessionRuntime = async ({ eventListener = null, parentSessionId } = {}) => ({
     usedSessionId: "s1",
+    startedAt: ACCEPTED_TURN_STARTED_AT,
     parentSessionId,
     dialogProcessId: TEST_ACCEPTED_DIALOG_PROCESS_ID,
-    sessionLoadState: "created",
     userConfig: {},
     currentSessionModelAlias: "",
     runtimeEventListener: eventListener || NOOP_EVENT_LISTENER,

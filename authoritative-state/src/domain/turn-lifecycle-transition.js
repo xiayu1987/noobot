@@ -84,7 +84,7 @@ function validateRequestIdentity(request) {
   if (!isCanonicalText(current ? current.presentationMessageId : input.presentationMessageId))
     return "turn_message_identity_incomplete";
   if (!isCanonicalText(request.dialogProcessId)) return "missing_dialog_process_id";
-  if (!current) return isCanonicalText(input.startedAt) ? "" : "turn_started_at_missing";
+  if (!current) return "";
   return findStoredIdentityConflict(input, current);
 }
 
@@ -111,8 +111,6 @@ function requestHashFor(request) {
             messageOrigin: input.userMessage.messageOrigin,
           }
         : null,
-    startedAt: input.startedAt,
-    finishedAt: input.finishedAt,
     presentationMessageId: request.presentationMessageId,
     continuationSource: request.continuationSource,
     completionCommitId: input.completionCommitId,
@@ -275,8 +273,8 @@ function projectCompletionCoordinates({ input, current, eventType }, state, nowV
   if (Object.hasOwn(input, "summaryVersion")) summaryVersion = input.summaryVersion;
   let completionCommitId = current ? current.completionCommitId : "";
   if (isCompletionCommitTurnEvent(eventType)) completionCommitId = input.commandId;
-  let finishedAt = current ? current.finishedAt : "";
-  if (isTerminalTurnState(state)) finishedAt = input.finishedAt || nowValue;
+  // finishedAt is an Authority fact: the commit time of the terminal transition.
+  const finishedAt = isTerminalTurnState(state) ? nowValue : current ? current.finishedAt : "";
   return { summaryVersion, completionCommitId, finishedAt };
 }
 
@@ -308,7 +306,8 @@ export function projectLifecycleTransition(request, transition, nowValue) {
     finalizeIntent: createFinalizeIntent({ input, current, eventType, phase, nowValue }),
     continuationSource: request.continuationSource,
     continuedByTurnScopeId: current ? current.continuedByTurnScopeId : "",
-    startedAt: current ? current.startedAt : input.startedAt,
+    // startedAt is an Authority fact: the commit time of the turn's first transition.
+    startedAt: current ? current.startedAt : nowValue,
     createdAt: current ? current.createdAt : nowValue,
     updatedAt: nowValue,
   };

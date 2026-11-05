@@ -11,13 +11,18 @@ import { resolveTimeMs } from "../../config/index.js";
 import { BOT_MANAGE_LOG_EVENT, BOT_MANAGE_LOG_SOURCE } from "../config/constants.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { isAbortError } from "../../shared/utils/error-utils.js";
+import { isFunction } from "@noobot/shared/value";
 
 export class MemoryPostProcessService {
-  constructor({ globalConfig, session, memory, errorLogger }) {
+  constructor({ globalConfig, session, memory, errorLogger, now }) {
+    if (!isFunction(now)) {
+      throw new TypeError("MemoryPostProcessService requires now function");
+    }
     this.globalConfig = globalConfig;
     this.session = session;
     this.memory = memory;
     this.errorLogger = errorLogger;
+    this.now = now;
   }
 
   resolveMemorySummaryTimeoutMs(userConfig = {}) {
@@ -76,6 +81,7 @@ export class MemoryPostProcessService {
       dialogProcessId: identity.dialogProcessId,
       turnScopeId: identity.turnScopeId,
       persistenceScope,
+      now: this.now,
     });
   }
 

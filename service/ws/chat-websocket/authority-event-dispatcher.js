@@ -7,6 +7,7 @@ import { assertAuthorityOutboxRequest } from "@noobot/event-protocol/outbox";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { validateSessionPersistenceScope } from "@noobot/session-protocol";
 import { isFunction } from "@noobot/shared/value";
+import { readServiceClockMs } from "./service-clock.js";
 
 export const AUTHORITY_EVENT_CONSUMER = Object.freeze({
   WEBSOCKET: "service.websocket",
@@ -91,7 +92,7 @@ async function drainDirtyScope(entry, drain) {
 }
 
 async function compactAuthorityEventsIfDue(bot, identity, lastCompactAtBySession) {
-  const now = Date.now();
+  const now = readServiceClockMs(bot);
   const accountingKey = `${identity.userId}\u0000${identity.sessionId}\u0000${scopeKey(
     identity.persistenceScope,
   )}`;

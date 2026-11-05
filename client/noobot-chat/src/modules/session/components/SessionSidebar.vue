@@ -4,6 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
+import { ref, watch } from "vue";
 import {
   CircleCheckFilled,
   CircleCloseFilled,
@@ -12,6 +13,7 @@ import {
   Key,
   Plus,
   Refresh,
+  Setting,
   User,
 } from "@element-plus/icons-vue";
 import noobotLogo from "../../../shared/assets/noobot.svg";
@@ -19,7 +21,21 @@ import SessionListPanel from "./SessionListPanel.vue";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 import { sharedSidebarProps } from "../model/sidebarProps.js";
 
-defineProps(sharedSidebarProps);
+const props = defineProps(sharedSidebarProps);
+const connectionPanelOpen = ref(!props.connected);
+const settingsButton = ref(null);
+
+watch(
+  () => props.connected,
+  (connected) => {
+    connectionPanelOpen.value = !connected;
+  },
+);
+
+function closeConnectionPanel() {
+  connectionPanelOpen.value = false;
+  settingsButton.value?.focus();
+}
 
 const emit = defineEmits([
   "toggle-sidebar",
@@ -52,7 +68,7 @@ const { translate } = useLocale();
         <span class="brand-text">Noobot Console</span>
       </div>
       <button
-        class="collapse-btn noobot-action-btn noobot-icon-button noobot-flat-soft-btn"
+        class="collapse-btn sidebar-icon-btn noobot-action-btn noobot-icon-button noobot-flat-soft-btn"
         type="button"
         @click="emit('toggle-sidebar')"
         :title="
@@ -70,56 +86,6 @@ const { translate } = useLocale();
     </div>
 
     <div class="sidebar-header">
-      <el-input
-        :model-value="userId"
-        size="large"
-        :placeholder="translate('common.inputUserId')"
-        class="custom-input"
-        @update:model-value="emit('update:user-id', $event)"
-      >
-        <template #prefix>
-          <el-icon class="input-icon"><User /></el-icon>
-        </template>
-      </el-input>
-
-      <div class="connect-row">
-        <el-input
-          :model-value="connectCode"
-          size="large"
-          :placeholder="translate('common.inputConnectCode')"
-          class="custom-input connect-input"
-          show-password
-          @update:model-value="emit('update:connect-code', $event)"
-        >
-          <template #prefix>
-            <el-icon class="input-icon"><Key /></el-icon>
-          </template>
-        </el-input>
-      </div>
-
-      <div class="action-row">
-        <el-button
-          :type="connected ? 'success' : 'primary'"
-          class="connect-btn noobot-action-btn"
-          :loading="connecting"
-          @click="emit('connect')"
-        >
-          {{ connecting ? translate("common.connecting") : translate("common.connect") }}
-        </el-button>
-        <button
-          type="button"
-          class="status-btn noobot-action-btn noobot-icon-button noobot-flat-soft-btn tail-btn"
-          :class="{ connected }"
-          :title="connected ? translate('common.connected') : translate('common.disconnected')"
-          :aria-label="connected ? translate('common.connected') : translate('common.disconnected')"
-        >
-          <el-icon class="status-icon">
-            <CircleCheckFilled v-if="connected" />
-            <CircleCloseFilled v-else />
-          </el-icon>
-        </button>
-      </div>
-
       <div class="action-row sidebar-actions">
         <el-button
           type="primary"
@@ -130,9 +96,8 @@ const { translate } = useLocale();
         >
           {{ translate("common.newSession") }}
         </el-button>
-
         <el-button
-          class="refresh-btn noobot-action-btn noobot-icon-button tail-btn"
+          class="refresh-btn sidebar-icon-btn noobot-action-btn noobot-icon-button noobot-tail-btn"
           :icon="Refresh"
           :loading="loadingSessions"
           @click="emit('refresh-sessions')"
@@ -154,11 +119,98 @@ const { translate } = useLocale();
       @delete-session="emit('delete-session', $event)"
       @rename-session="emit('rename-session', $event)"
     />
+
+    <div class="sidebar-footer" @keydown.esc.stop.prevent="closeConnectionPanel">
+      <section
+        v-if="connectionPanelOpen"
+        id="sidebar-connection-panel"
+        class="connection-panel"
+        :aria-label="translate('common.connectionSettings')"
+      >
+        <div class="connection-panel-heading">
+          <span>{{ translate("common.connectionSettings") }}</span>
+          <button
+            type="button"
+            class="noobot-action-btn noobot-flat-soft-btn"
+            @click="closeConnectionPanel"
+          >
+            {{ translate("common.collapse") }}
+          </button>
+        </div>
+        <el-input
+          :model-value="userId"
+          :placeholder="translate('common.inputUserId')"
+          :aria-label="translate('common.inputUserId')"
+          @update:model-value="emit('update:user-id', $event)"
+        >
+          <template #prefix>
+            <el-icon class="input-icon"><User /></el-icon>
+          </template>
+        </el-input>
+
+        <el-input
+          :model-value="connectCode"
+          :placeholder="translate('common.inputConnectCode')"
+          :aria-label="translate('common.inputConnectCode')"
+          show-password
+          @update:model-value="emit('update:connect-code', $event)"
+        >
+          <template #prefix>
+            <el-icon class="input-icon"><Key /></el-icon>
+          </template>
+        </el-input>
+
+        <div class="action-row">
+          <el-button
+            :type="connected ? 'success' : 'primary'"
+            class="connect-btn noobot-action-btn"
+            :loading="connecting"
+            @click="emit('connect')"
+          >
+            {{ connecting ? translate("common.connecting") : translate("common.connect") }}
+          </el-button>
+          <span
+            class="connection-status"
+            :class="{ connected }"
+            role="status"
+            :title="connected ? translate('common.connected') : translate('common.disconnected')"
+            :aria-label="
+              connected ? translate('common.connected') : translate('common.disconnected')
+            "
+          >
+            <el-icon>
+              <CircleCheckFilled v-if="connected" />
+              <CircleCloseFilled v-else />
+            </el-icon>
+          </span>
+        </div>
+      </section>
+      <button
+        ref="settingsButton"
+        type="button"
+        class="sidebar-settings-btn noobot-action-btn noobot-flat-soft-btn"
+        :class="{ connected }"
+        :data-connected="connected"
+        :aria-expanded="connectionPanelOpen"
+        aria-controls="sidebar-connection-panel"
+        :aria-label="`${translate('common.connectionSettings')}: ${connected ? translate('common.connected') : translate('common.disconnected')}`"
+        :title="`${translate('common.connectionSettings')}: ${connected ? translate('common.connected') : translate('common.disconnected')}`"
+        @click="connectionPanelOpen = !connectionPanelOpen"
+      >
+        <el-icon class="sidebar-settings-icon">
+          <CircleCheckFilled v-if="connected" />
+          <Setting v-else />
+        </el-icon>
+        <span class="sidebar-settings-label">{{ translate("common.connectionSettings") }}</span>
+      </button>
+    </div>
   </aside>
 </template>
 
 <style scoped>
 .sidebar {
+  position: relative;
+  min-height: 0;
   width: var(--noobot-side-panel-width);
   min-width: var(--noobot-side-panel-width);
   background: var(--noobot-surface-sidebar);
@@ -178,6 +230,7 @@ const { translate } = useLocale();
 }
 
 .brand {
+  flex-shrink: 0;
   padding: var(--noobot-space-sm) var(--noobot-space-xl);
   display: flex;
   align-items: center;
@@ -218,36 +271,17 @@ const { translate } = useLocale();
   white-space: nowrap;
 }
 
-.collapse-btn {
+.sidebar-icon-btn {
   width: var(--noobot-control-icon-size-lg);
   height: var(--noobot-control-icon-size-lg);
   min-width: var(--noobot-control-icon-size-lg);
   min-height: var(--noobot-control-icon-size-lg);
   flex: 0 0 var(--noobot-control-icon-size-lg);
-  padding: 0;
-  line-height: var(--noobot-line-height-none);
-  border-radius: var(--noobot-radius-circle);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition:
-    color var(--noobot-duration-normal) var(--noobot-ease-standard),
-    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
-    border-color var(--noobot-duration-normal) var(--noobot-ease-standard);
-}
-
-.collapse-btn :deep(.el-icon) {
-  margin: 0;
-}
-
-.collapse-btn:hover {
-  background: var(--noobot-btn-soft-bg-hover);
-  color: var(--noobot-text-strong);
-  transform: none;
+  margin-left: 0;
 }
 
 .sidebar-header {
+  flex-shrink: 0;
   padding: var(--noobot-space-2xs) var(--noobot-space-lg) var(--noobot-space-xl);
   display: flex;
   flex-direction: column;
@@ -255,41 +289,9 @@ const { translate } = useLocale();
   border-bottom: 1px solid var(--noobot-border-weak);
 }
 
-.custom-input :deep(.el-input__wrapper) {
-  border-radius: var(--noobot-radius-xs);
-  background-color: transparent;
-  box-shadow: var(--noobot-input-ring);
-  transition:
-    color var(--noobot-duration-normal) var(--noobot-ease-standard),
-    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
-    border-color var(--noobot-duration-normal) var(--noobot-ease-standard),
-    box-shadow var(--noobot-duration-normal) var(--noobot-ease-standard);
-  padding: 0 var(--noobot-space-md);
-}
-
-.custom-input :deep(.el-input__wrapper.is-focus),
-.custom-input :deep(.el-input__wrapper:hover) {
-  background-color: transparent;
-  box-shadow: var(--noobot-focus-ring);
-}
-
-.custom-input :deep(.el-input__inner) {
-  color: var(--noobot-text-main);
-  height: var(--noobot-control-height-md);
-}
-
 .input-icon {
   font-size: var(--noobot-font-size-lg);
-  opacity: 0.7;
   color: var(--noobot-text-secondary);
-}
-
-.connect-row {
-  display: flex;
-}
-
-.connect-input {
-  width: 100%;
 }
 
 .action-row {
@@ -307,71 +309,67 @@ const { translate } = useLocale();
   flex: 1 1 0;
   min-width: 0;
   height: var(--noobot-control-height-md);
-  border-radius: var(--noobot-radius-xs);
-  font-weight: var(--noobot-font-weight-semibold);
-  letter-spacing: var(--noobot-letter-spacing-none);
 }
 
-.new-chat-btn {
-  background: var(--noobot-btn-primary-bg);
-  border: 1px solid transparent;
-  color: var(--noobot-text-on-accent);
-  transition:
-    color var(--noobot-duration-normal) var(--noobot-ease-standard),
-    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
-    border-color var(--noobot-duration-normal) var(--noobot-ease-standard);
-}
-
-.new-chat-btn:not(:disabled):hover {
-  background: var(--noobot-btn-primary-bg-hover);
-}
-
-.tail-btn {
-  flex: 0 0 var(--noobot-control-icon-size-lg);
-  width: var(--noobot-control-icon-size-lg);
-  height: var(--noobot-control-icon-size-lg);
-  border-radius: var(--noobot-radius-circle);
-  background: transparent;
-  border: 0;
-  color: var(--noobot-btn-soft-text);
-  padding: 0;
+.connection-status {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  font-size: var(--noobot-font-size-lg);
-  margin-left: 0;
-  transition:
-    color var(--noobot-duration-normal) var(--noobot-ease-standard),
-    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
-    border-color var(--noobot-duration-normal) var(--noobot-ease-standard);
-}
-
-.tail-btn :deep(.el-icon) {
-  margin: 0;
-}
-
-.refresh-btn:not(:disabled):hover {
-  background: var(--noobot-btn-soft-bg-hover);
-  color: var(--noobot-text-strong);
-  transform: none;
-}
-
-.status-btn {
-  cursor: default;
-  pointer-events: none;
   color: var(--noobot-text-secondary);
-  background: transparent;
-  border: 0;
-}
-
-.status-btn.connected {
-  color: var(--noobot-status-success);
-  background: transparent;
-  border: 0;
-}
-
-.status-icon {
   font-size: var(--noobot-font-size-lg);
+  flex-shrink: 0;
+}
+
+.connection-status.connected,
+.sidebar-settings-btn.connected .sidebar-settings-icon {
+  color: var(--noobot-status-success);
+}
+
+.sidebar-footer {
+  position: relative;
+  flex-shrink: 0;
+  margin-top: auto;
+  padding: var(--noobot-space-sm);
+  border-top: 1px solid var(--noobot-border-weak);
+}
+
+.sidebar-settings-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--noobot-space-sm);
+  width: 100%;
+  min-height: var(--noobot-control-height-md);
+}
+
+.connection-panel {
+  position: absolute;
+  bottom: 100%;
+  left: var(--noobot-space-sm);
+  z-index: 1;
+  box-sizing: border-box;
+  width: min(var(--noobot-side-panel-width), calc(100vw - 2 * var(--noobot-space-sm)));
+  max-height: calc(100dvh - var(--noobot-control-height-md) - 4 * var(--noobot-space-sm));
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--noobot-space-md);
+  padding: var(--noobot-space-lg);
+  border: 1px solid var(--noobot-panel-border);
+  border-radius: var(--noobot-radius-xs);
+  background: var(--noobot-panel-bg);
+  color: var(--noobot-text-strong);
+}
+
+.connection-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--noobot-space-sm);
+  font-weight: var(--noobot-font-weight-semibold);
+}
+
+.sidebar.collapsed .sidebar-settings-label {
+  display: none;
 }
 
 .sidebar.collapsed .brand {
@@ -380,8 +378,7 @@ const { translate } = useLocale();
 }
 
 .sidebar.collapsed .brand-left,
-.sidebar.collapsed .sidebar-header,
-.sidebar.collapsed .connector-summary-wrap {
+.sidebar.collapsed .sidebar-header {
   display: none;
   opacity: 0;
 }

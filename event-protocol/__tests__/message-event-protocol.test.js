@@ -401,8 +401,17 @@ test("turn presentation atomically declares canonical user and assistant entitie
         assistantMessage: { ...assistantWithoutAttachments, ts: "2026-01-01T00:00:00.000Z" },
       },
     }).errors,
-    ["missing_user_ts", "invalid_assistant_attachments", "noncanonical_assistant_ts"],
+    ["invalid_user_ts", "invalid_assistant_attachments", "noncanonical_assistant_ts"],
   );
+  for (const ts of [1767225600000, "2026-01-01T00:00:00Z", "", "not-a-time"]) {
+    assert.deepEqual(
+      validateMessageEventPayload({
+        ...committed,
+        presentation: { ...presentation, userMessage: { ...presentation.userMessage, ts } },
+      }).errors,
+      ["invalid_user_ts"],
+    );
+  }
   assert.deepEqual(
     validateProtocolEvent(
       envelope({

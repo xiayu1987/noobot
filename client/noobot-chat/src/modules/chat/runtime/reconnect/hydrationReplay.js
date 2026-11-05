@@ -13,7 +13,6 @@ export async function renderActiveSessionBeforeReplay({
   chatList,
   getReplayHydrationPromise,
   setReplayHydrationPromise,
-  onError,
 }) {
   const existingPromise = getReplayHydrationPromise();
   if (existingPromise) return existingPromise;
@@ -43,9 +42,6 @@ export async function renderActiveSessionBeforeReplay({
         messages: summarizeDebugMessages(activeSession.value.messages),
       }));
       return true;
-    } catch (error) {
-      onError(error);
-      return false;
     } finally {
       setReplayHydrationPromise(null);
     }

@@ -334,17 +334,6 @@ watch(
   },
   { immediate: true, flush: "post" },
 );
-const showMessageTypeTag = computed(
-  () =>
-    !(
-      getMessageRole(props.messageItem) === "assistant" &&
-      text(props.messageItem?.type).toLowerCase() === "message" &&
-      !text(props.messageItem?.content) &&
-      Boolean(
-        getMessageTurnScopeId(props.messageItem) || getMessageDialogProcessId(props.messageItem),
-      )
-    ),
-);
 watch(
   () => [
     summarizeWorkflowMessage(props.messageItem),
@@ -494,27 +483,29 @@ function toggleAssistantContent() {
     :model-label="messageModelLabel"
     :hide-header="hideHeader"
   >
-    <BaseMessageTypeTag v-if="showMessageTypeTag" :type="messageItem.type" />
-    <div
-      v-if="isAssistantMessage"
-      class="message-runtime-panels"
-      :class="{
-        'has-status-steps': Boolean(statusStepState),
-        'has-thinking-panel': thinkingPanelVisible,
-        'is-running': unifiedRuntimePanelsRunning,
-      }"
-    >
-      <MessageStatusRow v-if="statusStepState" :status-step-state="statusStepState" />
-      <ThinkingPanel
-        :message-item="messageItem"
-        :all-messages="allMessages"
-        :runtime="messageRuntime"
-        :user-id="userId"
-        :fetch-execution-report="fetchExecutionReport"
-        @open-thinking-details="handleOpenThinkingDetails"
-        @panel-visibility-change="handleThinkingPanelVisibility"
-      />
-    </div>
+    <template #before-content>
+      <BaseMessageTypeTag :type="messageItem.type" />
+      <div
+        v-if="isAssistantMessage"
+        class="message-runtime-panels"
+        :class="{
+          'has-status-steps': Boolean(statusStepState),
+          'has-thinking-panel': thinkingPanelVisible,
+          'is-running': unifiedRuntimePanelsRunning,
+        }"
+      >
+        <MessageStatusRow v-if="statusStepState" :status-step-state="statusStepState" />
+        <ThinkingPanel
+          :message-item="messageItem"
+          :all-messages="allMessages"
+          :runtime="messageRuntime"
+          :user-id="userId"
+          :fetch-execution-report="fetchExecutionReport"
+          @open-thinking-details="handleOpenThinkingDetails"
+          @panel-visibility-change="handleThinkingPanelVisibility"
+        />
+      </div>
+    </template>
     <ExtensionOutlet
       :point="EXTENSION_POINTS.MESSAGE_CARD_PRE"
       :context="extensionRendererContext"
@@ -568,88 +559,90 @@ function toggleAssistantContent() {
 
     <MonotonicMessageActions v-bind="defaultMonotonicMessageActionProps" />
 
-    <section v-if="artifactTabs.length" class="message-artifact-tabs">
-      <div
-        class="message-artifact-tabs__nav"
-        role="tablist"
-        :aria-label="translate('message.artifactTabs')"
-      >
-        <button
-          v-for="tab in artifactTabs"
-          :id="`${artifactTabsDomId}-tab-${tab.name}`"
-          :key="tab.name"
-          type="button"
-          role="tab"
-          class="message-artifact-tabs__tab"
-          :class="{ 'is-active': tab.name === activeArtifactTab }"
-          :data-tab-name="tab.name"
-          :aria-selected="tab.name === activeArtifactTab ? 'true' : 'false'"
-          :aria-controls="`${artifactTabsDomId}-panel`"
-          :tabindex="tab.name === activeArtifactTab ? 0 : -1"
-          @click="selectedArtifactTab = tab.name"
-          @keydown="onArtifactTabKeydown"
+    <template #after-content>
+      <section v-if="artifactTabs.length" class="message-artifact-tabs">
+        <div
+          class="message-artifact-tabs__nav"
+          role="tablist"
+          :aria-label="translate('message.artifactTabs')"
         >
-          {{ translate(tab.labelKey) }}
-        </button>
-      </div>
-      <div
-        :id="`${artifactTabsDomId}-panel`"
-        class="message-artifact-tabs__panel"
-        role="tabpanel"
-        :aria-labelledby="`${artifactTabsDomId}-tab-${activeArtifactTab}`"
-      >
-        <BaseFileCardList v-if="activeArtifactTab === 'attachments'">
-          <BaseAttachmentFileCard
-            v-for="attachmentItem in artifactAttachments"
-            :key="`attachment:${getAttachmentRenderKey(attachmentItem)}`"
-            :attachment-item="attachmentItem"
+          <button
+            v-for="tab in artifactTabs"
+            :id="`${artifactTabsDomId}-tab-${tab.name}`"
+            :key="tab.name"
+            type="button"
+            role="tab"
+            class="message-artifact-tabs__tab"
+            :class="{ 'is-active': tab.name === activeArtifactTab }"
+            :data-tab-name="tab.name"
+            :aria-selected="tab.name === activeArtifactTab ? 'true' : 'false'"
+            :aria-controls="`${artifactTabsDomId}-panel`"
+            :tabindex="tab.name === activeArtifactTab ? 0 : -1"
+            @click="selectedArtifactTab = tab.name"
+            @keydown="onArtifactTabKeydown"
+          >
+            {{ translate(tab.labelKey) }}
+          </button>
+        </div>
+        <div
+          :id="`${artifactTabsDomId}-panel`"
+          class="message-artifact-tabs__panel"
+          role="tabpanel"
+          :aria-labelledby="`${artifactTabsDomId}-tab-${activeArtifactTab}`"
+        >
+          <BaseFileCardList v-if="activeArtifactTab === 'attachments'" embedded>
+            <BaseAttachmentFileCard
+              v-for="attachmentItem in artifactAttachments"
+              :key="`attachment:${getAttachmentRenderKey(attachmentItem)}`"
+              :attachment-item="attachmentItem"
+              :user-id="userId"
+              :thumbnail-url="attachmentItem.thumbnailUrl || attachmentItem.previewUrl || ''"
+              :is-image-mime="isImageMime"
+              :can-preview-attachment="canPreviewAttachment"
+              :can-preview-parsed-result="canPreviewParsedResult"
+              :format-file-size="formatFileSize"
+              :translate="translate"
+              :preview-icon="Paperclip"
+              show-parsed-result
+              @preview="openAttachmentPreview"
+              @download="onDownloadAttachment"
+              @preview-parsed-result="openParsedResultPreview"
+              @download-parsed-result="onDownloadParsedResult"
+            />
+          </BaseFileCardList>
+          <FileMutationPreview
+            v-else-if="activeArtifactTab === 'write-files'"
             :user-id="userId"
-            :thumbnail-url="attachmentItem.thumbnailUrl || attachmentItem.previewUrl || ''"
-            :is-image-mime="isImageMime"
-            :can-preview-attachment="canPreviewAttachment"
-            :can-preview-parsed-result="canPreviewParsedResult"
-            :format-file-size="formatFileSize"
+            :session-id="getMessageSessionId(messageItem)"
+            :mutations="writeMutations"
+            :service="fileMutationPreviewService"
             :translate="translate"
-            :preview-icon="Paperclip"
-            show-parsed-result
-            @preview="openAttachmentPreview"
-            @download="onDownloadAttachment"
-            @preview-parsed-result="openParsedResultPreview"
-            @download-parsed-result="onDownloadParsedResult"
+            compact
+            preview-kind="file"
+            @preview="openMutationPreview"
+            @download="downloadMutation"
           />
-        </BaseFileCardList>
-        <FileMutationPreview
-          v-else-if="activeArtifactTab === 'write-files'"
-          :user-id="userId"
-          :session-id="getMessageSessionId(messageItem)"
-          :mutations="writeMutations"
-          :service="fileMutationPreviewService"
-          :translate="translate"
-          compact
-          preview-kind="file"
-          @preview="openMutationPreview"
-          @download="downloadMutation"
-        />
-        <FileMutationPreview
-          v-else
-          :user-id="userId"
-          :session-id="getMessageSessionId(messageItem)"
-          :mutations="patchMutations"
-          :service="fileMutationPreviewService"
-          :translate="translate"
-          compact
-          preview-kind="diff"
-          @preview="openMutationPreview"
-          @download="downloadMutation"
-        />
-      </div>
-    </section>
+          <FileMutationPreview
+            v-else
+            :user-id="userId"
+            :session-id="getMessageSessionId(messageItem)"
+            :mutations="patchMutations"
+            :service="fileMutationPreviewService"
+            :translate="translate"
+            compact
+            preview-kind="diff"
+            @preview="openMutationPreview"
+            @download="downloadMutation"
+          />
+        </div>
+      </section>
 
-    <ExtensionOutlet
-      :point="EXTENSION_POINTS.MESSAGE_CARD_POST"
-      :context="extensionRendererContext"
-      :extra-listeners="{ openThinkingDetails: handleOpenThinkingDetails }"
-    />
+      <ExtensionOutlet
+        :point="EXTENSION_POINTS.MESSAGE_CARD_POST"
+        :context="extensionRendererContext"
+        :extra-listeners="{ openThinkingDetails: handleOpenThinkingDetails }"
+      />
+    </template>
   </BaseMessageShell>
 
   <BaseFilePreviewDrawer
@@ -751,12 +744,10 @@ function toggleAssistantContent() {
   padding: var(--noobot-space-xs);
   background: var(--noobot-msg-file-card-bg);
 }
-.message-artifact-tabs :deep(.base-file-card-list) {
-  margin-top: 0;
-}
 
 .message-runtime-panels.is-running {
-  animation: message-runtime-panels-glow 2.4s ease-in-out infinite;
+  animation: message-runtime-panels-glow var(--noobot-duration-breathe) var(--noobot-ease-in-out)
+    infinite;
 }
 
 @keyframes message-runtime-panels-glow {
@@ -766,8 +757,8 @@ function toggleAssistantContent() {
     box-shadow: var(--noobot-runtime-glow);
   }
   50% {
-    border-color: color-mix(in srgb, var(--noobot-accent) 64%, var(--noobot-panel-border));
-    box-shadow: 0 0 12px color-mix(in srgb, var(--noobot-accent) 32%, transparent);
+    border-color: var(--noobot-runtime-border-peak);
+    box-shadow: var(--noobot-runtime-glow-peak);
   }
 }
 </style>

@@ -9,6 +9,7 @@ import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js"
 import { TEST_ACCEPTED_DIALOG_PROCESS_ID } from "../../helpers/session-run-payload.js";
 import assert from "node:assert/strict";
 import {
+  ACCEPTED_TURN_STARTED_AT,
   createRunner,
   createTestBotHookManager,
   HOOK_POINT,
@@ -310,7 +311,7 @@ test("a failure after finalize overwrites the completed report with a failed rep
       usedSessionId: "s1",
       parentSessionId,
       dialogProcessId: TEST_ACCEPTED_DIALOG_PROCESS_ID,
-      sessionLoadState: "created",
+      startedAt: ACCEPTED_TURN_STARTED_AT,
       userConfig: {},
       currentSessionModelAlias: "",
       runtimeEventListener: {

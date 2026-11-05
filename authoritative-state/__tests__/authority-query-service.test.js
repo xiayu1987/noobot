@@ -140,11 +140,18 @@ test("authority snapshots only terminal Turns represented by canonical messages"
 test("authority owns terminal readiness decisions", () => {
   const lifecycle = { ...createEmptyTurnLifecycle(), sequence: 2, turns: { "turn-1": turn() } };
   assert.throws(
-    () => resolveAuthoritativeTurnTerminal({ lifecycle, sessionId: "s1", turnScopeId: "turn-1" }),
+    () =>
+      resolveAuthoritativeTurnTerminal({
+        generatedAt: "2026-07-18T00:00:00.000Z",
+        lifecycle,
+        sessionId: "s1",
+        turnScopeId: "turn-1",
+      }),
     /requires commandId/,
   );
   assert.equal(
     resolveAuthoritativeTurnTerminal({
+      generatedAt: "2026-07-18T00:00:00.000Z",
       lifecycle,
       turnTimings: [],
       commandId: "resolve-1",
@@ -155,6 +162,7 @@ test("authority owns terminal readiness decisions", () => {
   );
   assert.equal(
     resolveAuthoritativeTurnTerminal({
+      generatedAt: "2026-07-18T00:00:00.000Z",
       lifecycle,
       turnTimings: [],
       commandId: "resolve-1",
@@ -178,6 +186,7 @@ test("authority owns terminal readiness decisions", () => {
     },
   });
   const resolved = resolveAuthoritativeTurnTerminal({
+    generatedAt: "2026-07-18T00:00:00.000Z",
     lifecycle,
     turnTimings: [],
     aggregateVersion: 12,
@@ -229,6 +238,7 @@ test("snapshot and terminal reads project the same persisted timing and reject a
   };
   const input = {
     lifecycle,
+    generatedAt: now,
     turnTimings: [
       {
         turnScopeId: "turn-1",

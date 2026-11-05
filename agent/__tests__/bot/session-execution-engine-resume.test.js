@@ -205,7 +205,7 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
         throw new Error("fixture has no raw attachments");
       },
     }),
-    async buildExistingSessionContext() {
+    async buildSessionContext() {
       throw new Error("stopped resume must not rebuild Context from Session history");
     },
     async buildAgentContext(system, history, options) {

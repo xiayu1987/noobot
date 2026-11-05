@@ -21,7 +21,7 @@ describe("useReconnectReplay channel_state contract", () => {
   it("treats channel_state as transport-only", async () => {
     const { api, refs } = createFixture();
     refs.activeSession.value.messages = [
-      { role: RoleEnum.USER, content: "q" },
+      { ts: "2026-01-01T00:00:00.000Z", role: RoleEnum.USER, content: "q" },
       createCanonicalAssistant({
         sessionId: "s-1",
         dialogProcessId: "dp-1",
@@ -42,7 +42,7 @@ describe("useReconnectReplay channel_state contract", () => {
     async (state) => {
       const { api, refs, mocks } = createFixture();
       refs.activeSession.value.messages = [
-        { role: RoleEnum.USER, content: "q" },
+        { ts: "2026-01-01T00:00:00.000Z", role: RoleEnum.USER, content: "q" },
         createCanonicalAssistant({
           sessionId: "s-1",
           dialogProcessId: "dp-1",
@@ -61,7 +61,9 @@ describe("useReconnectReplay channel_state contract", () => {
 
   it("does not infer a message from a channel state without message identity", async () => {
     const { api, refs, mocks } = createFixture();
-    refs.activeSession.value.messages = [{ role: RoleEnum.USER, content: "q" }];
+    refs.activeSession.value.messages = [
+      { ts: "2026-01-01T00:00:00.000Z", role: RoleEnum.USER, content: "q" },
+    ];
     const result = await applyTransportState(api, {
       dialogProcessId: "",
       turnScopeId: "",
@@ -76,7 +78,7 @@ describe("useReconnectReplay channel_state contract", () => {
   it("does not use channel timestamps as timing facts", async () => {
     const { api, refs } = createFixture();
     refs.activeSession.value.messages = [
-      { role: RoleEnum.USER, content: "q" },
+      { ts: "2026-01-01T00:00:00.000Z", role: RoleEnum.USER, content: "q" },
       createCanonicalAssistant({
         sessionId: "s-1",
         dialogProcessId: "dp-1",
@@ -96,7 +98,12 @@ describe("useReconnectReplay channel_state contract", () => {
   it("does not let stale or terminal channel state affect a newer turn", async () => {
     const { api, refs } = createFixture();
     refs.activeSession.value.messages = [
-      { role: RoleEnum.USER, content: "new", turnScopeId: "turn-new" },
+      {
+        ts: "2026-01-01T00:00:00.000Z",
+        role: RoleEnum.USER,
+        content: "new",
+        turnScopeId: "turn-new",
+      },
       createCanonicalAssistant({
         sessionId: "s-1",
         dialogProcessId: "dp-new",

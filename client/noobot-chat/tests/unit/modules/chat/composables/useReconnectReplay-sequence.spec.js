@@ -15,7 +15,7 @@ describe("useReconnectReplay", () => {
   it("SQ-02/SQ-03: out-of-order and duplicate sequence are deduplicated", async () => {
     const { api, refs } = createFixture();
     refs.activeSession.value.messages = [
-      { role: RoleEnum.USER, content: "q" },
+      { ts: "2026-01-01T00:00:00.000Z", role: RoleEnum.USER, content: "q" },
       createCanonicalAssistant({ dialogProcessId: "dp-1" }),
     ];
 
@@ -65,7 +65,7 @@ describe("useReconnectReplay", () => {
   it("SQ-04: sequence gap is allowed and progresses watermark", async () => {
     const { api, refs } = createFixture();
     refs.activeSession.value.messages = [
-      { role: RoleEnum.USER, content: "q" },
+      { ts: "2026-01-01T00:00:00.000Z", role: RoleEnum.USER, content: "q" },
       createCanonicalAssistant({ dialogProcessId: "dp-gap" }),
     ];
 
@@ -93,7 +93,7 @@ describe("useReconnectReplay", () => {
   it("SQ-01: increasing sequence applies in order and records max sequence", async () => {
     const { api, refs } = createFixture();
     refs.activeSession.value.messages = [
-      { role: RoleEnum.USER, content: "q" },
+      { ts: "2026-01-01T00:00:00.000Z", role: RoleEnum.USER, content: "q" },
       createCanonicalAssistant({ dialogProcessId: "dp-inc" }),
     ];
 
@@ -128,7 +128,12 @@ describe("useReconnectReplay", () => {
   it("SQ-05: a replayed durable event is consumed once while transient deltas stay unsequenced", async () => {
     const { api, refs } = createFixture();
     refs.activeSession.value.messages = [
-      { role: RoleEnum.USER, content: "q", turnScopeId: "turn-boundary" },
+      {
+        ts: "2026-01-01T00:00:00.000Z",
+        role: RoleEnum.USER,
+        content: "q",
+        turnScopeId: "turn-boundary",
+      },
       {
         ...createCanonicalAssistant({
           dialogProcessId: "dp-boundary",

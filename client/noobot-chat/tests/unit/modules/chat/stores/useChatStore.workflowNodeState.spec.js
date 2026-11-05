@@ -163,6 +163,8 @@ describe("useChatStore workflow node state registry", () => {
 
     const accepted = store.applyTurnLifecycleEnvelope(
       createTurnLifecycleEnvelope({
+        startedAt: "2026-01-01T00:00:00.000Z",
+        finishedAt: "",
         updatedAt: "2026-01-01T00:00:00.000Z",
         eventType: "turn.action_accepted",
         eventId: "authority-child-accepted",
@@ -185,6 +187,8 @@ describe("useChatStore workflow node state registry", () => {
     );
     const processing = store.applyTurnLifecycleEnvelope(
       createTurnLifecycleEnvelope({
+        startedAt: "2026-01-01T00:00:00.000Z",
+        finishedAt: "",
         updatedAt: "2026-01-01T00:00:00.000Z",
         eventType: "turn.processing_started",
         eventId: "authority-child-processing",
@@ -369,6 +373,33 @@ describe("useChatStore workflow node state registry", () => {
     );
     expect(storedNode(store, "workflow-run-a", "node-b").status).toBe("pending");
     expect(storedNode(store, "workflow-run-a", "node-b").sequence).toBe(2);
+  });
+
+  it("keeps the first plannedAt across replanning", () => {
+    const store = useChatStore();
+    const firstPlannedAt = "2026-01-01T00:00:01.000Z";
+
+    applyPlanningEvent(store, {
+      workflowRunId: "workflow-run-a",
+      eventId: "planning:workflow-run-a:1",
+      sequence: 1,
+      occurredAt: firstPlannedAt,
+      nodeSessions: [planningNode({ status: "ready", nodeSessionId: "" })],
+    });
+    const replan = applyPlanningEvent(store, {
+      workflowRunId: "workflow-run-a",
+      eventId: "planning:workflow-run-a:2",
+      sequence: 2,
+      occurredAt: "2026-01-01T00:05:00.000Z",
+      nodeSessions: [
+        planningNode({ status: "ready", nodeSessionId: "", revision: 2, sequence: 2 }),
+      ],
+    });
+
+    expect(replan.applied).toBe(true);
+    expect(store.workflowNodeStateRegistry.workflows["workflow-run-a"].plannedAt).toBe(
+      firstPlannedAt,
+    );
   });
 
   it("lets committed node state override planning state but rejects planning rollback", () => {

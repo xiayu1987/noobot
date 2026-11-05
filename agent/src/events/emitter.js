@@ -15,9 +15,5 @@ export function hasEventListener(eventListener) {
 
 export function emitEvent(eventListener, event, data = {}) {
   if (!hasEventListener(eventListener)) return undefined;
-  return eventListener.onEvent({
-    event,
-    data,
-    ts: new Date().toISOString(),
-  });
+  return eventListener.onEvent({ event, data });
 }

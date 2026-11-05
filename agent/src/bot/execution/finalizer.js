@@ -40,7 +40,7 @@ export class SessionExecutionFinalizer {
     caller,
     dialogProcessId,
     turnScopeId,
-    thinkingStartedAt,
+    startedAt,
     agentResult,
     persistedTurnMessageUids,
     persistedTurnMessages,
@@ -165,7 +165,7 @@ export class SessionExecutionFinalizer {
       dialogProcessId,
       turnScopeId,
       caller,
-      startedAt: thinkingStartedAt,
+      startedAt,
       executionSummary,
     });
     return {

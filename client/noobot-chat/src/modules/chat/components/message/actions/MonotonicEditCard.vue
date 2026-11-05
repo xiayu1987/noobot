@@ -385,10 +385,7 @@ defineExpose({ focusTextarea });
     box-shadow var(--noobot-duration-normal) var(--noobot-ease-standard);
 }
 
-.monotonic-edit-textarea :deep(.el-textarea__inner:hover) {
-  background: var(--noobot-surface-soft-hover);
-}
-
+.monotonic-edit-textarea :deep(.el-textarea__inner:hover),
 .monotonic-edit-textarea :deep(.el-textarea__inner:focus) {
   background: var(--noobot-surface-soft-hover);
 }

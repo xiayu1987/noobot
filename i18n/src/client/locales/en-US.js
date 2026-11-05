@@ -24,6 +24,7 @@ export const enUSMessages = {
     configParams: "Config Parameters",
     inputUserId: "Enter User ID",
     inputConnectCode: "Enter Connection Code",
+    connectionSettings: "Connection settings",
     connecting: "Connecting...",
     connect: "Connect",
     cancel: "Cancel",

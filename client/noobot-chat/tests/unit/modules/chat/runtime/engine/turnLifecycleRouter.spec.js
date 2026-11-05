@@ -113,6 +113,7 @@ describe("committed user Turn routing", () => {
   it("applies commit and attachment binding as consecutive authoritative mutations", () => {
     const draftMessage = {
       userMessageId: "frontend-user-1",
+      ts: "2026-01-01T00:00:00.000Z",
       role: "user",
       turnScopeId: "client-turn:1",
       attachments: [{ clientAttachmentId: "draft-1", name: "old.docx" }],
@@ -143,6 +144,7 @@ describe("committed user Turn routing", () => {
           userMessage: {
             messageUid: "sm_1",
             userMessageId: "frontend-user-1",
+            ts: "2026-01-01T00:00:00.000Z",
             role: "user",
             sessionId: "session-1",
             dialogProcessId: "dialog-1",
@@ -225,6 +227,7 @@ describe("committed user Turn routing", () => {
           userMessage: {
             messageUid: "sm_1",
             userMessageId: "missing-user",
+            ts: "2026-01-01T00:00:00.000Z",
             role: "user",
             content: "hello",
             sessionId: "session-1",
@@ -255,7 +258,12 @@ describe("committed user Turn routing", () => {
     "rejects a commit with protocol-invalid aggregateVersion %j without touching the session",
     (aggregateVersion) => {
       const logSessionEvent = vi.fn();
-      const draftMessage = { userMessageId: "frontend-user-1", role: "user", attachments: [] };
+      const draftMessage = {
+        userMessageId: "frontend-user-1",
+        ts: "2026-01-01T00:00:00.000Z",
+        role: "user",
+        attachments: [],
+      };
       const activeSession = {
         value: { sessionId: "session-1", aggregateVersion: 4, messages: [draftMessage] },
       };
@@ -271,6 +279,7 @@ describe("committed user Turn routing", () => {
             userMessage: {
               messageUid: "sm_1",
               userMessageId: "frontend-user-1",
+              ts: "2026-01-01T00:00:00.000Z",
               role: "user",
               content: "hello",
               sessionId: "session-1",

@@ -5,6 +5,7 @@
  */
 import { buildViewMessage } from "../../../../../../src/modules/chat/model/messageModel.js";
 import { describe, expect, it } from "vitest";
+import { projectTurnPresentation } from "@noobot/event-protocol/message-event";
 import {
   applyReconnectEnvelopeBatchToTargetMessage,
   applyReconnectEnvelopeToTargetMessage,
@@ -70,7 +71,7 @@ describe("reconnect authoritative message event replay", () => {
     const findMessagesByPresentationId = (_sessionId, presentationMessageId) =>
       messages.filter((message) => message.presentationMessageId === presentationMessageId);
     const materializeTurnPresentation = (envelope) => {
-      for (const message of Object.values(envelope.payload.presentation))
+      for (const message of Object.values(projectTurnPresentation(envelope)))
         messages.push(buildViewMessage(message, { sessionId: "session-1" }));
       return { applied: true };
     };
@@ -93,6 +94,7 @@ describe("reconnect authoritative message event replay", () => {
         "message-1",
         buildViewMessage(
           {
+            ts: "2026-01-01T00:00:00.000Z",
             role: "assistant",
             presentationMessageId: "message-1",
             sessionId: "session-1",
@@ -106,6 +108,7 @@ describe("reconnect authoritative message event replay", () => {
         "message-2",
         buildViewMessage(
           {
+            ts: "2026-01-01T00:00:00.000Z",
             role: "assistant",
             presentationMessageId: "message-2",
             sessionId: "session-1",
@@ -165,6 +168,7 @@ describe("reconnect authoritative message event replay", () => {
   it("uses the canonical reducer and consumes no-text tool events idempotently", () => {
     const targetMessage = buildViewMessage(
       {
+        ts: "2026-01-01T00:00:00.000Z",
         presentationMessageId: "message-1",
         sessionId: "session-1",
         turnScopeId: "turn-1",
@@ -217,6 +221,7 @@ describe("reconnect authoritative message event replay", () => {
   it("replays an authoritative user interjection through the canonical message reducer", () => {
     const targetMessage = buildViewMessage(
       {
+        ts: "2026-01-01T00:00:00.000Z",
         presentationMessageId: "message-1",
         sessionId: "session-1",
         turnScopeId: "turn-1",
@@ -260,6 +265,7 @@ describe("reconnect authoritative message event replay", () => {
   it("continues guidance analysis on the refreshed canonical message", () => {
     const targetMessage = buildViewMessage(
       {
+        ts: "2026-01-01T00:00:00.000Z",
         presentationMessageId: "message-1",
         sessionId: "session-1",
         turnScopeId: "turn-1",
@@ -326,6 +332,7 @@ describe("reconnect authoritative message event replay", () => {
     const createTarget = () =>
       buildViewMessage(
         {
+          ts: "2026-01-01T00:00:00.000Z",
           role: "assistant",
           content: "",
           sessionId: "session-1",
@@ -370,6 +377,7 @@ describe("reconnect authoritative message event replay", () => {
   it("rejects cross-turn projection even when history target has no session id", () => {
     const targetMessage = buildViewMessage(
       {
+        ts: "2026-01-01T00:00:00.000Z",
         role: "assistant",
         content: "",
         presentationMessageId: "message-1",
@@ -390,6 +398,7 @@ describe("reconnect authoritative message event replay", () => {
   it("buffers sequence gaps so out-of-order replay converges with ordered live state", () => {
     const ordered = buildViewMessage(
       {
+        ts: "2026-01-01T00:00:00.000Z",
         role: "assistant",
         content: "",
         presentationMessageId: "message-1",
@@ -399,6 +408,7 @@ describe("reconnect authoritative message event replay", () => {
     );
     const reordered = buildViewMessage(
       {
+        ts: "2026-01-01T00:00:00.000Z",
         role: "assistant",
         content: "",
         presentationMessageId: "message-1",
@@ -436,6 +446,7 @@ describe("reconnect authoritative message event replay", () => {
   it("keeps stopped and continuation turns isolated", () => {
     const stopped = buildViewMessage(
       {
+        ts: "2026-01-01T00:00:00.000Z",
         role: "assistant",
         sessionId: "session-1",
         presentationMessageId: "stopped",
@@ -446,6 +457,7 @@ describe("reconnect authoritative message event replay", () => {
     );
     const continuation = buildViewMessage(
       {
+        ts: "2026-01-01T00:00:00.000Z",
         role: "assistant",
         content: "",
         sessionId: "session-1",
@@ -476,6 +488,7 @@ describe("reconnect authoritative message event replay", () => {
   it("projects canonical delta and tool facts once", () => {
     const targetMessage = buildViewMessage(
       {
+        ts: "2026-01-01T00:00:00.000Z",
         content: "",
         sessionId: "session-1",
         presentationMessageId: "message-1",

@@ -51,6 +51,7 @@ function settleStopped(store, session) {
   return applyTurnTerminalResolution(
     store.turnRuntimeRegistry,
     createTurnTerminalResolution({
+      generatedAt: "2026-11-01T00:00:00.000Z",
       commandId: `resolve-${turnScopeId}`,
       sessionId,
       turnScopeId,

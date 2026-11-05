@@ -18,6 +18,7 @@ import {
 } from "../src/workspace-lifecycle/session-checkpoint-identity-upgrade.js";
 import { upgradeSessionMessageIdentity } from "../src/workspace-lifecycle/session-message-identity-upgrade.js";
 import { readSessionForProtocolRepair } from "@noobot/session-repair";
+import { SESSION_ARTIFACT_SCHEMA_VERSION } from "@noobot/session-protocol";
 import { withTemp, canonicalMessages } from "./session/session-artifact-store-v2.test-helpers.js";
 import {
   applySessionMessageFacts,
@@ -173,7 +174,7 @@ test("schema18 identity upgrade preserves the complete checkpoint chain beyond 5
     assert.deepEqual(result.quarantined, []);
     assert.equal(result.sessions.length, 1);
     const manifest = await readJson(path.join(sessionDir, "session.json"));
-    assert.equal(manifest.schemaVersion, 21);
+    assert.equal(manifest.schemaVersion, SESSION_ARTIFACT_SCHEMA_VERSION);
     assert.equal(manifest.turnOrder[0].summarySnapshots.length, 60);
     assert.deepEqual(
       manifest.turnOrder[0].summarySnapshots.map((index) => index.contentHash),

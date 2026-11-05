@@ -5,6 +5,7 @@
  */
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
 import { createTestBotManager } from "./test-bot-manager.js";
+import { testWallClock } from "./session-services.js";
 import { createSessionPluginRuntimeBundle } from "../../src/extensions/plugins/session-plugin-runtime-provider.js";
 
 export const testPluginRuntimeBundle = await createSessionPluginRuntimeBundle();
@@ -24,6 +25,7 @@ export function createTestSessionExecutionEngine(overrides = {}) {
       throw new Error("test engine agentRunner not provided");
     },
     pluginRuntimeBundle: testPluginRuntimeBundle,
+    now: testWallClock,
     ...overrides,
   });
 }

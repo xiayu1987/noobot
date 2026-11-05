@@ -76,11 +76,13 @@ export function resolveAuthoritativeTurnTerminal({
   sessionId,
   turnScopeId,
   aggregateVersion = null,
+  generatedAt,
 }) {
   const retryAfterMs = TIME_THRESHOLDS.agent.terminalResolutionRetryDelayMs;
   const base = {
     ...requireTurnTerminalResolutionIdentity({ commandId, sessionId, turnScopeId }),
     aggregateVersion,
+    generatedAt,
   };
   const lifecycle = normalizeTurnLifecycleEntity(lifecycleSource);
   const lifecycleTurn = lifecycle.turns[turnScopeId] || null;
@@ -157,10 +159,7 @@ export function buildAuthoritativeExecutionReadModel(sessions = []) {
   return { executions: [...byId.values()], conflicts };
 }
 
-export function queryAuthoritativeExecution(
-  readModel,
-  { executionId, generatedAt = new Date().toISOString() } = {},
-) {
+export function queryAuthoritativeExecution(readModel, { executionId, generatedAt }) {
   const id = clean(executionId);
   if (!id) return { found: false, reason: "missing_execution" };
   const conflict = readModel.conflicts.get(id);
@@ -173,7 +172,7 @@ export function queryAuthoritativeExecution(
 
 export function queryAuthoritativeExecutionTree(
   readModel,
-  { executionId = "", rootExecutionId = "", generatedAt = new Date().toISOString() } = {},
+  { executionId = "", rootExecutionId = "", generatedAt },
 ) {
   const requestedExecutionId = clean(executionId);
   const requestedRootId = clean(rootExecutionId);
@@ -204,7 +203,7 @@ export function queryAuthoritativeExecutionTree(
   };
 }
 
-export function queryAuthoritativeExecutionChildren(readModel, options = {}) {
+export function queryAuthoritativeExecutionChildren(readModel, options) {
   const result = queryAuthoritativeExecutionTree(readModel, options);
   if (!result.found) return result;
   return {

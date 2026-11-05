@@ -53,6 +53,39 @@ test("startup and system events write JSONL without session context", async () =
   assert.equal((await readJsonl(system.file))[0].scope, "system");
 });
 
+test("runtime event time is assigned by the writer clock", async () => {
+  await tempRoot();
+  const before = Date.now();
+  const result = await writeRuntimeEvent({
+    scope: RUNTIME_EVENT_SCOPES.SYSTEM,
+    source: "service",
+    category: "state",
+    level: "info",
+    event: "service.writer.clock",
+  });
+  const after = Date.now();
+  const [record] = await readJsonl(result.file);
+  const writtenAt = Date.parse(record.time);
+  assert.equal(record.time, new Date(writtenAt).toISOString());
+  assert.ok(writtenAt >= before && writtenAt <= after);
+});
+
+test("runtime events carrying time are rejected", async () => {
+  for (const time of ["2026-10-01T00:00:00.000Z", undefined]) {
+    await assert.rejects(
+      writeRuntimeEvent({
+        scope: RUNTIME_EVENT_SCOPES.SYSTEM,
+        source: "frontend",
+        category: "state",
+        level: "info",
+        event: "frontend.clock.reported",
+        time,
+      }),
+      /Runtime event time is assigned by the writer/,
+    );
+  }
+});
+
 test("session runtime events write to runtime session events path", async () => {
   const workspaceRoot = await tempRoot();
   await persistSession(workspaceRoot, "admin", {

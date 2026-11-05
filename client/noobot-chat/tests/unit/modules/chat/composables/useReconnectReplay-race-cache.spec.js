@@ -40,7 +40,7 @@ describe("useReconnectReplay", () => {
   it("RC-01: rapid session switching does not apply replay to wrong session", async () => {
     const { api, refs } = createFixture();
     refs.sessions.value.find((session) => session.sessionId === "s-1").messages = [
-      { role: RoleEnum.USER, content: "s1-q" },
+      { ts: "2026-01-01T00:00:00.000Z", role: RoleEnum.USER, content: "s1-q" },
       createCanonicalAssistant({
         sessionId: "s-1",
         presentationMessageId: "message-s1",
@@ -49,7 +49,7 @@ describe("useReconnectReplay", () => {
       }),
     ];
     refs.sessions.value.find((session) => session.sessionId === "s-2").messages = [
-      { role: RoleEnum.USER, content: "s2-q" },
+      { ts: "2026-01-01T00:00:00.000Z", role: RoleEnum.USER, content: "s2-q" },
       createCanonicalAssistant({
         sessionId: "s-2",
         presentationMessageId: "message-s2",

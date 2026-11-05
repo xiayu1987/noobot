@@ -20,7 +20,10 @@ test("@core PBE-030 未 provision 的本地 Session 刷新不污染权威路由"
   );
 
   await noobot.page.reload({ waitUntil: "domcontentloaded" });
-  await expect(noobot.page.locator(".status-btn.connected")).toBeVisible();
+  await expect(noobot.page.locator(".sidebar-settings-btn")).toHaveAttribute(
+    "data-connected",
+    "true",
+  );
   await expect(noobot.page.getByText("Session not found", { exact: true })).toHaveCount(0);
   await expect(noobot.page.getByText("会话不存在", { exact: true })).toHaveCount(0);
   await expect

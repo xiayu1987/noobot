@@ -12,6 +12,7 @@ import { installRepositoryMethods } from "./file-system-session-repository/insta
 import { sessionLifecycleMethods } from "./file-system-session-repository/lifecycle-methods.js";
 import { sessionSummaryMethods } from "./file-system-session-repository/summary-methods.js";
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
+import { isFunction } from "@noobot/shared/value";
 
 export class FileSystemSessionRepository {
   constructor({
@@ -19,11 +20,12 @@ export class FileSystemSessionRepository {
     sessionPathResolver,
     sessionTreeRepository,
     storageService,
-    now = () => new Date().toISOString(),
+    now,
   } = {}) {
     if (!sessionTreeRepository) {
       throw new TypeError("FileSystemSessionRepository requires sessionTreeRepository");
     }
+    if (!isFunction(now)) throw new TypeError("FileSystemSessionRepository requires now function");
     this.pathResolver = pathResolver;
     this.sessionPathResolver = sessionPathResolver;
     this.sessionTreeRepository = sessionTreeRepository;

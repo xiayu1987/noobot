@@ -98,6 +98,8 @@ function batch({
 
 function lifecycleEvent(sequence) {
   const payload = createTurnLifecycleEnvelope({
+    startedAt: "2026-01-01T00:00:00.000Z",
+    finishedAt: "",
     updatedAt: "2026-01-01T00:00:00.000Z",
     eventType: TURN_EVENT.PROCESSING_STARTED,
     eventId: `event-${sequence}`,

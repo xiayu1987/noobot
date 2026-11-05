@@ -397,6 +397,7 @@ it.each([
       },
     });
     const unresolved = createTurnTerminalResolution({
+      generatedAt: "2026-11-01T00:00:00.000Z",
       commandId: "resolve-retry",
       sessionId: "s1",
       turnScopeId: "t1",
@@ -433,6 +434,7 @@ it.each([
       type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
       eventType: successEvent,
       state: successEvent === "turn.completed" ? "completed" : "stop_completed",
+      finishedAt: "2026-01-01T00:00:00.000Z",
       revision: 7,
       sessionId: "s1",
       turnScopeId: "t1",

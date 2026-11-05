@@ -41,7 +41,7 @@ export function createTurnTerminalResolution({
   retryAfterMs,
   turn = null,
   aggregateVersion = null,
-  generatedAt = new Date().toISOString(),
+  generatedAt,
 }) {
   if (retryable === true ? !isPositiveInteger(retryAfterMs) : retryAfterMs !== undefined) {
     throw new TypeError(

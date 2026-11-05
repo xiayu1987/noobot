@@ -35,6 +35,8 @@ import {
   EXECUTION_KIND,
 } from "@noobot/session-protocol";
 
+const TEST_AUTHORITY_CLOCK = () => "2026-07-18T00:00:00.000Z";
+
 function acceptedAgentExecution(turnScopeId, sessionId = "session-1") {
   const executionId = deriveAgentExecutionId({ turnScopeId });
   return {
@@ -71,6 +73,9 @@ test("turn lifecycle receipt identifies one authoritative delivery without carry
 
 test("turn lifecycle envelope requires stable identity and monotonic coordinates", () => {
   const envelope = createTurnLifecycleEnvelope({
+    occurredAt: "2026-07-18T00:00:00.000Z",
+    startedAt: "2026-07-18T00:00:00.000Z",
+    finishedAt: "",
     eventType: TURN_EVENT.PROCESSING_STARTED,
     eventId: "evt-1",
     updatedAt: "2026-01-01T00:00:00.000Z",
@@ -98,6 +103,9 @@ test("turn lifecycle envelope does not expose persistence locators", () => {
     allowedRoot: "runtime/plugin/session",
   };
   const envelope = createTurnLifecycleEnvelope({
+    occurredAt: "2026-07-18T00:00:00.000Z",
+    startedAt: "2026-07-18T00:00:00.000Z",
+    finishedAt: "",
     eventType: TURN_EVENT.PROCESSING_STARTED,
     eventId: "evt-scoped",
     updatedAt: "2026-01-01T00:00:00.000Z",
@@ -125,7 +133,6 @@ test("durable command receipt returns the original envelope after outbox compact
   const event = {
     ...acceptedAgentExecution("turn-1"),
     eventType: TURN_EVENT.ACTION_ACCEPTED,
-    startedAt: "2026-07-18T00:00:00.000Z",
     commandId: "durable-command-1",
     causationId: "durable-command-1",
     userId: "user-1",
@@ -165,6 +172,7 @@ test("durable command receipt returns the original envelope after outbox compact
 
   const compactedEventIds = new Set(compacted.outbox.map((item) => item.eventId));
   const replay = commitTurnLifecycle({
+    now: TEST_AUTHORITY_CLOCK,
     parentSessionId: "",
     lifecycle: committed.lifecycle,
     event,
@@ -178,6 +186,9 @@ test("durable command receipt returns the original envelope after outbox compact
 
 test("turn lifecycle envelope preserves parent identity without leaking mutation intents", () => {
   const envelope = createTurnLifecycleEnvelope({
+    occurredAt: "2026-07-18T00:00:00.000Z",
+    startedAt: "2026-07-18T00:00:00.000Z",
+    finishedAt: "",
     eventType: TURN_EVENT.ACTION_ACCEPTED,
     eventId: "evt-child",
     updatedAt: "2026-01-01T00:00:00.000Z",
@@ -205,7 +216,13 @@ test("turn lifecycle envelope rejects missing identity and invalid revision", ()
   const input = { eventType: TURN_EVENT.FAILED, eventId: "evt-2", revision: 0, sequence: 1 };
   assert.throws(() => createTurnLifecycleEnvelope(input), { code: "TURN_SCOPE_ID_INVALID" });
   const result = validateTurnLifecycleEnvelope(
-    createTurnLifecycleEnvelope({ ...input, turnScopeId: "turn-2" }),
+    createTurnLifecycleEnvelope({
+      occurredAt: "2026-07-18T00:00:00.000Z",
+      startedAt: "2026-07-18T00:00:00.000Z",
+      finishedAt: "",
+      ...input,
+      turnScopeId: "turn-2",
+    }),
   );
   assert.equal(result.valid, false);
   assert.deepEqual(result.errors, [
@@ -228,17 +245,24 @@ test("lifecycle command input rejects the retired messageId field", () => {
     eventType: TURN_EVENT.ACTION_ACCEPTED,
     phase: TURN_PHASE.ACTION,
     action: "send",
-    startedAt: "2026-07-18T00:00:00.000Z",
     dialogProcessId: "dialog-retired-message-id",
     presentationMessageId: "presentation-retired-message-id",
   };
-  const rejected = transitionTurnLifecycle(createEmptyTurnLifecycle(), {
-    ...accepted,
-    messageId: "legacy-message",
-  });
+  const rejected = transitionTurnLifecycle(
+    createEmptyTurnLifecycle(),
+    {
+      ...accepted,
+      messageId: "legacy-message",
+    },
+    TEST_AUTHORITY_CLOCK,
+  );
   assert.equal(rejected.applied, false);
   assert.equal(rejected.reason, "turn_message_id_noncanonical");
-  const admitted = transitionTurnLifecycle(createEmptyTurnLifecycle(), accepted);
+  const admitted = transitionTurnLifecycle(
+    createEmptyTurnLifecycle(),
+    accepted,
+    TEST_AUTHORITY_CLOCK,
+  );
   assert.equal(admitted.applied, true);
   assert.equal(Object.hasOwn(admitted.turn, "messageId"), false);
 });
@@ -259,12 +283,21 @@ test("action acceptance enforces one continuation source contract", () => {
     phase: TURN_PHASE.ACTION,
     state: TURN_STATE.ACTION_REQUESTING,
   };
-  const missingSource = createTurnLifecycleEnvelope({ ...base, action: "continue" });
+  const missingSource = createTurnLifecycleEnvelope({
+    occurredAt: "2026-07-18T00:00:00.000Z",
+    startedAt: "2026-07-18T00:00:00.000Z",
+    finishedAt: "",
+    ...base,
+    action: "continue",
+  });
   assert.deepEqual(validateTurnLifecycleEnvelope(missingSource), {
     valid: false,
     errors: ["missing_continuation_source"],
   });
   const unexpectedSource = createTurnLifecycleEnvelope({
+    occurredAt: "2026-07-18T00:00:00.000Z",
+    startedAt: "2026-07-18T00:00:00.000Z",
+    finishedAt: "",
     ...base,
     action: "send",
     continuationSource: { turnScopeId: "stopped-turn", dialogProcessId: "stopped-dialog" },
@@ -334,58 +367,72 @@ test("session provision intent is explicit and restricted to the first send acce
 });
 
 test("execution identity is immutable after the first Turn revision", () => {
-  const accepted = transitionTurnLifecycle(createEmptyTurnLifecycle(), {
-    eventType: TURN_EVENT.ACTION_ACCEPTED,
-    startedAt: "2026-07-18T00:00:00.000Z",
-    commandId: "identity-r1",
-    causationId: "identity-r1",
-    turnScopeId: "identity-turn",
-    phase: TURN_PHASE.ACTION,
-    action: "send",
-    presentationMessageId: "identity-presentation",
-    dialogProcessId: "identity-dialog",
-    executionId: "workflow:identity-turn",
-    executionKind: "workflow",
-    rootExecutionId: "workflow:identity-turn",
-    origin: { type: "workflow", workflowRunId: "workflow:identity-turn" },
-  });
+  const accepted = transitionTurnLifecycle(
+    createEmptyTurnLifecycle(),
+    {
+      eventType: TURN_EVENT.ACTION_ACCEPTED,
+      commandId: "identity-r1",
+      causationId: "identity-r1",
+      turnScopeId: "identity-turn",
+      phase: TURN_PHASE.ACTION,
+      action: "send",
+      presentationMessageId: "identity-presentation",
+      dialogProcessId: "identity-dialog",
+      executionId: "workflow:identity-turn",
+      executionKind: "workflow",
+      rootExecutionId: "workflow:identity-turn",
+      origin: { type: "workflow", workflowRunId: "workflow:identity-turn" },
+    },
+    TEST_AUTHORITY_CLOCK,
+  );
   assert.equal(accepted.applied, true);
-  const conflict = transitionTurnLifecycle(accepted.lifecycle, {
-    eventType: TURN_EVENT.PROCESSING_STARTED,
-    commandId: "identity-r2",
-    causationId: "identity-r2",
-    turnScopeId: "identity-turn",
-    phase: TURN_PHASE.PROCESSING,
-    executionId: "agent:identity-turn",
-    executionKind: "agent",
-  });
+  const conflict = transitionTurnLifecycle(
+    accepted.lifecycle,
+    {
+      eventType: TURN_EVENT.PROCESSING_STARTED,
+      commandId: "identity-r2",
+      causationId: "identity-r2",
+      turnScopeId: "identity-turn",
+      phase: TURN_PHASE.PROCESSING,
+      executionId: "agent:identity-turn",
+      executionKind: "agent",
+    },
+    TEST_AUTHORITY_CLOCK,
+  );
   assert.equal(conflict.applied, false);
   assert.equal(conflict.reason, "execution_identity_conflict");
   assert.equal(conflict.lifecycle.turns["identity-turn"].revision, 1);
 });
 
 test("dialogProcessId is immutable after acceptance", () => {
-  const accepted = transitionTurnLifecycle(createEmptyTurnLifecycle(), {
-    ...acceptedAgentExecution("dialog-turn"),
-    eventType: TURN_EVENT.ACTION_ACCEPTED,
-    startedAt: "2026-07-18T00:00:00.000Z",
-    commandId: "dialog-r1",
-    causationId: "dialog-r1",
-    turnScopeId: "dialog-turn",
-    dialogProcessId: "dialog-accepted",
-    phase: TURN_PHASE.ACTION,
-    action: "send",
-    presentationMessageId: "dialog-presentation",
-  });
+  const accepted = transitionTurnLifecycle(
+    createEmptyTurnLifecycle(),
+    {
+      ...acceptedAgentExecution("dialog-turn"),
+      eventType: TURN_EVENT.ACTION_ACCEPTED,
+      commandId: "dialog-r1",
+      causationId: "dialog-r1",
+      turnScopeId: "dialog-turn",
+      dialogProcessId: "dialog-accepted",
+      phase: TURN_PHASE.ACTION,
+      action: "send",
+      presentationMessageId: "dialog-presentation",
+    },
+    TEST_AUTHORITY_CLOCK,
+  );
   assert.equal(accepted.applied, true);
-  const conflict = transitionTurnLifecycle(accepted.lifecycle, {
-    eventType: TURN_EVENT.PROCESSING_STARTED,
-    commandId: "dialog-r2",
-    causationId: "dialog-r2",
-    turnScopeId: "dialog-turn",
-    dialogProcessId: "dialog-other",
-    phase: TURN_PHASE.PROCESSING,
-  });
+  const conflict = transitionTurnLifecycle(
+    accepted.lifecycle,
+    {
+      eventType: TURN_EVENT.PROCESSING_STARTED,
+      commandId: "dialog-r2",
+      causationId: "dialog-r2",
+      turnScopeId: "dialog-turn",
+      dialogProcessId: "dialog-other",
+      phase: TURN_PHASE.PROCESSING,
+    },
+    TEST_AUTHORITY_CLOCK,
+  );
   assert.equal(conflict.applied, false);
   assert.equal(conflict.reason, "turn_dialog_process_identity_conflict");
   assert.equal(conflict.lifecycle.turns["dialog-turn"].dialogProcessId, "dialog-accepted");
@@ -393,18 +440,21 @@ test("dialogProcessId is immutable after acceptance", () => {
 });
 
 test("failed transition requires failure code and message", () => {
-  const accepted = transitionTurnLifecycle(createEmptyTurnLifecycle(), {
-    ...acceptedAgentExecution("failure-turn"),
-    eventType: TURN_EVENT.ACTION_ACCEPTED,
-    startedAt: "2026-07-18T00:00:00.000Z",
-    commandId: "failure-r1",
-    causationId: "failure-r1",
-    turnScopeId: "failure-turn",
-    phase: TURN_PHASE.ACTION,
-    action: "send",
-    presentationMessageId: "failure-presentation",
-    dialogProcessId: "failure-dialog",
-  });
+  const accepted = transitionTurnLifecycle(
+    createEmptyTurnLifecycle(),
+    {
+      ...acceptedAgentExecution("failure-turn"),
+      eventType: TURN_EVENT.ACTION_ACCEPTED,
+      commandId: "failure-r1",
+      causationId: "failure-r1",
+      turnScopeId: "failure-turn",
+      phase: TURN_PHASE.ACTION,
+      action: "send",
+      presentationMessageId: "failure-presentation",
+      dialogProcessId: "failure-dialog",
+    },
+    TEST_AUTHORITY_CLOCK,
+  );
   assert.equal(accepted.applied, true);
   const failedInput = (commandId, failure) => ({
     eventType: TURN_EVENT.FAILED,
@@ -419,13 +469,18 @@ test("failed transition requires failure code and message", () => {
     ["failure-no-code", { message: "boom" }],
     ["failure-no-message", { code: "boom" }],
   ]) {
-    const rejected = transitionTurnLifecycle(accepted.lifecycle, failedInput(commandId, failure));
+    const rejected = transitionTurnLifecycle(
+      accepted.lifecycle,
+      failedInput(commandId, failure),
+      TEST_AUTHORITY_CLOCK,
+    );
     assert.equal(rejected.applied, false);
     assert.equal(rejected.reason, "turn_failure_incomplete");
   }
   const failed = transitionTurnLifecycle(
     accepted.lifecycle,
     failedInput("failure-ok", { code: "boom", message: "boom failed", retryable: false }),
+    TEST_AUTHORITY_CLOCK,
   );
   assert.equal(failed.applied, true);
   assert.equal(failed.lifecycle.turns["failure-turn"].failure.code, "boom");
@@ -478,7 +533,6 @@ test("continuation consumes the exact stopped Turn atomically and advances as on
   let lifecycle = transition(createEmptyTurnLifecycle(), {
     ...identity("turn-a", "dialog-a"),
     eventType: TURN_EVENT.ACTION_ACCEPTED,
-    startedAt: "2026-07-18T00:00:00.000Z",
     commandId: "turn-a:accepted",
     causationId: "turn-a:accepted",
     phase: TURN_PHASE.ACTION,
@@ -488,7 +542,6 @@ test("continuation consumes the exact stopped Turn atomically and advances as on
   lifecycle = transition(lifecycle, {
     ...identity("turn-b", "dialog-b"),
     eventType: TURN_EVENT.ACTION_ACCEPTED,
-    startedAt: "2026-07-18T00:00:00.000Z",
     commandId: "turn-b:accepted",
     causationId: "turn-b:accepted",
     phase: TURN_PHASE.ACTION,
@@ -502,16 +555,19 @@ test("continuation consumes the exact stopped Turn atomically and advances as on
   });
 
   lifecycle = stop(lifecycle, "turn-b", "dialog-b", "turn-b");
-  const duplicateSource = transitionTurnLifecycle(lifecycle, {
-    ...identity("turn-c", "dialog-c"),
-    eventType: TURN_EVENT.ACTION_ACCEPTED,
-    startedAt: "2026-07-18T00:00:00.000Z",
-    commandId: "turn-c:wrong-source",
-    causationId: "turn-c:wrong-source",
-    phase: TURN_PHASE.ACTION,
-    action: "continue",
-    continuationSource: { turnScopeId: "turn-a", dialogProcessId: "dialog-a" },
-  });
+  const duplicateSource = transitionTurnLifecycle(
+    lifecycle,
+    {
+      ...identity("turn-c", "dialog-c"),
+      eventType: TURN_EVENT.ACTION_ACCEPTED,
+      commandId: "turn-c:wrong-source",
+      causationId: "turn-c:wrong-source",
+      phase: TURN_PHASE.ACTION,
+      action: "continue",
+      continuationSource: { turnScopeId: "turn-a", dialogProcessId: "dialog-a" },
+    },
+    TEST_AUTHORITY_CLOCK,
+  );
   assert.equal(duplicateSource.applied, false);
   assert.equal(duplicateSource.reason, "continue_source_consumed");
   assert.equal(duplicateSource.lifecycle.turns["turn-c"], undefined);
@@ -520,7 +576,6 @@ test("continuation consumes the exact stopped Turn atomically and advances as on
   lifecycle = transition(lifecycle, {
     ...identity("turn-c", "dialog-c"),
     eventType: TURN_EVENT.ACTION_ACCEPTED,
-    startedAt: "2026-07-18T00:00:00.000Z",
     commandId: "turn-c:accepted",
     causationId: "turn-c:accepted",
     phase: TURN_PHASE.ACTION,
@@ -558,6 +613,8 @@ test("committed turn lifecycle envelope projects identity from the committed tur
       phase: TURN_PHASE.PROCESSING,
       state: TURN_STATE.PROCESSING,
       updatedAt: "2026-07-18T00:00:00.000Z",
+      startedAt: "2026-07-18T00:00:00.000Z",
+      finishedAt: "",
     },
     eventId: "projection-event",
   });

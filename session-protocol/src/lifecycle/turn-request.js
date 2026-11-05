@@ -30,8 +30,6 @@ const REQUEST_FIELDS = new Set([
   "origin",
   "stage",
   "continuationSource",
-  "startedAt",
-  "finishedAt",
   "completionCommitId",
   "summaryVersion",
   "terminalStatus",
@@ -80,8 +78,6 @@ export function validateTurnLifecycleRequest(input) {
     "dialogProcessId",
     "executionId",
     "rootExecutionId",
-    "startedAt",
-    "finishedAt",
     "completionCommitId",
   ]) {
     if (Object.hasOwn(input, field) && input[field] !== "" && !isCanonicalText(input[field]))

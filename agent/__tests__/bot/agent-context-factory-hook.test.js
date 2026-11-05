@@ -45,7 +45,7 @@ test("buildAgentContextFromBuilder triggers before/after context build hooks", a
   );
 
   const contextBuilder = {
-    async buildNewSessionContext() {
+    async buildSessionContext() {
       return createTestAgentExecutionScope(
         createTestRuntimeContext({ runConfig: { hookManager } }),
         {
@@ -60,14 +60,10 @@ test("buildAgentContextFromBuilder triggers before/after context build hooks", a
         },
       );
     },
-    async buildExistingSessionContext() {
-      throw new Error("should not be called");
-    },
   };
 
   const factory = createFactory();
   const result = await factory.buildAgentContextFromBuilder({
-    mode: "new_session",
     runtimeIdentity: {
       userId: "u_ctx_1",
       sessionId: "s_ctx_1",
@@ -83,7 +79,7 @@ test("buildAgentContextFromBuilder triggers before/after context build hooks", a
   assert.ok(result);
   assert.equal(beforePayloads.length, 1);
   assert.equal(afterPayloads.length, 1);
-  assert.equal(beforePayloads[0].mode, "new_session");
+  assert.equal(Object.hasOwn(beforePayloads[0], "mode"), false);
   assert.equal(beforePayloads[0].userId, "u_ctx_1");
   assert.equal(beforePayloads[0].sessionId, "s_ctx_1");
   assert.equal(beforePayloads[0].caller, "user");
@@ -121,11 +117,8 @@ test("buildAgentContextFromBuilder triggers context_build_error hook on failure"
   );
 
   const contextBuilder = {
-    async buildNewSessionContext() {
+    async buildSessionContext() {
       throw new Error("context build failed");
-    },
-    async buildExistingSessionContext() {
-      throw new Error("should not be called");
     },
   };
 
@@ -133,7 +126,6 @@ test("buildAgentContextFromBuilder triggers context_build_error hook on failure"
   await assert.rejects(
     () =>
       factory.buildAgentContextFromBuilder({
-        mode: "new_session",
         runtimeIdentity: {
           userId: "u_ctx_2",
           sessionId: "s_ctx_2",
@@ -151,39 +143,11 @@ test("buildAgentContextFromBuilder triggers context_build_error hook on failure"
   assert.deepEqual(calls, ["before", "error:context build failed"]);
   assert.equal(errorPayloads.length, 1);
   assert.equal(errorPayloads[0].status, "error");
-  assert.equal(errorPayloads[0].mode, "new_session");
+  assert.equal(Object.hasOwn(errorPayloads[0], "mode"), false);
   assert.equal(errorPayloads[0].userId, "u_ctx_2");
   assert.equal(errorPayloads[0].caller, "user");
   assert.equal(errorPayloads[0].parentSessionId, "p_ctx_2");
   assert.equal(errorPayloads[0].dialogProcessId, "dp_ctx_2");
   assert.equal(Number.isFinite(errorPayloads[0].durationMs), true);
   assert.equal(errorPayloads[0].durationMs >= 0, true);
-});
-
-test("buildAgentContextFromBuilder rejects unknown context modes before any hook", async () => {
-  const factory = createFactory();
-  const hookManager = createHookManager();
-  const hookPoints = [];
-  for (const point of [
-    HOOK_POINT.AGENT.BEFORE_CONTEXT_BUILD,
-    HOOK_POINT.AGENT.CONTEXT_BUILD_ERROR,
-  ]) {
-    hookManager.on(point, async () => hookPoints.push(point), { id: `test.mode.${point}` });
-  }
-  await assert.rejects(
-    () =>
-      factory.buildAgentContextFromBuilder({
-        mode: "typo_mode",
-        userId: "u1",
-        sessionId: "s1",
-        caller: SESSION_CALLER.USER,
-        parentSessionId: "",
-        eventListener: null,
-        dialogProcessId: "dp1",
-        runConfig: { hookManager },
-        contextBuilder: {},
-      }),
-    (error) => error?.code === "INVALID_CONTEXT_MODE",
-  );
-  assert.deepEqual(hookPoints, []);
 });

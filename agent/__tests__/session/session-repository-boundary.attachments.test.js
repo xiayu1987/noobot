@@ -490,7 +490,6 @@ test("session artifact persistence should normalize attachment fields before wri
       storageService: TEST_STORAGE_SERVICE,
       atomic: true,
       predecessor: SESSION_ARTIFACT_PREDECESSOR.CANONICAL,
-      now: () => "2026-05-14T00:00:00.000Z",
       sessionPayload: applySessionMessageFacts({
         ...createTestSessionRequiredFields(),
         sessionId: "s-attachments",

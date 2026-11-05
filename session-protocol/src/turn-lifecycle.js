@@ -292,9 +292,9 @@ export function createTurnLifecycleEnvelope({
   summaryVersion = 0,
   completionCommitId = "",
   updatedAt = "",
-  startedAt = "",
-  finishedAt = "",
-  occurredAt = new Date().toISOString(),
+  startedAt,
+  finishedAt,
+  occurredAt,
   capabilities,
   failure = null,
   payload = {},
@@ -306,7 +306,7 @@ export function createTurnLifecycleEnvelope({
   stage = "",
   continuationSource = null,
   continuedByTurnScopeId = "",
-} = {}) {
+}) {
   const executionIdentity = normalizeExecutionIdentity({
     executionId,
     executionKind,
@@ -339,9 +339,9 @@ export function createTurnLifecycleEnvelope({
     summaryVersion,
     completionCommitId: clean(completionCommitId),
     updatedAt: clean(updatedAt),
-    startedAt: clean(startedAt),
-    finishedAt: clean(finishedAt),
-    occurredAt: clean(occurredAt),
+    startedAt,
+    finishedAt,
+    occurredAt,
     capabilities: capabilities && typeof capabilities === "object" ? capabilities : undefined,
     failure: failure === null ? undefined : failure,
     payload: payload && typeof payload === "object" ? payload : {},
@@ -357,12 +357,19 @@ export function createTurnLifecycleEnvelope({
   return envelope;
 }
 
-export function validateTurnLifecycleEnvelope(envelope = {}) {
+export function validateTurnLifecycleEnvelope(envelope) {
+  if (!isObjectLike(envelope)) return { valid: false, errors: ["invalid_turn_lifecycle_envelope"] };
   const errors = [];
   if (envelope.protocolVersion !== TURN_LIFECYCLE_PROTOCOL_VERSION)
     errors.push("unsupported_protocol_version");
   if (!EVENT_VALUES.has(envelope.eventType)) errors.push("invalid_event_type");
   if (!isCanonicalText(envelope.eventId)) errors.push("missing_event_id");
+  if (!isCanonicalText(envelope.occurredAt)) errors.push("missing_occurred_at");
+  if (!isCanonicalText(envelope.startedAt)) errors.push("missing_started_at");
+  if (envelope.finishedAt !== "" && !isCanonicalText(envelope.finishedAt))
+    errors.push("invalid_finished_at");
+  else if (isTerminalTurnState(envelope.state) && envelope.finishedAt === "")
+    errors.push("missing_finished_at");
   if (!isCanonicalText(envelope.sessionId)) errors.push("missing_session_id");
   errors.push(...collectTurnScopeIdErrors(envelope.turnScopeId));
   errors.push(
@@ -411,6 +418,6 @@ export function validateTurnLifecycleEnvelope(envelope = {}) {
   return { valid: errors.length === 0, errors };
 }
 
-export function isAuthoritativeTurnLifecycleEnvelope(envelope = {}) {
+export function isAuthoritativeTurnLifecycleEnvelope(envelope) {
   return validateTurnLifecycleEnvelope(envelope).valid;
 }

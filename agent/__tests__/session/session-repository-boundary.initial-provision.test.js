@@ -54,7 +54,6 @@ function firstSend(commandId, turnScopeId = "turn-1") {
     commandId,
     causationId: commandId,
     eventType: TURN_EVENT.ACTION_ACCEPTED,
-    startedAt: "2026-07-18T00:00:00.000Z",
     phase: TURN_PHASE.ACTION,
     action: "send",
     ...createAcceptedAgentExecution(turnScopeId, "session-1"),

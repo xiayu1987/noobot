@@ -14,6 +14,7 @@ import {
   projectLifecycleTransition,
   resolveLifecycleTransitionRequest,
 } from "./turn-lifecycle-transition.js";
+import { isFunction } from "@noobot/shared/value";
 
 export function normalizeTurnLifecycleEntity(source) {
   assertTurnLifecycleRecordIntegrity(source);
@@ -44,7 +45,8 @@ function rejectionResult(request, decision) {
   return result;
 }
 
-export function transitionTurnLifecycle(source, input = {}, now = () => new Date().toISOString()) {
+export function transitionTurnLifecycle(source, input, now) {
+  if (!isFunction(now)) throw new TypeError("transitionTurnLifecycle requires an Authority clock");
   const lifecycle = normalizeTurnLifecycleEntity(source);
   const reason = validateTurnLifecycleRequest(input);
   if (reason) return { applied: false, reason, lifecycle };

@@ -18,6 +18,8 @@ import { createAuthoritativeTurnSnapshot } from "../src/application/authority-qu
 import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol/turn-lifecycle";
 import { transitionTurnLifecycle } from "../src/domain/turn-lifecycle-entity.js";
 
+const TEST_AUTHORITY_CLOCK = () => "2026-07-18T00:00:00.000Z";
+
 function acceptedAgentExecution(turnScopeId, sessionId = "session-1") {
   const executionId = deriveAgentExecutionId({ turnScopeId });
   return {
@@ -35,7 +37,6 @@ function acceptedTurn() {
     event: {
       ...acceptedAgentExecution("turn-old"),
       eventType: TURN_EVENT.ACTION_ACCEPTED,
-      startedAt: "2026-07-18T00:00:00.000Z",
       commandId: "send-old",
       causationId: "send-old",
       sessionId: "session-1",
@@ -114,14 +115,18 @@ test("replaced Turn tombstone rejects delayed lifecycle events and replacement c
     lifecycle: accepted.lifecycle,
     replacement: replacement(),
   });
-  const delayed = transitionTurnLifecycle(committed.lifecycle, {
-    eventType: TURN_EVENT.PROCESSING_STARTED,
-    commandId: "late-processing",
-    causationId: "late-processing",
-    turnScopeId: "turn-old",
-    presentationMessageId: "presentation-old",
-    phase: TURN_PHASE.PROCESSING,
-  });
+  const delayed = transitionTurnLifecycle(
+    committed.lifecycle,
+    {
+      eventType: TURN_EVENT.PROCESSING_STARTED,
+      commandId: "late-processing",
+      causationId: "late-processing",
+      turnScopeId: "turn-old",
+      presentationMessageId: "presentation-old",
+      phase: TURN_PHASE.PROCESSING,
+    },
+    TEST_AUTHORITY_CLOCK,
+  );
   assert.equal(delayed.applied, false);
   assert.equal(delayed.reason, "turn_replaced");
   assert.equal(delayed.replacement.replacementTurnScopeId, "turn-new");
@@ -217,25 +222,28 @@ test("turn replacement removes the authoritative Continue edge when replacing it
       phase: TURN_PHASE.STOP,
     },
   ].reduce(
-    (state, event) => transitionTurnLifecycle(state, event).lifecycle,
+    (state, event) => transitionTurnLifecycle(state, event, TEST_AUTHORITY_CLOCK).lifecycle,
     sourceAccepted.lifecycle,
   );
-  const continued = transitionTurnLifecycle(sourceStopped, {
-    ...acceptedAgentExecution("turn-target"),
-    eventType: TURN_EVENT.ACTION_ACCEPTED,
-    startedAt: "2026-07-18T00:00:00.000Z",
-    commandId: "continue-target",
-    causationId: "continue-target",
-    turnScopeId: "turn-target",
-    presentationMessageId: "presentation-target",
-    dialogProcessId: "dialog-target",
-    action: "continue",
-    phase: TURN_PHASE.ACTION,
-    continuationSource: {
-      turnScopeId: "turn-old",
-      dialogProcessId: sourceStopped.turns["turn-old"].dialogProcessId,
+  const continued = transitionTurnLifecycle(
+    sourceStopped,
+    {
+      ...acceptedAgentExecution("turn-target"),
+      eventType: TURN_EVENT.ACTION_ACCEPTED,
+      commandId: "continue-target",
+      causationId: "continue-target",
+      turnScopeId: "turn-target",
+      presentationMessageId: "presentation-target",
+      dialogProcessId: "dialog-target",
+      action: "continue",
+      phase: TURN_PHASE.ACTION,
+      continuationSource: {
+        turnScopeId: "turn-old",
+        dialogProcessId: sourceStopped.turns["turn-old"].dialogProcessId,
+      },
     },
-  });
+    TEST_AUTHORITY_CLOCK,
+  );
   assert.equal(continued.applied, true);
   assert.equal(continued.lifecycle.turns["turn-old"].continuedByTurnScopeId, "turn-target");
 
@@ -309,6 +317,7 @@ test("replaying a follow-up event without identity fields deduplicates and a con
     phase: TURN_PHASE.PROCESSING,
   };
   const started = commitTurnLifecycle({
+    now: TEST_AUTHORITY_CLOCK,
     parentSessionId: "",
     lifecycle: accepted.lifecycle,
     event: processing,
@@ -317,6 +326,7 @@ test("replaying a follow-up event without identity fields deduplicates and a con
   assert.equal(started.applied, true);
 
   const replay = commitTurnLifecycle({
+    now: TEST_AUTHORITY_CLOCK,
     parentSessionId: "",
     lifecycle: started.lifecycle,
     event: processing,
@@ -325,6 +335,7 @@ test("replaying a follow-up event without identity fields deduplicates and a con
   assert.equal(replay.deduplicated, true);
 
   const conflicting = commitTurnLifecycle({
+    now: TEST_AUTHORITY_CLOCK,
     parentSessionId: "",
     lifecycle: started.lifecycle,
     event: { ...processing, executionId: deriveAgentExecutionId({ turnScopeId: "turn-other" }) },

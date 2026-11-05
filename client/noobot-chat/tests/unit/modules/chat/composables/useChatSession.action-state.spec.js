@@ -302,12 +302,14 @@ describe("useChatSession conversation and composer action state", () => {
         sessionId: "s-newer",
         messages: [
           {
+            ts: "2026-01-01T00:00:00.000Z",
             role: RoleEnum.ASSISTANT,
             content: "old",
             dialogProcessId: "dp-old",
             turnScopeId: "turn-old",
           },
           {
+            ts: "2026-01-01T00:00:00.000Z",
             role: RoleEnum.ASSISTANT,
             content: "new",
             dialogProcessId: "dp-new",

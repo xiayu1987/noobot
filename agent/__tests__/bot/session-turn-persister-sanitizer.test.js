@@ -19,9 +19,12 @@ import {
   createFlowControlContextPolicy,
 } from "@noobot/context-protocol/tool/context-policy";
 
+const PERSISTER_NOW = () => "2026-01-01T00:00:00.000Z";
+
 test("appendAgentMessages persists all messages through one appendTurns batch", async () => {
   const batches = [];
   const persister = new SessionTurnPersister({
+    now: PERSISTER_NOW,
     session: {
       appendExecutionLog: async () => {},
       appendTurns: async (payload = {}) => {
@@ -51,6 +54,7 @@ test("appendAgentMessages preserves the canonical tool policy at the Session bou
   const batches = [];
   const policy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE);
   const persister = new SessionTurnPersister({
+    now: PERSISTER_NOW,
     session: {
       appendExecutionLog: async () => {},
       appendTurns: async (payload = {}) => {
@@ -87,6 +91,7 @@ test("appendAgentMessages keeps scoped persistence identity for logs and message
     allowedRoot: "runtime/plugin-data/workflow/session",
   });
   const persister = new SessionTurnPersister({
+    now: PERSISTER_NOW,
     session: {
       appendExecutionLog: async (payload = {}) => executionPayloads.push(payload),
       appendTurns: async (payload = {}) => {
@@ -119,6 +124,7 @@ test("appendAgentMessages keeps scoped persistence identity for logs and message
 test("appendAgentMessages forwards the authoritative realtime message identity", async () => {
   const turns = [];
   const persister = new SessionTurnPersister({
+    now: PERSISTER_NOW,
     session: {
       appendExecutionLog: async () => {},
       appendTurns: async (payload = {}) => {
@@ -146,6 +152,7 @@ test("appendAgentMessages forwards the authoritative realtime message identity",
 test("appendAgentMessages forwards the canonical internal control message type", async () => {
   const turns = [];
   const persister = new SessionTurnPersister({
+    now: PERSISTER_NOW,
     session: {
       appendExecutionLog: async () => {},
       appendTurns: async (payload = {}) => {
@@ -182,6 +189,7 @@ test("appendAgentMessages forwards presentation identity and checkpoint context"
     allowedRoot: "runtime/plugin-data/workflow/session",
   });
   const persister = new SessionTurnPersister({
+    now: PERSISTER_NOW,
     session: {
       appendExecutionLog: async () => {},
       appendTurns: async (payload = {}) => {
@@ -234,7 +242,7 @@ test("SessionTurnPersister never forwards a caller parentSessionId to persistenc
       return { turns: payload.turns };
     },
   };
-  const persister = new SessionTurnPersister({ session });
+  const persister = new SessionTurnPersister({ session, now: PERSISTER_NOW });
 
   await persister.appendAgentMessages({
     userId: "u1",
@@ -262,7 +270,7 @@ test("SessionTurnPersister persists tool transfer envelopes into session turns",
       return { turns: payload.turns };
     },
   };
-  const persister = new SessionTurnPersister({ session });
+  const persister = new SessionTurnPersister({ session, now: PERSISTER_NOW });
 
   await persister.appendAgentMessages({
     userId: "u1",
@@ -316,7 +324,7 @@ test("SessionTurnPersister persists final assistant transfer envelopes with atta
       return { turns: payload.turns };
     },
   };
-  const persister = new SessionTurnPersister({ session });
+  const persister = new SessionTurnPersister({ session, now: PERSISTER_NOW });
   const envelope = {
     protocol: "noobot.semantic-transfer",
     version: TRANSFER_VERSION,
@@ -386,7 +394,7 @@ test("SessionTurnPersister persists canonical plugin metadata without old concre
       return { turns: payload.turns };
     },
   };
-  const persister = new SessionTurnPersister({ session });
+  const persister = new SessionTurnPersister({ session, now: PERSISTER_NOW });
   const pluginMeta = {
     source: "workflow-plugin",
     kind: "workflow",
@@ -435,7 +443,7 @@ test("SessionTurnPersister does not carry thinking timing on persisted turns", a
       return { turns: payload.turns };
     },
   };
-  const persister = new SessionTurnPersister({ session });
+  const persister = new SessionTurnPersister({ session, now: PERSISTER_NOW });
   await persister.appendAgentMessages({
     userId: "u1",
     sessionId: "s1",
@@ -475,6 +483,7 @@ test("SessionTurnPersister does not carry thinking timing on persisted turns", a
 test("appendAgentMessages keeps relayCorrelationId on persisted injected turns", async () => {
   const appendedTurns = [];
   const persister = new SessionTurnPersister({
+    now: PERSISTER_NOW,
     session: {
       appendExecutionLog: async () => {},
       appendTurns: async (payload = {}) => {
@@ -515,6 +524,7 @@ test("appendAgentMessages keeps relayCorrelationId on persisted injected turns",
 test("appendAgentMessages keeps canonical user interjection time and sequence", async () => {
   const appendedTurns = [];
   const persister = new SessionTurnPersister({
+    now: PERSISTER_NOW,
     session: {
       appendExecutionLog: async () => {},
       appendTurns: async (payload = {}) => {
@@ -550,6 +560,7 @@ test("appendAgentMessages keeps canonical user interjection time and sequence", 
 test("appendAgentMessages propagates Session deletion and absence errors unchanged", async () => {
   const createPersister = (error) =>
     new SessionTurnPersister({
+      now: PERSISTER_NOW,
       session: {
         appendExecutionLog: async () => {},
         appendTurns: async () => {

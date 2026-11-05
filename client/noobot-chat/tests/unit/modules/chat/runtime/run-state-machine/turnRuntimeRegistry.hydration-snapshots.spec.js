@@ -52,8 +52,10 @@ const lifecycleEvent = ({ eventType, eventId, state, phase, executionState, revi
     capabilities: { actionLocked: state !== "completed", canStop: false },
     startedAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:01.000Z",
+    occurredAt: "2026-01-01T00:00:01.000Z",
     completionCommitId: state === "completed" ? "commit-t1" : "",
     summaryVersion: state === "completed" ? 1 : 0,
+    finishedAt: state === "completed" ? "2026-01-01T00:00:01.000Z" : "",
   });
 
 describe("turnRuntimeRegistry: hydration and snapshots", () => {

@@ -17,9 +17,12 @@ import {
   createAttachmentLifecycleEvent,
 } from "@noobot/attachment-protocol";
 
+const TEST_NOW = () => "2026-01-01T00:00:00.000Z";
+
 test("execution listener keeps strict attachment lifecycle payloads unchanged upstream", async () => {
   let forwarded;
   const listener = createExecutionEventListener({
+    now: TEST_NOW,
     sessionManager: { appendExecutionLog: async () => {} },
     sessionId: "session-a",
     turnScopeId: "turn-a",
@@ -87,6 +90,7 @@ test("execution listener keeps strict attachment lifecycle payloads unchanged up
 test("execution listener rejects committed authority events that violate the protocol", () => {
   const persisted = [];
   const listener = createExecutionEventListener({
+    now: TEST_NOW,
     sessionManager: { appendExecutionLog: async (record) => persisted.push(record) },
     sessionId: "session-a",
     turnScopeId: "turn-a",

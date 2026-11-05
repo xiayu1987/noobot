@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { createSecureId } from "@noobot/shared/secure-identity";
-import { nowIso } from "../../model/timeFields.js";
 import { text } from "@noobot/shared/value";
 
 function normalizeOperationId(value = "") {
@@ -34,8 +33,6 @@ export function createPendingMessageOperationStore() {
       opId,
       sessionId,
       status: operation.status || "pending",
-      createdAt: operation.createdAt || nowIso(),
-      updatedAt: nowIso(),
     };
     const previousOperationId = activeOperationIdsBySessionId.get(sessionId);
     if (previousOperationId && previousOperationId !== opId) {
@@ -55,7 +52,6 @@ export function createPendingMessageOperationStore() {
       ...patch,
       opId: current.opId,
       sessionId: current.sessionId,
-      updatedAt: nowIso(),
     };
     operationsById.set(normalizedOpId, updated);
     return updated;

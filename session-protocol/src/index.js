@@ -76,7 +76,11 @@ export * from "./lifecycle/turn-terminal.js";
 export * from "./lifecycle/turn-capability.js";
 export * from "./lifecycle/turn-continuation.js";
 export * from "./lifecycle/turn-failure.js";
-export { assertTurnRecord, collectTurnRecordErrors } from "./lifecycle/turn-record.js";
+export {
+  assertTurnRecord,
+  collectTurnRecordErrors,
+  requireAcceptedTurnRecord,
+} from "./lifecycle/turn-record.js";
 export * from "./lifecycle/turn-request.js";
 export * from "./lifecycle/turn-replacement.js";
 export * from "./lifecycle/turn-timing.js";
@@ -90,4 +94,5 @@ export * from "./aggregate/session-manifest-layout.js";
 export * from "./aggregate/execution-event-index.js";
 export * from "./aggregate/sessions-summary.js";
 export * from "./aggregate/session-detail.js";
+export * from "./aggregate/server-clock.js";
 export * from "./aggregate/session-mutation-response.js";

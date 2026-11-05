@@ -267,11 +267,9 @@ defineExpose({
 }
 
 .msg-list-inner {
-  padding: 0 max(var(--noobot-space-2xl), calc(50% - 400px));
+  padding: 0 var(--noobot-content-inset-right) 0 var(--noobot-content-inset-left);
   display: flex;
   flex-direction: column;
-  --msg-list-edge-gap: var(--noobot-space-2xl);
-  --msg-list-row-gap: var(--noobot-space-xl);
 }
 
 .msg-virtual-space {
@@ -284,19 +282,19 @@ defineExpose({
   top: 0;
   left: 0;
   width: 100%;
-  padding-bottom: var(--msg-list-row-gap);
+  padding-bottom: var(--noobot-msg-list-row-gap);
 }
 
 .msg-virtual-row.is-first {
-  padding-top: var(--msg-list-edge-gap);
+  padding-top: var(--noobot-msg-list-edge-gap);
 }
 
 .msg-virtual-row.is-last {
-  padding-bottom: var(--msg-list-edge-gap);
+  padding-bottom: var(--noobot-msg-list-edge-gap);
 }
 
 .skeleton-loading {
-  margin: var(--msg-list-edge-gap) 0;
+  margin: var(--noobot-msg-list-edge-gap) 0;
   padding: var(--noobot-space-xl);
 }
 
@@ -319,14 +317,5 @@ defineExpose({
   width: 52px;
   height: 52px;
   display: block;
-}
-
-@media (max-width: 768px) {
-  .msg-list-inner {
-    padding: 0 max(var(--noobot-space-md), env(safe-area-inset-right)) 0
-      max(var(--noobot-space-md), env(safe-area-inset-left));
-    --msg-list-edge-gap: var(--noobot-space-xl);
-    --msg-list-row-gap: var(--noobot-space-lg);
-  }
 }
 </style>

@@ -13,6 +13,7 @@ import {
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { isFunction } from "@noobot/shared/value";
 
 function progressPhaseKey(progress) {
   return `${progress.userIndex}:${progress.stage}:${progress.upgradeId}`;
@@ -21,8 +22,11 @@ function progressPhaseKey(progress) {
 export function createThrottledProgressReporter({
   write,
   intervalMs = TIME_THRESHOLDS.service.startupProgressIntervalMs,
-  now = Date.now,
+  now,
 }) {
+  if (!isFunction(now)) {
+    throw new TypeError("startup progress reporter requires now function");
+  }
   let lastPhaseKey = "";
   let lastWrittenAt = 0;
   let pending = null;

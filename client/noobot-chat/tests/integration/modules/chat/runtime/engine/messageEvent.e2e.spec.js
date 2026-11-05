@@ -102,6 +102,7 @@ function projectHistory(sessionId, messages) {
 function historyAssistant(turn, toolCallId, mutationRefs) {
   return {
     presentationMessageId: `assistant-${turn}`,
+    ts: "2026-01-01T00:00:00.000Z",
     role: "assistant",
     type: "message",
     chatPresentation: true,
@@ -296,6 +297,7 @@ describe("authoritative message event end-to-end fidelity", () => {
         {
           messageUid: presentationMessageId,
           presentationMessageId,
+          ts: "2026-01-01T00:00:00.000Z",
           role: "assistant",
           content: "final answer",
         },
@@ -377,9 +379,21 @@ describe("authoritative message event end-to-end fidelity", () => {
 
   it("binds history-projected links to the snapshot of their own message", () => {
     const messages = projectHistory("session-history", [
-      { role: "user", content: "q1", turnScopeId: "turn-1", dialogProcessId: "dialog-1" },
+      {
+        ts: "2026-01-01T00:00:00.000Z",
+        role: "user",
+        content: "q1",
+        turnScopeId: "turn-1",
+        dialogProcessId: "dialog-1",
+      },
       historyAssistant(1, "call-h1", [reportMutationRef()]),
-      { role: "user", content: "q2", turnScopeId: "turn-2", dialogProcessId: "dialog-2" },
+      {
+        ts: "2026-01-01T00:00:00.000Z",
+        role: "user",
+        content: "q2",
+        turnScopeId: "turn-2",
+        dialogProcessId: "dialog-2",
+      },
       historyAssistant(2, "call-h2", [reportMutationRef({ mutationId: "m-report-turn-2" })]),
     ]);
     const assistantIndexes = messages.flatMap((message, index) =>

@@ -24,6 +24,7 @@ import { createTestAttachmentService } from "../helpers/test-runtime-context.js"
 import { TEST_MODEL_GLOBAL_CONFIG } from "../helpers/test-model-config.js";
 import { createSummaryCheckpointInstruction } from "@noobot/context-protocol/policy/main-flow-control";
 import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
+import { turnRecord } from "../helpers/turn-record.js";
 
 test("session execution preserves every user interjection into the next model history", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-user-interjection-e2e-"));
@@ -49,7 +50,15 @@ test("session execution preserves every user interjection into the next model hi
 
   const session = {
     async getSessionBundle() {
-      return { exists: false, session: { messages: [] } };
+      return {
+        exists: true,
+        session: {
+          messages: [],
+          turnLifecycle: {
+            turns: { [turnScopeId]: turnRecord({ turnScopeId, dialogProcessId }) },
+          },
+        },
+      };
     },
     async createSession() {},
     async getExecutionTurnLogs() {
@@ -194,10 +203,7 @@ test("session execution preserves every user interjection into the next model hi
     };
     return {
       ...builder,
-      buildNewSessionContext: (payload) =>
-        bindSessionManager(() => builder.buildNewSessionContext(payload)),
-      buildExistingSessionContext: (payload) =>
-        bindSessionManager(() => builder.buildExistingSessionContext(payload)),
+      buildSessionContext: () => bindSessionManager(() => builder.buildSessionContext()),
     };
   };
 

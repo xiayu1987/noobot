@@ -4,28 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 import { buildSessionLogRecord, SESSION_LOG_DEBUG_CATEGORY } from "./session-log-protocol.js";
-import { safeSegment } from "./sanitize.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-
-export const SESSION_CHANNELS = Object.freeze({
-  WEB_SOCKET: "ws",
-  DIRECT: "direct",
-  AGENT_PROXY_WEB_SOCKET: "agent-proxy-ws",
-});
 
 export const MAX_SESSION_CHANNEL_MESSAGE_BYTES = LENGTH_THRESHOLDS.sessionLog.maxPayloadBytes;
 export const MAX_SESSION_CHANNEL_BATCH_SIZE = QUANTITY_THRESHOLDS.sessionLog.maxBatchSize;
 
 const MAX_SESSION_CHANNEL_QUEUE_SIZE = QUANTITY_THRESHOLDS.sessionLog.maxQueueSize;
 const RECONNECT_DELAY_MS = TIME_THRESHOLDS.service.sessionLogMinIntervalMs;
-
-function buildSessionChannelRecord(event = {}, { source, channel }) {
-  const record = buildSessionLogRecord({ ...event, source });
-  record.channel = safeSegment(channel);
-  return record;
-}
 
 export function createSessionChannelWebSocketClient({
   WebSocketImpl,
@@ -114,7 +101,7 @@ export function createSessionChannelWebSocketClient({
   }
 
   function log(key = "", event = {}) {
-    const record = buildSessionChannelRecord(event, { source, channel });
+    const record = buildSessionLogRecord({ ...event, source, channel });
     const queue = getQueue(key);
     queue.push(record);
     if (queue.length > MAX_SESSION_CHANNEL_QUEUE_SIZE)

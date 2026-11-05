@@ -11,6 +11,9 @@ import {
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { createWorkflowNodeStateRegistry } from "../../../../../../src/modules/chat/stores/workflowEventOperations.js";
 
+const SHELL_TS = "2026-01-01T00:00:00.000Z";
+const WORKFLOW_PLANNED_AT = "2026-01-01T00:00:01.000Z";
+
 function workflow({
   workflowRunId = "workflow-a",
   sessionId = "session-a",
@@ -24,6 +27,7 @@ function workflow({
     turnScopeId,
     presentationMessageId,
     dialogProcessId,
+    plannedAt: WORKFLOW_PLANNED_AT,
     semanticText: "WORKFLOW_DSL/1",
     workflowPayload: {
       workflowRunId,
@@ -109,7 +113,7 @@ describe("selectTurnPresentations", () => {
       type: "message",
       turnScopeId: "turn-a",
       pending: true,
-      ts: 123,
+      ts: SHELL_TS,
       content: "",
     };
     const result = selectTurnPresentations({
@@ -121,7 +125,7 @@ describe("selectTurnPresentations", () => {
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
       presentationMessageId: "assistant-presentation-a",
-      ts: 123,
+      ts: SHELL_TS,
       pending: true,
       type: "workflow",
     });
@@ -176,7 +180,7 @@ describe("selectTurnPresentations", () => {
       role: "assistant",
       type: "message",
       turnScopeId: "turn-a",
-      ts: 123,
+      ts: SHELL_TS,
       content: "",
     };
     const result = selectTurnPresentations({
@@ -188,7 +192,7 @@ describe("selectTurnPresentations", () => {
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
       presentationMessageId: "assistant-shell-a",
-      ts: 123,
+      ts: SHELL_TS,
       type: "workflow",
       content: "WORKFLOW_DSL/1 persisted",
     });

@@ -5,6 +5,7 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
+import { SESSION_ARTIFACT_SCHEMA_VERSION } from "@noobot/session-protocol";
 import { migrateSessionDocument } from "../src/index.js";
 import { SESSION_REPAIR_ERROR_CODE } from "../src/errors.js";
 import { releasedSession } from "./helpers/released-session.js";
@@ -24,7 +25,7 @@ test("schema19 missing artifact collection migrates explicitly and is idempotent
   const source = document(19);
   delete source.sessionArtifactEvents;
   const result = migrateSessionDocument(source);
-  assert.equal(result.document.schemaVersion, 21);
+  assert.equal(result.document.schemaVersion, SESSION_ARTIFACT_SCHEMA_VERSION);
   assert.deepEqual(result.document.sessionArtifactEvents, []);
   assert.ok(result.migrations.includes("session-artifact-events-v20"));
   assert.equal(Object.hasOwn(source, "sessionArtifactEvents"), false);

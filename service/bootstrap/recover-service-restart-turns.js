@@ -7,6 +7,7 @@ import { createServiceRestartRecoveryPolicy } from "@noobot/authoritative-state/
 import { createSessionPersistenceScope } from "@noobot/session-protocol";
 import { SESSION_SUMMARY_AVAILABILITY } from "@noobot/session-protocol/sessions-summary";
 import { finalizeTurnSnapshot } from "../ws/chat-websocket/turn-recovery.js";
+import { readServiceClockMs } from "../ws/chat-websocket/service-clock.js";
 
 const TREE_SESSION_PERSISTENCE_SCOPE = createSessionPersistenceScope(null);
 
@@ -33,14 +34,14 @@ function recoverSessionTurn(bot, identity, observedAtMs) {
   });
 }
 
-export async function recoverServiceRestartTurns({ bot, userId, onProgress, now = Date.now }) {
+export async function recoverServiceRestartTurns({ bot, userId, onProgress }) {
   const { sessions } = await bot.session.getAllSessionSummaries({ userId });
   const active = sessions.filter(isActiveAvailableSummary);
   const recoveredSessionIds = [];
   const failures = [];
   for (const [index, { sessionId }] of active.entries()) {
     onProgress({ sessionIndex: index + 1, sessionCount: active.length });
-    const outcome = await recoverSessionTurn(bot, { userId, sessionId }, now());
+    const outcome = await recoverSessionTurn(bot, { userId, sessionId }, readServiceClockMs(bot));
     if (outcome.recovered) recoveredSessionIds.push(sessionId);
     else failures.push({ sessionId, code: outcome.reason });
   }

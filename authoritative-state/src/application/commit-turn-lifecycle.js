@@ -14,7 +14,7 @@ import {
 } from "@noobot/session-protocol";
 import { createTurnLifecycleEventEnvelope } from "@noobot/event-protocol";
 import { transitionTurnLifecycle } from "../domain/turn-lifecycle-entity.js";
-import { isCanonicalText } from "@noobot/shared/value";
+import { isCanonicalText, isFunction } from "@noobot/shared/value";
 
 export function createCommittedTurnLifecycleEnvelope({ event, turn, eventId, parentSessionId }) {
   const payload = createTurnLifecycleEnvelope({
@@ -60,18 +60,26 @@ export function createCommittedTurnLifecycleEnvelope({ event, turn, eventId, par
 
 export function commitTurnLifecycle({
   lifecycle,
-  event = {},
+  event,
   parentSessionId,
   isCommittedEventId,
   materializeTerminal,
   createEventId,
-  now = () => new Date().toISOString(),
-} = {}) {
+  now,
+}) {
   assertTurnLifecycleRecordIntegrity(lifecycle);
+  if (!isFunction(now)) throw new TypeError("commitTurnLifecycle requires an Authority clock");
   const requestFailure = validateTurnLifecycleRequest(event);
   if (requestFailure) return { applied: false, reason: requestFailure, lifecycle };
   if (Object.hasOwn(event, "eventId") && !isCanonicalText(event.eventId))
     return { applied: false, reason: "invalid_event_id", lifecycle };
+  // One commit observes exactly one Authority clock instant; it is allocated lazily
+  // so rejected requests never read the clock.
+  let committedAt = "";
+  const commitClock = () => {
+    if (!committedAt) committedAt = now();
+    return committedAt;
+  };
   let lifecycleEvent = event;
   let terminalMaterialization = null;
   const requestedTerminal =
@@ -90,7 +98,7 @@ export function commitTurnLifecycle({
       ...terminalPayload,
       turnScopeId: event.turnScopeId,
       dialogProcessId: settlingTurn.dialogProcessId,
-      updatedAt: event.finishedAt || now(),
+      updatedAt: commitClock(),
     });
     if (!terminalStatus)
       return { applied: false, reason: "invalid_turn_terminal_status", lifecycle };
@@ -101,7 +109,7 @@ export function commitTurnLifecycle({
     };
   }
 
-  const transition = transitionTurnLifecycle(lifecycle, lifecycleEvent, now);
+  const transition = transitionTurnLifecycle(lifecycle, lifecycleEvent, commitClock);
   if (!transition.applied) {
     const { receipt, ...rejection } = transition;
     return {

@@ -16,8 +16,8 @@ import {
 import { isPlainObject, text } from "@noobot/shared/value";
 
 function compareDialogAnchors(left, right) {
-  const leftTime = Date.parse(left.startedAt);
-  const rightTime = Date.parse(right.startedAt);
+  const leftTime = Date.parse(left.anchorTs);
+  const rightTime = Date.parse(right.anchorTs);
   if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) {
     return leftTime - rightTime;
   }
@@ -36,7 +36,7 @@ function collectDialogAnchors(messages) {
       dialogProcessId,
       turnScopeId: text(message?.turnScopeId),
       userMessageUid: anchored ? text(message?.messageUid) : "",
-      startedAt: text(message?.ts),
+      anchorTs: text(message?.ts),
       sourceIndex,
     });
   };
@@ -64,7 +64,6 @@ function persistedDialogEntries(dialogOrder, liveDialogIds) {
       dialogProcessId,
       turnScopeId: text(entry.turnScopeId),
       userMessageUid: text(entry.userMessageUid),
-      startedAt: text(entry.startedAt),
       dialogOrdinal: entry.dialogOrdinal,
     });
   }
@@ -80,7 +79,7 @@ export function deriveWriteTimeDialogOrder(dialogOrder, messages) {
   const persistedByDialog = new Map(persisted.map((entry) => [entry.dialogProcessId, entry]));
   let nextDialogOrdinal = persisted.reduce((max, entry) => Math.max(max, entry.dialogOrdinal), 0);
   const combined = [...persisted];
-  for (const { sourceIndex, ...anchor } of anchors) {
+  for (const { sourceIndex, anchorTs, ...anchor } of anchors) {
     const current = persistedByDialog.get(anchor.dialogProcessId);
     if (!current) {
       nextDialogOrdinal += 1;
@@ -89,7 +88,6 @@ export function deriveWriteTimeDialogOrder(dialogOrder, messages) {
     }
     current.turnScopeId ||= anchor.turnScopeId;
     current.userMessageUid ||= anchor.userMessageUid;
-    current.startedAt ||= anchor.startedAt;
   }
   return combined.sort((left, right) => left.dialogOrdinal - right.dialogOrdinal);
 }

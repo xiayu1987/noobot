@@ -39,6 +39,11 @@ export function evaluateWorkflowNodeStateGate({ eventData, current }) {
   return { admitted: true };
 }
 
+/**
+ * Planning header of a workflow run. `plannedAt` is the Authority `occurredAt` of the first
+ * planning event: it is the creation time of the workflow presentation message, so replanning
+ * keeps it instead of moving the message timestamp.
+ */
 export function buildWorkflowPlanningHeader({ currentWorkflow, eventData }) {
   return {
     ...currentWorkflow,
@@ -49,5 +54,8 @@ export function buildWorkflowPlanningHeader({ currentWorkflow, eventData }) {
     presentationMessageId: eventData.presentationMessageId,
     semanticText: eventData.semanticText,
     workflowPayload: eventData.workflowPayload,
+    plannedAt: Object.hasOwn(currentWorkflow, "plannedAt")
+      ? currentWorkflow.plannedAt
+      : eventData.occurredAt,
   };
 }

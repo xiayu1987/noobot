@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isFunction, isPlainObject, text } from "@noobot/shared/value";
 import {
   isCanonicalMessageTimestamp,
   normalizeDialogProcessId,
@@ -160,7 +160,7 @@ function buildFullTurnPayload(input) {
   };
 }
 
-async function appendSessionTurnDiagnostics(session, input, fullTurnPayload) {
+async function appendSessionTurnDiagnostics(session, now, input, fullTurnPayload) {
   await session.appendExecutionLog({
     userId: input.userId,
     sessionId: input.sessionId,
@@ -170,13 +170,14 @@ async function appendSessionTurnDiagnostics(session, input, fullTurnPayload) {
     category: MESSAGE_ROLE.SYSTEM,
     type: EXECUTION_LOG_EVENT.SESSION_TURN_FULL,
     data: summarizeSessionTurnPayload(fullTurnPayload),
+    ts: now(),
     persistenceScope: input.persistenceScope,
   });
 }
 
-async function tryAppendSessionTurnDiagnostics(session, input, fullTurnPayload) {
+async function tryAppendSessionTurnDiagnostics(session, now, input, fullTurnPayload) {
   try {
-    await appendSessionTurnDiagnostics(session, input, fullTurnPayload);
+    await appendSessionTurnDiagnostics(session, now, input, fullTurnPayload);
   } catch (error) {
     emitEvent(input.eventListener, "session_turn_diagnostic_persistence_failed", {
       error: error?.message || String(error || ""),
@@ -298,13 +299,22 @@ function buildAgentMessageTurnInput(messageItem, input) {
 }
 
 export class SessionTurnPersister {
-  constructor({ session = null } = {}) {
+  constructor({ session = null, now }) {
+    if (!isFunction(now)) {
+      throw new TypeError("SessionTurnPersister requires now function");
+    }
     this.session = session;
+    this.now = now;
   }
 
   async _prepareTurnPayload(payload = {}) {
     const input = normalizeSessionTurnInput(payload);
-    await tryAppendSessionTurnDiagnostics(this.session, input, buildFullTurnPayload(input));
+    await tryAppendSessionTurnDiagnostics(
+      this.session,
+      this.now,
+      input,
+      buildFullTurnPayload(input),
+    );
     return buildTurnPayload(input);
   }
 

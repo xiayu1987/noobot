@@ -38,6 +38,7 @@ test("session log protocol exports stable categories and helpers from runtime-ev
     Object.keys(
       buildSessionLogRecord({
         scope: "session",
+        channel: "ws",
         source: "test",
         category: "state",
         event: "test.keys",
@@ -97,6 +98,7 @@ test("session log protocol exports stable categories and helpers from runtime-ev
 
   const record = buildSessionLogRecord({
     scope: "session",
+    channel: "ws",
     source: "frontend",
     category: "message",
     event: "chat.message",
@@ -104,12 +106,11 @@ test("session log protocol exports stable categories and helpers from runtime-ev
     turnScopeId: "turn-1",
     message: "hello",
     data: { turnScopeId: "turn-1" },
-    time: "2026-10-01T00:00:00.000Z",
   });
 
   assert.deepEqual(record, {
     scope: "session",
-    time: "2026-10-01T00:00:00.000Z",
+    channel: "ws",
     source: "frontend",
     category: "message",
     level: "info",
@@ -123,6 +124,7 @@ test("session log protocol exports stable categories and helpers from runtime-ev
   assert.equal(
     buildSessionLogRecord({
       scope: "session",
+      channel: "ws",
       source: "f",
       category: "state",
       event: "e",
@@ -279,7 +281,7 @@ test("workflow diagnostics debug follows explicit disabled and enabled controls"
 });
 
 test("session log record requires an explicit scope that matches its session ownership", () => {
-  const base = { source: "frontend", category: "state", event: "chat.state" };
+  const base = { channel: "ws", source: "frontend", category: "state", event: "chat.state" };
   assert.throws(
     () => buildSessionLogRecord({ ...base, sessionId: "s1" }),
     /Invalid session log scope/,
@@ -289,14 +291,39 @@ test("session log record requires an explicit scope that matches its session own
     () => buildSessionLogRecord({ ...base, scope: "system", sessionId: "s1" }),
     /must not carry sessionId/,
   );
-  assert.throws(() => buildSessionLogRecord({ scope: "system", event: "e" }), /source is required/);
-  assert.throws(() => buildSessionLogRecord({ scope: "system", source: "x" }), /event is required/);
+  assert.throws(
+    () => buildSessionLogRecord({ scope: "system", channel: "ws", event: "e" }),
+    /source is required/,
+  );
+  assert.throws(
+    () => buildSessionLogRecord({ scope: "system", channel: "ws", source: "x" }),
+    /event is required/,
+  );
   assert.equal(buildSessionLogRecord({ ...base, scope: "system" }).scope, "system");
+});
+
+test("session log record requires the sender to declare a registered channel", () => {
+  const base = { scope: "system", source: "frontend", category: "state", event: "chat.state" };
+  assert.throws(() => buildSessionLogRecord(base), /Invalid session log channel: undefined/);
+  assert.throws(
+    () => buildSessionLogRecord({ ...base, channel: "startup" }),
+    /Invalid session log channel: startup/,
+  );
+  assert.throws(
+    () => buildSessionLogRecord({ ...base, channel: "direct" }),
+    /Invalid session log channel: direct/,
+  );
+  assert.equal(buildSessionLogRecord({ ...base, channel: "ws" }).channel, "ws");
+  assert.equal(
+    buildSessionLogRecord({ ...base, channel: "agent-proxy-ws" }).channel,
+    "agent-proxy-ws",
+  );
 });
 
 test("session log record carries debug type only at top level", () => {
   const record = buildSessionLogRecord({
     scope: "session",
+    channel: "ws",
     source: "frontend",
     category: "debug",
     level: "debug",

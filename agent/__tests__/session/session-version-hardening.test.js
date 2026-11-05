@@ -159,7 +159,6 @@ test("dialog order accepts only canonical dialogOrdinal and messageUid fields", 
       {
         dialogProcessId: "d1",
         turnScopeId: "",
-        startedAt: "",
         dialogOrdinal: 7,
       },
     ],
@@ -178,7 +177,6 @@ test("messages without a persistent messageUid are rejected", () => {
       {
         dialogProcessId: "d1",
         turnScopeId: "t1",
-        startedAt: "",
         userMessageUid: "",
         dialogOrdinal: 1,
       },
@@ -197,7 +195,7 @@ test("messages without a persistent messageUid are rejected", () => {
     ],
   };
   assert.throws(
-    () => normalizeSessionEntity(invalid, { now: () => "2026-01-01T00:00:00.000Z" }),
+    () => normalizeSessionEntity(invalid),
     /invalid session message identity: session_message_uid_missing/,
   );
 });

@@ -16,7 +16,7 @@ export async function reloadAndWaitForReconnect(page, capture) {
       ),
     { timeoutMs: 60000 },
   );
-  await expect(page.locator(".status-btn.connected")).toBeVisible();
+  await expect(page.locator(".sidebar-settings-btn")).toHaveAttribute("data-connected", "true");
 }
 
 export async function beginReload(page) {

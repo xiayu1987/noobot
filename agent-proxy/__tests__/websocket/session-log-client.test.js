@@ -83,6 +83,7 @@ test("session log client preserves child storage ownership fields on the wire", 
   const sent = JSON.parse(socket.sent[0]);
   assert.equal(sent.sessionId, "child-session");
   assert.equal(sent.parentSessionId, "root-session");
+  assert.equal(sent.channel, "agent-proxy-ws");
 });
 
 test("session log client restores unacked logs on close", () => {

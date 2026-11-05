@@ -37,6 +37,7 @@ function createActiveReplayFixture(overrides = {}) {
           {
             presentationMessageId: "message-1",
             sessionId: "s-1",
+            ts: "2026-01-01T00:00:00.000Z",
             role: "assistant",
             dialogProcessId: "dp-1",
             turnScopeId: "turn-1",
@@ -138,6 +139,7 @@ describe("replayCacheConsumer", () => {
           messages: [
             buildViewMessage(
               {
+                ts: "2026-01-01T00:00:00.000Z",
                 role: "assistant",
                 presentationMessageId: "message-1",
                 sessionId: "s-1",
@@ -167,6 +169,7 @@ describe("replayCacheConsumer", () => {
   it("projects onto the presentation target when turns share a dialog process", async () => {
     const stoppedAssistant = buildViewMessage(
       {
+        ts: "2026-01-01T00:00:00.000Z",
         role: "assistant",
         presentationMessageId: "message-stopped",
         sessionId: "s-1",
@@ -179,6 +182,7 @@ describe("replayCacheConsumer", () => {
     );
     const continuationAssistant = buildViewMessage(
       {
+        ts: "2026-01-01T00:00:00.000Z",
         role: "assistant",
         presentationMessageId: "message-continuation",
         sessionId: "s-1",

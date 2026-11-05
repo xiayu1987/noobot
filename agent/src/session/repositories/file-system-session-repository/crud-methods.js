@@ -54,7 +54,6 @@ class SessionCrudMethods {
           sessionDir: scope.sessionDir,
           sessionPayload: payload,
           atomic: true,
-          now: this.now,
           predecessor: SESSION_ARTIFACT_PREDECESSOR.CANONICAL,
         });
         await this.commitSessionPlacement(userId, payload, persistenceContext);
@@ -66,23 +65,23 @@ class SessionCrudMethods {
   }
 
   createInitialSession({ sessionId, parentSessionId, caller }) {
-    return normalizeSessionEntity(
-      {
-        sessionId,
-        parentSessionId,
-        aggregateVersion: 0,
-        caller: requireSessionCaller(caller),
-        modelAlias: "",
-        shortMemoryCheckpoint: 0,
-        messages: [],
-        sessionArtifactEvents: [],
-        dialogOrder: [],
-        turnTimings: [],
-        turnLifecycle: createEmptyTurnLifecycle(),
-        selectedConnectorIds: [],
-      },
-      { now: this.now },
-    );
+    const createdAt = this.now();
+    return normalizeSessionEntity({
+      sessionId,
+      parentSessionId,
+      aggregateVersion: 0,
+      caller: requireSessionCaller(caller),
+      modelAlias: "",
+      shortMemoryCheckpoint: 0,
+      messages: [],
+      sessionArtifactEvents: [],
+      dialogOrder: [],
+      turnTimings: [],
+      turnLifecycle: createEmptyTurnLifecycle(),
+      selectedConnectorIds: [],
+      createdAt,
+      updatedAt: createdAt,
+    });
   }
 
   async findById(userId, sessionId, { persistenceContext } = {}) {
@@ -175,7 +174,6 @@ class SessionCrudMethods {
           sessionDir: scope.sessionDir,
           sessionPayload: payload,
           atomic: true,
-          now: this.now,
           predecessor: SESSION_ARTIFACT_PREDECESSOR.CANONICAL,
         });
         if (createOnly) await this.commitSessionPlacement(userId, payload, persistenceContext);
@@ -196,7 +194,6 @@ class SessionCrudMethods {
           sessionPayload: payload,
           turnScopeIds,
           atomic: true,
-          now: this.now,
         });
         return { payload, listFacts };
       },
@@ -232,7 +229,7 @@ class SessionCrudMethods {
   }
 
   _buildSavePayload(session) {
-    return normalizeSessionEntity({ ...session, updatedAt: this.now() }, { now: this.now });
+    return normalizeSessionEntity({ ...session, updatedAt: this.now() });
   }
 
   async delete(userId, sessionId, { persistenceContext } = {}) {

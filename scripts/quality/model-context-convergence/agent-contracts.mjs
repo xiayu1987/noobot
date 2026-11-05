@@ -214,7 +214,7 @@ export const AGENT_CONTRACTS = Object.freeze([
     forbidden: [
       [
         "stopped snapshot resume rebuilds blocks from Session history",
-        /projectTerminalHistoryMessages|getContextRecords|buildExistingSessionContext|buildContinueContext/,
+        /projectTerminalHistoryMessages|getContextRecords|buildSessionContext|buildContinueContext/,
       ],
     ],
   },
@@ -268,16 +268,8 @@ export const AGENT_CONTRACTS = Object.freeze([
     file: "agent/src/context/index.js",
     required: [
       [
-        "shared session context resolves session history and long memory",
-        /async\s+_buildSessionContext[\s\S]*?_resolveSessionRecords[\s\S]*?resolveLongMemory/,
-      ],
-      [
-        "new-session context delegates to the shared session context builder",
-        /async\s+buildNewSessionContext[\s\S]*?_buildSessionContext\([\s\S]*?AGENT_CONTEXT_MODE\.NEW_SESSION/,
-      ],
-      [
-        "existing-session context delegates to the shared session context builder",
-        /async\s+buildExistingSessionContext[\s\S]*?_buildSessionContext\([\s\S]*?AGENT_CONTEXT_MODE\.EXISTING_SESSION/,
+        "single session context resolves session history and long memory",
+        /async\s+buildSessionContext\(\)[\s\S]*?_resolveSessionRecords\(\)[\s\S]*?_resolveLongMemoryForInjection\(\)/,
       ],
       [
         "context passes current turnScopeId to session history",

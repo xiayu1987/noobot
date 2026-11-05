@@ -93,7 +93,7 @@ export function createWorkflowStore({
       aggregateVersion: canonical.ordering.aggregateVersion,
     };
     if (eventType === WORKFLOW_RUNTIME_EVENT.PLANNING) {
-      result = upsertWorkflowPlanningEvent(data);
+      result = upsertWorkflowPlanningEvent({ ...data, occurredAt: canonical.occurredAt });
     } else if (eventType === WORKFLOW_RUNTIME_EVENT.NODE_STATE) {
       result = upsertWorkflowNodeStateEvent({
         ...data,

@@ -39,6 +39,8 @@ test("authority outbox tracks attempts and acknowledges delivery idempotently", 
       phase: TURN_PHASE.PROCESSING,
       state: TURN_STATE.PROCESSING,
       updatedAt: "2026-07-18T00:00:00.000Z",
+      startedAt: "2026-07-18T00:00:00.000Z",
+      finishedAt: "",
     },
   });
   const initial = normalizeAuthorityEventOutbox([
@@ -108,6 +110,8 @@ test("outbox compaction reclaims only events every attempting consumer delivered
         phase: TURN_PHASE.PROCESSING,
         state: TURN_STATE.PROCESSING,
         updatedAt: "2026-07-01T00:00:00.000Z",
+        startedAt: "2026-07-01T00:00:00.000Z",
+        finishedAt: "",
       },
     });
   const delivered = (eventId, sequence, deliveries, scopeId = "message-1") => {
@@ -179,6 +183,8 @@ test("authority outbox tracks each consumer independently so one ack never hides
       phase: TURN_PHASE.PROCESSING,
       state: TURN_STATE.PROCESSING,
       updatedAt: "2026-07-18T00:00:00.000Z",
+      startedAt: "2026-07-18T00:00:00.000Z",
+      finishedAt: "",
     },
   });
   const eventId = envelope.identity.eventId;
@@ -251,6 +257,8 @@ test("legacy single-slot outbox delivery migrates to the recorded consumer only"
       phase: TURN_PHASE.PROCESSING,
       state: TURN_STATE.PROCESSING,
       updatedAt: "2026-07-18T00:00:00.000Z",
+      startedAt: "2026-07-18T00:00:00.000Z",
+      finishedAt: "",
     },
   });
   const [migrated, unowned] = migrateLegacyAuthorityEventOutbox([

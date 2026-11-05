@@ -27,11 +27,6 @@ button,
   background: var(--noobot-panel-bg);
 }
 
-.noobot-dialog-surface .el-dialog {
-  border: 1px solid var(--noobot-panel-border);
-  background: var(--noobot-panel-bg);
-}
-
 .noobot-flat-chip {
   display: inline-flex;
   align-items: center;
@@ -114,6 +109,11 @@ button,
   font-size: var(--noobot-font-size-sm);
   font-weight: var(--noobot-font-weight-semibold);
   line-height: var(--noobot-line-height-none);
+}
+
+.noobot-pill-option.el-button,
+.noobot-flat-icon-btn,
+.noobot-flat-inline-icon-btn {
   transition:
     background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
     border-color var(--noobot-duration-normal) var(--noobot-ease-standard),
@@ -169,11 +169,6 @@ button,
   background: transparent;
   color: var(--noobot-text-main);
   cursor: pointer;
-  transition:
-    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
-    border-color var(--noobot-duration-normal) var(--noobot-ease-standard),
-    color var(--noobot-duration-normal) var(--noobot-ease-standard),
-    box-shadow var(--noobot-duration-normal) var(--noobot-ease-standard);
 }
 
 .noobot-copy-actions {
@@ -245,7 +240,11 @@ button,
 .connector-toggle-btn.noobot-flat-soft-btn,
 .workspace-btn.noobot-flat-soft-btn,
 .dark-btn.noobot-flat-soft-btn,
-.collapse-btn.noobot-flat-soft-btn {
+.collapse-btn.noobot-flat-soft-btn,
+.connector-toggle-btn.noobot-flat-soft-btn:hover,
+.workspace-btn.noobot-flat-soft-btn:hover,
+.dark-btn.noobot-flat-soft-btn:hover,
+.collapse-btn.noobot-flat-soft-btn:hover {
   border-color: transparent;
   background: color-mix(in srgb, var(--noobot-panel-muted) 72%, transparent);
   color: var(--noobot-text-strong);
@@ -269,8 +268,6 @@ button,
 .dark-btn.noobot-flat-soft-btn:hover,
 .collapse-btn.noobot-flat-soft-btn:hover {
   border-color: color-mix(in srgb, var(--noobot-panel-border) 18%, transparent);
-  background: color-mix(in srgb, var(--noobot-panel-muted) 72%, transparent);
-  color: var(--noobot-text-strong);
 }
 
 .attachment-download-btn.noobot-flat-icon-btn .el-icon,
@@ -298,4 +295,27 @@ button,
 .noobot-tail-btn:hover:not(:disabled) {
   background: var(--noobot-panel-muted);
   border-color: transparent;
+}
+
+.el-button {
+  border-radius: var(--noobot-btn-radius);
+  min-height: var(--noobot-control-height-sm);
+  transition:
+    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    border-color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    color var(--noobot-duration-normal) var(--noobot-ease-standard);
+}
+
+.el-button:not(:disabled):hover {
+  transform: none;
+  filter: none;
+}
+
+.el-button--primary {
+  border: none;
+  background: var(--noobot-btn-primary-bg);
+}
+
+.el-button--primary:not(:disabled):hover {
+  background: var(--noobot-btn-primary-bg-hover);
 }

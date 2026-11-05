@@ -11,7 +11,6 @@ import {
   findVisibleLastMessage,
   isPluginInjectedMessage,
 } from "../../model/messageModel.js";
-import { nowIso } from "../../model/timeFields.js";
 import { RoleEnum } from "../../model/chatConstants.js";
 import { isWorkflowNodeTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
 import {
@@ -129,7 +128,6 @@ export function createSessionMessageView({ sessions, activeSession, activeSessio
     activeSession.value.messages.push(msg);
     activeSession.value.messageCount = (activeSession.value.messageCount || 0) + 1;
     activeSession.value.lastMessage = findVisibleLastMessage(activeSession.value.messages);
-    activeSession.value.updatedAt = nowIso();
     return msg;
   }
 

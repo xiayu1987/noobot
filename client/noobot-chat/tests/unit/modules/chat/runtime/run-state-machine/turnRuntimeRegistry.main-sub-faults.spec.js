@@ -42,6 +42,9 @@ function start(registry, sessionId, turnScopeId, dialogProcessId, seq = 1) {
   applyTurnLifecycleEnvelope(
     registry,
     createTurnLifecycleEnvelope({
+      occurredAt: "2026-01-01T00:00:00.000Z",
+      startedAt: "2026-01-01T00:00:00.000Z",
+      finishedAt: "",
       updatedAt: "2026-01-01T00:00:00.000Z",
       eventType: "turn.action_accepted",
       eventId: `accepted-${sessionId}-${turnScopeId}`,
@@ -64,6 +67,9 @@ function start(registry, sessionId, turnScopeId, dialogProcessId, seq = 1) {
   applyTurnLifecycleEnvelope(
     registry,
     createTurnLifecycleEnvelope({
+      occurredAt: "2026-01-01T00:00:00.000Z",
+      startedAt: "2026-01-01T00:00:00.000Z",
+      finishedAt: "",
       updatedAt: "2026-01-01T00:00:00.000Z",
       eventType: "turn.processing_started",
       eventId: `start-${sessionId}-${turnScopeId}`,
@@ -95,6 +101,7 @@ function settle(registry, sessionId, turnScopeId, state = "completed", revision 
   return applyTurnTerminalResolution(
     registry,
     createTurnTerminalResolution({
+      generatedAt: "2026-11-01T00:00:00.000Z",
       commandId: `resolve-${resolutionSequence}`,
       sessionId,
       turnScopeId,
@@ -150,6 +157,9 @@ describe("turnRuntimeRegistry main/sub-session concurrent fault isolation", () =
     const mismatched = applyTurnLifecycleEnvelope(
       registry,
       createTurnLifecycleEnvelope({
+        occurredAt: "2026-01-01T00:00:00.000Z",
+        startedAt: "2026-01-01T00:00:00.000Z",
+        finishedAt: "",
         updatedAt: "2026-01-01T00:00:00.000Z",
         eventType: "turn.processing_started",
         eventId: "mismatched-main-processing",
@@ -215,6 +225,9 @@ describe("turnRuntimeRegistry main/sub-session concurrent fault isolation", () =
     applyTurnLifecycleEnvelope(
       registry,
       createTurnLifecycleEnvelope({
+        occurredAt: "2026-01-01T00:00:00.000Z",
+        startedAt: "2026-01-01T00:00:00.000Z",
+        finishedAt: "",
         updatedAt: "2026-01-01T00:00:00.000Z",
         eventType: "turn.processing_started",
         eventId: "start-child-canonical-child-turn",

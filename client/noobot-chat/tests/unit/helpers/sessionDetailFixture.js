@@ -18,10 +18,12 @@ import {
 } from "@noobot/session-protocol/sessions-summary";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { createMessageDeleteResponse } from "@noobot/session-protocol/session-mutation-response";
+import { withServerNow } from "@noobot/session-protocol/server-clock";
 import { jsonResponse } from "./jsonResponse.js";
 
 const FIXTURE_CREATED_AT = "2026-07-15T10:00:00.000Z";
 const FIXTURE_UPDATED_AT = "2026-07-15T10:01:00.000Z";
+export const FIXTURE_SERVER_NOW = "2026-07-15T10:02:00.000Z";
 
 export function idleTurnLifecycleSnapshot(sessionId) {
   return createTurnLifecycleSnapshot({
@@ -107,7 +109,11 @@ export function missingDetailDocument({ sessionId }) {
 }
 
 export function detailResponse(document) {
-  return { ok: true, status: 200, json: async () => ({ ok: true, ...document }) };
+  return {
+    ok: true,
+    status: 200,
+    json: async () => withServerNow({ ok: true, ...document }, FIXTURE_SERVER_NOW),
+  };
 }
 
 export function availableSummaryEntry({
@@ -138,7 +144,11 @@ export function sessionsSummaryResponse({ userId, updatedAt, sessions }) {
     updatedAt,
     sessions,
   });
-  return { ok: true, status: 200, json: async () => ({ ok: true, userId, ...payload }) };
+  return {
+    ok: true,
+    status: 200,
+    json: async () => withServerNow({ ok: true, userId, ...payload }, FIXTURE_SERVER_NOW),
+  };
 }
 
 export function messageDeleteResponse({

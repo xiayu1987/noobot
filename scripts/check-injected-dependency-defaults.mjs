@@ -115,7 +115,7 @@ export const CHECK = defineCheck({
   },
   exemptions: [],
   baseline: {
-    emptyDependencyBag: 90,
+    emptyDependencyBag: 89,
     optionalDependencyCall: 10,
     fetcherFallback: 0,
     exemptions: 0,

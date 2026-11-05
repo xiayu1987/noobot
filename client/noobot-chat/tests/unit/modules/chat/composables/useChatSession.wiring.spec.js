@@ -47,6 +47,7 @@ function createAuthFetch() {
             {
               messageUid: "wiring-user",
               userMessageId: "wiring-user",
+              ts: "2026-01-01T00:00:00.000Z",
               role: RoleEnum.USER,
               content: "q",
               turnScopeId: TURN_SCOPE_ID,

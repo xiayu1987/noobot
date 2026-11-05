@@ -17,7 +17,6 @@ import {
 } from "../../../runtime/lifecycle/state-machine.js";
 import { buildSessionRuntimePluginResolvedEvent } from "./plugin-runtime.js";
 import { isCanonicalText, isPlainObject, text, isFunction } from "@noobot/shared/value";
-import { AGENT_CONTEXT_MODE } from "@noobot/context-protocol";
 import { assertRunConfigPreferences } from "@noobot/agent-transport-protocol/run-preferences";
 
 const REQUIRED_RUN_IDENTITY_FIELDS = Object.freeze([
@@ -85,7 +84,6 @@ export async function initializeSessionRun({
     userId,
     sessionId,
     parentSessionId,
-    caller,
     eventListener,
     dialogProcessId: requestedDialogProcessId,
     turnScopeId: requestedTurnScopeId,
@@ -95,7 +93,6 @@ export async function initializeSessionRun({
     usedSessionId,
     parentSessionId: resolvedParentSessionId,
     dialogProcessId,
-    sessionLoadState,
     userConfig,
     currentSessionModelAlias,
     sessionDir,
@@ -172,7 +169,6 @@ export async function initializeSessionRun({
       ...botHookBase,
       message: normalizedMessage,
       isContinue: resumeFromStoppedSnapshot,
-      sessionLoadState,
       resumeFromStoppedSnapshot,
     },
     eventListener: runtimeEventListener,
@@ -182,7 +178,6 @@ export async function initializeSessionRun({
     usedSessionId,
     parentSessionId: resolvedParentSessionId,
     dialogProcessId,
-    sessionLoadState,
     userConfig,
     sessionDir,
     runtimeEventListener,
@@ -190,10 +185,6 @@ export async function initializeSessionRun({
     turnScopeId,
     presentationMessageId,
     resumeFromStoppedSnapshot,
-    contextMode:
-      sessionLoadState === "loaded"
-        ? AGENT_CONTEXT_MODE.EXISTING_SESSION
-        : AGENT_CONTEXT_MODE.NEW_SESSION,
     lifecycle,
     botHookRuntime,
     botHookIdentity,

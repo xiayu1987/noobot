@@ -59,8 +59,11 @@ export function createDetachedSubSessionRunner({
   attachmentService,
   mergeRunConfigPluginPolicy = null,
   prepareRunConfig = null,
-  now = () => new Date().toISOString(),
+  now,
 } = {}) {
+  if (!isFunction(now)) {
+    throw new TypeError("detached sub-session runner requires now function");
+  }
   const dependencies = {
     workspaceService,
     configService,
@@ -80,12 +83,7 @@ async function runDetachedSubSession(dependencies, request) {
   const identity = resolveDetachedIdentity(request, runtime);
   const prepared = await prepareDetachedExecution(dependencies, request, runtime, identity);
   const lifecycle = await createDetachedLifecycle(dependencies, request, identity, prepared);
-  const accepted = await commitDetachedStart(
-    lifecycle,
-    prepared.effectiveRunConfig.thinkingStartedAt,
-    prepared.message,
-    identity,
-  );
+  const accepted = await commitDetachedStart(lifecycle, prepared.message, identity);
   await dependencies.session.writeSessionMetadata({
     userId: identity.userId,
     sessionId: identity.subSessionId,
@@ -255,9 +253,6 @@ function createDetachedRunConfig(
   config.commandId = identity.commandId;
   const presentationMessageId = createPresentationMessageId();
   config.presentationMessageId = presentationMessageId;
-  if (!text(config.thinkingStartedAt)) {
-    config.thinkingStartedAt = String(dependencies.now()).trim();
-  }
   for (const key of ["hookManager", "hooks", "botHookManager", "botHooks"]) delete config[key];
   return config;
 }
@@ -284,7 +279,7 @@ async function resolveDetachedSystemMessages(systemMessageFactory, attachments) 
 }
 
 async function createDetachedLifecycle(dependencies, request, identity, prepared) {
-  const { session } = dependencies;
+  const { session, now } = dependencies;
   const runtimePluginState = buildRuntimePluginState({
     effectiveRunConfig: prepared.effectiveRunConfig,
     disabledPlugins: request.strategy?.disabledPlugins,
@@ -311,6 +306,7 @@ async function createDetachedLifecycle(dependencies, request, identity, prepared
       turnScopeId: identity.turnScopeId,
       persistenceScope,
       dialogProcessId: identity.subDialogProcessId,
+      now,
     }),
     commandId: identity.commandId,
     commit: createLifecycleCommitter(session, lifecycleIdentity, identity.scopedEventListener),
@@ -369,14 +365,13 @@ function lifecycleCommandId(lifecycle, eventType, phase = "") {
   return createTurnLifecycleCommandId({ commandId: lifecycle.commandId, eventType, phase });
 }
 
-async function commitDetachedStart(lifecycle, startedAt, message, identity) {
+async function commitDetachedStart(lifecycle, message, identity) {
   const accepted = await lifecycle.commit({
     commandId: lifecycleCommandId(lifecycle, TURN_EVENT.ACTION_ACCEPTED),
     causationId: lifecycle.commandId,
     eventType: TURN_EVENT.ACTION_ACCEPTED,
     phase: TURN_PHASE.ACTION,
     action: TURN_ACTION.SEND,
-    startedAt,
     createSessionIfAbsent: true,
     parentSessionId: identity.parentSessionId,
     sessionCaller: SESSION_CALLER.BOT,
@@ -471,7 +466,6 @@ async function commitDetachedStop(dependencies, lifecycle) {
     eventType: TURN_EVENT.STOP_COMPLETED,
     phase: TURN_PHASE.STOP,
     terminalStatus: { command: "user_stopped" },
-    finishedAt: String(dependencies.now()).trim(),
   });
 }
 
@@ -516,7 +510,6 @@ async function commitDetachedCompletion(dependencies, lifecycle) {
     eventType: TURN_EVENT.COMPLETED,
     phase: TURN_PHASE.COMPLETION,
     terminalStatus: { command: "completed" },
-    finishedAt: String(dependencies.now()).trim(),
   });
 }
 
@@ -555,7 +548,6 @@ function clearParentTurnTransactionIdentity(runConfig = {}) {
   delete runConfig.expectedAggregateVersion;
   delete runConfig.commandId;
   delete runConfig.reuseExistingUserTurn;
-  delete runConfig.thinkingStartedAt;
   delete runConfig.presentationMessageId;
   return runConfig;
 }

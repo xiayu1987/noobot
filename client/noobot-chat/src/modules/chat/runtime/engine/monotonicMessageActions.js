@@ -19,7 +19,7 @@ import {
   getMessageRole,
   getMessageTurnScopeId,
 } from "../../model/messageIdentity.js";
-import { nowIso, nowMs } from "../../model/timeFields.js";
+import { nowMs } from "../../model/timeFields.js";
 import {
   isStageStatusStepState,
   SESSION_RUN_EVENT,
@@ -67,7 +67,6 @@ function syncSessionMessageSummary(session) {
   const { messages } = session;
   session.messageCount = messages.length;
   session.lastMessage = findVisibleLastMessage(messages);
-  session.updatedAt = nowIso();
 }
 
 export function createMonotonicMessageActions({

@@ -13,6 +13,19 @@
   --noobot-space-lg: 12px;
   --noobot-space-xl: 16px;
   --noobot-space-2xl: 24px;
+  --noobot-space-3xl: 32px;
+  --noobot-content-max-width: 800px;
+  --noobot-content-gutter: var(--noobot-space-2xl);
+  --noobot-content-inset-left: max(
+    var(--noobot-content-gutter),
+    env(safe-area-inset-left, 0px),
+    calc((100% - var(--noobot-content-max-width)) / 2)
+  );
+  --noobot-content-inset-right: max(
+    var(--noobot-content-gutter),
+    env(safe-area-inset-right, 0px),
+    calc((100% - var(--noobot-content-max-width)) / 2)
+  );
   --noobot-control-height-sm: 30px;
   --noobot-control-height-md: 34px;
   --noobot-control-height-lg: 38px;
@@ -22,6 +35,18 @@
   --noobot-control-icon-size-lg: 36px;
   --noobot-side-panel-width: 240px;
   --noobot-side-panel-collapsed-width: 44px;
+  --noobot-side-panel-inset: var(--noobot-space-xl);
+  --noobot-side-panel-clearance: var(--noobot-space-3xl);
+  --noobot-side-panel-docked-reserve: calc(
+    var(--noobot-side-panel-collapsed-width) + var(--noobot-side-panel-inset) +
+      var(--noobot-side-panel-clearance)
+  );
+  --noobot-side-panel-open-reserve: calc(
+    var(--noobot-side-panel-width) + var(--noobot-side-panel-inset) +
+      var(--noobot-side-panel-clearance)
+  );
+  --noobot-workspace-head-padding: var(--noobot-space-md) var(--noobot-space-xl);
+  --noobot-workspace-empty-padding: var(--noobot-space-2xl) var(--noobot-space-xl);
   --noobot-header-height: 52px;
   --noobot-header-height-mobile: 48px;
   --noobot-panel-header-height: 40px;
@@ -31,4 +56,12 @@
   --noobot-layer-floating-action: 2001;
   --noobot-layer-tooltip: 4000;
   --noobot-floating-action-gap: 52px;
+}
+
+@media (max-width: 768px) {
+  :root {
+    --noobot-content-gutter: var(--noobot-space-md);
+    --noobot-workspace-head-padding: 0 var(--noobot-space-md);
+    --noobot-workspace-empty-padding: var(--noobot-space-xl) 0;
+  }
 }

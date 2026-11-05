@@ -137,6 +137,7 @@ describe("useChatSession reconnect replay", () => {
     const assistant = buildViewMessage(
       {
         presentationMessageId: "msg-live",
+        ts: "2026-01-01T00:00:00.000Z",
         role: RoleEnum.ASSISTANT,
         dialogProcessId: "dp-live",
         turnScopeId: "turn-live",
@@ -152,7 +153,10 @@ describe("useChatSession reconnect replay", () => {
         title: "live",
         isLocal: false,
         loaded: true,
-        messages: [{ role: RoleEnum.USER, content: "run" }, assistant],
+        messages: [
+          { ts: "2026-01-01T00:00:00.000Z", role: RoleEnum.USER, content: "run" },
+          assistant,
+        ],
         rawMessages: [],
         sessionDocs: [],
         connectorPanelState: { selectedConnectorIds: [], connectors: [] },
@@ -213,6 +217,7 @@ describe("useChatSession reconnect replay", () => {
     const assistant = buildViewMessage(
       {
         presentationMessageId: "msg-after-reconnect",
+        ts: "2026-01-01T00:00:00.000Z",
         role: RoleEnum.ASSISTANT,
         dialogProcessId: "dp-after-reconnect",
         turnScopeId: "turn-after-reconnect",
@@ -225,7 +230,10 @@ describe("useChatSession reconnect replay", () => {
       createSessionFixture({
         id: "s-after-reconnect",
         sessionId: "s-after-reconnect",
-        messages: [{ role: RoleEnum.USER, content: "continue" }, assistant],
+        messages: [
+          { ts: "2026-01-01T00:00:00.000Z", role: RoleEnum.USER, content: "continue" },
+          assistant,
+        ],
       }),
     ];
     store.activeSessionId = "s-after-reconnect";
@@ -261,6 +269,7 @@ describe("useChatSession reconnect replay", () => {
     const store = useChatStore();
     const stoppedAssistant = buildViewMessage(
       {
+        ts: "2026-01-01T00:00:00.000Z",
         role: RoleEnum.ASSISTANT,
         dialogProcessId: "dp-continued",
         turnScopeId: "turn-stopped",
@@ -272,6 +281,7 @@ describe("useChatSession reconnect replay", () => {
     const continuedAssistant = buildViewMessage(
       {
         presentationMessageId: "msg-continued",
+        ts: "2026-01-01T00:00:00.000Z",
         role: RoleEnum.ASSISTANT,
         dialogProcessId: "dp-continued",
         turnScopeId: "turn-continued",
@@ -288,9 +298,19 @@ describe("useChatSession reconnect replay", () => {
         isLocal: false,
         loaded: true,
         messages: [
-          { role: RoleEnum.USER, content: "first", turnScopeId: "turn-stopped" },
+          {
+            ts: "2026-01-01T00:00:00.000Z",
+            role: RoleEnum.USER,
+            content: "first",
+            turnScopeId: "turn-stopped",
+          },
           stoppedAssistant,
-          { role: RoleEnum.USER, content: "continue", turnScopeId: "turn-continued" },
+          {
+            ts: "2026-01-01T00:00:00.000Z",
+            role: RoleEnum.USER,
+            content: "continue",
+            turnScopeId: "turn-continued",
+          },
           continuedAssistant,
         ],
         rawMessages: [],
@@ -340,9 +360,13 @@ describe("useChatSession reconnect replay", () => {
         isLocal: false,
         loaded: true,
         messages: [
-          buildViewMessage({ role: RoleEnum.USER, content: "old q" }, { sessionId: "s-1" }),
+          buildViewMessage(
+            { ts: "2026-01-01T00:00:00.000Z", role: RoleEnum.USER, content: "old q" },
+            { sessionId: "s-1" },
+          ),
           buildViewMessage(
             {
+              ts: "2026-01-01T00:00:00.000Z",
               role: RoleEnum.ASSISTANT,
               presentationMessageId: "msg-old",
               dialogProcessId: "dp-old",
@@ -351,9 +375,13 @@ describe("useChatSession reconnect replay", () => {
             },
             { sessionId: "s-1" },
           ),
-          buildViewMessage({ role: RoleEnum.USER, content: "new q" }, { sessionId: "s-1" }),
+          buildViewMessage(
+            { ts: "2026-01-01T00:00:00.000Z", role: RoleEnum.USER, content: "new q" },
+            { sessionId: "s-1" },
+          ),
           buildViewMessage(
             {
+              ts: "2026-01-01T00:00:00.000Z",
               role: RoleEnum.ASSISTANT,
               presentationMessageId: "msg-new",
               dialogProcessId: "dp-new",
@@ -414,16 +442,18 @@ describe("useChatSession reconnect replay", () => {
           {
             sessionId: "s-1",
             messages: [
-              { role: RoleEnum.USER, content: "old q" },
+              { ts: "2026-01-01T00:00:00.000Z", role: RoleEnum.USER, content: "old q" },
               {
+                ts: "2026-01-01T00:00:00.000Z",
                 role: RoleEnum.ASSISTANT,
                 presentationMessageId: "msg-old",
                 dialogProcessId: "dp-old",
                 turnScopeId: "turn-old",
                 content: "old keep",
               },
-              { role: RoleEnum.USER, content: "new q" },
+              { ts: "2026-01-01T00:00:00.000Z", role: RoleEnum.USER, content: "new q" },
               {
+                ts: "2026-01-01T00:00:00.000Z",
                 role: RoleEnum.ASSISTANT,
                 presentationMessageId: "msg-new",
                 dialogProcessId: "dp-new",
@@ -435,16 +465,18 @@ describe("useChatSession reconnect replay", () => {
           },
         ],
         messages: [
-          { role: RoleEnum.USER, content: "old q" },
+          { ts: "2026-01-01T00:00:00.000Z", role: RoleEnum.USER, content: "old q" },
           {
+            ts: "2026-01-01T00:00:00.000Z",
             role: RoleEnum.ASSISTANT,
             presentationMessageId: "msg-old",
             dialogProcessId: "dp-old",
             turnScopeId: "turn-old",
             content: "old keep",
           },
-          { role: RoleEnum.USER, content: "new q" },
+          { ts: "2026-01-01T00:00:00.000Z", role: RoleEnum.USER, content: "new q" },
           {
+            ts: "2026-01-01T00:00:00.000Z",
             role: RoleEnum.ASSISTANT,
             presentationMessageId: "msg-new",
             dialogProcessId: "dp-new",
@@ -678,8 +710,17 @@ describe("useChatSession reconnect replay", () => {
           isLocal: false,
           loaded: true,
           messages: [
-            { role: RoleEnum.USER, content: `hello from ${senderId}` },
-            { role: RoleEnum.ASSISTANT, content: "", pending: false },
+            {
+              ts: "2026-01-01T00:00:00.000Z",
+              role: RoleEnum.USER,
+              content: `hello from ${senderId}`,
+            },
+            {
+              ts: "2026-01-01T00:00:00.000Z",
+              role: RoleEnum.ASSISTANT,
+              content: "",
+              pending: false,
+            },
           ],
           rawMessages: [],
           sessionDocs: [],

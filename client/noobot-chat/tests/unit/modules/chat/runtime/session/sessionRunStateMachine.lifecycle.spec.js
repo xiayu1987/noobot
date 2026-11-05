@@ -63,6 +63,7 @@ const stopProcessingCompleted = {
 const completionCommit = { completionCommitId: "completion-commit-1", summaryVersion: 1 };
 const terminalResolved = (state) => ({
   updatedAt: "2026-01-01T00:00:00.000Z",
+  finishedAt: "2026-01-01T00:00:00.000Z",
   type: SESSION_RUN_EVENT.TERMINAL_RESOLVED,
   state,
   revision: 10,
@@ -124,6 +125,7 @@ describe("sessionRunStateMachine lifecycle", () => {
     expect(turn.state).toBe(FrontendRunState.FRONTEND_COMPLETION_REQUESTING);
     turn = apply(turn, {
       updatedAt: "2026-01-01T00:00:00.000Z",
+      finishedAt: "2026-01-01T00:00:00.000Z",
       type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
       eventType: TURN_EVENT.COMPLETED,
       state: TURN_STATE.COMPLETED,

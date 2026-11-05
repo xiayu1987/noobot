@@ -7,6 +7,7 @@ import test from "node:test";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import assert from "node:assert/strict";
 import {
+  ACCEPTED_TURN_STARTED_AT,
   createRunner,
   createTestBotHookManager,
   HOOK_POINT,
@@ -95,7 +96,7 @@ for (const { name, dialogProcessId, turnScopeId, runConfig, isContinue } of [
         parentSessionId,
         usedSessionId: "s1",
         dialogProcessId,
-        sessionLoadState: "loaded",
+        startedAt: ACCEPTED_TURN_STARTED_AT,
         userConfig: {},
         currentSessionModelAlias: "",
         runtimeEventListener: eventListener,
@@ -107,7 +108,7 @@ for (const { name, dialogProcessId, turnScopeId, runConfig, isContinue } of [
       { dialogProcessId, committedEventPublished: false },
     );
 
-    assert.equal(beforeRunContext?.sessionLoadState, "loaded");
+    assert.equal(Object.hasOwn(beforeRunContext, "sessionLoadState"), false);
     assert.equal(beforeRunContext?.isContinue, isContinue);
   });
 }
@@ -120,7 +121,7 @@ test("SessionExecutionRunner asserts reused user with prepared attachments after
       parentSessionId,
       usedSessionId: "s1",
       dialogProcessId: "dp-new",
-      sessionLoadState: "loaded",
+      startedAt: ACCEPTED_TURN_STARTED_AT,
       userConfig: {},
       currentSessionModelAlias: "",
       runtimeEventListener: eventListener,
@@ -208,7 +209,7 @@ test("SessionExecutionRunner preserves the precommitted reused Turn dialogProces
       parentSessionId,
       usedSessionId: "s1",
       dialogProcessId: "dp-new",
-      sessionLoadState: "loaded",
+      startedAt: ACCEPTED_TURN_STARTED_AT,
       userConfig: {},
       currentSessionModelAlias: "",
       runtimeEventListener: eventListener,

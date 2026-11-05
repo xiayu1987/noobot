@@ -17,11 +17,6 @@ export const AGENT_CONTEXT_ENVELOPE_KEYS = Object.freeze([
   "modelContext",
 ]);
 
-export const AGENT_CONTEXT_MODE = Object.freeze({
-  NEW_SESSION: "new_session",
-  EXISTING_SESSION: "existing_session",
-});
-
 export const MESSAGE_BLOCK_LANES = Object.freeze(["system", "history", "incremental"]);
 
 export const AGENT_CONTEXT_MODEL_CONTEXT_SHAPE = Object.freeze({

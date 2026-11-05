@@ -29,6 +29,7 @@ const committedReceipt = () => ({
   userMessage: {
     messageUid: "sm_1",
     userMessageId: "frontend-user-1",
+    ts: "2026-01-01T00:00:00.000Z",
     role: "user",
     sessionId: "session-1",
     dialogProcessId: "dialog-1",
@@ -126,6 +127,9 @@ describe("turnTransportEnvelope", () => {
 
   it("projects one canonical lifecycle payload while retaining its protocol envelope for audit", () => {
     const lifecycle = createTurnLifecycleEnvelope({
+      occurredAt: "2026-01-01T00:00:00.000Z",
+      startedAt: "2026-01-01T00:00:00.000Z",
+      finishedAt: "",
       updatedAt: "2026-01-01T00:00:00.000Z",
       eventType: TURN_EVENT.PROCESSING_STARTED,
       eventId: "turn-event-1",

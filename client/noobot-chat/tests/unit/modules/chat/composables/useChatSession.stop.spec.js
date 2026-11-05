@@ -50,6 +50,9 @@ function applyLifecycle(
     registry,
     createTurnLifecycleEnvelope({
       updatedAt: "2026-01-01T00:00:00.000Z",
+      occurredAt: "2026-01-01T00:00:00.000Z",
+      startedAt: "2026-01-01T00:00:00.000Z",
+      finishedAt: "",
       eventType,
       eventId: `${eventType}:${sessionId}:${turnScopeId}:${revision}`,
       commandId: `${action}:${turnScopeId}`,

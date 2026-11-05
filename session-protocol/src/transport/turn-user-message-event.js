@@ -5,6 +5,7 @@
  */
 import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
 import { MESSAGE_IDENTITY_FIELD } from "../identity/message-identity.js";
+import { isCanonicalMessageTimestamp } from "../message-entity-contract.js";
 import {
   MESSAGE_REMOVED_FIELD_NAME,
   acceptedMessageIdentityFieldsFor,
@@ -29,6 +30,7 @@ function validateTurnUserMessageEventData(data, { attachmentMode }) {
   }
   if (userMessage.role !== "user") errors.push("user_message_role_invalid");
   if (typeof userMessage.content !== "string") errors.push("user_message_content_invalid");
+  if (!isCanonicalMessageTimestamp(userMessage.ts)) errors.push("user_message_ts_invalid");
   if (!isCanonicalText(userMessage[MESSAGE_IDENTITY_FIELD.SESSION]))
     errors.push("user_message_uid_missing");
   for (const field of ACCEPTED_USER_IDENTITY_FIELDS) {

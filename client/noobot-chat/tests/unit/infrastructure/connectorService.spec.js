@@ -51,7 +51,6 @@ describe("connectorService", () => {
         },
       ],
       selectedConnectorIds: ["con_db"],
-      updatedAt: expect.any(String),
     });
   });
 

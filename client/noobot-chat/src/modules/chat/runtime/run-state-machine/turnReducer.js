@@ -242,8 +242,7 @@ function isAllowed(current, event, nextState) {
       nextState === FrontendRunState.IDLE
     );
   }
-  if (!currentState)
-    return nextState === FrontendRunState.ACTION_REQUESTING || event.authoritativeSnapshot === true;
+  if (!currentState) return nextState === FrontendRunState.ACTION_REQUESTING;
   if (isFinalTurnState(currentState, current)) return false;
   if (ACTION_START_EVENTS.has(event.type)) return false;
   if (nextState === currentState) return true;
@@ -262,7 +261,7 @@ function isAllowed(current, event, nextState) {
     return allowsUserStopping(currentState, current, event);
   if (nextState === FrontendRunState.USER_STOP_COMPLETED)
     return allowsUserStopCompleted(currentState, current, event);
-  return event.authoritativeSnapshot === true;
+  return false;
 }
 
 function initialTerminalRejection(current, event) {

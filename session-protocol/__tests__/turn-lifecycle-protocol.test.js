@@ -74,6 +74,7 @@ test("turn lifecycle event type is derived from authoritative state", () => {
 
 test("terminal resolution binds terminal state to the committed Session aggregate version", () => {
   const resolution = createTurnTerminalResolution({
+    generatedAt: "2026-08-02T10:00:00.000Z",
     commandId: "resolve-terminal-version",
     sessionId: "session-terminal-version",
     turnScopeId: "turn-terminal-version",
@@ -392,6 +393,9 @@ test("turn lifecycle receipt identifies one authoritative delivery without carry
 test("turn lifecycle envelope requires stable identity and monotonic coordinates", () => {
   const envelope = createTurnLifecycleEnvelope({
     updatedAt: "2026-01-01T00:00:00.000Z",
+    occurredAt: "2026-01-01T00:00:00.000Z",
+    startedAt: "2026-01-01T00:00:00.000Z",
+    finishedAt: "",
     eventType: TURN_EVENT.PROCESSING_STARTED,
     eventId: "evt-1",
     commandId: "cmd-1",
@@ -418,6 +422,9 @@ test("turn lifecycle envelope rejects storage locator fields", () => {
   };
   const envelope = createTurnLifecycleEnvelope({
     updatedAt: "2026-01-01T00:00:00.000Z",
+    occurredAt: "2026-01-01T00:00:00.000Z",
+    startedAt: "2026-01-01T00:00:00.000Z",
+    finishedAt: "",
     eventType: TURN_EVENT.PROCESSING_STARTED,
     eventId: "evt-scoped",
     commandId: "cmd-scoped",
@@ -442,6 +449,9 @@ test("turn lifecycle envelope rejects storage locator fields", () => {
 test("turn lifecycle envelope preserves parent identity without leaking mutation intents", () => {
   const envelope = createTurnLifecycleEnvelope({
     updatedAt: "2026-01-01T00:00:00.000Z",
+    occurredAt: "2026-01-01T00:00:00.000Z",
+    startedAt: "2026-01-01T00:00:00.000Z",
+    finishedAt: "",
     eventType: TURN_EVENT.ACTION_ACCEPTED,
     eventId: "evt-child",
     commandId: "cmd-child",
@@ -469,6 +479,9 @@ test("turn lifecycle envelope rejects missing identity and invalid revision", ()
   const result = validateTurnLifecycleEnvelope(
     createTurnLifecycleEnvelope({
       updatedAt: "2026-01-01T00:00:00.000Z",
+      occurredAt: "2026-01-01T00:00:00.000Z",
+      startedAt: "2026-01-01T00:00:00.000Z",
+      finishedAt: "",
       ...input,
       turnScopeId: "turn-2",
     }),
@@ -488,6 +501,8 @@ test("turn lifecycle envelope rejects missing identity and invalid revision", ()
 test("turn lifecycle envelope rejects event, phase and state contradictions", () => {
   const envelope = createTurnLifecycleEnvelope({
     updatedAt: "2026-01-01T00:00:00.000Z",
+    occurredAt: "2026-01-01T00:00:00.000Z",
+    startedAt: "2026-01-01T00:00:00.000Z",
     eventType: TURN_EVENT.COMPLETED,
     eventId: "evt-completed-contract",
     commandId: "cmd-completed-contract",
@@ -502,6 +517,7 @@ test("turn lifecycle envelope rejects event, phase and state contradictions", ()
     state: TURN_STATE.COMPLETED,
     completionCommitId: "commit-completed-contract",
     summaryVersion: 1,
+    finishedAt: "2026-01-01T00:00:00.000Z",
   });
   assert.deepEqual(validateTurnLifecycleEnvelope(envelope), { valid: true, errors: [] });
   assert.deepEqual(
@@ -512,6 +528,37 @@ test("turn lifecycle envelope rejects event, phase and state contradictions", ()
     validateTurnLifecycleEnvelope({ ...envelope, state: TURN_STATE.PROCESSING }).errors,
     ["event_state_mismatch"],
   );
+});
+
+test("turn lifecycle envelope requires explicit Authority timing", () => {
+  const envelope = createTurnLifecycleEnvelope({
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    occurredAt: "2026-01-01T00:00:02.000Z",
+    startedAt: "2026-01-01T00:00:00.000Z",
+    finishedAt: "2026-01-01T00:00:02.000Z",
+    eventType: TURN_EVENT.COMPLETED,
+    eventId: "evt-timing-contract",
+    commandId: "cmd-timing-contract",
+    sessionId: "session-timing-contract",
+    turnScopeId: "turn-timing-contract",
+    presentationMessageId: "presentation-timing-contract",
+    dialogProcessId: "dialog-timing-contract",
+    parentSessionId: "",
+    revision: 4,
+    sequence: 4,
+    phase: TURN_PHASE.COMPLETION,
+    state: TURN_STATE.COMPLETED,
+    completionCommitId: "commit-timing-contract",
+    summaryVersion: 1,
+  });
+  const errorsOf = (override) => validateTurnLifecycleEnvelope({ ...envelope, ...override }).errors;
+  assert.deepEqual(validateTurnLifecycleEnvelope(envelope), { valid: true, errors: [] });
+  assert.deepEqual(errorsOf({ occurredAt: undefined }), ["missing_occurred_at"]);
+  assert.deepEqual(errorsOf({ startedAt: undefined }), ["missing_started_at"]);
+  assert.deepEqual(errorsOf({ startedAt: "" }), ["missing_started_at"]);
+  assert.deepEqual(errorsOf({ finishedAt: undefined }), ["invalid_finished_at"]);
+  assert.deepEqual(errorsOf({ finishedAt: " 2026-01-01T00:00:02.000Z" }), ["invalid_finished_at"]);
+  assert.deepEqual(errorsOf({ finishedAt: "" }), ["missing_finished_at"]);
 });
 
 test("action acceptance enforces one continuation source contract", () => {
@@ -531,6 +578,9 @@ test("action acceptance enforces one continuation source contract", () => {
   };
   const missingSource = createTurnLifecycleEnvelope({
     updatedAt: "2026-01-01T00:00:00.000Z",
+    occurredAt: "2026-01-01T00:00:00.000Z",
+    startedAt: "2026-01-01T00:00:00.000Z",
+    finishedAt: "",
     ...base,
     action: "continue",
   });
@@ -540,6 +590,9 @@ test("action acceptance enforces one continuation source contract", () => {
   });
   const unexpectedSource = createTurnLifecycleEnvelope({
     updatedAt: "2026-01-01T00:00:00.000Z",
+    occurredAt: "2026-01-01T00:00:00.000Z",
+    startedAt: "2026-01-01T00:00:00.000Z",
+    finishedAt: "",
     ...base,
     action: "send",
     continuationSource: { turnScopeId: "stopped-turn", dialogProcessId: "stopped-dialog" },

@@ -5,7 +5,10 @@
  */
 import { resolveAttachmentAccessMeta } from "../../../infrastructure/api/attachments/attachmentAccess.js";
 import { getMessageTransferEnvelopes } from "./transferEnvelopes.js";
-import { getMessageTimestamp, nowIso, nowMs } from "./timeFields.js";
+import {
+  assertUncommittedMessageDraft,
+  requireCommittedMessageTimestamp,
+} from "@noobot/session-protocol";
 import { getMessageAttachments, normalizeArray } from "./messageAttachmentsProjection.js";
 import { findVisibleLastMessage, isPluginInjectedMessage } from "./messageVisibility.js";
 import { foldConversationMessages } from "./conversationFolding.js";
@@ -68,23 +71,20 @@ function createMessageModel(canonicalMessage, sessionId) {
     messageEventState: createMessageEventState(),
     attachments: normalizeArray(getMessageAttachments(canonicalMessage)),
     transferEnvelopes: getMessageTransferEnvelopes(canonicalMessage),
-    ts: getMessageTimestamp(canonicalMessage) || nowIso(),
     workflowMessage: isWorkflowMessageLike(canonicalMessage),
   };
 }
 
+/** Local optimistic draft: no ts until the Authority commit projection supplies it. */
 function buildAppendMessage({ sessionId, role, content, attachments, options }) {
-  return createMessageModel(
-    {
-      ...options,
-      role,
-      content,
-      type: "message",
-      attachments,
-      ts: nowMs(),
-    },
-    sessionId,
-  );
+  const draft = assertUncommittedMessageDraft({
+    ...options,
+    role,
+    content,
+    type: "message",
+    attachments,
+  });
+  return createMessageModel(draft, sessionId);
 }
 
 function normalizeMessageAttachments(attachments, { userId }) {
@@ -92,13 +92,16 @@ function normalizeMessageAttachments(attachments, { userId }) {
 }
 
 function buildViewMessage(messageItem, { sessionId, userId }) {
-  return createMessageModel(
-    {
-      ...messageItem,
-      attachments: normalizeMessageAttachments(getMessageAttachments(messageItem), { userId }),
-    },
-    sessionId,
-  );
+  return {
+    ...createMessageModel(
+      {
+        ...messageItem,
+        attachments: normalizeMessageAttachments(getMessageAttachments(messageItem), { userId }),
+      },
+      sessionId,
+    ),
+    ts: requireCommittedMessageTimestamp(messageItem),
+  };
 }
 
 export {

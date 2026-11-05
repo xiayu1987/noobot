@@ -41,75 +41,12 @@ function normalizeEpochMs(value = 0) {
   return numberValue > 1e11 ? numberValue : numberValue * 1000;
 }
 
-function firstTimeValue(...values) {
-  for (const value of values) {
-    if (typeof value === "number") {
-      if (Number.isFinite(value) && value > 0) return value;
-      continue;
-    }
-    const inputText = trim(value);
-    if (inputText) return inputText;
-  }
-  return "";
-}
-
 export function resolveTimeMs(...values) {
   for (const value of values) {
     const ms = parseTimeMs(value);
     if (ms > 0) return ms;
   }
   return 0;
-}
-
-function resolveTimeIso(...values) {
-  for (const value of values) {
-    const inputText = trim(value);
-    if (inputText && !Number.isFinite(Number(inputText))) {
-      const ms = parseTimeMs(inputText);
-      if (ms > 0) return new Date(ms).toISOString();
-    }
-    const ms = parseTimeMs(value);
-    if (ms > 0) return new Date(ms).toISOString();
-  }
-  return "";
-}
-
-function resolveFallbackMs(fallbackMs, nowFallback) {
-  const configured = Number(fallbackMs);
-  if (configured > 0) return configured;
-  return nowFallback ? nowMs() : 0;
-}
-
-export function normalizeTimePair(source = {}, { fallbackMs = 0, nowFallback = false } = {}) {
-  const fallback = resolveFallbackMs(fallbackMs, nowFallback);
-  const createdAtMs = resolveTimeMs(
-    source?.createdAtMs,
-    source?.createdAt,
-    source?.createdAtIso,
-    fallback,
-  );
-  const updatedAtMs = resolveTimeMs(
-    source?.updatedAtMs,
-    source?.updatedAt,
-    source?.updatedAtIso,
-    source?.timestamp,
-    createdAtMs,
-    fallback,
-  );
-  const createdAt = resolveTimeIso(source?.createdAt, source?.createdAtIso, createdAtMs);
-  const updatedAt = resolveTimeIso(source?.updatedAt, source?.updatedAtIso, updatedAtMs);
-  return { createdAtMs, updatedAtMs, createdAt, updatedAt };
-}
-
-export function getMessageTimestamp(messageItem = {}) {
-  return firstTimeValue(
-    messageItem?.ts,
-    messageItem?.timestamp,
-    messageItem?.createdAt,
-    messageItem?.created_at,
-    messageItem?.updatedAt,
-    messageItem?.updated_at,
-  );
 }
 
 export function formatLocalTime(value, options = {}) {
@@ -126,7 +63,10 @@ export function formatLocalTime(value, options = {}) {
 }
 
 export function formatDurationMs(ms = 0) {
-  const total = Math.max(0, Math.floor(Number(ms || 0) / 1000));
+  if (!Number.isFinite(ms) || ms < 0) {
+    throw new RangeError(`duration must be a non-negative finite number: ${ms}`);
+  }
+  const total = Math.floor(ms / 1000);
   const hourValue = Math.floor(total / 3600);
   const minuteValue = Math.floor((total % 3600) / 60);
   const secondValue = total % 60;
@@ -136,10 +76,15 @@ export function formatDurationMs(ms = 0) {
   return `${String(minuteValue).padStart(2, "0")}:${String(secondValue).padStart(2, "0")}`;
 }
 
+/**
+ * Thinking duration from authoritative (server clock) timestamps. `now` must be
+ * in the server clock domain; null means the server time is not yet observed.
+ * Returns null whenever the interval is unknown or inverted, never a clamped 0.
+ */
 export function resolveThinkingDurationMs({
   messageStartedAt = 0,
   messageFinishedAt = 0,
-  now = nowMs(),
+  now = null,
   running = false,
 } = {}) {
   const startMs = resolveTimeMs(messageStartedAt);
@@ -149,6 +94,7 @@ export function resolveThinkingDurationMs({
     return finishedMs >= startMs ? finishedMs - startMs : null;
   }
   if (!running) return null;
-  const currentMs = parseTimeMs(now) || nowMs();
-  return Math.max(0, currentMs - startMs);
+  const currentMs = parseTimeMs(now);
+  if (currentMs <= 0 || currentMs < startMs) return null;
+  return currentMs - startMs;
 }

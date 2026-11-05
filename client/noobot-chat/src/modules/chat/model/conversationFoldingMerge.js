@@ -76,7 +76,7 @@ function mergeFoldedArtifacts(previousMessage, currentMessage) {
     ];
   }
   previousMessage.attachments = getMessageAttachments(previousMessage);
-  previousMessage.ts = currentMessage?.ts || previousMessage?.ts;
+  previousMessage.ts = currentMessage.ts;
 }
 
 function mergeFoldedModelIdentity(previousMessage, currentMessage) {

@@ -19,6 +19,8 @@ import {
 
 const event = (sequence, eventId = `event-${sequence}`, overrides = {}) => {
   const payload = createTurnLifecycleEnvelope({
+    startedAt: "2026-01-01T00:00:00.000Z",
+    finishedAt: "",
     eventType: TURN_EVENT.PROCESSING_STARTED,
     eventId,
     commandId: `command-${sequence}`,

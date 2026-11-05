@@ -63,6 +63,7 @@ const stopProcessingCompleted = {
 const completionCommit = { completionCommitId: "completion-commit-1", summaryVersion: 1 };
 const authoritativeCompleted = {
   updatedAt: "2026-01-01T00:00:00.000Z",
+  finishedAt: "2026-01-01T00:00:00.000Z",
   type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
   eventType: TURN_EVENT.COMPLETED,
   state: TURN_STATE.COMPLETED,
@@ -71,6 +72,7 @@ const authoritativeCompleted = {
 };
 const terminalResolved = (state, overrides = {}) => ({
   updatedAt: "2026-01-01T00:00:00.000Z",
+  finishedAt: "2026-01-01T00:00:00.000Z",
   type: SESSION_RUN_EVENT.TERMINAL_RESOLVED,
   state,
   revision: 100,
@@ -334,6 +336,7 @@ describe("turn runtime interaction lifecycle", () => {
     }[phase];
     const notification = apply(currentByPhase[phase], {
       updatedAt: "2026-01-01T00:00:00.000Z",
+      finishedAt: "2026-01-01T00:00:00.000Z",
       type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
       eventType: TURN_EVENT.FAILED,
       phase,
@@ -376,6 +379,7 @@ describe("turn runtime interaction lifecycle", () => {
       expect(
         reduceTurnRuntimeEvent(failed, {
           ...identity,
+          finishedAt: "2026-01-01T00:00:00.000Z",
           type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
           eventType: successEvent,
           state: successState,
@@ -394,6 +398,7 @@ describe("turn runtime interaction lifecycle", () => {
     expect(
       reduceTurnRuntimeEvent(failed, {
         ...identity,
+        finishedAt: "2026-01-01T00:00:00.000Z",
         type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
         eventType,
         state:
@@ -428,6 +433,7 @@ describe("turn runtime interaction lifecycle", () => {
       expect(
         reduceTurnRuntimeEvent(failed, {
           ...identity,
+          finishedAt: "2026-01-01T00:00:00.000Z",
           type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
           eventType,
           state: successState,

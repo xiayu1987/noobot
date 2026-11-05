@@ -51,7 +51,7 @@ test("invalid command rejection exposes its protocol classification and validati
 });
 
 test("Session artifact and Turn commit metadata have one canonical protocol shape", () => {
-  assert.equal(SESSION_ARTIFACT_SCHEMA_VERSION, 21);
+  assert.equal(SESSION_ARTIFACT_SCHEMA_VERSION, 22);
   assert.deepEqual(
     normalizeTurnCommitMetadata({
       action: " SEND ",
@@ -345,6 +345,7 @@ test("attachment binding event requires the bound canonical user message", () =>
       userMessageId: "m1",
       role: "user",
       content: "hello",
+      ts: "2026-01-01T00:00:00.000Z",
       sessionId: "s1",
       dialogProcessId: "d1",
       turnScopeId: "t1",

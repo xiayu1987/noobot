@@ -14,8 +14,27 @@ import {
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { normalizeOptionalSessionId } from "./session-id.js";
-import { RUNTIME_EVENT_CATEGORIES, RUNTIME_EVENT_SCOPES } from "./constants.js";
+import {
+  RUNTIME_EVENT_CATEGORIES,
+  RUNTIME_EVENT_CHANNELS,
+  RUNTIME_EVENT_SCOPES,
+} from "./constants.js";
 import { text } from "@noobot/shared/value";
+
+// 会话日志的发送通道由发送方声明；服务端入口共用，不能推断。
+// 仅 /logs/ws 上报方可用；服务端直写事件使用 RUNTIME_EVENT_CHANNELS，不经本协议。
+export const SESSION_CHANNELS = Object.freeze({
+  WEB_SOCKET: RUNTIME_EVENT_CHANNELS.WEB_SOCKET,
+  AGENT_PROXY_WEB_SOCKET: RUNTIME_EVENT_CHANNELS.AGENT_PROXY_WEB_SOCKET,
+});
+const SESSION_CHANNEL_SET = new Set(Object.values(SESSION_CHANNELS));
+
+export function requireSessionLogChannel(channel) {
+  if (!SESSION_CHANNEL_SET.has(channel)) {
+    throw new Error(`Invalid session log channel: ${channel}`);
+  }
+  return channel;
+}
 
 export const SESSION_LOG_CATEGORIES = Object.freeze([
   RUNTIME_EVENT_CATEGORIES.STATE,
@@ -53,13 +72,6 @@ function normalizeSessionLogText(
 ) {
   const normalizedText = text(value || fallback);
   return maxLength > 0 ? normalizedText.slice(0, maxLength) : normalizedText;
-}
-
-function normalizeSessionLogTime(value) {
-  const parsed = value ? new Date(value) : null;
-  return parsed && Number.isFinite(parsed.getTime())
-    ? parsed.toISOString()
-    : new Date().toISOString();
 }
 
 export function normalizeSessionLogCategory(category) {
@@ -138,6 +150,7 @@ export function buildSessionLogRecord(event = {}) {
   if (scope !== RUNTIME_EVENT_SCOPES.SESSION && scope !== RUNTIME_EVENT_SCOPES.SYSTEM) {
     throw new Error(`Invalid session log scope: ${scope}`);
   }
+  const channel = requireSessionLogChannel(event.channel);
   const data = event.data && typeof event.data === "object" ? { ...event.data } : {};
   const source = normalizeSessionLogText(event.source, {
     maxLength: LENGTH_THRESHOLDS.sessionLog.sourceChars,
@@ -159,7 +172,7 @@ export function buildSessionLogRecord(event = {}) {
   const category = normalizeSessionLogCategory(event.category);
   const record = {
     scope,
-    time: normalizeSessionLogTime(event.time),
+    channel,
     source,
     category,
     level: normalizeSessionLogText(event.level || "info", {

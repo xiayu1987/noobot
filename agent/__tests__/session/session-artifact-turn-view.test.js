@@ -22,8 +22,6 @@ import { withTemp, writeSessionArtifact } from "./session-artifact-store-v2.test
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 import { TEST_STORAGE_SERVICE as storageService } from "../helpers/storage-service.js";
 
-const now = () => "2026-10-19T00:00:00.000Z";
-
 const baseMessages = [
   {
     sessionId: "s",
@@ -109,7 +107,6 @@ async function seed(root) {
       aggregateVersion: 0,
       messages: baseMessages,
     },
-    now,
   });
 }
 
@@ -120,7 +117,6 @@ function writeTurnView(sessionDir, view, turnScopeIds) {
     sessionPayload: view.session,
     turnScopeIds,
     atomic: true,
-    now,
   });
 }
 
@@ -147,7 +143,6 @@ test("turn view write matches the full write when an earlier turn of a dialog gr
       sessionPayload: full,
       atomic: true,
       predecessor: SESSION_ARTIFACT_PREDECESSOR.CANONICAL,
-      now,
     });
 
     const view = await readView(viewDir, ["a"]);

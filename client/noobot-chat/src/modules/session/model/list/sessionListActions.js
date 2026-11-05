@@ -29,6 +29,7 @@ import {
   requireSessionsSummaryPayload,
 } from "@noobot/session-protocol/sessions-summary";
 import { selectMainSessionDetailEntry } from "@noobot/session-protocol/session-detail";
+import { observeServerClock } from "../../../chat/model/serverClock.js";
 
 export function createSessionListActions({
   sessions,
@@ -129,8 +130,10 @@ export function createSessionListActions({
       return {
         status: "loaded",
         data: requireSessionsSummaryPayload(
-          await readApiResponseEnvelope(
-            await getSessionsApi({ userId: userId.value }, { fetcher: authFetch }),
+          observeServerClock(
+            await readApiResponseEnvelope(
+              await getSessionsApi({ userId: userId.value }, { fetcher: authFetch }),
+            ),
           ),
         ),
       };

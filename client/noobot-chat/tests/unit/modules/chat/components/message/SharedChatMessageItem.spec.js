@@ -120,6 +120,10 @@ describe("SharedChatMessageItem", () => {
     );
     expect(panels.find(".message-status-steps").exists()).toBe(true);
     expect(panels.find(".thinking-panel-probe").exists()).toBe(true);
+    expect(wrapper.get(".before-content-slot").find(".message-runtime-panels").exists()).toBe(true);
+    expect(wrapper.get(".message-content-slot").find(".message-runtime-panels").exists()).toBe(
+      false,
+    );
 
     await wrapper.setProps({
       messageItem: {
@@ -254,7 +258,22 @@ describe("SharedChatMessageItem", () => {
       },
     });
 
-    expect(wrapper.find(".BaseMessageTypeTag-stub").exists()).toBe(false);
+    expect(wrapper.find(".base-message-type-row").exists()).toBe(false);
+  });
+
+  it.each(["user", "assistant"])("hides the internal message label for %s content", (role) => {
+    const wrapper = mountItem({
+      currentTurn: true,
+      messageItem: {
+        presentationMessageId: `message-${role}`,
+        role,
+        type: "message",
+        content: "hello",
+      },
+    });
+
+    expect(wrapper.find(".base-message-type-row").exists()).toBe(false);
+    expect(wrapper.find(".BaseMarkdownContent-stub").text()).toBe("hello");
   });
 
   it("keeps the type tag for persisted workflow messages", () => {
@@ -270,7 +289,7 @@ describe("SharedChatMessageItem", () => {
       },
     });
 
-    expect(wrapper.find(".BaseMessageTypeTag-stub").exists()).toBe(true);
+    expect(wrapper.find(".base-message-type-row").text()).toBe("workflow");
   });
 
   it("passes displayed attachments to message card renderers", () => {
@@ -578,6 +597,10 @@ describe("SharedChatMessageItem", () => {
     const panel = wrapper.find('.message-artifact-tabs [role="tabpanel"]');
     expect(panel.attributes("aria-labelledby")).toBe(tabs[0].attributes("id"));
     expect(panel.findAll(".BaseAttachmentFileCard-stub")).toHaveLength(1);
+    expect(wrapper.get(".after-content-slot").find(".message-artifact-tabs").exists()).toBe(true);
+    expect(wrapper.get(".message-content-slot").find(".message-artifact-tabs").exists()).toBe(
+      false,
+    );
   });
 
   it("unmounts artifact tabs in the same flush they were mounted in", async () => {

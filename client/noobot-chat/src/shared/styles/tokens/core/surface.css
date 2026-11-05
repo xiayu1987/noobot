@@ -6,9 +6,9 @@
   --noobot-surface-primary-soft: var(--noobot-surface-soft-hover);
   --noobot-border-weak: color-mix(in srgb, var(--noobot-base-white) 6%, transparent);
   --noobot-border-primary: var(--noobot-border-weak);
-  --noobot-text-strong: #f5f5f5;
-  --noobot-text-main: #e5e5e5;
-  --noobot-text-secondary: #a3a3a3;
+  --noobot-text-strong: #fafafa;
+  --noobot-text-main: #f0f0f0;
+  --noobot-text-secondary: #bdbdbd;
   --noobot-text-accent: var(--noobot-base-blue-400);
   --noobot-text-on-accent: var(--noobot-base-white);
   --noobot-text-on-danger: var(--noobot-base-white);

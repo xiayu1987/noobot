@@ -21,17 +21,13 @@ import {
 import { buildThinkingDetailPayload } from "../session-thinking-detail.js";
 import { requireSessionTreeNode } from "@noobot/workspace-protocol/session-tree";
 import { projectSessionAttachmentState } from "./session-attachment-projection.js";
-import { text } from "@noobot/shared/value";
+import { isFunction, text } from "@noobot/shared/value";
 
 function ignoreSummaryProgress() {}
 
 export class SessionCrudService {
-  constructor({
-    sessionRepo,
-    sessionTreeService,
-    attachmentService,
-    now = () => new Date().toISOString(),
-  } = {}) {
+  constructor({ sessionRepo, sessionTreeService, attachmentService, now } = {}) {
+    if (!isFunction(now)) throw new TypeError("SessionCrudService requires now function");
     this.sessionRepo = sessionRepo;
     this.sessionTreeService = sessionTreeService;
     this.attachmentService = attachmentService;
@@ -90,12 +86,14 @@ export class SessionCrudService {
       return createTurnTerminalResolution({
         ...identity,
         reason: SESSION_NOT_FOUND_REASON,
+        generatedAt: this.now(),
       });
     }
     return resolveAuthoritativeTurnTerminal({
       lifecycle: bundle.session.turnLifecycle,
       turnTimings: bundle.session.turnTimings,
       aggregateVersion: bundle.session.aggregateVersion,
+      generatedAt: this.now(),
       ...identity,
     });
   }

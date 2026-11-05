@@ -9,6 +9,8 @@ import assert from "node:assert/strict";
 import { MemoryPostProcessService } from "../../src/bot/execution/memory-postprocess.js";
 import { createMemoryPostprocessIdentity } from "@noobot/session-protocol/turn-scope-identity";
 
+const TEST_NOW = () => "2026-01-01T00:00:00.000Z";
+
 function createHarness({ maybeSummarize = async () => {}, captureDialogToShortMemory } = {}) {
   const persistenceScope = { scopeId: "scope-1" };
   const messages = [{ role: "user", content: "hi", dialogProcessId: "d1" }];
@@ -21,6 +23,7 @@ function createHarness({ maybeSummarize = async () => {}, captureDialogToShortMe
     resolveSummarized = resolve;
   });
   const service = new MemoryPostProcessService({
+    now: TEST_NOW,
     globalConfig: {},
     session: {
       async getSessionTurns(payload) {

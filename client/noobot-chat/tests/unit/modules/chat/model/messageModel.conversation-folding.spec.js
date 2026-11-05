@@ -16,6 +16,7 @@ describe("messageModel conversation folding", () => {
     const messages = foldConversationMessages(
       [
         {
+          ts: "2026-01-01T00:00:00.000Z",
           role: "assistant",
           content: "previous answer",
           dialogProcessId: "dp-same-until-stream-arrives",
@@ -31,6 +32,7 @@ describe("messageModel conversation folding", () => {
           executionLogTotal: 1,
         },
         {
+          ts: "2026-01-01T00:00:00.000Z",
           role: "assistant",
           content: "",
           dialogProcessId: "dp-same-until-stream-arrives",
@@ -57,6 +59,7 @@ describe("messageModel conversation folding", () => {
     const messages = foldConversationMessages(
       [
         {
+          ts: "2026-01-01T00:00:00.000Z",
           role: "assistant",
           content: "new partial answer",
           turnScopeId: "client-turn:new-stream",
@@ -80,6 +83,7 @@ describe("messageModel conversation folding", () => {
           executionLogTotal: 1,
         },
         {
+          ts: "2026-01-01T00:00:00.000Z",
           role: "assistant",
           content: "new continuation",
           turnScopeId: "client-turn:new-stream",
@@ -112,12 +116,14 @@ describe("messageModel conversation folding", () => {
       [
         {
           messageUid: "storage-user-1",
+          ts: "2026-01-01T00:00:00.000Z",
           role: "user",
           content: "question",
           turnScopeId: "client-turn:render-1",
         },
         {
           presentationMessageId: "storage-assistant-1",
+          ts: "2026-01-01T00:00:00.000Z",
           role: "assistant",
           content: "answer part 1",
           dialogProcessId: "dp-render-1",
@@ -125,6 +131,7 @@ describe("messageModel conversation folding", () => {
         },
         {
           presentationMessageId: "storage-assistant-1",
+          ts: "2026-01-01T00:00:00.000Z",
           role: "assistant",
           content: "answer part 2",
           dialogProcessId: "dp-render-1",

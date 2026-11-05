@@ -55,7 +55,7 @@ function harness(initial = {}) {
     },
     ...requiredSessionReads,
     async findById() {
-      return normalizeSessionEntity(structuredClone(persisted), { now });
+      return normalizeSessionEntity(structuredClone(persisted));
     },
     async save(_u, next, { expectedAggregateVersion } = {}) {
       assert.equal(expectedAggregateVersion, Number(persisted.aggregateVersion ?? 0));
@@ -64,7 +64,7 @@ function harness(initial = {}) {
         saveFailure = null;
         throw error;
       }
-      persisted = structuredClone(normalizeSessionEntity(next, { now }));
+      persisted = structuredClone(normalizeSessionEntity(next));
     },
   };
   return {
@@ -77,7 +77,7 @@ function harness(initial = {}) {
     outbox: () => readAuthorityOutbox(sessionDir),
     outboxEntry: async (eventId) =>
       (await readAuthorityOutbox(sessionDir)).find((item) => item.eventId === eventId) || null,
-    reload: () => normalizeSessionEntity(structuredClone(persisted), { now }),
+    reload: () => normalizeSessionEntity(structuredClone(persisted)),
     failNextSave: (error = new Error("session_save_failed")) => {
       saveFailure = error;
     },
@@ -113,26 +113,23 @@ function newSessionHarness() {
       return false;
     },
     createInitialSession({ sessionId, caller }) {
-      return normalizeSessionEntity(
-        {
-          ...createTestSessionRequiredFields(),
-          caller: requireSessionCaller(caller),
-          sessionId,
-          parentSessionId: "",
-          aggregateVersion: 0,
-          messages: [],
-        },
-        { now },
-      );
+      return normalizeSessionEntity({
+        ...createTestSessionRequiredFields(),
+        caller: requireSessionCaller(caller),
+        sessionId,
+        parentSessionId: "",
+        aggregateVersion: 0,
+        messages: [],
+      });
     },
     ...requiredSessionReads,
     async findById() {
-      return persisted ? normalizeSessionEntity(structuredClone(persisted), { now }) : null;
+      return persisted ? normalizeSessionEntity(structuredClone(persisted)) : null;
     },
     async save(_u, next, { expectedAggregateVersion, createOnly } = {}) {
       if (createOnly) assert.equal(persisted, null);
       else assert.equal(expectedAggregateVersion, Number(persisted.aggregateVersion ?? 0));
-      persisted = structuredClone(normalizeSessionEntity(next, { now }));
+      persisted = structuredClone(normalizeSessionEntity(next));
     },
   };
   return {
@@ -143,7 +140,7 @@ function newSessionHarness() {
     }),
     sessionDir,
     outbox: () => readAuthorityOutbox(sessionDir),
-    reload: () => persisted && normalizeSessionEntity(structuredClone(persisted), { now }),
+    reload: () => persisted && normalizeSessionEntity(structuredClone(persisted)),
   };
 }
 
@@ -163,7 +160,6 @@ const event = (eventType, commandId, expectedRevision, extra = {}) => {
     ...(eventType === TURN_EVENT.ACTION_ACCEPTED
       ? {
           ...createAcceptedAgentExecution(extra.turnScopeId ?? "t1", extra.sessionId ?? "s1"),
-          startedAt: "2026-07-18T00:00:00.000Z",
         }
       : {}),
     ...extra,

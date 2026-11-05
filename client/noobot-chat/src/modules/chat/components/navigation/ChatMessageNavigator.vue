@@ -6,7 +6,6 @@
 <script setup>
 import { nextTick, ref, watch } from "vue";
 import { useLocale } from "../../../../shared/i18n/useLocale.js";
-import noobotIcon from "../../../../shared/assets/noobot.svg";
 import { text } from "@noobot/shared/value";
 
 const props = defineProps({
@@ -44,7 +43,7 @@ watch(
 <template>
   <el-anchor
     ref="navigatorRef"
-    class="chat-message-navigator noobot-surface-card"
+    class="chat-message-navigator noobot-surface-card noobot-subtle-list"
     :class="{ 'is-empty': !items.length }"
     :container="null"
     :marker="false"
@@ -67,7 +66,7 @@ watch(
         :width="264"
         :show-after="220"
         :hide-after="80"
-        popper-class="chat-message-navigator-popover"
+        popper-class="chat-message-navigator-popover noobot-navigation-popover"
       >
         <template #reference>
           <span
@@ -77,18 +76,14 @@ watch(
                 .trim()
                 .toLowerCase() || 'session'
             }`"
+            :aria-label="`${item.roleLabel || item.role}: ${item.preview || ''}`"
           >
-            <span class="chat-message-navigator__role noobot-message-avatar">
-              <template v-if="item.role === 'user'">ME</template>
-              <img v-else-if="item.role === 'assistant'" :src="noobotIcon" alt="Noobot" />
-              <template v-else>{{ item.roleLabel || item.role }}</template>
-            </span>
             <span v-if="item.preview" class="chat-message-navigator__content">{{
               item.preview
             }}</span>
           </span>
         </template>
-        <div class="chat-nav-popover">
+        <div class="chat-nav-popover noobot-navigation-popover__body">
           <ul class="chat-nav-popover__meta">
             <li>
               <span class="k">{{ translate("common.navRole") }}</span>
@@ -141,11 +136,6 @@ watch(
   margin: 0;
 }
 
-:deep(.el-anchor__marker) {
-  width: 3px;
-  border-radius: var(--noobot-radius-pill);
-}
-
 :deep(.el-anchor__item) {
   position: relative;
 }
@@ -157,82 +147,36 @@ watch(
   width: 100%;
   max-width: 100%;
   margin: var(--noobot-space-3xs) 0;
-  padding: var(--noobot-space-xs) var(--noobot-space-lg) var(--noobot-space-xs)
-    var(--noobot-space-xl);
-  border-radius: var(--noobot-radius-xs);
+  padding: var(--noobot-space-xs) var(--noobot-space-lg);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--noobot-text-secondary);
-  background: var(--noobot-surface-soft);
-  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 56%, transparent);
   font-size: var(--noobot-font-size-sm);
   line-height: var(--noobot-line-height-balanced);
-  transition:
-    color var(--noobot-duration-normal) var(--noobot-ease-standard),
-    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
-    border-color var(--noobot-duration-normal) var(--noobot-ease-standard);
 }
 
 .chat-message-navigator__item {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--noobot-space-xs);
+  display: block;
   min-width: 0;
   width: 100%;
+  color: var(--noobot-text-secondary);
 }
 
-.chat-message-navigator__role {
-  flex: 0 0 auto;
-  width: var(--noobot-msg-avatar-size);
-  height: var(--noobot-msg-avatar-size);
-  min-width: var(--noobot-msg-avatar-size);
-  padding: 0;
-  border-radius: var(--noobot-radius-circle);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--noobot-font-size-xs);
-  line-height: var(--noobot-line-height-tight);
-  font-weight: var(--noobot-font-weight-bold);
-  letter-spacing: var(--noobot-letter-spacing-none);
-  text-align: center;
-  color: var(--noobot-msg-avatar-text);
-  background: var(--noobot-msg-avatar-bg);
-  border: 0;
+.chat-message-navigator__item.is-user {
+  color: var(--noobot-msg-user-text);
 }
 
-.chat-message-navigator__role img {
-  width: 72%;
-  height: 72%;
-  object-fit: contain;
-  display: block;
-}
-
-.chat-message-navigator__item.is-user .chat-message-navigator__role {
-  background: var(--noobot-msg-user-avatar);
-  color: var(--noobot-msg-user-avatar-text);
+.chat-message-navigator__item.is-assistant {
+  color: var(--noobot-accent);
 }
 
 .chat-message-navigator__content {
+  display: block;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-:deep(.el-anchor__link:hover) {
-  color: var(--noobot-text-main);
-  background: var(--noobot-surface-soft-hover);
-  border-color: color-mix(in srgb, var(--noobot-accent) 24%, var(--noobot-panel-border));
-}
-
-:deep(.el-anchor__item.is-current .el-anchor__link),
-:deep(.el-anchor__link.is-current) {
-  color: var(--noobot-text-strong);
-  background: var(--noobot-surface-primary-soft);
-  border-color: color-mix(in srgb, var(--noobot-accent) 42%, var(--noobot-panel-border));
-  font-weight: var(--noobot-font-weight-bold);
 }
 
 @media (max-width: 768px) {
@@ -245,33 +189,13 @@ watch(
 
   :deep(.el-anchor__link) {
     max-width: none;
-    padding: var(--noobot-space-sm) var(--noobot-space-lg) var(--noobot-space-sm)
-      var(--noobot-space-xl);
+    padding: var(--noobot-space-sm) var(--noobot-space-lg);
     font-size: var(--noobot-font-size-md);
   }
 }
 </style>
 
 <style>
-.chat-message-navigator-popover.el-popover.el-popper {
-  padding: var(--noobot-space-md) var(--noobot-space-lg);
-  background: var(--noobot-panel-bg);
-  border: 1px solid var(--noobot-panel-border);
-  color: var(--noobot-text-strong);
-}
-
-.chat-nav-popover {
-  max-height: min(420px, calc(100dvh - 32px));
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-}
-
-.chat-message-navigator-popover.el-popover.el-popper .el-popper__arrow::before {
-  background: var(--noobot-panel-bg);
-  border: 1px solid var(--noobot-panel-border);
-}
-
 .chat-nav-popover__meta {
   list-style: none;
   margin: 0;

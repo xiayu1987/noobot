@@ -6,10 +6,10 @@
 import { migrateSessionDocument } from "@noobot/session-repair";
 import { normalizeSessionEntity } from "./entities/session-entity.js";
 
-export function normalizeSessionDocumentForCurrentProtocol(document, options = {}) {
+export function normalizeSessionDocumentForCurrentProtocol(document) {
   const migration = migrateSessionDocument(document);
   return {
     ...migration,
-    document: normalizeSessionEntity(migration.document, options),
+    document: normalizeSessionEntity(migration.document),
   };
 }

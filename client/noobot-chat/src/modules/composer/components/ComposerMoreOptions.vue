@@ -608,11 +608,6 @@ const composerExtensionBaseProps = computed(() => ({
     flex-basis: auto;
   }
 
-  .model-select :deep(.el-select__wrapper) {
-    min-height: var(--noobot-control-height-lg);
-    height: var(--noobot-control-height-lg);
-  }
-
   .option-selector {
     gap: var(--noobot-space-xs);
     flex-wrap: wrap;

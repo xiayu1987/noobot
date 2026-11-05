@@ -37,6 +37,7 @@ describe("messageModel activity timeline folding", () => {
     const messages = foldConversationMessages(
       [
         {
+          ts: "2026-01-01T00:00:00.000Z",
           role: "assistant",
           content: "part 1",
           turnScopeId: "client-turn:logs",
@@ -47,6 +48,7 @@ describe("messageModel activity timeline folding", () => {
           executionLogTotal: 6,
         },
         {
+          ts: "2026-01-01T00:00:00.000Z",
           role: "assistant",
           content: "part 2",
           turnScopeId: "client-turn:logs",
@@ -71,6 +73,7 @@ describe("messageModel activity timeline folding", () => {
     const messages = foldConversationMessages(
       [
         {
+          ts: "2026-01-01T00:00:00.000Z",
           role: "assistant",
           content: "initial attempt",
           turnScopeId: "client-turn:continue",
@@ -79,6 +82,7 @@ describe("messageModel activity timeline folding", () => {
           thinkingFinishedAt: 1700000001000,
         },
         {
+          ts: "2026-01-01T00:00:00.000Z",
           role: "assistant",
           content: "continued attempt",
           turnScopeId: "client-turn:continue",

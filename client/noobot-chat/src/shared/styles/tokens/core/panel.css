@@ -8,6 +8,12 @@
   --noobot-focus-outline-offset: 2px;
   --noobot-runtime-glow: 0 0 9px color-mix(in srgb, var(--noobot-accent) 24%, transparent);
   --noobot-runtime-border: color-mix(in srgb, var(--noobot-accent) 38%, var(--noobot-panel-border));
+  --noobot-runtime-glow-peak: 0 0 12px color-mix(in srgb, var(--noobot-accent) 32%, transparent);
+  --noobot-runtime-border-peak: color-mix(
+    in srgb,
+    var(--noobot-accent) 64%,
+    var(--noobot-panel-border)
+  );
   --noobot-panel-bg: #050505;
   --noobot-panel-head-bg: var(--noobot-panel-bg);
   --noobot-panel-border: color-mix(in srgb, var(--noobot-base-slate-400) 16%, transparent);

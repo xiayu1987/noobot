@@ -15,6 +15,8 @@ import {
 import { transitionTurnLifecycle } from "../src/domain/turn-lifecycle-entity.js";
 import { commitTurnLifecycle } from "../src/application/commit-turn-lifecycle.js";
 
+const TEST_AUTHORITY_CLOCK = () => "2026-07-18T00:00:00.000Z";
+
 const turnScopeId = "turn-finalize";
 const executionId = deriveAgentExecutionId({ turnScopeId });
 
@@ -29,7 +31,6 @@ function processing() {
       presentationMessageId: "presentation-1",
       dialogProcessId: "dialog-1",
       eventType: TURN_EVENT.ACTION_ACCEPTED,
-      startedAt: "2026-07-18T00:00:00.000Z",
       commandId: "accepted",
       causationId: "accepted",
       phase: TURN_PHASE.ACTION,
@@ -42,7 +43,11 @@ function processing() {
       phase: TURN_PHASE.PROCESSING,
     },
   ]) {
-    const result = transitionTurnLifecycle(lifecycle, { turnScopeId, ...input });
+    const result = transitionTurnLifecycle(
+      lifecycle,
+      { turnScopeId, ...input },
+      TEST_AUTHORITY_CLOCK,
+    );
     assert.equal(result.applied, true, result.reason);
     lifecycle = result.lifecycle;
   }
@@ -50,7 +55,7 @@ function processing() {
 }
 
 function apply(lifecycle, input) {
-  return transitionTurnLifecycle(lifecycle, { turnScopeId, ...input });
+  return transitionTurnLifecycle(lifecycle, { turnScopeId, ...input }, TEST_AUTHORITY_CLOCK);
 }
 
 function finalizeRequest(extra = {}) {
@@ -161,6 +166,7 @@ test("domain transition returns a receipt draft and never writes a placeholder r
 test("an early-returning commit leaves no receipt behind", () => {
   const lifecycle = processing();
   const unavailable = commitTurnLifecycle({
+    now: TEST_AUTHORITY_CLOCK,
     parentSessionId: "",
     lifecycle,
     event: { turnScopeId, sessionId: "session-1", ...finalizeRequest({ completionCommitId: "c" }) },
@@ -170,6 +176,7 @@ test("an early-returning commit leaves no receipt behind", () => {
   assert.equal(unavailable.reason, "event_id_unavailable");
   assert.deepEqual(unavailable.lifecycle.commandReceipts, []);
   const conflict = commitTurnLifecycle({
+    now: TEST_AUTHORITY_CLOCK,
     parentSessionId: "",
     lifecycle,
     event: { turnScopeId, sessionId: "session-1", ...finalizeRequest({ completionCommitId: "c" }) },

@@ -28,6 +28,7 @@ const attachment = {
   name: "报告.txt",
 };
 const ref = "attachment:v1:report-session/model/report-id";
+const DOWNLOAD_MESSAGE_TS = "2026-01-01T00:00:00.000Z";
 const wrappers = [];
 
 function resourceRef(source, path, extra = {}) {
@@ -82,6 +83,7 @@ async function mountMessage(
   const messageItem = {
     id: "download-message",
     role: "assistant",
+    ts: DOWNLOAD_MESSAGE_TS,
     content,
     attachments,
     toolTimeline,
@@ -175,6 +177,7 @@ describe("main message download clicks", () => {
     const streamedMessage = {
       presentationMessageId: "download-message",
       role: "assistant",
+      ts: DOWNLOAD_MESSAGE_TS,
       content: ref,
       attachments: [attachment],
     };

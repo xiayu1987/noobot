@@ -9,10 +9,16 @@ import { TEST_SCOPED_SESSION_ROOTS } from "./scoped-session-roots.js";
 
 export function createTestSessionServices(globalConfig, options = {}) {
   return createSessionServices(globalConfig, {
+    now: testWallClock,
     scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS,
     ...options,
     attachmentService: new AttachmentService(globalConfig),
   });
+}
+
+/** Single test wall clock shared by session services and the execution engine. */
+export function testWallClock() {
+  return new Date().toISOString();
 }
 
 export function withTreeContext(runtime, payload) {

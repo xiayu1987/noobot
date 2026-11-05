@@ -436,9 +436,10 @@ defineExpose({
   --composer-icon-size: var(--noobot-control-icon-size);
   --composer-icon-radius: var(--noobot-radius-sm);
   --composer-send-height: var(--noobot-control-icon-size);
-  --composer-send-padding-x: 16px;
+  --composer-send-padding-x: var(--noobot-space-xl);
 
-  padding: var(--noobot-space-sm) var(--noobot-space-2xl) var(--noobot-space-xl);
+  padding: var(--noobot-space-sm) var(--noobot-content-inset-right) var(--noobot-space-xl)
+    var(--noobot-content-inset-left);
   background: var(--noobot-panel-bg);
   position: relative;
   width: 100%;
@@ -452,7 +453,8 @@ defineExpose({
 
 .composer-drop-overlay {
   position: absolute;
-  inset: var(--noobot-space-sm) var(--noobot-space-2xl) var(--noobot-space-xl);
+  inset: var(--noobot-space-sm) var(--noobot-content-inset-right) var(--noobot-space-xl)
+    var(--noobot-content-inset-left);
   z-index: 120;
   display: flex;
   align-items: center;
@@ -461,7 +463,7 @@ defineExpose({
 }
 
 .composer-drop-target {
-  width: min(800px, 100%);
+  width: min(var(--noobot-content-max-width), 100%);
   min-height: 88px;
   display: flex;
   align-items: center;
@@ -472,7 +474,7 @@ defineExpose({
 
 .composer {
   position: relative;
-  max-width: 800px;
+  max-width: var(--noobot-content-max-width);
   margin: 0 auto;
   padding: var(--noobot-space-md) var(--noobot-space-xl);
   display: flex;
@@ -558,14 +560,12 @@ defineExpose({
     --composer-row-gap: var(--noobot-space-xs);
     --composer-icon-size: var(--noobot-control-icon-size);
     --composer-icon-radius: var(--noobot-radius-xs);
-    --composer-send-height: var(--noobot-control-icon-size);
-    --composer-send-padding-x: 16px;
-    padding: var(--noobot-space-xs) var(--noobot-space-xl)
-      calc(var(--noobot-space-lg) + env(safe-area-inset-bottom));
+    padding-top: var(--noobot-space-xs);
+    padding-bottom: calc(var(--noobot-space-lg) + env(safe-area-inset-bottom));
   }
   .composer-drop-overlay {
-    inset: var(--noobot-space-xs) var(--noobot-space-xl)
-      calc(var(--noobot-space-lg) + env(safe-area-inset-bottom));
+    top: var(--noobot-space-xs);
+    bottom: calc(var(--noobot-space-lg) + env(safe-area-inset-bottom));
   }
   .composer-drop-target {
     min-height: 76px;

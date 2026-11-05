@@ -64,6 +64,10 @@ export function createTestLifecycleEnvelope({
   const facts = TEST_EVENT_FACTS[eventType];
   const payload = createTurnLifecycleEnvelope({
     updatedAt: "2026-01-01T00:00:00.000Z",
+    occurredAt: "2026-01-01T00:00:00.000Z",
+    startedAt: "2026-01-01T00:00:00.000Z",
+    // Authority writes "" for an unfinished turn (turn-lifecycle-transition.js projectCompletionCoordinates).
+    finishedAt: eventType === TURN_EVENT.COMPLETED ? "2026-01-01T00:00:00.000Z" : "",
     eventId,
     commandId: `${eventId}:command`,
     causationId: `${eventId}:command`,
@@ -123,6 +127,7 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
   let lastRunConfig = null;
   let lastTurnAcceptance = null;
   const userMessages = new Map();
+  const authorityNow = "2026-01-01T00:00:00.000Z";
   const bot = {
     async resolveExecutionIntent({ turnScopeId } = {}) {
       return createAcceptedAgentExecutionIdentity({ turnScopeId });
@@ -158,6 +163,8 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
       };
     },
     session: {
+      /** Test double of the service session clock (real wall clock, like production). */
+      readServerNow: () => new Date().toISOString(),
       async getRootSessionSelectedConnectorIds() {
         return [];
       },
@@ -176,6 +183,7 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
           event: selectFakeTurnLifecycleRequest(input),
           eventOutbox,
           createEventId: () => `authority-event-${++eventIdSequence}`,
+          now: () => authorityNow,
           materializeTerminal: input.terminalStatus
             ? ({ terminalStatus, previousSummaryVersion }) =>
                 persistSummary
@@ -203,6 +211,7 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
             role: "user",
             type: "message",
             content: input.userMessage.content,
+            ts: authorityNow,
             sessionId: input.sessionId,
             parentSessionId: AUTHORITATIVE_ROOT_PARENT_SESSION_ID,
             dialogProcessId: input.dialogProcessId,
@@ -282,7 +291,6 @@ export const payload = {
   createIfAbsent: true,
   config: {
     turnScopeId: "turn-authoritative",
-    thinkingStartedAt: "2026-07-24T05:42:07.698Z",
   },
 };
 

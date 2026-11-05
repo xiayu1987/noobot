@@ -68,7 +68,7 @@ function buildFinalizeInput(userConfig = {}) {
     caller: SESSION_CALLER.USER,
     dialogProcessId: "d1",
     turnScopeId: "turn-1",
-    thinkingStartedAt: "2026-07-08T16:49:44.113Z",
+    startedAt: "2026-07-08T16:49:44.113Z",
     agentResult: {
       output: "ok",
       traces: [],

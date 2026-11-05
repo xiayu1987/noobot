@@ -129,6 +129,7 @@ export class SessionExecutionRunner {
           initializedSession = {
             sessionId: initialized.usedSessionId,
             dialogProcessId: initialized.dialogProcessId,
+            startedAt: initialized.startedAt,
           };
           return initialized;
         },
@@ -152,7 +153,6 @@ export class SessionExecutionRunner {
         usedSessionId,
         parentSessionId: resolvedParentSessionId,
         dialogProcessId,
-        sessionLoadState,
         userConfig,
         sessionDir,
         runtimeEventListener,
@@ -160,7 +160,6 @@ export class SessionExecutionRunner {
         turnScopeId: resolvedTurnScopeId,
         presentationMessageId,
         resumeFromStoppedSnapshot,
-        contextMode,
         lifecycle: initializedLifecycle,
         botHookRuntime,
         botHookIdentity,
@@ -189,7 +188,6 @@ export class SessionExecutionRunner {
           userInteractionBridge,
           abortSignal,
           persistenceScope,
-          contextMode,
           runtimeIdentity: botHookIdentity,
           userConfig,
           resolvedRunConfig,
@@ -263,6 +261,7 @@ export class SessionExecutionRunner {
         runtime: dispatchRuntime,
       });
       const finalizedResult = await finalizeAgentTurn({
+        startedAt: initializedSession.startedAt,
         resolvedRunConfig,
         runtimeEventListener,
         usedSessionId,
@@ -288,7 +287,6 @@ export class SessionExecutionRunner {
           ...botHookBase,
           message: normalizedMessage,
           isContinue: resumeFromStoppedSnapshot,
-          sessionLoadState,
           resumeFromStoppedSnapshot,
           result: finalizedResult,
         },

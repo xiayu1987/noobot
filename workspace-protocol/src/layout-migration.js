@@ -178,6 +178,11 @@ export const WORKSPACE_LAYOUT_UPGRADES = Object.freeze([
     toVersion: 30,
     owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MESSAGE_IDENTITY,
   }),
+  Object.freeze({
+    id: "session-dialog-order-start-v31",
+    toVersion: 31,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MESSAGE_IDENTITY,
+  }),
 ]);
 
 function layoutStateError(message) {

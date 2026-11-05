@@ -25,6 +25,7 @@ import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { writeContextMessageMetadata } from "@noobot/context-protocol/message/codec";
 import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import { TEST_MESSAGE_TS, createTestSessionRunPayload } from "../helpers/session-run-payload.js";
+import { turnRecord } from "../helpers/turn-record.js";
 
 const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-closure-flow-"));
 test.after(() => fs.rmSync(workspaceRoot, { recursive: true, force: true }));
@@ -45,7 +46,20 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
 
   const session = {
     async getSessionBundle() {
-      return { exists: false, session: { messages: [] } };
+      return {
+        exists: true,
+        session: {
+          messages: [],
+          turnLifecycle: {
+            turns: {
+              [acceptedTurn.turnScopeId]: turnRecord({
+                turnScopeId: acceptedTurn.turnScopeId,
+                dialogProcessId: acceptedTurn.dialogProcessId,
+              }),
+            },
+          },
+        },
+      };
     },
     async createSession() {},
     async getExecutionTurnLogs() {
@@ -251,7 +265,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
     capturedBuildContextInput = { runConfig, userMessageAttachments };
     return {
       attachmentService: engine.attach,
-      async buildNewSessionContext() {
+      async buildSessionContext() {
         const [firstIncoming] = userMessageAttachments;
         return createTestAgentExecutionScope(
           createTestRuntimeContext({
@@ -293,9 +307,6 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
             ],
           },
         );
-      },
-      async buildExistingSessionContext() {
-        return this.buildNewSessionContext();
       },
     };
   };
@@ -423,6 +434,14 @@ test("continue mode closed-loop: should build continue context and persist paren
         session: {
           modelAlias: "anthropic",
           messages: [{ role: "user", content: "history" }],
+          turnLifecycle: {
+            turns: {
+              [acceptedTurn.turnScopeId]: turnRecord({
+                turnScopeId: acceptedTurn.turnScopeId,
+                dialogProcessId: acceptedTurn.dialogProcessId,
+              }),
+            },
+          },
         },
       };
     },
@@ -531,23 +550,7 @@ test("continue mode closed-loop: should build continue context and persist paren
 
   engine._buildContextBuilder = ({ runtimeIdentity, runConfig }) => ({
     attachmentService: engine.attach,
-    async buildNewSessionContext() {
-      return createTestAgentExecutionScope(
-        createTestRuntimeContext({
-          sessionManager,
-          runtimeModel: String(runConfig?.runtimeModel || ""),
-          identity: runtimeIdentity,
-        }),
-        {
-          identity: projectAgentContextIdentity(
-            { ...runtimeIdentity, rootSessionId: parentRootSessionId },
-            runConfig,
-          ),
-          messageBlocks: { system: ["initial"], history: [], incremental: [] },
-        },
-      );
-    },
-    async buildExistingSessionContext() {
+    async buildSessionContext() {
       continueContextBuilt = true;
       capturedRunConfig = { ...runConfig };
       return createTestAgentExecutionScope(
@@ -612,7 +615,7 @@ test("continue mode closed-loop: should build continue context and persist paren
     }),
   );
 
-  assert.equal(continueContextBuilt, true, "continue 模式应走 buildExistingSessionContext");
+  assert.equal(continueContextBuilt, true, "续跑应走 buildSessionContext");
   assert.equal(
     capturedRunConfig?.runtimeModel,
     "anthropic",

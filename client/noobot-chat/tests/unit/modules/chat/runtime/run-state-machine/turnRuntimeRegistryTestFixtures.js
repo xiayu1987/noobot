@@ -56,6 +56,7 @@ export function lifecycle(
     canStop = state === "processing",
     action = "send",
     commandId = "command-1",
+    finishedAt = "",
   } = {},
 ) {
   lifecycleSequence += 1;
@@ -79,7 +80,9 @@ export function lifecycle(
       executionState,
       capabilities: { actionLocked: true, canStop },
       startedAt: "2026-01-01T00:00:00.000Z",
+      finishedAt,
       updatedAt: "2026-01-01T00:00:01.000Z",
+      occurredAt: "2026-01-01T00:00:01.000Z",
     }),
   );
 }
@@ -116,6 +119,7 @@ export function settleTerminal(
   return applyTurnTerminalResolution(
     registry,
     createTurnTerminalResolution({
+      generatedAt: "2026-11-01T00:00:00.000Z",
       commandId: `terminal-resolution-${terminalResolutionSequence}`,
       sessionId,
       turnScopeId,

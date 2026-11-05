@@ -46,6 +46,8 @@ describe("Execution Registry authoritative projections", () => {
     );
     const before = structuredClone(registry);
     const envelope = createTurnLifecycleEnvelope({
+      occurredAt: "2026-01-01T00:00:01.000Z",
+      finishedAt: "",
       eventType: "turn.processing_started",
       eventId: "event-cycle",
       commandId: "command-cycle",

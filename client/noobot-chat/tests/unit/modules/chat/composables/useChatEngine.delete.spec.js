@@ -52,13 +52,15 @@ describe("useChatEngine.delete", () => {
     activeSession.value.rawMessages = [first, target, tail];
     activeSession.value.messageCount = 3;
     activeSession.value.lastMessage = tail;
+    const updatedAtBeforeCascade = activeSession.value.updatedAt;
 
     expect(engine.cascadeDeleteMessagesFrom(target)).toBe(true);
 
     expect(activeSession.value.messages).toEqual([]);
     expect(activeSession.value.messageCount).toBe(0);
     expect(activeSession.value.lastMessage).toBe(null);
-    expect(activeSession.value.updatedAt).toBeTruthy();
+    // Session updatedAt is an Authority fact written by applySessionDetail, never by the local cascade.
+    expect(activeSession.value.updatedAt).toBe(updatedAtBeforeCascade);
   });
 
   it("cascadeDeleteMessagesFrom removes matching rawMessages even when they are not the same objects", () => {

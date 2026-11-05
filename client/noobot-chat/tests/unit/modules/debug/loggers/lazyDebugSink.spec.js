@@ -24,7 +24,9 @@ describe("lazyDebugSink", () => {
     expect(record.scope).toBe("system");
     expect(record).not.toHaveProperty("sessionId");
     expect(record).not.toHaveProperty("dialogProcessId");
-    expect(() => buildSessionLogRecord({ ...record, source: "frontend" })).not.toThrow();
+    expect(() =>
+      buildSessionLogRecord({ ...record, source: "frontend", channel: "ws" }),
+    ).not.toThrow();
   });
 
   it("scopes a hand-built record with a session as a session record", () => {
@@ -36,7 +38,9 @@ describe("lazyDebugSink", () => {
       data: {},
     });
     expect(record).toMatchObject({ scope: "session", sessionId: "s-1", turnScopeId: "t-1" });
-    expect(buildSessionLogRecord({ ...record, source: "frontend" }).sessionId).toBe("s-1");
+    expect(buildSessionLogRecord({ ...record, source: "frontend", channel: "ws" }).sessionId).toBe(
+      "s-1",
+    );
   });
 
   it("builds a session record from the payload's own session identity", () => {
@@ -63,7 +67,9 @@ describe("lazyDebugSink", () => {
         reason: "user",
       },
     });
-    expect(() => buildSessionLogRecord({ ...record, source: "frontend" })).not.toThrow();
+    expect(() =>
+      buildSessionLogRecord({ ...record, source: "frontend", channel: "ws" }),
+    ).not.toThrow();
   });
 
   it("declares a session-less diagnostic as a system record without identity", () => {
@@ -75,7 +81,9 @@ describe("lazyDebugSink", () => {
     expect(record).not.toHaveProperty("sessionId");
     expect(record).not.toHaveProperty("dialogProcessId");
     expect(record).not.toHaveProperty("turnScopeId");
-    expect(buildSessionLogRecord({ ...record, source: "frontend" }).scope).toBe("system");
+    expect(buildSessionLogRecord({ ...record, source: "frontend", channel: "ws" }).scope).toBe(
+      "system",
+    );
   });
 
   it("does not consult nested state for identity", () => {
@@ -98,9 +106,9 @@ describe("lazyDebugSink", () => {
     expect(record.scope).toBe("session");
     expect(record.sessionId).toBe("child-1");
     expect(record.parentSessionId).toBe("parent-1");
-    expect(buildSessionLogRecord({ ...record, source: "frontend" }).parentSessionId).toBe(
-      "parent-1",
-    );
+    expect(
+      buildSessionLogRecord({ ...record, source: "frontend", channel: "ws" }).parentSessionId,
+    ).toBe("parent-1");
   });
 
   it("omits parentSessionId when the payload declares none or names no session", () => {

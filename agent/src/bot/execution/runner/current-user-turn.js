@@ -74,7 +74,6 @@ export async function prepareCurrentUserTurn({
   userInteractionBridge,
   abortSignal,
   persistenceScope,
-  contextMode,
   runtimeIdentity,
   userConfig,
   resolvedRunConfig,
@@ -82,7 +81,6 @@ export async function prepareCurrentUserTurn({
 }) {
   const { userId, sessionId, dialogProcessId, turnScopeId } = runtimeIdentity;
   const buildContextPayload = {
-    mode: contextMode,
     runtimeIdentity,
     userConfig,
     userMessageAttachments: attachments,

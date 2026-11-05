@@ -8,7 +8,11 @@ import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js"
 import assert from "node:assert/strict";
 import { createModelMessageId } from "@noobot/session-protocol/message-identity";
 import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
-import { createRunner, createTestAgentExecutionScope } from "./runner-bot-hook.fixtures.js";
+import {
+  ACCEPTED_TURN_STARTED_AT,
+  createRunner,
+  createTestAgentExecutionScope,
+} from "./runner-bot-hook.fixtures.js";
 
 test("SessionExecutionRunner checkpoints current turn messages with scoped persistence identity", async () => {
   const checkpointPayloads = [];
@@ -326,7 +330,7 @@ test("SessionExecutionRunner hands the validated persistence scope to session in
         usedSessionId: "child-1",
         parentSessionId: payload.parentSessionId,
         dialogProcessId: "dp1",
-        sessionLoadState: "created",
+        startedAt: ACCEPTED_TURN_STARTED_AT,
         userConfig: {},
         currentSessionModelAlias: "",
         runtimeEventListener: payload.eventListener,

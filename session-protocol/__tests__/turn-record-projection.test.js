@@ -79,3 +79,37 @@ for (const [state, phase] of [
     }
   });
 }
+
+test("requireAcceptedTurnRecord returns the Authority Turn record for the run identity", async () => {
+  const { requireAcceptedTurnRecord } = await import("../src/index.js");
+  const turn = turnRecord({ turnScopeId: "turn-1", dialogProcessId: "dialog-1" });
+  const lifecycle = { turns: { "turn-1": turn } };
+  assert.equal(
+    requireAcceptedTurnRecord(lifecycle, { turnScopeId: "turn-1", dialogProcessId: "dialog-1" })
+      .startedAt,
+    turn.startedAt,
+  );
+  assert.throws(
+    () =>
+      requireAcceptedTurnRecord(lifecycle, { turnScopeId: "turn-2", dialogProcessId: "dialog-1" }),
+    { code: "TURN_LIFECYCLE_TURN_NOT_FOUND" },
+  );
+  assert.throws(
+    () =>
+      requireAcceptedTurnRecord(undefined, { turnScopeId: "turn-1", dialogProcessId: "dialog-1" }),
+    { code: "TURN_LIFECYCLE_TURN_NOT_FOUND" },
+  );
+  assert.throws(
+    () =>
+      requireAcceptedTurnRecord(lifecycle, { turnScopeId: "turn-1", dialogProcessId: "dialog-2" }),
+    { code: "TURN_LIFECYCLE_IDENTITY_MISMATCH" },
+  );
+  assert.throws(
+    () =>
+      requireAcceptedTurnRecord(
+        { turns: { "turn-1": { ...turn, startedAt: "" } } },
+        { turnScopeId: "turn-1", dialogProcessId: "dialog-1" },
+      ),
+    { code: "TURN_LIFECYCLE_RECORD_INVALID" },
+  );
+});

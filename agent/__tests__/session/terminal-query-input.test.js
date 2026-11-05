@@ -8,7 +8,11 @@ import assert from "node:assert/strict";
 import { SessionCrudService } from "../../src/session/services/session-crud-service.js";
 
 test("terminal query rejects malformed identity before repository access", async () => {
-  const service = new SessionCrudService({ sessionRepo: {}, sessionTreeService: {} });
+  const service = new SessionCrudService({
+    sessionRepo: {},
+    sessionTreeService: {},
+    now: () => "2026-01-01T00:00:00.000Z",
+  });
   let reads = 0;
   service.getSessionBundle = async () => {
     reads += 1;

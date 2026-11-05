@@ -5,22 +5,24 @@
  */
 
 import { createExecutionEventListener, emitEvent } from "../../events/index.js";
-import { assertSessionScopeIdentity } from "@noobot/session-protocol";
-import { text } from "@noobot/shared/value";
-import { AGENT_CONTEXT_MODE } from "@noobot/context-protocol";
+import { assertSessionScopeIdentity, requireAcceptedTurnRecord } from "@noobot/session-protocol";
+import { isFunction, text } from "@noobot/shared/value";
 
 export class SessionExecutionInitializer {
-  constructor({ session = null, configService = null, workspaceService = null } = {}) {
+  constructor({ session = null, configService = null, workspaceService = null, now }) {
+    if (!isFunction(now)) {
+      throw new TypeError("SessionExecutionInitializer requires now function");
+    }
     this.session = session;
     this.configService = configService;
     this.workspaceService = workspaceService;
+    this.now = now;
   }
 
   async initializeRunSessionRuntime({
     userId,
     sessionId,
     parentSessionId,
-    caller,
     eventListener = null,
     dialogProcessId = "",
     turnScopeId = "",
@@ -39,18 +41,15 @@ export class SessionExecutionInitializer {
       sessionId: usedSessionId,
       persistenceScope,
     });
-    const sessionLoadState = sessionBundle.exists ? "loaded" : "created";
-    const userConfig = await this.configService.loadUserConfig(basePath);
-
     if (!sessionBundle.exists) {
-      await this.session.createSession({
-        userId,
-        sessionId: usedSessionId,
-        parentSessionId,
-        caller,
-        persistenceScope,
-      });
+      throw new TypeError("accepted Turn session is required before Session run");
     }
+    // Acceptance always commits the Session together with its first Turn, so a run only ever loads.
+    const { startedAt } = requireAcceptedTurnRecord(sessionBundle.session.turnLifecycle, {
+      turnScopeId,
+      dialogProcessId: resolvedDialogProcessId,
+    });
+    const userConfig = await this.configService.loadUserConfig(basePath);
 
     const sessionScope = await this.session.locateSessionScope({
       userId,
@@ -73,29 +72,22 @@ export class SessionExecutionInitializer {
       persistenceScope,
       dialogProcessId: resolvedDialogProcessId,
       upstream: upstreamListener,
+      now: this.now,
     });
 
     emitEvent(runtimeEventListener, "session_starting", {
-      mode:
-        sessionLoadState === "loaded"
-          ? AGENT_CONTEXT_MODE.EXISTING_SESSION
-          : AGENT_CONTEXT_MODE.NEW_SESSION,
-      ...(sessionLoadState === "loaded" ? { sessionId: usedSessionId } : {}),
+      sessionId: usedSessionId,
     });
     emitEvent(runtimeEventListener, "workspace_ready", { userId });
-    emitEvent(
-      runtimeEventListener,
-      sessionLoadState === "loaded" ? "session_loaded" : "session_created",
-      { sessionId: usedSessionId },
-    );
+    emitEvent(runtimeEventListener, "session_loaded", { sessionId: usedSessionId });
 
     return {
       usedSessionId,
+      startedAt,
       parentSessionId: sessionScope.resolvedParentSessionId,
       dialogProcessId: resolvedDialogProcessId,
-      sessionLoadState,
       userConfig,
-      currentSessionModelAlias: text(sessionBundle?.session?.modelAlias),
+      currentSessionModelAlias: text(sessionBundle.session.modelAlias),
       sessionDir: sessionScope.sessionDir,
       runtimeEventListener,
     };

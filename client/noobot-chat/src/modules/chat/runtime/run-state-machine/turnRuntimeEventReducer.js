@@ -6,7 +6,10 @@
 import { text } from "@noobot/shared/value";
 import { requireCanonicalTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
 import { SESSION_RUN_EVENT } from "./constants.js";
-import { projectSessionRunEvent } from "@noobot/session-protocol/runtime-event";
+import {
+  AUTHORITATIVE_EVENT_TYPES,
+  projectSessionRunEvent,
+} from "@noobot/session-protocol/runtime-event";
 import { isFinalTurnState, reduceTurnRuntimeEvent } from "./turnReducer.js";
 import {
   createTurnRuntimeRegistryState,
@@ -64,21 +67,16 @@ function createObservation({ registry, event, requestedSessionId, turnScopeId })
   };
 }
 
+// Turn timing is an Authority fact (server clock domain). Only authoritative
+// events carry it; local/transport events never contribute or infer timing.
 function resolveProjectedStart(currentValue, event) {
-  const observed = event.startedAt;
-  if (event.type === SESSION_RUN_EVENT.TERMINAL_RESOLVED) {
-    return observed || currentValue.startedAt;
-  }
-  return currentValue.startedAt || observed;
+  if (!AUTHORITATIVE_EVENT_TYPES.has(event.type)) return currentValue.startedAt;
+  return event.startedAt || currentValue.startedAt;
 }
 
 function resolveProjectedFinish(currentValue, event, terminal) {
-  if (!terminal) return currentValue.finishedAt;
-  const observed = event.finishedAt;
-  if (event.type === SESSION_RUN_EVENT.TERMINAL_RESOLVED) {
-    return observed || currentValue.finishedAt || event.updatedAt;
-  }
-  return currentValue.finishedAt || observed || event.updatedAt;
+  if (!terminal || !AUTHORITATIVE_EVENT_TYPES.has(event.type)) return currentValue.finishedAt;
+  return event.finishedAt || currentValue.finishedAt;
 }
 
 function projectTurn({ current, transition, event, sessionId, turnScopeId }) {

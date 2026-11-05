@@ -104,7 +104,7 @@ const RUN_COMMAND_TURN_ACTION = Object.freeze({
   [AGENT_COMMAND.CONTINUE]: TURN_ACTION.CONTINUE,
 });
 
-function createActionEvent(command, run, executionIntent, startedAt) {
+function createActionEvent(command, run, executionIntent) {
   const commandId = text(command.commandId);
   const isContinue = command.commandType === AGENT_COMMAND.CONTINUE;
   return {
@@ -124,7 +124,6 @@ function createActionEvent(command, run, executionIntent, startedAt) {
     phase: TURN_PHASE.ACTION,
     action: RUN_COMMAND_TURN_ACTION[command.commandType],
     presentationMessageId: run.normalizedRunConfig.presentationMessageId,
-    startedAt,
     createSessionIfAbsent: run.createSessionIfAbsent,
     ...(run.createSessionIfAbsent === true ? { parentSessionId: run.parentSessionId } : {}),
     sessionCaller: SESSION_CALLER.USER,
@@ -172,8 +171,6 @@ async function commitAction(context, actionEvent, run) {
 }
 
 export async function acceptRunCommand(context, command, run) {
-  const startedAt = new Date().toISOString();
-  run.normalizedRunConfig.thinkingStartedAt = startedAt;
   const activeBot = context.resolveBot();
   const agentApplication = createAgentApplication({ runtime: activeBot });
   const executionIntent = await agentApplication.resolveExecutionIntent({
@@ -183,7 +180,7 @@ export async function acceptRunCommand(context, command, run) {
     runConfig: run.normalizedRunConfig,
   });
   Object.assign(run.normalizedRunConfig, executionIntent);
-  const actionEvent = createActionEvent(command, run, executionIntent, startedAt);
+  const actionEvent = createActionEvent(command, run, executionIntent);
   const accepted = await commitAction(context, actionEvent, run);
   run.dialogProcessId = text(accepted.dialogProcessId);
   if (command.commandType !== AGENT_COMMAND.RESEND) {

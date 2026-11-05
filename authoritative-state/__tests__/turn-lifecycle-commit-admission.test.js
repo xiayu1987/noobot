@@ -10,6 +10,8 @@ import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol/turn-lifecycle";
 import { commitTurnLifecycle } from "../src/application/commit-turn-lifecycle.js";
 
+const TEST_AUTHORITY_CLOCK = () => "2026-07-18T00:00:00.000Z";
+
 test("unknown terminal fields are rejected before materialization or event allocation", () => {
   const lifecycle = {
     ...createEmptyTurnLifecycle(),
@@ -20,6 +22,7 @@ test("unknown terminal fields are rejected before materialization or event alloc
   assert.throws(
     () =>
       commitTurnLifecycle({
+        now: TEST_AUTHORITY_CLOCK,
         parentSessionId: "",
         lifecycle,
         event: {
@@ -48,6 +51,7 @@ test("damaged lifecycle is rejected before terminal materialization or event all
   assert.throws(
     () =>
       commitTurnLifecycle({
+        now: TEST_AUTHORITY_CLOCK,
         parentSessionId: "",
         lifecycle,
         event: {
@@ -69,7 +73,6 @@ test("turn lifecycle commit rejects events without causationId", () => {
     lifecycle: createEmptyTurnLifecycle(),
     event: {
       eventType: TURN_EVENT.ACTION_ACCEPTED,
-      startedAt: "2026-07-18T00:00:00.000Z",
       commandId: "missing-causation-command",
       userId: "user-1",
       sessionId: "session-1",

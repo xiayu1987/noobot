@@ -27,7 +27,6 @@ function normalizeDialogOrderItem(entry) {
     dialogProcessId,
     turnScopeId: text(entry.turnScopeId),
     userMessageUid: text(entry.userMessageUid),
-    startedAt: text(entry.startedAt),
     dialogOrdinal,
   };
 }
@@ -66,9 +65,7 @@ export function registerDialogOrderMessage(dialogOrder, message) {
   if (index >= 0) {
     if (!anchorUid || dialogOrder[index].userMessageUid) return dialogOrder;
     return dialogOrder.map((entry, entryIndex) =>
-      entryIndex === index
-        ? { ...entry, userMessageUid: anchorUid, startedAt: text(message.ts) || entry.startedAt }
-        : entry,
+      entryIndex === index ? { ...entry, userMessageUid: anchorUid } : entry,
     );
   }
   const dialogOrdinal =
@@ -79,7 +76,6 @@ export function registerDialogOrderMessage(dialogOrder, message) {
       dialogProcessId,
       turnScopeId: text(message.turnScopeId),
       userMessageUid: anchorUid,
-      startedAt: text(message.ts),
       dialogOrdinal,
     },
   ];

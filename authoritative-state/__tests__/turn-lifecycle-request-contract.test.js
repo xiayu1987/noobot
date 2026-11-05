@@ -20,14 +20,20 @@ const accepted = {
   causationId: "cause-1",
   presentationMessageId: "message-1",
   dialogProcessId: "dialog-1",
-  startedAt: timestamp,
   executionId: "agent:turn-1",
   executionKind: "agent",
   rootExecutionId: "agent:turn-1",
 };
 
 test("domain and commit reject undeclared request fields before allocating facts", () => {
-  for (const changes of [{ revision: 1 }, { correlationId: "other" }, { extra: undefined }]) {
+  for (const changes of [
+    { revision: 1 },
+    { correlationId: "other" },
+    { extra: undefined },
+    // Turn timing is an Authority fact; callers can never supply it.
+    { startedAt: "2026-07-30T00:00:00.000Z" },
+    { finishedAt: "2026-07-30T00:00:00.000Z" },
+  ]) {
     const lifecycle = createEmptyTurnLifecycle();
     const before = structuredClone(lifecycle);
     const event = { ...accepted, ...changes };

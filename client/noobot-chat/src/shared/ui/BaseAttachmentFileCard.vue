@@ -194,27 +194,29 @@ function emitPreview() {
 
 <style scoped>
 .attachment-owner-badge {
-  flex: 0 0 auto;
-  height: 18px;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 18px;
   padding: 0 var(--noobot-space-xs);
   font-size: var(--noobot-font-size-xs);
   line-height: var(--noobot-line-height-none);
-}
-.file-size {
-  font-size: var(--noobot-msg-file-size-font-size);
-  color: var(--noobot-msg-file-size);
+  overflow-wrap: anywhere;
 }
 .parsed-result-row {
+  box-sizing: border-box;
+  flex-wrap: wrap;
   width: fit-content;
   max-width: 100%;
   margin-top: var(--noobot-space-xs);
   padding: var(--noobot-space-2xs) var(--noobot-space-xs);
 }
 .parsed-result-label {
-  flex: 0 0 auto;
+  min-width: 0;
   font-size: var(--noobot-msg-meta-font-size);
   color: var(--noobot-msg-file-size);
   line-height: var(--noobot-line-height-none);
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .parsed-result-label::after {
   content: "";
@@ -226,17 +228,19 @@ function emitPreview() {
   background: color-mix(in srgb, var(--noobot-panel-border) 62%, transparent);
 }
 .parsed-result-action {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  max-width: 100%;
   width: auto;
   min-width: 34px;
-  height: 22px;
+  min-height: 22px;
   line-height: var(--noobot-line-height-none);
   font-size: var(--noobot-msg-meta-font-size);
   padding: 0 var(--noobot-space-xs);
   border-color: transparent;
   border-radius: var(--noobot-radius-pill);
   color: var(--noobot-msg-file-name);
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .parsed-result-action:hover {
   color: var(--noobot-text-strong);

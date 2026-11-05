@@ -9,6 +9,8 @@ import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 import { createExecutionEventListener } from "../../src/events/execution-listener.js";
 import { createRunner } from "./session-execution-runner-agent-done-order.fixtures.js";
 
+const TEST_NOW = () => "2026-01-01T00:00:00.000Z";
+
 const input = { userId: "u1", sessionId: "s1", message: "hello", turnScopeId: "turn-default" };
 
 test("runSession waits for post-run hook events before completing and publishing success", async () => {
@@ -17,6 +19,7 @@ test("runSession waits for post-run hook events before completing and publishing
   const records = [];
   const states = [];
   const listener = createExecutionEventListener({
+    now: TEST_NOW,
     sessionManager: {
       async appendExecutionLog(record) {
         if (
@@ -70,6 +73,7 @@ test("post-run hook failure never publishes completed and drains the failed life
   const hookError = new Error("post-run hook failed");
   const hookManager = createHookManager();
   const listener = createExecutionEventListener({
+    now: TEST_NOW,
     sessionManager: {
       async appendExecutionLog(record) {
         records.push(record);
@@ -108,6 +112,7 @@ test("post-run hook failure never publishes completed and drains the failed life
 test("completion event persistence failure rejects the run as failed", async () => {
   const records = [];
   const listener = createExecutionEventListener({
+    now: TEST_NOW,
     sessionManager: {
       async appendExecutionLog(record) {
         if (record.event === "agent_lifecycle_state_changed" && record.data.state === "completed") {
@@ -138,6 +143,7 @@ test("failed runs drain error-hook events before disposing the plugin activation
   const executionError = new Error("model failed");
   let disposed = false;
   const listener = createExecutionEventListener({
+    now: TEST_NOW,
     sessionManager: {
       async appendExecutionLog(record) {
         if (

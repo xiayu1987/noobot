@@ -5,6 +5,7 @@
  */
 
 export async function finalizeAgentTurn({
+  startedAt,
   resolvedRunConfig,
   runtimeEventListener,
   usedSessionId,
@@ -59,7 +60,7 @@ export async function finalizeAgentTurn({
     caller,
     dialogProcessId,
     turnScopeId: resolvedTurnScopeId,
-    thinkingStartedAt: resolvedRunConfig.thinkingStartedAt,
+    startedAt,
     agentResult,
     persistedTurnMessageUids: [
       ...new Set([...checkpointPersistedMessageUids, ...durableTurnMessageUids]),

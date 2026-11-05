@@ -242,7 +242,10 @@ export function findActiveRun(identity = {}) {
   return null;
 }
 
-export function createExecutionLivenessInspector({ userId, sessionId, now = () => Date.now() }) {
+export function createExecutionLivenessInspector({ userId, sessionId, now }) {
+  if (!isFunction(now)) {
+    throw new TypeError("execution liveness inspector requires now function");
+  }
   return ({ turnScopeId, dialogProcessId }) => ({
     alive: Boolean(findActiveRun({ userId, sessionId, turnScopeId, dialogProcessId })),
     observedAtMs: now(),

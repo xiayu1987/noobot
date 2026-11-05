@@ -17,6 +17,7 @@ export async function writeRuntimeEvent(event = {}, { desktopRoot = "" } = {}) {
     throw new Error("Session runtime events are owned by the workspace and cannot use desktopRoot");
   }
   const record = normalizeRuntimeEventEnvelope(event);
+  record.time = new Date().toISOString();
   const controlledLog =
     record.scope === RUNTIME_EVENT_SCOPES.SESSION || isSessionLogDebugEvent(record);
   if (controlledLog && !shouldRecordSessionLog(record)) {

@@ -14,11 +14,13 @@ describe("messageModel workflow messages", () => {
     const messages = foldConversationMessages(
       [
         {
+          ts: "2026-01-01T00:00:00.000Z",
           role: "assistant",
           content: "normal",
           dialogProcessId: "dp-workflow",
         },
         {
+          ts: "2026-01-01T00:00:00.000Z",
           role: "assistant",
           type: "workflow",
           content: "workflow plan",

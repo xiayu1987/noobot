@@ -30,6 +30,7 @@ import {
   assertAuthorityOutboxJournalRecord,
   AUTHORITY_OUTBOX_JOURNAL_OP,
   migrateLegacyAuthorityEventOutbox,
+  migrateLegacyUnownedAttemptRecords,
 } from "@noobot/event-protocol/outbox";
 import {
   SESSION_REPAIR_DATA_REJECTION_CODES,
@@ -64,8 +65,6 @@ import { migrateSessionCheckpointIdentity } from "./session-checkpoint-identity-
 
 const UPGRADE_INVALID_CODE = "WORKSPACE_SESSION_MESSAGE_IDENTITY_UPGRADE_INVALID";
 const QUARANTINE_KIND = WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MESSAGE_IDENTITY;
-const MIGRATION_NOW = () => new Date().toISOString();
-
 function upgradeError(reason, details, cause) {
   const error = new Error(`workspace session message identity upgrade failed: ${reason}`);
   error.code = UPGRADE_INVALID_CODE;
@@ -157,10 +156,13 @@ async function migrateOutboxJournal(stagingDir, legacyOutbox) {
     changed = true;
   }
   const droppedEventIds = legacyOutboxEventIds(records);
-  const kept = records.filter(
+  const retained = records.filter(
     (record) => !isPlainObject(record) || !droppedEventIds.has(record.eventId),
   );
-  changed ||= kept.length !== records.length;
+  changed ||= retained.length !== records.length;
+  const attempts = migrateLegacyUnownedAttemptRecords(retained);
+  const kept = attempts.records;
+  changed ||= attempts.changed;
   let attachments;
   try {
     attachments = migrateAttachmentLifecycleOutboxRecords(kept);
@@ -193,14 +195,13 @@ async function repairStagedSession({ storageService, stagingDir, expectScope }) 
     source = await readSessionArtifactForRepair({ storageService, sessionDir: stagingDir });
   }
   const scope = await expectScope(source);
-  const migration = normalizeSessionDocumentForCurrentProtocol(source, { now: MIGRATION_NOW });
+  const migration = normalizeSessionDocumentForCurrentProtocol(source);
   const outbox = await migrateOutboxJournal(stagingDir, migration.legacyAuthorityEventOutbox);
   await writeSessionArtifact({
     storageService,
     sessionDir: stagingDir,
     sessionPayload: migration.document,
     atomic: true,
-    now: MIGRATION_NOW,
     predecessor: SESSION_ARTIFACT_PREDECESSOR.LEGACY_REWRITE,
   });
   await resegmentMigratedCheckpointBaselines({ sessionDir: stagingDir });
@@ -216,7 +217,7 @@ async function repairStagedSession({ storageService, stagingDir, expectScope }) 
 async function validateStagedSession({ storageService, stagingDir, scope }) {
   const session = await readSessionArtifact({ storageService, sessionDir: stagingDir });
   if (!session) throw upgradeError("session_artifact_missing", {});
-  const normalized = normalizeSessionEntity(session, { now: MIGRATION_NOW });
+  const normalized = normalizeSessionEntity(session);
   assertSessionScopeIdentity({ session: normalized, ...scope });
   if (normalized.schemaVersion !== SESSION_ARTIFACT_SCHEMA_VERSION) {
     throw upgradeError("schema_version_not_current", { schemaVersion: normalized.schemaVersion });

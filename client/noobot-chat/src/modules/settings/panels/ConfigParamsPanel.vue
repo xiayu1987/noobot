@@ -415,20 +415,4 @@ watch(
 .param-value-input :deep(.el-input__inner) {
   font-family: var(--noobot-font-mono);
 }
-
-.list-empty-tip {
-  position: static;
-  padding: 48px var(--noobot-space-xl);
-}
-
-.list-empty-tip .empty-icon {
-  font-size: var(--noobot-font-size-lg);
-  margin-bottom: var(--noobot-space-sm);
-  opacity: 0.42;
-}
-
-.list-empty-tip p {
-  margin: 0;
-  color: var(--noobot-text-secondary);
-}
 </style>

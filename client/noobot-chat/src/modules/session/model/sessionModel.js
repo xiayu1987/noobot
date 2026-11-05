@@ -5,7 +5,6 @@
  */
 import { createSecureUuid } from "@noobot/shared/secure-identity";
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
-import { nowIso } from "../../chat/model/timeFields.js";
 import { text } from "@noobot/shared/value";
 
 export function createConnectorPanelState(overrides = {}) {
@@ -13,7 +12,6 @@ export function createConnectorPanelState(overrides = {}) {
     rootSessionId: text(overrides?.rootSessionId),
     connectors: Array.isArray(overrides?.connectors) ? overrides.connectors : [],
     selectedConnectorIds: normalizeSelectedConnectorIds(overrides?.selectedConnectorIds),
-    updatedAt: nowIso(),
   };
 }
 

@@ -222,7 +222,7 @@ describe("AppShell chat message navigator", () => {
       'title: `${messageIndex + 1}. ${roleLabel}${content ? `：${content}` : ""}`',
     );
     expect(chatMessageNavigatorComponentSource).toContain(
-      'popper-class="chat-message-navigator-popover"',
+      'popper-class="chat-message-navigator-popover noobot-navigation-popover"',
     );
     expect(chatMessageNavigatorComponentSource).not.toContain(':title="item.title"');
     expect(chatMessageNavigatorPanelSource).toContain(
@@ -326,14 +326,14 @@ describe("AppShell chat message navigator", () => {
     );
     expect(appShellLayoutSource).toContain(".chat-content-body {\n  position: relative;");
     expect(appShellLayoutSource).toContain(
-      ".chat-content-body.right-tool-panel-docked,\n  .chat-composer-body.right-tool-panel-docked {\n    padding-right: 96px;",
+      ".chat-content-body.right-tool-panel-docked,\n  .chat-composer-body.right-tool-panel-docked {\n    padding-right: var(--noobot-side-panel-docked-reserve);",
     );
     expect(appShellLayoutSource).toContain(
-      ".chat-composer-body.right-tool-panel-open {\n    padding-right: calc(var(--noobot-side-panel-width) + 32px);",
+      ".chat-composer-body.right-tool-panel-open {\n    padding-right: var(--noobot-side-panel-open-reserve);",
     );
     expect(appShellLayoutSource).toContain(".chat-composer-body {\n  flex-shrink: 0;");
     expect(appShellLayoutSource).not.toContain(".main-content {\n    padding-right: 268px;");
-    expect(appShellLayoutSource).toContain("top: 18px;");
+    expect(appShellLayoutSource).toContain("top: var(--noobot-side-panel-inset);");
     expect(appShellLayoutSource).toContain(":class=\"{ 'is-collapsed': !chatNavigatorVisible }\"");
     expect(appShellLayoutSource).toContain(".chat-message-nav-panel.is-collapsed {");
     expect(appShellLayoutSource).toContain("width: var(--noobot-side-panel-collapsed-width);");

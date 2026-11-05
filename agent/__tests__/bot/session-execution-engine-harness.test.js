@@ -39,6 +39,7 @@ import { createAcceptedRunIdentity } from "../helpers/accepted-run-identity.js";
 import { createCanonicalMessageEventSessionManager } from "../helpers/canonical-message-event-session-manager.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 import { TEST_MESSAGE_TS, createTestSessionRunPayload } from "../helpers/session-run-payload.js";
+import { turnRecord } from "../helpers/turn-record.js";
 
 function createWorkspaceService(baseDir) {
   return {
@@ -345,7 +346,19 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
       return { scope: {}, messages: [] };
     },
     async getSessionBundle() {
-      return { exists: false, session: {} };
+      return {
+        exists: true,
+        session: {
+          turnLifecycle: {
+            turns: {
+              "turn-scope-smoke": turnRecord({
+                turnScopeId: "turn-scope-smoke",
+                dialogProcessId: "dp-scope-smoke",
+              }),
+            },
+          },
+        },
+      };
     },
     async createSession() {},
     async getExecutionTurnLogs() {
@@ -480,10 +493,7 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
     };
     return {
       ...builder,
-      buildNewSessionContext: (payload) =>
-        bindSessionManager(() => builder.buildNewSessionContext(payload)),
-      buildExistingSessionContext: (payload) =>
-        bindSessionManager(() => builder.buildExistingSessionContext(payload)),
+      buildSessionContext: () => bindSessionManager(() => builder.buildSessionContext()),
     };
   };
 

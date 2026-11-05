@@ -51,6 +51,7 @@ describe("useChatEngine.resend stopped state", () => {
       jsonResponse({
         ok: true,
         ...createTurnTerminalResolution({
+          generatedAt: "2026-11-01T00:00:00.000Z",
           commandId: "resolve-immediate-stop",
           sessionId,
           turnScopeId: stoppedTurnScopeId,
@@ -355,6 +356,7 @@ describe("useChatEngine.resend stopped state", () => {
       return jsonResponse({
         ok: true,
         ...createTurnTerminalResolution({
+          generatedAt: "2026-11-01T00:00:00.000Z",
           commandId: `resolve:${turnScopeId}:${revision}`,
           sessionId,
           turnScopeId,

@@ -13,7 +13,11 @@ import { withRuntimeEventsEnv } from "@noobot/runtime-events/testing";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { createSessionFacade } from "../../src/session/index.js";
 import { MemoryPostProcessService } from "../../src/bot/execution/memory-postprocess.js";
-import { createTestSessionServices, provisionTestSession } from "../helpers/session-services.js";
+import {
+  createTestSessionServices,
+  provisionTestSession,
+  testWallClock,
+} from "../helpers/session-services.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 
 const USER_ID = "u1";
@@ -49,6 +53,7 @@ test("memory postprocess for a session deleted after scheduling reports SESSION_
       const captures = [];
       const loggedErrors = [];
       const service = new MemoryPostProcessService({
+        now: testWallClock,
         globalConfig: {},
         session,
         memory: {

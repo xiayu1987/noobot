@@ -9,6 +9,8 @@ import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
 import { createCommandResultError } from "../../../../../src/infrastructure/websocket/chatWebSocketProtocol.js";
 import { setTransportDiagnosticsLogSink } from "../../../../../src/modules/debug/loggers/transportDiagnosticsLogger.js";
 import {
+  AUTHORITY_TURN_FINISHED_AT,
+  AUTHORITY_TURN_STARTED_AT,
   createHarness,
   assistantMessage,
   emitChannelState,
@@ -117,7 +119,7 @@ describe("useChatEngine.send-stream", () => {
     expect(applySessionDetail).not.toHaveBeenCalled();
   });
 
-  it("sends the locally recorded thinking start so refresh can hydrate the duration", async () => {
+  it("takes the thinking start from the Authority lifecycle, never from the client clock", async () => {
     let capturedPayload = null;
     const stream = vi.fn(async (payload, onEvent) => {
       capturedPayload = payload;
@@ -145,7 +147,8 @@ describe("useChatEngine.send-stream", () => {
     expect(runtime).toMatchObject({
       state: FrontendRunState.FRONTEND_COMPLETED,
       terminal: "completed",
-      startedAt: expect.any(String),
+      startedAt: AUTHORITY_TURN_STARTED_AT,
+      finishedAt: AUTHORITY_TURN_FINISHED_AT,
     });
     expect(capturedPayload.preferences).not.toHaveProperty("thinkingStartedAt");
   });
@@ -461,8 +464,8 @@ describe("useChatEngine.send-stream", () => {
     );
   });
 
-  it("channel_state sending preserves thinking elapsed start in the turn timing store", async () => {
-    const messageStartedAt = "2026-06-22T10:00:05.000Z";
+  it("channel_state sending does not replace the Authority thinking start", async () => {
+    const clientClockAt = "2026-06-22T10:00:05.000Z";
     const channelStartedAt = "2026-06-22T10:00:00.000Z";
     const finishedAt = "2026-06-22T10:00:12.000Z";
     const stream = vi.fn(async (payload, onEvent) => {
@@ -498,7 +501,7 @@ describe("useChatEngine.send-stream", () => {
     });
 
     vi.useFakeTimers();
-    vi.setSystemTime(new Date(messageStartedAt));
+    vi.setSystemTime(new Date(clientClockAt));
     try {
       await engine.send(SEND_REQUEST);
     } finally {
@@ -520,7 +523,7 @@ describe("useChatEngine.send-stream", () => {
         turnScopeId: assistant?.turnScopeId,
       }),
     ).toMatchObject({
-      startedAt: messageStartedAt,
+      startedAt: AUTHORITY_TURN_STARTED_AT,
       finishedAt: "",
     });
   });

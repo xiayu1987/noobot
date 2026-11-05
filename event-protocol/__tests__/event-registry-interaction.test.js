@@ -110,6 +110,9 @@ test("event family registry delegates authoritative domain events only", () => {
 
 test("protocol payload reader validates wire identity and returns the canonical domain fact", () => {
   const payload = createTurnLifecycleEnvelope({
+    occurredAt: "2026-01-01T00:00:00.000Z",
+    startedAt: "2026-01-01T00:00:00.000Z",
+    finishedAt: "",
     eventType: TURN_EVENT.PROCESSING_STARTED,
     eventId: "event-1",
     updatedAt: "2026-01-01T00:00:00.000Z",
@@ -153,6 +156,9 @@ test("protocol payload reader validates wire identity and returns the canonical 
 
 test("event family declares the exact reducer input projection", () => {
   const turnPayload = createTurnLifecycleEnvelope({
+    occurredAt: "2026-01-01T00:00:00.000Z",
+    startedAt: "2026-01-01T00:00:00.000Z",
+    finishedAt: "",
     eventType: TURN_EVENT.PROCESSING_STARTED,
     eventId: "event-reducer-1",
     updatedAt: "2026-01-01T00:00:00.000Z",
@@ -324,6 +330,9 @@ test("interaction payload validators return the registry {valid, errors} shape",
 
 test("turn lifecycle envelope causality must equal the payload causality", () => {
   const payload = createTurnLifecycleEnvelope({
+    occurredAt: "2026-01-01T00:00:00.000Z",
+    startedAt: "2026-01-01T00:00:00.000Z",
+    finishedAt: "",
     eventType: TURN_EVENT.PROCESSING_STARTED,
     eventId: "event-causality-1",
     updatedAt: "2026-01-01T00:00:00.000Z",

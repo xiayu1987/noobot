@@ -28,6 +28,7 @@ async function withRealFacadeServer(operation) {
     const runtime = createSessionServices(
       { workspaceRoot },
       {
+        now: () => new Date().toISOString(),
         attachmentService: new AttachmentService({ workspaceRoot }),
         scopedSessionRoots: resolveScopedSessionRoots([
           { pluginId: "workflow", scopedSessionRoots: ["session"] },
@@ -86,6 +87,8 @@ test("session-routes: HTTP 调用经真实 facade 绑定根会话 persistence sc
         status: "completed",
         sessionId: SESSION_ID,
         dialogProcessId: "dp-1",
+        startedAt: "2026-07-18T00:00:00.000Z",
+        finishedAt: "2026-07-18T00:00:01.000Z",
         summaryError: new Error("summary unavailable"),
       }),
     });

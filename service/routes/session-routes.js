@@ -29,6 +29,7 @@ import {
 import { mergeSessionDeletionIds } from "@noobot/hook-protocol";
 import { pipeline } from "node:stream/promises";
 import { text } from "@noobot/shared/value";
+import { withServerNow } from "@noobot/session-protocol/server-clock";
 import { buildContentDisposition } from "./content-disposition.js";
 
 const HTTP_SESSION_PERSISTENCE_SCOPE = null;
@@ -140,7 +141,7 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
           messages: entries.flatMap((entry) => entry.messages.map(describeDetailMessage)),
         },
       });
-      res.json({ ok: true, ...detail });
+      res.json(withServerNow({ ok: true, ...detail }, bot.session.readServerNow()));
     }),
   );
 
@@ -452,7 +453,7 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
     jsonRoute(async (req, res) => {
       const { userId } = req.params;
       const payload = await bot.session.getAllSessionSummaries({ userId });
-      res.json({ ok: true, userId, ...payload });
+      res.json(withServerNow({ ok: true, userId, ...payload }, bot.session.readServerNow()));
     }),
   );
 

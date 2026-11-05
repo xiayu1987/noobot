@@ -346,6 +346,9 @@ describe("terminalResolutionCoordinator", () => {
     applyTurnLifecycleEnvelope(
       registry,
       createTurnLifecycleEnvelope({
+        occurredAt: "2026-01-01T00:00:00.000Z",
+        startedAt: "2026-01-01T00:00:00.000Z",
+        finishedAt: "",
         updatedAt: "2026-01-01T00:00:00.000Z",
         eventType: "turn.action_accepted",
         eventId: "event-t-1-accepted",
@@ -368,6 +371,9 @@ describe("terminalResolutionCoordinator", () => {
     applyTurnLifecycleEnvelope(
       registry,
       createTurnLifecycleEnvelope({
+        occurredAt: "2026-01-01T00:00:00.000Z",
+        startedAt: "2026-01-01T00:00:00.000Z",
+        finishedAt: "",
         updatedAt: "2026-01-01T00:00:00.000Z",
         eventType: "turn.processing_started",
         eventId: "event-t-1-processing",
@@ -393,6 +399,7 @@ describe("terminalResolutionCoordinator", () => {
     });
 
     const authoritativeResponse = createTurnTerminalResolution({
+      generatedAt: "2026-11-01T00:00:00.000Z",
       commandId: "resolve-t-1",
       sessionId: "s-1",
       turnScopeId: "t-1",

@@ -18,6 +18,7 @@ import { AGENT_RUN_EVENT } from "../../../src/events/run-event.js";
 test("resume identity is immutable and owned by lifecycle base payload", () => {
   const events = [];
   const machine = createAgentLifecycleMachine({
+    now: () => "2026-01-01T00:00:00.000Z",
     basePayload: { resumeFromStoppedSnapshot: true },
     eventListener: { onEvent: (event) => events.push(event) },
   });
@@ -75,7 +76,10 @@ test("agent lifecycle helpers resolve initial state and sync runtime fields", ()
     AGENT_LIFECYCLE_STATE.RESUME_INITIALIZING,
   );
 
-  const machine = createAgentLifecycleMachine({ basePayload: { resumeFromStoppedSnapshot: true } });
+  const machine = createAgentLifecycleMachine({
+    now: () => "2026-01-01T00:00:00.000Z",
+    basePayload: { resumeFromStoppedSnapshot: true },
+  });
   machine.transition(resolveInitialLifecycleState({ resumeFromStoppedSnapshot: true }));
   const runtime = {};
 

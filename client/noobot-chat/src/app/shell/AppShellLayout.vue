@@ -566,12 +566,12 @@ defineExpose({
 @media (min-width: 961px) {
   .chat-content-body.right-tool-panel-docked,
   .chat-composer-body.right-tool-panel-docked {
-    padding-right: 96px;
+    padding-right: var(--noobot-side-panel-docked-reserve);
   }
 
   .chat-content-body.right-tool-panel-open,
   .chat-composer-body.right-tool-panel-open {
-    padding-right: calc(var(--noobot-side-panel-width) + 32px);
+    padding-right: var(--noobot-side-panel-open-reserve);
   }
 }
 
@@ -606,14 +606,14 @@ defineExpose({
 
 .right-tool-panels {
   position: absolute;
-  top: 18px;
-  right: 18px;
+  top: var(--noobot-side-panel-inset);
+  right: var(--noobot-side-panel-inset);
   z-index: 8;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: var(--noobot-space-sm);
-  max-height: calc(100% - 36px);
+  max-height: calc(100% - var(--noobot-side-panel-inset) * 2);
   overflow-y: auto;
   overflow-x: hidden;
 }

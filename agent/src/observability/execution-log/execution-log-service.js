@@ -27,7 +27,7 @@ export class ExecutionLogService {
     category = "",
     type = "",
     data = {},
-    ts = "",
+    ts,
     persistenceContext,
   }) {
     if (!shouldRecordRuntimeExecutionLog({ event, category, type, data })) {

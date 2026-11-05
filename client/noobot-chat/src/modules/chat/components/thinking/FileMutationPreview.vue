@@ -120,7 +120,7 @@ async function openCompactPreview(mutation) {
 
 <template>
   <section v-if="mutations.length" class="file-mutation-preview" :class="{ 'is-compact': compact }">
-    <BaseFileCardList v-if="compact">
+    <BaseFileCardList v-if="compact" embedded>
       <div
         v-for="mutation in mutations"
         :key="mutation.mutationId"

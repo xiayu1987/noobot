@@ -62,6 +62,7 @@ const stopProcessingCompleted = {
 const completionCommit = { completionCommitId: "completion-commit-1", summaryVersion: 1 };
 const terminalResolved = (state) => ({
   updatedAt: "2026-01-01T00:00:00.000Z",
+  finishedAt: "2026-01-01T00:00:00.000Z",
   type: SESSION_RUN_EVENT.TERMINAL_RESOLVED,
   state,
   revision: 10,
@@ -194,6 +195,7 @@ describe("sessionRunStateMachine scope separation", () => {
     let completion = apply(processing, processingCompleted);
     completion = apply(completion, {
       updatedAt: "2026-01-01T00:00:00.000Z",
+      finishedAt: "2026-01-01T00:00:00.000Z",
       type: SESSION_RUN_EVENT.TERMINAL_RESOLVED,
       state: TURN_STATE.COMPLETED,
       revision: 10,
@@ -216,6 +218,7 @@ describe("sessionRunStateMachine scope separation", () => {
     let completion = apply(processing, processingCompleted);
     completion = apply(completion, {
       updatedAt: "2026-01-01T00:00:00.000Z",
+      finishedAt: "2026-01-01T00:00:00.000Z",
       type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
       eventType: TURN_EVENT.COMPLETED,
       phase: TURN_PHASE.COMPLETION,

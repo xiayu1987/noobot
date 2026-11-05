@@ -114,7 +114,7 @@
 规则由协议包函数唯一实现，本节只登记归属和语义。
 
 - 主流程控制：插件只能通过端口 `createMainFlowControlPort`（`agent/src/runtime/main-flow-control.js`）下达指令。指令由 context-protocol `policy/main-flow-control.js` 构造，`MAIN_FLOW_CONTROL_ACTION` 只有 `final_no_tools_turn` 和 `summary_checkpoint` 两种。committer 只接受 `action === SUMMARY_CHECKPOINT` 的指令，不探测能力，也不软返回。
-- 上下文构建模式：`AGENT_CONTEXT_MODE`（`new_session` / `existing_session`）。factory 在任何 hook 之前调用 `assertAgentContextMode`，非法值报 `INVALID_CONTEXT_MODE`(400)。
+- 上下文构建：单一入口 `buildSessionContext()`，新会话与续跑走同一流程（会话记录 + 长期记忆），不再区分模式；`AGENT_CONTEXT_MODE`、`assertAgentContextMode`、`INVALID_CONTEXT_MODE` 与 hook 中的 `sessionLoadState` 已删除。
 - 活动上下文：`runtime.activeMessageContext` 是 modelContext 和 `userMetaBackwrites` 唯一的持有方。state 构建完成后，只能通过 `requireActiveModelContext` 读取，缺失就抛错。
   - 快照里的 backwrites 经信封 `modelContext.userMetaBackwrites` 进入 `createModelContext`，runtime 上不再另存。
   - 停止候选只保存身份和 `systemRuntime`，保存时从活动上下文投影。不变式：有候选，就一定有活动上下文。

@@ -12,12 +12,14 @@ export function createRuntimeConfigService({
   readWorkspaceConfigParams,
   globalConfigBuilder,
   BotManager,
+  now,
   setGlobalConfigRaw,
   setGlobalConfig,
   setBot,
   connectorAccessPort,
 } = {}) {
   const connectorPort = assertConnectorAccessPort(connectorAccessPort);
+  if (!isFunction(now)) throw new TypeError("createRuntimeConfigService requires now function");
   async function rebuildRuntimeConfig() {
     if (!globalConfigBuilder || !isFunction(globalConfigBuilder.build)) {
       throw new Error("[runtime-config-service] globalConfigBuilder.build is required");
@@ -36,6 +38,7 @@ export function createRuntimeConfigService({
       startupContext,
       pluginRuntimeBundle,
       connectorAccessPort: connectorPort,
+      now,
     });
     setGlobalConfigRaw(persistedGlobalConfig);
     setGlobalConfig(resolvedGlobalConfig);

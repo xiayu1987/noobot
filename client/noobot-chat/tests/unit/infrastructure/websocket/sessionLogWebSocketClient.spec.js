@@ -349,6 +349,7 @@ describe("sessionLogWebSocketClient", () => {
     socket.onopen?.();
     expect(JSON.parse(socket.sent[0])).toEqual(
       expect.objectContaining({
+        channel: "ws",
         category: "debug",
         event: "debug.trace",
         sessionId: "s-debug",

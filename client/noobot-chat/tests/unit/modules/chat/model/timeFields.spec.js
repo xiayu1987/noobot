@@ -3,22 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   formatDurationMs,
-  getMessageTimestamp,
   resolveThinkingDurationMs,
 } from "../../../../../src/modules/chat/model/timeFields.js";
-
-describe("timeFields message timestamp", () => {
-  it("skips non-positive numeric timestamps instead of stringifying them", () => {
-    expect(getMessageTimestamp({ ts: 0 })).toBe("");
-    expect(getMessageTimestamp({ ts: Number.NaN, createdAt: "2026-06-22T10:00:05.000Z" })).toBe(
-      "2026-06-22T10:00:05.000Z",
-    );
-    expect(getMessageTimestamp({ ts: 0, timestamp: 1750000000000 })).toBe(1750000000000);
-  });
-});
 
 describe("timeFields thinking duration responsibilities", () => {
   it("formats milliseconds as mm:ss or hh:mm:ss", () => {
@@ -50,9 +39,6 @@ describe("timeFields thinking duration responsibilities", () => {
   });
 
   it("freezes on message finish even when pending is true", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-06-22T10:00:30.000Z"));
-
     expect(
       resolveThinkingDurationMs({
         messageStartedAt: "2026-06-22T10:00:10.000Z",
@@ -61,8 +47,21 @@ describe("timeFields thinking duration responsibilities", () => {
         running: true,
       }),
     ).toBe(5000);
+  });
 
-    vi.useRealTimers();
+  it("returns unknown while running before the server clock is observed", () => {
+    expect(
+      resolveThinkingDurationMs({
+        messageStartedAt: "2026-06-22T10:00:10.000Z",
+        now: null,
+        running: true,
+      }),
+    ).toBeNull();
+  });
+
+  it("rejects negative or non-finite durations instead of formatting 00:00", () => {
+    expect(() => formatDurationMs(-1)).toThrow(RangeError);
+    expect(() => formatDurationMs(Number.NaN)).toThrow(RangeError);
   });
 
   it("uses now minus message start only while running without finish", () => {
@@ -79,6 +78,18 @@ describe("timeFields thinking duration responsibilities", () => {
         messageStartedAt: "2026-06-22T10:00:10.000Z",
         now: "2026-06-22T10:00:30.000Z",
         running: false,
+      }),
+    ).toBeNull();
+  });
+
+  it("does not clamp a start later than now to zero (client clock skew)", () => {
+    // 复现：客户端时钟比服务端慢约 113s，刷新后权威起点晚于本地 now。
+    // 钳零会显示 00:00 并从头计时；负区间必须显式识别为未知，而非 0。
+    expect(
+      resolveThinkingDurationMs({
+        messageStartedAt: "2026-11-04T15:47:16.696Z",
+        now: "2026-11-04T15:45:23.972Z",
+        running: true,
       }),
     ).toBeNull();
   });

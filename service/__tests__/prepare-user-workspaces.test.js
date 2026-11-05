@@ -44,6 +44,9 @@ const activeTurn = {
   updatedAt: "2026-07-18T00:00:00.000Z",
 };
 
+/** Service clock one day after the orphan's last update, past the recovery grace period. */
+const RECOVERY_OBSERVED_AT = "2026-07-19T00:00:00.000Z";
+
 const summaryOf = (sessionId, activeTurnScopeId, availability) => ({
   sessionId,
   activeTurnScopeId,
@@ -64,6 +67,7 @@ function createBot({ brokenWorkspace, partialSummary, layoutUpgrades = [], summa
       return { base: `/ws/${userId}`, report: { layoutUpgrades } };
     },
     session: {
+      readServerNow: () => RECOVERY_OBSERVED_AT,
       async maintainSessionDisplaySummaries({ userId, onProgress }) {
         onProgress({ sessionIndex: 1, sessionCount: 1 });
         prepared.push(userId);

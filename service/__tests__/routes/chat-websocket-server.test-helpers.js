@@ -254,6 +254,7 @@ export async function startServerWithWs({
   let turnLifecycle = structuredClone(initialTurnLifecycle);
   let authorityEventOutbox = [];
   let authorityEventSequence = 0;
+  const authorityNow = "2026-01-01T00:00:00.000Z";
   const sessionAuthorities = {
     applyTurnLifecycleEvent: async (event = {}) => {
       const { lifecycleEvent, acceptedUserMessage } = acceptFakeAgentTurnLifecycleEvent(
@@ -266,6 +267,7 @@ export async function startServerWithWs({
         event: lifecycleEvent,
         eventOutbox: authorityEventOutbox,
         createEventId: () => `test-authority-event-${++authorityEventSequence}`,
+        now: () => authorityNow,
         materializeTerminal: event.terminalStatus
           ? ({ terminalStatus, previousSummaryVersion }) =>
               materializeTerminalMessages({
@@ -296,6 +298,7 @@ export async function startServerWithWs({
                 role: "user",
                 type: "message",
                 content: acceptedUserMessage.content,
+                ts: authorityNow,
                 sessionId: event.sessionId,
                 dialogProcessId: result.turn.dialogProcessId,
                 turnScopeId: event.turnScopeId,
@@ -364,6 +367,8 @@ export async function startServerWithWs({
       return runSession(payload);
     },
     session: {
+      /** Test double of the service session clock (real wall clock, like production). */
+      readServerNow: () => new Date().toISOString(),
       getRootSessionSelectedConnectorIds: async () => [],
       ...sessionAuthorities,
     },

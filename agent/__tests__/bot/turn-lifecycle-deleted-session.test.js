@@ -37,7 +37,6 @@ function acceptedEvent(sessionId) {
     action: "send",
     phase: TURN_PHASE.ACTION,
     ...createAcceptedAgentExecution(TURN_SCOPE_ID, sessionId),
-    startedAt: "2026-11-01T00:00:00.000Z",
     userMessage: {
       content: "running request",
       userMessageId: `um_${TURN_SCOPE_ID}`,

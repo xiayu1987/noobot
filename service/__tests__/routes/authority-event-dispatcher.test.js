@@ -17,6 +17,8 @@ function createPendingEvent(eventId, sessionId) {
   return { eventId: envelope.identity.eventId, envelope };
 }
 
+const DISPATCHER_SERVER_NOW = "2026-01-01T00:00:00.000Z";
+
 test("authority dispatcher confirms the sent prefix before propagating a publisher error", async () => {
   const first = createPendingEvent("authority-prefix", "s-prefix");
   const second = createPendingEvent("authority-retry", "s-prefix");
@@ -25,6 +27,7 @@ test("authority dispatcher confirms the sent prefix before propagating a publish
   const sent = [];
   const bot = {
     session: {
+      readServerNow: () => DISPATCHER_SERVER_NOW,
       async getPendingAuthorityEvents() {
         return { found: true, events: pending };
       },
@@ -70,6 +73,7 @@ test("authority dispatcher retains both publisher and acknowledgement failures",
     consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
     resolveBot: () => ({
       session: {
+        readServerNow: () => DISPATCHER_SERVER_NOW,
         async getPendingAuthorityEvents() {
           return { found: true, events };
         },
@@ -113,6 +117,7 @@ test("authority dispatcher reports ack failure without counting the sent events"
   const item = createPendingEvent("authority-event-ack-failed", "s-ack-failed");
   const bot = {
     session: {
+      readServerNow: () => DISPATCHER_SERVER_NOW,
       async getPendingAuthorityEvents() {
         return { found: true, events: [item] };
       },
@@ -151,6 +156,7 @@ test("authority dispatcher drains again when dispatch is requested while a drain
   });
   const bot = {
     session: {
+      readServerNow: () => DISPATCHER_SERVER_NOW,
       async getPendingAuthorityEvents() {
         getCalls += 1;
         if (getCalls === 1) await firstGetGate;

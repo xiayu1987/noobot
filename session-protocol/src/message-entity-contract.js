@@ -31,6 +31,25 @@ export function isCanonicalMessageTimestamp(value) {
   return Number.isFinite(ms) && new Date(ms).toISOString() === value;
 }
 
+/**
+ * Message `ts` is an Authority fact: a committed message carries a canonical ISO `ts`,
+ * an uncommitted local draft carries none until the commit projection fills it in.
+ */
+export function requireCommittedMessageTimestamp(message) {
+  const { ts } = message;
+  if (!isCanonicalMessageTimestamp(ts)) {
+    throw new TypeError(`committed message ts must be a canonical ISO timestamp: ${String(ts)}`);
+  }
+  return ts;
+}
+
+export function assertUncommittedMessageDraft(draft) {
+  if (Object.hasOwn(draft, "ts")) {
+    throw new TypeError("uncommitted message draft must not carry ts");
+  }
+  return draft;
+}
+
 export function readSessionMessageDraftAttachments(message) {
   if (message.attachments === undefined) return [];
   if (!Array.isArray(message.attachments)) {

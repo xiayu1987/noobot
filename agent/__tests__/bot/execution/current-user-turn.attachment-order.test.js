@@ -20,7 +20,6 @@ function createInput(overrides = {}) {
     userInteractionBridge: null,
     abortSignal: null,
     persistenceContext: null,
-    contextMode: "conversation",
     runtimeIdentity: {
       userId: "u1",
       sessionId: "s1",
@@ -42,6 +41,7 @@ function committedUserMessage() {
     role: "user",
     type: "message",
     content: "message with attachment",
+    ts: "2026-01-01T00:00:00.000Z",
     userName: "u1",
     sessionId: "s1",
     parentSessionId: "",

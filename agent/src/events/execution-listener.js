@@ -51,9 +51,13 @@ export function createExecutionEventListener({
   dialogProcessId,
   persistenceScope,
   upstream = null,
+  now,
 }) {
   if (!isFunction(sessionManager?.appendExecutionLog)) {
     throw new TypeError("sessionManager.appendExecutionLog is required");
+  }
+  if (!isFunction(now)) {
+    throw new TypeError("execution event listener requires now function");
   }
   if (upstream !== null && !isFunction(upstream.onEvent)) {
     throw new TypeError("execution event upstream requires an onEvent port");
@@ -133,7 +137,9 @@ export function createExecutionEventListener({
       : 0,
   });
 
-  const forwardUpstream = ({ event, data, ts, route: deliveryRoute }) => {
+  const stampExecutionLogTime = () => now();
+
+  const forwardUpstream = ({ event, data, route: deliveryRoute }) => {
     const transportData = projectExecutionTransportPayload({ data, route: deliveryRoute });
     const diagnostic = summarizeDelivery(event, transportData, deliveryRoute);
     const shouldDiagnose = Boolean(diagnostic.eventId || diagnostic.presentationMessageId);
@@ -143,7 +149,7 @@ export function createExecutionEventListener({
       deliveryTiming?.queueWaitMs.push(startedAt - enqueuedAt);
       try {
         if (!upstream) return undefined;
-        const result = await upstream.onEvent({ event, data: transportData, ts });
+        const result = await upstream.onEvent({ event, data: transportData });
         if (result === false) {
           const error = new Error("upstream rejected event delivery");
           error.code = "EVENT_UPSTREAM_DELIVERY_REJECTED";
@@ -159,7 +165,7 @@ export function createExecutionEventListener({
             category: "system",
             type: "execution_upstream_forward_failed",
             data: failure,
-            ts: new Date().toISOString(),
+            ts: stampExecutionLogTime(),
           });
         }
         return false;
@@ -175,7 +181,6 @@ export function createExecutionEventListener({
     return forwardUpstream({
       event: evt?.event || "",
       data: evt?.data || {},
-      ts: evt?.ts || new Date().toISOString(),
       route: requireExecutionRouteIdentity(evt?.route),
     });
   };
@@ -231,7 +236,6 @@ export function createExecutionEventListener({
     onEvent: (evt = {}) => {
       const event = evt?.event || "";
       const data = evt?.data || {};
-      const ts = evt?.ts || new Date().toISOString();
 
       if (!isTransientMessageEvent(data?.envelope)) {
         const executionRecord = projectExecutionLogRecord(event, data);
@@ -241,12 +245,12 @@ export function createExecutionEventListener({
           category,
           type,
           data: executionRecord.data,
-          ts,
+          ts: stampExecutionLogTime(),
         });
       }
 
       if (!AGENT_RUN_EVENTS.has(event)) return persistenceTail;
-      return forwardUpstream({ event, data, ts, route });
+      return forwardUpstream({ event, data, route });
     },
   };
 }

@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  buildAppendMessage,
   buildViewMessage,
   findVisibleLastMessage,
 } from "../../../../../src/modules/chat/model/messageModel.js";
@@ -13,9 +14,42 @@ import { MESSAGE_REMOVED_FIELD_NAME } from "@noobot/session-protocol";
 const LEGACY_MESSAGE_ID = MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID;
 
 describe("messageModel projections", () => {
+  it("builds uncommitted drafts without ts and rejects a self-made draft ts", () => {
+    const draft = buildAppendMessage({
+      sessionId: "session-1",
+      role: "user",
+      content: "hi",
+      attachments: [],
+      options: { userMessageId: "user-1" },
+    });
+    expect(draft).not.toHaveProperty("ts");
+    expect(() =>
+      buildAppendMessage({
+        sessionId: "session-1",
+        role: "user",
+        content: "hi",
+        attachments: [],
+        options: { ts: "2026-01-01T00:00:00.000Z" },
+      }),
+    ).toThrow(TypeError);
+  });
+
+  it("requires the canonical Authority ts on committed view messages", () => {
+    expect(() =>
+      buildViewMessage({ role: "user", content: "hi" }, { sessionId: "session-1" }),
+    ).toThrow(TypeError);
+    expect(
+      buildViewMessage(
+        { role: "user", content: "hi", ts: "2026-01-01T00:00:00.000Z" },
+        { sessionId: "session-1" },
+      ).ts,
+    ).toBe("2026-01-01T00:00:00.000Z");
+  });
+
   it("does not admit workflow running view models into canonical messages", () => {
     const message = buildViewMessage(
       {
+        ts: "2026-01-01T00:00:00.000Z",
         role: "assistant",
         type: "message",
         content: "",
@@ -40,22 +74,33 @@ describe("messageModel projections", () => {
   it("keeps turn UI state out of message projections", () => {
     expect(
       buildViewMessage(
-        { role: "assistant", content: "", pending: true },
+        { ts: "2026-01-01T00:00:00.000Z", role: "assistant", content: "", pending: true },
         { sessionId: "session-1" },
       ),
     ).not.toHaveProperty("thinkingOpenNames");
     expect(
-      buildViewMessage({ role: "assistant", content: "" }, { sessionId: "session-1" }),
+      buildViewMessage(
+        { ts: "2026-01-01T00:00:00.000Z", role: "assistant", content: "" },
+        { sessionId: "session-1" },
+      ),
     ).not.toHaveProperty("expandedToolDetailKeys");
     expect(
-      buildViewMessage({ role: "user", content: "" }, { sessionId: "session-1" }),
+      buildViewMessage(
+        { ts: "2026-01-01T00:00:00.000Z", role: "user", content: "" },
+        { sessionId: "session-1" },
+      ),
     ).not.toHaveProperty("thinkingOpenNames");
   });
 
   it("finds the last user-visible message and skips harness injected relay messages", () => {
-    const userMessage = { role: "user", content: "real request" };
-    const assistantMessage = { role: "assistant", content: "real answer" };
+    const userMessage = { ts: "2026-01-01T00:00:00.000Z", role: "user", content: "real request" };
+    const assistantMessage = {
+      ts: "2026-01-01T00:00:00.000Z",
+      role: "assistant",
+      content: "real answer",
+    };
     const harnessRelay = {
+      ts: "2026-01-01T00:00:00.000Z",
       role: "user",
       content: "[来自harness外部模型输出/planning] hidden relay",
       injectedMessage: true,
@@ -71,6 +116,7 @@ describe("messageModel projections", () => {
   it("keeps thinking timing fields out of backend view messages after refresh", () => {
     const message = buildViewMessage(
       {
+        ts: "2026-01-01T00:00:00.000Z",
         role: "assistant",
         content: "running",
         thinkingStartedAt: "2026-06-22T10:00:00.000Z",
@@ -83,23 +129,10 @@ describe("messageModel projections", () => {
     expect(message.thinkingFinishedAt).toBeUndefined();
   });
 
-  it("uses backend createdAt as message timestamp so pending thinking elapsed does not reset after refresh", () => {
-    const message = buildViewMessage(
-      {
-        role: "assistant",
-        content: "running",
-        pending: true,
-        createdAt: "2026-06-22T10:00:00.000Z",
-      },
-      { sessionId: "session-1" },
-    );
-
-    expect(message.ts).toBe("2026-06-22T10:00:00.000Z");
-  });
-
   it("does not expose backend turn/message identity aliases", () => {
     const message = buildViewMessage(
       {
+        ts: "2026-01-01T00:00:00.000Z",
         role: "user",
         content: "edit me",
         userMessageId: "storage-id-1",
@@ -117,6 +150,7 @@ describe("messageModel projections", () => {
   it("preserves parent dialog process id for related attachment aggregation", () => {
     const message = buildViewMessage(
       {
+        ts: "2026-01-01T00:00:00.000Z",
         role: "assistant",
         content: "done",
         dialogProcessId: "child-dp",
@@ -131,6 +165,7 @@ describe("messageModel projections", () => {
   it("preserves summary thinking entry fields on view messages", () => {
     const message = buildViewMessage(
       {
+        ts: "2026-01-01T00:00:00.000Z",
         role: "assistant",
         content: "done",
         hasThinkingDetails: true,

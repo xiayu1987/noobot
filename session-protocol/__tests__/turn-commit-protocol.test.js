@@ -22,6 +22,7 @@ function createCommit(overrides = {}) {
       userMessageId: "frontend-user-1",
       role: "user",
       content: "hello",
+      ts: "2026-01-01T00:00:00.000Z",
       sessionId: "session-1",
       dialogProcessId: "dialog-1",
       turnScopeId: "turn-1",
@@ -35,6 +36,18 @@ test("turn_committed accepts one canonical persisted user message", () => {
   const commit = createCommit();
   assert.equal(validateTurnCommittedEventData(commit).valid, true);
   assert.equal(assertTurnCommittedEventData(commit), commit);
+});
+
+test("turn_committed requires the persisted user message canonical ISO ts", () => {
+  const { ts: _ts, ...withoutTs } = createCommit().userMessage;
+  for (const userMessage of [
+    withoutTs,
+    ...[1767225600000, "2026-01-01T00:00:00Z", ""].map((ts) => ({ ...withoutTs, ts })),
+  ]) {
+    assert.deepEqual(validateTurnCommittedEventData(createCommit({ userMessage })).errors, [
+      "user_message_ts_invalid",
+    ]);
+  }
 });
 
 test("turn_committed rejects attachments owned by the binding command", () => {

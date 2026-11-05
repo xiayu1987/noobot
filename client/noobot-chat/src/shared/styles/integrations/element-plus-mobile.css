@@ -8,20 +8,13 @@
     overscroll-behavior: contain;
   }
 
-  .noobot-select-popper .el-select-dropdown__wrap {
-    max-height: min(36vh, 280px);
-    overscroll-behavior: contain;
-  }
-
-  .noobot-select-popper .el-select-dropdown__item {
-    min-height: 42px;
-  }
-
+  .noobot-select-popper .el-select-dropdown__wrap,
   .noobot-dropdown-popper .el-dropdown-menu {
     max-height: min(36vh, 280px);
     overscroll-behavior: contain;
   }
 
+  .noobot-select-popper .el-select-dropdown__item,
   .noobot-dropdown-popper .el-dropdown-menu__item {
     min-height: 42px;
   }
@@ -44,11 +37,6 @@
 
   .el-button,
   .noobot-action-btn {
-    min-height: var(--noobot-control-height-md);
-  }
-
-  .el-input__wrapper,
-  .el-select__wrapper {
     min-height: var(--noobot-control-height-md);
   }
 }

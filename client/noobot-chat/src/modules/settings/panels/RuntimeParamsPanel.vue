@@ -305,10 +305,6 @@ watch(
   flex-wrap: wrap;
   gap: var(--noobot-space-xs);
 }
-.runtime-params-workspace :deep(.panel-head) {
-  height: auto;
-  min-height: var(--noobot-panel-header-height);
-}
 .runtime-change {
   display: flex;
   flex-wrap: wrap;

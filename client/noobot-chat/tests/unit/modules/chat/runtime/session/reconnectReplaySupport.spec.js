@@ -28,7 +28,6 @@ function hydrate(activeSession, chatList) {
     chatList,
     getReplayHydrationPromise: () => null,
     setReplayHydrationPromise: vi.fn(),
-    onError: vi.fn(),
   });
 }
 
@@ -111,5 +110,26 @@ describe("reconnectReplay support modules", () => {
 
     expect(result).toBe(false);
     expect(applySessionDetail).not.toHaveBeenCalled();
+  });
+
+  it("propagates detail protocol violations and releases the hydration slot", async () => {
+    const violation = new TypeError("message ts must be a canonical ISO timestamp: 4");
+    const setReplayHydrationPromise = vi.fn();
+    const applySessionDetail = vi.fn();
+    const pending = renderActiveSessionBeforeReplay({
+      activeSession: { value: { id: "s-1", sessionId: "s-1", messages: [] } },
+      chatList: {
+        fetchSessionDetail: vi.fn(async () => {
+          throw violation;
+        }),
+        applySessionDetail,
+      },
+      getReplayHydrationPromise: () => null,
+      setReplayHydrationPromise,
+    });
+
+    await expect(pending).rejects.toBe(violation);
+    expect(applySessionDetail).not.toHaveBeenCalled();
+    expect(setReplayHydrationPromise).toHaveBeenLastCalledWith(null);
   });
 });

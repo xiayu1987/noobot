@@ -11,7 +11,6 @@ import { HOOK_POINT, withHookRuntimeIdentity } from "@noobot/hook-protocol";
 import { getAgentContextEnvelope, getRuntimeFromAgentContext } from "../agent-context-accessor.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { resolveToolBindings } from "@noobot/agent-config-protocol";
-import { AGENT_CONTEXT_MODE, assertAgentContextMode } from "@noobot/context-protocol";
 
 export class AgentContextFactory {
   constructor({ globalConfig, session, memory, attach, skill, botManager, errorLogger }) {
@@ -62,7 +61,6 @@ export class AgentContextFactory {
   }
 
   async buildAgentContextFromBuilder({
-    mode,
     runtimeIdentity,
     eventListener,
     runConfig,
@@ -71,14 +69,13 @@ export class AgentContextFactory {
     if (!contextBuilder) {
       throw new Error(tSystem("context.contextBuilderRequired"));
     }
-    assertAgentContextMode(mode);
     const runtimeHookCarrier = {
       eventListener,
       hookManager: runConfig.hookManager,
       abortSignal: contextBuilder.abortSignal,
     };
 
-    const contextHook = (fields) => withHookRuntimeIdentity(runtimeIdentity, { mode, ...fields });
+    const contextHook = (fields) => withHookRuntimeIdentity(runtimeIdentity, fields);
     const buildStartedAtMs = Date.now();
     const buildStartedAt = new Date(buildStartedAtMs).toISOString();
 
@@ -87,14 +84,10 @@ export class AgentContextFactory {
       point: HOOK_POINT.AGENT.BEFORE_CONTEXT_BUILD,
       context: contextHook({ startedAt: buildStartedAt }),
     });
-    emitEvent(eventListener, "context_building", { sessionId: runtimeIdentity.sessionId, mode });
+    emitEvent(eventListener, "context_building", { sessionId: runtimeIdentity.sessionId });
     let agentContext = null;
     try {
-      if (mode === AGENT_CONTEXT_MODE.NEW_SESSION) {
-        agentContext = await contextBuilder.buildNewSessionContext();
-      } else {
-        agentContext = await contextBuilder.buildExistingSessionContext();
-      }
+      agentContext = await contextBuilder.buildSessionContext();
     } catch (error) {
       const failedAtMs = Date.now();
       await runAgentRuntimeHook({

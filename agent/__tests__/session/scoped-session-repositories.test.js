@@ -21,7 +21,7 @@ import {
   readExecutionLogs,
   readSessionArtifact,
 } from "../../src/session/session-artifact-store.js";
-import { provisionTestSession } from "../helpers/session-services.js";
+import { provisionTestSession, testWallClock } from "../helpers/session-services.js";
 import { useRuntimeEventsEnv } from "../helpers/runtime-events-env.js";
 import { buildHarness, readJson } from "./scoped-session-repositories.fixtures.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
@@ -174,7 +174,11 @@ test("session facade execution reads do not create a default shadow session for 
       persistenceContext: access.persistenceContext,
     });
     assert.deepEqual(await session.getExecutionTurnLogs(payload), []);
-    await session.appendExecutionLog({ ...payload, event: "workflow_started" });
+    await session.appendExecutionLog({
+      ...payload,
+      event: "workflow_started",
+      ts: "2026-01-01T00:00:00.000Z",
+    });
 
     const scope = await access.locate();
     assert.equal(
@@ -237,7 +241,7 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
         },
       ],
     });
-    await new SessionTurnPersister({ session }).appendAgentMessages({
+    await new SessionTurnPersister({ session, now: testWallClock }).appendAgentMessages({
       ...turnIdentity,
       messages: [
         {
@@ -420,6 +424,8 @@ test("session facade writes per-turn execution reports into the scoped session d
           sessionId: "child-report",
           parentSessionId: "parent-report",
           dialogProcessId,
+          startedAt: "2026-05-21T00:00:00.000Z",
+          finishedAt: "2026-05-21T00:00:01.000Z",
           executionSummary: summarizeExecutionLogs([]),
           error,
         }),

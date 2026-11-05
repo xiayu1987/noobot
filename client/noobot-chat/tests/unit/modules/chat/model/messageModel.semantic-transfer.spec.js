@@ -43,6 +43,7 @@ describe("messageModel attachments and semantic transfer", () => {
   it("preserves the attachment protocol identity independently from its owning message", () => {
     const message = buildViewMessage(
       {
+        ts: "2026-01-01T00:00:00.000Z",
         role: "user",
         content: "",
         sessionId: "session-1",
@@ -69,6 +70,7 @@ describe("messageModel attachments and semantic transfer", () => {
   it("projects ordinary attachments independently from semantic transfer envelopes", () => {
     const message = buildViewMessage(
       {
+        ts: "2026-01-01T00:00:00.000Z",
         role: "assistant",
         content: "done",
         attachments: [
@@ -96,6 +98,7 @@ describe("messageModel attachments and semantic transfer", () => {
   it("restores V2 transfer attachment identity after refresh", () => {
     const message = buildViewMessage(
       {
+        ts: "2026-01-01T00:00:00.000Z",
         role: "assistant",
         content: "done after refresh",
         transferEnvelopes: [envelope],
@@ -115,6 +118,7 @@ describe("messageModel attachments and semantic transfer", () => {
     expect(() =>
       buildViewMessage(
         {
+          ts: "2026-01-01T00:00:00.000Z",
           role: "assistant",
           content: "done",
           transferEnvelopes: [{ ...envelope, filePath: "/legacy/result.md" }],
@@ -127,6 +131,7 @@ describe("messageModel attachments and semantic transfer", () => {
   it("preserves canonical parsed-result relations without creating derived fields", () => {
     const message = buildViewMessage(
       {
+        ts: "2026-01-01T00:00:00.000Z",
         role: "user",
         content: "source",
         attachments: [
@@ -175,6 +180,7 @@ describe("messageModel attachments and semantic transfer", () => {
   it("builds attachment access from the canonical stable identity", () => {
     const message = buildViewMessage(
       {
+        ts: "2026-01-01T00:00:00.000Z",
         role: "assistant",
         content: "generated file",
         attachments: [
@@ -202,6 +208,7 @@ describe("messageModel attachments and semantic transfer", () => {
   it("keeps canonical attachments after refresh", () => {
     const message = buildViewMessage(
       {
+        ts: "2026-01-01T00:00:00.000Z",
         role: "user",
         content: "source",
         attachments: [
@@ -226,6 +233,7 @@ describe("messageModel attachments and semantic transfer", () => {
   it("does not restore attachment metadata from legacy snake_case attachment_metas", () => {
     const message = buildViewMessage(
       {
+        ts: "2026-01-01T00:00:00.000Z",
         role: "user",
         content: "source",
         attachment_metas: [

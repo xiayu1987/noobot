@@ -12,7 +12,9 @@ import {
   collectSessionMessageEntityErrors,
   isDialogAnchorMessageRecord,
   isInternalDialogUserMessage,
+  assertUncommittedMessageDraft,
   readSessionMessageDraftAttachments,
+  requireCommittedMessageTimestamp,
 } from "../src/index.js";
 
 const base = { content: "hi", attachments: [], ts: "2026-01-01T00:00:00.000Z" };
@@ -121,4 +123,25 @@ test("dialog anchor reads the explicit origin instead of inferring natural", () 
   assert.equal(isDialogAnchorMessageRecord(internal), false);
   assert.equal(isDialogAnchorMessageRecord({ ...base, role: "user" }), false);
   assert.equal(isInternalDialogUserMessage(internal), true);
+});
+
+test("committed message ts is the canonical ISO Authority fact with no alias fallback", () => {
+  assert.equal(requireCommittedMessageTimestamp(base), base.ts);
+  for (const message of [
+    { ts: 0 },
+    { ts: 1750000000000 },
+    { ts: "" },
+    { ts: "2026-06-22 10:00:05" },
+    { createdAt: "2026-06-22T10:00:05.000Z" },
+    { timestamp: 1750000000000 },
+  ]) {
+    assert.throws(() => requireCommittedMessageTimestamp(message), TypeError);
+  }
+});
+
+test("uncommitted drafts carry no ts until the commit projection supplies it", () => {
+  const draft = { role: "user", content: "hi", attachments: [] };
+  assert.equal(assertUncommittedMessageDraft(draft), draft);
+  assert.throws(() => assertUncommittedMessageDraft({ ...draft, ts: base.ts }), TypeError);
+  assert.throws(() => assertUncommittedMessageDraft({ ...draft, ts: undefined }), TypeError);
 });

@@ -23,6 +23,8 @@ function lifecycle(eventType, sequence, state, executionState, extra = {}) {
     revision: sequence,
     sequence,
     occurredAt: `2026-08-07T00:00:0${sequence}.000Z`,
+    startedAt: "2026-08-07T00:00:01.000Z",
+    finishedAt: "",
     phase: eventType === "turn.completed" ? "completion" : "action",
     state,
     action: "send",
@@ -66,6 +68,7 @@ describe("useChatStore interaction lifecycle", () => {
         lifecycle("turn.completed", 2, "completed", "completed", {
           completionCommitId: "commit-a",
           summaryVersion: 1,
+          finishedAt: "2026-08-07T00:00:02.000Z",
         }),
       ).applied,
     ).toBe(true);

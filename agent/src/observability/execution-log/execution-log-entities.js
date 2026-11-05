@@ -5,11 +5,12 @@
  */
 
 import { text } from "@noobot/shared/value";
+import { isCanonicalMessageTimestamp } from "@noobot/session-protocol";
 
-export function normalizeExecutionLogEntity(
-  executionLog = {},
-  now = () => new Date().toISOString(),
-) {
+export function normalizeExecutionLogEntity(executionLog) {
+  if (!isCanonicalMessageTimestamp(executionLog?.ts)) {
+    throw new TypeError("execution log requires canonical ISO ts");
+  }
   const data = executionLog?.data && typeof executionLog.data === "object" ? executionLog.data : {};
   return {
     userId: text(executionLog?.userId),
@@ -21,6 +22,6 @@ export function normalizeExecutionLogEntity(
     category: text(executionLog?.category),
     type: text(executionLog?.type),
     data,
-    ts: text(executionLog?.ts) || now(),
+    ts: executionLog.ts,
   };
 }

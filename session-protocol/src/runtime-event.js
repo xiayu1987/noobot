@@ -5,7 +5,7 @@
  */
 import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
 import { requireOptionalCanonicalTurnScopeId } from "./identity/turn-scope-identity.js";
-import { TURN_STATE } from "./lifecycle/turn-state.js";
+import { TURN_STATE, isTerminalTurnState } from "./lifecycle/turn-state.js";
 import {
   collectTurnFailureErrors,
   collectFinalizeIntentErrors,
@@ -95,7 +95,15 @@ function projectIdentity(event, authoritative) {
   return identity;
 }
 
+// Turn timing (startedAt/finishedAt/thinkingFinishedAt) is an Authority fact in
+// the server clock domain; local and transport events must not carry it.
+const AUTHORITY_TIMING_FIELDS = Object.freeze(["startedAt", "finishedAt", "thinkingFinishedAt"]);
+
 function projectTimes(event, authoritative, transport) {
+  if (!authoritative) {
+    const field = AUTHORITY_TIMING_FIELDS.find((name) => Object.hasOwn(event, name));
+    if (field) throw new TypeError(`runtime_${field}_requires_authority`);
+  }
   const times = Object.fromEntries(
     ["createdAt", "updatedAt", "startedAt", "finishedAt", "thinkingFinishedAt"].map((field) => {
       const value = optionalText(event, field);
@@ -110,6 +118,9 @@ function projectTimes(event, authoritative, transport) {
     timestamp = requireRuntimeIsoTime(event.updatedAt, "updatedAt");
     if (Object.hasOwn(event, "updatedAtMs") && updatedAtMs !== timestamp)
       throw new TypeError("runtime_time_conflict");
+    // A terminal Authority state is committed together with its finishedAt.
+    if (isTerminalTurnState(event.state) && !times.finishedAt)
+      throw new TypeError("missing_runtime_terminal_finishedAt");
   } else if (transport) {
     timestamp = integer(event, "updatedAtMs", true);
     if (times.updatedAt && requireRuntimeIsoTime(times.updatedAt, "updatedAt") !== timestamp)
@@ -139,11 +150,6 @@ function requireRuntimeNestedFields(event) {
       Object.keys(event.capabilities).some((field) => !["canStop", "actionLocked"].includes(field)))
   )
     throw new TypeError("invalid_runtime_capabilities");
-  if (
-    Object.hasOwn(event, "authoritativeSnapshot") &&
-    typeof event.authoritativeSnapshot !== "boolean"
-  )
-    throw new TypeError("invalid_runtime_authoritativeSnapshot");
 }
 
 export function projectSessionRunEvent(event) {
@@ -167,7 +173,6 @@ export function projectSessionRunEvent(event) {
     ...projectIdentity(event, authoritative),
     source: Object.hasOwn(event, "source") ? optionalText(event, "source") : event.type,
     authority,
-    authoritativeSnapshot: event.authoritativeSnapshot === true,
     sourceEvent: optionalText(event, "sourceEvent"),
     seq,
     transportSeq: transport ? seq : 0,

@@ -15,8 +15,9 @@ describe("useReconnectReplay", () => {
   it("EV-06/FN-01: channel_state error is transport-only", async () => {
     const { api, refs, mocks } = createFixture({ currentRun: { turnScopeId: "turn-e" } });
     refs.activeSession.value.messages = [
-      { role: RoleEnum.USER, content: "q" },
+      { ts: "2026-01-01T00:00:00.000Z", role: RoleEnum.USER, content: "q" },
       {
+        ts: "2026-01-01T00:00:00.000Z",
         role: RoleEnum.ASSISTANT,
         dialogProcessId: "dp-e",
         turnScopeId: "turn-e",
@@ -44,8 +45,9 @@ describe("useReconnectReplay", () => {
   it("EV-04: channel_state completed remains transport-only", async () => {
     const { api, refs, mocks } = createFixture({ currentRun: { turnScopeId: "turn-done" } });
     refs.activeSession.value.messages = [
-      { role: RoleEnum.USER, content: "q" },
+      { ts: "2026-01-01T00:00:00.000Z", role: RoleEnum.USER, content: "q" },
       {
+        ts: "2026-01-01T00:00:00.000Z",
         role: RoleEnum.ASSISTANT,
         dialogProcessId: "dp-done",
         turnScopeId: "turn-done",
@@ -74,8 +76,9 @@ describe("useReconnectReplay", () => {
   it("EV-05: channel_state stopped does not terminate or clean up a Turn", async () => {
     const { api, refs, mocks } = createFixture({ currentRun: { turnScopeId: "turn-stopped" } });
     refs.activeSession.value.messages = [
-      { role: RoleEnum.USER, content: "q" },
+      { ts: "2026-01-01T00:00:00.000Z", role: RoleEnum.USER, content: "q" },
       {
+        ts: "2026-01-01T00:00:00.000Z",
         role: RoleEnum.ASSISTANT,
         dialogProcessId: "dp-stopped",
         turnScopeId: "turn-stopped",
@@ -104,7 +107,7 @@ describe("useReconnectReplay", () => {
   it("RC-04: transport terminal does not override later canonical message events", async () => {
     const { api, refs } = createFixture();
     refs.activeSession.value.messages = [
-      { role: RoleEnum.USER, content: "q" },
+      { ts: "2026-01-01T00:00:00.000Z", role: RoleEnum.USER, content: "q" },
       createCanonicalAssistant({ dialogProcessId: "dp-terminal" }),
     ];
 

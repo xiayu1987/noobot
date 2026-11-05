@@ -23,6 +23,7 @@
     "./message-identity-schema": "./src/identity/message-identity-schema.js",
     "./sessions-summary": "./src/aggregate/sessions-summary.js",
     "./session-detail": "./src/aggregate/session-detail.js",
+    "./server-clock": "./src/aggregate/server-clock.js",
     "./session-mutation-response": "./src/aggregate/session-mutation-response.js",
     "./execution-event-index": "./src/aggregate/execution-event-index.js"
   },

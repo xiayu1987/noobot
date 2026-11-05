@@ -32,6 +32,8 @@ import express, {
   withTestServer,
 } from "./session-routes.helpers.js";
 
+const WORKFLOW_SESSION_TS = "2026-08-19T00:00:00.000Z";
+
 async function writeScopedSessionDir({ sessionDir, sessionPayload, metadata = null }) {
   await writeSessionArtifact({
     storageService: TEST_STORAGE_SERVICE,
@@ -76,6 +78,8 @@ test("workflow service reads child execution events only from the workflow scope
   await writeScopedSessionDir({
     sessionDir: workflowDir,
     sessionPayload: {
+      createdAt: WORKFLOW_SESSION_TS,
+      updatedAt: WORKFLOW_SESSION_TS,
       sessionId: "child-s",
       parentSessionId: "root-s",
       caller: SESSION_CALLER.USER,
@@ -108,11 +112,12 @@ test("session-routes: workflow session returns the canonical snapshot and execut
   await writeScopedSessionDir({
     sessionDir: workflowDir,
     sessionPayload: {
+      createdAt: WORKFLOW_SESSION_TS,
       sessionId: "node-s",
       parentSessionId: "root-s",
       caller: SESSION_CALLER.USER,
       aggregateVersion: 1,
-      updatedAt: "2026-08-19T00:00:00.000Z",
+      updatedAt: WORKFLOW_SESSION_TS,
       sessionArtifactEvents: [],
       turnTimings: [],
       turnLifecycle: createEmptyTurnLifecycle(),
@@ -201,11 +206,12 @@ test("session-routes: workflow session rejects a node snapshot without session m
   await writeScopedSessionDir({
     sessionDir: path.join(workspaceRoot, "runtime/plugin-data/workflow/session/root-s/wf_node_1"),
     sessionPayload: {
+      createdAt: WORKFLOW_SESSION_TS,
       sessionId: "node-s",
       parentSessionId: "root-s",
       caller: SESSION_CALLER.USER,
       aggregateVersion: 1,
-      updatedAt: "2026-08-19T00:00:00.000Z",
+      updatedAt: WORKFLOW_SESSION_TS,
       sessionArtifactEvents: [],
       turnTimings: [],
       turnLifecycle: createEmptyTurnLifecycle(),
@@ -234,6 +240,8 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
   await writeScopedSessionDir({
     sessionDir: workflowDir,
     sessionPayload: {
+      createdAt: WORKFLOW_SESSION_TS,
+      updatedAt: WORKFLOW_SESSION_TS,
       sessionId: "node-s",
       parentSessionId: "root-s",
       caller: SESSION_CALLER.USER,
@@ -404,6 +412,8 @@ test("session-routes: workflow execution-report reads the scoped node report", a
         status: "completed",
         sessionId: "node-s",
         dialogProcessId: "wf_node_1",
+        startedAt: "2026-07-18T00:00:00.000Z",
+        finishedAt: "2026-07-18T00:00:01.000Z",
         executionSummary: summarizeExecutionLogs([]),
       }),
     ),

@@ -18,6 +18,7 @@ import { createRuntimeEventProjector } from "../../../../../../src/modules/chat/
 
 function envelope() {
   return createTurnLifecycleEnvelope({
+    finishedAt: "",
     eventType: "turn.processing_started",
     eventId: "event-1",
     commandId: "command-1",

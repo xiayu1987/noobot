@@ -20,7 +20,6 @@ import { tSystem } from "noobot-i18n/agent/system-text";
 import { validateSessionPersistenceScope } from "@noobot/session-protocol";
 import { emitModelContextTrace } from "../observability/model-context-trace-emitter.js";
 import { summarizeDiagnosticMessages } from "@noobot/context-protocol/assembly/diagnostics";
-import { AGENT_CONTEXT_MODE } from "@noobot/context-protocol";
 import { emitEvent } from "../events/index.js";
 import { isAbortError } from "../shared/utils/error-utils.js";
 import { BOT_MANAGE_LOG_EVENT, BOT_MANAGE_LOG_SOURCE } from "../bot/config/constants.js";
@@ -286,11 +285,10 @@ export class ContextBuilder {
     }
   }
 
-  async _buildSessionContext({ mode }) {
+  async buildSessionContext() {
     const sessionProjection = await this._resolveSessionRecords();
     const sessionRecords = sessionProjection.messages;
     emitModelContextTrace(this.eventListener, "context_records_resolved", {
-      mode,
       records: summarizeDiagnosticMessages(sessionRecords),
     });
     const longMemory = await this._resolveLongMemoryForInjection();
@@ -300,13 +298,5 @@ export class ContextBuilder {
       incrementalMessages: [],
       userMetaBackwrites: [],
     });
-  }
-
-  async buildNewSessionContext() {
-    return this._buildSessionContext({ mode: AGENT_CONTEXT_MODE.NEW_SESSION });
-  }
-
-  async buildExistingSessionContext() {
-    return this._buildSessionContext({ mode: AGENT_CONTEXT_MODE.EXISTING_SESSION });
   }
 }

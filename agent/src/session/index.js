@@ -85,7 +85,7 @@ function createSessionPersistenceContextFactory({
 
 export function createSessionServices(
   globalConfig,
-  { now = () => new Date().toISOString(), attachmentService, scopedSessionRoots } = {},
+  { now, attachmentService, scopedSessionRoots },
 ) {
   if (!isFunction(now)) throw new TypeError("createSessionServices requires now function");
   if (!isFunction(attachmentService?.ingest)) {
@@ -128,7 +128,6 @@ export function createSessionServices(
 
   const executionRepository = new ExecutionLogRepository({
     executionRepository: fileSystemExecutionRepository,
-    now,
   });
 
   const sessionTreeService = new SessionTreeService({
@@ -165,6 +164,7 @@ export function createSessionServices(
   const scopedArtifactReader = createScopedSessionArtifactReader({ storageService });
 
   return {
+    now,
     pathResolver,
     sessionPathResolver,
     ...createSessionLifecycleAccess(sessionRepository),
@@ -240,6 +240,11 @@ export function createSessionFacade(runtime) {
 
     async getRootSessionId({ userId, sessionId }) {
       return sessionTreeService.getRootSessionId({ userId, sessionId });
+    },
+
+    /** The session service clock; the single source for read-response `serverNow`. */
+    readServerNow() {
+      return runtime.now();
     },
 
     async getSessionDisplayData(payload = {}) {

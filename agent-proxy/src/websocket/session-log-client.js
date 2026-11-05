@@ -5,10 +5,8 @@
  */
 import { config } from "../shared/config.js";
 import { resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports";
-import {
-  createSessionChannelWebSocketClient,
-  SESSION_CHANNELS,
-} from "@noobot/runtime-events/session-channel";
+import { createSessionChannelWebSocketClient } from "@noobot/runtime-events/session-channel";
+import { SESSION_CHANNELS } from "@noobot/runtime-events/session-log-protocol";
 
 function buildLogWebSocketUrl(apiKey = "") {
   try {

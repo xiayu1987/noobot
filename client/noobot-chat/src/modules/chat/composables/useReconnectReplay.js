@@ -129,11 +129,6 @@ export function useReconnectReplay({
         replayHydrationPromise = promise;
         reconnectReplayContext.replayHydrationPromise = promise;
       },
-      onError: (error) =>
-        logReconnectReplaySystemEvent("reconnectReplay.hydration.failed", {
-          sessionId: requestedSessionId,
-          error: error.message,
-        }),
     });
     if (!isCurrentActiveSession(requestedSessionId)) return false;
     const presentationMessage = presentationMessageId
@@ -171,21 +166,6 @@ export function useReconnectReplay({
       sessionId,
       applyReconnectMessagesToActiveSession,
     });
-  }
-
-  function logReconnectReplaySystemEvent(event, payload = {}) {
-    sessionLogWebSocketClient.log(
-      scopeSessionLogRecord({
-        category: "system",
-        event,
-        sessionId: payload.sessionId,
-        data: {
-          event,
-          at: new Date().toISOString(),
-          ...payload,
-        },
-      }),
-    );
   }
 
   async function applyReconnectMessagesToActiveSession(messages, { turnScopeId }) {

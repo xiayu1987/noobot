@@ -73,7 +73,7 @@ function terminalStatusesFromRuntime(turnRuntimeRegistry, sessionId) {
       dialogProcessId: text(turn?.dialogProcessId),
       status: text(turn?.terminal).toLowerCase(),
       failureMessage: text(turn?.failure?.message),
-      updatedAt: text(turn?.finishedAt || turn?.updatedAt),
+      updatedAt: turn.finishedAt,
     }))
     .filter((status) => Boolean(status.turnScopeId));
 }
@@ -97,7 +97,6 @@ function formatTerminalStatusContent(status = {}) {
 function buildTerminalPresentation(status = {}, sessionId = "") {
   const turnScopeId = text(status?.turnScopeId);
   const dialogProcessId = text(status?.dialogProcessId);
-  const timestamp = text(status?.updatedAt);
   return {
     presentationMessageId: `turn-status-placeholder:${turnScopeId}`,
     sessionId: text(sessionId),
@@ -112,9 +111,7 @@ function buildTerminalPresentation(status = {}, sessionId = "") {
     turnStatus: { ...status },
     turnScopeId,
     dialogProcessId,
-    ts: timestamp,
-    createdAt: timestamp,
-    updatedAt: timestamp,
+    ts: status.updatedAt,
   };
 }
 
@@ -137,6 +134,7 @@ function buildLiveWorkflowPresentationMessage(workflow) {
     dialogProcessId: text(workflow?.dialogProcessId),
     turnScopeId,
     content: text(workflow?.semanticText),
+    ts: workflow.plannedAt,
     pluginMeta: {
       source: WORKFLOW_MESSAGE_IDENTITY.source,
       kind: WORKFLOW_MESSAGE_IDENTITY.kind,
@@ -151,11 +149,12 @@ function mergeWorkflowIntoShell(shell, workflowMessage) {
   const canonicalContent = text(shell?.content);
   const livePlanningContent = text(workflowMessage?.content);
   const content = canonicalContent || livePlanningContent;
+  // ts belongs to the shell: committed shells carry the Authority ts, uncommitted ones none.
+  const { ts: _liveWorkflowTs, ...liveWorkflowFields } = workflowMessage;
   const merged = {
     ...shell,
-    ...workflowMessage,
+    ...liveWorkflowFields,
     presentationMessageId: resolveMessageViewKey(shell),
-    ts: shell.ts,
     turnScopeId: shell.turnScopeId,
     dialogProcessId: workflowMessage.dialogProcessId,
     content,
@@ -184,9 +183,10 @@ function mergeTurnStatusIntoAssistant(shell, terminalPresentation) {
     shellContent && terminalContent && shellContent !== terminalContent
       ? `${shellContent}\n\n${terminalContent}`
       : shellContent || terminalContent;
+  const { ts: _terminalTs, ...terminalFields } = terminalPresentation;
   return {
     ...shell,
-    ...terminalPresentation,
+    ...terminalFields,
     presentationMessageId: resolveMessageViewKey(shell),
     turnScopeId: shell.turnScopeId,
     dialogProcessId: terminalPresentation.dialogProcessId,
@@ -194,7 +194,6 @@ function mergeTurnStatusIntoAssistant(shell, terminalPresentation) {
     toolTimeline: shell?.toolTimeline || [],
     activityTimeline: shell?.activityTimeline || [],
     attachments: shell?.attachments || [],
-    ts: shell.ts,
   };
 }
 

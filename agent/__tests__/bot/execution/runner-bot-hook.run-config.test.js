@@ -6,7 +6,11 @@
 import test from "node:test";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import assert from "node:assert/strict";
-import { createRunner, createTestAgentExecutionScope } from "./runner-bot-hook.fixtures.js";
+import {
+  ACCEPTED_TURN_STARTED_AT,
+  createRunner,
+  createTestAgentExecutionScope,
+} from "./runner-bot-hook.fixtures.js";
 
 test("SessionExecutionRunner does not let currentSessionModelAlias override selectedModel", async () => {
   let capturedRunConfig = null;
@@ -15,7 +19,7 @@ test("SessionExecutionRunner does not let currentSessionModelAlias override sele
       parentSessionId,
       usedSessionId: "s1",
       dialogProcessId: "dp1",
-      sessionLoadState: "created",
+      startedAt: ACCEPTED_TURN_STARTED_AT,
       userConfig: {},
       currentSessionModelAlias: "history-model",
       runtimeEventListener: eventListener,
@@ -51,7 +55,7 @@ test("SessionExecutionRunner restores currentSessionModelAlias when selectedMode
       parentSessionId,
       usedSessionId: "s1",
       dialogProcessId: "dp1",
-      sessionLoadState: "loaded",
+      startedAt: ACCEPTED_TURN_STARTED_AT,
       userConfig: {},
       currentSessionModelAlias: "history-model",
       runtimeEventListener: eventListener,
@@ -75,9 +79,8 @@ test("SessionExecutionRunner restores currentSessionModelAlias when selectedMode
   assert.equal(capturedRunConfig?.runtimeModel, "history-model");
 });
 
-test("SessionExecutionRunner preserves provided thinkingStartedAt", async () => {
+test("SessionExecutionRunner finalizes with the accepted Turn startedAt, not runConfig", async () => {
   let capturedFinalizePayload = null;
-  const providedThinkingStartedAt = "2026-01-02T03:04:05.006Z";
   const runner = createRunner({});
   runner.finalizeRunSession = async (payload = {}) => {
     capturedFinalizePayload = payload;
@@ -89,10 +92,11 @@ test("SessionExecutionRunner preserves provided thinkingStartedAt", async () => 
     userId: "u1",
     sessionId: "s1",
     message: "hello",
-    runConfig: { thinkingStartedAt: providedThinkingStartedAt },
+    runConfig: {},
   });
 
-  assert.equal(capturedFinalizePayload?.thinkingStartedAt, providedThinkingStartedAt);
+  assert.equal(Object.hasOwn(capturedFinalizePayload, "thinkingStartedAt"), false);
+  assert.equal(capturedFinalizePayload?.startedAt, ACCEPTED_TURN_STARTED_AT);
 });
 
 test("SessionExecutionRunner disposes the plugin activation scope exactly once after success", async () => {

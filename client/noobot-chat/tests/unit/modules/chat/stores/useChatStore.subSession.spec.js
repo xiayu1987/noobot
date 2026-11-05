@@ -244,7 +244,11 @@ describe("sub-session realtime message projection", () => {
     for (const [eventType, sequence, phase, state, executionState] of lifecycle) {
       const terminalFields =
         eventType === "turn.completed"
-          ? { completionCommitId: "child-run:completed", summaryVersion: 1 }
+          ? {
+              completionCommitId: "child-run:completed",
+              summaryVersion: 1,
+              finishedAt: "2026-01-01T00:00:04.000Z",
+            }
           : {};
       const result = store.applyTurnLifecycleEnvelope(
         createTurnLifecycleEnvelope({
@@ -261,6 +265,8 @@ describe("sub-session realtime message projection", () => {
           sequence,
           revision: sequence,
           occurredAt: `2026-01-01T00:00:0${sequence}.000Z`,
+          startedAt: "2026-01-01T00:00:01.000Z",
+          finishedAt: "",
           capabilities: {
             actionLocked: eventType !== "turn.completed",
             canStop: eventType === "turn.processing_started",
@@ -353,12 +359,18 @@ describe("sub-session realtime message projection", () => {
           sequence,
           revision: sequence,
           occurredAt: `2026-01-01T00:00:0${sequence}.000Z`,
+          startedAt: "2026-01-01T00:00:01.000Z",
+          finishedAt: "",
           capabilities: {
             actionLocked: eventType !== "turn.completed",
             canStop: eventType === "turn.processing_started",
           },
           ...(eventType === "turn.completed"
-            ? { completionCommitId: "root:completed", summaryVersion: 1 }
+            ? {
+                completionCommitId: "root:completed",
+                summaryVersion: 1,
+                finishedAt: "2026-01-01T00:00:04.000Z",
+              }
             : {}),
         }),
       );

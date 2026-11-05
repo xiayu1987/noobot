@@ -24,6 +24,7 @@ import {
 } from "./run-registry.js";
 import { EXECUTION_ABORT_TYPE, createExecutionAbortReason } from "@noobot/session-protocol";
 import { text } from "@noobot/shared/value";
+import { readServiceClockMs } from "./service-clock.js";
 
 const CHAT_CONNECTION_PERSISTENCE_SCOPE = null;
 
@@ -91,6 +92,7 @@ function createTurnRecovery({ resolveBot, commitTurnLifecycle, authInfo, persist
     createExecutionLivenessInspector({
       userId: text(authInfo?.userId),
       sessionId: request.sessionId,
+      now: () => readServiceClockMs(resolveBot()),
     });
   return {
     readSnapshot: (request) =>

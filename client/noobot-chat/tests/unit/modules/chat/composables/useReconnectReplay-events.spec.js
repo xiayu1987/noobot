@@ -92,7 +92,7 @@ describe("useReconnectReplay", () => {
   it("EV-02: THINKING updates logs and keeps pending true", async () => {
     const { api, refs } = createFixture();
     refs.activeSession.value.messages = [
-      { role: RoleEnum.USER, content: "q" },
+      { ts: "2026-01-01T00:00:00.000Z", role: RoleEnum.USER, content: "q" },
       createCanonicalAssistant({ dialogProcessId: "dp-t" }),
     ];
 
@@ -115,7 +115,7 @@ describe("useReconnectReplay", () => {
   it("EV-01: DELTA appends content and keeps pending unchanged", async () => {
     const { api, refs } = createFixture();
     refs.activeSession.value.messages = [
-      { role: RoleEnum.USER, content: "q" },
+      { ts: "2026-01-01T00:00:00.000Z", role: RoleEnum.USER, content: "q" },
       createCanonicalAssistant({ dialogProcessId: "dp-delta" }),
     ];
 
@@ -182,8 +182,14 @@ describe("useReconnectReplay", () => {
   it("EV-01f: turnless channel_state stopping does not guess an assistant or acquire the global lock", async () => {
     const { api, refs } = createFixture();
     refs.activeSession.value.messages = [
-      { role: RoleEnum.USER, content: "q" },
-      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-stop", content: "", pending: true },
+      { ts: "2026-01-01T00:00:00.000Z", role: RoleEnum.USER, content: "q" },
+      {
+        ts: "2026-01-01T00:00:00.000Z",
+        role: RoleEnum.ASSISTANT,
+        dialogProcessId: "dp-stop",
+        content: "",
+        pending: true,
+      },
     ];
 
     await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
@@ -232,7 +238,9 @@ describe("useReconnectReplay", () => {
 
   it("EV-02b: replay in-flight THINKING does not restore sending without channel_state", async () => {
     const { api, refs } = createFixture();
-    refs.activeSession.value.messages = [{ role: RoleEnum.USER, content: "q" }];
+    refs.activeSession.value.messages = [
+      { ts: "2026-01-01T00:00:00.000Z", role: RoleEnum.USER, content: "q" },
+    ];
 
     await api.applyReconnectEvent("message", {
       sessionId: "s-1",
@@ -247,12 +255,12 @@ describe("useReconnectReplay", () => {
   it("EV-01b: reconnect transaction hydrates the active presentation from session authority", async () => {
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
-      { role: RoleEnum.USER, content: "old-q", ts: 1 },
+      { role: RoleEnum.USER, content: "old-q", ts: "2026-01-01T00:00:01.000Z" },
       {
         role: RoleEnum.ASSISTANT,
         dialogProcessId: "dp-old",
         content: "old-a",
-        ts: 2,
+        ts: "2026-01-01T00:00:02.000Z",
         pending: false,
       },
     ];
@@ -267,12 +275,14 @@ describe("useReconnectReplay", () => {
         messages: [
           {
             messageUid: "u-old",
+            ts: "2026-01-01T00:00:00.000Z",
             role: RoleEnum.USER,
             content: "old-q",
             turnScopeId: "turn-dp-old",
           },
           {
             presentationMessageId: "message-dp-old",
+            ts: "2026-01-01T00:00:00.000Z",
             role: RoleEnum.ASSISTANT,
             turnScopeId: "turn-dp-old",
             dialogProcessId: "dp-old",
@@ -280,6 +290,7 @@ describe("useReconnectReplay", () => {
           },
           {
             messageUid: "u-new",
+            ts: "2026-01-01T00:00:00.000Z",
             role: RoleEnum.USER,
             content: "new-q",
             turnScopeId: "turn-dp-new",
@@ -289,7 +300,7 @@ describe("useReconnectReplay", () => {
             presentationMessageId: "message-dp-new",
             dialogProcessId: "dp-new",
             turnScopeId: "turn-dp-new",
-            ts: 4,
+            ts: "2026-01-01T00:00:04.000Z",
           }),
         ],
       }),
@@ -363,8 +374,14 @@ describe("useReconnectReplay", () => {
   it("EV-03: INTERACTION_REQUEST sets pending interaction without terminal cleanup", async () => {
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
-      { role: RoleEnum.USER, content: "q" },
-      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-int", content: "", pending: true },
+      { ts: "2026-01-01T00:00:00.000Z", role: RoleEnum.USER, content: "q" },
+      {
+        ts: "2026-01-01T00:00:00.000Z",
+        role: RoleEnum.ASSISTANT,
+        dialogProcessId: "dp-int",
+        content: "",
+        pending: true,
+      },
     ];
 
     const interaction = createInteractionEnvelope({
@@ -383,8 +400,14 @@ describe("useReconnectReplay", () => {
   it("EV-03b: non-interaction replay event does not clear interaction without channel_state", async () => {
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
-      { role: RoleEnum.USER, content: "q" },
-      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-int2", content: "", pending: true },
+      { ts: "2026-01-01T00:00:00.000Z", role: RoleEnum.USER, content: "q" },
+      {
+        ts: "2026-01-01T00:00:00.000Z",
+        role: RoleEnum.ASSISTANT,
+        dialogProcessId: "dp-int2",
+        content: "",
+        pending: true,
+      },
     ];
 
     const interaction = createInteractionEnvelope({

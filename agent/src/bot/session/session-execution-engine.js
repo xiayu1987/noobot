@@ -39,6 +39,9 @@ function assertEngineDependencies(dependencies) {
   if (missing.length) {
     throw new TypeError(`SessionExecutionEngine requires: ${missing.join(",")}`);
   }
+  if (!isFunction(dependencies.now)) {
+    throw new TypeError("SessionExecutionEngine requires now");
+  }
   if (!isFunction(dependencies.agentRunner)) {
     throw new TypeError("SessionExecutionEngine agentRunner must be a function");
   }
@@ -72,6 +75,7 @@ export class SessionExecutionEngine {
     botManager,
     agentRunner,
     pluginRuntimeBundle,
+    now,
   }) {
     this.globalConfig = globalConfig;
     this.session = session;
@@ -84,6 +88,7 @@ export class SessionExecutionEngine {
     this.botManager = botManager;
     this.agentRunner = agentRunner;
     this.pluginRuntimeBundle = pluginRuntimeBundle;
+    this.now = now;
   }
 
   _initializeCoreServices() {
@@ -96,6 +101,7 @@ export class SessionExecutionEngine {
       session: this.session,
       memory: this.memory,
       errorLogger: this.errorLogger,
+      now: this.now,
     });
   }
 
@@ -114,17 +120,19 @@ export class SessionExecutionEngine {
   _initializeExecutionServices() {
     this.turnPersister = new SessionTurnPersister({
       session: this.session,
+      now: this.now,
     });
     this.initializer = new SessionExecutionInitializer({
       session: this.session,
       configService: this.configService,
       workspaceService: this.workspaceService,
+      now: this.now,
     });
     this.finalizer = new SessionExecutionFinalizer({
       session: this.session,
       turnPersister: this.turnPersister,
       memoryPostProcessService: this.memoryPostProcessService,
-      now: () => this._now(),
+      now: this.now,
     });
   }
 
@@ -189,12 +197,8 @@ export class SessionExecutionEngine {
       ...runnerValidationDeps,
       ...runnerRuntimeDeps,
       ...runnerPersistenceDeps,
-      now: () => this._now(),
+      now: this.now,
     });
-  }
-
-  _now() {
-    return new Date().toISOString();
   }
 
   _normalizeRunMessage(message) {
@@ -253,9 +257,9 @@ export class SessionExecutionEngine {
       sessionRunner: this.runner,
       session: this.session,
       attachmentService: this.attach,
-      pluginRuntime: this.pluginRuntimeBundle.pluginRuntime,
       mergeRunConfigPluginPolicy: (payload = {}) => this._mergeRunConfigPluginPolicy(payload),
       prepareRunConfig: (payload = {}) => this._prepareRunConfig(payload),
+      now: this.now,
     });
   }
 

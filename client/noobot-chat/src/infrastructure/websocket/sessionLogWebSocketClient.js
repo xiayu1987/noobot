@@ -7,6 +7,7 @@
 import {
   buildSessionLogRecord,
   isSessionLogDebugEvent,
+  SESSION_CHANNELS,
 } from "@noobot/runtime-events/session-log-protocol";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
@@ -244,7 +245,7 @@ export function createSessionLogWebSocketClient({
     if (!isObjectLike(event)) return false;
     let record;
     try {
-      record = buildSessionLogRecord({ ...event, source });
+      record = buildSessionLogRecord({ ...event, source, channel: SESSION_CHANNELS.WEB_SOCKET });
     } catch (error) {
       rejectedInvalidCount += 1;
       console.warn("[noobot:session-log] rejected invalid record", error?.message || error);

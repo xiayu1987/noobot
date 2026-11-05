@@ -142,7 +142,7 @@ class SessionArtifactMethods {
   }
 
   _normalizeReadSession(session, sessionId, scope) {
-    const normalized = normalizeStoredSession(session, { now: this.now });
+    const normalized = normalizeStoredSession(session);
     assertSessionScopeIdentity({
       session: normalized,
       sessionId,

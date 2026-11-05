@@ -24,6 +24,7 @@ export const zhCNMessages = {
     configParams: "参数管理",
     inputUserId: "输入 User ID",
     inputConnectCode: "输入连接码",
+    connectionSettings: "连接设置",
     connecting: "连接中...",
     connect: "建立连接",
     cancel: "取消",

@@ -16,6 +16,8 @@ import {
   useRuntimeEventsUserWorkspace,
 } from "../helpers/runtime-events-env.js";
 
+const LOG_TS = "2026-05-13T00:00:00.000Z";
+
 async function makeTempDir() {
   return fs.mkdtemp(path.join(os.tmpdir(), "noobot-execution-log-repository-"));
 }
@@ -48,12 +50,11 @@ test("appendLog keeps each dialog's logs in its own turn", async (t) => {
   await useRuntimeEventsUserWorkspace(t, "u1");
   const repo = new ExecutionLogRepository({
     executionRepository: createInMemoryExecutionRepository(),
-    now: () => "2026-05-13T00:00:00.000Z",
   });
 
-  await repo.appendLog("u1", "s1", { dialogProcessId: "d1", event: "start" });
-  await repo.appendLog("u1", "s1", { dialogProcessId: "d1", event: "tool_called" });
-  await repo.appendLog("u1", "s1", { dialogProcessId: "d2", event: "start" });
+  await repo.appendLog("u1", "s1", { dialogProcessId: "d1", event: "start", ts: LOG_TS });
+  await repo.appendLog("u1", "s1", { dialogProcessId: "d1", event: "tool_called", ts: LOG_TS });
+  await repo.appendLog("u1", "s1", { dialogProcessId: "d2", event: "start", ts: LOG_TS });
 
   const d1 = await repo.getTurnLogs("u1", "s1", "d1");
   const d2 = await repo.getTurnLogs("u1", "s1", "d2");
@@ -86,7 +87,7 @@ test("getTurnLogs and appendLog preserve scoped persistence context", async (t) 
   await repo.appendLog(
     "u1",
     "child-1",
-    { event: "start", dialogProcessId: "d1" },
+    { event: "start", dialogProcessId: "d1", ts: LOG_TS },
     { persistenceContext },
   );
 
@@ -109,11 +110,10 @@ test("appendLog forwards logs without deriving a dialogProcessId", async (t) => 
         appended.push(log);
       },
     },
-    now: () => "2026-05-13T00:00:00.000Z",
   });
 
-  await repo.appendLog("u1", "s1", { dialogProcessId: "d1", event: "start" });
-  await repo.appendLog("u1", "s1", { event: "heartbeat" });
+  await repo.appendLog("u1", "s1", { dialogProcessId: "d1", event: "start", ts: LOG_TS });
+  await repo.appendLog("u1", "s1", { event: "heartbeat", ts: LOG_TS });
 
   assert.equal(appended[0].dialogProcessId, "d1");
   assert.equal(appended[1].dialogProcessId, "");
@@ -125,7 +125,6 @@ test("appendLog mirrors session execution logs to runtime-events session events"
   const eventsDir = await persistChildSessionFixture(workspaceRoot);
   const repo = new ExecutionLogRepository({
     executionRepository: createInMemoryExecutionRepository(),
-    now: () => "2026-05-13T00:00:00.000Z",
   });
 
   await repo.appendLog(
@@ -170,6 +169,7 @@ test("appendLog mirrors context identity diagnostics to their dedicated runtime-
     "s1",
     {
       dialogProcessId: "d1",
+      ts: LOG_TS,
       turnScopeId: "t1",
       event: "agent.contextIdentity.modelContextCreated",
       category: "context_identity",
@@ -205,6 +205,7 @@ test("appendLog routes model context traces to the registry-derived debug file, 
     "s1",
     {
       dialogProcessId: "d1",
+      ts: LOG_TS,
       event: "model_context_trace",
       category: "model_context_trace",
       type: "model_context_trace_debug",
@@ -235,6 +236,7 @@ test("appendLog routes durable activity events to the message channel, not syste
     "s1",
     {
       dialogProcessId: "d1",
+      ts: LOG_TS,
       event: "thinking",
       category: "activity",
       type: "thinking",

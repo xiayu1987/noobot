@@ -10,7 +10,7 @@ import {
 import { isMutationRef } from "@noobot/file-mutation-protocol";
 import { validateUserInterjectionFact } from "./thinking-detail-content-fact.js";
 import { decodeToolResultText, isToolResultError } from "./tool-result.js";
-import { MESSAGE_REMOVED_FIELD_NAME } from "@noobot/session-protocol";
+import { MESSAGE_REMOVED_FIELD_NAME, isCanonicalMessageTimestamp } from "@noobot/session-protocol";
 import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
 
 export const MESSAGE_EVENT_WIRE_EVENT = "message_event";
@@ -118,7 +118,7 @@ function validatePresentationMessage(message, expectedRole, value) {
   } else {
     if (!isCanonicalText(message.messageUid)) errors.push("missing_user_message_uid");
     if (!isCanonicalText(message.userMessageId)) errors.push("missing_user_message_id");
-    if (!isCanonicalText(message.ts)) errors.push("missing_user_ts");
+    if (!isCanonicalMessageTimestamp(message.ts)) errors.push("invalid_user_ts");
   }
   for (const [alias, code] of Object.entries(PRESENTATION_IDENTITY_ALIASES)) {
     if (Object.hasOwn(message, alias)) errors.push(`noncanonical_${expectedRole}_${code}`);

@@ -8,6 +8,7 @@ import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.
 import { TOOL_NAME } from "../../src/tools/constants/index.js";
 
 export const DETACHED_REQUEST_METADATA = Object.freeze({ scope: TOOL_NAME.CALL_MCP_TASK });
+const DETACHED_TEST_NOW = () => "2026-01-01T00:00:00.000Z";
 
 export function createDeps(overrides = {}) {
   const calls = {
@@ -21,6 +22,7 @@ export function createDeps(overrides = {}) {
     executionLogs: [],
   };
   const deps = {
+    now: DETACHED_TEST_NOW,
     workspaceService: {
       getWorkspacePath(userId = "") {
         return `/tmp/workspace/${userId}`;

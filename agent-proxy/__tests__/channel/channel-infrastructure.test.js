@@ -23,6 +23,11 @@ import { normalizeRuntimeEventEnvelope } from "@noobot/runtime-events";
 import { AGENT_TRANSPORT_EVENT } from "@noobot/agent-transport-protocol";
 import { createChannelKey, parseChannelKey } from "../../src/shared/utils.js";
 
+// Authority 时间在测试构造点显式给出：信封工厂不再补默认值。
+const AUTHORITY_TIME = "2026-01-01T00:00:00.000Z";
+const activeTiming = { occurredAt: AUTHORITY_TIME, startedAt: AUTHORITY_TIME, finishedAt: "" };
+const terminalTiming = { ...activeTiming, finishedAt: AUTHORITY_TIME };
+
 function canonicalTurnLifecycle(domainEnvelope) {
   return createEventEnvelope({
     family: EVENT_FAMILY.TURN_LIFECYCLE,
@@ -223,6 +228,7 @@ test("authoritative lifecycle delivery remains pending until the browser receipt
   });
   manager.attachSubscriber(channel, socket, { sendStateSnapshot: false });
   const lifecycle = createTurnLifecycleEnvelope({
+    ...activeTiming,
     eventType: TURN_EVENT.PROCESSING_STARTED,
     eventId: "event-1",
     commandId: "command-1",
@@ -276,6 +282,7 @@ test("newer lifecycle state supersedes the in-flight state and is delivered imme
   });
   const createLifecycle = ({ eventType, eventId, sequence, phase, state }) =>
     createTurnLifecycleEnvelope({
+      ...activeTiming,
       eventType,
       eventId,
       commandId: "command-ordered",
@@ -365,6 +372,7 @@ test("older lifecycle state is superseded by the in-flight newer state and not s
   };
   const completed = createTurnLifecycleEnvelope({
     ...base,
+    ...terminalTiming,
     eventType: TURN_EVENT.COMPLETED,
     eventId: "event-stale-completed",
     revision: 4,
@@ -376,6 +384,7 @@ test("older lifecycle state is superseded by the in-flight newer state and not s
   });
   const processing = createTurnLifecycleEnvelope({
     ...base,
+    ...activeTiming,
     eventType: TURN_EVENT.PROCESSING_STARTED,
     eventId: "event-stale-processing",
     revision: 3,
@@ -437,6 +446,7 @@ test("unacknowledged lifecycle exhausts retries and retires the unreliable socke
     },
   });
   const lifecycle = createTurnLifecycleEnvelope({
+    ...terminalTiming,
     eventType: TURN_EVENT.COMPLETED,
     eventId: "event-timeout",
     commandId: "command-timeout",
@@ -495,6 +505,7 @@ test("terminal lifecycle supersedes an unacknowledged state instead of waiting b
   };
   const processing = createTurnLifecycleEnvelope({
     ...base,
+    ...activeTiming,
     eventType: TURN_EVENT.PROCESSING_STARTED,
     eventId: "event-drop-processing",
     revision: 3,
@@ -504,6 +515,7 @@ test("terminal lifecycle supersedes an unacknowledged state instead of waiting b
   });
   const completed = createTurnLifecycleEnvelope({
     ...base,
+    ...terminalTiming,
     eventType: TURN_EVENT.COMPLETED,
     eventId: "event-drop-completed",
     revision: 4,

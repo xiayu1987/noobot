@@ -1,31 +1,18 @@
-.el-button {
-  border-radius: var(--noobot-btn-radius);
-  min-height: var(--noobot-control-height-sm);
-  transition:
-    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
-    border-color var(--noobot-duration-normal) var(--noobot-ease-standard),
-    color var(--noobot-duration-normal) var(--noobot-ease-standard);
-}
-
-.el-button:not(:disabled):hover {
-  transform: none;
-  filter: none;
-}
-
-.el-button--primary {
-  border: none;
-  background: var(--noobot-btn-primary-bg);
-}
-
-.el-button--primary:not(:disabled):hover {
-  background: var(--noobot-btn-primary-bg-hover);
-}
-
 .el-card,
 .el-dropdown-menu,
 .el-popover {
   background: color-mix(in srgb, var(--noobot-panel-bg) 94%, transparent);
   border: 1px solid var(--noobot-panel-border);
+}
+
+.noobot-select-popper,
+.noobot-dropdown-popper {
+  width: auto;
+  max-width: calc(100vw - 32px);
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--noobot-panel-border) 82%, transparent);
+  border-radius: var(--noobot-radius-md);
+  background: var(--noobot-control-menu-bg);
 }
 
 .noobot-dropdown-popper.el-popper {
@@ -35,15 +22,33 @@
   overflow: hidden;
 }
 
+.noobot-select-popper .el-select-dropdown,
+.noobot-select-popper .el-popper__content,
+.noobot-select-popper .el-scrollbar,
+.noobot-select-popper .el-scrollbar__view,
+.noobot-select-popper .el-select-dropdown__list,
+.noobot-select-popper .el-select-dropdown__wrap {
+  background: var(--noobot-control-menu-bg);
+}
+
+.noobot-select-popper .el-select-dropdown__wrap,
+.noobot-dropdown-popper .el-dropdown-menu {
+  max-height: min(40vh, 300px);
+}
+
+.noobot-select-popper .el-select-dropdown__list,
 .noobot-dropdown-popper .el-dropdown-menu {
   box-sizing: border-box;
-  max-height: min(40vh, 300px);
-  overflow: hidden auto;
-  border: 0;
-  background: var(--noobot-control-menu-bg);
   padding: var(--noobot-space-2xs);
 }
 
+.noobot-dropdown-popper .el-dropdown-menu {
+  overflow: hidden auto;
+  border: 0;
+  background: var(--noobot-control-menu-bg);
+}
+
+.noobot-select-popper .el-select-dropdown__item,
 .noobot-dropdown-popper .el-dropdown-menu__item {
   min-height: var(--noobot-control-height-xl);
   margin: 0;
@@ -52,15 +57,26 @@
   border-radius: var(--noobot-radius-xs);
   line-height: var(--noobot-line-height-balanced);
   white-space: normal;
+}
+
+.noobot-select-popper .el-select-dropdown__item {
+  height: auto;
+  background: transparent;
+}
+
+.noobot-dropdown-popper .el-dropdown-menu__item {
   overflow-wrap: anywhere;
 }
 
+.noobot-select-popper .el-select-dropdown__item.hover,
+.noobot-select-popper .el-select-dropdown__item:hover,
 .noobot-dropdown-popper .el-dropdown-menu__item:hover,
 .noobot-dropdown-popper .el-dropdown-menu__item:focus {
   background: color-mix(in srgb, var(--noobot-accent) 10%, var(--noobot-control-menu-bg));
   color: var(--noobot-text-strong);
 }
 
+.noobot-select-popper .el-select-dropdown__item.is-selected,
 .noobot-dropdown-popper .el-dropdown-menu__item.is-selected {
   background: color-mix(in srgb, var(--noobot-accent) 14%, var(--noobot-control-menu-bg));
   color: var(--noobot-text-accent);
@@ -70,6 +86,17 @@
   color: var(--noobot-text-secondary);
 }
 
+.noobot-select-popper .el-select-dropdown__item.is-selected.hover,
+.noobot-select-popper .el-select-dropdown__item.is-selected:hover {
+  background: color-mix(in srgb, var(--noobot-accent) 18%, var(--noobot-control-menu-bg));
+}
+
+.noobot-select-popper .el-select-dropdown__empty {
+  background: var(--noobot-control-menu-bg);
+  color: var(--noobot-text-secondary);
+}
+
+.noobot-select-popper .el-popper__arrow::before,
 .noobot-dropdown-popper .el-popper__arrow::before {
   border-color: color-mix(in srgb, var(--noobot-panel-border) 82%, transparent);
   background: var(--noobot-control-menu-bg);

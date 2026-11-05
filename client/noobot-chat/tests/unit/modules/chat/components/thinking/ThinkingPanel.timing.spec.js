@@ -12,6 +12,20 @@ import {
   getTurnUiState,
   setTurnThinkingOpenNames,
 } from "../../../../../../src/modules/chat/runtime/engine/turnUiStore.js";
+import {
+  observeServerClock,
+  resetServerClock,
+} from "../../../../../../src/modules/chat/model/serverClock.js";
+
+// 客户端时钟比服务端慢 113s（与现场证据一致）；耗时必须按服务端时钟域计算。
+const CLIENT_NOW = "2026-06-22T09:58:19.000Z";
+const SERVER_NOW = "2026-06-22T10:00:12.000Z";
+
+function observeSkewedServerClock() {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date(CLIENT_NOW));
+  observeServerClock({ serverNow: SERVER_NOW });
+}
 
 function runtime(overrides = {}) {
   return {
@@ -28,6 +42,7 @@ function runtime(overrides = {}) {
 
 function thinkingMessage(overrides = {}) {
   return {
+    ts: "2026-01-01T00:00:00.000Z",
     role: "assistant",
     content: "",
     sessionId: "session-1",
@@ -39,11 +54,13 @@ function thinkingMessage(overrides = {}) {
 
 describe("ThinkingPanel runtime timing", () => {
   beforeEach(() => localStorage.clear());
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => {
+    resetServerClock();
+    vi.useRealTimers();
+  });
 
-  it("uses the Runtime Store start time while running", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-06-22T10:00:12.000Z"));
+  it("uses the Runtime Store start time against the server clock while running", () => {
+    observeSkewedServerClock();
     const wrapper = mountThinkingPanel(thinkingMessage({ pending: false }), {
       runtime: runtime({
         running: true,
@@ -54,6 +71,20 @@ describe("ThinkingPanel runtime timing", () => {
     expect(getTurnUiState(thinkingMessage()).thinkingOpenNames).toEqual(["thinking-panel"]);
     expect(wrapper.text()).toContain("00:12");
     expect(wrapper.find(".thinking-realtime-shell").classes()).toContain("is-running");
+  });
+
+  it("shows an unknown running duration before the server clock is observed", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(CLIENT_NOW));
+    const wrapper = mountThinkingPanel(thinkingMessage({ pending: false }), {
+      runtime: runtime({
+        running: true,
+        phase: "processing",
+        startedAt: "2026-06-22T10:00:00.000Z",
+      }),
+    });
+    expect(wrapper.text()).toContain("--:--");
+    expect(wrapper.text()).not.toContain("00:00");
   });
 
   it("uses Runtime Store start and finish time after completion", () => {
@@ -103,8 +134,7 @@ describe("ThinkingPanel runtime timing", () => {
   });
 
   it("reacts when the selected Runtime Store view completes", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-06-22T10:00:12.000Z"));
+    observeSkewedServerClock();
     const wrapper = mountThinkingPanel(thinkingMessage(), {
       runtime: runtime({
         running: true,

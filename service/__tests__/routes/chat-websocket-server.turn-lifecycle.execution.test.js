@@ -107,18 +107,17 @@ test("authoritative lifecycle follows accepted -> running -> processed -> summar
     const inputs = authoritative.commitInputs();
     assert.equal(inputs[0].createSessionIfAbsent, true);
     assert.equal(inputs[0].action, "send");
-    const authoritativeStartedAt = inputs[0].startedAt;
-    assert.equal(Number.isNaN(Date.parse(authoritativeStartedAt)), false);
-    assert.notEqual(authoritativeStartedAt, payload.config.thinkingStartedAt);
-    assert.equal(turn.startedAt, authoritativeStartedAt);
-    assert.equal(authoritative.lastRunConfig().thinkingStartedAt, authoritativeStartedAt);
+    // startedAt is allocated by the Authority clock; neither the request nor runConfig carries it.
+    assert.equal(Object.hasOwn(inputs[0], "startedAt"), false);
+    assert.equal(Number.isNaN(Date.parse(turn.startedAt)), false);
+    assert.equal(Object.hasOwn(authoritative.lastRunConfig(), "thinkingStartedAt"), false);
     assert.equal(Object.hasOwn(turn, LEGACY_MESSAGE_ID), false);
     assert.equal(turn.presentationMessageId, authoritative.lastRunConfig().presentationMessageId);
     const completedEnvelope = events.find(
       (item) =>
         item?.event === "turn_lifecycle" && item?.data?.payload?.eventType === TURN_EVENT.COMPLETED,
     );
-    assert.equal(completedEnvelope.data.payload.startedAt, authoritativeStartedAt);
+    assert.equal(completedEnvelope.data.payload.startedAt, turn.startedAt);
     assert.equal(Object.hasOwn(completedEnvelope.data.identity, "messageId"), false);
     assert.equal(completedEnvelope.data.payload.presentationMessageId, turn.presentationMessageId);
     assert.equal(Boolean(completedEnvelope.data.payload.finishedAt), true);
@@ -264,6 +263,8 @@ test("deduplicated lifecycle commands do not bypass the acknowledged authority o
   let eventIdSequence = 0;
   const bot = {
     session: {
+      /** Test double of the service session clock (real wall clock, like production). */
+      readServerNow: () => new Date().toISOString(),
       applyTurnLifecycleEvent: async ({ persistenceScope, ...event }) => {
         const { lifecycleEvent } = acceptFakeAgentTurnLifecycleEvent(lifecycle, event);
         const result = commitTurnLifecycle({
@@ -272,6 +273,7 @@ test("deduplicated lifecycle commands do not bypass the acknowledged authority o
           event: lifecycleEvent,
           eventOutbox,
           createEventId: () => `deduplicated-event-${++eventIdSequence}`,
+          now: () => "2026-01-01T00:00:00.000Z",
         });
         if (result.applied) {
           lifecycle = result.lifecycle;
@@ -343,7 +345,6 @@ test("deduplicated lifecycle commands do not bypass the acknowledged authority o
     commandId: "command-deduplicated-ack",
     causationId: "command-deduplicated-ack",
     eventType: TURN_EVENT.ACTION_ACCEPTED,
-    startedAt: "2026-07-18T00:00:00.000Z",
     ...createAcceptedAgentExecutionIdentity({ turnScopeId: "turn-deduplicated-ack" }),
     phase: TURN_PHASE.ACTION,
     action: "send",

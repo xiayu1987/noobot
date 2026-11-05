@@ -97,7 +97,10 @@ process.once("SIGTERM", () => void shutdown("SIGTERM"));
 
 const stopStartupHeartbeat = startStartupHeartbeat();
 try {
-  const reportProgress = createThrottledProgressReporter({ write: writeStartupProgressEvent });
+  const reportProgress = createThrottledProgressReporter({
+    write: writeStartupProgressEvent,
+    now: () => performance.now(),
+  });
   const preparation = await prepareUserWorkspaces({
     userIds: await readSessionUserIds(),
     bot: getBot(),

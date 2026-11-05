@@ -126,7 +126,7 @@ test("ContextBuilder binds Session persistence authority before constructing too
     selectedConnectorIds: [],
   });
 
-  const executionScope = await builder.buildNewSessionContext();
+  const executionScope = await builder.buildSessionContext();
   const tool = executionScope.bindings.tools.find((item) => item.name === "user_interaction");
   assert.ok(tool);
   await tool.invoke({
@@ -143,7 +143,7 @@ test("ContextBuilder binds Session persistence authority before constructing too
   });
 });
 
-test("buildNewSessionContext always projects explicitly selected connectors", async () => {
+test("buildSessionContext always projects explicitly selected connectors", async () => {
   const builder = createBuilderForAttachmentRuntimeTest({
     runtimeIdentity: attachmentRuntimeIdentity("dp-connectors", { parentSessionId: "" }),
     promptSections: ["base_prompt", "system_runtime"],
@@ -173,13 +173,13 @@ test("buildNewSessionContext always projects explicitly selected connectors", as
     persistenceScope: null,
   });
 
-  const context = await builder.buildNewSessionContext();
+  const context = await builder.buildSessionContext();
   const systemText = context.context.modelContext.messageBlocks.system.join("\n");
   assert.equal(systemText.includes('"connector_id": "con_db"'), true);
   assert.equal(systemText.includes('"connector_name": "primary"'), true);
 });
 
-test("buildNewSessionContext emits the default agent context debug structure", async () => {
+test("buildSessionContext emits the default agent context debug structure", async () => {
   const events = [];
   const builder = createBuilderForAttachmentRuntimeTest({
     runtimeIdentity: attachmentRuntimeIdentity("dp-debug", { parentSessionId: "" }),
@@ -197,7 +197,7 @@ test("buildNewSessionContext emits the default agent context debug structure", a
     persistenceScope: null,
   });
 
-  await builder.buildNewSessionContext();
+  await builder.buildSessionContext();
 
   const event = events.find((item = {}) => item.event === "agent.context.executionScopeCreated");
   assert.ok(event);
@@ -211,7 +211,7 @@ test("buildNewSessionContext emits the default agent context debug structure", a
   assert.equal(JSON.stringify(event.data).includes("abortSignal"), false);
 });
 
-test("buildNewSessionContext binds userMessageAttachments into runtime", async () => {
+test("buildSessionContext binds userMessageAttachments into runtime", async () => {
   const builder = createBuilderForAttachmentRuntimeTest({
     runtimeIdentity: attachmentRuntimeIdentity("dp_1", { parentSessionId: "" }),
     userMessageAttachments: [
@@ -234,12 +234,12 @@ test("buildNewSessionContext binds userMessageAttachments into runtime", async (
     persistenceScope: null,
   });
 
-  const context = await builder.buildNewSessionContext();
+  const context = await builder.buildSessionContext();
   assert.equal(context?.bindings?.runtime?.userMessageAttachments?.[0]?.attachmentId, "att_input");
   assert.deepEqual(context?.bindings?.runtime?.attachments, []);
 });
 
-test("buildNewSessionContext marks normalized superAdmin user as super user", async () => {
+test("buildSessionContext marks normalized superAdmin user as super user", async () => {
   const configuredSuperUserId = "xiayu-owner";
   const builder = new ContextBuilder({
     config: {
@@ -282,7 +282,7 @@ test("buildNewSessionContext marks normalized superAdmin user as super user", as
     },
   });
 
-  const context = await builder.buildNewSessionContext();
+  const context = await builder.buildSessionContext();
   assert.equal(context?.bindings?.runtime?.systemRuntime?.isSuperUser, true);
   assert.equal(context?.context?.environment?.permissions?.isSuperUser, true);
   assert.equal(
@@ -297,7 +297,7 @@ test("buildNewSessionContext marks normalized superAdmin user as super user", as
   );
 });
 
-test("buildNewSessionContext keeps turn identity in runtime but excludes it from system text", async () => {
+test("buildSessionContext keeps turn identity in runtime but excludes it from system text", async () => {
   const builder = new ContextBuilder({
     config: { globalConfig: { workspaceRoot: "/tmp/noobot-test-workspace" }, userConfig: {} },
     serviceContainer: {
@@ -329,7 +329,7 @@ test("buildNewSessionContext keeps turn identity in runtime but excludes it from
     },
   });
 
-  const context = await builder.buildNewSessionContext();
+  const context = await builder.buildSessionContext();
   const runtime = context.bindings.runtime.systemRuntime;
   const systemText = context.context.modelContext.messageBlocks.system.join("\n");
 
@@ -341,7 +341,7 @@ test("buildNewSessionContext keeps turn identity in runtime but excludes it from
   assert.equal(systemText.includes("turn-runtime-only"), false);
 });
 
-test("buildNewSessionContext keeps super user identity in system message when system_runtime is excluded", async () => {
+test("buildSessionContext keeps super user identity in system message when system_runtime is excluded", async () => {
   const configuredSuperUserId = "system-owner";
   const builder = new ContextBuilder({
     config: {
@@ -384,7 +384,7 @@ test("buildNewSessionContext keeps super user identity in system message when sy
     },
   });
 
-  const context = await builder.buildNewSessionContext();
+  const context = await builder.buildSessionContext();
   const systemText = context.context.modelContext.messageBlocks.system.join("\n");
   assert.equal(context?.context?.environment?.permissions?.isSuperUser, true);
   assert.equal(systemText.includes('"identity"'), true);
@@ -447,7 +447,7 @@ test("buildContextMessageBlocks prefers runtime userMessageAttachments for user 
   assert.equal(String(metaMessage.content || "").includes("att_legacy"), false);
 });
 
-test("buildNewSessionContext keeps user message attachments separate from runtime generated attachments when attachments section is excluded", async () => {
+test("buildSessionContext keeps user message attachments separate from runtime generated attachments when attachments section is excluded", async () => {
   const builder = createBuilderForAttachmentRuntimeTest({
     runtimeIdentity: attachmentRuntimeIdentity("dp_1", { parentSessionId: "" }),
     userMessageAttachments: [
@@ -470,7 +470,7 @@ test("buildNewSessionContext keeps user message attachments separate from runtim
     persistenceScope: null,
   });
 
-  const context = await builder.buildNewSessionContext();
+  const context = await builder.buildSessionContext();
   const runtime = context?.bindings?.runtime || {};
   assert.equal(Array.isArray(runtime.userMessageAttachments), true);
   assert.equal(runtime.userMessageAttachments.length, 1);
@@ -478,7 +478,7 @@ test("buildNewSessionContext keeps user message attachments separate from runtim
   assert.deepEqual(runtime.attachments, []);
 });
 
-test("buildNewSessionContext resolves session history and passes edited turnScopeId", async () => {
+test("buildSessionContext resolves session history and passes edited turnScopeId", async () => {
   const calls = [];
   const builder = new ContextBuilder({
     config: {
@@ -541,7 +541,7 @@ test("buildNewSessionContext resolves session history and passes edited turnScop
     },
   });
 
-  const context = await builder.buildNewSessionContext();
+  const context = await builder.buildSessionContext();
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0]?.currentDialogProcessId, "dp-current");
@@ -694,11 +694,11 @@ function createBuilderForLongMemoryTest(
   });
 }
 
-test("buildNewSessionContext resolves user level long memory on the first turn", async () => {
+test("buildSessionContext resolves user level long memory on the first turn", async () => {
   const readLongMemoryCalls = [];
   const builder = createBuilderForLongMemoryTest(readLongMemoryCalls);
 
-  const context = await builder.buildNewSessionContext();
+  const context = await builder.buildSessionContext();
 
   assert.deepEqual(readLongMemoryCalls, [{ userId: "u1" }]);
   assert.equal(
@@ -706,21 +706,6 @@ test("buildNewSessionContext resolves user level long memory on the first turn",
       String(item || "").includes("remembered-long-memory"),
     ),
     true,
-  );
-});
-
-test("buildExistingSessionContext resolves the same long memory as a new session", async () => {
-  const newSessionCalls = [];
-  const existingSessionCalls = [];
-  const newSessionContext =
-    await createBuilderForLongMemoryTest(newSessionCalls).buildNewSessionContext();
-  const existingSessionContext =
-    await createBuilderForLongMemoryTest(existingSessionCalls).buildExistingSessionContext();
-
-  assert.deepEqual(existingSessionCalls, newSessionCalls);
-  assert.deepEqual(
-    existingSessionContext.context.modelContext.messageBlocks.system,
-    newSessionContext.context.modelContext.messageBlocks.system,
   );
 });
 
@@ -736,7 +721,7 @@ test("a long memory read failure is recorded and the turn continues without long
     },
     errorLogs,
     events,
-  }).buildNewSessionContext();
+  }).buildSessionContext();
 
   assert.deepEqual(
     errorLogs.map((entry) => [entry.event, entry.error, entry.extra.stage]),
@@ -761,7 +746,7 @@ test("an aborted long memory read is rethrown and not recorded", async () => {
       },
       errorLogs,
       abortSignal: controller.signal,
-    }).buildNewSessionContext(),
+    }).buildSessionContext(),
     { name: "AbortError" },
   );
   assert.deepEqual(errorLogs, []);

@@ -10,6 +10,7 @@ import { assertSessionArtifactEvents } from "@noobot/event-protocol";
 import {
   assertSessionAggregateInvariants,
   assertSessionAggregateShape,
+  isCanonicalMessageTimestamp,
   requireSessionAggregateVersion,
   mergeTurnTimingRecord,
   normalizeTurnTimingRecord,
@@ -22,7 +23,7 @@ import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { normalizeSessionTree } from "@noobot/workspace-protocol/session-tree";
 import { objectRecord } from "./entity-primitives.js";
 import { normalizeMessagesEntity } from "./message-entity.js";
-import { firstText, text } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
 
 function normalizeTurnTimingsEntity(turnTimings) {
   const byKey = new Map();
@@ -37,11 +38,17 @@ function normalizeTurnTimingsEntity(turnTimings) {
   return [...byKey.values()];
 }
 
-function resolveSessionNormalizationContext(session, { now }) {
-  const nowValue = now();
+function requireSessionTimestamp(session, field) {
+  const value = session?.[field];
+  if (!isCanonicalMessageTimestamp(value)) {
+    throw new TypeError(`session ${field} must be a canonical ISO timestamp`);
+  }
+  return value;
+}
+
+function resolveSessionNormalizationContext(session) {
   const shortMemoryCheckpoint = Number(session?.shortMemoryCheckpoint);
   return {
-    nowValue,
     customTitle: text(session?.customTitle),
     autoTitle: text(session?.autoTitle),
     shortMemoryCheckpoint: Number.isFinite(shortMemoryCheckpoint) ? shortMemoryCheckpoint : 0,
@@ -69,22 +76,19 @@ function createNormalizedSessionEntity(session, context, messages) {
       session.sessionId,
     ),
     selectedConnectorIds: normalizeSelectedConnectorIds(session?.selectedConnectorIds),
-    createdAt: firstText(session?.createdAt, context.nowValue),
-    updatedAt: firstText(session?.updatedAt, context.nowValue),
+    createdAt: requireSessionTimestamp(session, "createdAt"),
+    updatedAt: requireSessionTimestamp(session, "updatedAt"),
   };
 }
 
-export function normalizeSessionEntity(
-  session = {},
-  { now = () => new Date().toISOString() } = {},
-) {
+export function normalizeSessionEntity(session) {
   if ("version" in session || "revision" in session) {
     throw new TypeError(
       "legacy session version fields are not supported; run the session protocol migration",
     );
   }
   assertSessionAggregateShape(session);
-  const context = resolveSessionNormalizationContext(session, { now });
+  const context = resolveSessionNormalizationContext(session);
   const normalizedMessages = normalizeMessagesEntity(session.messages);
   if ("turnSummaryCheckpoints" in session) {
     assertTurnSummaryCheckpoints(session.turnSummaryCheckpoints);

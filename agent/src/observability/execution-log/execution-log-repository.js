@@ -25,9 +25,8 @@ function mapExecutionLogToSessionChannel(normalizedLog = {}) {
 }
 
 export class ExecutionLogRepository {
-  constructor({ executionRepository = null, now = () => new Date().toISOString() } = {}) {
+  constructor({ executionRepository = null } = {}) {
     this.executionRepository = executionRepository;
-    this.now = now;
     this.appendQueues = new Map();
   }
 
@@ -50,7 +49,7 @@ export class ExecutionLogRepository {
       data: {
         executionCategory: normalizedLog.category || "",
         type: normalizedLog.type || "",
-        ts: normalizedLog.ts || "",
+        ts: normalizedLog.ts,
         ...logData,
       },
     });
@@ -117,7 +116,7 @@ export class ExecutionLogRepository {
   async appendLog(userId, sessionId, executionLog, { persistenceContext } = {}) {
     const normalizedSessionId = this._requireSessionId(sessionId);
     return this._withSessionAppendQueue(userId, normalizedSessionId, async () => {
-      const normalizedLog = normalizeExecutionLogEntity(executionLog, this.now);
+      const normalizedLog = normalizeExecutionLogEntity(executionLog);
       await Promise.all([
         this.executionRepository.appendLog(userId, normalizedSessionId, normalizedLog, {
           persistenceContext,

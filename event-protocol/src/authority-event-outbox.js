@@ -81,6 +81,38 @@ export function migrateLegacyAuthorityEventOutbox(source = []) {
 const AUTHORITY_OUTBOX_PENDING_BATCH_SIZE =
   QUANTITY_THRESHOLDS.eventProtocol.authorityOutboxPendingBatchSize;
 
+function isUnownedLegacyAttempt(record) {
+  return (
+    isPlainObject(record) &&
+    record.op === AUTHORITY_OUTBOX_JOURNAL_OP.ATTEMPT &&
+    !Object.hasOwn(record, "consumerId")
+  );
+}
+
+/**
+ * 存量规则：早期写入方的 attempt 记录不带 consumerId。
+ * 之后已有同 eventId ack 的 attempt 不再承载送达事实，直接删除；
+ * 未被 ack 覆盖的保持原样，由 assertAuthorityOutboxJournalRecord 拒绝，不推断归属。
+ */
+export function migrateLegacyUnownedAttemptRecords(records) {
+  requireOutbox(Array.isArray(records), "journal records must be an array");
+  const kept = [];
+  for (const [index, record] of records.entries()) {
+    const covered =
+      isUnownedLegacyAttempt(record) &&
+      records
+        .slice(index + 1)
+        .some(
+          (later) =>
+            isPlainObject(later) &&
+            later.op === AUTHORITY_OUTBOX_JOURNAL_OP.ACK &&
+            later.eventId === record.eventId,
+        );
+    if (!covered) kept.push(record);
+  }
+  return { records: kept, changed: kept.length !== records.length };
+}
+
 export function listPendingAuthorityEvents(source, { consumerId }) {
   const normalizedConsumerId = requireOutboxText(consumerId, "consumerId");
   return normalizeAuthorityEventOutbox(source)

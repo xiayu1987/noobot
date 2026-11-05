@@ -60,7 +60,7 @@ async function saveFailureReport(context, failure) {
       dialogProcessId,
       turnScopeId: context.turnScopeId,
       caller: context.caller,
-      startedAt: context.resolvedRunConfig?.thinkingStartedAt,
+      startedAt: context.initializedSession.startedAt,
       finishedAt: context.now(),
       executionSummary,
       summaryError,
@@ -160,11 +160,12 @@ function assertFailureInitializationState({ preparedBotHook, initializedSession 
     !(
       isPlainObject(initializedSession) &&
       initializedSession.sessionId &&
-      initializedSession.dialogProcessId
+      initializedSession.dialogProcessId &&
+      initializedSession.startedAt
     )
   ) {
     throw new TypeError(
-      "handleSessionRunFailure initializedSession must be null or { sessionId, dialogProcessId }",
+      "handleSessionRunFailure initializedSession must be null or { sessionId, dialogProcessId, startedAt }",
     );
   }
 }

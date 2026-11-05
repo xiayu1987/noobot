@@ -234,7 +234,6 @@ test("terminal resolution reads status from the Turn without returning messages"
     event(TURN_EVENT.ACTION_ACCEPTED, "r1", 0, {
       action: "send",
       phase: TURN_PHASE.ACTION,
-      startedAt: "2026-07-17T23:59:30.000Z",
     }),
   );
   await h.service.applyTurnLifecycleEvent(
@@ -273,7 +272,8 @@ test("terminal resolution reads status from the Turn without returning messages"
   assert.equal(response.resolved, true);
   assert.equal(response.turn.terminalStatus.status, "completed");
   assert.equal(response.turn.executionState, "completed");
-  assert.equal(response.turn.startedAt, "2026-07-17T23:59:30.000Z");
+  // Both instants come from the Authority clock injected into the harness.
+  assert.equal(response.turn.startedAt, "2026-07-18T00:00:00.000Z");
   assert.equal(response.turn.finishedAt, "2026-07-18T00:00:00.000Z");
   assert.equal(Object.hasOwn(response, "materialization"), false);
   assert.equal(JSON.stringify(response).includes('"messages"'), false);
@@ -304,7 +304,7 @@ test("noncanonical terminal snapshots are rejected without mutating Turns", () =
     },
   };
   const before = structuredClone(source);
-  assert.throws(() => normalizeSessionEntity(source, { now }), {
+  assert.throws(() => normalizeSessionEntity(source), {
     code: "TURN_LIFECYCLE_RECORD_INVALID",
   });
   assert.deepEqual(source, before);

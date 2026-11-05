@@ -18,6 +18,7 @@ import {
 import { recordServiceWebSocketLifecycle } from "./runtime-events.js";
 import { selectAuthoritativeActiveTurn } from "@noobot/authoritative-state/application";
 import { recoverPersistedTurn } from "./turn-recovery.js";
+import { readServiceClockMs } from "./service-clock.js";
 import {
   acceptRunCommand,
   bindExistingRun,
@@ -41,6 +42,7 @@ function createConflictTurnRecovery(context) {
       inspectExecution: createExecutionLivenessInspector({
         userId: context.canonicalRunOwnerId,
         sessionId,
+        now: () => readServiceClockMs(context.resolveBot()),
       }),
       commitTurnLifecycle: context.commitTurnLifecycle,
     });

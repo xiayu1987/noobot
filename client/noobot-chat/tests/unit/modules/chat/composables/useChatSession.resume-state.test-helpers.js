@@ -9,7 +9,11 @@ import { jsonResponse } from "../../../helpers/jsonResponse.js";
 import { terminalStatusFixture } from "../helpers/terminalStatusFixture.js";
 import { turnRecordFixture } from "../helpers/turnRecordFixture.js";
 import { createSessionDetailDocument } from "@noobot/session-protocol/session-detail";
-import { detailEntryWithLifecycle } from "../../../helpers/sessionDetailFixture.js";
+import { withServerNow } from "@noobot/session-protocol/server-clock";
+import {
+  FIXTURE_SERVER_NOW,
+  detailEntryWithLifecycle,
+} from "../../../helpers/sessionDetailFixture.js";
 
 export function detailResponse(options) {
   const payload = detailPayload(options);
@@ -17,36 +21,41 @@ export function detailResponse(options) {
 }
 
 export function detailPayload({ sessionId, dialogProcessId, turnScopeId, turnLifecycleSnapshot }) {
-  return {
-    ok: true,
-    ...createSessionDetailDocument({
-      sessionId,
-      sessions: [
-        detailEntryWithLifecycle({
-          sessionId,
-          title: sessionId,
-          aggregateVersion: 1,
-          turnTimings: [],
-          turnLifecycleSnapshot,
-          messages: [
-            {
-              role: RoleEnum.USER,
-              messageUid: `user-${turnScopeId}`,
-              content: "question",
-              turnScopeId,
-            },
-            {
-              role: RoleEnum.ASSISTANT,
-              presentationMessageId: `msg-${turnScopeId}`,
-              content: "answer",
-              dialogProcessId,
-              turnScopeId,
-            },
-          ],
-        }),
-      ],
-    }),
-  };
+  return withServerNow(
+    {
+      ok: true,
+      ...createSessionDetailDocument({
+        sessionId,
+        sessions: [
+          detailEntryWithLifecycle({
+            sessionId,
+            title: sessionId,
+            aggregateVersion: 1,
+            turnTimings: [],
+            turnLifecycleSnapshot,
+            messages: [
+              {
+                role: RoleEnum.USER,
+                ts: "2026-01-01T00:00:00.000Z",
+                messageUid: `user-${turnScopeId}`,
+                content: "question",
+                turnScopeId,
+              },
+              {
+                role: RoleEnum.ASSISTANT,
+                ts: "2026-01-01T00:00:00.000Z",
+                presentationMessageId: `msg-${turnScopeId}`,
+                content: "answer",
+                dialogProcessId,
+                turnScopeId,
+              },
+            ],
+          }),
+        ],
+      }),
+    },
+    FIXTURE_SERVER_NOW,
+  );
 }
 
 export function terminalLifecycleSnapshot({

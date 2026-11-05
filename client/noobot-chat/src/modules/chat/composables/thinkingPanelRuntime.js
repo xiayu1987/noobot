@@ -5,12 +5,8 @@
  */
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { onBeforeUnmount, ref, watch } from "vue";
-import {
-  formatDurationMs,
-  nowMs,
-  resolveThinkingDurationMs,
-  resolveTimeMs,
-} from "../model/timeFields.js";
+import { formatDurationMs, resolveThinkingDurationMs, resolveTimeMs } from "../model/timeFields.js";
+import { readServerNowMs } from "../model/serverClock.js";
 import {
   getMessageDialogProcessId,
   getMessageRole,
@@ -22,7 +18,7 @@ import { logThinkingReplayDebug } from "../../debug/loggers/thinkingReplayDebugL
 import { setTurnThinkingOpenNames } from "../runtime/engine/turnUiStore.js";
 
 export function useThinkingRuntime(props, getRuntimeView) {
-  const nowTick = ref(nowMs());
+  const nowTick = ref(readServerNowMs());
   let timer = null;
   let lastRenderRuntimeSignature = "";
   function getThinkingDurationLabel() {
@@ -74,7 +70,7 @@ export function useThinkingRuntime(props, getRuntimeView) {
   function startTimer() {
     if (timer) return;
     timer = setInterval(() => {
-      nowTick.value = nowMs();
+      nowTick.value = readServerNowMs();
     }, TIME_THRESHOLDS.client.thinkingElapsedRefreshIntervalMs);
   }
 
@@ -108,11 +104,11 @@ export function useThinkingRuntime(props, getRuntimeView) {
         getMessageSessionId(props.messageItem),
         getMessageDialogProcessId(props.messageItem),
         getMessageTurnScopeId(props.messageItem),
-        runtime.state || "",
+        runtime.state,
         runtime.running === true,
-        runtime.terminal || "",
-        runtime.startedAt || "",
-        runtime.finishedAt || "",
+        runtime.terminal,
+        runtime.startedAt,
+        runtime.finishedAt,
       ].join("|");
     },
     (signature) => {
@@ -123,11 +119,11 @@ export function useThinkingRuntime(props, getRuntimeView) {
         sessionId: getMessageSessionId(props.messageItem),
         dialogProcessId: getMessageDialogProcessId(props.messageItem),
         turnScopeId: getMessageTurnScopeId(props.messageItem),
-        runtimeState: runtime.state || "",
+        runtimeState: runtime.state,
         running: runtime.running === true,
-        terminal: runtime.terminal || null,
-        startedAt: runtime.startedAt || "",
-        finishedAt: runtime.finishedAt || "",
+        terminal: runtime.terminal,
+        startedAt: runtime.startedAt,
+        finishedAt: runtime.finishedAt,
         pending: props.messageItem?.pending === true,
         messageRole: getMessageRole(props.messageItem),
       }));

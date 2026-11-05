@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import path from "node:path";
 import { readFile, writeFile } from "node:fs/promises";
-import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
+import { SESSION_ARTIFACT_SCHEMA_VERSION, SESSION_ERROR_CODE } from "@noobot/session-protocol";
 import { createPluginArtifactEnvelope } from "@noobot/event-protocol";
 import { buildHarness } from "./session/scoped-session-repositories.fixtures.js";
 import {
@@ -79,7 +79,7 @@ test("v28 migrates schema19 absence, preserves artifact facts and converges on r
   assert.deepEqual(first.quarantined, []);
   assert.equal(first.sessions.length, 1);
   const session = await readSessionArtifact({ storageService, sessionDir });
-  assert.equal(session.schemaVersion, 21);
+  assert.equal(session.schemaVersion, SESSION_ARTIFACT_SCHEMA_VERSION);
   assert.deepEqual(session.sessionArtifactEvents, []);
   const artifact = createPluginArtifactEnvelope({
     sessionId: SESSION_ID,

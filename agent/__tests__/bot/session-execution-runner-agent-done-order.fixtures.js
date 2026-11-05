@@ -116,7 +116,7 @@ export function createRunner({
       usedSessionId: "session-used",
       parentSessionId,
       dialogProcessId: "dialog-1",
-      sessionLoadState: "created",
+      startedAt: "2026-05-21T00:00:00.000Z",
       userConfig: {},
       currentSessionModelAlias: "",
       runtimeEventListener: { flush: async () => {}, ...eventListener },

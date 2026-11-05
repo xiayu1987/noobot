@@ -18,6 +18,7 @@ export function settleStoppedTurn(
   const result = applyTurnTerminalResolution(
     turnRuntimeRegistry.value,
     createTurnTerminalResolution({
+      generatedAt: "2026-11-01T00:00:00.000Z",
       commandId: `resolve-${turnScopeId}-${revision}`,
       sessionId,
       turnScopeId,

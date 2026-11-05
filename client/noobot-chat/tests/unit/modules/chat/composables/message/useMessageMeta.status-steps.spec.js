@@ -43,6 +43,9 @@ function applyLifecycle(
     store.turnRuntimeRegistry,
     createTurnLifecycleEnvelope({
       updatedAt: "2026-01-01T00:00:00.000Z",
+      occurredAt: "2026-01-01T00:00:00.000Z",
+      startedAt: "2026-01-01T00:00:00.000Z",
+      finishedAt: "",
       eventType,
       eventId: `${eventType}:${sessionId}:${turnScopeId}:${revision}`,
       commandId: `${action}:${turnScopeId}`,
@@ -91,6 +94,7 @@ function settleTurn(store, { sessionId, turnScopeId, state }) {
   return applyTurnTerminalResolution(
     store.turnRuntimeRegistry,
     createTurnTerminalResolution({
+      generatedAt: "2026-11-01T00:00:00.000Z",
       commandId: `resolve-${turnScopeId}-${state}`,
       sessionId,
       turnScopeId,

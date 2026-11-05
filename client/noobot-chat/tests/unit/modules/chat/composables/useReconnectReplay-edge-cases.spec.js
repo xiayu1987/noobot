@@ -30,7 +30,10 @@ describe("useReconnectReplay", () => {
       dialogProcessId: "dp-order",
       turnScopeId: "turn-order",
     });
-    refs.activeSession.value.messages = [{ role: RoleEnum.USER, content: "q" }, assistant];
+    refs.activeSession.value.messages = [
+      { ts: "2026-01-01T00:00:00.000Z", role: RoleEnum.USER, content: "q" },
+      assistant,
+    ];
     const result = await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
       sessionId: "s-1",
       dialogProcessId: "dp-order",
@@ -47,8 +50,9 @@ describe("useReconnectReplay", () => {
     vi.useFakeTimers();
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
-      { role: RoleEnum.USER, content: "q" },
+      { ts: "2026-01-01T00:00:00.000Z", role: RoleEnum.USER, content: "q" },
       {
+        ts: "2026-01-01T00:00:00.000Z",
         role: RoleEnum.ASSISTANT,
         content: "",
         pending: true,
@@ -77,8 +81,9 @@ describe("useReconnectReplay", () => {
     vi.useFakeTimers();
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
-      { role: RoleEnum.USER, content: "q" },
+      { ts: "2026-01-01T00:00:00.000Z", role: RoleEnum.USER, content: "q" },
       {
+        ts: "2026-01-01T00:00:00.000Z",
         role: RoleEnum.ASSISTANT,
         content: "",
         pending: true,

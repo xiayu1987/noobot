@@ -30,9 +30,9 @@ export async function connectThroughUi(page, credentials) {
   const response = await responsePromise;
   const payload = await response.json();
   expect(response.ok(), String(payload?.error || "connection failed")).toBe(true);
-  await expect(page.locator(".connect-btn")).not.toHaveClass(/is-loading/, {
+  await expect(page.locator(".sidebar-settings-btn")).toHaveAttribute("data-connected", "true", {
     timeout: ADMISSION_RETRY_BUDGET_MS,
   });
-  await expect(page.locator(".status-btn.connected")).toBeVisible();
+  await expect(page.locator(".connection-panel")).toHaveCount(0);
   return payload;
 }

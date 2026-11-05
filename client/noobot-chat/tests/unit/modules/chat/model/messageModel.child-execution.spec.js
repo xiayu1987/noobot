@@ -14,12 +14,14 @@ describe("messageModel child execution projections", () => {
     const messages = foldConversationMessages(
       [
         {
+          ts: "2026-01-01T00:00:00.000Z",
           role: "assistant",
           content: "part 1",
           turnScopeId: "client-turn:summary-thinking",
           dialogProcessId: "dp-summary-thinking",
         },
         {
+          ts: "2026-01-01T00:00:00.000Z",
           role: "assistant",
           content: "part 2",
           turnScopeId: "client-turn:summary-thinking",
@@ -45,6 +47,7 @@ describe("messageModel child execution projections", () => {
     const messages = foldConversationMessages(
       [
         {
+          ts: "2026-01-01T00:00:00.000Z",
           role: "assistant",
           content: "done",
           sessionId: "child-session",
@@ -73,6 +76,7 @@ describe("messageModel child execution projections", () => {
     const messages = foldConversationMessages(
       [
         {
+          ts: "2026-01-01T00:00:00.000Z",
           role: "assistant",
           content: "",
           pending: true,
@@ -97,6 +101,7 @@ describe("messageModel child execution projections", () => {
     const messages = foldConversationMessages(
       [
         {
+          ts: "2026-01-01T00:00:00.000Z",
           role: "assistant",
           content: "part 1",
           sessionId: "child-session",
@@ -105,6 +110,7 @@ describe("messageModel child execution projections", () => {
           projectedStatusStepState: "completed",
         },
         {
+          ts: "2026-01-01T00:00:00.000Z",
           role: "assistant",
           content: "part 2",
           sessionId: "child-session",
@@ -127,6 +133,7 @@ describe("messageModel child execution projections", () => {
     const messages = foldConversationMessages(
       [
         {
+          ts: "2026-01-01T00:00:00.000Z",
           role: "assistant",
           content: "first turn",
           sessionId: "child-session",
@@ -135,6 +142,7 @@ describe("messageModel child execution projections", () => {
           projectedStatusStepState: "completed",
         },
         {
+          ts: "2026-01-01T00:00:00.000Z",
           role: "assistant",
           content: "second turn",
           sessionId: "child-session",

@@ -30,7 +30,6 @@ summary,
   color: var(--noobot-text-strong);
 }
 
-
 :where(a, button, summary, [role="button"], [tabindex]:not([tabindex="-1"])):focus-visible {
   outline: var(--noobot-focus-outline);
   outline-offset: var(--noobot-focus-outline-offset);
@@ -55,14 +54,4 @@ summary,
 
 *::-webkit-scrollbar-track {
   background: var(--noobot-surface-soft);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation: none;
-    transition: none;
-    scroll-behavior: auto;
-  }
 }

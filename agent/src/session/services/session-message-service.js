@@ -32,14 +32,11 @@ import {
 } from "./session-message-service/message-queries.js";
 import { commitTurnSummaryCheckpoint } from "./session-message-service/turn-summary-checkpoint.js";
 import { recordUserMetaParsedResult } from "./session-message-service/user-meta-parsed-result.js";
+import { isFunction } from "@noobot/shared/value";
 
 export class SessionMessageService {
-  constructor({
-    sessionRepo,
-    sessionCrudService,
-    now = () => new Date().toISOString(),
-    allocateDialogProcessId,
-  } = {}) {
+  constructor({ sessionRepo, sessionCrudService, now, allocateDialogProcessId } = {}) {
+    if (!isFunction(now)) throw new TypeError("SessionMessageService requires now function");
     this.sessionRepo = sessionRepo;
     this.sessionCrudService = sessionCrudService;
     this.now = now;

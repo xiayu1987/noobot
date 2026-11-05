@@ -383,32 +383,27 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
       return operation(this.scope);
     },
     createInitialSession({ sessionId, parentSessionId, caller }) {
-      return normalizeSessionEntity(
-        {
-          ...createTestSessionRequiredFields(),
-          caller: requireSessionCaller(caller),
-          sessionId,
-          parentSessionId,
-          aggregateVersion: 0,
-          messages: [],
-        },
-        { now: fixedNow },
-      );
+      return normalizeSessionEntity({
+        ...createTestSessionRequiredFields(),
+        caller: requireSessionCaller(caller),
+        sessionId,
+        parentSessionId,
+        aggregateVersion: 0,
+        messages: [],
+      });
     },
     async isSessionDeleted() {
       return false;
     },
     ...requiredSessionReads,
     async findById() {
-      return persisted
-        ? normalizeSessionEntity(structuredClone(persisted), { now: fixedNow })
-        : null;
+      return persisted ? normalizeSessionEntity(structuredClone(persisted)) : null;
     },
     async save(_userId, next, { expectedAggregateVersion, createOnly } = {}) {
       if (createOnly) assert.equal(persisted, null);
       else assert.equal(expectedAggregateVersion, Number(persisted?.aggregateVersion ?? 0));
       next.aggregateVersion = Number(persisted?.aggregateVersion ?? 0) + 1;
-      persisted = structuredClone(normalizeSessionEntity(next, { now: fixedNow }));
+      persisted = structuredClone(normalizeSessionEntity(next));
     },
   };
   const messageService = new SessionMessageService({ sessionRepo: repo, now: fixedNow });
@@ -425,7 +420,7 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
     },
   });
 
-  await createDetachedSubSessionRunner({ ...deps, now: fixedNow })({
+  await createDetachedSubSessionRunner(deps)({
     abortSignal: new AbortController().signal,
     parentExecutionScope: createParentExecutionScope(),
     message: "hello",
@@ -572,7 +567,6 @@ test("detached sub-session does not inherit parent turn transaction identity", a
         expectedAggregateVersion: 7,
         commandId: "root-continue-command",
         reuseExistingUserTurn: true,
-        thinkingStartedAt: "2026-07-26T12:00:00.000Z",
         presentationMessageId: "root-presentation-message",
       },
     }),
@@ -594,8 +588,7 @@ test("detached sub-session does not inherit parent turn transaction identity", a
   assert.equal(runConfig.commandId, "child-turn");
   assert.notEqual(runConfig.commandId, "root-continue-command");
   assert.equal(runConfig.reuseExistingUserTurn, undefined);
-  assert.equal(Number.isFinite(Date.parse(runConfig.thinkingStartedAt)), true);
-  assert.notEqual(runConfig.thinkingStartedAt, "2026-07-26T12:00:00.000Z");
+  assert.equal(Object.hasOwn(runConfig, "thinkingStartedAt"), false);
   assert.match(runConfig.presentationMessageId, /^pm_/);
   assert.notEqual(runConfig.presentationMessageId, "root-presentation-message");
   assert.notEqual(runConfig.presentationMessageId, "root-presentation-message-from-patch");
@@ -621,7 +614,6 @@ test("detached sub-session derives commandId from the strategy turnScopeId and t
     runConfigPatch: {
       turnScopeId: "child-turn",
       expectedAggregateVersion: 0,
-      thinkingStartedAt: "2026-07-26T12:30:00.000Z",
     },
     metadata: DETACHED_REQUEST_METADATA,
     strategy: createCompleteStrategy({
@@ -634,7 +626,6 @@ test("detached sub-session derives commandId from the strategy turnScopeId and t
   assert.equal(runConfig.expectedAggregateVersion, 0);
   assert.equal(runConfig.commandId, "child-turn");
   assert.equal(calls.lifecyclePayloads.at(-1)?.commandId, "child-turn:turn.completed");
-  assert.equal(runConfig.thinkingStartedAt, "2026-07-26T12:30:00.000Z");
 });
 
 test("detached sub-session propagates main runner abort and failure contracts", async () => {

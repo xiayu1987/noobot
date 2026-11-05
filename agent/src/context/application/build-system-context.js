@@ -8,6 +8,7 @@ import {
   normalizeContextSectionSelection,
 } from "@noobot/agent-config-protocol/enums";
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
+import { isFunction } from "@noobot/shared/value";
 import { resolveScenarioProfile } from "../builders/scenario-resolver.js";
 import { composeSystemInfoSections } from "../formatters/system-prompt-formatter.js";
 import { resolveConnectorStatusSection } from "../providers/connector-status-provider.js";
@@ -48,8 +49,9 @@ export async function buildSystemContext({
   botManager = null,
   userMessageAttachments = [],
   resolveWorkspaceDirectories,
-  now = () => new Date().toISOString(),
+  now,
 } = {}) {
+  if (!isFunction(now)) throw new TypeError("buildSystemContext requires now function");
   const includeSet = normalizeContextSectionSelection(contextPolicy.promptSections);
   const enabled = (section) => isContextSectionSelected(includeSet, section);
   const selectedConnectorIds = normalizeSelectedConnectorIds(runConfig?.selectedConnectorIds);

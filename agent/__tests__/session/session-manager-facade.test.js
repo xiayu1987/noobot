@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createSessionFacade } from "../../src/session/index.js";
+import { createSessionFacade, createSessionServices } from "../../src/session/index.js";
 
 function createFacadeRuntime(overrides = {}) {
   const contexts = [];
@@ -276,4 +276,23 @@ test("createSessionFacade should delegate message and tree methods", async () =>
   assert.equal(turns.length, 1);
   assert.deepEqual(deleteCaptured, { userId: "u1", sessionIds: ["s2"] });
   assert.equal(deleted.ok, true);
+});
+
+test("createSessionFacade readServerNow reads the injected session runtime clock", () => {
+  const serverNow = "2026-08-20T00:00:00.000Z";
+  const { runtime } = createFacadeRuntime({ now: () => serverNow });
+  const session = createSessionFacade(runtime);
+
+  assert.equal(session.readServerNow(), serverNow);
+});
+
+test("createSessionServices requires an explicit now clock", () => {
+  assert.throws(
+    () =>
+      createSessionServices(
+        { workspaceRoot: "/tmp/noobot-session-clock" },
+        { attachmentService: { ingest() {} }, scopedSessionRoots: ["session"] },
+      ),
+    /createSessionServices requires now function/,
+  );
 });

@@ -11,6 +11,7 @@ import { thinkingDetailService } from "../../../../infrastructure/api/thinking/t
 import { logWorkflowDiagnostics } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
 import { requireSessionDetailDocument } from "@noobot/session-protocol/session-detail";
 import { readApiResponseEnvelope } from "@noobot/shared/request-error";
+import { observeServerClock } from "../../../chat/model/serverClock.js";
 
 const RECENT_SESSION_DETAIL_REUSE_MS = 2000;
 
@@ -90,7 +91,9 @@ export function createSessionDetailRequests({
 
   async function requestSessionDetailData(requestFactory, requestSessionId) {
     const response = await requestFactory();
-    const { ok: _envelopeOk, ...document } = await readApiResponseEnvelope(response);
+    const { ok: _envelopeOk, ...document } = observeServerClock(
+      await readApiResponseEnvelope(response),
+    );
     const data = requireSessionDetailDocument(document);
     if (data.sessionId !== requestSessionId) {
       throw new TypeError(

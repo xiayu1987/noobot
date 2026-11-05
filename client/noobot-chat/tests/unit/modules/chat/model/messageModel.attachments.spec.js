@@ -11,6 +11,7 @@ describe("messageModel attachment normalization", () => {
   it("preserves the canonical parsed-result relation for office attachments", () => {
     const viewMessage = buildViewMessage(
       {
+        ts: "2026-01-01T00:00:00.000Z",
         role: "user",
         content: "",
         sessionId: "session-a",
@@ -67,6 +68,7 @@ describe("messageModel attachment normalization", () => {
   it("projects tool output attachments from message-level transfer envelopes", () => {
     const viewMessage = buildViewMessage(
       {
+        ts: "2026-01-01T00:00:00.000Z",
         role: "assistant",
         content: "",
         sessionId: "session-a",

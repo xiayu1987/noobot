@@ -8,8 +8,11 @@ import assert from "node:assert/strict";
 
 import { MemoryPostProcessService } from "../../src/bot/execution/memory-postprocess.js";
 
+const TEST_NOW = () => "2026-01-01T00:00:00.000Z";
+
 test("memory-postprocess: resolveMemorySummaryTimeoutMs supports canonical keys", () => {
   const service = new MemoryPostProcessService({
+    now: TEST_NOW,
     globalConfig: {
       memory: {
         summarizeTimeoutMs: 11111,

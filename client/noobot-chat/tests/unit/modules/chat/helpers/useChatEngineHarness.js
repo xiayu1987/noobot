@@ -385,6 +385,9 @@ export const activateRuntimeTurn = ({
   applyTurnLifecycleEnvelope(
     registry,
     createTurnLifecycleEnvelope({
+      occurredAt: "2026-01-01T00:00:00.000Z",
+      startedAt: "2026-01-01T00:00:00.000Z",
+      finishedAt: "",
       updatedAt: "2026-01-01T00:00:00.000Z",
       eventType: "turn.action_accepted",
       eventId: `accepted:${sessionId}:${turnScopeId}:${revision}`,
@@ -407,6 +410,9 @@ export const activateRuntimeTurn = ({
   applyTurnLifecycleEnvelope(
     registry,
     createTurnLifecycleEnvelope({
+      occurredAt: "2026-01-01T00:00:00.000Z",
+      startedAt: "2026-01-01T00:00:00.000Z",
+      finishedAt: "",
       updatedAt: "2026-01-01T00:00:00.000Z",
       eventType: "turn.processing_started",
       eventId: `processing:${sessionId}:${turnScopeId}:${revision + 1}`,
@@ -461,6 +467,10 @@ export const serverTurnSource = (payload, dialogProcessId) => ({
   dialogProcessId,
 });
 
+// Authority (server clock domain) turn timing emitted by the harness lifecycle events.
+export const AUTHORITY_TURN_STARTED_AT = "2026-01-01T00:00:00.000Z";
+export const AUTHORITY_TURN_FINISHED_AT = "2026-01-01T00:00:07.000Z";
+
 const lifecycleEvent = (fields) =>
   createTurnLifecycleEventEnvelope(createTurnLifecycleEnvelope(fields), {
     producer: { type: "test", id: "use-chat-engine-harness" },
@@ -480,6 +490,9 @@ export const emitAuthorityProcessing = (onEvent, source) => {
     lifecycleEvent({
       eventType: "turn.action_accepted",
       updatedAt: "2026-01-01T00:00:00.000Z",
+      startedAt: AUTHORITY_TURN_STARTED_AT,
+      finishedAt: "",
+      occurredAt: "2026-01-01T00:00:00.000Z",
       eventId: `accepted:${sessionId}:${turnScopeId}`,
       commandId,
       userId,
@@ -501,6 +514,9 @@ export const emitAuthorityProcessing = (onEvent, source) => {
     lifecycleEvent({
       eventType: "turn.processing_started",
       updatedAt: "2026-01-01T00:00:00.000Z",
+      startedAt: AUTHORITY_TURN_STARTED_AT,
+      finishedAt: "",
+      occurredAt: "2026-01-01T00:00:00.000Z",
       eventId: `processing:${sessionId}:${turnScopeId}`,
       commandId,
       userId,
@@ -534,6 +550,9 @@ export const emitAuthorityCompletionRequested = (onEvent, source) => {
     data: lifecycleEvent({
       eventType: "turn.processing_completed",
       updatedAt: "2026-01-01T00:00:00.000Z",
+      startedAt: AUTHORITY_TURN_STARTED_AT,
+      finishedAt: "",
+      occurredAt: "2026-01-01T00:00:00.000Z",
       eventId: `completion-requested:${sessionId}:${turnScopeId}`,
       commandId,
       userId,
@@ -570,6 +589,9 @@ export const emitAuthorityTerminal = (onEvent, source) => {
     event: StreamEventEnum.TURN_LIFECYCLE,
     data: lifecycleEvent({
       updatedAt: "2026-01-01T00:00:00.000Z",
+      startedAt: AUTHORITY_TURN_STARTED_AT,
+      finishedAt: AUTHORITY_TURN_FINISHED_AT,
+      occurredAt: AUTHORITY_TURN_FINISHED_AT,
       eventType:
         state === "stop_completed"
           ? "turn.stop_completed"

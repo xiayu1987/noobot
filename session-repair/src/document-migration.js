@@ -52,6 +52,7 @@ import { migrateMessageEntityContract } from "./message-entity-contract-migratio
 import { migrateRetiredTaskFields } from "./retired-task-fields-migration.js";
 import { migrateSessionArtifactEvents } from "./session-artifact-events-migration.js";
 import { migrateTurnLifecycleRecords } from "./turn-lifecycle-record-migration.js";
+import { migrateDialogOrderStart } from "./dialog-order-start-migration.js";
 import { SESSION_REPAIR_ERROR_CODE } from "./errors.js";
 import {
   assertLegacyAuthorityEventOutbox,
@@ -805,6 +806,7 @@ const DOCUMENT_MIGRATION_STEPS = Object.freeze([
   migrateSessionCaller,
   migrateSessionArtifactEvents,
   migrateTurnLifecycleRecords,
+  migrateDialogOrderStart,
 ]);
 
 export function migrateSessionDocument(document) {

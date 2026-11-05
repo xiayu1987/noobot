@@ -9,7 +9,9 @@ import { createEventEnvelope } from "../src/envelope.js";
 import {
   acknowledgeAuthorityEventDelivery,
   assertAuthorityOutboxRequest,
+  assertAuthorityOutboxJournalRecord,
   authorityEventConsumerDelivery,
+  migrateLegacyUnownedAttemptRecords,
   normalizeAuthorityEventOutbox,
   projectAuthorityOutboxJournal,
 } from "../src/authority-event-outbox.js";
@@ -180,4 +182,50 @@ test("outbox acknowledgement rejects mismatched ordering and keeps the event pen
     /acknowledgement ordering mismatch/,
   );
   assert.equal(authorityEventConsumerDelivery(source[0], "browser").status, "pending");
+});
+
+test("legacy unowned attempt covered by a later ack is dropped and projection stays delivered", () => {
+  const legacyAttempt = { op: "attempt", eventId: "event-1", attemptedAt: occurredAt };
+  const { records, changed } = migrateLegacyUnownedAttemptRecords([commit(), legacyAttempt, ack()]);
+  assert.equal(changed, true);
+  assert.deepEqual(records, [commit(), ack()]);
+  const [projected] = projectAuthorityOutboxJournal(records);
+  assert.equal(authorityEventConsumerDelivery(projected, "browser").status, "delivered");
+});
+
+test("legacy unowned attempt without a later ack is kept and still rejected", () => {
+  const legacyAttempt = { op: "attempt", eventId: "event-1", attemptedAt: occurredAt };
+  for (const source of [
+    [commit(), legacyAttempt],
+    [commit(), ack(), legacyAttempt],
+    [commit(), legacyAttempt, ack({ eventId: "event-2" })],
+  ]) {
+    const { records, changed } = migrateLegacyUnownedAttemptRecords(source);
+    assert.equal(changed, false);
+    assert.deepEqual(records, source);
+  }
+  assert.throws(
+    () => assertAuthorityOutboxJournalRecord(legacyAttempt),
+    /consumerId must be canonical text/,
+  );
+});
+
+test("owned attempts are untouched by the legacy attempt migration", () => {
+  const owned = {
+    op: "attempt",
+    eventId: "event-1",
+    consumerId: "browser",
+    attemptedAt: occurredAt,
+  };
+  const blank = { ...owned, consumerId: "" };
+  for (const source of [
+    [commit(), owned, ack()],
+    [commit(), blank, ack()],
+  ]) {
+    assert.deepEqual(migrateLegacyUnownedAttemptRecords(source), {
+      records: source,
+      changed: false,
+    });
+  }
+  assert.throws(() => migrateLegacyUnownedAttemptRecords(null), /journal records must be an array/);
 });

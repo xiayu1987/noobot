@@ -630,6 +630,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       eventType: "turn.failed",
       state: "processing_failed",
       phase: "processing",
+      finishedAt: "2026-01-01T00:00:00.000Z",
       sessionId: "s1",
       turnScopeId: "t1",
       dialogProcessId: "dp1",

@@ -40,6 +40,7 @@ function createPanel(fetchThinkingDetail = vi.fn(), activeSession = ref({ messag
 const workflowMessage = buildViewMessage(
   {
     role: "assistant",
+    ts: "2026-01-01T00:00:00.000Z",
     content: "",
     presentationMessageId: "workflow-presentation",
     dialogProcessId: "workflow-node",
@@ -51,6 +52,7 @@ const workflowMessage = buildViewMessage(
 const normalMessage = buildViewMessage(
   {
     role: "assistant",
+    ts: "2026-01-01T00:00:00.000Z",
     content: "",
     presentationMessageId: "normal-presentation",
     dialogProcessId: "normal-message",
@@ -213,6 +215,7 @@ describe("useThinkingDetailsPanel request isolation", () => {
   it("binds the drawer to the active canonical turn instead of a stale click payload", async () => {
     const staleSummary = {
       role: "assistant",
+      ts: "2026-01-01T00:00:00.000Z",
       content: "",
       presentationMessageId: "presentation-1",
       sessionId: "session-1",
@@ -298,6 +301,7 @@ describe("useThinkingDetailsPanel request isolation", () => {
     const summaryMessage = buildViewMessage(
       {
         role: "assistant",
+        ts: "2026-01-01T00:00:00.000Z",
         content: "",
         presentationMessageId: "presentation-complete",
         sessionId: "session-1",
@@ -363,6 +367,7 @@ describe("useThinkingDetailsPanel request isolation", () => {
     const canonicalMessage = buildViewMessage(
       {
         role: "assistant",
+        ts: "2026-01-01T00:00:00.000Z",
         content: "",
         presentationMessageId: "presentation-canonical",
         sessionId: "session-1",

@@ -132,8 +132,14 @@ test("buildExecutionReport rejects missing identity and inconsistent status", ()
   );
 });
 
-test("buildExecutionReport leaves durationMs null without both timestamps", () => {
-  assert.equal(failedReport({ finishedAt: "" }).durationMs, null);
+test("buildExecutionReport rejects missing or inverted timestamps instead of clamping", () => {
+  assert.equal(failedReport().durationMs, 1500);
+  assert.throws(() => failedReport({ finishedAt: "" }), /must be ISO instants/);
+  assert.throws(() => failedReport({ startedAt: undefined }), /must be ISO instants/);
+  assert.throws(
+    () => failedReport({ finishedAt: "2025-12-31T23:59:59.000Z" }),
+    /finishedAt precedes startedAt/,
+  );
 });
 
 test("decodeExecutionReport accepts current reports and rejects other versions", () => {

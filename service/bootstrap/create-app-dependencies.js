@@ -34,6 +34,8 @@ export async function createAppDependencies({
     throw new TypeError("createAppDependencies requires globalConfigBuilder");
   }
   const configBuilder = globalConfigBuilder;
+  /** Service clock: the single wall-clock source injected into the session runtime. */
+  const now = () => new Date().toISOString();
   const initialRawConfig = await configBuilder.loadRawConfig({ reload: false });
   let globalConfigRaw = initialRawConfig;
   let globalConfig = globalConfigRaw;
@@ -128,6 +130,7 @@ export async function createAppDependencies({
     readWorkspaceConfigParams,
     globalConfigBuilder: configBuilder,
     BotManager,
+    now,
     setGlobalConfigRaw: (nextGlobalConfigRaw) => {
       globalConfigRaw = nextGlobalConfigRaw;
     },

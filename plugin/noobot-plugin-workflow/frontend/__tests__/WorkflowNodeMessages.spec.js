@@ -13,6 +13,7 @@ describe("workflow node message projection", () => {
     const final = {
       messageUid: "sm-final",
       presentationMessageId: "final",
+      ts: "2026-01-01T00:00:00.000Z",
       role: "assistant",
       content: "final result",
     };
@@ -67,6 +68,7 @@ describe("workflow node message projection", () => {
     const selectedNodeMessages = ref([
       {
         userMessageId: "user-1",
+        ts: "2026-01-01T00:00:00.000Z",
         role: "user",
         content: "inspect",
         sessionId: "child-session",
@@ -74,6 +76,7 @@ describe("workflow node message projection", () => {
       },
       {
         presentationMessageId: "assistant-presentation-1",
+        ts: "2026-01-01T00:00:00.000Z",
         role: "assistant",
         type: "tool_call",
         content: "",
@@ -84,6 +87,7 @@ describe("workflow node message projection", () => {
       {
         messageUid: "sm-tool-1",
         presentationMessageId: "assistant-presentation-1",
+        ts: "2026-01-01T00:00:00.000Z",
         role: "tool",
         type: "tool_result",
         content: "result 1",
@@ -92,6 +96,7 @@ describe("workflow node message projection", () => {
       },
       {
         presentationMessageId: "assistant-presentation-1",
+        ts: "2026-01-01T00:00:00.000Z",
         role: "assistant",
         type: "tool_call",
         content: "",
@@ -151,6 +156,7 @@ describe("workflow node message projection", () => {
     const selectedNodeMessages = ref([
       {
         userMessageId: "child-task",
+        ts: "2026-01-01T00:00:00.000Z",
         role: "user",
         content: "完成工作流节点任务",
         sessionId: "child-session",
@@ -158,6 +164,7 @@ describe("workflow node message projection", () => {
       },
       {
         userMessageId: "task-check-control",
+        ts: "2026-01-01T00:00:00.000Z",
         role: "user",
         content: "已达到周期任务检查阈值。本次模型调用可按需调用 task_check 留下任务检查切片",
         chatPresentation: false,
@@ -166,6 +173,7 @@ describe("workflow node message projection", () => {
       },
       {
         userMessageId: "help-failure-control",
+        ts: "2026-01-01T00:00:00.000Z",
         role: "user",
         content:
           "工具调用已连续失败 3 次。若需要补充外部信息或排查方向，可调用 help 工具查询工具说明或经验记忆路径。",

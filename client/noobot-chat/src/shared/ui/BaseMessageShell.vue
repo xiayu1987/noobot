@@ -9,7 +9,8 @@ import { useLocale } from "../i18n/useLocale.js";
 
 defineProps({
   role: { type: String, default: "assistant" },
-  ts: { type: [String, Number], default: "" },
+  // Absent while the message is an uncommitted local draft (session-protocol message ts contract).
+  ts: { type: String, required: false },
   formatTime: { type: Function, required: true },
   modelLabel: { type: String, default: "" },
   hideHeader: { type: Boolean, default: false },
@@ -29,10 +30,11 @@ const { translate } = useLocale();
         <img v-else class="base-message-assistant-icon" :src="noobotIcon" alt="Noobot" />
       </div>
       <div class="base-message-meta">
-        <span v-if="ts">{{ formatTime(ts) }}</span>
+        <span v-if="ts" class="base-message-time">{{ formatTime(ts) }}</span>
         <span
           v-if="role === 'assistant' && modelLabel"
           class="base-message-model-label noobot-soft-badge"
+          :title="modelLabel"
         >
           {{ modelLabel }}
         </span>
@@ -40,11 +42,17 @@ const { translate } = useLocale();
     </div>
 
     <div class="base-message-content">
+      <div v-if="$slots['before-content']" class="base-message-panels">
+        <slot name="before-content"></slot>
+      </div>
       <div
         class="base-message-bubble noobot-message-bubble"
         :class="role === 'user' ? 'is-user' : 'is-assistant'"
       >
         <slot></slot>
+      </div>
+      <div v-if="$slots['after-content']" class="base-message-panels">
+        <slot name="after-content"></slot>
       </div>
     </div>
   </div>
@@ -57,12 +65,8 @@ const { translate } = useLocale();
   gap: var(--noobot-space-xs);
   margin-bottom: var(--noobot-msg-stack-gap);
   width: 100%;
+  min-width: 0;
   position: relative;
-}
-
-.base-message-shell.assistant,
-.base-message-shell.user {
-  align-items: stretch;
 }
 
 .base-message-header {
@@ -79,7 +83,6 @@ const { translate } = useLocale();
 .base-message-avatar {
   width: var(--noobot-msg-avatar-size);
   height: var(--noobot-msg-avatar-size);
-  border-radius: var(--noobot-radius-circle);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -88,11 +91,6 @@ const { translate } = useLocale();
   line-height: var(--noobot-line-height-none);
   flex: 0 0 var(--noobot-msg-avatar-size);
   overflow: hidden;
-}
-
-.base-message-avatar.is-user {
-  background: var(--noobot-msg-user-avatar);
-  color: var(--noobot-msg-user-avatar-text);
 }
 
 .base-message-assistant-icon {
@@ -106,18 +104,24 @@ const { translate } = useLocale();
   display: flex;
   align-items: center;
   gap: var(--noobot-space-xs);
+  min-width: 0;
   min-height: var(--noobot-msg-avatar-size);
   font-size: var(--noobot-msg-meta-font-size);
   line-height: var(--noobot-line-height-none);
   color: var(--noobot-msg-meta);
 }
 
-.base-message-meta > span {
-  display: inline-flex;
-  align-items: center;
+.base-message-time {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .base-message-model-label {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: var(--noobot-font-size-xs);
   color: var(--noobot-msg-tag-text);
   background: var(--noobot-msg-tag-bg);
@@ -129,14 +133,16 @@ const { translate } = useLocale();
 .base-message-content {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
   width: 100%;
   max-width: 100%;
+  min-width: 0;
 }
 
-.base-message-content :deep(.thinking-realtime-shell) {
+.base-message-bubble,
+.base-message-panels {
   width: 100%;
   max-width: 100%;
+  min-width: 0;
 }
 
 .base-message-bubble {
@@ -144,29 +150,13 @@ const { translate } = useLocale();
   font-size: var(--noobot-msg-font-size);
   line-height: var(--noobot-msg-line-height);
   word-wrap: break-word;
-  width: 100%;
   position: relative;
   overflow: hidden;
 }
 
-.base-message-shell.assistant .base-message-bubble {
-  border-top-left-radius: var(--noobot-msg-corner-accent-radius);
-}
-
 .base-message-shell.user .base-message-bubble {
-  border-top-right-radius: var(--noobot-msg-corner-accent-radius);
-  width: calc(100% - var(--noobot-msg-bubble-pad-x) - var(--noobot-msg-bubble-pad-x));
-  margin-left: auto;
-  margin-right: auto;
-}
-
-@media (max-width: 768px) {
-  .base-message-bubble {
-    --noobot-msg-bubble-pad-x: var(--noobot-space-md);
-  }
-
-  .base-message-shell.user .base-message-bubble {
-    width: 100%;
-  }
+  align-self: flex-end;
+  width: fit-content;
+  overflow-wrap: anywhere;
 }
 </style>

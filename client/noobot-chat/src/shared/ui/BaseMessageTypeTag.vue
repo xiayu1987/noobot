@@ -13,7 +13,9 @@ const props = defineProps({
 
 const normalizedType = computed(() => text(props.type));
 const visible = computed(
-  () => Boolean(normalizedType.value) && normalizedType.value !== "tool_call",
+  () =>
+    Boolean(normalizedType.value) &&
+    !["message", "tool_call"].includes(normalizedType.value.toLowerCase()),
 );
 </script>
 

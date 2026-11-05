@@ -18,6 +18,8 @@
   --startup-radius-pill: 999px;
   --startup-control-height: 34px;
   --startup-control-transition: 0.18s ease;
+  --startup-spinner-duration: 0.9s;
+  --startup-spinner-easing: linear;
   --startup-space-xs: 4px;
   --startup-space-sm: 6px;
   --startup-space-md: 8px;
@@ -30,12 +32,12 @@
   --startup-space-6xl: 34px;
   --startup-space-7xl: 38px;
   --startup-content-padding-top: 26px;
-  --startup-content-padding-inline: 38px;
-  --startup-content-padding-bottom: 34px;
-  --startup-panel-padding: 20px;
-  --startup-section-gap: 22px;
-  --startup-field-gap: 16px;
-  --startup-title-gap: 12px;
+  --startup-content-padding-inline: var(--startup-space-7xl);
+  --startup-content-padding-bottom: var(--startup-space-6xl);
+  --startup-panel-padding: var(--startup-space-4xl);
+  --startup-section-gap: var(--startup-space-5xl);
+  --startup-field-gap: var(--startup-space-3xl);
+  --startup-title-gap: var(--startup-space-xl);
   --startup-body-font-size: 15px;
   --startup-font-size-sm: 12px;
   --startup-font-size-md: 14px;
@@ -121,13 +123,13 @@ input {
   font-weight: var(--startup-font-weight-bold);
 }
 h1 {
-  margin: 18px 0 10px;
+  margin: var(--startup-space-4xl) 0 var(--startup-space-lg);
   font-size: var(--startup-font-size-title);
   letter-spacing: var(--startup-letter-spacing-tight);
   color: var(--startup-text-strong);
 }
 p {
-  margin: 8px 0;
+  margin: var(--startup-space-md) 0;
   color: var(--startup-text-secondary);
   line-height: var(--startup-line-height-prose);
 }
@@ -148,14 +150,14 @@ p {
 .status-spinner {
   color: var(--startup-status-running);
   font-size: var(--startup-font-size-icon);
-  animation: spin 0.9s linear infinite;
+  animation: spin var(--startup-spinner-duration) var(--startup-spinner-easing) infinite;
 }
 .content {
   padding: var(--startup-content-padding-top) var(--startup-content-padding-inline)
     var(--startup-content-padding-bottom);
 }
 .setup-form {
-  margin: 18px 0 0;
+  margin: var(--startup-space-4xl) 0 0;
   padding: var(--startup-panel-padding);
   border: 1px solid var(--startup-border-panel);
   border-radius: var(--startup-radius-xl);
@@ -219,7 +221,7 @@ p {
   opacity: 0.72;
 }
 .el-form-item__error {
-  padding-top: 4px;
+  padding-top: var(--startup-space-xs);
   color: var(--startup-status-error);
   font-size: var(--startup-font-size-error);
 }
@@ -321,7 +323,7 @@ small {
   line-height: var(--startup-line-height-relaxed);
 }
 .dependency-panel {
-  margin-top: 4px;
+  margin-top: var(--startup-space-xs);
 }
 .dependency-title {
   display: flex;

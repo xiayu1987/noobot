@@ -7,6 +7,7 @@
 .base-file-card {
   box-sizing: border-box;
   width: 100%;
+  min-width: 0;
   min-height: var(--noobot-msg-file-card-min-height);
   display: flex;
   align-items: center;
@@ -14,14 +15,14 @@
   padding: var(--noobot-space-2xs) var(--noobot-space-xs);
 }
 
-.file-thumb {
+.base-file-card .file-thumb {
   width: var(--noobot-msg-file-thumb-size);
   height: var(--noobot-msg-file-thumb-size);
   border-radius: var(--noobot-radius-xs);
   object-fit: cover;
 }
 
-.attachment-preview-btn {
+.base-file-card .attachment-preview-btn {
   border: none;
   background: transparent;
   padding: 0;
@@ -31,7 +32,7 @@
   line-height: 0;
 }
 
-.file-icon {
+.base-file-card .file-icon {
   box-sizing: border-box;
   width: var(--noobot-msg-file-thumb-size);
   height: var(--noobot-msg-file-thumb-size);
@@ -44,15 +45,15 @@
   border: 0;
 }
 
-.file-icon > .el-icon,
-.file-icon-button > .el-icon {
+.base-file-card .file-icon > .el-icon,
+.base-file-card .file-icon-button > .el-icon {
   width: var(--noobot-msg-file-icon-size);
   height: var(--noobot-msg-file-icon-size);
   font-size: var(--noobot-msg-file-icon-size);
   line-height: var(--noobot-line-height-none);
 }
 
-.file-icon-button {
+.base-file-card .file-icon-button {
   box-sizing: border-box;
   width: var(--noobot-msg-file-thumb-size);
   height: var(--noobot-msg-file-thumb-size);
@@ -65,24 +66,27 @@
   border-radius: var(--noobot-radius-circle);
 }
 
-.file-icon-button:hover {
+.base-file-card .file-icon-button:hover {
   background: transparent;
 }
 
-.file-meta {
+.base-file-card .file-meta {
+  display: block;
   min-width: 0;
   flex: 1;
 }
 
-.file-name-row {
+.base-file-card .file-name-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--noobot-space-2xs);
   min-width: 0;
 }
 
-.file-name {
-  max-width: 260px;
+.base-file-card .file-name {
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -91,13 +95,29 @@
   line-height: var(--noobot-line-height-tight);
 }
 
-.file-size {
+.base-file-card .file-size {
   font-size: var(--noobot-msg-file-size-font-size);
   line-height: var(--noobot-line-height-tight);
   color: var(--noobot-msg-file-size);
+  overflow-wrap: anywhere;
 }
 
-.attachment-download-btn {
+.base-file-card .attachment-download-btn {
   border-radius: var(--noobot-radius-circle);
   color: var(--noobot-msg-file-name);
+}
+
+.base-file-card > .file-icon,
+.base-file-card > .attachment-preview-btn,
+.base-file-card > .attachment-download-btn {
+  flex-shrink: 0;
+}
+
+.base-file-card.is-previewable {
+  cursor: pointer;
+}
+
+.base-file-card[role="button"]:focus-visible {
+  outline: 2px solid var(--noobot-accent-border);
+  outline-offset: 1px;
 }

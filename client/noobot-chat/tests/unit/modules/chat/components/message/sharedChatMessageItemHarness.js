@@ -13,6 +13,8 @@ import { createElementPlusMountOptions } from "../../../../fixtures/elementPlusS
 
 vi.mock("../../../../../../src/shared/public-api/ui.js", async () => {
   const { defineComponent, h } = await import("vue");
+  const { default: BaseMessageTypeTag } =
+    await import("../../../../../../src/shared/ui/BaseMessageTypeTag.vue");
   const passthrough = (name) =>
     defineComponent({
       name,
@@ -65,16 +67,15 @@ vi.mock("../../../../../../src/shared/public-api/ui.js", async () => {
               class: "BaseMessageShell-stub",
               "data-hide-header": String(props.hideHeader),
             },
-            slots.default?.(),
+            [
+              h("div", { class: "before-content-slot" }, slots["before-content"]?.()),
+              h("div", { class: "message-content-slot" }, slots.default?.()),
+              h("div", { class: "after-content-slot" }, slots["after-content"]?.()),
+            ],
           );
       },
     }),
-    BaseMessageTypeTag: defineComponent({
-      name: "BaseMessageTypeTag",
-      setup() {
-        return () => h("div", { class: "BaseMessageTypeTag-stub" });
-      },
-    }),
+    BaseMessageTypeTag,
     BasePreviewContent: defineComponent({
       name: "BasePreviewContent",
       setup() {

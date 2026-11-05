@@ -31,6 +31,84 @@ const sessionListRef = ref(null);
 const lastSessionListScrollTop = ref(0);
 const listWrapEl = shallowRef(null);
 const expandedDateGroups = ref([]);
+const sessionPanelRef = ref(null);
+const expandedActionSessionId = ref("");
+const LONG_PRESS_DELAY_MS = 500;
+const LONG_PRESS_MOVE_TOLERANCE_PX = 10;
+let pendingPress = null;
+let suppressedClickSessionId = "";
+
+function cancelLongPress() {
+  if (pendingPress) clearTimeout(pendingPress.timer);
+  pendingPress = null;
+}
+
+function startLongPress(event, sessionItem) {
+  cancelLongPress();
+  suppressedClickSessionId = "";
+  if (
+    !props.isMobile ||
+    props.collapsed ||
+    event.isPrimary === false ||
+    event.pointerType === "mouse" ||
+    event.target.closest("button")
+  )
+    return;
+  pendingPress = {
+    sessionId: sessionItem.sessionId,
+    x: event.clientX,
+    y: event.clientY,
+    timer: setTimeout(() => {
+      expandedActionSessionId.value = sessionItem.sessionId;
+      suppressedClickSessionId = sessionItem.sessionId;
+      cancelLongPress();
+    }, LONG_PRESS_DELAY_MS),
+  };
+}
+
+function moveLongPress(event) {
+  if (!pendingPress) return;
+  if (
+    Math.hypot(event.clientX - pendingPress.x, event.clientY - pendingPress.y) >
+    LONG_PRESS_MOVE_TOLERANCE_PX
+  ) {
+    suppressedClickSessionId = pendingPress.sessionId;
+    cancelLongPress();
+  }
+}
+
+function showSessionActions(event, sessionItem) {
+  if (!props.isMobile || props.collapsed || event.target.closest("button")) return;
+  event.preventDefault();
+  cancelLongPress();
+  suppressedClickSessionId = sessionItem.sessionId;
+  expandedActionSessionId.value = sessionItem.sessionId;
+}
+
+function selectSession(sessionItem, event) {
+  if (event?.type !== "keydown" && suppressedClickSessionId === sessionItem.sessionId) {
+    suppressedClickSessionId = "";
+    return;
+  }
+  expandedActionSessionId.value = "";
+  emit("select-session", sessionItem.sessionId);
+}
+
+function closeSessionActions(event) {
+  if (!sessionPanelRef.value?.contains(event.target)) {
+    cancelLongPress();
+    expandedActionSessionId.value = "";
+  }
+}
+
+watch(
+  () => [props.isMobile, props.collapsed, props.sessions],
+  () => {
+    cancelLongPress();
+    suppressedClickSessionId = "";
+    expandedActionSessionId.value = "";
+  },
+);
 
 const RECENT_DAY_GROUP_COUNT = QUANTITY_THRESHOLDS.client.sessionListRecentDayGroupCount;
 const OLDER_GROUP_KEY = "older";
@@ -111,6 +189,9 @@ watch(
 );
 
 function onSessionListScroll() {
+  if (pendingPress) suppressedClickSessionId = pendingPress.sessionId;
+  cancelLongPress();
+  expandedActionSessionId.value = "";
   if (!listWrapEl.value) return;
   lastSessionListScrollTop.value = Number(listWrapEl.value.scrollTop || 0);
 }
@@ -138,10 +219,17 @@ async function restoreSessionListScrollTop() {
 
 onMounted(() => {
   bindSessionListScrollListener();
+  document.addEventListener("pointerdown", closeSessionActions);
+  document.addEventListener("pointerup", cancelLongPress);
+  document.addEventListener("pointercancel", cancelLongPress);
 });
 
 onBeforeUnmount(() => {
+  cancelLongPress();
   if (listWrapEl.value) listWrapEl.value.removeEventListener("scroll", onSessionListScroll);
+  document.removeEventListener("pointerdown", closeSessionActions);
+  document.removeEventListener("pointerup", cancelLongPress);
+  document.removeEventListener("pointercancel", cancelLongPress);
 });
 
 const statusKeyMap = {
@@ -213,7 +301,12 @@ watch(
 </script>
 
 <template>
-  <div class="session-list-panel" :class="{ collapsed }">
+  <div
+    ref="sessionPanelRef"
+    class="session-list-panel"
+    :class="{ collapsed, mobile: isMobile }"
+    @keydown.esc="expandedActionSessionId = ''"
+  >
     <el-scrollbar ref="sessionListRef" class="session-list">
       <el-collapse v-model="expandedDateGroups" class="session-date-collapse">
         <el-collapse-item
@@ -254,7 +347,7 @@ watch(
               :width="264"
               :show-after="220"
               :hide-after="80"
-              popper-class="session-hover-popover"
+              popper-class="session-hover-popover noobot-navigation-popover"
             >
               <template #reference>
                 <div
@@ -264,30 +357,40 @@ watch(
                   :class="{
                     active: sessionItem.sessionId === activeSessionId,
                     unavailable: sessionItem.isUnavailable === true,
+                    'actions-expanded': expandedActionSessionId === sessionItem.sessionId,
                   }"
+                  tabindex="0"
+                  :aria-label="sessionItem.title"
                   :aria-disabled="sessionItem.isUnavailable === true ? 'true' : undefined"
-                  @click="emit('select-session', sessionItem.sessionId)"
+                  @click="selectSession(sessionItem)"
+                  @pointerdown="startLongPress($event, sessionItem)"
+                  @pointermove="moveLongPress"
+                  @pointerup="cancelLongPress"
+                  @pointercancel="cancelLongPress"
+                  @pointerleave="cancelLongPress"
+                  @contextmenu="showSessionActions($event, sessionItem)"
+                  @keydown.enter.self.prevent="selectSession(sessionItem, $event)"
+                  @keydown.space.self.prevent="selectSession(sessionItem, $event)"
                 >
                   <div v-if="collapsed" class="session-icon-wrapper">
                     <el-icon class="session-icon"><ChatDotRound /></el-icon>
                   </div>
                   <div class="session-info">
-                    <div class="title">{{ sessionItem.title }}</div>
-                    <div class="sid">
-                      <span v-if="sessionItem.isUnavailable" class="session-unavailable-label">
-                        {{ translate("common.sessionUnavailableLegacyProtocol") }}
-                      </span>
-                      <template v-else>
-                        <span class="status-dot" :class="sessionRuntimeStatus(sessionItem)"></span>
-                        #{{
-                          sessionItem.sessionId
-                            ? sessionItem.sessionId.slice(0, 8)
-                            : translate("common.notStarted")
-                        }}
-                      </template>
+                    <div
+                      class="title"
+                      :class="
+                        sessionItem.isUnavailable ? 'error' : sessionRuntimeStatus(sessionItem)
+                      "
+                      :aria-label="
+                        sessionItem.isUnavailable
+                          ? `${sessionItem.title}: ${translate('common.sessionUnavailableLegacyProtocol')}`
+                          : `${sessionItem.title}: ${formatSessionStatus(sessionRuntimeStatus(sessionItem))}`
+                      "
+                    >
+                      {{ sessionItem.title }}
                     </div>
                   </div>
-                  <div class="session-actions">
+                  <div v-if="!collapsed" class="session-actions">
                     <button
                       type="button"
                       class="session-rename-btn noobot-action-btn noobot-icon-button noobot-flat-icon-btn"
@@ -310,7 +413,7 @@ watch(
                   </div>
                 </div>
               </template>
-              <div class="session-popover">
+              <div class="session-popover noobot-navigation-popover__body">
                 <div class="session-popover__title">{{ sessionItem.title }}</div>
                 <div v-if="sessionItem.isUnavailable" class="session-popover__reason">
                   {{ translate("common.sessionUnavailableLegacyProtocol") }}<br />
@@ -410,15 +513,14 @@ watch(
 }
 
 .session-item {
+  position: relative;
   display: flex;
   align-items: center;
+  min-width: 0;
+  min-height: var(--noobot-control-height-xl);
   gap: var(--noobot-space-sm);
-  padding: var(--noobot-space-sm);
+  padding: var(--noobot-space-xs) var(--noobot-space-sm);
   cursor: pointer;
-  border-radius: var(--noobot-radius-sm);
-  transition:
-    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
-    color var(--noobot-duration-normal) var(--noobot-ease-standard);
 }
 
 .session-item.unavailable {
@@ -428,19 +530,6 @@ watch(
 
 .session-item.unavailable .session-icon-wrapper {
   color: var(--noobot-status-error);
-}
-
-.session-unavailable-label {
-  color: var(--noobot-status-error);
-  font-family: inherit;
-}
-
-.session-item:hover {
-  background: var(--noobot-surface-soft-hover);
-}
-
-.session-item.active {
-  background: var(--noobot-surface-primary-soft);
 }
 
 .session-icon-wrapper {
@@ -471,15 +560,35 @@ watch(
   flex: 1;
   min-width: 0;
   display: flex;
-  flex-direction: column;
-  gap: var(--noobot-space-2xs);
+  align-items: center;
+  gap: var(--noobot-space-sm);
 }
 
 .session-actions {
-  display: flex;
+  position: absolute;
+  inset-inline-end: var(--noobot-space-sm);
+  top: 50%;
+  transform: translateY(-50%);
+  display: none;
   align-items: center;
   gap: var(--noobot-space-2xs);
-  flex: 0 0 auto;
+  padding-inline-start: var(--noobot-space-lg);
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--noobot-surface-sidebar) var(--noobot-space-lg)
+  );
+}
+
+.session-list-panel.mobile .session-item {
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+.session-list-panel:not(.mobile) .session-item:hover .session-actions,
+.session-list-panel:not(.mobile) .session-item:focus-within .session-actions,
+.session-list-panel.mobile .session-item.actions-expanded .session-actions {
+  display: flex;
 }
 
 .session-rename-btn,
@@ -487,7 +596,6 @@ watch(
 .session-group-delete-btn {
   display: inline-flex;
   color: var(--noobot-text-secondary);
-  opacity: 0;
   transform: none;
   transition:
     opacity var(--noobot-duration-normal) var(--noobot-ease-standard),
@@ -496,13 +604,8 @@ watch(
     border-color var(--noobot-duration-normal) var(--noobot-ease-standard);
 }
 
-.session-item:hover .session-rename-btn,
-.session-item:hover .session-delete-btn,
-.session-item:focus-within .session-rename-btn,
-.session-item:focus-within .session-delete-btn,
-.session-item.active .session-rename-btn,
-.session-item.active .session-delete-btn {
-  opacity: 1;
+.session-group-delete-btn {
+  opacity: 0;
 }
 
 .session-date-header:hover .session-group-delete-btn,
@@ -531,6 +634,8 @@ watch(
 }
 
 .title {
+  flex: 1;
+  min-width: 0;
   font-size: var(--noobot-font-size-md);
   font-weight: var(--noobot-font-weight-medium);
   color: var(--noobot-text-main);
@@ -541,41 +646,22 @@ watch(
 }
 
 .session-item.active .title {
-  color: var(--noobot-text-strong);
   font-weight: var(--noobot-font-weight-semibold);
 }
 
-.sid {
-  font-size: var(--noobot-font-size-xs);
-  color: var(--noobot-text-secondary);
-  display: flex;
-  align-items: center;
-  gap: var(--noobot-space-2xs);
-  font-family: var(--noobot-font-mono);
+.title.running {
+  color: var(--noobot-status-running);
 }
 
-.status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: var(--noobot-radius-circle);
-  background-color: var(--noobot-status-idle);
+.title.done {
+  color: var(--noobot-status-success);
 }
 
-.status-dot.running {
-  background-color: var(--noobot-status-running);
+.title.error {
+  color: var(--noobot-status-error);
 }
 
-.status-dot.done {
-  background-color: var(--noobot-status-success);
-}
-
-.status-dot.error {
-  background-color: var(--noobot-status-error);
-}
-
-.session-list-panel.collapsed .title,
-.session-list-panel.collapsed .sid,
-.session-list-panel.collapsed .session-actions {
+.session-list-panel.collapsed .session-info {
   display: none;
 }
 
@@ -602,25 +688,6 @@ watch(
 </style>
 
 <style>
-.session-hover-popover.el-popover.el-popper {
-  padding: var(--noobot-space-md) var(--noobot-space-lg);
-  background: var(--noobot-panel-bg);
-  border: 1px solid var(--noobot-panel-border);
-  color: var(--noobot-text-strong);
-}
-
-.session-popover {
-  max-height: min(420px, calc(100dvh - 32px));
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-}
-
-.session-hover-popover.el-popover.el-popper .el-popper__arrow::before {
-  background: var(--noobot-panel-bg);
-  border: 1px solid var(--noobot-panel-border);
-}
-
 .session-popover__title {
   font-weight: var(--noobot-font-weight-semibold);
   font-size: var(--noobot-font-size-md);

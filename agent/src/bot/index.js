@@ -27,6 +27,7 @@ export class BotManager {
       startupContext,
       pluginRuntimeBundle,
       connectorAccessPort = null,
+      now,
     } = {},
   ) {
     this.globalConfig = globalConfig;
@@ -42,6 +43,7 @@ export class BotManager {
 
     this.attach = new AttachmentService(globalConfig);
     this.sessionRuntime = createSessionServices(globalConfig, {
+      now,
       attachmentService: this.attach,
       scopedSessionRoots,
     });
@@ -72,6 +74,7 @@ export class BotManager {
       botManager: this,
       agentRunner: runAgentTurn,
       pluginRuntimeBundle: this.pluginRuntimeBundle,
+      now,
     });
   }
 

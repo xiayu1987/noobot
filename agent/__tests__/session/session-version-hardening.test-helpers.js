@@ -88,7 +88,6 @@ export async function acceptTurn(
     sessionId: "s1",
     eventType: TURN_EVENT.ACTION_ACCEPTED,
     sessionCaller: SESSION_CALLER.USER,
-    startedAt: "2026-07-18T00:00:00.000Z",
     phase: TURN_PHASE.ACTION,
     action: "send",
     turnScopeId,

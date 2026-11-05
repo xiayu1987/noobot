@@ -19,6 +19,7 @@ import {
 import express, {
   createSessionApp,
   registerSessionRoutes,
+  TEST_MESSAGE_TS,
   withTestServer,
 } from "./session-routes.helpers.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
@@ -39,6 +40,7 @@ test("session-routes: sessions 列表只读取并返回概要", async () => {
   registerSessionRoutes(app, {
     bot: {
       session: {
+        readServerNow: () => TEST_MESSAGE_TS,
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
         getAllSessionsData: async () => {
@@ -78,6 +80,7 @@ test("session-routes: sessions 列表只读取并返回概要", async () => {
     assert.equal(payload.ok, true);
     assert.equal(payload.schemaVersion, SESSIONS_SUMMARY_SCHEMA_VERSION);
     assert.equal(payload.updatedAt, "2026-05-14T00:02:00.000Z");
+    assert.equal(payload.serverNow, TEST_MESSAGE_TS);
     assert.equal(fullDataCalled, false);
     assert.equal(payload.sessions.length, 1);
     assert.equal(payload.sessions[0].sessionId, "s1");
@@ -92,6 +95,7 @@ test("session-routes: session 详情只返回 detail 协议文档，拒绝任何
   registerSessionRoutes(app, {
     bot: {
       session: {
+        readServerNow: () => TEST_MESSAGE_TS,
         getSessionDisplayData: async () => {
           detailCalls += 1;
           return availableDetailDocument({
@@ -117,7 +121,14 @@ test("session-routes: session 详情只返回 detail 协议文档，拒绝任何
     let payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.ok, true);
-    assert.deepEqual(Object.keys(payload).sort(), ["exists", "ok", "sessionId", "sessions"]);
+    assert.deepEqual(Object.keys(payload).sort(), [
+      "exists",
+      "ok",
+      "serverNow",
+      "sessionId",
+      "sessions",
+    ]);
+    assert.equal(payload.serverNow, TEST_MESSAGE_TS);
     assert.equal(payload.sessions[0].availability, SESSION_SUMMARY_AVAILABILITY.AVAILABLE);
     assert.equal(detailCalls, 1);
     assert.equal(payload.sessions[0].messages[0].hasThinkingDetails, true);

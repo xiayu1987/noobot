@@ -147,10 +147,7 @@ function entryLabel(key) {
       </div>
     </div>
 
-    <div
-      v-if="!isLeaf && !leafFields.length && !entries.length"
-      class="empty-tip list-empty-tip section-empty"
-    >
+    <div v-if="!isLeaf && !leafFields.length && !entries.length" class="empty-tip list-empty-tip">
       <p>{{ translate("settings.configSectionEmpty") }}</p>
     </div>
   </div>
@@ -206,9 +203,5 @@ function entryLabel(key) {
   font-size: var(--noobot-font-size-md);
   color: var(--noobot-text-main);
   word-break: break-all;
-}
-
-.section-empty {
-  padding: var(--noobot-space-xl) 0;
 }
 </style>

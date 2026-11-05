@@ -22,6 +22,7 @@ function settleCompleted(registry, { sessionId, turnScopeId, updatedAt }) {
   return applyTurnTerminalResolution(
     registry,
     createTurnTerminalResolution({
+      generatedAt: "2026-11-01T00:00:00.000Z",
       commandId: `resolve-${turnScopeId}`,
       sessionId,
       turnScopeId,
@@ -50,6 +51,25 @@ function settleCompleted(registry, { sessionId, turnScopeId, updatedAt }) {
   );
 }
 
+// Turn timing is an Authority fact: only backend lifecycle events carry startedAt.
+function authorityProcessing({ sessionId, turnScopeId, dialogProcessId, startedAt }) {
+  return {
+    type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
+    eventType: "turn.processing_started",
+    phase: "processing",
+    state: "processing",
+    executionState: "sending",
+    sessionId,
+    turnScopeId,
+    dialogProcessId,
+    seq: 1,
+    revision: 1,
+    updatedAt: startedAt,
+    startedAt,
+    capabilities: { actionLocked: true, canStop: true },
+  };
+}
+
 describe("useChatStore turn runtime actions", () => {
   it("publishes a new registry root after the first runtime event so selectors recompute", async () => {
     setActivePinia(createPinia());
@@ -68,7 +88,6 @@ describe("useChatStore turn runtime actions", () => {
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
       sessionId: "session-1",
       turnScopeId: "client-turn:abc:def",
-      startedAt: "2026-07-21T10:00:00.000Z",
       updatedAt: "2026-07-21T10:00:00.000Z",
     });
     await nextTick();
@@ -76,6 +95,17 @@ describe("useChatStore turn runtime actions", () => {
     expect(result.applied).not.toBe(false);
     expect(store.turnRuntimeRegistry).not.toBe(before);
     expect(runtime.value.running).toBe(true);
+    expect(runtime.value.startedAt).toBe("");
+
+    store.applyTurnRuntimeEvent(
+      authorityProcessing({
+        sessionId: "session-1",
+        turnScopeId: "client-turn:abc:def",
+        dialogProcessId: "dp-1",
+        startedAt: "2026-07-21T10:00:00.000Z",
+      }),
+    );
+    await nextTick();
     expect(runtime.value.startedAt).toBe("2026-07-21T10:00:00.000Z");
   });
 
@@ -131,9 +161,16 @@ describe("useChatStore turn runtime actions", () => {
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
       sessionId: "session-1",
       turnScopeId: "client-turn:abc:def",
-      startedAt: "2026-07-21T10:00:00.000Z",
       updatedAt: "2026-07-21T10:00:00.000Z",
     });
+    store.applyTurnRuntimeEvent(
+      authorityProcessing({
+        sessionId: "session-1",
+        turnScopeId: "client-turn:abc:def",
+        dialogProcessId: "dp-1",
+        startedAt: "2026-07-21T10:00:00.000Z",
+      }),
+    );
     const afterSending = store.turnRuntimeRegistry;
 
     store.applyTurnRuntimeEvent({

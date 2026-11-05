@@ -8,24 +8,6 @@
   box-sizing: border-box;
 }
 
-.noobot-workspace-layout .panel-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--noobot-space-md) var(--noobot-space-xl);
-}
-
-.noobot-workspace-layout .panel-title {
-  font-weight: var(--noobot-font-weight-semibold);
-}
-
-.noobot-workspace-layout .panel-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
 .noobot-workspace-layout .tree-actions {
   display: flex;
   align-items: center;
@@ -90,8 +72,12 @@
 
 .noobot-workspace-layout .empty-icon {
   font-size: var(--noobot-font-size-lg);
-  margin-bottom: var(--noobot-space-xl);
-  opacity: 0.3;
+  margin-bottom: var(--noobot-space-sm);
+  opacity: 0.42;
+}
+
+.noobot-workspace-layout .empty-tip p {
+  margin: 0;
 }
 
 .settings-tabs {
@@ -108,9 +94,9 @@
   height: 100%;
 }
 
-.settings-tabs .list-empty-tip {
+.noobot-workspace-layout .list-empty-tip {
   position: static;
-  padding: 40px 0;
+  padding: var(--noobot-workspace-empty-padding);
 }
 
 .thinking-details-tabs {

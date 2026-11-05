@@ -332,12 +332,11 @@ export async function writeSessionArtifact({
   sessionDir,
   sessionPayload,
   atomic,
-  now,
   predecessor,
 }) {
   const files = buildSessionArtifactFileMap(sessionDir);
   await mkdir(sessionDir, { recursive: true });
-  const normalizedSessionPayload = normalizeSessionEntity(sessionPayload, { now });
+  const normalizedSessionPayload = normalizeSessionEntity(sessionPayload);
   const { turns } = splitSessionMessages(
     normalizedSessionPayload.messages,
     normalizedSessionPayload.dialogOrder,
@@ -469,10 +468,9 @@ export async function writeSessionTurnArtifacts({
   sessionPayload,
   turnScopeIds,
   atomic,
-  now,
 }) {
   const files = buildSessionArtifactFileMap(sessionDir);
-  const session = normalizeSessionEntity(sessionPayload, { now });
+  const session = normalizeSessionEntity(sessionPayload);
   const previous = await readPreviousTurnManifest({
     storageService,
     files,

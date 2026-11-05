@@ -18,8 +18,15 @@ import { TRANSFER_VERSION, TRANSFER_REASON } from "@noobot/semantic-transfer-pro
 describe("detailMessages", () => {
   it("builds one normalized detail message list for replace and preserve inputs", () => {
     const detailMessages = [
-      { role: RoleEnum.USER, content: "q", turnScopeId: "turn-1", sessionId: "root-session" },
       {
+        ts: "2026-01-01T00:00:00.000Z",
+        role: RoleEnum.USER,
+        content: "q",
+        turnScopeId: "turn-1",
+        sessionId: "root-session",
+      },
+      {
+        ts: "2026-01-01T00:00:00.000Z",
         role: RoleEnum.ASSISTANT,
         content: "final",
         turnScopeId: "turn-1",
@@ -70,6 +77,7 @@ describe("detailMessages", () => {
         sessionId: "child-session",
         messages: [
           {
+            ts: "2026-01-01T00:00:00.000Z",
             role: RoleEnum.ASSISTANT,
             content: "",
             dialogProcessId: "child-dp",
@@ -158,6 +166,7 @@ describe("detailMessages", () => {
       rootSessionId: "root-session",
       rootMessages: [
         {
+          ts: "2026-01-01T00:00:00.000Z",
           role: RoleEnum.ASSISTANT,
           content: "",
           dialogProcessId: "root-dp",
@@ -169,6 +178,7 @@ describe("detailMessages", () => {
           sessionId: "root-session",
           messages: [
             {
+              ts: "2026-01-01T00:00:00.000Z",
               role: RoleEnum.ASSISTANT,
               content: "",
               dialogProcessId: "root-dp",
@@ -180,6 +190,7 @@ describe("detailMessages", () => {
           sessionId: "child-session",
           messages: [
             {
+              ts: "2026-01-01T00:00:00.000Z",
               role: RoleEnum.ASSISTANT,
               dialogProcessId: "child-dp",
               parentDialogProcessId: "root-dp",
@@ -238,6 +249,7 @@ describe("detailMessages", () => {
   it("keeps child transfer envelope attachments on root assistant after refreshed detail merge", () => {
     const rootMessages = [
       {
+        ts: "2026-01-01T00:00:00.000Z",
         role: RoleEnum.ASSISTANT,
         dialogProcessId: "root-dp",
         turnScopeId: "client-turn:root",
@@ -257,6 +269,7 @@ describe("detailMessages", () => {
           sessionId: "child-session",
           messages: [
             {
+              ts: "2026-01-01T00:00:00.000Z",
               role: RoleEnum.ASSISTANT,
               dialogProcessId: "child-dp",
               parentDialogProcessId: "root-dp",
@@ -317,6 +330,7 @@ describe("detailMessages", () => {
     const normalizedMessages = buildNormalizedDetailMessages({
       detailMessages: [
         {
+          ts: "2026-01-01T00:00:00.000Z",
           role: RoleEnum.ASSISTANT,
           content: "workflow generated files",
           dialogProcessId: "root-dp",
@@ -476,6 +490,7 @@ describe("detailMessages", () => {
     const normalizedMessages = buildNormalizedDetailMessages({
       detailMessages: [
         {
+          ts: "2026-01-01T00:00:00.000Z",
           role: RoleEnum.ASSISTANT,
           content: "first chunk",
           turnScopeId: "turn-thinking",
@@ -484,6 +499,7 @@ describe("detailMessages", () => {
           thinkingStartedAt: startedAt,
         },
         {
+          ts: "2026-01-01T00:00:00.000Z",
           role: RoleEnum.ASSISTANT,
           content: "final chunk",
           turnScopeId: "turn-thinking",

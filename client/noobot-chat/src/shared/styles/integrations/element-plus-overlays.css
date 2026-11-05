@@ -7,20 +7,32 @@
 }
 
 .el-drawer__header,
-.el-dialog__header {
+.el-dialog__header,
+.noobot-side-drawer__header {
   background: var(--noobot-panel-head-bg);
   border-bottom: 1px solid var(--noobot-divider);
 }
 
 .el-drawer__title,
 .el-dialog__title,
-.el-message-box__title {
+.el-message-box__title,
+.noobot-side-drawer__title {
   color: var(--noobot-text-strong);
   font-weight: var(--noobot-font-weight-semibold);
 }
 
+.el-dialog,
 .el-message-box {
   border-radius: var(--noobot-radius-lg);
+}
+
+.el-dialog {
+  overflow: hidden;
+}
+
+.noobot-dialog-surface .el-dialog {
+  border: 1px solid var(--noobot-panel-border);
+  background: var(--noobot-panel-bg);
 }
 
 .el-message-box__message,

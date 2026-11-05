@@ -12,6 +12,7 @@ import { readAuthorityOutbox } from "../../src/session/authority-outbox-store/ou
 import { buildHarness } from "./scoped-session-repositories.fixtures.js";
 import { writeSessionArtifact } from "./session-artifact-store-v2.test-helpers.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
+import { testWallClock } from "../helpers/session-services.js";
 
 const ts = "2026-11-01T00:00:00.000Z";
 
@@ -30,7 +31,7 @@ test("message event commit has constant snapshot IO and preserves durable starts
     persistenceContext,
   });
   const scope = await sessionRepo.requireSessionScope(userId, sessionId, persistenceContext);
-  const service = new SessionMessageService({ sessionRepo });
+  const service = new SessionMessageService({ sessionRepo, now: testWallClock });
   let jsonReads = [];
   const readJson = storageService.readJson.bind(storageService);
   storageService.readJson = async (file) => {
@@ -121,7 +122,7 @@ test("message event commit has constant snapshot IO and preserves durable starts
       beforeManifest,
       "event durability does not require projection writes",
     );
-    const restartedService = new SessionMessageService({ sessionRepo });
+    const restartedService = new SessionMessageService({ sessionRepo, now: testWallClock });
     const pending = await restartedService.getPendingAuthorityEvents({
       userId,
       sessionId,

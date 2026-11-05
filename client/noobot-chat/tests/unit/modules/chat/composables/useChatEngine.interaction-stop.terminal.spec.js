@@ -85,6 +85,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
           executionState: eventType === TURN_EVENT.COMPLETED ? "completed" : "sending",
           startedAt: thinkingStartedAt,
           finishedAt: eventType === TURN_EVENT.COMPLETED ? thinkingFinishedAt : "",
+          occurredAt: eventType === TURN_EVENT.COMPLETED ? thinkingFinishedAt : thinkingStartedAt,
           revision: sequence + 1,
           sequence: sequence + 1,
           ...(eventType === TURN_EVENT.COMPLETED
