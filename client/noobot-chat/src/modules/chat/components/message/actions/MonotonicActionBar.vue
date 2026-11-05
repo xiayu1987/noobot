@@ -20,7 +20,7 @@ const emit = defineEmits(["edit", "delete"]);
     <button
       v-if="showResend"
       type="button"
-      class="monotonic-chip-btn noobot-chip-action-btn noobot-icon-button is-primary"
+      class="noobot-icon-button noobot-flat-icon-btn is-primary"
       :title="t('message.monotonicEdit')"
       :aria-label="t('message.monotonicEdit')"
       :disabled="disabled || operating"
@@ -45,7 +45,7 @@ const emit = defineEmits(["edit", "delete"]);
     <button
       v-if="showDelete"
       type="button"
-      class="monotonic-chip-btn noobot-chip-action-btn noobot-icon-button is-danger"
+      class="noobot-icon-button noobot-flat-icon-btn danger-text"
       :title="t('message.monotonicDelete')"
       :aria-label="t('message.monotonicDelete')"
       :disabled="disabled || operating"
@@ -84,11 +84,6 @@ const emit = defineEmits(["edit", "delete"]);
 
 .monotonic-action-bar:hover {
   opacity: 1;
-}
-
-.monotonic-chip-btn {
-  width: 30px;
-  height: 30px;
 }
 
 .monotonic-btn-icon {

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { DEVELOPMENT_THRESHOLDS } from "./development-thresholds.mjs";
-import { mkdtempSync, readdirSync, rmSync, statSync } from "node:fs";
+import { lstatSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { withoutRuntimeInstancePaths } from "@noobot/runtime-topology-protocol/instance-paths";
@@ -15,15 +15,14 @@ export const ISOLATED_TMP_ENV = "NOOBOT_TEST_TMP_DIR";
 const DEFAULT_TMP_MIN_AGE_MS = DEVELOPMENT_THRESHOLDS.time.isolatedTmpMinAgeMs;
 
 export function pruneOldest(dir, matches, keep, { minAgeMs = 0, now = Date.now() } = {}) {
-  let entries;
-  try {
-    entries = readdirSync(dir)
-      .filter(matches)
-      .map((name) => ({ name, mtimeMs: statSync(path.join(dir, name)).mtimeMs }))
-      .sort((left, right) => left.mtimeMs - right.mtimeMs);
-  } catch {
-    return;
+  const uid = os.userInfo().uid;
+  const entries = [];
+  for (const name of readdirSync(dir).filter(matches)) {
+    const stat = lstatSync(path.join(dir, name), { throwIfNoEntry: false });
+    if (!stat || stat.isSymbolicLink() || (uid >= 0 && stat.uid !== uid)) continue;
+    entries.push({ name, mtimeMs: stat.mtimeMs });
   }
+  entries.sort((left, right) => left.mtimeMs - right.mtimeMs);
   for (const { name, mtimeMs } of entries.slice(0, Math.max(0, entries.length - keep))) {
     if (now - mtimeMs < minAgeMs) continue;
     rmSync(path.join(dir, name), { recursive: true, force: true });

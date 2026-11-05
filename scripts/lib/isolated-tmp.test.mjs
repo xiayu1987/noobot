@@ -4,7 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, utimesSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  utimesSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -67,6 +75,26 @@ test("pruneOldest never removes dirs younger than minAgeMs", (t) => {
   assert.deepEqual(readdirSync(root).sort(), ["p-a", "p-b"]);
   pruneOldest(root, (name) => name.startsWith("p-"), 0);
   assert.deepEqual(readdirSync(root), []);
+});
+
+test("pruneOldest excludes other owners from pruning and retention counts", (t) => {
+  const root = createRoot(t);
+  const owned = createAgedDir(root, "p-owned", 5 * HOUR_MS);
+  const uid = statSync(owned).uid;
+  t.mock.method(os, "userInfo", () => ({ uid: uid + 1 }));
+  pruneOldest(root, (name) => name.startsWith("p-"), 0);
+  assert.deepEqual(readdirSync(root), ["p-owned"]);
+});
+
+test("pruneOldest excludes symbolic links and surfaces filesystem errors", (t) => {
+  const root = createRoot(t);
+  const target = createAgedDir(root, "target", 5 * HOUR_MS);
+  symlinkSync(target, path.join(root, "p-link"), "junction");
+  pruneOldest(root, (name) => name.startsWith("p-"), 0);
+  assert.deepEqual(readdirSync(root).sort(), ["p-link", "target"]);
+  assert.throws(() => pruneOldest(path.join(root, "missing"), () => true, 0), {
+    code: "ENOENT",
+  });
 });
 
 test("buildIsolatedTmpEnv points all tmp variables and marker at dir", () => {

@@ -52,7 +52,7 @@ describe("MonotonicMessageActions", () => {
     const wrapper = mountActions({ visible: true });
     for (const [selector, key] of [
       [".is-primary", "message.monotonicEdit"],
-      [".is-danger", "message.monotonicDelete"],
+      [".danger-text", "message.monotonicDelete"],
     ]) {
       const button = wrapper.find(`button${selector}`);
       const label = translateMessageKey("zh-CN", key);
@@ -70,20 +70,16 @@ describe("MonotonicMessageActions", () => {
     ElMessageBox.confirm.mockImplementationOnce(() => new Promise(() => {}));
     const wrapper = mountActions();
 
-    await wrapper.find(".monotonic-chip-btn.is-danger").trigger("click");
+    await wrapper.find("button.danger-text").trigger("click");
     await nextTick();
     wrapper.vm.$forceUpdate();
     await nextTick();
 
-    expect(wrapper.find(".monotonic-chip-btn.is-primary").attributes("disabled")).toBeDefined();
-    expect(wrapper.find(".monotonic-chip-btn.is-danger").attributes("disabled")).toBeDefined();
+    expect(wrapper.find("button.is-primary").attributes("disabled")).toBeDefined();
+    expect(wrapper.find("button.danger-text").attributes("disabled")).toBeDefined();
     const disabledWrapper = mountActions({ disabled: true });
-    expect(
-      disabledWrapper.find(".monotonic-chip-btn.is-primary").attributes("disabled"),
-    ).toBeDefined();
-    expect(
-      disabledWrapper.find(".monotonic-chip-btn.is-danger").attributes("disabled"),
-    ).toBeDefined();
+    expect(disabledWrapper.find("button.is-primary").attributes("disabled")).toBeDefined();
+    expect(disabledWrapper.find("button.danger-text").attributes("disabled")).toBeDefined();
   });
 
   it("calls delete handler with message payload", async () => {
@@ -92,7 +88,7 @@ describe("MonotonicMessageActions", () => {
     const onResend = vi.fn(async () => true);
     const wrapper = mountActions({ messageItem, onDelete, onResend });
 
-    await wrapper.find(".monotonic-chip-btn.is-danger").trigger("click");
+    await wrapper.find("button.danger-text").trigger("click");
 
     expect(ElMessageBox.confirm).toHaveBeenCalledTimes(1);
     expect(onDelete).toHaveBeenCalledWith(messageItem);
@@ -104,7 +100,7 @@ describe("MonotonicMessageActions", () => {
     const onResend = vi.fn(async () => true);
     const wrapper = mountActions({ messageItem, onResend });
 
-    await wrapper.find(".monotonic-chip-btn.is-primary").trigger("click");
+    await wrapper.find("button.is-primary").trigger("click");
     await nextTick();
     wrapper.vm.$forceUpdate();
     await nextTick();
@@ -127,7 +123,7 @@ describe("MonotonicMessageActions", () => {
   it("forwards attachment count parameters to the locale translator", async () => {
     const wrapper = mountActions();
 
-    await wrapper.find(".monotonic-chip-btn.is-primary").trigger("click");
+    await wrapper.find("button.is-primary").trigger("click");
     await nextTick();
 
     const stats = wrapper.find(".monotonic-attachment-stats");

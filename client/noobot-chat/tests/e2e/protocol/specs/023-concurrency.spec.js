@@ -28,7 +28,7 @@ test("@full PBE-023 Session version 冲突", async ({
   try {
     await stalePage.goto(`/?session=${encodeURIComponent(noobot.sessionId)}`);
     await connectThroughUi(stalePage, readE2eCredentials());
-    await expect(stalePage.locator(".monotonic-chip-btn.is-primary").last()).toBeVisible();
+    await expect(stalePage.locator(".monotonic-action-bar button.is-primary").last()).toBeVisible();
     const replacementResponses = [];
     for (const page of [noobot.page, stalePage]) {
       page.on("response", (response) => {

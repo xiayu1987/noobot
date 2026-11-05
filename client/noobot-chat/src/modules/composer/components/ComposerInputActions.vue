@@ -127,12 +127,8 @@ function onInputKeydown(event) {
   z-index: 50;
   width: var(--noobot-control-height-xl);
   height: var(--noobot-control-height-xl);
-  padding: 0;
-  border-radius: var(--noobot-radius-circle);
   border: none;
   display: flex;
-  justify-content: center;
-  align-items: center;
   flex-shrink: 0;
   transition:
     background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
@@ -177,8 +173,6 @@ function onInputKeydown(event) {
   height: var(--composer-icon-size);
   min-width: var(--composer-icon-size);
   min-height: var(--composer-icon-size);
-  padding: 0;
-  border-radius: var(--noobot-radius-circle);
   border: 1px solid transparent;
   background: transparent;
   color: var(--noobot-text-secondary);

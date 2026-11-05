@@ -39,44 +39,6 @@ button,
   border: 1px solid var(--noobot-panel-border);
 }
 
-.noobot-chip-action-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--noobot-space-2xs);
-  min-height: var(--noobot-control-height-sm);
-  padding: 0 var(--noobot-space-md);
-  border: 1px solid var(--noobot-panel-border);
-  border-radius: var(--noobot-radius-pill);
-  color: var(--noobot-text-main);
-  background: var(--noobot-control-bg);
-  cursor: pointer;
-  font-size: var(--noobot-font-size-md);
-  font-weight: var(--noobot-font-weight-medium);
-  line-height: var(--noobot-line-height-none);
-  transition:
-    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
-    border-color var(--noobot-duration-normal) var(--noobot-ease-standard),
-    color var(--noobot-duration-normal) var(--noobot-ease-standard),
-    transform var(--noobot-duration-normal) var(--noobot-ease-standard);
-}
-
-.noobot-chip-action-btn.is-primary:hover:not(:disabled) {
-  color: var(--noobot-text-accent);
-  background: var(--noobot-accent-soft);
-  border-color: var(--noobot-border-primary);
-}
-
-.noobot-chip-action-btn.is-danger:hover:not(:disabled) {
-  color: var(--noobot-status-error);
-  background: var(--noobot-danger-soft);
-  border-color: color-mix(in srgb, var(--noobot-status-error) 42%, transparent);
-}
-
-.noobot-chip-action-btn:disabled {
-  cursor: not-allowed;
-  opacity: var(--noobot-btn-muted-disabled-opacity);
-}
-
 .noobot-primary-pill-action {
   border: 1px solid color-mix(in srgb, var(--noobot-accent) 42%, transparent);
   background: color-mix(in srgb, var(--noobot-accent) 10%, transparent);
@@ -163,6 +125,14 @@ button,
   justify-content: center;
 }
 
+.noobot-icon-button.noobot-flat-icon-btn,
+.noobot-icon-button.noobot-flat-inline-icon-btn {
+  width: var(--noobot-icon-button-size);
+  height: var(--noobot-icon-button-size);
+  min-width: var(--noobot-icon-button-size);
+  min-height: var(--noobot-icon-button-size);
+}
+
 .noobot-flat-icon-btn,
 .noobot-flat-inline-icon-btn {
   border: 0;
@@ -181,35 +151,42 @@ button,
   margin-left: 0;
 }
 
-.noobot-copy-button {
-  width: var(--noobot-control-icon-size-sm);
-  height: var(--noobot-control-icon-size-sm);
-  min-width: var(--noobot-control-icon-size-sm);
-  min-height: var(--noobot-control-icon-size-sm);
-  border: 0;
-  background: transparent;
-}
-
 .noobot-flat-icon-btn {
-  width: var(--noobot-msg-icon-btn-size);
-  height: var(--noobot-msg-icon-btn-size);
-  min-width: var(--noobot-msg-icon-btn-size);
-  min-height: var(--noobot-msg-icon-btn-size);
-  padding: 0;
+  --noobot-icon-button-size: var(--noobot-msg-icon-btn-size);
 }
 
 .noobot-flat-inline-icon-btn {
-  width: var(--noobot-msg-inline-icon-btn-size);
-  height: var(--noobot-msg-inline-icon-btn-size);
-  min-width: var(--noobot-msg-inline-icon-btn-size);
-  min-height: var(--noobot-msg-inline-icon-btn-size);
-  padding: 0;
+  --noobot-icon-button-size: var(--noobot-msg-inline-icon-btn-size);
 }
 
-.noobot-flat-icon-btn:hover,
-.noobot-flat-inline-icon-btn:hover {
+.noobot-copy-button {
+  --noobot-icon-button-size: var(--noobot-control-icon-size-sm);
+}
+
+.noobot-flat-icon-btn:hover:not(:disabled),
+.noobot-flat-inline-icon-btn:hover:not(:disabled) {
   background: var(--noobot-panel-muted);
   color: var(--noobot-text-main);
+}
+
+:is(.noobot-flat-icon-btn, .noobot-flat-inline-icon-btn).is-primary:hover:not(:disabled) {
+  color: var(--noobot-text-accent);
+  background: var(--noobot-accent-soft);
+}
+
+:is(.noobot-flat-icon-btn, .noobot-flat-inline-icon-btn).danger-text:hover:not(:disabled) {
+  color: var(--noobot-status-error);
+  background: var(--noobot-danger-soft);
+}
+
+:is(.noobot-flat-icon-btn, .noobot-flat-inline-icon-btn):focus-visible {
+  outline: 2px solid var(--noobot-border-primary);
+  outline-offset: 2px;
+}
+
+:is(.noobot-flat-icon-btn, .noobot-flat-inline-icon-btn):disabled {
+  cursor: not-allowed;
+  opacity: var(--noobot-btn-muted-disabled-opacity);
 }
 
 .noobot-flat-soft-btn {
@@ -300,10 +277,7 @@ button,
 .el-button {
   border-radius: var(--noobot-btn-radius);
   min-height: var(--noobot-control-height-sm);
-  transition:
-    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
-    border-color var(--noobot-duration-normal) var(--noobot-ease-standard),
-    color var(--noobot-duration-normal) var(--noobot-ease-standard);
+  transition: var(--noobot-transition-colors);
 }
 
 .el-button:not(:disabled):hover {

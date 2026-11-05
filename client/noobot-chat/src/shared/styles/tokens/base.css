@@ -46,4 +46,8 @@
   --noobot-ease-standard: ease;
   --noobot-ease-in-out: ease-in-out;
   --noobot-ease-emphasized: cubic-bezier(0.4, 0, 0.2, 1);
+  --noobot-transition-colors:
+    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    border-color var(--noobot-duration-normal) var(--noobot-ease-standard),
+    color var(--noobot-duration-normal) var(--noobot-ease-standard);
 }

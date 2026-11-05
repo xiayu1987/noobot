@@ -1,19 +1,5 @@
 .noobot-workspace-layout .icon-btn {
-  border: 0;
-  background: transparent;
-  color: var(--noobot-text-secondary);
   font-size: var(--noobot-font-size-lg);
-  padding: var(--noobot-space-2xs) var(--noobot-space-xs);
-}
-
-.noobot-workspace-layout .icon-btn:hover {
-  color: var(--noobot-text-main);
-  background: var(--noobot-panel-muted);
-}
-
-.noobot-workspace-layout .icon-btn.danger-text:hover {
-  color: var(--noobot-status-error);
-  background: var(--noobot-danger-soft);
 }
 
 .noobot-workspace-layout .refresh-btn:not(:disabled):hover {

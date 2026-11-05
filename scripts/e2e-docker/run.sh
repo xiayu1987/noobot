@@ -89,9 +89,6 @@ stop_container() {
 teardown() {
   stop_container "$CONTAINER"
   stop_container "$MCP_CONTAINER"
-  if docker network inspect "$NETWORK" >/dev/null 2>&1; then
-    docker network rm "$NETWORK" >/dev/null
-  fi
 }
 
 start_mcp() {
@@ -135,7 +132,9 @@ cmd_up() {
   fi
   teardown
   docker image inspect "$IMAGE" >/dev/null 2>&1 || cmd_build
-  docker network create "$NETWORK" >/dev/null
+  if ! docker network inspect "$NETWORK" >/dev/null 2>&1; then
+    docker network create "$NETWORK" >/dev/null
+  fi
   if ! start_mcp || ! start_service; then
     teardown
     return 1

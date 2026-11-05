@@ -240,7 +240,7 @@ export async function editLatestUserMessage(
   content,
   { attachment = null, removeAttachments = false } = {},
 ) {
-  const editButton = page.locator(".monotonic-chip-btn.is-primary").last();
+  const editButton = page.locator(".monotonic-action-bar button.is-primary").last();
   await editButton.click();
   const card = page.locator(".monotonic-edit-card").last();
   await card.locator(".monotonic-edit-textarea textarea").fill(content);
@@ -254,7 +254,7 @@ export async function editLatestUserMessage(
 }
 
 export async function deleteLatestUserMessage(page) {
-  const deleteButtons = page.locator(".monotonic-chip-btn.is-danger");
+  const deleteButtons = page.locator(".monotonic-action-bar button.danger-text");
   const userNavigatorItems = page.locator('[data-chat-message-nav-id^="chat-message-user-"]');
   const initialUserMessageCount = await userNavigatorItems.count();
   expect(initialUserMessageCount).toBeGreaterThan(0);

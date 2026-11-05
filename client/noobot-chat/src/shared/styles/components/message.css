@@ -58,10 +58,7 @@
   border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 20%, transparent);
   border-radius: var(--noobot-radius-sm);
   background: color-mix(in srgb, var(--noobot-panel-bg) 78%, transparent);
-  transition:
-    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
-    border-color var(--noobot-duration-normal) var(--noobot-ease-standard),
-    color var(--noobot-duration-normal) var(--noobot-ease-standard);
+  transition: var(--noobot-transition-colors);
 }
 
 .noobot-subtle-row:hover,

@@ -79,7 +79,7 @@ export const CHECK = defineCheck({
     },
   },
   exemptions: [],
-  baseline: { clones: 32, duplicatedLines: 391, exemptions: 0 },
+  baseline: { clones: 31, duplicatedLines: 386, exemptions: 0 },
   measure,
 });
 

@@ -228,10 +228,7 @@ function handleHeaderAction(command = "") {
   max-width: var(--noobot-control-height-md);
   max-height: var(--noobot-control-height-md);
   flex: 0 0 var(--noobot-control-height-md);
-  padding: 0;
   line-height: var(--noobot-line-height-none);
-  aspect-ratio: 1 / 1;
-  border-radius: var(--noobot-radius-circle);
 }
 
 .mobile-menu-btn :deep(.el-icon) {
@@ -251,10 +248,13 @@ function handleHeaderAction(command = "") {
 }
 
 .workspace-btn {
-  border-radius: var(--noobot-radius-sm);
   height: var(--noobot-control-height-sm);
-  padding: 0 var(--noobot-space-md);
   margin-left: 0;
+}
+
+.workspace-btn:not(.noobot-icon-button) {
+  border-radius: var(--noobot-radius-sm);
+  padding: 0 var(--noobot-space-md);
 }
 
 .desktop-header-actions {
@@ -268,16 +268,6 @@ function handleHeaderAction(command = "") {
   width: var(--noobot-control-icon-size);
   height: var(--noobot-control-icon-size);
   min-width: var(--noobot-control-icon-size);
-  padding: 0;
-  border-radius: var(--noobot-radius-circle);
-}
-
-.locale-select {
-  width: 110px;
-}
-
-.theme-select {
-  width: 104px;
 }
 
 .mobile-header-actions {
@@ -305,17 +295,10 @@ function handleHeaderAction(command = "") {
 @media (max-width: 768px) {
   .mobile-menu-btn {
     display: inline-flex;
-    align-items: center;
-    justify-content: center;
   }
 
   .head-sub {
     display: none;
-  }
-
-  .locale-select,
-  .theme-select {
-    width: 84px;
   }
 
   .chat-header {
