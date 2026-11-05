@@ -125,6 +125,56 @@ test("unmarked workspace maps the legacy session tree and retires v1 artifacts",
   }
 });
 
+test("session storage upgrade only walks session roots and never re-enters backups", async () => {
+  const fixture = await createFixture();
+  const outside = [
+    `${WORKSPACE_LAYOUT.WORKSPACE_BACKUPS_DIR}/old-stamp/runtime/session/s-9`,
+    "runtime/native_tasks/t-1",
+  ];
+  try {
+    await seedLegacySessionStorage(fixture);
+    for (const dir of outside) {
+      await fixture.write(`${dir}/execution-events/index.json`, { schemaVersion: 1, segments: [] });
+    }
+    const backupBase = fixture.at(`${WORKSPACE_LAYOUT.WORKSPACE_BACKUPS_DIR}/new-stamp`);
+    let processed = 0;
+    const { retired } = await upgradeSessionStorage({
+      base: fixture.userPath,
+      backupBase,
+      scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS,
+      onSessionProcessed: () => {
+        processed += 1;
+      },
+    });
+    assert.equal(processed, 2);
+    assert.deepEqual(
+      [
+        ...new Set(
+          retired.map((item) =>
+            path
+              .dirname(item.path)
+              .split(path.sep)
+              .join("/")
+              .replace(/\/execution-reports$/, ""),
+          ),
+        ),
+      ].sort(),
+      [NESTED_DIR, SESSION_DIR].sort(),
+    );
+    for (const dir of outside) {
+      assert.equal(await fixture.exists(`${dir}/execution-events/index.json`), true, dir);
+    }
+    assert.equal(
+      await fixture.exists(
+        `${WORKSPACE_LAYOUT.WORKSPACE_BACKUPS_DIR}/new-stamp/runtime/workspace-backups`,
+      ),
+      false,
+    );
+  } finally {
+    await fixture.restore();
+  }
+});
+
 test("new workspace is marked current without running session storage upgrades", async () => {
   const fixture = await createFixture();
   try {
@@ -282,7 +332,11 @@ test("session tree rebuild reports rejected sessions and retires them from disk"
     await fixture.write(WORKSPACE_LAYOUT.SESSION_TREE_FILE, "{not json");
     const backupBase = await mkdtemp(path.join(os.tmpdir(), "noobot-tree-rebuild-backup-"));
     try {
-      const { sessionTree } = await upgradeSessionStorage({ base: fixture.userPath, backupBase });
+      const { sessionTree } = await upgradeSessionStorage({
+        base: fixture.userPath,
+        backupBase,
+        scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS,
+      });
       assert.equal(sessionTree.nodes, 1);
       assert.deepEqual(sessionTree.rejected, [
         { sessionId: "s-2", reason: "parent-missing", segments: ["s-2"] },
@@ -312,7 +366,11 @@ test("legacy tree upgrade retires sessions whose persisted parent chain is broke
     await fixture.write("runtime/session/gone/lost/session.json", { caller: SESSION_CALLER.BOT });
     const backupBase = await mkdtemp(path.join(os.tmpdir(), "noobot-tree-legacy-backup-"));
     try {
-      const { sessionTree } = await upgradeSessionStorage({ base: fixture.userPath, backupBase });
+      const { sessionTree } = await upgradeSessionStorage({
+        base: fixture.userPath,
+        backupBase,
+        scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS,
+      });
       assert.equal(sessionTree.nodes, 1);
       assert.deepEqual(sessionTree.rejected, [{ sessionId: "lost", reason: "parent-missing" }]);
       assert.deepEqual(sessionTree.retiredSessions, [
@@ -430,7 +488,11 @@ test("session tree caller upgrade reports only the sessions whose caller was rep
     await fixture.write("runtime/session/root/broken/session.json", "{not json");
     const backupBase = await mkdtemp(path.join(os.tmpdir(), "noobot-caller-upgrade-backup-"));
     try {
-      const { sessionTree } = await upgradeSessionStorage({ base: fixture.userPath, backupBase });
+      const { sessionTree } = await upgradeSessionStorage({
+        base: fixture.userPath,
+        backupBase,
+        scopedSessionRoots: TEST_SCOPED_SESSION_ROOTS,
+      });
       assert.deepEqual(sessionTree.repairedCallers, ["broken"]);
       assert.equal(sessionTree.nodes, 2);
     } finally {

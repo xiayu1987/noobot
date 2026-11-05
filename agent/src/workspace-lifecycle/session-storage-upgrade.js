@@ -28,15 +28,6 @@ import {
 } from "@noobot/session-protocol/execution-event-index";
 import { isPlainObject } from "@noobot/shared/value";
 
-const SKIPPED_RUNTIME_DIRECTORIES = new Set([
-  WORKSPACE_LAYOUT.WORKSPACE_BACKUPS_DIR,
-  WORKSPACE_LAYOUT.MIGRATION_QUARANTINE_DIR,
-  WORKSPACE_LAYOUT.MEMORY_REPAIR_BACKUPS_DIR,
-  WORKSPACE_LAYOUT.BROWSER_PROFILES_DIR,
-  WORKSPACE_LAYOUT.OPS_WORKDIR,
-  WORKSPACE_LAYOUT.PLUGIN_ASSETS_DIR,
-]);
-
 const SESSION_ARTIFACT_DIRECTORIES = new Set(Object.values(SESSION_ARTIFACT_FILE_NAMES));
 const MUTATION_LOCK_SUFFIX = ".mutation-lock";
 
@@ -251,7 +242,7 @@ async function retireSessionArtifacts({ base, sessionDir, retire }) {
   );
 }
 
-async function* walkSessionDirectories(base, directory) {
+async function* walkSessionDirectories(directory) {
   const entries = await listDirectories(directory);
   const names = new Set(entries.map((entry) => entry.name));
   if (
@@ -263,24 +254,27 @@ async function* walkSessionDirectories(base, directory) {
   for (const entry of entries) {
     if (SESSION_ARTIFACT_DIRECTORIES.has(entry.name)) continue;
     if (entry.name.endsWith(MUTATION_LOCK_SUFFIX)) continue;
-    const child = path.join(directory, entry.name);
-    if (SKIPPED_RUNTIME_DIRECTORIES.has(path.relative(base, child))) continue;
-    yield* walkSessionDirectories(base, child);
+    yield* walkSessionDirectories(path.join(directory, entry.name));
   }
 }
 
 export async function upgradeSessionStorage({
   base,
   backupBase,
+  scopedSessionRoots,
   onSessionProcessed = ignoreSessionProgress,
 }) {
+  if (!Array.isArray(scopedSessionRoots) || !scopedSessionRoots.length) {
+    throw new TypeError("session storage upgrade requires scopedSessionRoots");
+  }
   const retire = createRetirement(base, backupBase);
   const sessionTree = await upgradeSessionTree({ base, retire });
   const retired = [];
-  const runtimeRoot = path.join(base, WORKSPACE_LAYOUT.RUNTIME_DIR);
-  for await (const sessionDir of walkSessionDirectories(base, runtimeRoot)) {
-    retired.push(...(await retireSessionArtifacts({ base, sessionDir, retire })));
-    onSessionProcessed();
+  for (const root of [WORKSPACE_LAYOUT.SESSION_DIR, ...scopedSessionRoots]) {
+    for await (const sessionDir of walkSessionDirectories(path.join(base, root))) {
+      retired.push(...(await retireSessionArtifacts({ base, sessionDir, retire })));
+      onSessionProcessed();
+    }
   }
   return { sessionTree, retired };
 }
