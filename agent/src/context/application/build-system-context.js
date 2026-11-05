@@ -9,6 +9,7 @@ import {
 } from "@noobot/agent-config-protocol/enums";
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { isFunction } from "@noobot/shared/value";
+import { readServerClock } from "@noobot/session-protocol/server-clock";
 import { resolveScenarioProfile } from "../builders/scenario-resolver.js";
 import { composeSystemInfoSections } from "../formatters/system-prompt-formatter.js";
 import { resolveConnectorStatusSection } from "../providers/connector-status-provider.js";
@@ -101,7 +102,7 @@ export async function buildSystemContext({
         runConfig,
         botManager,
         isSuperUser: identityInfo.isSuperUser,
-        now: now(),
+        now: readServerClock(now),
       })
     : {};
   return {

@@ -26,6 +26,7 @@ import { BOT_MANAGE_LOG_EVENT, BOT_MANAGE_LOG_SOURCE } from "../bot/config/const
 import { MEMORY_SUMMARY_STAGE } from "../memory/stage-runner.js";
 import { text, isFunction, isPlainObject } from "@noobot/shared/value";
 import { createHookRuntimeIdentity } from "@noobot/hook-protocol/runtime-identity";
+import { readServerClock } from "@noobot/session-protocol/server-clock";
 
 function normalizeAdditionalSystemMessages(input) {
   return input.map((item) => text(item)).filter(Boolean);
@@ -34,6 +35,7 @@ function normalizeAdditionalSystemMessages(input) {
 const CONTEXT_BUILDER_INPUT_FIELDS = Object.freeze({
   config: Object.freeze(["globalConfig", "userConfig"]),
   serviceContainer: Object.freeze([
+    "now",
     "eventListener",
     "sessionManager",
     "memoryService",
@@ -94,6 +96,7 @@ export class ContextBuilder {
   constructor(input) {
     assertContextBuilderInput(input);
     const {
+      now,
       globalConfig,
       userConfig,
       eventListener,
@@ -111,6 +114,8 @@ export class ContextBuilder {
       abortSignal,
       persistenceScope,
     } = { ...input.config, ...input.serviceContainer, ...input.sessionContext };
+    if (!isFunction(now)) throw new TypeError("ContextBuilder requires now function");
+    this.now = now;
     this.globalConfig = globalConfig;
     this.userConfig = userConfig;
     this.eventListener = eventListener;
@@ -141,10 +146,6 @@ export class ContextBuilder {
     this._effectiveConfigCache = null;
     this._runtimeBasePathCache = "";
     this._workspaceDirectoriesPromise = null;
-  }
-
-  _now() {
-    return new Date().toISOString();
   }
 
   _getEffectiveConfig() {
@@ -202,7 +203,7 @@ export class ContextBuilder {
         runConfig: this.runConfig,
         botManager: this.botManager,
         isSuperUser: runtimeStaticInfo.identity.isSuperUser,
-        now: this._now(),
+        now: readServerClock(this.now),
       }),
       persistenceScope: this.persistenceScope,
     };
@@ -256,7 +257,7 @@ export class ContextBuilder {
       botManager: this.botManager,
       userMessageAttachments: this.userMessageAttachments,
       resolveWorkspaceDirectories: (basePath) => this._resolveWorkspaceDirectoriesCached(basePath),
-      now: () => this._now(),
+      now: this.now,
     });
   }
 

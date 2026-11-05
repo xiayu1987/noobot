@@ -30,7 +30,7 @@ test("domain and commit reject undeclared request fields before allocating facts
     { revision: 1 },
     { correlationId: "other" },
     { extra: undefined },
-    // Turn timing is an Authority fact; callers can never supply it.
+
     { startedAt: "2026-07-30T00:00:00.000Z" },
     { finishedAt: "2026-07-30T00:00:00.000Z" },
   ]) {

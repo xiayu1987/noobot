@@ -95,8 +95,6 @@ function projectIdentity(event, authoritative) {
   return identity;
 }
 
-// Turn timing (startedAt/finishedAt/thinkingFinishedAt) is an Authority fact in
-// the server clock domain; local and transport events must not carry it.
 const AUTHORITY_TIMING_FIELDS = Object.freeze(["startedAt", "finishedAt", "thinkingFinishedAt"]);
 
 function projectTimes(event, authoritative, transport) {
@@ -118,7 +116,7 @@ function projectTimes(event, authoritative, transport) {
     timestamp = requireRuntimeIsoTime(event.updatedAt, "updatedAt");
     if (Object.hasOwn(event, "updatedAtMs") && updatedAtMs !== timestamp)
       throw new TypeError("runtime_time_conflict");
-    // A terminal Authority state is committed together with its finishedAt.
+
     if (isTerminalTurnState(event.state) && !times.finishedAt)
       throw new TypeError("missing_runtime_terminal_finishedAt");
   } else if (transport) {

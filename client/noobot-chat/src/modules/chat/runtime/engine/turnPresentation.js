@@ -149,7 +149,7 @@ function mergeWorkflowIntoShell(shell, workflowMessage) {
   const canonicalContent = text(shell?.content);
   const livePlanningContent = text(workflowMessage?.content);
   const content = canonicalContent || livePlanningContent;
-  // ts belongs to the shell: committed shells carry the Authority ts, uncommitted ones none.
+
   const { ts: _liveWorkflowTs, ...liveWorkflowFields } = workflowMessage;
   const merged = {
     ...shell,

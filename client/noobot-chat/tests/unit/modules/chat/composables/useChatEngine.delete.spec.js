@@ -59,7 +59,7 @@ describe("useChatEngine.delete", () => {
     expect(activeSession.value.messages).toEqual([]);
     expect(activeSession.value.messageCount).toBe(0);
     expect(activeSession.value.lastMessage).toBe(null);
-    // Session updatedAt is an Authority fact written by applySessionDetail, never by the local cascade.
+
     expect(activeSession.value.updatedAt).toBe(updatedAtBeforeCascade);
   });
 

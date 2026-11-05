@@ -71,6 +71,7 @@ function createBuilderForAttachmentRuntimeTest({
       userConfig: {},
     },
     serviceContainer: {
+      now: () => "2026-01-01T00:00:00.000Z",
       sessionManager: createContextSessionManager(),
       memoryService: null,
       attachmentService: createTestAttachmentService({
@@ -127,6 +128,7 @@ test("ContextBuilder binds Session persistence authority before constructing too
   });
 
   const executionScope = await builder.buildSessionContext();
+  assert.equal(executionScope.context.execution.timestamp, "2026-01-01T00:00:00.000Z");
   const tool = executionScope.bindings.tools.find((item) => item.name === "user_interaction");
   assert.ok(tool);
   await tool.invoke({
@@ -250,6 +252,7 @@ test("buildSessionContext marks normalized superAdmin user as super user", async
       userConfig: {},
     },
     serviceContainer: {
+      now: () => "2026-01-01T00:00:00.000Z",
       sessionManager: createContextSessionManager(),
       memoryService: null,
       attachmentService: createTestAttachmentService({
@@ -301,6 +304,7 @@ test("buildSessionContext keeps turn identity in runtime but excludes it from sy
   const builder = new ContextBuilder({
     config: { globalConfig: { workspaceRoot: "/tmp/noobot-test-workspace" }, userConfig: {} },
     serviceContainer: {
+      now: () => "2026-01-01T00:00:00.000Z",
       sessionManager: createContextSessionManager(),
       memoryService: null,
       attachmentService: createTestAttachmentService({
@@ -352,6 +356,7 @@ test("buildSessionContext keeps super user identity in system message when syste
       userConfig: {},
     },
     serviceContainer: {
+      now: () => "2026-01-01T00:00:00.000Z",
       sessionManager: createContextSessionManager(),
       memoryService: null,
       attachmentService: createTestAttachmentService({
@@ -486,6 +491,7 @@ test("buildSessionContext resolves session history and passes edited turnScopeId
       userConfig: {},
     },
     serviceContainer: {
+      now: () => "2026-01-01T00:00:00.000Z",
       sessionManager: {
         async getRootSessionId({ sessionId }) {
           return sessionId;
@@ -654,6 +660,7 @@ function createBuilderForLongMemoryTest(
       userConfig: {},
     },
     serviceContainer: {
+      now: () => "2026-01-01T00:00:00.000Z",
       sessionManager: createContextSessionManager(),
       memoryService: {
         async readLongMemory(payload = {}) {
@@ -758,6 +765,7 @@ test("a builder with memoryService requires an error logger", () => {
       new ContextBuilder({
         config: { globalConfig: {}, userConfig: {} },
         serviceContainer: {
+          now: () => "2026-01-01T00:00:00.000Z",
           eventListener: null,
           sessionManager: createContextSessionManager(),
           memoryService: { readLongMemory: async () => "" },

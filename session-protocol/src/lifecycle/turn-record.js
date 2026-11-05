@@ -191,10 +191,6 @@ export function assertTurnRecord(turn) {
   return turn;
 }
 
-/**
- * Reads the accepted Turn a run executes. The Turn record is the single source of
- * its Authority timing (startedAt); callers never derive or default it.
- */
 export function requireAcceptedTurnRecord(lifecycle, { turnScopeId, dialogProcessId }) {
   const turn = isPlainObject(lifecycle?.turns) ? lifecycle.turns[turnScopeId] : undefined;
   if (!turn) {

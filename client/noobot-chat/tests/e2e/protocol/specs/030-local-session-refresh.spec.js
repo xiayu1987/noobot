@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { test, expect } from "../fixtures/noobot.fixture.js";
+import { splitServerNow } from "@noobot/session-protocol/server-clock";
 
 test("@core PBE-030 未 provision 的本地 Session 刷新不污染权威路由", async ({ noobot }) => {
   const localSessionId = noobot.sessionId;
@@ -19,7 +20,16 @@ test("@core PBE-030 未 provision 的本地 Session 刷新不污染权威路由"
     localSessionId,
   );
 
+  const listResponsePromise = noobot.page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname ===
+        `/api/internal/sessions/${encodeURIComponent(noobot.userId)}` &&
+      response.request().method() === "GET" &&
+      response.ok(),
+  );
   await noobot.page.reload({ waitUntil: "domcontentloaded" });
+  const { document: sessionList } = splitServerNow(await (await listResponsePromise).json());
+  expect(sessionList.ok).toBe(true);
   await expect(noobot.page.locator(".sidebar-settings-btn")).toHaveAttribute(
     "data-connected",
     "true",

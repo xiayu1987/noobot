@@ -9,7 +9,7 @@ import { useLocale } from "../i18n/useLocale.js";
 
 defineProps({
   role: { type: String, default: "assistant" },
-  // Absent while the message is an uncommitted local draft (session-protocol message ts contract).
+
   ts: { type: String, required: false },
   formatTime: { type: Function, required: true },
   modelLabel: { type: String, default: "" },

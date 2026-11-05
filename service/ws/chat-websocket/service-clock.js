@@ -4,10 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-/**
- * Service wall clock in epoch milliseconds, derived from the single session clock
- * (`bot.session.readServerNow()`), so recovery observations share the `serverNow` time domain.
- */
 export function readServiceClockMs(bot) {
   const serverNow = bot.session.readServerNow();
   const ms = Date.parse(serverNow);

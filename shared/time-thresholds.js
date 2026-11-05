@@ -179,6 +179,7 @@ export const DEFAULT_TIME_THRESHOLDS = deepFreeze({
   },
 
   client: {
+    sessionLongPressDelayMs: TIME_TIERS.fastProbeMs,
     micDurationRefreshIntervalMs: 1000,
     thinkingElapsedRefreshIntervalMs: 1000,
     chatMessageNavigatorScrollLockMs: 1400,

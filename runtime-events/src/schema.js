@@ -70,7 +70,7 @@ export function normalizeRuntimeEventEnvelope(event = {}) {
   if (scope === RUNTIME_EVENT_SCOPES.SESSION && (!event.userId || !event.sessionId)) {
     throw new Error("Session runtime event requires userId and sessionId");
   }
-  // time 是 writer 写入时刻，由 writeRuntimeEvent 的时钟唯一生成；上游不得携带。
+
   if (Object.hasOwn(event, "time")) {
     throw new Error("Runtime event time is assigned by the writer");
   }

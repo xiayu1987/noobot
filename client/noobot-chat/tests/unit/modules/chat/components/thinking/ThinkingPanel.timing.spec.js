@@ -17,7 +17,6 @@ import {
   resetServerClock,
 } from "../../../../../../src/modules/chat/model/serverClock.js";
 
-// 客户端时钟比服务端慢 113s（与现场证据一致）；耗时必须按服务端时钟域计算。
 const CLIENT_NOW = "2026-06-22T09:58:19.000Z";
 const SERVER_NOW = "2026-06-22T10:00:12.000Z";
 

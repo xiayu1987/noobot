@@ -142,7 +142,6 @@ test("materialization exceptions propagate without modifying the source lifecycl
 });
 
 for (const changes of [
-  // finishedAt is written by the Authority at commit time; callers cannot supply it.
   { finishedAt: "2026-07-30T00:00:01.000Z" },
   { summaryVersion: "1" },
   { eventId: " event-1" },

@@ -6,6 +6,7 @@
 import fs from "node:fs/promises";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { expect } from "@playwright/test";
+import { splitServerNow } from "@noobot/session-protocol/server-clock";
 import { artifactTest } from "./artifacts.fixture.js";
 import { connectThroughUi, readE2eCredentials } from "./auth.fixture.js";
 import { createSessionThroughUi } from "./session.fixture.js";
@@ -178,7 +179,7 @@ async function readSessionDetail({ page, apiKey, userId, sessionId }) {
     { headers: { "x-api-key": apiKey } },
   );
   expect(response.ok(), "session detail read must succeed before artifact audit").toBe(true);
-  const detail = await response.json();
+  const { document: detail } = splitServerNow(await response.json());
   expect(detail.ok).toBe(true);
   return detail;
 }

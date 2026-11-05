@@ -31,7 +31,7 @@ const execution = (executionId, parentExecutionId = "") => ({
   state: "running",
 });
 
-function mountDrawer(executionDirectory) {
+function mountDrawer(executionDirectory, config = {}) {
   const noop = vi.fn();
   const wrapper = mount(WorkflowNodeSessionDrawer, {
     props: {
@@ -51,6 +51,7 @@ function mountDrawer(executionDirectory) {
       stepHasSession: noop,
     },
     global: {
+      config,
       stubs: {
         "el-drawer": { template: "<div><slot /></div>" },
         "el-scrollbar": { template: "<div><slot /></div>" },
@@ -124,6 +125,16 @@ describe("workflow drawer execution tree", () => {
     [execution("a", "b"), execution("b", "a")],
     [execution(" a")],
   ])("rejects damaged directories through the protocol: %j", (directory) => {
-    expect(() => mountDrawer(directory)).toThrow(/execution directory/);
+    const warnings = [];
+    expect(() =>
+      mountDrawer(directory, { warnHandler: (message) => warnings.push(message) }),
+    ).toThrow(/execution directory/);
+    if (directory === null) {
+      expect(warnings).toEqual([
+        expect.stringContaining('Invalid prop: type check failed for prop "executionDirectory"'),
+      ]);
+    } else {
+      expect(warnings).toEqual([]);
+    }
   });
 });

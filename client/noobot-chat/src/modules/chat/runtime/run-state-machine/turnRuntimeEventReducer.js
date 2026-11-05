@@ -67,8 +67,6 @@ function createObservation({ registry, event, requestedSessionId, turnScopeId })
   };
 }
 
-// Turn timing is an Authority fact (server clock domain). Only authoritative
-// events carry it; local/transport events never contribute or infer timing.
 function resolveProjectedStart(currentValue, event) {
   if (!AUTHORITATIVE_EVENT_TYPES.has(event.type)) return currentValue.startedAt;
   return event.startedAt || currentValue.startedAt;

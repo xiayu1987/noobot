@@ -73,8 +73,7 @@ export function commitTurnLifecycle({
   if (requestFailure) return { applied: false, reason: requestFailure, lifecycle };
   if (Object.hasOwn(event, "eventId") && !isCanonicalText(event.eventId))
     return { applied: false, reason: "invalid_event_id", lifecycle };
-  // One commit observes exactly one Authority clock instant; it is allocated lazily
-  // so rejected requests never read the clock.
+
   let committedAt = "";
   const commitClock = () => {
     if (!committedAt) committedAt = now();

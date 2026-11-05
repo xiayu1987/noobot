@@ -75,7 +75,6 @@ function createMessageModel(canonicalMessage, sessionId) {
   };
 }
 
-/** Local optimistic draft: no ts until the Authority commit projection supplies it. */
 function buildAppendMessage({ sessionId, role, content, attachments, options }) {
   const draft = assertUncommittedMessageDraft({
     ...options,

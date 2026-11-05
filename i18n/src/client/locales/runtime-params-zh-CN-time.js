@@ -433,6 +433,10 @@ export default {
     },
   },
   client: {
+    sessionLongPressDelayMs: {
+      name: "会话长按延迟",
+      description: "触屏设备上长按会话后显示操作菜单所需的持续时间。",
+    },
     micDurationRefreshIntervalMs: {
       name: "客户端麦克风持续时间刷新间隔",
       description: "客户端麦克风持续时间刷新间隔使用的执行间隔。",

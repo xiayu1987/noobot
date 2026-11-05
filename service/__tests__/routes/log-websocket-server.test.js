@@ -518,7 +518,7 @@ test("log-websocket-server: rejects records whose sender did not declare a sessi
       () => writeSessionLogEvent(base),
       /Invalid session log channel: undefined/,
     );
-    // direct 属于服务端直写通道，会话日志上报方不能声明。
+
     await assert.rejects(
       () => writeSessionLogEvent({ ...base, channel: "direct" }),
       /Invalid session log channel: direct/,

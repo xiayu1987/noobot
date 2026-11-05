@@ -83,8 +83,6 @@ describe("timeFields thinking duration responsibilities", () => {
   });
 
   it("does not clamp a start later than now to zero (client clock skew)", () => {
-    // 复现：客户端时钟比服务端慢约 113s，刷新后权威起点晚于本地 now。
-    // 钳零会显示 00:00 并从头计时；负区间必须显式识别为未知，而非 0。
     expect(
       resolveThinkingDurationMs({
         messageStartedAt: "2026-11-04T15:47:16.696Z",

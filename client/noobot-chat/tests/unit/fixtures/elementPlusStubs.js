@@ -8,6 +8,11 @@ import { defineComponent, h } from "vue";
 const ELEMENT_PLUS_TAGS = Object.freeze([
   "el-alert",
   "el-button",
+  "el-collapse",
+  "el-collapse-item",
+  "el-descriptions",
+  "el-descriptions-item",
+  "el-drawer",
   "el-empty",
   "el-form",
   "el-form-item",

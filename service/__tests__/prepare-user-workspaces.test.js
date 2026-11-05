@@ -44,7 +44,6 @@ const activeTurn = {
   updatedAt: "2026-07-18T00:00:00.000Z",
 };
 
-/** Service clock one day after the orphan's last update, past the recovery grace period. */
 const RECOVERY_OBSERVED_AT = "2026-07-19T00:00:00.000Z";
 
 const summaryOf = (sessionId, activeTurnScopeId, availability) => ({
@@ -343,14 +342,19 @@ test("startup progress keeps the last throttled count of a phase", () => {
   assert.deepEqual(written, ["a:1", "a:7", "b:1", "b:3"]);
 });
 
-test("startup heartbeat writes immediately, repeats per interval and stops cleanly", async () => {
+test("startup heartbeat writes immediately, repeats per interval and stops cleanly", (t) => {
+  t.mock.timers.enable({ apis: ["setInterval"] });
   const beats = [];
   const stop = startStartupHeartbeat({ write: (data) => beats.push(data), intervalMs: 10 });
   assert.equal(beats.length, 1);
-  await new Promise((resolve) => setTimeout(resolve, 35));
+  t.mock.timers.tick(9);
+  assert.equal(beats.length, 1);
+  t.mock.timers.tick(1);
+  assert.equal(beats.length, 2);
+  t.mock.timers.tick(20);
+  assert.equal(beats.length, 4);
   stop();
   const stoppedAt = beats.length;
-  assert.ok(stoppedAt >= 3, `expected repeated heartbeats, got ${stoppedAt}`);
-  await new Promise((resolve) => setTimeout(resolve, 30));
+  t.mock.timers.tick(30);
   assert.equal(beats.length, stoppedAt);
 });

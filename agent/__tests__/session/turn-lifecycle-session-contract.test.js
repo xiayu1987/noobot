@@ -272,7 +272,7 @@ test("terminal resolution reads status from the Turn without returning messages"
   assert.equal(response.resolved, true);
   assert.equal(response.turn.terminalStatus.status, "completed");
   assert.equal(response.turn.executionState, "completed");
-  // Both instants come from the Authority clock injected into the harness.
+
   assert.equal(response.turn.startedAt, "2026-07-18T00:00:00.000Z");
   assert.equal(response.turn.finishedAt, "2026-07-18T00:00:00.000Z");
   assert.equal(Object.hasOwn(response, "materialization"), false);

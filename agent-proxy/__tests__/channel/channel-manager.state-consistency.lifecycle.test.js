@@ -133,6 +133,7 @@ test("upstream accepts the canonical Session attachment-binding receipt", () => 
       messageUid: "message-uid-attachment-binding",
       userMessageId: "message-attachment-binding",
       content: "hello",
+      ts: "2026-11-05T00:00:00.000Z",
       sessionId,
       dialogProcessId,
       turnScopeId,

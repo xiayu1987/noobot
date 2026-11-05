@@ -107,7 +107,7 @@ test("authoritative lifecycle follows accepted -> running -> processed -> summar
     const inputs = authoritative.commitInputs();
     assert.equal(inputs[0].createSessionIfAbsent, true);
     assert.equal(inputs[0].action, "send");
-    // startedAt is allocated by the Authority clock; neither the request nor runConfig carries it.
+
     assert.equal(Object.hasOwn(inputs[0], "startedAt"), false);
     assert.equal(Number.isNaN(Date.parse(turn.startedAt)), false);
     assert.equal(Object.hasOwn(authoritative.lastRunConfig(), "thinkingStartedAt"), false);
@@ -263,7 +263,6 @@ test("deduplicated lifecycle commands do not bypass the acknowledged authority o
   let eventIdSequence = 0;
   const bot = {
     session: {
-      /** Test double of the service session clock (real wall clock, like production). */
       readServerNow: () => new Date().toISOString(),
       applyTurnLifecycleEvent: async ({ persistenceScope, ...event }) => {
         const { lifecycleEvent } = acceptFakeAgentTurnLifecycleEvent(lifecycle, event);

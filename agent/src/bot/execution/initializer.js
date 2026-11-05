@@ -44,7 +44,7 @@ export class SessionExecutionInitializer {
     if (!sessionBundle.exists) {
       throw new TypeError("accepted Turn session is required before Session run");
     }
-    // Acceptance always commits the Session together with its first Turn, so a run only ever loads.
+
     const { startedAt } = requireAcceptedTurnRecord(sessionBundle.session.turnLifecycle, {
       turnScopeId,
       dialogProcessId: resolvedDialogProcessId,

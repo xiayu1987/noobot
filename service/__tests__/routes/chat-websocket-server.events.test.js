@@ -44,7 +44,6 @@ test("authority outbox publishes child lifecycle under the persisted child sessi
   let delivered = false;
   const bot = {
     session: {
-      /** Test double of the service session clock (real wall clock, like production). */
       readServerNow: () => new Date().toISOString(),
       async getPendingAuthorityEvents(identity) {
         identities.push(identity);
@@ -107,7 +106,6 @@ test("authority outbox rejects an invalid lifecycle envelope before delivery sid
   };
   const bot = {
     session: {
-      /** Test double of the service session clock (real wall clock, like production). */
       readServerNow: () => new Date().toISOString(),
       async getPendingAuthorityEvents({ consumerId }) {
         return {

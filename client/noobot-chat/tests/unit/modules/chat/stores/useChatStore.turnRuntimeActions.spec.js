@@ -51,7 +51,6 @@ function settleCompleted(registry, { sessionId, turnScopeId, updatedAt }) {
   );
 }
 
-// Turn timing is an Authority fact: only backend lifecycle events carry startedAt.
 function authorityProcessing({ sessionId, turnScopeId, dialogProcessId, startedAt }) {
   return {
     type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,

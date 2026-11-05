@@ -6,7 +6,7 @@
 export function createTestSessionFinalizationContext() {
   return {
     parentDialogProcessId: "",
-    // Authority startedAt of the accepted Turn, read by the initializer.
+
     startedAt: "2026-07-30T00:00:00.000Z",
     userConfig: {},
     lifecycle: { enterPersisting() {}, enterMemory() {} },

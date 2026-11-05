@@ -10,9 +10,9 @@ export function mountComposable(useComposable) {
   let result;
   const Host = defineComponent({
     name: "ComposableTestHost",
+    render: () => null,
     setup() {
       result = useComposable();
-      return () => null;
     },
   });
   const wrapper = mount(Host);

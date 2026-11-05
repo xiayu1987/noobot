@@ -41,7 +41,6 @@ function logDiagnostic(message, data = {}) {
 }
 
 export async function writeSessionLogEvent(event = {}) {
-  // channel 由发送方经 buildSessionLogRecord 声明；会话日志入口按协议校验，不推断。
   requireSessionLogChannel(event.channel);
   const result = await writeRuntimeEvent(event);
   if (result.ok && !result.skipped)
@@ -126,7 +125,6 @@ export function registerLogWebSocketServer(
           userId: request.auth.userId,
         }));
 
-        // 整批先校验，全部合法才写入。
         for (const record of records) {
           requireSessionLogChannel(record.channel);
           normalizeRuntimeEventEnvelope(record);

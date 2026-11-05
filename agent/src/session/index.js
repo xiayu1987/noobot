@@ -31,6 +31,7 @@ import {
   validateSessionProvisionIntent,
 } from "@noobot/session-protocol";
 import { isFunction } from "@noobot/shared/value";
+import { readServerClock } from "@noobot/session-protocol/server-clock";
 export {
   SESSION_GENERATED_DATA_DIRS,
   resolveSessionGeneratedDataRoot,
@@ -242,9 +243,8 @@ export function createSessionFacade(runtime) {
       return sessionTreeService.getRootSessionId({ userId, sessionId });
     },
 
-    /** The session service clock; the single source for read-response `serverNow`. */
     readServerNow() {
-      return runtime.now();
+      return readServerClock(runtime.now);
     },
 
     async getSessionDisplayData(payload = {}) {

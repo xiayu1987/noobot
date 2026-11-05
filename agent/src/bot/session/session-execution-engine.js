@@ -138,6 +138,7 @@ export class SessionExecutionEngine {
 
   _createAgentContextFactory() {
     return new AgentContextFactory({
+      now: this.now,
       globalConfig: this.globalConfig,
       session: this.session,
       memory: this.memory,

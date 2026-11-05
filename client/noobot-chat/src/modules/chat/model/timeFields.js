@@ -76,11 +76,6 @@ export function formatDurationMs(ms = 0) {
   return `${String(minuteValue).padStart(2, "0")}:${String(secondValue).padStart(2, "0")}`;
 }
 
-/**
- * Thinking duration from authoritative (server clock) timestamps. `now` must be
- * in the server clock domain; null means the server time is not yet observed.
- * Returns null whenever the interval is unknown or inverted, never a clamped 0.
- */
 export function resolveThinkingDurationMs({
   messageStartedAt = 0,
   messageFinishedAt = 0,

@@ -89,11 +89,6 @@ function isUnownedLegacyAttempt(record) {
   );
 }
 
-/**
- * 存量规则：早期写入方的 attempt 记录不带 consumerId。
- * 之后已有同 eventId ack 的 attempt 不再承载送达事实，直接删除；
- * 未被 ack 覆盖的保持原样，由 assertAuthorityOutboxJournalRecord 拒绝，不推断归属。
- */
 export function migrateLegacyUnownedAttemptRecords(records) {
   requireOutbox(Array.isArray(records), "journal records must be an array");
   const kept = [];

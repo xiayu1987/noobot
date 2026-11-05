@@ -21,8 +21,6 @@ import {
 } from "./constants.js";
 import { text } from "@noobot/shared/value";
 
-// 会话日志的发送通道由发送方声明；服务端入口共用，不能推断。
-// 仅 /logs/ws 上报方可用；服务端直写事件使用 RUNTIME_EVENT_CHANNELS，不经本协议。
 export const SESSION_CHANNELS = Object.freeze({
   WEB_SOCKET: RUNTIME_EVENT_CHANNELS.WEB_SOCKET,
   AGENT_PROXY_WEB_SOCKET: RUNTIME_EVENT_CHANNELS.AGENT_PROXY_WEB_SOCKET,

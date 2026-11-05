@@ -160,7 +160,6 @@ function inspectSpacing(filePath, source) {
     for (const match of css.matchAll(
       /(?<![-\w])(?:padding|margin|gap|row-gap|column-gap)(?:-(?:top|right|bottom|left|inline(?:-start|-end)?|block(?:-start|-end)?))?\s*:\s*([^;{}]+)/g,
     )) {
-      // Keep 1px optical and screen-reader adjustments; layout spacing uses tokens.
       const hasLiteralSpacing = Array.from(match[1].matchAll(/-?(\d*\.?\d+)px\b/g)).some(
         (value) => Number(value[1]) > 1,
       );

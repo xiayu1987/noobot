@@ -434,6 +434,10 @@ export default {
     },
   },
   client: {
+    sessionLongPressDelayMs: {
+      name: "Session long-press delay",
+      description: "Hold duration before showing session actions on touch devices.",
+    },
     micDurationRefreshIntervalMs: {
       name: "Client mic duration refresh interval",
       description: "Execution interval for client mic duration refresh interval.",

@@ -14,6 +14,7 @@ import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 function createFactory() {
   return new AgentContextFactory({
+    now: () => "2026-01-01T00:00:00.000Z",
     globalConfig: {},
     session: null,
     memory: null,
@@ -85,11 +86,11 @@ test("buildAgentContextFromBuilder triggers before/after context build hooks", a
   assert.equal(beforePayloads[0].caller, "user");
   assert.equal(beforePayloads[0].parentSessionId, "p_ctx_1");
   assert.equal(beforePayloads[0].dialogProcessId, "dp_ctx_1");
-  assert.equal(typeof beforePayloads[0].startedAt, "string");
+  assert.equal(beforePayloads[0].startedAt, "2026-01-01T00:00:00.000Z");
   assert.equal(afterPayloads[0].messageCount, 2);
   assert.equal(afterPayloads[0].status, "success");
-  assert.equal(typeof afterPayloads[0].startedAt, "string");
-  assert.equal(typeof afterPayloads[0].endedAt, "string");
+  assert.equal(afterPayloads[0].startedAt, "2026-01-01T00:00:00.000Z");
+  assert.equal(afterPayloads[0].endedAt, "2026-01-01T00:00:00.000Z");
   assert.equal(Number.isFinite(afterPayloads[0].durationMs), true);
   assert.equal(afterPayloads[0].durationMs >= 0, true);
 });

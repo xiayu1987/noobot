@@ -467,7 +467,6 @@ export const serverTurnSource = (payload, dialogProcessId) => ({
   dialogProcessId,
 });
 
-// Authority (server clock domain) turn timing emitted by the harness lifecycle events.
 export const AUTHORITY_TURN_STARTED_AT = "2026-01-01T00:00:00.000Z";
 export const AUTHORITY_TURN_FINISHED_AT = "2026-01-01T00:00:07.000Z";
 

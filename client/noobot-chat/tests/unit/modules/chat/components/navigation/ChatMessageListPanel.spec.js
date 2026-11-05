@@ -43,6 +43,7 @@ vi.mock("../../../../../../src/modules/chat/components/message/ChatMessageItem.v
         deleteMonotonicMessage: { type: Function, default: null },
         resendMonotonicMessage: { type: Function, default: null },
         stopExecution: { type: Function, default: null },
+        fetchExecutionReport: { type: Function, required: true },
       },
       emits: ["openThinkingDetails"],
       setup(props) {
@@ -107,6 +108,7 @@ function mountPanel(props = {}, options = {}) {
       deleteMonotonicMessage: { type: Function, default: null },
       resendMonotonicMessage: { type: Function, default: null },
       stopExecution: { type: Function, default: null },
+      fetchExecutionReport: { type: Function, required: true },
     },
     emits: ["openThinkingDetails"],
     setup(itemProps) {

@@ -16,7 +16,6 @@ export function createTestSessionServices(globalConfig, options = {}) {
   });
 }
 
-/** Single test wall clock shared by session services and the execution engine. */
 export function testWallClock() {
   return new Date().toISOString();
 }

@@ -66,7 +66,7 @@ export function createTestLifecycleEnvelope({
     updatedAt: "2026-01-01T00:00:00.000Z",
     occurredAt: "2026-01-01T00:00:00.000Z",
     startedAt: "2026-01-01T00:00:00.000Z",
-    // Authority writes "" for an unfinished turn (turn-lifecycle-transition.js projectCompletionCoordinates).
+
     finishedAt: eventType === TURN_EVENT.COMPLETED ? "2026-01-01T00:00:00.000Z" : "",
     eventId,
     commandId: `${eventId}:command`,
@@ -163,7 +163,6 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
       };
     },
     session: {
-      /** Test double of the service session clock (real wall clock, like production). */
       readServerNow: () => new Date().toISOString(),
       async getRootSessionSelectedConnectorIds() {
         return [];

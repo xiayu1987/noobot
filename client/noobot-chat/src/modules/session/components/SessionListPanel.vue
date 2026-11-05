@@ -14,6 +14,7 @@ import { useLocale } from "../../../shared/i18n/useLocale.js";
 import { selectSessionTurnRuntime } from "../../chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { text } from "@noobot/shared/value";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 const props = defineProps({
   sessions: { type: Array, required: true },
@@ -33,7 +34,6 @@ const listWrapEl = shallowRef(null);
 const expandedDateGroups = ref([]);
 const sessionPanelRef = ref(null);
 const expandedActionSessionId = ref("");
-const LONG_PRESS_DELAY_MS = 500;
 const LONG_PRESS_MOVE_TOLERANCE_PX = 10;
 let pendingPress = null;
 let suppressedClickSessionId = "";
@@ -62,7 +62,7 @@ function startLongPress(event, sessionItem) {
       expandedActionSessionId.value = sessionItem.sessionId;
       suppressedClickSessionId = sessionItem.sessionId;
       cancelLongPress();
-    }, LONG_PRESS_DELAY_MS),
+    }, TIME_THRESHOLDS.client.sessionLongPressDelayMs),
   };
 }
 

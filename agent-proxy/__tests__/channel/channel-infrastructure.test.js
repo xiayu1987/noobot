@@ -23,7 +23,6 @@ import { normalizeRuntimeEventEnvelope } from "@noobot/runtime-events";
 import { AGENT_TRANSPORT_EVENT } from "@noobot/agent-transport-protocol";
 import { createChannelKey, parseChannelKey } from "../../src/shared/utils.js";
 
-// Authority 时间在测试构造点显式给出：信封工厂不再补默认值。
 const AUTHORITY_TIME = "2026-01-01T00:00:00.000Z";
 const activeTiming = { occurredAt: AUTHORITY_TIME, startedAt: AUTHORITY_TIME, finishedAt: "" };
 const terminalTiming = { ...activeTiming, finishedAt: AUTHORITY_TIME };

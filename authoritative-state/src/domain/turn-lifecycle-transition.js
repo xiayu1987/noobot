@@ -273,8 +273,9 @@ function projectCompletionCoordinates({ input, current, eventType }, state, nowV
   if (Object.hasOwn(input, "summaryVersion")) summaryVersion = input.summaryVersion;
   let completionCommitId = current ? current.completionCommitId : "";
   if (isCompletionCommitTurnEvent(eventType)) completionCommitId = input.commandId;
-  // finishedAt is an Authority fact: the commit time of the terminal transition.
-  const finishedAt = isTerminalTurnState(state) ? nowValue : current ? current.finishedAt : "";
+
+  let finishedAt = current ? current.finishedAt : "";
+  if (isTerminalTurnState(state)) finishedAt = nowValue;
   return { summaryVersion, completionCommitId, finishedAt };
 }
 
@@ -306,7 +307,7 @@ export function projectLifecycleTransition(request, transition, nowValue) {
     finalizeIntent: createFinalizeIntent({ input, current, eventType, phase, nowValue }),
     continuationSource: request.continuationSource,
     continuedByTurnScopeId: current ? current.continuedByTurnScopeId : "",
-    // startedAt is an Authority fact: the commit time of the turn's first transition.
+
     startedAt: current ? current.startedAt : nowValue,
     createdAt: current ? current.createdAt : nowValue,
     updatedAt: nowValue,

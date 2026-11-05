@@ -11,9 +11,13 @@ import { HOOK_POINT, withHookRuntimeIdentity } from "@noobot/hook-protocol";
 import { getAgentContextEnvelope, getRuntimeFromAgentContext } from "../agent-context-accessor.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { resolveToolBindings } from "@noobot/agent-config-protocol";
+import { readServerClock } from "@noobot/session-protocol/server-clock";
+import { isFunction } from "@noobot/shared/value";
 
 export class AgentContextFactory {
-  constructor({ globalConfig, session, memory, attach, skill, botManager, errorLogger }) {
+  constructor({ globalConfig, session, memory, attach, skill, botManager, errorLogger, now }) {
+    if (!isFunction(now)) throw new TypeError("AgentContextFactory requires now function");
+    this.now = now;
     this.globalConfig = globalConfig;
     this.session = session;
     this.memory = memory;
@@ -40,6 +44,7 @@ export class AgentContextFactory {
         userConfig,
       },
       serviceContainer: {
+        now: this.now,
         eventListener,
         sessionManager: this.session,
         memoryService: this.memory,
@@ -76,8 +81,8 @@ export class AgentContextFactory {
     };
 
     const contextHook = (fields) => withHookRuntimeIdentity(runtimeIdentity, fields);
-    const buildStartedAtMs = Date.now();
-    const buildStartedAt = new Date(buildStartedAtMs).toISOString();
+    const buildStartedAt = readServerClock(this.now);
+    const buildStartedAtMs = performance.now();
 
     await runAgentRuntimeHook({
       runtime: runtimeHookCarrier,
@@ -89,13 +94,13 @@ export class AgentContextFactory {
     try {
       agentContext = await contextBuilder.buildSessionContext();
     } catch (error) {
-      const failedAtMs = Date.now();
+      const failedAtMs = performance.now();
       await runAgentRuntimeHook({
         runtime: runtimeHookCarrier,
         point: HOOK_POINT.AGENT.CONTEXT_BUILD_ERROR,
         context: contextHook({
           startedAt: buildStartedAt,
-          endedAt: new Date(failedAtMs).toISOString(),
+          endedAt: readServerClock(this.now),
           durationMs: failedAtMs - buildStartedAtMs,
           status: "error",
           error,
@@ -115,13 +120,13 @@ export class AgentContextFactory {
       },
     };
     const runtime = getRuntimeFromAgentContext(scopedAgentContext);
-    const completedAtMs = Date.now();
+    const completedAtMs = performance.now();
     await runAgentRuntimeHook({
       runtime,
       point: HOOK_POINT.AGENT.AFTER_CONTEXT_BUILD,
       context: contextHook({
         startedAt: buildStartedAt,
-        endedAt: new Date(completedAtMs).toISOString(),
+        endedAt: readServerClock(this.now),
         durationMs: completedAtMs - buildStartedAtMs,
         status: "success",
         messageCount:

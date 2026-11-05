@@ -103,9 +103,9 @@ async function runDetachedSubSession(dependencies, request) {
   try {
     result = await executeDetachedSession(dependencies, identity, prepared, lifecycle);
   } catch (error) {
-    throw await commitDetachedError(error, dependencies, identity, lifecycle);
+    throw await commitDetachedError(error, identity, lifecycle);
   }
-  const terminalLifecycle = await commitDetachedCompletion(dependencies, lifecycle);
+  const terminalLifecycle = await commitDetachedCompletion(lifecycle);
   return projectDetachedResult(result, identity, terminalLifecycle);
 }
 
@@ -433,10 +433,10 @@ function assertDetachedDialogIdentity(result, identity, lifecycle) {
   throw error;
 }
 
-async function commitDetachedError(error, dependencies, identity, lifecycle) {
+async function commitDetachedError(error, identity, lifecycle) {
   const stopped = isExecutionAbortError({ error, abortSignal: identity.abortSignal });
   const terminalLifecycle = stopped
-    ? await commitDetachedStop(dependencies, lifecycle)
+    ? await commitDetachedStop(lifecycle)
     : await commitDetachedFailure(error, identity, lifecycle);
   const receipt = createDetachedTerminalReceipt(terminalLifecycle.turn);
   const executionFailure = createExecutionFailure(error, receipt);
@@ -445,7 +445,7 @@ async function commitDetachedError(error, dependencies, identity, lifecycle) {
   return executionFailure;
 }
 
-async function commitDetachedStop(dependencies, lifecycle) {
+async function commitDetachedStop(lifecycle) {
   const completionCommitId = lifecycleCommandId(lifecycle, TURN_EVENT.STOP_COMPLETED);
   await lifecycle.commit({
     commandId: lifecycleCommandId(lifecycle, TURN_EVENT.STOP_ACCEPTED),
@@ -495,7 +495,7 @@ function emitDetachedTerminalEvent(factListener, identity, terminalTurn, stopped
   );
 }
 
-async function commitDetachedCompletion(dependencies, lifecycle) {
+async function commitDetachedCompletion(lifecycle) {
   const completionCommitId = lifecycleCommandId(lifecycle, TURN_EVENT.COMPLETED);
   await lifecycle.commit({
     commandId: lifecycleCommandId(lifecycle, TURN_EVENT.PROCESSING_COMPLETED),

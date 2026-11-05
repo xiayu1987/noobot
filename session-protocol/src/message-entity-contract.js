@@ -31,10 +31,6 @@ export function isCanonicalMessageTimestamp(value) {
   return Number.isFinite(ms) && new Date(ms).toISOString() === value;
 }
 
-/**
- * Message `ts` is an Authority fact: a committed message carries a canonical ISO `ts`,
- * an uncommitted local draft carries none until the commit projection fills it in.
- */
 export function requireCommittedMessageTimestamp(message) {
   const { ts } = message;
   if (!isCanonicalMessageTimestamp(ts)) {

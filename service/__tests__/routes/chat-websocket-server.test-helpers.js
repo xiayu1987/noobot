@@ -367,7 +367,6 @@ export async function startServerWithWs({
       return runSession(payload);
     },
     session: {
-      /** Test double of the service session clock (real wall clock, like production). */
       readServerNow: () => new Date().toISOString(),
       getRootSessionSelectedConnectorIds: async () => [],
       ...sessionAuthorities,

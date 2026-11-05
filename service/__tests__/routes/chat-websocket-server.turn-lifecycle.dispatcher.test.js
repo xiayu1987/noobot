@@ -55,7 +55,6 @@ test("plugin artifact outbox commit is sent through the active WebSocket before 
   let acknowledged = 0;
   const bot = {
     session: {
-      /** Test double of the service session clock (real wall clock, like production). */
       readServerNow: () => new Date().toISOString(),
       async getPendingAuthorityEvents() {
         return { found: true, events: pending };
@@ -152,7 +151,6 @@ test("authority dispatcher keeps a failed send pending and reconnect retries the
   let socketAvailable = false;
   const bot = {
     session: {
-      /** Test double of the service session clock (real wall clock, like production). */
       readServerNow: () => new Date().toISOString(),
       async getPendingAuthorityEvents({ consumerId } = {}) {
         return { found: true, events: listPendingAuthorityEvents(eventOutbox, { consumerId }) };
@@ -260,7 +258,6 @@ test("authority dispatcher preserves the child persistence scope across every ou
   });
   const bot = {
     session: {
-      /** Test double of the service session clock (real wall clock, like production). */
       readServerNow: () => new Date().toISOString(),
       async getPendingAuthorityEvents(input) {
         calls.push({ method: "get", input });
@@ -352,7 +349,6 @@ test("a detached child lifecycle commit drains its complete scoped outbox to the
   const sent = [];
   const bot = {
     session: {
-      /** Test double of the service session clock (real wall clock, like production). */
       readServerNow: () => new Date().toISOString(),
       async getPendingAuthorityEvents(input) {
         calls.push({ method: "get", input });
@@ -438,7 +434,6 @@ test("authority dispatcher serializes concurrent scoped drains and performs the 
   });
   const bot = {
     session: {
-      /** Test double of the service session clock (real wall clock, like production). */
       readServerNow: () => new Date().toISOString(),
       async getPendingAuthorityEvents() {
         calls.get += 1;
@@ -516,7 +511,6 @@ test("authority dispatcher repeats a scoped drain when a lifecycle commit arrive
   const sent = [];
   const bot = {
     session: {
-      /** Test double of the service session clock (real wall clock, like production). */
       readServerNow: () => new Date().toISOString(),
       async getPendingAuthorityEvents() {
         reads += 1;
@@ -612,7 +606,6 @@ test("authority dispatcher leaves an event pending when acknowledgement persiste
   const sentEventIds = [];
   const bot = {
     session: {
-      /** Test double of the service session clock (real wall clock, like production). */
       readServerNow: () => new Date().toISOString(),
       async getPendingAuthorityEvents({ consumerId } = {}) {
         return { found: true, events: listPendingAuthorityEvents(eventOutbox, { consumerId }) };
@@ -716,7 +709,6 @@ test("CLI dispatcher acknowledges and compacts as the CLI consumer", async () =>
   let pending = true;
   const bot = {
     session: {
-      /** Test double of the service session clock (real wall clock, like production). */
       readServerNow: () => new Date().toISOString(),
       async getPendingAuthorityEvents(input) {
         calls.push({ method: "get", input });
