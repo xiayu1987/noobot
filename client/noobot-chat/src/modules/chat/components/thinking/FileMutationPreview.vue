@@ -4,10 +4,11 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, ref, watch, onBeforeUnmount } from "vue";
 import { DocumentAdd, Download, EditPen } from "@element-plus/icons-vue";
 import { BaseFileCardList } from "../../../../shared/public-api/ui.js";
 import MutationDiffSplit from "./MutationDiffSplit.vue";
+import MutationFileContent from "./MutationFileContent.vue";
 import { text, isFunction } from "@noobot/shared/value";
 import { locatorDisplayPath } from "@noobot/shared/locator";
 import "../../../../shared/ui/file-card-common.css";
@@ -17,7 +18,6 @@ const props = defineProps({
   userId: { type: String, default: "" },
   sessionId: { type: String, default: "" },
   mutations: { type: Array, default: () => [] },
-  fetcher: { type: Function, default: null },
   service: { type: Object, default: null },
   compact: { type: Boolean, default: false },
   previewKind: { type: String, default: "file" },
@@ -27,11 +27,17 @@ const emit = defineEmits(["preview", "download"]);
 const tabs = Object.freeze({ FILE: "file", DIFF: "diff", METADATA: "metadata" });
 const activeTab = ref(tabs.FILE);
 const selectedIndex = ref(0);
-const fileContent = ref("");
 const diff = ref(null);
 const error = ref("");
 const loading = ref(false);
 let requestGeneration = 0;
+let requestController = null;
+function cancelRequest() {
+  requestGeneration += 1;
+  requestController?.abort();
+  requestController = null;
+}
+onBeforeUnmount(cancelRequest);
 
 const selectedMutation = computed(() => props.mutations[selectedIndex.value] || null);
 const mutationId = computed(() => text(selectedMutation.value?.mutationId));
@@ -57,27 +63,18 @@ const tabLoaders = Object.freeze({
       diff.value = payload.diff;
     },
   },
-  [tabs.FILE]: {
-    method: "getFile",
-    unavailableKey: "message.mutationFileServiceUnavailable",
-    apply(payload) {
-      fileContent.value =
-        payload.content === null
-          ? props.translate(`message.mutationSnapshotState.${payload.snapshot}`)
-          : payload.content;
-    },
-  },
 });
 
 async function loadTab(tab) {
+  cancelRequest();
   const mutation = selectedMutation.value;
-  if (!mutation) return;
-
-  const generation = ++requestGeneration;
+  const generation = requestGeneration;
   const loader = tabLoaders[tab];
-  loading.value = Boolean(loader);
+  loading.value = Boolean(loader && mutation);
   error.value = "";
-  if (!loader) return;
+  if (!loader || !mutation) return;
+  const controller = new AbortController();
+  requestController = controller;
   try {
     const fetchPayload = props.service?.[loader.method];
     if (!isFunction(fetchPayload)) throw new Error(props.translate(loader.unavailableKey));
@@ -86,6 +83,7 @@ async function loadTab(tab) {
       sessionId: props.sessionId,
       sessionScope: mutation.sessionScope,
       mutationId: mutation.mutationId,
+      signal: controller.signal,
     });
     if (generation !== requestGeneration) return;
     loader.apply(payload);
@@ -100,13 +98,12 @@ async function loadTab(tab) {
 }
 function changeTab(tab) {
   activeTab.value = tab;
-  if (tabLoaders[tab]) void loadTab(tab);
+  void loadTab(tab);
 }
 watch(
   [selectedIndex, mutationId],
   () => {
     if (props.compact) return;
-    fileContent.value = "";
     diff.value = null;
     error.value = "";
     void loadTab(activeTab.value);
@@ -170,9 +167,14 @@ async function openCompactPreview(mutation) {
       </el-select>
       <el-tabs :model-value="activeTab" class="noobot-tabs" @tab-change="changeTab">
         <el-tab-pane :label="translate('message.mutationPreviewFile')" :name="tabs.FILE">
-          <el-skeleton v-if="loading" :rows="5" animated />
-          <el-alert v-else-if="error" :title="error" type="error" :closable="false" />
-          <pre v-else class="mutation-file-content">{{ fileContent }}</pre>
+          <MutationFileContent
+            v-if="activeTab === tabs.FILE && selectedMutation"
+            :mutation="selectedMutation"
+            :user-id="userId"
+            :session-id="sessionId"
+            :service="service"
+            :translate="translate"
+          />
         </el-tab-pane>
         <el-tab-pane :label="translate('message.mutationPreviewDiff')" :name="tabs.DIFF">
           <el-skeleton v-if="loading" :rows="5" animated />
@@ -221,6 +223,39 @@ async function openCompactPreview(mutation) {
   margin-top: 0;
   border-top: 0;
   padding-top: 0;
+}
+.file-mutation-preview:not(.is-compact) {
+  display: flex;
+  flex-direction: column;
+  height: min(26rem, 70dvh);
+  max-height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.file-mutation-preview > .noobot-tabs {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.file-mutation-preview :deep(.el-tabs__header) {
+  flex-shrink: 0;
+}
+.file-mutation-preview :deep(.el-tabs__content) {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.file-mutation-preview :deep(.el-tab-pane) {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
 }
 .mutation-select {
   width: min(100%, 28rem);

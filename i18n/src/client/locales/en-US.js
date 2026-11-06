@@ -384,8 +384,11 @@ export const enUSMessages = {
     previewFailedHttp: "Preview failed: HTTP {status}",
     attachmentPreviewFailed: "Attachment preview failed",
     previewFailed: "Preview failed",
+    filePreviewTab: "Preview",
+    fileSourceTab: "Source",
+    previewResourceFailed: "Preview resource failed: {error}. Switch to Source to view the file.",
     previewFileTooLarge:
-      "Files larger than 1 MiB cannot be previewed. Download the file to view it.",
+      "The file exceeds the preview size limit for this type. Download the file to view it.",
     fileTypeNotSupported: "Current file type is not supported for preview",
     copiedHtml: "Copied as HTML page",
     copyFormatFailed: "Copy format failed",

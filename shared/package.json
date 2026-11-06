@@ -28,6 +28,7 @@
     "./secure-identity": "./secure-identity.js",
     "./session-caller": "./session-caller.js",
     "./request-error": "./request-error.js",
+    "./resource-access": "./resource-access.js",
     "./locator": "./locator.js",
     "./package.json": "./package.json"
   }

@@ -99,6 +99,11 @@ export default {
     },
   },
   clientPreview: {
+    resourceMaxBytes: { name: "预览单资源大小", description: "单个授权预览资源读取的字节上限。" },
+    resourceTotalBytes: {
+      name: "文档预览资源总大小",
+      description: "单个文档预览加载的授权资源文件总字节上限。",
+    },
     nonImageMaxBytes: {
       name: "客户端预览非图片最大",
       description: "客户端预览非图片最大使用的长度或容量阈值。",

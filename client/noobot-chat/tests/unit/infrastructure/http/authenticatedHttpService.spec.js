@@ -6,6 +6,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   configureAuthenticatedFetcher,
+  authenticatedResourceAccess,
   createScopedAuthenticatedHttpService,
 } from "../../../../src/infrastructure/http/authenticatedHttpService.js";
 
@@ -115,4 +116,31 @@ describe("scoped authenticated HTTP service", () => {
       service.request("/api/internal/character/assets/user.glb.1", { method: "GET" }),
     ).toThrow("authenticated HTTP route is not allowed");
   });
+});
+
+it("exchanges authenticated access for a resource ticket without putting the API key in the URL", async () => {
+  const fetcher = vi.fn(async () => ({
+    ok: true,
+    json: async () => ({ ok: true, token: "ticket", expiresAt: Date.now() + 3600000 }),
+  }));
+  configureAuthenticatedFetcher(fetcher);
+  expect(await authenticatedResourceAccess("/api/internal/attachment/u/a?sessionId=s")).toEqual({
+    url: "/api/internal/attachment/u/a?sessionId=s&resourceToken=ticket",
+    expiresAt: expect.any(Number),
+  });
+  expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({
+    target: "/internal/attachment/u/a?sessionId=s",
+  });
+  await expect(
+    authenticatedResourceAccess("https://external.invalid/api/internal/a"),
+  ).rejects.toThrow("same-origin");
+  await expect(authenticatedResourceAccess("/public/file")).rejects.toThrow("internal");
+  fetcher.mockResolvedValueOnce({ ok: false, status: 401 });
+  await expect(authenticatedResourceAccess("/api/internal/attachment/u/a")).rejects.toThrow(
+    "HTTP 401",
+  );
+  fetcher.mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
+  await expect(authenticatedResourceAccess("/api/internal/attachment/u/a")).rejects.toThrow(
+    "Invalid resource authorization response",
+  );
 });

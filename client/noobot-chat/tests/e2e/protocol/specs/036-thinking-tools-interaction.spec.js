@@ -151,7 +151,7 @@ async function assertFileMutationArtifacts(page, records, turnScopeId, filePath)
   await writeCard.click();
   const writeDialog = page.locator(".generated-file-preview-drawer:visible");
   await expect(writeDialog).toBeVisible();
-  await expect(writeDialog.locator(".mutation-file-content")).toContainText("CASE036-TOOL-CONTENT");
+  await expect(writeDialog.locator(".preview-text")).toContainText("CASE036-TOOL-CONTENT");
   await expect(page).toHaveURL(/overlay=file-preview/);
   await writeDialog.locator(".el-drawer__close-btn").click();
   await expect(writeDialog).toBeHidden();

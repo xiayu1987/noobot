@@ -20,7 +20,9 @@ test("session-routes: streams an attachment opened by the canonical attachment s
       openAttachmentStream: async () => ({
         name: "report.txt",
         mimeType: "text/plain",
-        stream: Readable.from(["canonical attachment"]),
+        size: Buffer.byteLength("canonical attachment"),
+        createReadStream: () => Readable.from(["canonical attachment"]),
+        close: async () => {},
       }),
     },
     translateText: (key) => key,
@@ -266,7 +268,9 @@ test("session-routes: 附件下载头按 RFC 6266 编码非 ASCII 文件名", as
   const app = createAttachmentApp(async () => ({
     name: "调查表 (v1).xlsx",
     mimeType: "application/octet-stream",
-    stream: Readable.from(["x"]),
+    size: 1,
+    createReadStream: () => Readable.from(["x"]),
+    close: async () => {},
   }));
   await withTestServer(app, async (baseUrl) => {
     const response = await fetch(

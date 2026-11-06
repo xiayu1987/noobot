@@ -27,10 +27,9 @@ import {
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
 import { mergeSessionDeletionIds } from "@noobot/hook-protocol";
-import { pipeline } from "node:stream/promises";
+import { sendAttachmentContent } from "./attachment-content.js";
 import { text } from "@noobot/shared/value";
 import { withServerNow } from "@noobot/session-protocol/server-clock";
-import { buildContentDisposition } from "./content-disposition.js";
 
 const HTTP_SESSION_PERSISTENCE_SCOPE = null;
 
@@ -476,12 +475,7 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
       });
       if (!attachment) throw notFound();
 
-      res.setHeader("Content-Type", attachment.mimeType || "application/octet-stream");
-      res.setHeader(
-        "Content-Disposition",
-        `${buildContentDisposition("inline", attachment.name || attachmentId)}`,
-      );
-      await pipeline(attachment.stream, res);
+      await sendAttachmentContent(req, res, attachment);
     }),
   );
 }

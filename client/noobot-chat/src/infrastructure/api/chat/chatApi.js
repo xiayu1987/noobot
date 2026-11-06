@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { createSessionCommand, SESSION_COMMAND } from "@noobot/session-protocol";
+import { WORKSPACE_FILE_ROUTE } from "@noobot/shared/resource-access";
 import { FILE_TRACE_ID_HEADER } from "@noobot/shared/runtime-events-config";
 import { text } from "@noobot/shared/value";
 import { readApiResponseEnvelope } from "@noobot/shared/request-error";
@@ -25,12 +26,17 @@ function buildQueryString(params = {}) {
   return query.toString();
 }
 
-function runFileFetch(fetcher, path, { traceId = "", query = {} } = {}) {
+function runFileFetch(fetcher, path, { traceId = "", query = {}, signal } = {}) {
   const runFetch = requireFetcher(fetcher);
   const queryString = buildQueryString(query);
   return runFetch(
     queryString ? `${path}?${queryString}` : path,
-    buildOptionalHeaders(traceId) ? { headers: buildOptionalHeaders(traceId) } : undefined,
+    signal || traceId
+      ? {
+          ...(traceId ? { headers: buildOptionalHeaders(traceId) } : {}),
+          ...(signal ? { signal } : {}),
+        }
+      : undefined,
   );
 }
 
@@ -259,9 +265,11 @@ export async function getWorkspaceAllTreeApi({ fetcher, path = "" }) {
   });
 }
 
-export async function getWorkspaceAllFileApi({ path = "" }, { fetcher }) {
-  const runFetch = requireFetcher(fetcher);
-  return runFetch(`/api/internal/admin/workspace-all/file?path=${encodeURIComponent(path)}`);
+export async function getWorkspaceAllFileApi({ path = "" }, { fetcher, signal }) {
+  return runFileFetch(fetcher, "/api/internal/admin/workspace-all/file", {
+    query: { path },
+    signal,
+  });
 }
 
 export async function putWorkspaceAllFileApi({ path = "", content = "" }, { fetcher }) {
@@ -303,10 +311,14 @@ export async function postResetAllWorkspaceApi({ sections = [] }, { fetcher }) {
   });
 }
 
-export async function getWorkspaceFileApi({ userId = "", path = "", traceId = "" }, { fetcher }) {
+export async function getWorkspaceFileApi(
+  { userId = "", path = "", traceId = "" },
+  { fetcher, signal },
+) {
   return runFileFetch(fetcher, `/api/internal/workspace/${encodeURIComponent(userId)}/file`, {
     traceId,
     query: { path },
+    signal,
   });
 }
 
@@ -317,18 +329,34 @@ export async function getWorkspaceConfigDeclarationsApi({ userId = "" }, { fetch
 
 export async function downloadWorkspaceFileApi(
   { userId = "", path = "", traceId = "" },
-  { fetcher },
+  { fetcher, signal },
 ) {
-  return runFileFetch(fetcher, `/api/internal/workspace/${encodeURIComponent(userId)}/download`, {
+  return runFileFetch(fetcher, buildWorkspaceDownloadUrl({ userId, path, source: "user" }), {
     traceId,
-    query: { path },
+    signal,
   });
 }
 
-export async function downloadWorkspaceAllFileApi({ path = "" }, { fetcher }) {
-  return runFileFetch(fetcher, "/api/internal/admin/workspace-all/download", {
-    query: { path },
-  });
+export async function downloadWorkspaceAllFileApi({ path = "" }, { fetcher, signal }) {
+  return runFileFetch(fetcher, buildWorkspaceDownloadUrl({ path, source: "all" }), { signal });
+}
+
+export function buildWorkspacePreviewUrl(params) {
+  return buildWorkspaceResourceUrl(params, WORKSPACE_FILE_ROUTE.PREVIEW);
+}
+
+function buildWorkspaceDownloadUrl(params) {
+  return buildWorkspaceResourceUrl(params, WORKSPACE_FILE_ROUTE.DOWNLOAD);
+}
+
+function buildWorkspaceResourceUrl({ userId, path, source }, operation) {
+  if (source !== "user" && source !== "all")
+    throw new TypeError("workspace source must be user or all");
+  const route =
+    source === "all"
+      ? "/api/internal/admin/workspace-all"
+      : `/api/internal/workspace/${encodeURIComponent(userId)}`;
+  return `${route}/${operation}?${buildQueryString({ path })}`;
 }
 
 export async function putWorkspaceFileApi({ userId = "", path = "", content = "" }, { fetcher }) {
@@ -343,7 +371,7 @@ export async function putWorkspaceFileApi({ userId = "", path = "", content = ""
 async function getWorkspaceFileMutationApi(
   { userId = "", sessionId = "", sessionScope = null, mutationId = "", version = null },
   artifact,
-  { fetcher },
+  { fetcher, signal },
 ) {
   const runFetch = requireFetcher(fetcher);
   const query = buildQueryString({
@@ -357,6 +385,7 @@ async function getWorkspaceFileMutationApi(
   });
   return runFetch(
     `/api/internal/workspace/${encodeURIComponent(userId)}/file-mutations/${encodeURIComponent(mutationId)}/${artifact}${query ? `?${query}` : ""}`,
+    { signal },
   );
 }
 

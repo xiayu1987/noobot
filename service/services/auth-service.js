@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { isSuperAdminRole, SUPER_ADMIN_ROLE } from "#agent/utils";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
+import { createResourceAccessService } from "./resource-access.js";
 import { HTTP_STATUS } from "#agent/constants";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import {
@@ -29,11 +30,24 @@ function assertUserScopePolicy(policy) {
 export function createAuthService({ translateText } = {}) {
   const apiKeyStore = new Map();
   const apiKeyTtlMs = TIME_THRESHOLDS.service.apiKeyTtlMs;
+  const keyId = (key) => createHash("sha256").update(key).digest("hex");
+  function resolveSession(sessionId) {
+    const auth = apiKeyStore.get(sessionId);
+    if (!auth) return null;
+    if (Date.now() - auth.issuedAt > apiKeyTtlMs) {
+      apiKeyStore.delete(sessionId);
+      return null;
+    }
+    return auth;
+  }
+  const resourceAccess = createResourceAccessService(resolveSession);
 
   function issueApiKey({ userId, role }) {
     if (!isCanonicalText(userId)) throw new TypeError("issueApiKey requires canonical userId");
     const apiKey = randomBytes(24).toString("hex");
-    apiKeyStore.set(apiKey, {
+    const sessionId = keyId(apiKey);
+    apiKeyStore.set(sessionId, {
+      sessionId,
       userId,
       role: isSuperAdminRole(role) ? SUPER_ADMIN_ROLE : "user",
       issuedAt: Date.now(),
@@ -69,15 +83,8 @@ export function createAuthService({ translateText } = {}) {
       }
     }
     const apiKey = headerApiKey || bearerApiKey || queryApiKey;
-    if (!apiKey) return null;
-    const authInfo = apiKeyStore.get(apiKey);
-    if (!authInfo) return null;
-    const isExpired = Date.now() - authInfo.issuedAt > apiKeyTtlMs;
-    if (isExpired) {
-      apiKeyStore.delete(apiKey);
-      return null;
-    }
-    return authInfo;
+    if (apiKey) return resolveSession(keyId(apiKey));
+    return req.url ? resourceAccess.resolve(req) : null;
   }
 
   function isForbiddenUserScope(authInfo, requestUserId, policy) {
@@ -146,6 +153,7 @@ export function createAuthService({ translateText } = {}) {
   }
 
   return {
+    issueResourceAccess: resourceAccess.issue,
     issueApiKey,
     resolveAuthByApiKey,
     isForbiddenUserScope,

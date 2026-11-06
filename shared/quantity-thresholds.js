@@ -61,6 +61,13 @@ export const DEFAULT_QUANTITY_THRESHOLDS = deepFreeze({
   attachments: {
     maxFileCount: QUANTITY_TIERS.smallFiles,
   },
+  clientPreview: {
+    maxResourceFiles: 64,
+    resourceConcurrency: 4,
+    maxTableRows: 2000,
+    maxTableColumns: 100,
+    maxTableCells: 10000,
+  },
 
   toolIO: {
     readMaxLines: 1000,

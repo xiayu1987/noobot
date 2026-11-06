@@ -10,6 +10,11 @@ export const MIME_TYPE = Object.freeze({
   APPLICATION_OCTET_STREAM: DEFAULT_MIME_TYPE,
   APPLICATION_JSON: "application/json",
   APPLICATION_PDF: "application/pdf",
+  TEXT_HTML: "text/html",
+  TEXT_CSS: "text/css",
+  APPLICATION_XML: "application/xml",
+  TEXT_CSV: "text/csv",
+  TEXT_TSV: "text/tab-separated-values",
   TEXT_PLAIN: "text/plain",
   TEXT_MARKDOWN: "text/markdown",
   TEXT_EVENT_STREAM: "text/event-stream",
@@ -42,6 +47,14 @@ const IMAGE_EXTENSION_TO_MIME = Object.freeze({
   ".jpeg": MIME_TYPE.IMAGE_JPEG,
   ".webp": MIME_TYPE.IMAGE_WEBP,
   ".bmp": MIME_TYPE.IMAGE_BMP,
+  ".jfif": MIME_TYPE.IMAGE_JPEG,
+  ".pjpeg": MIME_TYPE.IMAGE_JPEG,
+  ".pjp": MIME_TYPE.IMAGE_JPEG,
+  ".avif": "image/avif",
+  ".apng": "image/apng",
+  ".ico": "image/x-icon",
+  ".heic": "image/heic",
+  ".heif": "image/heif",
 });
 
 const AUDIO_EXTENSION_TO_MIME = Object.freeze({
@@ -71,11 +84,18 @@ const EXTENSION_TO_MIME = Object.freeze({
   ".gif": MIME_TYPE.IMAGE_GIF,
   ".svg": MIME_TYPE.IMAGE_SVG_XML,
   ".tiff": MIME_TYPE.IMAGE_TIFF,
+  ".tif": MIME_TYPE.IMAGE_TIFF,
   ".pdf": MIME_TYPE.APPLICATION_PDF,
   ".json": MIME_TYPE.APPLICATION_JSON,
   ".txt": MIME_TYPE.TEXT_PLAIN,
   ".md": MIME_TYPE.TEXT_MARKDOWN,
   ".markdown": MIME_TYPE.TEXT_MARKDOWN,
+  ".html": MIME_TYPE.TEXT_HTML,
+  ".htm": MIME_TYPE.TEXT_HTML,
+  ".css": MIME_TYPE.TEXT_CSS,
+  ".xml": MIME_TYPE.APPLICATION_XML,
+  ".csv": MIME_TYPE.TEXT_CSV,
+  ".tsv": MIME_TYPE.TEXT_TSV,
 });
 
 export const MIME_TO_EXTENSION = Object.freeze({

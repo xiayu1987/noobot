@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Blob as NodeBlob } from "node:buffer";
 import { useMessagePreview } from "../../../../../../src/modules/chat/composables/message/useMessagePreview.js";
 import { mountComposable } from "../../../../fixtures/mountComposable.js";
+import { configureAuthenticatedFetcher } from "../../../../../../src/infrastructure/http/authenticatedHttpService.js";
 
 const mountedComposables = [];
 
@@ -36,7 +37,7 @@ function createTextResponse(text = "content") {
   return {
     ok: true,
     status: 200,
-    text: vi.fn(async () => text),
+    blob: vi.fn(async () => new NodeBlob([text])),
   };
 }
 
@@ -161,6 +162,12 @@ describe("useMessagePreview attachment downloads", () => {
   });
 
   it("previews image attachments by extension when mime type is missing", async () => {
+    configureAuthenticatedFetcher(
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ ok: true, token: "read-ticket", expiresAt: Date.now() + 3600000 }),
+      })),
+    );
     const attachmentService = createAttachmentService(createBlobResponse);
     const preview = createMessagePreview({ userId: "admin", attachmentService });
     const attachment = {
@@ -175,12 +182,12 @@ describe("useMessagePreview attachment downloads", () => {
 
     await preview.openAttachmentPreview(attachment);
 
-    expect(attachmentService.fetchUrl).toHaveBeenCalledWith(
-      "/api/internal/attachment/admin/generated-image?sessionId=session-1&attachmentSource=model",
-    );
+    expect(attachmentService.fetchUrl).not.toHaveBeenCalled();
     expect(preview.attachmentPreviewVisible.value).toBe(true);
-    expect(preview.attachmentPreviewType.value).toBe("image");
-    expect(preview.attachmentPreviewUrl.value).toBe("blob:attachment");
+    expect(preview.attachmentPreviewDescriptor.value.type).toBe("image");
+    expect(preview.attachmentPreviewUrl.value).toBe(
+      "/api/internal/attachment/admin/generated-image?sessionId=session-1&attachmentSource=model&resourceToken=read-ticket",
+    );
   });
 
   it("previews text attachments by extension when mime type is octet-stream", async () => {
@@ -200,9 +207,10 @@ describe("useMessagePreview attachment downloads", () => {
 
     expect(attachmentService.fetchUrl).toHaveBeenCalledWith(
       "/api/internal/attachment/admin/report-log?sessionId=session-1&attachmentSource=model",
+      { signal: expect.any(AbortSignal) },
     );
     expect(preview.attachmentPreviewVisible.value).toBe(true);
-    expect(preview.attachmentPreviewType.value).toBe("text");
+    expect(preview.attachmentPreviewDescriptor.value.type).toBe("text");
     expect(preview.attachmentPreviewTextContent.value).toBe("hello\nworld");
   });
 
@@ -244,9 +252,10 @@ describe("useMessagePreview attachment downloads", () => {
 
     expect(attachmentService.fetchUrl).toHaveBeenCalledWith(
       "/api/internal/attachment/admin/parsed-1?sessionId=session-1&attachmentSource=model",
+      { signal: expect.any(AbortSignal) },
     );
     expect(preview.attachmentPreviewVisible.value).toBe(true);
-    expect(preview.attachmentPreviewType.value).toBe("markdown");
+    expect(preview.attachmentPreviewDescriptor.value.type).toBe("markdown");
     expect(preview.attachmentPreviewName.value).toBe("report.md");
     expect(preview.attachmentPreviewTextContent.value).toBe("# parsed");
   });
@@ -304,8 +313,9 @@ describe("useMessagePreview attachment downloads", () => {
 
     expect(attachmentService.fetchUrl).toHaveBeenCalledWith(
       "/api/internal/attachment/admin/parsed-1?sessionId=session-1&attachmentSource=model",
+      { signal: expect.any(AbortSignal) },
     );
-    expect(preview.attachmentPreviewType.value).toBe("markdown");
+    expect(preview.attachmentPreviewDescriptor.value.type).toBe("markdown");
     expect(preview.attachmentPreviewTextContent.value).toBe("# parsed from office");
   });
 
@@ -357,9 +367,10 @@ describe("useMessagePreview attachment downloads", () => {
 
     expect(attachmentService.fetchUrl).toHaveBeenCalledWith(
       "/api/internal/attachment/admin/parsed-1?sessionId=session-1&attachmentSource=model",
+      { signal: expect.any(AbortSignal) },
     );
     expect(preview.attachmentPreviewVisible.value).toBe(true);
-    expect(preview.attachmentPreviewType.value).toBe("markdown");
+    expect(preview.attachmentPreviewDescriptor.value.type).toBe("markdown");
     expect(preview.attachmentPreviewTextContent.value).toBe("# parsed payload");
   });
 });

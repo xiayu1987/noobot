@@ -503,6 +503,10 @@ export default {
       name: "HTTP 准入窗口时长",
       description: "HTTP 准入窗口时长使用的统计或状态跟踪窗口时长。",
     },
+    resourceAccessTtlMs: {
+      name: "资源读取凭证有效期",
+      description: "绑定具体资源的 GET/HEAD 读取凭证有效期。",
+    },
     apiKeyTtlMs: {
       name: "服务API密钥有效期",
       description: "服务API密钥有效期使用的保留期限。",

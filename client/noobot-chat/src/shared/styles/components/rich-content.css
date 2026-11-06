@@ -1,3 +1,16 @@
+.noobot-preview-surface .hljs-keyword,
+.noobot-preview-surface .hljs-literal,
+.noobot-preview-surface .hljs-number {
+  color: var(--el-color-primary);
+}
+.noobot-preview-surface .hljs-string,
+.noobot-preview-surface .hljs-attr {
+  color: var(--el-color-success);
+}
+.noobot-preview-surface .hljs-comment {
+  color: var(--el-text-color-secondary);
+}
+
 .noobot-rich-content {
   width: 100%;
   min-width: 0;

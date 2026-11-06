@@ -112,7 +112,8 @@ export async function openAttachmentStream(service, identity) {
     return {
       ...publicRecord,
       size: openedStat.size,
-      stream: handle.createReadStream(),
+      createReadStream: (range) => handle.createReadStream({ ...range, autoClose: false }),
+      close: () => handle.close(),
     };
   } catch (error) {
     try {

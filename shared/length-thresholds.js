@@ -111,6 +111,8 @@ export const DEFAULT_LENGTH_THRESHOLDS = deepFreeze({
 
   clientPreview: {
     nonImageMaxBytes: LENGTH_TIERS.bytes.clientNonImagePreview,
+    resourceMaxBytes: 8 * MiB,
+    resourceTotalBytes: 16 * MiB,
     chatMessageNavChars: 28,
   },
 

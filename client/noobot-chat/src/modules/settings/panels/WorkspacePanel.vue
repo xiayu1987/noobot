@@ -4,10 +4,17 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, ref, watch, onBeforeUnmount } from "vue";
+import {
+  createFilePreviewState,
+  readFilePreviewBlob,
+} from "../../../shared/composables/useFilePreview.js";
+import { assertPreviewResourceReference } from "@noobot/attachment-protocol/preview";
+import { authenticatedResourceAccess } from "../../../infrastructure/http/authenticatedHttpService.js";
 import { ElMessage } from "element-plus";
 import {
   getConfigParamCatalogApi,
+  buildWorkspacePreviewUrl,
   downloadWorkspaceAllFileApi,
   downloadWorkspaceFileApi,
   getWorkspaceAllFileApi,
@@ -30,7 +37,8 @@ import {
   WorkspaceEditorPanel,
   WorkspaceResetDialog,
 } from "../public-api.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction } from "@noobot/shared/value";
+import { readApiResponseEnvelope } from "@noobot/shared/request-error";
 
 const props = defineProps({
   userId: { type: String, default: "" },
@@ -45,7 +53,6 @@ const tree = ref([]);
 const allWorkspaceTree = ref([]);
 const loadingTree = ref(false);
 const loadingAllTree = ref(false);
-const loadingFile = ref(false);
 const saving = ref(false);
 const resetting = ref(false);
 const syncing = ref(false);
@@ -54,8 +61,17 @@ const resettingAll = ref(false);
 const activePath = ref("");
 const activePathSource = ref("user");
 const activePathType = ref("");
-const content = ref("");
-const isTextFile = ref(true);
+const filePreview = createFilePreviewState();
+const {
+  descriptor: previewDescriptor,
+  url: previewUrl,
+  error: previewError,
+  loading: loadingFile,
+  textContent: content,
+  editable: isTextFile,
+} = filePreview.state;
+const clearFilePreview = filePreview.reset;
+onBeforeUnmount(clearFilePreview);
 const editorInputRef = ref(null);
 const systemParamCatalog = ref([]);
 const userParamCatalog = ref([]);
@@ -222,36 +238,64 @@ async function openFile(node, source = "user") {
   const normalizedSource = source === "all" ? "all" : "user";
   const nodePath = text(node.path);
   if (!nodePath) return;
-  if (node.type === "dir") {
-    activePath.value = nodePath;
-    activePathSource.value = normalizedSource;
-    activePathType.value = "dir";
-    isTextFile.value = false;
-    content.value = "";
-    return;
-  }
+  clearFilePreview();
+  activePath.value = nodePath;
+  activePathSource.value = normalizedSource;
+  activePathType.value = node.type;
   if (node.type !== "file") return;
-  loadingFile.value = true;
-  try {
+  const userId = props.userId;
+  await filePreview.load(async (signal) => {
     const res =
       normalizedSource === "all"
-        ? await getWorkspaceAllFileApi({ path: nodePath }, { fetcher: props.fetcher })
-        : await getWorkspaceFileApi(
-            { userId: props.userId, path: nodePath },
-            { fetcher: props.fetcher },
-          );
+        ? await getWorkspaceAllFileApi({ path: nodePath }, { fetcher: props.fetcher, signal })
+        : await getWorkspaceFileApi({ userId, path: nodePath }, { fetcher: props.fetcher, signal });
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.readFileFailed"));
-    activePath.value = data.path || nodePath;
-    activePathSource.value = normalizedSource;
-    activePathType.value = "file";
-    isTextFile.value = data.isText !== false;
-    content.value = data.content || "";
-  } catch (error) {
-    ElMessage.error(error.message || translate("settings.readFileFailed"));
-  } finally {
-    loadingFile.value = false;
-  }
+    assertWorkspaceFileResponse(data);
+    const descriptor = data.preview;
+    return {
+      descriptor,
+      readText: async () => data.content,
+      editable: data.isText === true,
+      authorizeResource: (resourceSignal) =>
+        authenticatedResourceAccess(
+          buildWorkspacePreviewUrl({ userId, path: nodePath, source: normalizedSource }),
+          resourceSignal,
+        ),
+    };
+  });
+}
+
+function assertWorkspaceFileResponse(data) {
+  if (
+    !data.preview ||
+    ![true, false, null].includes(data.isText) ||
+    typeof data.content !== "string"
+  )
+    throw new TypeError("Invalid workspace file response");
+}
+
+function fetchWorkspaceBlob(path, source, signal) {
+  return source === "all"
+    ? downloadWorkspaceAllFileApi({ path }, { fetcher: props.fetcher, signal })
+    : downloadWorkspaceFileApi({ userId: props.userId, path }, { fetcher: props.fetcher, signal });
+}
+
+async function resolvePreviewResource(reference, signal, stylesheet, { maxBytes, onBytes }) {
+  if (!Number.isFinite(maxBytes) || maxBytes <= 0 || !isFunction(onBytes))
+    throw new TypeError("FILE_PREVIEW_RESOURCE_BUDGET_INVALID");
+  assertPreviewResourceReference(reference);
+  const root = new URL("https://workspace.invalid/");
+  const documentUrl = new URL(activePath.value, root);
+  const base = stylesheet ? new URL(stylesheet, documentUrl) : documentUrl;
+  const resource = new URL(reference, base);
+  if (resource.origin !== root.origin) throw new Error("FILE_PREVIEW_RESOURCE_OUT_OF_SCOPE");
+  const filePath = decodeURIComponent(
+    activePath.value.startsWith("/") ? resource.pathname : resource.pathname.slice(1),
+  );
+  const response = await fetchWorkspaceBlob(filePath, activePathSource.value, signal);
+  if (!response.ok) throw new Error(`HTTP ${response.status}: ${reference}`);
+  return readFilePreviewBlob(response, maxBytes, onBytes);
 }
 
 async function saveFile() {
@@ -296,16 +340,7 @@ async function downloadFile() {
             { userId: props.userId, path: activePath.value },
             { fetcher: props.fetcher },
           );
-    if (!response?.ok) {
-      let errorText = translate("settings.readFileFailed");
-      try {
-        const data = await response.json();
-        if (data?.error) errorText = String(data.error);
-      } catch (error) {
-        console.debug("[workspace] download error response is not JSON", error);
-      }
-      throw new Error(errorText);
-    }
+    if (!response.ok) await readApiResponseEnvelope(response);
     const fileName =
       parseContentDisposition(response.headers?.get("content-disposition") || "") ||
       String(activePath.value || "")
@@ -325,6 +360,7 @@ async function resetWorkspace() {
 }
 
 async function doResetWorkspace(sections = []) {
+  clearFilePreview();
   resetting.value = true;
   try {
     const res = await postResetWorkspaceApi(
@@ -337,8 +373,6 @@ async function doResetWorkspace(sections = []) {
     activePath.value = "";
     activePathSource.value = "user";
     activePathType.value = "";
-    content.value = "";
-    isTextFile.value = true;
     await refreshAll();
     emit("workspace-reset");
     ElMessage.success(translate("settings.workspaceReset"));
@@ -394,6 +428,7 @@ async function resetAllWorkspace() {
 }
 
 async function doResetAllWorkspace(sections = []) {
+  clearFilePreview();
   resettingAll.value = true;
   try {
     const res = await postResetAllWorkspaceApi({ sections }, { fetcher: props.fetcher });
@@ -402,8 +437,6 @@ async function doResetAllWorkspace(sections = []) {
     activePath.value = "";
     activePathSource.value = "user";
     activePathType.value = "";
-    content.value = "";
-    isTextFile.value = true;
     await refreshAll();
     ElMessage.success(
       translate("settings.resetDoneWithCount", {
@@ -455,7 +488,7 @@ async function insertParamAtCursor(key = "") {
   }
   const token = `\${${normalizedKey}}`;
   await nextTick();
-  const textarea = editorInputRef.value?.textarea || editorInputRef.value?.getTextarea?.() || null;
+  const textarea = await editorInputRef.value?.getTextarea();
   if (!textarea) {
     content.value = `${content.value || ""}${token}`;
     return;
@@ -484,6 +517,8 @@ watch(
   [() => props.userId, () => props.connected, () => props.isSuperAdmin],
   () => {
     resourceGeneration += 1;
+    clearFilePreview();
+    activePath.value = "";
     loadedSections.clear();
     pendingSections.clear();
     tree.value = [];
@@ -551,6 +586,11 @@ watch(
       :active-path="activePath"
       :active-path-source="activePathSource"
       :is-text-file="isTextFile"
+      :active-path-type="activePathType"
+      :preview-descriptor="previewDescriptor"
+      :preview-url="previewUrl"
+      :preview-error="previewError"
+      :resolve-resource="resolvePreviewResource"
       :loading-file="loadingFile"
       :editor-actions="editorActions"
       :translate="translate"

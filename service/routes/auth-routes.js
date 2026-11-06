@@ -14,6 +14,7 @@ import {
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
 import { isPlainObject, text } from "@noobot/shared/value";
+import { RESOURCE_ACCESS_ROUTE } from "@noobot/shared/resource-access";
 
 function resolveMergedPlugins(globalPlugins = {}, userPlugins = {}) {
   const globalSource = isPlainObject(globalPlugins) ? globalPlugins : {};
@@ -70,6 +71,7 @@ export function registerAuthRoutes(
     loadUserConfigForUser,
     globalConfigProvider,
     issueApiKey,
+    issueResourceAccess,
     readWorkspaceUsers,
     readWorkspaceUsersConfig,
     writeWorkspaceUsersConfig,
@@ -80,6 +82,15 @@ export function registerAuthRoutes(
     connectorRuntime,
   } = {},
 ) {
+  app.post(
+    RESOURCE_ACCESS_ROUTE,
+    requireApiKey,
+    withJsonError(async (req, res) => {
+      const access = issueResourceAccess(req.auth, req.body?.target);
+      res.setHeader("Cache-Control", "no-store");
+      res.json({ ok: true, ...access });
+    }),
+  );
   app.post(
     "/internal/connect",
     withJsonError(

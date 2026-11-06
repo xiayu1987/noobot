@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import path from "node:path";
+import { WORKSPACE_FILE_ROUTE } from "@noobot/shared/resource-access";
 import { mkdir, open, rename, rm, stat, writeFile } from "node:fs/promises";
 import { writeFileAtomicCreatingParents } from "@noobot/platform-compatibility/atomic-file-write";
 import {
@@ -18,6 +19,7 @@ import {
   decodeFileMutationDownloadRequest,
 } from "@noobot/file-mutation-protocol";
 import { resolveMimeTypeFromFileName } from "@noobot/attachment-protocol/mime";
+import { readWorkspaceFilePreview } from "../services/workspace-file-preview.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { isPathOutOfScopeError, safeJoin } from "#agent/utils";
 import {
@@ -27,6 +29,7 @@ import {
   decodeRequestInput,
 } from "./route-wrapper.js";
 import { buildContentDisposition } from "./content-disposition.js";
+import { sendAttachmentContent } from "./attachment-content.js";
 import { recordFileAccessDebug } from "../runtime-events/file-access-debug.js";
 import { text, isFunction } from "@noobot/shared/value";
 import { readWorkspaceDirectoryPath } from "@noobot/workspace-protocol/directory-tree";
@@ -101,12 +104,13 @@ export function registerFileCrudRoutes(
   const buildFileResponse =
     typeof responseBuilders?.file === "function"
       ? responseBuilders.file
-      : ({ path, isText, size, content }) => ({
+      : ({ path, isText, size, content, preview }) => ({
           ok: true,
           path,
           isText,
           size,
           content,
+          preview,
         });
   const maskWorkspacePath = (pathValue = "") => {
     const normalized = text(pathValue).replaceAll("\\", "/");
@@ -184,9 +188,9 @@ export function registerFileCrudRoutes(
         }
         const root = await resolveRootPath(req);
         const absolutePath = resolveRequestFilePath(req, root, relativePath);
-        let handle;
+        let file;
         try {
-          handle = await open(absolutePath, "r");
+          file = await readWorkspaceFilePreview(absolutePath, relativePath);
         } catch (error) {
           logFileAccess(req, "file.accessFailed", {
             relativePath: maskWorkspacePath(relativePath),
@@ -194,31 +198,16 @@ export function registerFileCrudRoutes(
           });
           throw classifyRequestedPathError(error);
         }
-        let fileStats;
-        let contentBuffer;
-        try {
-          fileStats = await handle.stat();
-          if (!fileStats.isFile()) {
-            throw createBadRequestError(translateText("common.pathIsNotFile", req.locale));
-          }
-          contentBuffer = await handle.readFile();
-        } finally {
-          await handle.close();
-        }
-        const isText = !contentBuffer.includes(0);
-        const content = isText ? contentBuffer.toString("utf8") : "";
         logFileAccess(req, "file.response", {
           relativePath: maskWorkspacePath(relativePath),
-          isText,
-          size: fileStats.size,
+          isText: file.isText,
+          size: file.size,
         });
         res.json(
           buildFileResponse({
             req,
             path: relativePath,
-            isText,
-            size: fileStats.size,
-            content,
+            ...file,
           }),
         );
       },
@@ -332,9 +321,43 @@ export function registerFileCrudRoutes(
     );
   }
 
+  app.get(
+    `${routePrefix}/${WORKSPACE_FILE_ROUTE.PREVIEW}`,
+    ...middlewares,
+    jsonRoute(
+      async (req, res) => {
+        const relativePath = String(req.query.path || "");
+        if (!relativePath)
+          throw createBadRequestError(translateText("common.pathRequired", req.locale));
+        const root = await resolveRootPath(req);
+        const absolutePath = resolveRequestFilePath(req, root, relativePath);
+        const handle = await open(absolutePath, "r").catch((error) => {
+          throw classifyRequestedPathError(error);
+        });
+        let fileStats;
+        try {
+          fileStats = await handle.stat();
+          if (!fileStats.isFile())
+            throw createBadRequestError(translateText("common.pathIsNotFile", req.locale));
+        } catch (error) {
+          await handle.close();
+          throw error;
+        }
+        await sendAttachmentContent(req, res, {
+          name: path.basename(relativePath),
+          mimeType: resolveMimeTypeFromFileName(relativePath),
+          size: fileStats.size,
+          createReadStream: (range) => handle.createReadStream({ ...range, autoClose: false }),
+          close: () => handle.close(),
+        });
+      },
+      { fallbackErrorKey: keys.readFailed },
+    ),
+  );
+
   if (typeof buildDirectoryArchiveFile === "function") {
     app.get(
-      `${routePrefix}/download`,
+      `${routePrefix}/${WORKSPACE_FILE_ROUTE.DOWNLOAD}`,
       ...middlewares,
       jsonRoute(
         async (req, res) => {

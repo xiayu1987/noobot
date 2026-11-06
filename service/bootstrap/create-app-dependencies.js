@@ -86,6 +86,7 @@ export async function createAppDependencies({
   });
   const {
     issueApiKey,
+    issueResourceAccess,
     resolveAuthByApiKey,
     requireApiKey,
     createUserScopeParam,
@@ -174,6 +175,7 @@ export async function createAppDependencies({
       openVSCodeService,
       globalConfigProvider: () => globalConfig,
       issueApiKey,
+      issueResourceAccess,
       readWorkspaceUsers,
       readWorkspaceUsersConfig,
       writeWorkspaceUsersConfig,

@@ -4,6 +4,26 @@
  * SPDX-License-Identifier: MIT
  */
 export default {
+  clientPreview: {
+    resourceConcurrency: {
+      name: "资源读取并发数",
+      description: "授权预览资源同时读取的最大数量。",
+    },
+    maxTableRows: { name: "表格预览行数上限", description: "表格预览允许解析和渲染的最大行数。" },
+    maxTableColumns: {
+      name: "表格预览列数上限",
+      description: "表格预览每行允许解析和渲染的最大列数。",
+    },
+    maxTableCells: {
+      name: "表格预览单元格上限",
+      description: "表格预览允许解析和渲染的单元格总数。",
+    },
+
+    maxResourceFiles: {
+      name: "文件预览资源文件数量",
+      description: "单个 文件预览加载的不同外部资源文件数量上限。",
+    },
+  },
   runtimeEvents: {
     maxArchives: {
       name: "运行事件归档保留数量",

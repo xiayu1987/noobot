@@ -281,12 +281,16 @@ test("attachment stream keeps execution paths inside the attachment service", as
       sessionId: "s1",
       attachmentSource: "user",
     });
-    assert.ok(opened?.stream);
+    assert.equal(typeof opened?.createReadStream, "function");
     assert.equal(opened.absolutePath, undefined);
     assert.equal(opened.path, undefined);
     assert.equal(opened.relativePath, undefined);
     const chunks = [];
-    for await (const chunk of opened.stream) chunks.push(chunk);
+    try {
+      for await (const chunk of opened.createReadStream()) chunks.push(chunk);
+    } finally {
+      await opened.close();
+    }
     assert.equal(Buffer.concat(chunks).toString("utf8"), "streamed");
   });
 });

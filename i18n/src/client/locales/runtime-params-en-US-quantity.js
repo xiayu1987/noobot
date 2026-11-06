@@ -4,6 +4,29 @@
  * SPDX-License-Identifier: MIT
  */
 export default {
+  clientPreview: {
+    resourceConcurrency: {
+      name: "Resource concurrency",
+      description: "Maximum simultaneous reads of authorized preview resources.",
+    },
+    maxTableRows: {
+      name: "Table preview row limit",
+      description: "Maximum rows parsed and rendered in a table preview.",
+    },
+    maxTableColumns: {
+      name: "Table preview column limit",
+      description: "Maximum columns parsed and rendered per table row.",
+    },
+    maxTableCells: {
+      name: "Table preview cell limit",
+      description: "Maximum total cells parsed and rendered in a table preview.",
+    },
+
+    maxResourceFiles: {
+      name: "File preview resource count",
+      description: "Maximum number of distinct external files loaded for one file preview.",
+    },
+  },
   runtimeEvents: {
     maxArchives: {
       name: "Runtime event archive limit",

@@ -11,6 +11,7 @@ import { Blob as NodeBlob } from "node:buffer";
 import { mount, flushPromises } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia } from "pinia";
+import { defineComponent, h } from "vue";
 import SharedChatMessageItem from "../../../../../../src/modules/chat/components/message/SharedChatMessageItem.vue";
 import { useMarkdownRenderer } from "../../../../../../src/modules/chat/composables/message/useMarkdownRenderer.js";
 import { fileMutationPreviewService } from "../../../../../../src/infrastructure/api/fileMutation/fileMutationPreviewService.js";
@@ -102,7 +103,17 @@ async function mountMessage(
       stopExecution: async () => true,
       fetchExecutionReport: async () => null,
     },
-    global: { plugins: [createPinia()], ...createElementPlusMountOptions({ "el-drawer": true }) },
+    global: {
+      plugins: [createPinia()],
+      ...createElementPlusMountOptions({
+        "el-drawer": defineComponent({
+          props: { modelValue: Boolean },
+          setup(props, { slots }) {
+            return () => h("div", props.modelValue ? slots.default?.() : []);
+          },
+        }),
+      }),
+    },
   });
   wrappers.push(wrapper);
   await wrapper.get(".assistant-copy-actions").trigger("click");
@@ -299,6 +310,81 @@ describe("main message download clicks", () => {
     expect(request.searchParams.get("afterSha256")).toBe("c".repeat(64));
     expect(saveDownload.mock.calls[0][0].fileName).toBe("报告.txt");
     expect(new TextDecoder().decode(saveDownload.mock.calls[0][0].bytes)).toBe("snapshot file");
+  });
+
+  it("opens written HTML snapshots in the shared preview and reloads after closing", async () => {
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true, content: "<h1>Snapshot HTML</h1>", size: 22 }),
+    });
+    configureAuthenticatedFetcher(fetcher);
+    const mutation = {
+      mutationId: "html-mutation",
+      revision: 1,
+      operation: "replace",
+      locator: { view: "workspace", path: "page.html" },
+      fileName: "page.html",
+      beforeSha256: null,
+      afterSha256: "c".repeat(64),
+      size: 22,
+      additions: 1,
+      deletions: 0,
+      snapshot: "available",
+    };
+    const wrapper = await mountMessage("Written page", [], "admin", [], [mutation]);
+    await wrapper.get(".mutation-file-item").trigger("click");
+    await flushPromises();
+    expect(wrapper.get("iframe").attributes("srcdoc")).toContain("Snapshot HTML");
+    const signal = fetcher.mock.calls[0][1].signal;
+    expect(signal.aborted).toBe(false);
+    const drawer = wrapper.findAllComponents({ name: "BaseFilePreviewDrawer" })[0];
+    drawer.vm.$emit("update:modelValue", false);
+    await flushPromises();
+    expect(signal.aborted).toBe(true);
+    await wrapper.get(".mutation-file-item").trigger("click");
+    await flushPromises();
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(wrapper.get("iframe").attributes("srcdoc")).toContain("Snapshot HTML");
+  });
+
+  it("aborts drawer diff requests on replacement, close and unmount through HTTP", async () => {
+    const pending = [];
+    const fetcher = vi.fn(() => {
+      const request = Promise.withResolvers();
+      pending.push(request);
+      return request.promise;
+    });
+    configureAuthenticatedFetcher(fetcher);
+    const mutation = {
+      mutationId: "diff-mutation",
+      revision: 1,
+      operation: "update",
+      locator: { view: "workspace", path: "page.html" },
+      fileName: "page.html",
+      beforeSha256: "b".repeat(64),
+      afterSha256: "c".repeat(64),
+      size: 22,
+      additions: 1,
+      deletions: 1,
+      snapshot: "available",
+    };
+    const wrapper = await mountMessage("Patched page", [], "admin", [], [mutation]);
+    const preview = wrapper.findComponent({ name: "FileMutationPreview" });
+    preview.vm.$emit("preview", { mutation, kind: "diff" });
+    await flushPromises();
+    expect(fetcher.mock.calls[0][0]).toContain("/diff?");
+    const first = fetcher.mock.calls[0][1].signal;
+    preview.vm.$emit("preview", { mutation, kind: "diff" });
+    expect(first.aborted).toBe(true);
+    const drawer = wrapper.findAllComponents({ name: "BaseFilePreviewDrawer" })[0];
+    drawer.vm.$emit("update:modelValue", false);
+    expect(fetcher.mock.calls[1][1].signal.aborted).toBe(true);
+    preview.vm.$emit("preview", { mutation, kind: "diff" });
+    await flushPromises();
+    wrapper.unmount();
+    expect(fetcher.mock.calls[2][1].signal.aborted).toBe(true);
+    for (const request of pending) request.reject(new DOMException("Aborted", "AbortError"));
+    await flushPromises();
   });
 
   it("renders an unregistered Windows path as a disabled chip and sends no request", async () => {

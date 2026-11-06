@@ -504,6 +504,10 @@ export default {
       name: "HTTP admission window duration",
       description: "Window duration used by http admission window duration.",
     },
+    resourceAccessTtlMs: {
+      name: "Resource access ticket TTL",
+      description: "Validity period of a resource-specific GET/HEAD ticket.",
+    },
     apiKeyTtlMs: {
       name: "Service API key TTL",
       description: "Retention period for service api key ttl.",

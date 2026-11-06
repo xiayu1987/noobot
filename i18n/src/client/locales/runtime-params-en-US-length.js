@@ -101,6 +101,14 @@ export default {
     },
   },
   clientPreview: {
+    resourceMaxBytes: {
+      name: "Preview resource size",
+      description: "Maximum bytes read for one authorized preview resource.",
+    },
+    resourceTotalBytes: {
+      name: "Preview resource budget",
+      description: "Maximum combined bytes of authorized files loaded for one document preview.",
+    },
     nonImageMaxBytes: {
       name: "Client preview non image max",
       description: "Length or capacity threshold used by client preview non image max.",

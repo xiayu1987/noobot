@@ -12,8 +12,8 @@ import {
 } from "../../../../infrastructure/api/attachments/attachmentAccess.js";
 import { useLocale } from "../../../../shared/i18n/useLocale.js";
 import { triggerBlobDownload } from "./useMessagePreview/file-access-log.js";
-import { handleCopyMarkdown } from "./useMessagePreview/markdown-copy.js";
-import { createAttachmentPreviewState } from "./useMessagePreview/preview-state.js";
+import { handleCopyMarkdown } from "../../../../shared/utils/markdown-copy-feedback.js";
+import { createFilePreviewState } from "../../../../shared/composables/useFilePreview.js";
 import { createAttachmentPreviewController } from "./useMessagePreview/attachment-preview-controller.js";
 import { outOfSessionRenderContext } from "./useMarkdownRenderer.js";
 import { requireFunctionDependencies, text } from "@noobot/shared/value";
@@ -21,19 +21,17 @@ import { requireFunctionDependencies, text } from "@noobot/shared/value";
 export function useMessagePreview({
   userId,
   attachmentService = defaultAttachmentService,
-  isImageMime,
   renderMarkdown,
   notify,
 }) {
-  requireFunctionDependencies("useMessagePreview", { isImageMime, renderMarkdown, notify });
+  requireFunctionDependencies("useMessagePreview", { renderMarkdown, notify });
   const { translate } = useLocale();
-  const attachmentPreview = createAttachmentPreviewState();
+  const attachmentPreview = createFilePreviewState();
   const attachmentController = createAttachmentPreviewController({
     userId,
     attachmentService,
     translate,
     notify,
-    isImageMime,
     attachmentPreview,
   });
   const downloadController = createDownloadController({
@@ -65,7 +63,7 @@ export function useMessagePreview({
 function projectPreviewState(attachmentPreview) {
   return {
     attachmentPreviewVisible: attachmentPreview.visible,
-    attachmentPreviewType: attachmentPreview.type,
+    attachmentPreviewDescriptor: attachmentPreview.descriptor,
     attachmentPreviewUrl: attachmentPreview.url,
     attachmentPreviewName: attachmentPreview.name,
     attachmentPreviewLoading: attachmentPreview.loading,

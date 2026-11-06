@@ -123,9 +123,7 @@ export const CHECK = defineCheck({
       kind: EXEMPTION_KINDS.PATH_PREFIX,
       rules: ["bashShell"],
       reason: "code preview lists bash as a syntax-highlighting language name, not a shell",
-      match: [
-        "client/noobot-chat/src/modules/chat/composables/message/useMessagePreview/constants.js",
-      ],
+      match: ["attachment-protocol/src/preview.js"],
     },
   ],
   baseline: {

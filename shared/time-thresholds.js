@@ -200,6 +200,7 @@ export const DEFAULT_TIME_THRESHOLDS = deepFreeze({
   service: {
     httpAdmissionWindowMs: 60000,
     apiKeyTtlMs: TIME_TIERS.oneDayMs,
+    resourceAccessTtlMs: TIME_TIERS.oneHourMs,
     orphanedTurnRecoveryGraceMs: TIME_TIERS.standardCommandMs,
     userInteractionTimeoutMs: 10 * MINUTE_MS,
     sessionLogMinIntervalMs: TIME_TIERS.startupMs,

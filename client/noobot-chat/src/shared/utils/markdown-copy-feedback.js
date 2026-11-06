@@ -7,14 +7,12 @@ import {
   copyMarkdownRichAsHtmlPage,
   copyMarkdownText,
   MARKDOWN_COPY_ERROR_CODES,
-} from "../../../../../shared/utils/markdown-copy.js";
-
+} from "./markdown-copy.js";
 const WARNING_ERROR_CODES = new Set([
   MARKDOWN_COPY_ERROR_CODES.noCopyableContent,
   MARKDOWN_COPY_ERROR_CODES.noCopyableText,
 ]);
 const KNOWN_ERROR_CODES = new Set(Object.values(MARKDOWN_COPY_ERROR_CODES));
-
 export function handleCopyMarkdown({ markdownText, html, translate, notify, rich }) {
   try {
     if (rich) {

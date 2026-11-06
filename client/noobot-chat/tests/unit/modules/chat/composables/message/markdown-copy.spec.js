@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { handleCopyMarkdown } from "../../../../../../src/modules/chat/composables/message/useMessagePreview/markdown-copy.js";
+import { handleCopyMarkdown } from "../../../../../../src/shared/utils/markdown-copy-feedback.js";
 
 const translate = (key) => `t:${key}`;
 

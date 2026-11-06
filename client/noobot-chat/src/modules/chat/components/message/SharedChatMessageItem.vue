@@ -4,7 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, ref, useId, watch } from "vue";
+import { computed, ref, useId, watch, onBeforeUnmount } from "vue";
 import { ElMessage } from "element-plus";
 import { Paperclip } from "@element-plus/icons-vue";
 import { useMessagePreview } from "../../composables/message/useMessagePreview.js";
@@ -66,6 +66,7 @@ import { isWorkflowNodeTurnScopeId } from "@noobot/session-protocol/turn-scope-i
 import FileMutationPreview from "../thinking/FileMutationPreview.vue";
 import ThinkingPanel from "../thinking/ThinkingPanel.vue";
 import MutationDiffSplit from "../thinking/MutationDiffSplit.vue";
+import MutationFileContent from "../thinking/MutationFileContent.vue";
 import { selectCompletedToolArtifacts } from "../../runtime/engine/toolTimeline.js";
 import { fileMutationPreviewService } from "../../../../infrastructure/api/fileMutation/fileMutationPreviewService.js";
 import { text } from "@noobot/shared/value";
@@ -81,7 +82,7 @@ const props = defineProps(chatMessageItemProps);
 
 const {
   attachmentPreviewVisible,
-  attachmentPreviewType,
+  attachmentPreviewDescriptor,
   attachmentPreviewUrl,
   attachmentPreviewName,
   attachmentPreviewLoading,
@@ -101,7 +102,6 @@ const {
   onCopyMessageMarkdownText,
 } = useMessagePreview({
   userId: props.userId,
-  isImageMime: props.isImageMime,
   renderMarkdown: props.renderMarkdown,
   notify: ({ type = "info", message = "" } = {}) => {
     if (!message) return;
@@ -186,8 +186,23 @@ const mutationPreviewKind = ref("file");
 const mutationPreviewContent = ref("");
 const mutationPreviewDiff = ref(null);
 let mutationPreviewGeneration = 0;
+let mutationPreviewController = null;
+function cancelMutationPreview() {
+  mutationPreviewGeneration += 1;
+  mutationPreviewController?.abort();
+  mutationPreviewController = null;
+}
+watch(
+  mutationPreviewVisible,
+  (visible) => {
+    if (!visible) cancelMutationPreview();
+  },
+  { flush: "sync" },
+);
+onBeforeUnmount(cancelMutationPreview);
 async function openMutationPreview({ mutation, kind } = {}) {
-  const generation = ++mutationPreviewGeneration;
+  cancelMutationPreview();
+  const generation = mutationPreviewGeneration;
   const requestedMutation = mutation || null;
   const requestedKind = kind || "file";
   const requestedSessionId = getMessageSessionId(props.messageItem);
@@ -198,32 +213,25 @@ async function openMutationPreview({ mutation, kind } = {}) {
   mutationPreviewError.value = "";
   mutationPreviewContent.value = "";
   mutationPreviewDiff.value = null;
+  if (requestedKind === "file") {
+    mutationPreviewLoading.value = false;
+    return;
+  }
+  const controller = new AbortController();
+  mutationPreviewController = controller;
   try {
-    const payload =
-      requestedKind === "diff"
-        ? await fileMutationPreviewService.getDiff({
-            userId: props.userId,
-            sessionId: requestedSessionId,
-            sessionScope: requestedMutation?.sessionScope,
-            mutationId: requestedMutation?.mutationId,
-          })
-        : await fileMutationPreviewService.getFile({
-            userId: props.userId,
-            sessionId: requestedSessionId,
-            sessionScope: requestedMutation?.sessionScope,
-            mutationId: requestedMutation?.mutationId,
-          });
+    const payload = await fileMutationPreviewService.getDiff({
+      userId: props.userId,
+      sessionId: requestedSessionId,
+      sessionScope: requestedMutation?.sessionScope,
+      mutationId: requestedMutation?.mutationId,
+      signal: controller.signal,
+    });
     if (generation !== mutationPreviewGeneration) return;
 
-    if (requestedKind === "diff") {
-      mutationPreviewDiff.value = payload.diff;
-      if (payload.diff === null)
-        mutationPreviewContent.value = translate("message.mutationBinaryDiff");
-    } else
-      mutationPreviewContent.value =
-        payload.content === null
-          ? translate(`message.mutationSnapshotState.${payload.snapshot}`)
-          : payload.content;
+    mutationPreviewDiff.value = payload.diff;
+    if (payload.diff === null)
+      mutationPreviewContent.value = translate("message.mutationBinaryDiff");
   } catch (error) {
     if (generation !== mutationPreviewGeneration) return;
     mutationPreviewError.value = String(
@@ -650,7 +658,15 @@ function toggleAssistantContent() {
     :title="translate('message.mutationPreviewTitle', { name: mutationPreviewMutation?.fileName })"
     class="generated-file-preview-drawer"
   >
-    <el-skeleton v-if="mutationPreviewLoading" :rows="5" animated />
+    <MutationFileContent
+      v-if="mutationPreviewVisible && mutationPreviewKind === 'file' && mutationPreviewMutation"
+      :mutation="mutationPreviewMutation"
+      :user-id="props.userId"
+      :session-id="getMessageSessionId(props.messageItem)"
+      :service="fileMutationPreviewService"
+      :translate="translate"
+    />
+    <el-skeleton v-else-if="mutationPreviewLoading" :rows="5" animated />
     <el-alert
       v-else-if="mutationPreviewError"
       :title="mutationPreviewError"
@@ -672,14 +688,12 @@ function toggleAssistantContent() {
     @closed="closeAttachmentPreview"
   >
     <BasePreviewContent
-      content-type="attachment"
       :active="attachmentPreviewVisible"
-      :attachment-preview-type="attachmentPreviewType"
-      :attachment-preview-url="attachmentPreviewUrl"
-      :attachment-preview-name="attachmentPreviewName"
-      :attachment-preview-loading="attachmentPreviewLoading"
-      :attachment-preview-error="attachmentPreviewError"
-      :attachment-preview-text-content="attachmentPreviewTextContent"
+      :descriptor="attachmentPreviewDescriptor"
+      :url="attachmentPreviewUrl"
+      :loading="attachmentPreviewLoading"
+      :error="attachmentPreviewError"
+      :text-content="attachmentPreviewTextContent"
       :render-markdown="renderPreviewMarkdown"
       @copy-markdown-rich="onCopyAttachmentMarkdownRich"
       @copy-markdown-text="onCopyAttachmentMarkdownText"

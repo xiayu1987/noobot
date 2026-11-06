@@ -4,9 +4,20 @@
  * SPDX-License-Identifier: MIT
  */
 import { mount, flushPromises } from "@vue/test-utils";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ElMessage } from "element-plus";
 import FileMutationPreview from "../../../../../../src/modules/chat/components/thinking/FileMutationPreview.vue";
+import BasePreviewContent from "../../../../../../src/shared/ui/BasePreviewContent.vue";
 import { createElementPlusMountOptions } from "../../../../fixtures/elementPlusStubs.js";
+
+vi.mock("element-plus", async (importOriginal) => ({
+  ...(await importOriginal()),
+  ElMessage: vi.fn(),
+}));
+afterEach(() => {
+  vi.restoreAllMocks();
+  delete document.execCommand;
+});
 
 function mutationRef(overrides = {}) {
   return {
@@ -36,6 +47,39 @@ function mountPreview(props = {}) {
 }
 
 describe("FileMutationPreview", () => {
+  it("aborts obsolete diff requests on tab, selection and unmount", async () => {
+    const pending = [];
+    const getDiff = vi.fn(() => {
+      const request = Promise.withResolvers();
+      pending.push(request);
+      return request.promise;
+    });
+    const wrapper = mountPreview({
+      mutations: [mutationRef()],
+      service: {
+        getFile: async () => ({ content: "file", size: 4, isText: true }),
+        getDiff,
+      },
+    });
+    const tabs = wrapper.findComponent({ name: "ElTabsTestStub" });
+    tabs.vm.$emit("tab-change", "diff");
+    await flushPromises();
+    const first = getDiff.mock.calls[0][0].signal;
+    tabs.vm.$emit("tab-change", "metadata");
+    expect(first.aborted).toBe(true);
+    tabs.vm.$emit("tab-change", "diff");
+    await wrapper.setProps({ mutations: [mutationRef({ mutationId: "mutation-2" })] });
+    expect(getDiff.mock.calls[1][0].signal.aborted).toBe(true);
+    expect(getDiff.mock.calls[2][0].signal.aborted).toBe(false);
+    pending[0].reject(new Error("obsolete"));
+    pending[1].resolve({ diff: null });
+    await flushPromises();
+    expect(wrapper.find("el-skeleton").exists()).toBe(true);
+    wrapper.unmount();
+    expect(getDiff.mock.calls[2][0].signal.aborted).toBe(true);
+    pending[2].reject(new DOMException("Aborted", "AbortError"));
+    await flushPromises();
+  });
   it("shows the MutationRef file name with its locator path and line counts", () => {
     const wrapper = mountPreview({ compact: true, mutations: [mutationRef()] });
     const name = wrapper.get(".file-name");
@@ -77,7 +121,7 @@ describe("FileMutationPreview", () => {
     });
     await flushPromises();
     expect(getFile).toHaveBeenCalledWith(expect.objectContaining({ mutationId: "mutation-1" }));
-    expect(wrapper.get(".mutation-file-content").text()).toBe(
+    expect(wrapper.findComponent(BasePreviewContent).props("error")).toBe(
       "message.mutationSnapshotState.deleted",
     );
   });
@@ -99,7 +143,8 @@ describe("FileMutationPreview", () => {
       expect(service.getDiff).toHaveBeenCalledOnce();
       expect(wrapper.find("el-alert").exists()).toBe(false);
       expect(wrapper.find("el-skeleton").exists()).toBe(false);
-      expect(wrapper.get(".mutation-file-content").text()).toBe("");
+      expect(wrapper.findComponent(BasePreviewContent).exists()).toBe(false);
+      expect(service.getFile.mock.calls[0][0].signal.aborted).toBe(true);
     },
   );
 
@@ -111,10 +156,10 @@ describe("FileMutationPreview", () => {
     await wrapper.setProps({ mutations: [mutationRef({ mutationId: "mutation-2" })] });
     first.resolve({ content: "obsolete file" });
     await flushPromises();
-    expect(wrapper.find("el-skeleton").exists()).toBe(true);
+    expect(wrapper.findComponent(BasePreviewContent).props("loading")).toBe(true);
     second.resolve({ content: "current file" });
     await flushPromises();
-    expect(wrapper.get(".mutation-file-content").text()).toBe("current file");
+    expect(wrapper.findComponent(BasePreviewContent).props("textContent")).toBe("current file");
     expect(wrapper.find("el-skeleton").exists()).toBe(false);
   });
 
@@ -138,7 +183,102 @@ describe("FileMutationPreview", () => {
     const wrapper = mountPreview({ mutations: [mutationRef()] });
     wrapper.findComponent({ name: "ElTabsTestStub" }).vm.$emit("tab-change", tab);
     await flushPromises();
-    expect(wrapper.get("el-alert").attributes("title")).toBe(message);
+    if (tab === "file")
+      expect(wrapper.findComponent(BasePreviewContent).props("error")).toBe(message);
+    else expect(wrapper.get("el-alert").attributes("title")).toBe(message);
     expect(wrapper.find("el-skeleton").exists()).toBe(false);
   });
+
+  it.each([
+    ["page.html", "<h1>Written HTML</h1>", "html"],
+    ["report.md", "# Written Markdown", "markdown"],
+    ["result.json", '{"written":true}', "json"],
+    ["rows.csv", "a,b\n1,2", "csv"],
+  ])("uses the shared preview for written %s snapshots", async (fileName, content, type) => {
+    const getFile = vi.fn().mockResolvedValue({ content, size: content.length });
+    const wrapper = mountPreview({ mutations: [mutationRef({ fileName })], service: { getFile } });
+    await flushPromises();
+    const preview = wrapper.findComponent(BasePreviewContent);
+    expect(preview.props("descriptor")).toMatchObject({ name: fileName, type });
+    expect(preview.props("textContent")).toBe(content);
+    expect(preview.props("error")).toBe("");
+    if (type === "html")
+      expect(wrapper.get("iframe").attributes("srcdoc")).toContain("Written HTML");
+    if (type === "markdown") expect(wrapper.get("h1").text()).toBe("Written Markdown");
+    wrapper.unmount();
+  });
+
+  it("aborts the snapshot request on close and enforces the shared preview size budget", async () => {
+    const pending = Promise.withResolvers();
+    const getFile = vi.fn().mockReturnValueOnce(pending.promise);
+    const wrapper = mountPreview({ mutations: [mutationRef()], service: { getFile } });
+    const { signal } = getFile.mock.calls[0][0];
+    wrapper.unmount();
+    expect(signal.aborted).toBe(true);
+    pending.resolve({ content: "late", size: 4 });
+    await flushPromises();
+    getFile.mockResolvedValue({ content: "oversize", size: 2 ** 30 });
+    const oversized = mountPreview({ mutations: [mutationRef()], service: { getFile } });
+    await flushPromises();
+    expect(oversized.findComponent(BasePreviewContent).props("error")).toBe(
+      "FILE_PREVIEW_TOO_LARGE",
+    );
+    expect(oversized.findComponent(BasePreviewContent).props("textContent")).toBe("");
+    oversized.unmount();
+  });
+
+  it("previews SVG text snapshots through the shared resource lifecycle", async () => {
+    const content = '<svg xmlns="http://www.w3.org/2000/svg"/>';
+    const create = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:snapshot");
+    const revoke = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    const wrapper = mountPreview({
+      mutations: [mutationRef({ fileName: "icon.svg" })],
+      service: { getFile: async () => ({ content, size: content.length, isText: true }) },
+    });
+    await flushPromises();
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ type: "image/svg+xml" }));
+    expect(wrapper.get(".preview-image").attributes("src")).toBe("blob:snapshot");
+    expect(wrapper.findComponent(BasePreviewContent).props("error")).toBe("");
+    wrapper.unmount();
+    expect(revoke).toHaveBeenCalledWith("blob:snapshot");
+  });
+
+  it.each([true, false])(
+    "copies written Markdown and reports browser success=%s",
+    async (success) => {
+      const written = {};
+      document.execCommand = vi.fn(() => {
+        const event = new Event("copy", { cancelable: true });
+        event.clipboardData = {
+          setData: (type, value) => {
+            written[type] = value;
+          },
+        };
+        document.dispatchEvent(event);
+        return success;
+      });
+      const wrapper = mountPreview({
+        mutations: [mutationRef()],
+        service: {
+          getFile: async () => ({ content: "# Snapshot", size: 10, isText: true }),
+        },
+      });
+      await flushPromises();
+      const buttons = wrapper.findAll(".noobot-copy-button");
+      for (const [index, button] of buttons.entries()) {
+        await button.trigger("click");
+        expect(written["text/plain"]).toBe("# Snapshot");
+        expect(ElMessage).toHaveBeenLastCalledWith({
+          type: success ? "success" : "error",
+          message: success
+            ? index === 0
+              ? "message.copiedHtml"
+              : "message.copiedMarkdown"
+            : "message.clipboardUnavailable",
+        });
+      }
+      expect(written["text/html"]).toContain("<h1");
+      wrapper.unmount();
+    },
+  );
 });

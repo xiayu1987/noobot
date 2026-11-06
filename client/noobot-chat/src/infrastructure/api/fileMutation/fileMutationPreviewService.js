@@ -16,10 +16,11 @@ async function getMutationFile({
   sessionId = "",
   sessionScope = null,
   mutationId = "",
+  signal,
 } = {}) {
   const response = await getWorkspaceFileMutationFileApi(
     { userId, sessionId, sessionScope, mutationId },
-    { fetcher: requireAuthenticatedFetcher() },
+    { fetcher: requireAuthenticatedFetcher(), signal },
   );
   if (!response?.ok) throw new Error(`failed to load file: ${response?.status || 500}`);
   const data = await response.json();
@@ -27,13 +28,25 @@ async function getMutationFile({
   return data;
 }
 export const fileMutationPreviewService = Object.freeze({
-  async getFile({ userId = "", sessionId = "", sessionScope = null, mutationId = "" } = {}) {
-    return getMutationFile({ userId, sessionId, sessionScope, mutationId });
+  async getFile({
+    userId = "",
+    sessionId = "",
+    sessionScope = null,
+    mutationId = "",
+    signal,
+  } = {}) {
+    return getMutationFile({ userId, sessionId, sessionScope, mutationId, signal });
   },
-  async getDiff({ userId = "", sessionId = "", sessionScope = null, mutationId = "" } = {}) {
+  async getDiff({
+    userId = "",
+    sessionId = "",
+    sessionScope = null,
+    mutationId = "",
+    signal,
+  } = {}) {
     const response = await getWorkspaceFileMutationDiffApi(
       { userId, sessionId, sessionScope, mutationId },
-      { fetcher: requireAuthenticatedFetcher() },
+      { fetcher: requireAuthenticatedFetcher(), signal },
     );
     if (!response?.ok) throw new Error(`failed to load file diff: ${response?.status || 500}`);
     const data = await response.json();

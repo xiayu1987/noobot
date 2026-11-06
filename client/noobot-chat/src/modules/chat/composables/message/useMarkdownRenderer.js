@@ -3,76 +3,24 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import MarkdownIt from "markdown-it";
+import {
+  createMarkdownRenderer,
+  normalizeMermaidMarkdown,
+  looksLikeMermaidLine,
+} from "../../../../shared/utils/markdown-renderer.js";
 import { provideExtensionValues } from "../../../../extensions/extension-registry.js";
 import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
 import { attachmentInlineRefPlugin } from "./attachmentInlineRefPlugin.js";
 import { isFunction, text } from "@noobot/shared/value";
 
-const MERMAID_PREFIXES = [
-  "graph ",
-  "flowchart ",
-  "sequenceDiagram",
-  "classDiagram",
-  "stateDiagram",
-  "erDiagram",
-  "journey",
-  "gantt",
-  "pie ",
-  "mindmap",
-  "timeline",
-];
 function collapseMarkerNames() {
   return ["NOOBOT_COLLAPSE", ...provideExtensionValues(EXTENSION_POINTS.MARKDOWN_COLLAPSE_MARKERS)]
     .map((value) => text(value))
     .filter(Boolean);
 }
 
-function looksLikeMermaidLine(rawLine = "") {
-  const line = text(rawLine);
-  if (!line) return false;
-  return MERMAID_PREFIXES.some((prefix) => line.startsWith(prefix));
-}
-
-function normalizeMermaidMarkdown(inputText = "") {
-  const sourceText = String(inputText || "");
-  if (!sourceText.trim()) return sourceText;
-  const lines = sourceText.split(/\r?\n/);
-  const outputLines = [];
-  let inCodeFence = false;
-
-  for (const currentLine of lines) {
-    const trimmedLine = text(currentLine);
-    if (trimmedLine.startsWith("```")) {
-      inCodeFence = !inCodeFence;
-      outputLines.push(currentLine);
-      continue;
-    }
-    if (!inCodeFence && looksLikeMermaidLine(currentLine)) {
-      outputLines.push("```mermaid");
-      outputLines.push(currentLine);
-      outputLines.push("```");
-      continue;
-    }
-    outputLines.push(currentLine);
-  }
-  return outputLines.join("\n");
-}
-
-const md = new MarkdownIt({ html: false, linkify: true, breaks: true });
+const md = createMarkdownRenderer();
 attachmentInlineRefPlugin(md);
-const defaultFenceRenderer =
-  md.renderer.rules.fence ||
-  ((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options));
-md.renderer.rules.fence = (tokens, idx, options, env, self) => {
-  const token = tokens[idx] || {};
-  const info = text(token?.info).toLowerCase();
-  if (info === "mermaid") {
-    const diagramCode = md.utils.escapeHtml(String(token?.content || ""));
-    return `<div class="mermaid">${diagramCode}</div>`;
-  }
-  return defaultFenceRenderer(tokens, idx, options, env, self);
-};
 
 function escapeHtmlAttribute(value = "") {
   return String(value || "")
