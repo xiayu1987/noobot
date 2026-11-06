@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { tool as structuredTool } from "@langchain/core/tools";
+import { structuredTool } from "../core/structured-tool.js";
 import { z } from "zod";
 import { MODEL_CONTEXT_SEQUENCE_POLICY, MODEL_OPERATION_KIND } from "@noobot/model-protocol";
 import { mergeConfig } from "../../config/index.js";
@@ -158,6 +158,7 @@ export function createWebSearchTool({ agentContext }) {
 
   return [
     structuredTool(
+      runtime,
       async ({ query }, toolConfig) => {
         const normalizedQuery = text(query);
         let resolvedModelSpec = null;
@@ -249,6 +250,7 @@ export function createWebSearchTool({ agentContext }) {
           query: z.string().describe(tTool(runtime, "tools.do_search_web.fieldQuery")),
         }),
       },
+      agentContext,
     ),
   ];
 }

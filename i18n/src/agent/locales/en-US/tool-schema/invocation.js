@@ -169,12 +169,12 @@ export const INVOCATION_TOOL_SCHEMA = {
   execute_native_script: {
     description: {
       key: "tools.nativeScript.description",
-      text: "Run a Node.js function with browser, document, media, and file capabilities; query help for execute_native_script for detailed usage.",
+      text: "Run a Node.js function with browser, document, media, and file capabilities; query {{tool:help}} for {{tool:execute_native_script}} for detailed usage.",
     },
     params: {
       script_body: {
         key: "tools.nativeScript.fieldScriptBody",
-        text: "Async function body source; query help for execute_native_script for detailed usage.",
+        text: "Async function body source; query {{tool:help}} for {{tool:execute_native_script}} for detailed usage.",
       },
       inputs: {
         key: "tools.nativeScript.fieldInputs",

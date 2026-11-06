@@ -27,6 +27,7 @@ const connectorAccess = {
 function createScope(selectedConnectorIds = ["con_selected"]) {
   return {
     bindings: {
+      tools: [{ name: "access_connector" }],
       runtime: {
         globalConfig: {},
         userConfig: {},

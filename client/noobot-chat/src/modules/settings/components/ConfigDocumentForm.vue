@@ -118,6 +118,7 @@ watch(
           :container="activeContainer"
           :document="document"
           :declaration="activeDeclaration"
+          :declarations="declarations"
           @open-entry="openEntry"
         />
       </div>

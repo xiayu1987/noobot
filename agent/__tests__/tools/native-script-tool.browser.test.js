@@ -39,7 +39,11 @@ test("execute_native_script uses the installed Chromium path with an isolated ta
       },
     }),
   });
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
   const result = JSON.parse(
     await tool.invoke(
       {
@@ -65,7 +69,11 @@ test("execute_native_script supports restricted offline browser content and page
   }
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-browser-content-"));
   const runtime = createRuntime(basePath);
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
   const result = JSON.parse(
     await tool.invoke(
       {

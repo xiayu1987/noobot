@@ -292,7 +292,8 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
     });
     return false;
   }
-  const responseText = text(response?.output?.text);
+  if (response === null) return false;
+  const responseText = text(response.output.text);
   const attachments = await saveCapabilityOutputAsTransferArtifacts(ctx, {
     purpose: "acceptance_semantic_validation",
     content: responseText,
@@ -303,6 +304,7 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
     locale,
     purpose: "acceptance_semantic_validation",
     content: responseText,
+    toolNameBindings: response.toolNameBindings,
     dedupe: true,
     attachments,
   });

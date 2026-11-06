@@ -18,7 +18,7 @@ export const EXECUTE_NATIVE_SCRIPT_MANUAL = {
   execute_native_script: {
     summary:
       "Run a Node.js async function body in a restricted sandbox, driving browser, document, media, and file work through injected capabilities.",
-    usage: ["execute_native_script({ script_body, inputs, arguments, riskLevel })"],
+    usage: ["{{tool:execute_native_script}}({ script_body, inputs, arguments, riskLevel })"],
     params: {
       script_body:
         "Async function body source. The complete source is AST-validated before execution; capabilities arrive as bindings, and import or require is not allowed.",

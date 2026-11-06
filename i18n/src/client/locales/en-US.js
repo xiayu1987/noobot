@@ -103,6 +103,12 @@ export const enUSMessages = {
     configSamplingTransmitLabel: "Send parameter {field}",
     configListPlaceholder: "Type and press Enter",
     configEntryKey: "Entry key",
+    toolBindingsSelect: "Select a tool to rename",
+    toolBindingsHint:
+      "Select a tool and edit its model call name. Use 1–64 letters, digits, underscores or hyphens, with no duplicate names. Saving applies to subsequent requests and does not change permissions.",
+    toolBindingsReset: "Restore inherited",
+    toolBindingsInherited: "Inherited name: {name}",
+    toolBindingsUnavailable: "Tool catalog is unavailable. Reopen user configuration.",
     configAddEntry: "Add entry",
     configRemoveEntry: "Remove entry",
     configRawPlaceholder: "No field contract for this section, edit JSON",
@@ -191,6 +197,8 @@ export const enUSMessages = {
     chooseFileLeftTree: "Please select a file from the left tree",
   },
   configFields: {
+    bindings: "Tool call names",
+    bindingName: "Call name",
     context: "Context",
     default_provider: "Default provider",
     providers: "Model providers",

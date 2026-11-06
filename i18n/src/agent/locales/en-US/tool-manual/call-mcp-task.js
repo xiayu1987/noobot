@@ -7,7 +7,7 @@
 export const CALL_MCP_TASK_MANUAL = {
   call_mcp_task: {
     summary: "Call a tool capability provided by a connected MCP server.",
-    usage: ["call_mcp_task({ serverName, toolName, params })"],
+    usage: ["{{tool:call_mcp_task}}({ serverName, toolName, params })"],
     params: {
       serverName: "MCP server name. Must be a server connected in the current session.",
       toolName: "Name of a tool exposed by that server.",

@@ -73,34 +73,37 @@ export function createTestModelResponse(
     turnScopeId = `test-model-turn-${sequence}`,
     runId = `test-model-run-${sequence}`,
   } = identity;
-  return createModelResponse({
-    invocation: {
-      requestId: `test-model-request-${sequence}`,
-      invocationId: `test-model-invocation-${sequence}`,
-      sessionId,
-      parentSessionId,
-      dialogProcessId,
-      turnScopeId,
-      runId,
-      flow: "harness.test",
-      purpose: "harness_test",
-      domain: "test",
-      contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.CHECKPOINT_APPEND_ONLY,
-    },
-    output,
-    attemptCount: normalizedAttempts.length,
-    attempts: normalizedAttempts,
-    model: {
-      model: "test-model",
-      format: "openai_compatible",
-      providerId: "test-provider",
-      adapterId: "openai-compatible",
-    },
-    provider: {
-      operatorId: "test-provider",
-      adapterId: "openai-compatible",
-    },
-  });
+  return {
+    toolNameBindings: {},
+    ...createModelResponse({
+      invocation: {
+        requestId: `test-model-request-${sequence}`,
+        invocationId: `test-model-invocation-${sequence}`,
+        sessionId,
+        parentSessionId,
+        dialogProcessId,
+        turnScopeId,
+        runId,
+        flow: "harness.test",
+        purpose: "harness_test",
+        domain: "test",
+        contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.CHECKPOINT_APPEND_ONLY,
+      },
+      output,
+      attemptCount: normalizedAttempts.length,
+      attempts: normalizedAttempts,
+      model: {
+        model: "test-model",
+        format: "openai_compatible",
+        providerId: "test-provider",
+        adapterId: "openai-compatible",
+      },
+      provider: {
+        operatorId: "test-provider",
+        adapterId: "openai-compatible",
+      },
+    }),
+  };
 }
 
 function initializeTestSemanticTransfer(agentContext = {}) {
@@ -271,6 +274,7 @@ function createTestRuntimeBinding({ userId, runtime, systemRuntime }) {
 
 export function ensureTestHookContext(ctx = {}) {
   if (!isObjectLike(ctx)) return ctx;
+  if (ctx.modelResponse) ctx.modelResponse = { toolNameBindings: {}, ...ctx.modelResponse };
   if (!Object.hasOwn(ctx, "turn")) ctx.turn = 1;
   ensureTestAgentExecutionScope(ctx);
   const explicitIdentity =

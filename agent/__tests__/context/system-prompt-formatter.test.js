@@ -6,8 +6,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { composeSystemInfoSections } from "../../src/context/formatters/system-prompt-formatter.js";
+import { composeSystemInfoSections as composeSections } from "../../src/context/formatters/system-prompt-formatter.js";
+import { createToolNameBinding, projectToolNamePrompt } from "@noobot/model-protocol";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
+
+function composeSystemInfoSections(options) {
+  return composeSections(options).map((section) =>
+    typeof section === "string"
+      ? section
+      : projectToolNamePrompt(section.content, createToolNameBinding())
+          .map((block) => block.text)
+          .join(""),
+  );
+}
 
 test("system runtime projection rejects missing caller without inventing user ownership", () => {
   const dynamicInfo = { now: "2026-08-05T12:00:00.000Z", config: {} };

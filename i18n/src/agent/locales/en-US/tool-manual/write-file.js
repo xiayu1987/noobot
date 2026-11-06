@@ -7,7 +7,7 @@
 export const WRITE_FILE_MANUAL = {
   write_file: {
     summary: "Write a workspace text file, returning its path and a write-time mutation snapshot.",
-    usage: ["write_file({ filePath, content, overwrite, riskLevel })"],
+    usage: ["{{tool:write_file}}({ filePath, content, overwrite, riskLevel })"],
     params: {
       filePath: "File path. Relative paths resolve against the current user workspace root.",
       content: "Content to write, with full-replacement semantics.",
@@ -17,13 +17,13 @@ export const WRITE_FILE_MANUAL = {
         "Operation risk level, classified by the same impact and destructiveness standard as script execution.",
     },
     notes: [
-      "Writing replaces the whole file rather than appending. Prefer patch_file for existing files so unread content is not lost.",
+      "Writing replaces the whole file rather than appending. Prefer {{tool:patch_file}} for existing files so unread content is not lost.",
       "The returned mutation snapshot is a copy taken at write time; later edits to the same file leave existing snapshots untouched. To link the file in a reply, copy the result path verbatim.",
       "Keep each call modest in size. For large files, write a skeleton first and then extend in batches of about 50 lines.",
     ],
     pitfalls: [
-      "Calling write_file on an existing file you have not fully read silently drops the parts you never saw.",
-      "Fall back to write_file only after patches keep failing; it is not the default editing tool.",
+      "Calling {{tool:write_file}} on an existing file you have not fully read silently drops the parts you never saw.",
+      "Fall back to {{tool:write_file}} only after patches keep failing; it is not the default editing tool.",
     ],
   },
 };

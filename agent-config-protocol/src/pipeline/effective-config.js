@@ -3,10 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { deepMerge, isPlainObject } from "../utils.js";
+import { deepMerge, isPlainObject, setConfigOwnProperty } from "../utils.js";
 import {
   resolveDefaultModelLibraryProvider,
   resolveModelLibraryProvider,
+  requireToolBindingConfig,
 } from "@noobot/model-protocol";
 import { normalizeKnownConfigKeys } from "../normalization/keys.js";
 import { resolveBuiltinScenarios } from "../policy/scenario-policy.js";
@@ -40,15 +41,18 @@ function mergeProviders(globalProviders = {}, userProviders = {}) {
   const output = { ...globalSource };
   for (const [providerId, userProvider] of Object.entries(userSource)) {
     if (!isPlainObject(userProvider)) continue;
-    const globalProvider = globalSource[providerId];
+    const globalProvider = Object.hasOwn(globalSource, providerId)
+      ? globalSource[providerId]
+      : undefined;
     const authority = resolveProviderAuthority(providerId, globalProvider);
     const editableUserProvider = projectProviderFields(userProvider, CONFIG_NODE_ACCESS.USER);
-    output[providerId] = deepMerge(authority, editableUserProvider);
+    setConfigOwnProperty(output, providerId, deepMerge(authority, editableUserProvider));
   }
   return output;
 }
 
 export function mergeConfig(globalConfig = {}, userConfig = {}) {
+  requireToolBindingConfig(globalConfig?.tools?.bindings);
   const globalBase = normalizeKnownConfigKeys(
     isPlainObject(globalConfig) ? { ...globalConfig } : {},
   );
@@ -63,13 +67,18 @@ export function mergeConfig(globalConfig = {}, userConfig = {}) {
     }
 
     if (USER_CONFIG_MERGE_MODE[key] === "replace") {
-      out[key] = userValue;
+      setConfigOwnProperty(out, key, userValue);
       continue;
     }
-    out[key] = deepMerge(globalBase[key], userValue);
+    setConfigOwnProperty(
+      out,
+      key,
+      deepMerge(Object.hasOwn(globalBase, key) ? globalBase[key] : undefined, userValue),
+    );
   }
   out.scenarios = resolveBuiltinScenarios(globalBase?.scenarios, safeUser?.scenarios);
   delete out.configParams;
+  requireToolBindingConfig(out.tools?.bindings);
   return out;
 }
 

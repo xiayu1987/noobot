@@ -34,7 +34,7 @@ function limitRelayText(locale, rawText) {
   return `${rawText.slice(0, maxChars)}\n${notice}`;
 }
 
-function buildRelayContent(locale, purposeLabel, inputText) {
+function buildRelayContent(locale, purposeLabel, inputText, bindings) {
   const prefix = translateI18nText(locale, HARNESS_I18N_KEYSET.RELAY.SEPARATE_MODEL_PREFIX, {
     purpose: purposeLabel,
   });
@@ -42,7 +42,7 @@ function buildRelayContent(locale, purposeLabel, inputText) {
     locale,
     HARNESS_I18N_KEYSET.RELAY.CAPABILITY_BOUNDARY_NOTICE,
   );
-  const riskNotice = containsExecutableScriptText(inputText)
+  const riskNotice = containsExecutableScriptText(inputText, bindings)
     ? ` ${translateI18nText(locale, HARNESS_I18N_KEYSET.RELAY.SCRIPT_CONTENT_RISK_NOTICE)}`
     : "";
   return `${prefix}${riskNotice}\n${capabilityBoundaryNotice}\n${inputText}`;
@@ -94,13 +94,19 @@ export function relaySeparateModelOutputAsUserMessage(
     content = "",
     dedupe = false,
     transferPayload = null,
+    toolNameBindings,
   } = {},
 ) {
   const messages = resolveModelMessages(ctx);
   const rawText = text(content);
   if (!rawText) return false;
   const purposeLabel = optionalText(purpose) || "unknown";
-  const relayContent = buildRelayContent(locale, purposeLabel, limitRelayText(locale, rawText));
+  const relayContent = buildRelayContent(
+    locale,
+    purposeLabel,
+    limitRelayText(locale, rawText),
+    toolNameBindings,
+  );
   const resolvedTransferPayload = normalizeTransferPayload(transferPayload || {});
   if (!messages) return false;
   const injection = injectMessageWithPolicy(ctx, {

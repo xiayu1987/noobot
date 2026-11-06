@@ -42,6 +42,7 @@ export function pickLocaleText({
   fallback = "",
   fallbackLocale = DEFAULT_LOCALE,
   params = {},
+  transformText = (value) => value,
 } = {}) {
   const normalizedKey = text(key);
   const row = dict?.[normalizedKey] || {};
@@ -50,6 +51,6 @@ export function pickLocaleText({
     row?.[normalizedLocale] ??
     row?.[normalizeLocale(fallbackLocale, DEFAULT_LOCALE)] ??
     (fallback || normalizedKey);
-  if (typeof value === "function") return String(value(params) ?? "");
-  return String(value ?? "");
+  if (typeof value === "function") return String(value(params, transformText) ?? "");
+  return transformText(String(value ?? ""));
 }

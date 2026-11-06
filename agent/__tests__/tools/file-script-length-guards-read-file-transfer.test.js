@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
+import { createToolNameBinding } from "@noobot/model-protocol";
+import { runWithToolNameBinding } from "@noobot/model-protocol/tool-binding-scope-node";
 import {
   test,
   assert,
@@ -11,12 +13,17 @@ import {
   os,
   path,
   createFileTool,
-  transferSemanticContent,
+  transferSemanticContent as transferContent,
   LENGTH_THRESHOLDS,
   buildAgentContext,
   parseToolResult,
   buildAttachmentService,
 } from "./helpers/file-script-length-guards-helper.js";
+
+const transferSemanticContent = (options) =>
+  runWithToolNameBinding(createToolNameBinding({ tools: [{ name: "read_file" }] }), () =>
+    transferContent(options),
+  );
 
 test("read_file: 具体工具不判断大文件，原始内容交由 semantic-transfer 处理", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-read-guard-"));

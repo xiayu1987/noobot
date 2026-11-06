@@ -9,7 +9,7 @@ import {
   CONFIG_REPAIR_ACTION,
 } from "../contract/repair.js";
 import { migrateConfigFileToCurrentProtocol } from "./migration.js";
-import { isPlainObject } from "../utils.js";
+import { isPlainObject, setConfigOwnProperty } from "../utils.js";
 import {
   CONFIG_STRUCTURE,
   CONFIG_STRUCTURE_KIND,
@@ -18,6 +18,7 @@ import {
   structureAllowsScope,
 } from "../contract/config-structure.js";
 import { createConfigValueSource } from "../contract/config-values.js";
+import { requireToolBindingConfig } from "@noobot/model-protocol";
 
 const REMOVE_NODE = Symbol("remove_config_node");
 const VALID_SCOPES = new Set(Object.values(CONFIG_DOCUMENT_SCOPE));
@@ -64,13 +65,17 @@ function validatesContract(value, contract = {}, enforceValueConstraints = true)
     return value.every((item) => validatesContract(item, contract.items, enforceValueConstraints));
   }
   if (contract.type !== "object") return true;
+  return validatesObjectContract(value, contract, enforceValueConstraints);
+}
+
+function validatesObjectContract(value, contract, enforceValueConstraints) {
   const properties = isPlainObject(contract.properties) ? contract.properties : {};
   for (const key of contract.required || []) {
     if (!Object.prototype.hasOwnProperty.call(value, key)) return false;
     if (!validatesContract(value[key], properties[key], enforceValueConstraints)) return false;
   }
   for (const [key, child] of Object.entries(value)) {
-    const childContract = properties[key];
+    const childContract = Object.hasOwn(properties, key) ? properties[key] : undefined;
     if (childContract && !validatesContract(child, childContract, enforceValueConstraints))
       return false;
     if (childContract) continue;
@@ -117,7 +122,7 @@ function repairDeclaredContractProperties({
       scope,
       enforceValueConstraints,
     });
-    if (child !== REMOVE_NODE) output[key] = child;
+    if (child !== REMOVE_NODE) setConfigOwnProperty(output, key, child);
   }
   return output;
 }
@@ -135,9 +140,13 @@ function repairTemplateAdditionalProperties({
   enforceValueConstraints,
 }) {
   for (const [key, child] of Object.entries(templateObject)) {
-    if (properties[key]) continue;
+    if (Object.hasOwn(properties, key)) continue;
     if (contract.additionalProperties === true) {
-      output[key] = repairOpenProperty({ target, key, template: child, path, changes });
+      setConfigOwnProperty(
+        output,
+        key,
+        repairOpenProperty({ target, key, template: child, path, changes }),
+      );
       continue;
     }
     if (!isPlainObject(contract.additionalProperties)) {
@@ -155,7 +164,7 @@ function repairTemplateAdditionalProperties({
       scope,
       enforceValueConstraints,
     });
-    if (repaired !== REMOVE_NODE) output[key] = repaired;
+    if (repaired !== REMOVE_NODE) setConfigOwnProperty(output, key, repaired);
   }
 }
 
@@ -176,9 +185,9 @@ function repairTargetAdditionalProperties({
   enforceValueConstraints,
 }) {
   for (const [key, child] of Object.entries(target)) {
-    if (properties[key] || Object.prototype.hasOwnProperty.call(output, key)) continue;
+    if (Object.hasOwn(properties, key) || Object.hasOwn(output, key)) continue;
     if (contract.additionalProperties === true) {
-      output[key] = clone(child);
+      setConfigOwnProperty(output, key, clone(child));
       continue;
     }
     if (!isPlainObject(contract.additionalProperties)) {
@@ -198,7 +207,7 @@ function repairTargetAdditionalProperties({
       scope,
       enforceValueConstraints,
     });
-    if (repaired !== REMOVE_NODE) output[key] = repaired;
+    if (repaired !== REMOVE_NODE) setConfigOwnProperty(output, key, repaired);
   }
 }
 
@@ -221,7 +230,7 @@ function repairModelProviderOptions({
     }
     if (!options.length || options.includes(output[key])) continue;
     const fallback = options.includes(valueObject[key]) ? valueObject[key] : options[0];
-    output[key] = clone(fallback);
+    setConfigOwnProperty(output, key, clone(fallback));
     recordChange(
       changes,
       [...path, key],
@@ -403,7 +412,7 @@ function repairStructureCollection({ node, target, path, values, scope, changes 
       scope,
       changes,
     });
-    if (repaired !== REMOVE_NODE) output[key] = repaired;
+    if (repaired !== REMOVE_NODE) setConfigOwnProperty(output, key, repaired);
   }
   for (const key of collectionValueKeys({ path, values })) {
     if (Object.prototype.hasOwnProperty.call(output, key)) continue;
@@ -415,7 +424,7 @@ function repairStructureCollection({ node, target, path, values, scope, changes 
       scope,
       changes,
     });
-    if (repaired !== REMOVE_NODE) output[key] = repaired;
+    if (repaired !== REMOVE_NODE) setConfigOwnProperty(output, key, repaired);
   }
   return output;
 }
@@ -431,7 +440,7 @@ function repairStructureObject({ node, target, path, values, scope, changes }) {
       scope,
       changes,
     });
-    if (repaired !== REMOVE_NODE) output[key] = repaired;
+    if (repaired !== REMOVE_NODE) setConfigOwnProperty(output, key, repaired);
   }
   for (const key of Object.keys(target)) {
     if (Object.prototype.hasOwnProperty.call(output, key)) continue;
@@ -582,7 +591,9 @@ export function repairConfigDocument({
   if (!isPlainObject(baseValues)) {
     throw new TypeError("config repair baseValues must be an object");
   }
+  requireToolBindingConfig(baseValues.tools?.bindings);
   const sourceTarget = isPlainObject(target) ? target : {};
+  requireToolBindingConfig(sourceTarget.tools?.bindings);
   const currentTarget = migrateConfigFileToCurrentProtocol(sourceTarget);
   const changes = [];
   if (!isPlainObject(target)) {

@@ -34,7 +34,11 @@ test("execute_native_script injects capabilities and persists task output", asyn
       },
     }),
   });
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
   assert.match(tool.description, /help.*execute_native_script/);
   assert.doesNotMatch(tool.description, /output:\/\//);
   assert.match(tool.schema.shape.script_body.description, /help.*execute_native_script/);
@@ -78,7 +82,11 @@ log("completed");
 test("execute_native_script returns the top-level JSON value as script_result", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-result-"));
   const runtime = createRuntime(basePath);
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
   const result = JSON.parse(
     await tool.invoke(
       {
@@ -107,7 +115,11 @@ return { passed: checks.every((check) => check.passed), checks, empty: null };
 test("execute_native_script rejects a non-JSON return value", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-invalid-result-"));
   const runtime = createRuntime(basePath);
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
   const result = JSON.parse(
     await tool.invoke(
       { script_body: "return { valid: true, invalid: undefined };" },
@@ -126,7 +138,11 @@ test("execute_native_script rejects a non-JSON return value", async () => {
 test("execute_native_script rejects implicit toJSON and oversized return values", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-result-contract-"));
   const runtime = createRuntime(basePath);
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
 
   for (const [scriptBody, expected] of [
     ["return { toJSON() { return { hidden: true }; } };", /unsupported function value/],
@@ -163,7 +179,11 @@ test("execute_native_script projects runtime roots but preserves caller path dat
       },
     }),
   });
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
   const result = JSON.parse(
     await tool.invoke(
       {
@@ -222,7 +242,11 @@ test("execute_native_script reads generated output and temporary text through ta
       },
     }),
   });
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
   const result = JSON.parse(
     await tool.invoke(
       {
@@ -250,7 +274,11 @@ log(parsed.status, temporaryText);
 test("execute_native_script writes and reads temporary text and JSON without collecting attachments", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-temp-write-"));
   const runtime = createRuntime(basePath);
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
   const result = JSON.parse(
     await tool.invoke(
       {
@@ -275,7 +303,11 @@ log(await files.readText(temporaryText), (await files.readJson(temporaryJson)).s
 test("execute_native_script exposes output.directory and awaited task paths as strings", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-output-tokens-"));
   const runtime = createRuntime(basePath);
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
   const result = JSON.parse(
     await tool.invoke(
       {
@@ -309,7 +341,11 @@ return {
 test("execute_native_script joins a temp directory token with a file name exactly once", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-temp-directory-"));
   const runtime = createRuntime(basePath);
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
   const result = JSON.parse(
     await tool.invoke(
       {
@@ -345,7 +381,11 @@ test("execute_native_script publishes zero-byte output with the same count as it
       },
     }),
   });
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
   const result = JSON.parse(
     await tool.invoke(
       {
@@ -386,7 +426,11 @@ test("execute_native_script promotes temporary binary bytes into a formal output
       },
     }),
   });
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
   const result = JSON.parse(
     await tool.invoke(
       {
@@ -426,7 +470,11 @@ log("encoded:" + encoded);
 test("execute_native_script rejects non-base64 content before writing binary bytes", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-binary-invalid-"));
   const runtime = createRuntime(basePath);
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
   const result = JSON.parse(
     await tool.invoke(
       {

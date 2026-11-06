@@ -22,6 +22,7 @@ test("patch_file: patch 超过 semantic-transfer 阈值时保存附件并直接�
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-guard-"));
   let invoked = false;
   const tool = {
+    name: "patch_file",
     async invoke() {
       invoked = true;
       throw new Error("patch_file concrete tool must not be invoked for overlong input");

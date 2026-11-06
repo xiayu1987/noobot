@@ -6,6 +6,7 @@
 import { normalizeRuntimeModelSpec } from "@noobot/model-runtime";
 import test from "node:test";
 import assert from "node:assert/strict";
+import { TOOL_CALL_NAME_BINDING, createToolNameBinding } from "@noobot/model-protocol";
 import { runFunctionCallLoop as runFunctionCallLoopProduction } from "../../../src/runtime/turn/orchestrator.js";
 import { resolveBoundToolModelRequestOverrides } from "../../../src/runtime/turn/tool-choice-strategy.js";
 import { createBoundLlmToolChoiceInvoker } from "../../../src/runtime/turn/tool-invoke-strategy.js";
@@ -34,12 +35,19 @@ function createToolCallingModelPort(responses = []) {
       invokeIndex += 1;
       if (next instanceof Error) throw next;
       return {
+        toolNameBindings: {},
         output: {
           text: String(next.text ?? next.content ?? ""),
           toolCalls: Array.isArray(next.toolCalls)
-            ? next.toolCalls
+            ? next.toolCalls.map((call) => ({
+                ...call,
+                [TOOL_CALL_NAME_BINDING]: createToolNameBinding({ tools: [{ name: call.name }] }),
+              }))
             : Array.isArray(next.tool_calls)
-              ? next.tool_calls
+              ? next.tool_calls.map((call) => ({
+                  ...call,
+                  [TOOL_CALL_NAME_BINDING]: createToolNameBinding({ tools: [{ name: call.name }] }),
+                }))
               : [],
         },
       };

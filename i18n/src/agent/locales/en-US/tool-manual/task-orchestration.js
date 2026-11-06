@@ -8,7 +8,7 @@ export const TASK_ORCHESTRATION_MANUAL = {
   task_summary: {
     summary:
       "Submit a stage summary for the current task, which becomes the authoritative stage state for later steps.",
-    usage: ["task_summary({ summaryContent })"],
+    usage: ["{{tool:task_summary}}({ summaryContent })"],
     params: {
       summaryContent: "Summary body strictly following the NOOBOT_TASK_SUMMARY/1 text protocol.",
     },
@@ -33,7 +33,7 @@ export const TASK_ORCHESTRATION_MANUAL = {
   },
   task_check: {
     summary: "Submit a task check slice recording current progress and the next step.",
-    usage: ["task_check({ checkContent })"],
+    usage: ["{{tool:task_check}}({ checkContent })"],
     params: {
       checkContent: "Check body strictly following the NOOBOT_TASK_CHECK/1 text protocol.",
     },
@@ -48,6 +48,8 @@ export const TASK_ORCHESTRATION_MANUAL = {
       "Call it as needed after a periodic task-check prompt; it is optional.",
       "This tool creates no summary marker or attachment; the result is only a derived receipt.",
     ],
-    pitfalls: ["Its protocol header differs from task_summary, and the two must not be swapped."],
+    pitfalls: [
+      "Its protocol header differs from {{tool:task_summary}}, and the two must not be swapped.",
+    ],
   },
 };

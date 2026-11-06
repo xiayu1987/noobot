@@ -20,6 +20,7 @@ import { createTaskCheckTool } from "./collaboration/task-check-tool.js";
 import { createHelpTool } from "./collaboration/help-tool.js";
 import { mergeConfig } from "../config/index.js";
 import { CONTROL_TOOL_NAMES } from "./constants/index.js";
+export { BUILTIN_TOOL_IDS } from "./constants/index.js";
 import { runBuildToolsAdapter } from "./adapter.js";
 export { renderTaskSummaryReceiptMessage } from "./collaboration/task-summary-tool.js";
 import { assertToolPathContract } from "@noobot/path-resolver";

@@ -11,9 +11,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { processToolResults } from "../../../src/runtime/turn/response-processor.js";
+import { processToolResults as processBoundToolResults } from "../../../src/runtime/turn/response-processor.js";
 import {
-  startToolCallInTurn,
+  startToolCallInTurn as startBoundToolCallInTurn,
   settleStartedToolCallInTurn,
 } from "../../../src/runtime/tool-execution/tool-runner.js";
 import { bindCurrentTurnPersistence } from "../../../src/bot/execution/runner/current-turn-persistence.js";
@@ -28,6 +28,16 @@ import { AttachmentService } from "../../../src/artifacts/service/attachment-ser
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { bindTestDispatchLifecycle } from "./turn-runtime-test-helper.js";
 import { findCommittedMessagePayload } from "./tool-runner.test-helpers.js";
+
+import { TOOL_CALL_NAME_BINDING, createToolNameBinding } from "@noobot/model-protocol";
+const bindCall = (call) => ({
+  ...call,
+  [TOOL_CALL_NAME_BINDING]: createToolNameBinding({ tools: [{ name: call.name }] }),
+});
+const startToolCallInTurn = (options) =>
+  startBoundToolCallInTurn({ ...options, call: bindCall(options.call) });
+const processToolResults = (options) =>
+  processBoundToolResults({ ...options, calls: options.calls.map(bindCall) });
 
 const wait = (durationMs) => new Promise((resolve) => setTimeout(resolve, durationMs));
 const settleToolCallInTurn = async (options) =>
@@ -75,6 +85,7 @@ test("parallel starts persist before invocation and ends/results flush once befo
         [
           "read_file",
           {
+            name: "read_file",
             async invoke() {
               assert.equal(persisted.length, 1);
               assert.ok(facts.includes("tool_call_start"));
@@ -87,6 +98,7 @@ test("parallel starts persist before invocation and ends/results flush once befo
         [
           "execute_script",
           {
+            name: "execute_script",
             async invoke() {
               throw fatalError;
             },
@@ -123,6 +135,7 @@ test("settled timing separates invocation from event commit and includes the fin
   const settled = await settleToolCallInTurn({
     call: { id: "timed", name: "read_file", args: {} },
     tool: {
+      name: "read_file",
       async invoke() {
         await wait(10);
         return { ok: true };
@@ -164,6 +177,7 @@ test("start persistence failure prevents invocation and is not recast as a tool 
       call: { id: "start-failure", name: "read_file", args: {} },
       abortSignal: runtime.abortSignal,
       tool: {
+        name: "read_file",
         async invoke() {
           invoked = true;
         },
@@ -202,6 +216,7 @@ for (const eventType of ["tool_call_end", "tool_call_timing"]) {
         call: { id: `failure-${eventType}`, name: "execute_script", args: {} },
         abortSignal: runtime.abortSignal,
         tool: {
+          name: "execute_script",
           async invoke() {
             throw fatalError;
           },
@@ -235,6 +250,7 @@ test("timing emission failure after success propagates without a second end", as
       call: { id: "timing-failure", name: "read_file", args: {} },
       abortSignal: runtime.abortSignal,
       tool: {
+        name: "read_file",
         async invoke() {
           return { ok: true };
         },
@@ -279,6 +295,7 @@ test("a failed parallel settlement drains peers and persists their results befor
         [
           "multimodal_parse",
           {
+            name: "multimodal_parse",
             async invoke() {
               throw fatalError;
             },
@@ -287,6 +304,7 @@ test("a failed parallel settlement drains peers and persists their results befor
         [
           "read_file",
           {
+            name: "read_file",
             async invoke() {
               return { ok: true };
             },
@@ -295,6 +313,7 @@ test("a failed parallel settlement drains peers and persists their results befor
         [
           "execute_script",
           {
+            name: "execute_script",
             async invoke() {
               await wait(20);
               slowCompleted = true;
@@ -363,6 +382,7 @@ test("processToolResults commits every settled parallel result before propagatin
     [
       "read_file",
       {
+        name: "read_file",
         async invoke() {
           await wait(20);
           return { ok: true, value: "read" };
@@ -372,6 +392,7 @@ test("processToolResults commits every settled parallel result before propagatin
     [
       "execute_script",
       {
+        name: "execute_script",
         async invoke() {
           await wait(30);
           return { ok: true, value: "script" };
@@ -381,6 +402,7 @@ test("processToolResults commits every settled parallel result before propagatin
     [
       "multimodal_parse",
       {
+        name: "multimodal_parse",
         async invoke() {
           await wait(5);
           throw stopReason;
@@ -390,6 +412,7 @@ test("processToolResults commits every settled parallel result before propagatin
     [
       "execute_native_script",
       {
+        name: "execute_native_script",
         async invoke() {
           await wait(10);
           return { ok: true, value: "native" };
@@ -454,6 +477,7 @@ test("processToolResults commits result policy from its authoritative batch call
       [
         "task_check",
         {
+          name: "task_check",
           contextPolicy: policy,
           async invoke() {
             return { ok: true };
@@ -499,6 +523,7 @@ test("processToolResults accepts only a successful task_summary result", async (
       [
         "task_summary",
         {
+          name: "task_summary",
           async invoke() {
             return { ok: false, code: "RECOVERABLE_INVALID_TOOL_INPUT" };
           },
@@ -525,6 +550,7 @@ test("processToolResults accepts only a successful task_summary result", async (
       [
         "task_summary",
         {
+          name: "task_summary",
           async invoke() {
             return { ok: true };
           },
@@ -563,6 +589,7 @@ test("processToolResults consumes queued user interjections only after the tool 
       [
         "read_file",
         {
+          name: "read_file",
           async invoke() {
             return { ok: true };
           },
@@ -594,6 +621,7 @@ test("settleToolCallInTurn pairs a pre-existing stop without invoking the tool",
   const settlement = await settleToolCallInTurn({
     call: { id: "call-pre-stopped", name: "execute_script", args: {} },
     tool: {
+      name: "execute_script",
       async invoke() {
         invocationCount += 1;
         return { ok: true };
@@ -628,6 +656,7 @@ test("settleToolCallInTurn rejected fatal path reports elapsed durationMs on too
   const settlement = await settleToolCallInTurn({
     call: { id: "call-fatal", name: "execute_script", args: {} },
     tool: {
+      name: "execute_script",
       async invoke() {
         invokedAt = Date.now();
         await wait(20);

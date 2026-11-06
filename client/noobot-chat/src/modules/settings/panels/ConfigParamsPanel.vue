@@ -243,6 +243,7 @@ async function saveConfigDocument() {
     const nextDocument = buildConfigDocumentForSave(
       configDocument.value,
       configDocumentBaseline.value,
+      configDeclarations.value,
     );
     const res = await putWorkspaceFileApi(
       {

@@ -7,7 +7,7 @@
 export const SWITCH_MODEL_MANUAL = {
   switch_model: {
     summary: "切换当前会话使用的模型。",
-    usage: ["switch_model({ modelName })"],
+    usage: ["{{tool:switch_model}}({ modelName })"],
     params: {
       modelName: "目标模型名，必须是配置中已声明且提供方已启用的模型。",
     },

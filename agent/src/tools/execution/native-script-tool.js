@@ -20,14 +20,14 @@ import {
   projectTaskPathText,
   TOOL_PATH_CONTRACTS,
 } from "@noobot/path-resolver";
-import { tool as structuredTool } from "@langchain/core/tools";
+import { structuredTool } from "../core/structured-tool.js";
 import { z } from "zod";
 import {
   getRuntimeFromAgentContext,
   resolveRuntimeUserId,
 } from "../../context/agent-context-accessor.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
-import { tTool } from "../core/tool-i18n.js";
+import { tTool, tToolTemplate } from "../core/tool-i18n.js";
 import { createFileInputSchema, resolveFileInput } from "../core/file-input.js";
 import { registerTransferAttachmentResources } from "../core/resource-broker.js";
 import { TOOL_NAME } from "../constants/index.js";
@@ -495,6 +495,7 @@ export function createNativeScriptTool({ agentContext }) {
   const config = effectiveConfig?.tools?.[TOOL_NAME.EXECUTE_NATIVE_SCRIPT];
   if (config?.enabled !== true || !text(runtime?.basePath)) return [];
   const tool = structuredTool(
+    runtime,
     async ({ script_body, inputs, arguments: scriptArguments, riskLevel }, toolConfig = {}) => {
       const identity = toolConfig?.configurable?.transferIdentity;
       if (!isObjectLike(identity)) throw new Error("native_script_identity_required");
@@ -591,9 +592,11 @@ export function createNativeScriptTool({ agentContext }) {
     {
       name: TOOL_NAME.EXECUTE_NATIVE_SCRIPT,
       metadata: { pathContract: TOOL_PATH_CONTRACTS.nativeInput },
-      description: tTool(runtime, "tools.nativeScript.description"),
+      description: tToolTemplate(runtime, "tools.nativeScript.description"),
       schema: z.strictObject({
-        script_body: z.string().describe(tTool(runtime, "tools.nativeScript.fieldScriptBody")),
+        script_body: z
+          .string()
+          .describe(tToolTemplate(runtime, "tools.nativeScript.fieldScriptBody")),
         inputs: z
           .array(
             createFileInputSchema({
@@ -614,6 +617,7 @@ export function createNativeScriptTool({ agentContext }) {
         ),
       }),
     },
+    agentContext,
   );
   return [tool];
 }

@@ -35,9 +35,9 @@ function buildSystemContextMessage(source) {
   const identity = Object.fromEntries(
     Object.entries(resolveContextMessageIdentity(source)).filter(([key]) => key !== "shape"),
   );
-  if (typeof source?.content !== "string") {
+  if (typeof source?.content !== "string" && !Array.isArray(source?.content)) {
     throw new TypeError(
-      `restored system context message content must be a string: ${resolveContextMessageKey(source)}`,
+      `restored system context message content must be a string or blocks: ${resolveContextMessageKey(source)}`,
     );
   }
   return new SystemMessage({

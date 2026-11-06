@@ -15,17 +15,14 @@ test("adaptToolsForBinding requires a resolved model spec", () => {
   assert.throws(() => adaptToolsForBinding([{ name: "read_file" }], {}), /resolved model spec/);
 });
 
-test("adaptToolsForBinding drops invalid names and deduplicates", () => {
-  const adapted = adaptToolsForBinding(
-    [{ name: "valid_tool" }, { name: "invalid tool" }, { name: "valid_tool" }, { name: "" }],
-    GPT_SPEC,
+test("adaptToolsForBinding validates identities without applying model name rules", () => {
+  assert.throws(
+    () => adaptToolsForBinding([{ name: "valid_tool" }, { name: "valid_tool" }], GPT_SPEC),
+    /duplicate tool identity/,
   );
-
-  assert.deepEqual(
-    adapted.tools.map((toolItem) => toolItem.name),
-    ["valid_tool"],
-  );
-  assert.deepEqual(adapted.droppedToolNames, ["invalid tool", "(empty)"]);
+  assert.throws(() => adaptToolsForBinding([{ name: "" }], GPT_SPEC), /tool identity/);
+  const adapted = adaptToolsForBinding([{ name: "source.tool" }], GPT_SPEC);
+  assert.equal(adapted.tools[0].name, "source.tool");
 });
 
 test("adaptToolsForBinding returns tools in stable name order", () => {

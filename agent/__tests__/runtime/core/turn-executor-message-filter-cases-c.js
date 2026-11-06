@@ -101,7 +101,7 @@ test("invokeNoToolsTurn consumes only the final ModelPort result", async () => {
   const modelState = {
     modelPort: {
       async invoke() {
-        return { output: { text: "ok after retry", toolCalls: [] } };
+        return { toolNameBindings: {}, output: { text: "ok after retry", toolCalls: [] } };
       },
     },
     runtime: createTestRuntimeContext({
@@ -135,7 +135,10 @@ test("invokeWithToolsTurn does not project provider retry attempts into context"
   const modelState = {
     modelPort: {
       async invoke() {
-        return { output: { text: "ok with tools after retry", toolCalls: [] } };
+        return {
+          toolNameBindings: {},
+          output: { text: "ok with tools after retry", toolCalls: [] },
+        };
       },
     },
     runtime: createTestRuntimeContext({

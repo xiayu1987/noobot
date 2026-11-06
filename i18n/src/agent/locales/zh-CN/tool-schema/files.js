@@ -55,7 +55,7 @@ export const FILE_TOOL_SCHEMA = {
     params: {
       query: {
         key: "tools.search.fieldQuery",
-        text: "必填且不能为空的关键词或正则；不要使用空字符串调用 search。",
+        text: "必填且不能为空的关键词或正则；不要使用空字符串调用 {{tool:search}}。",
       },
       isRegex: {
         key: "tools.search.fieldIsRegex",
@@ -93,12 +93,12 @@ export const FILE_TOOL_SCHEMA = {
   patch_file: {
     description: {
       key: "tools.patch_file.description",
-      text: "先 read_file/search 确认文件，再按返回的完整 path 修改；省略 root，不要自行添加 project、a/ 或 b/ 前缀。同一文件的 hunk 按原文顺序排列且不得重叠；apply_patch 用 @@ L行号 选择最近的完全匹配处，锚点不重置游标。",
+      text: "先 {{tool:read_file}}/{{tool:search}} 确认文件，再按返回的完整 path 修改；省略 root，不要自行添加 project、a/ 或 b/ 前缀。同一文件的 hunk 按原文顺序排列且不得重叠；apply_patch 用 @@ L行号 选择最近的完全匹配处，锚点不重置游标。",
     },
     params: {
       patch: {
         key: "tools.patch_file.fieldPatch",
-        text: "补丁内容；使用 read_file/search 返回的完整 path 和精确上下文，不要改写路径。",
+        text: "补丁内容；使用 {{tool:read_file}}/{{tool:search}} 返回的完整 path 和精确上下文，不要改写路径。",
       },
       format: {
         key: "tools.patch_file.fieldFormat",
@@ -123,9 +123,9 @@ export const FILE_TOOL_SCHEMA = {
     },
     texts: {
       "tools.patch_file.fieldPatchPathHintHost":
-        "普通用户必须原样使用 read_file/search 返回的 workspace path，不要改写或添加前缀。",
+        "普通用户必须原样使用 {{tool:read_file}}/{{tool:search}} 返回的 workspace path，不要改写或添加前缀。",
       "tools.patch_file.fieldPatchPathHintSuperHost":
-        "超级管理员也必须原样使用 read_file/search 返回的 path；host 绝对路径同样不得改写或添加前缀。",
+        "超级管理员也必须原样使用 {{tool:read_file}}/{{tool:search}} 返回的 path；host 绝对路径同样不得改写或添加前缀。",
       "tools.patch_file.fieldRootPathHintSandbox": "通常省略 root；不得填写沙箱绝对路径。",
       "tools.patch_file.fieldRootPathHintHost": "通常省略 root；填写时只能是工作区相对子目录。",
       "tools.patch_file.fieldRootPathHintSuperHost": "通常省略 root；不得填写 host 绝对路径。",

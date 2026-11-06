@@ -48,6 +48,7 @@ test("executeToolCall task_summary preserves recovery diagnostics", async () => 
       args: { summaryContent },
     },
     tool: {
+      name: "task_summary",
       async invoke() {
         return {
           toolName: "task_summary",

@@ -17,6 +17,7 @@ import {
 } from "../state/configNavigation.js";
 import { resolveConfigFieldLabel } from "../state/configLabels.js";
 import ConfigFieldControl from "./ConfigFieldControl.vue";
+import ConfigToolBindingsEditor from "./ConfigToolBindingsEditor.vue";
 import { text } from "@noobot/shared/value";
 
 const props = defineProps({
@@ -24,6 +25,7 @@ const props = defineProps({
   container: { type: [Object, Array], default: null },
   document: { type: Object, default: null },
   declaration: { type: Object, default: null },
+  declarations: { type: Object, default: null },
 });
 
 const emit = defineEmits(["open-entry", "changed"]);
@@ -67,7 +69,12 @@ function entryLabel(key) {
 </script>
 
 <template>
-  <div class="config-section-editor">
+  <ConfigToolBindingsEditor
+    v-if="node.path === 'tools.bindings'"
+    :bindings="container"
+    :settings="declarations?.toolBindings"
+  />
+  <div v-else class="config-section-editor">
     <div v-if="isContainer" class="entry-toolbar">
       <el-input
         v-if="node.kind === KIND.COLLECTION"

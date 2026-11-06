@@ -9,8 +9,8 @@ export const MULTIMODAL_MANUAL = {
     summary:
       "Generate image content, supporting text-to-image plus image-to-image and outpainting from source images.",
     usage: [
-      "multimodal_generate({ generation_content, model_name, size, resolution, n, quality })",
-      "multimodal_generate({ generation_content, image_urls, size, resolution })",
+      "{{tool:multimodal_generate}}({ generation_content, model_name, size, resolution, n, quality })",
+      "{{tool:multimodal_generate}}({ generation_content, image_urls, size, resolution })",
     ],
     params: {
       generation_content:
@@ -33,7 +33,7 @@ export const MULTIMODAL_MANUAL = {
   },
   multimodal_parse: {
     summary: "Parse images, audio, video, and binary documents, returning structured content.",
-    usage: ["multimodal_parse({ inputs, prompt, model_name })"],
+    usage: ["{{tool:multimodal_parse}}({ inputs, prompt, model_name })"],
     params: {
       inputs:
         "Array of items to parse, each { source: logical path or attachmentRef }, at least one.",
@@ -41,7 +41,7 @@ export const MULTIMODAL_MANUAL = {
       model_name: "Model that performs the parsing, optional.",
     },
     notes: [
-      "Use read_file for text files; this tool targets images, audio, video, and binary documents.",
+      "Use {{tool:read_file}} for text files; this tool targets images, audio, video, and binary documents.",
       "When parsing documents or requirements, preserve original structure, order, and verbatim text, including headings, tables, lists, headers and footers, and text inside diagrams.",
       "Read images region by region, top to bottom and left to right, and re-check edges, the bottom, sides, table cells, connector labels, and small type.",
     ],

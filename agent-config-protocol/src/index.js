@@ -11,6 +11,7 @@ export * from "./contract/run-config.js";
 export * from "./contract/repair.js";
 export * from "./contract/config-structure.js";
 export * from "./contract/config-values.js";
+export * from "./contract/tool-binding-settings.js";
 export * from "./utils.js";
 export * from "./enums.js";
 export * from "./normalization/keys.js";

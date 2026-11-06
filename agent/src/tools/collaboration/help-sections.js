@@ -14,21 +14,18 @@ import {
 import { projectToolPathRef } from "../core/check-tool-input.js";
 import { MEMORY_RELATIVE_PATHS } from "../../memory/storage/paths.js";
 import { ATTACHMENT_SOURCE, formatAttachmentIdentityRef } from "@noobot/attachment-protocol";
-import { resolveToolBindings } from "@noobot/agent-config-protocol";
+import { requireToolNameBinding } from "@noobot/model-protocol/tool-binding-scope-node";
 import {
   getRuntimeFromAgentContext,
   getSessionIdsFromAgentContext,
-  getToolsFromAgentContext,
 } from "../../context/agent-context-accessor.js";
 import { getAgentContextEnvelope } from "../../context/agent-execution-scope.js";
 import { mergeConfig } from "../../config/index.js";
 import { resolveModelSection } from "../../context/providers/model-provider.js";
-import { text } from "@noobot/shared/value";
 import { AGENT_CONTEXT_IDENTITY_SHAPE } from "@noobot/context-protocol/agent-context/schema";
 
 export const TOOL_SOURCE = Object.freeze({
   RUNTIME_BINDINGS: "runtime_bindings",
-  UNAVAILABLE: "unavailable",
 });
 
 export const EXPERIENCE_PATH_FIELDS = Object.freeze({
@@ -117,25 +114,14 @@ export function buildContextSection(agentContext) {
   };
 }
 
-export function resolveAvailableTools(agentContext) {
-  try {
-    const runtime = getRuntimeFromAgentContext(agentContext);
-    const tools = resolveToolBindings({
-      sourceTools: getToolsFromAgentContext(agentContext),
-      runConfig: runtime?.runConfig,
-    });
-    const toolNames = [
-      ...new Set(
-        tools
-          .map((tool) => text(tool?.name))
-          .filter((name) => name)
-          .sort(),
-      ),
-    ];
-    return { toolNames, source: TOOL_SOURCE.RUNTIME_BINDINGS };
-  } catch {
-    return { toolNames: [], source: TOOL_SOURCE.UNAVAILABLE };
-  }
+export function resolveAvailableTools() {
+  return projectAvailableTools(requireToolNameBinding());
+}
+
+function projectAvailableTools(binding) {
+  const toolIds = binding.toolIds;
+  const toolNames = toolIds.map((toolId) => binding.toActiveBindingName(toolId)).sort();
+  return { toolNames, toolIds, binding, source: TOOL_SOURCE.RUNTIME_BINDINGS };
 }
 
 export function buildIsolationSection(availableToolNames = []) {

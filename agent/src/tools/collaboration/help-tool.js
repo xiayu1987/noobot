@@ -3,20 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { tool as structuredTool } from "@langchain/core/tools";
+import { structuredTool } from "../core/structured-tool.js";
 import { z } from "zod";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
-import { tTool } from "../core/tool-i18n.js";
+import { tTool, tToolTemplate } from "../core/tool-i18n.js";
 import { tToolManual } from "../core/tool-schema-i18n.js";
 import { TOOL_NAME } from "../constants/index.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
-import {
-  HELP_COMMAND,
-  HELP_COMMAND_NAMES,
-  HELP_COMMAND_OPTIONS,
-  HELP_COMMAND_USAGE,
-} from "./help-command-contract.js";
+import { HELP_COMMAND, HELP_COMMAND_NAMES, HELP_COMMAND_OPTIONS } from "./help-command-contract.js";
 import { parseHelpCommand } from "./help-command-parser.js";
 import {
   ATTACHMENT_SOURCES,
@@ -108,7 +103,7 @@ function buildCommandIndex(runtime) {
       options: (HELP_COMMAND_OPTIONS[name] || []).map((option) => `--${option}`),
       description: tTool(runtime, `tools.help.command.${name}`),
     })),
-    usage: [...HELP_COMMAND_USAGE],
+    usage: tToolManual(runtime, HELP_TOOL_NAME).usage,
   });
 }
 
@@ -127,20 +122,24 @@ function buildToolsResult({ runtime, availableTools, options }) {
   }
   const isAvailable = toolNames.includes(toolName);
   if (isAvailable) {
+    const help = availableTools.binding.getToolManual(availableTools.binding.toToolId(toolName));
+    if (help.status === "unsupported")
+      return completed(HELP_COMMAND.TOOLS, {
+        queriedTool: toolName,
+        manual: null,
+        manualStatus: help.status,
+      });
     return buildToolManualResult({
       runtime,
       toolName,
-      manual: tToolManual(runtime, toolName),
+      manual: help.manual,
       capabilityName,
     });
   }
-  const isRegisteredTool = Object.values(TOOL_NAME).includes(toolName);
   return completed(HELP_COMMAND.TOOLS, {
     queriedTool: toolName,
     manual: null,
-    reason: isRegisteredTool
-      ? tTool(runtime, "tools.help.toolNotAvailable")
-      : tTool(runtime, "tools.help.unknownTool"),
+    reason: tTool(runtime, "tools.help.toolNotAvailable"),
     toolNames,
     toolSource: source,
   });
@@ -210,7 +209,7 @@ function buildParseFailure(runtime, parsed) {
     code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
     error: tTool(runtime, `tools.help.parseError.${reason}`),
     commands: HELP_COMMAND_NAMES.map((name) => `--${name}`),
-    usage: [...HELP_COMMAND_USAGE],
+    usage: tToolManual(runtime, HELP_TOOL_NAME).usage,
   };
 }
 
@@ -239,9 +238,16 @@ async function dispatchHelpCommand({ runtime, agentContext, command, options }) 
     case HELP_COMMAND.CONTEXT:
       return completed(HELP_COMMAND.CONTEXT, { context: buildContextSection(agentContext) });
     case HELP_COMMAND.ISOLATION: {
-      const { toolNames, source } = resolveAvailableTools(agentContext);
+      const { toolIds, binding, source } = resolveAvailableTools(agentContext);
+      const isolation = buildIsolationSection(toolIds);
+      isolation.toolsByExecutionClass = Object.fromEntries(
+        Object.entries(isolation.toolsByExecutionClass).map(([key, ids]) => [
+          key,
+          ids.map((id) => binding.toBindingName(id)),
+        ]),
+      );
       return completed(HELP_COMMAND.ISOLATION, {
-        isolation: buildIsolationSection(toolNames),
+        isolation,
         toolSource: source,
       });
     }
@@ -255,6 +261,7 @@ async function dispatchHelpCommand({ runtime, agentContext, command, options }) 
 export function createHelpTool({ agentContext } = {}) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const helpTool = structuredTool(
+    runtime,
     async ({ command }) => {
       const parsed = parseHelpCommand(command);
       const payload = parsed.ok
@@ -269,11 +276,12 @@ export function createHelpTool({ agentContext } = {}) {
     },
     {
       name: HELP_TOOL_NAME,
-      description: tTool(runtime, "tools.help.description"),
+      description: tToolTemplate(runtime, "tools.help.description"),
       schema: z.strictObject({
-        command: z.string().optional().describe(tTool(runtime, "tools.help.fieldCommand")),
+        command: z.string().optional().describe(tToolTemplate(runtime, "tools.help.fieldCommand")),
       }),
     },
+    agentContext,
   );
   return [helpTool];
 }

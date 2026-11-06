@@ -14,12 +14,23 @@ import {
   requireModelPort,
   requireModelSpec,
   validateModelResponse,
+  collectToolMessageIds,
+  createToolNameBinding,
+  projectToolMessageNames,
+  isToolResultMessage,
+  projectToolResultName,
+  projectToolChoiceNames,
+  restoreToolOutputNames,
+  projectToolDefinitionNames,
+  projectToolNamePrompt,
 } from "@noobot/model-protocol";
 import { emitEvent } from "../events/index.js";
 import { resolveEffectiveModelSpec } from "./run-config/index.js";
 import { applyActiveModelSpec } from "../models/runtime/model-manager.js";
 import { projectToolsForModel } from "../models/tool/model-tool-definition.js";
+import { mergeConfig } from "../config/index.js";
 import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
+import { decodeToolResultText, encodeToolResultObject } from "@noobot/event-protocol/tool-result";
 
 function resolveCredential(modelSpec = {}) {
   return text(modelSpec.api_key);
@@ -97,17 +108,65 @@ function createModelPort({ resolveTurnModelSpec, modelState }) {
       operation,
     } = {}) {
       const requestModelSpec = requireModelSpec(model || resolveTurnModelSpec());
+      const effectiveConfig = mergeConfig(
+        modelState.runtime.globalConfig || {},
+        modelState.runtime.userConfig || {},
+      );
+      const binding = createToolNameBinding({
+        tools,
+        historyToolIds: collectToolMessageIds(messages),
+        bindings: effectiveConfig.tools?.bindings,
+      });
+      const mapName = (name) => binding.toBindingName(name);
+      const projectedTools = projectToolsForModel(tools, {
+        strict: options?.toolBinding?.strict === true,
+      }).map((tool) => projectToolDefinitionNames(tool, binding));
+      const projectedOptions = { ...options };
+      for (const key of ["invoke", "toolBinding"]) {
+        if (options[key]?.tool_choice !== undefined) {
+          projectedOptions[key] = {
+            ...options[key],
+            tool_choice: projectToolChoiceNames(options[key].tool_choice, binding),
+          };
+        }
+      }
       const response = await executor.invoke({
         model: requestModelSpec,
         operation,
-        messages,
-        tools: projectToolsForModel(tools, { strict: options?.toolBinding?.strict === true }),
-        options,
+        messages: messages.map((message) => {
+          const projected = projectToolMessageNames(message, mapName);
+          projected.content = isToolResultMessage(message)
+            ? encodeToolResultObject(
+                projectToolResultName(decodeToolResultText(message.content), message.name, mapName),
+              )
+            : projectToolNamePrompt(projected.content, binding);
+          return projected;
+        }),
+        tools: projectedTools,
+        options: projectedOptions,
         policies,
         metadata: buildRequestMetadata(modelState, invocation),
         invocation: buildInvocation(modelState, invocation),
       });
-      return validateModelResponse(response);
+      validateModelResponse(response);
+      const restoredOutputs = new WeakMap();
+      const restoreOutput = (output) => {
+        if (!restoredOutputs.has(output))
+          restoredOutputs.set(output, restoreToolOutputNames(output, binding));
+        return restoredOutputs.get(output);
+      };
+      return validateModelResponse({
+        ...response,
+        toolNameBindings: binding.bindings,
+        output: restoreOutput(response.output),
+        execution: {
+          ...response.execution,
+          attempts: response.execution.attempts.map((attempt) => ({
+            ...attempt,
+            ...(attempt.output ? { output: restoreOutput(attempt.output) } : {}),
+          })),
+        },
+      });
     },
   };
   return requireModelPort(Object.freeze(port));

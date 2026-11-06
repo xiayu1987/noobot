@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path, PATH_CAPABILITIES } from "@noobot/path-resolver";
-import { tool as structuredTool } from "@langchain/core/tools";
+import { structuredTool } from "../core/structured-tool.js";
 import { z } from "zod";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import {
@@ -58,6 +58,7 @@ export function createSkillTool({ agentContext }) {
   });
 
   const listSkillTool = structuredTool(
+    runtime,
     async ({ parentSkill }) => {
       let root;
       try {
@@ -127,6 +128,7 @@ export function createSkillTool({ agentContext }) {
         parentSkill: z.string().optional().describe(tTool(runtime, "tools.skill.fieldParentSkill")),
       }),
     },
+    agentContext,
   );
 
   return [listSkillTool];

@@ -30,6 +30,7 @@ for (const code of [
         runtime,
         call: { id: "call_conflict", name: "demo_tool", args: {} },
         tool: {
+          name: "demo_tool",
           invoke: async () => {
             throw error;
           },
@@ -59,6 +60,7 @@ test("recoverable tool errors retain the complete execution identity", async () 
     }),
     call: { id: "call_identity", name: "demo_tool", args: {} },
     tool: {
+      name: "demo_tool",
       invoke: async () => {
         const error = new Error("identity failure");
         error.code = "RECOVERABLE_IDENTITY_FAILURE";

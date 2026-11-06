@@ -32,6 +32,7 @@ function withAttachmentService(options) {
 test("executeToolCall: tool result too long should be persisted as a V2 attachment reference", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-tool-overflow-"));
   const tool = {
+    name: "demo_tool",
     invoke: async () =>
       JSON.stringify({
         toolName: "demo_tool",
@@ -107,6 +108,7 @@ test("executeToolCall: overflow length is measured after compacting transfer wra
     size: 12,
   });
   const tool = {
+    name: "demo_tool",
     invoke: async () =>
       JSON.stringify({
         toolName: "demo_tool",
@@ -151,6 +153,7 @@ test("executeToolCall: overflow keeps original semantic-transfer artifact and co
     size: 128,
   });
   const tool = {
+    name: "multimodal_generate",
     invoke: async () =>
       JSON.stringify({
         toolName: "multimodal_generate",
@@ -195,6 +198,7 @@ test("executeToolCall task_summary returns transfer metadata without phase summa
     args: { summaryContent },
   };
   const tool = {
+    name: "task_summary",
     invoke: async () =>
       JSON.stringify({
         toolName: "task_summary",
@@ -280,6 +284,7 @@ test("executeToolCall task_summary returns transfer metadata without phase summa
 test("executeToolCall: overflow result never exposes sandbox or host paths", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-tool-overflow-sandbox-"));
   const tool = {
+    name: "demo_tool",
     invoke: async () =>
       JSON.stringify({
         toolName: "demo_tool",
@@ -345,6 +350,7 @@ test("executeToolCall: an overflowed failure keeps the original failure contract
     presentationMessageId: "message-call_overflow_failure",
   };
   const tool = {
+    name: "demo_tool",
     invoke: async () =>
       JSON.stringify({
         toolName: "demo_tool",

@@ -18,6 +18,7 @@ import {
   WORKSPACE_ASSET_REASON,
   isWorkspacePathSegment,
   isWorkspaceRuntimeRelativePath,
+  isWorkspaceUserConfigRelativePath,
   normalizeWorkspaceSections,
   parseWorkspaceAssetState,
   planWorkspaceAssetSync,
@@ -32,6 +33,23 @@ import {
 } from "../src/index.js";
 
 const h = (char) => char.repeat(64);
+
+test("user config identity follows the workspace layout", () => {
+  assert.equal(isWorkspaceUserConfigRelativePath("alice/config.json"), true);
+  for (const value of [
+    "config.json",
+    "./config.json",
+    "../config.json",
+    "/alice/config.json",
+    "alice/services/config.json",
+    "alice/runtime/config.json",
+    "alice/config-params.json",
+    null,
+    undefined,
+  ]) {
+    assert.equal(isWorkspaceUserConfigRelativePath(value), false);
+  }
+});
 
 test("layout runtime directories all live under runtime", () => {
   for (const dir of WORKSPACE_RUNTIME_DIRECTORIES) assert.ok(isWorkspaceRuntimeRelativePath(dir));

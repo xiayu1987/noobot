@@ -8,6 +8,15 @@ import { isPlainObject, text } from "@noobot/shared/value";
 
 export { isPlainObject };
 
+export function setConfigOwnProperty(target, key, value) {
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
+}
+
 export function normalizeStringList(input = [], { dedupe = false } = {}) {
   const values = (Array.isArray(input) ? input : []).map((item) => text(item)).filter(Boolean);
   return dedupe ? Array.from(new Set(values)) : values;
@@ -18,8 +27,13 @@ export function deepMerge(base, override) {
   const right = isPlainObject(override) ? override : {};
   const out = { ...left };
   for (const [key, value] of Object.entries(right)) {
-    out[key] =
-      isPlainObject(value) && isPlainObject(left[key]) ? deepMerge(left[key], value) : value;
+    setConfigOwnProperty(
+      out,
+      key,
+      isPlainObject(value) && Object.hasOwn(left, key) && isPlainObject(left[key])
+        ? deepMerge(left[key], value)
+        : value,
+    );
   }
   return out;
 }

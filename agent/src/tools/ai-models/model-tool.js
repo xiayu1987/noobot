@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { tool as structuredTool } from "@langchain/core/tools";
+import { structuredTool } from "../core/structured-tool.js";
 import { z } from "zod";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
@@ -36,6 +36,7 @@ export function createModelTool({ agentContext, sessionId }) {
   const allEnabledProviders = runtime.allEnabledProviders || {};
 
   const switchModelTool = structuredTool(
+    runtime,
     async ({ modelName }) => {
       if (!runtime || !sessionId) {
         throw recoverableToolError(tModel(runtime, "sessionContextMissing"), {
@@ -87,6 +88,7 @@ export function createModelTool({ agentContext, sessionId }) {
         modelName: z.string().describe(tTool(runtime, "tools.model.fieldModelName")),
       }),
     },
+    agentContext,
   );
 
   return [switchModelTool];

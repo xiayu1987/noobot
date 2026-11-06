@@ -237,7 +237,9 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
       ],
     },
   });
-  const agentContext = createTestAgentExecutionScope(runtime);
+  const agentContext = createTestAgentExecutionScope(runtime, {
+    tools: [{ name: "multimodal_parse" }],
+  });
   const [tool] = createMultimodalParseTool({ agentContext });
   const result = JSON.parse(
     await tool.invoke(
@@ -355,6 +357,7 @@ test("multimodal_parse parses a workspace file without source-attachment backwri
         },
       }),
     }),
+    { tools: [{ name: "multimodal_parse" }] },
   );
   const [tool] = createMultimodalParseTool({ agentContext });
   const result = JSON.parse(
@@ -390,6 +393,7 @@ test("multimodal_parse rejects directly readable text before invoking a model", 
         modelSpec: null,
       }),
     }),
+    { tools: [{ name: "multimodal_parse" }] },
   );
   const [tool] = createMultimodalParseTool({ agentContext });
 
@@ -455,6 +459,7 @@ test("multimodal_parse passes audio and video files to the configured model", as
         },
       }),
     }),
+    { tools: [{ name: "multimodal_parse" }] },
   );
   const [tool] = createMultimodalParseTool({ agentContext });
 
@@ -505,6 +510,7 @@ test("multimodal_parse rejects combined files at the official 50 MB request limi
         modelSpec: null,
       }),
     }),
+    { tools: [{ name: "multimodal_parse" }] },
   );
   const [tool] = createMultimodalParseTool({ agentContext });
 
@@ -546,6 +552,7 @@ test("multimodal_parse rejects an explicitly selected model without parsing capa
       userConfig: {},
       userMessageAttachments: [],
     }),
+    { tools: [{ name: "multimodal_parse" }] },
   );
   const [tool] = createMultimodalParseTool({ agentContext });
 
@@ -614,6 +621,7 @@ test("multimodal_parse uses the configured modality default instead of the runti
         },
       }),
     }),
+    { tools: [{ name: "multimodal_parse" }] },
   );
   const [tool] = createMultimodalParseTool({ agentContext });
 

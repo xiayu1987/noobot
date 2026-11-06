@@ -53,9 +53,12 @@ test("projectToolsForModel: strict objects closed, loose objects keep catchall",
   assert.deepEqual(properties.loose.additionalProperties, {});
 });
 
-test("projectToolsForModel: strict binding passes tools through unchanged", () => {
-  const tools = [createTool()];
-  assert.equal(projectToolsForModel(tools, { strict: true }), tools);
+test("projectToolsForModel: strict binding preserves langchain schema semantics", () => {
+  const source = createTool();
+  const [projected] = projectToolsForModel([source], { strict: true });
+  assert.deepEqual(projected.function.parameters, toJsonSchema(source.schema));
+  assert.equal(projected.function.name, source.name);
+  assert.equal(projected.function.description, source.description);
 });
 
 test("projectToolsForModel: non-zod tools pass through unchanged", () => {

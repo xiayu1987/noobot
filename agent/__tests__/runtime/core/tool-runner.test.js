@@ -59,6 +59,7 @@ test("executeToolCall gives tools an output transfer identity named after the ca
   await executeToolCall({
     call: { id: "call-native", name: "execute_native_script", args: {} },
     tool: {
+      name: "execute_native_script",
       async invoke(_args, config) {
         identity = config?.configurable?.transferIdentity;
         return JSON.stringify({ ok: true, status: "completed" });
@@ -73,6 +74,7 @@ test("executeToolCall preserves read-resource evidence but excludes it from the 
   const result = await executeToolCall({
     call: { id: "call-resource", name: "read_file", args: {} },
     tool: {
+      name: "read_file",
       invoke: async () =>
         JSON.stringify({
           toolName: "read_file",
@@ -94,6 +96,7 @@ test("executeToolCall promotes only declared outputResources into resourceRefs",
   const result = await executeToolCall({
     call: { id: "call-output", name: "write_file", args: {} },
     tool: {
+      name: "write_file",
       invoke: async () =>
         JSON.stringify({
           toolName: "write_file",
@@ -118,6 +121,7 @@ test("executeToolCall rejects a non-array outputResources declaration", async ()
     executeToolCall({
       call: { id: "call-bad-output", name: "write_file", args: {} },
       tool: {
+        name: "write_file",
         invoke: async () =>
           JSON.stringify({ toolName: "write_file", ok: true, outputResources: { bad: true } }),
       },
@@ -133,6 +137,7 @@ test("executeToolCall does not promote ordinary tool attachments into semantic t
     args: {},
   };
   const tool = {
+    name: "multimodal_generate",
     invoke: async () => ({
       toolName: "multimodal_generate",
       ok: true,
@@ -171,6 +176,7 @@ test("executeToolCall preserves strict V2 transfer envelopes from structured too
     args: {},
   };
   const tool = {
+    name: "multimodal_generate",
     invoke: async () => ({
       toolName: "multimodal_generate",
       ok: true,
@@ -213,6 +219,7 @@ test("executeToolCall extracts strict V2 transfer envelopes from JSON tool resul
   const result = await executeToolCall({
     call,
     tool: {
+      name: "multimodal_parse",
       invoke: async () =>
         JSON.stringify({
           toolName: call.name,
@@ -247,6 +254,7 @@ test("executeToolCall materializes outputArtifacts through the single transfer o
     call,
     runtime,
     tool: {
+      name: "write_file",
       invoke: async () =>
         JSON.stringify({
           toolName: call.name,
@@ -283,6 +291,7 @@ test("executeToolCall rejects output artifact types that differ from the registe
       }),
     }),
     tool: {
+      name: "write_file",
       invoke: async () => ({
         toolName: "write_file",
         ok: true,
@@ -319,6 +328,7 @@ test("executeToolCall does not publish writtenFiles outside semantic transfer", 
   await executeToolCall({
     call: { id: "call-write", name: "write_file", args: {} },
     tool: {
+      name: "write_file",
       invoke: async () => ({
         toolName: "write_file",
         ok: true,
@@ -359,6 +369,7 @@ test("canonical tool events publish the server-assessed maximum risk level", asy
       args: { filePath: "notes.txt", riskLevel: "low" },
     },
     tool: {
+      name: "read_file",
       async invoke() {
         await confirmToolOperation({
           runtime,
@@ -399,6 +410,7 @@ test("tool operation baseline risk is published even when invocation fails befor
       args: { script_body: "require('fs')" },
     },
     tool: {
+      name: "execute_native_script",
       async invoke() {
         throw new Error("script_body contains forbidden runtime capability: require");
       },
@@ -432,7 +444,7 @@ test("canonical tool_call_end preserves a complete JSON tool result beyond 200 c
 
   await executeToolCall({
     call: { id: "call-task-check", name: "task_check", args: {} },
-    tool: { invoke: async () => resultPayload },
+    tool: { name: "task_check", invoke: async () => resultPayload },
     runtime: createTestRuntimeContext({
       eventListener: { onEvent: (event) => events.push(event) },
     }),
@@ -459,6 +471,7 @@ test("executeToolCall returns toToolJsonResult when tool is missing", async () =
 
 test("executeToolCall returns toToolJsonResult when tool invoke throws recoverable error", async () => {
   const tool = {
+    name: "demo_tool",
     invoke: async () => {
       const error = new Error("invalid tool args");
       error.code = "RECOVERABLE_INVALID_TOOL_ARGS";
@@ -484,6 +497,7 @@ test("executeToolCall assigns the canonical invoke code when a thrown error has 
   const result = await executeToolCall({
     call: { id: "call_uncoded", name: "demo_tool", args: {} },
     tool: {
+      name: "demo_tool",
       invoke: async () => {
         throw new Error("uncoded failure");
       },
@@ -500,6 +514,7 @@ test("executeToolCall assigns the canonical invoke code when a thrown error has 
 
 test("executeToolCall includes error details from recoverable error", async () => {
   const tool = {
+    name: "call_service",
     invoke: async () => {
       const error = new Error("service unavailable");
       error.code = "RECOVERABLE_SERVICE_UNAVAILABLE";
@@ -523,6 +538,7 @@ test("executeToolCall includes error details from recoverable error", async () =
 
 test("executeToolCall redacts sensitive fields from tool results before returning them", async () => {
   const tool = {
+    name: "demo_tool",
     invoke: async () => ({
       ok: true,
       token: "top-secret-token",
@@ -553,6 +569,7 @@ test("executeToolCall redacts sensitive fields from tool results before returnin
 
 test("executeToolCall redacts sensitive fields from recoverable error details", async () => {
   const tool = {
+    name: "demo_tool",
     invoke: async () => {
       const error = new Error("service unavailable");
       error.details = { endpoint: "weather", accessToken: "top-secret-token" };
@@ -591,9 +608,7 @@ test("executeToolCall hook payload includes normalized runtime meta", async () =
     { id: "test.tool-call.after" },
   );
 
-  const tool = {
-    invoke: async () => ({ ok: true }),
-  };
+  const tool = { name: "meta_tool", invoke: async () => ({ ok: true }) };
   const runtime = createTestRuntimeContext({
     identity: {
       userId: "runtime_user",
@@ -648,6 +663,7 @@ test("executeToolCallInTurn repairs stringified scalar args before start event a
       args: { patch: "x", dryRun: "false", maxLines: "60" },
     },
     tool: {
+      name: "patch_file",
       schema: z.object({
         patch: z.string(),
         dryRun: z.boolean().optional().default(false),
@@ -685,6 +701,7 @@ test("executeToolCallInTurn rejects unrepairable args before invocation and emit
   const result = await executeToolCall({
     call: { id: "call-no-repair", name: "patch_file", args: { patch: "x", dryRun: "yes" } },
     tool: {
+      name: "patch_file",
       schema: z.object({ patch: z.string(), dryRun: z.boolean().optional() }),
       async invoke(args) {
         invokedArgs = args;
@@ -712,6 +729,7 @@ test("executeToolCall classifies an uncoded invoke error as retryable, matching 
   const result = await executeToolCall({
     call: { id: "call-uncoded-class", name: "read_file", args: {} },
     tool: {
+      name: "read_file",
       invoke: async () => {
         throw new Error("uncoded invoke failure");
       },
@@ -734,6 +752,7 @@ test("executeToolCall keeps a plain-object throw message non-empty", async () =>
   const result = await executeToolCall({
     call: { id: "call-plain-object", name: "demo_tool", args: {} },
     tool: {
+      name: "demo_tool",
       invoke: async () => {
         throw { reason: 1 };
       },
@@ -748,7 +767,7 @@ test("executeToolCall keeps a plain-object throw message non-empty", async () =>
 test("executeToolCall publishes mutationRefs for a committed file mutation", async () => {
   const result = await executeToolCall({
     call: { id: "call-mutation-ok", name: "write_file", args: {} },
-    tool: { invoke: async () => JSON.stringify(committedMutationResult()) },
+    tool: { name: "write_file", invoke: async () => JSON.stringify(committedMutationResult()) },
   });
   assert.equal(result.success, true);
   assert.equal(result.mutationRefs.length, 1);
@@ -763,6 +782,7 @@ test("executeToolCall publishes no mutationRefs when the call fails", async () =
   const okFalse = await executeToolCall({
     call: { id: "call-mutation-ok-false", name: "patch_file", args: {} },
     tool: {
+      name: "patch_file",
       invoke: async () => JSON.stringify({ ...committedMutationResult(), ok: false }),
     },
   });
@@ -772,6 +792,7 @@ test("executeToolCall publishes no mutationRefs when the call fails", async () =
   const thrown = await executeToolCall({
     call: { id: "call-mutation-throw", name: "patch_file", args: {} },
     tool: {
+      name: "patch_file",
       invoke: async () => {
         throw new Error("patch rolled back");
       },
@@ -785,7 +806,7 @@ test("canonical tool_call_end carries validated mutationRefs", async () => {
   const events = [];
   await executeToolCall({
     call: { id: "call-mutation-event", name: "write_file", args: {} },
-    tool: { invoke: async () => JSON.stringify(committedMutationResult()) },
+    tool: { name: "write_file", invoke: async () => JSON.stringify(committedMutationResult()) },
     runtime: createTestRuntimeContext({
       eventListener: { onEvent: (event) => events.push(event) },
     }),

@@ -7,7 +7,7 @@
 export const ACCESS_CONNECTOR_MANUAL = {
   access_connector: {
     summary: "Access a connector the user selected and connected for the current session.",
-    usage: ["access_connector({ connector_id, operation, input })"],
+    usage: ["{{tool:access_connector}}({ connector_id, operation, input })"],
     params: {
       connector_id: "Stable ID of a connector selected in the current session.",
       operation: "Registered operation name exposed by that connector instance.",

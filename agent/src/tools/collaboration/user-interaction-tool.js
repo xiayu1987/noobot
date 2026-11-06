@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { tool as structuredTool } from "@langchain/core/tools";
+import { structuredTool } from "../core/structured-tool.js";
 import { z } from "zod";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
@@ -198,6 +198,7 @@ export function createUserInteractionTool({ agentContext }) {
   });
 
   const userInteractionTool = structuredTool(
+    runtime,
     async ({ content, timeoutMs, fields }, config = {}) => {
       if (!bridge?.requestUserInteraction) {
         throw recoverableToolError(tUserInteraction(runtime, "bridgeMissing"), {
@@ -303,6 +304,7 @@ export function createUserInteractionTool({ agentContext }) {
           .describe(tTool(runtime, "tools.user_interaction.fieldFieldsPayload")),
       }),
     },
+    agentContext,
   );
 
   return [userInteractionTool];

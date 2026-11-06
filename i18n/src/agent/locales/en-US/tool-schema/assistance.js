@@ -12,16 +12,16 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       key: "tools.help.description",
       text:
         "Look up your own runtime documentation, command-line style. Omit command to list " +
-        "available commands; command looks like --tools, --tools --name read_file, " +
-        "--tools --name execute_native_script --capability browser, --models, --runtime, " +
+        "available commands; command looks like --tools, --tools --name {{tool:read_file}}, " +
+        "--tools --name {{tool:execute_native_script}} --capability browser, --models, --runtime, " +
         "--context, --attachs --id xxx.",
     },
     params: {
       command: {
         key: "tools.help.fieldCommand",
         text:
-          "Command-line string such as --tools --name read_file or " +
-          "--tools --name execute_native_script --capability media. " +
+          "Command-line string such as --tools --name {{tool:read_file}} or " +
+          "--tools --name {{tool:execute_native_script}} --capability media. " +
           "Omit it to list available commands.",
       },
     },
@@ -45,12 +45,11 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.help.command.models":
         "The model currently in use plus the models available in this session and their multimodal capabilities.",
       "tools.help.toolNotAvailable":
-        "This tool is registered but not assembled in this session and cannot be called; pick one from toolNames",
-      "tools.help.unknownTool": "Unknown tool name, pick one from the queryable list",
+        "This name is unavailable in the current session; pick one from toolNames",
       "tools.help.experienceHint":
-        "The following are memory paths. Use read_file or search to inspect the actual content.",
+        "The following are memory paths. Use {{tool:read_file}} or {{tool:search}} to inspect the actual content.",
       "tools.help.memoryHint":
-        "The following are memory and summary paths. Use read_file or search to inspect content.",
+        "The following are memory and summary paths. Use {{tool:read_file}} or {{tool:search}} to inspect content.",
       "tools.help.unknownAttachmentSource":
         "Unknown attachment source, pick one from attachmentSources",
       "tools.help.attachmentNotFound":
@@ -149,7 +148,7 @@ export const ASSISTANCE_TOOL_SCHEMA = {
   multimodal_parse: {
     description: {
       key: "tools.multimodalParse.description",
-      text: "Parse images, binary documents, audio, or video and save the result. Use read_file for text. source accepts a logical path or attachmentRef.",
+      text: "Parse images, binary documents, audio, or video and save the result. Use {{tool:read_file}} for text. source accepts a logical path or attachmentRef.",
     },
     params: {
       inputs: {
@@ -177,8 +176,11 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.multimodalParse.filePathsRequired": "inputs must contain at least one file input",
       "tools.multimodalParse.fileTooLarge": (params = {}) =>
         `The combined file size must be smaller than ${Number(params.maxSizeMB || 50)} MB`,
-      "tools.multimodalParse.directTextUnsupported": (params = {}) =>
-        `The following inputs are directly readable text and are outside multimodal parsing: ${text(params.inputs)}. Use read_file or resource chunk reading.`,
+      "tools.multimodalParse.directTextUnsupported": (
+        params = {},
+        transformText = (value) => value,
+      ) =>
+        `The following inputs are directly readable text and are outside multimodal parsing: ${text(params.inputs)}. ${transformText("Use {{tool:read_file}} or resource chunk reading.")}`,
       "tools.multimodalParse.svgRasterizerUnavailable":
         "The current environment has no SVG rasterizer, so the SVG cannot be parsed by a multimodal model.",
       "tools.multimodalParse.defaultPrompt":

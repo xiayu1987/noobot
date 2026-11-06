@@ -12,17 +12,17 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       key: "tools.help.description",
       text:
         "查询自身运行说明，命令行风格。不传 command 返回可用命令清单；" +
-        "command 形如 --tools、--tools --name read_file、--tools --name execute_native_script " +
+        "command 形如 --tools、--tools --name {{tool:read_file}}、--tools --name {{tool:execute_native_script}} " +
         "--capability browser、--models、--runtime、--context、--attachs --id xxx。",
     },
     params: {
       command: {
         key: "tools.help.fieldCommand",
-        text: "命令行字符串，如 --tools --name read_file 或 --tools --name execute_native_script --capability media；不传则返回命令清单。",
+        text: "命令行字符串，如 --tools --name {{tool:read_file}} 或 --tools --name {{tool:execute_native_script}} --capability media；不传则返回命令清单。",
       },
     },
     texts: {
-      "tools.help.commandIndexHint": "以下为 help 可用命令，按需选择后再次调用。",
+      "tools.help.commandIndexHint": "以下为 {{tool:help}} 可用命令，按需选择后再次调用。",
       "tools.help.command.tools":
         "工具手册：不带选项列出可查工具名，--name 查共享说明，--capability 查专项能力。",
       "tools.help.capabilityRequiresToolName": "--capability 必须与 --name 同时使用",
@@ -34,11 +34,11 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.help.command.attachs": "会话附件清单，--id 查单个附件明细，--source 按来源过滤。",
       "tools.help.command.isolation": "执行隔离模式与本会话可用工具的执行面分类。",
       "tools.help.command.models": "当前使用中的模型与本会话可用模型清单及其多模态能力。",
-      "tools.help.toolNotAvailable":
-        "该工具已注册但未在本会话装配，当前不可调用；请从 toolNames 中选择",
-      "tools.help.unknownTool": "工具名不存在，请从可查询清单中选择",
-      "tools.help.experienceHint": "以下为经验记忆路径，需再用 read_file 或 search 读取具体内容。",
-      "tools.help.memoryHint": "以下为记忆与摘要路径，需再用 read_file 或 search 读取具体内容。",
+      "tools.help.toolNotAvailable": "该名称在当前会话不可用；请从 toolNames 中选择",
+      "tools.help.experienceHint":
+        "以下为经验记忆路径，需再用 {{tool:read_file}} 或 {{tool:search}} 读取具体内容。",
+      "tools.help.memoryHint":
+        "以下为记忆与摘要路径，需再用 {{tool:read_file}} 或 {{tool:search}} 读取具体内容。",
       "tools.help.unknownAttachmentSource": "附件来源不存在，请从 attachmentSources 中选择",
       "tools.help.attachmentNotFound": "附件不存在或不属于当前会话",
       "tools.help.parseError.unknown_command": "命令不存在，请从 commands 中选择",
@@ -132,7 +132,7 @@ export const ASSISTANCE_TOOL_SCHEMA = {
   multimodal_parse: {
     description: {
       key: "tools.multimodalParse.description",
-      text: "解析图片、二进制文档、音频或视频并保存结果。文本类文件使用 read_file。source 使用逻辑路径或 attachmentRef。",
+      text: "解析图片、二进制文档、音频或视频并保存结果。文本类文件使用 {{tool:read_file}}。source 使用逻辑路径或 attachmentRef。",
     },
     params: {
       inputs: {
@@ -160,8 +160,11 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.multimodalParse.filePathsRequired": "inputs 至少需要包含一个文件输入",
       "tools.multimodalParse.fileTooLarge": (params = {}) =>
         `所有文件合计必须小于 ${Number(params.maxSizeMB || 50)} MB`,
-      "tools.multimodalParse.directTextUnsupported": (params = {}) =>
-        `以下输入是可直接读取的文本，不属于多模态解析范围：${text(params.inputs)}。请使用 read_file 或资源分段读取。`,
+      "tools.multimodalParse.directTextUnsupported": (
+        params = {},
+        transformText = (value) => value,
+      ) =>
+        `以下输入是可直接读取的文本，不属于多模态解析范围：${text(params.inputs)}。${transformText("请使用 {{tool:read_file}} 或资源分段读取。")}`,
       "tools.multimodalParse.svgRasterizerUnavailable":
         "当前环境缺少 SVG 图像转换能力，无法将 SVG 交给多模态模型解析。",
       "tools.multimodalParse.defaultPrompt":
@@ -219,7 +222,7 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.user_interaction.missingRequiredField": (params = {}) =>
         `缺少必填字段: ${text(params.key)}`,
       "tools.user_interaction.sensitiveFieldsBlocked":
-        "字段名、显示名或说明命中凭据类敏感词，交互已被拦截。不得向用户索取密码、令牌、密钥、连接串等凭据；如确实不是凭据字段，请改用不含敏感词的字段名后重发。数据库或终端等需要凭据的场景由用户在客户端配置连接器，再通过 access_connector 访问。",
+        "字段名、显示名或说明命中凭据类敏感词，交互已被拦截。不得向用户索取密码、令牌、密钥、连接串等凭据；如确实不是凭据字段，请改用不含敏感词的字段名后重发。数据库或终端等需要凭据的场景由用户在客户端配置连接器，再通过 {{tool:access_connector}} 访问。",
     },
   },
 };

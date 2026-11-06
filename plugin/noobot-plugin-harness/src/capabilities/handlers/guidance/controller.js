@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { HOOK_POINT, requireHookTurn } from "@noobot/hook-protocol";
+import { requireResponseToolNameBindings } from "@noobot/model-protocol";
 import { resolveToolCallName } from "@noobot/shared/tool-name";
 import { resolveContextMessageSummarized } from "@noobot/context-protocol/message/codec";
 import { relaySeparateModelOutputAsUserMessage } from "../shared/relay-model-output.js";
@@ -291,6 +292,7 @@ async function executeGuidanceWorkflowAction({
 }
 
 async function relayGuidanceSummary(ctx, { meta, locale, rawSummaryText }) {
+  const toolNameBindings = requireResponseToolNameBindings(ctx.modelResponse);
   const persistSummaryAttachment = shouldSaveSummaryToAttachment(meta);
   if (persistSummaryAttachment && rawSummaryText) {
     const transferPayload = await saveCapabilityOutputAsTransferArtifacts(ctx, {
@@ -305,6 +307,7 @@ async function relayGuidanceSummary(ctx, { meta, locale, rawSummaryText }) {
         locale,
         purpose: "summary",
         content: rawSummaryText,
+        toolNameBindings,
         dedupe: true,
         transferPayload,
       });
@@ -324,6 +327,7 @@ async function relayGuidanceSummary(ctx, { meta, locale, rawSummaryText }) {
     locale,
     purpose: "summary",
     content: summaryInjectionContent || rawSummaryText,
+    toolNameBindings,
     dedupe: true,
   });
 }

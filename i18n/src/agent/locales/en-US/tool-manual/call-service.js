@@ -7,7 +7,7 @@
 export const CALL_SERVICE_MANUAL = {
   call_service: {
     summary: "Call an external service endpoint that is enabled in configuration.",
-    usage: ["call_service({ serviceName, endpointName, params })"],
+    usage: ["{{tool:call_service}}({ serviceName, endpointName, params })"],
     params: {
       serviceName: "Service name. Must be declared and enabled in configuration.",
       endpointName: "Endpoint name. Omit to resolve the service default endpoint.",

@@ -29,7 +29,9 @@ test("list_skills uses the shared path authorization and resource protocol", asy
   await fs.mkdir(path.join(basePath, "skills", "analysis"), { recursive: true });
   await fs.writeFile(path.join(basePath, "skills", "analysis", "SKILL.md"), "# Analysis", "utf8");
   const [tool] = createSkillTool({
-    agentContext: createTestAgentExecutionScope(createRuntime(basePath)),
+    agentContext: createTestAgentExecutionScope(createRuntime(basePath), {
+      tools: [{ name: "list_skills" }],
+    }),
   });
 
   const result = JSON.parse(await tool.invoke({}));
@@ -52,7 +54,9 @@ test("list_skills rejects a parentSkill outside the authorized skills root", asy
   await fs.mkdir(path.join(basePath, "skills"), { recursive: true });
   await fs.mkdir(path.join(basePath, "outside"), { recursive: true });
   const [tool] = createSkillTool({
-    agentContext: createTestAgentExecutionScope(createRuntime(basePath)),
+    agentContext: createTestAgentExecutionScope(createRuntime(basePath), {
+      tools: [{ name: "list_skills" }],
+    }),
   });
 
   await assert.rejects(
@@ -75,7 +79,7 @@ test("list_skills uses the runtime execution root when sandbox display paths are
     workspaceRoot,
     security: { executionIsolation: { mode: "sandbox" } },
   };
-  const agentContext = createTestAgentExecutionScope(runtime);
+  const agentContext = createTestAgentExecutionScope(runtime, { tools: [{ name: "list_skills" }] });
   agentContext.context = { environment: { workspace: { basePath: "/workspace" } } };
   const [tool] = createSkillTool({ agentContext });
 

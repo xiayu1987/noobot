@@ -41,7 +41,11 @@ test("execute_native_script resolves FFmpeg output tokens into collected binary 
       },
     }),
   });
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
   const result = JSON.parse(
     await tool.invoke(
       {
@@ -73,7 +77,11 @@ test("execute_native_script fails when LibreOffice reports success without an ou
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-libreoffice-"));
   await fs.writeFile(path.join(basePath, "input.html"), "<html><body>test</body></html>", "utf8");
   const runtime = createRuntime(basePath);
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
   const result = JSON.parse(
     await tool.invoke(
       {
@@ -121,7 +129,11 @@ test("execute_native_script converts a declared input token with LibreOffice", a
       },
     }),
   });
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
   const result = JSON.parse(
     await tool.invoke(
       {
@@ -169,7 +181,11 @@ test("execute_native_script converts a same-task output token with LibreOffice",
       },
     }),
   });
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
   const result = JSON.parse(
     await tool.invoke(
       {
@@ -209,7 +225,11 @@ test("execute_native_script converts into an explicit temporary LibreOffice dire
     "utf8",
   );
   const runtime = createRuntime(basePath);
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
   const result = JSON.parse(
     await tool.invoke(
       {

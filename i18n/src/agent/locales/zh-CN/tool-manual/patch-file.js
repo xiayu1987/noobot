@@ -7,9 +7,10 @@
 export const PATCH_FILE_MANUAL = {
   patch_file: {
     summary: "以补丁方式精确修改既有文件，支持 unified diff 与 apply_patch 两种格式。",
-    usage: ["patch_file({ patch, strip, root, dryRun, riskLevel, format })"],
+    usage: ["{{tool:patch_file}}({ patch, strip, root, dryRun, riskLevel, format })"],
     params: {
-      patch: "补丁内容。必须使用 read_file 或 search 返回的完整 path 与精确上下文，不要改写路径。",
+      patch:
+        "补丁内容。必须使用 {{tool:read_file}} 或 {{tool:search}} 返回的完整 path 与精确上下文，不要改写路径。",
       strip: "路径前缀剥离层数，默认 0。仅补丁带 a/、b/ 前缀时设 1。",
       root: "通常省略。填写时只能是工作区相对子目录，不能是绝对路径或 .. 。",
       dryRun: "只验证不写入，用于先确认补丁能否命中。",
@@ -18,11 +19,11 @@ export const PATCH_FILE_MANUAL = {
     },
     notes: [
       "这是修改既有文件的首选手段，优先使用精确上下文补丁，避免手算 unified diff 行数。",
-      "补丁失败时先重新 read_file 拿到当前真实内容再改，不要在旧上下文上反复试。失配时 details 给出最接近候选的首个不一致行 line/expected/actual，并带 totalLines 与 nearbyContent；无候选时只给 expected。",
+      "补丁失败时先重新 {{tool:read_file}} 拿到当前真实内容再改，不要在旧上下文上反复试。失配时 details 给出最接近候选的首个不一致行 line/expected/actual，并带 totalLines 与 nearbyContent；无候选时只给 expected。",
       "文件经其他工具或格式化器修改后仍可继续打补丁。file_mutation_conflict 表示本次补丁读取后文件又发生变化，需要重新读取并重建补丁。聚合 diff 展示本轮文件的总体变化；aggregate.externalChangeCount 标识其中观察到的外部修改次数。",
       "同一文件多处改动可放在一个补丁里；hunk 必须按原文顺序排列且不得重叠。",
       "apply_patch 无锚点时从当前游标向后完全匹配，多处匹配时报歧义并给出 candidateLines；`@@ L行号` 在原文件中选择最近的完全匹配处，但不重置游标。乱序或重叠时报 line/cursorLine，带锚点时同时给出 anchorLine。",
-      "上下文/删除行误带 read_file 行号前缀时，若全部带前缀、行号连续且与原文一致，会自动剥离并在 changes[].repairs 标注；新增行带前缀直接报错。",
+      "上下文/删除行误带 {{tool:read_file}} 行号前缀时，若全部带前缀、行号连续且与原文一致，会自动剥离并在 changes[].repairs 标注；新增行带前缀直接报错。",
       "changes[].action 表示补丁声明的意图（write 或 delete），不代表已经落盘；判断是否真的写入要看 changes[].mutation 与顶层 mutations 是否为空。dryRun 时 action 仍是 write 而 mutation 恒为 null。",
     ],
     pitfalls: [

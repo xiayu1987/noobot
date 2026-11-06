@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { tool as structuredTool } from "@langchain/core/tools";
+import { structuredTool } from "../core/structured-tool.js";
 import { normalizeServiceHandlerResult } from "@noobot/agent-config-protocol/service-handler";
 import { z } from "zod";
 import { mergeConfig } from "../../config/index.js";
@@ -65,6 +65,7 @@ function validateCustomParam(customParam, runtime) {
 export function createServiceTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const callServiceTool = structuredTool(
+    runtime,
     async ({ serviceName, endpointName, custom_param, queryString, body }, toolConfig) => {
       const globalConfig = runtime?.globalConfig || {};
       const userId = resolveRuntimeUserId(runtime);
@@ -164,6 +165,7 @@ export function createServiceTool({ agentContext }) {
         body: z.unknown().optional().describe(tTool(runtime, "tools.service.fieldBody")),
       }),
     },
+    agentContext,
   );
 
   return [callServiceTool];

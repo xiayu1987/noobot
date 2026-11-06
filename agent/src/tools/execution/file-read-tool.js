@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { PATH_CAPABILITIES, TOOL_PATH_CONTRACTS } from "@noobot/path-resolver";
-import { tool as structuredTool } from "@langchain/core/tools";
+import { structuredTool } from "../core/structured-tool.js";
 import { z } from "zod";
 import { assertValidFileNameFromPath, projectToolPathRef } from "../core/check-tool-input.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
@@ -30,6 +30,7 @@ import {
 
 export function createReadFileTool({ agentContext, runtime, workspaceIo }) {
   return structuredTool(
+    runtime,
     async ({ filePath, startLine, endLine, maxLines, riskLevel }) => {
       if (typeof filePath === "string")
         assertValidFileNameFromPath({ filePath, fieldName: "filePath", agentContext });
@@ -154,5 +155,6 @@ export function createReadFileTool({ agentContext, runtime, workspaceIo }) {
         riskLevel: createRiskLevelSchema(runtime, "tools.file.readRiskLevelField"),
       }),
     },
+    agentContext,
   );
 }

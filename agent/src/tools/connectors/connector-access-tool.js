@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { tool as structuredTool } from "@langchain/core/tools";
+import { structuredTool } from "../core/structured-tool.js";
 import {
   assertConnectorAccessPort,
   normalizeSelectedConnectorIds,
@@ -69,6 +69,7 @@ export function createConnectorAccessTool({ agentContext }) {
     runtime?.systemRuntime?.config?.selectedConnectorIds,
   );
   const tool = structuredTool(
+    runtime,
     async ({ connector_id, operation, input }, toolConfig) => {
       const connectorId = assertSelectedConnector(selectedConnectorIds, connector_id);
       if (!userId) {
@@ -116,6 +117,7 @@ export function createConnectorAccessTool({ agentContext }) {
           .describe(tToolParamDescription(runtime, TOOL_NAME.ACCESS_CONNECTOR, "input")),
       }),
     },
+    agentContext,
   );
   return [tool];
 }

@@ -17,6 +17,8 @@ import {
   createModelResponse,
   MODEL_CONTEXT_SEQUENCE_POLICY,
   validateModelResponse,
+  createToolNameBinding,
+  TOOL_CALL_NAME_BINDING,
 } from "@noobot/model-protocol";
 import { bindAssistantMessageEventStream } from "../../../../src/events/message-event-stream.js";
 import { createCanonicalMessageEventSessionManager } from "../../../helpers/canonical-message-event-session-manager.js";
@@ -54,7 +56,14 @@ function createModelPort(outputs = []) {
       const canonicalOutput = {
         text: String(output.text || ""),
         reasoning: String(output.reasoning || ""),
-        toolCalls: Array.isArray(output.toolCalls) ? output.toolCalls : [],
+        toolCalls: Array.isArray(output.toolCalls)
+          ? output.toolCalls.map((call) => ({
+              ...call,
+              [TOOL_CALL_NAME_BINDING]: createToolNameBinding({
+                tools: request.tools || [],
+              }),
+            }))
+          : [],
         finishReason: String(output.finishReason || ""),
         usage: output.usage || {},
       };

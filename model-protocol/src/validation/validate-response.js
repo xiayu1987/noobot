@@ -12,6 +12,7 @@ import { projectModelAttemptError, requireInvocationIdentity } from "../protocol
 import { MODEL_OPERATION_KIND, normalizeModelOperationResult } from "../protocol/operation.js";
 import { hasUsableModelChatOutput } from "../protocol/output.js";
 import { text, isPlainObject } from "@noobot/shared/value";
+import { requireToolBindingConfig } from "../protocol/tool-binding.js";
 
 const RESPONSE_KEYS = Object.freeze([
   "protocol",
@@ -22,6 +23,7 @@ const RESPONSE_KEYS = Object.freeze([
   "output",
   "result",
   "execution",
+  "toolNameBindings",
 ]);
 
 const OUTPUT_KEYS = Object.freeze([
@@ -116,6 +118,8 @@ function validateAttempt(value, index) {
 export function validateModelResponse(input) {
   const response = requirePlainObject(input, "model response");
   rejectUnknownKeys(response, RESPONSE_KEYS, "model response");
+  if (Object.hasOwn(response, "toolNameBindings"))
+    requireToolBindingConfig(response.toolNameBindings);
   if (response.protocol !== MODEL_PROTOCOL_NAME)
     throw new TypeError("invalid model response protocol");
   if (response.protocolVersion !== MODEL_PROTOCOL_VERSION) {

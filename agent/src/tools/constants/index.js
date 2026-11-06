@@ -33,6 +33,7 @@ export const TOOL_NAME = Object.freeze({
 });
 
 export const CONTROL_TOOL_NAMES = Object.freeze([TOOL_NAME.TASK_SUMMARY, TOOL_NAME.TASK_CHECK]);
+export const BUILTIN_TOOL_IDS = Object.freeze(Object.values(TOOL_NAME));
 
 export const ARTIFACT_GENERATION_SOURCE = Object.freeze({
   MULTIMODAL_GENERATE_TOOL: "multimodal_generate_tool",

@@ -52,7 +52,9 @@ test("do_search_web: model_web_search 模式只通过 canonical ModelPort 发起
       modelSpec: null,
     }),
   };
-  const [tool] = createWebSearchTool({ agentContext: { bindings: { runtime } } });
+  const [tool] = createWebSearchTool({
+    agentContext: { bindings: { tools: [{ name: "do_search_web" }], runtime } },
+  });
   const result = JSON.parse(
     await tool.invoke({ query: "latest noobot news" }, { signal: abortController.signal }),
   );
@@ -101,7 +103,9 @@ test("do_search_web: Claude 家族透传 Anthropic Messages 执行协议身份",
       modelSpec: null,
     }),
   };
-  const [tool] = createWebSearchTool({ agentContext: { bindings: { runtime } } });
+  const [tool] = createWebSearchTool({
+    agentContext: { bindings: { tools: [{ name: "do_search_web" }], runtime } },
+  });
   const result = JSON.parse(await tool.invoke({ query: "latest noobot news" }));
 
   assert.equal(result.mode, "model_web_search");
@@ -222,7 +226,9 @@ test("do_search_web: model_web_search 未显式声明模型时失败，不回退
       modelSpec: null,
     }),
   };
-  const [tool] = createWebSearchTool({ agentContext: { bindings: { runtime } } });
+  const [tool] = createWebSearchTool({
+    agentContext: { bindings: { tools: [{ name: "do_search_web" }], runtime } },
+  });
   const output = await tool.invoke({ query: "q" }).then(
     (value) => String(value),
     (error) => String(error?.message || error),

@@ -12,6 +12,7 @@ import {
 import {
   CONFIG_DOCUMENT_SCOPE,
   projectConfigDocumentForScope,
+  resolveToolBindingSettings,
 } from "@noobot/agent-config-protocol";
 
 export const CONFIG_DOCUMENT_PATH = "config.json";
@@ -147,11 +148,12 @@ export function pruneConfigDocument(document = {}, baseline = {}) {
   return pruned;
 }
 
-export function buildConfigDocumentForSave(document = {}, baseline = {}) {
+export function buildConfigDocumentForSave(document = {}, baseline = {}, declarations = {}) {
   const pruned = pruneConfigDocument(document, baseline);
   const userDocument = projectConfigDocumentForScope(pruned, {
     scope: CONFIG_DOCUMENT_SCOPE.USER,
   });
   assertConfigDocument(userDocument);
+  resolveToolBindingSettings(declarations.toolBindings, userDocument.tools?.bindings);
   return userDocument;
 }

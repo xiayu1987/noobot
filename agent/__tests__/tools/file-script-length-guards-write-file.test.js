@@ -23,6 +23,7 @@ test("write_file: content 超过 semantic-transfer 阈值时保存附件并直�
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-write-guard-"));
   let invoked = false;
   const tool = {
+    name: "write_file",
     async invoke() {
       invoked = true;
       throw new Error("write_file concrete tool must not be invoked for overlong input");

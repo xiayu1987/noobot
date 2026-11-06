@@ -10,6 +10,12 @@ import { decodeToolResultText } from "@noobot/event-protocol/tool-result";
 import { executeMcpTask } from "../../../src/integrations/mcp/task-runner.js";
 import { createTestModelHost } from "../../helpers/test-model-host.js";
 import { TEST_RUN_PREFERENCES } from "../../helpers/run-preferences.js";
+import { createNamespacedToolId } from "@noobot/model-protocol/tool-identity-node";
+import { createToolNameBinding, TOOL_CALL_NAME_BINDING } from "@noobot/model-protocol";
+import {
+  getToolNameBinding,
+  runWithToolNameBinding,
+} from "@noobot/model-protocol/tool-binding-scope-node";
 
 function createJsonResponse(payload = {}, { status = 200, headers = {} } = {}) {
   return {
@@ -75,7 +81,11 @@ function createFakeModelPort(scriptedToolCalls = []) {
     invocations,
     async invoke(request) {
       invocations.push(request);
-      const toolCalls = invocations.length === 1 ? scriptedToolCalls : [];
+      const binding = createToolNameBinding({ tools: request.tools });
+      const toolCalls =
+        invocations.length === 1
+          ? scriptedToolCalls.map((call) => ({ ...call, [TOOL_CALL_NAME_BINDING]: binding }))
+          : [];
       return { output: { text: "done", toolCalls } };
     },
   };
@@ -178,7 +188,7 @@ test("executeMcpTask encodes a missing MCP tool as a protocol failure result", a
 
 test("executeMcpTask forwards MCP tool results as protocol objects", async () => {
   const { result, modelPort } = await runScriptedTask([
-    { id: "call-1", name: "fake_mcp_tool", args: {} },
+    { id: "call-1", name: createNamespacedToolId("mcp", "fake", "fake_mcp_tool"), args: {} },
   ]);
 
   const decoded = decodeToolResultText(result.traces[0].result);
@@ -188,4 +198,42 @@ test("executeMcpTask forwards MCP tool results as protocol objects", async () =>
     (message) => message.tool_call_id === "call-1",
   );
   assert.equal(toolMessage.content, result.traces[0].result);
+});
+
+test("MCP task execution uses the child request binding and restores the parent scope", async () => {
+  const parent = createToolNameBinding({ tools: [{ name: "call_mcp_task" }] });
+  await runWithToolNameBinding(parent, async () => {
+    const { result } = await runScriptedTask([
+      { id: "child-call", name: createNamespacedToolId("mcp", "fake", "fake_mcp_tool"), args: {} },
+    ]);
+    assert.equal(decodeToolResultText(result.traces[0].result).ok, true);
+    assert.equal(getToolNameBinding(), parent);
+  });
+  assert.equal(getToolNameBinding(), undefined);
+});
+
+test("MCP task refuses model calls without their request binding", async () => {
+  const modelPort = createFakeModelPort([
+    { id: "child-call", name: createNamespacedToolId("mcp", "fake", "fake_mcp_tool"), args: {} },
+  ]);
+  const invoke = modelPort.invoke.bind(modelPort);
+  modelPort.invoke = async (request) => {
+    const response = await invoke(request);
+    for (const call of response.output.toolCalls) delete call[TOOL_CALL_NAME_BINDING];
+    return response;
+  };
+  await assert.rejects(
+    () =>
+      executeMcpTask({
+        globalConfig: createGlobalConfig(),
+        mcpName: "fake",
+        task: "do it",
+        fetchImpl: createMcpFetch(),
+        runtime: {
+          runConfig: { ...TEST_RUN_PREFERENCES },
+          modelHost: createTestModelHost({ modelPort, modelSpec: QWEN_MODEL }),
+        },
+      }),
+    /request name binding/,
+  );
 });

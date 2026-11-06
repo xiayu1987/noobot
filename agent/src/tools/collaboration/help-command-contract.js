@@ -34,19 +34,3 @@ export const HELP_COMMAND_OPTIONS = Object.freeze({
 });
 
 export const HELP_COMMAND_NAMES = Object.freeze(Object.values(HELP_COMMAND));
-
-export const HELP_COMMAND_USAGE = Object.freeze([
-  "help()",
-  "help({ command: '--tools' })",
-  "help({ command: '--tools --name read_file' })",
-  "help({ command: '--tools --name execute_native_script --capability browser' })",
-  "help({ command: '--models' })",
-  "help({ command: '--experience' })",
-  "help({ command: '--memory' })",
-  "help({ command: '--runtime' })",
-  "help({ command: '--context' })",
-  "help({ command: '--attachs' })",
-  "help({ command: '--attachs --id <attachmentId>' })",
-  "help({ command: '--attachs --source model' })",
-  "help({ command: '--isolation' })",
-]);

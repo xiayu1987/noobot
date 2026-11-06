@@ -48,6 +48,7 @@ test("all Harness relay purposes cross the canonical capability-to-main-model bo
 
     assert.equal(
       relaySeparateModelOutputAsUserMessage(ctx, {
+        toolNameBindings: response.toolNameBindings,
         locale: "en-US",
         purpose,
         content: response.output.text,
@@ -79,10 +80,52 @@ test("all Harness relay purposes cross the canonical capability-to-main-model bo
   }
 });
 
+test("relay script notices use the source request binding after runtime config changes", () => {
+  const ctx = createTestHookContext({
+    agentContext: {
+      bindings: {
+        runtime: {
+          globalConfig: { tools: { bindings: { execute_script: { bindingName: "global_run" } } } },
+          userConfig: { tools: { bindings: { execute_script: { bindingName: "new_script" } } } },
+        },
+      },
+    },
+  });
+  relaySeparateModelOutputAsUserMessage(ctx, {
+    toolNameBindings: { execute_script: { bindingName: "-nb_run-" } },
+    locale: "en-US",
+    purpose: "guidance",
+    content: '-nb_run-({ command: "echo ok" })',
+  });
+  const relay = ctx.modelContext.messageBlocks.incremental.at(-1);
+  assert.match(relay.content, /\[Risk level: high: reason: script content/);
+  assert.match(relay.content, /-nb_run-/);
+  relaySeparateModelOutputAsUserMessage(ctx, {
+    toolNameBindings: { execute_script: { bindingName: "-nb_run-" } },
+    locale: "en-US",
+    purpose: "guidance",
+    content: 'new_script({ command: "echo ok" })',
+  });
+  assert.doesNotMatch(
+    ctx.modelContext.messageBlocks.incremental.at(-1).content,
+    /\[Risk level: high:/,
+  );
+  assert.throws(
+    () =>
+      relaySeparateModelOutputAsUserMessage(ctx, {
+        locale: "en-US",
+        purpose: "guidance",
+        content: "missing source binding",
+      }),
+    /toolNameBindings/,
+  );
+});
+
 test("automatic planning refinement relay cannot represent request_plan_refinement tool evidence", () => {
   const ctx = createTestHookContext();
   assert.equal(
     relaySeparateModelOutputAsUserMessage(ctx, {
+      toolNameBindings: {},
       locale: "zh-CN",
       purpose: "planning_refinement",
       content: "计划细化结果",

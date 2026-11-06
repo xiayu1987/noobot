@@ -22,6 +22,7 @@ test("tool runner aborts a tool that never observes the signal", async () => {
   let settled = false;
   let invoked = false;
   const tool = {
+    name: "demo",
     invoke: async () => {
       invoked = true;
       return new Promise((resolve) => {
@@ -52,6 +53,7 @@ test("tool runner rejects immediately when the signal is already aborted", async
   controller.abort();
   let invoked = false;
   const tool = {
+    name: "demo",
     invoke: async () => {
       invoked = true;
       return JSON.stringify({ ok: true });
@@ -75,7 +77,7 @@ test("tool runner still returns normal results when a signal is present but not 
   const resultText = JSON.stringify({ toolName: "demo", ok: true, content: "ok" });
   const result = await executeToolCall({
     call: { id: "call-not-aborted", name: "demo", args: {} },
-    tool: { invoke: async () => resultText },
+    tool: { name: "demo", invoke: async () => resultText },
     runtime: runtime(controller.signal),
     abortSignal: controller.signal,
   });

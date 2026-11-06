@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createNamespacedToolId } from "@noobot/model-protocol/tool-identity-node";
 
 import { createMcpTool } from "../../src/tools/execution/mcp-tool.js";
 import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
@@ -99,7 +100,9 @@ test("call_mcp_task: 透传父 runConfig 显式 streaming=false 到子 session",
     userConfig: {},
     sharedTools: { fetch: createMcpFetch() },
   });
-  const [tool] = createMcpTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createMcpTool({
+    agentContext: createTestAgentExecutionScope(runtime, { tools: [{ name: "call_mcp_task" }] }),
+  });
   const raw = await tool.invoke(
     { mcpName: "fake", task: "do something" },
     { signal: new AbortController().signal },
@@ -111,7 +114,7 @@ test("call_mcp_task: 透传父 runConfig 显式 streaming=false 到子 session",
   assert.deepEqual(runCalls[0]?.runConfigPatch?.pluginPolicy, { mode: "none" });
   assert.deepEqual(
     runCalls[0]?.runConfigPatch?.toolPolicy?.customTools?.map((item) => item?.name),
-    ["fake_mcp_tool"],
+    [createNamespacedToolId("mcp", "fake", "fake_mcp_tool")],
   );
   assert.equal(
     runCalls[0]?.runConfigPatch?.toolPolicy?.customTools?.some(
@@ -145,7 +148,9 @@ test("call_mcp_task: 未配置的 mcp 服务以可恢复错误失败且不启动
     },
     globalConfig: { mcpServers: {} },
   });
-  const [tool] = createMcpTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createMcpTool({
+    agentContext: createTestAgentExecutionScope(runtime, { tools: [{ name: "call_mcp_task" }] }),
+  });
   const invocation = tool.invoke(
     { mcpName: "missing", task: "do something" },
     { signal: new AbortController().signal },

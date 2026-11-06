@@ -8,7 +8,7 @@ export const SEARCH_MANUAL = {
   search: {
     summary: "在工作区文件中搜索，返回命中行与上下文。",
     usage: [
-      "search({ query, glob, path, isRegex, caseSensitive, contextLines, maxResults, riskLevel })",
+      "{{tool:search}}({ query, glob, path, isRegex, caseSensitive, contextLines, maxResults, riskLevel })",
     ],
     params: {
       query: "必填且不能为空的关键词或正则。不要用空字符串调用。",
@@ -21,7 +21,7 @@ export const SEARCH_MANUAL = {
       riskLevel: "操作风险等级。可能检索到隐私、凭证或密钥时必须标记为 critical。",
     },
     notes: [
-      "定位代码优先用 search 而不是脚本里的 grep 或 find，前者对用户可见且受路径策略约束。",
+      "定位代码优先用 {{tool:search}} 而不是脚本里的 grep 或 find，前者对用户可见且受路径策略约束。",
       "先用宽 query 摸清分布，再用 glob 与 path 收窄，比一次写复杂正则更可靠。",
       "命中数被 maxResults 截断时应提高上限或收窄条件，不要据此断言只有这么多处。",
     ],

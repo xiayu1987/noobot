@@ -28,7 +28,7 @@ test("task_check returns only a receipt and creates no flow-control state", asyn
   const runtime = createTestRuntimeContext({ systemRuntime: { taskCheckLoopCount: 10 } });
   const { systemRuntime } = runtime;
   const [tool] = createTaskCheckTool({
-    agentContext: { bindings: { runtime } },
+    agentContext: { bindings: { tools: [{ name: "task_check" }], runtime } },
   });
   const payload = JSON.parse(await tool.invoke({ checkContent }));
   assert.equal(payload.toolName, "task_check");
@@ -51,7 +51,7 @@ test("task_check returns only a receipt and creates no flow-control state", asyn
 test("task_check rejects non-protocol input without resetting its counter", async () => {
   const systemRuntime = { taskCheckLoopCount: 9 };
   const [tool] = createTaskCheckTool({
-    agentContext: { bindings: { runtime: { systemRuntime } } },
+    agentContext: { bindings: { tools: [{ name: "task_check" }], runtime: { systemRuntime } } },
   });
   await assert.rejects(
     tool.invoke({ checkContent: "普通检查文本" }),

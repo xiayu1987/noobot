@@ -7,7 +7,7 @@
 export const CALL_MCP_TASK_MANUAL = {
   call_mcp_task: {
     summary: "调用已连接 MCP 服务器提供的工具能力。",
-    usage: ["call_mcp_task({ serverName, toolName, params })"],
+    usage: ["{{tool:call_mcp_task}}({ serverName, toolName, params })"],
     params: {
       serverName: "MCP 服务器名，必须是当前会话已连接的服务器。",
       toolName: "该服务器暴露的工具名。",

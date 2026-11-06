@@ -3,10 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { tool as structuredTool } from "@langchain/core/tools";
+import { boundTool } from "../../tools/core/structured-tool.js";
+import { requireToolNameBinding } from "@noobot/model-protocol/tool-binding-scope-node";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { encodeToolResultObject } from "@noobot/event-protocol/tool-result";
-import { TOOL_BINDING_NAME_MAX_LENGTH } from "../../models/tool/binding-adapter.js";
+import { requireUniqueToolIds } from "@noobot/model-protocol";
+import { createNamespacedToolId } from "@noobot/model-protocol/tool-identity-node";
 import { isPlainObject, text } from "@noobot/shared/value";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 
@@ -53,21 +55,6 @@ export function normalizeMcpInputSchema(inputSchema = {}) {
   return schema;
 }
 
-export function normalizeMcpToolCallArgs(args = {}) {
-  if (typeof args === "string") {
-    const rawText = args.trim();
-    if (!rawText) return {};
-    try {
-      const parsed = JSON.parse(rawText);
-      return isPlainObject(parsed) ? parsed : {};
-    } catch {
-      return {};
-    }
-  }
-  if (!isPlainObject(args)) return {};
-  return Object.fromEntries(Object.entries(args).filter(([, value]) => value !== undefined));
-}
-
 export const MCP_TOOL_RESULT_ERROR = Object.freeze({
   CONTENT_NOT_ARRAY: "mcp_tool_result_content_not_array",
   IS_ERROR_NOT_BOOLEAN: "mcp_tool_result_is_error_not_boolean",
@@ -111,40 +98,24 @@ export function normalizeMcpToolResult(result) {
   });
 }
 
-function resolveMcpToolBindingName(toolName = "", usedNames = new Set()) {
-  const base =
-    text(toolName)
-      .replaceAll(/[^a-zA-Z0-9_-]/g, "_")
-      .slice(0, TOOL_BINDING_NAME_MAX_LENGTH) || "mcp_tool";
-  let candidate = base;
-  for (let index = 2; usedNames.has(candidate); index += 1) {
-    const suffix = `_${index}`;
-    candidate = `${base.slice(0, TOOL_BINDING_NAME_MAX_LENGTH - suffix.length)}${suffix}`;
-  }
-  usedNames.add(candidate);
-  return candidate;
-}
-
-export function buildLangChainMcpTools({ mcpTools = [], client }) {
-  const usedNames = new Set();
-  return (mcpTools || [])
-    .map((toolSpec) => {
-      const toolName = text(toolSpec?.name);
-      if (!toolName) return null;
-      return structuredTool(
-        async (args = {}) => {
-          const callResult = await client.callTool({
-            name: toolName,
-            args: normalizeMcpToolCallArgs(args),
-          });
-          return normalizeMcpToolResult(callResult);
-        },
-        {
-          name: resolveMcpToolBindingName(toolName, usedNames),
-          description: buildMcpToolDescription(toolSpec),
-          schema: normalizeMcpInputSchema(toolSpec?.inputSchema || {}),
-        },
-      );
-    })
-    .filter(Boolean);
+export function buildLangChainMcpTools({ mcpTools = [], client, serverName }) {
+  requireUniqueToolIds(mcpTools.map((tool) => tool?.name));
+  return mcpTools.map((toolSpec) => {
+    const toolName = text(toolSpec?.name);
+    return boundTool(
+      async (args) => {
+        const callResult = await client.callTool({
+          name: toolName,
+          args,
+        });
+        return normalizeMcpToolResult(callResult);
+      },
+      {
+        name: createNamespacedToolId("mcp", serverName, toolName),
+        description: buildMcpToolDescription(toolSpec),
+        schema: normalizeMcpInputSchema(toolSpec?.inputSchema || {}),
+      },
+      requireToolNameBinding,
+    );
+  });
 }

@@ -7,7 +7,7 @@
 export const USER_INTERACTION_MANUAL = {
   user_interaction: {
     summary: "Ask the user for information or an explicit confirmation.",
-    usage: ["user_interaction({ content, fields, timeoutMs })"],
+    usage: ["{{tool:user_interaction}}({ content, fields, timeoutMs })"],
     params: {
       content:
         "Body of the request. Explain background, options, and impact so the user can decide directly.",

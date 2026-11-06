@@ -66,6 +66,7 @@ test("relayed injections keep one identity across context and current-turn persi
 
   assert.equal(
     relaySeparateModelOutputAsUserMessage(ctx, {
+      toolNameBindings: {},
       purpose: "summary",
       content: "summary",
     }),

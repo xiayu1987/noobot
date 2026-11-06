@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { filterForModelContext } from "@noobot/context-protocol/policy/message";
-import { MODEL_CONTEXT_SEQUENCE_POLICY, requireModelSpec } from "@noobot/model-protocol";
+import {
+  MODEL_CONTEXT_SEQUENCE_POLICY,
+  requireModelSpec,
+  projectBoundModelOutput,
+} from "@noobot/model-protocol";
 import {
   buildDualLaneModelContext,
   MODEL_CONTEXT_LANE,
@@ -134,7 +138,7 @@ async function invokeNoToolsModel({
       },
       policies: { retry: MAIN_FLOW_NO_FINAL_RESPONSE_RETRY },
     });
-    return protocolResponse.output;
+    return projectBoundModelOutput(protocolResponse);
   } catch (error) {
     if (isRecoverableNoFinalResponse(error, runtime)) throw error;
     await runAgentRuntimeHook({

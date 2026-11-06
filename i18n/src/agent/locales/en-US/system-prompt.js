@@ -57,7 +57,7 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
         "Sandbox mode is active. Workspace logical paths and extra mount targets listed in the system runtime environment are available to every file-related tool. Mount paths are governed uniformly by their global read-only setting and path policy.",
       hostWorkspaceView: "Host mode is active. Workspace tools use the service workspace view.",
       taskLocalView:
-        "execute_native_script task-local paths last for one call; pass attachmentRef unchanged across tools.",
+        "{{tool:execute_native_script}} task-local paths last for one call; pass attachmentRef unchanged across tools.",
       superUserHost:
         "Super user: host absolute paths are allowed (Windows e.g. C:\\\\dir, macOS/Linux e.g. /Users, /home).",
       regularHost:
@@ -65,7 +65,7 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       sandboxHostAccess:
         "Sandbox mode does not expose host paths or add mounts for super administrators; only fixed restricted-host tools may use authorized host capabilities.",
       patchRoot:
-        "For patch_file, usually omit root; if set, root must be a workspace-relative child directory.",
+        "For {{tool:patch_file}}, usually omit root; if set, root must be a workspace-relative child directory.",
     },
     executionEvidence:
       "Report execution only from actual tool calls and corresponding results in the current context; capability lists are not execution evidence. Runtime toolTimeline and execution events are authoritative for tool auditing.",

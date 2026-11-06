@@ -8,7 +8,7 @@ export const SEARCH_MANUAL = {
   search: {
     summary: "Search workspace files, returning matched lines with context.",
     usage: [
-      "search({ query, glob, path, isRegex, caseSensitive, contextLines, maxResults, riskLevel })",
+      "{{tool:search}}({ query, glob, path, isRegex, caseSensitive, contextLines, maxResults, riskLevel })",
     ],
     params: {
       query: "Required non-empty keyword or regex. Do not call with an empty string.",

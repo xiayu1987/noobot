@@ -74,7 +74,11 @@ async function runInteractionScript({ scriptBody, bridge, userId }) {
     userInteractionBridge: bridge,
   });
   if (userId !== undefined) runtime.systemRuntime = { ...runtime.systemRuntime, userId };
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
   try {
     return JSON.parse(
       await tool.invoke(

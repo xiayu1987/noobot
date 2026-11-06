@@ -243,6 +243,7 @@ async function handleSeparateModelPlanningProcessResult({
   processed,
   locale,
   responseText,
+  toolNameBindings,
 }) {
   const operationDirectory = resolveOperationDirectoryContext(ctx);
   applyDynamicPolicyPromptFromText(bucket, responseText, {
@@ -266,6 +267,7 @@ async function handleSeparateModelPlanningProcessResult({
       locale,
       purpose: "planning",
       content: relayText,
+      toolNameBindings,
       dedupe: true,
       attachments,
     });
@@ -284,10 +286,12 @@ async function handleSeparateModelPlanningProcessResult({
     locale,
     purpose: "planning",
     content: relayText,
+    toolNameBindings,
     dedupe: true,
     attachments,
   });
   relaySeparateModelOutputAsUserMessage(ctx, {
+    toolNameBindings: {},
     locale,
     purpose: "planning_followup",
     content: buildPostPlanUserFollowupPrompt(locale, "planning"),
@@ -359,6 +363,7 @@ export async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
       });
       return false;
     }
+    if (response === null) return false;
     const responseText = extractPlanningResponseText(response);
     recordPlanningRawOutput(ctx, {
       source: "separate_model",
@@ -376,6 +381,7 @@ export async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
       processed,
       locale,
       responseText,
+      toolNameBindings: response.toolNameBindings,
     });
   } finally {
     state.flags.planningSeparateModelInFlight = false;

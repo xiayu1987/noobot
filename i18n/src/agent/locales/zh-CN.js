@@ -21,7 +21,7 @@ export default {
   "tools.result.toolResultOverflow": ({ measuredLength }) =>
     `工具返回内容过长(${measuredLength}字符)，已保存为附件，请按返回的 transfer 信息分批读取。`,
   "tools.result.readFileSourceReferenceOverflow":
-    "read_file 结果过长，已保留源文件引用，请按源文件地址和行范围继续读取。",
+    "{{tool:read_file}} 结果过长，已保留源文件引用，请按源文件地址和行范围继续读取。",
   "tools.file.workspaceRelativePathRule": "相对路径统一基于当前用户工作区根目录。",
   "tools.file.symbolicLinkRule": "当前路径策略不允许文件工具使用符号链接。",
   "tools.file.readLineRangeOutOfBounds": ({ startLine, endLine, totalLines }) =>
@@ -64,7 +64,7 @@ export default {
   "scenarios.full.description": "通用情景：不限制工具和上下文，按任务需要自主选择能力。",
   "scenarios.programming.name": "编程",
   "scenarios.programming.description":
-    "编程情景：先 search/read_file 确认真实内容，再用 patch_file 修改；优先精确上下文补丁，避免手算 unified diff 行数；补丁失败后重新读取再改，必要时用 write_file。",
+    "编程情景：先 {{tool:search}}/{{tool:read_file}} 确认真实内容，再用 {{tool:patch_file}} 修改；优先精确上下文补丁，避免手算 unified diff 行数；补丁失败后重新读取再改，必要时用 {{tool:write_file}}。",
   "scenarios.text.name": "文本",
   "scenarios.text.description": "文本情景：适合写作、改写、摘要、翻译与内容整理。",
   "capability.finalPlanningPrompt": "请基于以上工具结果，立即给出最终规划答案。",

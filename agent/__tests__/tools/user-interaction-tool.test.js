@@ -24,7 +24,7 @@ function toolAgentContext(runtime, identity = {}) {
         ...identity,
       },
     },
-    bindings: { runtime },
+    bindings: { tools: [{ name: "user_interaction" }], runtime },
   };
 }
 

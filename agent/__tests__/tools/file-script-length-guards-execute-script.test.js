@@ -84,6 +84,7 @@ test("execute_script: command 超过 semantic-transfer 阈值时保存附件并�
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-guard-"));
   let invoked = false;
   const tool = {
+    name: "execute_script",
     async invoke() {
       invoked = true;
       throw new Error("execute_script concrete tool must not be invoked for overlong input");

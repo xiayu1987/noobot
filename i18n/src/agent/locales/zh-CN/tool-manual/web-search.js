@@ -7,7 +7,7 @@
 export const WEB_SEARCH_MANUAL = {
   do_search_web: {
     summary: "检索网页信息，用于获取模型知识之外或时效性强的事实。",
-    usage: ["do_search_web({ query })"],
+    usage: ["{{tool:do_search_web}}({ query })"],
     params: {
       query: "搜索内容，必填。",
     },

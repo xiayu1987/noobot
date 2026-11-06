@@ -23,7 +23,7 @@ export const TASK_ORCHESTRATION_TOOL_SCHEMA = {
       "tools.task_summary.summaryProtocolInvalid":
         "summaryContent does not conform to NOOBOT_TASK_SUMMARY/1",
       "tools.task_summary.receiptContinue":
-        "This summary receipt is the authoritative phase state. Do not repeat completed work; proceed only from summary.nextAction. When the task is done, reply directly without calling task_summary again.",
+        "This summary receipt is the authoritative phase state. Do not repeat completed work; proceed only from summary.nextAction. When the task is done, reply directly without calling {{tool:task_summary}} again.",
       "tools.task_summary.receiptComplete":
         "This summary receipt is the authoritative phase state. The task is complete; the receipt's abstract and nextAction are the verified execution results. Raw tool records were archived by the checkpoint, so do not question or refuse verification because they are absent; reply directly with the final answer based on them.",
       "tools.task_summary.receiptBlocked":

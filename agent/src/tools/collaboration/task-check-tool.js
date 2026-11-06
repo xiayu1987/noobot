@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { tool as structuredTool } from "@langchain/core/tools";
+import { structuredTool } from "../core/structured-tool.js";
 import { z } from "zod";
 import { TASK_STATUS } from "../../bot/config/constants.js";
 import {
@@ -34,6 +34,7 @@ export function createTaskCheckTool(ctx = {}) {
 
   return [
     structuredTool(
+      runtime,
       async ({ checkContent }) => {
         const content = text(checkContent);
         if (!content) {
@@ -73,6 +74,7 @@ export function createTaskCheckTool(ctx = {}) {
           contextPolicy: createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE),
         },
       },
+      ctx.agentContext,
     ),
   ];
 }

@@ -4,6 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { Buffer } from "node:buffer";
+import {
+  TOOL_CALL_NAME_BINDING,
+  requireToolCallNameBinding,
+  assertToolExecution,
+} from "@noobot/model-protocol";
+import { runWithToolNameBinding } from "@noobot/model-protocol/tool-binding-scope-node";
+import { resolveDirectToolNameBinding } from "../../tools/core/structured-tool.js";
 import { ToolInputParsingException } from "@langchain/core/tools";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 import { emitEvent } from "../../events/index.js";
@@ -536,10 +543,26 @@ async function finalizeToolExecution(state) {
 
 export async function executeToolCall(options) {
   validateRuntimeToolCall(options.call);
-  return executeValidatedToolCall({ ...options, executionTiming: { executionMs: 0 } });
+  const call = options.call[TOOL_CALL_NAME_BINDING]
+    ? options.call
+    : {
+        ...options.call,
+        [TOOL_CALL_NAME_BINDING]: resolveDirectToolNameBinding(
+          options.runtime,
+          options.tool,
+          options.agentContext,
+        ),
+      };
+  return executeValidatedToolCall({ ...options, call, executionTiming: { executionMs: 0 } });
 }
 
 async function executeValidatedToolCall(options) {
+  const binding = requireToolCallNameBinding(options.call);
+  assertToolExecution(binding, options.call.name, options.tool);
+  return runWithToolNameBinding(binding, () => executeBoundToolCall(options));
+}
+
+async function executeBoundToolCall(options) {
   const state = createToolCallExecutionState(options);
   if (!state.tool) return completeMissingTool(state);
   await runToolHook(state, HOOK_POINT.AGENT.BEFORE_TOOL_CALL, {
@@ -574,6 +597,7 @@ function toolFactEventFields({ transferEnvelopes, resourceRefs, mutationRefs }) 
 function normalizeToolCallOptions(options) {
   const { call, tool, runtime } = options;
   validateRuntimeToolCall(call);
+  assertToolExecution(requireToolCallNameBinding(call), call.name, tool);
   if (!tool) return options;
   const repaired = repairToolCallArgs(tool.schema, call.args);
   if (!repaired) return options;

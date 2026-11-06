@@ -23,7 +23,7 @@ export default {
   "tools.result.toolResultOverflow": ({ measuredLength }) =>
     `Tool result is too long (${measuredLength} chars) and was saved as an attachment. Read it in batches using the returned transfer info.`,
   "tools.result.readFileSourceReferenceOverflow":
-    "read_file result is too long. The source file reference was kept; continue reading by source address and line range.",
+    "{{tool:read_file}} result is too long. The source file reference was kept; continue reading by source address and line range.",
   "tools.file.workspaceRelativePathRule":
     "Relative paths are consistently resolved from the current user's workspace root.",
   "tools.file.symbolicLinkRule":
@@ -72,7 +72,7 @@ export default {
     "General scenario: no restrictions on tools and context; autonomously selects capabilities as needed.",
   "scenarios.programming.name": "Programming",
   "scenarios.programming.description":
-    "Programming scenario: use search/read_file to confirm real content before patch_file; prefer exact-context patches and avoid hand-computing unified diff counts; after patch failure, reread then retry; use write_file only when needed.",
+    "Programming scenario: use {{tool:search}}/{{tool:read_file}} to confirm real content before {{tool:patch_file}}; prefer exact-context patches and avoid hand-computing unified diff counts; after patch failure, reread then retry; use {{tool:write_file}} only when needed.",
   "scenarios.text.name": "Text",
   "scenarios.text.description":
     "Text scenario: suited for writing, rewriting, summarizing, translating, and content organization.",

@@ -110,6 +110,7 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
   const attachedToFinalOutput = attachTransferPayloadToFinalOutputTurn(ctx, transferPayload);
   if (!attachedToInjectedMessage && !attachedToFinalOutput) {
     relaySeparateModelOutputAsUserMessage(ctx, {
+      toolNameBindings: {},
       locale,
       purpose: "acceptance_checklist",
       content: translateI18nText(

@@ -206,8 +206,8 @@ export async function runPhaseAcceptanceBySeparateModel(
     });
     return false;
   }
-  const responseText = text(response?.output?.text);
-  if (!responseText) return false;
+  if (response === null) return false;
+  const responseText = text(response.output.text);
   appendPhaseAcceptanceReport(bucket, responseText);
   state.flags.phaseAcceptanceTriggeredThisTurn = true;
   const attachments = await saveCapabilityOutputAsTransferArtifacts(ctx, {
@@ -220,6 +220,7 @@ export async function runPhaseAcceptanceBySeparateModel(
     locale,
     purpose: "phase_acceptance",
     content: responseText,
+    toolNameBindings: response.toolNameBindings,
     dedupe: true,
     attachments,
   });
@@ -331,10 +332,8 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
     });
     return false;
   }
-  const responseText = text(response?.output?.text);
-  const reportText =
-    responseText || buildFinalOutputFallbackPhaseAcceptanceText(locale, bucket, state);
-  appendPhaseAcceptanceReport(bucket, reportText);
+  if (response === null) return false;
+  appendPhaseAcceptanceReport(bucket, text(response.output.text));
   state.flags.phaseAcceptanceTriggeredThisTurn = true;
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.ACCEPTANCE,

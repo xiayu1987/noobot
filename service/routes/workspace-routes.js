@@ -16,8 +16,16 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
-import { projectUserVisibleConfigDeclarations } from "@noobot/agent-config-protocol";
-import { WORKSPACE_LAYOUT, WORKSPACE_ROOT_LAYOUT } from "@noobot/workspace-protocol";
+import {
+  projectUserVisibleConfigDeclarations,
+  resolveToolBindingSettings,
+} from "@noobot/agent-config-protocol";
+import { BUILTIN_TOOL_IDS } from "noobot-agent/tools";
+import {
+  WORKSPACE_LAYOUT,
+  WORKSPACE_ROOT_LAYOUT,
+  isWorkspaceUserConfigRelativePath,
+} from "@noobot/workspace-protocol";
 import { text } from "@noobot/shared/value";
 import { assertRuntimeParamsFileWriteAllowed } from "@noobot/shared/runtime-params-node";
 
@@ -74,11 +82,27 @@ export function registerWorkspaceRoutes(
   } = {},
 ) {
   const jsonRoute = createJsonRouteWrapper({ translateText });
-  const authorizeWrite = (_req, filePath) =>
+  const toolBindingSettings = () => ({
+    toolIds: BUILTIN_TOOL_IDS,
+    bindings: resolveToolBindingSettings({
+      toolIds: BUILTIN_TOOL_IDS,
+      bindings: globalConfig?.tools?.bindings,
+    }),
+  });
+  const authorizeWrite = (_req, filePath, { content }) => {
     assertRuntimeParamsFileWriteAllowed(
       filePath,
       path.join(workspaceRootPath(), WORKSPACE_ROOT_LAYOUT.RUNTIME_PARAMS_FILE),
     );
+    const relativePath = path.relative(workspaceRootPath(), filePath).split(path.sep).join("/");
+    if (!isWorkspaceUserConfigRelativePath(relativePath)) return;
+    try {
+      const document = JSON.parse(content);
+      resolveToolBindingSettings(toolBindingSettings(), document?.tools?.bindings);
+    } catch (error) {
+      throw createBadRequestError(error.message, { code: "INVALID_TOOL_BINDINGS" });
+    }
+  };
 
   app.post(
     "/internal/workspace/reset/:userId",
@@ -116,7 +140,10 @@ export function registerWorkspaceRoutes(
       async (_req, res) => {
         res.json({
           ok: true,
-          declarations: projectUserVisibleConfigDeclarations(globalConfig),
+          declarations: {
+            ...projectUserVisibleConfigDeclarations(globalConfig),
+            toolBindings: toolBindingSettings(),
+          },
         });
       },
       { fallbackErrorKey: "common.readWorkspaceFileFailed" },

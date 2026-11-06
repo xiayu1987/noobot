@@ -18,7 +18,7 @@ export const EXECUTE_NATIVE_SCRIPT_MANUAL = {
   execute_native_script: {
     summary:
       "在受限沙箱里执行 Node.js 异步函数体，通过注入的能力对象操作浏览器、文档、媒体与文件。",
-    usage: ["execute_native_script({ script_body, inputs, arguments, riskLevel })"],
+    usage: ["{{tool:execute_native_script}}({ script_body, inputs, arguments, riskLevel })"],
     params: {
       script_body:
         "异步函数体源码。执行前会对整个源码做 AST 静态校验；能力通过绑定注入，不能自行 import 或 require。",

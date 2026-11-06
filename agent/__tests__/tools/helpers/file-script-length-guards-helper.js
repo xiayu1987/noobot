@@ -69,6 +69,13 @@ function buildAgentContext(basePath, userId = "u-test", overrides = {}) {
     },
   });
   return createTestAgentExecutionScope(runtime, {
+    tools: [
+      { name: "read_file" },
+      { name: "write_file" },
+      { name: "search" },
+      { name: "patch_file" },
+      { name: "execute_script" },
+    ],
     identity: {
       userId: identity.userId,
       sessionId: identity.sessionId,

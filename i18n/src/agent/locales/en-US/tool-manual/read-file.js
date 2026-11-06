@@ -8,8 +8,8 @@ export const READ_FILE_MANUAL = {
   read_file: {
     summary: "Read a text file as cat -n style numbered lines, with optional line range.",
     usage: [
-      "read_file({ filePath, maxLines, riskLevel })",
-      "read_file({ filePath, startLine, endLine, maxLines, riskLevel })",
+      "{{tool:read_file}}({ filePath, maxLines, riskLevel })",
+      "{{tool:read_file}}({ filePath, startLine, endLine, maxLines, riskLevel })",
     ],
     params: {
       filePath:
@@ -23,13 +23,13 @@ export const READ_FILE_MANUAL = {
     },
     notes: [
       "Each numberedContent line is a 6-wide right-aligned line number, a tab, then the raw text; the prefix is not file content, so patch context uses only the text after the tab.",
-      "Text files only. Use multimodal_parse for images, audio, video, and binary documents.",
+      "Text files only. Use {{tool:multimodal_parse}} for images, audio, video, and binary documents.",
       "The response carries totalLines and hasMore; read the next segment while hasMore is true.",
       "For very large files, locate matches with search first, then read the relevant ranges instead of pulling the whole file.",
       "The current path policy does not allow file tools to follow symbolic links.",
     ],
     pitfalls: [
-      "Never edit from memory. patch_file needs exact context, so read the real content before changing it.",
+      "Never edit from memory. {{tool:patch_file}} needs exact context, so read the real content before changing it.",
       "startLine and endLine are 1-based, not 0-based.",
     ],
   },

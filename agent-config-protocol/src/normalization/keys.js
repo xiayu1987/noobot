@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject } from "../utils.js";
+import { isPlainObject, setConfigOwnProperty } from "../utils.js";
 
 export const SNAKE_TO_CANONICAL_KEY_MAP = {
   workspace_root: "workspaceRoot",
@@ -54,13 +54,24 @@ export function normalizeKnownConfigKeys(input, path = []) {
 
   const currentPath = Array.isArray(path) ? path : [];
   const inMcpServersSubtree = currentPath[0] === "mcpServers";
+  const isToolIdentityMap =
+    currentPath.length === 2 && currentPath[0] === "tools" && currentPath[1] === "bindings";
 
   const out = {};
   for (const [rawKey, value] of Object.entries(input)) {
-    const normalizedKey = inMcpServersSubtree
-      ? rawKey
-      : SNAKE_TO_CANONICAL_KEY_MAP[rawKey] || rawKey;
-    out[normalizedKey] = normalizeKnownConfigKeys(value, [...currentPath, normalizedKey]);
+    let normalizedKey = rawKey;
+    if (
+      !inMcpServersSubtree &&
+      !isToolIdentityMap &&
+      Object.hasOwn(SNAKE_TO_CANONICAL_KEY_MAP, rawKey)
+    ) {
+      normalizedKey = SNAKE_TO_CANONICAL_KEY_MAP[rawKey];
+    }
+    setConfigOwnProperty(
+      out,
+      normalizedKey,
+      normalizeKnownConfigKeys(value, [...currentPath, normalizedKey]),
+    );
   }
   return out;
 }

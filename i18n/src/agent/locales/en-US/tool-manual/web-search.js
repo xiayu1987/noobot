@@ -8,7 +8,7 @@ export const WEB_SEARCH_MANUAL = {
   do_search_web: {
     summary:
       "Search the web for facts outside model knowledge or where recency changes the answer.",
-    usage: ["do_search_web({ query })"],
+    usage: ["{{tool:do_search_web}}({ query })"],
     params: {
       query: "Search content, required.",
     },

@@ -8,6 +8,8 @@ import { TOOL_SCHEMA_BY_TOOL as enToolSchemaByTool } from "noobot-i18n/agent/loc
 import { TOOL_MANUAL_BY_TOOL as zhToolManualByTool } from "noobot-i18n/agent/locales/zh-CN/tool-manual";
 import { TOOL_MANUAL_BY_TOOL as enToolManualByTool } from "noobot-i18n/agent/locales/en-US/tool-manual";
 import { resolveToolLocale } from "./tool-i18n.js";
+import { requireToolNameBinding } from "@noobot/model-protocol/tool-binding-scope-node";
+import { isPlainObject } from "@noobot/shared/value";
 
 const TOOL_SCHEMA_I18N = Object.freeze({
   "zh-CN": Object.freeze(zhToolSchemaByTool),
@@ -21,15 +23,17 @@ const TOOL_MANUAL_I18N = Object.freeze({
 
 function resolveLocaleEntry(catalog, runtime, toolName, kind) {
   const locale = resolveToolLocale(runtime);
-  const entry = catalog[locale]?.[toolName];
-  if (!entry) {
+  const entries = catalog[locale];
+  const entry = Object.hasOwn(entries, toolName) ? entries[toolName] : undefined;
+  if (!isPlainObject(entry) || !Object.keys(entry).length) {
     throw new Error(`tool ${kind} i18n not configured: ${locale}.${toolName}`);
   }
   return entry;
 }
 
 export function tToolManual(runtime, toolName) {
-  return resolveLocaleEntry(TOOL_MANUAL_I18N, runtime, toolName, "manual");
+  const entry = resolveLocaleEntry(TOOL_MANUAL_I18N, runtime, toolName, "manual");
+  return requireToolNameBinding().renderReferences(entry);
 }
 
 export function tToolDescription(runtime, toolName) {

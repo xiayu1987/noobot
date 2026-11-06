@@ -9,7 +9,14 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createNativeScriptTool } from "../../src/tools/execution/native-script-tool.js";
-import { tToolManual } from "../../src/tools/core/tool-schema-i18n.js";
+import { tToolManual as renderManual } from "../../src/tools/core/tool-schema-i18n.js";
+import { createToolNameBinding } from "@noobot/model-protocol";
+import { runWithToolNameBinding } from "@noobot/model-protocol/tool-binding-scope-node";
+
+const tToolManual = (runtime, name) =>
+  runWithToolNameBinding(createToolNameBinding({ tools: [{ name }] }), () =>
+    renderManual(runtime, name),
+  );
 import {
   createTestRuntimeContext,
   createTestAttachmentService,
@@ -47,7 +54,11 @@ test("native script execution result IPC accepts only its exact protocol shape",
 test("execute_native_script rejects host runtime escape syntax before execution", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-script-guard-"));
   const runtime = createRuntime(basePath);
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
 
   for (const scriptBody of [
     'await import("node:fs")',
@@ -79,7 +90,11 @@ test("execute_native_script reports the source location of forbidden dynamic pro
       },
     }),
   });
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
 
   await assert.rejects(
     () =>
@@ -101,7 +116,11 @@ test("execute_native_script reports the source location of forbidden dynamic pro
 test("execute_native_script rejects typeof process before any script statement runs", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-static-guard-"));
   const runtime = createRuntime(basePath);
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
 
   await assert.rejects(
     () =>
@@ -169,7 +188,11 @@ test("execute_native_script rejects non-canonical capability call signatures", a
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-signature-"));
   await fs.writeFile(path.join(basePath, "input.html"), "<p>source</p>", "utf8");
   const runtime = createRuntime(basePath);
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
 
   const cases = [
     {
@@ -200,7 +223,11 @@ test("execute_native_script rejects output traversal before creating parent dire
   const basePath = path.join(parentPath, "workspace");
   await fs.mkdir(basePath);
   const runtime = createRuntime(basePath);
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
   const result = JSON.parse(
     await tool.invoke(
       {
@@ -223,7 +250,11 @@ await files.writeText(target, "must not exist");
 test("execute_native_script rejects reversed tempFile arguments", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-temp-order-"));
   const runtime = createRuntime(basePath);
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
   const result = JSON.parse(
     await tool.invoke(
       {
@@ -245,7 +276,11 @@ test("execute_native_script rejects a temporary file token as LibreOffice output
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-libreoffice-file-dir-"));
   await fs.writeFile(path.join(basePath, "input.html"), "<p>source</p>", "utf8");
   const runtime = createRuntime(basePath);
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
   const result = JSON.parse(
     await tool.invoke(
       {
@@ -273,7 +308,11 @@ test("execute_native_script requires task paths for file reads and output tokens
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-file-protocol-"));
   await fs.writeFile(path.join(basePath, "input.txt"), "source", "utf8");
   const runtime = createRuntime(basePath);
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
 
   for (const scriptBody of [
     "await files.readText(0)",
@@ -301,7 +340,11 @@ test("execute_native_script discards formal outputs when the script fails", asyn
       },
     }),
   });
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
   const result = JSON.parse(
     await tool.invoke(
       {
@@ -325,7 +368,11 @@ throw new Error("intentional failure");
 test("execute_native_script exposes opaque capability callables", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-opaque-"));
   const runtime = createRuntime(basePath);
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
   const result = JSON.parse(
     await tool.invoke(
       {
@@ -354,7 +401,11 @@ test("execute_native_script browser rejects non-HTTP navigation protocols", asyn
   }
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-browser-protocol-"));
   const runtime = createRuntime(basePath);
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
   const result = JSON.parse(
     await tool.invoke(
       {

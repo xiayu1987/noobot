@@ -5,6 +5,7 @@
  */
 import { initializeCurrentTurnMessageEventProjection } from "../../../src/events/current-turn-message-event-projection.js";
 import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
+import { TOOL_CALL_NAME_BINDING, createToolNameBinding } from "@noobot/model-protocol";
 import {
   executeToolCall as executeToolCallWithoutTurn,
   executeToolCallInTurn,
@@ -45,7 +46,11 @@ export function executeToolCall({
     abortSignal: runtime.abortSignal,
     toolStartedAtMs: Date.now(),
     ...options,
-    call,
+    call: {
+      ...call,
+      [TOOL_CALL_NAME_BINDING]:
+        call[TOOL_CALL_NAME_BINDING] ?? createToolNameBinding({ tools: [{ name: call.name }] }),
+    },
     runtime,
     agentContext,
   };

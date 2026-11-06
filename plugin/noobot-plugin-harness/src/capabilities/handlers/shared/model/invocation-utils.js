@@ -7,6 +7,7 @@ import {
   MODEL_ATTEMPT_KIND,
   MODEL_CONTEXT_SEQUENCE_POLICY,
   validateModelResponse,
+  requireResponseToolNameBindings,
 } from "@noobot/model-protocol";
 import {
   AUXILIARY_SEQUENCE_MESSAGE_KIND,
@@ -96,6 +97,7 @@ export async function invokeCapabilityModel({
       contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.CHECKPOINT_APPEND_ONLY,
     }),
   );
+  requireResponseToolNameBindings(response);
   if (!text(response.output.text)) {
     throw new TypeError(
       `harness capability model returned empty output: ${purpose || payload.purpose || "unknown"}`,

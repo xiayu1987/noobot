@@ -7,7 +7,7 @@ import { mkdir } from "node:fs/promises";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { TOOL_PATH_CONTRACTS } from "@noobot/path-resolver";
 import { resolveAgentRuntimePathContext } from "../../context/runtime-path-context.js";
-import { tool as structuredTool } from "@langchain/core/tools";
+import { structuredTool } from "../core/structured-tool.js";
 import { z } from "zod";
 import {
   isSandboxExecutionView,
@@ -83,6 +83,7 @@ export function createScriptTool({ agentContext }) {
   });
 
   const execute_script = structuredTool(
+    runtime,
     async (
       {
         command,
@@ -221,6 +222,7 @@ export function createScriptTool({ agentContext }) {
           .describe(tTool(runtime, "tools.script.fieldOutputFiles")),
       }),
     },
+    agentContext,
   );
 
   return [execute_script];

@@ -56,7 +56,7 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
         "当前为 sandbox 模式；workspace 逻辑路径与系统运行环境中列出的额外挂载目标可用于所有文件相关工具。挂载路径受全局配置的只读属性和路径策略统一约束。",
       hostWorkspaceView: "当前为 host 模式；workspace 类工具使用服务工作区视角。",
       taskLocalView:
-        "execute_native_script 的 task-local 仅本次调用有效；跨工具原样传递 attachmentRef。",
+        "{{tool:execute_native_script}} 的 task-local 仅本次调用有效；跨工具原样传递 attachmentRef。",
       superUserHost:
         "可使用 Windows（如 C:\\\\dir）、macOS/Linux（如 /Users、/home）等 host 绝对路径。",
       regularHost:

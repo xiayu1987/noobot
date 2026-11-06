@@ -161,12 +161,12 @@ export const INVOCATION_TOOL_SCHEMA = {
   execute_native_script: {
     description: {
       key: "tools.nativeScript.description",
-      text: "执行具备浏览器、文档、媒体和文件能力的 Node.js 函数；具体用法请通过 help 查询 execute_native_script。",
+      text: "执行具备浏览器、文档、媒体和文件能力的 Node.js 函数；具体用法请通过 {{tool:help}} 查询 {{tool:execute_native_script}}。",
     },
     params: {
       script_body: {
         key: "tools.nativeScript.fieldScriptBody",
-        text: "异步函数体源码；详细用法请通过 help 查询 execute_native_script。",
+        text: "异步函数体源码；详细用法请通过 {{tool:help}} 查询 {{tool:execute_native_script}}。",
       },
       inputs: {
         key: "tools.nativeScript.fieldInputs",

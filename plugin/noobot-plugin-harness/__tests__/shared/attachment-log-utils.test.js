@@ -15,8 +15,15 @@ import { attachmentTransfer, TRANSFER_REASON } from "@noobot/semantic-transfer-p
 import { containsExecutableScriptText } from "../../src/capabilities/handlers/shared/script-content-risk.js";
 
 test("containsExecutableScriptText recognizes executable script signals only", () => {
-  assert.equal(containsExecutableScriptText("```bash\nrm -rf /tmp/demo\n```"), true);
-  assert.equal(containsExecutableScriptText("说明代码函数 foo() 的用途"), false);
+  const bindings = { execute_script: { bindingName: "nb_command" } };
+  assert.equal(containsExecutableScriptText("```bash\nrm -rf /tmp/demo\n```", bindings), true);
+  assert.equal(containsExecutableScriptText("说明代码函数 foo() 的用途", bindings), false);
+  assert.throws(() => containsExecutableScriptText("nonempty"), /toolNameBindings/);
+  assert.equal(containsExecutableScriptText('nb_command({ command: "echo ok" })', bindings), true);
+  assert.equal(
+    containsExecutableScriptText('execute_script({ command: "echo ok" })', bindings),
+    false,
+  );
 });
 
 test("transfer payload binds and deduplicates complete V2 envelopes by stable transfer identity", () => {

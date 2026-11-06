@@ -7,6 +7,7 @@
 import { PROGRAMMING_REQUIRED_TOOL_NAMES } from "./scenario-policy.js";
 import { normalizeStringList } from "../utils.js";
 import { isPlainObject, text } from "@noobot/shared/value";
+import { requireUniqueToolIds } from "@noobot/model-protocol";
 
 export function removeDeniedToolNamesFromAllow({ toolPolicy = {} } = {}) {
   const policy = isPlainObject(toolPolicy) ? toolPolicy : {};
@@ -90,15 +91,8 @@ export function resolveToolBindings({ sourceTools = [], runConfig = {} } = {}) {
   if (allow.size) tools = tools.filter((item) => allow.has(String(item?.name || "")));
   const deny = new Set(normalizeStringList(policy.denyToolNames));
   if (deny.size) tools = tools.filter((item) => !deny.has(String(item?.name || "")));
-  const result = [];
-  const seen = new Set();
-  for (const item of tools) {
-    const name = text(item?.name);
-    if (name && !seen.has(name)) {
-      seen.add(name);
-      result.push(item);
-    }
-  }
+  const result = [...new Set(tools)];
+  requireUniqueToolIds(result.map((item) => item?.name));
   return result;
 }
 

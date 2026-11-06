@@ -9,7 +9,7 @@ export const EXECUTE_SCRIPT_MANUAL = {
     summary:
       "Run a shell script under the current execution isolation view, for work that genuinely needs a command line.",
     usage: [
-      "execute_script({ command, riskLevel, executionMode, includeLineNumbers, outputFiles })",
+      "{{tool:execute_script}}({ command, riskLevel, executionMode, includeLineNumbers, outputFiles })",
     ],
     params: {
       command: "Shell command. Must use the syntax of the interpreter declared by the runtime.",
@@ -23,7 +23,7 @@ export const EXECUTE_SCRIPT_MANUAL = {
         "Absolute paths to deliver as attachments after execution. Reuse returned attachment references verbatim in replies.",
     },
     notes: [
-      "Do not replace dedicated tools with commands: read with read_file, edit with patch_file, search with search.",
+      "Do not replace dedicated tools with commands: read with {{tool:read_file}}, edit with {{tool:patch_file}}, {{tool:search}} with search.",
       "Use paths relative to the current working directory; the interpreter and working directory come from the runtime environment section.",
       "background does not return early, and the command must not use background operators, nohup, or disown.",
       "overflowed marks oversized inline output; read the full result with attachmentRef from transfers.",

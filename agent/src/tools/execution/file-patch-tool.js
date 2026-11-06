@@ -8,7 +8,7 @@ import {
   resolvePathRef,
   TOOL_PATH_CONTRACTS,
 } from "@noobot/path-resolver";
-import { tool as structuredTool } from "@langchain/core/tools";
+import { structuredTool } from "../core/structured-tool.js";
 import { z } from "zod";
 import {
   FILE_MUTATION_ERROR_CODE,
@@ -409,6 +409,7 @@ async function runPatchFile({ agentContext, runtime, workspaceIo, mutationScopeI
 
 export function createPatchFileTool({ agentContext, runtime, workspaceIo, mutationScopeId }) {
   return structuredTool(
+    runtime,
     (args) => runPatchFile({ agentContext, runtime, workspaceIo, mutationScopeId, args }),
     {
       name: TOOL_NAME.PATCH_FILE,
@@ -416,5 +417,6 @@ export function createPatchFileTool({ agentContext, runtime, workspaceIo, mutati
       description: buildFileToolDescription(runtime, "tools.patch_file.description"),
       schema: buildPatchSchema(agentContext, runtime),
     },
+    agentContext,
   );
 }

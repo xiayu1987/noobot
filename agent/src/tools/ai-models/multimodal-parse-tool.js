@@ -6,7 +6,7 @@
 import { createRequire } from "node:module";
 import { readFile, stat } from "node:fs/promises";
 import { PATH_CAPABILITIES, TOOL_PATH_CONTRACTS, filePath as path } from "@noobot/path-resolver";
-import { tool as structuredTool } from "@langchain/core/tools";
+import { structuredTool } from "../core/structured-tool.js";
 import { z } from "zod";
 import {
   MULTIMODAL_CONFIG_OPERATION,
@@ -32,7 +32,7 @@ import { resolveModelSpecOrConfiguredDefault } from "../../models/index.js";
 import { createFileInputSchema, isUserAttachment, resolveFileInput } from "../core/file-input.js";
 import { registerTransferAttachmentResources } from "../core/resource-broker.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
-import { tTool } from "../core/tool-i18n.js";
+import { tTool, tToolTemplate } from "../core/tool-i18n.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import {
@@ -127,6 +127,7 @@ export function createMultimodalParseTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   if (!text(runtime?.basePath)) return [];
   const tool = structuredTool(
+    runtime,
     async ({ inputs: requestedInputs, prompt = "", model_name = "" }, toolConfig) => {
       const fileInputs = Array.isArray(requestedInputs) ? requestedInputs : [];
       if (!fileInputs.length) {
@@ -310,7 +311,7 @@ export function createMultimodalParseTool({ agentContext }) {
     {
       name: TOOL_NAME.MULTIMODAL_PARSE,
       metadata: { pathContract: TOOL_PATH_CONTRACTS.multimodalInput },
-      description: tTool(runtime, "tools.multimodalParse.description"),
+      description: tToolTemplate(runtime, "tools.multimodalParse.description"),
       schema: z.strictObject({
         inputs: z
           .array(
@@ -328,6 +329,7 @@ export function createMultimodalParseTool({ agentContext }) {
           .describe(tTool(runtime, "tools.multimodalParse.fieldModelName")),
       }),
     },
+    agentContext,
   );
   return [tool];
 }

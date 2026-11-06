@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { tool as structuredTool } from "@langchain/core/tools";
+import { structuredTool } from "../core/structured-tool.js";
 import { z } from "zod";
 import { TASK_STATUS } from "../../bot/config/constants.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
@@ -41,6 +41,7 @@ export function createTaskSummaryTool(ctx = {}) {
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
 
   const taskSummaryTool = structuredTool(
+    runtime,
     async ({ summaryContent }) => {
       if (systemRuntime.needsPhaseSummary !== true) {
         throw recoverableToolError(tTool(runtime, "tools.task_summary.notRequested"), {
@@ -108,6 +109,7 @@ export function createTaskSummaryTool(ctx = {}) {
         contextPolicy: createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY),
       },
     },
+    ctx.agentContext,
   );
 
   return [taskSummaryTool];

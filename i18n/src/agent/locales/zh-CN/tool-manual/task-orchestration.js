@@ -7,7 +7,7 @@
 export const TASK_ORCHESTRATION_MANUAL = {
   task_summary: {
     summary: "提交当前任务阶段小结，作为后续流程的权威阶段状态。",
-    usage: ["task_summary({ summaryContent })"],
+    usage: ["{{tool:task_summary}}({ summaryContent })"],
     params: {
       summaryContent: "严格遵循 NOOBOT_TASK_SUMMARY/1 文本协议的小结正文。",
     },
@@ -32,7 +32,7 @@ export const TASK_ORCHESTRATION_MANUAL = {
   },
   task_check: {
     summary: "提交任务检查切片，记录当前进展与下一步。",
-    usage: ["task_check({ checkContent })"],
+    usage: ["{{tool:task_check}}({ checkContent })"],
     params: {
       checkContent: "严格遵循 NOOBOT_TASK_CHECK/1 文本协议的检查正文。",
     },
@@ -47,6 +47,6 @@ export const TASK_ORCHESTRATION_MANUAL = {
       "收到周期任务检查提示后按需调用，不强制。",
       "该工具不创建小结标记或附件，结果只返回派生回执。",
     ],
-    pitfalls: ["与 task_summary 的协议头不同，两者不可互换套用。"],
+    pitfalls: ["与 {{tool:task_summary}} 的协议头不同，两者不可互换套用。"],
   },
 };

@@ -7,7 +7,7 @@
 export const USER_INTERACTION_MANUAL = {
   user_interaction: {
     summary: "向用户发起交互，收集信息或取得操作确认。",
-    usage: ["user_interaction({ content, fields, timeoutMs })"],
+    usage: ["{{tool:user_interaction}}({ content, fields, timeoutMs })"],
     params: {
       content: "交互说明正文，应把背景、选项与影响讲清楚，便于用户直接决策。",
       fields:

@@ -9,7 +9,9 @@
     "./protocol": "./src/protocol/index.js",
     "./policy": "./src/policy/index.js",
     "./ports": "./src/ports/index.js",
-    "./validation": "./src/validation/index.js"
+    "./validation": "./src/validation/index.js",
+    "./tool-identity-node": "./src/protocol/tool-identity-node.js",
+    "./tool-binding-scope-node": "./src/protocol/tool-binding-scope-node.js"
   },
   "scripts": {
     "test": "node ../scripts/run-with-isolated-tmp.mjs node --test __tests__/*.test.js"

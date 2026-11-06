@@ -49,14 +49,16 @@ const applyRevisedPlanFromText = planRevisionHelpers.applyRevisedPlanFromText;
 const buildPlanningRefinementPrompt = planRevisionHelpers.buildPlanningRefinementPrompt;
 const buildNextPhaseRelayContent = planRevisionHelpers.buildNextPhaseRelayContent;
 
-function relayRefinementNextPhase(ctx, bucket, locale) {
+function relayRefinementNextPhase(ctx, bucket, locale, toolNameBindings) {
   relaySeparateModelOutputAsUserMessage(ctx, {
+    toolNameBindings,
     locale,
     purpose: "next_phase_plan_refinement",
     content: buildNextPhaseRelayContent(bucket, locale, "refinement"),
     dedupe: true,
   });
   relaySeparateModelOutputAsUserMessage(ctx, {
+    toolNameBindings,
     locale,
     purpose: "next_phase_plan_refinement_followup",
     content: [
@@ -171,7 +173,8 @@ export async function runPlanningRefinementBySeparateModel(
       error: String(error?.message || error || ""),
     };
   }
-  const refinementText = text(refinementResponse?.output?.text);
+  if (refinementResponse === null) return { applied: false, status: "not_invoked" };
+  const refinementText = text(refinementResponse.output.text);
   const refinementAttachments = await saveCapabilityOutputAsTransferArtifacts(ctx, {
     purpose: "planning_refinement",
     content: refinementText,
@@ -182,6 +185,7 @@ export async function runPlanningRefinementBySeparateModel(
     locale,
     purpose: "planning_refinement",
     content: refinementText,
+    toolNameBindings: refinementResponse.toolNameBindings,
     dedupe: true,
     transferPayload: normalizeTransferPayload(refinementAttachments),
   });
@@ -192,7 +196,7 @@ export async function runPlanningRefinementBySeparateModel(
     targetMainStepIndexes: appliedTargetMainStepIndexes,
   });
   if (refinementApplied) {
-    relayRefinementNextPhase(ctx, bucket, locale);
+    relayRefinementNextPhase(ctx, bucket, locale, refinementResponse.toolNameBindings);
     return {
       applied: true,
       status: "completed",

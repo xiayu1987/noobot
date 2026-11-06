@@ -93,12 +93,12 @@ export const FILE_TOOL_SCHEMA = {
   patch_file: {
     description: {
       key: "tools.patch_file.description",
-      text: "Read/search the file first, then use its complete returned path; omit root and do not add project, a/, or b/ prefixes. Order non-overlapping hunks by their locations in the original file. In apply_patch, @@ L<line> selects the nearest exact match; anchors do not reset the cursor.",
+      text: "Read/{{tool:search}} the file first, then use its complete returned path; omit root and do not add project, a/, or b/ prefixes. Order non-overlapping hunks by their locations in the original file. In apply_patch, @@ L<line> selects the nearest exact match; anchors do not reset the cursor.",
     },
     params: {
       patch: {
         key: "tools.patch_file.fieldPatch",
-        text: "Patch content; reuse the complete path and exact context returned by read_file/search.",
+        text: "Patch content; reuse the complete path and exact context returned by {{tool:read_file}}/{{tool:search}}.",
       },
       format: {
         key: "tools.patch_file.fieldFormat",
@@ -123,9 +123,9 @@ export const FILE_TOOL_SCHEMA = {
     },
     texts: {
       "tools.patch_file.fieldPatchPathHintHost":
-        "Regular users must copy the workspace path returned by read_file/search exactly; do not rewrite it or add prefixes.",
+        "Regular users must copy the workspace path returned by {{tool:read_file}}/{{tool:search}} exactly; do not rewrite it or add prefixes.",
       "tools.patch_file.fieldPatchPathHintSuperHost":
-        "Super administrators must also copy the path returned by read_file/search exactly; host absolute paths must not be rewritten or prefixed.",
+        "Super administrators must also copy the path returned by {{tool:read_file}}/{{tool:search}} exactly; host absolute paths must not be rewritten or prefixed.",
       "tools.patch_file.fieldRootPathHintSandbox":
         "Usually omit root; sandbox absolute paths are not allowed.",
       "tools.patch_file.fieldRootPathHintHost":

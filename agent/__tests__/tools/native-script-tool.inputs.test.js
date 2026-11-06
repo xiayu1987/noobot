@@ -56,7 +56,11 @@ test("execute_native_script resolves a canonical attachment reference", async ()
       },
     }),
   });
-  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
+  });
   const result = JSON.parse(
     await tool.invoke(
       {
@@ -77,7 +81,9 @@ await files.writeText(target, await files.readText(source));
 test("execute_native_script rejects model-authored attachment identity objects", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-invalid-identity-"));
   const [tool] = createNativeScriptTool({
-    agentContext: createTestAgentExecutionScope(createRuntime(basePath)),
+    agentContext: createTestAgentExecutionScope(createRuntime(basePath), {
+      tools: [{ name: "execute_native_script" }],
+    }),
   });
 
   await assert.rejects(
@@ -132,7 +138,9 @@ test("execute_native_script accepts a logical workspace path", async () => {
       },
     }),
   });
-  const scope = createTestAgentExecutionScope(runtime);
+  const scope = createTestAgentExecutionScope(runtime, {
+    tools: [{ name: "execute_native_script" }],
+  });
   const [tool] = createNativeScriptTool({ agentContext: scope });
   const result = JSON.parse(
     await tool.invoke(
@@ -179,7 +187,9 @@ test("execute_native_script projects a sandbox workspace path into task-local in
     }),
   });
   const [tool] = createNativeScriptTool({
-    agentContext: createTestAgentExecutionScope(runtime),
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
   });
   const result = JSON.parse(
     await tool.invoke(
@@ -231,7 +241,9 @@ test("execute_native_script projects a global sandbox mount into task-local inpu
     }),
   });
   const [tool] = createNativeScriptTool({
-    agentContext: createTestAgentExecutionScope(runtime),
+    agentContext: createTestAgentExecutionScope(runtime, {
+      tools: [{ name: "execute_native_script" }],
+    }),
   });
   const result = JSON.parse(
     await tool.invoke(

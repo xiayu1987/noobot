@@ -122,3 +122,15 @@ export function isWorkspaceRuntimeRelativePath(value) {
     !normalized.split("/").includes("..")
   );
 }
+
+export function isWorkspaceUserConfigRelativePath(value) {
+  if (typeof value !== "string") return false;
+  const parts = value.split("/");
+  return (
+    parts.length === 2 &&
+    parts[0] !== "." &&
+    parts[0] !== ".." &&
+    parts[0].length > 0 &&
+    parts[1] === WORKSPACE_LAYOUT.CONFIG_FILE
+  );
+}

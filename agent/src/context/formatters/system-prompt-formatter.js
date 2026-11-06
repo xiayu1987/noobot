@@ -9,6 +9,7 @@ import { SYSTEM_PROMPT_FORMATTER_I18N as enSystemPromptFormatterI18n } from "noo
 import { projectAttachmentMetaForModel } from "../../artifacts/index.js";
 import { isPlainObject, text } from "@noobot/shared/value";
 import { requireSessionCaller } from "@noobot/shared/session-caller";
+import { scenarioPromptSection, toolNamePromptSection } from "./tool-name-prompt-section.js";
 
 function toSystemSection(title, content) {
   return `# ${title}\n${content}`;
@@ -198,17 +199,21 @@ export function composeSystemInfoSections({
     ? String(contextPromptI18n.executionEvidence).trim()
     : "";
   return [
-    text(systemPrompt),
+    toolNamePromptSection(text(systemPrompt)),
     jsonSection("staticInfo", staticInfo),
-    textSection(
-      sectionTitle(sections, "pathGuidance"),
-      buildPathGuidanceSection(staticInfo, contextPromptI18n),
+    toolNamePromptSection(
+      textSection(
+        sectionTitle(sections, "pathGuidance"),
+        buildPathGuidanceSection(staticInfo, contextPromptI18n),
+      ),
     ),
     executionEvidence
-      ? toSystemSection(sectionTitle(sections, "executionEvidence"), executionEvidence)
+      ? toolNamePromptSection(
+          toSystemSection(sectionTitle(sections, "executionEvidence"), executionEvidence),
+        )
       : "",
     jsonSection("dynamicInfo", normalizeDynamicInfoForSystem(dynamicInfo)),
-    jsonSection("scenario", scenarioSection),
+    scenarioPromptSection(sectionTitle(sections, "scenario"), scenarioSection),
     textSection(sectionTitle(sections, "workspaceDirectories"), workspaceSection),
     hasValue(longMemory)
       ? toSystemSection(sectionTitle(sections, "longMemory"), formatLongMemory(longMemory))

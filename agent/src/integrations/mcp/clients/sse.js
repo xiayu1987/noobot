@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { addAbortListener } from "node:events";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { recoverableToolError } from "../../../shared/errors/index.js";
 import { runBestEffort } from "@noobot/shared/best-effort";
@@ -23,6 +24,7 @@ export class SseMcpClient extends BaseMcpClient {
     super({ baseUrl, headers, signal, fetchImpl });
     this.messageUrl = "";
     this._streamAbortController = null;
+    this._streamAbortSubscription = null;
     this._pending = new Map();
     this._connectPromise = null;
     this._endpointResolved = false;
@@ -97,9 +99,9 @@ export class SseMcpClient extends BaseMcpClient {
     if (this.signal) {
       if (this.signal.aborted) this._streamAbortController.abort();
       else {
-        this.signal.addEventListener("abort", () => this._streamAbortController?.abort(), {
-          once: true,
-        });
+        this._streamAbortSubscription = addAbortListener(this.signal, () =>
+          this._streamAbortController?.abort(this.signal.reason),
+        );
       }
     }
     const response = await this.fetch(this.baseUrl, {
@@ -160,9 +162,13 @@ export class SseMcpClient extends BaseMcpClient {
 
   async close() {
     const controller = this._streamAbortController;
+    const connection = this._connectPromise;
+    this._streamAbortSubscription?.[Symbol.dispose]();
+    this._streamAbortSubscription = null;
     this._streamAbortController = null;
     this._connectPromise = null;
     if (controller && !controller.signal.aborted) controller.abort();
+    await connection;
   }
 
   async _doRequest({ method, params = {} }) {

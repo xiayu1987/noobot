@@ -61,6 +61,7 @@ test("planning separate_model avoids duplicate invoker calls while one run is in
 test("relaySeparateModelOutputAsUserMessage dedupes repeated planning relay when enabled", () => {
   const ctx = createTestHookContext();
   const payload = {
+    toolNameBindings: {},
     purpose: "planning",
     content: "1. x",
     dedupe: true,
@@ -83,6 +84,7 @@ test("relaySeparateModelOutputAsUserMessage preserves oversized relay content wh
   const ctx = createTestHookContext();
   const content = `HEAD-${"x".repeat(2400)}-TAIL`;
   const relayed = relaySeparateModelOutputAsUserMessage(ctx, {
+    toolNameBindings: {},
     purpose: "planning_refinement",
     content,
     dedupe: true,
@@ -143,6 +145,7 @@ test("relaySeparateModelOutputAsUserMessage truncates oversized relay content an
   const maxChars = LENGTH_THRESHOLDS.harness.relayInjectionMaxChars;
   const content = `HEAD-${"y".repeat(maxChars)}-TAIL`;
   const relayed = relaySeparateModelOutputAsUserMessage(ctx, {
+    toolNameBindings: {},
     purpose: "guidance",
     content,
   });
@@ -167,6 +170,7 @@ test("relaySeparateModelOutputAsUserMessage is blocked after agent turn ended", 
   await runtime.runHook(HOOK_POINT.AGENT.AFTER_TURN, ctx, createTestHarnessMeta());
 
   const relayed = relaySeparateModelOutputAsUserMessage(ctx, {
+    toolNameBindings: {},
     purpose: "planning",
     content: "1. x",
     dedupe: true,

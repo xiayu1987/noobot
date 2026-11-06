@@ -609,13 +609,16 @@ test("harness records tool call and state commit hook artifacts", async () => {
     identity: { userId: "u1", sessionId, dialogProcessId },
     systemRuntime: {},
   });
-  const agentContext = createTestAgentExecutionScope(runtime);
+  const agentContext = createTestAgentExecutionScope(runtime, {
+    tools: [{ name: "demo_tool" }, { name: "failing_tool" }],
+  });
 
   const successCall = { id: "call_ok", name: "demo_tool", args: { x: 1 } };
   const successResult = await executeToolCall({
     abortSignal: runtime.abortSignal,
     call: successCall,
     tool: {
+      name: "demo_tool",
       async invoke(args) {
         return { ok: true, echoed: args.x };
       },
@@ -632,6 +635,7 @@ test("harness records tool call and state commit hook artifacts", async () => {
     abortSignal: runtime.abortSignal,
     call: errorCall,
     tool: {
+      name: "failing_tool",
       async invoke() {
         throw new Error("boom from test tool");
       },

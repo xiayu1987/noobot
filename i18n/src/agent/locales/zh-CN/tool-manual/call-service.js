@@ -7,7 +7,7 @@
 export const CALL_SERVICE_MANUAL = {
   call_service: {
     summary: "调用配置中已启用的外部服务端点。",
-    usage: ["call_service({ serviceName, endpointName, params })"],
+    usage: ["{{tool:call_service}}({ serviceName, endpointName, params })"],
     params: {
       serviceName: "服务名，必须是配置里已声明且启用的服务。",
       endpointName: "端点名，省略时按服务配置的默认端点解析。",

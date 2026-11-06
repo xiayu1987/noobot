@@ -8,6 +8,7 @@ import { bindAssistantMessageEventStream } from "../../../src/events/message-eve
 import { initializeCurrentTurnMessageEventProjection } from "../../../src/events/current-turn-message-event-projection.js";
 import { createModelContext } from "@noobot/context-protocol";
 import { normalizeSystemRuntimeCounters } from "@noobot/agent-config-protocol";
+import { createToolNameBinding, TOOL_CALL_NAME_BINDING } from "@noobot/model-protocol";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import {
   bindTestIdentityToRuntime,
@@ -39,6 +40,7 @@ export function createTestModelPort(providerModel = {}) {
         signal: request?.options?.signal,
       });
       return {
+        toolNameBindings: {},
         output: {
           ...(typeof response?.content === "string" || Array.isArray(response?.content)
             ? { content: response.content }
@@ -50,9 +52,19 @@ export function createTestModelPort(providerModel = {}) {
                 ? response.content
                 : "",
           toolCalls: Array.isArray(response?.toolCalls)
-            ? response.toolCalls
+            ? response.toolCalls.map((call) => ({
+                ...call,
+                [TOOL_CALL_NAME_BINDING]: createToolNameBinding({
+                  tools,
+                }),
+              }))
             : Array.isArray(response?.tool_calls)
-              ? response.tool_calls
+              ? response.tool_calls.map((call) => ({
+                  ...call,
+                  [TOOL_CALL_NAME_BINDING]: createToolNameBinding({
+                    tools,
+                  }),
+                }))
               : [],
           reasoning: String(response?.reasoning || ""),
           finishReason: String(

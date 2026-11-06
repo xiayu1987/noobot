@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { tool as structuredTool } from "@langchain/core/tools";
+import { structuredTool } from "../core/structured-tool.js";
 import { z } from "zod";
 import {
   MODEL_CONTEXT_SEQUENCE_POLICY,
@@ -404,6 +404,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
   const sharedFetch = runtime.sharedTools.fetch;
 
   const multimodalGenerateTool = structuredTool(
+    runtime,
     (input, toolConfig) =>
       runMultimodalGeneration(input, {
         runtime,
@@ -441,6 +442,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
           .describe(tTool(runtime, "tools.multimodal.fieldImageUrls")),
       }),
     },
+    agentContext,
   );
 
   return [multimodalGenerateTool];

@@ -9,7 +9,7 @@ import {
   PATH_ENTRY_KIND,
   TOOL_PATH_CONTRACTS,
 } from "@noobot/path-resolver";
-import { tool as structuredTool } from "@langchain/core/tools";
+import { structuredTool } from "../core/structured-tool.js";
 import { z } from "zod";
 import {
   projectToolPathRef,
@@ -19,7 +19,7 @@ import { toToolJsonResult } from "../core/tool-json-result.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { registerResource } from "../core/resource-broker.js";
-import { tTool } from "../core/tool-i18n.js";
+import { tTool, tToolTemplate } from "../core/tool-i18n.js";
 import { TOOL_NAME } from "../constants/index.js";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { searchFilesWithRipgrep } from "./file-search.js";
@@ -33,7 +33,7 @@ import { buildFileToolDescription, resolveFileResourceRiskScope } from "./file-t
 
 function buildSearchSchema(runtime) {
   return z.strictObject({
-    query: z.string().min(1).describe(tTool(runtime, "tools.search.fieldQuery")),
+    query: z.string().min(1).describe(tToolTemplate(runtime, "tools.search.fieldQuery")),
     isRegex: z
       .boolean()
       .optional()
@@ -222,6 +222,7 @@ async function runSearch({ agentContext, runtime, args, abortSignal }) {
 
 export function createSearchTool({ agentContext, runtime }) {
   return structuredTool(
+    runtime,
     (args, toolConfig) =>
       runSearch({ agentContext, runtime, args, abortSignal: toolConfig.signal }),
     {
@@ -230,5 +231,6 @@ export function createSearchTool({ agentContext, runtime }) {
       description: buildFileToolDescription(runtime, "tools.search.description"),
       schema: buildSearchSchema(runtime),
     },
+    agentContext,
   );
 }

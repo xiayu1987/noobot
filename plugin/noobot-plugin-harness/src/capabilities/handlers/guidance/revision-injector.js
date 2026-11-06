@@ -212,12 +212,14 @@ export async function maybeCapturePlanUpdateByInject(ctx = {}) {
       const locale = state?.locale || LOCALE.ZH_CN;
       if (applied) {
         relaySeparateModelOutputAsUserMessage(currentCtx, {
+          toolNameBindings: currentCtx.modelResponse.toolNameBindings,
           locale,
           purpose: stage === "revision" ? "next_phase_plan" : "next_phase_plan_refinement",
           content: buildNextPhaseRelayContent(bucket, locale, stage),
           dedupe: true,
         });
         relaySeparateModelOutputAsUserMessage(currentCtx, {
+          toolNameBindings: currentCtx.modelResponse.toolNameBindings,
           locale,
           purpose:
             stage === "revision"

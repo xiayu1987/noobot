@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import express from "express";
 import { registerWorkspaceRoutes } from "../../routes/workspace-routes.js";
 import { withTestServer } from "./session-routes.helpers.js";
+import { BUILTIN_TOOL_IDS } from "noobot-agent/tools";
 
 test("workspace config declarations expose only user-visible provider metadata", async () => {
   const app = express();
@@ -38,6 +39,7 @@ test("workspace config declarations expose only user-visible provider metadata",
       ok: true,
       declarations: {
         providers: { primary: { reasoning_effort_options: ["none", "high"] } },
+        toolBindings: { toolIds: [...BUILTIN_TOOL_IDS], bindings: {} },
       },
     });
   });

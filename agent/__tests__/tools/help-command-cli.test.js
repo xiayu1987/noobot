@@ -45,11 +45,37 @@ import {
   buildRuntimeSection,
   projectAttachmentRecord,
   projectPathFields,
-  resolveAvailableTools,
+  resolveAvailableTools as readAvailableTools,
 } from "../../src/tools/collaboration/help-sections.js";
 import { createHelpTool } from "../../src/tools/collaboration/help-tool.js";
 import { projectToolResultForModel } from "../../src/tools/core/tool-json-result.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import {
+  createDirectToolNameBinding,
+  resolveDirectToolNameBinding,
+} from "../../src/tools/core/structured-tool.js";
+import { resolveToolBindings } from "@noobot/agent-config-protocol";
+import {
+  getToolNameBinding,
+  runWithToolNameBinding,
+} from "@noobot/model-protocol/tool-binding-scope-node";
+import { TOOL_MANUAL_PROVIDER } from "@noobot/model-protocol";
+import { tToolManual } from "../../src/tools/core/tool-schema-i18n.js";
+import { executeToolCall } from "../../src/runtime/tool-execution/tool-runner.js";
+import { bindTestIdentityToRuntime } from "../helpers/test-turn-identity.js";
+import { buildLangChainMcpTools } from "../../src/integrations/mcp/tool-adapter.js";
+import { createReadFileTool } from "../../src/tools/execution/file-read-tool.js";
+
+function resolveAvailableTools(scope) {
+  const runtime = scope.bindings.runtime;
+  const tools = resolveToolBindings({
+    sourceTools: scope.bindings.tools,
+    runConfig: runtime.runConfig,
+  });
+  return runWithToolNameBinding(createDirectToolNameBinding(runtime, tools), () =>
+    readAvailableTools(scope),
+  );
+}
 
 function isAbsoluteAnyPlatform(value) {
   return /^([A-Za-z]:[\\/]|[\\/])/.test(String(value || ""));
@@ -102,7 +128,11 @@ function createScope({
     bindings: {
       runtime,
       mainFlowControl: createMainFlowControlPort(runtime),
-      tools: toolNames.map((name) => ({ name, func: async () => "" })),
+      tools: toolNames.map((name) => ({
+        name,
+        func: async () => "",
+        [TOOL_MANUAL_PROVIDER]: () => tToolManual(runtime, name),
+      })),
       extensions: {},
     },
   });
@@ -452,6 +482,46 @@ test("tools listing comes from runtime bindings rather than the static registry"
   );
 });
 
+test("help resolves binding names across listing, manuals, capabilities and isolation", async () => {
+  const globalConfig = {
+    tools: {
+      bindings: {
+        help: { bindingName: "nb_help" },
+        read_file: { bindingName: "nb_read" },
+        execute_native_script: { bindingName: "nb_native" },
+      },
+    },
+  };
+  const [tool] = createHelpTool({
+    agentContext: createScope({
+      globalConfig,
+      toolNames: [...FIXTURE_TOOL_NAMES, TOOL_NAME.EXECUTE_NATIVE_SCRIPT],
+    }),
+  });
+  const query = async (command) => JSON.parse(await tool.func({ command }));
+  for (const command of ["", "--bogus"]) {
+    const index = await query(command);
+    assert.ok(index.usage.some((usage) => usage.includes("--name nb_read")));
+    assert.ok(index.usage.every((usage) => usage.startsWith("nb_help(")));
+  }
+  const listed = await query("--tools");
+  assert.deepEqual(listed.toolNames, ["nb_help", "nb_native", "nb_read", "search"]);
+  const manual = await query("--tools --name nb_read");
+  assert.equal(manual.ok, true);
+  assert.notEqual(manual.manual, null);
+  assert.doesNotMatch(JSON.stringify(manual.manual), /\{\{tool:/);
+  const oldName = await query("--tools --name read_file");
+  assert.equal(oldName.manual, null);
+  const native = await query("--tools --name nb_native");
+  assert.ok(native.capabilities.every(({ command }) => command.includes("--name nb_native")));
+  const browser = await query("--tools --name nb_native --capability browser");
+  assert.equal(browser.ok, true);
+  const isolation = await query("--isolation");
+  const names = Object.values(isolation.isolation.toolsByExecutionClass).flat();
+  assert.ok(names.includes("nb_read"));
+  assert.equal(names.includes("read_file"), false);
+});
+
 test("tools listing applies the same runtime tool policy that narrows the model bindings", async () => {
   const scopeOptions = {
     toolNames: [...FIXTURE_TOOL_NAMES, TOOL_NAME.TASK_SUMMARY],
@@ -474,7 +544,7 @@ test("tools listing applies the same runtime tool policy that narrows the model 
   );
 });
 
-test("querying a registered but unassembled tool reports it as unavailable and hides its manual", async () => {
+test("querying an inactive tool reports it as unavailable and hides its manual", async () => {
   const [tool] = createHelpTool({ agentContext: createScope() });
   const parsed = JSON.parse(
     await tool.func({ command: `--tools --name ${TOOL_NAME.EXECUTE_SCRIPT}` }),
@@ -487,6 +557,135 @@ test("querying a registered but unassembled tool reports it as unavailable and h
   const availableQuery = JSON.parse(await tool.func({ command: "--tools --name read_file" }));
   assert.equal(availableQuery.queriedTool, "read_file");
   assert.notEqual(availableQuery.manual, null, "an available tool must expose its manual");
+});
+
+test("inactive configured names, internal identities and unknown names share an unavailable result", async () => {
+  const [help] = createHelpTool({
+    agentContext: createScope({
+      toolNames: ["help"],
+      globalConfig: { tools: { bindings: { execute_script: { bindingName: "run_shell" } } } },
+    }),
+  });
+  const reasons = new Set();
+  for (const name of ["run_shell", "execute_script", "unknown", "__proto__", "constructor"]) {
+    const result = JSON.parse(await help.invoke({ command: `--tools --name ${name}` }));
+    assert.equal(result.queriedTool, name);
+    assert.equal(result.manual, null);
+    assert.deepEqual(result.toolNames, ["help"]);
+    assert.ok(result.reason.length > 0);
+    reasons.add(result.reason);
+  }
+  assert.equal(reasons.size, 1);
+});
+
+test("direct invoke and executor share the policy-selected tool view", async () => {
+  const scope = createScope({
+    runConfig: { hookManager: null, toolPolicy: { denyToolNames: ["search"] } },
+    globalConfig: { tools: { bindings: { read_file: { bindingName: "bound_read" } } } },
+  });
+  const runtime = scope.bindings.runtime;
+  bindTestIdentityToRuntime(runtime, IDENTITY);
+  const [help] = createHelpTool({ agentContext: scope });
+  const clonedHelp = Object.assign(Object.create(Object.getPrototypeOf(help)), help);
+  assert.deepEqual(resolveDirectToolNameBinding(runtime, clonedHelp).toolIds, [
+    "help",
+    "read_file",
+  ]);
+  assert.throws(
+    () => resolveDirectToolNameBinding(runtime, { name: "unregistered" }),
+    /requires its tool context/,
+  );
+  assert.deepEqual(resolveDirectToolNameBinding(runtime, { name: "unregistered" }, scope).toolIds, [
+    "help",
+    "read_file",
+  ]);
+  for (const command of ["--tools", "--tools --name bound_read"]) {
+    const direct = JSON.parse(await help.invoke({ command }));
+    const result = await executeToolCall({
+      call: { id: "direct-help", name: "help", args: { command } },
+      tool: help,
+      runtime,
+      agentContext: scope,
+      abortSignal: runtime.abortSignal,
+      toolStartedAtMs: Date.now(),
+    });
+    assert.equal(result.success, true, result.toolResultText);
+    assert.deepEqual(JSON.parse(result.toolResultText), direct);
+    if (command === "--tools") assert.deepEqual(direct.toolNames, ["bound_read", "help"]);
+    else assert.ok(direct.manual.usage.length);
+  }
+});
+
+test("real read_file construction retains the context and honors an explicit execution context", async () => {
+  const scope = createScope({
+    toolNames: ["read_file", "help", "search"],
+    runConfig: { hookManager: null, toolPolicy: { denyToolNames: ["search"] } },
+  });
+  const runtime = scope.bindings.runtime;
+  const read = createReadFileTool({ agentContext: scope, runtime });
+  assert.deepEqual(resolveDirectToolNameBinding(runtime, read).toolIds, ["read_file", "help"]);
+  const override = createScope({ toolNames: ["read_file", "help", "web_search"] });
+  assert.deepEqual(resolveDirectToolNameBinding(runtime, read, override).toolIds, [
+    "read_file",
+    "help",
+    "web_search",
+  ]);
+  const stop = new Error("stop before file access");
+  await assert.rejects(
+    () =>
+      read.func({
+        get filePath() {
+          assert.deepEqual(getToolNameBinding().toolIds, ["read_file", "help"]);
+          throw stop;
+        },
+      }),
+    (error) => error === stop,
+  );
+  assert.equal(getToolNameBinding(), undefined);
+  const detached = createReadFileTool({ runtime });
+  assert.throws(() => resolveDirectToolNameBinding(runtime, detached), /requires its tool context/);
+  assert.deepEqual(resolveDirectToolNameBinding(runtime, detached, scope).toolIds, [
+    "read_file",
+    "help",
+  ]);
+  await assert.rejects(
+    () => detached.invoke({ filePath: "unused.txt", riskLevel: "low" }),
+    /requires its tool context/,
+  );
+});
+
+test("external help uses declared manual support without consulting built-in catalogs", async () => {
+  const scope = createScope({ toolNames: ["help"] });
+  const runtime = scope.bindings.runtime;
+  const [mcp] = buildLangChainMcpTools({
+    serverName: "help-test",
+    mcpTools: [
+      { name: "lookup", description: "literal {{tool:bad.name}}", inputSchema: { type: "object" } },
+    ],
+    client: {
+      callTool: async () => {
+        throw new Error("help must not invoke remote tools");
+      },
+    },
+  });
+  const manual = { summary: "literal {{tool:bad.name}}", usage: ["external usage"] };
+  scope.bindings.tools.push(mcp, { name: "plugin_tool", [TOOL_MANUAL_PROVIDER]: () => manual });
+  for (const name of ["__proto__", "constructor", "toString"]) scope.bindings.tools.push({ name });
+  const [help] = createHelpTool({ agentContext: scope });
+  for (const name of [mcp.name, "__proto__", "constructor", "toString"]) {
+    const result = JSON.parse(await help.invoke({ command: `--tools --name ${name}` }));
+    assert.equal(result.ok, true);
+    assert.equal(result.manual, null);
+    assert.equal(result.manualStatus, "unsupported");
+  }
+  const result = JSON.parse(await help.invoke({ command: "--tools --name plugin_tool" }));
+  assert.deepEqual(result.manual, manual);
+  assert.throws(() => tToolManual(runtime, "__proto__"), /manual i18n not configured/);
+  scope.bindings.tools.push({ name: "broken_plugin", [TOOL_MANUAL_PROVIDER]: () => ({}) });
+  await assert.rejects(
+    help.invoke({ command: "--tools --name broken_plugin" }),
+    /non-empty object/,
+  );
 });
 
 test("models section excludes providers disabled by enabled false", async () => {

@@ -198,7 +198,8 @@ export async function runPlanUpdateAfterSummary(ctx = {}, meta = {}, { baseMessa
     });
     return changed;
   }
-  const revisionText = text(revisionResponse?.output?.text);
+  if (revisionResponse === null) return changed;
+  const revisionText = text(revisionResponse.output.text);
   applyDynamicPolicyPromptFromText(bucket, revisionText, {
     source: "planning_revision",
     stage: "revision",
@@ -213,6 +214,7 @@ export async function runPlanUpdateAfterSummary(ctx = {}, meta = {}, { baseMessa
     locale,
     purpose: "planning_revision",
     content: revisionText,
+    toolNameBindings: revisionResponse.toolNameBindings,
     dedupe: true,
     transferPayload: normalizeTransferPayload(revisionAttachments),
   });
@@ -229,12 +231,14 @@ export async function runPlanUpdateAfterSummary(ctx = {}, meta = {}, { baseMessa
     return changed;
   }
   relaySeparateModelOutputAsUserMessage(ctx, {
+    toolNameBindings: revisionResponse.toolNameBindings,
     locale,
     purpose: "next_phase_plan",
     content: buildNextPhaseRelayContent(bucket, locale, "revision"),
     dedupe: true,
   });
   relaySeparateModelOutputAsUserMessage(ctx, {
+    toolNameBindings: revisionResponse.toolNameBindings,
     locale,
     purpose: "next_phase_plan_followup",
     content: buildPostPlanUserFollowupPrompt(locale, "revision"),
@@ -460,6 +464,7 @@ async function invokeGuidanceModel({
       ctx,
       meta,
     });
+    if (response === null) return { ok: false, summaryStartedAt };
     return { ok: true, response, summaryStartedAt };
   } catch (error) {
     logGuidanceModelFailure(ctx, { purpose, summaryStartedAt, error });
@@ -600,6 +605,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     purpose,
     relayCorrelationId,
     content: relayText,
+    toolNameBindings: invocation.response.toolNameBindings,
     transferPayload: normalizeTransferPayload(relayAttachments),
   });
   if (!relayInjected) {

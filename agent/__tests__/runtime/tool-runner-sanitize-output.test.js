@@ -17,6 +17,7 @@ function runtime(sanitizeOutput) {
 
 test("tool runner sanitizes successful output when enabled and preserves it when disabled", async () => {
   const tool = {
+    name: "demo",
     invoke: async () => JSON.stringify({ toolName: "demo", ok: true, content: email }),
   };
   const sanitized = await executeToolCall({
@@ -36,6 +37,7 @@ test("tool runner sanitizes successful output when enabled and preserves it when
 
 test("tool runner applies the output sanitization preference to recoverable errors", async () => {
   const tool = {
+    name: "demo",
     invoke: async () => {
       throw new Error(email);
     },

@@ -12,8 +12,10 @@ import {
   CONFIG_PATH_REPRESENTATION,
 } from "../contract/repair.js";
 import { projectConfigDocumentForAccess } from "../contract/config-structure.js";
+import { requireToolBindingConfig } from "@noobot/model-protocol";
 
 export function sanitizeUserConfig(input = {}) {
+  requireToolBindingConfig(input?.tools?.bindings);
   const src = normalizeKnownConfigKeys(isPlainObject(input) ? input : {});
   const out = projectConfigDocumentForAccess(src, {
     scope: CONFIG_DOCUMENT_SCOPE.USER,

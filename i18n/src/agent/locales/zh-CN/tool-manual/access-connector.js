@@ -7,7 +7,7 @@
 export const ACCESS_CONNECTOR_MANUAL = {
   access_connector: {
     summary: "访问用户为当前会话勾选且已连接的连接器。",
-    usage: ["access_connector({ connector_id, operation, input })"],
+    usage: ["{{tool:access_connector}}({ connector_id, operation, input })"],
     params: {
       connector_id: "当前会话已勾选连接器的稳定 ID。",
       operation: "该连接器实例暴露的已注册操作名。",

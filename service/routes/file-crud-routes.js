@@ -237,7 +237,7 @@ export function registerFileCrudRoutes(
             rename,
             remove: rm,
           });
-        if (authorizeWrite) await authorizeWrite(req, absolutePath);
+        if (authorizeWrite) await authorizeWrite(req, absolutePath, { root, content });
         const result = trackMutations
           ? await applyFileMutation({
               filePath: absolutePath,

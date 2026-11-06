@@ -66,7 +66,7 @@ function withExecutorModelHost(runtime) {
 
 function getMultimodalGenerateTool(runtime) {
   const tools = createMultimodalGenerateTool({
-    agentContext: { bindings: { runtime } },
+    agentContext: { bindings: { tools: [{ name: "multimodal_generate" }], runtime } },
   });
   const tool = tools.find((item) => item?.name === "multimodal_generate");
   assert.ok(tool, "multimodal_generate tool should exist");

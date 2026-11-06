@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { tool as structuredTool } from "@langchain/core/tools";
+import { structuredTool } from "../core/structured-tool.js";
 import { runBestEffort } from "@noobot/shared/best-effort";
 import { z } from "zod";
 import { createMcpAgentTools } from "../../integrations/mcp/index.js";
@@ -145,17 +145,13 @@ function logMcpTaskFailure({ runtime, identity, parentSessionId, input, error })
 export function createMcpTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const callMcpTaskTool = structuredTool(
+    runtime,
     async (rawInput, toolConfig) => {
       const abortSignal = toolConfig.signal;
       const input = requireTaskInput(runtime, rawInput);
       const identity = getSessionIdsFromAgentContext(agentContext);
       const parentSessionId = getChildRunParentSessionIdFromAgentContext(agentContext);
       let mcpToolset = null;
-      const closeOnAbort = () =>
-        runBestEffort(() => mcpToolset?.close(), {
-          operationName: "mcpTool.closeToolsetOnAbort",
-          context: { mcpName: input.mcpName },
-        });
       try {
         requireRunContext(runtime, identity);
         mcpToolset = await createMcpAgentTools({
@@ -165,7 +161,6 @@ export function createMcpTool({ agentContext }) {
           signal: abortSignal,
           fetchImpl: runtime.sharedTools.fetch,
         });
-        abortSignal.addEventListener("abort", closeOnAbort, { once: true });
         return await runMcpTask({
           agentContext,
           runtime,
@@ -182,11 +177,7 @@ export function createMcpTool({ agentContext }) {
           code: String(error.code || ERROR_CODE.RECOVERABLE_CALL_MCP_TASK_FAILED),
         });
       } finally {
-        abortSignal.removeEventListener("abort", closeOnAbort);
-        await runBestEffort(() => mcpToolset?.close(), {
-          operationName: "mcpTool.closeToolset",
-          context: { mcpName: input.mcpName },
-        });
+        await mcpToolset?.close();
       }
     },
     {
@@ -197,6 +188,7 @@ export function createMcpTool({ agentContext }) {
         task: z.string().describe(tTool(runtime, "tools.mcp.fieldTask")),
       }),
     },
+    agentContext,
   );
 
   return [callMcpTaskTool];

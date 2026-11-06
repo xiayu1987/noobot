@@ -7,11 +7,10 @@ import {
   MODEL_FAMILY_ID,
   resolveModelFamilyId,
   resolveModelStrictToolSchema,
+  requireUniqueToolIds,
 } from "@noobot/model-protocol";
 import { text, isObjectLike } from "@noobot/shared/value";
 
-export const TOOL_BINDING_NAME_MAX_LENGTH = 64;
-const TOOL_BINDING_NAME_PATTERN = new RegExp(`^[a-zA-Z0-9_-]{1,${TOOL_BINDING_NAME_MAX_LENGTH}}$`);
 const STRICT_INCOMPATIBLE_TOOL_NAMES = new Set(["call_service"]);
 
 function assertModelSpec(modelSpec) {
@@ -36,7 +35,7 @@ function removeToolSearchDeferral(toolItem = {}) {
 export function adaptToolsForBinding(tools, modelSpec) {
   assertModelSpec(modelSpec);
   const sourceTools = Array.isArray(tools) ? tools : [];
-  const seenNames = new Set();
+  requireUniqueToolIds(sourceTools.map((tool) => tool?.name));
   const validTools = [];
   const droppedToolNames = [];
   const disableClaudeToolSearch = resolveModelFamilyId(modelSpec) === MODEL_FAMILY_ID.CLAUDE;
@@ -51,12 +50,6 @@ export function adaptToolsForBinding(tools, modelSpec) {
       droppedToolNames.push(toolName || toolType || "tool_search");
       continue;
     }
-    if (!toolName || !TOOL_BINDING_NAME_PATTERN.test(toolName)) {
-      droppedToolNames.push(toolName || "(empty)");
-      continue;
-    }
-    if (seenNames.has(toolName)) continue;
-    seenNames.add(toolName);
     validTools.push(disableClaudeToolSearch ? removeToolSearchDeferral(toolItem) : toolItem);
   }
   validTools.sort((left, right) =>

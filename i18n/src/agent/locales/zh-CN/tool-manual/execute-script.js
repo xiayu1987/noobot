@@ -8,7 +8,7 @@ export const EXECUTE_SCRIPT_MANUAL = {
   execute_script: {
     summary: "在当前执行隔离视角下运行 shell 脚本，用于必须命令行完成的操作。",
     usage: [
-      "execute_script({ command, riskLevel, executionMode, includeLineNumbers, outputFiles })",
+      "{{tool:execute_script}}({ command, riskLevel, executionMode, includeLineNumbers, outputFiles })",
     ],
     params: {
       command: "shell 命令。必须使用当前运行时声明的解释器语法。",
@@ -20,7 +20,7 @@ export const EXECUTE_SCRIPT_MANUAL = {
       outputFiles: "交付文件的绝对路径列表，执行后登记为附件。回复时原样使用返回的附件引用。",
     },
     notes: [
-      "有专用工具时不要用命令替代：读文件用 read_file，改文件用 patch_file，搜索用 search。",
+      "有专用工具时不要用命令替代：读文件用 {{tool:read_file}}，改文件用 {{tool:patch_file}}，搜索用 {{tool:search}}。",
       "输入输出使用当前工作目录下的相对路径，具体解释器与工作目录见运行时环境说明。",
       "background 不会提前返回，也不要在命令里再使用后台符号、nohup 或 disown。",
       "overflowed 表示内联输出超限；用 transfers 中的 attachmentRef 读取完整结果。",

@@ -5,7 +5,9 @@
  */
 import { z } from "zod";
 import { interopZodTransformInputSchema, isZodSchemaV4 } from "@langchain/core/utils/types";
+import { toJsonSchema } from "@langchain/core/utils/json_schema";
 import { text } from "@noobot/shared/value";
+import { TOOL_DEFINITION_TEMPLATE } from "@noobot/model-protocol";
 
 const inputViewCache = new WeakMap();
 
@@ -19,15 +21,18 @@ function exportInputViewParameters(schema) {
 }
 
 export function projectToolsForModel(tools = [], { strict = false } = {}) {
-  if (!Array.isArray(tools) || strict === true) return tools;
+  if (!Array.isArray(tools)) return tools;
   return tools.map((toolItem) => {
     if (!isZodSchemaV4(toolItem?.schema) || !text(toolItem?.name)) return toolItem;
     return {
       type: "function",
       function: {
+        [TOOL_DEFINITION_TEMPLATE]: toolItem[TOOL_DEFINITION_TEMPLATE] === true,
         name: text(toolItem.name),
         description: String(toolItem.description || ""),
-        parameters: exportInputViewParameters(toolItem.schema),
+        parameters: strict
+          ? toJsonSchema(toolItem.schema)
+          : exportInputViewParameters(toolItem.schema),
       },
     };
   });

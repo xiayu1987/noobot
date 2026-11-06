@@ -10,7 +10,7 @@ import { resolveConfiguredPathPolicy } from "../../config/core/path-policy-adapt
 import { resolveFileMutationRoot } from "./file-mutation-service.js";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { formatLinesWithNumbers, splitLines } from "./file-utils.js";
-import { tTool } from "../core/tool-i18n.js";
+import { tToolTemplate } from "../core/tool-i18n.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { createFileMutationLocator } from "@noobot/file-mutation-protocol";
 import { text } from "@noobot/shared/value";
@@ -59,11 +59,11 @@ export function resolveFileResourceRiskScope({ pathRef, resourcePath, runtime } 
 export function buildFileToolDescription(runtime = {}, descriptionKey = "") {
   const resolution = resolveConfiguredPathPolicy(runtime.globalConfig).resolution;
   return [
-    tTool(runtime, descriptionKey),
-    tTool(runtime, "tools.file.workspaceRelativePathRule"),
+    tToolTemplate(runtime, descriptionKey),
+    tToolTemplate(runtime, "tools.file.workspaceRelativePathRule"),
     ...(resolution.followSymbolicLinks === true
       ? []
-      : [tTool(runtime, "tools.file.symbolicLinkRule")]),
+      : [tToolTemplate(runtime, "tools.file.symbolicLinkRule")]),
   ]
     .map((item) => text(item))
     .filter(Boolean)
@@ -73,10 +73,10 @@ export function buildFileToolDescription(runtime = {}, descriptionKey = "") {
 export function buildPatchFieldDescription(agentContext = {}, fieldName = "") {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const hostPathsAllowed = canUseHostPathsForWorkspaceTools(agentContext);
-  const baseText = tTool(runtime, `tools.patch_file.${fieldName}`);
+  const baseText = tToolTemplate(runtime, `tools.patch_file.${fieldName}`);
   const modeText = (() => {
     if (fieldName === "fieldPatch") {
-      return tTool(
+      return tToolTemplate(
         runtime,
         hostPathsAllowed
           ? "tools.patch_file.fieldPatchPathHintSuperHost"
@@ -84,7 +84,7 @@ export function buildPatchFieldDescription(agentContext = {}, fieldName = "") {
       );
     }
     if (fieldName === "fieldRoot") {
-      return tTool(
+      return tToolTemplate(
         runtime,
         hostPathsAllowed
           ? "tools.patch_file.fieldRootPathHintSuperHost"

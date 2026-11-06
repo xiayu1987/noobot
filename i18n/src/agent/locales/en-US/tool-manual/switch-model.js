@@ -7,7 +7,7 @@
 export const SWITCH_MODEL_MANUAL = {
   switch_model: {
     summary: "Switch the model used by the current session.",
-    usage: ["switch_model({ modelName })"],
+    usage: ["{{tool:switch_model}}({ modelName })"],
     params: {
       modelName: "Target model name. Must be declared in configuration with its provider enabled.",
     },

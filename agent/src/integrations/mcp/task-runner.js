@@ -10,12 +10,22 @@ import { getMcpServerByName, createMcpClient } from "./client-factory.js";
 import { buildLangChainMcpTools } from "./tool-adapter.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
-import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
+import { MODEL_CONTEXT_SEQUENCE_POLICY, requireToolCallNameBinding } from "@noobot/model-protocol";
+import { runWithToolNameBinding } from "@noobot/model-protocol/tool-binding-scope-node";
 import { ACTIVITY_KIND, MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 import { createModelActivity } from "../../models/runtime/model-manager.js";
 import { requireRuntimeModelHost } from "../../runtime/model-port-host.js";
 import { text } from "@noobot/shared/value";
 import { decodeToolResultText, encodeToolResultObject } from "@noobot/event-protocol/tool-result";
+
+async function closeMcpResource(resource, failure) {
+  try {
+    await resource.close();
+  } catch (closeError) {
+    if (failure === null) throw closeError;
+    throw new AggregateError([failure.error, closeError], "MCP operation and cleanup failed");
+  }
+}
 
 export async function createMcpAgentTools({
   globalConfig = {},
@@ -31,16 +41,21 @@ export async function createMcpAgentTools({
     });
   }
   const client = createMcpClient({ server, signal, fetchImpl });
-  await client.initialize();
-  const mcpTools = await client.listTools();
-  const tools = buildLangChainMcpTools({ mcpTools, client });
-  return {
-    mcpName: server.name,
-    server,
-    tools,
-    toolNames: tools.map((tool) => tool.name),
-    close: () => client.close(),
-  };
+  try {
+    await client.initialize();
+    const mcpTools = await client.listTools();
+    const tools = buildLangChainMcpTools({ mcpTools, client, serverName: server.name });
+    return {
+      mcpName: server.name,
+      server,
+      tools,
+      toolNames: tools.map((tool) => tool.name),
+      close: () => client.close(),
+    };
+  } catch (error) {
+    await closeMcpResource(client, { error });
+    throw error;
+  }
 }
 
 export async function executeMcpTask({
@@ -58,20 +73,26 @@ export async function executeMcpTask({
       code: ERROR_CODE.RECOVERABLE_MCP_TASK_REQUIRED,
     });
   }
-  const server = getMcpServerByName({ globalConfig, userConfig, mcpName });
-  if (!server) {
-    throw recoverableToolError(`${tSystem("mcp.serverNotFoundOrInactive")}: ${mcpName}`, {
-      code: ERROR_CODE.RECOVERABLE_MCP_SERVER_NOT_FOUND,
-    });
-  }
-
-  const { tools: langchainTools, toolNames } = await createMcpAgentTools({
+  const toolset = await createMcpAgentTools({
     globalConfig,
     userConfig,
-    mcpName: server.name,
+    mcpName,
     signal,
     fetchImpl,
   });
+  let taskFailure = null;
+  try {
+    return await runMcpTaskWithTools({ toolset, normalizedTask, runtime, signal });
+  } catch (error) {
+    taskFailure = { error };
+    throw error;
+  } finally {
+    await closeMcpResource(toolset, taskFailure);
+  }
+}
+
+async function runMcpTaskWithTools({ toolset, normalizedTask, runtime, signal }) {
+  const { tools: langchainTools, toolNames, server } = toolset;
   if (!toolNames.length) {
     return {
       ok: true,
@@ -148,9 +169,9 @@ export async function executeMcpTask({
         messages.push(new ToolMessage({ tool_call_id: call?.id || "", content: notFoundResult }));
         continue;
       }
-      const result = await tool.invoke(call?.args || {}, {
-        signal: signal || undefined,
-      });
+      const result = await runWithToolNameBinding(requireToolCallNameBinding(call), () =>
+        tool.invoke(call.args, { signal: signal || undefined }),
+      );
       decodeToolResultText(result);
       traces.push({
         tool: call?.name || "",

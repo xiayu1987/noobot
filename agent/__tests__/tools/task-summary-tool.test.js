@@ -35,7 +35,7 @@ function createTool() {
   };
   const runtime = createTestRuntimeContext({ systemRuntime });
   const [tool] = createTaskSummaryTool({
-    agentContext: createTestAgentExecutionScope(runtime),
+    agentContext: createTestAgentExecutionScope(runtime, { tools: [{ name: "task_summary" }] }),
   });
   return { tool, runtime, systemRuntime };
 }

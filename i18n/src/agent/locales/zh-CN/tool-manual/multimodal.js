@@ -8,8 +8,8 @@ export const MULTIMODAL_MANUAL = {
   multimodal_generate: {
     summary: "生成图片内容，支持文生图与基于原图的图生图或扩图。",
     usage: [
-      "multimodal_generate({ generation_content, model_name, size, resolution, n, quality })",
-      "multimodal_generate({ generation_content, image_urls, size, resolution })",
+      "{{tool:multimodal_generate}}({ generation_content, model_name, size, resolution, n, quality })",
+      "{{tool:multimodal_generate}}({ generation_content, image_urls, size, resolution })",
     ],
     params: {
       generation_content: "生成内容描述，必填。描述越具体，结果越可控。",
@@ -29,14 +29,14 @@ export const MULTIMODAL_MANUAL = {
   },
   multimodal_parse: {
     summary: "解析图片、音频、视频与二进制文档并返回结构化内容。",
-    usage: ["multimodal_parse({ inputs, prompt, model_name })"],
+    usage: ["{{tool:multimodal_parse}}({ inputs, prompt, model_name })"],
     params: {
       inputs: "待解析项数组，每项为 { source: 逻辑路径或 attachmentRef }，至少一项。",
       prompt: "解析要求，可选。用于指定提取重点与输出结构。",
       model_name: "承担解析的模型名，可选。",
     },
     notes: [
-      "文本类文件请用 read_file，这个工具面向图片、音频、视频与二进制文档。",
+      "文本类文件请用 {{tool:read_file}}，这个工具面向图片、音频、视频与二进制文档。",
       "解析文档或需求时应完整保留原始结构、顺序与逐字文本，含标题、表格、列表、页眉页脚与图示文字。",
       "图片需自顶向下、自左向右逐区识别，并复核边界、底部、侧边、表格单元格、连线标签与小字号文字。",
     ],
