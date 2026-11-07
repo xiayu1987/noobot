@@ -222,6 +222,11 @@ export default {
       description:
         "Total attempts allowed for model transport failures, including the initial request.",
     },
+    generationMaxAttempts: {
+      name: "Model media generation attempt limit",
+      description:
+        "Total attempts allowed for image or video generation, including the initial request.",
+    },
     reasoningOnlyMaxAttempts: {
       name: "Reasoning-only maximum attempts",
       description: "Turn or attempt count threshold used by reasoning-only maximum attempts.",

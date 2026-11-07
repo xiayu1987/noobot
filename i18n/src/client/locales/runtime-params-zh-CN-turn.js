@@ -199,6 +199,10 @@ export default {
       name: "模型传输尝试次数上限",
       description: "模型传输失败时允许的总尝试次数，包含首次请求。",
     },
+    generationMaxAttempts: {
+      name: "模型媒体生成尝试次数上限",
+      description: "图片或视频生成允许的总尝试次数，包含首次请求。",
+    },
     reasoningOnlyMaxAttempts: {
       name: "仅返回推理的最大尝试次数",
       description: "仅返回推理的最大尝试次数使用的轮次或尝试次数阈值。",

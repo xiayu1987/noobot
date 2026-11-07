@@ -25,6 +25,14 @@ export default {
       name: "Model transport retry base delay",
       description: "Waiting period used by model transport retry base delay.",
     },
+    generationTimeoutMs: {
+      name: "Model media generation timeout",
+      description: "Maximum wait for a model image or video generation request.",
+    },
+    generationPollIntervalMs: {
+      name: "Model media generation poll interval",
+      description: "Interval between status checks for asynchronous image or video generation.",
+    },
   },
   hooks: {
     defaultTimeoutMs: {
@@ -217,14 +225,6 @@ export default {
     browserDevtoolsPortPollIntervalMs: {
       name: "Tools browser devtools port poll interval",
       description: "Execution interval for tools browser devtools port poll interval.",
-    },
-    imagesAsyncPollIntervalMs: {
-      name: "Tools images async poll interval",
-      description: "Execution interval for tools images async poll interval.",
-    },
-    imagesAsyncTimeoutMs: {
-      name: "Tools images async timeout",
-      description: "Maximum wait for tools images async timeout.",
     },
     processForceKillGraceMs: {
       name: "Tools process force kill grace",

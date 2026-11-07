@@ -5,6 +5,7 @@
  */
 import { resolveDefaultModelSpec, resolveModelSpecByName } from "../models/index.js";
 import { createAgentAuxiliaryModelPort } from "../runtime/model-port-host.js";
+import { initializeRuntimeEnvironment } from "../runtime/capabilities/runtime-capability-initializer.js";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { mergeConfig } from "../config/index.js";
 import { normalizeLocale } from "noobot-i18n/shared";
@@ -171,6 +172,14 @@ export class MemoryManager {
       globalConfig: this.globalConfig,
       userConfig,
     });
+    const runtime = {
+      globalConfig: this.globalConfig,
+      userConfig,
+      eventListener,
+      systemRuntime: { userId, sessionId },
+      sharedTools: {},
+    };
+    await initializeRuntimeEnvironment(runtime);
     const modelPort = this.createModelPort({
       modelSpec,
       modelState: {
@@ -181,10 +190,7 @@ export class MemoryManager {
           turnScopeId: invocationIdentity.turnScopeId,
           runId: invocationIdentity.runId,
         },
-        runtime: {
-          eventListener,
-          systemRuntime: { userId, sessionId },
-        },
+        runtime,
       },
     });
     const memorySystemPrompt = text(promptI18n?.system);

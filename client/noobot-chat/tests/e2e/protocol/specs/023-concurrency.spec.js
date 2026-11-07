@@ -5,9 +5,14 @@
  */
 import { test, expect, installE2eModelPreferences } from "../fixtures/noobot.fixture.js";
 import { connectThroughUi, readE2eCredentials } from "../fixtures/auth.fixture.js";
-import { editLatestUserMessage } from "../helpers/browser-actions.js";
+import { editLatestUserMessage, stopActiveTurn } from "../helpers/browser-actions.js";
 import { sendAndStop, uniquePrompt } from "../helpers/turn-scenarios.js";
-import { commandsForSession, waitForCommand } from "../helpers/scenario-assertions.js";
+import {
+  commandsForSession,
+  waitForCommand,
+  waitForLifecycle,
+} from "../helpers/scenario-assertions.js";
+import { waitForModelInvocationTraces } from "../helpers/persistence-audit.js";
 import { waitForReconnect } from "../helpers/reconnect-scenarios.js";
 
 test("@full PBE-023 Session version 冲突", async ({
@@ -44,13 +49,26 @@ test("@full PBE-023 Session version 冲突", async ({
     await expect
       .poll(() => replacementResponses.map(({ status }) => status).sort())
       .toEqual([200, 409]);
-    await waitForCommand(protocolCapture, noobot.sessionId, "turn.resend");
-    const successfulPage = replacementResponses.find(({ status }) => status === 200)?.page;
-    const stopButton = successfulPage?.locator(".stop-float-btn");
-    if (stopButton && (await stopButton.isVisible())) {
-      await stopButton.click();
-      await expect(stopButton).toBeHidden();
-    }
+    const resend = await waitForCommand(protocolCapture, noobot.sessionId, "turn.resend");
+    await waitForLifecycle(
+      protocolCapture,
+      noobot.sessionId,
+      "turn.processing_started",
+      0,
+      resend.identity.turnScopeId,
+    );
+    await waitForModelInvocationTraces(noobot.userId, noobot.sessionId, (records) =>
+      records.some((record) => record.turnScopeId === resend.identity.turnScopeId),
+    );
+    const successfulPage = replacementResponses.find(({ status }) => status === 200).page;
+    await stopActiveTurn(successfulPage);
+    await waitForLifecycle(
+      protocolCapture,
+      noobot.sessionId,
+      "turn.stop_completed",
+      0,
+      resend.identity.turnScopeId,
+    );
     const resends = commandsForSession(protocolCapture, noobot.sessionId).filter(
       (item) => item.commandType === "turn.resend",
     );

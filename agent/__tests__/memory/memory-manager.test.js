@@ -108,6 +108,20 @@ test("readLongMemory renders the field protocol body without the document header
   assert.equal(await service.readLongMemory({ userId }), "personal_info.occupation：工程师");
 });
 
+test("maybeSummarize initializes the real auxiliary model host without a turn runtime", async () => {
+  const { workspaceRoot, userId } = await createLongMemoryUserRoot();
+  const service = new MemoryManager(createMemoryConfig(workspaceRoot));
+  const stageErrors = [];
+  await service.maybeSummarize({
+    ...MEMORY_RUN_PORTS,
+    userId,
+    userConfig: {},
+    abortSignal: new AbortController().signal,
+    onStageError: (error) => stageErrors.push(error),
+  });
+  assert.deepEqual(stageErrors, []);
+});
+
 test("readLongMemory rejects a document whose protocol header does not match", async () => {
   const { workspaceRoot, userId, userRoot } = await createLongMemoryUserRoot();
   await writeFile(path.join(userRoot, "memory/long-memory.md"), "1. legacy numbered memory\n");

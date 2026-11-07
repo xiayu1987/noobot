@@ -25,6 +25,14 @@ export default {
       name: "模型传输重试基础延迟",
       description: "模型传输重试基础延迟使用的等待时长。",
     },
+    generationTimeoutMs: {
+      name: "模型媒体生成超时",
+      description: "模型图片或视频生成请求的最长等待时间。",
+    },
+    generationPollIntervalMs: {
+      name: "模型媒体生成轮询间隔",
+      description: "异步图片或视频生成任务的状态查询间隔。",
+    },
   },
   hooks: {
     defaultTimeoutMs: {
@@ -216,14 +224,6 @@ export default {
     browserDevtoolsPortPollIntervalMs: {
       name: "工具浏览器开发工具端口轮询间隔",
       description: "工具浏览器开发工具端口轮询间隔使用的执行间隔。",
-    },
-    imagesAsyncPollIntervalMs: {
-      name: "工具图片异步轮询间隔",
-      description: "工具图片异步轮询间隔使用的执行间隔。",
-    },
-    imagesAsyncTimeoutMs: {
-      name: "工具图片异步超时",
-      description: "工具图片异步超时的最长等待时间。",
     },
     processForceKillGraceMs: {
       name: "工具进程强制终止宽限",
