@@ -64,6 +64,33 @@ function validateLibrary(payload) {
 }
 
 const MODEL_LIBRARY_PROVIDERS = validateLibrary(libraryPayload);
+
+function isCalendarDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(value);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+export function createModelReleaseIndex(releases, providers) {
+  if (!isPlainObject(releases)) throw new TypeError("model library releases are required");
+  const models = new Set(Object.values(providers).map(({ model }) => model));
+  const index = new Map();
+  for (const [model, release] of Object.entries(releases)) {
+    if (
+      !models.has(model) ||
+      !isPlainObject(release) ||
+      !isCalendarDate(release.date) ||
+      typeof release.source !== "string" ||
+      !release.source.startsWith("https://")
+    ) {
+      throw new TypeError(`invalid model library release: ${model}`);
+    }
+    index.set(model, Object.freeze({ date: release.date, source: release.source }));
+  }
+  return index;
+}
+
+const MODEL_RELEASES = createModelReleaseIndex(libraryPayload.releases, MODEL_LIBRARY_PROVIDERS);
 export const MODEL_LIBRARY_VERSION = libraryPayload.version;
 const MODEL_LIBRARY_CACHE_FIELDS = new Map();
 for (const provider of Object.values(MODEL_LIBRARY_PROVIDERS)) {
@@ -112,4 +139,15 @@ export function resolveModelLibraryProvider(alias = "") {
 
 export function resolveDefaultModelLibraryProvider() {
   return clone(GENERIC_PROVIDER_TEMPLATE);
+}
+
+export function resolveModelRelease(model) {
+  return MODEL_RELEASES.get(model) ?? null;
+}
+
+export function sortModelsByReleaseDate(models) {
+  return models
+    .map((item) => ({ item, date: resolveModelRelease(item.model)?.date ?? "" }))
+    .sort((left, right) => Number(right.date > left.date) - Number(right.date < left.date))
+    .map(({ item }) => item);
 }

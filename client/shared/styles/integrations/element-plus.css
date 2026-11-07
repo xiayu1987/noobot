@@ -1,6 +1,7 @@
 .el-input__wrapper,
 .el-textarea__inner,
 .el-select__wrapper,
+.noobot-choice-control,
 .el-input-number .el-input__wrapper {
   box-sizing: border-box;
   background: var(--noobot-control-bg);
@@ -39,6 +40,7 @@
 
 .el-input__wrapper,
 .el-select__wrapper,
+.noobot-choice-control,
 .el-input-number {
   min-height: var(--noobot-control-height-md);
 }
@@ -46,6 +48,7 @@
 .el-input__wrapper:hover,
 .el-textarea__inner:hover,
 .el-select__wrapper:hover,
+.noobot-choice-control:hover:not(:disabled),
 .el-input-number:hover .el-input__wrapper {
   border-color: var(--noobot-accent-border);
 }
@@ -127,6 +130,8 @@
 
 .el-input__wrapper.is-focus,
 .el-select__wrapper.is-focused,
+.noobot-choice-control:focus-visible,
+.noobot-choice-control[aria-expanded="true"],
 .el-textarea__inner:focus,
 .el-input-number.is-controls-right .el-input__wrapper.is-focus {
   border-color: color-mix(in srgb, var(--noobot-accent) 72%, transparent);
@@ -136,6 +141,7 @@
 .el-input.is-disabled .el-input__wrapper,
 .el-textarea.is-disabled .el-textarea__inner,
 .el-select.is-disabled .el-select__wrapper,
+.noobot-choice-control:disabled,
 .el-input-number.is-disabled .el-input__wrapper {
   background: var(--noobot-panel-muted);
   border-color: var(--noobot-panel-border);
@@ -167,6 +173,7 @@
 
 .el-form-item.is-error .el-input__wrapper,
 .el-form-item.is-error .el-select__wrapper,
+.el-form-item.is-error .noobot-choice-control,
 .el-form-item.is-error .el-textarea__inner {
   border-color: var(--noobot-status-error);
   box-shadow: none;

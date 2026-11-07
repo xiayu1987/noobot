@@ -1,5 +1,217 @@
 {
   "version": 3,
+  "releases": {
+    "gpt-5.6-sol": {
+      "date": "2026-07-09",
+      "source": "https://developers.openai.com/api/docs/changelog"
+    },
+    "gpt-6-sol": {
+      "date": "2026-09-22",
+      "source": "https://developers.openai.com/api/docs/changelog"
+    },
+    "gpt-6.1-sol": {
+      "date": "2026-09-29",
+      "source": "https://developers.openai.com/api/docs/changelog"
+    },
+    "gpt-6.1-terra": {
+      "date": "2026-10-26",
+      "source": "https://developers.openai.com/api/docs/changelog"
+    },
+    "gpt-6-luna": {
+      "date": "2026-09-22",
+      "source": "https://developers.openai.com/api/docs/changelog"
+    },
+    "gpt-6-astra": {
+      "date": "2026-09-03",
+      "source": "https://developers.openai.com/api/docs/changelog"
+    },
+    "gpt-5.6-terra": {
+      "date": "2026-07-09",
+      "source": "https://developers.openai.com/api/docs/changelog"
+    },
+    "gpt-5.6-luna": {
+      "date": "2026-07-09",
+      "source": "https://developers.openai.com/api/docs/changelog"
+    },
+    "claude-fable-5": {
+      "date": "2026-06-09",
+      "source": "https://www.anthropic.com/news/claude-fable-5-mythos-5"
+    },
+    "claude-fable-5-1": {
+      "date": "2026-09-15",
+      "source": "https://www.anthropic.com/claude-fable-and-mythos-5-1"
+    },
+    "claude-opus-5-5": {
+      "date": "2026-09-22",
+      "source": "https://www.anthropic.com/claude-opus-5-5"
+    },
+    "claude-opus-5": {
+      "date": "2026-07-24",
+      "source": "https://www.anthropic.com/news/claude-opus-5"
+    },
+    "claude-sonnet-5": {
+      "date": "2026-06-30",
+      "source": "https://www.anthropic.com/news/claude-sonnet-5"
+    },
+    "claude-sonnet-5-5": {
+      "date": "2026-09-28",
+      "source": "https://www.anthropic.com/claude-sonnet-5-5"
+    },
+    "claude-haiku-4-5": {
+      "date": "2025-10-15",
+      "source": "https://www.anthropic.com/news/claude-haiku-4-5"
+    },
+    "claude-haiku-5-5": {
+      "date": "2026-10-07",
+      "source": "https://www.anthropic.com/claude-haiku-5-5"
+    },
+    "gemini-4-argon": {
+      "date": "2026-10-13",
+      "source": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/introducing-gemini-4-argon/"
+    },
+    "gemini-3.8-flash": {
+      "date": "2026-09-02",
+      "source": "https://ai.google.dev/gemini-api/docs/deprecations"
+    },
+    "gemini-3.7-flash": {
+      "date": "2026-08-13",
+      "source": "https://ai.google.dev/gemini-api/docs/deprecations"
+    },
+    "gemini-3.6-flash": {
+      "date": "2026-07-21",
+      "source": "https://ai.google.dev/gemini-api/docs/deprecations"
+    },
+    "gemini-3.1-pro-preview": {
+      "date": "2026-02-19",
+      "source": "https://ai.google.dev/gemini-api/docs/deprecations"
+    },
+    "gemini-3.5-flash-lite": {
+      "date": "2026-07-21",
+      "source": "https://ai.google.dev/gemini-api/docs/deprecations"
+    },
+    "gemini-3.1-flash-lite": {
+      "date": "2026-05-07",
+      "source": "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-1-flash-lite"
+    },
+    "deepseek-v4-pro": {
+      "date": "2026-04-24",
+      "source": "https://api-docs.deepseek.com/news/news260424/"
+    },
+    "grok-4.7": { "date": "2026-09-21", "source": "https://x.ai/news/grok-4-7" },
+    "grok-4.6": { "date": "2026-08-12", "source": "https://x.ai/news/grok-4-6" },
+    "qwen3.8-max": { "date": "2026-08-03", "source": "https://qwen.ai/blog?id=qwen3.8" },
+    "qwen3.8-flash": {
+      "date": "2026-08-26",
+      "source": "https://docs.qwencloud.com/changelog/models"
+    },
+    "qwen3.8-omni-flash": {
+      "date": "2026-09-18",
+      "source": "https://docs.qwencloud.com/changelog/models"
+    },
+    "qwen3.7-max": {
+      "date": "2026-05-21",
+      "source": "https://docs.qwencloud.com/changelog/models"
+    },
+    "qwen3.7-plus": {
+      "date": "2026-06-01",
+      "source": "https://docs.qwencloud.com/changelog/models"
+    },
+    "qwen3.7-flash": {
+      "date": "2026-07-25",
+      "source": "https://docs.qwencloud.com/changelog/models"
+    },
+    "qwen3.6-flash": {
+      "date": "2026-04-16",
+      "source": "https://help.aliyun.com/en/model-studio/newly-released-models"
+    },
+    "glm-5.2": { "date": "2026-06-16", "source": "https://docs.z.ai/release-notes/new-released" },
+    "glm-5.3-flash": {
+      "date": "2026-08-26",
+      "source": "https://docs.z.ai/release-notes/new-released"
+    },
+    "glm-5.3": { "date": "2026-08-18", "source": "https://docs.z.ai/release-notes/new-released" },
+    "gpt-image-2.5-sunburst": {
+      "date": "2026-09-08",
+      "source": "https://developers.openai.com/api/docs/changelog"
+    },
+    "gpt-image-2.5-flare": {
+      "date": "2026-09-08",
+      "source": "https://developers.openai.com/api/docs/changelog"
+    },
+    "kimi-k3": { "date": "2026-07-16", "source": "https://www.kimi.ai/help/agent/agent-overview" },
+    "MiniMax-M3.1-Flash": {
+      "date": "2026-10-19",
+      "source": "https://www.minimax.io/blog/minimax-m31f"
+    },
+    "gpt-image-2.6-sunburst": {
+      "date": "2026-11-04",
+      "source": "https://developers.openai.com/api/docs/changelog"
+    },
+    "gpt-image-2.6-flare": {
+      "date": "2026-11-04",
+      "source": "https://developers.openai.com/api/docs/changelog"
+    },
+    "gemini-nano-banana-2.1": {
+      "date": "2026-10-06",
+      "source": "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/nano-banana-2-1"
+    },
+    "gemini-3.1-flash-lite-image": {
+      "date": "2026-06-23",
+      "source": "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/model-versions"
+    },
+    "gemini-3-pro-image": {
+      "date": "2026-05-28",
+      "source": "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-pro-image"
+    },
+    "grok-imagine-image-2.0": {
+      "date": "2026-08-07",
+      "source": "https://x.ai/news/grok-imagine-image-2"
+    },
+    "qwen-image-3.0-pro": {
+      "date": "2026-07-20",
+      "source": "https://help.aliyun.com/en/model-studio/newly-released-models"
+    },
+    "wan2.7-image-pro": {
+      "date": "2026-04-01",
+      "source": "https://help.aliyun.com/en/model-studio/newly-released-models"
+    },
+    "wan2.7-image": {
+      "date": "2026-04-01",
+      "source": "https://help.aliyun.com/en/model-studio/newly-released-models"
+    },
+    "gemini-omni-1.2-flash": {
+      "date": "2026-11-05",
+      "source": "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/model-versions"
+    },
+    "grok-imagine-video-1.5": {
+      "date": "2026-06-16",
+      "source": "https://x.ai/news/grok-imagine-video-1-5"
+    },
+    "wan3.0-video": {
+      "date": "2026-08-06",
+      "source": "https://help.aliyun.com/en/model-studio/newly-released-models"
+    },
+    "wan3.0-video-prime": {
+      "date": "2026-08-20",
+      "source": "https://help.aliyun.com/en/model-studio/newly-released-models"
+    },
+    "happyhorse-1.1-t2v": {
+      "date": "2026-06-16",
+      "source": "https://help.aliyun.com/en/model-studio/newly-released-models"
+    },
+    "happyhorse-1.1-i2v": {
+      "date": "2026-06-16",
+      "source": "https://help.aliyun.com/en/model-studio/newly-released-models"
+    },
+    "happyhorse-1.1-r2v": {
+      "date": "2026-06-16",
+      "source": "https://help.aliyun.com/en/model-studio/newly-released-models"
+    },
+    "MiniMax-H3": {
+      "date": "2026-07-31",
+      "source": "https://platform.minimax.io/docs/release-notes/models"
+    }
+  },
   "defaults": {
     "generic_provider": {
       "supplier": "",

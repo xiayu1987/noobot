@@ -64,6 +64,32 @@ async function open(props = {}) {
 }
 
 describe("BaseModelPicker", () => {
+  it("keeps newest-first ordering through filters and selects the alias rather than the model ID", async () => {
+    await open({
+      options: [
+        { alias: "unknown", model: "custom-999", supplier: "Private" },
+        { alias: "older", model: "gpt-5.6-sol", supplier: "OpenAI" },
+        { alias: "newer", model: "gpt-6.1-terra", supplier: "OpenAI" },
+      ],
+      modelValue: "older",
+    });
+    expect(rows().map((row) => row.querySelector("strong").textContent)).toEqual([
+      "newer",
+      "older",
+      "unknown",
+    ]);
+    await clickButton("OpenAI");
+    expect(rows().map((row) => row.querySelector("strong").textContent)).toEqual([
+      "newer",
+      "older",
+    ]);
+    expect(rows()[1].getAttribute("aria-pressed")).toBe("true");
+    const popped = popState();
+    rows()[0].click();
+    await popped;
+    expect(wrapper.emitted("update:modelValue")).toEqual([["newer"]]);
+  });
+
   it("combines supplier, generation capability and search filters in a right drawer", async () => {
     await open();
     expect(document.querySelector(".el-drawer.rtl")).toBeTruthy();
