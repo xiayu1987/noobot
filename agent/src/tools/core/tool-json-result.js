@@ -84,7 +84,11 @@ function projectCanonicalAttachmentFields(value) {
 }
 
 export function projectToolResultForModel(toolResultText) {
-  const source = decodeToolResultText(toolResultText);
+  return JSON.stringify(projectToolResultObjectForModel(decodeToolResultText(toolResultText)));
+}
+
+export function projectToolResultObjectForModel(result) {
+  const source = assertToolResultObject(result);
   const visit = (value) => {
     if (Array.isArray(value)) return value.map(visit);
     if (!isPlainObject(value)) return value;
@@ -121,7 +125,7 @@ export function projectToolResultForModel(toolResultText) {
     }
     return out;
   };
-  return JSON.stringify(visit(source));
+  return visit(source);
 }
 
 export function toToolJsonResult(toolName, payload) {

@@ -105,7 +105,7 @@ export const enUSMessages = {
     configEntryKey: "Entry key",
     toolBindingsSelect: "Select a tool to rename",
     toolBindingsHint:
-      "Select a tool and edit its model call name. Use 1–64 letters, digits, underscores or hyphens, with no duplicate names. Saving applies to subsequent requests and does not change permissions.",
+      "Binding names are used for model calls and interface display. Use 1–64 letters, digits, underscores or hyphens, with no duplicate names. Saving updates the display and subsequent requests without changing permissions.",
     toolBindingsReset: "Restore inherited",
     toolBindingsInherited: "Inherited name: {name}",
     toolBindingsUnavailable: "Tool catalog is unavailable. Reopen user configuration.",

@@ -28,7 +28,10 @@ export const FILE_TOOL_SCHEMA = {
         text: "Maximum returned lines; hasMore is true when lines remain.",
       },
     },
-    texts: {},
+    texts: {
+      "tools.file.fieldEncoding":
+        "Text encoding: auto detects UTF BOMs, otherwise UTF-8; UTF-16LE/BE and GB18030 may be explicit. Updates/moves preserve source encoding; new files use UTF-8 in auto mode. Invalid or lossy conversion is rejected.",
+    },
   },
   write_file: {
     description: {
@@ -93,12 +96,20 @@ export const FILE_TOOL_SCHEMA = {
   patch_file: {
     description: {
       key: "tools.patch_file.description",
-      text: "Read/{{tool:search}} the file first, then use its complete returned path; omit root and do not add project, a/, or b/ prefixes. Order non-overlapping hunks by their locations in the original file. In apply_patch, @@ L<line> selects the nearest exact match; anchors do not reset the cursor.",
+      text: "Use {{tool:read_file}} for content and baseSha256; copy its returned path. Each hunk locates independently using continuous unique context; @@ L<line> specifies the exact original start line. Order non-overlapping hunks by source location. Reread and rebuild after failure.",
     },
     params: {
       patch: {
         key: "tools.patch_file.fieldPatch",
         text: "Patch content; reuse the complete path and exact context returned by {{tool:read_file}}/{{tool:search}}.",
+      },
+      contentEncoding: {
+        key: "tools.patch_file.fieldContentEncoding",
+        text: "Default raw; use read_file_numbered only when context/removal lines include read line numbers. Added lines are always literal.",
+      },
+      baseVersions: {
+        key: "tools.patch_file.fieldBaseVersions",
+        text: "Base versions for every source and destination [{filePath, sha256}]. filePath matches the patch path after strip and before root; sha256 is the read result baseSha256, or null for an absent new target.",
       },
       format: {
         key: "tools.patch_file.fieldFormat",

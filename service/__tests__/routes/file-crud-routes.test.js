@@ -240,7 +240,7 @@ test("file-crud-routes: 拒绝写入非法 JSON 配置且保留原文件", async
   }
 });
 
-test("file-crud-routes: 拒绝非文本控制字符且保留原文件", async () => {
+test("file-crud-routes: preserves Unicode control characters through save and preview", async () => {
   const app = express();
   app.use(express.json());
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-file-crud-text-guard-"));
@@ -262,11 +262,14 @@ test("file-crud-routes: 拒绝非文本控制字符且保留原文件", async ()
           body: JSON.stringify({ path: "guarded.txt", content }),
         });
         const payload = await response.json();
-        assert.equal(response.status, 400);
-        assert.equal(payload.ok, false);
-        assert.equal(payload.errorCode, "INVALID_WORKSPACE_FILE_CONTENT");
+        assert.equal(response.status, 200);
+        assert.equal(payload.ok, true);
+        assert.equal(await readFile(targetPath, "utf8"), content);
+        const preview = await fetch(`${baseUrl}/internal/workspace/admin/file?path=guarded.txt`);
+        const decoded = await preview.json();
+        assert.equal(decoded.isText, true);
+        assert.equal(decoded.content, content);
       }
-      assert.equal(await readFile(targetPath, "utf8"), "before\n");
     });
   } finally {
     await rm(tempRoot, { recursive: true, force: true });

@@ -15,9 +15,9 @@ import {
   rollbackFileMutation,
 } from "../../src/tools/execution/file-mutation-service.js";
 
-const writeText = (filePath, content) => writeFile(filePath, content, "utf8");
+const stageBytes = (filePath, content) => writeFile(filePath, content);
 
-test("file mutation requires an explicit write capability", async () => {
+test("file mutation requires an explicit staging capability", async () => {
   await assert.rejects(
     applyFileMutation({
       sessionScope: null,
@@ -26,7 +26,7 @@ test("file mutation requires an explicit write capability", async () => {
       content: "unused",
       mutationRoot: "unused-mutations",
     }),
-    { name: "TypeError", message: "file mutation write capability is required" },
+    { name: "TypeError", message: "file mutation staging capability is required" },
   );
 });
 
@@ -41,7 +41,7 @@ test("file mutation persists before snapshot and diff, then reads the same recor
       locator: { view: "workspace", path: "file.txt" },
       content: "after\n",
       mutationRoot: resolveFileMutationRoot(root),
-      writeText,
+      stageBytes,
     });
     assert.equal(await readFile(target, "utf8"), "after\n");
     await stat(path.join(root, "file-mutations", `${result.mutations[0].id}.json`));
@@ -72,7 +72,7 @@ test("file mutation rolls target back when record commit fails", async () => {
         locator: { view: "workspace", path: "file.txt" },
         content: "after\n",
         mutationRoot: path.join(root, "records"),
-        writeText: async (filePath, content) => writeFile(filePath, content, "utf8"),
+        stageBytes,
       }),
       /EEXIST|file mutation commit failed/,
     );
@@ -93,7 +93,7 @@ test("delete mutation persists the before snapshot and a removal diff", async ()
       locator: { view: "workspace", path: "file.txt" },
       operation: "delete",
       mutationRoot: resolveFileMutationRoot(root),
-      writeText,
+      stageBytes,
     });
     await assert.rejects(stat(target), { code: "ENOENT" });
     const record = await readFileMutation({
@@ -123,7 +123,7 @@ test("update mutations keep one initial snapshot and append incremental diffs pe
       operation: "update",
       scopeId: "turn-1",
       mutationRoot,
-      writeText,
+      stageBytes,
     });
     const second = await applyFileMutation({
       sessionScope: null,
@@ -133,7 +133,7 @@ test("update mutations keep one initial snapshot and append incremental diffs pe
       operation: "update",
       scopeId: "turn-1",
       mutationRoot,
-      writeText,
+      stageBytes,
     });
     assert.equal(first.mutations[0].id, second.mutations[0].id);
     assert.equal(first.mutations[0].aggregate.revision, 1);
@@ -162,7 +162,7 @@ test("update mutations keep one initial snapshot and append incremental diffs pe
       operation: "update",
       scopeId: "turn-2",
       mutationRoot,
-      writeText,
+      stageBytes,
     });
     assert.notEqual(isolated.mutations[0].id, second.mutations[0].id);
     const isolatedRecord = await readFileMutation({
@@ -183,8 +183,8 @@ test("multi-file callers can roll back every committed mutation after a later wr
   try {
     await writeFile(first, "first-before\n", "utf8");
     await writeFile(second, "second-before\n", "utf8");
-    const writeText = async (filePath, content) => {
-      if (filePath === second && content === "second-after\n") {
+    const stageBytes = async (filePath, content) => {
+      if (content.equals(Buffer.from("second-after\n"))) {
         const error = new Error("injected second write failure");
         error.code = "injected_write_failure";
         throw error;
@@ -197,7 +197,7 @@ test("multi-file callers can roll back every committed mutation after a later wr
       locator: { view: "workspace", path: "first.txt" },
       content: "first-after\n",
       mutationRoot,
-      writeText,
+      stageBytes,
     });
     await assert.rejects(
       applyFileMutation({
@@ -206,7 +206,7 @@ test("multi-file callers can roll back every committed mutation after a later wr
         locator: { view: "workspace", path: "second.txt" },
         content: "second-after\n",
         mutationRoot,
-        writeText,
+        stageBytes,
       }),
       (error) => {
         assert.equal(error.code, "file_mutation_commit_failed");
@@ -237,14 +237,13 @@ test("rollback removes a file created by a mutation", async () => {
       content: "created\n",
       mutationRoot,
       rollbackState,
-      writeText,
+      stageBytes,
     });
     await rollbackFileMutation({
       mutationRoot,
       mutationId: result.mutations[0].id,
       filePath: target,
       restoreState: rollbackState,
-      writeText,
     });
     await assert.rejects(stat(target), { code: "ENOENT" });
     await assert.rejects(readFileMutation({ mutationRoot, mutationId: result.mutations[0].id }), {

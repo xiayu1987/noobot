@@ -8,6 +8,8 @@ import {
   TOOL_DEFINITION_TEMPLATE,
   collectToolMessageIds,
   createToolNameBinding,
+  createToolResultIdentityResolver,
+  isToolResultMessage,
   projectToolMessageNames,
   projectToolResultName,
   projectToolDefinitionNames,
@@ -16,6 +18,17 @@ import {
 
 const bindings = { read_file: { bindingName: "nb_read" } };
 
+test("tool result identity uses declared message fields without class methods", () => {
+  for (const declaration of [{ role: "tool" }, { type: "tool" }]) {
+    const message = { ...declaration, name: "read_file", content: "opaque" };
+    assert.equal(isToolResultMessage(message), true);
+    assert.deepEqual(collectToolMessageIds([message]), ["read_file"]);
+    assert.equal(projectToolMessageNames(message, () => "nb_read").name, "nb_read");
+    assert.equal(message.name, "read_file");
+  }
+  assert.equal(isToolResultMessage({ type: "human", content: "tool" }), false);
+});
+
 test("result identity projects without rewriting opaque payloads or requiring a message name", () => {
   const binding = createToolNameBinding({ tools: [{ name: "read_file" }], bindings });
   const result = {
@@ -23,23 +36,61 @@ test("result identity projects without rewriting opaque payloads or requiring a 
     toolName: "read_file",
     data: { toolName: "business value", text: "read_file", path: "read_file.txt" },
   };
-  for (const toolId of [undefined, "read_file"]) {
-    assert.deepEqual(projectToolResultName(result, toolId, binding.toBindingName), {
-      ...result,
-      toolName: "nb_read",
-    });
-  }
+  assert.deepEqual(projectToolResultName(result, "read_file", binding.toBindingName), {
+    ...result,
+    toolName: "nb_read",
+  });
   assert.equal(result.toolName, "read_file");
   const external = { ok: true, content: [{ type: "text", text: "read_file" }] };
-  assert.equal(projectToolResultName(external, undefined, binding.toBindingName), external);
+  assert.equal(projectToolResultName(external, "read_file", binding.toBindingName), external);
   assert.throws(
     () => projectToolResultName(result, "search", binding.toBindingName),
     /tool result identity mismatch/,
   );
   assert.throws(
-    () =>
-      projectToolResultName({ ok: true, toolName: "unknown" }, undefined, binding.toBindingName),
-    /unbound tool identity/,
+    () => projectToolResultName(result, undefined, binding.toBindingName),
+    /tool identity must be a non-empty string/,
+  );
+});
+
+test("result identity comes from its call across all call representations", () => {
+  const call = { id: "read", name: "read_file", args: {} };
+  const signed = {
+    type: "signed_tool_call",
+    toolId: "read_file",
+    providerCall: {
+      type: "function_call",
+      id: "provider-item",
+      call_id: "read",
+      name: "nb_read",
+      signature: "opaque",
+    },
+  };
+  const resolve = createToolResultIdentityResolver([
+    {
+      tool_calls: [call],
+      content: [signed],
+      response_metadata: { output: [signed] },
+      additional_kwargs: { tool_calls: [{ id: "read", function: { name: "read_file" } }] },
+    },
+    {
+      content: [
+        { type: "custom_tool_call", call_id: "custom", name: "search" },
+        { type: "web_search_call", id: "server", name: "web_search" },
+      ],
+    },
+  ]);
+  assert.equal(resolve({ tool_call_id: "read" }), "read_file");
+  assert.equal(resolve({ tool_call_id: "custom", name: "search" }), "search");
+  assert.throws(
+    () => resolve({ tool_call_id: "read", name: "search" }),
+    /message identity mismatch/,
+  );
+  for (const id of [undefined, "", "missing", "server", "provider-item"])
+    assert.throws(() => resolve({ tool_call_id: id }), /requires its matching call/);
+  assert.throws(
+    () => createToolResultIdentityResolver([{ tool_calls: [call, { ...call, name: "search" }] }]),
+    /conflicting tool call identity/,
   );
 });
 

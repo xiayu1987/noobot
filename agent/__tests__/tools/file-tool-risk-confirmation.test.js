@@ -14,6 +14,7 @@ import {
   parseToolResult,
 } from "./helpers/file-script-length-guards-helper.js";
 import { PATH_CAPABILITIES, resolvePathRef } from "@noobot/path-resolver";
+import { invokePatchFile } from "./helpers/patch-base-versions.js";
 import { RESOURCE_OPERATION, classifyResourceRisk } from "@noobot/security-assessment-protocol";
 import { resolveAuthorizedUserWorkspaceFilePath } from "../../src/tools/core/check-tool-input.js";
 import { resolveFileResourceRiskScope } from "../../src/tools/execution/file-tool-shared.js";
@@ -209,7 +210,12 @@ test("server-classified search and patch confirmations omit query and patch cont
   );
   const patch =
     "*** Begin Patch\n*** Update File: a.txt\n@@\n-one\n+private-replacement\n*** End Patch\n";
-  await patchTool.invoke({ format: "apply_patch", patch, dryRun: false, riskLevel: "low" });
+  await invokePatchFile(patchTool, basePath, {
+    format: "apply_patch",
+    patch,
+    dryRun: false,
+    riskLevel: "low",
+  });
   assert.equal(requests.length, 2);
   const combined = requests.map((item) => item.content).join("\n");
   for (const sensitive of [query, patch, "private-replacement"]) {
@@ -226,7 +232,7 @@ test("unified delete patch confirms the deleted file instead of the absent side"
     "patch_file",
   );
   const patch = "--- a/gone.txt\n+++ /dev/null\n@@ -1,1 +0,0 @@\n-one\n";
-  await patchTool.invoke({
+  await invokePatchFile(patchTool, basePath, {
     format: "unified_diff",
     patch,
     strip: 1,

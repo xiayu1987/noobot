@@ -4,11 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { FILE_TOOL_SCHEMA } from "../tool-schema/files.js";
+
 export const WRITE_FILE_MANUAL = {
   write_file: {
     summary: "写入工作区文本文件，返回文件路径与写入时的变更快照。",
-    usage: ["{{tool:write_file}}({ filePath, content, overwrite, riskLevel })"],
+    usage: ["{{tool:write_file}}({ filePath, content, encoding, overwrite, riskLevel })"],
     params: {
+      encoding: FILE_TOOL_SCHEMA.read_file.texts["tools.file.fieldEncoding"],
       filePath: "文件路径。相对路径基于当前用户工作区根目录。",
       content: "写入内容，全量覆盖语义。",
       overwrite: "文件存在时是否覆盖，默认 true。设为 false 时目标已存在会失败。",

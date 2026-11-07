@@ -7,6 +7,10 @@ import { ref } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { connectApi } from "../../../../../../src/infrastructure/api/chat/chatApi.js";
 import { useApiConnection } from "../../../../../../src/modules/chat/composables/connectivity/useApiConnection.js";
+import {
+  toolDisplayName,
+  clearToolNameBindings,
+} from "../../../../../../src/shared/state/toolNameBindings.js";
 
 vi.mock("../../../../../../src/infrastructure/api/chat/chatApi", () => ({ connectApi: vi.fn() }));
 vi.mock("../../../../../../src/shared/i18n/useLocale", () => ({
@@ -15,6 +19,7 @@ vi.mock("../../../../../../src/shared/i18n/useLocale", () => ({
 
 describe("useApiConnection authentication recovery", () => {
   beforeEach(() => {
+    clearToolNameBindings();
     const values = new Map();
     vi.stubGlobal("localStorage", {
       getItem: (key) => values.get(key) || null,
@@ -32,7 +37,13 @@ describe("useApiConnection authentication recovery", () => {
   it("single-flights credential refresh and retries concurrent 401 requests once", async () => {
     connectApi.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ ok: true, userId: "admin", apiKey: "initial-key", role: "super_admin" }),
+      json: async () => ({
+        ok: true,
+        userId: "admin",
+        apiKey: "initial-key",
+        role: "super_admin",
+        toolNameBindings: {},
+      }),
     });
     const connection = useApiConnection({ userId: ref("admin") });
     connection.connectCode.value = "connect-code";
@@ -40,7 +51,13 @@ describe("useApiConnection authentication recovery", () => {
     connectApi.mockClear();
     connectApi.mockResolvedValue({
       ok: true,
-      json: async () => ({ ok: true, userId: "admin", apiKey: "fresh-key", role: "super_admin" }),
+      json: async () => ({
+        ok: true,
+        userId: "admin",
+        apiKey: "fresh-key",
+        role: "super_admin",
+        toolNameBindings: {},
+      }),
     });
     const fetchMock = vi.fn(async (_url, options = {}) => ({
       status: options.headers?.["x-api-key"] === "fresh-key" ? 200 : 401,
@@ -61,7 +78,13 @@ describe("useApiConnection authentication recovery", () => {
   it("preserves the current credential when background recovery races service downtime", async () => {
     connectApi.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ ok: true, userId: "admin", apiKey: "current-key", role: "super_admin" }),
+      json: async () => ({
+        ok: true,
+        userId: "admin",
+        apiKey: "current-key",
+        role: "super_admin",
+        toolNameBindings: {},
+      }),
     });
     const connection = useApiConnection({ userId: ref("admin") });
     connection.connectCode.value = "connect-code";
@@ -77,7 +100,13 @@ describe("useApiConnection authentication recovery", () => {
   it("clears authentication when the retried request still returns 401", async () => {
     connectApi.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ ok: true, userId: "admin", apiKey: "initial-key", role: "super_admin" }),
+      json: async () => ({
+        ok: true,
+        userId: "admin",
+        apiKey: "initial-key",
+        role: "super_admin",
+        toolNameBindings: {},
+      }),
     });
     const connection = useApiConnection({ userId: ref("admin") });
     connection.connectCode.value = "connect-code";
@@ -90,6 +119,7 @@ describe("useApiConnection authentication recovery", () => {
         userId: "admin",
         apiKey: "rejected-fresh-key",
         role: "super_admin",
+        toolNameBindings: {},
       }),
     });
     const fetchMock = vi.fn(async () => ({ status: 401 }));
@@ -128,6 +158,7 @@ describe("useApiConnection authentication recovery", () => {
         userId: "admin",
         apiKey: "shared-fresh-key",
         role: "super_admin",
+        toolNameBindings: {},
       }),
     });
 
@@ -141,7 +172,13 @@ describe("useApiConnection authentication recovery", () => {
   it("runs concurrent foreground initialization only once", async () => {
     connectApi.mockResolvedValue({
       ok: true,
-      json: async () => ({ ok: true, userId: "admin", apiKey: "fresh-key", role: "super_admin" }),
+      json: async () => ({
+        ok: true,
+        userId: "admin",
+        apiKey: "fresh-key",
+        role: "super_admin",
+        toolNameBindings: {},
+      }),
     });
     let releaseConnected;
     const onConnected = vi.fn(
@@ -173,7 +210,13 @@ describe("useApiConnection authentication recovery", () => {
       }
       return Promise.resolve({
         ok: true,
-        json: async () => ({ ok: true, userId: "xiayu", apiKey: "xiayu-key", role: "user" }),
+        json: async () => ({
+          ok: true,
+          userId: "xiayu",
+          apiKey: "xiayu-key",
+          role: "user",
+          toolNameBindings: {},
+        }),
       });
     });
     const selectedUserId = ref("admin");
@@ -186,13 +229,20 @@ describe("useApiConnection authentication recovery", () => {
     const xiayuConnect = connection.connectBackend({ silent: true });
     resolveAdminConnect({
       ok: true,
-      json: async () => ({ ok: true, userId: "admin", apiKey: "admin-key", role: "super_admin" }),
+      json: async () => ({
+        ok: true,
+        userId: "admin",
+        apiKey: "admin-key",
+        role: "super_admin",
+        toolNameBindings: { read_file: { bindingName: "stale_admin_read" } },
+      }),
     });
 
     await expect(adminConnect).resolves.toBe(false);
     await expect(xiayuConnect).resolves.toBe(true);
     expect(connection.apiKey.value).toBe("xiayu-key");
     expect(connection.apiRole.value).toBe("user");
+    expect(toolDisplayName("read_file")).toBe("read_file");
     expect(connection.connected.value).toBe(true);
     expect(localStorage.getItem("noobot_api_user_id")).toBe(null);
   });
@@ -200,7 +250,13 @@ describe("useApiConnection authentication recovery", () => {
   it("rejects a server credential whose canonical owner differs from the requested user", async () => {
     connectApi.mockResolvedValue({
       ok: true,
-      json: async () => ({ ok: true, userId: "admin", apiKey: "admin-key", role: "super_admin" }),
+      json: async () => ({
+        ok: true,
+        userId: "admin",
+        apiKey: "admin-key",
+        role: "super_admin",
+        toolNameBindings: {},
+      }),
     });
     const connection = useApiConnection({ userId: ref("xiayu") });
     connection.connectCode.value = "connect-code";
@@ -235,6 +291,7 @@ describe("useApiConnection authentication recovery", () => {
         userId: "admin",
         apiKey: "restored-key",
         role: "super_admin",
+        toolNameBindings: {},
       }),
     });
 
@@ -269,13 +326,20 @@ describe("useApiConnection authentication recovery", () => {
   it("persists the system connection profile only after successful authentication", async () => {
     connectApi.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ ok: true, userId: "admin", apiKey: "key", role: "super_admin" }),
+      json: async () => ({
+        ok: true,
+        userId: "admin",
+        apiKey: "key",
+        role: "super_admin",
+        toolNameBindings: { read_file: { bindingName: "nb_read_file" } },
+      }),
     });
     const connection = useApiConnection({ userId: ref("admin") });
     connection.connectCode.value = "admin-code";
 
     expect(localStorage.getItem("noobot_connection_profile")).toBe(null);
     await expect(connection.connectBackend({ silent: true })).resolves.toBe(true);
+    expect(toolDisplayName("read_file")).toBe("nb_read_file");
     expect(JSON.parse(localStorage.getItem("noobot_connection_profile"))).toEqual({
       userId: "admin",
       connectCode: "admin-code",
@@ -291,6 +355,7 @@ describe("useApiConnection authentication recovery", () => {
           userId,
           apiKey: `${userId}-key`,
           role: userId === "admin" ? "super_admin" : "user",
+          toolNameBindings: {},
         }),
       }),
     );
@@ -338,7 +403,13 @@ describe("useApiConnection authentication recovery", () => {
       connectApi.mockResolvedValueOnce(rateLimitedResponse(2)).mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ({ ok: true, userId: "admin", apiKey: "after-429", role: "user" }),
+        json: async () => ({
+          ok: true,
+          userId: "admin",
+          apiKey: "after-429",
+          role: "user",
+          toolNameBindings: {},
+        }),
       });
       const connection = useApiConnection({ userId: ref("admin") });
       connection.connectCode.value = "connect-code";

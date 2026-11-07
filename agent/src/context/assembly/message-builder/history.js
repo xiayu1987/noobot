@@ -14,7 +14,6 @@ import {
   resolveContextToolCalls,
 } from "@noobot/context-protocol/message/codec";
 import { MESSAGE_ROLE } from "../../../bot/config/constants.js";
-import { compactToolResultTextForModel } from "../../../transfer-adapter/core/compact.js";
 import { toLangChainToolCalls } from "../../../models/adapters/langchain/context-message-adapter.js";
 import {
   isCheckpointBoundaryToolResultMessage,
@@ -79,7 +78,7 @@ function buildHistoryToolMessages(msg, historyToolCallsById, runtime) {
   return [
     new ToolMessage({
       tool_call_id: toolCallId,
-      content: compactToolResultTextForModel(msg.content),
+      content: msg.content,
       additional_kwargs: {
         ...projectContextMessageModelMetadata(msg),
         ...(declaredContextPolicy ? { contextPolicy: declaredContextPolicy } : {}),

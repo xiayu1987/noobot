@@ -5,7 +5,6 @@
  */
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { text } from "@noobot/shared/value";
-import { compactToolResultTextForModel } from "../../transfer-adapter/core/compact.js";
 import { toToolJsonResult } from "../../tools/core/tool-json-result.js";
 
 export function createCapabilityToolBinding(adapted = {}) {
@@ -49,7 +48,7 @@ async function executeCapabilityTool({
     turn,
     toolStartedAtMs: Date.now(),
   });
-  return compactToolResultTextForModel(result.toolResultText);
+  return result.toolResultText;
 }
 
 export async function runCapabilityToolTurns({

@@ -5,7 +5,7 @@
  */
 import path from "node:path";
 import { WORKSPACE_FILE_ROUTE } from "@noobot/shared/resource-access";
-import { mkdir, open, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { writeFileAtomicCreatingParents } from "@noobot/platform-compatibility/atomic-file-write";
 import {
   applyFileMutation,
@@ -17,7 +17,12 @@ import {
   createFileMutationDiffPreview,
   createFileMutationFilePreview,
   decodeFileMutationDownloadRequest,
+  assertFileText,
+  assertFileTextEncoding,
+  decodePatchText,
+  resolveFileWriteEncoding,
 } from "@noobot/file-mutation-protocol";
+import { encodeFileText, decodeFileDocument } from "@noobot/file-mutation-protocol/text-codec-node";
 import { resolveMimeTypeFromFileName } from "@noobot/attachment-protocol/mime";
 import { readWorkspaceFilePreview } from "../services/workspace-file-preview.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
@@ -42,26 +47,24 @@ const DEFAULT_I18N_KEYS = {
 };
 
 const JSON_DOCUMENT_NAMES = new Set(["config.json", "config-params.json"]);
-const UNSAFE_TEXT_CONTROL_CHARACTERS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/u;
 
 function validateWorkspaceText(content) {
-  if (typeof content !== "string") {
-    throw createBadRequestError("workspace file content must be a string", {
-      code: "INVALID_WORKSPACE_FILE_CONTENT",
-    });
-  }
-  if (Buffer.byteLength(content, "utf8") > LENGTH_THRESHOLDS.serviceHttp.workspaceFileBytes) {
-    const error = new Error("workspace file content exceeds the configured size limit");
-    error.statusCode = 413;
-    error.code = "WORKSPACE_FILE_CONTENT_TOO_LARGE";
+  return decodeRequestInput(
+    () => assertFileText(content),
+    (error) => error instanceof TypeError,
+  );
+}
+
+async function resolveWriteEncoding(absolutePath, encoding) {
+  const bytes = await readFile(absolutePath).catch((error) => {
+    if (error.code === "ENOENT") return null;
     throw error;
-  }
-  if (UNSAFE_TEXT_CONTROL_CHARACTERS.test(content)) {
-    throw createBadRequestError("workspace file content contains unsafe control characters", {
-      code: "INVALID_WORKSPACE_FILE_CONTENT",
-    });
-  }
-  return content;
+  });
+  const document = decodeRequestInput(
+    () => (bytes === null ? null : decodeFileDocument(bytes, encoding)),
+    (error) => error instanceof TypeError,
+  );
+  return resolveFileWriteEncoding(encoding, document?.encoding);
 }
 
 function validateJsonDocumentWrite(relativePath, content) {
@@ -104,13 +107,15 @@ export function registerFileCrudRoutes(
   const buildFileResponse =
     typeof responseBuilders?.file === "function"
       ? responseBuilders.file
-      : ({ path, isText, size, content, preview }) => ({
+      : ({ path, isText, size, content, preview, textFormat, textError }) => ({
           ok: true,
           path,
           isText,
           size,
           content,
           preview,
+          ...(textFormat ? { textFormat } : {}),
+          ...(textError ? { textError } : {}),
         });
   const maskWorkspacePath = (pathValue = "") => {
     const normalized = text(pathValue).replaceAll("\\", "/");
@@ -190,7 +195,11 @@ export function registerFileCrudRoutes(
         const absolutePath = resolveRequestFilePath(req, root, relativePath);
         let file;
         try {
-          file = await readWorkspaceFilePreview(absolutePath, relativePath);
+          const encoding = decodeRequestInput(
+            () => assertFileTextEncoding(req.query.encoding ?? "auto"),
+            (error) => error instanceof TypeError,
+          );
+          file = await readWorkspaceFilePreview(absolutePath, relativePath, encoding);
         } catch (error) {
           logFileAccess(req, "file.accessFailed", {
             relativePath: maskWorkspacePath(relativePath),
@@ -228,7 +237,22 @@ export function registerFileCrudRoutes(
         validateJsonDocumentWrite(relativePath, content);
         const root = await resolveRootPath(req);
         const absolutePath = resolveRequestFilePath(req, root, relativePath);
-        const writeText = (target, value) =>
+        const requestedEncoding = decodeRequestInput(
+          () => assertFileTextEncoding(req.body?.encoding ?? "auto"),
+          (error) => error instanceof TypeError,
+        );
+        const encoding = await resolveWriteEncoding(absolutePath, requestedEncoding);
+        const bytes = decodeRequestInput(
+          () => encodeFileText(content, encoding),
+          (error) => error instanceof TypeError,
+        );
+        if (bytes.length > LENGTH_THRESHOLDS.serviceHttp.workspaceFileBytes) {
+          throw Object.assign(
+            new Error("encoded workspace file exceeds the configured size limit"),
+            { statusCode: 413, code: "WORKSPACE_FILE_CONTENT_TOO_LARGE" },
+          );
+        }
+        const writeBytes = (target, value) =>
           writeFileAtomicCreatingParents({
             filePath: target,
             content: value,
@@ -243,18 +267,20 @@ export function registerFileCrudRoutes(
               filePath: absolutePath,
               locator: resolveRequestMutationLocator(req, relativePath, absolutePath),
               content,
+              encoding,
               operation: "replace",
               mutationRoot: await resolveRequestMutationRoot(req, root),
               sessionScope: null,
-              writeText,
+              stageBytes: writeBytes,
             })
-          : (await writeText(absolutePath, content),
+          : (await writeBytes(absolutePath, bytes),
             {
               ok: true,
               path: relativePath,
               isText: true,
-              size: Buffer.byteLength(content, "utf8"),
+              size: bytes.length,
               content,
+              textFormat: decodePatchText(content, encoding).textFormat,
             });
         res.json(result);
       },

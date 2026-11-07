@@ -5,6 +5,7 @@
  */
 export {
   ATOMIC_RENAME_RETRY_DELAYS_MS,
+  renameFileAtomic,
   writeFileAtomic,
   writeFileAtomicCreatingParents,
 } from "@noobot/platform-compatibility/atomic-file-write";

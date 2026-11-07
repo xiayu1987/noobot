@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { renderToolNameReferences } from "@noobot/model-protocol";
 
 import { resolveScenarioProfile } from "../../src/context/builders/scenario-resolver.js";
 import {
@@ -46,15 +47,17 @@ test("resolveScenarioProfile only consumes runConfig.scenarioProfile", () => {
   assert.deepEqual(resolveScenarioProfile({ runConfig: { scenario: "programming" } }), {});
 });
 
-test("resolveScenarioProfile programming description mentions preferred code tools by actual names", () => {
+test("programming instructions use protocol references that follow configured tool names", () => {
   const result = resolveScenarioProfile({
     runConfig: resolveRunConfig({ scenario: "programming" }),
   });
 
-  assert.match(result.description, /search/);
-  assert.match(result.description, /read_file/);
-  assert.match(result.description, /write_file/);
-  assert.match(result.description, /patch_file/);
+  assert.match(result.description, /\{\{tool:patch_file\}\}/);
+  const projected = renderToolNameReferences(result.description, {
+    patch_file: { bindingName: "apply_changes" },
+  });
+  assert.match(projected, /apply_changes/);
+  assert.doesNotMatch(projected, /patch_file|\{\{tool:/);
 });
 
 test("resolveScenarioProfile localizes builtin scenario names from runtime locale", () => {

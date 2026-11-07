@@ -16,6 +16,7 @@ import {
   validateModelResponse,
   collectToolMessageIds,
   createToolNameBinding,
+  createToolResultIdentityResolver,
   projectToolMessageNames,
   isToolResultMessage,
   projectToolResultName,
@@ -30,7 +31,8 @@ import { applyActiveModelSpec } from "../models/runtime/model-manager.js";
 import { projectToolsForModel } from "../models/tool/model-tool-definition.js";
 import { mergeConfig } from "../config/index.js";
 import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
-import { decodeToolResultText, encodeToolResultObject } from "@noobot/event-protocol/tool-result";
+import { decodeToolResultText } from "@noobot/event-protocol/tool-result";
+import { projectToolResultObjectForModel } from "../tools/core/tool-json-result.js";
 
 function resolveCredential(modelSpec = {}) {
   return text(modelSpec.api_key);
@@ -118,6 +120,7 @@ function createModelPort({ resolveTurnModelSpec, modelState }) {
         bindings: effectiveConfig.tools?.bindings,
       });
       const mapName = (name) => binding.toBindingName(name);
+      const resolveResultIdentity = createToolResultIdentityResolver(messages);
       const projectedTools = projectToolsForModel(tools, {
         strict: options?.toolBinding?.strict === true,
       }).map((tool) => projectToolDefinitionNames(tool, binding));
@@ -136,8 +139,14 @@ function createModelPort({ resolveTurnModelSpec, modelState }) {
         messages: messages.map((message) => {
           const projected = projectToolMessageNames(message, mapName);
           projected.content = isToolResultMessage(message)
-            ? encodeToolResultObject(
-                projectToolResultName(decodeToolResultText(message.content), message.name, mapName),
+            ? JSON.stringify(
+                projectToolResultObjectForModel(
+                  projectToolResultName(
+                    decodeToolResultText(message.content),
+                    resolveResultIdentity(message),
+                    mapName,
+                  ),
+                ),
               )
             : projectToolNamePrompt(projected.content, binding);
           return projected;

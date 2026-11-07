@@ -64,7 +64,7 @@ export default {
   "scenarios.full.description": "通用情景：不限制工具和上下文，按任务需要自主选择能力。",
   "scenarios.programming.name": "编程",
   "scenarios.programming.description":
-    "编程情景：先 {{tool:search}}/{{tool:read_file}} 确认真实内容，再用 {{tool:patch_file}} 修改；优先精确上下文补丁，避免手算 unified diff 行数；补丁失败后重新读取再改，必要时用 {{tool:write_file}}。",
+    "编程情景：先定位并读取真实内容，再依 {{tool:patch_file}} 协议修改；失败后重读并重建补丁，完成后验证。",
   "scenarios.text.name": "文本",
   "scenarios.text.description": "文本情景：适合写作、改写、摘要、翻译与内容整理。",
   "capability.finalPlanningPrompt": "请基于以上工具结果，立即给出最终规划答案。",

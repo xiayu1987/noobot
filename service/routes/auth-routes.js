@@ -7,7 +7,11 @@ import { resolveLocalizedBuiltinScenarios } from "#agent/config";
 import { getEnabledProviders, pickAlias } from "#agent/model";
 import { isSuperAdminRole, resolveConfiguredSuperUserId } from "#agent/utils";
 import { createBadRequestError, withJsonError } from "./route-wrapper.js";
-import { createClientModelCatalog, normalizePluginMode } from "@noobot/agent-config-protocol";
+import {
+  createClientModelCatalog,
+  normalizePluginMode,
+  resolveToolBindingSettings,
+} from "@noobot/agent-config-protocol";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
@@ -158,6 +162,10 @@ export function registerAuthRoutes(
             permissions: buildClientPermissions("super_admin", { canUseIDE: true }),
             scenarios: superAdminScenarios,
             plugins: superAdminPlugins,
+            toolNameBindings: resolveToolBindingSettings(
+              { bindings: globalConfig?.tools?.bindings },
+              loadedSuperAdminConfig?.tools?.bindings,
+            ),
             ...superAdminModelCatalog,
           });
           return;
@@ -201,6 +209,10 @@ export function registerAuthRoutes(
           }),
           scenarios: mergedScenarios,
           plugins: mergedPlugins,
+          toolNameBindings: resolveToolBindingSettings(
+            { bindings: globalConfig?.tools?.bindings },
+            loadedUserConfig?.tools?.bindings,
+          ),
           ...modelCatalog,
         });
       },

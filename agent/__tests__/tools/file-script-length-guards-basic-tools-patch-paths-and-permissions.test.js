@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { invokePatchFile } from "./helpers/patch-base-versions.js";
 import {
   test,
   assert,
@@ -14,47 +15,7 @@ import {
   parseToolResult,
 } from "./helpers/file-script-length-guards-helper.js";
 import { createTestAgentEnvironment } from "../helpers/agent-execution-scope.js";
-import { parseUnifiedDiff } from "../../src/tools/execution/file-patch.js";
-
-test("patch_file: unified_diff 保留 Windows 绝对路径与 file URL 语义", () => {
-  const driveDiff = [
-    "--- C:\\work\\src\\a.txt",
-    "+++ C:\\work\\src\\a.txt",
-    "@@ -1,1 +1,1 @@",
-    "-old",
-    "+new",
-    "",
-  ].join("\n");
-  const drivePatch = parseUnifiedDiff(driveDiff, 1)[0];
-  assert.equal(drivePatch.oldPath, "C:/work/src/a.txt");
-  assert.equal(drivePatch.newPath, "C:/work/src/a.txt");
-
-  const fileUrlDiff = [
-    "--- file:///C:/work/src/a.txt",
-    "+++ file:///C:/work/src/a.txt",
-    "@@ -1,1 +1,1 @@",
-    "-old",
-    "+new",
-    "",
-  ].join("\n");
-  const fileUrlPatch = parseUnifiedDiff(fileUrlDiff, 1)[0];
-  assert.equal(fileUrlPatch.oldPath, "C:/work/src/a.txt");
-  assert.equal(fileUrlPatch.newPath, "C:/work/src/a.txt");
-});
-
-test("patch_file: unified_diff 在 strip 后保留父目录组件供权威路径解析器拒绝", () => {
-  const oneParent = parseUnifiedDiff(
-    ["--- /dev/null", "+++ b/../escape.txt", "@@ -0,0 +1 @@", "+escape", ""].join("\n"),
-    1,
-  )[0];
-  assert.equal(oneParent.newPath, "../escape.txt");
-
-  const twoParents = parseUnifiedDiff(
-    ["--- /dev/null", "+++ b/../../escape.txt", "@@ -0,0 +1 @@", "+escape", ""].join("\n"),
-    1,
-  )[0];
-  assert.equal(twoParents.newPath, "../../escape.txt");
-});
+import { fileContentSha256 } from "../../src/tools/execution/file-mutation-state.js";
 
 test("patch_file: strip 不得消除 unified_diff 中的父目录穿越语义", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-strip-traversal-"));
@@ -67,7 +28,9 @@ test("patch_file: strip 不得消除 unified_diff 中的父目录穿越语义", 
     const diff = ["--- /dev/null", `+++ ${target}`, "@@ -0,0 +1 @@", "+escape", ""].join("\n");
     await assert.rejects(
       () =>
-        tool.invoke(
+        invokePatchFile(
+          tool,
+          basePath,
           { riskLevel: "medium", format: "unified_diff", patch: diff, strip: 1 },
           { signal: new AbortController().signal },
         ),
@@ -109,7 +72,9 @@ test("patch_file: 普通用户不能修改 workspace 外绝对路径", async () 
 
   await assert.rejects(
     () =>
-      tool.invoke(
+      invokePatchFile(
+        tool,
+        basePath,
         { riskLevel: "low", format: "unified_diff", patch: diff },
         { signal: new AbortController().signal },
       ),
@@ -156,7 +121,9 @@ test("patch_file: super user can patch an absolute file outside workspace root",
   ].join("\n");
 
   const result = parseToolResult(
-    await tool.invoke(
+    await invokePatchFile(
+      tool,
+      basePath,
       { riskLevel: "low", format: "unified_diff", patch: diff },
       { signal: new AbortController().signal },
     ),
@@ -214,7 +181,9 @@ test("patch_file: sharedTools cannot remap a Windows host path", async () => {
 
   await assert.rejects(
     () =>
-      tool.invoke(
+      invokePatchFile(
+        tool,
+        basePath,
         { riskLevel: "low", format: "unified_diff", patch: diff },
         { signal: new AbortController().signal },
       ),
@@ -271,7 +240,9 @@ test("patch_file: apply_patch also rejects sharedTools host remapping", async ()
 
   await assert.rejects(
     () =>
-      tool.invoke(
+      invokePatchFile(
+        tool,
+        basePath,
         { riskLevel: "low", format: "apply_patch", patch: patchText },
         { signal: new AbortController().signal },
       ),
@@ -308,7 +279,9 @@ test("patch_file: 拒绝 root=.. 和 project 虚拟相对前缀", async () => {
 
   await assert.rejects(
     () =>
-      tool.invoke(
+      invokePatchFile(
+        tool,
+        basePath,
         { riskLevel: "low", format: "apply_patch", patch: patchText, root: ".." },
         { signal: new AbortController().signal },
       ),
@@ -354,7 +327,9 @@ test("patch_file: 用户配置不能授权 /project 沙箱挂载", async () => {
 
   await assert.rejects(
     () =>
-      tool.invoke(
+      invokePatchFile(
+        tool,
+        basePath,
         { riskLevel: "low", format: "apply_patch", patch: patchText },
         { signal: new AbortController().signal },
       ),
@@ -415,7 +390,17 @@ test("patch_file: 全局 sandbox 挂载可授权 workspace 外项目", async () 
 
   const result = parseToolResult(
     await tool.invoke(
-      { riskLevel: "low", format: "apply_patch", patch: patchText },
+      {
+        riskLevel: "low",
+        format: "apply_patch",
+        patch: patchText,
+        baseVersions: [
+          {
+            filePath: "/project/client/noobot-chat/src/composables/chat/useChatSession.js",
+            sha256: fileContentSha256(await fs.readFile(targetFile)),
+          },
+        ],
+      },
       { signal: new AbortController().signal },
     ),
   );
@@ -446,7 +431,9 @@ test("patch_file: root 参数拒绝沙箱路径并返回明确提示", async () 
 
   await assert.rejects(
     () =>
-      tool.invoke(
+      invokePatchFile(
+        tool,
+        basePath,
         { riskLevel: "low", format: "unified_diff", patch: diff, root: "/project" },
         { signal: new AbortController().signal },
       ),
@@ -478,7 +465,9 @@ test("patch_file: root 参数 host 错误提示不暗示沙箱路径", async () 
 
   await assert.rejects(
     () =>
-      tool.invoke(
+      invokePatchFile(
+        tool,
+        basePath,
         { riskLevel: "low", format: "unified_diff", patch: diff, root: "/project" },
         { signal: new AbortController().signal },
       ),
@@ -515,7 +504,9 @@ test("patch_file: 路径不存在时诊断使用当前 workspace 执行审计路
 
   await assert.rejects(
     async () =>
-      tool.invoke(
+      invokePatchFile(
+        tool,
+        workspacePath,
         { riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 },
         { signal: new AbortController().signal },
       ),
@@ -561,7 +552,9 @@ test("patch_file: host 视角下路径不存在时诊断保留真实工作区根
 
   await assert.rejects(
     async () =>
-      tool.invoke(
+      invokePatchFile(
+        tool,
+        workspacePath,
         { riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 },
         { signal: new AbortController().signal },
       ),
@@ -604,7 +597,9 @@ test("patch_file: sandbox 虚拟相对路径沿用权威路径解析错误", asy
 
   await assert.rejects(
     () =>
-      tool.invoke(
+      invokePatchFile(
+        tool,
+        workspacePath,
         { riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 },
         { signal: new AbortController().signal },
       ),
@@ -644,7 +639,9 @@ test("patch_file: 普通用户必须显式提供 workspace 子项目路径", asy
   ].join("\n");
 
   const result = parseToolResult(
-    await tool.invoke(
+    await invokePatchFile(
+      tool,
+      workspacePath,
       { riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 },
       { signal: new AbortController().signal },
     ),
@@ -698,7 +695,9 @@ test("patch_file: strip=0 不剥离 git 前缀或虚拟根", async () => {
 
   await assert.rejects(
     () =>
-      tool.invoke(
+      invokePatchFile(
+        tool,
+        workspacePath,
         { riskLevel: "low", format: "unified_diff", patch: diff, strip: 0 },
         { signal: new AbortController().signal },
       ),
@@ -739,7 +738,9 @@ test("patch_file: 不扫描父工作区猜测唯一子项目", async () => {
 
   await assert.rejects(
     () =>
-      tool.invoke(
+      invokePatchFile(
+        tool,
+        workspacePath,
         { riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 },
         { signal: new AbortController().signal },
       ),
@@ -788,7 +789,9 @@ test("patch_file: 相对路径固定基于用户 workspace", async () => {
 
   await assert.rejects(
     () =>
-      tool.invoke(
+      invokePatchFile(
+        tool,
+        workspacePath,
         { riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 },
         { signal: new AbortController().signal },
       ),
@@ -830,7 +833,9 @@ test("patch_file: 超级管理员也不扫描项目根解析虚拟路径", async
 
   await assert.rejects(
     () =>
-      tool.invoke(
+      invokePatchFile(
+        tool,
+        workspacePath,
         { riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 },
         { signal: new AbortController().signal },
       ),

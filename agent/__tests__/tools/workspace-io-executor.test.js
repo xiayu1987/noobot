@@ -40,10 +40,10 @@ test("workspace atomic writes use the canonical transient rename policy", async 
     },
   });
 
-  await executor.writeText("C:/workspace/project/a.txt", "patched-line\n");
+  await executor.writeBytes("C:/workspace/project/a.txt", Buffer.from("patched-line\n"));
 
   assert.equal(renameAttempts, 2);
-  assert.equal(files.get("C:/workspace/project/a.txt"), "patched-line\n");
+  assert.deepEqual(files.get("C:/workspace/project/a.txt"), Buffer.from("patched-line\n"));
   assert.deepEqual(removed, []);
 });
 
@@ -69,7 +69,7 @@ for (const platform of ["linux", "darwin"]) {
     });
 
     await assert.rejects(
-      () => executor.writeText("/workspace/project/a.txt", "content"),
+      () => executor.writeBytes("/workspace/project/a.txt", Buffer.from("content")),
       /permission denied/,
     );
     assert.equal(renameAttempts, 1);
@@ -97,7 +97,7 @@ test("workspace atomic writes fail immediately for non-transient rename errors",
   });
 
   await assert.rejects(
-    () => executor.writeText("C:/workspace/project/a.txt", "content"),
+    () => executor.writeBytes("C:/workspace/project/a.txt", Buffer.from("content")),
     /invalid target/,
   );
   assert.equal(renameAttempts, 1);

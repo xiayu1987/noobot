@@ -10,6 +10,7 @@ import { normalizeSecurityRiskLevel } from "@noobot/security-assessment-protocol
 import { useLocale } from "../i18n/useLocale.js";
 import { resolveToolEventVisual } from "../utils/toolEventIcon.js";
 import { text } from "@noobot/shared/value";
+import { toolDisplayName } from "../state/toolNameBindings.js";
 
 const props = defineProps({
   eventText: { type: String, default: "" },
@@ -55,17 +56,25 @@ const normalizedRiskLevel = computed(() => normalizeSecurityRiskLevel(props.risk
 const riskLabel = computed(() =>
   normalizedRiskLevel.value ? translate(`message.toolRiskLevel.${normalizedRiskLevel.value}`) : "",
 );
+function toolNamePrefixLength(content) {
+  const toolName = text(props.toolName);
+  if (!toolName || !content.startsWith(toolName)) return 0;
+  const boundary = content.charAt(toolName.length);
+  return boundary && !/[\s·:：([]/.test(boundary) ? 0 : toolName.length;
+}
 const contentWithoutToolName = computed(() => {
   const content = String(props.contentText || "");
-  const toolName = text(props.toolName);
-  if (!toolName || !content.startsWith(toolName)) return content;
-  const boundary = content.charAt(toolName.length);
-  if (boundary && !/[\s·:：([]/.test(boundary)) return content;
-  return content.slice(toolName.length).trimStart();
+  const prefixLength = toolNamePrefixLength(content);
+  return prefixLength ? content.slice(prefixLength).trimStart() : content;
 });
-const resolvedTitle = computed(() =>
-  [props.titleText || props.contentText || "", statusLabel.value].filter(Boolean).join(" · "),
-);
+const resolvedTitle = computed(() => {
+  const title = props.titleText || props.contentText || "";
+  const prefixLength = toolNamePrefixLength(title);
+  const displayTitle = prefixLength
+    ? toolDisplayName(props.toolName) + title.slice(prefixLength)
+    : title;
+  return [displayTitle, statusLabel.value].filter(Boolean).join(" · ");
+});
 const resolvedDetail = computed(() => {
   if (props.detailText !== "" && props.detailText !== undefined && props.detailText !== null) {
     if (typeof props.detailText === "string") return props.detailText;
@@ -121,7 +130,9 @@ function handleToggle() {
       :title="resolvedTitle"
       @click="handleToggle"
     >
-      <span v-if="toolName" class="base-thinking-log-line__tool-name">{{ toolName }}</span>
+      <span v-if="toolName" class="base-thinking-log-line__tool-name">{{
+        toolDisplayName(toolName)
+      }}</span>
       <span
         v-if="riskLabel"
         class="base-thinking-log-line__risk"

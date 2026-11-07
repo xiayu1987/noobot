@@ -6,6 +6,26 @@
 
 import { isPlainObject, text } from "@noobot/shared/value";
 import { createLocator, isCanonicalLocator } from "@noobot/shared/locator";
+export {
+  PATCH_FORMATS,
+  PATCH_CONTENT_ENCODINGS,
+  PATCH_SHA256_PATTERN,
+  PATCH_LINE_ANCHOR_PATTERN,
+  formatLinesWithNumbers,
+  adaptPatchHunks,
+  indexPatchBaseVersions,
+  indexPatchOperations,
+  decodePatchText,
+  encodePatchText,
+  validateUnifiedNewlineMarkers,
+} from "./patch.js";
+export {
+  FILE_TEXT_ENCODINGS,
+  FILE_TEXT_ENCODING_INPUTS,
+  assertFileTextEncoding,
+  assertFileText,
+  resolveFileWriteEncoding,
+} from "./text.js";
 
 export const FILE_MUTATION_PROTOCOL = "noobot.file-mutation-result";
 export const FILE_MUTATION_VERSION = 3;
@@ -28,6 +48,7 @@ export const FILE_MUTATION_ERROR_CODE = Object.freeze({
   ALREADY_EXISTS: "file_mutation_already_exists",
   COMMIT_FAILED: "file_mutation_commit_failed",
   COMMIT_AND_ROLLBACK_FAILED: "file_mutation_commit_and_rollback_failed",
+  CLEANUP_FAILED: "file_mutation_cleanup_failed",
   ROLLBACK_CONFLICT: "file_mutation_rollback_conflict",
   SNAPSHOT_OVERWRITTEN: "snapshot_overwritten",
   SNAPSHOT_UNAVAILABLE: "snapshot_unavailable",
@@ -44,12 +65,24 @@ export const FILE_MUTATION_ERROR_STATUS = Object.freeze({
   [FILE_MUTATION_ERROR_CODE.ALREADY_EXISTS]: 409,
   [FILE_MUTATION_ERROR_CODE.COMMIT_FAILED]: 500,
   [FILE_MUTATION_ERROR_CODE.COMMIT_AND_ROLLBACK_FAILED]: 500,
+  [FILE_MUTATION_ERROR_CODE.CLEANUP_FAILED]: 500,
   [FILE_MUTATION_ERROR_CODE.ROLLBACK_CONFLICT]: 409,
   [FILE_MUTATION_ERROR_CODE.SNAPSHOT_OVERWRITTEN]: 409,
   [FILE_MUTATION_ERROR_CODE.SNAPSHOT_UNAVAILABLE]: 409,
   [FILE_MUTATION_ERROR_CODE.RESOURCE_DELETED]: 410,
   [FILE_MUTATION_ERROR_CODE.SNAPSHOT_CORRUPT]: 500,
 });
+
+export function describeFileMutationFailure(error) {
+  return {
+    message: error.message,
+    ...(error.code === undefined ? {} : { code: error.code }),
+    ...(error.cause === undefined ? {} : { cause: describeFileMutationFailure(error.cause) }),
+    ...(error instanceof AggregateError
+      ? { errors: error.errors.map(describeFileMutationFailure) }
+      : {}),
+  };
+}
 
 export function createFileMutationError(code, message, { cause, details } = {}) {
   const statusCode = FILE_MUTATION_ERROR_STATUS[code];
@@ -65,70 +98,7 @@ export function createFileMutationLocator(value) {
   return createLocator(value);
 }
 
-function linesOf(value = "") {
-  const lines = String(value).split("\n");
-  if (lines.at(-1) === "") lines.pop();
-  return lines;
-}
-
-export function createFileDiff(before = "", after = "") {
-  const oldLines = linesOf(before);
-  const newLines = linesOf(after);
-  const width = newLines.length + 1;
-  const table = Array.from({ length: oldLines.length + 1 }, () => new Uint32Array(width));
-  for (let oldIndex = oldLines.length - 1; oldIndex >= 0; oldIndex -= 1)
-    for (let newIndex = newLines.length - 1; newIndex >= 0; newIndex -= 1)
-      table[oldIndex][newIndex] =
-        oldLines[oldIndex] === newLines[newIndex]
-          ? table[oldIndex + 1][newIndex + 1] + 1
-          : Math.max(table[oldIndex + 1][newIndex], table[oldIndex][newIndex + 1]);
-  const rows = [];
-  let oldIndex = 0;
-  let newIndex = 0;
-  while (oldIndex < oldLines.length || newIndex < newLines.length) {
-    if (
-      oldIndex < oldLines.length &&
-      newIndex < newLines.length &&
-      oldLines[oldIndex] === newLines[newIndex]
-    ) {
-      rows.push({
-        type: "context",
-        oldLine: oldIndex + 1,
-        newLine: newIndex + 1,
-        text: oldLines[oldIndex],
-      });
-      oldIndex += 1;
-      newIndex += 1;
-    } else if (
-      newIndex < newLines.length &&
-      (oldIndex === oldLines.length ||
-        table[oldIndex][newIndex + 1] > table[oldIndex + 1][newIndex])
-    ) {
-      rows.push({
-        type: "added",
-        oldLine: null,
-        newLine: newIndex + 1,
-        text: newLines[newIndex++],
-      });
-    } else {
-      rows.push({
-        type: "removed",
-        oldLine: oldIndex + 1,
-        newLine: null,
-        text: oldLines[oldIndex++],
-      });
-    }
-  }
-  const additions = rows.filter((row) => row.type === "added").length;
-  const deletions = rows.filter((row) => row.type === "removed").length;
-  return {
-    format: "git-lines-v1",
-    additions,
-    deletions,
-    changedLines: additions + deletions,
-    lines: rows,
-  };
-}
+export { createFileDiff } from "./diff.js";
 
 export function createFileMutationResult({
   id,
@@ -373,6 +343,7 @@ export function createFileMutationFilePreview(value) {
     isText: mutation.after.isText,
     size: mutation.after.size,
     content: state === MUTATION_SNAPSHOT_STATE.AVAILABLE ? snapshots.after : null,
+    ...(mutation.after.textFormat ? { textFormat: mutation.after.textFormat } : {}),
   };
 }
 
@@ -438,5 +409,6 @@ export function createFileMutationDownload(value, { revision, afterSha256 } = {}
     fileName: mutation.fileName,
     sha256: mutation.after.sha256,
     content: snapshots.after,
+    ...(mutation.after.textFormat ? { textFormat: mutation.after.textFormat } : {}),
   });
 }

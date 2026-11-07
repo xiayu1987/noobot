@@ -4,5 +4,5 @@
  * SPDX-License-Identifier: MIT
  */
 export { parseApplyPatch, parseUnifiedDiff } from "./file-patch/parse.js";
-export { applySearchHunks, applyUnifiedHunks } from "./file-patch/apply.js";
+export { applyPatchHunks } from "./file-patch/apply.js";
 export { resolvePatchTargetsWithOptions } from "./file-patch/resolve.js";

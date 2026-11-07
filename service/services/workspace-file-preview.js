@@ -5,6 +5,8 @@
  */
 import { open } from "node:fs/promises";
 import { describeFilePreview, FILE_PREVIEW_URL_TYPES } from "@noobot/attachment-protocol/preview";
+import { decodePatchText } from "@noobot/file-mutation-protocol";
+import { decodeFileDocument } from "@noobot/file-mutation-protocol/text-codec-node";
 
 async function readBoundedText(handle, size, maxBytes) {
   const buffer = Buffer.alloc(Math.min(size + 1, maxBytes + 1));
@@ -17,20 +19,21 @@ async function readBoundedText(handle, size, maxBytes) {
   return buffer.subarray(0, offset);
 }
 
-function decodeText(buffer) {
-  if (buffer.includes(0)) return { isText: false, content: "" };
+function decodeText(buffer, encoding) {
   try {
+    const document = decodeFileDocument(buffer, encoding);
     return {
       isText: true,
-      content: new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(buffer),
+      content: document.content,
+      textFormat: decodePatchText(document.content, document.encoding).textFormat,
     };
   } catch (error) {
     if (!(error instanceof TypeError)) throw error;
-    return { isText: false, content: "" };
+    return { isText: false, content: "", textError: error.message };
   }
 }
 
-export async function readWorkspaceFilePreview(absolutePath, name) {
+export async function readWorkspaceFilePreview(absolutePath, name, encoding = "auto") {
   const handle = await open(absolutePath, "r");
   try {
     const stats = await handle.stat();
@@ -47,7 +50,7 @@ export async function readWorkspaceFilePreview(absolutePath, name) {
         content: "",
         preview: { ...preview, overLimit: true },
       };
-    const decoded = decodeText(buffer);
+    const decoded = decodeText(buffer, encoding);
     preview = describeFilePreview({ name, size: stats.size, isText: decoded.isText });
     return { size: stats.size, ...decoded, preview };
   } finally {

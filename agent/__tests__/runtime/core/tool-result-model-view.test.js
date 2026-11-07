@@ -39,7 +39,7 @@ function incrementalView(content) {
   return modelContext.messages[0];
 }
 
-test("live and rebuilt history expose identical callable references while canonical results remain valid", () => {
+test("live and rebuilt history retain canonical results until the model request boundary", () => {
   const rawBefore = JSON.stringify(envelope);
   const live = incrementalView(canonical);
   const history = buildHistoryMessages({
@@ -49,11 +49,11 @@ test("live and rebuilt history expose identical callable references while canoni
     ],
   });
   assert.equal(history.at(-1).content, live.content);
-  const model = JSON.parse(live.content);
-  assert.equal(model.overflowed, true);
-  assert.equal(model.transfers[0].attachments[0].attachmentRef.startsWith("attachment:v1:"), true);
-  assert.equal("transferEnvelopes" in model, false);
-  assert.equal(JSON.stringify(model).includes("presentationMessageId"), false);
+  assert.equal(live.content, canonical);
+  const result = decodeToolResultText(live.content);
+  assert.equal(result.overflowed, true);
+  assert.deepEqual(result.transferEnvelopes, [envelope]);
+  assert.equal("transfers" in result, false);
   assert.deepEqual(decodeToolResultText(canonical).transferEnvelopes, [envelope]);
   assert.equal(JSON.stringify(envelope), rawBefore);
   assert.equal(
@@ -65,7 +65,7 @@ test("live and rebuilt history expose identical callable references while canoni
   );
 });
 
-test("auxiliary tool calls project canonical results exactly once", async () => {
+test("auxiliary tool calls retain canonical results until the model request boundary", async () => {
   const requests = [];
   await runCapabilityToolTurns({
     messages: [],
@@ -82,7 +82,7 @@ test("auxiliary tool calls project canonical results exactly once", async () => 
       };
     },
   });
-  assert.equal(requests[1].at(-1).content, incrementalView(canonical).content);
+  assert.equal(requests[1].at(-1).content, canonical);
 });
 
 test("auxiliary rejection and missing-tool results obey the failure protocol", async () => {

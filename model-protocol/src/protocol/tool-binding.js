@@ -227,12 +227,51 @@ function* toolMessageGroups(message) {
 }
 
 export function isToolResultMessage(message) {
-  return message.role === "tool" || message.getType?.() === "tool";
+  return message.role === "tool" || message.type === "tool";
+}
+
+function* groupToolCalls({ blocks, calls }) {
+  for (const call of calls) {
+    if (!blocks || isClientToolCallBlock(call)) yield call;
+  }
+}
+
+function* toolMessageCalls(message) {
+  for (const group of toolMessageGroups(message)) yield* groupToolCalls(group);
+}
+
+function registerToolCallIdentity(names, call) {
+  const signed = call.type === "signed_tool_call";
+  const source = signed ? call.providerCall : call;
+  const id = source.call_id ?? source.id;
+  const name = signed ? call.toolId : callName(call);
+  if (names.has(id) && names.get(id) !== name)
+    throw new TypeError(`conflicting tool call identity: ${id}`);
+  names.set(id, name);
+}
+
+export function createToolResultIdentityResolver(messages) {
+  const names = new Map();
+  for (const message of messages) {
+    for (const call of toolMessageCalls(message)) registerToolCallIdentity(names, call);
+  }
+  return (message) => {
+    const id = message.tool_call_id;
+    if (typeof id !== "string" || !id || !names.has(id))
+      throw new TypeError(`tool result requires its matching call: ${id}`);
+    const toolId = requireToolId(names.get(id));
+    if (message.name !== undefined && message.name !== toolId)
+      throw new TypeError(
+        `tool result message identity mismatch: expected ${toolId}, got ${message.name}`,
+      );
+    return toolId;
+  };
 }
 
 export function projectToolResultName(result, toolId, mapName) {
+  requireToolId(toolId);
   if (!Object.hasOwn(result, "toolName")) return result;
-  if (toolId !== undefined && result.toolName !== toolId)
+  if (result.toolName !== toolId)
     throw new TypeError(
       `tool result identity mismatch: expected ${toolId}, got ${result.toolName}`,
     );
@@ -251,18 +290,12 @@ export function projectToolMessageNames(message, mapName) {
   return projected;
 }
 
-function collectGroupToolIds(ids, { blocks, calls }) {
-  for (const call of calls) {
-    if (!blocks || isClientToolCallBlock(call))
-      ids.add(call.type === "signed_tool_call" ? call.toolId : callName(call));
-  }
-}
-
 export function collectToolMessageIds(messages) {
   const ids = new Set();
   for (const message of messages) {
     if (isToolResultMessage(message) && message.name !== undefined) ids.add(message.name);
-    for (const group of toolMessageGroups(message)) collectGroupToolIds(ids, group);
+    for (const call of toolMessageCalls(message))
+      ids.add(call.type === "signed_tool_call" ? call.toolId : callName(call));
   }
   return [...ids];
 }

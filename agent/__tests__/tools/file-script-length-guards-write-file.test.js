@@ -338,6 +338,9 @@ test("workspace I/O: file tools keep one sandbox display path end to end", async
     await tools.get("patch_file").invoke(
       {
         format: "apply_patch",
+        baseVersions: [
+          { filePath: "runtime/ops_workdir/sandbox-flow.txt", sha256: firstRead.baseSha256 },
+        ],
         patch: [
           "*** Begin Patch",
           "*** Update File: runtime/ops_workdir/sandbox-flow.txt",

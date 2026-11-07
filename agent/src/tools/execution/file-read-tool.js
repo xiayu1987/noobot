@@ -15,7 +15,10 @@ import { createFileSourceSchema, resolveFileInput } from "../core/file-input.js"
 import { tTool } from "../core/tool-i18n.js";
 import { TOOL_NAME } from "../constants/index.js";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
-import { formatLinesWithNumbers, splitLines } from "./file-utils.js";
+import { formatLinesWithNumbers } from "./file-utils.js";
+import { decodePatchText, FILE_TEXT_ENCODING_INPUTS } from "@noobot/file-mutation-protocol";
+import { decodeFileDocument } from "@noobot/file-mutation-protocol/text-codec-node";
+import { fileContentSha256 } from "./file-mutation-state.js";
 import {
   RESOURCE_OPERATION,
   SECURITY_EVIDENCE_SOURCE,
@@ -31,7 +34,7 @@ import {
 export function createReadFileTool({ agentContext, runtime, workspaceIo }) {
   return structuredTool(
     runtime,
-    async ({ filePath, startLine, endLine, maxLines, riskLevel }) => {
+    async ({ filePath, startLine, endLine, maxLines, riskLevel, encoding }) => {
       if (typeof filePath === "string")
         assertValidFileNameFromPath({ filePath, fieldName: "filePath", agentContext });
       const resolvedInput = await resolveFileInput({
@@ -71,15 +74,15 @@ export function createReadFileTool({ agentContext, runtime, workspaceIo }) {
           details: { field: "filePath", path: projectToolPathRef(pathRef) },
         });
       }
-      const rawContent = await workspaceIo.readText(resolvedPath);
-      const allLines = splitLines(rawContent);
-      if (rawContent.endsWith("\n")) allLines.pop();
+      const buffer = await workspaceIo.readBuffer(resolvedPath);
+      const document = decodeFileDocument(buffer, encoding);
+      const { lines: allLines, textFormat } = decodePatchText(document.content, document.encoding);
       const totalLines = allLines.length;
       const requestedEnd = endLine ?? totalLines;
       const rangeError =
         startLine > Math.max(1, totalLines)
           ? { field: "startLine", reason: "start_line_after_eof" }
-          : requestedEnd < startLine
+          : totalLines > 0 && requestedEnd < startLine
             ? { field: "endLine", reason: "end_line_before_start_line" }
             : null;
       if (rangeError) {
@@ -121,6 +124,8 @@ export function createReadFileTool({ agentContext, runtime, workspaceIo }) {
         totalLines,
         hasMore: end < totalLines,
         numberedContent,
+        textFormat,
+        baseSha256: fileContentSha256(buffer),
       });
     },
     {
@@ -128,6 +133,10 @@ export function createReadFileTool({ agentContext, runtime, workspaceIo }) {
       metadata: { pathContract: TOOL_PATH_CONTRACTS.fileRead },
       description: buildFileToolDescription(runtime, "tools.file.readDescription"),
       schema: z.strictObject({
+        encoding: z
+          .enum(FILE_TEXT_ENCODING_INPUTS)
+          .default("auto")
+          .describe(tTool(runtime, "tools.file.fieldEncoding")),
         filePath: createFileSourceSchema({
           filePathDescription: tTool(runtime, "tools.file.readFilePathField"),
         }),

@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { invokePatchFile } from "./helpers/patch-base-versions.js";
 import {
   test,
   assert,
@@ -24,7 +25,9 @@ test("patch_file: out-of-order anchors return diagnostics without partial writes
     (item) => item?.name === "patch_file",
   );
   const result = parseToolResult(
-    await tool.invoke(
+    await invokePatchFile(
+      tool,
+      basePath,
       {
         riskLevel: "low",
         patch:
@@ -64,7 +67,9 @@ test("patch_file: 不填 format 时仍自动识别旧 apply_patch 格式", async
   ].join("\n");
 
   const result = parseToolResult(
-    await tool.invoke(
+    await invokePatchFile(
+      tool,
+      basePath,
       { riskLevel: "low", patch: applyPatch },
       { signal: new AbortController().signal },
     ),
@@ -93,7 +98,9 @@ test("patch_file: hunk 不匹配时返回带行号上下文", async () => {
     "",
   ].join("\n");
   const result = parseToolResult(
-    await tool.invoke(
+    await invokePatchFile(
+      tool,
+      basePath,
       { riskLevel: "low", format: "apply_patch", patch: badPatch },
       { signal: new AbortController().signal },
     ),
@@ -127,7 +134,9 @@ test("patch_file: apply_patch 无任何候选时不伪造失配行号", async ()
     "",
   ].join("\n");
   const result = parseToolResult(
-    await tool.invoke(
+    await invokePatchFile(
+      tool,
+      basePath,
       { riskLevel: "low", format: "apply_patch", patch },
       { signal: new AbortController().signal },
     ),
@@ -149,7 +158,9 @@ test("patch_file: apply_patch 多 hunk 按顺序定位并以最长前缀候选�
   );
   const invoke = async (lines) =>
     parseToolResult(
-      await tool.invoke(
+      await invokePatchFile(
+        tool,
+        basePath,
         { riskLevel: "low", format: "apply_patch", patch: lines.join("\n") },
         { signal: new AbortController().signal },
       ),
@@ -188,7 +199,9 @@ test("patch_file: hunk beyond EOF reports totalLines without an inverted context
   );
   const patch = ["--- a.txt", "+++ a.txt", "@@ -40,2 +40,2 @@", " x", "-y", "+z", ""].join("\n");
   const result = parseToolResult(
-    await tool.invoke(
+    await invokePatchFile(
+      tool,
+      basePath,
       { riskLevel: "low", format: "unified_diff", patch },
       { signal: new AbortController().signal },
     ),

@@ -4,6 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { spawn } from "node:child_process";
+import { readFile } from "node:fs/promises";
+import { filePath as path } from "@noobot/path-resolver";
+import {
+  assertFileText,
+  assertFileTextEncoding,
+  decodePatchText,
+} from "@noobot/file-mutation-protocol";
+import { decodeFileText, decodeFileDocument } from "@noobot/file-mutation-protocol/text-codec-node";
 import { rgPath } from "@vscode/ripgrep";
 import { fatalSystemError } from "../../shared/errors/index.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
@@ -94,8 +102,8 @@ const RIPGREP_EXCLUDED_GLOBS = [
   "!**/coverage/**",
 ];
 
-function buildRipgrepArgs({ query, target, isRegex, caseSensitive, glob, contextLines }) {
-  const args = ["--json", "--line-number", "--column"];
+function buildRipgrepArgs({ query, target, isRegex, caseSensitive, glob, contextLines, encoding }) {
+  const args = ["--json", "--text", "--line-number", "--column", "--encoding", encoding];
   for (const excluded of RIPGREP_EXCLUDED_GLOBS) args.push("--glob", excluded);
   if (contextLines > 0) args.push("--context", String(contextLines));
   if (!caseSensitive) args.push("-i");
@@ -118,8 +126,9 @@ function invalidRipgrepOutput(reason, cause) {
 
 function decodeRipgrepData(field, value) {
   if (!isPlainObject(value)) throw invalidRipgrepOutput(`${field} must be an object`);
-  if (typeof value.text === "string") return value.text;
-  if (typeof value.bytes === "string") return Buffer.from(value.bytes, "base64").toString("utf8");
+  if (typeof value.text === "string") return assertFileText(value.text);
+  if (typeof value.bytes === "string")
+    return decodeFileText(Buffer.from(value.bytes, "base64"), "utf-8");
   throw invalidRipgrepOutput(`${field} must carry text or bytes`);
 }
 
@@ -215,14 +224,24 @@ export async function searchFilesWithRipgrep({
   contextLines,
   maxResults,
   abortSignal,
+  encoding = "auto",
 }) {
+  assertFileTextEncoding(encoding);
   assertNotAborted(abortSignal);
   if (typeof target !== "string" || !target) {
     throw fatalSystemError("search target must be a non-empty string", {
       code: ERROR_CODE.FATAL_SEARCH_TARGET_INVALID,
     });
   }
-  const args = buildRipgrepArgs({ query, target, isRegex, caseSensitive, glob, contextLines });
+  const args = buildRipgrepArgs({
+    query,
+    target,
+    isRegex,
+    caseSensitive,
+    glob,
+    contextLines,
+    encoding,
+  });
   const { events, truncated } = await runRipgrepSearch({
     args,
     rootPath,
@@ -230,8 +249,31 @@ export async function searchFilesWithRipgrep({
     abortSignal,
   });
   const { rawMatches, contextByFile } = collectRipgrepEvents(events);
+  const eventsByFile = new Map();
+  for (const event of events) {
+    if (!eventsByFile.has(event.filePath)) eventsByFile.set(event.filePath, []);
+    eventsByFile.get(event.filePath).push(event);
+  }
+  const encodings = new Map();
+  for (const [filePath, fileEvents] of eventsByFile) {
+    assertNotAborted(abortSignal);
+    const bytes = await readFile(path.join(rootPath, filePath));
+    const document = decodeFileDocument(bytes, encoding);
+    const { lines } = decodePatchText(document.content, document.encoding);
+    for (const event of fileEvents) {
+      if (lines[event.line - 1] !== event.text) {
+        throw new Error(
+          `search result differs from file content: ${filePath}:${event.line}; search again`,
+        );
+      }
+    }
+    encodings.set(filePath, document.encoding);
+  }
   return {
-    matches: assembleRipgrepMatches({ rawMatches, contextByFile, contextLines }),
+    matches: assembleRipgrepMatches({ rawMatches, contextByFile, contextLines }).map((match) => ({
+      ...match,
+      encoding: encodings.get(match.filePath),
+    })),
     truncated,
   };
 }

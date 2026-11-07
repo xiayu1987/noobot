@@ -418,7 +418,7 @@ test("state-committer writes tool result through message store when holder is pr
   assert.equal(turnMessageStore.items[0]?.content, STORE_TOOL_RESULT_TEXT);
 });
 
-test("state-committer retains raw results and compacts only the model projection", async () => {
+test("state-committer retains canonical results in storage and model context", async () => {
   const turnMessageStore = createInMemoryTurnStore();
   const modelContext = createTestModelContext("dp_compact", "turn-compact");
   const messages = modelContext.messages;
@@ -473,6 +473,7 @@ test("state-committer retains raw results and compacts only the model projection
       ok: true,
       empty: [],
       nullable: null,
+      transferEnvelopes: [envelope],
     }),
     transferEnvelopes: [envelope],
     resourceRefs: [],
@@ -488,11 +489,12 @@ test("state-committer retains raw results and compacts only the model projection
     ok: true,
     empty: [],
     nullable: null,
+    transferEnvelopes: [envelope],
   });
   assert.equal("transferResult" in payload, false);
   assert.equal("attachmentMetas" in payload, false);
   assert.equal(payload.toolName, "multimodal_generate");
-  assert.equal("transferEnvelopes" in payload, false);
+  assert.deepEqual(payload.transferEnvelopes, [envelope]);
   assert.equal("transferEnvelopes" in turnMessageStore.items[0], true);
   assert.deepEqual(turnMessageStore.items[0].transferEnvelopes, [envelope]);
 });

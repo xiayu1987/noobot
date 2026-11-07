@@ -15,6 +15,27 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+export async function renameFileAtomic({
+  source,
+  filePath,
+  rename,
+  retryDelaysMs = ATOMIC_RENAME_RETRY_DELAYS_MS,
+  platform = process.platform,
+}) {
+  if (!isFunction(rename)) throw new TypeError("atomic rename requires a rename operation");
+  const delays = Array.isArray(retryDelaysMs) ? retryDelaysMs : ATOMIC_RENAME_RETRY_DELAYS_MS;
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await rename(source, filePath);
+      return;
+    } catch (error) {
+      if (attempt >= delays.length || !isTransientAtomicRenameError(error, { platform }))
+        throw error;
+      await sleep(delays[attempt]);
+    }
+  }
+}
+
 export async function writeFileAtomic({
   filePath,
   content,
@@ -28,26 +49,17 @@ export async function writeFileAtomic({
   if (!isFunction(writeFile) || !isFunction(rename) || !isFunction(remove)) {
     throw new TypeError("atomic file write requires writeFile, rename, and remove operations");
   }
-  const delays = Array.isArray(retryDelaysMs) ? retryDelaysMs : ATOMIC_RENAME_RETRY_DELAYS_MS;
   const temporary = path.join(path.dirname(filePath), `${TEMPORARY_FILE_PREFIX}${randomUUID()}`);
   try {
     await writeFile(temporary, content, encoding);
-    for (let attempt = 0; ; attempt += 1) {
-      try {
-        await rename(temporary, filePath);
-        return;
-      } catch (error) {
-        if (attempt >= delays.length || !isTransientAtomicRenameError(error, { platform })) {
-          throw error;
-        }
-        await sleep(delays[attempt]);
-      }
-    }
+    await renameFileAtomic({ source: temporary, filePath, rename, retryDelaysMs, platform });
   } catch (error) {
     try {
       await remove(temporary, { force: true });
-    } catch {
-      void 0;
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], "atomic write and temporary cleanup failed", {
+        cause: error,
+      });
     }
     throw error;
   }

@@ -14,6 +14,8 @@ import {
   putWorkspaceFileApi,
 } from "../../../infrastructure/api/chat/chatApi.js";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
+import { resolveToolBindingSettings } from "@noobot/agent-config-protocol";
+import { updateToolNameBindings } from "../../../shared/state/toolNameBindings.js";
 import { ConfigDocumentForm, SettingsJsonListEditorLayout } from "../public-api.js";
 import {
   assertConfigParamListMatchesCatalog,
@@ -238,6 +240,8 @@ async function loadConfigDocument() {
 
 async function saveConfigDocument() {
   if (!props.connected || !props.userId) return;
+  const userId = props.userId;
+  const declarations = configDeclarations.value;
   configSaving.value = true;
   try {
     const nextDocument = buildConfigDocumentForSave(
@@ -247,7 +251,7 @@ async function saveConfigDocument() {
     );
     const res = await putWorkspaceFileApi(
       {
-        userId: props.userId,
+        userId,
         path: CONFIG_DOCUMENT_PATH,
         content: serializeConfigDocument(nextDocument),
       },
@@ -257,6 +261,11 @@ async function saveConfigDocument() {
     if (!res.ok || !data.ok) {
       throw new Error(data.error || translate("settings.saveConfigFailed"));
     }
+    updateToolNameBindings(
+      userId,
+      resolveToolBindingSettings(declarations.toolBindings, nextDocument.tools?.bindings),
+    );
+    if (props.userId !== userId || !props.connected) return;
     configDocument.value = nextDocument;
     configDocumentBaseline.value = cloneConfigDocument(nextDocument);
     ElMessage.success(translate("settings.configSaved"));

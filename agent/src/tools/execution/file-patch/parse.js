@@ -4,294 +4,261 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizePathForPlatform } from "@noobot/path-resolver";
+import {
+  PATCH_LINE_ANCHOR_PATTERN,
+  assertFileText,
+  validateUnifiedNewlineMarkers,
+} from "@noobot/file-mutation-protocol";
 import { recoverableToolError } from "../../../shared/errors/index.js";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { text } from "@noobot/shared/value";
 
-const UNIFIED_ABSENT_PATH = "/dev/null";
-
-function parseUnifiedHunkHeader(header = "") {
-  const match = /^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@/.exec(header);
-  if (!match) {
-    throw recoverableToolError(`invalid unified diff hunk header: ${header}`, {
-      code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
-      details: {
-        field: "patch",
-        hint: "Use a unified diff hunk header like @@ -1,3 +1,3 @@, or use apply_patch syntax with *** Begin Patch.",
-      },
-    });
-  }
-  return {
-    oldStart: Number(match[1]),
-    oldCount: Number(match[2] || "1"),
-    newStart: Number(match[3]),
-    newCount: Number(match[4] || "1"),
-  };
+function invalid(message, line) {
+  throw recoverableToolError(message, {
+    code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
+    details: { field: "patch", ...(line === undefined ? {} : { patchLine: line + 1 }) },
+  });
 }
 
 export function normalizePatchPathInput(rawPath = "") {
   const trimmed = text(rawPath);
-  if (!trimmed) return "";
-  return normalizePathForPlatform(trimmed);
+  return trimmed ? normalizePathForPlatform(trimmed) : "";
 }
 
-function resolveUnifiedPatchMode(oldPath, newPath) {
-  if (newPath === UNIFIED_ABSENT_PATH) return "delete";
-  if (oldPath === UNIFIED_ABSENT_PATH) return "add";
-  return oldPath === newPath ? "update" : "move";
+function patchLines(patch) {
+  return assertFileText(patch).replace(/\r\n/g, "\n").replace(/\n+$/, "").split("\n");
 }
 
-function buildAddedFileContent(contentLines) {
-  return contentLines.join("\n") + (contentLines.length ? "\n" : "");
-}
-
-function readUnifiedAddedLines(hunks) {
-  const lines = hunks.flatMap((hunk) => hunk.lines);
-  const invalidIndex = lines.findIndex((line) => line.type !== "+");
-  if (invalidIndex >= 0) {
-    throw recoverableToolError("invalid unified diff add file line: expected + prefix", {
-      code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
-      details: { field: "patch", line: invalidIndex + 1 },
-    });
+function requireChange(hunk, index) {
+  if (!hunk.lines.some((line) => line.type === "+" || line.type === "-")) {
+    invalid("patch hunk must contain a change", index);
   }
-  return lines.map((line) => line.text);
+  return hunk;
 }
 
-function buildUnifiedFilePatch({ oldPath, newPath, hunks }) {
-  const mode = resolveUnifiedPatchMode(oldPath, newPath);
-  if (mode === "add") {
-    const content = buildAddedFileContent(readUnifiedAddedLines(hunks));
-    return { mode, oldPath: "", newPath, hunks: [], content };
+function bodyLine(line, index) {
+  if (![" ", "+", "-"].includes(line[0]))
+    invalid("invalid patch body line: expected space, + or - prefix", index);
+  return { type: line[0], text: line.slice(1) };
+}
+
+function requiredPath(value, index) {
+  const path = normalizePatchPathInput(value);
+  if (!path) invalid("patch file path must not be empty", index);
+  return path;
+}
+
+function parseApplyHunk(lines, start) {
+  const header = lines[start];
+  const match = PATCH_LINE_ANCHOR_PATTERN.exec(header);
+  if (header !== "@@" && (!match || !Number.isSafeInteger(Number(match[1])))) {
+    invalid(`invalid apply_patch hunk header: ${header}; use @@ or @@ L<line>`, start);
   }
-  if (mode === "delete") return { mode, oldPath, newPath: "", hunks: [] };
-  return { mode, oldPath, newPath, hunks };
-}
-
-const APPLY_PATCH_ANCHOR_PATTERN = /^@@ L(\d+)\s*$/;
-
-function parseApplyPatchAnchor(header) {
-  const match = APPLY_PATCH_ANCHOR_PATTERN.exec(header);
-  if (!match) return {};
-  const anchorLine = Number(match[1]);
-  if (anchorLine < 1) {
-    throw recoverableToolError(`invalid apply_patch line anchor: ${header}`, {
-      code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
-      details: { field: "patch", hint: "Line anchors are 1-based, e.g. @@ L42." },
-    });
-  }
-  return { anchorLine };
-}
-
-function parseApplyPatchHunk(lines, startIndex) {
-  const anchor = parseApplyPatchAnchor(lines[startIndex]);
-  let index = startIndex + 1;
-  const hunkLines = [];
+  const hunk = { ...(match ? { anchorLine: Number(match[1]) } : {}), lines: [] };
+  let index = start + 1;
   while (
     index < lines.length &&
     !lines[index].startsWith("@@") &&
     !lines[index].startsWith("*** ")
   ) {
-    const prefix = lines[index][0];
-    if ([" ", "+", "-"].includes(prefix)) {
-      hunkLines.push({ type: prefix, text: lines[index].slice(1) });
-    }
+    hunk.lines.push(bodyLine(lines[index], index));
     index += 1;
   }
-  return { index, hunk: { ...anchor, lines: hunkLines } };
+  return { index, hunk: requireChange(hunk, start) };
 }
 
-function stripDiffPath(rawPath, strip) {
-  const pathToken = text(rawPath).split(/\s+/)[0] || "";
-  const normalizedPath = normalizePatchPathInput(pathToken);
-  if (!normalizedPath || normalizedPath === UNIFIED_ABSENT_PATH) return normalizedPath;
-  if (isAbsoluteDiffPath(pathToken)) return normalizedPath;
-
-  const parts = pathToken.replaceAll("\\", "/").split("/").filter(Boolean);
-  if (strip >= parts.length) {
-    throw recoverableToolError(`strip ${strip} removes the whole diff path: ${pathToken}`, {
-      code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
-      details: { field: "strip", strip, path: pathToken },
-    });
-  }
-  return normalizePatchPathInput(parts.slice(strip).join("/"));
-}
-
-function isAbsoluteDiffPath(value = "") {
-  const source = text(value);
-  return (
-    source.startsWith("/") ||
-    /^file:/i.test(source) ||
-    /^[A-Za-z]:[\\/]/.test(source) ||
-    /^(?:\\\\|\/\/)[^\\/]+[\\/][^\\/]+/.test(source)
-  );
-}
-
-function normalizePatchText(patch = "") {
-  const inputText = String(patch || "").replace(/\r\n/g, "\n");
-  const trimmed = inputText.trim();
-  const fenced = /^```(?:diff|patch)?\n([\s\S]*?)\n```$/.exec(trimmed);
-  return fenced ? fenced[1] : inputText;
-}
-
-function isUnifiedFileHeader(lines, index) {
-  return lines[index].startsWith("--- ") && Boolean(lines[index + 1]?.startsWith("+++ "));
-}
-
-function isUnifiedHunkBoundary(lines, index) {
-  const line = lines[index];
-  return (
-    line.startsWith("@@") || line.startsWith("diff --git ") || isUnifiedFileHeader(lines, index)
-  );
-}
-
-function parseUnifiedHunk(lines, startIndex) {
-  const header =
-    lines[startIndex].trim() === "@@" ? null : parseUnifiedHunkHeader(lines[startIndex]);
-  const hunkLines = [];
-  let index = startIndex + 1;
-  for (; index < lines.length && !isUnifiedHunkBoundary(lines, index); index += 1) {
-    if (lines[index] === "\\ No newline at end of file") continue;
-    const prefix = lines[index][0];
-    if (![" ", "+", "-"].includes(prefix)) break;
-    hunkLines.push({ type: prefix, text: lines[index].slice(1) });
-  }
-  return {
-    index,
-    hunk: {
-      ...header,
-      searchOnly: !header,
-      oldCount: hunkLines.filter((line) => line.type !== "+").length,
-      newCount: hunkLines.filter((line) => line.type !== "-").length,
-      lines: hunkLines,
-    },
-  };
-}
-
-function parseUnifiedFile(lines, startIndex, strip) {
-  const oldPath = stripDiffPath(lines[startIndex].slice(4), strip);
-  const newPath = stripDiffPath(lines[startIndex + 1].slice(4), strip);
-  const hunks = [];
-  let index = startIndex + 2;
-  while (index < lines.length && !isUnifiedFileHeader(lines, index)) {
-    if (!lines[index].startsWith("@@")) {
-      index += 1;
-      continue;
-    }
-    const parsed = parseUnifiedHunk(lines, index);
-    hunks.push(parsed.hunk);
-    index = parsed.index;
-  }
-  return { index, filePatch: buildUnifiedFilePatch({ oldPath, newPath, hunks }) };
-}
-
-export function parseUnifiedDiff(patch, strip) {
-  const lines = normalizePatchText(patch).split("\n");
-  const filePatches = [];
-  let index = 0;
-  while (index < lines.length) {
-    if (!isUnifiedFileHeader(lines, index)) {
-      index += 1;
-      continue;
-    }
-    const parsed = parseUnifiedFile(lines, index, strip);
-    filePatches.push(parsed.filePatch);
-    index = parsed.index;
-  }
-  if (!filePatches.length) {
-    throw recoverableToolError("invalid unified diff: no file patch found", {
-      code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
-      details: { field: "patch" },
-    });
-  }
-  return filePatches;
-}
-
-const APPLY_PATCH_ADD = "*** Add File: ";
-const APPLY_PATCH_DELETE = "*** Delete File: ";
-const APPLY_PATCH_UPDATE = "*** Update File: ";
-const APPLY_PATCH_MOVE = "*** Move to: ";
-
-function isApplyPatchSectionEnd(lines, index) {
-  return index >= lines.length || lines[index].startsWith("*** ");
-}
-
-function parseApplyPatchAdd(lines, startIndex) {
-  const newPath = lines[startIndex].slice(APPLY_PATCH_ADD.length).trim();
+function parseAddedContent(lines, start) {
   const contentLines = [];
-  let index = startIndex + 1;
-  for (; !isApplyPatchSectionEnd(lines, index); index += 1) {
-    if (!lines[index].startsWith("+")) {
-      throw recoverableToolError("invalid apply_patch add file line: expected + prefix", {
-        code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
-        details: { field: "patch" },
-      });
-    }
-    contentLines.push(lines[index].slice(1));
+  let index = start;
+  while (index < lines.length && !lines[index].startsWith("*** ")) {
+    if (!lines[index].startsWith("+"))
+      invalid("invalid apply_patch add file line: expected + prefix", index);
+    contentLines.push(lines[index++].slice(1));
   }
-  const content = buildAddedFileContent(contentLines);
-  return { index, patch: { mode: "add", oldPath: "", newPath, hunks: [], content } };
-}
-
-function parseApplyPatchDelete(lines, startIndex) {
-  const oldPath = lines[startIndex].slice(APPLY_PATCH_DELETE.length).trim();
-  return { index: startIndex + 1, patch: { mode: "delete", oldPath, newPath: "", hunks: [] } };
-}
-
-function parseApplyPatchUpdate(lines, startIndex) {
-  const oldPath = lines[startIndex].slice(APPLY_PATCH_UPDATE.length).trim();
-  let index = startIndex + 1;
-  const moved = Boolean(lines[index]?.startsWith(APPLY_PATCH_MOVE));
-  const newPath = moved ? lines[index].slice(APPLY_PATCH_MOVE.length).trim() : oldPath;
-  if (moved) index += 1;
-  const hunks = [];
-  while (!isApplyPatchSectionEnd(lines, index)) {
-    if (!lines[index].startsWith("@@")) {
-      index += 1;
-      continue;
-    }
-    const parsed = parseApplyPatchHunk(lines, index);
-    hunks.push(parsed.hunk);
-    index = parsed.index;
-  }
-  const mode = newPath === oldPath ? "update" : "move";
-  return { index, patch: { mode, oldPath, newPath, hunks } };
-}
-
-const APPLY_PATCH_SECTION_PARSERS = Object.freeze([
-  [APPLY_PATCH_ADD, parseApplyPatchAdd],
-  [APPLY_PATCH_DELETE, parseApplyPatchDelete],
-  [APPLY_PATCH_UPDATE, parseApplyPatchUpdate],
-]);
-
-function resolveApplyPatchSectionParser(line) {
-  return APPLY_PATCH_SECTION_PARSERS.find(([marker]) => line.startsWith(marker))?.[1] || null;
+  return { index, content: contentLines.join("\n") + (contentLines.length ? "\n" : "") };
 }
 
 export function parseApplyPatch(patch = "") {
-  const lines = normalizePatchText(patch).split("\n");
-  if (lines[0] !== "*** Begin Patch" || !lines.some((line) => line === "*** End Patch")) {
-    throw recoverableToolError("invalid apply_patch: missing Begin/End Patch marker", {
-      code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
-      details: { field: "patch" },
-    });
+  const lines = patchLines(patch);
+  if (lines[0] !== "*** Begin Patch" || lines.at(-1) !== "*** End Patch") {
+    invalid("invalid apply_patch: missing Begin/End Patch marker or trailing content");
   }
   const patches = [];
   let index = 1;
-  while (index < lines.length && lines[index] !== "*** End Patch") {
-    const parseSection = resolveApplyPatchSectionParser(lines[index]);
-    if (!parseSection) {
+  while (index < lines.length - 1) {
+    const match = /^\*\*\* (Add|Delete|Update) File: (.*)$/.exec(lines[index]);
+    if (!match) invalid(`invalid apply_patch section: ${lines[index]}`, index);
+    const path = requiredPath(match[2], index);
+    index += 1;
+    if (match[1] === "Delete") {
+      patches.push({ mode: "delete", oldPath: path, newPath: "", hunks: [] });
+      continue;
+    }
+    if (match[1] === "Add") {
+      const added = parseAddedContent(lines, index);
+      index = added.index;
+      patches.push({ mode: "add", oldPath: "", newPath: path, hunks: [], content: added.content });
+      continue;
+    }
+    let newPath = path;
+    if (lines[index]?.startsWith("*** Move to: ")) {
+      newPath = requiredPath(lines[index].slice(13), index);
+      index += 1;
+    }
+    const hunks = [];
+    while (index < lines.length && !lines[index].startsWith("*** ")) {
+      const parsed = parseApplyHunk(lines, index);
+      hunks.push(parsed.hunk);
+      index = parsed.index;
+    }
+    if (!hunks.length && newPath === path)
+      invalid("update requires at least one changed hunk", index);
+    patches.push({ mode: newPath === path ? "update" : "move", oldPath: path, newPath, hunks });
+  }
+  if (!patches.length) invalid("invalid apply_patch: no file operation found");
+  return patches;
+}
+
+function stripDiffPath(rawPath, strip) {
+  const token = rawPath.split("\t")[0];
+  const normalized = requiredPath(token);
+  if (normalized === "/dev/null" || /^(?:\/|file:|[A-Za-z]:[\\/]|\\\\)/i.test(token))
+    return normalized;
+  const parts = token.replaceAll("\\", "/").split("/").filter(Boolean);
+  if (strip >= parts.length) invalid(`strip ${strip} removes the whole diff path: ${token}`);
+  return normalizePatchPathInput(parts.slice(strip).join("/"));
+}
+
+function unifiedHeader(lines, index) {
+  return lines[index]?.startsWith("--- ") && lines[index + 1]?.startsWith("+++ ");
+}
+
+function parseUnifiedRange(lines, start) {
+  const match = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(?: .*)?$/.exec(lines[start]);
+  if (!match) invalid(`invalid unified diff hunk header: ${lines[start]}`, start);
+  const oldStart = Number(match[1]);
+  const oldCount = Number(match[2] ?? 1);
+  const newStart = Number(match[3]);
+  const newCount = Number(match[4] ?? 1);
+  if (
+    ![oldStart, oldCount, newStart, newCount].every(Number.isSafeInteger) ||
+    (oldCount > 0 && oldStart === 0) ||
+    (newCount > 0 && newStart === 0)
+  ) {
+    invalid("invalid unified diff line range", start);
+  }
+  return { oldStart, oldCount, newStart, newCount };
+}
+
+function markNoFinalNewline(hunk, index) {
+  if (!hunk.lines.length || hunk.lines.at(-1).noFinalNewline)
+    invalid("invalid no-newline marker", index);
+  hunk.lines.at(-1).noFinalNewline = true;
+}
+
+function parseUnifiedHunk(lines, start) {
+  const range = parseUnifiedRange(lines, start);
+  const { oldStart, oldCount, newCount } = range;
+  const hunk = { unified: true, anchorLine: oldCount === 0 ? oldStart + 1 : oldStart, lines: [] };
+  let index = start + 1;
+  let oldSeen = 0;
+  let newSeen = 0;
+  while (index < lines.length && (oldSeen < oldCount || newSeen < newCount)) {
+    if (lines[index] === "\\ No newline at end of file") {
+      markNoFinalNewline(hunk, index);
       index += 1;
       continue;
     }
-    const parsed = parseSection(lines, index);
-    patches.push(parsed.patch);
+    const line = bodyLine(lines[index], index);
+    hunk.lines.push(line);
+    if (line.type !== "+") oldSeen += 1;
+    if (line.type !== "-") newSeen += 1;
+    if (oldSeen > oldCount || newSeen > newCount)
+      invalid("unified diff hunk counts do not match body", index);
+    index += 1;
+  }
+  if (lines[index] === "\\ No newline at end of file") {
+    markNoFinalNewline(hunk, index);
+    index += 1;
+  }
+  if (oldSeen !== oldCount || newSeen !== newCount)
+    invalid("unified diff hunk counts do not match body", start);
+  return { index, hunk: requireChange(hunk, start), ...range };
+}
+
+function parseUnifiedHunks(lines, start) {
+  const hunks = [];
+  let index = start;
+  let delta = 0;
+  while (lines[index]?.startsWith("@@")) {
+    const parsed = parseUnifiedHunk(lines, index);
+    const oldPosition = parsed.oldCount === 0 ? parsed.oldStart : parsed.oldStart - 1;
+    const newPosition = parsed.newCount === 0 ? parsed.newStart : parsed.newStart - 1;
+    if (newPosition !== oldPosition + delta)
+      invalid("unified diff new range conflicts with old range", index);
+    delta += parsed.newCount - parsed.oldCount;
+    hunks.push(parsed.hunk);
     index = parsed.index;
   }
-  if (!patches.length) {
-    throw recoverableToolError("invalid apply_patch: no file operation found", {
-      code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
-      details: { field: "patch" },
-    });
+  if (!hunks.length) invalid("unified diff requires at least one hunk", index);
+  try {
+    validateUnifiedNewlineMarkers(hunks);
+  } catch (error) {
+    if (!(error instanceof TypeError)) throw error;
+    invalid(error.message, index);
   }
+  return { hunks, index };
+}
+
+function unifiedOperation(oldPath, newPath, hunks) {
+  const allLines = hunks.flatMap((hunk) => hunk.lines);
+  if (oldPath === "/dev/null" && newPath === "/dev/null")
+    invalid("unified diff requires a file path");
+  if (oldPath === "/dev/null") {
+    if (
+      allLines.some((line) => line.type !== "+") ||
+      hunks.length !== 1 ||
+      hunks[0].anchorLine !== 1
+    )
+      invalid("invalid unified diff add file lines");
+    return {
+      mode: "add",
+      oldPath: "",
+      newPath,
+      hunks: [],
+      content:
+        allLines.map((line) => line.text).join("\n") +
+        (allLines.at(-1)?.noFinalNewline ? "" : "\n"),
+    };
+  }
+  if (newPath === "/dev/null") {
+    if (allLines.some((line) => line.type !== "-"))
+      invalid("invalid unified diff delete file lines");
+    return { mode: "delete", oldPath, newPath: "", hunks };
+  }
+  return { mode: oldPath === newPath ? "update" : "move", oldPath, newPath, hunks };
+}
+
+export function parseUnifiedDiff(patch, strip = 0) {
+  const lines = patchLines(patch);
+  const patches = [];
+  let index = 0;
+  while (index < lines.length) {
+    if (
+      lines[index].startsWith("diff --git ") ||
+      /^index [0-9a-f]+\.\.[0-9a-f]+(?: \d+)?$/.test(lines[index])
+    ) {
+      index += 1;
+      continue;
+    }
+    if (!unifiedHeader(lines, index))
+      invalid(`invalid unified diff file header: ${lines[index]}`, index);
+    const oldPath = stripDiffPath(lines[index].slice(4), strip);
+    const newPath = stripDiffPath(lines[index + 1].slice(4), strip);
+    const parsed = parseUnifiedHunks(lines, index + 2);
+    patches.push(unifiedOperation(oldPath, newPath, parsed.hunks));
+    index = parsed.index;
+  }
+  if (!patches.length) invalid("invalid unified diff: no file patch found");
   return patches;
 }

@@ -3,32 +3,22 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { FILE_TOOL_SCHEMA } from "../tool-schema/files.js";
+import { buildPatchFileManual } from "../../../patch-file-manual.js";
 
-export const PATCH_FILE_MANUAL = {
-  patch_file: {
-    summary: "以补丁方式精确修改既有文件，支持 unified diff 与 apply_patch 两种格式。",
-    usage: ["{{tool:patch_file}}({ patch, strip, root, dryRun, riskLevel, format })"],
-    params: {
-      patch:
-        "补丁内容。必须使用 {{tool:read_file}} 或 {{tool:search}} 返回的完整 path 与精确上下文，不要改写路径。",
-      strip: "路径前缀剥离层数，默认 0。仅补丁带 a/、b/ 前缀时设 1。",
-      root: "通常省略。填写时只能是工作区相对子目录，不能是绝对路径或 .. 。",
-      dryRun: "只验证不写入，用于先确认补丁能否命中。",
-      format: "补丁格式，省略时按内容识别。显式格式与内容不一致会被拒绝。",
-      riskLevel: "操作风险等级，按与脚本执行相同的影响与破坏性标准分级。",
-    },
+export const PATCH_FILE_MANUAL = buildPatchFileManual(
+  FILE_TOOL_SCHEMA.patch_file,
+  {
     notes: [
-      "这是修改既有文件的首选手段，优先使用精确上下文补丁，避免手算 unified diff 行数。",
-      "补丁失败时先重新 {{tool:read_file}} 拿到当前真实内容再改，不要在旧上下文上反复试。失配时 details 给出最接近候选的首个不一致行 line/expected/actual，并带 totalLines 与 nearbyContent；无候选时只给 expected。",
-      "文件经其他工具或格式化器修改后仍可继续打补丁。file_mutation_conflict 表示本次补丁读取后文件又发生变化，需要重新读取并重建补丁。聚合 diff 展示本轮文件的总体变化；aggregate.externalChangeCount 标识其中观察到的外部修改次数。",
-      "同一文件多处改动可放在一个补丁里；hunk 必须按原文顺序排列且不得重叠。",
-      "apply_patch 无锚点时从当前游标向后完全匹配，多处匹配时报歧义并给出 candidateLines；`@@ L行号` 在原文件中选择最近的完全匹配处，但不重置游标。乱序或重叠时报 line/cursorLine，带锚点时同时给出 anchorLine。",
-      "上下文/删除行误带 {{tool:read_file}} 行号前缀时，若全部带前缀、行号连续且与原文一致，会自动剥离并在 changes[].repairs 标注；新增行带前缀直接报错。",
-      "changes[].action 表示补丁声明的意图（write 或 delete），不代表已经落盘；判断是否真的写入要看 changes[].mutation 与顶层 mutations 是否为空。dryRun 时 action 仍是 write 而 mutation 恒为 null。",
+      "apply_patch 仅接受 @@ 或 @@ L行号；unified_diff 必须使用标准范围头且行数准确。未知头部、非法正文、无修改 hunk 均拒绝。",
+      "无锚点 hunk 仅在当前游标之后唯一匹配；锚点精确定位，不重置游标。不能把函数名与闭括号拆成两个 hunk 表达函数作用域。",
+      "read_file_numbered 在定位前解码所有旧行：行号须连续，且必须与显式锚点及原文一致。适配记录在 changes[].adaptations；新增行始终是字面文本。",
+      "baseVersions 覆盖全部源与目标且不重复。所有操作读取初始快照；同一源、同一目标在各自角色中最多出现一次。移动按最终状态合成：a→b、b→c 将原 a 保留在 b、原 b 保留在 c。版本冲突后重读并重建。",
+      "BOM 作为格式元数据保留，不进入读取和错误上下文的行文本。unified_diff 须在对应旧侧、新侧声明末尾缺失换行，标记必须对应实际最终 EOF。",
+      "未修改行保留原换行符；新增行采用源文件首个换行符，无换行符时使用 LF。纯移动保持字节不变；回滚恢复原始字节并校验哈希。",
+      "dryRun 执行相同的适配、版本校验和规划，返回变更前后哈希，不写入。实际提交结果见顶层 mutations；多文件提交失败时执行事务回滚并报告回滚冲突。",
     ],
-    pitfalls: [
-      "完整 path 不要再设 strip，否则首层目录被剥掉导致找不到文件。",
-      "补丁上下文必须与磁盘完全一致，凭记忆拼写的上下文几乎一定失败。",
-    ],
+    pitfalls: ["通常省略 root；仅路径带 a/、b/ 前缀时设 strip: 1。"],
   },
-};
+  FILE_TOOL_SCHEMA.read_file.texts["tools.file.fieldEncoding"],
+);

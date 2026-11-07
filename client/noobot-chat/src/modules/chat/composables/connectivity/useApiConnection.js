@@ -6,6 +6,10 @@
 import { computed, ref, watch } from "vue";
 import { connectApi } from "../../../../infrastructure/api/chat/chatApi.js";
 import { useLocale } from "../../../../shared/i18n/useLocale.js";
+import {
+  setToolNameBindings,
+  clearToolNameBindings,
+} from "../../../../shared/state/toolNameBindings.js";
 import { API_REQUEST_ERROR_CODE, ApiRequestError } from "@noobot/shared/request-error";
 import { normalizeClientModelOptions } from "@noobot/agent-config-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
@@ -118,6 +122,7 @@ export function useApiConnection({ userId, onConnected = async () => {}, notify 
   }
 
   function clearApiAuth() {
+    clearToolNameBindings();
     apiKey.value = "";
     apiKeyUserId.value = "";
     apiRole.value = "";
@@ -258,6 +263,7 @@ export function useApiConnection({ userId, onConnected = async () => {}, notify 
       throw new Error("authentication_identity_mismatch");
     }
     if (snapshotCredentials().key !== credentials.key) return false;
+    setToolNameBindings(authenticatedUserId, data.toolNameBindings);
     apiKey.value = String(data.apiKey || "");
     apiKeyUserId.value = authenticatedUserId;
     apiRole.value = String(data.role || "user");

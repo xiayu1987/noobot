@@ -20,6 +20,7 @@ import {
 } from "@noobot/security-assessment-protocol";
 import { confirmToolOperation, createRiskLevelSchema } from "./tool-risk.js";
 import { applyFileMutation } from "./file-mutation-service.js";
+import { FILE_TEXT_ENCODING_INPUTS } from "@noobot/file-mutation-protocol";
 import {
   buildFileToolDescription,
   resolveFileResourceRiskScope,
@@ -31,7 +32,7 @@ import {
 export function createWriteFileTool({ agentContext, runtime, workspaceIo }) {
   return structuredTool(
     runtime,
-    async ({ filePath, content, overwrite = true, riskLevel }) => {
+    async ({ filePath, content, overwrite = true, riskLevel, encoding }) => {
       if (typeof filePath === "string")
         assertValidFileNameFromPath({ filePath, fieldName: "filePath", agentContext });
       const resolvedInput = await resolveFileInput({
@@ -78,10 +79,11 @@ export function createWriteFileTool({ agentContext, runtime, workspaceIo }) {
         filePath: resolvedPath,
         locator: mutationLocator(pathRef),
         content,
+        encoding,
         operation: "replace",
         mutationRoot: resolveRuntimeFileMutationRoot(runtime),
         sessionScope: runtime.systemRuntime.persistenceScope,
-        writeText: (target, value) => workspaceIo.writeText(target, value),
+        stageBytes: (target, value) => workspaceIo.writeBytes(target, value),
       });
       const resource = await registerResource({
         agentContext,
@@ -101,6 +103,10 @@ export function createWriteFileTool({ agentContext, runtime, workspaceIo }) {
       metadata: { pathContract: TOOL_PATH_CONTRACTS.fileWrite },
       description: buildFileToolDescription(runtime, "tools.file.writeDescription"),
       schema: z.strictObject({
+        encoding: z
+          .enum(FILE_TEXT_ENCODING_INPUTS)
+          .default("auto")
+          .describe(tTool(runtime, "tools.file.fieldEncoding")),
         filePath: createFileSourceSchema({
           filePathDescription: tTool(runtime, "tools.file.writeFilePathField"),
         }),

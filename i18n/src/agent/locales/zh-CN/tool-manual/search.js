@@ -4,13 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { FILE_TOOL_SCHEMA } from "../tool-schema/files.js";
+
 export const SEARCH_MANUAL = {
   search: {
     summary: "在工作区文件中搜索，返回命中行与上下文。",
     usage: [
-      "{{tool:search}}({ query, glob, path, isRegex, caseSensitive, contextLines, maxResults, riskLevel })",
+      "{{tool:search}}({ query, glob, path, encoding, isRegex, caseSensitive, contextLines, maxResults, riskLevel })",
     ],
     params: {
+      encoding: FILE_TOOL_SCHEMA.read_file.texts["tools.file.fieldEncoding"],
       query: "必填且不能为空的关键词或正则。不要用空字符串调用。",
       path: "限定搜索的文件或目录，可选。缩小范围能显著提速。",
       glob: "文件名匹配，例如 *.js。",

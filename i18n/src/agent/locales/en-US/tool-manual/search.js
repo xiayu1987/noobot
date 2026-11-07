@@ -4,13 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { FILE_TOOL_SCHEMA } from "../tool-schema/files.js";
+
 export const SEARCH_MANUAL = {
   search: {
     summary: "Search workspace files, returning matched lines with context.",
     usage: [
-      "{{tool:search}}({ query, glob, path, isRegex, caseSensitive, contextLines, maxResults, riskLevel })",
+      "{{tool:search}}({ query, glob, path, encoding, isRegex, caseSensitive, contextLines, maxResults, riskLevel })",
     ],
     params: {
+      encoding: FILE_TOOL_SCHEMA.read_file.texts["tools.file.fieldEncoding"],
       query: "Required non-empty keyword or regex. Do not call with an empty string.",
       path: "Restrict the search to a file or directory, optional. Narrowing the scope speeds things up noticeably.",
       glob: "File name pattern, e.g. *.js.",

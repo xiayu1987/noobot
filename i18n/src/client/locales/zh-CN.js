@@ -97,9 +97,9 @@ export const zhCNMessages = {
     configSectionSet: "已配置",
     selectConfigSection: "请选择左侧配置分组",
     configEntryKey: "条目名称",
-    toolBindingsSelect: "选择要配置调用名称的工具",
+    toolBindingsSelect: "选择要配置绑定名称的工具",
     toolBindingsHint:
-      "选择工具后编辑模型调用名称。名称限 1–64 个英文字母、数字、下划线或连字符，且不能重复。保存后用于后续请求，不改变工具权限。",
+      "绑定名称用于模型调用和界面展示。名称限 1–64 个英文字母、数字、下划线或连字符，且不能重复。保存后更新展示并用于后续请求，不改变工具权限。",
     toolBindingsReset: "恢复继承",
     toolBindingsInherited: "继承名称：{name}",
     toolBindingsUnavailable: "工具目录未加载，请重新打开用户配置。",

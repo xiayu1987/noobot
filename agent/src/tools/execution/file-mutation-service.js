@@ -12,9 +12,15 @@ import {
   createFileDiff,
   createFileMutationDownload,
   createFileMutationError,
+  describeFileMutationFailure,
   createFileMutationLocator,
   createFileMutationResult,
+  assertFileText,
+  decodePatchText,
+  assertFileTextEncoding,
+  resolveFileWriteEncoding,
 } from "@noobot/file-mutation-protocol";
+import { decodeFileDocument, encodeFileText } from "@noobot/file-mutation-protocol/text-codec-node";
 import {
   assertFileMutationVersion,
   fileContentSha256,
@@ -22,6 +28,7 @@ import {
 } from "./file-mutation-state.js";
 import { resolveSessionGeneratedDataRoot } from "../../session/session-generated-data.js";
 import { text, isFunction } from "@noobot/shared/value";
+import { renameFileAtomic, writeFileAtomic } from "../../shared/storage/atomic-file-write.js";
 
 export function resolveFileMutationRoot(sessionDir) {
   return resolveSessionGeneratedDataRoot(sessionDir, "fileMutations");
@@ -31,11 +38,12 @@ function digest(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-async function readExisting(filePath) {
+async function readExisting(filePath, encoding) {
   try {
     const buffer = await readFile(filePath);
-    const isText = !buffer.includes(0);
-    return { exists: true, buffer, content: isText ? buffer.toString("utf8") : null, isText };
+    const document = decodeFileDocument(buffer, encoding);
+    const { textFormat } = decodePatchText(document.content, document.encoding);
+    return { exists: true, buffer, content: document.content, isText: true, textFormat };
   } catch (error) {
     if (error?.code === "ENOENT")
       return { exists: false, buffer: Buffer.alloc(0), content: "", isText: true };
@@ -73,15 +81,15 @@ async function readOptionalRecord(mutationRoot, mutationId) {
   }
 }
 
-async function restoreTarget(filePath, before, { writeText, removeFile }) {
+async function restoreTarget(filePath, before) {
   if (before.exists) {
-    if (before.isText) await writeText(filePath, before.content);
-    else await writeFile(filePath, before.buffer);
+    await writeFileAtomic({ filePath, content: before.buffer, writeFile, rename, remove: rm });
   } else {
-    await removeFile(filePath).catch((error) => {
+    await unlink(filePath).catch((error) => {
       if (error?.code !== "ENOENT") throw error;
     });
   }
+  await assertFileMutationVersion(filePath, before.exists ? digest(before.buffer) : null);
 }
 
 function collectExternalChanges(existingRecord, before, beforeSha256) {
@@ -127,7 +135,7 @@ function isRollbackState(rollbackState) {
   return Boolean(rollbackState) && typeof rollbackState === "object";
 }
 
-function normalizeMutationRequest({ locator, operation, scopeId, mutationRoot, writeText }) {
+function normalizeMutationRequest({ locator, operation, scopeId, mutationRoot, stageBytes }) {
   const normalizedOperation = String(operation || "replace");
   if (!FILE_MUTATION_OPERATIONS.includes(normalizedOperation))
     throw new TypeError(`unsupported file mutation operation: ${normalizedOperation}`);
@@ -135,8 +143,8 @@ function normalizeMutationRequest({ locator, operation, scopeId, mutationRoot, w
   const normalizedLocator = createFileMutationLocator(locator);
   const root = text(mutationRoot);
   if (!root) throw new Error("file mutation repository root is required");
-  if (!isFunction(writeText)) {
-    throw new TypeError("file mutation write capability is required");
+  if (!isFunction(stageBytes)) {
+    throw new TypeError("file mutation staging capability is required");
   }
   return {
     operation: normalizedOperation,
@@ -147,15 +155,26 @@ function normalizeMutationRequest({ locator, operation, scopeId, mutationRoot, w
   };
 }
 
-function describeNextContent(content, before) {
-  const nextContent = content === null ? null : String(content);
-  const afterBuffer = nextContent === null ? Buffer.alloc(0) : Buffer.from(nextContent, "utf8");
-  const afterIsText = nextContent !== null && !afterBuffer.includes(0);
-  const diffable = nextContent === null || afterIsText;
+function describeNextContent(content, before, encoding) {
+  const nextContent = content === null ? null : assertFileText(content);
+  const resolvedEncoding = resolveFileWriteEncoding(
+    encoding,
+    before.exists ? before.textFormat.encoding : null,
+  );
+  const afterBuffer =
+    nextContent === null ? Buffer.alloc(0) : encodeFileText(nextContent, resolvedEncoding);
+  const afterIsText = nextContent !== null;
+  const textFormat = afterIsText ? decodePatchText(nextContent, resolvedEncoding).textFormat : null;
   const diffTarget = nextContent === null ? "" : nextContent;
-  const incrementalDiff =
-    before.isText && diffable ? createFileDiff(before.content || "", diffTarget) : null;
-  return { nextContent, afterBuffer, afterIsText, diffable, diffTarget, incrementalDiff };
+  const incrementalDiff = createFileDiff(before.content, diffTarget);
+  return {
+    nextContent,
+    afterBuffer,
+    afterIsText,
+    textFormat,
+    diffTarget,
+    incrementalDiff,
+  };
 }
 
 function assertAggregateIdentity(existingMutation, request) {
@@ -173,7 +192,7 @@ function buildAggregateHistory({ request, existingRecord, before, beforeSha256, 
   const externalChanges = collectExternalChanges(existingRecord, before, beforeSha256);
   const initialBeforeContent = existingRecord ? existingRecord.snapshots?.before : before.content;
   const aggregateDiff =
-    request.isAggregate && typeof initialBeforeContent === "string" && next.diffable
+    request.isAggregate && typeof initialBeforeContent === "string"
       ? createFileDiff(initialBeforeContent, next.diffTarget)
       : next.incrementalDiff;
   const previousDiffs = Array.isArray(existingRecord?.snapshots?.diffs)
@@ -194,6 +213,7 @@ function buildBeforeMeta({ existingMutation, before, beforeSha256, id }) {
       isText: before.isText,
       size: before.buffer.length,
       sha256: beforeSha256,
+      textFormat: before.textFormat,
       snapshotRef: before.exists && before.isText ? { mutationId: id, section: "before" } : null,
     }
   );
@@ -206,6 +226,7 @@ function buildAfterMeta(next, id) {
     isText: next.afterIsText,
     size: next.afterBuffer.length,
     sha256: exists ? digest(next.afterBuffer) : null,
+    textFormat: next.textFormat,
     snapshotRef: exists && next.afterIsText ? { mutationId: id, section: "after" } : null,
   };
 }
@@ -222,6 +243,22 @@ function buildAggregateMeta(request, history) {
   };
 }
 
+async function cleanupMutationFiles(paths) {
+  const results = await Promise.allSettled(paths.map((filePath) => rm(filePath, { force: true })));
+  return results.flatMap((result, index) =>
+    result.status === "rejected"
+      ? [{ path: paths[index], error: result.reason.message, code: result.reason.code }]
+      : [],
+  );
+}
+
+async function restoreFailedCommit({ filePath, before, afterMeta, targetCommitted }) {
+  if (!targetCommitted) return "not_committed";
+  await assertFileMutationVersion(filePath, afterMeta.sha256);
+  await restoreTarget(filePath, before);
+  return "restored";
+}
+
 async function commitMutationRecord({
   root,
   id,
@@ -230,43 +267,55 @@ async function commitMutationRecord({
   before,
   beforeSha256,
   afterMeta,
-  nextContent,
+  next,
   rollbackState,
-  writeText,
-  removeFile,
+  stageBytes,
 }) {
   await mkdir(root, { recursive: true });
   const recordPath = path.join(root, `${id}.json`);
   const temporaryRecordPath = `${recordPath}.${randomUUID()}.tmp`;
+  const stagedPath = path.join(path.dirname(filePath), `.noobot-mutation-${randomUUID()}`);
   await assertFileMutationVersion(filePath, beforeSha256);
   let targetCommitted = false;
   try {
-    if (nextContent === null) await removeFile(filePath);
-    else await writeText(filePath, nextContent);
+    if (next.nextContent !== null) {
+      await stageBytes(stagedPath, next.afterBuffer);
+      await assertFileMutationVersion(stagedPath, afterMeta.sha256);
+    }
+    await assertFileMutationVersion(filePath, beforeSha256);
+    if (next.nextContent === null) await unlink(filePath);
+    else await renameFileAtomic({ source: stagedPath, filePath, rename });
     targetCommitted = true;
+    await assertFileMutationVersion(filePath, afterMeta.sha256);
     await writeFile(temporaryRecordPath, JSON.stringify(record), "utf8");
     await rename(temporaryRecordPath, recordPath);
     if (isRollbackState(rollbackState)) rollbackState.committedRecord = record;
   } catch (error) {
-    await rm(temporaryRecordPath, { force: true }).catch((cleanupError) => {
-      void cleanupError;
-    });
-    if (targetCommitted) {
-      try {
-        await assertFileMutationVersion(filePath, afterMeta.sha256);
-        await restoreTarget(filePath, before, { writeText, removeFile });
-      } catch (rollbackError) {
-        throw createFileMutationError(
-          FILE_MUTATION_ERROR_CODE.COMMIT_AND_ROLLBACK_FAILED,
-          `file mutation commit failed and the target could not be restored: ${error.message}`,
-          { cause: error, details: { rollbackError: rollbackError.message } },
-        );
-      }
+    const cleanupErrors = await cleanupMutationFiles([temporaryRecordPath, stagedPath]);
+    let targetState;
+    try {
+      targetState = await restoreFailedCommit({ filePath, before, afterMeta, targetCommitted });
+    } catch (rollbackError) {
+      throw createFileMutationError(
+        FILE_MUTATION_ERROR_CODE.COMMIT_AND_ROLLBACK_FAILED,
+        `file mutation commit failed and the target could not be restored: ${error.message}`,
+        {
+          cause: error,
+          details: {
+            targetState:
+              rollbackError.code === FILE_MUTATION_ERROR_CODE.CONFLICT
+                ? "conflict"
+                : "restore_failed",
+            rollbackError: describeFileMutationFailure(rollbackError),
+            cleanupErrors,
+          },
+        },
+      );
     }
     throw createFileMutationError(
       FILE_MUTATION_ERROR_CODE.COMMIT_FAILED,
       `file mutation commit failed: ${error.message}`,
-      { cause: error },
+      { cause: error, details: { targetState, cleanupErrors } },
     );
   }
 }
@@ -281,17 +330,18 @@ async function applyFileMutationInternal({
   expectedSha256 = undefined,
   rollbackState = null,
   sessionScope,
-  writeText,
-  removeFile = async (target) => unlink(target),
+  stageBytes,
+  encoding = "auto",
 } = {}) {
+  assertFileTextEncoding(encoding);
   const request = normalizeMutationRequest({
     locator,
     operation,
     scopeId,
     mutationRoot,
-    writeText,
+    stageBytes,
   });
-  const before = await readExisting(filePath);
+  const before = await readExisting(filePath, encoding);
   const beforeSha256 = before.exists ? digest(before.buffer) : null;
   assertMutationPreconditions({
     before,
@@ -300,7 +350,7 @@ async function applyFileMutationInternal({
     operation: request.operation,
     locator: request.locator,
   });
-  const next = describeNextContent(content, before);
+  const next = describeNextContent(content, before, encoding);
   const id = request.isAggregate
     ? aggregateMutationId(request.scopeId, request.locator)
     : randomUUID();
@@ -345,10 +395,9 @@ async function applyFileMutationInternal({
     before,
     beforeSha256,
     afterMeta,
-    nextContent: next.nextContent,
+    next,
     rollbackState,
-    writeText,
-    removeFile,
+    stageBytes,
   });
   return result;
 }
@@ -385,7 +434,7 @@ export async function readFileMutationDownload({
 } = {}) {
   const record = await readFileMutation({ mutationRoot, mutationId });
   const download = createFileMutationDownload(record, { revision, afterSha256 });
-  const content = Buffer.from(download.content, "utf8");
+  const content = encodeFileText(download.content, download.textFormat?.encoding);
   if (fileContentSha256(content) !== download.sha256) {
     throw createFileMutationError(
       FILE_MUTATION_ERROR_CODE.SNAPSHOT_CORRUPT,
@@ -400,8 +449,6 @@ async function rollbackFileMutationInternal({
   mutationId,
   filePath,
   restoreState,
-  writeText = async (target, value) => writeFile(target, value, "utf8"),
-  removeFile = async (target) => unlink(target),
 } = {}) {
   if (!isRollbackState(restoreState) || !restoreState.before || !restoreState.committedRecord) {
     throw new TypeError("file mutation rollback requires the committed rollback state");
@@ -415,20 +462,30 @@ async function rollbackFileMutationInternal({
     );
   }
   await assertFileMutationVersion(filePath, record.mutations[0].after.sha256);
-  await restoreTarget(filePath, restoreState.before, { writeText, removeFile });
+  await restoreTarget(filePath, restoreState.before);
   const recordPath = path.join(root, `${text(mutationId)}.json`);
   if (!restoreState.record) {
-    await rm(recordPath, { force: true });
+    const cleanupErrors = await cleanupMutationFiles([recordPath]);
+    if (cleanupErrors.length) {
+      throw createFileMutationError(
+        FILE_MUTATION_ERROR_CODE.CLEANUP_FAILED,
+        "file bytes restored but mutation record cleanup failed",
+        { details: { targetState: "restored", cleanupErrors } },
+      );
+    }
     return;
   }
   const temporaryRecordPath = `${recordPath}.${randomUUID()}.tmp`;
   try {
     await writeFile(temporaryRecordPath, JSON.stringify(restoreState.record), "utf8");
     await rename(temporaryRecordPath, recordPath);
-  } finally {
-    await rm(temporaryRecordPath, { force: true }).catch((cleanupError) => {
-      void cleanupError;
-    });
+  } catch (error) {
+    const cleanupErrors = await cleanupMutationFiles([temporaryRecordPath]);
+    throw createFileMutationError(
+      FILE_MUTATION_ERROR_CODE.ROLLBACK_CONFLICT,
+      `file bytes restored but mutation record restoration failed: ${error.message}`,
+      { cause: error, details: { targetState: "restored", cleanupErrors } },
+    );
   }
 }
 

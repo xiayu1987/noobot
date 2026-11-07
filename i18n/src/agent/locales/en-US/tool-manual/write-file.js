@@ -4,11 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { FILE_TOOL_SCHEMA } from "../tool-schema/files.js";
+
 export const WRITE_FILE_MANUAL = {
   write_file: {
     summary: "Write a workspace text file, returning its path and a write-time mutation snapshot.",
-    usage: ["{{tool:write_file}}({ filePath, content, overwrite, riskLevel })"],
+    usage: ["{{tool:write_file}}({ filePath, content, encoding, overwrite, riskLevel })"],
     params: {
+      encoding: FILE_TOOL_SCHEMA.read_file.texts["tools.file.fieldEncoding"],
       filePath: "File path. Relative paths resolve against the current user workspace root.",
       content: "Content to write, with full-replacement semantics.",
       overwrite:

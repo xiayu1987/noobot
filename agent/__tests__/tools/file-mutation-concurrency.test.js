@@ -25,7 +25,7 @@ async function fixture(t) {
     locator: { view: "workspace", path: "file.txt" },
     mutationRoot: path.join(root, "session-1", "file-mutations"),
     sessionScope: null,
-    writeText: (target, value) => writeFile(target, value, "utf8"),
+    stageBytes: (target, value) => writeFile(target, value),
   };
 }
 
@@ -33,7 +33,7 @@ test("different sessions, turns and locators serialize writes to the same physic
   const options = await fixture(t);
   let active = 0;
   let peak = 0;
-  const writeText = async (target, content) => {
+  const stageBytes = async (target, content) => {
     active += 1;
     peak = Math.max(peak, active);
     try {
@@ -48,7 +48,7 @@ test("different sessions, turns and locators serialize writes to the same physic
       applyFileMutation({
         sessionScope: null,
         ...options,
-        writeText,
+        stageBytes,
         locator: index % 2 ? { view: "host", path: options.filePath } : options.locator,
         mutationRoot: path.join(
           path.dirname(options.filePath),

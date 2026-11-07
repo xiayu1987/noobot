@@ -9,22 +9,22 @@ import { canUseHostPathsForWorkspaceTools, projectToolPathRef } from "../core/ch
 import { resolveConfiguredPathPolicy } from "../../config/core/path-policy-adapter.js";
 import { resolveFileMutationRoot } from "./file-mutation-service.js";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
-import { formatLinesWithNumbers, splitLines } from "./file-utils.js";
+import { formatLinesWithNumbers } from "./file-utils.js";
 import { tToolTemplate } from "../core/tool-i18n.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
-import { createFileMutationLocator } from "@noobot/file-mutation-protocol";
+import { createFileMutationLocator, decodePatchText } from "@noobot/file-mutation-protocol";
 import { text } from "@noobot/shared/value";
 
-export function buildLineNumberedNearbyContent(content, targetLine) {
-  const lines = splitLines(content);
-  if (content.endsWith("\n")) lines.pop();
+export function buildLineNumberedNearbyContent(content, targetLine, encoding = "utf-8") {
+  const { lines, textFormat } = decodePatchText(content, encoding);
   const totalLines = lines.length;
   const radius = QUANTITY_THRESHOLDS.toolIO.patchFailureContextRadius;
   const start = Math.max(1, targetLine - radius);
   const end = Math.min(totalLines, targetLine + radius);
-  if (start > end) return { totalLines };
+  if (start > end) return { totalLines, textFormat };
   return {
     totalLines,
+    textFormat,
     contextStartLine: start,
     contextEndLine: end,
     nearbyContent: formatLinesWithNumbers(lines.slice(start - 1, end), start),

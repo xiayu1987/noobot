@@ -14,6 +14,7 @@ import {
   createFileTool,
 } from "./helpers/file-script-length-guards-helper.js";
 import { createPatchFileTool } from "../../src/tools/execution/file-patch-tool.js";
+import { invokePatchFile } from "./helpers/patch-base-versions.js";
 import { createWorkspaceIoExecutor } from "../../src/tools/core/workspace-io-executor.js";
 import { resolveToolExecutionPolicy } from "@noobot/execution-isolation-protocol";
 import {
@@ -36,13 +37,11 @@ async function fixture(t, overrides = () => ({})) {
     mutationScopeId: "turn-test",
   });
   const invoke = (body) =>
-    tool
-      .invoke({
-        riskLevel: "low",
-        format: "apply_patch",
-        patch: `*** Begin Patch\n${body}\n*** End Patch`,
-      })
-      .then(parseToolResult);
+    invokePatchFile(tool, root, {
+      riskLevel: "low",
+      format: "apply_patch",
+      patch: `*** Begin Patch\n${body}\n*** End Patch`,
+    }).then(parseToolResult);
   return { root, context, invoke };
 }
 
@@ -143,13 +142,14 @@ test("move detects a changed source and restores the overwritten destination", a
 });
 
 test("rollback preserves external changes and still restores other files", async (t) => {
+  let stagedWrites = 0;
   const { root, invoke } = await fixture(t, ({ root: tmpRoot, io }) => ({
-    async writeText(target, content) {
-      if (target.endsWith("c.txt")) {
+    async writeBytes(target, content) {
+      if (++stagedWrites === 3) {
         await fs.writeFile(path.join(tmpRoot, "b.txt"), "external\n");
         throw new Error("injected failure");
       }
-      await io.writeText(target, content);
+      await io.writeBytes(target, content);
     },
   }));
   for (const name of ["a.txt", "b.txt", "c.txt"])
@@ -163,22 +163,23 @@ test("rollback preserves external changes and still restores other files", async
   assert.equal(await fs.readFile(path.join(root, "c.txt"), "utf8"), "base\n");
 });
 
-test("repeated updates to one file use the preceding planned version and roll back in reverse", async (t) => {
+test("move chain commit failure restores each initial file state", async (t) => {
+  let stagedWrites = 0;
   const { root, invoke } = await fixture(t, ({ io }) => ({
-    async writeText(target, content) {
-      if (target.endsWith("b.txt")) throw new Error("injected failure");
-      await io.writeText(target, content);
+    async writeBytes(target, content) {
+      if (++stagedWrites === 2) throw new Error("injected failure");
+      await io.writeBytes(target, content);
     },
   }));
   await fs.writeFile(path.join(root, "a.txt"), "base\n");
-  await fs.writeFile(path.join(root, "b.txt"), "base\n");
-  const edits = [update("a.txt", "base", "middle"), update("a.txt", "middle", "final")];
+  await fs.writeFile(path.join(root, "b.txt"), "destination\n");
   await assert.rejects(
-    invoke([...edits, update("b.txt", "base", "fail")].join("\n")),
+    invoke(
+      "*** Update File: a.txt\n*** Move to: b.txt\n*** Update File: b.txt\n*** Move to: c.txt",
+    ),
     /injected failure/,
   );
   assert.equal(await fs.readFile(path.join(root, "a.txt"), "utf8"), "base\n");
-  const result = await invoke(edits.join("\n"));
-  assert.equal(result.mutations.at(-1).aggregate.revision, 2);
-  assert.equal(await fs.readFile(path.join(root, "a.txt"), "utf8"), "final\n");
+  assert.equal(await fs.readFile(path.join(root, "b.txt"), "utf8"), "destination\n");
+  await assert.rejects(fs.access(path.join(root, "c.txt")), { code: "ENOENT" });
 });

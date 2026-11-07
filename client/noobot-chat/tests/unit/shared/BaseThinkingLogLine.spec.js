@@ -4,10 +4,76 @@
  * SPDX-License-Identifier: MIT
  */
 import { mount } from "@vue/test-utils";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { reactive, nextTick } from "vue";
+import {
+  setToolNameBindings,
+  updateToolNameBindings,
+  clearToolNameBindings,
+} from "../../../src/shared/state/toolNameBindings.js";
 import BaseThinkingLogLine from "../../../src/shared/ui/BaseThinkingLogLine.vue";
 
 describe("BaseThinkingLogLine", () => {
+  afterEach(clearToolNameBindings);
+
+  it.each(["tool_call", "tool_result"])(
+    "displays the effective binding for %s and reacts to saved configuration",
+    async (eventText) => {
+      setToolNameBindings("admin", { read_file: { bindingName: "nb_read_file" } });
+      const wrapper = mount(BaseThinkingLogLine, {
+        props: {
+          eventText,
+          tool: true,
+          toolName: "read_file",
+          contentText: "read_file · document.txt",
+          detailText: '{"content":"read_file"}',
+          expanded: true,
+        },
+      });
+      expect(wrapper.find(".base-thinking-log-line__tool-name").text()).toBe("nb_read_file");
+      expect(wrapper.find(".base-thinking-log-line__text").attributes("title")).toBe(
+        "nb_read_file · document.txt",
+      );
+      expect(wrapper.find(".base-thinking-log-line__summary").text()).toBe("· document.txt");
+      expect(wrapper.find(".base-thinking-log-line__detail").text()).toBe(
+        '{"content":"read_file"}',
+      );
+      updateToolNameBindings("admin", reactive({ read_file: { bindingName: "read_document" } }));
+      await nextTick();
+      expect(wrapper.find(".base-thinking-log-line__tool-name").text()).toBe("read_document");
+      expect(wrapper.find(".base-thinking-log-line__text").attributes("title")).toBe(
+        "read_document · document.txt",
+      );
+      updateToolNameBindings("other-user", { read_file: { bindingName: "wrong_user" } });
+      await nextTick();
+      expect(wrapper.find(".base-thinking-log-line__tool-name").text()).toBe("read_document");
+      updateToolNameBindings("admin", {});
+      await nextTick();
+      expect(wrapper.find(".base-thinking-log-line__tool-name").text()).toBe("read_file");
+      wrapper.unmount();
+    },
+  );
+
+  it("projects only a tool identity prefix in explicit titles", async () => {
+    setToolNameBindings("admin", { read_file: { bindingName: "nb_read_file" } });
+    const wrapper = mount(BaseThinkingLogLine, {
+      props: {
+        tool: true,
+        toolName: "read_file",
+        titleText: "read_file: read_file.txt",
+      },
+    });
+    const title = () => wrapper.find(".base-thinking-log-line__text").attributes("title");
+    expect(title()).toBe("nb_read_file: read_file.txt");
+    await wrapper.setProps({ titleText: "read_file.txt" });
+    expect(title()).toBe("read_file.txt");
+    await wrapper.setProps({ titleText: "path/read_file" });
+    expect(title()).toBe("path/read_file");
+    await wrapper.setProps({ titleText: "read_file" });
+    expect(title()).toBe("nb_read_file");
+    wrapper.unmount();
+  });
+
   it("emits toggle when an expandable detail row is clicked", async () => {
     const wrapper = mount(BaseThinkingLogLine, {
       props: {

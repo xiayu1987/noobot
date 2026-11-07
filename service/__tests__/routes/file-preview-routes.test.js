@@ -76,7 +76,7 @@ test("workspace file reads return the shared preview contract and preserve sourc
   const fixtures = [
     ["source.md", Buffer.from("\uFEFF# 原文\r\n"), true, "markdown"],
     ["invalid.txt", Buffer.from([255]), false, "unsupported"],
-    ["binary.txt", Buffer.from([0, 1, 2]), false, "unsupported"],
+    ["controls.txt", Buffer.from([0, 1, 2]), true, "text"],
     ["clip.mp4", Buffer.alloc(limit + 1), null, "video"],
     ["large.txt", Buffer.alloc(limit + 1, 65), null, "text"],
     ["empty.txt", Buffer.alloc(0), true, "text"],

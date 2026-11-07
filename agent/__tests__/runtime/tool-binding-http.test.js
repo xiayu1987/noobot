@@ -19,6 +19,9 @@ import {
 } from "@noobot/model-protocol";
 import { runWithToolNameBinding } from "@noobot/model-protocol/tool-binding-scope-node";
 import { projectSessionRecordsToContextMessages } from "@noobot/context-protocol/message/session-projection";
+import { createModelContext } from "@noobot/context-protocol/assembly/hook-context";
+import { assignContextMessageIdentity } from "@noobot/context-protocol/message/codec";
+import { appendMessage } from "@noobot/context-protocol/message/store";
 import { buildContextMessageBlocks } from "../../src/context/assembly/message-builder.js";
 import { normalizeMessageEntity } from "../../src/session/entities.js";
 import { createPersistedCurrentUserMessage } from "./core/message-builder-current-user-fixture.js";
@@ -35,6 +38,10 @@ import {
   bindTestIdentityToRuntime,
   deriveTestTurnIdentity,
 } from "../helpers/test-turn-identity.js";
+
+import { appendToolResultModelMessage } from "../../src/runtime/message-context/message-store.js";
+import { buildHistoryMessages } from "../../src/context/assembly/message-builder/history.js";
+import { attachmentEnvelope } from "./core/tool-runner.test-helpers.js";
 
 const invocation = {
   flow: "test.binding",
@@ -243,6 +250,35 @@ for (const ok of [true, false]) {
   });
 }
 
+test("canonical active-turn context projects tool results after metadata cloning", async (t) => {
+  const fixture = await createFixture(t);
+  const result = { ok: true, toolName: "read_file" };
+  const context = createModelContext({
+    activeTurnIdentity: { dialogProcessId: "dialog", turnScopeId: "turn" },
+    messageBlocks: { system: [], history: [], incremental: [] },
+  });
+  for (const message of [
+    new AIMessage({ content: "", tool_calls: [{ id: "read", name: "read_file", args: {} }] }),
+    new ToolMessage({ tool_call_id: "read", content: JSON.stringify(result) }),
+  ]) {
+    appendMessage(context, assignContextMessageIdentity(message), { block: "incremental" });
+  }
+  const original = context.messages[1];
+  assert.equal(original.type, "tool");
+  assert.equal(original.getType, undefined);
+  await fixture.host.modelPort.invoke({
+    messages: context.messages,
+    tools: [fixture.readTool],
+    options: fixture.options,
+    invocation,
+  });
+  assert.deepEqual(JSON.parse(fixture.requests[0].messages[1].content), {
+    ...result,
+    toolName: "nb_read",
+  });
+  assert.deepEqual(JSON.parse(original.content), result);
+});
+
 test("invalid tool result identity or JSON fails before HTTP", async (t) => {
   const fixture = await createFixture(t);
   for (const [content, expected] of [
@@ -251,8 +287,53 @@ test("invalid tool result identity or JSON fails before HTTP", async (t) => {
   ]) {
     await assert.rejects(
       fixture.host.modelPort.invoke({
-        messages: [new ToolMessage({ name: "read_file", tool_call_id: "bad", content })],
+        messages: [
+          new AIMessage({ content: "", tool_calls: [{ id: "bad", name: "read_file", args: {} }] }),
+          new ToolMessage({ name: "read_file", tool_call_id: "bad", content }),
+        ],
         tools: [fixture.readTool],
+        options: fixture.options,
+        invocation,
+      }),
+      expected,
+    );
+  }
+  assert.equal(fixture.requests.length, 0);
+});
+
+test("unnamed results cannot claim another declared tool or an absent call over HTTP", async (t) => {
+  const fixture = await createFixture(t);
+  const search = externalTool(async () => "unused", {
+    name: "search",
+    description: "search",
+    schema: z.object({}),
+  });
+  const history = new AIMessage({
+    content: "",
+    tool_calls: [{ id: "read", name: "read_file", args: {} }],
+  });
+  for (const [result, expected] of [
+    [
+      { tool_call_id: "read", content: JSON.stringify({ ok: true, toolName: "search" }) },
+      /tool result identity mismatch/,
+    ],
+    [
+      {
+        tool_call_id: "read",
+        name: "search",
+        content: JSON.stringify({ ok: true, toolName: "search" }),
+      },
+      /message identity mismatch/,
+    ],
+    [
+      { tool_call_id: "missing", content: JSON.stringify({ ok: true, toolName: "read_file" }) },
+      /requires its matching call/,
+    ],
+  ]) {
+    await assert.rejects(
+      fixture.host.modelPort.invoke({
+        messages: [history, new ToolMessage(result)],
+        tools: [fixture.readTool, search],
         options: fixture.options,
         invocation,
       }),
@@ -477,3 +558,67 @@ test("signed calls survive session normalization and history rebuilding without 
   assert.equal(replay.tool_calls[0].name, "nb_read");
   assert.throws(() => projectToolMessageNames(assistant, () => "renamed_read"), /signed tool call/);
 });
+
+for (const ok of [true, false]) {
+  test(`HTTP projects canonical overflow results once (ok=${ok})`, async (t) => {
+    const fixture = await createFixture(t);
+    const envelope = attachmentEnvelope({
+      callId: "call-overflow",
+      attachmentId: "overflow-output",
+      name: "output.txt",
+      mimeType: "text/plain",
+      size: 10000,
+    });
+    const result = {
+      toolName: "read_file",
+      ok,
+      ...(ok ? {} : { code: "READ_FAILED", error: "read failed" }),
+      overflowed: true,
+      message: "Read the referenced output",
+      transferEnvelopes: [envelope],
+    };
+    const context = createModelContext({
+      activeTurnIdentity: { dialogProcessId: "dialog", turnScopeId: "turn" },
+      messageBlocks: { system: [], history: [], incremental: [] },
+    });
+    appendMessage(
+      context,
+      assignContextMessageIdentity(
+        new AIMessage({
+          content: "",
+          tool_calls: [{ id: "call-overflow", name: "read_file", args: {} }],
+        }),
+      ),
+      { block: "incremental" },
+    );
+    appendToolResultModelMessage({
+      modelContext: context,
+      toolCallId: "call-overflow",
+      content: JSON.stringify(result),
+      messageUid: "overflow-result",
+    });
+    const message = context.messages[1];
+    assert.deepEqual(JSON.parse(message.content), result);
+    for (const messages of [
+      context.messages,
+      buildHistoryMessages({
+        effectiveHistoryMessages: context.messages,
+        runtime: fixture.runtime,
+      }),
+    ]) {
+      await fixture.host.modelPort.invoke({
+        messages,
+        tools: [fixture.readTool],
+        options: fixture.options,
+        invocation,
+      });
+      const sent = JSON.parse(fixture.requests.at(-1).messages[1].content);
+      assert.equal(sent.toolName, "nb_read");
+      assert.equal(sent.overflowed, true);
+      assert.equal(sent.ok, ok);
+      assert.equal(sent.transferEnvelopes, undefined);
+      assert.match(sent.transfers[0].attachments[0].attachmentRef, /overflow-output$/);
+      assert.deepEqual(JSON.parse(message.content), result);
+    }
+  });
+}

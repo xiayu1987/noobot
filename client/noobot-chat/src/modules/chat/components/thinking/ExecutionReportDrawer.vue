@@ -13,6 +13,7 @@ import {
 import { getMessageDialogProcessId, getMessageSessionId } from "../../model/messageIdentity.js";
 import { buildExecutionReportView } from "../../model/executionReportModel.js";
 import { useOverlayHistory } from "../../../../shared/composables/useOverlayHistory.js";
+import { toolDisplayName } from "../../../../shared/state/toolNameBindings.js";
 
 const props = defineProps({
   visible: Boolean,
@@ -152,7 +153,7 @@ watch(
           data-testid="execution-report-tools"
         >
           <li v-for="tool in view.tools" :key="tool.tool" class="execution-report-tool">
-            <span class="execution-report-tool-name">{{ tool.tool }}</span>
+            <span class="execution-report-tool-name">{{ toolDisplayName(tool.tool) }}</span>
             <span class="execution-report-bar" aria-hidden="true">
               <span class="execution-report-bar-fill" :style="barStyle(tool.totalRatio)"></span>
             </span>
@@ -195,7 +196,7 @@ watch(
           <li v-for="call in view.slowest" :key="call.key">
             <span class="execution-report-rank" aria-hidden="true">{{ call.rank }}</span>
             <span class="execution-report-slowest-call">
-              <span class="execution-report-tool-name">{{ call.tool }}</span>
+              <span class="execution-report-tool-name">{{ toolDisplayName(call.tool) }}</span>
               <span
                 v-if="call.subject"
                 class="execution-report-slowest-subject"

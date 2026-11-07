@@ -72,7 +72,7 @@ export default {
     "General scenario: no restrictions on tools and context; autonomously selects capabilities as needed.",
   "scenarios.programming.name": "Programming",
   "scenarios.programming.description":
-    "Programming scenario: use {{tool:search}}/{{tool:read_file}} to confirm real content before {{tool:patch_file}}; prefer exact-context patches and avoid hand-computing unified diff counts; after patch failure, reread then retry; use {{tool:write_file}} only when needed.",
+    "Programming scenario: locate and read real content, then follow the {{tool:patch_file}} contract; reread and rebuild after failure, and verify the result.",
   "scenarios.text.name": "Text",
   "scenarios.text.description":
     "Text scenario: suited for writing, rewriting, summarizing, translating, and content organization.",

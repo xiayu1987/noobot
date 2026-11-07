@@ -16,7 +16,6 @@ import {
   resolveContextToolResultCallId,
 } from "@noobot/context-protocol/message/codec";
 import { renderTaskSummaryReceiptMessage } from "noobot-agent/tools";
-import { compactToolResultTextForModel } from "noobot-agent/semantic-transfer";
 import { resolveSessionMessageRecordInternalMessageType } from "@noobot/session-protocol";
 import {
   selectPlugins,
@@ -304,7 +303,7 @@ test("@full PBE-034 主流程低轮次 task_summary checkpoint 与模型输入�
     }
   }
   for (const { resultMessage } of summaryExchanges) {
-    const resultHash = messageContentHash(compactToolResultTextForModel(resultMessage.content));
+    const resultHash = messageContentHash(resultMessage.content);
     const invocationsReceivingReceipt = mainInvocations.filter((invocation) =>
       invocation.data.messages.preview.some(
         (message) =>

@@ -23,6 +23,7 @@ import { tTool, tToolTemplate } from "../core/tool-i18n.js";
 import { TOOL_NAME } from "../constants/index.js";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { searchFilesWithRipgrep } from "./file-search.js";
+import { FILE_TEXT_ENCODING_INPUTS } from "@noobot/file-mutation-protocol";
 import {
   RESOURCE_OPERATION,
   SECURITY_EVIDENCE_SOURCE,
@@ -33,6 +34,10 @@ import { buildFileToolDescription, resolveFileResourceRiskScope } from "./file-t
 
 function buildSearchSchema(runtime) {
   return z.strictObject({
+    encoding: z
+      .enum(FILE_TEXT_ENCODING_INPUTS)
+      .default("auto")
+      .describe(tTool(runtime, "tools.file.fieldEncoding")),
     query: z.string().min(1).describe(tToolTemplate(runtime, "tools.search.fieldQuery")),
     isRegex: z
       .boolean()
@@ -135,6 +140,7 @@ async function searchFilesSource({
   contextLines,
   maxResults,
   riskLevel,
+  encoding,
 }) {
   const searchResolution = await resolveAuthorizedUserWorkspaceFilePath({
     filePath: inputPath,
@@ -177,6 +183,7 @@ async function searchFilesSource({
     contextLines,
     maxResults,
     abortSignal,
+    encoding,
   });
   const resolved = await resolveSearchMatches({
     matches: result.matches,
@@ -204,6 +211,7 @@ async function runSearch({ agentContext, runtime, args, abortSignal }) {
     contextLines,
     maxResults,
     riskLevel,
+    encoding,
   } = args;
   return searchFilesSource({
     agentContext,
@@ -217,6 +225,7 @@ async function runSearch({ agentContext, runtime, args, abortSignal }) {
     contextLines,
     maxResults,
     riskLevel,
+    encoding,
   });
 }
 
