@@ -4,19 +4,17 @@
  * SPDX-License-Identifier: MIT
  */
 import { shallowRef } from "vue";
-import { requireToolBindingConfig, resolveToolBindingName } from "@noobot/model-protocol";
+import { diagnoseToolBindingConfig, resolveToolBindingName } from "@noobot/model-protocol";
 
 const current = shallowRef(null);
 
 export function setToolNameBindings(userId, bindings) {
   if (!userId) throw new TypeError("tool name bindings require a user identity");
   if (bindings === undefined) throw new TypeError("connection.toolNameBindings is required");
-  requireToolBindingConfig(bindings);
   current.value = {
     userId,
-    bindings: Object.fromEntries(
-      Object.entries(bindings).map(([id, entry]) => [id, { bindingName: entry.bindingName }]),
-    ),
+    bindings: JSON.parse(JSON.stringify(bindings)),
+    issues: diagnoseToolBindingConfig(bindings),
   };
 }
 
@@ -31,5 +29,6 @@ export function updateToolNameBindings(userId, bindings) {
 
 export function toolDisplayName(toolId) {
   if (!toolId) return "";
+  if (current.value?.issues.length) return `${toolId} (${current.value.issues[0].code})`;
   return resolveToolBindingName(toolId, current.value?.bindings);
 }

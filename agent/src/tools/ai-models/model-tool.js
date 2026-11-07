@@ -12,6 +12,7 @@ import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { TOOL_NAME } from "../constants/index.js";
 import { text, isObjectLike } from "@noobot/shared/value";
+import { resolveModelUsedForConversation } from "@noobot/model-protocol";
 
 function tModel(runtime = {}, key = "", params = {}) {
   const keyMap = {
@@ -26,9 +27,7 @@ function tModel(runtime = {}, key = "", params = {}) {
 }
 
 function isConversationModel(providerSpec = {}) {
-  if (!isObjectLike(providerSpec)) return false;
-  const configuredValue = providerSpec.used_for_conversation;
-  return configuredValue === undefined ? true : configuredValue === true;
+  return isObjectLike(providerSpec) && resolveModelUsedForConversation(providerSpec);
 }
 
 export function createModelTool({ agentContext, sessionId }) {

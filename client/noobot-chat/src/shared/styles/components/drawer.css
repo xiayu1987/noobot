@@ -4,6 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 
+.noobot-side-drawer__header {
+  background: var(--noobot-panel-head-bg);
+  border-bottom: 1px solid var(--noobot-divider);
+}
+
+.noobot-side-drawer__title {
+  color: var(--noobot-text-strong);
+  font-weight: var(--noobot-font-weight-semibold);
+}
+
 .noobot-side-drawer .el-drawer__header,
 .workspace-drawer .el-drawer__header,
 .noobot-side-drawer__header {

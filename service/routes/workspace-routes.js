@@ -18,6 +18,7 @@ import {
 } from "@noobot/runtime-events";
 import {
   projectUserVisibleConfigDeclarations,
+  projectToolBindingSettings,
   resolveToolBindingSettings,
 } from "@noobot/agent-config-protocol";
 import { BUILTIN_TOOL_IDS } from "noobot-agent/tools";
@@ -84,8 +85,7 @@ export function registerWorkspaceRoutes(
   const jsonRoute = createJsonRouteWrapper({ translateText });
   const toolBindingSettings = () => ({
     toolIds: BUILTIN_TOOL_IDS,
-    bindings: resolveToolBindingSettings({
-      toolIds: BUILTIN_TOOL_IDS,
+    bindings: projectToolBindingSettings({
       bindings: globalConfig?.tools?.bindings,
     }),
   });

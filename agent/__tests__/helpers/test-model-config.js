@@ -10,6 +10,7 @@ export const TEST_MODEL_GLOBAL_CONFIG = Object.freeze({
   providers: Object.freeze({
     [TEST_MODEL_PROVIDER_ALIAS]: Object.freeze({
       enabled: true,
+      used_for_conversation: true,
       model: "test-default-model",
       reasoning_effort_parameter: "reasoning_effort",
       reasoning_effort_options: Object.freeze(["none", "low", "medium", "high"]),

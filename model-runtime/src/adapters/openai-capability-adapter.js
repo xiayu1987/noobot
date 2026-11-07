@@ -4,48 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import OpenAI from "openai";
-import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-import {
-  tModelRuntime as modelRuntimeText,
-  modelHttpStatusFallback as httpStatusFallback,
-} from "../locale.js";
-import {
-  MODEL_IMAGE_GENERATION_API_TYPE,
-  MODEL_OPERATION_KIND,
-  MODEL_WEB_SEARCH_INSTRUCTION,
-  resolveModelImageGenerationApiType,
-} from "@noobot/model-protocol";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { MODEL_OPERATION_KIND, MODEL_WEB_SEARCH_INSTRUCTION } from "@noobot/model-protocol";
+import { text } from "@noobot/shared/value";
 import { createResponseModeFetch, unwrapModelProtocolError } from "./response-mode.js";
 import { collectResponsesStream } from "./openai-responses-stream.js";
-
-const RATIO_SIZE = /^(auto|\d+(?:\.\d+)?:\d+(?:\.\d+)?)$/i;
-
-function normalizeBaseUrl(baseUrl = "") {
-  const withoutTrailingSlashes = (value) => {
-    let end = value.length;
-    while (end > 0 && value[end - 1] === "/") end -= 1;
-    return value.slice(0, end);
-  };
-  const normalized = withoutTrailingSlashes(text(baseUrl));
-  if (!normalized) return "";
-  try {
-    const url = new URL(normalized);
-    const pathname = withoutTrailingSlashes(url.pathname);
-    if (/\/chatgpt\/v1$/i.test(pathname)) url.pathname = pathname.replace(/\/chatgpt\/v1$/i, "/v1");
-    url.search = "";
-    url.hash = "";
-    return withoutTrailingSlashes(url.toString());
-  } catch {
-    return normalized.replace(/\/chatgpt\/v1$/i, "/v1");
-  }
-}
-
-function buildApiUrl(baseUrl = "", path = "") {
-  const base = normalizeBaseUrl(baseUrl);
-  if (base.endsWith("/v1") && path.startsWith("/v1/")) return `${base}${path.slice(3)}`;
-  return `${base}${path}`;
-}
 
 function resolveResponsesOutputText(result = {}) {
   const sdkOutputText = text(result?.output_text);
@@ -71,217 +33,11 @@ function extractResponsesUrlCitations(output = []) {
   return [...sources.values()];
 }
 
-function normalizeCount(value = 1, modelName = "") {
-  const count = Math.min(10, Math.max(1, Math.floor(Number(value || 1)) || 1));
-  return text(modelName).toLowerCase() === "gpt-image-2-beta" ? 1 : count;
+export function resolveOpenAiOperationStreamingModes() {
+  return [false, true];
 }
 
-function unwrapPayload(payload = {}) {
-  const source = payload && typeof payload === "object" ? payload : {};
-  for (const key of ["data", "payload", "result"]) {
-    const nested = source[key];
-    if (isPlainObject(nested)) Object.assign(source, nested);
-  }
-  return source;
-}
-
-function normalizeTask(payload = {}) {
-  const source = unwrapPayload({ ...payload });
-  const data = Array.isArray(source.data) ? source.data : source.data ? [source.data] : [];
-  const first = data.find((item) => item && typeof item === "object") || {};
-  return {
-    ...source,
-    ...first,
-    result_data:
-      source.result_data ||
-      source.resultData ||
-      source.images ||
-      source.output ||
-      first.result_data ||
-      first.resultData ||
-      first.images ||
-      first.output ||
-      [],
-  };
-}
-
-function taskId(payload = {}) {
-  const task = normalizeTask(payload);
-  return text(task.id || task.task_id || task.taskId);
-}
-
-function imageArtifacts(items = []) {
-  return (Array.isArray(items) ? items : [])
-    .map((item = {}, index) => {
-      const value = text(item.b64_json || item.image_base64 || item.base64 || item.data);
-      const dataUrlMatch = /^data:[^;]+;base64,(.+)$/i.exec(value);
-      return {
-        fileName: `generated_image_${index + 1}.png`,
-        b64Json: dataUrlMatch ? dataUrlMatch[1] : value,
-        url: text(item.url || item.image_url),
-      };
-    })
-    .filter((item) => item.b64Json || item.url);
-}
-
-async function requestJson({
-  fetchImpl,
-  url,
-  method = "GET",
-  headers = {},
-  body,
-  signal,
-  locale = "zh-CN",
-}) {
-  let response;
-  try {
-    response = await fetchImpl(url, {
-      method,
-      headers: { ...headers, ...(body ? { "Content-Type": "application/json" } : {}) },
-      ...(body ? { body: JSON.stringify(body) } : {}),
-      ...(signal ? { signal } : {}),
-    });
-  } catch (error) {
-    error.requestUrl = url;
-    error.requestMethod = method;
-    throw error;
-  }
-  const responseText = await response.text();
-  let payload;
-  let parsedJson = false;
-  try {
-    payload = responseText ? JSON.parse(responseText) : {};
-    parsedJson = true;
-  } catch {
-    payload = { message: responseText };
-  }
-  if (!response.ok) {
-    const returnedMessage = text(
-      (typeof payload?.error?.message === "string" ? payload.error.message : "") ||
-        (typeof payload?.message === "string" ? payload.message : "") ||
-        (typeof payload?.error === "string" ? payload.error : "") ||
-        (!parsedJson ? responseText : ""),
-    );
-    const message =
-      returnedMessage || httpStatusFallback(locale, response.status) || `HTTP ${response.status}`;
-    const error = new Error(message);
-    error.status = response.status;
-    error.payload = payload;
-    error.requestUrl = url;
-    error.requestMethod = method;
-    throw error;
-  }
-  return payload;
-}
-
-async function executeImagesAsync({
-  modelSpec,
-  credential,
-  headers,
-  input,
-  options,
-  signal,
-  fetchImpl,
-  clock,
-  locale,
-}) {
-  const baseUrl = normalizeBaseUrl(modelSpec.base_url);
-  const createUrl = buildApiUrl(baseUrl, "/v1/images/generations");
-  const requestHeaders = { ...headers, Authorization: `Bearer ${credential}` };
-  const size = text(options.size) || "1:1";
-  const resolution = text(options.resolution) || (RATIO_SIZE.test(size) ? "1K" : "");
-  const created = await requestJson({
-    fetchImpl,
-    url: createUrl,
-    method: "POST",
-    headers: requestHeaders,
-    signal,
-    locale,
-    body: {
-      model: modelSpec.model,
-      prompt: text(input.prompt),
-      size,
-      ...(resolution ? { resolution } : {}),
-      n: normalizeCount(options.n, modelSpec.model),
-      ...(text(options.quality) ? { quality: String(options.quality).trim() } : {}),
-      ...(Array.isArray(options.imageUrls) && options.imageUrls.length
-        ? { image_urls: options.imageUrls }
-        : {}),
-    },
-  });
-  const id = taskId(created);
-  if (!id) {
-    const error = new Error(modelRuntimeText(locale, "imagesTaskIdMissing"));
-    error.capabilityUnavailable = true;
-    throw error;
-  }
-  const taskUrl = buildApiUrl(baseUrl, `/v1/tasks/${encodeURIComponent(id)}`);
-  const startedAt = Date.now();
-  while (
-    Date.now() - startedAt <
-    Number(options.timeoutMs || TIME_THRESHOLDS.tools.imagesAsyncTimeoutMs)
-  ) {
-    const task = normalizeTask(
-      await requestJson({ fetchImpl, url: taskUrl, headers: requestHeaders, signal, locale }),
-    );
-    const status = text(task.status).toLowerCase();
-    if (status === "completed") {
-      return {
-        taskId: id,
-        imageArtifacts: imageArtifacts(task.result_data),
-        rawText: "",
-        rawTask: task,
-      };
-    }
-    if (status === "failed") {
-      const error = new Error(
-        String(task.error || task.message || modelRuntimeText(locale, "imagesTaskFailed")),
-      );
-      error.capabilityUnavailable = true;
-      throw error;
-    }
-    await clock.sleep(
-      Number(options.pollIntervalMs || TIME_THRESHOLDS.tools.imagesAsyncPollIntervalMs),
-    );
-  }
-  const error = new Error(modelRuntimeText(locale, "imagesTaskTimeout", { id }));
-  error.capabilityUnavailable = true;
-  throw error;
-}
-
-function extractResponsesImages(output = []) {
-  const artifacts = [];
-  const values = (Array.isArray(output) ? output : []).flatMap((item) => [
-    item,
-    ...(Array.isArray(item?.content) ? item.content : []),
-  ]);
-  for (const value of values) {
-    const type = String(value?.type || "").toLowerCase();
-    if (!type.includes("image")) continue;
-    const b64Json = text(value?.result || value?.b64_json || value?.image_base64 || value?.data);
-    const url = text(value?.image_url?.url || value?.url);
-    if (b64Json || url)
-      artifacts.push({ fileName: `generated_image_${artifacts.length + 1}.png`, b64Json, url });
-  }
-  return artifacts;
-}
-
-function usesImagesAsync({ modelSpec, operation }) {
-  return (
-    operation.kind === MODEL_OPERATION_KIND.IMAGE_GENERATION &&
-    resolveModelImageGenerationApiType(modelSpec) === MODEL_IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC
-  );
-}
-
-export function resolveOpenAiOperationStreamingModes({ modelSpec, operation }) {
-  return usesImagesAsync({ modelSpec, operation }) ? [false] : [false, true];
-}
-
-export async function executeOpenAiOperation({
-  fetchImpl = globalThis.fetch,
-  streaming,
-  ...input
-}) {
+export async function executeOpenAiOperation({ fetchImpl, streaming, ...input }) {
   try {
     return await runOpenAiOperation({
       ...input,
@@ -301,24 +57,9 @@ async function runOpenAiOperation({
   headers = {},
   signal,
   fetchImpl,
-  clock = { sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) },
-  locale = "zh-CN",
   mapMultimodalAttachment = mapOpenAiMultimodalAttachment,
   openAiClientFactory = (config) => new OpenAI(config),
 }) {
-  if (usesImagesAsync({ modelSpec, operation })) {
-    return executeImagesAsync({
-      modelSpec,
-      credential,
-      headers,
-      input: operation.input,
-      options: operation.options,
-      signal,
-      fetchImpl,
-      clock,
-      locale,
-    });
-  }
   const client = openAiClientFactory({
     apiKey: credential,
     ...(modelSpec.base_url ? { baseURL: modelSpec.base_url } : {}),
@@ -367,30 +108,7 @@ async function runOpenAiOperation({
     });
     return {
       rawText: resolveResponsesOutputText(result),
-      output: Array.isArray(result?.output) ? result.output : [],
-    };
-  }
-  if (operation.kind === MODEL_OPERATION_KIND.IMAGE_GENERATION) {
-    const result = await createResponse({
-      model: modelSpec.model,
-      input: [
-        {
-          role: "user",
-          content: [{ type: "input_text", text: text(operation.input.prompt) }],
-        },
-      ],
-      tools: [
-        {
-          type: "image_generation",
-          size: text(operation.options.size) || "1024x1024",
-        },
-      ],
-      tool_choice: "required",
-    });
-    return {
-      rawText: resolveResponsesOutputText(result),
-      imageArtifacts: extractResponsesImages(result?.output),
-      output: Array.isArray(result?.output) ? result.output : [],
+      output: result.output,
     };
   }
   throw new TypeError(`unsupported OpenAI model operation: ${operation.kind}`);

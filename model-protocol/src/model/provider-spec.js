@@ -4,7 +4,7 @@
  */
 
 import { resolveModelAdapterId } from "./model-adapter.js";
-import { MODEL_IMAGE_GENERATION_API_TYPE } from "./model-capabilities.js";
+import { MODEL_GENERATION_API_TYPE } from "./model-capabilities.js";
 import { MODEL_FAMILY_ID, resolveModelFamilyId } from "./model-family.js";
 import { text } from "@noobot/shared/value";
 
@@ -241,7 +241,7 @@ const nonEmptyStringField = Object.freeze({
 });
 const booleanField = Object.freeze({ type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.BOOLEAN });
 
-const MODEL_PROVIDER_FIELD_GROUP = Object.freeze({
+export const MODEL_PROVIDER_FIELD_GROUP = Object.freeze({
   CONNECTION: "connection",
   SAMPLING: "sampling",
   REASONING: "reasoning",
@@ -401,6 +401,7 @@ export const MODEL_PROVIDER_CONFIG_CONTRACT = Object.freeze({
     api_key: connectionField(stringField),
     base_url: connectionField(stringField),
     model: connectionField(nonEmptyStringField),
+    supplier: connectionField(stringField),
     description: connectionField(stringField),
     temperature: samplingField({
       type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.NUMBER,
@@ -492,7 +493,6 @@ export const MODEL_PROVIDER_CONFIG_CONTRACT = Object.freeze({
         type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.OBJECT,
         additionalProperties: false,
         properties: Object.freeze({
-          image_generation: booleanField,
           reasoning: booleanField,
           streaming: booleanField,
           tools: booleanField,
@@ -511,7 +511,10 @@ export const MODEL_PROVIDER_CONFIG_CONTRACT = Object.freeze({
           input_modalities: modalityListField,
         }),
       },
-      { group: MODEL_PROVIDER_FIELD_GROUP.CAPABILITY },
+      {
+        group: MODEL_PROVIDER_FIELD_GROUP.CAPABILITY,
+        declarationVisibility: MODEL_PROVIDER_DECLARATION_VISIBILITY.USER,
+      },
     ),
     multimodal_generation: internalField(
       {
@@ -526,36 +529,48 @@ export const MODEL_PROVIDER_CONFIG_CONTRACT = Object.freeze({
               support_scope: modalityListField,
               api_type: Object.freeze({
                 type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.STRING,
-                values: Object.freeze(Object.values(MODEL_IMAGE_GENERATION_API_TYPE)),
+                values: Object.freeze(Object.values(MODEL_GENERATION_API_TYPE)),
+              }),
+              input_mode: Object.freeze({
+                type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.STRING,
+                values: Object.freeze(["auto", "text", "image", "reference"]),
               }),
             }),
           }),
         }),
       },
-      { group: MODEL_PROVIDER_FIELD_GROUP.CAPABILITY },
+      {
+        group: MODEL_PROVIDER_FIELD_GROUP.CAPABILITY,
+        declarationVisibility: MODEL_PROVIDER_DECLARATION_VISIBILITY.USER,
+      },
     ),
   }),
   required: Object.freeze(["model"]),
 });
 
-const MODEL_TRANSPORT_FLAG_DEFAULTS = Object.freeze({
+export const MODEL_PROVIDER_FLAG_DEFAULTS = Object.freeze({
+  used_for_conversation: false,
   use_responses_api: false,
   strict_tool_schema: false,
 });
 
-function resolveModelTransportFlag(spec, key) {
+function resolveModelProviderFlag(spec, key) {
   const value = spec?.[key];
-  if (value === undefined) return MODEL_TRANSPORT_FLAG_DEFAULTS[key];
+  if (value === undefined) return MODEL_PROVIDER_FLAG_DEFAULTS[key];
   if (typeof value !== "boolean") throw new TypeError(`model spec ${key} must be boolean`);
   return value;
 }
 
+export function resolveModelUsedForConversation(spec = {}) {
+  return resolveModelProviderFlag(spec, "used_for_conversation");
+}
+
 export function resolveModelUseResponsesApi(spec = {}) {
-  return resolveModelTransportFlag(spec, "use_responses_api");
+  return resolveModelProviderFlag(spec, "use_responses_api");
 }
 
 export function resolveModelStrictToolSchema(spec = {}) {
-  return resolveModelTransportFlag(spec, "strict_tool_schema");
+  return resolveModelProviderFlag(spec, "strict_tool_schema");
 }
 
 const OPERATOR_ID_BY_HOST = Object.freeze({

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { text } from "@noobot/shared/value";
-import TYPOGRAPHY_TOKENS from "../styles/tokens/typography.css?raw";
+import TYPOGRAPHY_TOKENS from "@noobot/client-shared/styles/typography.css?raw";
 
 export const MARKDOWN_COPY_ERROR_CODES = Object.freeze({
   noCopyableContent: "noCopyableContent",

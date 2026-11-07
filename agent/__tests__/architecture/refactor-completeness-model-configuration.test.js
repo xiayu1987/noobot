@@ -153,7 +153,7 @@ describe("5. 配置优先级测试", () => {
               support_generation: {
                 enabled: true,
                 support_scope: ["image"],
-                api_type: "openai_responses",
+                api_type: "openai_images",
               },
             },
           },
@@ -163,7 +163,7 @@ describe("5. 配置优先级测试", () => {
         providers: {
           openai: {
             multimodal_generation: {
-              support_generation: { api_type: "openai_responses" },
+              support_generation: { api_type: "openai_images" },
             },
           },
         },
@@ -174,7 +174,7 @@ describe("5. 配置优先级测试", () => {
         support_generation: {
           enabled: true,
           support_scope: ["image"],
-          api_type: "openai_responses",
+          api_type: "openai_images",
         },
       });
     });

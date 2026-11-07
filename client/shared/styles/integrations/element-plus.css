@@ -125,27 +125,6 @@
   color: var(--noobot-text-secondary);
 }
 
-.noobot-model-select-control .el-select__wrapper {
-  min-height: var(--noobot-control-height-lg);
-  height: var(--noobot-control-height-lg);
-  border-radius: var(--noobot-radius-md);
-  background: color-mix(in srgb, var(--noobot-control-bg) 94%, var(--noobot-accent));
-  border-color: color-mix(in srgb, var(--noobot-panel-border) 78%, transparent);
-  transition:
-    background-color var(--noobot-duration-normal) var(--noobot-ease-standard),
-    border-color var(--noobot-duration-normal) var(--noobot-ease-standard);
-}
-
-.noobot-model-select-control .el-select__wrapper.is-focused,
-.noobot-model-select-control .el-select__wrapper:hover {
-  border-color: color-mix(in srgb, var(--noobot-accent) 50%, var(--noobot-panel-border));
-}
-
-.noobot-model-select-control .el-select__selected-item,
-.noobot-model-select-control .el-select__placeholder {
-  min-width: 0;
-}
-
 .el-input__wrapper.is-focus,
 .el-select__wrapper.is-focused,
 .el-textarea__inner:focus,

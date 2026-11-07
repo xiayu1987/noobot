@@ -12,6 +12,10 @@ import ComposerCameraDialog from "../../../../src/modules/composer/components/Co
 import ComposerSelectedTags from "../../../../src/modules/composer/components/ComposerSelectedTags.vue";
 import { createComposerMountOptions } from "./composerElementPlusStubs.js";
 
+vi.mock("../../../../src/shared/composables/useMobileViewport.js", () => ({
+  useMobileViewport: () => ({ drawerSize: "72%" }),
+}));
+
 vi.mock("../../../../src/shared/i18n/useLocale", () => ({
   useLocale: () => ({
     translate: (key, params = {}) => {

@@ -4,11 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 import { createToolNameBinding, requireToolBindingConfig } from "@noobot/model-protocol";
+import { deepMerge } from "../utils.js";
+
+export function projectToolBindingSettings({ bindings = {} } = {}, overrides) {
+  return deepMerge({ bindings }, overrides === undefined ? {} : { bindings: overrides }).bindings;
+}
 
 export function resolveToolBindingSettings({ toolIds = [], bindings = {} } = {}, overrides = {}) {
-  requireToolBindingConfig(bindings);
-  requireToolBindingConfig(overrides);
-  const effective = { ...bindings, ...overrides };
+  const effective = projectToolBindingSettings({ bindings }, overrides);
+  requireToolBindingConfig(effective);
   const ids = new Set([...toolIds, ...Object.keys(effective)]);
   createToolNameBinding({
     bindings: effective,

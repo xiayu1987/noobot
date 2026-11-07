@@ -6,14 +6,18 @@
 import { isPlainObject, text } from "@noobot/shared/value";
 import { BUILTIN_SCENARIO_KEYS } from "./constants.js";
 import { applyPrimaryModelReferencesToConfigFile } from "@noobot/agent-config-protocol";
-import { listModelLibraryOptions, resolveModelLibraryProvider } from "@noobot/model-protocol";
+import {
+  listModelLibraryOptions,
+  resolveModelLibraryProvider,
+  resolveModelUsedForConversation,
+} from "@noobot/model-protocol";
 import { deepClone } from "./utils.js";
 
 const TEMPLATE_VARIABLE_PATTERN = /^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$/;
 
 export function listConversationModelOptions() {
-  return listModelLibraryOptions().filter(
-    (option) => resolveModelLibraryProvider(option.key)?.used_for_conversation !== false,
+  return listModelLibraryOptions().filter((option) =>
+    resolveModelUsedForConversation(resolveModelLibraryProvider(option.key)),
   );
 }
 

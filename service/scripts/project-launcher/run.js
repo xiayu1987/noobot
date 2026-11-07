@@ -19,7 +19,6 @@ import {
   ensureModelProxyConfig,
   ensureWorkspaceConfigParamsCatalog,
   logConfigRepairReport,
-  logInvalidConfigBackup,
   syncUserConfigs,
 } from "./config-sync.js";
 import {
@@ -34,13 +33,7 @@ import {
   parseTemplateVariableName,
   resolveProviderTemplate,
 } from "./provider.js";
-import {
-  deepClone,
-  fileExists,
-  readJsonStrict,
-  readJsonWithInvalidBackup,
-  writeJson,
-} from "./utils.js";
+import { deepClone, fileExists, readJsonStrict, readConfigDocument, writeJson } from "./utils.js";
 
 async function initializeGlobalConfigWhenMissing({
   globalExamplePath,
@@ -127,11 +120,10 @@ async function syncWhenGlobalConfigExists({
   globalConfigPath,
   serviceRoot,
 } = {}) {
-  const [globalExampleConfig, globalRead] = await Promise.all([
+  const [globalExampleConfig, globalConfig] = await Promise.all([
     readJsonStrict(globalExamplePath, t("zh", "labelGlobalExample")),
-    readJsonWithInvalidBackup(globalConfigPath),
+    readConfigDocument(globalConfigPath),
   ]);
-  const globalConfig = globalRead.document;
 
   if (!isPlainObject(globalExampleConfig) || !isPlainObject(globalConfig)) return;
 
@@ -141,6 +133,7 @@ async function syncWhenGlobalConfigExists({
     target: upgradeConfigModelLibrary(globalConfig).document,
   });
   const mergedGlobal = globalRepair.document;
+  logConfigRepairReport({ targetFilePath: globalConfigPath, report: globalRepair.report });
 
   const existingConfigLanguage = text(mergedGlobal?.preferences?.language);
   const mergedGlobalLocalized = existingConfigLanguage
@@ -152,11 +145,6 @@ async function syncWhenGlobalConfigExists({
 
   if (JSON.stringify(globalConfig) !== JSON.stringify(mergedGlobalLocalized)) {
     await writeJson(globalConfigPath, mergedGlobalLocalized);
-    logConfigRepairReport({ targetFilePath: globalConfigPath, report: globalRepair.report });
-    logInvalidConfigBackup({
-      targetFilePath: globalConfigPath,
-      invalidBackupPath: globalRead.invalidBackupPath,
-    });
   }
 
   const workspaceRootAbsolutePath = resolveWorkspaceRootPath({

@@ -5,6 +5,7 @@
  */
 import { access, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { parseConfigDocumentText } from "@noobot/agent-config-protocol";
 
 export function deepClone(input) {
   return JSON.parse(JSON.stringify(input));
@@ -23,14 +24,6 @@ export async function fileExists(filePath = "") {
   }
 }
 
-export async function readJsonRelaxed(filePath = "", fallback = null) {
-  try {
-    return JSON.parse(await readFile(filePath, "utf8"));
-  } catch {
-    return fallback;
-  }
-}
-
 export async function readJsonStrict(filePath = "", label = "JSON") {
   const raw = await readFile(filePath, "utf8");
   try {
@@ -40,18 +33,15 @@ export async function readJsonStrict(filePath = "", label = "JSON") {
   }
 }
 
-export async function readJsonWithInvalidBackup(filePath = "") {
-  const raw = await readFile(filePath, "utf8");
+export async function readConfigDocument(filePath, { allowMissing = false } = {}) {
+  let source;
   try {
-    return { document: JSON.parse(raw), invalidBackupPath: "" };
-  } catch {
-    const invalidBackupPath = `${filePath}.invalid-${Date.now()}.json`;
-    await rename(filePath, invalidBackupPath);
-    return {
-      document: {},
-      invalidBackupPath,
-    };
+    source = await readFile(filePath, "utf8");
+  } catch (error) {
+    if (allowMissing && error.code === "ENOENT") return {};
+    throw error;
   }
+  return parseConfigDocumentText(source);
 }
 
 export async function writeJson(filePath = "", payload = {}) {

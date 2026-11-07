@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { randomUUID } from "node:crypto";
+import { createNamespacedToolId } from "@noobot/model-protocol/tool-identity-node";
 import { test, expect, installE2eModelPreferences } from "../fixtures/noobot.fixture.js";
 import { connectThroughUi, readE2eCredentials } from "../fixtures/auth.fixture.js";
 import {
@@ -192,10 +193,10 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
       testInfo,
       [
         "按顺序各调用一次且只调用以下七个规范工具：",
-        `1) write_file 写 ${generatedFilePath}，内容 CASE036-TOOL-CONTENT，overwrite=true，riskLevel=low；`,
+        `1) write_file 写 ${generatedFilePath}，content=${JSON.stringify("CASE036-TOOL-CONTENT\n")}（末尾保留换行），overwrite=true，riskLevel=low；`,
         `2) read_file 读取 ${generatedFilePath}，riskLevel=low；`,
         `3) search 在 ${generatedFilePath} 中查 CASE036-TOOL-CONTENT，riskLevel=low；`,
-        `4) patch_file 对 ${generatedFileName} 应用这个精确 unified diff，dryRun=false、root=${runOpsWorkdir()}、strip=1、riskLevel=low：--- a/${generatedFileName} +++ b/${generatedFileName} @@ -1 +1 @@ -CASE036-TOOL-CONTENT +CASE036-PATCH-CONTENT；`,
+        `4) patch_file 使用 read_file 返回的 baseSha256，对 ${generatedFileName} 应用这个精确 unified diff，dryRun=false、root=${runOpsWorkdir()}、strip=1、riskLevel=low：\n--- a/${generatedFileName}\n+++ b/${generatedFileName}\n@@ -1 +1 @@\n-CASE036-TOOL-CONTENT\n+CASE036-PATCH-CONTENT\n`,
         "5) execute_script 执行 printf CASE036-SCRIPT，foreground、riskLevel=low；",
         "6) list_skills 使用空参数；",
         "7) user_interaction 显示 CASE036-INTERACTION，要求必填 verificationCode，显示名 Verification Code。",
@@ -370,7 +371,7 @@ test("@full PBE-043 普通用户原生、多模态与外部工具结果闭环", 
       testInfo,
       [
         "严格按顺序且每种只调用一次以下七个工具；即使某个外部服务失败，也必须继续后续步骤，不得调用 switch_model：",
-        '1) execute_native_script 不传输入，先 const target = await output.file(\'case036-native.svg\'); 再执行 await files.writeText(target, \'<svg xmlns="http://www.w3.org/2000/svg" width="320" height="80"><text x="10" y="45">CASE036-NATIVE</text></svg>\');；',
+        '1) execute_native_script 不传输入，先 const target = await output.file(\'case036-native.svg\'); 再执行 await files.writeText(target, \'<svg xmlns="http://www.w3.org/2000/svg" width="320" height="80"><rect width="320" height="80" fill="white"/><text x="10" y="45" fill="black" font-size="24">CASE036-NATIVE</text></svg>\');；',
         `2) multimodal_parse 解析上一步返回的 case036-native.svg 附件身份，model_name 使用 ${noobot.modelAlias}，提示词为 Extract the exact visible text；`,
         "3) multimodal_generate 不传 model_name，生成一张简洁的红色正方形图片，n=1；",
         "4) call_service 调用 weather_service.get_weather，queryString.city=Shanghai，custom_param=j1；",
@@ -424,13 +425,20 @@ test("@full PBE-043 普通用户原生、多模态与外部工具结果闭环", 
   expect(parseCall.data.args.model_name).toBe(noobot.modelAlias);
   const parseResult = results.find((event) => event.data.toolCallId === parseCall.data.toolCallId);
   expect(parseResult.data.success, parseResult.data.result).toBe(true);
+  expect(JSON.parse(parseResult.data.result).text).toContain("CASE036-NATIVE");
   const mcpCall = calls.find((event) => event.data.tool === "call_mcp_task");
   expect(mcpCall.data.args.mcpName).toBe(MCP_TEST_SERVICE.name);
   const mcpResult = results.find((event) => event.data.toolCallId === mcpCall.data.toolCallId);
   expect(mcpResult.data.success, mcpResult.data.result).toBe(true);
+  const mcpTaskResult = JSON.parse(mcpResult.data.result);
+  const echoToolId = createNamespacedToolId("mcp", MCP_TEST_SERVICE.name, "echo");
+  expect(mcpTaskResult.tools).toEqual([echoToolId]);
   const mcpEvents = await readSessionExecutionEventTree(noobot.userId, noobot.sessionId);
   const echoResults = mcpEvents.filter(
-    (event) => event.event === "tool_call_end" && event.data?.tool === "echo",
+    (event) =>
+      event.sessionId === mcpTaskResult.sessionId &&
+      event.event === "tool_call_end" &&
+      event.data?.tool === echoToolId,
   );
   expect(echoResults).toHaveLength(1);
   expect(echoResults[0].data.success, echoResults[0].data.result).toBe(true);

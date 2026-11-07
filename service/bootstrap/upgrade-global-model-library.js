@@ -30,6 +30,7 @@ export async function upgradeGlobalModelLibrary(filePath) {
       rename,
       remove: rm,
     });
+    return { ...report, issues: repaired.report.issues };
   }
   return report;
 }

@@ -70,16 +70,37 @@ test("missing or unknown x-model-operation fails instead of defaulting to chat",
   }
 });
 
-test("image_generation audits the gateway prompt and the Responses input shapes", () => {
+test("media_generation audits native image and video prompt shapes", () => {
   const { failures, passes } = auditLog(
-    requestEntry({ operation: "image_generation", body: { model: "m", prompt: "red square" } }) +
-      requestEntry({ operation: "image_generation", body: { input: userOnly } }),
+    requestEntry({ operation: "media_generation", body: { model: "m", prompt: "red square" } }) +
+      requestEntry({ operation: "media_generation", body: { input: userOnly } }),
   );
   assert.deepEqual(failures, []);
   assert.match(passes[0], /\(2 requests\)/);
 
-  const empty = auditLog(requestEntry({ operation: "image_generation", body: { prompt: " " } }));
+  const empty = auditLog(requestEntry({ operation: "media_generation", body: { prompt: " " } }));
   assert.match(empty.failures[0], /no auditable request messages/);
+});
+
+test("native generation audits every message container without hiding later system roles", () => {
+  const late = [...userOnly, { role: "system", content: "late" }];
+  for (const body of [
+    { contents: late },
+    { content: late },
+    { input: late },
+    { input: { messages: late } },
+    { prompt: "image", contents: late },
+    { contents: [], input: late },
+  ]) {
+    const { failures } = auditLog(requestEntry({ operation: "media_generation", body }));
+    assert.equal(failures.length, 1);
+    assert.match(failures[0], /order violation/);
+  }
+  const { failures, passes } = auditLog(
+    requestEntry({ operation: "media_generation", body: { input: { prompt: "video" } } }),
+  );
+  assert.deepEqual(failures, []);
+  assert.equal(passes.length, 1);
 });
 
 test("provider operations are exempt from the constructed system requirement", () => {

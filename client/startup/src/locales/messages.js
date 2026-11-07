@@ -4,7 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { messages as clientMessages } from "noobot-i18n/client/messages";
+
 const enUS = {
+  composer: clientMessages["en-US"].composer,
   hero: { title: "Starting Noobot", logTitle: "Startup log" },
   status: {
     checkingService: "Checking local Noobot service...",
@@ -85,6 +88,7 @@ const enUS = {
 };
 
 const zhCN = {
+  composer: clientMessages["zh-CN"].composer,
   hero: { title: "正在启动 Noobot", logTitle: "启动日志" },
   status: {
     checkingService: "正在检查本地 Noobot 服务...",

@@ -70,7 +70,10 @@ describe("contract enum declarations", () => {
 
 describe("resolveConfigReferenceOptions", () => {
   const document = {
-    providers: { alpha: {}, beta: {} },
+    providers: {
+      alpha: { model: "alpha", used_for_conversation: true },
+      beta: { model: "beta", used_for_conversation: true },
+    },
     scenarios: { definitions: { chat: {}, coding: {} } },
   };
 
@@ -101,10 +104,27 @@ describe("resolveConfigReferenceOptions", () => {
     expect(resolveConfigReferenceOptions(node, {})).toEqual([]);
   });
 
+  it("never restores unrelated options when no provider satisfies the reference", () => {
+    const node = { modelReference: "generate:video", options: ["legacy"] };
+    expect(resolveConfigFieldOptions(node, {}, document)).toEqual([]);
+    expect(
+      resolveConfigReferenceOptions(
+        { modelReference: "conversation" },
+        {
+          providers: { tool: { model: "tool", used_for_conversation: false } },
+        },
+      ),
+    ).toEqual([]);
+  });
+
   it("resolves reasoning effort from the fixed options declared by the same provider", () => {
     const node = findNode(userTree, "providers.*.reasoning_effort");
     const provider = { reasoning_effort_options: ["none", "low", "high"] };
-    expect(resolveConfigFieldOptions(node, provider, document)).toEqual(["none", "low", "high"]);
+    expect(resolveConfigFieldOptions(node, {}, document, provider)).toEqual([
+      "none",
+      "low",
+      "high",
+    ]);
     expect(hasConfigReferenceSource(node)).toBe(false);
   });
 
@@ -117,6 +137,19 @@ describe("resolveConfigReferenceOptions", () => {
       "medium",
       "high",
     ]);
+  });
+
+  it("does not restore editable or static options when the system declaration is empty or absent", () => {
+    const node = {
+      ...findNode(userTree, "providers.*.reasoning_effort"),
+      options: ["stale-static"],
+    };
+    const provider = { reasoning_effort_options: ["stale-editable"] };
+    expect(resolveConfigFieldOptions(node, provider, document, {})).toEqual([]);
+    expect(resolveConfigFieldOptions(node, provider, document)).toEqual([]);
+    expect(
+      resolveConfigFieldOptions(node, provider, document, { reasoning_effort_options: [] }),
+    ).toEqual([]);
   });
 
   it("offers every compatible cache field in the model-family protocol", () => {

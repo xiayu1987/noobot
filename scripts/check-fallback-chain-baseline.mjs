@@ -77,7 +77,7 @@ export const CHECK = defineCheck({
     {
       id: "vendor-adapters",
       kind: EXEMPTION_KINDS.PATH_PREFIX,
-      rules: ["fallbackChain", "inlineTrim"],
+      rules: ["fallbackChain"],
       reason: "vendor wire format adapters",
       match: ["model-runtime/src/adapters/"],
     },
@@ -108,10 +108,10 @@ export const CHECK = defineCheck({
     },
   ],
   baseline: {
-    fallbackChain: 243,
+    fallbackChain: 242,
     inlineTrim: 48,
     typeCheck: 0,
-    rawTypeof: 422,
+    rawTypeof: 416,
     textShadow: 0,
     exemptions: 9,
   },

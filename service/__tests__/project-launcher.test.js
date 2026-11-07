@@ -4,13 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
+import { resolveModelLibraryProvider } from "@noobot/model-protocol";
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { promisify } from "node:util";
+import { ensureWorkspaceConfigParamsCatalog } from "../scripts/project-launcher/config-sync.js";
 import {
   listConversationModelOptions,
   parseTemplateVariableName,
@@ -70,7 +72,7 @@ const minimalGlobalExample = {
         support_generation: {
           enabled: true,
           support_scope: ["image"],
-          api_type: "openai_responses",
+          api_type: "openai_images",
         },
       },
     },
@@ -115,6 +117,120 @@ async function runLauncher(serviceRoot, { env = {}, args = [] } = {}) {
     },
   });
 }
+
+test("project launcher preserves invalid workspace params and recovers after correction", async (t) => {
+  const serviceRoot = await makeServiceRoot();
+  t.after(() => rm(serviceRoot, { recursive: true, force: true }));
+  await writeJson(path.join(serviceRoot, "config/global.config.json"), {
+    ...minimalGlobalExample,
+    workspace_root: "./workspace",
+  });
+  const paramsPath = path.join(serviceRoot, "workspace/config-params.json");
+  await writeJson(paramsPath, {});
+  for (const source of [
+    '{"values":{"API_KEY":"never-log-secret"} trailing',
+    "null",
+    "[]",
+    '{"values":false}',
+    '{"descriptions":null}',
+    '{"values":{"API_KEY":{"nested":"never-log-secret"}}}',
+    '{"values":{"API_KEY":["never-log-secret"]}}',
+    '{"values":{"API_KEY":null}}',
+    '{"values":{"API_KEY":false}}',
+    '{"descriptions":{"API_KEY":42}}',
+  ]) {
+    await writeFile(paramsPath, source);
+    await assert.rejects(runLauncher(serviceRoot), (error) => {
+      assert.match(error.stderr, /INVALID_CONFIG_(PARAM_)?DOCUMENT/);
+      assert.equal(error.stderr.includes("never-log-secret"), false);
+      return true;
+    });
+    assert.equal(await readFile(paramsPath, "utf8"), source);
+  }
+  await writeJson(paramsPath, {
+    values: { API_KEY: "kept" },
+    descriptions: { API_KEY: "Credential" },
+  });
+  await runLauncher(serviceRoot);
+  const corrected = await readFile(paramsPath, "utf8");
+  assert.equal(JSON.parse(corrected).values.API_KEY, "kept");
+  assert.equal(JSON.parse(corrected).descriptions.API_KEY, "Credential");
+  await runLauncher(serviceRoot);
+  assert.equal(await readFile(paramsPath, "utf8"), corrected);
+});
+
+test("project launcher isolates invalid user params, continues other users, and resumes after correction", async (t) => {
+  const serviceRoot = await makeServiceRoot();
+  t.after(() => rm(serviceRoot, { recursive: true, force: true }));
+  await writeJson(path.join(serviceRoot, "config/global.config.json"), {
+    ...minimalGlobalExample,
+    workspace_root: "./workspace",
+  });
+  for (const userId of ["aaa", "zzz"]) {
+    await writeJson(path.join(serviceRoot, "workspace", userId, "config.json"), {});
+  }
+  const paramsPath = path.join(serviceRoot, "workspace/aaa/config-params.json");
+  await writeJson(paramsPath, {});
+  for (const source of [
+    '{"values":{"API_KEY":"never-log-secret"} trailing',
+    "null",
+    "[]",
+    '{"values":false}',
+    '{"descriptions":null}',
+    '{"values":{"API_KEY":{"nested":"never-log-secret"}}}',
+    '{"values":{"API_KEY":["never-log-secret"]}}',
+    '{"values":{"API_KEY":null}}',
+    '{"values":{"API_KEY":false}}',
+    '{"descriptions":{"API_KEY":42}}',
+  ]) {
+    await writeFile(paramsPath, source);
+    const result = await runLauncher(serviceRoot);
+    assert.match(result.stderr, /config-diagnostic/);
+    assert.match(result.stderr, /aaa.*config-params.json/);
+    assert.equal(result.stderr.includes("never-log-secret"), false);
+    assert.equal(await readFile(paramsPath, "utf8"), source);
+    assert.equal(await exists(path.join(serviceRoot, "workspace/zzz/config-params.json")), true);
+  }
+  await writeJson(paramsPath, { values: { API_KEY: "kept" } });
+  assert.doesNotMatch((await runLauncher(serviceRoot)).stderr, /INVALID_CONFIG_(PARAM_)?DOCUMENT/);
+  assert.equal((await readJson(paramsPath)).values.API_KEY, "kept");
+});
+
+test("project launcher explicit params use protocol validation before any write", async (t) => {
+  const serviceRoot = await makeServiceRoot();
+  t.after(() => rm(serviceRoot, { recursive: true, force: true }));
+  const workspaceRootAbsolutePath = path.join(serviceRoot, "workspace");
+  const globalConfigPath = path.join(serviceRoot, "config/global.config.json");
+  const paramsPath = path.join(workspaceRootAbsolutePath, "config-params.json");
+  await writeJson(globalConfigPath, minimalGlobalExample);
+  await writeJson(paramsPath, { values: { API_KEY: "original" } });
+  const original = await readFile(paramsPath, "utf8");
+  for (const explicitEntries of [
+    null,
+    false,
+    [],
+    { API_KEY: {} },
+    { API_KEY: null },
+    { API_KEY: false },
+    { "bad key": "x" },
+  ]) {
+    await assert.rejects(
+      ensureWorkspaceConfigParamsCatalog({
+        workspaceRootAbsolutePath,
+        globalConfigPath,
+        explicitEntries,
+      }),
+      { code: "INVALID_CONFIG_PARAM_DOCUMENT" },
+    );
+    assert.equal(await readFile(paramsPath, "utf8"), original);
+  }
+  await ensureWorkspaceConfigParamsCatalog({
+    workspaceRootAbsolutePath,
+    globalConfigPath,
+    explicitEntries: { api_key: "corrected" },
+  });
+  assert.equal((await readJson(paramsPath)).values.API_KEY, "corrected");
+});
 
 test("project launcher uses NOOBOT_GLOBAL_CONFIG_PATH when resolving global config", async (t) => {
   const serviceRoot = await makeServiceRoot();
@@ -287,13 +403,13 @@ test("project launcher recursively adds new global nodes without replacing confi
   example.multimodal = {
     parsing: {
       default_models: {
-        audio: "gpt_5_6_sol",
-        video: "gpt_5_6_sol",
+        audio: "gemini_3_7_flash",
+        video: "gemini_3_7_flash",
         image: "gpt_5_6_sol",
-        document: "gpt_5_6_sol",
+        document: "gemini_3_7_flash",
       },
     },
-    generation: { default_models: { image: "gpt_5_6_sol" } },
+    generation: { default_models: { image: "gpt_image_2_5_flare" } },
   };
   await writeJson(examplePath, example);
   await writeJson(path.join(serviceRoot, "config", "global.config.json"), {
@@ -349,11 +465,11 @@ test("project launcher recursively adds new global nodes without replacing confi
   assert.equal(config.session, undefined);
   assert.equal(Object.hasOwn(config.tools, "set_skill_task"), false);
   assert.deepEqual(config.tools.execute_script, { enabled: true });
-  assert.equal(config.multimodal.parsing.default_models.document, "gpt_5_6_sol");
-  assert.equal(config.multimodal.generation.default_models.image, "gpt_5_6_sol");
+  assert.equal(config.multimodal.parsing.default_models.document, "gemini_3_7_flash");
+  assert.equal(config.multimodal.generation.default_models.image, "gpt_image_2_5_flare");
 });
 
-test("project launcher preserves malformed global JSON before restoring the template", async (t) => {
+test("project launcher rejects malformed global JSON without replacing it or logging secrets", async (t) => {
   const serviceRoot = await makeServiceRoot();
   t.after(() => rm(serviceRoot, { recursive: true, force: true }));
   const examplePath = path.join(serviceRoot, "config", "global.config.example.json");
@@ -364,21 +480,15 @@ test("project launcher preserves malformed global JSON before restoring the temp
   const globalConfigPath = path.join(serviceRoot, "config", "global.config.json");
   await writeFile(globalConfigPath, '{"api_key":"must-not-appear-in-log" trailing', "utf8");
 
-  const result = await runLauncher(serviceRoot);
-
-  const restored = await readJson(globalConfigPath);
-  assert.equal(restored.workspace_root, "./workspace");
-  assert.equal(restored.providers.gpt_5_6_sol.model, "gpt-5.6-sol");
-  const backupName = (await readdir(path.dirname(globalConfigPath))).find((name) =>
-    name.startsWith("global.config.json.invalid-"),
-  );
-  assert.ok(backupName);
+  await assert.rejects(runLauncher(serviceRoot), (error) => {
+    assert.match(error.stderr, /INVALID_CONFIG_DOCUMENT/);
+    assert.equal(error.stderr.includes("must-not-appear-in-log"), false);
+    return true;
+  });
   assert.equal(
-    await readFile(path.join(path.dirname(globalConfigPath), backupName), "utf8"),
+    await readFile(globalConfigPath, "utf8"),
     '{"api_key":"must-not-appear-in-log" trailing',
   );
-  assert.match(result.stderr, /invalid JSON preserved/);
-  assert.equal(result.stderr.includes("must-not-appear-in-log"), false);
 });
 
 test("project launcher repairs user configs from the global config without template files", async (t) => {
@@ -406,4 +516,135 @@ test("project launcher repairs user configs from the global config without templ
 
   await runLauncher(serviceRoot);
   assert.deepEqual(await readJson(path.join(userRoot, "config.json")), userConfig);
+});
+
+test("project launcher isolates malformed user JSON and resumes after correction", async (t) => {
+  const serviceRoot = await makeServiceRoot();
+  t.after(() => rm(serviceRoot, { recursive: true, force: true }));
+  await writeJson(path.join(serviceRoot, "config/global.config.json"), {
+    ...minimalGlobalExample,
+    workspace_root: "./workspace",
+  });
+  const brokenPath = path.join(serviceRoot, "workspace/aaa/config.json");
+  const otherPath = path.join(serviceRoot, "workspace/zzz/config.json");
+  await writeJson(brokenPath, {});
+  await writeFile(brokenPath, '{"api_key":"user-secret" trailing');
+  await writeJson(otherPath, {});
+  const result = await runLauncher(serviceRoot);
+  assert.match(result.stderr, /INVALID_CONFIG_DOCUMENT/);
+  assert.equal(result.stderr.includes("user-secret"), false);
+  assert.equal(await readFile(brokenPath, "utf8"), '{"api_key":"user-secret" trailing');
+  assert.equal((await readJson(otherPath)).preferences.language, "zh-CN");
+  await writeJson(brokenPath, {});
+  assert.doesNotMatch((await runLauncher(serviceRoot)).stderr, /INVALID_CONFIG_DOCUMENT/);
+});
+
+test("project launcher blocks invalid security configuration without rewriting the file", async (t) => {
+  const serviceRoot = await makeServiceRoot();
+  t.after(() => rm(serviceRoot, { recursive: true, force: true }));
+  const configPath = path.join(serviceRoot, "config/global.config.json");
+  for (const security of [
+    false,
+    { execution_isolation: { mode: "invalid" } },
+    { trusted_directories: 5 },
+  ]) {
+    await writeJson(configPath, { ...minimalGlobalExample, security });
+    const original = await readFile(configPath, "utf8");
+    await assert.rejects(runLauncher(serviceRoot), (error) => {
+      assert.match(error.stderr, /INVALID_SECURITY_CONFIG/);
+      return true;
+    });
+    assert.equal(await readFile(configPath, "utf8"), original);
+  }
+});
+
+test("project launcher isolates a failed user migration, preserves the file and recovers after correction", async (t) => {
+  const serviceRoot = await makeServiceRoot();
+  t.after(() => rm(serviceRoot, { recursive: true, force: true }));
+  const globalConfig = { ...minimalGlobalExample, workspace_root: "./workspace" };
+  await writeJson(path.join(serviceRoot, "config/global.config.example.json"), globalConfig);
+  await writeJson(path.join(serviceRoot, "config/global.config.json"), globalConfig);
+  const brokenPath = path.join(serviceRoot, "workspace/aaa/config.json");
+  const otherPath = path.join(serviceRoot, "workspace/zzz/config.json");
+  await writeJson(brokenPath, { model_library_version: "invalid", default_provider: "retained" });
+  await writeJson(otherPath, {});
+  const original = await readFile(brokenPath, "utf8");
+  const first = await runLauncher(serviceRoot);
+  assert.match(first.stderr, /INVALID_MODEL_LIBRARY_CONFIG/);
+  assert.equal(await readFile(brokenPath, "utf8"), original);
+  assert.equal((await readJson(otherPath)).preferences.language, "zh-CN");
+  assert.match((await runLauncher(serviceRoot)).stderr, /INVALID_MODEL_LIBRARY_CONFIG/);
+  await writeJson(brokenPath, {});
+  assert.doesNotMatch((await runLauncher(serviceRoot)).stderr, /INVALID_MODEL_LIBRARY_CONFIG/);
+});
+
+test("project launcher preserves invalid tool identities and continues until the user corrects them", async (t) => {
+  const serviceRoot = await makeServiceRoot();
+  t.after(() => rm(serviceRoot, { recursive: true, force: true }));
+  const globalConfig = {
+    ...minimalGlobalExample,
+    workspace_root: "./workspace",
+    tools: { bindings: { read_file: { bindingName: "bad.name" } } },
+  };
+  await writeJson(
+    path.join(serviceRoot, "config/global.config.example.json"),
+    minimalGlobalExample,
+  );
+  await writeJson(path.join(serviceRoot, "config/global.config.json"), globalConfig);
+  const userPath = path.join(serviceRoot, "workspace/admin/config.json");
+  await writeJson(userPath, {});
+  const first = await runLauncher(serviceRoot);
+  assert.match(first.stderr, /INVALID_TOOL_BINDING_CONFIG/);
+  const configPath = path.join(serviceRoot, "config/global.config.json");
+  const stored = await readJson(configPath);
+  assert.equal(stored.tools.bindings.read_file.bindingName, "bad.name");
+  stored.tools.bindings.read_file.bindingName = "corrected_read";
+  await writeJson(configPath, stored);
+  const user = await readJson(userPath);
+  assert.equal(user.tools.bindings.read_file.bindingName, "bad.name");
+  user.tools.bindings.read_file.bindingName = "corrected_read";
+  await writeJson(userPath, user);
+  assert.doesNotMatch((await runLauncher(serviceRoot)).stderr, /INVALID_TOOL_BINDING_CONFIG/);
+});
+
+test("project launcher preserves invalid model choices, continues other users and reports until corrected", async (t) => {
+  const serviceRoot = await makeServiceRoot();
+  t.after(() => rm(serviceRoot, { recursive: true, force: true }));
+  const globalConfig = {
+    ...minimalGlobalExample,
+    workspace_root: "./workspace",
+    multimodal: {
+      parsing: { default_models: { document: "gemini_3_7_flash", image: "gpt_6_1_sol" } },
+    },
+    providers: {
+      gpt_5_6_sol: resolveModelLibraryProvider("gpt_5_6_sol"),
+      gemini_3_7_flash: resolveModelLibraryProvider("gemini_3_7_flash"),
+      gpt_6_1_sol: resolveModelLibraryProvider("gpt_6_1_sol"),
+    },
+  };
+  await writeJson(path.join(serviceRoot, "config/global.config.example.json"), globalConfig);
+  await writeJson(path.join(serviceRoot, "config/global.config.json"), globalConfig);
+  const userPath = path.join(serviceRoot, "workspace/admin/config.json");
+  const otherUserPath = path.join(serviceRoot, "workspace/other/config.json");
+  await writeJson(otherUserPath, { preferences: { language: "invalid-enum" } });
+  await writeJson(userPath, {
+    model_library_version: 1,
+    default_provider: "gpt_6_1_sol",
+    multimodal: { parsing: { default_models: { document: "gpt_6_1_sol", image: "gpt_6_1_sol" } } },
+  });
+  const { stderr } = await runLauncher(serviceRoot);
+  const user = await readJson(userPath);
+  assert.equal(user.default_provider, "gpt_6_1_sol");
+  assert.equal(user.multimodal.parsing.default_models.document, "gpt_6_1_sol");
+  assert.equal(user.multimodal.parsing.default_models.image, "gpt_6_1_sol");
+  assert.match(stderr, /MODEL_REFERENCE_CAPABILITY_MISMATCH/);
+  assert.equal((await readJson(otherUserPath)).preferences.language, "zh-CN");
+  const before = await readFile(userPath, "utf8");
+  const repeated = await runLauncher(serviceRoot);
+  assert.match(repeated.stderr, /MODEL_REFERENCE_CAPABILITY_MISMATCH/);
+  assert.equal(await readFile(userPath, "utf8"), before);
+  user.multimodal.parsing.default_models.document = "gemini_3_7_flash";
+  await writeJson(userPath, user);
+  const corrected = await runLauncher(serviceRoot);
+  assert.doesNotMatch(corrected.stderr, /MODEL_REFERENCE_CAPABILITY_MISMATCH/);
 });

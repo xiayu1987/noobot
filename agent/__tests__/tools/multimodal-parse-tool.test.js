@@ -564,73 +564,83 @@ test("multimodal_parse rejects an explicitly selected model without parsing capa
   );
 });
 
-test("multimodal_parse uses the configured modality default instead of the runtime model", async () => {
+test("multimodal_parse rejects invalid defaults before provider invocation and recovers after correction", async (t) => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-multimodal-parse-fallback-"));
+  t.after(() => fs.rm(basePath, { recursive: true, force: true }));
   await fs.writeFile(path.join(basePath, "input.pdf"), "content", "utf8");
   let invokedModel = null;
-  const agentContext = createTestAgentExecutionScope(
-    createTestRuntimeContext({
-      basePath,
-      identity: { userId: "admin" },
-      systemRuntime: { persistenceScope: null },
-      runtimeModel: "conversation-model",
-      globalConfig: {
-        multimodal: { parsing: { default_models: { document: "parse-model" } } },
-        providers: {
-          "conversation-model": {
-            enabled: true,
-            model: "text-only",
-            reasoning_effort_parameter: "reasoning_effort",
-            reasoning_effort_options: ["none", "low", "medium", "high"],
-            multimodal_parsing: { enabled: false },
-          },
-          "parse-model": {
-            enabled: true,
-            model: "gpt-5.4",
-            reasoning_effort_parameter: "reasoning_effort",
-            reasoning_effort_options: ["none", "low", "medium", "high"],
-            multimodal_parsing: { enabled: true, input_modalities: ["document"] },
-          },
-        },
-      },
-      userConfig: {},
-      userMessageAttachments: [],
-      modelHost: createTestModelHost({
-        modelPort: {
-          async invoke(request) {
-            invokedModel = request.model;
-            return { result: { rawText: "parsed", output: [] } };
-          },
-        },
-        modelSpec: null,
-      }),
-      attachmentService: createTestAttachmentService({
-        async ingestGeneratedArtifacts(request) {
-          return [
-            {
-              attachmentId: "parsed-fallback",
-              sessionId: "session-1",
-              attachmentSource: "model",
-              name: request.artifacts[0].name,
-              mimeType: request.artifacts[0].mimeType,
-              size: 6,
-              path: path.join(basePath, request.artifacts[0].name),
-              relativePath: request.artifacts[0].name,
+  for (const defaultAlias of ["conversation-model", "missing-model", "parse-model"]) {
+    const agentContext = createTestAgentExecutionScope(
+      createTestRuntimeContext({
+        basePath,
+        identity: { userId: "admin" },
+        systemRuntime: { persistenceScope: null },
+        runtimeModel: "conversation-model",
+        globalConfig: {
+          multimodal: { parsing: { default_models: { document: defaultAlias } } },
+          providers: {
+            "conversation-model": {
+              enabled: true,
+              model: "text-only",
+              reasoning_effort_parameter: "reasoning_effort",
+              reasoning_effort_options: ["none", "low", "medium", "high"],
+              multimodal_parsing: { enabled: false },
             },
-          ];
+            "parse-model": {
+              enabled: true,
+              model: "gpt-5.4",
+              reasoning_effort_parameter: "reasoning_effort",
+              reasoning_effort_options: ["none", "low", "medium", "high"],
+              multimodal_parsing: { enabled: true, input_modalities: ["document"] },
+            },
+          },
         },
+        userConfig: {},
+        userMessageAttachments: [],
+        modelHost: createTestModelHost({
+          modelPort: {
+            async invoke(request) {
+              invokedModel = request.model;
+              return { result: { rawText: "parsed", output: [] } };
+            },
+          },
+          modelSpec: null,
+        }),
+        attachmentService: createTestAttachmentService({
+          async ingestGeneratedArtifacts(request) {
+            return [
+              {
+                attachmentId: "parsed-fallback",
+                sessionId: "session-1",
+                attachmentSource: "model",
+                name: request.artifacts[0].name,
+                mimeType: request.artifacts[0].mimeType,
+                size: 6,
+                path: path.join(basePath, request.artifacts[0].name),
+                relativePath: request.artifacts[0].name,
+              },
+            ];
+          },
+        }),
       }),
-    }),
-    { tools: [{ name: "multimodal_parse" }] },
-  );
-  const [tool] = createMultimodalParseTool({ agentContext });
+      { tools: [{ name: "multimodal_parse" }] },
+    );
+    const [tool] = createMultimodalParseTool({ agentContext });
 
-  const result = JSON.parse(
-    await tool.invoke(
-      { inputs: [{ source: "input.pdf" }] },
-      { configurable: { transferIdentity: TRANSFER_IDENTITY } },
-    ),
-  );
-  assert.equal(invokedModel.alias, "parse-model");
-  assert.equal(result.model.alias, "parse-model");
+    if (defaultAlias !== "parse-model") {
+      await assert.rejects(() => tool.invoke({ inputs: [{ source: "input.pdf" }] }), {
+        code: "RECOVERABLE_MODEL_NOT_FOUND",
+      });
+      assert.equal(invokedModel, null);
+      continue;
+    }
+    const result = JSON.parse(
+      await tool.invoke(
+        { inputs: [{ source: "input.pdf" }] },
+        { configurable: { transferIdentity: TRANSFER_IDENTITY } },
+      ),
+    );
+    assert.equal(invokedModel.alias, "parse-model");
+    assert.equal(result.model.alias, "parse-model");
+  }
 });

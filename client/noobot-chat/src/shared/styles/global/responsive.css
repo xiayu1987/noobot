@@ -1,4 +1,8 @@
 @media (max-width: 768px) {
+  .noobot-action-btn {
+    min-height: var(--noobot-control-height-md);
+  }
+
   html,
   body,
   #app {

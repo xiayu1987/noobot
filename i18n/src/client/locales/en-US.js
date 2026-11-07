@@ -7,6 +7,14 @@ import { runtimeParamsEnUS } from "./runtime-params-en-US.js";
 
 export const enUSMessages = {
   runtimeParams: runtimeParamsEnUS,
+  configDiagnostics: {
+    correctionHint:
+      "These settings need correction. Values are preserved; only dependent operations are blocked. Correct and save to restore them.",
+    INVALID_TOOL_BINDING_CONFIG:
+      "Invalid tool name bindings; check name format and duplicate bindings",
+    MODEL_REFERENCE_NOT_FOUND: "Model unavailable (requires {requirement})",
+    MODEL_REFERENCE_CAPABILITY_MISMATCH: "Model capability mismatch (requires {requirement})",
+  },
   common: {
     session: "Session",
     sessionArtifacts: "Session artifacts",
@@ -208,6 +216,7 @@ export const enUSMessages = {
     api_key: "API key",
     base_url: "Base URL",
     model: "Model name",
+    supplier: "Model supplier",
     description: "Description",
     temperature: "Temperature",
     top_p: "Top P",
@@ -294,6 +303,7 @@ export const enUSMessages = {
     api_key: "Vendor key stored in server config; never echoed back to the client.",
     base_url: "API base address including the version path (e.g. https://api.openai.com/v1).",
     model: "Model identifier sent to the vendor; must match vendor docs.",
+    supplier: "Model supplier used for selection filters. Undeclared suppliers appear as unknown.",
     description: "Display-only note; has no effect on calls.",
     temperature: "Sampling randomness. Sent only when Send is checked; empty uses built-in 0.7.",
     top_p: "Nucleus sampling threshold. Sent only when Send is checked; empty uses built-in 1.",
@@ -660,6 +670,21 @@ export const enUSMessages = {
     cameraFrameNotReady: "Camera frame is not ready, please try again",
     cameraCanvasUnavailable: "Camera rendering is not supported",
     modelSelection: "Model selection",
+    modelSearch: "Search model name or description",
+    modelSupplier: "Supplier",
+    modelSupplierUnknown: "Other / Unknown",
+    modelCapability: "Model capabilities",
+    modelFilterAll: "All",
+    modelNoMatches: "No models match these filters",
+    modelCapabilityLabels: {
+      "generate:image": "Generate images",
+      "generate:video": "Generate videos",
+      "generate:audio": "Generate audio",
+      "parse:image": "Understand images",
+      "parse:video": "Understand videos",
+      "parse:audio": "Understand audio",
+      "parse:document": "Understand documents",
+    },
     modelSelectionDescription:
       "Only enabled models marked for conversation are shown. The system default is selected when nothing is saved.",
     mainFlowModel: "Main flow",

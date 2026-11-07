@@ -45,6 +45,8 @@ export const DEFAULT_TIME_THRESHOLDS = deepFreeze({
   model: {
     emptyResponseRetryBaseDelayMs: 500,
     transportRetryBaseDelayMs: 250,
+    generationTimeoutMs: 15 * MINUTE_MS,
+    generationPollIntervalMs: TIME_TIERS.fiveSecondsMs,
   },
   hooks: {
     defaultTimeoutMs: 3000,
@@ -110,8 +112,6 @@ export const DEFAULT_TIME_THRESHOLDS = deepFreeze({
     nativeScriptForceKillGraceMs: 2000,
     executeScriptTimeoutMs: TIME_TIERS.fiveMinutesMs,
     browserDevtoolsPortPollIntervalMs: 250,
-    imagesAsyncPollIntervalMs: TIME_TIERS.fiveSecondsMs,
-    imagesAsyncTimeoutMs: TIME_TIERS.threeMinutesMs,
     processForceKillGraceMs: TIME_TIERS.flushMs,
     processSettleGraceMs: TIME_TIERS.hookMs,
     nativeTaskCleanupRetryDelayMs: 100,

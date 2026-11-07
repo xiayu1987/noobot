@@ -8,13 +8,17 @@ import { describe, expect, it, vi } from "vitest";
 import HarnessModelExtension from "../components/HarnessModelExtension.vue";
 import { createElementPlusMountOptions } from "../../../../client/noobot-chat/tests/unit/fixtures/elementPlusStubs.js";
 
+vi.mock("../../../../client/noobot-chat/src/shared/composables/useMobileViewport.js", () => ({
+  useMobileViewport: () => ({ drawerSize: "72%" }),
+}));
+
 function mountHarnessModelExtension(props = {}) {
   const { pluginConfig = {}, patch = vi.fn(), ...componentProps } = props;
   return mount(HarnessModelExtension, {
     props: {
       modelOptions: [
-        { label: "Main", value: "main-model" },
-        { label: "Planning", value: "planning-model" },
+        { alias: "main-model", model: "gpt-main" },
+        { alias: "planning-model", model: "claude-planning" },
       ],
       hasModelOptions: true,
       pluginContext: {

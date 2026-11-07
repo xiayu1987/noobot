@@ -5,6 +5,8 @@
 -->
 <script setup>
 import { computed, ref, watch } from "vue";
+import { createClientModelOptions } from "@noobot/agent-config-protocol";
+import BaseModelPicker from "../../../shared/ui/BaseModelPicker.vue";
 import { MODEL_SAMPLING_FIELDS, MODEL_SAMPLING_FIELDS_KEY } from "@noobot/model-protocol";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 import { CONFIG_FORM_NODE_KIND } from "../state/configStructureContract.js";
@@ -52,6 +54,11 @@ const isReferenceSelect = computed(
 );
 const isOpenOptionField = computed(
   () => props.node.kind === KIND.STRING && Boolean(props.node.optionsField),
+);
+const modelOptions = computed(() =>
+  props.node.modelReference
+    ? createClientModelOptions(props.document?.providers, props.node.modelReference)
+    : [],
 );
 
 function writeValue(next) {
@@ -165,6 +172,14 @@ function syncRawDraft(text) {
           @update:model-value="writeScalar($event)"
         />
       </div>
+      <BaseModelPicker
+        v-else-if="node.modelReference"
+        :model-value="value ?? ''"
+        :options="modelOptions"
+        :allow-default="!node.nonEmpty"
+        :title="label"
+        @update:model-value="writeScalar($event)"
+      />
       <el-select
         v-else-if="isKind(KIND.ENUM)"
         :model-value="value ?? ''"

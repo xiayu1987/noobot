@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { test, expect } from "../fixtures/noobot.fixture.js";
+import { createNamespacedToolId } from "@noobot/model-protocol/tool-identity-node";
 import { sendMessage, waitForNaturalCompletion } from "../helpers/browser-actions.js";
 import { waitForCommand } from "../helpers/scenario-assertions.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
@@ -75,10 +76,11 @@ test("@core PBE-051 MCP 子 Session 的 user_interaction authority 闭环", asyn
   const result = String(childToolEvents.at(-1)?.data?.result || "");
   expect(result).toContain("CASE051-CHILD-VALUE");
   expect(result).not.toContain("session_not_found");
+  const echoToolId = createNamespacedToolId("mcp", MCP_TEST_SERVICE.name, "echo");
   const echoEvents = events.filter(
     (event) =>
       event.sessionId === childSessionId &&
-      event.data?.tool === "echo" &&
+      event.data?.tool === echoToolId &&
       ["tool_call_start", "tool_call_end"].includes(event.event),
   );
   expect(echoEvents.map((event) => event.event)).toEqual(["tool_call_start", "tool_call_end"]);

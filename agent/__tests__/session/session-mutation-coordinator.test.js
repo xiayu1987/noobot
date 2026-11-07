@@ -5,11 +5,12 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { access, open, readFile, readdir, stat, utimes, writeFile } from "node:fs/promises";
+import { access, open, readFile, readdir, rename, stat, utimes, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { SessionMutationCoordinator } from "../../src/session/session-mutation-coordinator.js";
 import { resetFsAdapter, setFsAdapter } from "../../src/shared/storage/fs-adapter.js";
+import { readConfiguredLockTiming } from "../../src/shared/storage/file-mutation-coordinator.js";
 import { withTemp } from "./session-artifact-store-v2.test-helpers.js";
 
 function fixedLockTiming(timing) {
@@ -234,11 +235,113 @@ test("mutation coordinator heartbeat remains ahead of a short stale threshold", 
     assert.deepEqual(order, ["first-start", "first-end", "second-start", "second-end"]);
   }));
 
+test("mutation coordinator keeps a registering waiter alive during slow filesystem work", async () =>
+  withTemp(async (root) => {
+    const options = fixedLockTiming({ timeoutMs: 1500, staleMs: 90, pollMs: 2 });
+    const lockPath = path.join(root, "registration.lock");
+    let signalPublished;
+    const published = new Promise((resolve) => {
+      signalPublished = resolve;
+    });
+    let delayed = false;
+    const delayPublication = async (target) => {
+      if (delayed || !/registration\.lock\.wait-\d+-/.test(target)) return;
+      delayed = true;
+      signalPublished();
+      await new Promise((resolve) => setTimeout(resolve, 450));
+    };
+    setFsAdapter({
+      open: async (target, ...args) => {
+        const handle = await open(target, ...args);
+        if (!/registration\.lock\.wait-\d+-/.test(target)) return handle;
+        return {
+          writeFile: async (...writeArgs) => {
+            await handle.writeFile(...writeArgs);
+            await delayPublication(target);
+          },
+          close: () => handle.close(),
+          utimes: (...timeArgs) => handle.utimes(...timeArgs),
+        };
+      },
+      rename: async (source, target) => {
+        await rename(source, target);
+        await delayPublication(target);
+      },
+    });
+    const entries = [];
+    try {
+      const first = new SessionMutationCoordinator(options).run(lockPath, async () => {
+        entries.push("first");
+      });
+      await published;
+      await new Promise((resolve) => setTimeout(resolve, 240));
+      const second = new SessionMutationCoordinator(options).run(lockPath, async () => {
+        entries.push("second");
+      });
+      const results = await Promise.allSettled([first, second]);
+      assert.deepEqual(
+        results.map((result) => result.status),
+        ["fulfilled", "fulfilled"],
+      );
+      assert.deepEqual(entries, ["first", "second"]);
+      assert.deepEqual(await readdir(root), []);
+    } finally {
+      resetFsAdapter();
+    }
+  }));
+
+for (const phase of ["write", "rename"]) {
+  test(`mutation coordinator cleans up failed waiter registration during ${phase}`, async () =>
+    withTemp(async (root) => {
+      const options = fixedLockTiming({ timeoutMs: 1500, staleMs: 90, pollMs: 2 });
+      const failure = new Error(`registration ${phase} failed`);
+      let closed = false;
+      let heartbeatAfterClose = false;
+      setFsAdapter({
+        open: async (target, ...args) => {
+          const handle = await open(target, ...args);
+          return {
+            writeFile: async (...writeArgs) => {
+              if (phase === "write") throw failure;
+              return handle.writeFile(...writeArgs);
+            },
+            close: async () => {
+              await handle.close();
+              closed = true;
+            },
+            utimes: async (...timeArgs) => {
+              heartbeatAfterClose ||= closed;
+              return handle.utimes(...timeArgs);
+            },
+          };
+        },
+        rename: async () => {
+          throw failure;
+        },
+      });
+      try {
+        await assert.rejects(
+          new SessionMutationCoordinator(options).run(path.join(root, "failure.lock"), () => {
+            assert.fail("failed registration must not enter the critical section");
+          }),
+          (error) => error === failure,
+        );
+        assert.equal(closed, true);
+        assert.deepEqual(await readdir(root), []);
+        await new Promise((resolve) => setTimeout(resolve, 120));
+        assert.equal(heartbeatAfterClose, false);
+      } finally {
+        resetFsAdapter();
+      }
+    }));
+}
+
 test("mutation coordinator elects one waiter to reclaim a stale lock", async () =>
   withTemp(async (root) => {
-    const options = fixedLockTiming({ timeoutMs: 2000, staleMs: 20, pollMs: 1 });
+    const { staleMs } = readConfiguredLockTiming();
+    const options = fixedLockTiming({ timeoutMs: 2000, staleMs, pollMs: 1 });
     const lockPath = path.join(root, "contended-stale.lock");
-    const staleTime = new Date(Date.now() - 1000);
+    const staleTime = new Date(Date.now() - staleMs * 2);
     await writeFile(lockPath, "999999999:abandoned", "utf8");
     await utimes(lockPath, staleTime, staleTime);
 

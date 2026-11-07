@@ -14,6 +14,8 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 const repoRoot = path.resolve(projectRoot, "../..");
 const sourceRoots = [
   path.join(projectRoot, "src"),
+  path.join(repoRoot, "client/shared/ui"),
+  path.join(repoRoot, "client/shared/styles"),
   path.join(repoRoot, "client/startup/src"),
   path.join(repoRoot, "plugin/noobot-plugin-harness/frontend"),
   path.join(repoRoot, "plugin/noobot-plugin-workflow/frontend"),
@@ -22,14 +24,11 @@ const sourceRoots = [
 const inspectedExtensions = new Set([".css", ".js", ".jsx", ".ts", ".tsx", ".vue"]);
 const tokenLocations = [
   path.join(projectRoot, "src/shared/styles/tokens"),
+  path.join(repoRoot, "client/shared/styles/tokens"),
   path.join(projectRoot, "src/shared/utils/markdown-copy.js"),
-  path.join(repoRoot, "client/startup/src/style.css"),
 ];
 
-const typographySources = [
-  path.join(projectRoot, "src/shared/styles/tokens/typography.css"),
-  path.join(repoRoot, "client/startup/src/style.css"),
-];
+const typographySources = [path.join(repoRoot, "client/shared/styles/tokens/typography.css")];
 const typographyTemplateFiles = [path.join(projectRoot, "src/shared/utils/markdown-copy.js")];
 const typographyDeclaration =
   /(?<![-\w])["']?(?<property>--[\w-]*(?:font|line-height|letter-spacing)[\w-]*|font|font-family|font-size|font-weight|line-height|letter-spacing)["']?\s*:\s*(?:"(?<quotedValue>[^"]*)"|(?<plainValue>[^;{}]+))/g;
@@ -38,7 +37,7 @@ const sharedLayoutToken =
   /(?<![-\w])--noobot-(?:content-[\w-]+|side-panel-[\w-]+|workspace-(?:head|empty)-padding|msg-(?:list-[\w-]+|bubble-pad-[xy]))\s*:/;
 const formContractFiles = [
   {
-    filePath: path.join(projectRoot, "src/shared/styles/integrations/element-plus.css"),
+    filePath: path.join(repoRoot, "client/shared/styles/integrations/element-plus.css"),
     selectors: [
       ".el-input__wrapper",
       ".el-textarea__inner",
@@ -49,17 +48,21 @@ const formContractFiles = [
       ".el-radio",
       ".el-slider",
       ".el-form-item__label",
+      ".el-form-item__error",
+      ".el-checkbox__inner",
     ],
   },
   {
-    filePath: path.join(repoRoot, "client/startup/src/style.css"),
-    selectors: [
-      ".el-input__wrapper",
-      ".el-select__wrapper",
-      ".el-checkbox__inner",
-      ".el-form-item__label",
-      ".el-form-item__error",
-    ],
+    filePath: path.join(repoRoot, "client/shared/styles/integrations/element-plus-overlays.css"),
+    selectors: [".el-drawer", ".el-dialog", ".el-message-box", ".el-collapse"],
+  },
+  {
+    filePath: path.join(repoRoot, "client/shared/styles/integrations/element-plus-tabs.css"),
+    selectors: [".noobot-tabs", ".el-tabs__item:focus-visible"],
+  },
+  {
+    filePath: path.join(repoRoot, "client/shared/styles/integrations/element-plus-mobile.css"),
+    selectors: [".noobot-select-popper", ".noobot-dropdown-popper", ".el-drawer", ".el-dialog"],
   },
 ];
 const iconButtonContract = {
@@ -131,24 +134,28 @@ function inspectEmptyStyleRegion(filePath, source, region) {
 
 function inspectAnimationTokens(filePath, source) {
   for (const region of getStyleRegions(filePath, source)) {
-    const css = region.source.replace(/\/\*[\s\S]*?\*\//g, (comment) =>
-      comment.replace(/[^\r\n]/g, " "),
-    );
-    for (const match of css.matchAll(
-      /(?<![-\w])animation(?:-duration|-delay|-timing-function)?\s*:\s*([^;{}]+)/g,
-    )) {
-      const value = match[1].replace(/var\(--[\w-]+\)/g, "");
-      if (
-        !/(?:\b\d*\.?\d+m?s\b|\bease(?:-in-out|-in|-out)?\b|\blinear\b|\bcubic-bezier\s*\(|\bsteps\s*\()/.test(
-          value,
-        )
+    inspectAnimationRegion(filePath, source, region);
+  }
+}
+
+function inspectAnimationRegion(filePath, source, region) {
+  const css = region.source.replace(/\/\*[\s\S]*?\*\//g, (comment) =>
+    comment.replace(/[^\r\n]/g, " "),
+  );
+  for (const match of css.matchAll(
+    /(?<![-\w])animation(?:-duration|-delay|-timing-function)?\s*:\s*([^;{}]+)/g,
+  )) {
+    const value = match[1].replace(/var\(--[\w-]+\)/g, "");
+    if (
+      !/(?:\b\d*\.?\d+m?s\b|\bease(?:-in-out|-in|-out)?\b|\blinear\b|\bcubic-bezier\s*\(|\bsteps\s*\()/.test(
+        value,
       )
-        continue;
-      const lineNumber = source.slice(0, region.offset + match.index).split(/\r?\n/).length;
-      violations.push(
-        `${path.relative(repoRoot, filePath)}:${lineNumber}: animation duration, delay and easing must use shared design tokens`,
-      );
-    }
+    )
+      continue;
+    const lineNumber = source.slice(0, region.offset + match.index).split(/\r?\n/).length;
+    violations.push(
+      `${path.relative(repoRoot, filePath)}:${lineNumber}: animation duration, delay and easing must use shared design tokens`,
+    );
   }
 }
 
@@ -185,7 +192,7 @@ function inspectTypography(filePath, source) {
     if (allowedTypographyValue.test(value)) continue;
     const lineNumber = source.slice(0, match.index).split(/\r?\n/).length;
     violations.push(
-      `${path.relative(repoRoot, filePath)}:${lineNumber}: ${property} must reference a typography token from src/shared/styles/tokens/typography.css (got "${value}")`,
+      `${path.relative(repoRoot, filePath)}:${lineNumber}: ${property} must reference a typography token from client/shared/styles/tokens/typography.css (got "${value}")`,
     );
   }
 }
@@ -256,7 +263,7 @@ function inspectFixedLayers(filePath, source) {
 function inspectStyleLine(filePath, line, index) {
   if (sharedLayoutToken.test(line) && !isTokenDeclaration(filePath, line)) {
     violations.push(
-      `${path.relative(repoRoot, filePath)}:${index + 1}: shared layout and message spacing tokens must be declared in src/shared/styles/tokens`,
+      `${path.relative(repoRoot, filePath)}:${index + 1}: shared layout and message spacing tokens must be declared in style token directories`,
     );
   }
   for (const [message, pattern] of checks) {
@@ -367,6 +374,21 @@ function inspectDirectory(directory) {
 }
 
 sourceRoots.forEach(inspectDirectory);
+const sharedIntegrationRoot = path.join(repoRoot, "client/shared/styles/integrations");
+const sharedIntegrationEntry = fs.readFileSync(
+  path.join(repoRoot, "client/shared/styles/element-plus.css"),
+  "utf8",
+);
+for (const name of fs.readdirSync(sharedIntegrationRoot).filter((name) => name.endsWith(".css"))) {
+  if (sharedIntegrationEntry.includes(`@import "./integrations/${name}";`)) continue;
+  violations.push(`client/shared/styles/element-plus.css: missing shared integration ${name}`);
+}
+const hostIntegrationRoot = path.join(projectRoot, "src/shared/styles/integrations");
+if (fs.existsSync(hostIntegrationRoot) && fs.readdirSync(hostIntegrationRoot).length) {
+  violations.push(
+    "Element Plus integrations must be maintained in client/shared/styles/integrations",
+  );
+}
 for (const { filePath, selectors } of formContractFiles) {
   const source = fs.readFileSync(filePath, "utf8");
   for (const selector of selectors) {

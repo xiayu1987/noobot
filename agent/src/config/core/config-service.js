@@ -7,9 +7,12 @@ import { readFile } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import {
+  AgentConfigProtocolError,
   createConfigValueLookup,
   mergeConfigParamLayers,
   normalizeConfigParamsDocument,
+  parseConfigParamsDocumentText,
+  parseConfigDocumentText,
   resolveConfigTemplates,
   sanitizeUserConfig,
 } from "@noobot/agent-config-protocol";
@@ -25,11 +28,12 @@ async function readOptionalText(filePath) {
 }
 
 function parseParamsDocument(rawText, documentName) {
-  if (rawText === null) return {};
+  if (rawText === null) return normalizeConfigParamsDocument({});
   try {
-    return normalizeConfigParamsDocument(JSON.parse(rawText));
+    return parseConfigParamsDocumentText(rawText);
   } catch (error) {
-    throw recoverableToolError(`${documentName} parse failed: ${error?.message || String(error)}`, {
+    if (!(error instanceof AgentConfigProtocolError)) throw error;
+    throw recoverableToolError(`${documentName} parse failed: ${error.message}`, {
       code: ERROR_CODE.RECOVERABLE_INVALID_USER_CONFIG,
     });
   }
@@ -48,9 +52,10 @@ export class ConfigService {
     ]);
     let raw = {};
     try {
-      raw = JSON.parse(rawText);
+      raw = parseConfigDocumentText(rawText);
     } catch (error) {
-      throw recoverableToolError(`config.json parse failed: ${error?.message || String(error)}`, {
+      if (!(error instanceof AgentConfigProtocolError)) throw error;
+      throw recoverableToolError(`config.json parse failed: ${error.message}`, {
         code: ERROR_CODE.RECOVERABLE_INVALID_USER_CONFIG,
       });
     }

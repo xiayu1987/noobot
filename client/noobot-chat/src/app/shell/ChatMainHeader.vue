@@ -6,7 +6,7 @@
 <script setup>
 import { Menu, MoreFilled, Refresh, Setting } from "@element-plus/icons-vue";
 import { useLocale } from "../../shared/i18n/useLocale.js";
-import { useTheme } from "../../shared/theme/useTheme.js";
+import { useTheme } from "@noobot/client-shared/theme";
 
 defineProps({
   title: { type: String, default: "" },

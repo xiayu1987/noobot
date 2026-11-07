@@ -10,6 +10,7 @@ import {
   ElCard,
   ElCheckbox,
   ElCheckboxGroup,
+  ElDrawer,
   ElForm,
   ElFormItem,
   ElIcon,
@@ -19,6 +20,9 @@ import {
   ElTag,
 } from "element-plus";
 import "element-plus/dist/index.css";
+import "@noobot/client-shared/theme";
+import "@noobot/client-shared/styles/theme.css";
+import "@noobot/client-shared/styles/element-plus.css";
 import App from "./app/App.vue";
 import "./style.css";
 
@@ -29,6 +33,7 @@ for (const component of [
   ElCard,
   ElCheckbox,
   ElCheckboxGroup,
+  ElDrawer,
   ElForm,
   ElFormItem,
   ElIcon,

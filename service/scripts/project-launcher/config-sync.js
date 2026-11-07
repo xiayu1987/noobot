@@ -9,7 +9,8 @@ import path from "node:path";
 import {
   collectConfigTemplateKeys,
   CONFIG_DOCUMENT_SCOPE,
-  CONFIG_REPAIR_ACTION,
+  AgentConfigProtocolError,
+  configIssueBlocksStartup,
   normalizeConfigParamKey,
   normalizeConfigParamValues,
   normalizeConfigParamsDocument,
@@ -19,14 +20,7 @@ import {
 } from "@noobot/agent-config-protocol";
 import { localizeConfigTextTree, resolveTextLocaleFromConfigLanguage, t } from "./i18n.js";
 import { alignInitialModelReferences } from "./provider.js";
-import {
-  deepClone,
-  fileExists,
-  hasOwnProperty,
-  readJsonRelaxed,
-  readJsonWithInvalidBackup,
-  writeJson,
-} from "./utils.js";
+import { deepClone, fileExists, hasOwnProperty, readConfigDocument, writeJson } from "./utils.js";
 
 export async function ensureModelProxyConfig({ serviceRoot } = {}) {
   const modelProxyRoot = path.resolve(serviceRoot, "../model-proxy");
@@ -58,7 +52,9 @@ async function upsertConfigParams({
 } = {}) {
   const filePath =
     text(configParamsFilePath) || path.join(workspaceRootAbsolutePath, "config-params.json");
-  const currentPayload = normalizeConfigParamsDocument((await readJsonRelaxed(filePath, {})) || {});
+  const currentPayload = normalizeConfigParamsDocument(
+    await readConfigDocument(filePath, { allowMissing: true }),
+  );
   const values = { ...currentPayload.values };
   const descriptions = { ...currentPayload.descriptions };
   const overwriteKeySet = new Set(
@@ -68,7 +64,7 @@ async function upsertConfigParams({
   );
 
   for (const [normalizedKey, incomingValue] of Object.entries(
-    normalizeConfigParamValues(isPlainObject(entries) ? entries : {}),
+    normalizeConfigParamValues(entries),
   )) {
     if (!hasOwnProperty(values, normalizedKey)) {
       values[normalizedKey] = incomingValue;
@@ -85,10 +81,7 @@ async function upsertConfigParams({
 
 async function repairUserConfigFile({ targetFilePath, baseValues = {}, transform = null } = {}) {
   const targetExists = await fileExists(targetFilePath);
-  const targetRead = targetExists
-    ? await readJsonWithInvalidBackup(targetFilePath)
-    : { document: {}, invalidBackupPath: "" };
-  const targetJson = targetRead.document;
+  const targetJson = targetExists ? await readConfigDocument(targetFilePath) : {};
   const seeded = typeof transform === "function" ? transform(deepClone(targetJson)) : targetJson;
   const repair = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.USER,
@@ -96,32 +89,20 @@ async function repairUserConfigFile({ targetFilePath, baseValues = {}, transform
     target: upgradeConfigModelLibrary(seeded).document,
   });
   const merged = repair.document;
+  logConfigRepairReport({ targetFilePath, report: repair.report });
 
-  if (
-    !targetExists ||
-    targetRead.invalidBackupPath ||
-    JSON.stringify(targetJson) !== JSON.stringify(merged)
-  ) {
+  if (!targetExists || JSON.stringify(targetJson) !== JSON.stringify(merged)) {
     await writeJson(targetFilePath, merged);
-    logConfigRepairReport({ targetFilePath, report: repair.report });
-    logInvalidConfigBackup({
-      targetFilePath,
-      invalidBackupPath: targetRead.invalidBackupPath,
-    });
     return true;
   }
   return false;
 }
 
-export function logInvalidConfigBackup({ targetFilePath = "", invalidBackupPath = "" } = {}) {
-  if (!invalidBackupPath) return;
-  console.warn(
-    `[config-repair] action=${CONFIG_REPAIR_ACTION.RESTORE_INVALID_DOCUMENT}; invalid JSON preserved at ${invalidBackupPath}; restored=${targetFilePath}`,
-  );
-}
-
 export function logConfigRepairReport({ targetFilePath = "", report = {} } = {}) {
   const summary = summarizeConfigRepairReport(report);
+  for (const issue of report.issues || []) {
+    console.warn(`[config-diagnostic] file=${targetFilePath}; issue=${JSON.stringify(issue)}`);
+  }
   if (!summary.changed) return;
   console.log(
     `[config-repair] file=${targetFilePath}; changes=${summary.changeCount}; actions=${JSON.stringify(summary.actionCounts)}`,
@@ -154,6 +135,16 @@ function applyLanguage(document, language) {
   return localized;
 }
 
+function reportUserConfigError(error, targetFilePath) {
+  if (
+    !(error instanceof AgentConfigProtocolError) ||
+    !error.details.impact ||
+    configIssueBlocksStartup(error.details, CONFIG_DOCUMENT_SCOPE.USER)
+  )
+    throw error;
+  logConfigRepairReport({ targetFilePath, report: { issues: [error.details] } });
+}
+
 export async function syncUserConfigs({
   workspaceRootAbsolutePath,
   baseValues = {},
@@ -174,11 +165,12 @@ export async function syncUserConfigs({
     return applyLanguage(aligned, normalizedLanguage);
   };
   for (const userId of await collectWorkspaceUserIds({ workspaceRootAbsolutePath })) {
-    await repairUserConfigFile({
-      targetFilePath: path.join(workspaceRootAbsolutePath, userId, "config.json"),
-      baseValues,
-      transform,
-    });
+    const targetFilePath = path.join(workspaceRootAbsolutePath, userId, "config.json");
+    try {
+      await repairUserConfigFile({ targetFilePath, baseValues, transform });
+    } catch (error) {
+      reportUserConfigError(error, targetFilePath);
+    }
   }
   if (normalizedLanguage) {
     console.log(t(locale, "logLanguageSynced", { language: normalizedLanguage }));
@@ -190,32 +182,38 @@ export async function ensureWorkspaceConfigParamsCatalog({
   globalConfigPath,
   explicitEntries = {},
 } = {}) {
-  const globalDocument = await readJsonRelaxed(globalConfigPath, {});
+  const globalDocument = await readConfigDocument(globalConfigPath);
   const entries = Object.fromEntries(
     collectConfigTemplateKeys(globalDocument).map((key) => [key, ""]),
   );
-  for (const [key, value] of Object.entries(explicitEntries || {})) {
-    const normalizedKey = text(key);
-    if (!normalizedKey) continue;
-    entries[normalizedKey] = text(value);
-  }
+  const normalizedEntries = normalizeConfigParamValues(explicitEntries);
+  Object.assign(entries, normalizedEntries);
   await upsertConfigParams({
     workspaceRootAbsolutePath,
     entries,
-    overwriteKeys: Object.keys(explicitEntries || {}),
+    overwriteKeys: Object.keys(normalizedEntries),
   });
 
   for (const userId of await collectWorkspaceUserIds({ workspaceRootAbsolutePath })) {
     const userConfigPath = path.join(workspaceRootAbsolutePath, userId, "config.json");
-    const userEntries = Object.fromEntries(
-      collectConfigTemplateKeys(globalDocument, await readJsonRelaxed(userConfigPath, {})).map(
-        (key) => [key, ""],
-      ),
-    );
-    await upsertConfigParams({
-      workspaceRootAbsolutePath,
-      configParamsFilePath: path.join(workspaceRootAbsolutePath, userId, "config-params.json"),
-      entries: userEntries,
-    });
+    let userDocument;
+    try {
+      userDocument = await readConfigDocument(userConfigPath, { allowMissing: true });
+    } catch (error) {
+      reportUserConfigError(error, userConfigPath);
+      continue;
+    }
+    const userParamsPath = path.join(workspaceRootAbsolutePath, userId, "config-params.json");
+    try {
+      await upsertConfigParams({
+        workspaceRootAbsolutePath,
+        configParamsFilePath: userParamsPath,
+        entries: Object.fromEntries(
+          collectConfigTemplateKeys(globalDocument, userDocument).map((key) => [key, ""]),
+        ),
+      });
+    } catch (error) {
+      reportUserConfigError(error, userParamsPath);
+    }
   }
 }

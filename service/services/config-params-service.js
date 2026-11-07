@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import path from "node:path";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { writeFileAtomicCreatingParents } from "@noobot/platform-compatibility/atomic-file-write";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
@@ -14,6 +15,8 @@ import {
   buildConfigParamCatalog as buildProtocolConfigParamCatalog,
   collectConfigTemplateKeys as scanConfigTemplateKeys,
   normalizeConfigParamsDocument,
+  parseConfigParamsDocumentText,
+  parseConfigDocumentText,
 } from "@noobot/agent-config-protocol";
 import { WORKSPACE_LAYOUT, WORKSPACE_ROOT_LAYOUT } from "@noobot/workspace-protocol/layout";
 import { text } from "@noobot/shared/value";
@@ -52,8 +55,7 @@ export function createConfigParamsService({ workspaceRootPath, getGlobalConfigRa
   async function readWorkspaceConfigParams({ createIfMissing = false } = {}) {
     const filePath = workspaceConfigParamsFilePath();
     try {
-      const parsedPayload = JSON.parse(await readFile(filePath, "utf8"));
-      return normalizeConfigParams(parsedPayload);
+      return parseConfigParamsDocumentText(await readFile(filePath, "utf8"));
     } catch (error) {
       if (error?.code !== "ENOENT") {
         writeConfigReadFailedEvent({
@@ -73,16 +75,14 @@ export function createConfigParamsService({ workspaceRootPath, getGlobalConfigRa
   async function writeWorkspaceConfigParams(input = {}) {
     const payload = normalizeConfigParams(input);
     const filePath = workspaceConfigParamsFilePath();
-    await mkdir(path.dirname(filePath), { recursive: true });
-    await writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+    await writeConfigParams(filePath, payload);
     return payload;
   }
 
   async function readUserConfigParams({ userId = "", createIfMissing = false } = {}) {
     const filePath = userConfigParamsFilePath(userId);
     try {
-      const parsedPayload = JSON.parse(await readFile(filePath, "utf8"));
-      return normalizeConfigParams(parsedPayload);
+      return parseConfigParamsDocumentText(await readFile(filePath, "utf8"));
     } catch (error) {
       if (error?.code !== "ENOENT") {
         writeConfigReadFailedEvent({
@@ -103,14 +103,24 @@ export function createConfigParamsService({ workspaceRootPath, getGlobalConfigRa
   async function writeUserConfigParams({ userId = "", input = {} } = {}) {
     const payload = normalizeConfigParams(input);
     const filePath = userConfigParamsFilePath(userId);
-    await mkdir(path.dirname(filePath), { recursive: true });
-    await writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+    await writeConfigParams(filePath, payload);
     return payload;
+  }
+
+  async function writeConfigParams(filePath, payload) {
+    await writeFileAtomicCreatingParents({
+      filePath,
+      content: `${JSON.stringify(payload, null, 2)}\n`,
+      mkdir,
+      writeFile,
+      rename,
+      remove: rm,
+    });
   }
 
   async function readUserConfigJson(filePath = "") {
     try {
-      return JSON.parse(await readFile(filePath, "utf8"));
+      return parseConfigDocumentText(await readFile(filePath, "utf8"));
     } catch (error) {
       writeConfigReadFailedEvent({
         event: "service.configParams.configJson.read.failed",

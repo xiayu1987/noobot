@@ -6,6 +6,7 @@
 <script setup>
 import { computed } from "vue";
 import { useMermaidRender } from "../composables/useMermaidRender.js";
+import { useMarkdownAttachmentImages } from "../composables/useMarkdownAttachmentImages.js";
 import {
   attachmentIdentityKey,
   parseAttachmentIdentityRef,
@@ -28,7 +29,7 @@ const props = defineProps({
 const emit = defineEmits(["download-attachment", "download-mutation", "link-error"]);
 
 const { mermaidHostRef } = useMermaidRender();
-const renderedHtml = computed(() =>
+const markdownHtml = computed(() =>
   props.renderMarkdown(props.content, {
     attachmentRefIndex: props.attachmentRefIndex,
     linkSnapshots: props.linkSnapshots,
@@ -36,6 +37,9 @@ const renderedHtml = computed(() =>
     workspaceRootDirectory: props.workspaceRootDirectory,
     translate: props.translate,
   }),
+);
+const renderedHtml = useMarkdownAttachmentImages(markdownHtml, (error) =>
+  emit("link-error", error),
 );
 
 function findMutationRef(chipRef) {

@@ -26,11 +26,9 @@ const localizedStatusKeys = Object.freeze({
 
 function normalizeModel(model, options) {
   const value = text(model);
-  const optionKeys = Array.isArray(options)
-    ? options.map((item) => text(item?.key)).filter(Boolean)
-    : [];
+  const optionKeys = options.map((item) => item.alias);
   if (value && optionKeys.includes(value)) return value;
-  return optionKeys[0] || value;
+  return "";
 }
 
 export function useStartupBridge() {
@@ -132,12 +130,8 @@ export function useStartupBridge() {
     setStep("super-admin");
     languageSelectedByUser.value = false;
     superAdminForm.language = normalizeStartupLanguage(superAdmin?.language);
-    modelOptions.value = Array.isArray(superAdmin?.modelOptions)
-      ? superAdmin.modelOptions.filter((item) => text(item?.key))
-      : [];
+    modelOptions.value = superAdmin.modelOptions;
     superAdminForm.model = normalizeModel(superAdmin?.model, modelOptions.value);
-    if (!modelOptions.value.length && superAdminForm.model)
-      modelOptions.value = [{ key: superAdminForm.model }];
     superAdminForm.userId = superAdmin?.userId || "";
     superAdminForm.connectCode = superAdmin?.connectCode || "";
     superAdminForm.dependencyProxyUrl = superAdmin?.dependencyProxyUrl || "";

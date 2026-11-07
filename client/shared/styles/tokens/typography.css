@@ -17,6 +17,8 @@
   --noobot-font-size-sm: 13px;
   --noobot-font-size-md: 14px;
   --noobot-font-size-lg: 16px;
+  --noobot-font-size-title: clamp(30px, 5vw, 42px);
+  --noobot-font-size-title-compact: 28px;
 
   --noobot-font-weight-regular: 400;
   --noobot-font-weight-medium: 500;
@@ -32,6 +34,7 @@
   --noobot-line-height-loose: 1.7;
 
   --noobot-letter-spacing-none: 0;
+  --noobot-letter-spacing-tight: -0.04em;
   --noobot-letter-spacing-subtle: 0.01em;
   --noobot-letter-spacing-wide: 0.04em;
   --noobot-letter-spacing-caps: 0.5px;

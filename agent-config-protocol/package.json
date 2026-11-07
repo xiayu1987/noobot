@@ -14,6 +14,7 @@
     "test": "node ../scripts/run-with-isolated-tmp.mjs node --test __tests__/*.test.js"
   },
   "dependencies": {
+    "@noobot/execution-isolation-protocol": "file:../execution-isolation-protocol",
     "@noobot/model-protocol": "file:../model-protocol",
     "@noobot/shared": "file:../shared"
   }

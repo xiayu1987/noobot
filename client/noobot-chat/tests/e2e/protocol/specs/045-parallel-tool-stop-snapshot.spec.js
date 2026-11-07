@@ -162,6 +162,11 @@ test("@full PBE-045 并行工具停止时结果完整进入快照并由 Continue
   const finalRecords = await readSessionExecutionEventTree(noobot.userId, noobot.sessionId);
   const trace = firstMainTraceForTurn(finalRecords, continued.identity.turnScopeId);
   expect(trace).toBeTruthy();
-  assertSnapshotRecoveryInModelInput({ snapshot, continuation: continued, trace });
+  assertSnapshotRecoveryInModelInput({
+    snapshot,
+    continuation: continued,
+    trace,
+    toolNameBindings: noobot.connectConfig.toolNameBindings,
+  });
   expect(toolEventsForTurn(finalRecords, continued.identity.turnScopeId)).toHaveLength(0);
 });

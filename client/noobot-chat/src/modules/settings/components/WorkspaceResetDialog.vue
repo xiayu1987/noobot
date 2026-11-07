@@ -34,7 +34,7 @@ useOverlayHistory(
     :title="title"
     width="min(92vw, 420px)"
     append-to-body
-    class="workspace-reset-dialog noobot-dialog-surface"
+    class="workspace-reset-dialog"
     @update:model-value="$emit('update:visible', $event)"
   >
     <div class="reset-dialog-tip noobot-flat-card">

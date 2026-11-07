@@ -137,6 +137,7 @@ export async function testModelAccess({
     }));
   const executor = createModelRequestExecutor({
     registry: createProviderAdapterRegistry(adapters),
+    providerRuntime: { fetchImpl: transportFetch },
     credentialPort: { resolve: async () => credential || "diagnostic-preview" },
   });
   const identity = `model-access-${randomUUID()}`;

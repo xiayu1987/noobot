@@ -5,9 +5,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { executeOpenAiOperation } from "../src/adapters/openai-capability-adapter.js";
+import { executeNativeGeneration } from "../src/adapters/native-generation.js";
 import {
   MODEL_ERROR_CODE,
-  MODEL_IMAGE_GENERATION_API_TYPE,
+  MODEL_GENERATION_API_TYPE,
   MODEL_OPERATION_KIND,
   ModelProtocolError,
 } from "@noobot/model-protocol";
@@ -15,6 +16,7 @@ import {
 test("Web Search forces the search tool and returns text with url_citation sources", async () => {
   let request;
   const result = await executeOpenAiOperation({
+    fetchImpl: globalThis.fetch,
     modelSpec: { model: "gpt-5.5", base_url: "https://example.test/v1" },
     credential: "key",
     streaming: false,
@@ -59,44 +61,10 @@ test("Web Search forces the search tool and returns text with url_citation sourc
   });
 });
 
-test("Responses image generation sends the prompt through the canonical input field", async () => {
-  let request;
-  await executeOpenAiOperation({
-    modelSpec: { model: "gpt-5.4", base_url: "https://example.test/v1" },
-    credential: "key",
-    streaming: false,
-    operation: {
-      kind: MODEL_OPERATION_KIND.IMAGE_GENERATION,
-      input: { prompt: "draw a small red square" },
-      options: { size: "1024x1024" },
-    },
-    openAiClientFactory: () => ({
-      responses: {
-        create: async (value) => {
-          request = value;
-          return { output_text: "", output: [] };
-        },
-      },
-    }),
-  });
-
-  assert.deepEqual(request, {
-    model: "gpt-5.4",
-    input: [
-      {
-        role: "user",
-        content: [{ type: "input_text", text: "draw a small red square" }],
-      },
-    ],
-    tools: [{ type: "image_generation", size: "1024x1024" }],
-    tool_choice: "required",
-    stream: false,
-  });
-});
-
 test("multimodal parse maps multiple image and document attachments to one Responses API input", async () => {
   let request;
   const result = await executeOpenAiOperation({
+    fetchImpl: globalThis.fetch,
     modelSpec: { model: "gpt-5.4", base_url: "https://example.test/v1" },
     credential: "key",
     streaming: false,
@@ -143,6 +111,7 @@ test("multimodal parse maps multiple image and document attachments to one Respo
 test("multimodal parse maps documents to Responses API input_file", async () => {
   let request;
   await executeOpenAiOperation({
+    fetchImpl: globalThis.fetch,
     modelSpec: { model: "gpt-5.4" },
     credential: "key",
     streaming: false,
@@ -179,6 +148,7 @@ test("multimodal parse maps documents to Responses API input_file", async () => 
 test("multimodal parse maps normalized audio to Responses API input_audio", async () => {
   let request;
   await executeOpenAiOperation({
+    fetchImpl: globalThis.fetch,
     modelSpec: { model: "gpt-5.4" },
     credential: "key",
     streaming: false,
@@ -196,7 +166,7 @@ test("multimodal parse maps normalized audio to Responses API input_audio", asyn
       responses: {
         create: async (value) => {
           request = value;
-          return { output_text: "ok" };
+          return { output_text: "ok", output: [] };
         },
       },
     }),
@@ -210,6 +180,7 @@ test("multimodal parse maps normalized audio to Responses API input_audio", asyn
 test("multimodal parse maps video to an OpenAI Responses API file input", async () => {
   let request;
   await executeOpenAiOperation({
+    fetchImpl: globalThis.fetch,
     modelSpec: { model: "gpt-5.4" },
     credential: "key",
     streaming: false,
@@ -227,7 +198,7 @@ test("multimodal parse maps video to an OpenAI Responses API file input", async 
       responses: {
         create: async (value) => {
           request = value;
-          return { output_text: "ok" };
+          return { output_text: "ok", output: [] };
         },
       },
     }),
@@ -256,20 +227,25 @@ test("capability operations reject a streamed answer as a response mode mismatch
         model: "img",
         base_url: "https://example.test/v1",
         multimodal_generation: {
-          support_generation: { api_type: MODEL_IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC },
+          support_generation: { api_type: MODEL_GENERATION_API_TYPE.OPENAI_IMAGES },
         },
       },
       operation: {
-        kind: MODEL_OPERATION_KIND.IMAGE_GENERATION,
-        input: { prompt: "p" },
-        options: {},
+        kind: MODEL_OPERATION_KIND.MEDIA_GENERATION,
+        input: { prompt: "p", outputType: "image" },
+        options: { imageUrls: [], n: 1 },
       },
     },
   ];
   for (const input of operations) {
+    const execute =
+      input.operation.kind === MODEL_OPERATION_KIND.MEDIA_GENERATION
+        ? executeNativeGeneration
+        : executeOpenAiOperation;
     await assert.rejects(
-      executeOpenAiOperation({
+      execute({
         ...input,
+        signal: new AbortController().signal,
         credential: "key",
         streaming: false,
         fetchImpl: async (url) => {
@@ -296,6 +272,7 @@ async function* responsesEvents(events) {
 
 function webSearchWithStream(events) {
   return executeOpenAiOperation({
+    fetchImpl: globalThis.fetch,
     modelSpec: { model: "gpt-5.5", base_url: "https://example.test/v1" },
     credential: "key",
     streaming: true,

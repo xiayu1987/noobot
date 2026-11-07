@@ -5,6 +5,8 @@
  */
 
 import path from "node:path";
+import { EXECUTION_ISOLATION_MODE } from "./modes.js";
+export { EXECUTION_ISOLATION_MODE } from "./modes.js";
 import { SHELL, resolveHostShell } from "@noobot/platform-compatibility/platform";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import {
@@ -24,11 +26,6 @@ export {
 
 export const EXECUTION_ISOLATION_PROTOCOL_NAME = "noobot.execution-isolation";
 export const EXECUTION_ISOLATION_PROTOCOL_VERSION = 1;
-
-export const EXECUTION_ISOLATION_MODE = Object.freeze({
-  HOST: "host",
-  SANDBOX: "sandbox",
-});
 
 export const SANDBOX_PROVIDER = Object.freeze({
   DOCKER: "docker",

@@ -506,11 +506,11 @@ test("multimodal generation transport remains an explicit configured fact", asyn
       support_generation: {
         enabled: true,
         support_scope: ["image"],
-        api_type: "openai_responses",
+        api_type: "openai_images",
       },
     },
   });
-  assert.equal(explicit.multimodal_generation.support_generation.api_type, "openai_responses");
+  assert.equal(explicit.multimodal_generation.support_generation.api_type, "openai_images");
 });
 
 test("model identity and defaults layer operator, family, concrete model, then explicit config", async () => {

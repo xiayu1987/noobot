@@ -13,6 +13,7 @@ import { buildModelsSection } from "../../src/tools/collaboration/help-sections.
 function provider(alias, model) {
   return {
     enabled: true,
+    used_for_conversation: true,
     providerId: alias,
     adapterId: "openai-compatible",
     model,

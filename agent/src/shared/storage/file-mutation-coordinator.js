@@ -94,18 +94,31 @@ async function listLiveWaiters(lockPath, staleMs) {
   return live;
 }
 
-async function createWaiter(lockPath, staleMs, ownerToken) {
+async function closeWaiter(waiter, lockPath) {
+  clearInterval(waiter.heartbeat);
+  await cleanupBestEffort(() => waiter.handle.close(), "fileMutation.closeWaiter", lockPath);
+  await cleanupBestEffort(
+    () => fsRm(waiter.path, { force: true }),
+    "fileMutation.removeWaiter",
+    lockPath,
+  );
+}
+
+async function createWaiter(lockPath, staleMs, ownerToken, operationName) {
   const parent = path.dirname(lockPath);
   const { choosingPrefix, settledPrefix } = waiterNames(lockPath);
   const choosingPath = path.join(parent, `${choosingPrefix}${ownerToken}`);
-  const choosingHandle = await fsOpen(choosingPath, "wx");
+  const handle = await fsOpen(choosingPath, "wx");
+  const waiter = {
+    path: choosingPath,
+    handle,
+    heartbeat: startHeartbeat(handle, staleMs, operationName, {
+      lockPath,
+      phase: "waiting",
+    }),
+  };
   try {
-    await choosingHandle.writeFile(ownerToken, "utf8");
-  } finally {
-    await choosingHandle.close();
-  }
-
-  try {
+    await handle.writeFile(ownerToken, "utf8");
     const waiters = await listLiveWaiters(lockPath, staleMs);
     const maxTicket = waiters.reduce(
       (current, waiter) => (waiter.ticket === null ? current : Math.max(current, waiter.ticket)),
@@ -115,25 +128,11 @@ async function createWaiter(lockPath, staleMs, ownerToken) {
     if (!Number.isSafeInteger(ticket)) throw new Error("file mutation waiter ticket overflow");
     const ticketText = String(ticket).padStart(WAITER_TICKET_WIDTH, "0");
     const waiterPath = path.join(parent, `${settledPrefix}${ticketText}-${ownerToken}`);
-    const waiterHandle = await fsOpen(waiterPath, "wx");
-    try {
-      await waiterHandle.writeFile(ownerToken, "utf8");
-    } catch (error) {
-      await cleanupBestEffort(
-        () => waiterHandle.close(),
-        "fileMutation.closeIncompleteWaiter",
-        lockPath,
-      );
-      await cleanupBestEffort(
-        () => fsRm(waiterPath, { force: true }),
-        "fileMutation.removeIncompleteWaiter",
-        lockPath,
-      );
-      throw error;
-    }
-    await fsRm(choosingPath, { force: true });
-    return { name: path.basename(waiterPath), path: waiterPath, handle: waiterHandle };
+    waiter.path = waiterPath;
+    await fsRename(choosingPath, waiterPath);
+    return { ...waiter, name: path.basename(waiterPath) };
   } catch (error) {
+    await closeWaiter(waiter, lockPath);
     await cleanupBestEffort(
       () => fsRm(choosingPath, { force: true }),
       "fileMutation.removeChoosingWaiter",
@@ -271,21 +270,11 @@ export class FileMutationCoordinator {
 
   async acquireAsWaiter(key, ownerToken, deadline) {
     await fsMkdir(path.dirname(key), { recursive: true });
-    const waiter = await createWaiter(key, this.staleMs, ownerToken);
-    const heartbeat = startHeartbeat(waiter.handle, this.staleMs, this.operationName, {
-      lockPath: key,
-      phase: "waiting",
-    });
+    const waiter = await createWaiter(key, this.staleMs, ownerToken, this.operationName);
     try {
       return await this.acquire(key, waiter.name, ownerToken, deadline);
     } finally {
-      clearInterval(heartbeat);
-      await cleanupBestEffort(() => waiter.handle.close(), "fileMutation.closeWaiter", key);
-      await cleanupBestEffort(
-        () => fsRm(waiter.path, { force: true }),
-        "fileMutation.removeWaiter",
-        key,
-      );
+      await closeWaiter(waiter, key);
     }
   }
 

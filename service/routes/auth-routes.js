@@ -10,7 +10,7 @@ import { createBadRequestError, withJsonError } from "./route-wrapper.js";
 import {
   createClientModelCatalog,
   normalizePluginMode,
-  resolveToolBindingSettings,
+  projectToolBindingSettings,
 } from "@noobot/agent-config-protocol";
 import {
   RUNTIME_EVENT_CATEGORIES,
@@ -162,7 +162,7 @@ export function registerAuthRoutes(
             permissions: buildClientPermissions("super_admin", { canUseIDE: true }),
             scenarios: superAdminScenarios,
             plugins: superAdminPlugins,
-            toolNameBindings: resolveToolBindingSettings(
+            toolNameBindings: projectToolBindingSettings(
               { bindings: globalConfig?.tools?.bindings },
               loadedSuperAdminConfig?.tools?.bindings,
             ),
@@ -209,7 +209,7 @@ export function registerAuthRoutes(
           }),
           scenarios: mergedScenarios,
           plugins: mergedPlugins,
-          toolNameBindings: resolveToolBindingSettings(
+          toolNameBindings: projectToolBindingSettings(
             { bindings: globalConfig?.tools?.bindings },
             loadedUserConfig?.tools?.bindings,
           ),

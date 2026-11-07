@@ -71,6 +71,13 @@ export const CHECK = defineCheck({
       match: ["client/noobot-chat/src/"],
     },
     {
+      id: "startup-locale-entry",
+      kind: EXEMPTION_KINDS.PATH_PREFIX,
+      rules: ["directI18nImport"],
+      reason: "startup locale entry composes startup and shared model picker messages",
+      match: ["client/startup/src/locales/messages.js"],
+    },
+    {
       id: "electron-window-messages",
       kind: EXEMPTION_KINDS.PATH_PREFIX,
       rules: ["directI18nImport"],
@@ -92,7 +99,7 @@ export const CHECK = defineCheck({
       match: ["service/bootstrap/create-app-dependencies.js"],
     },
   ],
-  baseline: { directI18nImport: 0, exemptions: 7 },
+  baseline: { directI18nImport: 0, exemptions: 8 },
   measure: async (usage) =>
     measureI18nImports(
       await getFirstPartyCodeFiles({

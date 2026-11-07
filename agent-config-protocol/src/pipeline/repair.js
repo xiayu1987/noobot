@@ -7,18 +7,21 @@ import {
   CONFIG_DOCUMENT_SCOPE,
   CONFIG_NODE_POLICY,
   CONFIG_REPAIR_ACTION,
+  requireConfigRepairRule,
 } from "../contract/repair.js";
 import { migrateConfigFileToCurrentProtocol } from "./migration.js";
+import { mergeConfig } from "./effective-config.js";
 import { isPlainObject, setConfigOwnProperty } from "../utils.js";
 import {
   CONFIG_STRUCTURE,
   CONFIG_STRUCTURE_KIND,
-  CONFIG_STRUCTURE_PLACEHOLDER,
-  listStructureModelReferences,
   structureAllowsScope,
 } from "../contract/config-structure.js";
 import { createConfigValueSource } from "../contract/config-values.js";
-import { requireToolBindingConfig } from "@noobot/model-protocol";
+import { diagnoseConfigDocument } from "../contract/diagnostics.js";
+import { createConfigIssue } from "../contract/issues.js";
+import { AgentConfigProtocolError } from "../contract/errors.js";
+import { requireConfigDocument } from "../contract/documents.js";
 
 const REMOVE_NODE = Symbol("remove_config_node");
 const VALID_SCOPES = new Set(Object.values(CONFIG_DOCUMENT_SCOPE));
@@ -88,6 +91,7 @@ function validatesObjectContract(value, contract, enforceValueConstraints) {
 }
 
 function recordChange(changes, path, action, reason) {
+  requireConfigRepairRule(action, reason);
   changes.push(Object.freeze({ path: pathText(path), action, reason }));
 }
 
@@ -339,6 +343,33 @@ function repairContractNode({
   return repairModelProviderOptions({ ...repairContext, output });
 }
 
+function repairDelegatedStructureNode({ node, target, path, values, scope, changes }) {
+  const providerValues = values.resolveProviderValues(path.at(-1));
+  const declared = target === undefined && values.has(path) ? values.resolve(path) : undefined;
+  if (declared !== undefined) {
+    recordChange(changes, path, CONFIG_REPAIR_ACTION.ADD_DEFAULT, "missing_defaulted_node");
+  }
+  return repairContractNode({
+    contract: node.delegatedContract,
+    template: providerValues.template,
+    valueTemplate: providerValues.template,
+    target: declared === undefined ? target : clone(declared),
+    path,
+    changes,
+    scope,
+    enforceValueConstraints: providerValues.exactLibraryMatch,
+  });
+}
+
+function assertProtectedStructureLeaf(node, target, path) {
+  if (target === undefined || !node.invalidValueIssue || validatesStructureLeaf(target, node))
+    return;
+  throw new AgentConfigProtocolError(`invalid protected config: ${pathText(path)}`, {
+    code: node.invalidValueIssue,
+    details: createConfigIssue(node.invalidValueIssue, { path: pathText(path) }),
+  });
+}
+
 function repairStructureNode({ node, target, path, values, scope, changes }) {
   if (!structureAllowsScope(node, scope)) {
     if (target !== undefined) {
@@ -348,22 +379,16 @@ function repairStructureNode({ node, target, path, values, scope, changes }) {
   }
   const optional = node.policy === CONFIG_NODE_POLICY.USER_OPTIONAL;
 
+  assertProtectedStructureLeaf(node, target, path);
+
+  if (
+    target !== undefined &&
+    (node.autoRepair === false || (node.modelReference && typeof target === "string"))
+  )
+    return clone(target);
+
   if (node.delegatedContract) {
-    const providerValues = values.resolveProviderValues(path.at(-1));
-    const declared = target === undefined && values.has(path) ? values.resolve(path) : undefined;
-    if (declared !== undefined) {
-      recordChange(changes, path, CONFIG_REPAIR_ACTION.ADD_DEFAULT, "missing_defaulted_node");
-    }
-    return repairContractNode({
-      contract: node.delegatedContract,
-      template: providerValues.template,
-      valueTemplate: providerValues.template,
-      target: declared === undefined ? target : clone(declared),
-      path,
-      changes,
-      scope,
-      enforceValueConstraints: providerValues.exactLibraryMatch,
-    });
+    return repairDelegatedStructureNode({ node, target, path, values, scope, changes });
   }
 
   if (target === undefined) {
@@ -464,7 +489,7 @@ function isStructuredNode(node) {
 }
 
 function materializeFromValues({ node, path, values, scope, changes }) {
-  if (!isStructuredNode(node)) return clone(values.resolve(path));
+  if (node.autoRepair === false || !isStructuredNode(node)) return clone(values.resolve(path));
   if (pathText(path) === "providers") {
     return repairStructureNode({
       node,
@@ -522,66 +547,6 @@ function validatesStructureLeaf(value, node) {
   return true;
 }
 
-function valueAt(root, path) {
-  let node = root;
-  for (const key of path) node = isPlainObject(node) ? node[key] : undefined;
-  return node;
-}
-
-function setValueAt(root, path, value) {
-  let node = root;
-  for (const key of path.slice(0, -1)) {
-    if (!isPlainObject(node[key])) node[key] = {};
-    node = node[key];
-  }
-  node[path.at(-1)] = value;
-}
-
-function providerReferenceExists(provider) {
-  return (
-    isPlainObject(provider) && typeof provider.model === "string" && Boolean(provider.model.trim())
-  );
-}
-
-function expandReferencePaths(document, { path }) {
-  const placeholderIndex = path.indexOf(CONFIG_STRUCTURE_PLACEHOLDER);
-  if (placeholderIndex >= 0) {
-    const parentPath = path.slice(0, placeholderIndex);
-    const parent = valueAt(document, parentPath);
-    if (!isPlainObject(parent)) return [];
-    const suffix = path.slice(placeholderIndex + 1);
-    return Object.keys(parent).map((key) => [...parentPath, key, ...suffix]);
-  }
-  const node = valueAt(document, path);
-  if (!isPlainObject(node)) return [[...path]];
-  return Object.keys(node).map((key) => [...path, key]);
-}
-
-function collectReferencePaths(document) {
-  return listStructureModelReferences().flatMap((rule) => expandReferencePaths(document, rule));
-}
-
-function repairModelReferences(document, values, changes, scope) {
-  const providers = {
-    ...(scope === CONFIG_DOCUMENT_SCOPE.USER ? values.resolve(["providers"]) : {}),
-    ...document.providers,
-  };
-  for (const path of collectReferencePaths(document)) {
-    const alias = valueAt(document, path);
-    if (typeof alias !== "string" || !alias) continue;
-    if (providerReferenceExists(providers[alias])) continue;
-    const fallback = values.resolve(path);
-    if (typeof fallback !== "string" || !fallback) {
-      throw new TypeError(`config value source has no model reference at ${pathText(path)}`);
-    }
-    if (!providerReferenceExists(providers[fallback])) {
-      throw new TypeError(`config repair cannot restore model reference at ${pathText(path)}`);
-    }
-    setValueAt(document, path, fallback);
-    recordChange(changes, path, CONFIG_REPAIR_ACTION.RESET_TO_DEFAULT, "invalid_model_reference");
-  }
-}
-
 export function repairConfigDocument({
   scope = CONFIG_DOCUMENT_SCOPE.GLOBAL,
   baseValues = {},
@@ -591,14 +556,9 @@ export function repairConfigDocument({
   if (!isPlainObject(baseValues)) {
     throw new TypeError("config repair baseValues must be an object");
   }
-  requireToolBindingConfig(baseValues.tools?.bindings);
-  const sourceTarget = isPlainObject(target) ? target : {};
-  requireToolBindingConfig(sourceTarget.tools?.bindings);
+  const sourceTarget = requireConfigDocument(target);
   const currentTarget = migrateConfigFileToCurrentProtocol(sourceTarget);
   const changes = [];
-  if (!isPlainObject(target)) {
-    recordChange(changes, [], CONFIG_REPAIR_ACTION.RESET_TO_DEFAULT, "invalid_document_type");
-  }
   if (JSON.stringify(sourceTarget) !== JSON.stringify(currentTarget)) {
     recordChange(changes, [], CONFIG_REPAIR_ACTION.MIGRATE_PROTOCOL, "outdated_protocol");
   }
@@ -613,9 +573,16 @@ export function repairConfigDocument({
     scope,
     changes,
   });
-  repairModelReferences(document === REMOVE_NODE ? {} : document, values, changes, scope);
+  const repaired = document === REMOVE_NODE ? {} : document;
+  const effective =
+    scope === CONFIG_DOCUMENT_SCOPE.USER ? mergeConfig(baseValues, repaired) : repaired;
+  const issues = diagnoseConfigDocument(
+    scope === CONFIG_DOCUMENT_SCOPE.USER
+      ? { ...repaired, providers: effective.providers, tools: effective.tools }
+      : repaired,
+  );
   return Object.freeze({
-    document: document === REMOVE_NODE ? {} : document,
-    report: Object.freeze({ changed: changes.length > 0, changes: Object.freeze(changes) }),
+    document: repaired,
+    report: Object.freeze({ changed: changes.length > 0, changes: Object.freeze(changes), issues }),
   });
 }

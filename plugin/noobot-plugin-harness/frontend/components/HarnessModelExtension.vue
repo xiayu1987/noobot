@@ -5,6 +5,7 @@
 -->
 <script setup>
 import { computed } from "vue";
+import { BaseModelPicker } from "noobot-chat/plugin-api/ui";
 import { useHarnessLocale } from "../i18n/index.js";
 import { text } from "@noobot/shared/value";
 
@@ -188,36 +189,18 @@ function isHarnessStepModelDisabled(stepKey = "") {
             @touchstart.stop
           />
         </div>
-        <el-select
+        <BaseModelPicker
           :model-value="getHarnessStepModel(stepItem.key)"
-          size="small"
-          clearable
-          :filterable="false"
-          popper-class="noobot-select-popper noobot-model-select-popper"
+          :options="modelOptions"
+          :title="stepItem.label"
           :disabled="isHarnessStepModelDisabled(stepItem.key)"
           :placeholder="
             stepItem.key === 'acceptance' && !isHarnessCapabilityEnabled(stepItem.key)
               ? translate('modelExtension.acceptanceModelDisabled')
               : translate('modelExtension.placeholder')
           "
-          class="composer-select model-select noobot-model-select-control"
           @update:model-value="onHarnessStepModelChange(stepItem.key, $event)"
-        >
-          <el-option
-            v-for="modelItem in modelOptions"
-            :key="`${stepItem.key}-${modelItem.alias}`"
-            :label="modelItem.alias"
-            :value="modelItem.alias"
-          >
-            <div class="model-option-content">
-              <span class="model-option-label">{{ modelItem.alias }}</span>
-              <span v-if="modelItem.model" class="model-option-meta">{{ modelItem.model }}</span>
-              <span v-if="modelItem.description" class="model-option-description">{{
-                modelItem.description
-              }}</span>
-            </div>
-          </el-option>
-        </el-select>
+        />
       </div>
     </div>
     <span v-if="!hasModelOptions" class="plugin-empty-text">{{
@@ -274,11 +257,6 @@ function isHarnessStepModelDisabled(stepKey = "") {
   color: var(--noobot-text-main);
 }
 
-.model-select {
-  width: 100%;
-  min-width: 0;
-}
-
 .plugin-capability-toggle {
   width: 100%;
   height: 28px;
@@ -312,9 +290,9 @@ function isHarnessStepModelDisabled(stepKey = "") {
 
 .plugin-capability-toggle
   :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
-  border-color: var(--el-color-primary);
-  background: var(--el-color-primary);
-  color: var(--el-color-white);
+  border-color: var(--noobot-accent);
+  background: var(--noobot-accent);
+  color: var(--noobot-text-on-accent);
   box-shadow: none;
 }
 
@@ -344,7 +322,7 @@ function isHarnessStepModelDisabled(stepKey = "") {
 }
 
 .plugin-guidance-analysis-title strong {
-  color: var(--el-color-primary);
+  color: var(--noobot-text-accent);
   font-size: var(--noobot-font-size-sm);
   font-weight: var(--noobot-font-weight-bold);
 }
@@ -374,20 +352,6 @@ function isHarnessStepModelDisabled(stepKey = "") {
   box-shadow: none;
 }
 
-.model-option-content {
-  display: flex;
-  flex-direction: column;
-  gap: var(--noobot-space-3xs);
-  padding: var(--noobot-space-2xs) 0;
-}
-
-.model-option-label {
-  font-weight: var(--noobot-font-weight-semibold);
-  color: var(--noobot-text-main);
-}
-
-.model-option-meta,
-.model-option-description,
 .plugin-empty-text {
   font-size: var(--noobot-font-size-xs);
   line-height: var(--noobot-line-height-balanced);

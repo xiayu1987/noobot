@@ -74,3 +74,26 @@ test("config scope marks invalid caller params as a caller error without writing
   );
   assert.deepEqual(writes, []);
 });
+
+test("config scope rejects explicitly invalid fields and entries for both scopes", async () => {
+  for (const scope of ["system", "user"]) {
+    for (const field of ["values", "descriptions"]) {
+      const existingPayload = { values: { API_KEY: "kept" }, descriptions: { API_KEY: "label" } };
+      const { service, writes } = createService({ existingPayload });
+      const req = { query: { scope }, auth: { userId: "admin" } };
+      for (const value of [false, null, 0, "", [], { API_KEY: {} }, { API_KEY: null }]) {
+        await assert.rejects(service.writeScopedConfigParams({ req, [field]: value }), {
+          code: "INVALID_CONFIG_PARAM_DOCUMENT",
+          statusCode: 400,
+        });
+        assert.deepEqual(writes, []);
+        assert.equal(existingPayload.values.API_KEY, "kept");
+      }
+      await service.writeScopedConfigParams({ req, [field]: { API_KEY: "corrected" } });
+      assert.equal(writes.length, 1);
+      assert.equal(writes[0][field].API_KEY, "corrected");
+      const untouched = field === "values" ? "descriptions" : "values";
+      assert.deepEqual(writes[0][untouched], existingPayload[untouched]);
+    }
+  }
+});

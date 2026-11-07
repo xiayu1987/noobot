@@ -10,6 +10,7 @@ import {
 } from "../../../../../../src/modules/chat/composables/message/useMarkdownRenderer.js";
 import { buildAttachmentRefIndex } from "../../../../../../src/modules/chat/composables/message/attachmentInlineRefPlugin.js";
 import { translateMessageKey } from "../../../../../../src/shared/i18n/messageCatalog.js";
+import { normalizeMessageAttachments } from "../../../../../../src/modules/chat/model/messageModel.js";
 
 const translate = (key, params) => translateMessageKey("en-US", key, params);
 
@@ -26,6 +27,51 @@ function buildIndex(attachmentItems = [ATTACHMENT_ITEM]) {
 }
 
 describe("attachment inline ref rendering", () => {
+  function renderImage(markdown, attachments) {
+    return useMarkdownRenderer().renderMarkdown(markdown, {
+      ...outOfSessionRenderContext(translate),
+      attachmentRefIndex: attachments === null ? null : buildIndex(attachments),
+    });
+  }
+
+  it("renders generated images using the message model access URL", () => {
+    const attachments = normalizeMessageAttachments(
+      [{ ...ATTACHMENT_ITEM, attachmentSource: "model", name: "bird.png", mimeType: "image/png" }],
+      { userId: "admin" },
+    );
+    const html = renderImage('![bird](attachment:v1:s1/model/a1 "Bird title")', attachments);
+    const image = new DOMParser().parseFromString(html, "text/html").querySelector("img");
+    expect(image.getAttribute("src")).toBe(attachments[0].url);
+    expect(image.getAttribute("alt")).toBe("bird");
+    expect(image.getAttribute("title")).toBe("Bird title");
+    expect(html).not.toContain('src="attachment:');
+  });
+
+  it.each([[], null])("reports unavailable image refs without loading the scheme (%j)", (items) => {
+    const html = renderImage(`![bird](${REF})`, items);
+    expect(html).toContain("attachment_not_available");
+    expect(html).toContain("bird");
+    expect(html).not.toContain("<img");
+  });
+
+  it("reports malformed image refs without requesting an invalid URL", () => {
+    const html = renderImage("![bird](attachment:v1:broken)", []);
+    expect(html).toContain("attachment_not_available");
+    expect(html).not.toContain("<img");
+  });
+
+  it("rejects indexed images missing their message model access URL", () => {
+    expect(() => renderImage(`![bird](${REF})`, [ATTACHMENT_ITEM])).toThrow(
+      "indexed attachment missing access URL",
+    );
+  });
+
+  it("preserves external images and code containing image syntax", () => {
+    const html = renderImage(`![bird](https://example.com/bird.png)\n\n\`![bird](${REF})\``, []);
+    expect(html).toContain('src="https://example.com/bird.png"');
+    expect(html).toContain(`<code>![bird](${REF})</code>`);
+  });
+
   it("indexes only canonical attachments while an upload is pending", () => {
     const draft = { clientAttachmentId: "draft-1", name: "pending.txt" };
     const index = buildIndex([draft, ATTACHMENT_ITEM]);

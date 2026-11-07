@@ -2,14 +2,18 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { MODEL_OPERATION_KIND } from "../protocol/operation.js";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { MODEL_ERROR_CODE } from "../protocol/constants.js";
 
-function defaultRetryPolicy() {
+function defaultRetryPolicy(operationKind) {
   return Object.freeze({
     transport: Object.freeze({
-      maxAttempts: TURN_THRESHOLDS.model.transportMaxAttempts,
+      maxAttempts:
+        operationKind === MODEL_OPERATION_KIND.MEDIA_GENERATION
+          ? TURN_THRESHOLDS.model.generationMaxAttempts
+          : TURN_THRESHOLDS.model.transportMaxAttempts,
       baseDelayMs: TIME_THRESHOLDS.model.transportRetryBaseDelayMs,
     }),
     reasoningOnly: Object.freeze({ maxAttempts: TURN_THRESHOLDS.model.reasoningOnlyMaxAttempts }),
@@ -60,10 +64,13 @@ function normalizeAttemptPolicy(defaults, input) {
   return Object.freeze(out);
 }
 
-export function normalizeRetryPolicy(input = {}) {
-  const DEFAULT_RETRY_POLICY = defaultRetryPolicy();
+export function normalizeRetryPolicy(input = {}, operationKind = MODEL_OPERATION_KIND.CHAT) {
+  const DEFAULT_RETRY_POLICY = defaultRetryPolicy(operationKind);
+  const transport = normalizeAttemptPolicy(DEFAULT_RETRY_POLICY.transport, input.transport);
+  if (operationKind === MODEL_OPERATION_KIND.MEDIA_GENERATION && transport.maxAttempts !== 1)
+    throw new TypeError("media generation submissions cannot be retried automatically");
   return Object.freeze({
-    transport: normalizeAttemptPolicy(DEFAULT_RETRY_POLICY.transport, input.transport),
+    transport,
     reasoningOnly: normalizeAttemptPolicy(DEFAULT_RETRY_POLICY.reasoningOnly, input.reasoningOnly),
     emptyResponse: normalizeAttemptPolicy(DEFAULT_RETRY_POLICY.emptyResponse, input.emptyResponse),
     toolCallMismatch: normalizeAttemptPolicy(

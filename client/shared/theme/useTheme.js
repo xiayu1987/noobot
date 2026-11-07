@@ -6,7 +6,7 @@
 import { ref } from "vue";
 import { text } from "@noobot/shared/value";
 
-const STORAGE_KEY = "noobot_theme";
+export const THEME_STORAGE_KEY = "noobot_theme";
 const SUPPORTED_THEMES = new Set(["dark", "light", "system"]);
 const isBrowser = typeof window !== "undefined" && typeof document !== "undefined";
 const systemThemeMedia =
@@ -20,7 +20,7 @@ function resolveInitialTheme() {
   if (!isBrowser) return "dark";
   let savedTheme = "";
   try {
-    savedTheme = text(globalThis.localStorage?.getItem?.(STORAGE_KEY));
+    savedTheme = text(globalThis.localStorage?.getItem?.(THEME_STORAGE_KEY));
   } catch {
     return "dark";
   }
@@ -41,7 +41,7 @@ function applyTheme(nextTheme = "dark") {
   if (!isBrowser) return;
   document.documentElement.setAttribute("data-theme", resolveAppliedTheme(resolvedTheme));
   try {
-    globalThis.localStorage?.setItem?.(STORAGE_KEY, resolvedTheme);
+    globalThis.localStorage?.setItem?.(THEME_STORAGE_KEY, resolvedTheme);
   } catch (error) {
     console.warn("[noobot:theme] failed to persist theme", error);
   }

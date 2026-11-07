@@ -9,9 +9,12 @@ import assert from "node:assert/strict";
 import {
   buildConfigParamCatalog,
   CONFIG_ERROR_CODE,
+  CONFIG_DOCUMENT_SCOPE,
+  configIssueBlocksStartup,
   createConfigValueLookup,
   mergeConfigParamLayers,
   normalizeConfigParamsDocument,
+  parseConfigParamsDocumentText,
   resolveConfigTemplates,
   synchronizeConfigParamsDocument,
   UNRESOLVED_TEMPLATE_POLICY,
@@ -57,6 +60,59 @@ test("config params document rejects ambiguous, invalid, and unknown facts", () 
       () => normalizeConfigParamsDocument(document),
       (error) => error?.code === CONFIG_ERROR_CODE.INVALID_PARAM_DOCUMENT,
     );
+  }
+});
+
+test("config params invalid fields are classified without treating false values as missing", () => {
+  for (const field of ["values", "descriptions"]) {
+    for (const value of [null, false, 0, "", [], "invalid"]) {
+      assert.throws(
+        () => parseConfigParamsDocumentText(JSON.stringify({ [field]: value })),
+        (error) => {
+          assert.equal(error.code, CONFIG_ERROR_CODE.INVALID_PARAM_DOCUMENT);
+          assert.equal(error.details.autoRepair, false);
+          assert.equal(configIssueBlocksStartup(error.details, CONFIG_DOCUMENT_SCOPE.GLOBAL), true);
+          assert.equal(configIssueBlocksStartup(error.details, CONFIG_DOCUMENT_SCOPE.USER), false);
+          return true;
+        },
+      );
+    }
+  }
+  for (const source of ['{"API_KEY":"secret" trailing', "null", "[]"]) {
+    assert.throws(
+      () => parseConfigParamsDocumentText(source),
+      (error) => {
+        assert.equal(error.code, CONFIG_ERROR_CODE.INVALID_DOCUMENT);
+        assert.equal(error.message.includes("secret"), false);
+        return true;
+      },
+    );
+  }
+  assert.deepEqual(parseConfigParamsDocumentText("{}"), { values: {}, descriptions: {} });
+});
+
+test("config params entries require strings without converting or exposing invalid values", () => {
+  for (const field of ["values", "descriptions"]) {
+    for (const value of [{ nested: "private" }, ["private"], null, false, true, 0, 42]) {
+      const document = { [field]: { API_KEY: value } };
+      const source = JSON.stringify(document);
+      for (const operation of [
+        () => normalizeConfigParamsDocument(document),
+        () => parseConfigParamsDocumentText(source),
+        () => synchronizeConfigParamsDocument({ document, keys: ["REGION"] }),
+      ]) {
+        assert.throws(operation, (error) => {
+          assert.equal(error.code, CONFIG_ERROR_CODE.INVALID_PARAM_DOCUMENT);
+          assert.equal(error.details.field, field);
+          assert.equal(error.details.key, "API_KEY");
+          assert.equal(error.details.autoRepair, false);
+          assert.equal(JSON.stringify(error).includes("private"), false);
+          assert.equal(error.message.includes("private"), false);
+          return true;
+        });
+        assert.equal(JSON.stringify(document), source);
+      }
+    }
   }
 });
 
@@ -126,4 +182,24 @@ test("template resolution has one explicit source order and unresolved policy", 
     "",
   );
   assert.equal(resolveConfigTemplates("${MISSING}", { lookup }), "");
+});
+
+test("native generation providers use the existing template parameter collection and resolution", async () => {
+  const { resolveModelLibraryProvider } = await import("@noobot/model-protocol");
+  const { collectConfigTemplateKeys } = await import("../src/index.js");
+  const provider = resolveModelLibraryProvider("gemini_omni_1_2_flash");
+  assert.equal(provider.base_url, "${GEMINI_NATIVE_API_ADDRESS}");
+  assert.deepEqual(collectConfigTemplateKeys(provider).sort(), [
+    "GEMINI_API_KEY",
+    "GEMINI_NATIVE_API_ADDRESS",
+  ]);
+  const resolved = resolveConfigTemplates(provider, {
+    lookup: createConfigValueLookup({
+      GEMINI_API_KEY: "private",
+      GEMINI_NATIVE_API_ADDRESS: "https://configured.example.test/v1beta",
+    }),
+    unresolved: UNRESOLVED_TEMPLATE_POLICY.ERROR,
+  });
+  assert.equal(resolved.base_url, "https://configured.example.test/v1beta");
+  assert.equal(resolved.api_key, "private");
 });

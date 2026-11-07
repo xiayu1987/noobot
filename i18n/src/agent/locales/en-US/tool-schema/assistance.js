@@ -85,20 +85,32 @@ export const ASSISTANCE_TOOL_SCHEMA = {
   multimodal_generate: {
     description: {
       key: "tools.multimodal.description",
-      text: "Generate images from multimodal prompt. Input generation_content (optional model_name, image_size). Returns generated image results.",
+      text: "Generate images or videos through native model APIs. Input generation_content and output_type (image by default). Returns media attachments.",
     },
     params: {
+      outputType: {
+        key: "tools.multimodal.fieldOutputType",
+        text: "Output type: image (default) or video.",
+      },
+      duration: {
+        key: "tools.multimodal.fieldDuration",
+        text: "Video duration in seconds; required by MiniMax.",
+      },
+      aspectRatio: {
+        key: "tools.multimodal.fieldAspectRatio",
+        text: "Video aspect ratio such as 16:9; image generation uses size.",
+      },
+      complexity: {
+        key: "tools.multimodal.fieldComplexity",
+        text: "OpenAI image complexity: low, medium or high.",
+      },
       generation_content: {
         key: "tools.multimodal.fieldGenerationContent",
         text: "Generation content description.",
       },
-      image_size: {
-        key: "tools.multimodal.fieldImageSize",
-        text: "Image size (optional).",
-      },
       image_urls: {
         key: "tools.multimodal.fieldImageUrls",
-        text: "Source image URLs for image-to-image or outpainting (optional).",
+        text: "Source image URLs for editing or video generation (optional).",
       },
       model_name: {
         key: "tools.multimodal.fieldModelName",
@@ -114,7 +126,7 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       },
       resolution: {
         key: "tools.multimodal.fieldResolution",
-        text: "Image resolution for ratio size (optional, e.g. 1K, 2K, 4K).",
+        text: "Native image or video resolution, such as 2K, 720p or 768P, depending on the model.",
       },
       size: {
         key: "tools.multimodal.fieldSize",
@@ -122,27 +134,20 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       },
     },
     texts: {
-      "tools.multimodal.fetchGeneratedImageUrlFailed": "fetch generated image url failed",
-      "tools.multimodal.fetchUnavailable": "runtime fetch unavailable",
       "tools.multimodal.generateFailed": "multimodal generate failed",
       "tools.multimodal.generationContentRequired": "generation_content required",
       "tools.multimodal.imagesApiNotEnabledError":
         "Current account does not have image generation enabled (403 Images API is not enabled).",
-      "tools.multimodal.imagesApiNotEnabledMessage":
-        "Enable Images API on your platform, or switch to a model/key with image generation enabled.",
-      "tools.multimodal.modelApiKeyMissing": "model api key missing",
+
       "tools.multimodal.modelNotFound": (params = {}) =>
         `configured multimodal generation model not found: ${text(params.model)}`,
       "tools.multimodal.multimodalUnsupportedError": (params = {}) =>
-        `Current model does not support multimodal image generation: ${text(params.model)}`,
+        `Current model does not support multimodal generation: ${text(params.model)}`,
       "tools.multimodal.multimodalUnsupportedMessage":
-        "Switch to a model that supports image generation, or specify one via model_name.",
-      "tools.multimodal.taskFailed": "image generation task failed",
-      "tools.multimodal.taskIdMissing": "image generation task id missing",
-      "tools.multimodal.taskTimeout": (params = {}) =>
-        `image generation task timeout: ${text(params.taskId)}`,
+        "Switch to a model that supports the requested generation type, or specify one via model_name.",
+
       "tools.multimodal.capabilityUnavailable":
-        "This model cannot serve image generation right now. Check the model configuration or use another model.",
+        "This model cannot serve media generation right now. Check the model configuration or use another model.",
     },
   },
   multimodal_parse: {

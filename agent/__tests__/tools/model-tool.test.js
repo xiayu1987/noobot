@@ -26,8 +26,8 @@ test("switch_model: 应能通过 alias 切换模型", async () => {
   let persistedPayload = null;
   const runtime = {
     allEnabledProviders: {
-      openai: { model: "gpt-4o" },
-      anthropic: { model: "claude-3-7-sonnet" },
+      openai: { model: "gpt-4o", used_for_conversation: true },
+      anthropic: { model: "claude-3-7-sonnet", used_for_conversation: true },
     },
     systemRuntime: { userId: "u1", sessionId: "s-1" },
     sessionManager: {
@@ -55,8 +55,8 @@ test("switch_model: 应能通过 alias 切换模型", async () => {
 test("switch_model: 不得通过模型名称反查 provider", async () => {
   const runtime = {
     allEnabledProviders: {
-      openai: { model: "gpt-4o" },
-      gemini: { model: "gemini-2.5-pro" },
+      openai: { model: "gpt-4o", used_for_conversation: true },
+      gemini: { model: "gemini-2.5-pro", used_for_conversation: true },
     },
     runtimeModel: "",
   };
@@ -72,7 +72,7 @@ test("switch_model: 不得通过模型名称反查 provider", async () => {
 test("switch_model: provider 名称大小写必须精确匹配", async () => {
   const runtime = {
     allEnabledProviders: {
-      Gemini: { model: "gemini-2.5-pro" },
+      Gemini: { model: "gemini-2.5-pro", used_for_conversation: true },
     },
     runtimeModel: "",
   };
@@ -90,8 +90,8 @@ test("switch_model: provider 名称大小写必须精确匹配", async () => {
 test("switch_model: persistence failure does not publish a new runtime model", async () => {
   const runtime = {
     allEnabledProviders: {
-      openai: { model: "gpt-4o" },
-      gemini: { model: "gemini-2.5-pro" },
+      openai: { model: "gpt-4o", used_for_conversation: true },
+      gemini: { model: "gemini-2.5-pro", used_for_conversation: true },
     },
     systemRuntime: { userId: "u1", sessionId: "s-persistence-failure" },
     sessionManager: {
@@ -116,7 +116,7 @@ test("switch_model: persistence failure does not publish a new runtime model", a
 test("switch_model: 不存在的模型应返回失败", async () => {
   const runtime = {
     allEnabledProviders: {
-      openai: { model: "gpt-4o" },
+      openai: { model: "gpt-4o", used_for_conversation: true },
     },
     runtimeModel: "openai",
   };
@@ -149,7 +149,7 @@ test("switch_model: 非会话模型（used_for_conversation=false）应拒绝切
 test("switch_model: 缺少 sessionId 时应返回 session context missing", async () => {
   const runtime = {
     allEnabledProviders: {
-      openai: { model: "gpt-4o" },
+      openai: { model: "gpt-4o", used_for_conversation: true },
     },
     runtimeModel: "",
   };

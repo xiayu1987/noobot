@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 
 import { loadGlobalConfig } from "../../src/config/core/global-config-loader.js";
 import { ConfigService } from "../../src/config/core/config-service.js";
@@ -227,6 +227,43 @@ test("ConfigService.loadUserConfig: config.json 非法 JSON 时应抛出可恢�
     );
   } finally {
     await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("ConfigService.loadUserConfig preserves invalid params without exposing contents and resumes after correction", async () => {
+  const workspaceRoot = await createTempDir();
+  const userDir = path.join(workspaceRoot, "user");
+  try {
+    await mkdir(userDir, { recursive: true });
+    await writeFile(
+      path.join(userDir, "config.json"),
+      JSON.stringify({
+        default_provider: "openai",
+        providers: { openai: { model: "gpt-4o", api_key: "${API_KEY}" } },
+      }),
+    );
+    const service = new ConfigService({ env: {} });
+    for (const directory of [workspaceRoot, userDir]) {
+      const paramsPath = path.join(directory, "config-params.json");
+      for (const source of [
+        '{"values":{"API_KEY":"never-log-secret"} trailing',
+        "null",
+        "[]",
+        '{"values":false}',
+      ]) {
+        await writeFile(paramsPath, source);
+        await assert.rejects(service.loadUserConfig(userDir), (error) => {
+          assert.equal(error.code, "RECOVERABLE_INVALID_USER_CONFIG");
+          assert.equal(error.message.includes("never-log-secret"), false);
+          return true;
+        });
+        assert.equal(await readFile(paramsPath, "utf8"), source);
+      }
+      await writeFile(paramsPath, JSON.stringify({ values: { API_KEY: "corrected" } }));
+      assert.equal((await service.loadUserConfig(userDir)).providers.openai.api_key, "corrected");
+    }
+  } finally {
+    await rm(workspaceRoot, { recursive: true, force: true });
   }
 });
 

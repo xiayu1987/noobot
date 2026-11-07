@@ -70,20 +70,29 @@ export const ASSISTANCE_TOOL_SCHEMA = {
   multimodal_generate: {
     description: {
       key: "tools.multimodal.description",
-      text: "生成图片内容。输入 generation_content（可选 model_name、image_size）。返回生成图片结果。",
+      text: "通过模型原生接口生成图片或视频。输入 generation_content、output_type（默认 image），返回媒体附件。",
     },
     params: {
+      outputType: {
+        key: "tools.multimodal.fieldOutputType",
+        text: "输出类型：image（默认）或 video。",
+      },
+      duration: { key: "tools.multimodal.fieldDuration", text: "视频时长（秒）；MiniMax 必填。" },
+      aspectRatio: {
+        key: "tools.multimodal.fieldAspectRatio",
+        text: "视频宽高比，如 16:9；图片使用 size。",
+      },
+      complexity: {
+        key: "tools.multimodal.fieldComplexity",
+        text: "OpenAI 图片复杂度：low、medium 或 high。",
+      },
       generation_content: {
         key: "tools.multimodal.fieldGenerationContent",
         text: "生成内容描述。",
       },
-      image_size: {
-        key: "tools.multimodal.fieldImageSize",
-        text: "图片尺寸（可选）。",
-      },
       image_urls: {
         key: "tools.multimodal.fieldImageUrls",
-        text: "图生图或扩图时使用的原图 URL 列表（可选）。",
+        text: "编辑图片或生成视频时使用的参考图片 URL 列表（可选）。",
       },
       model_name: {
         key: "tools.multimodal.fieldModelName",
@@ -99,7 +108,7 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       },
       resolution: {
         key: "tools.multimodal.fieldResolution",
-        text: "比例尺寸下的图片分辨率（可选，如 1K、2K、4K）。",
+        text: "模型原生图片或视频分辨率，如 2K、720p 或 768P。",
       },
       size: {
         key: "tools.multimodal.fieldSize",
@@ -107,26 +116,20 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       },
     },
     texts: {
-      "tools.multimodal.fetchGeneratedImageUrlFailed": "拉取生成图片 URL 失败",
-      "tools.multimodal.fetchUnavailable": "运行时 fetch 不可用",
       "tools.multimodal.generateFailed": "多模态生成失败",
       "tools.multimodal.generationContentRequired": "generation_content 必填",
       "tools.multimodal.imagesApiNotEnabledError":
         "当前账号未开通图片生成能力（403 Images API is not enabled）。",
-      "tools.multimodal.imagesApiNotEnabledMessage":
-        "请在对应平台开通 Images API 权限，或切换到已开通图片生成能力的模型/密钥。",
-      "tools.multimodal.modelApiKeyMissing": "模型 API Key 缺失",
+
       "tools.multimodal.modelNotFound": (params = {}) =>
         `未找到已配置的多模态生成模型：${text(params.model)}`,
       "tools.multimodal.multimodalUnsupportedError": (params = {}) =>
-        `当前模型不支持多模态生成（图片）：${text(params.model)}`,
+        `当前模型不支持多模态生成：${text(params.model)}`,
       "tools.multimodal.multimodalUnsupportedMessage":
-        "请切换到支持图片生成的模型，或通过 model_name 指定支持生成的模型。",
-      "tools.multimodal.taskFailed": "图片生成任务失败",
-      "tools.multimodal.taskIdMissing": "图片生成任务 ID 缺失",
-      "tools.multimodal.taskTimeout": (params = {}) => `图片生成任务超时：${text(params.taskId)}`,
+        "请切换到支持图片或视频生成的模型，或通过 model_name 指定支持生成的模型。",
+
       "tools.multimodal.capabilityUnavailable":
-        "该模型当前无法完成图片生成，请检查模型配置或更换模型。",
+        "该模型当前无法完成图片或视频生成，请检查模型配置或更换模型。",
     },
   },
   multimodal_parse: {

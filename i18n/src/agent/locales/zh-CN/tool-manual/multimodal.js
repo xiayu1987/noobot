@@ -6,26 +6,25 @@
 
 export const MULTIMODAL_MANUAL = {
   multimodal_generate: {
-    summary: "生成图片内容，支持文生图与基于原图的图生图或扩图。",
+    summary: "通过模型原生接口生成图片或视频。",
     usage: [
-      "{{tool:multimodal_generate}}({ generation_content, model_name, size, resolution, n, quality })",
-      "{{tool:multimodal_generate}}({ generation_content, image_urls, size, resolution })",
+      "{{tool:multimodal_generate}}({ generation_content, output_type: 'image', model_name, size, n })",
+      "{{tool:multimodal_generate}}({ generation_content, output_type: 'video', model_name, duration, aspect_ratio, resolution, image_urls })",
     ],
     params: {
-      generation_content: "生成内容描述，必填。描述越具体，结果越可控。",
-      model_name: "模型名，可选。省略时按配置默认图像模型解析。",
-      image_urls: "图生图或扩图时使用的原图 URL 列表，可选。",
-      size: "尺寸或比例，如 auto、1:1、16:9、1024x1024。",
-      resolution: "比例尺寸下的分辨率，如 1K、2K、4K。",
-      image_size: "直接指定像素尺寸，可选。",
-      n: "生成数量，可选，取值 1 到 10。",
-      quality: "图片质量，可选。",
+      generation_content: "生成内容描述，必填。",
+      output_type: "image（默认）或 video。",
+      model_name: "可选；未指定时使用对应输出类型的默认模型。",
+      image_urls: "可选参考图片 URL；模型须支持相应输入模式。",
+      size: "图片尺寸；像素或宽高比取决于模型原生协议。",
+      resolution: "模型原生分辨率；MiniMax H3 必填，如 768P 或 2K。",
+      duration: "视频时长（秒）；MiniMax H3 必填。",
+      aspect_ratio: "视频宽高比，如 16:9；MiniMax 单图输入按源图比例，其他模式必填。",
+      n: "图片数量；视频不使用此参数。",
+      quality: "模型支持的图片质量。",
+      complexity: "OpenAI 图片复杂度：low、medium 或 high。",
     },
-    notes: [
-      "可用性取决于是否存在启用且支持图像生成的提供方，无可用提供方时该工具不会出现。",
-      "需要多个候选时用 n 一次生成，比反复单张调用更省时。",
-    ],
-    pitfalls: ["不要为真实人物生成可能造成误认的图像，也不要生成侵权或违规内容。"],
+    notes: ["仅选择声明支持目标生成类型的模型；参数按厂商原生协议填写。"],
   },
   multimodal_parse: {
     summary: "解析图片、音频、视频与二进制文档并返回结构化内容。",

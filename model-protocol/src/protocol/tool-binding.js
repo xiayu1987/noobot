@@ -38,22 +38,58 @@ export function resolveToolBindingName(toolId, bindings = {}) {
   return requireToolBindingName(toolId, toolId);
 }
 
-export function requireToolBindingConfig(bindings = {}) {
-  if (!isPlainObject(bindings)) throw new TypeError("tools.bindings must be an object");
+export function diagnoseToolBindingConfig(bindings = {}) {
+  const issues = [];
+  const invalid = (path, message) =>
+    issues.push(
+      Object.freeze({
+        code: "INVALID_TOOL_BINDING_CONFIG",
+        path,
+        message,
+      }),
+    );
+  if (!isPlainObject(bindings)) {
+    invalid("tools.bindings", "tools.bindings must be an object");
+    return Object.freeze(issues);
+  }
   const names = new Map();
   for (const [toolId, entry] of Object.entries(bindings)) {
-    requireToolId(toolId);
+    const path = `tools.bindings.${toolId}`;
+    if (!toolId.trim()) {
+      invalid(path, "tool identity must be a non-empty string");
+      continue;
+    }
     if (
       !isPlainObject(entry) ||
       Object.keys(entry).length !== 1 ||
       !Object.hasOwn(entry, "bindingName")
     ) {
-      throw new TypeError(`tools.bindings.${toolId} requires only bindingName`);
+      invalid(path, `${path} requires only bindingName`);
+      continue;
     }
-    const name = requireToolBindingName(entry.bindingName, toolId);
-    if (names.has(name))
-      throw new TypeError(`duplicate tool bindingName ${name}: ${names.get(name)}, ${toolId}`);
+    const name = entry.bindingName;
+    if (typeof name !== "string" || !NAME_PATTERN.test(name)) {
+      invalid(`${path}.bindingName`, `invalid tool bindingName for ${toolId}`);
+      continue;
+    }
+    if (names.has(name)) {
+      invalid(
+        `${path}.bindingName`,
+        `duplicate tool bindingName ${name}: ${names.get(name)}, ${toolId}`,
+      );
+    }
     names.set(name, toolId);
+  }
+  return Object.freeze(issues);
+}
+
+export function requireToolBindingConfig(bindings = {}) {
+  const issues = diagnoseToolBindingConfig(bindings);
+  if (issues.length) {
+    const error = new TypeError(issues[0].message);
+    error.code = issues[0].code;
+    error.details = Object.freeze({ issues });
+    throw error;
   }
   return bindings;
 }

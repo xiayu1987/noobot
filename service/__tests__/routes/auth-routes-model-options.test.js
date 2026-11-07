@@ -20,6 +20,7 @@ test("connect exposes custom providers without requiring credentials or validati
           enabled: true,
           used_for_conversation: true,
           model: "ZHIPU/GLM-5.3",
+          supplier: "Zhipu",
           api_key: "",
           description: "forged user description",
           reasoning_effort: "medium",
@@ -58,13 +59,20 @@ test("connect exposes custom providers without requiring credentials or validati
 
     assert.equal(response.status, 200);
     assert.equal(payload.ok, true);
-    assert.deepEqual(
-      payload.enabledModels.find((item) => item.alias === "incomplete"),
-      { alias: "incomplete", model: "", description: "" },
+    assert.equal(
+      payload.enabledModels.some((item) => item.alias === "incomplete"),
+      false,
     );
     assert.deepEqual(
       payload.enabledModels.find((item) => item.alias === "GLM_5_3"),
-      { alias: "GLM_5_3", model: "ZHIPU/GLM-5.3", description: "forged user description" },
+      {
+        alias: "GLM_5_3",
+        model: "ZHIPU/GLM-5.3",
+        description: "forged user description",
+        supplier: "Zhipu",
+        inputModalities: [],
+        outputModalities: [],
+      },
     );
     assert.equal(
       payload.enabledModels.some((item) => item.alias === "glm_5_3"),

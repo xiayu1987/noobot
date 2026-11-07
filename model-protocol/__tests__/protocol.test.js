@@ -285,12 +285,12 @@ test("model operations are strict discriminated contracts", () => {
         model,
         messages: [],
         operation: {
-          kind: "image_generation",
-          input: { prompt: "draw" },
+          kind: "media_generation",
+          input: { prompt: "draw", outputType: "image" },
           options: { apiType: "legacy" },
         },
       }),
-    /options contains unsupported fields: apiType/,
+    /unsupported image generation option: apiType/,
   );
   assert.throws(
     () =>
@@ -730,7 +730,7 @@ test("multimodal capabilities are governed only by explicit model configuration"
       support_generation: {
         enabled: true,
         support_scope: ["image"],
-        api_type: "openai_responses",
+        api_type: "openai_images",
       },
     },
   };
@@ -757,7 +757,6 @@ test("model operation capabilities are governed only by explicit model configura
       streaming: false,
       tools: true,
       web_search: true,
-      image_generation: false,
     },
   };
   assert.deepEqual(normalizeModelCapabilities(configured.capabilities), {
@@ -766,7 +765,6 @@ test("model operation capabilities are governed only by explicit model configura
     vision: false,
     reasoning: false,
     web_search: true,
-    image_generation: false,
   });
   assert.equal(supportsModelCapability(configured, "web_search"), true);
   assert.equal(supportsModelCapability({}, "web_search"), false);

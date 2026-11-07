@@ -13,19 +13,8 @@ import { createTestModelHost } from "../helpers/test-model-host.js";
 
 const IMAGE_PROVIDER_BASE_URL = "https://image-provider.example.test";
 
-function jsonResponse(body, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
-}
-
 function textResponse(body, status) {
   return new Response(body, { status, headers: { "content-type": "text/plain" } });
-}
-
-function binaryResponse(body) {
-  return new Response(body, { headers: { "content-type": "image/png" } });
 }
 
 async function rejectUnexpectedFetch() {
@@ -93,7 +82,7 @@ test("multimodal_generate: failed image generation returns diagnostics and stabl
             support_generation: {
               enabled: true,
               support_scope: ["image"],
-              api_type: "images_async",
+              api_type: "openai_images",
             },
           },
         },
@@ -153,7 +142,7 @@ test("multimodal_generate: model configuration is the only image API type author
             support_generation: {
               enabled: true,
               support_scope: ["image"],
-              api_type: "openai_responses",
+              api_type: "openai_images",
             },
           },
         },
@@ -167,8 +156,9 @@ test("multimodal_generate: model configuration is the only image API type author
           return {
             result: {
               rawText: "",
-              imageArtifacts: [{ fileName: "generated.png", b64Json: "AA==", url: "" }],
-              output: [],
+              artifacts: [
+                { fileName: "generated.png", mimeType: "image/png", contentBase64: "AA==" },
+              ],
             },
           };
         },
@@ -179,7 +169,27 @@ test("multimodal_generate: model configuration is the only image API type author
   };
   const tool = getMultimodalGenerateTool(runtime);
 
-  assert.equal("api_type" in tool.schema.shape, false);
+  assert.equal(
+    tool.schema.options.every((option) => !("api_type" in option.shape)),
+    true,
+  );
+  assert.equal(tool.schema.parse({ generation_content: "draw" }).output_type, "image");
+  const video = {
+    generation_content: "fly",
+    output_type: "video",
+    duration: 5,
+    aspect_ratio: "16:9",
+    resolution: "720p",
+  };
+  assert.deepEqual(tool.schema.parse(video), video);
+  for (const option of [
+    { n: 2 },
+    { quality: "high" },
+    { complexity: "low" },
+    { size: "1024x1024" },
+  ]) {
+    assert.equal(tool.schema.safeParse({ ...video, ...option }).success, false);
+  }
   const result = JSON.parse(
     await tool.invoke({
       generation_content: "draw a bird",
@@ -191,7 +201,7 @@ test("multimodal_generate: model configuration is the only image API type author
   assert.equal("apiType" in modelRequest.operation.options, false);
   assert.equal(
     modelRequest.model.multimodal_generation.support_generation.api_type,
-    "openai_responses",
+    "openai_images",
   );
 });
 
@@ -211,7 +221,7 @@ test("multimodal_generate: an unknown requested model is rejected before capabil
             support_generation: {
               enabled: true,
               support_scope: ["image"],
-              api_type: "openai_responses",
+              api_type: "openai_images",
             },
           },
         },
@@ -259,7 +269,7 @@ test("multimodal_generate: canonical provider merge preserves Windows default im
             support_generation: {
               enabled: true,
               support_scope: ["image"],
-              api_type: "openai_responses",
+              api_type: "openai_images",
             },
           },
         },
@@ -269,7 +279,7 @@ test("multimodal_generate: canonical provider merge preserves Windows default im
       providers: {
         [modelAlias]: {
           multimodal_generation: {
-            support_generation: { api_type: "openai_responses" },
+            support_generation: { api_type: "openai_images" },
           },
         },
       },
@@ -281,8 +291,9 @@ test("multimodal_generate: canonical provider merge preserves Windows default im
           return {
             result: {
               rawText: "",
-              imageArtifacts: [{ fileName: "generated.png", b64Json: "AA==", url: "" }],
-              output: [],
+              artifacts: [
+                { fileName: "generated.png", mimeType: "image/png", contentBase64: "AA==" },
+              ],
             },
           };
         },
@@ -297,7 +308,6 @@ test("multimodal_generate: canonical provider merge preserves Windows default im
     await tool.invoke({
       generation_content:
         "A minimal flat blue square icon with a white check mark, no text, for a tool connectivity test.",
-      image_size: "512x512",
       image_urls: [],
       model_name: "",
       n: 1,
@@ -312,11 +322,11 @@ test("multimodal_generate: canonical provider merge preserves Windows default im
   assert.equal("apiType" in modelRequest.operation.options, false);
   assert.equal(
     modelRequest.model.multimodal_generation.support_generation.api_type,
-    "openai_responses",
+    "openai_images",
   );
 });
 
-test("multimodal_generate: Responses completion without an image artifact is a failure", async () => {
+test("multimodal_generate: Native generation completion without an image artifact is a failure", async () => {
   const runtime = {
     globalConfig: {
       providers: {
@@ -332,7 +342,7 @@ test("multimodal_generate: Responses completion without an image artifact is a f
             support_generation: {
               enabled: true,
               support_scope: ["image"],
-              api_type: "openai_responses",
+              api_type: "openai_images",
             },
           },
         },
@@ -342,7 +352,7 @@ test("multimodal_generate: Responses completion without an image artifact is a f
     modelHost: createTestModelHost({
       modelPort: {
         async invoke() {
-          return { result: { rawText: "prompt only", imageArtifacts: [], output: [] } };
+          return { result: { rawText: "prompt only", artifacts: [] } };
         },
       },
       modelSpec: null,
@@ -356,342 +366,76 @@ test("multimodal_generate: Responses completion without an image artifact is a f
   );
 });
 
-test("multimodal_generate: images_async polls task endpoint without websocket handshake", async () => {
-  const requestedUrls = [];
-  const requestedHeaders = [];
-  const port = 12345;
-
+test("multimodal_generate: native video uses the configured video model and returns an attachment", async () => {
+  const calls = [];
   const runtime = {
     globalConfig: {
+      multimodal: { generation: { default_models: { video: "video_model" } } },
       providers: {
-        gpt_image_2: {
+        video_model: {
           enabled: true,
           used_for_conversation: false,
-          api_key: "test-key",
-          base_url: `http://127.0.0.1:${port}/v1`,
-          model: "gpt-image-2",
+          model: "grok-imagine-video-1.5",
+          api_key: "private",
+          base_url: "https://video.example.test/v1",
           reasoning_effort_parameter: "reasoning_effort",
-          reasoning_effort_options: ["none", "low", "medium", "high"],
-          providerId: "gpt_image_2",
-          adapterId: "openai-compatible",
+          reasoning_effort_options: ["none"],
           multimodal_generation: {
-            support_generation: {
-              enabled: true,
-              support_scope: ["image"],
-              api_type: "images_async",
-            },
+            support_generation: { enabled: true, support_scope: ["video"], api_type: "xai_video" },
           },
         },
       },
     },
     userConfig: {},
     sharedTools: {
-      async fetch(url, init = {}) {
-        requestedUrls.push(`${String(init?.method || "GET").toUpperCase()} ${String(url || "")}`);
-        requestedHeaders.push({ ...init.headers });
-        if (String(url || "").endsWith("/v1/images/generations")) {
-          return jsonResponse({ data: [{ task_id: "task-1" }] });
-        }
-        if (String(url || "").endsWith("/v1/tasks/task-1")) {
-          return jsonResponse({
-            status: "completed",
-            result_data: [
-              {
-                b64_json: `data:image/png;base64,${Buffer.from("fake-image").toString("base64")}`,
-              },
-            ],
+      fetch: async (url, init) => {
+        calls.push({ url: String(url), ...init });
+        if (String(url).endsWith("videos/generations")) return Response.json({ request_id: "v1" });
+        if (String(url).endsWith("videos/v1"))
+          return Response.json({
+            status: "done",
+            video: { url: "https://cdn.example.test/a.mp4" },
           });
-        }
-        return textResponse("WebSocket upgrade required (Upgrade: websocket)", 426);
+        return new Response(new Uint8Array([1, 2]), { headers: { "content-type": "video/mp4" } });
       },
     },
   };
   const tool = getMultimodalGenerateTool(withExecutorModelHost(runtime));
-
-  const payload = JSON.parse(
-    await tool.invoke({
-      generation_content: "draw a bird",
-      model_name: "gpt_image_2",
-      size: "1:1",
-    }),
+  const result = JSON.parse(
+    await tool.invoke({ generation_content: "a bird flies", output_type: "video", duration: 5 }),
   );
-
-  assert.equal(payload.ok, true);
-  assert.equal(payload.callMode, "multimodal_generation");
-  assert.equal(payload.summary.task_id, "task-1");
-  assert.equal(payload.summary.generated_image_count, 1);
-  assert.deepEqual(requestedUrls, [
-    `POST http://127.0.0.1:${port}/v1/images/generations`,
-    `GET http://127.0.0.1:${port}/v1/tasks/task-1`,
-  ]);
-  assert.equal(requestedHeaders.length, 2);
-  for (const headers of requestedHeaders) {
-    assert.equal(headers.Authorization, "Bearer test-key");
-    assert.equal(headers["X-Model-Name"], "gpt-image-2");
-    assert.equal(headers["X-Plugin-Flow"], "agent.multimodal_generate");
-    assert.equal(headers["X-Plugin-Purpose"], "multimodal_generate");
-    assert.equal(headers["X-Plugin-Domain"], "tool");
-    assert.equal(headers["X-Plugin-Session-Id"], "multimodal-test-session");
-  }
+  assert.equal(result.ok, true);
+  assert.equal(result.summary.generated_video_count, 1);
+  assert.equal(result.summary.task_id, "v1");
+  assert.equal(result.outputArtifacts[0].mimeType, "video/mp4");
+  assert.equal(result.outputArtifacts[0].contentBase64, "AQI=");
+  assert.equal(calls[2].headers, undefined);
+  assert.equal(JSON.parse(calls[0].body).tools, undefined);
 });
 
-test("multimodal_generate: images_async uses the configured provider base URL", async () => {
-  const requested = [];
-  const bodies = [];
-  const runtime = {
-    globalConfig: {
-      providers: {
-        gpt_image_2: {
-          enabled: true,
-          used_for_conversation: false,
-          api_key: "test-key",
-          base_url: IMAGE_PROVIDER_BASE_URL,
-          model: "gpt-image-2",
-          reasoning_effort_parameter: "reasoning_effort",
-          reasoning_effort_options: ["none", "low", "medium", "high"],
-          providerId: "gpt_image_2",
-          adapterId: "openai-compatible",
-          multimodal_generation: {
-            support_generation: {
-              enabled: true,
-              support_scope: ["image"],
-              api_type: "images_async",
-            },
-          },
-        },
-      },
-    },
-    userConfig: {},
-    sharedTools: {
-      async fetch(url, init = {}) {
-        requested.push(`${String(init?.method || "GET").toUpperCase()} ${String(url || "")}`);
-        if (init?.body) bodies.push(JSON.parse(String(init.body)));
-        if (String(url || "") === `${IMAGE_PROVIDER_BASE_URL}/v1/images/generations`) {
-          return jsonResponse({ id: "task-unified-1777017804-vskdh190" });
-        }
-        if (
-          String(url || "") ===
-          `${IMAGE_PROVIDER_BASE_URL}/v1/tasks/task-unified-1777017804-vskdh190`
-        ) {
-          return jsonResponse({
-            status: "completed",
-            progress: 100,
-            result_data: [{ url: "https://cdn.example.com/generated-cat.png" }],
-          });
-        }
-        if (String(url || "") === "https://cdn.example.com/generated-cat.png") {
-          return binaryResponse(Buffer.from("fake-generated-cat"));
-        }
-        return textResponse("unexpected url", 404);
-      },
-    },
-  };
-  const tool = getMultimodalGenerateTool(withExecutorModelHost(runtime));
-
-  const payload = JSON.parse(
-    await tool.invoke({
-      generation_content: "一只可爱的猫咪在阳光下打盹",
-      model_name: "gpt_image_2",
-      size: "1:1",
-      resolution: "1K",
-      n: 4,
-      quality: "low",
-      image_urls: ["https://your-image-url.png"],
-    }),
-  );
-
-  assert.equal(payload.ok, true);
-  assert.equal(payload.summary.task_id, "task-unified-1777017804-vskdh190");
-  assert.equal(payload.summary.generated_image_count, 1);
-  assert.deepEqual(requested, [
-    `POST ${IMAGE_PROVIDER_BASE_URL}/v1/images/generations`,
-    `GET ${IMAGE_PROVIDER_BASE_URL}/v1/tasks/task-unified-1777017804-vskdh190`,
-    "GET https://cdn.example.com/generated-cat.png",
-  ]);
-  assert.deepEqual(bodies, [
-    {
-      model: "gpt-image-2",
-      prompt: "一只可爱的猫咪在阳光下打盹",
-      size: "1:1",
-      resolution: "1K",
-      n: 4,
-      quality: "low",
-      image_urls: ["https://your-image-url.png"],
-    },
-  ]);
-});
-
-test("multimodal_generate: images_async normalizes chatgpt base path to official v1 task endpoint", async () => {
-  const requestedUrls = [];
-  const runtime = {
-    globalConfig: {
-      providers: {
-        gpt_image_2: {
-          enabled: true,
-          used_for_conversation: false,
-          api_key: "test-key",
-          base_url: `${IMAGE_PROVIDER_BASE_URL}/chatgpt/v1`,
-          model: "gpt-image-2",
-          reasoning_effort_parameter: "reasoning_effort",
-          reasoning_effort_options: ["none", "low", "medium", "high"],
-          providerId: "gpt_image_2",
-          adapterId: "openai-compatible",
-          multimodal_generation: {
-            support_generation: {
-              enabled: true,
-              support_scope: ["image"],
-              api_type: "images_async",
-            },
-          },
-        },
-      },
-    },
-    userConfig: {},
-    sharedTools: {
-      async fetch(url, init = {}) {
-        requestedUrls.push(`${String(init?.method || "GET").toUpperCase()} ${String(url || "")}`);
-        if (String(url || "") === `${IMAGE_PROVIDER_BASE_URL}/v1/images/generations`) {
-          return jsonResponse({ data: [{ task_id: "task-426" }] });
-        }
-        return textResponse("WebSocket upgrade required (Upgrade: websocket)", 426);
-      },
-    },
-  };
-  const tool = getMultimodalGenerateTool(withExecutorModelHost(runtime));
-
+test("generated attachments reject a declared MIME mismatch and stop on cancellation", async () => {
+  const { materializeGenerationAttachments } =
+    await import("../../src/tools/ai-models/generation-artifacts.js");
+  const artifacts = [
+    { fileName: "a.mp4", mimeType: "video/mp4", url: "https://cdn.example.test/a.mp4" },
+  ];
   await assert.rejects(
-    tool.invoke({
-      generation_content: "draw a bird",
-      model_name: "gpt_image_2",
-      size: "1:1",
+    materializeGenerationAttachments(artifacts, {
+      modality: "video",
+      abortSignal: new AbortController().signal,
+      fetchImpl: async () =>
+        new Response("error page", { headers: { "content-type": "text/html" } }),
     }),
-    (error) => {
-      assert.equal(error?.code, "RECOVERABLE_MULTIMODAL_GENERATE_FAILED");
-      assert.match(error?.message || "", /WebSocket upgrade required/);
-      assert.equal(error?.details?.requestMethod, "GET");
-      assert.equal(error?.details?.requestUrl, `${IMAGE_PROVIDER_BASE_URL}/v1/tasks/task-426`);
-      return true;
-    },
+    /MIME mismatch/,
   );
-  assert.deepEqual(requestedUrls, [
-    `POST ${IMAGE_PROVIDER_BASE_URL}/v1/images/generations`,
-    `GET ${IMAGE_PROVIDER_BASE_URL}/v1/tasks/task-426`,
-  ]);
-});
-
-test("multimodal_generate: images_async applies official parameter defaults and beta count limit", async () => {
-  const bodies = [];
-  const runtime = {
-    globalConfig: {
-      providers: {
-        gpt_image_2_beta: {
-          enabled: true,
-          used_for_conversation: false,
-          api_key: "test-key",
-          base_url: IMAGE_PROVIDER_BASE_URL,
-          model: "gpt-image-2-beta",
-          reasoning_effort_parameter: "reasoning_effort",
-          reasoning_effort_options: ["none", "low", "medium", "high"],
-          providerId: "gpt_image_2",
-          adapterId: "openai-compatible",
-          multimodal_generation: {
-            support_generation: {
-              enabled: true,
-              support_scope: ["image"],
-              api_type: "images_async",
-            },
-          },
-        },
-      },
-    },
-    userConfig: {},
-    sharedTools: {
-      async fetch(url, init = {}) {
-        if (init?.body) bodies.push(JSON.parse(String(init.body)));
-        if (String(url || "").endsWith("/v1/images/generations")) {
-          return jsonResponse({ id: `task-${bodies.length}` });
-        }
-        return jsonResponse({
-          status: "completed",
-          result_data: [{ b64_json: Buffer.from("fake-image").toString("base64") }],
-        });
-      },
-    },
-  };
-  const tool = getMultimodalGenerateTool(withExecutorModelHost(runtime));
-
-  await tool.invoke({
-    generation_content: "draw a landscape",
-    model_name: "gpt_image_2_beta",
-    size: "16:9",
-    n: 8,
-  });
-  await tool.invoke({
-    generation_content: "draw a square",
-    model_name: "gpt_image_2_beta",
-    size: "1024x1024",
-    resolution: "2K",
-    n: 8,
-  });
-
-  assert.equal(bodies[0].size, "16:9");
-  assert.equal(bodies[0].resolution, "1K");
-  assert.equal(bodies[0].n, 1);
-  assert.equal(bodies[1].size, "1024x1024");
-  assert.equal(bodies[1].resolution, "2K");
-  assert.equal(bodies[1].n, 1);
-});
-
-test("multimodal_generate: images_async adds official HTTP status hints to diagnostics", async () => {
-  const runtime = {
-    globalConfig: {
-      providers: {
-        gpt_image_2: {
-          enabled: true,
-          used_for_conversation: false,
-          api_key: "test-key",
-          base_url: IMAGE_PROVIDER_BASE_URL,
-          model: "gpt-image-2",
-          reasoning_effort_parameter: "reasoning_effort",
-          reasoning_effort_options: ["none", "low", "medium", "high"],
-          providerId: "gpt_image_2",
-          adapterId: "openai-compatible",
-          multimodal_generation: {
-            support_generation: {
-              enabled: true,
-              support_scope: ["image"],
-              api_type: "images_async",
-            },
-          },
-        },
-      },
-    },
-    userConfig: {},
-    sharedTools: {
-      async fetch(url) {
-        if (String(url || "").endsWith("/v1/images/generations")) {
-          return jsonResponse({ id: "task-private" });
-        }
-        return jsonResponse({ error: "not found (request_id: req_404)" }, 404);
-      },
-    },
-  };
-  const tool = getMultimodalGenerateTool(withExecutorModelHost(runtime));
-
+  const controller = new AbortController();
+  controller.abort(new Error("cancelled"));
   await assert.rejects(
-    tool.invoke({
-      generation_content: "draw a bird",
-      model_name: "gpt_image_2",
-      size: "auto",
+    materializeGenerationAttachments(artifacts, {
+      modality: "video",
+      abortSignal: controller.signal,
+      fetchImpl: async () => assert.fail("cancelled generation must not download"),
     }),
-    (error) => {
-      assert.equal(error?.code, "RECOVERABLE_MULTIMODAL_GENERATE_FAILED");
-      assert.match(error?.message || "", /not found \(request_id: req_404\)/);
-      assert.doesNotMatch(error?.message || "", /任务不存在或无权访问/);
-      assert.doesNotMatch(error?.message || "", /只能查询自己创建的任务/);
-      assert.equal(error?.details?.requestMethod, "GET");
-      assert.equal(error?.details?.requestUrl, `${IMAGE_PROVIDER_BASE_URL}/v1/tasks/task-private`);
-      return true;
-    },
+    /cancelled/,
   );
 });

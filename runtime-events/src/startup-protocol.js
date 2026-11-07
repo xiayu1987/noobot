@@ -13,6 +13,7 @@ export const SERVICE_STARTUP_SOURCE = "service";
 
 export const SERVICE_STARTUP_EVENTS = Object.freeze({
   CONTEXT_LOADED: "service.startup.context.loaded",
+  CONFIG_DIAGNOSTIC: "service.startup.config.diagnostic",
   LISTEN_STARTED: "service.startup.httpServer.listen.started",
   WORKSPACE_PREPARATION_COMPLETED: "service.startup.workspacePreparation.completed",
   WORKSPACE_PREPARATION_FAILED: "service.startup.workspacePreparation.failed",

@@ -272,11 +272,13 @@ test("@full PBE-044 工具链两次停止继续后的快照序列化与模型恢
     snapshot: firstSnapshot,
     continuation: firstContinue,
     trace: firstContinueTrace,
+    toolNameBindings: noobot.connectConfig.toolNameBindings,
   });
   assertSnapshotRecoveryInModelInput({
     snapshot: secondSnapshot,
     continuation: secondContinue,
     trace: secondContinueTrace,
+    toolNameBindings: noobot.connectConfig.toolNameBindings,
   });
 
   const chainTurns = [

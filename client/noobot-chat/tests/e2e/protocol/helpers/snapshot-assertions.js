@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { expect } from "@playwright/test";
+import { createToolNameBinding, projectToolNamePrompt } from "@noobot/model-protocol";
 import {
   SNAPSHOT_VERSION,
   composeMessagesFromBlocks,
@@ -98,7 +99,12 @@ export function assertSerializedModelMessageSnapshot(snapshot) {
   return { declaredToolCallIds, completedToolCallIds };
 }
 
-export function assertSnapshotRecoveryInModelInput({ snapshot, continuation, trace }) {
+export function assertSnapshotRecoveryInModelInput({
+  snapshot,
+  continuation,
+  trace,
+  toolNameBindings,
+}) {
   const previousIdentity = {
     userId: snapshot.userId,
     sessionId: snapshot.sessionId,
@@ -118,7 +124,13 @@ export function assertSnapshotRecoveryInModelInput({ snapshot, continuation, tra
     }),
   };
   expect(recoveredBlocks.history).toEqual(hydrated.messageBlocks.history);
-  const expected = fingerprintDiagnosticMessages(composeMessagesFromBlocks(recoveredBlocks));
+  expect(isPlainObject(toolNameBindings)).toBe(true);
+  const binding = createToolNameBinding({ bindings: toolNameBindings });
+  const projectedMessages = composeMessagesFromBlocks(recoveredBlocks).map((message) => ({
+    ...message,
+    content: projectToolNamePrompt(message.content, binding),
+  }));
+  const expected = fingerprintDiagnosticMessages(projectedMessages);
   const actual = trace.data?.messages?.fingerprints || [];
   expect(actual.slice(0, expected.fingerprints.length)).toEqual(expected.fingerprints);
   expect(actual.length).toBeGreaterThan(expected.fingerprints.length);

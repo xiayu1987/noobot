@@ -11,6 +11,7 @@ export { default as BaseFileCardList } from "../ui/BaseFileCardList.vue";
 export { default as BaseMessageErrorAlert } from "../ui/BaseMessageErrorAlert.vue";
 export { default as BaseMarkdownContent } from "../ui/BaseMarkdownContent.vue";
 export { default as BaseMetaLabel } from "../ui/BaseMetaLabel.vue";
+export { default as BaseModelPicker } from "../ui/BaseModelPicker.vue";
 export { default as BaseMessageShell } from "../ui/BaseMessageShell.vue";
 export { default as BaseMessageTypeTag } from "../ui/BaseMessageTypeTag.vue";
 export { default as BaseNoteBlock } from "../ui/BaseNoteBlock.vue";

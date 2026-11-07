@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { resolveModelLibraryProvider } from "../src/index.js";
+import { resolveModelLibraryProvider, supportsModelMultimodalGeneration } from "../src/index.js";
 
 const additions = {
   gpt_6_sol: "gpt-6-sol",
@@ -193,4 +193,57 @@ test("new models declare supported reasoning levels and modality boundaries", ()
   const image = resolveModelLibraryProvider("gpt_image_2_5_sunburst");
   assert.equal(image.used_for_conversation, false);
   assert.deepEqual(image.multimodal_generation.support_generation.support_scope, ["image"]);
+});
+
+test("native generation catalog declares executable APIs while excluding chat selections", () => {
+  const config = JSON.parse(
+    readFileSync(new URL("../../service/config/global.config.example.json", import.meta.url)),
+  );
+  const groups = {
+    image: [
+      "gpt_image_2_6_sunburst",
+      "gpt_image_2_6_flare",
+      "gemini_nano_banana_2_1",
+      "gemini_3_1_flash_lite_image",
+      "gemini_3_pro_image",
+      "grok_imagine_image_2_0",
+      "qwen_image_3_0_pro",
+      "wan2_7_image_pro",
+      "wan2_7_image",
+    ],
+    video: [
+      "gemini_omni_1_2_flash",
+      "grok_imagine_video_1_5",
+      "grok_imagine_video_1_5_lite",
+      "wan3_0_video",
+      "wan3_0_video_prime",
+      "happyhorse_1_1_t2v",
+      "happyhorse_1_1_i2v",
+      "happyhorse_1_1_r2v",
+      "minimax_h3",
+    ],
+  };
+  for (const [modality, aliases] of Object.entries(groups)) {
+    for (const alias of aliases) {
+      const provider = resolveModelLibraryProvider(alias);
+      assert.deepEqual(config.providers[alias], provider, alias);
+      assert.equal(provider.enabled, true, alias);
+      assert.equal(provider.used_for_conversation, false, alias);
+      assert.deepEqual(provider.multimodal_generation.support_generation.support_scope, [modality]);
+      assert.equal(supportsModelMultimodalGeneration(provider, [modality]), true, alias);
+      assert.deepEqual(provider.reasoning_effort_options, ["none"]);
+    }
+  }
+  assert.equal(resolveModelLibraryProvider("sora_2"), null);
+  assert.equal(resolveModelLibraryProvider("veo_3_1_generate_preview"), null);
+});
+
+test("every built-in provider keeps credentials and addresses in configuration parameters", () => {
+  const config = JSON.parse(
+    readFileSync(new URL("../../service/config/global.config.example.json", import.meta.url)),
+  );
+  for (const [alias, provider] of Object.entries(config.providers)) {
+    assert.match(provider.base_url, /^\$\{[A-Z0-9_]+\}$/, alias);
+    assert.match(provider.api_key, /^\$\{[A-Z0-9_]+\}$/, alias);
+  }
 });

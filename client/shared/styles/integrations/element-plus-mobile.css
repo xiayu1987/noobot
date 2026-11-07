@@ -35,8 +35,7 @@
     margin-top: 5vh;
   }
 
-  .el-button,
-  .noobot-action-btn {
+  .el-button {
     min-height: var(--noobot-control-height-md);
   }
 }

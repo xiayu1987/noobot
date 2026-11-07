@@ -157,33 +157,13 @@ async function runMcpTaskWithTools({ toolset, normalizedTask, runtime, signal })
       };
     }
     for (const call of calls) {
-      const tool = toolMap.get(text(call?.name));
-      if (!tool) {
-        const notFoundMsg = `${tSystem("mcp.toolNotFound")}: ${String(call?.name || "")}`;
-        const notFoundResult = encodeToolResultObject({
-          ok: false,
-          code: ERROR_CODE.RECOVERABLE_MCP_TOOL_NOT_FOUND,
-          error: notFoundMsg,
-        });
-        traces.push({ tool: call?.name || "", args: call?.args || {}, result: notFoundResult });
-        messages.push(new ToolMessage({ tool_call_id: call?.id || "", content: notFoundResult }));
-        continue;
-      }
-      const result = await runWithToolNameBinding(requireToolCallNameBinding(call), () =>
-        tool.invoke(call.args, { signal: signal || undefined }),
-      );
-      decodeToolResultText(result);
+      const result = await invokeMcpTaskTool({ call, toolMap, signal });
       traces.push({
-        tool: call?.name || "",
-        args: call?.args || {},
+        tool: call.name,
+        args: call.args,
         result: result.slice(0, LENGTH_THRESHOLDS.display.mcpTaskResultPreviewChars),
       });
-      messages.push(
-        new ToolMessage({
-          tool_call_id: call?.id || "",
-          content: result,
-        }),
-      );
+      messages.push(new ToolMessage({ tool_call_id: call.id, content: result }));
     }
   }
 
@@ -194,4 +174,21 @@ async function runMcpTaskWithTools({ toolset, normalizedTask, runtime, signal })
     answer: tSystem("mcp.toolCallTurnLimitReached"),
     traces,
   };
+}
+
+async function invokeMcpTaskTool({ call, toolMap, signal }) {
+  const tool = toolMap.get(call.name);
+  if (!tool) {
+    return encodeToolResultObject({
+      ok: false,
+      code: ERROR_CODE.RECOVERABLE_MCP_TOOL_NOT_FOUND,
+      error: `${tSystem("mcp.toolNotFound")}: ${call.name}`,
+    });
+  }
+  const binding = requireToolCallNameBinding(call);
+  const result = await runWithToolNameBinding(binding, () =>
+    tool.invoke(call.args, { signal: signal || undefined }),
+  );
+  decodeToolResultText(result);
+  return result;
 }

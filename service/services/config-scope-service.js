@@ -50,14 +50,11 @@ export function createConfigScopeService({
       payload: existingPayload,
     } = await readScopedConfigParams({
       req,
-      createIfMissing: true,
+      createIfMissing: false,
     });
     const nextPayload = {
-      values: values && typeof values === "object" ? values : existingPayload?.values || {},
-      descriptions:
-        descriptions && typeof descriptions === "object"
-          ? descriptions
-          : existingPayload?.descriptions || {},
+      values: values === undefined ? existingPayload.values : values,
+      descriptions: descriptions === undefined ? existingPayload.descriptions : descriptions,
     };
     const keys =
       scope === "system"

@@ -38,11 +38,12 @@ export function normalizeMermaidMarkdown(source = "") {
 export function createMarkdownRenderer() {
   const md = new MarkdownIt({ html: false, linkify: true, breaks: true });
   const fence = md.renderer.rules.fence;
-  md.renderer.rules.fence = (tokens, index, options, env, self) => {
+  md.renderer.rules.fence = (...args) => {
+    const [tokens, index] = args;
     const token = tokens[index];
     return token.info.trim().toLowerCase() === "mermaid"
       ? `<div class="mermaid">${md.utils.escapeHtml(token.content)}</div>`
-      : fence(tokens, index, options, env, self);
+      : fence(...args);
   };
   return md;
 }

@@ -8,8 +8,11 @@ import { clientFilePath as path } from "../../path-resolver.js";
 import {
   applyPrimaryModelReferencesToConfigFile,
   collectConfigTemplateKeys,
+  createClientModelOptions,
   CONFIG_DOCUMENT_SCOPE,
-  CONFIG_REPAIR_ACTION,
+  AgentConfigProtocolError,
+  configIssueBlocksStartup,
+  parseConfigDocumentText,
   ensureModelProviderInConfigFile,
   normalizeConfigParamsDocument,
   repairConfigDocument,
@@ -17,7 +20,7 @@ import {
   summarizeConfigRepairReport,
   synchronizeConfigParamsDocument,
 } from "@noobot/agent-config-protocol";
-import { listModelLibraryOptions } from "@noobot/model-protocol";
+import { listModelLibraryOptions, resolveModelLibraryProvider } from "@noobot/model-protocol";
 import { isPlainObject, text } from "@noobot/shared/value";
 
 export function createDesktopConfigManager({
@@ -25,26 +28,15 @@ export function createDesktopConfigManager({
   packagedBackendRoot,
   appendDesktopLog = () => {},
 } = {}) {
-  function readJsonFile(filePath, fallback = null) {
+  function readConfigDocument(filePath, { allowMissing = false } = {}) {
+    let source;
     try {
-      return JSON.parse(fs.readFileSync(filePath, "utf8"));
-    } catch {
-      return fallback;
+      source = fs.readFileSync(filePath, "utf8");
+    } catch (error) {
+      if (allowMissing && error.code === "ENOENT") return {};
+      throw error;
     }
-  }
-
-  function readJsonFileForRepair(filePath) {
-    const raw = fs.readFileSync(filePath, "utf8");
-    try {
-      return JSON.parse(raw);
-    } catch {
-      const invalidBackupPath = `${filePath}.invalid-${Date.now()}.json`;
-      fs.renameSync(filePath, invalidBackupPath);
-      appendDesktopLog(
-        `[main:config-repair] action=${CONFIG_REPAIR_ACTION.RESTORE_INVALID_DOCUMENT}; invalid JSON preserved at ${invalidBackupPath}; restored=${filePath}`,
-      );
-      return {};
-    }
+    return parseConfigDocumentText(source);
   }
 
   function writeJsonFile(filePath, payload) {
@@ -61,6 +53,9 @@ export function createDesktopConfigManager({
 
   function logConfigRepairReport(filePath, report = {}) {
     const summary = summarizeConfigRepairReport(report);
+    for (const issue of report.issues || []) {
+      appendDesktopLog(`[main:config-diagnostic] file=${filePath}; issue=${JSON.stringify(issue)}`);
+    }
     if (!summary.changed) return;
     appendDesktopLog(
       `[main:config-repair] file=${filePath}; changes=${summary.changeCount}; actions=${JSON.stringify(summary.actionCounts)}`,
@@ -91,28 +86,14 @@ export function createDesktopConfigManager({
 
   function collectModelOptionsFromConfig(payload = {}) {
     const providers = isPlainObject(payload.providers) ? payload.providers : {};
-    const configuredOptions = Object.entries(providers)
-      .map(([key, value]) => ({
-        key: text(key),
-        model: text(value?.model),
-        format: text(value?.format),
-        description: text(value?.description),
-        enabled: value?.enabled !== false,
-        usedForConversation: value?.used_for_conversation !== false,
-      }))
-      .filter((item) => item.key)
-      .sort((a, b) => a.key.localeCompare(b.key));
-    const configuredByKey = new Map(configuredOptions.map((item) => [item.key, item]));
-    const options = listModelLibraryOptions().map((item) => ({
-      ...item,
-      ...(configuredByKey.get(item.key) || {}),
-      library: true,
-    }));
-    const libraryKeys = new Set(options.map((item) => item.key));
-    return options.concat(
-      configuredOptions
-        .filter((item) => !libraryKeys.has(item.key))
-        .map((item) => ({ ...item, library: false })),
+    const libraryProviders = Object.fromEntries(
+      listModelLibraryOptions().map(({ key }) => [key, resolveModelLibraryProvider(key)]),
+    );
+    return createClientModelOptions({ ...libraryProviders, ...providers }, "conversation").map(
+      (option) => ({
+        ...option,
+        library: Object.hasOwn(libraryProviders, option.alias),
+      }),
     );
   }
 
@@ -127,13 +108,19 @@ export function createDesktopConfigManager({
     return applyPrimaryModelReferencesToConfigFile(payload, selectedModel);
   }
 
-  function ensureConfigParamsCatalog({ workspaceRootPath, configFiles = [] } = {}) {
-    const keys = collectConfigTemplateKeys(
-      ...configFiles.map((filePath) => readJsonFile(filePath, {})),
-    );
+  function ensureConfigParamsCatalog({ workspaceRootPath, globalConfigPath } = {}) {
+    const documents = [readConfigDocument(globalConfigPath)];
+    for (const userConfigPath of listUserConfigPaths(workspaceRootPath)) {
+      try {
+        documents.push(readConfigDocument(userConfigPath));
+      } catch (error) {
+        reportUserConfigError(error, userConfigPath);
+      }
+    }
+    const keys = collectConfigTemplateKeys(...documents);
     const filePath = path.join(workspaceRootPath, "config-params.json");
     const synchronized = synchronizeConfigParamsDocument({
-      document: readJsonFile(filePath, {}) || {},
+      document: readConfigDocument(filePath, { allowMissing: true }),
       keys,
     });
     writeJsonFile(filePath, synchronized);
@@ -141,7 +128,7 @@ export function createDesktopConfigManager({
   }
 
   function collectSelectedModelConfigParams(globalConfigPath) {
-    const globalConfig = readJsonFile(globalConfigPath, {}) || {};
+    const globalConfig = readConfigDocument(globalConfigPath);
     const selectedAlias = getDefaultModelAlias(globalConfig);
     const selectedProvider = isPlainObject(globalConfig.providers?.[selectedAlias])
       ? globalConfig.providers[selectedAlias]
@@ -157,7 +144,7 @@ export function createDesktopConfigManager({
   }
 
   function getMissingRequiredConfigParams(configParamsPath, globalConfigPath) {
-    const payload = normalizeConfigParamsDocument(readJsonFile(configParamsPath, {}) || {});
+    const payload = normalizeConfigParamsDocument(readConfigDocument(configParamsPath));
     const values = payload.values;
     const modelParams = collectSelectedModelConfigParams(globalConfigPath);
     return Object.entries(values)
@@ -181,7 +168,7 @@ export function createDesktopConfigManager({
   }
 
   function getSuperAdminRequirement(globalConfigPath) {
-    const payload = readJsonFile(globalConfigPath, {}) || {};
+    const payload = readConfigDocument(globalConfigPath);
     const userId = getNestedString(payload, ["super_admin", "user_id"]);
     const connectCode = getNestedString(payload, ["super_admin", "connect_code"]);
     const language = getNestedString(payload, ["preferences", "language"]) || "zh-CN";
@@ -227,7 +214,7 @@ export function createDesktopConfigManager({
       throw new Error("Please change the default super admin username.");
     if (normalizedConnectCode === "change-your-connect-code")
       throw new Error("Please change the default connect code.");
-    const payload = readJsonFile(globalConfigPath, {}) || {};
+    const payload = readConfigDocument(globalConfigPath);
     setNestedValue(payload, ["super_admin", "user_id"], normalizedUserId);
     setNestedValue(payload, ["super_admin", "connect_code"], normalizedConnectCode);
     setNestedValue(payload, ["preferences", "language"], normalizedLanguage);
@@ -241,9 +228,11 @@ export function createDesktopConfigManager({
 
   function saveConfigParamValues({ workspaceRootPath, values = {} } = {}) {
     const filePath = path.join(workspaceRootPath, "config-params.json");
-    const current = normalizeConfigParamsDocument(readJsonFile(filePath, {}) || {});
+    const current = normalizeConfigParamsDocument(
+      readConfigDocument(filePath, { allowMissing: true }),
+    );
     const incoming = normalizeConfigParamsDocument({
-      values: isPlainObject(values) ? values : {},
+      values,
     });
     const next = normalizeConfigParamsDocument({
       values: { ...current.values, ...incoming.values },
@@ -261,19 +250,36 @@ export function createDesktopConfigManager({
       .filter((filePath) => fs.existsSync(filePath));
   }
 
-  function synchronizeExistingUserConfigs({ workspaceRootPath, baseValues = {} } = {}) {
-    for (const filePath of listUserConfigPaths(workspaceRootPath)) {
-      const payload = readJsonFileForRepair(filePath);
+  function reportUserConfigError(error, filePath) {
+    if (
+      !(error instanceof AgentConfigProtocolError) ||
+      !error.details.impact ||
+      configIssueBlocksStartup(error.details, CONFIG_DOCUMENT_SCOPE.USER)
+    )
+      throw error;
+    logConfigRepairReport(filePath, { issues: [error.details] });
+  }
+
+  function synchronizeUserConfig(filePath, baseValues) {
+    try {
+      const payload = readConfigDocument(filePath);
       const repair = repairConfigDocument({
         scope: CONFIG_DOCUMENT_SCOPE.USER,
         baseValues,
         target: upgradeConfigModelLibrary(payload).document,
       });
-      const synchronized = repair.document;
-      if (!fs.existsSync(filePath) || JSON.stringify(payload) !== JSON.stringify(synchronized)) {
-        writeJsonFile(filePath, synchronized);
-        logConfigRepairReport(filePath, repair.report);
+      logConfigRepairReport(filePath, repair.report);
+      if (JSON.stringify(payload) !== JSON.stringify(repair.document)) {
+        writeJsonFile(filePath, repair.document);
       }
+    } catch (error) {
+      reportUserConfigError(error, filePath);
+    }
+  }
+
+  function synchronizeExistingUserConfigs({ workspaceRootPath, baseValues = {} } = {}) {
+    for (const filePath of listUserConfigPaths(workspaceRootPath)) {
+      synchronizeUserConfig(filePath, baseValues);
     }
   }
 
@@ -288,11 +294,9 @@ export function createDesktopConfigManager({
       ? path.join(packagedBackendRoot, "user-template", "default-user")
       : path.join(repoRoot, "user-template", "default-user");
 
-    const exampleConfig = readJsonFile(examplePath, null);
-    if (!isPlainObject(exampleConfig))
-      throw new Error(`invalid global config example: ${examplePath}`);
+    const exampleConfig = readConfigDocument(examplePath);
     const isFirstGlobalConfig = !fs.existsSync(targetPath);
-    const currentConfig = isFirstGlobalConfig ? {} : readJsonFileForRepair(targetPath);
+    const currentConfig = isFirstGlobalConfig ? {} : readConfigDocument(targetPath);
     const hasConfiguredExecutionIsolationMode = Boolean(
       text(currentConfig?.security?.execution_isolation?.mode),
     );
@@ -303,6 +307,7 @@ export function createDesktopConfigManager({
         .document,
     });
     const mergedConfig = globalRepair.document;
+    logConfigRepairReport(targetPath, globalRepair.report);
     mergedConfig.workspace_root = workspaceRootPath;
     mergedConfig.workspace_template_path = workspaceTemplatePath;
     if (!hasConfiguredExecutionIsolationMode)
@@ -312,7 +317,6 @@ export function createDesktopConfigManager({
       JSON.stringify(currentConfig) !== JSON.stringify(mergedConfig)
     ) {
       writeJsonFile(targetPath, mergedConfig);
-      logConfigRepairReport(targetPath, globalRepair.report);
       appendDesktopLog(
         `[main:config] synced global config from example: ${examplePath} -> ${targetPath}`,
       );
@@ -322,7 +326,7 @@ export function createDesktopConfigManager({
     synchronizeExistingUserConfigs({ workspaceRootPath, baseValues: mergedConfig });
     const configParamsPath = ensureConfigParamsCatalog({
       workspaceRootPath,
-      configFiles: [targetPath, ...listUserConfigPaths(workspaceRootPath)],
+      globalConfigPath: targetPath,
     });
     return {
       configDir,

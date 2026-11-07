@@ -5,6 +5,7 @@
 -->
 <script setup>
 import { computed } from "vue";
+import BaseModelPicker from "../../../shared/ui/BaseModelPicker.vue";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 import ExtensionOutlet from "../../../extensions/components/ExtensionOutlet.vue";
 import { normalizeClientModelOptions } from "@noobot/agent-config-protocol";
@@ -87,7 +88,6 @@ const modelSelectionRows = computed(() => [
     label: translate("composer.mainFlowModel"),
     hint: translate("composer.mainFlowModelHint"),
     modelValue: props.selectedModel,
-    optionKeyPrefix: "",
     updateEvent: "update:selectedModel",
   },
   {
@@ -95,7 +95,6 @@ const modelSelectionRows = computed(() => [
     label: translate("composer.memoryExperienceModel"),
     hint: translate("composer.memoryExperienceModelHint"),
     modelValue: props.memoryModel,
-    optionKeyPrefix: "memory-",
     updateEvent: "update:memoryModel",
   },
 ]);
@@ -277,33 +276,14 @@ const composerExtensionBaseProps = computed(() => ({
           <span class="model-field-label">{{ row.label }}</span>
           <span class="model-field-hint">{{ row.hint }}</span>
         </div>
-        <el-select
+        <BaseModelPicker
           :model-value="row.modelValue"
-          size="small"
-          clearable
-          :filterable="false"
-          popper-class="noobot-select-popper noobot-model-select-popper"
+          :options="normalizedModelOptions"
+          :title="row.label"
           :disabled="!hasModelOptions"
           :placeholder="translate('composer.useDefaultModel')"
-          class="composer-select model-select noobot-model-select-control"
           @update:model-value="emit(row.updateEvent, String($event || '').trim())"
-        >
-          <el-option
-            v-for="modelItem in normalizedModelOptions"
-            :key="`${row.optionKeyPrefix}${modelItem.alias}`"
-            :label="modelItem.alias"
-            :value="modelItem.alias"
-            class="model-select-option"
-          >
-            <div class="model-option-content">
-              <span class="model-option-label">{{ modelItem.alias }}</span>
-              <span v-if="modelItem.model" class="model-option-meta">{{ modelItem.model }}</span>
-              <span v-if="modelItem.description" class="model-option-description">{{
-                modelItem.description
-              }}</span>
-            </div>
-          </el-option>
-        </el-select>
+        />
         <span v-if="row.key === 'main' && !hasModelOptions" class="plugin-empty-text">
           {{ translate("composer.noAvailableModels") }}
         </span>
@@ -445,11 +425,6 @@ const composerExtensionBaseProps = computed(() => ({
   min-width: 0;
 }
 
-.composer-select {
-  width: 100%;
-  min-width: 0;
-}
-
 .plugin-empty-text {
   font-size: var(--noobot-font-size-sm);
   color: var(--noobot-text-secondary);
@@ -522,33 +497,6 @@ const composerExtensionBaseProps = computed(() => ({
   color: var(--noobot-text-main);
 }
 
-.model-select {
-  width: 100%;
-  min-width: 0;
-}
-
-.model-option-content {
-  display: flex;
-  flex-direction: column;
-  gap: var(--noobot-space-3xs);
-  padding: var(--noobot-space-2xs) 0;
-  min-width: 0;
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
-.model-option-label {
-  font-weight: var(--noobot-font-weight-semibold);
-  color: var(--noobot-text-main);
-}
-
-.model-option-meta,
-.model-option-description {
-  font-size: var(--noobot-font-size-sm);
-  line-height: var(--noobot-line-height-balanced);
-  color: var(--noobot-text-secondary);
-}
-
 .plugin-model-extension {
   display: flex;
   flex-direction: column;
@@ -603,11 +551,6 @@ const composerExtensionBaseProps = computed(() => ({
     flex-basis: auto;
   }
 
-  .model-select {
-    width: 100%;
-    flex-basis: auto;
-  }
-
   .option-selector {
     gap: var(--noobot-space-xs);
     flex-wrap: wrap;
@@ -631,10 +574,6 @@ const composerExtensionBaseProps = computed(() => ({
     min-height: var(--noobot-control-icon-size);
     padding: var(--noobot-space-2xs) var(--noobot-space-xs);
     justify-content: center;
-  }
-
-  .composer-select {
-    width: 100%;
   }
 }
 

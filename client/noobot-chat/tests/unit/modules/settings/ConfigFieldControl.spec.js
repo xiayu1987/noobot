@@ -87,6 +87,80 @@ const mountControl = ({ declarationContainer, container, node }) =>
     },
   });
 
+describe("ConfigFieldControl model references", () => {
+  it("projects configured model capabilities into the picker and persists selection or default", async () => {
+    const container = reactive({ model: "existing" });
+    const wrapper = mount(ConfigFieldControl, {
+      props: {
+        node: { key: "model", kind: CONFIG_FORM_NODE_KIND.STRING, modelReference: "model" },
+        container,
+        document: {
+          providers: {
+            image: {
+              model: "gpt-image-2",
+              supplier: "OpenAI",
+              api_key: "private",
+              multimodal_generation: {
+                support_generation: { enabled: true, support_scope: ["image"] },
+              },
+            },
+          },
+        },
+      },
+      global: {
+        stubs: {
+          BaseModelPicker: defineComponent({
+            name: "BaseModelPicker",
+            props: ["modelValue", "options", "allowDefault"],
+            emits: ["update:modelValue"],
+            template: "<div />",
+          }),
+          ElSwitch: true,
+          ElCheckbox: true,
+          ElInputNumber: true,
+          ElOption: true,
+          ElSelect: true,
+          ElInput: true,
+        },
+      },
+    });
+    const picker = wrapper.findComponent({ name: "BaseModelPicker" });
+    expect(wrapper.find("select").exists()).toBe(false);
+    expect(picker.props("modelValue")).toBe("existing");
+    expect(picker.props("options")).toEqual([
+      {
+        alias: "image",
+        model: "gpt-image-2",
+        description: "",
+        supplier: "OpenAI",
+        inputModalities: [],
+        outputModalities: ["image"],
+      },
+    ]);
+    picker.vm.$emit("update:modelValue", "image");
+    await wrapper.vm.$nextTick();
+    expect(container.model).toBe("image");
+    picker.vm.$emit("update:modelValue", "");
+    expect(container.model).toBeUndefined();
+    await wrapper.setProps({
+      node: {
+        key: "model",
+        kind: CONFIG_FORM_NODE_KIND.STRING,
+        modelReference: "conversation",
+        nonEmpty: true,
+      },
+    });
+    expect(picker.props("allowDefault")).toBe(false);
+    expect(picker.props("options")).toEqual([]);
+    await wrapper.setProps({
+      node: { key: "model", kind: CONFIG_FORM_NODE_KIND.STRING, modelReference: "generate:image" },
+    });
+    expect(picker.props("options").map(({ alias }) => alias)).toEqual(["image"]);
+    expect(picker.props("allowDefault")).toBe(true);
+    wrapper.unmount();
+  });
+});
+
 describe("ConfigFieldControl reasoning effort options", () => {
   it("uses a free text input and persists the literal value when no options exist", async () => {
     const container = { reasoning_effort: "Custom-Level" };

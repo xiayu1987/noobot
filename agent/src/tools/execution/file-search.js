@@ -260,12 +260,11 @@ export async function searchFilesWithRipgrep({
     const bytes = await readFile(path.join(rootPath, filePath));
     const document = decodeFileDocument(bytes, encoding);
     const { lines } = decodePatchText(document.content, document.encoding);
-    for (const event of fileEvents) {
-      if (lines[event.line - 1] !== event.text) {
-        throw new Error(
-          `search result differs from file content: ${filePath}:${event.line}; search again`,
-        );
-      }
+    const changedEvent = fileEvents.find((event) => lines[event.line - 1] !== event.text);
+    if (changedEvent) {
+      throw new Error(
+        `search result differs from file content: ${filePath}:${changedEvent.line}; search again`,
+      );
     }
     encodings.set(filePath, document.encoding);
   }

@@ -60,14 +60,8 @@ export function registerConfigAndTemplateRoutes(
         const incomingBody = req.body || {};
         const { payload, userId } = await writeScopedConfigParams({
           req,
-          values:
-            incomingBody?.values && typeof incomingBody.values === "object"
-              ? incomingBody.values
-              : undefined,
-          descriptions:
-            incomingBody?.descriptions && typeof incomingBody.descriptions === "object"
-              ? incomingBody.descriptions
-              : undefined,
+          values: incomingBody?.values,
+          descriptions: incomingBody?.descriptions,
         });
         if (scope === "system") await rebuildRuntimeConfig();
         res.json(await buildScopedConfigParamsResponse({ req, payload, userId }));
@@ -106,9 +100,9 @@ export function registerConfigAndTemplateRoutes(
     requireSuperAdmin,
     withJsonError(
       async (req, res) => {
-        req.query = { ...(req.query || {}), scope: "system" };
-        const { payload } = await readScopedConfigParams({ req, createIfMissing: true });
-        res.json(await buildScopedConfigParamsResponse({ req, payload }));
+        const scopedReq = { ...req, query: { ...req.query, scope: "system" } };
+        const { payload } = await readScopedConfigParams({ req: scopedReq, createIfMissing: true });
+        res.json(await buildScopedConfigParamsResponse({ req: scopedReq, payload }));
       },
       { fallbackErrorKey: "common.readConfigParamsFailed", translateText },
     ),
@@ -120,15 +114,15 @@ export function registerConfigAndTemplateRoutes(
     requireSuperAdmin,
     withJsonError(
       async (req, res) => {
-        req.query = { ...(req.query || {}), scope: "system" };
+        const scopedReq = { ...req, query: { ...req.query, scope: "system" } };
         const incomingBody = req.body || {};
         const { payload } = await writeScopedConfigParams({
-          req,
+          req: scopedReq,
           values: incomingBody?.values,
           descriptions: incomingBody?.descriptions,
         });
         await rebuildRuntimeConfig();
-        res.json(await buildScopedConfigParamsResponse({ req, payload }));
+        res.json(await buildScopedConfigParamsResponse({ req: scopedReq, payload }));
       },
       { fallbackErrorKey: "common.saveConfigParamsFailed", translateText },
     ),

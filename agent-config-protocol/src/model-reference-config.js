@@ -4,21 +4,14 @@
  */
 import { isPlainObject } from "./utils.js";
 import { resolveModelLibraryProvider } from "@noobot/model-protocol";
-import { MULTIMODAL_CONFIG_OPERATION } from "./multimodal-config.js";
+import { listConfigModelReferences, supportsModelReference } from "./contract/model-reference.js";
 import { text } from "@noobot/shared/value";
-
-function setStringValues(target, value) {
-  if (!isPlainObject(target)) return;
-  for (const key of Object.keys(target)) {
-    if (typeof target[key] === "string") target[key] = value;
-  }
-}
 
 export function applyPrimaryModelReferencesToConfigFile(config = {}, modelAlias = "") {
   const alias = text(modelAlias);
   if (!isPlainObject(config) || !alias) return config;
   const providers = isPlainObject(config.providers) ? config.providers : {};
-  if (!isPlainObject(providers[alias])) {
+  if (!supportsModelReference(providers[alias], "model")) {
     throw new TypeError(`selected model provider not found: ${alias}`);
   }
 
@@ -26,32 +19,8 @@ export function applyPrimaryModelReferencesToConfigFile(config = {}, modelAlias 
   providers[alias].enabled = true;
   providers[alias].used_for_conversation = true;
 
-  const multimodal = isPlainObject(config.multimodal) ? config.multimodal : {};
-  for (const operation of Object.values(MULTIMODAL_CONFIG_OPERATION)) {
-    const operationConfig = isPlainObject(multimodal[operation]) ? multimodal[operation] : null;
-    if (operationConfig) setStringValues(operationConfig.default_models, alias);
-  }
-
-  const scenarioDefinitions = config?.scenarios?.definitions;
-  if (isPlainObject(scenarioDefinitions)) {
-    for (const definition of Object.values(scenarioDefinitions)) {
-      if (isPlainObject(definition) && Object.prototype.hasOwnProperty.call(definition, "model")) {
-        definition.model = alias;
-      }
-    }
-  }
-
-  if (isPlainObject(config?.tools?.do_search_web?.model_web_search)) {
-    config.tools.do_search_web.model_web_search.model = alias;
-  }
-
-  setStringValues(config?.plugins?.harness?.stepModels, alias);
-  setStringValues(config?.plugins?.harness?.capabilityModelByPurpose, alias);
-  if (
-    isPlainObject(config?.plugins?.workflow) &&
-    Object.prototype.hasOwnProperty.call(config.plugins.workflow, "semanticModel")
-  ) {
-    config.plugins.workflow.semanticModel = alias;
+  for (const { container, key, requirement } of listConfigModelReferences(config)) {
+    if (supportsModelReference(providers[alias], requirement)) container[key] = alias;
   }
   return config;
 }

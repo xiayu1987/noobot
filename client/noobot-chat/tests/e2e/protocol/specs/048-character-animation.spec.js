@@ -366,7 +366,7 @@ test("@full PBE-048 导入勾选 GLB 后工具生成权威动画并渲染唯一�
     await expect(mobileArtifact).toBeVisible();
     const mobileCard = mobileArtifact.locator(`[data-animation-id="${animationId}"]`);
     await expect(mobileCard).toBeVisible();
-    expect(assetDownloads).toEqual([200]);
+    await expect.poll(() => assetDownloads).toEqual([200]);
     const mobileCanvas = mobileCard.locator("canvas");
     await expect(mobileCanvas).toBeVisible();
     const mobileCanvasBox = await mobileCanvas.boundingBox();

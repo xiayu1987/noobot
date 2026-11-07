@@ -11,6 +11,11 @@ import ComposerInputActions from "../../../../src/modules/composer/components/Co
 import ComposerAttachmentToolbar from "../../../../src/modules/composer/components/ComposerAttachmentToolbar.vue";
 import { useComposerMediaCapture } from "../../../../src/modules/composer/composables/useComposerMediaCapture.js";
 import { createComposerMountOptions } from "./composerElementPlusStubs.js";
+import BaseModelPicker from "../../../../src/shared/ui/BaseModelPicker.vue";
+
+vi.mock("../../../../src/shared/composables/useMobileViewport.js", () => ({
+  useMobileViewport: () => ({ drawerSize: "72%" }),
+}));
 
 const messageMock = vi.hoisted(() => ({
   error: vi.fn(),
@@ -192,6 +197,33 @@ afterEach(() => {
 });
 
 describe("ChatComposer interactions", () => {
+  it("keeps More expanded and its scroll position after selecting or dismissing the nested model drawer", async () => {
+    vi.useRealTimers();
+    const wrapper = mountComposer({ modelOptions: [{ alias: "test", model: "gpt-test" }] });
+    await inputActions(wrapper).vm.$emit("toggle-more-panel");
+    await nextTick();
+    const panel = wrapper.get(".more-panel-overlay");
+    const content = wrapper.get(".more-panel-content").element;
+    content.scrollTop = 120;
+    const picker = wrapper.findComponent(BaseModelPicker);
+    await picker.get(".model-picker-trigger").trigger("click");
+    expect(panel.isVisible()).toBe(true);
+    let popped = new Promise((resolve) =>
+      window.addEventListener("popstate", resolve, { once: true }),
+    );
+    await picker.get(".model-picker-option").trigger("click");
+    await popped;
+    expect(wrapper.emitted("update:selectedModel")).toEqual([["test"]]);
+    expect(panel.isVisible()).toBe(true);
+    expect(content.scrollTop).toBe(120);
+    await picker.get(".model-picker-trigger").trigger("click");
+    popped = new Promise((resolve) => window.addEventListener("popstate", resolve, { once: true }));
+    history.back();
+    await popped;
+    expect(panel.isVisible()).toBe(true);
+    expect(content.scrollTop).toBe(120);
+    wrapper.unmount();
+  });
   it("keeps send disabled until the active session is loaded", async () => {
     const wrapper = mountComposer({ modelValue: "hello", sessionReady: false });
     expect(inputActions(wrapper).props("sendDisabled")).toBe(true);

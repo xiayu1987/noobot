@@ -4,6 +4,31 @@
  * SPDX-License-Identifier: MIT
  */
 import { isPlainObject } from "../utils.js";
+import { AgentConfigProtocolError, CONFIG_ERROR_CODE } from "./errors.js";
+import { createConfigIssue } from "./issues.js";
+
+export function requireConfigDocument(document) {
+  if (!isPlainObject(document)) {
+    throw new AgentConfigProtocolError("config document root must be an object", {
+      details: createConfigIssue(CONFIG_ERROR_CODE.INVALID_DOCUMENT, { path: "$" }),
+    });
+  }
+  return document;
+}
+
+export function parseConfigDocumentText(source) {
+  if (typeof source !== "string") throw new TypeError("config source must be text");
+  let document;
+  try {
+    document = JSON.parse(source);
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
+    throw new AgentConfigProtocolError("config document contains invalid JSON", {
+      details: createConfigIssue(CONFIG_ERROR_CODE.INVALID_DOCUMENT, { path: "$" }),
+    });
+  }
+  return requireConfigDocument(document);
+}
 
 export function createConfigBuildResult({
   rawConfig = {},

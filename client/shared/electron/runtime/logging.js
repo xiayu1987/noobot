@@ -136,6 +136,25 @@ function formatLogFields(fields = {}) {
 
 export function createStartupLogger({ app, startupDebugEnabled = false } = {}) {
   const runtimeEvents = createDesktopRuntimeEventWriter({ app });
+  const pendingWrites = new Set();
+  const writeFailures = [];
+  function trackWrite(operation) {
+    pendingWrites.add(operation);
+    operation.then(
+      () => pendingWrites.delete(operation),
+      (error) => {
+        pendingWrites.delete(operation);
+        writeFailures.push(error);
+        console.error("[desktop-log] write failed", error);
+      },
+    );
+  }
+  async function flush() {
+    while (pendingWrites.size) await Promise.allSettled([...pendingWrites]);
+    if (writeFailures.length) {
+      throw new AggregateError(writeFailures.splice(0), "Desktop log writes failed");
+    }
+  }
 
   function getLogDir() {
     return path.join(app.getPath("userData"), "logs");
@@ -147,18 +166,8 @@ export function createStartupLogger({ app, startupDebugEnabled = false } = {}) {
 
   function appendLogFile(fileName, message) {
     const line = `[${new Date().toISOString()}] ${message}\n`;
-    try {
-      const logFile = getLogFilePath(fileName);
-      appendDesktopLogLine(logFile, line).catch((error) => {
-        if (fileName !== DESKTOP_LOG_FILES.STARTUP) {
-          writeStartupLog("desktop-log", "error", { fileName, message, error }, { debug: true });
-        }
-      });
-    } catch {
-      if (fileName !== DESKTOP_LOG_FILES.STARTUP) {
-        writeStartupLog("desktop-log", "fallback", { fileName, message }, { debug: true });
-      }
-    }
+    const logFile = getLogFilePath(fileName);
+    trackWrite(appendDesktopLogLine(logFile, line));
   }
 
   function writeStartupLog(
@@ -171,16 +180,16 @@ export function createStartupLogger({ app, startupDebugEnabled = false } = {}) {
     const detail = formatLogFields(fields);
     const message = `[${scope}:${event}]${detail ? ` ${detail}` : ""}`;
     appendLogFile(DESKTOP_LOG_FILES.STARTUP, message);
-    runtimeEvents
-      .write(
+    trackWrite(
+      runtimeEvents.write(
         {
           scope: "startup",
           category: scope === "frontend" ? "frontend-lifecycle" : "backend-lifecycle",
           event: `desktop.${scope}.${event}`,
         },
         fields,
-      )
-      .catch((error) => console.warn("[desktop-log] runtime event write failed", error));
+      ),
+    );
     if (mirrorToEarly) appendStartupTrace(message);
   }
 
@@ -189,12 +198,16 @@ export function createStartupLogger({ app, startupDebugEnabled = false } = {}) {
     const detail = formatLogFields(fields);
     const message = `[dependency:${event}]${detail ? ` ${detail}` : ""}`;
     appendLogFile(DESKTOP_LOG_FILES.DEPENDENCY, message);
-    runtimeEvents
-      .write(
-        { scope: "startup", category: "frontend-lifecycle", event: `desktop.dependency.${event}` },
+    trackWrite(
+      runtimeEvents.write(
+        {
+          scope: "startup",
+          category: "frontend-lifecycle",
+          event: `desktop.dependency.${event}`,
+        },
         fields,
-      )
-      .catch((error) => console.warn("[desktop-log] dependency runtime event write failed", error));
+      ),
+    );
     writeStartupLog("dependency", event, fields, { ...options, mirrorToEarly: false });
   }
 
@@ -220,6 +233,7 @@ export function createStartupLogger({ app, startupDebugEnabled = false } = {}) {
 
   return {
     writeStartupLog,
+    flush,
     writeDependencyLog,
     getLogDir,
     getLogFilePath,

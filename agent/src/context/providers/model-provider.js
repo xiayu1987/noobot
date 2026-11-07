@@ -4,7 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { resolveEffectiveModelSpec } from "../../runtime/run-config/config-resolver.js";
-import { resolveModelMultimodalCapabilities } from "@noobot/model-protocol";
+import {
+  resolveModelMultimodalCapabilities,
+  resolveModelUsedForConversation,
+} from "@noobot/model-protocol";
 
 function normalizeModelMultimodalInfo(modelSpec = {}) {
   const generation = resolveModelMultimodalCapabilities(modelSpec).generation;
@@ -39,10 +42,7 @@ export function resolveModelSection({
       alias: currentModelSpec?.alias || "",
       name: currentModelSpec?.model || "",
       description: currentModelSpec?.description || "",
-      used_for_conversation:
-        currentModelSpec?.used_for_conversation === undefined
-          ? true
-          : currentModelSpec?.used_for_conversation === true,
+      used_for_conversation: resolveModelUsedForConversation(currentModelSpec),
       multimodal_generation: normalizeModelMultimodalInfo(currentModelSpec),
       multimodal_parsing: normalizeModelMultimodalParsing(currentModelSpec),
     },
@@ -52,10 +52,7 @@ export function resolveModelSection({
         alias,
         name: providerConfig?.model || "",
         description: providerConfig?.description || "",
-        used_for_conversation:
-          providerConfig?.used_for_conversation === undefined
-            ? true
-            : providerConfig?.used_for_conversation === true,
+        used_for_conversation: resolveModelUsedForConversation(providerConfig),
         multimodal_generation: normalizeModelMultimodalInfo(providerConfig),
         multimodal_parsing: normalizeModelMultimodalParsing(providerConfig),
       })),

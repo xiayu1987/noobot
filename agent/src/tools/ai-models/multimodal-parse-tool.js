@@ -18,8 +18,8 @@ import {
   MODEL_INPUT_PROCESSING_KIND,
   MODEL_OPERATION_KIND,
   classifyModelInputProcessing,
-  supportsModelMultimodalParsing,
 } from "@noobot/model-protocol";
+import { diagnoseModelReference } from "@noobot/agent-config-protocol";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import {
   formatAttachmentIdentityRef,
@@ -117,9 +117,22 @@ function resolveConfiguredParseModel({
     globalConfig,
     userConfig,
   });
+  const issues = requiredModalities
+    .map((modality) =>
+      diagnoseModelReference({
+        provider: modelSpec,
+        alias: requestedModel,
+        requirement: `parse:${modality}`,
+        path: explicitModel
+          ? ["model_name"]
+          : ["multimodal", "parsing", "default_models", modality],
+      }),
+    )
+    .filter(Boolean);
   return {
-    modelSpec: supportsModelMultimodalParsing(modelSpec, requiredModalities) ? modelSpec : null,
+    modelSpec: issues.length ? null : modelSpec,
     selection,
+    issues,
   };
 }
 
@@ -203,7 +216,11 @@ export function createMultimodalParseTool({ agentContext }) {
           },
         );
       }
-      const { modelSpec, selection } = resolveConfiguredParseModel({
+      const {
+        modelSpec,
+        selection,
+        issues = [],
+      } = resolveConfiguredParseModel({
         modelName: model_name,
         requiredModalities,
         runtime,
@@ -218,6 +235,7 @@ export function createMultimodalParseTool({ agentContext }) {
             : tTool(runtime, "tools.multimodalParse.modelNotFound");
         throw recoverableToolError(selectionError, {
           code: ERROR_CODE.RECOVERABLE_MODEL_NOT_FOUND,
+          details: { configIssues: issues },
         });
       }
       const { modelPort } = requireRuntimeModelHost(runtime);

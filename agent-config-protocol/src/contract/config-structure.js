@@ -10,6 +10,7 @@ import {
   MODEL_PROVIDER_DECLARATION_VISIBILITY,
 } from "@noobot/model-protocol";
 import { isPlainObject, isObjectLike } from "@noobot/shared/value";
+import { EXECUTION_ISOLATION_MODE } from "@noobot/execution-isolation-protocol/modes";
 import {
   CONFIG_DOCUMENT_SCOPE,
   CONFIG_ITEM_TYPE,
@@ -154,7 +155,10 @@ const SECURITY_STRUCTURE = object(
     }),
     path_policy: object({}, builtin({ open: true, scopes: GLOBAL_SCOPE_ONLY })),
     execution_isolation: object({
-      mode: string({ nonEmpty: true }),
+      mode: string({
+        nonEmpty: true,
+        values: Object.freeze(Object.values(EXECUTION_ISOLATION_MODE)),
+      }),
       sandbox: object({
         provider: string(),
         scope: string(),
@@ -165,7 +169,7 @@ const SECURITY_STRUCTURE = object(
       }),
     }),
   },
-  { policy: GLOBAL_ONLY },
+  { policy: GLOBAL_ONLY, invalidValueIssue: "INVALID_SECURITY_CONFIG" },
 );
 
 const TOOLS_STRUCTURE = object({
@@ -177,6 +181,7 @@ const TOOLS_STRUCTURE = object({
         requiredFields: Object.freeze(["bindingName"]),
       },
     ),
+    { autoRepair: false },
   ),
   read_file: toolToggle(),
   write_file: toolToggle(),
@@ -259,7 +264,12 @@ export const CONFIG_STRUCTURE = object({
   workspace_template_path: systemField(CONFIG_STRUCTURE_KIND.STRING, { policy: GLOBAL_ONLY }),
   super_admin: object(
     { user_id: string(), connect_code: string() },
-    { itemType: EXPLICIT, access: SYSTEM, policy: GLOBAL_ONLY },
+    {
+      itemType: EXPLICIT,
+      access: SYSTEM,
+      policy: GLOBAL_ONLY,
+      invalidValueIssue: "INVALID_SECURITY_CONFIG",
+    },
   ),
   security: SECURITY_STRUCTURE,
 
@@ -294,7 +304,10 @@ export const CONFIG_STRUCTURE = object({
       }),
     }),
     generation: object({
-      default_models: object({ image: string({ modelReference: "generate:image" }) }),
+      default_models: object({
+        image: string({ modelReference: "generate:image" }),
+        video: string({ modelReference: "generate:video" }),
+      }),
     }),
   }),
   tools: TOOLS_STRUCTURE,
@@ -357,6 +370,7 @@ function projectConfigNode(node, value, options) {
   const { scope, access, representation } = options;
   if (value === undefined || !configNodeAllowsDocument(node, scope)) return undefined;
   if (access && resolveConfigNodeSemantics(node, scope).access !== access) return undefined;
+  if (node.autoRepair === false) return structuredClone(value);
   if (node.delegatedContract) {
     return projectDelegatedContract(node.delegatedContract, value, options);
   }
@@ -469,12 +483,21 @@ function walkStructure(node, path, visit) {
   }
 }
 
-export function listStructureModelReferences() {
+export function listStructureModelReferences({
+  representation = CONFIG_PATH_REPRESENTATION.PERSISTED,
+} = {}) {
+  if (!Object.values(CONFIG_PATH_REPRESENTATION).includes(representation)) {
+    throw new TypeError(`unsupported config path representation: ${representation}`);
+  }
   const references = [];
   walkStructure(CONFIG_STRUCTURE, [], (node, path) => {
     if (!node.modelReference || !path.length) return;
     references.push(
-      Object.freeze({ path: Object.freeze([...path]), requirement: node.modelReference }),
+      Object.freeze({
+        path: Object.freeze(path.map((key) => configKeyForRepresentation(key, representation))),
+        requirement: node.modelReference,
+        nonEmpty: node.nonEmpty === true,
+      }),
     );
   });
   return Object.freeze(references);

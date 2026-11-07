@@ -5,6 +5,11 @@
 -->
 <script setup>
 import { computed, watch } from "vue";
+import {
+  CONFIG_PATH_REPRESENTATION,
+  diagnoseConfigDocument,
+  mergeConfig,
+} from "@noobot/agent-config-protocol";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 import {
   CONFIG_NAV_SEPARATOR,
@@ -32,6 +37,20 @@ const emit = defineEmits(["select-path", "save"]);
 const { translate } = useLocale();
 
 const navTree = computed(() => buildConfigNavTree(props.document));
+const referenceDocument = computed(() =>
+  mergeConfig(
+    {
+      ...props.declarations,
+      tools: { bindings: props.declarations?.toolBindings?.bindings },
+    },
+    props.document,
+  ),
+);
+const configIssues = computed(() =>
+  diagnoseConfigDocument(referenceDocument.value, {
+    representation: CONFIG_PATH_REPRESENTATION.RUNTIME,
+  }),
+);
 const trail = computed(() => findConfigNavTrail(navTree.value, props.activePath));
 const activeNav = computed(() => trail.value[trail.value.length - 1] || null);
 const activeContainer = computed(() =>
@@ -113,10 +132,17 @@ watch(
     <el-scrollbar v-if="activeNav" class="section-scroll">
       <div class="section-body">
         <p v-if="filePath" class="section-file">{{ filePath }}</p>
+        <div v-if="configIssues.length" role="alert" class="config-issues">
+          <p>{{ translate("configDiagnostics.correctionHint") }}</p>
+          <p v-for="issue in configIssues" :key="`${issue.code}:${issue.path}`">
+            {{ issue.path }} · {{ issue.alias }} ·
+            {{ translate(`configDiagnostics.${issue.code}`, { requirement: issue.requirement }) }}
+          </p>
+        </div>
         <ConfigSectionEditor
           :node="activeNav.node"
           :container="activeContainer"
-          :document="document"
+          :document="referenceDocument"
           :declaration="activeDeclaration"
           :declarations="declarations"
           @open-entry="openEntry"
@@ -130,6 +156,12 @@ watch(
 </template>
 
 <style scoped>
+.config-issues {
+  margin-bottom: var(--noobot-space-md);
+  color: var(--noobot-text-secondary);
+  overflow-wrap: anywhere;
+}
+
 .node-dot {
   width: 6px;
   height: 6px;

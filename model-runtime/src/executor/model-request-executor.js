@@ -38,6 +38,7 @@ import { isToolCallStreamingMismatch } from "../policies/tool-call-retry-policy.
 import { runModelAttempt } from "./attempt-runner.js";
 import { executeTransportRetry } from "./retry-coordinator.js";
 import { createProviderAdapterRegistry } from "../adapters/registry.js";
+import { executeNativeGeneration } from "../adapters/native-generation.js";
 import {
   alternateStreamingMode,
   mayRetryWithAlternateStreaming,
@@ -115,7 +116,6 @@ export function createModelRequestExecutor({
   };
   return Object.freeze({
     async invoke(input = {}) {
-      const retry = normalizeRetryPolicy(input.policies?.retry);
       const messages = normalizeMessages(input.messages);
       let reasoningOnlyAttempts = 0;
       let emptyResponseAttempts = 0;
@@ -124,6 +124,7 @@ export function createModelRequestExecutor({
       let totalAttempts = 0;
       const attempts = [];
       const requestBase = createModelRequest({ ...input, messages });
+      const retry = normalizeRetryPolicy(input.policies?.retry, requestBase.operation.kind);
       const invocation = requestBase.invocation;
       const adapter = registry.resolve(requestBase.model);
       const streamingCacheKey = streamingProviderCacheKey({
@@ -257,6 +258,10 @@ export function createModelRequestExecutor({
         if (delayMs > 0) await clock.sleep(delayMs);
         return true;
       };
+      const nativeGeneration = requestBase.operation.kind === MODEL_OPERATION_KIND.MEDIA_GENERATION;
+      const operationTransport = nativeGeneration
+        ? executeNativeGeneration
+        : adapter.executeOperation;
       const invokeOperationTransport = (credential) =>
         executeTransportRetry({
           policy: retry.transport,
@@ -272,7 +277,7 @@ export function createModelRequestExecutor({
               streaming,
             });
             return recordingAttempt(MODEL_ATTEMPT_KIND.TRANSPORT, streaming, () =>
-              adapter.executeOperation({
+              operationTransport({
                 modelSpec: requestBase.model,
                 credential,
                 operation: requestBase.operation,
@@ -301,16 +306,18 @@ export function createModelRequestExecutor({
         }
       };
       const executeOperation = async (credential) => {
-        if (!isFunction(adapter.executeOperation)) {
+        if (!isFunction(operationTransport)) {
           throw new TypeError(
             `provider adapter ${adapter.id} does not support operation: ${requestBase.operation.kind}`,
           );
         }
         const modes = requireOperationStreamingModes(
-          adapter.resolveOperationStreamingModes({
-            modelSpec: requestBase.model,
-            operation: requestBase.operation,
-          }),
+          nativeGeneration
+            ? [false]
+            : adapter.resolveOperationStreamingModes({
+                modelSpec: requestBase.model,
+                operation: requestBase.operation,
+              }),
         );
         if (!modes.includes(streaming)) [streaming] = modes;
         const result = await attemptOperationTransport(credential, modes);

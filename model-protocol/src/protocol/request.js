@@ -47,7 +47,7 @@ export function createModelRequest(input = {}) {
   const invocation = requireInvocationIdentity(input.invocation);
   const model = requireModelSpec(input.model);
   const operation = normalizeModelOperation(input.operation);
-  requireModelOperationCapability(model, operation.kind);
+  requireModelOperationCapability(model, operation);
   if (!Array.isArray(input.messages))
     throw new TypeError("model request.messages must be an array");
   return Object.freeze({

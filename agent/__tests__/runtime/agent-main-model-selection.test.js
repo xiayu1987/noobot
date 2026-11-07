@@ -14,6 +14,7 @@ const globalConfig = {
   providers: {
     scenario_default: {
       enabled: true,
+      used_for_conversation: true,
       model: "scenario-default-model",
       reasoning_effort_parameter: "reasoning_effort",
       reasoning_effort_options: ["none", "low", "medium", "high"],
@@ -22,6 +23,7 @@ const globalConfig = {
     },
     selected_alias: {
       enabled: true,
+      used_for_conversation: true,
       model: "selected-model",
       reasoning_effort_parameter: "reasoning_effort",
       reasoning_effort_options: ["none", "low", "medium", "high"],
@@ -60,7 +62,7 @@ test("resolveEffectiveModelSpec rejects an invalid explicit selection even when 
         selectedModel: "missing_alias",
         scenario: "programming",
       }),
-    /selected model not found: missing_alias/,
+    { code: "MODEL_REFERENCE_NOT_FOUND" },
   );
 });
 
@@ -70,6 +72,7 @@ test("resolveEffectiveModelSpec uses scenario model as initial model fallback", 
       providers: {
         scenario_model_alias: {
           enabled: true,
+          used_for_conversation: true,
           model: "scenario-model",
           reasoning_effort_parameter: "reasoning_effort",
           reasoning_effort_options: ["none", "low", "medium", "high"],
@@ -78,6 +81,7 @@ test("resolveEffectiveModelSpec uses scenario model as initial model fallback", 
         },
         system_default: {
           enabled: true,
+          used_for_conversation: true,
           model: "system-default-model",
           reasoning_effort_parameter: "reasoning_effort",
           reasoning_effort_options: ["none", "low", "medium", "high"],
@@ -101,6 +105,21 @@ test("resolveEffectiveModelSpec uses scenario model as initial model fallback", 
 
   assert.equal(spec.alias, "scenario_model_alias");
   assert.equal(spec.model, "scenario-model");
+});
+
+test("model capability failure blocks only that selection and recovers after correction", () => {
+  const config = structuredClone(globalConfig);
+  config.providers.selected_alias.used_for_conversation = false;
+  assert.throws(
+    () => resolveEffectiveModelSpec({ globalConfig: config, selectedModel: "selected_alias" }),
+    { code: "MODEL_REFERENCE_CAPABILITY_MISMATCH" },
+  );
+  assert.equal(resolveEffectiveModelSpec({ globalConfig: config }).alias, "scenario_default");
+  config.providers.selected_alias.used_for_conversation = true;
+  assert.equal(
+    resolveEffectiveModelSpec({ globalConfig: config, selectedModel: "selected_alias" }).alias,
+    "selected_alias",
+  );
 });
 
 function initializeHostWithRunConfig(runConfig) {

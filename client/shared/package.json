@@ -5,6 +5,11 @@
   "type": "module",
   "exports": {
     "./path-resolver": "./path-resolver.js",
+    "./ui/model-picker": "./ui/ModelPicker.vue",
+    "./theme": "./theme/useTheme.js",
+    "./styles/theme.css": "./styles/theme.css",
+    "./styles/typography.css": "./styles/tokens/typography.css",
+    "./styles/element-plus.css": "./styles/element-plus.css",
     "./electron-main": "./electron/main.js"
   },
   "scripts": {

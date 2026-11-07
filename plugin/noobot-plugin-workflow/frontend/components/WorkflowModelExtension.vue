@@ -5,6 +5,7 @@
 -->
 <script setup>
 import { computed } from "vue";
+import { BaseModelPicker } from "noobot-chat/plugin-api/ui";
 import { useWorkflowLocale } from "../i18n/index.js";
 import { text } from "@noobot/shared/value";
 
@@ -35,32 +36,14 @@ function onWorkflowSemanticModelChange(value = "") {
     </div>
     <label class="plugin-model-field workflow-model-field">
       <span class="plugin-model-label">{{ translate("modelExtension.field") }}</span>
-      <el-select
+      <BaseModelPicker
         :model-value="getWorkflowSemanticModel()"
-        size="small"
-        clearable
-        :filterable="false"
-        popper-class="noobot-select-popper noobot-model-select-popper"
+        :options="modelOptions"
+        :title="translate('modelExtension.field')"
         :disabled="!hasModelOptions"
         :placeholder="translate('modelExtension.placeholder')"
-        class="composer-select model-select noobot-model-select-control"
         @update:model-value="onWorkflowSemanticModelChange"
-      >
-        <el-option
-          v-for="modelItem in modelOptions"
-          :key="`workflow-${modelItem.alias}`"
-          :label="modelItem.alias"
-          :value="modelItem.alias"
-        >
-          <div class="model-option-content">
-            <span class="model-option-label">{{ modelItem.alias }}</span>
-            <span v-if="modelItem.model" class="model-option-meta">{{ modelItem.model }}</span>
-            <span v-if="modelItem.description" class="model-option-description">{{
-              modelItem.description
-            }}</span>
-          </div>
-        </el-option>
-      </el-select>
+      />
     </label>
     <span v-if="!hasModelOptions" class="plugin-empty-text">{{
       translate("modelExtension.empty")
@@ -107,25 +90,6 @@ function onWorkflowSemanticModelChange(value = "") {
   color: var(--noobot-text-main);
 }
 
-.model-select {
-  width: 100%;
-  min-width: 0;
-}
-
-.model-option-content {
-  display: flex;
-  flex-direction: column;
-  gap: var(--noobot-space-3xs);
-  padding: var(--noobot-space-2xs) 0;
-}
-
-.model-option-label {
-  font-weight: var(--noobot-font-weight-semibold);
-  color: var(--noobot-text-main);
-}
-
-.model-option-meta,
-.model-option-description,
 .plugin-empty-text {
   font-size: var(--noobot-font-size-xs);
   line-height: var(--noobot-line-height-balanced);

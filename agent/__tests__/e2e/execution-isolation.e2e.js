@@ -45,7 +45,7 @@ function buildAgentContext({
   isSuperUser = false,
   mounts = [],
 }) {
-  return createTestAgentExecutionScope(
+  const agentContext = createTestAgentExecutionScope(
     createTestRuntimeContext({
       basePath,
       identity: { userId, ...E2E_IDENTITY },
@@ -82,10 +82,15 @@ function buildAgentContext({
       },
     },
   );
+  agentContext.bindings.tools.push(
+    ...createScriptTool({ agentContext }),
+    ...createFileTool({ agentContext }),
+  );
+  return agentContext;
 }
 
 function scriptTool(agentContext) {
-  return createScriptTool({ agentContext }).find((tool) => tool?.name === "execute_script");
+  return agentContext.bindings.tools.find((tool) => tool.name === "execute_script");
 }
 
 async function invokeScript(tool, command) {
@@ -192,7 +197,7 @@ describe("execution isolation E2E", { concurrency: false }, () => {
       containerName: containerBase,
       mounts: [{ source: mountedRoot, target: "/shared" }],
     });
-    const tools = new Map(createFileTool({ agentContext }).map((tool) => [tool.name, tool]));
+    const tools = new Map(agentContext.bindings.tools.map((tool) => [tool.name, tool]));
     const script = scriptTool(agentContext);
     assert.ok(script);
 

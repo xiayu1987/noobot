@@ -2,6 +2,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { resolveModelGenerationApiType } from "./model-capabilities.js";
 import libraryPayload from "../../model-library.json" with { type: "json" };
 import {
   normalizeModelPromptCacheFields,
@@ -49,11 +50,13 @@ function validateLibrary(payload) {
     if (provider.is_custom !== false) {
       throw new TypeError(`model library provider ${alias}.is_custom must be false`);
     }
-    for (const field of ["model", "api_key", "base_url"]) {
+    for (const field of ["model", "supplier", "api_key", "base_url"]) {
       if (!text(provider[field])) {
         throw new TypeError(`model library provider ${alias}.${field} is required`);
       }
     }
+    if (provider.multimodal_generation?.support_generation?.enabled)
+      resolveModelGenerationApiType(provider);
     validateReasoningConfiguration(provider, `model library provider ${alias}`);
     validatePromptCacheConfiguration(provider, `model library provider ${alias}`);
   }

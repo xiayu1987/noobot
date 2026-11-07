@@ -3,8 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-@import "./tokens/typography.css";
-@import "./tokens/base.css";
+@import "@noobot/client-shared/styles/theme.css";
 @import "./tokens/semantic.css";
 @import "./tokens/theme-light.css";
 @import "./global/base.css";
@@ -19,9 +18,5 @@
 @import "./components/workspace-panel.css";
 @import "./components/chat.css";
 @import "./components/composer.css";
-@import "./integrations/element-plus.css";
-@import "./integrations/element-plus-menus.css";
-@import "./integrations/element-plus-tabs.css";
-@import "./integrations/element-plus-overlays.css";
-@import "./integrations/element-plus-mobile.css";
+@import "@noobot/client-shared/styles/element-plus.css";
 @import "./global/responsive.css";

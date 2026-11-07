@@ -8,11 +8,18 @@ import {
   classifyModelInputProcessing,
 } from "../model/model-input-processing.js";
 import { text, isPlainObject } from "@noobot/shared/value";
+import { normalizeGeneratedMediaArtifact } from "./generated-media.js";
+import {
+  normalizeGenerationImageUrls,
+  normalizeVideoGenerationOptions,
+  requireGenerationOptionKeys,
+  MODEL_GENERATION_OUTPUT_TYPES,
+} from "./generation-options.js";
 
 export const MODEL_OPERATION_KIND = Object.freeze({
   CHAT: "chat",
   WEB_SEARCH: "web_search",
-  IMAGE_GENERATION: "image_generation",
+  MEDIA_GENERATION: "media_generation",
   MULTIMODAL_PARSE: "multimodal_parse",
 });
 
@@ -43,25 +50,18 @@ function requireText(value, path) {
 
 function normalizeImageOptions(input = {}) {
   const source = requirePlainObject(input, "model operation.options");
-  rejectUnknownKeys(
-    source,
-    ["size", "resolution", "n", "quality", "imageUrls"],
-    "model operation.options",
-  );
+  requireGenerationOptionKeys(source, "image");
   const count = source.n === undefined ? 1 : Number(source.n);
   if (!Number.isInteger(count) || count < 1 || count > 10) {
     throw new TypeError("model operation.options.n must be an integer between 1 and 10");
-  }
-  const imageUrls = source.imageUrls === undefined ? [] : source.imageUrls;
-  if (!Array.isArray(imageUrls) || imageUrls.some((value) => !text(value))) {
-    throw new TypeError("model operation.options.imageUrls must be an array of non-empty strings");
   }
   return Object.freeze({
     size: text(source.size),
     resolution: text(source.resolution),
     n: count,
     quality: text(source.quality),
-    imageUrls: Object.freeze(imageUrls.map((value) => String(value).trim())),
+    ...(source.complexity === undefined ? {} : { complexity: text(source.complexity) }),
+    imageUrls: normalizeGenerationImageUrls(source.imageUrls),
   });
 }
 
@@ -121,27 +121,20 @@ export function normalizeModelOperation(input = {}) {
       options: Object.freeze({}),
     });
   }
-  rejectUnknownKeys(operationInput, ["prompt"], "model operation.input");
+  rejectUnknownKeys(operationInput, ["prompt", "outputType"], "model operation.input");
+  const outputType = operationInput.outputType;
+  if (!MODEL_GENERATION_OUTPUT_TYPES.includes(outputType))
+    throw new TypeError("generation outputType must be image or video");
   return Object.freeze({
     kind,
     input: Object.freeze({
       prompt: requireText(operationInput.prompt, "model operation.input.prompt"),
+      outputType,
     }),
-    options: normalizeImageOptions(operationOptions),
-  });
-}
-
-function normalizeImageArtifact(value, index) {
-  const path = `model response.result.imageArtifacts[${index}]`;
-  const artifact = requirePlainObject(value, path);
-  rejectUnknownKeys(artifact, ["fileName", "b64Json", "url"], path);
-  const b64Json = text(artifact.b64Json);
-  const url = text(artifact.url);
-  if (!b64Json && !url) throw new TypeError(`${path} requires b64Json or url`);
-  return Object.freeze({
-    fileName: requireText(artifact.fileName, `${path}.fileName`),
-    b64Json,
-    url,
+    options:
+      outputType === "video"
+        ? normalizeVideoGenerationOptions(operationOptions)
+        : normalizeImageOptions(operationOptions),
   });
 }
 
@@ -179,29 +172,19 @@ export function normalizeModelOperationResult(kind, input = {}) {
   }
   if (operationKind === MODEL_OPERATION_KIND.MULTIMODAL_PARSE) {
     rejectUnknownKeys(source, ["rawText", "output"], "model response.result");
+    if (!Array.isArray(source.output))
+      throw new TypeError("model response.result.output must be an array");
     return Object.freeze({
       rawText: text(source.rawText),
-      output: Array.isArray(source.output) ? Object.freeze([...source.output]) : Object.freeze([]),
+      output: Object.freeze([...source.output]),
     });
   }
-  rejectUnknownKeys(
-    source,
-    ["rawText", "imageArtifacts", "output", "taskId", "rawTask"],
-    "model response.result",
-  );
-  if (!Array.isArray(source.imageArtifacts)) {
-    throw new TypeError("model response.result.imageArtifacts must be an array");
-  }
-  if (source.output !== undefined && !Array.isArray(source.output)) {
-    throw new TypeError("model response.result.output must be an array");
-  }
-  if (source.rawTask !== undefined)
-    requirePlainObject(source.rawTask, "model response.result.rawTask");
+  rejectUnknownKeys(source, ["rawText", "artifacts", "taskId"], "model response.result");
+  if (!Array.isArray(source.artifacts) || !source.artifacts.length)
+    throw new TypeError("generation result requires non-empty artifacts");
   return Object.freeze({
     rawText: text(source.rawText),
-    imageArtifacts: Object.freeze(source.imageArtifacts.map(normalizeImageArtifact)),
-    output: Object.freeze([...(source.output || [])]),
+    artifacts: Object.freeze(source.artifacts.map(normalizeGeneratedMediaArtifact)),
     taskId: text(source.taskId),
-    ...(source.rawTask === undefined ? {} : { rawTask: Object.freeze({ ...source.rawTask }) }),
   });
 }

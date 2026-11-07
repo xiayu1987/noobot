@@ -8,5 +8,4 @@ export const MODEL_CAPABILITY_KIND = Object.freeze({
   VISION: "vision",
   REASONING: "reasoning",
   WEB_SEARCH: "web_search",
-  IMAGE_GENERATION: "image_generation",
 });

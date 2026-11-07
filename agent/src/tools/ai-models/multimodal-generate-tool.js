@@ -7,12 +7,12 @@ import { structuredTool } from "../core/structured-tool.js";
 import { z } from "zod";
 import {
   MODEL_CONTEXT_SEQUENCE_POLICY,
-  MODEL_MULTIMODAL_MODALITY,
-  MODEL_OPERATION_KIND,
-  supportsModelMultimodalGeneration,
+  MODEL_GENERATION_OUTPUT_TYPES,
+  MODEL_GENERATION_OPTION_FIELDS,
 } from "@noobot/model-protocol";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { diagnoseModelReference } from "@noobot/agent-config-protocol";
 import {
-  MULTIMODAL_CONFIG_MODALITY,
   MULTIMODAL_CONFIG_OPERATION,
   mergeConfig,
   resolveMultimodalDefaultModelSelection,
@@ -24,7 +24,8 @@ import { resolveLocaleFromRuntime } from "noobot-i18n/shared";
 import { requireRuntimeModelHost } from "../../runtime/model-port-host.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
-import { MIME_TYPE } from "@noobot/attachment-protocol/mime";
+import { buildGenerationOperation } from "./generation-operation.js";
+import { materializeGenerationAttachments } from "./generation-artifacts.js";
 import { TOOL_CALL_MODE, TOOL_NAME } from "../constants/index.js";
 import { text } from "@noobot/shared/value";
 
@@ -96,10 +97,12 @@ function buildFailureDetails({
   modelAlias = "",
   model = "",
   requestedModel = "",
-  effectiveImageSize = "",
+  effectiveSize = "",
   modelSpec = {},
   requestUrl = "",
   requestMethod = "",
+  taskId = "",
+  outputType = "",
 } = {}) {
   return {
     ...(message ? { message } : {}),
@@ -110,28 +113,12 @@ function buildFailureDetails({
     baseUrl: describeBaseUrlForDiagnostics(resolveModelBaseUrl(modelSpec || {})),
     requestUrl: describeBaseUrlForDiagnostics(requestUrl),
     requestMethod: text(requestMethod).toUpperCase(),
-    imageSize: text(effectiveImageSize),
+    taskId: text(taskId),
+    outputType,
+    size: text(effectiveSize),
     platform: process.platform,
     proxyEnv: collectProxyEnvDiagnostics(),
   };
-}
-
-async function imageUrlToBase64(url, { fetchImpl, runtime, abortSignal }) {
-  const normalizedUrl = text(url);
-  if (!normalizedUrl || typeof fetchImpl !== "function") return "";
-  const response = await fetchImpl(normalizedUrl, { signal: abortSignal });
-  if (!response?.ok) {
-    throw recoverableToolError(
-      `${tMultimodal(runtime, "fetchGeneratedImageUrlFailed")}: HTTP ${response?.status || 500}`,
-      { code: ERROR_CODE.RECOVERABLE_FETCH_GENERATED_IMAGE_URL_FAILED },
-    );
-  }
-  const imageBytes = Buffer.from(await response.arrayBuffer());
-  return imageBytes.toString("base64");
-}
-
-function normalizeStringArray(value = []) {
-  return (Array.isArray(value) ? value : []).map((item) => text(item)).filter(Boolean);
 }
 
 function shouldAppendCapabilityHint(error = {}) {
@@ -150,6 +137,7 @@ function appendCapabilityHint(message = "", runtime = {}) {
 
 function resolveGenerationModelSpec({
   modelName = "",
+  modality = "image",
   effectiveConfig = {},
   globalConfig = {},
   userConfig = {},
@@ -159,7 +147,7 @@ function resolveGenerationModelSpec({
     ? ""
     : resolveMultimodalDefaultModelSelection(effectiveConfig, {
         operation: MULTIMODAL_CONFIG_OPERATION.GENERATION,
-        modalities: [MULTIMODAL_CONFIG_MODALITY.IMAGE],
+        modalities: [modality],
       }).alias;
   const resolvedModelName = preferredModelName || configuredDefault;
   if (!resolvedModelName) return { resolvedModelName: "", resolvedModelSpec: null };
@@ -180,16 +168,22 @@ function trimmedText(value) {
 
 function assertGenerationModelSupported(state, runtime) {
   const { resolvedModelSpec, resolvedModelName } = state;
+  const issue = diagnoseModelReference({
+    provider: resolvedModelSpec,
+    alias: resolvedModelName,
+    requirement: `generate:${state.modality}`,
+    path: state.modelReferencePath,
+  });
   if (!resolvedModelSpec) {
     throw recoverableToolError(
       tMultimodal(runtime, "modelNotFound", { model: resolvedModelName }),
       {
         code: ERROR_CODE.RECOVERABLE_MODEL_NOT_FOUND,
-        details: { requestedModel: trimmedText(resolvedModelName) },
+        details: { requestedModel: trimmedText(resolvedModelName), configIssues: [issue] },
       },
     );
   }
-  if (supportsModelMultimodalGeneration(resolvedModelSpec, [MODEL_MULTIMODAL_MODALITY.IMAGE])) {
+  if (!issue) {
     return;
   }
   const currentModelAlias = trimmedText(resolvedModelSpec.alias || resolvedModelName);
@@ -204,15 +198,16 @@ function assertGenerationModelSupported(state, runtime) {
         message: tMultimodal(runtime, "multimodalUnsupportedMessage"),
         modelAlias: currentModelAlias,
         model: currentModelName,
+        configIssues: [issue],
       },
     },
   );
 }
 
-function buildImageGenerationRequest({
+function buildMediaGenerationRequest({
   modelSpec,
   generationContent,
-  imageSize,
+  size,
   input,
   runtime,
   abortSignal,
@@ -220,17 +215,7 @@ function buildImageGenerationRequest({
   return {
     model: modelSpec,
     messages: [],
-    operation: {
-      kind: MODEL_OPERATION_KIND.IMAGE_GENERATION,
-      input: { prompt: generationContent },
-      options: {
-        size: imageSize,
-        resolution: input.resolution,
-        n: input.n,
-        quality: input.quality,
-        imageUrls: normalizeStringArray(input.image_urls),
-      },
-    },
+    operation: buildGenerationOperation({ input, prompt: generationContent, size }),
     options: {
       signal: abortSignal,
       locale: resolveLocaleFromRuntime(runtime),
@@ -244,32 +229,18 @@ function buildImageGenerationRequest({
   };
 }
 
-async function materializeImageAttachments(imageArtifacts, fetchContext) {
-  const outputArtifacts = [];
-  for (const imageArtifact of imageArtifacts) {
-    const resolvedBase64 =
-      imageArtifact.b64Json || (await imageUrlToBase64(imageArtifact.url, fetchContext));
-    if (!resolvedBase64) continue;
-    outputArtifacts.push({
-      type: "attachment_bytes",
-      name: imageArtifact.fileName,
-      mimeType: MIME_TYPE.IMAGE_PNG,
-      contentBase64: resolvedBase64,
-    });
-  }
-  return outputArtifacts;
-}
-
 function stateFailureDetails(state, error = {}, message = "") {
   return buildFailureDetails({
     message,
     modelAlias: trimmedText(state.resolvedModelSpec?.alias),
     model: trimmedText(state.resolvedModelSpec?.model),
     requestedModel: state.resolvedModelName,
-    effectiveImageSize: state.effectiveImageSize,
+    effectiveSize: state.effectiveSize,
     modelSpec: state.resolvedModelSpec || {},
     requestUrl: error?.requestUrl,
     requestMethod: error?.requestMethod,
+    taskId: error?.taskId,
+    outputType: state.modality,
   });
 }
 
@@ -300,47 +271,51 @@ function toGenerationFailure(error, state, runtime) {
   });
 }
 
-async function generateImages(input, deps, state) {
+async function generateMedia(input, deps, state) {
   const { runtime } = deps;
+  const timeout = AbortSignal.timeout(TIME_THRESHOLDS.model.generationTimeoutMs);
+  const abortSignal = deps.abortSignal ? AbortSignal.any([deps.abortSignal, timeout]) : timeout;
   const selection = resolveGenerationModelSpec({
     modelName: input.model_name,
+    modality: state.modality,
     effectiveConfig: deps.effectiveConfig,
     globalConfig: deps.globalConfig,
     userConfig: deps.userConfig,
   });
   state.resolvedModelName = selection.resolvedModelName;
   state.resolvedModelSpec = selection.resolvedModelSpec;
+  state.modelReferencePath = text(input.model_name)
+    ? ["model_name"]
+    : ["multimodal", "generation", "default_models", state.modality];
   assertGenerationModelSupported(state, runtime);
-  state.effectiveImageSize = trimmedText(input.size || input.image_size);
+  state.effectiveSize = trimmedText(input.size);
   const { modelPort } = requireRuntimeModelHost(runtime);
   const response = await modelPort.invoke(
-    buildImageGenerationRequest({
+    buildMediaGenerationRequest({
       modelSpec: state.resolvedModelSpec,
       generationContent: state.generationContent,
-      imageSize: state.effectiveImageSize,
+      size: state.effectiveSize,
       input,
       runtime,
-      abortSignal: deps.abortSignal,
+      abortSignal,
     }),
   );
   const generationResult = response.result;
-  const imageArtifacts = Array.isArray(generationResult?.imageArtifacts)
-    ? generationResult.imageArtifacts
-    : [];
-  if (!imageArtifacts.length) {
+  const mediaArtifacts = generationResult.artifacts;
+  if (!Array.isArray(mediaArtifacts) || !mediaArtifacts.length) {
     throw recoverableToolError(tMultimodal(runtime, "generateFailed"), {
       code: ERROR_CODE.RECOVERABLE_MULTIMODAL_GENERATE_FAILED,
       details: stateFailureDetails(
         state,
         {},
-        "Image generation completed without an image_generation_call result",
+        `Native ${state.modality} generation returned no media`,
       ),
     });
   }
-  const outputArtifacts = await materializeImageAttachments(imageArtifacts, {
+  const outputArtifacts = await materializeGenerationAttachments(mediaArtifacts, {
+    modality: state.modality,
     fetchImpl: deps.sharedFetch,
-    runtime,
-    abortSignal: deps.abortSignal,
+    abortSignal,
   });
   return toToolJsonResult(
     TOOL_NAME.MULTIMODAL_GENERATE,
@@ -354,7 +329,7 @@ async function generateImages(input, deps, state) {
       outputArtifacts,
       summary: {
         task_id: trimmedText(generationResult?.taskId),
-        generated_image_count: imageArtifacts.length,
+        [`generated_${state.modality}_count`]: mediaArtifacts.length,
         saved_attachment_count: outputArtifacts.length,
       },
     },
@@ -362,24 +337,13 @@ async function generateImages(input, deps, state) {
   );
 }
 
-async function runMultimodalGeneration(rawInput = {}, deps = {}) {
-  const input = {
-    model_name: "",
-    image_size: "",
-    size: "",
-    resolution: "",
-    n: 1,
-    quality: "",
-    image_urls: [],
-  };
-  for (const [key, value] of Object.entries(rawInput || {})) {
-    if (value !== undefined) input[key] = value;
-  }
+async function runMultimodalGeneration(input, deps) {
   const state = {
     generationContent: trimmedText(input.generation_content),
+    modality: input.output_type,
     resolvedModelSpec: null,
     resolvedModelName: "",
-    effectiveImageSize: "",
+    effectiveSize: "",
   };
   if (!state.generationContent) {
     throw recoverableToolError(tMultimodal(deps.runtime, "generationContentRequired"), {
@@ -387,10 +351,75 @@ async function runMultimodalGeneration(rawInput = {}, deps = {}) {
     });
   }
   try {
-    return await generateImages(input, deps, state);
+    return await generateMedia(input, deps, state);
   } catch (error) {
     throw toGenerationFailure(error, state, deps.runtime);
   }
+}
+
+function generationSchema(runtime) {
+  const fields = {
+    duration: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe(tTool(runtime, "tools.multimodal.fieldDuration")),
+    aspect_ratio: z
+      .string()
+      .optional()
+      .describe(tTool(runtime, "tools.multimodal.fieldAspectRatio")),
+    complexity: z
+      .enum(["low", "medium", "high"])
+      .optional()
+      .describe(tTool(runtime, "tools.multimodal.fieldComplexity")),
+    size: z.string().optional().describe(tTool(runtime, "tools.multimodal.fieldSize")),
+    resolution: z.string().optional().describe(tTool(runtime, "tools.multimodal.fieldResolution")),
+    n: z
+      .number()
+      .int()
+      .min(1)
+      .max(10)
+      .optional()
+      .describe(tTool(runtime, "tools.multimodal.fieldN")),
+    quality: z.string().optional().describe(tTool(runtime, "tools.multimodal.fieldQuality")),
+    image_urls: z
+      .array(z.string())
+      .optional()
+      .describe(tTool(runtime, "tools.multimodal.fieldImageUrls")),
+  };
+  return z.discriminatedUnion(
+    "output_type",
+    MODEL_GENERATION_OUTPUT_TYPES.map((outputType) => {
+      const output = z
+        .literal(outputType)
+        .describe(tTool(runtime, "tools.multimodal.fieldOutputType"));
+      return z
+        .strictObject({
+          output_type: outputType === "image" ? output.default("image") : output,
+          generation_content: z
+            .string()
+            .describe(tTool(runtime, "tools.multimodal.fieldGenerationContent")),
+          model_name: z
+            .string()
+            .optional()
+            .describe(tTool(runtime, "tools.multimodal.fieldModelName")),
+          ...Object.fromEntries(
+            Object.keys(MODEL_GENERATION_OPTION_FIELDS[outputType]).map((key) => [
+              key,
+              fields[key],
+            ]),
+          ),
+        })
+        .superRefine((input, context) => {
+          try {
+            buildGenerationOperation({ input, prompt: input.generation_content });
+          } catch (error) {
+            context.addIssue({ code: "custom", message: error.message });
+          }
+        });
+    }),
+  );
 }
 
 export function createMultimodalGenerateTool({ agentContext }) {
@@ -417,30 +446,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
     {
       name: TOOL_NAME.MULTIMODAL_GENERATE,
       description: tTool(runtime, "tools.multimodal.description"),
-      schema: z.strictObject({
-        generation_content: z
-          .string()
-          .describe(tTool(runtime, "tools.multimodal.fieldGenerationContent")),
-        model_name: z
-          .string()
-          .optional()
-          .describe(tTool(runtime, "tools.multimodal.fieldModelName")),
-        size: z.string().optional().describe(tTool(runtime, "tools.multimodal.fieldSize")),
-        image_size: z
-          .string()
-          .optional()
-          .describe(tTool(runtime, "tools.multimodal.fieldImageSize")),
-        resolution: z
-          .string()
-          .optional()
-          .describe(tTool(runtime, "tools.multimodal.fieldResolution")),
-        n: z.number().optional().describe(tTool(runtime, "tools.multimodal.fieldN")),
-        quality: z.string().optional().describe(tTool(runtime, "tools.multimodal.fieldQuality")),
-        image_urls: z
-          .array(z.string())
-          .optional()
-          .describe(tTool(runtime, "tools.multimodal.fieldImageUrls")),
-      }),
+      schema: generationSchema(runtime),
     },
     agentContext,
   );

@@ -7,13 +7,85 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import fsPromises, {
+  access,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
 
 import { createConfigParamsService } from "../services/config-params-service.js";
 
 async function createTempDir(prefix = "noobot-config-params-test-") {
   return mkdtemp(path.join(os.tmpdir(), prefix));
 }
+
+test("config params writes reject invalid entries without changing files and recover after correction", async (t) => {
+  const workspaceRoot = await createTempDir();
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+  const service = createConfigParamsService({ workspaceRootPath: () => workspaceRoot });
+  for (const userId of ["", "admin"]) {
+    const save = (input) =>
+      userId
+        ? service.writeUserConfigParams({ userId, input })
+        : service.writeWorkspaceConfigParams(input);
+    const filePath = path.join(workspaceRoot, userId, "config-params.json");
+    await save({ values: { API_KEY: "original" } });
+    const original = await readFile(filePath, "utf8");
+    for (const field of ["values", "descriptions"]) {
+      for (const value of [{ nested: "private" }, ["a", "b"], null, false, 0]) {
+        await assert.rejects(save({ [field]: { API_KEY: value } }), {
+          code: "INVALID_CONFIG_PARAM_DOCUMENT",
+        });
+        assert.equal(await readFile(filePath, "utf8"), original);
+      }
+    }
+    await save({ values: { API_KEY: "corrected" } });
+    assert.equal(JSON.parse(await readFile(filePath, "utf8")).values.API_KEY, "corrected");
+  }
+});
+
+test("config params atomic writes preserve originals and clean temporary files on failure", async (t) => {
+  const workspaceRoot = await createTempDir();
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+  const service = createConfigParamsService({ workspaceRootPath: () => workspaceRoot });
+  for (const userId of ["", "admin"]) {
+    const save = (input) =>
+      userId
+        ? service.writeUserConfigParams({ userId, input })
+        : service.writeWorkspaceConfigParams(input);
+    const filePath = path.join(workspaceRoot, userId, "config-params.json");
+    await save({ values: { API_KEY: "original" } });
+    const original = await readFile(filePath, "utf8");
+    const files = await readdir(path.dirname(filePath));
+    for (const operation of ["writeFile", "rename"]) {
+      const originalWrite = fsPromises.writeFile;
+      const fault = Object.assign(new Error("injected storage failure"), { code: "ENOSPC" });
+      t.mock.method(fsPromises, operation, async (...args) => {
+        if (operation === "writeFile") await originalWrite(args[0], "partial");
+        throw fault;
+      });
+      syncBuiltinESMExports();
+      try {
+        await assert.rejects(
+          save({ values: { API_KEY: "replacement" } }),
+          (error) => error === fault,
+        );
+        assert.equal(await readFile(filePath, "utf8"), original);
+        assert.deepEqual(await readdir(path.dirname(filePath)), files);
+      } finally {
+        t.mock.restoreAll();
+        syncBuiltinESMExports();
+      }
+    }
+    await save({ values: { API_KEY: "recovered" } });
+    assert.equal(JSON.parse(await readFile(filePath, "utf8")).values.API_KEY, "recovered");
+  }
+});
 
 async function waitForFile(file, { timeoutMs = 1000 } = {}) {
   const deadline = Date.now() + timeoutMs;
@@ -113,12 +185,27 @@ test("config-params-service: rejects invalid documents and writes sanitized syst
       getGlobalConfigRaw: () => ({ provider: "${API_KEY}" }),
     });
 
-    await assert.rejects(service.readWorkspaceConfigParams(), SyntaxError);
+    const invalidDocument = {
+      code: "INVALID_CONFIG_DOCUMENT",
+      details: {
+        code: "INVALID_CONFIG_DOCUMENT",
+        impact: "document",
+        autoRepair: false,
+        path: "$",
+      },
+    };
     await assert.rejects(
-      service.readUserConfigParams({ userId: "user-secret-token" }),
-      SyntaxError,
+      service.readWorkspaceConfigParams({ createIfMissing: true }),
+      invalidDocument,
     );
-    await assert.rejects(service.collectUserConfigTemplateKeys("user-secret-token"), SyntaxError);
+    await assert.rejects(
+      service.readUserConfigParams({ userId: "user-secret-token", createIfMissing: true }),
+      invalidDocument,
+    );
+    await assert.rejects(
+      service.collectUserConfigTemplateKeys("user-secret-token"),
+      invalidDocument,
+    );
 
     const eventFile = serviceConfigEventFile(runtimeRoot);
     await waitForFile(eventFile);
@@ -147,6 +234,24 @@ test("config-params-service: rejects invalid documents and writes sanitized syst
     assert.equal(serialized.includes("APIKEY"), false);
     assert.equal(serialized.includes("TOKEN"), false);
     assert.equal(serialized.includes("user-secret-token"), false);
+    assert.equal(
+      await readFile(path.join(workspaceRoot, "config-params.json"), "utf8"),
+      "{ invalid SECRET_VALUE",
+    );
+    assert.equal(
+      await readFile(path.join(workspaceRoot, "user-secret-token/config-params.json"), "utf8"),
+      "{ invalid APIKEY",
+    );
+    await service.writeWorkspaceConfigParams({ values: { API_KEY: "workspace-corrected" } });
+    await service.writeUserConfigParams({
+      userId: "user-secret-token",
+      input: { values: { API_KEY: "user-corrected" } },
+    });
+    assert.equal((await service.readWorkspaceConfigParams()).values.API_KEY, "workspace-corrected");
+    assert.equal(
+      (await service.readUserConfigParams({ userId: "user-secret-token" })).values.API_KEY,
+      "user-corrected",
+    );
   } finally {
     if (previousWorkspaceRoot === undefined) delete process.env.NOOBOT_WORKSPACE_ROOT;
     else process.env.NOOBOT_WORKSPACE_ROOT = previousWorkspaceRoot;

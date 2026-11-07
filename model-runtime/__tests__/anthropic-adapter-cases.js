@@ -408,9 +408,9 @@ test("Anthropic adapter rejects operation kinds it cannot serve", async () => {
       anthropicMessagesAdapter.executeOperation({
         credential: "sk-test",
         modelSpec: anthropicOperationSpec,
-        operation: { kind: "image_generation", input: { prompt: "cat" } },
+        operation: { kind: "media_generation", input: { prompt: "cat", outputType: "image" } },
       }),
-    /does not support operation: image_generation/,
+    /does not support operation: media_generation/,
   );
 });
 

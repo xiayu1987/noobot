@@ -7,7 +7,6 @@ import { deepMerge, isPlainObject, setConfigOwnProperty } from "../utils.js";
 import {
   resolveDefaultModelLibraryProvider,
   resolveModelLibraryProvider,
-  requireToolBindingConfig,
 } from "@noobot/model-protocol";
 import { normalizeKnownConfigKeys } from "../normalization/keys.js";
 import { resolveBuiltinScenarios } from "../policy/scenario-policy.js";
@@ -52,7 +51,6 @@ function mergeProviders(globalProviders = {}, userProviders = {}) {
 }
 
 export function mergeConfig(globalConfig = {}, userConfig = {}) {
-  requireToolBindingConfig(globalConfig?.tools?.bindings);
   const globalBase = normalizeKnownConfigKeys(
     isPlainObject(globalConfig) ? { ...globalConfig } : {},
   );
@@ -78,7 +76,6 @@ export function mergeConfig(globalConfig = {}, userConfig = {}) {
   }
   out.scenarios = resolveBuiltinScenarios(globalBase?.scenarios, safeUser?.scenarios);
   delete out.configParams;
-  requireToolBindingConfig(out.tools?.bindings);
   return out;
 }
 

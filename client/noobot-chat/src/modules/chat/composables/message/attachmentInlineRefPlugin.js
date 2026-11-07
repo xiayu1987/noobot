@@ -54,10 +54,7 @@ export function buildAttachmentRefIndex(attachmentItems = []) {
   for (const attachmentItem of Array.isArray(attachmentItems) ? attachmentItems : []) {
     if (isDraftAttachmentItem(attachmentItem)) continue;
     const identity = projectAttachmentIdentity(attachmentItem);
-    index.set(attachmentIdentityKey(identity), {
-      ...identity,
-      name: text(attachmentItem.name),
-    });
+    index.set(attachmentIdentityKey(identity), attachmentItem);
   }
   return index;
 }
@@ -195,7 +192,9 @@ function downloadableTarget(linked) {
 function resolveLinkTarget(href, env) {
   if (href.startsWith(ATTACHMENT_IDENTITY_REF_PREFIX)) {
     const identity = resolveIdentity(href);
-    return identity ? { ref: href, identity, superseded: false } : null;
+    return identity
+      ? { ref: href, identity, superseded: false }
+      : { unavailableReason: "attachment_not_available", href };
   }
   if (!isFileLinkHref(href)) return null;
   const linked = resolveLinkedResource(href, env.linkSnapshots, {
@@ -229,15 +228,31 @@ function readLinkLabel(children, start) {
   return { closeIndex, depth, label: labelParts.join("").trim() };
 }
 
+function rewriteAttachmentImage(token, target, env, href) {
+  if (token.type !== "image" || !target.identity) return false;
+  const attachment = lookupAttachment(env, target.identity);
+  if (!attachment) return false;
+  const url = text(attachment.url);
+  if (!url) throw new Error(`indexed attachment missing access URL: ${href}`);
+  token.attrSet("src", url);
+  token.attrSet("data-noobot-attachment-ref", target.ref);
+  return true;
+}
+
 function rewriteLinkChildren(state, children) {
   for (let index = 0; index < children.length; index += 1) {
     const token = children[index];
-    if (token.type !== "link_open") continue;
-    const href = String(token.attrGet?.("href") || "");
+    const isImage = token.type === "image";
+    if (!isImage && token.type !== "link_open") continue;
+    const href = String(token.attrGet?.(isImage ? "src" : "href") || "");
     const target = resolveLinkTarget(href, state.env);
     if (!target) continue;
 
-    const { closeIndex, depth, label } = readLinkLabel(children, index);
+    if (rewriteAttachmentImage(token, target, state.env, href)) continue;
+
+    const { closeIndex, depth, label } = isImage
+      ? { closeIndex: index, depth: 0, label: token.content }
+      : readLinkLabel(children, index);
     if (depth !== 0) continue;
 
     const replacement = new state.Token(ATTACHMENT_INLINE_TOKEN, "", 0);

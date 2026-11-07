@@ -57,9 +57,13 @@ function responsesInputMessages(body = {}) {
   return instructions ? [{ role: "system", content: instructions }, ...input] : input;
 }
 
-function imageGenerationMessages(body = {}) {
-  const prompt = text(body?.prompt);
-  return prompt ? [{ role: "user", content: prompt }] : responsesInputMessages(body);
+function mediaGenerationMessages(body = {}) {
+  const prompts = [body.prompt, body.input?.prompt].map((value) => text(value)).filter(Boolean);
+  const messages = prompts.map((content) => ({ role: "user", content }));
+  for (const entries of [body.contents, body.content, body.input, body.input?.messages]) {
+    if (Array.isArray(entries)) messages.push(...entries);
+  }
+  return messages;
 }
 
 const REQUEST_AUDIT_RULES = Object.freeze({
@@ -69,8 +73,8 @@ const REQUEST_AUDIT_RULES = Object.freeze({
     messages: responsesInputMessages,
     requiresSystem: false,
   },
-  [MODEL_OPERATION_KIND.IMAGE_GENERATION]: {
-    messages: imageGenerationMessages,
+  [MODEL_OPERATION_KIND.MEDIA_GENERATION]: {
+    messages: mediaGenerationMessages,
     requiresSystem: false,
   },
 });

@@ -14,10 +14,6 @@ import {
   createStartupLogger,
 } from "../../electron/runtime/logging.js";
 
-function waitForLogWrites() {
-  return new Promise((resolve) => setTimeout(resolve, 40));
-}
-
 test("desktop logger writes role-specific files under one logs directory", async () => {
   const rootDir = await mkdtemp(path.join(os.tmpdir(), "noobot-startup-logging-"));
   const app = {
@@ -35,7 +31,7 @@ test("desktop logger writes role-specific files under one logs directory", async
     logger.appendServiceLog("service stdout line");
     logger.appendAgentProxyLog("agent proxy stdout line");
 
-    await waitForLogWrites();
+    await logger.flush();
 
     const logsDir = path.join(rootDir, "logs");
     assert.equal(logger.getLogDir(), logsDir);
@@ -64,6 +60,33 @@ test("desktop logger writes role-specific files under one logs directory", async
     assert.match(
       await readFile(path.join(logsDir, DESKTOP_LOG_FILES.AGENT_PROXY), "utf8"),
       /agent proxy stdout line/,
+    );
+  } finally {
+    await rm(rootDir, { recursive: true, force: true });
+  }
+});
+
+test("desktop logger reports failed writes even when they settle before flush", async (t) => {
+  const rootDir = await mkdtemp(path.join(os.tmpdir(), "noobot-startup-log-failure-"));
+  const diagnostics = [];
+  t.mock.method(console, "error", (...args) => diagnostics.push(args));
+  const logger = createStartupLogger({ app: { getPath: () => rootDir } });
+  try {
+    await writeFile(path.join(rootDir, "logs"), "blocked", "utf8");
+    logger.appendServiceLog("must report failure");
+    while (!diagnostics.length) await new Promise((resolve) => setImmediate(resolve));
+    await assert.rejects(logger.flush(), (error) => {
+      assert.ok(error instanceof AggregateError);
+      assert.equal(error.errors.length, 1);
+      assert.equal(error.errors[0].code, "EEXIST");
+      return true;
+    });
+    await rm(path.join(rootDir, "logs"));
+    logger.appendServiceLog("recovered");
+    await logger.flush();
+    assert.match(
+      await readFile(logger.getLogFilePath(DESKTOP_LOG_FILES.SERVICE), "utf8"),
+      /recovered/,
     );
   } finally {
     await rm(rootDir, { recursive: true, force: true });

@@ -27,7 +27,7 @@ for (const versioned of [false, true]) {
     const filePath = path.join(root, "global.config.json");
     const alias = listModelLibraryOptions()[0].key;
     const original = `${JSON.stringify({
-      ...(versioned ? { model_library_version: MODEL_LIBRARY_VERSION + 1 } : {}),
+      ...(versioned ? { model_library_version: MODEL_LIBRARY_VERSION - 1 } : {}),
       default_provider: "retired",
       providers: {
         [alias]: { model: "preserved", api_key: "configured-key", is_custom: false },
@@ -46,13 +46,22 @@ for (const versioned of [false, true]) {
       assert.equal(document.providers[alias].is_custom, !versioned);
       assert.equal(document.providers.private.is_custom, true);
       assert.equal(Boolean(document.providers.retired), !versioned);
-      assert.ok(document.providers[document.default_provider]);
+      assert.equal(document.default_provider, "retired");
+      assert.equal(
+        report.issues.some(
+          (issue) =>
+            issue.path === "default_provider" && issue.code === "MODEL_REFERENCE_NOT_FOUND",
+        ),
+        versioned,
+      );
       for (const { key } of listModelLibraryOptions()) assert.ok(document.providers[key]);
       const backups = (await readdir(root)).filter((name) => name.endsWith(".bak"));
       assert.equal(backups.length, 1);
       assert.equal(await readFile(path.join(root, backups[0]), "utf8"), original);
       const before = await fileSnapshot(filePath);
-      assert.equal((await upgradeGlobalModelLibrary(filePath)).changed, false);
+      const repeatedReport = await upgradeGlobalModelLibrary(filePath);
+      assert.equal(repeatedReport.changed, false);
+      assert.deepEqual(repeatedReport.issues, report.issues);
       assert.deepEqual(await fileSnapshot(filePath), before);
       assert.equal((await readdir(root)).filter((name) => name.endsWith(".bak")).length, 1);
     } finally {

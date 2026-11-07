@@ -690,9 +690,16 @@ test("external help uses declared manual support without consulting built-in cat
 
 test("models section excludes providers disabled by enabled false", async () => {
   const globalConfig = {
+    default_provider: "alpha",
     providers: {
-      alpha: { model: "alpha-1", description: "on" },
-      beta: { model: "beta-1", enabled: false },
+      alpha: {
+        model: "alpha-1",
+        description: "on",
+        used_for_conversation: true,
+        reasoning_effort_parameter: "reasoning_effort",
+        reasoning_effort_options: ["none"],
+      },
+      beta: { model: "beta-1", enabled: false, used_for_conversation: true },
     },
   };
   const section = buildModelsSection(createScope({ globalConfig }));

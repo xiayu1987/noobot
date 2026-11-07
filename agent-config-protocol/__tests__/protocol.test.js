@@ -341,10 +341,17 @@ test("multimodal defaults resolve one explicit model across required modalities"
   assert.equal(conflict.conflicting, true);
 });
 
-test("primary model alignment updates every config-file model reference", () => {
+test("primary model alignment updates only references supported by the selected model", () => {
   const config = {
     default_provider: "old",
-    providers: { selected: { enabled: false, used_for_conversation: false } },
+    providers: {
+      selected: {
+        model: "selected-model",
+        enabled: false,
+        used_for_conversation: false,
+        multimodal_parsing: { enabled: true, input_modalities: ["image", "document"] },
+      },
+    },
     multimodal: {
       parsing: { default_models: { audio: "old", image: "old", document: "old" } },
       generation: { default_models: { image: "old" } },
@@ -363,18 +370,18 @@ test("primary model alignment updates every config-file model reference", () => 
   assert.equal(config.providers.selected.enabled, true);
   assert.equal(config.providers.selected.used_for_conversation, true);
   assert.deepEqual(config.multimodal.parsing.default_models, {
-    audio: "selected",
+    audio: "old",
     image: "selected",
     document: "selected",
   });
-  assert.equal(config.multimodal.generation.default_models.image, "selected");
+  assert.equal(config.multimodal.generation.default_models.image, "old");
   assert.equal(config.scenarios.definitions.programming.model, "selected");
   assert.equal(config.tools.do_search_web.model_web_search.model, "selected");
   assert.equal(config.plugins.harness.stepModels.planning, "selected");
   assert.equal(config.plugins.workflow.semanticModel, "selected");
 });
 
-test("config repair preserves model references regardless of declared capabilities", () => {
+test("config repair preserves unsupported references and reports their operation impact", () => {
   const baseValues = {
     default_provider: "primary",
     providers: {
@@ -382,23 +389,57 @@ test("config repair preserves model references regardless of declared capabiliti
         enabled: true,
         used_for_conversation: true,
         model: "primary-model",
-        reasoning_effort: "medium",
-        tool_reasoning_effort: "medium",
-        reasoning_effort_options: ["low", "medium"],
-        reasoning_effort_parameter: "reasoning_effort",
-        multimodal_generation: {
-          support_generation: { enabled: false, support_scope: [] },
-        },
+        multimodal_parsing: { enabled: true, input_modalities: ["image"] },
+      },
+      document: {
+        enabled: true,
+        used_for_conversation: true,
+        model: "document-model",
+        multimodal_parsing: { enabled: true, input_modalities: ["document"] },
       },
     },
-    multimodal: { generation: { default_models: { image: "primary" } } },
+    multimodal: { parsing: { default_models: { document: "document", image: "primary" } } },
   };
-  const repaired = repairConfigDocument({
+  const target = {
+    multimodal: { parsing: { default_models: { document: "primary", image: "primary" } } },
+  };
+  const original = structuredClone(target);
+  const result = repairConfigDocument({ scope: CONFIG_DOCUMENT_SCOPE.USER, baseValues, target });
+  assert.equal(result.document.multimodal.parsing.default_models.document, "primary");
+  assert.equal(result.document.multimodal.parsing.default_models.image, "primary");
+  assert.deepEqual(result.report.issues, [
+    {
+      code: "MODEL_REFERENCE_CAPABILITY_MISMATCH",
+      impact: "operation",
+      autoRepair: false,
+      path: "multimodal.parsing.default_models.document",
+      alias: "primary",
+      requirement: "parse:document",
+    },
+  ]);
+  assert.deepEqual(target, original);
+  const second = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.USER,
     baseValues,
-    target: structuredClone(baseValues),
+    target: result.document,
   });
-  assert.equal(repaired.document.multimodal.generation.default_models.image, "primary");
+  assert.equal(second.report.changed, false);
+});
+
+test("config repair reports an invalid authoritative model reference instead of guessing a capable model", () => {
+  const baseValues = {
+    providers: { primary: { model: "primary-model", used_for_conversation: true } },
+    multimodal: { generation: { default_models: { image: "primary" } } },
+  };
+  const target = structuredClone(baseValues);
+  const result = repairConfigDocument({ scope: CONFIG_DOCUMENT_SCOPE.USER, baseValues, target });
+  assert.equal(result.document.multimodal.generation.default_models.image, "primary");
+  assert.ok(
+    result.report.issues.some(
+      (issue) => issue.requirement === "generate:image" && issue.impact === "operation",
+    ),
+  );
+  assert.deepEqual(target, baseValues);
 });
 
 test("model provider insertion uses the model library only when the alias is missing", () => {
@@ -575,6 +616,7 @@ test("config repair preserves an explicit DashScope GLM provider over the librar
     base_url: "${DASHSCOPE_API_ADDRESS}",
     model: "ZHIPU/GLM-5.3",
     description: "Z.AI GLM-5.3 reasoning model (official OpenAI-compatible API)",
+    supplier: "Zhipu",
     prompt_cache_fields: [],
   });
 });
@@ -606,6 +648,7 @@ test("config repair uses generic provider structure without repairing custom con
   assert.deepEqual(repaired.document.providers.CustomGPT, {
     ...customProvider,
     is_custom: true,
+    supplier: "",
     enabled: true,
     used_for_conversation: true,
     prompt_cache_fields: [],

@@ -4,6 +4,10 @@
  */
 import { MODEL_CAPABILITY_KIND } from "../capabilities/capability-kinds.js";
 import { MODEL_OPERATION_KIND } from "./operation.js";
+import {
+  supportsModelMultimodalGeneration,
+  resolveModelGenerationApiType,
+} from "../model/model-capabilities.js";
 import { text } from "@noobot/shared/value";
 
 export function normalizeModelCapabilities(input = {}) {
@@ -13,7 +17,6 @@ export function normalizeModelCapabilities(input = {}) {
     vision: input.vision === true,
     reasoning: input.reasoning === true,
     web_search: input.web_search === true,
-    image_generation: input.image_generation === true,
   });
 }
 
@@ -25,8 +28,15 @@ export function supportsModelCapability(modelSpec = {}, capability = "") {
   return normalizeModelCapabilities(modelSpec?.capabilities)[normalizedCapability] === true;
 }
 
-export function requireModelOperationCapability(modelSpec = {}, operationKind = "") {
-  const normalizedOperationKind = text(operationKind);
+export function requireModelOperationCapability(modelSpec, operation) {
+  const normalizedOperationKind = operation.kind;
+  if (normalizedOperationKind === MODEL_OPERATION_KIND.MEDIA_GENERATION) {
+    if (!supportsModelMultimodalGeneration(modelSpec, [operation.input.outputType]))
+      throw new TypeError(
+        `model does not declare ${operation.input.outputType} generation capability`,
+      );
+    resolveModelGenerationApiType(modelSpec);
+  }
   if (
     normalizedOperationKind === MODEL_OPERATION_KIND.WEB_SEARCH &&
     !supportsModelCapability(modelSpec, MODEL_CAPABILITY_KIND.WEB_SEARCH)

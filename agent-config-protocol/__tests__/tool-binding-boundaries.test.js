@@ -4,22 +4,33 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { CONFIG_DOCUMENT_SCOPE, mergeConfig, repairConfigDocument } from "../src/index.js";
+import {
+  CONFIG_DOCUMENT_SCOPE,
+  diagnoseConfigDocument,
+  mergeConfig,
+  repairConfigDocument,
+} from "../src/index.js";
 import { sanitizeUserConfig } from "../src/policy/user-override.js";
 
 const globalConfig = { tools: { bindings: { read_file: { bindingName: "global_read" } } } };
 
-test("raw binding declarations are validated before user projection or merging", () => {
+test("invalid raw binding declarations survive projection for diagnosis and correction", () => {
   for (const entry of [null, "", 42, {}, { bindingName: "ok", extra: true }, { bindingName: "" }]) {
     const input = { tools: { bindings: { read_file: entry } } };
-    assert.throws(() => sanitizeUserConfig(input), /bindingName/);
-    assert.throws(() => mergeConfig(globalConfig, input), /bindingName/);
-    assert.throws(() => mergeConfig(input), /bindingName/);
-    assert.throws(() => repairConfigDocument({ target: input }), /bindingName/);
-    assert.throws(() => repairConfigDocument({ baseValues: input }), /bindingName/);
+    assert.deepEqual(sanitizeUserConfig(input).tools.bindings.read_file, entry);
+    assert.deepEqual(mergeConfig({}, input).tools.bindings.read_file, entry);
+    for (const repaired of [
+      repairConfigDocument({ target: input }),
+      repairConfigDocument({ baseValues: input }),
+    ]) {
+      assert.deepEqual(repaired.document.tools.bindings.read_file, entry);
+      assert.equal(repaired.report.issues[0].code, "INVALID_TOOL_BINDING_CONFIG");
+    }
   }
   for (const bindings of [null, "", 42, []]) {
-    assert.throws(() => mergeConfig(globalConfig, { tools: { bindings } }), /bindings/);
+    const effective = mergeConfig(globalConfig, { tools: { bindings } });
+    assert.deepEqual(effective.tools.bindings, bindings);
+    assert.equal(diagnoseConfigDocument(effective)[0].code, "INVALID_TOOL_BINDING_CONFIG");
   }
 });
 

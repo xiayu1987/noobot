@@ -22,20 +22,16 @@
         <small>{{ messages.setup.languageHelp }}</small>
       </el-form-item>
       <el-form-item :label="messages.setup.model">
-        <el-select
+        <ModelPicker
+          v-model:visible="modelPickerVisible"
           :model-value="form.model"
-          class="startup-system-select"
-          popper-class="noobot-select-popper"
-          filterable
+          :options="modelOptions"
+          :translate="translateModelPicker"
+          drawer-size="min(480px, 100vw)"
+          :allow-default="false"
+          :placeholder="messages.setup.model"
           @update:model-value="updateField('model', $event)"
-        >
-          <el-option
-            v-for="item in modelOptions"
-            :key="item.key"
-            :label="formatModelLabel(item)"
-            :value="item.key"
-          />
-        </el-select>
+        />
         <small>{{ messages.setup.modelHelp }}</small>
       </el-form-item>
       <el-form-item :label="messages.setup.username">
@@ -84,7 +80,8 @@
 </template>
 
 <script setup>
-import { text } from "@noobot/shared/value";
+import { ref } from "vue";
+import ModelPicker from "@noobot/client-shared/ui/model-picker";
 
 const props = defineProps({
   form: { type: Object, required: true },
@@ -95,11 +92,9 @@ const props = defineProps({
 });
 const emit = defineEmits(["submit", "update:form"]);
 
-function formatModelLabel(item) {
-  return [item?.key, item?.model, item?.description]
-    .map((value) => text(value))
-    .filter(Boolean)
-    .join(" · ");
+const modelPickerVisible = ref(false);
+function translateModelPicker(key) {
+  return key.split(".").reduce((node, segment) => node[segment], props.messages);
 }
 function updateField(key, value) {
   emit("update:form", { ...props.form, [key]: value });

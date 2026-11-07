@@ -71,6 +71,12 @@ function decodeBase64Bytes(encoded, maxBytes, onBytes) {
   return Uint8Array.from(binary, (char) => char.charCodeAt(0));
 }
 
+function decodePercentByte(encoded, index) {
+  const hex = encoded.slice(index + 1, index + 3);
+  if (!/^[a-f\d]{2}$/iu.test(hex)) throw new Error("FILE_PREVIEW_RESOURCE_DATA_INVALID");
+  return Number.parseInt(hex, 16);
+}
+
 function decodePercentBytes(encoded, maxBytes, onBytes) {
   const bytes = new Uint8Array(Math.min(encoded.length * 3, maxBytes));
   const encoder = new TextEncoder();
@@ -84,9 +90,7 @@ function decodePercentBytes(encoded, maxBytes, onBytes) {
   const decode = () => {
     for (let index = 0; index < encoded.length;) {
       if (encoded[index] === "%") {
-        const hex = encoded.slice(index + 1, index + 3);
-        if (!/^[a-f\d]{2}$/iu.test(hex)) throw new Error("FILE_PREVIEW_RESOURCE_DATA_INVALID");
-        append([Number.parseInt(hex, 16)]);
+        append([decodePercentByte(encoded, index)]);
         index += 3;
         continue;
       }

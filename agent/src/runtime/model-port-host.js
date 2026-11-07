@@ -98,6 +98,7 @@ function createModelPort({ resolveTurnModelSpec, modelState }) {
   const executor = createModelRequestExecutor({
     credentialPort: createCredentialPort(),
     observationPort: createObservationPort({ modelState }),
+    providerRuntime: { fetchImpl: modelState.runtime.sharedTools.fetch },
   });
   const port = {
     async invoke({

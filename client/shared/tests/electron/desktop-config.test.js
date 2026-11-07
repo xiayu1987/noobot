@@ -77,8 +77,8 @@ export async function createFixture() {
       },
       default_provider: "gpt_5_6_sol",
       multimodal: {
-        parsing: { default_models: { audio: "gpt_5_6_sol", image: "gpt_5_6_sol" } },
-        generation: { default_models: { image: "gpt_5_6_sol" } },
+        parsing: { default_models: { audio: "gemini_3_7_flash", image: "gpt_5_6_sol" } },
+        generation: { default_models: { image: "gpt_image_2_5_flare" } },
       },
       plugins: {
         character: {
@@ -118,6 +118,96 @@ export async function createFixture() {
   };
 }
 
+test("desktop startup and saving preserve invalid params and resume after correction", async (t) => {
+  const fixture = await createFixture();
+  t.after(fixture.restore);
+  const manager = createDesktopConfigManager({
+    repoRoot: fixture.repoRoot,
+    packagedBackendRoot: fixture.packagedBackendRoot,
+  });
+  const state = manager.ensureDesktopGlobalConfig({
+    isPackaged: true,
+    userDataPath: fixture.userDataPath,
+  });
+  for (const source of [
+    '{"values":{"API_KEY":"private"} trailing',
+    "null",
+    "[]",
+    '{"values":false}',
+    '{"descriptions":null}',
+    '{"values":{"API_KEY":{"nested":"private"}}}',
+    '{"values":{"API_KEY":["private"]}}',
+    '{"values":{"API_KEY":null}}',
+    '{"values":{"API_KEY":false}}',
+    '{"descriptions":{"API_KEY":42}}',
+  ]) {
+    await writeFile(state.configParamsPath, source);
+    for (const action of [
+      () =>
+        manager.ensureDesktopGlobalConfig({ isPackaged: true, userDataPath: fixture.userDataPath }),
+      () =>
+        manager.saveConfigParamValues({
+          workspaceRootPath: state.workspaceRootPath,
+          values: { API_KEY: "replacement" },
+        }),
+    ]) {
+      assert.throws(action, (error) => {
+        assert.match(error.code, /INVALID_CONFIG_(PARAM_)?DOCUMENT/);
+        assert.equal(error.message.includes("private"), false);
+        return true;
+      });
+      assert.equal(await readFile(state.configParamsPath, "utf8"), source);
+    }
+  }
+  await writeFile(
+    state.configParamsPath,
+    JSON.stringify({ values: { API_KEY: "repaired" }, descriptions: { API_KEY: "Credential" } }),
+  );
+  manager.ensureDesktopGlobalConfig({ isPackaged: true, userDataPath: fixture.userDataPath });
+  manager.saveConfigParamValues({
+    workspaceRootPath: state.workspaceRootPath,
+    values: { REGION: "cn" },
+  });
+  const restored = JSON.parse(await readFile(state.configParamsPath, "utf8"));
+  assert.equal(restored.values.API_KEY, "repaired");
+  assert.equal(restored.values.REGION, "cn");
+  assert.equal(restored.descriptions.API_KEY, "Credential");
+  const original = await readFile(state.configParamsPath, "utf8");
+  for (const values of [null, false, 0, "", [], { API_KEY: {} }, { API_KEY: null }]) {
+    assert.throws(
+      () => manager.saveConfigParamValues({ workspaceRootPath: state.workspaceRootPath, values }),
+      { code: "INVALID_CONFIG_PARAM_DOCUMENT" },
+    );
+    assert.equal(await readFile(state.configParamsPath, "utf8"), original);
+  }
+});
+
+test("desktop super admin saving preserves malformed existing global config", async (t) => {
+  const fixture = await createFixture();
+  t.after(fixture.restore);
+  const manager = createDesktopConfigManager({
+    repoRoot: fixture.repoRoot,
+    packagedBackendRoot: fixture.packagedBackendRoot,
+  });
+  const state = manager.ensureDesktopGlobalConfig({
+    isPackaged: true,
+    userDataPath: fixture.userDataPath,
+  });
+  const source = '{"api_key":"private" trailing';
+  await writeFile(state.globalConfigPath, source);
+  assert.throws(
+    () =>
+      manager.saveSuperAdminConfig({
+        globalConfigPath: state.globalConfigPath,
+        userId: "owner",
+        connectCode: "configured-code",
+        language: "en-US",
+      }),
+    { code: "INVALID_CONFIG_DOCUMENT" },
+  );
+  assert.equal(await readFile(state.globalConfigPath, "utf8"), source);
+});
+
 test("packaged desktop startup incrementally adds any bundled global config fields", async () => {
   const fixture = await createFixture();
   try {
@@ -151,7 +241,7 @@ test("packaged desktop startup incrementally adds any bundled global config fiel
     assert.equal(config.security.path_policy, undefined);
     assert.equal(config.attachments, undefined);
     assert.deepEqual(config.multimodal.parsing.default_models, {
-      audio: "gpt_5_6_sol",
+      audio: "gemini_3_7_flash",
       image: "gpt_5_6_sol",
     });
     const userConfig = JSON.parse(await readFile(path.join(legacyUserDir, "config.json"), "utf8"));
@@ -265,12 +355,20 @@ test("packaged desktop setup selects library models and new users inherit them f
       userDataPath: fixture.userDataPath,
     });
     assert.equal(
-      state.superAdmin.modelOptions.some((item) => item.key === "gemini_3_7_flash"),
+      state.superAdmin.modelOptions.some((item) => item.alias === "gemini_3_7_flash"),
       true,
     );
     assert.equal(
-      state.superAdmin.modelOptions.some((item) => item.key === "openai" && !item.library),
+      state.superAdmin.modelOptions.some((item) => item.alias === "openai" && !item.library),
       true,
+    );
+    const gemini = state.superAdmin.modelOptions.find((item) => item.alias === "gemini_3_7_flash");
+    assert.equal(gemini.supplier, "Google");
+    assert.ok(gemini.inputModalities.includes("audio"));
+    assert.equal(Object.hasOwn(gemini, "api_key"), false);
+    assert.equal(
+      state.superAdmin.modelOptions.some((item) => item.alias === "gpt_image_2_5_flare"),
+      false,
     );
 
     manager.saveSuperAdminConfig({

@@ -1,7 +1,8 @@
 {
-  "version": 1,
+  "version": 3,
   "defaults": {
     "generic_provider": {
+      "supplier": "",
       "is_custom": true,
       "enabled": true,
       "used_for_conversation": true,
@@ -28,6 +29,7 @@
   },
   "providers": {
     "gpt_5_6_sol": {
+      "supplier": "OpenAI",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -55,6 +57,7 @@
       }
     },
     "gpt_6_sol": {
+      "supplier": "OpenAI",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -83,6 +86,7 @@
       }
     },
     "gpt_6_1_sol": {
+      "supplier": "OpenAI",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -111,6 +115,7 @@
       }
     },
     "gpt_6_1_terra": {
+      "supplier": "OpenAI",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -139,6 +144,7 @@
       }
     },
     "gpt_6_luna": {
+      "supplier": "OpenAI",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -167,6 +173,7 @@
       }
     },
     "gpt_6_astra": {
+      "supplier": "OpenAI",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -195,6 +202,7 @@
       }
     },
     "gpt_5_6_terra": {
+      "supplier": "OpenAI",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -222,6 +230,7 @@
       }
     },
     "gpt_5_6_luna": {
+      "supplier": "OpenAI",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -249,6 +258,7 @@
       }
     },
     "claude_fable_5": {
+      "supplier": "Anthropic",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -276,6 +286,7 @@
       }
     },
     "claude_fable_5_1": {
+      "supplier": "Anthropic",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -303,6 +314,7 @@
       }
     },
     "claude_opus_5_5": {
+      "supplier": "Anthropic",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -330,6 +342,7 @@
       }
     },
     "claude_opus_5": {
+      "supplier": "Anthropic",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -357,6 +370,7 @@
       }
     },
     "claude_sonnet_5": {
+      "supplier": "Anthropic",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -384,6 +398,7 @@
       }
     },
     "claude_sonnet_5_5": {
+      "supplier": "Anthropic",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -411,6 +426,7 @@
       }
     },
     "claude_haiku_4_5": {
+      "supplier": "Anthropic",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -438,6 +454,7 @@
       }
     },
     "claude_haiku_5_5": {
+      "supplier": "Anthropic",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -465,6 +482,7 @@
       }
     },
     "gemini_4_argon": {
+      "supplier": "Google",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -489,6 +507,7 @@
       }
     },
     "gemini_3_8_flash": {
+      "supplier": "Google",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -513,6 +532,7 @@
       }
     },
     "gemini_3_7_flash": {
+      "supplier": "Google",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -537,6 +557,7 @@
       }
     },
     "gemini_3_6_flash": {
+      "supplier": "Google",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -561,6 +582,7 @@
       }
     },
     "gemini_3_1_pro_preview": {
+      "supplier": "Google",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -585,6 +607,7 @@
       }
     },
     "gemini_3_5_flash_lite": {
+      "supplier": "Google",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -609,6 +632,7 @@
       }
     },
     "gemini_3_1_flash_lite": {
+      "supplier": "Google",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -633,6 +657,7 @@
       }
     },
     "deepseek_v4_pro": {
+      "supplier": "DeepSeek",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -660,6 +685,7 @@
       }
     },
     "deepseek_flash": {
+      "supplier": "DeepSeek",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -684,6 +710,7 @@
       }
     },
     "grok_4_7": {
+      "supplier": "xAI",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -711,6 +738,7 @@
       }
     },
     "grok_4_6": {
+      "supplier": "xAI",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -738,6 +766,7 @@
       }
     },
     "qwen3_8_max": {
+      "supplier": "Alibaba",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -765,6 +794,7 @@
       }
     },
     "qwen3_8_flash": {
+      "supplier": "Alibaba",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -792,6 +822,7 @@
       }
     },
     "qwen3_8_omni_flash": {
+      "supplier": "Alibaba",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -819,6 +850,7 @@
       }
     },
     "qwen3_7_max": {
+      "supplier": "Alibaba",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -846,6 +878,7 @@
       }
     },
     "qwen3_7_plus": {
+      "supplier": "Alibaba",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -873,6 +906,7 @@
       }
     },
     "qwen3_7_flash": {
+      "supplier": "Alibaba",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -900,6 +934,7 @@
       }
     },
     "qwen3_6_flash": {
+      "supplier": "Alibaba",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -924,6 +959,7 @@
       }
     },
     "glm_5_2": {
+      "supplier": "Zhipu",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -948,6 +984,7 @@
       }
     },
     "glm_5_3_flash": {
+      "supplier": "Zhipu",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -972,6 +1009,7 @@
       }
     },
     "glm_5_3_flashx": {
+      "supplier": "Zhipu",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -996,6 +1034,7 @@
       }
     },
     "glm_5_3": {
+      "supplier": "Zhipu",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -1020,6 +1059,7 @@
       }
     },
     "gpt_image_2_5_sunburst": {
+      "supplier": "OpenAI",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": false,
@@ -1036,7 +1076,7 @@
         "support_generation": {
           "enabled": true,
           "support_scope": ["image"],
-          "api_type": "images_async"
+          "api_type": "openai_images"
         }
       },
       "reasoning_effort": "medium",
@@ -1045,6 +1085,7 @@
       "reasoning_effort_parameter": "reasoning_effort"
     },
     "gpt_image_2_5_flare": {
+      "supplier": "OpenAI",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": false,
@@ -1061,7 +1102,7 @@
         "support_generation": {
           "enabled": true,
           "support_scope": ["image"],
-          "api_type": "images_async"
+          "api_type": "openai_images"
         }
       },
       "reasoning_effort": "medium",
@@ -1070,6 +1111,7 @@
       "reasoning_effort_parameter": "reasoning_effort"
     },
     "kimi_k3": {
+      "supplier": "Moonshot",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -1094,6 +1136,7 @@
       }
     },
     "kimi_k3_1_pro": {
+      "supplier": "Moonshot",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -1118,6 +1161,7 @@
       }
     },
     "kimi_k3_1_pro_highspeed": {
+      "supplier": "Moonshot",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -1142,6 +1186,7 @@
       }
     },
     "minimax_m3_1_flash": {
+      "supplier": "MiniMax",
       "is_custom": false,
       "enabled": true,
       "used_for_conversation": true,
@@ -1164,6 +1209,479 @@
           "support_scope": []
         }
       }
+    },
+    "gpt_image_2_6_sunburst": {
+      "supplier": "OpenAI",
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": false,
+      "api_key": "${OPENAI_API_KEY}",
+      "base_url": "${OPENAI_API_ADDRESS}",
+      "model": "gpt-image-2.6-sunburst",
+      "prompt_cache_fields": [],
+      "description": "OpenAI GPT Image 2.6 Sunburst for detailed image generation and editing",
+      "multimodal_parsing": {
+        "enabled": false,
+        "input_modalities": []
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": true,
+          "support_scope": ["image"],
+          "api_type": "openai_images"
+        }
+      },
+      "reasoning_effort": "none",
+      "tool_reasoning_effort": "none",
+      "reasoning_effort_options": ["none"],
+      "reasoning_effort_parameter": "reasoning_effort"
+    },
+    "gpt_image_2_6_flare": {
+      "supplier": "OpenAI",
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": false,
+      "api_key": "${OPENAI_API_KEY}",
+      "base_url": "${OPENAI_API_ADDRESS}",
+      "model": "gpt-image-2.6-flare",
+      "prompt_cache_fields": [],
+      "description": "OpenAI GPT Image 2.6 Flare for fast image generation and editing",
+      "multimodal_parsing": {
+        "enabled": false,
+        "input_modalities": []
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": true,
+          "support_scope": ["image"],
+          "api_type": "openai_images"
+        }
+      },
+      "reasoning_effort": "none",
+      "tool_reasoning_effort": "none",
+      "reasoning_effort_options": ["none"],
+      "reasoning_effort_parameter": "reasoning_effort"
+    },
+    "gemini_nano_banana_2_1": {
+      "supplier": "Google",
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": false,
+      "api_key": "${GEMINI_API_KEY}",
+      "base_url": "${GEMINI_NATIVE_API_ADDRESS}",
+      "model": "gemini-nano-banana-2.1",
+      "prompt_cache_fields": [],
+      "description": "Google Nano Banana 2.1 image generation and conversational editing",
+      "multimodal_parsing": {
+        "enabled": false,
+        "input_modalities": []
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": true,
+          "support_scope": ["image"],
+          "api_type": "gemini_interactions"
+        }
+      },
+      "reasoning_effort": "none",
+      "tool_reasoning_effort": "none",
+      "reasoning_effort_options": ["none"],
+      "reasoning_effort_parameter": "reasoning_effort"
+    },
+    "gemini_3_1_flash_lite_image": {
+      "supplier": "Google",
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": false,
+      "api_key": "${GEMINI_API_KEY}",
+      "base_url": "${GEMINI_NATIVE_API_ADDRESS}",
+      "model": "gemini-3.1-flash-lite-image",
+      "prompt_cache_fields": [],
+      "description": "Google Nano Banana 2 Lite for low-cost image generation",
+      "multimodal_parsing": {
+        "enabled": false,
+        "input_modalities": []
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": true,
+          "support_scope": ["image"],
+          "api_type": "gemini_generate_content"
+        }
+      },
+      "reasoning_effort": "none",
+      "tool_reasoning_effort": "none",
+      "reasoning_effort_options": ["none"],
+      "reasoning_effort_parameter": "reasoning_effort"
+    },
+    "gemini_3_pro_image": {
+      "supplier": "Google",
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": false,
+      "api_key": "${GEMINI_API_KEY}",
+      "base_url": "${GEMINI_NATIVE_API_ADDRESS}",
+      "model": "gemini-3-pro-image",
+      "prompt_cache_fields": [],
+      "description": "Google Nano Banana Pro for complex image generation and editing",
+      "multimodal_parsing": {
+        "enabled": false,
+        "input_modalities": []
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": true,
+          "support_scope": ["image"],
+          "api_type": "gemini_generate_content"
+        }
+      },
+      "reasoning_effort": "none",
+      "tool_reasoning_effort": "none",
+      "reasoning_effort_options": ["none"],
+      "reasoning_effort_parameter": "reasoning_effort"
+    },
+    "grok_imagine_image_2_0": {
+      "supplier": "xAI",
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": false,
+      "api_key": "${XAI_API_KEY}",
+      "base_url": "${XAI_API_ADDRESS}",
+      "model": "grok-imagine-image-2.0",
+      "prompt_cache_fields": [],
+      "description": "xAI Imagine Image 2.0 image generation",
+      "multimodal_parsing": {
+        "enabled": false,
+        "input_modalities": []
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": true,
+          "support_scope": ["image"],
+          "api_type": "xai_images"
+        }
+      },
+      "reasoning_effort": "none",
+      "tool_reasoning_effort": "none",
+      "reasoning_effort_options": ["none"],
+      "reasoning_effort_parameter": "reasoning_effort"
+    },
+    "qwen_image_3_0_pro": {
+      "supplier": "Alibaba",
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": false,
+      "api_key": "${DASHSCOPE_API_KEY}",
+      "base_url": "${DASHSCOPE_NATIVE_API_ADDRESS}",
+      "model": "qwen-image-3.0-pro",
+      "prompt_cache_fields": [],
+      "description": "Alibaba Qwen Image 3.0 Pro for image generation and text rendering",
+      "multimodal_parsing": {
+        "enabled": false,
+        "input_modalities": []
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": true,
+          "support_scope": ["image"],
+          "api_type": "dashscope_multimodal"
+        }
+      },
+      "reasoning_effort": "none",
+      "tool_reasoning_effort": "none",
+      "reasoning_effort_options": ["none"],
+      "reasoning_effort_parameter": "reasoning_effort"
+    },
+    "wan2_7_image_pro": {
+      "supplier": "Alibaba",
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": false,
+      "api_key": "${DASHSCOPE_API_KEY}",
+      "base_url": "${DASHSCOPE_NATIVE_API_ADDRESS}",
+      "model": "wan2.7-image-pro",
+      "prompt_cache_fields": [],
+      "description": "Alibaba Wan 2.7 Image Pro with up to 4K text-to-image output",
+      "multimodal_parsing": {
+        "enabled": false,
+        "input_modalities": []
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": true,
+          "support_scope": ["image"],
+          "api_type": "dashscope_multimodal"
+        }
+      },
+      "reasoning_effort": "none",
+      "tool_reasoning_effort": "none",
+      "reasoning_effort_options": ["none"],
+      "reasoning_effort_parameter": "reasoning_effort"
+    },
+    "wan2_7_image": {
+      "supplier": "Alibaba",
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": false,
+      "api_key": "${DASHSCOPE_API_KEY}",
+      "base_url": "${DASHSCOPE_NATIVE_API_ADDRESS}",
+      "model": "wan2.7-image",
+      "prompt_cache_fields": [],
+      "description": "Alibaba Wan 2.7 Image for image generation and editing",
+      "multimodal_parsing": {
+        "enabled": false,
+        "input_modalities": []
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": true,
+          "support_scope": ["image"],
+          "api_type": "dashscope_multimodal"
+        }
+      },
+      "reasoning_effort": "none",
+      "tool_reasoning_effort": "none",
+      "reasoning_effort_options": ["none"],
+      "reasoning_effort_parameter": "reasoning_effort"
+    },
+    "gemini_omni_1_2_flash": {
+      "supplier": "Google",
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": false,
+      "api_key": "${GEMINI_API_KEY}",
+      "base_url": "${GEMINI_NATIVE_API_ADDRESS}",
+      "model": "gemini-omni-1.2-flash",
+      "prompt_cache_fields": [],
+      "description": "Google Gemini Omni 1.2 Flash for video generation and conversational editing",
+      "multimodal_parsing": {
+        "enabled": false,
+        "input_modalities": []
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": true,
+          "support_scope": ["video"],
+          "api_type": "gemini_interactions"
+        }
+      },
+      "reasoning_effort": "none",
+      "tool_reasoning_effort": "none",
+      "reasoning_effort_options": ["none"],
+      "reasoning_effort_parameter": "reasoning_effort"
+    },
+    "grok_imagine_video_1_5": {
+      "supplier": "xAI",
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": false,
+      "api_key": "${XAI_API_KEY}",
+      "base_url": "${XAI_API_ADDRESS}",
+      "model": "grok-imagine-video-1.5",
+      "prompt_cache_fields": [],
+      "description": "xAI Imagine Video 1.5 for video generation with audio",
+      "multimodal_parsing": {
+        "enabled": false,
+        "input_modalities": []
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": true,
+          "support_scope": ["video"],
+          "api_type": "xai_video"
+        }
+      },
+      "reasoning_effort": "none",
+      "tool_reasoning_effort": "none",
+      "reasoning_effort_options": ["none"],
+      "reasoning_effort_parameter": "reasoning_effort"
+    },
+    "grok_imagine_video_1_5_lite": {
+      "supplier": "xAI",
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": false,
+      "api_key": "${XAI_API_KEY}",
+      "base_url": "${XAI_API_ADDRESS}",
+      "model": "grok-imagine-video-1.5-lite",
+      "prompt_cache_fields": [],
+      "description": "xAI Imagine Video 1.5 Lite for cost-efficient video generation",
+      "multimodal_parsing": {
+        "enabled": false,
+        "input_modalities": []
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": true,
+          "support_scope": ["video"],
+          "api_type": "xai_video"
+        }
+      },
+      "reasoning_effort": "none",
+      "tool_reasoning_effort": "none",
+      "reasoning_effort_options": ["none"],
+      "reasoning_effort_parameter": "reasoning_effort"
+    },
+    "wan3_0_video": {
+      "supplier": "Alibaba",
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": false,
+      "api_key": "${DASHSCOPE_API_KEY}",
+      "base_url": "${DASHSCOPE_NATIVE_API_ADDRESS}",
+      "model": "wan3.0-video",
+      "prompt_cache_fields": [],
+      "description": "Alibaba Wan 3.0 all-in-one text/image/reference-to-video generation",
+      "multimodal_parsing": {
+        "enabled": false,
+        "input_modalities": []
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": true,
+          "support_scope": ["video"],
+          "api_type": "dashscope_video",
+          "input_mode": "auto"
+        }
+      },
+      "reasoning_effort": "none",
+      "tool_reasoning_effort": "none",
+      "reasoning_effort_options": ["none"],
+      "reasoning_effort_parameter": "reasoning_effort"
+    },
+    "wan3_0_video_prime": {
+      "supplier": "Alibaba",
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": false,
+      "api_key": "${DASHSCOPE_API_KEY}",
+      "base_url": "${DASHSCOPE_NATIVE_API_ADDRESS}",
+      "model": "wan3.0-video-prime",
+      "prompt_cache_fields": [],
+      "description": "Alibaba Wan 3.0 Video Prime for faster all-in-one video generation",
+      "multimodal_parsing": {
+        "enabled": false,
+        "input_modalities": []
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": true,
+          "support_scope": ["video"],
+          "api_type": "dashscope_video",
+          "input_mode": "auto"
+        }
+      },
+      "reasoning_effort": "none",
+      "tool_reasoning_effort": "none",
+      "reasoning_effort_options": ["none"],
+      "reasoning_effort_parameter": "reasoning_effort"
+    },
+    "happyhorse_1_1_t2v": {
+      "supplier": "Alibaba",
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": false,
+      "api_key": "${DASHSCOPE_API_KEY}",
+      "base_url": "${DASHSCOPE_NATIVE_API_ADDRESS}",
+      "model": "happyhorse-1.1-t2v",
+      "prompt_cache_fields": [],
+      "description": "Alibaba HappyHorse 1.1 text-to-video generation with audio",
+      "multimodal_parsing": {
+        "enabled": false,
+        "input_modalities": []
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": true,
+          "support_scope": ["video"],
+          "api_type": "dashscope_video",
+          "input_mode": "text"
+        }
+      },
+      "reasoning_effort": "none",
+      "tool_reasoning_effort": "none",
+      "reasoning_effort_options": ["none"],
+      "reasoning_effort_parameter": "reasoning_effort"
+    },
+    "happyhorse_1_1_i2v": {
+      "supplier": "Alibaba",
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": false,
+      "api_key": "${DASHSCOPE_API_KEY}",
+      "base_url": "${DASHSCOPE_NATIVE_API_ADDRESS}",
+      "model": "happyhorse-1.1-i2v",
+      "prompt_cache_fields": [],
+      "description": "Alibaba HappyHorse 1.1 image-to-video generation with audio",
+      "multimodal_parsing": {
+        "enabled": false,
+        "input_modalities": []
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": true,
+          "support_scope": ["video"],
+          "api_type": "dashscope_video",
+          "input_mode": "image"
+        }
+      },
+      "reasoning_effort": "none",
+      "tool_reasoning_effort": "none",
+      "reasoning_effort_options": ["none"],
+      "reasoning_effort_parameter": "reasoning_effort"
+    },
+    "happyhorse_1_1_r2v": {
+      "supplier": "Alibaba",
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": false,
+      "api_key": "${DASHSCOPE_API_KEY}",
+      "base_url": "${DASHSCOPE_NATIVE_API_ADDRESS}",
+      "model": "happyhorse-1.1-r2v",
+      "prompt_cache_fields": [],
+      "description": "Alibaba HappyHorse 1.1 reference-image-to-video generation",
+      "multimodal_parsing": {
+        "enabled": false,
+        "input_modalities": []
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": true,
+          "support_scope": ["video"],
+          "api_type": "dashscope_video",
+          "input_mode": "reference"
+        }
+      },
+      "reasoning_effort": "none",
+      "tool_reasoning_effort": "none",
+      "reasoning_effort_options": ["none"],
+      "reasoning_effort_parameter": "reasoning_effort"
+    },
+    "minimax_h3": {
+      "supplier": "MiniMax",
+      "is_custom": false,
+      "enabled": true,
+      "used_for_conversation": false,
+      "api_key": "${MINIMAX_API_KEY}",
+      "base_url": "${MINIMAX_VIDEO_API_ADDRESS}",
+      "model": "MiniMax-H3",
+      "prompt_cache_fields": [],
+      "description": "MiniMax H3 multimodal video generation",
+      "multimodal_parsing": {
+        "enabled": false,
+        "input_modalities": []
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": true,
+          "support_scope": ["video"],
+          "api_type": "minimax_video"
+        }
+      },
+      "reasoning_effort": "none",
+      "tool_reasoning_effort": "none",
+      "reasoning_effort_options": ["none"],
+      "reasoning_effort_parameter": "reasoning_effort"
     }
   }
 }

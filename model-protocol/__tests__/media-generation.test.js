@@ -1,0 +1,101 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
+  normalizeModelOperation,
+  normalizeModelOperationResult,
+  normalizeGeneratedMediaArtifact,
+  resolveModelGenerationApiType,
+} from "../src/index.js";
+
+function operation(outputType, options = {}) {
+  return normalizeModelOperation({
+    kind: "media_generation",
+    input: { prompt: "bird", outputType },
+    options,
+  });
+}
+
+test("native media operation requires explicit output type and rejects mixed modality parameters", () => {
+  assert.throws(() => operation(undefined), /outputType/);
+  assert.throws(
+    () => operation("image", { duration: 5 }),
+    /unsupported image generation option: duration/,
+  );
+  assert.throws(() => operation("video", { n: 2 }), /unsupported video generation option: n/);
+  assert.throws(() => operation("video", { duration: 1.5 }), /positive integer/);
+  assert.throws(() => operation("video", { aspectRatio: "landscape" }), /width:height/);
+  assert.throws(() => operation("image", { imageUrls: [""] }), /non-empty/);
+  const request = operation("video", { duration: 5, aspectRatio: "16:9" });
+  assert.equal(request.options.duration, 5);
+  assert.ok(Object.isFrozen(request.options.imageUrls));
+});
+
+test("native media results have exactly one explicit artifact source and supported MIME", () => {
+  const artifact = {
+    fileName: "a.mp4",
+    mimeType: "video/mp4",
+    url: "https://cdn.example.test/a.mp4",
+  };
+  const result = normalizeModelOperationResult("media_generation", {
+    artifacts: [artifact],
+    taskId: "t",
+  });
+  assert.equal(result.artifacts[0].mimeType, "video/mp4");
+  assert.ok(Object.isFrozen(result.artifacts[0]));
+  assert.throws(
+    () => normalizeModelOperationResult("media_generation", { artifacts: [] }),
+    /non-empty/,
+  );
+  assert.throws(
+    () => normalizeGeneratedMediaArtifact({ ...artifact, contentBase64: "AQ==" }),
+    /exactly one/,
+  );
+  assert.throws(
+    () => normalizeGeneratedMediaArtifact({ ...artifact, url: "file:///tmp/x" }),
+    /HTTP/,
+  );
+  assert.throws(
+    () => normalizeGeneratedMediaArtifact({ ...artifact, mimeType: "application/octet-stream" }),
+    /MIME/,
+  );
+  assert.throws(
+    () => normalizeGeneratedMediaArtifact({ ...artifact, b64Json: "AQ==" }),
+    /unsupported/,
+  );
+});
+
+test("generation API selection has one explicit model declaration without legacy defaults", () => {
+  assert.throws(() => resolveModelGenerationApiType({}), /unsupported model generation API/);
+  for (const api_type of ["images_async", "openai_responses", "unknown"]) {
+    assert.throws(
+      () =>
+        resolveModelGenerationApiType({
+          multimodal_generation: { support_generation: { api_type } },
+        }),
+      /unsupported/,
+    );
+  }
+});
+
+test("the protocol forbids retries for billable media submissions", async () => {
+  const { normalizeRetryPolicy } = await import("../src/index.js");
+  assert.equal(normalizeRetryPolicy({}, "media_generation").transport.maxAttempts, 1);
+  assert.throws(
+    () => normalizeRetryPolicy({ transport: { maxAttempts: 3 } }, "media_generation"),
+    /cannot be retried/,
+  );
+  assert.throws(
+    () =>
+      normalizeGeneratedMediaArtifact({
+        fileName: "x.png",
+        mimeType: "image/png",
+        contentBase64: "corrupt!",
+      }),
+    /valid padded base64/,
+  );
+});

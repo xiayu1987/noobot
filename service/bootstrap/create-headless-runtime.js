@@ -62,7 +62,19 @@ export async function createHeadlessRuntime({
   });
 
   const globalConfigSource = createServiceGlobalConfigSource({ cwd });
-  await upgradeGlobalModelLibrary(globalConfigSource.getResolvedPath());
+  const globalConfigPath = globalConfigSource.getResolvedPath();
+  const upgradeReport = await upgradeGlobalModelLibrary(globalConfigPath);
+  for (const issue of upgradeReport.issues) {
+    await writeRuntimeEvent({
+      scope: RUNTIME_EVENT_SCOPES.STARTUP,
+      source: startupSource,
+      channel: RUNTIME_EVENT_CHANNELS.STARTUP,
+      category: RUNTIME_EVENT_CATEGORIES.CONFIG,
+      level: "warn",
+      event: SERVICE_STARTUP_EVENTS.CONFIG_DIAGNOSTIC,
+      data: { filePath: globalConfigPath, issue },
+    });
+  }
   const globalConfigBuilder = createGlobalConfigBuilder({
     source: globalConfigSource,
   });

@@ -6,6 +6,8 @@
 
 import { isPlainObject } from "../utils.js";
 import { AgentConfigProtocolError, CONFIG_ERROR_CODE } from "../contract/errors.js";
+import { createConfigIssue } from "../contract/issues.js";
+import { parseConfigDocumentText } from "../contract/documents.js";
 import { text } from "@noobot/shared/value";
 
 const CONFIG_PARAM_KEY_PATTERN = /^[A-Z0-9_]+$/;
@@ -18,24 +20,40 @@ function normalizeConfigParamMap(input, { field, omitEmptyValues }) {
   if (!isPlainObject(input)) {
     throw new AgentConfigProtocolError(`config params ${field} must be an object`, {
       code: CONFIG_ERROR_CODE.INVALID_PARAM_DOCUMENT,
-      details: { field },
+      details: createConfigIssue(CONFIG_ERROR_CODE.INVALID_PARAM_DOCUMENT, { field }),
     });
   }
   const normalized = {};
   const sourceKeys = new Map();
   for (const [rawKey, rawValue] of Object.entries(input)) {
     const key = normalizeConfigParamKey(rawKey);
-    const value = text(rawValue);
+    if (typeof rawValue !== "string") {
+      throw new AgentConfigProtocolError(`config params ${field} entry must be a string`, {
+        code: CONFIG_ERROR_CODE.INVALID_PARAM_DOCUMENT,
+        details: createConfigIssue(CONFIG_ERROR_CODE.INVALID_PARAM_DOCUMENT, {
+          field,
+          key,
+        }),
+      });
+    }
+    const value = rawValue.trim();
     if (!CONFIG_PARAM_KEY_PATTERN.test(key)) {
       throw new AgentConfigProtocolError(`invalid config param key: ${rawKey}`, {
         code: CONFIG_ERROR_CODE.INVALID_PARAM_DOCUMENT,
-        details: { field, key: rawKey },
+        details: createConfigIssue(CONFIG_ERROR_CODE.INVALID_PARAM_DOCUMENT, {
+          field,
+          key: rawKey,
+        }),
       });
     }
     if (sourceKeys.has(key) && sourceKeys.get(key) !== rawKey) {
       throw new AgentConfigProtocolError(`ambiguous config param key: ${key}`, {
         code: CONFIG_ERROR_CODE.INVALID_PARAM_DOCUMENT,
-        details: { field, key, sourceKeys: [sourceKeys.get(key), rawKey] },
+        details: createConfigIssue(CONFIG_ERROR_CODE.INVALID_PARAM_DOCUMENT, {
+          field,
+          key,
+          sourceKeys: [sourceKeys.get(key), rawKey],
+        }),
       });
     }
     sourceKeys.set(key, rawKey);
@@ -57,6 +75,7 @@ export function normalizeConfigParamsDocument(document = {}) {
   if (!isPlainObject(document)) {
     throw new AgentConfigProtocolError("config params document must be an object", {
       code: CONFIG_ERROR_CODE.INVALID_PARAM_DOCUMENT,
+      details: createConfigIssue(CONFIG_ERROR_CODE.INVALID_PARAM_DOCUMENT, { path: "$" }),
     });
   }
   const unknownFields = Object.keys(document).filter(
@@ -67,16 +86,26 @@ export function normalizeConfigParamsDocument(document = {}) {
       `unknown config params document field: ${unknownFields[0]}`,
       {
         code: CONFIG_ERROR_CODE.INVALID_PARAM_DOCUMENT,
-        details: { fields: unknownFields },
+        details: createConfigIssue(CONFIG_ERROR_CODE.INVALID_PARAM_DOCUMENT, {
+          fields: unknownFields,
+        }),
       },
     );
   }
-  const values = normalizeConfigParamValues(document.values || {});
-  const descriptions = normalizeConfigParamDescriptions(document.descriptions || {});
+  const values = normalizeConfigParamValues(
+    Object.hasOwn(document, "values") ? document.values : {},
+  );
+  const descriptions = normalizeConfigParamDescriptions(
+    Object.hasOwn(document, "descriptions") ? document.descriptions : {},
+  );
   for (const key of Object.keys(values)) {
     if (!Object.prototype.hasOwnProperty.call(descriptions, key)) descriptions[key] = "";
   }
   return { values, descriptions };
+}
+
+export function parseConfigParamsDocumentText(source) {
+  return normalizeConfigParamsDocument(parseConfigDocumentText(source));
 }
 
 export function mergeConfigParamLayers(...layers) {
@@ -96,7 +125,10 @@ function normalizeExplicitConfigParamKeys(keys = []) {
     if (!CONFIG_PARAM_KEY_PATTERN.test(key)) {
       throw new AgentConfigProtocolError(`invalid config param key: ${key}`, {
         code: CONFIG_ERROR_CODE.INVALID_PARAM_DOCUMENT,
-        details: { field: "keys", key },
+        details: createConfigIssue(CONFIG_ERROR_CODE.INVALID_PARAM_DOCUMENT, {
+          field: "keys",
+          key,
+        }),
       });
     }
   }

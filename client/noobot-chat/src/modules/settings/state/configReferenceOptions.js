@@ -5,13 +5,12 @@
  */
 
 import { isPlainObject } from "./configStructureContract.js";
+import { createClientModelOptions } from "@noobot/agent-config-protocol";
 import {
   MODEL_PROMPT_CACHE_TTL_KEY,
   resolveModelFamilyPromptCacheFields,
   resolveModelPromptCacheTtlOptions,
 } from "@noobot/model-protocol";
-
-const CONFIG_MODEL_REFERENCE_SOURCE = "providers";
 
 function readContainerKeys(document, sourcePath) {
   if (!isPlainObject(document) || !sourcePath) return [];
@@ -26,7 +25,9 @@ function readContainerKeys(document, sourcePath) {
 export function resolveConfigReferenceOptions(node, document) {
   if (!isPlainObject(node)) return [];
   if (node.modelReference) {
-    return readContainerKeys(document, CONFIG_MODEL_REFERENCE_SOURCE);
+    return createClientModelOptions(document?.providers, node.modelReference).map(
+      ({ alias }) => alias,
+    );
   }
   if (node.documentReference) {
     return readContainerKeys(document, node.documentReference);
@@ -51,12 +52,8 @@ export function resolveConfigFieldOptions(node, container, document, declaration
       }),
     ];
   }
-  const referenceOptions = resolveConfigReferenceOptions(node, document);
-  if (referenceOptions.length) return referenceOptions;
-  const declaredOptions = readDeclaredOptions(node, declarationContainer);
-  if (declaredOptions.length) return declaredOptions;
-  const legacyOptions = readDeclaredOptions(node, container);
-  if (legacyOptions.length) return legacyOptions;
+  if (hasConfigReferenceSource(node)) return resolveConfigReferenceOptions(node, document);
+  if (node?.optionsField) return readDeclaredOptions(node, declarationContainer);
   return Array.isArray(node?.options) ? node.options.map(String).filter(Boolean) : [];
 }
 

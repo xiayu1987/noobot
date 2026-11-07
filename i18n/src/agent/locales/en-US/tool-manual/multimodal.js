@@ -6,30 +6,26 @@
 
 export const MULTIMODAL_MANUAL = {
   multimodal_generate: {
-    summary:
-      "Generate image content, supporting text-to-image plus image-to-image and outpainting from source images.",
+    summary: "Generate images or videos through native model APIs.",
     usage: [
-      "{{tool:multimodal_generate}}({ generation_content, model_name, size, resolution, n, quality })",
-      "{{tool:multimodal_generate}}({ generation_content, image_urls, size, resolution })",
+      "{{tool:multimodal_generate}}({ generation_content, output_type: 'image', model_name, size, n })",
+      "{{tool:multimodal_generate}}({ generation_content, output_type: 'video', model_name, duration, aspect_ratio, resolution, image_urls })",
     ],
     params: {
-      generation_content:
-        "Description of what to generate, required. The more specific it is, the more controllable the result.",
-      model_name: "Model name, optional. Omit to resolve the configured default image model.",
-      image_urls: "Source image URLs for image-to-image or outpainting, optional.",
-      size: "Size or aspect ratio, e.g. auto, 1:1, 16:9, 1024x1024.",
-      resolution: "Resolution under a ratio size, e.g. 1K, 2K, 4K.",
-      image_size: "Explicit pixel size, optional.",
-      n: "Number of images, optional, 1 to 10.",
-      quality: "Image quality, optional.",
+      generation_content: "Required generation prompt.",
+      output_type: "image (default) or video.",
+      model_name: "Optional; uses the configured default for the output type.",
+      image_urls: "Optional source image URLs; the model must support the input mode.",
+      size: "Image pixels or aspect ratio as defined by the model API.",
+      resolution: "Native resolution; required for MiniMax H3, e.g. 768P or 2K.",
+      duration: "Video duration in seconds; required for MiniMax H3.",
+      aspect_ratio:
+        "Video ratio, e.g. 16:9; required by MiniMax except single-image input, which uses source ratio.",
+      n: "Image count; omit for video.",
+      quality: "Native image quality.",
+      complexity: "OpenAI image complexity: low, medium or high.",
     },
-    notes: [
-      "Availability depends on an enabled provider that supports image generation; without one, this tool is absent.",
-      "When several candidates are needed, generate them in one call with n rather than repeating single calls.",
-    ],
-    pitfalls: [
-      "Do not generate images of real people that could be mistaken for them, and do not produce infringing or prohibited content.",
-    ],
+    notes: ["Select a model declaring the requested output type and use its native parameters."],
   },
   multimodal_parse: {
     summary: "Parse images, audio, video, and binary documents, returning structured content.",

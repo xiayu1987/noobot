@@ -9,8 +9,9 @@ import {
   isRuntimeThresholdGateEnabled,
   resolveGatedThresholdValue,
   selectModelAlias,
+  requireModelReference,
 } from "@noobot/agent-config-protocol";
-import { resolveModelSpecByName, resolveModelSpecOrConfiguredDefault } from "../../models/index.js";
+import { resolveModelSpecByName } from "../../models/index.js";
 export function resolvePhaseSummaryLoopTurns({ runConfig = {} } = {}) {
   return resolveGatedThresholdValue({
     enabled: isRuntimeThresholdGateEnabled(runConfig),
@@ -27,6 +28,12 @@ export function resolveTaskCheckLoopTurns({ runConfig = {} } = {}) {
   });
 }
 
+function modelSelectionPath(selection, scenario) {
+  if (selection.source === "scenario") return ["scenarios", "definitions", scenario, "model"];
+  if (selection.source === "requested") return ["selectedModel"];
+  return ["default_provider"];
+}
+
 export function resolveEffectiveModelSpec({
   globalConfig = {},
   userConfig = {},
@@ -35,20 +42,15 @@ export function resolveEffectiveModelSpec({
 } = {}) {
   const effectiveConfig = mergeConfig(globalConfig, userConfig);
   const selection = selectModelAlias({ selectedModel, scenario, effectiveConfig });
-  if (selection.source === "requested") {
-    const selectedOrDefaultModelSpec = resolveModelSpecOrConfiguredDefault({
-      modelName: selection.alias,
-      globalConfig,
-      userConfig,
-    });
-    if (!selectedOrDefaultModelSpec) {
-      throw new Error(`selected model not found: ${selection.alias}`);
-    }
-    return selectedOrDefaultModelSpec;
-  }
-  return resolveModelSpecByName({
+  const provider = resolveModelSpecByName({
     modelName: selection.alias,
     globalConfig,
     userConfig,
+  });
+  return requireModelReference({
+    provider,
+    alias: selection.alias,
+    requirement: "conversation",
+    path: modelSelectionPath(selection, scenario),
   });
 }
