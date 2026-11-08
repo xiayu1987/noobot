@@ -83,6 +83,7 @@ async function mountMessage(
       : [];
   const messageItem = {
     id: "download-message",
+    sessionId: "report-session",
     role: "assistant",
     ts: DOWNLOAD_MESSAGE_TS,
     content,

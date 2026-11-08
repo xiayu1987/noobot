@@ -71,5 +71,5 @@ export function createElementPlusMountOptions(overrides = {}) {
       components[name] = component;
     }
   }
-  return { components, stubs };
+  return { components, stubs, directives: { loading: {} } };
 }
