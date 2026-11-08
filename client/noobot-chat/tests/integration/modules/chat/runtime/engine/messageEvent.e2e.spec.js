@@ -82,7 +82,7 @@ function linkRenderer(messages, messageIndex) {
   const linkSnapshots = collectSessionLinkSnapshots(messages);
   return (content) =>
     renderMarkdown(content, {
-      attachmentRefIndex: buildAttachmentRefIndex([]),
+      attachmentRefIndex: buildAttachmentRefIndex([], { userId: "user-1" }),
       linkSnapshots,
       messageIndex,
       workspaceRootDirectory: null,

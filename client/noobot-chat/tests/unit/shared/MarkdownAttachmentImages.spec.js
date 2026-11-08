@@ -34,7 +34,7 @@ describe("Markdown attachment image authorization", () => {
       props: {
         content,
         renderMarkdown: useMarkdownRenderer().renderMarkdown,
-        attachmentRefIndex: buildAttachmentRefIndex(attachments),
+        attachmentRefIndex: buildAttachmentRefIndex(attachments, { userId: "admin" }),
         linkSnapshots: [],
         messageIndex: 0,
         workspaceRootDirectory: null,

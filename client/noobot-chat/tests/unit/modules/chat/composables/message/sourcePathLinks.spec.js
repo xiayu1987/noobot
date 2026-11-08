@@ -86,7 +86,7 @@ function render(
   } = {},
 ) {
   return renderMarkdown(content, {
-    attachmentRefIndex: buildAttachmentRefIndex(attachments),
+    attachmentRefIndex: buildAttachmentRefIndex(attachments, { userId: "admin" }),
     linkSnapshots,
     messageIndex,
     workspaceRootDirectory,
@@ -106,7 +106,7 @@ function mountMarkdown(
     props: {
       content,
       renderMarkdown,
-      attachmentRefIndex: buildAttachmentRefIndex(attachments),
+      attachmentRefIndex: buildAttachmentRefIndex(attachments, { userId: "admin" }),
       linkSnapshots,
       messageIndex,
       workspaceRootDirectory: null,
@@ -332,7 +332,9 @@ describe("file links resolve through session snapshots", () => {
 
   it("reports a rendered attachment chip missing from the index through link-error", async () => {
     const wrapper = mountMarkdown(`[调查表](<${REPORT_PATH}>)`);
-    await wrapper.setProps({ attachmentRefIndex: buildAttachmentRefIndex([]) });
+    await wrapper.setProps({
+      attachmentRefIndex: buildAttachmentRefIndex([], { userId: "admin" }),
+    });
 
     wrapper.element.innerHTML = render(`[调查表](<${REPORT_PATH}>)`);
     await wrapper.get("a").trigger("click");

@@ -131,6 +131,7 @@ const artifactAttachments = computed(() =>
 const attachmentRefIndex = computed(() =>
   buildAttachmentRefIndex(
     collectSessionAttachments(props.allMessages, props.messageItem, displayedAttachments.value),
+    { userId: props.userId },
   ),
 );
 const linkSnapshots = computed(() => collectSessionLinkSnapshots(props.allMessages));

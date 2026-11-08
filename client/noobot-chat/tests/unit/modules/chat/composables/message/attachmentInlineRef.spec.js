@@ -23,7 +23,7 @@ const ATTACHMENT_ITEM = {
 const REF = "attachment:v1:s1/tool/a1";
 
 function buildIndex(attachmentItems = [ATTACHMENT_ITEM]) {
-  return buildAttachmentRefIndex(attachmentItems);
+  return buildAttachmentRefIndex(attachmentItems, { userId: "admin" });
 }
 
 describe("attachment inline ref rendering", () => {
@@ -60,10 +60,13 @@ describe("attachment inline ref rendering", () => {
     expect(html).not.toContain("<img");
   });
 
-  it("rejects indexed images missing their message model access URL", () => {
-    expect(() => renderImage(`![bird](${REF})`, [ATTACHMENT_ITEM])).toThrow(
-      "indexed attachment missing access URL",
+  it("derives image access URLs from canonical metadata without mutating the attachment", () => {
+    const html = renderImage(`![bird](${REF})`, [ATTACHMENT_ITEM]);
+    const image = new DOMParser().parseFromString(html, "text/html").querySelector("img");
+    expect(image.getAttribute("src")).toBe(
+      normalizeMessageAttachments([ATTACHMENT_ITEM], { userId: "admin" })[0].url,
     );
+    expect(ATTACHMENT_ITEM).not.toHaveProperty("url");
   });
 
   it("preserves external images and code containing image syntax", () => {
@@ -75,7 +78,9 @@ describe("attachment inline ref rendering", () => {
   it("indexes only canonical attachments while an upload is pending", () => {
     const draft = { clientAttachmentId: "draft-1", name: "pending.txt" };
     const index = buildIndex([draft, ATTACHMENT_ITEM]);
-    expect([...index.values()]).toEqual([ATTACHMENT_ITEM]);
+    expect([...index.values()]).toEqual([
+      expect.objectContaining({ ...ATTACHMENT_ITEM, url: expect.any(String) }),
+    ]);
     expect(() => buildIndex([{ name: "invalid.txt" }])).toThrow("invalid_attachment_id");
     expect(() => buildIndex([{ attachmentId: "broken", clientAttachmentId: "draft-1" }])).toThrow(
       "invalid_attachment_session_id",
