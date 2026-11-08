@@ -221,7 +221,7 @@ function select(alias) {
   outline: var(--noobot-focus-outline);
   outline-offset: var(--noobot-focus-outline-offset);
 }
-:global(.model-picker-drawer .el-drawer__body) {
+:global(.noobot-side-drawer.model-picker-drawer .el-drawer__body) {
   display: flex;
   min-height: 0;
   padding: 0;

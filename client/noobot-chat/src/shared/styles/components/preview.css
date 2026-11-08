@@ -1,4 +1,4 @@
-.noobot-file-preview-drawer .el-drawer__body {
+.noobot-side-drawer.noobot-file-preview-drawer .el-drawer__body {
   display: flex;
   flex-direction: column;
   min-height: 0;

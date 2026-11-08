@@ -1,5 +1,50 @@
 # v4.4.4 以来改动审核（2026-11-07）
 
+## 增量复核（2026-11-08，范围 `v4.4.4..73cc65ffd`）
+
+范围：8 个提交，480 个文件（+19865/−4802）。前两次复核截止到 cc71cf878，本次新增审核 73cc65ffd（模型选择器按发布日期排序、共享样式调整），并重新检查 cc71cf878 引入的共享组件边界。复核开始时工作区干净；下表中的“已修复”项是本次改动，尚未提交。
+
+| 分类           | 结论                                                                                                                                                                                     |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 73cc65ffd 主体 | 闭环。发布日期、排序规则和消费方的边界清晰，未发现兜底或重复事实源。                                                                                                                     |
+| 本次引入问题   | 1 项：共享 `ModelPicker.vue` 依赖 chat 内部样式（cc71cf878 引入），已按根因修复。                                                                                                        |
+| 存量问题       | 1 项：workflow 插件依赖宿主抽屉样式类名（v4.4.4 已存在），本次未修改。                                                                                                                   |
+| 待验证         | `.el-drawer__close-btn` 的颜色改由 Element Plus token 映射承接（`--el-text-color-*`、`--el-color-primary`），未在浏览器中目测确认；触发器单行省略后，长 alias 只能在抽屉列表中看到全称。 |
+
+### 73cc65ffd 核实
+
+- 单一事实源：发布日期只在 `model-protocol/model-library.json` 的 `releases` 中维护（57 条），`RELEASES.md` 只描述规则，不存数据。`createModelReleaseIndex` 在加载时校验日期必须是真实日历日、来源为 https、键必须对应库内模型 ID；不合法时抛错，不会静默跳过。
+- 职责：排序 `sortModelsByReleaseDate` 定义在协议层，仓库内唯一消费方是 `client/shared/ui/ModelPicker.vue:26`；目录投影和候选项归一化保持配置顺序，与 RELEASES.md 的约定一致。
+- 缺失日期：62 个库模型中有 5 个没有已验证日期（`deepseek-flash`、`glm-5.3-flashx`、`kimi-k3.1-pro`、`kimi-k3.1-pro-highspeed`、`grok-imagine-video-1.5-lite`）。按协议它们排在有日期的模型之后，并保持输入顺序。`resolveModelRelease` 对这些模型显式返回 `null`；排序时 `""` 只作为比较键，不会写回数据或对外暴露，不属于用默认值掩盖事实。
+- 版本链：`releases` 不写入用户配置，`model-library-upgrade.js` 只比较 `version`，因此新增该字段不需要提升 `model_library_version`；`check:version-chain-coverage` 通过。
+- 可访问性：触发器改为原生 `<button>`，保留 `aria-haspopup`、`aria-expanded`、`aria-label`。焦点由共享规则 `.noobot-choice-control:focus-visible` 的 `--noobot-focus-ring` 提供，组件内 `outline: none` 不会造成焦点不可见。完整的 WCAG 结论仍需要辅助技术人工测试。
+
+### 本次修复：共享抽屉样式归属
+
+- 根因：cc71cf878 让 `client/shared/ui/ModelPicker.vue` 使用 `noobot-side-drawer`、`noobot-side-drawer-modal`，但这两个类只定义在 chat 内部的 `src/shared/styles/components/drawer.css`。startup 只引入 client-shared 样式，修复前它的构建产物中 `noobot-side-drawer` 命中数为 0，抽屉 header 内边距、遮罩和移动端全高布局都不生效。
+- 修复：按 `check-frontend-styles.js` 的既有契约（Element Plus 集成样式只放在 `client/shared/styles/integrations`，并由 `element-plus.css` 引入），新增 `element-plus-drawers.css`，并删除 chat 的 `drawer.css` 及其 import。同时删除冗余的 `workspace-drawer` 并列选择器：所有用到它的地方都同时带有 `noobot-side-drawer`，`workspace-drawer-modal` 也没有消费方。选择器契约已登记到 `formContractFiles`。
+- 层叠顺序：共享样式现在排在 chat 组件样式之后。原先文件预览抽屉的 body 覆盖规则依赖 import 顺序才能生效，迁移后会被通用规则反超。本次没有调整 import 顺序，而是把两个变体改成与基类组合的选择器（`.noobot-side-drawer.noobot-file-preview-drawer .el-drawer__body`、`.noobot-side-drawer.model-picker-drawer .el-drawer__body`），明确表达“变体覆盖基类”。
+- 改动文件：`client/shared/styles/integrations/element-plus-drawers.css`（新增）、`client/shared/styles/element-plus.css`、`client/noobot-chat/src/shared/styles/style.css`、`client/noobot-chat/src/shared/styles/components/drawer.css`（删除）、`client/noobot-chat/src/shared/styles/components/preview.css`、`client/shared/ui/ModelPicker.vue`、`client/noobot-chat/scripts/check-frontend-styles.js`。
+
+### 存量：插件依赖宿主样式类名
+
+`plugin/noobot-plugin-workflow/frontend/components/workflow-message-card/WorkflowNodeSessionDrawer.vue:212-213` 使用 `noobot-side-drawer__body/__header`，在 v4.4.4 已存在。迁移后这两个类由 client-shared 提供，但插件仍隐式依赖宿主类名，没有在 plugin-protocol 中声明。建议后续把共享抽屉类名作为前端插件样式契约写入协议，或由插件只使用自身类名；本次不扩大范围。
+
+### 验证证据
+
+日志位于用户工作区 `runtime/ops_workdir/`。
+
+| 验证                                     | 结果                                                                                             | 日志                                            |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
+| 质量门禁（修复前 / 修复后）              | 49/49 / 49/49                                                                                    | `audit2-quality.log` / `audit2-quality-fix.log` |
+| model-protocol / agent-config-protocol   | 87/87、107/107                                                                                   | `audit2-pkg-*.log`                              |
+| client/shared（修复后）                  | 131/131                                                                                          | `audit2-shared-fix.log`                         |
+| chat（含前端样式检查，修复后）           | 241 个文件、1762 项全部通过                                                                      | `audit2-chat-fix.log`                           |
+| startup / chat 构建（修复后）            | 通过；startup 产物包含全部 `noobot-side-drawer*` 规则及 model-picker 变体，chat 产物包含两个变体 | `audit2-build-fix.log`                          |
+| prettier（改动文件）、`git diff --check` | 通过                                                                                             | 命令输出                                        |
+
+验证边界：样式结论基于构建产物中的选择器和特异性分析，没有做浏览器截图对比。
+
 ## 独立复核（2026-11-07，第二次）
 
 本次重新检查下表涉及的协议、调用方、启动诊断、生成请求与附件链路、锁登记和失败清理代码，并重跑相关包测试、质量门禁及构建，没有沿用下文旧日志作为复测证据。接手时这些修复已在工作区，本次仅更新本文档，不将已有代码修复归为本次新增。

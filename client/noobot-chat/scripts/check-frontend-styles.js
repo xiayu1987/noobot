@@ -57,6 +57,16 @@ const formContractFiles = [
     selectors: [".el-drawer", ".el-dialog", ".el-message-box", ".el-collapse"],
   },
   {
+    filePath: path.join(repoRoot, "client/shared/styles/integrations/element-plus-drawers.css"),
+    selectors: [
+      ".noobot-side-drawer .el-drawer__header",
+      ".noobot-side-drawer .el-drawer__body",
+      ".noobot-side-drawer__header",
+      ".noobot-side-drawer__body",
+      ".noobot-side-drawer-modal",
+    ],
+  },
+  {
     filePath: path.join(repoRoot, "client/shared/styles/integrations/element-plus-tabs.css"),
     selectors: [".noobot-tabs", ".el-tabs__item:focus-visible"],
   },

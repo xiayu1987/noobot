@@ -1,9 +1,3 @@
-/*
- * Copyright (c) 2026 xiayu
- * Contact: 126240622+xiayu1987@users.noreply.github.com
- * SPDX-License-Identifier: MIT
- */
-
 .noobot-side-drawer__header {
   background: var(--noobot-panel-head-bg);
   border-bottom: 1px solid var(--noobot-divider);
@@ -15,7 +9,6 @@
 }
 
 .noobot-side-drawer .el-drawer__header,
-.workspace-drawer .el-drawer__header,
 .noobot-side-drawer__header {
   margin-bottom: 0;
   padding: var(--noobot-space-lg) var(--noobot-space-xl);
@@ -23,7 +16,6 @@
 }
 
 .noobot-side-drawer .el-drawer__body,
-.workspace-drawer .el-drawer__body,
 .noobot-side-drawer__body {
   background: var(--noobot-panel-bg);
   padding: var(--noobot-space-xs);
@@ -33,27 +25,23 @@
   -webkit-overflow-scrolling: touch;
 }
 
-.noobot-side-drawer-modal,
-.workspace-drawer-modal {
+.noobot-side-drawer-modal {
   background: var(--noobot-mask-bg);
 }
 
 @media (max-width: 768px) {
-  .noobot-side-drawer.el-drawer,
-  .workspace-drawer.el-drawer {
+  .noobot-side-drawer.el-drawer {
     height: 100svh;
     display: flex;
     flex-direction: column;
   }
 
   .noobot-side-drawer .el-drawer__header,
-  .workspace-drawer .el-drawer__header,
   .noobot-side-drawer__header {
     flex: 0 0 auto;
   }
 
   .noobot-side-drawer .el-drawer__body,
-  .workspace-drawer .el-drawer__body,
   .noobot-side-drawer__body {
     flex: 1 1 auto;
     min-height: 0;
