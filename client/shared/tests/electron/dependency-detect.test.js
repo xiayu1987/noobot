@@ -5,7 +5,7 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { clientFilePath as path } from "../../path-resolver.js";
+import { clientFilePath as path, clientPathDirname, joinClientPath } from "../../path-resolver.js";
 import { createGzip } from "node:zlib";
 import { pipeline } from "node:stream/promises";
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
@@ -114,7 +114,7 @@ test("Playwright installer runs only when selected", async () => {
   assert.equal(result[0].ok, true);
   assert.equal(runs[0].command, process.execPath);
   assert.deepEqual(runs[0].args, [
-    path.join("/application/backend", "node_modules", "playwright", "cli.js"),
+    "/application/backend/node_modules/playwright/cli.js",
     "install",
     "chromium",
   ]);
@@ -348,7 +348,13 @@ test("darwin FFmpeg managed installer extracts gzip binary archives", async () =
         darwinManaged: { url: "https://mirror.example/ffmpeg.gz" },
       });
 
-      const installedPath = path.join(rootDir, "managed-dependencies", "ffmpeg", "bin", "ffmpeg");
+      const installedPath = joinClientPath(
+        rootDir,
+        "managed-dependencies",
+        "ffmpeg",
+        "bin",
+        "ffmpeg",
+      );
       assert.equal(result.ok, true);
       assert.equal(result.path, installedPath);
       assert.equal(await readFile(installedPath, "utf8"), "#!/bin/sh\necho ffmpeg version test\n");
@@ -602,8 +608,14 @@ test("dependency runtime env resolves managed ffmpeg, sibling ffprobe and LibreO
   await withPlatform("darwin", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "noobot-runtime-env-"));
     try {
-      const ffmpegPath = path.join(rootDir, "managed-dependencies", "ffmpeg", "bin", "ffmpeg");
-      const ffprobePath = path.join(rootDir, "managed-dependencies", "ffmpeg", "bin", "ffprobe");
+      const ffmpegPath = joinClientPath(rootDir, "managed-dependencies", "ffmpeg", "bin", "ffmpeg");
+      const ffprobePath = joinClientPath(
+        rootDir,
+        "managed-dependencies",
+        "ffmpeg",
+        "bin",
+        "ffprobe",
+      );
       const sofficePath = "/Applications/LibreOffice.app/Contents/MacOS/soffice";
       const runtimeEnv = buildDependencyRuntimeEnv({
         app: { isReady: () => true, getPath: () => rootDir },
@@ -615,7 +627,7 @@ test("dependency runtime env resolves managed ffmpeg, sibling ffprobe and LibreO
       assert.equal(runtimeEnv.NOOBOT_FFMPEG_PATH, ffmpegPath);
       assert.equal(runtimeEnv.NOOBOT_FFPROBE_PATH, ffprobePath);
       assert.equal(runtimeEnv.LIBRE_OFFICE_EXE, sofficePath);
-      assert.ok(runtimeEnv.PATH.startsWith(path.dirname(ffmpegPath)));
+      assert.ok(runtimeEnv.PATH.startsWith(clientPathDirname(ffmpegPath)));
     } finally {
       await rm(rootDir, { recursive: true, force: true });
     }

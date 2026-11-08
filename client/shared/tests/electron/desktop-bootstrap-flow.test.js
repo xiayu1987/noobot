@@ -184,8 +184,10 @@ test("desktop boot flow reaches system after startup setup, config params, servi
         sleep: async () => {},
         spawnProcess: (command, args, options) => {
           spawnCalls.push({ command, args, options });
-          if (args.join(" ").includes("service/app.js")) serviceSpawned = true;
-          if (args.join(" ").includes("agent-proxy.js")) proxySpawned = true;
+          if (args[0] === path.join(fixture.packagedBackendRoot, "service", "app.js"))
+            serviceSpawned = true;
+          if (args[0] === path.join(fixture.packagedBackendRoot, "agent-proxy", "agent-proxy.js"))
+            proxySpawned = true;
           return createMockChildProcess();
         },
       });

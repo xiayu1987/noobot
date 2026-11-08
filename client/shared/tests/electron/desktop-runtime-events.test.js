@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
-import { clientFilePath as path } from "../../path-resolver.js";
+import { clientFilePath as path, joinClientPath } from "../../path-resolver.js";
 import test from "node:test";
 import {
   createDesktopRuntimeEventWriter,
@@ -27,7 +27,7 @@ test("desktop runtime-events root is under Electron userData", async () => {
   const rootDir = await mkdtemp(path.join(os.tmpdir(), "noobot-desktop-runtime-events-"));
   try {
     const app = createApp(rootDir);
-    assert.equal(getDesktopRuntimeEventsRoot(app), path.join(rootDir, "runtime", "events"));
+    assert.equal(getDesktopRuntimeEventsRoot(app), joinClientPath(rootDir, "runtime", "events"));
   } finally {
     await rm(rootDir, { recursive: true, force: true });
   }
@@ -62,7 +62,7 @@ test("desktop runtime event writer writes sanitized startup event", async () => 
     );
 
     assert.equal(result.ok, true);
-    assert.equal(writer.runtimeEventsRoot, path.join(rootDir, "runtime", "events"));
+    assert.equal(writer.runtimeEventsRoot, joinClientPath(rootDir, "runtime", "events"));
     const content = await readFile(
       path.join(writer.runtimeEventsRoot, "startup", "desktop", "system.jsonl"),
       "utf8",

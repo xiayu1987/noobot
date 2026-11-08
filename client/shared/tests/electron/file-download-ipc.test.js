@@ -8,7 +8,7 @@ import test from "node:test";
 import fs from "node:fs/promises";
 import os from "node:os";
 import { registerFileIpcHandlers } from "../../electron/ipc/files.js";
-import { clientFilePath as path } from "../../path-resolver.js";
+import { clientFilePath as path, joinClientPath } from "../../path-resolver.js";
 
 async function createHarness(t, chooseDestination) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-download-"));
@@ -41,7 +41,7 @@ test("desktop download writes the exact binary payload to the chosen destination
 
   assert.equal(result.ok, true);
   assert.deepEqual(await fs.readFile(result.filePath), Buffer.from(bytes));
-  assert.equal(dialogs[0].defaultPath, path.join(root, "report.bin"));
+  assert.equal(dialogs[0].defaultPath, joinClientPath(root, "report.bin"));
   assert.ok(dialogs[0].properties.includes("showOverwriteConfirmation"));
 });
 

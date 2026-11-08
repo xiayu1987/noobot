@@ -5,6 +5,7 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
+import { clientFilePath as path } from "../../path-resolver.js";
 import {
   getDesktopRipgrepPackages,
   getRipgrepBinaryRelativePath,
@@ -22,7 +23,7 @@ test("desktop backend runtime selects the Windows ripgrep binary for the build a
     assert.deepEqual(packages, [`${packageName}@${version}`]);
     assert.equal(
       getRipgrepBinaryRelativePath(packages[0]),
-      `node_modules/${packageName}/bin/rg.exe`,
+      path.join("node_modules", packageName, "bin", "rg.exe"),
     );
   }
 });
@@ -34,7 +35,10 @@ test("desktop backend runtime selects the macOS ripgrep binary for the build arc
   ]) {
     const packages = getDesktopRipgrepPackages("noobot-mac-client", version, arch);
     assert.deepEqual(packages, [`${packageName}@${version}`]);
-    assert.equal(getRipgrepBinaryRelativePath(packages[0]), `node_modules/${packageName}/bin/rg`);
+    assert.equal(
+      getRipgrepBinaryRelativePath(packages[0]),
+      path.join("node_modules", packageName, "bin", "rg"),
+    );
   }
 });
 

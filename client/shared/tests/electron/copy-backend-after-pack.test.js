@@ -216,10 +216,9 @@ test("copyBackendAfterPack fails when security assessment protocol is missing", 
       { recursive: true, force: true },
     );
 
-    await assert.rejects(
-      () => copyBackendAfterPack(fixture.context),
-      /Missing required backend runtime workspace after prepare: node_modules\/@noobot\/security-assessment-protocol\/package\.json/,
-    );
+    await assert.rejects(() => copyBackendAfterPack(fixture.context), {
+      message: `Missing required backend runtime workspace after prepare: ${path.join("node_modules", "@noobot", "security-assessment-protocol", "package.json")}`,
+    });
   } finally {
     await rm(fixture.rootDir, { recursive: true, force: true });
   }
@@ -233,10 +232,9 @@ test("copyBackendAfterPack fails when the prepared runtime is missing plugin-run
       force: true,
     });
 
-    await assert.rejects(
-      () => copyBackendAfterPack(fixture.context),
-      /Missing required backend runtime workspace after prepare: node_modules\/@noobot\/plugin-runtime\/package\.json/,
-    );
+    await assert.rejects(() => copyBackendAfterPack(fixture.context), {
+      message: `Missing required backend runtime workspace after prepare: ${path.join("node_modules", "@noobot", "plugin-runtime", "package.json")}`,
+    });
   } finally {
     await rm(fixture.rootDir, { recursive: true, force: true });
   }
@@ -250,10 +248,9 @@ test("copyBackendAfterPack fails when the prepared runtime is missing sanitize",
       force: true,
     });
 
-    await assert.rejects(
-      () => copyBackendAfterPack(fixture.context),
-      /Missing required backend runtime workspace after prepare: node_modules\/@noobot\/sanitize\/package\.json/,
-    );
+    await assert.rejects(() => copyBackendAfterPack(fixture.context), {
+      message: `Missing required backend runtime workspace after prepare: ${path.join("node_modules", "@noobot", "sanitize", "package.json")}`,
+    });
   } finally {
     await rm(fixture.rootDir, { recursive: true, force: true });
   }

@@ -135,14 +135,7 @@ export function createDesktopServiceManager({
       await waitForHealthyService();
     }
     if (stopping || !app.isPackaged) return;
-    if (!managedAgentProxyProcess && !(await isAgentProxyHealthy())) {
-      startAgentProxy();
-      if (!(await waitForHealthyAgentProxy())) {
-        throw new Error(
-          `Noobot agent proxy did not become healthy within ${agentProxyStartupTimeoutMs}ms.`,
-        );
-      }
-    }
+    await ensureAgentProxyStarted();
   }
 
   function stopManagedChildProcess(child) {
@@ -485,6 +478,19 @@ export function createDesktopServiceManager({
     if (startupInterruption) throw new Error(startupInterruption);
   }
 
+  async function ensureAgentProxyStarted() {
+    sendStatus({ phase: "starting", message: "Starting Noobot agent proxy..." });
+    syncPackagedProxyConfigs();
+    if (!(await isAgentProxyHealthy()) && !managedAgentProxyProcess) startAgentProxy();
+    const proxyHealthy = await waitForHealthyAgentProxy();
+    throwIfStartupInterrupted();
+    if (!proxyHealthy)
+      throw new Error(
+        `Noobot agent proxy did not become healthy within ${agentProxyStartupTimeoutMs}ms.`,
+      );
+    sendStatus({ phase: "ready", message: "Noobot agent proxy is ready." });
+  }
+
   async function ensureServiceStarted() {
     if (serviceStartupPromise) return serviceStartupPromise;
     startupInterruption = "";
@@ -521,23 +527,14 @@ export function createDesktopServiceManager({
       }
       if (serviceAlreadyHealthy) {
         sendStatus({ phase: "ready", message: "Noobot service is already running." });
-        return;
+      } else {
+        sendStatus({ phase: "starting", message: "Starting Noobot service..." });
+        if (!managedServiceProcess) startNoobotService();
+        await waitForHealthyService();
+        sendStatus({ phase: "ready", message: "Noobot service is ready." });
       }
-      sendStatus({ phase: "starting", message: "Starting Noobot service..." });
-      startNoobotService();
-      await waitForHealthyService();
-      sendStatus({ phase: "ready", message: "Noobot service is ready." });
       if (app.isPackaged) {
-        sendStatus({ phase: "starting", message: "Starting Noobot agent proxy..." });
-        syncPackagedProxyConfigs();
-        if (!(await isAgentProxyHealthy())) startAgentProxy();
-        const proxyHealthy = await waitForHealthyAgentProxy();
-        throwIfStartupInterrupted();
-        if (!proxyHealthy)
-          throw new Error(
-            `Noobot agent proxy did not become healthy within ${agentProxyStartupTimeoutMs}ms.`,
-          );
-        sendStatus({ phase: "ready", message: "Noobot agent proxy is ready." });
+        await ensureAgentProxyStarted();
       }
       throwIfStartupInterrupted();
     })().finally(() => {

@@ -317,6 +317,79 @@ test("packaged desktop startup uses Electron node runtime for service and agent 
   });
 });
 
+for (const proxyAlreadyHealthy of [false, true]) {
+  test(`healthy service still checks packaged proxy (already healthy: ${proxyAlreadyHealthy})`, async () => {
+    let proxyChecks = 0;
+    const fixture = await createFixture({
+      packaged: true,
+      managerOptions: {
+        fetchImpl: async (url) => {
+          const isProxy = String(url).includes(":10062");
+          if (isProxy) proxyChecks += 1;
+          return {
+            ok: true,
+            json: async () => ({
+              ok: !isProxy || proxyAlreadyHealthy || fixture.calls.length > 0,
+            }),
+          };
+        },
+      },
+    });
+    try {
+      await Promise.all([
+        fixture.manager.ensureServiceStarted(),
+        fixture.manager.ensureServiceStarted(),
+      ]);
+      assert.ok(proxyChecks > 0);
+      assert.equal(fixture.calls.length, proxyAlreadyHealthy ? 0 : 1);
+      if (!proxyAlreadyHealthy)
+        assert.match(fixture.calls[0].args[0], /agent-proxy[/\\]agent-proxy\.js$/);
+      assert.equal(fixture.statuses.at(-1).message, "Noobot agent proxy is ready.");
+    } finally {
+      fixture.manager.stopManagedService();
+      await fixture.restore();
+    }
+  });
+}
+
+test("proxy timeout fails startup and retry waits for the existing process", async () => {
+  let recovering = false;
+  let recoveryChecks = 0;
+  const fixture = await createFixture({
+    packaged: true,
+    managerOptions: {
+      agentProxyStartupTimeoutMs: 100,
+      fetchImpl: async (url) => {
+        const isProxy = String(url).includes(":10062");
+        if (isProxy && recovering) recoveryChecks += 1;
+        return {
+          ok: true,
+          json: async () => ({ ok: !isProxy || (recovering && recoveryChecks >= 3) }),
+        };
+      },
+    },
+  });
+  try {
+    await assert.rejects(
+      fixture.manager.ensureServiceStarted(),
+      /agent proxy did not become healthy/,
+    );
+    assert.equal(fixture.calls.length, 1);
+    assert.equal(
+      fixture.statuses.some((status) => status.message === "Noobot agent proxy is ready."),
+      false,
+    );
+    recovering = true;
+    await fixture.manager.ensureServiceStarted();
+    assert.ok(recoveryChecks >= 3);
+    assert.equal(fixture.calls.length, 1);
+    assert.equal(fixture.statuses.at(-1).message, "Noobot agent proxy is ready.");
+  } finally {
+    fixture.manager.stopManagedService();
+    await fixture.restore();
+  }
+});
+
 async function waitFor(predicate, timeoutMs = 1000) {
   const startedAt = Date.now();
   while (!predicate()) {
