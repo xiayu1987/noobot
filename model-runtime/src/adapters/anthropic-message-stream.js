@@ -3,121 +3,32 @@
  * SPDX-License-Identifier: MIT
  */
 import { streamServerSentEvents } from "@noobot/shared/event-stream";
-import { ModelProtocolError } from "@noobot/model-protocol";
-
-function invalidStream(message) {
-  return new ModelProtocolError(`invalid Anthropic message stream: ${message}`);
-}
-
-async function applyBlockDelta(entry, delta, onText) {
-  const block = entry.block;
-  switch (delta?.type) {
-    case "text_delta":
-      if (block.type !== "text" || typeof delta.text !== "string") break;
-      block.text += delta.text;
-      await onText(delta.text);
-      return;
-    case "input_json_delta":
-      if (
-        !["tool_use", "server_tool_use"].includes(block.type) ||
-        typeof delta.partial_json !== "string"
-      )
-        break;
-      entry.json += delta.partial_json;
-      return;
-    case "thinking_delta":
-      if (block.type !== "thinking" || typeof delta.thinking !== "string") break;
-      block.thinking += delta.thinking;
-      return;
-    case "signature_delta":
-      if (block.type !== "thinking" || typeof delta.signature !== "string") break;
-      block.signature = (block.signature || "") + delta.signature;
-      return;
-    case "citations_delta":
-      if (block.type !== "text" || !delta.citation) break;
-      block.citations = [...(block.citations || []), delta.citation];
-      return;
-  }
-  throw invalidStream(`unsupported ${delta?.type || "missing delta"} for ${block.type}`);
-}
-
-function startMessage(message, event) {
-  if (
-    message ||
-    !event.message ||
-    !Array.isArray(event.message.content) ||
-    event.message.content.length
-  ) {
-    throw invalidStream("unexpected message_start");
-  }
-  return { ...event.message, content: [], usage: { ...event.message.usage } };
-}
-
-async function startContentBlock(message, openBlocks, event, onText) {
-  if (event.index !== message.content.length || !event.content_block?.type) {
-    throw invalidStream("unexpected content block index or type");
-  }
-  const block = { ...event.content_block };
-  message.content.push(block);
-  openBlocks.set(event.index, { block, json: "" });
-  if (block.type === "text" && block.text) await onText(block.text);
-}
-
-function stopContentBlock(openBlocks, event) {
-  const entry = openBlocks.get(event.index);
-  if (!entry) throw invalidStream("stop without an open content block");
-  if (entry.json) entry.block.input = JSON.parse(entry.json);
-  openBlocks.delete(event.index);
-}
-
-async function applyMessageEvent(message, openBlocks, event, onText) {
-  switch (event.type) {
-    case "content_block_start":
-      await startContentBlock(message, openBlocks, event, onText);
-      return false;
-    case "content_block_delta": {
-      const entry = openBlocks.get(event.index);
-      if (!entry) throw invalidStream("delta without an open content block");
-      await applyBlockDelta(entry, event.delta, onText);
-      return false;
-    }
-    case "content_block_stop":
-      stopContentBlock(openBlocks, event);
-      return false;
-    case "message_delta":
-      Object.assign(message, event.delta);
-      Object.assign(message.usage, event.usage);
-      return false;
-    case "message_stop":
-      if (openBlocks.size || !message.stop_reason) {
-        throw invalidStream("message_stop before content and stop reason are complete");
-      }
-      return true;
-    default:
-      throw invalidStream(`unsupported event: ${event.type}`);
-  }
-}
+import { ModelProtocolError, createAnthropicStreamTerminalTracker } from "@noobot/model-protocol";
 
 export async function readAnthropicMessageStream(response, { onText, signal }) {
-  if (!response.body) throw invalidStream("missing SSE response body");
-  let message = null;
-  const openBlocks = new Map();
+  if (!response.body) throw new ModelProtocolError("missing Anthropic SSE response body");
+  const tracker = createAnthropicStreamTerminalTracker({ retainMessage: true });
   for await (const { data } of streamServerSentEvents(response.body)) {
     const event = JSON.parse(data);
     signal?.throwIfAborted();
-    if (event.type === "ping") continue;
-    if (event.type === "error") {
+    const terminal = tracker.accept(event);
+    if (terminal?.status === "failed") {
       const error = new Error(event.error?.message || "Anthropic stream failed");
       error.code = event.error?.type;
       throw error;
     }
-    if (event.type === "message_start") {
-      message = startMessage(message, event);
-      continue;
-    }
-    if (!message) throw invalidStream("missing message_start");
-    if (await applyMessageEvent(message, openBlocks, event, onText)) return message;
+    if (
+      event.type === "content_block_start" &&
+      event.content_block.type === "text" &&
+      event.content_block.text
+    )
+      await onText(event.content_block.text);
+    if (event.type === "content_block_delta" && event.delta.type === "text_delta")
+      await onText(event.delta.text);
+    if (terminal?.status === "completed") return tracker.message;
   }
   signal?.throwIfAborted();
-  throw invalidStream("connection ended before message_stop");
+  throw new ModelProtocolError(
+    "invalid Anthropic message stream: connection ended before message_stop",
+  );
 }

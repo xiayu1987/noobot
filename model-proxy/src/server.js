@@ -113,7 +113,6 @@ function createProxyServer({
   targetUrl,
   proxyHost,
   logger,
-  buildRequestCacheDiagnostics,
   headerExtractors,
   unknownModelName,
   unknownFlowName,
@@ -134,7 +133,7 @@ function createProxyServer({
     };
   }
 
-  function logRequestStream(req, lifecycle, context) {
+  function logRequestStream(req, lifecycle) {
     const chunks = [];
     let bodyComplete = false;
     const recordRequest = () => {
@@ -143,10 +142,6 @@ function createProxyServer({
         req,
         bodyText,
         bodyComplete,
-        cacheDiagnostics: buildRequestCacheDiagnostics({
-          bodyText,
-          ...context,
-        }),
       });
     };
     req.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
@@ -200,7 +195,6 @@ function createProxyServer({
           status: proxyRes.statusCode,
           headers: proxyRes.headers,
           bodyText: finalText,
-          rawBodyText: inputText,
         });
       } catch (error) {
         lifecycle?.settle({
@@ -231,7 +225,7 @@ function createProxyServer({
     const context = createRequestContext(req);
     const lifecycle = createRequestLogLifecycle({ logger, context });
     req.__requestLogLifecycle = lifecycle;
-    logRequestStream(req, lifecycle, context);
+    logRequestStream(req, lifecycle);
     res.on("close", () => {
       if (res.writableEnded) return;
       lifecycle.settle({

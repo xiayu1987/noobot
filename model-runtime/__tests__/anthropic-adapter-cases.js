@@ -202,7 +202,7 @@ test("Anthropic Messages adapter sends native endpoint and exposes cache usage",
       "cache_control",
       "messages",
     ]);
-    assert.equal(result.usage_metadata.cache_read_input_tokens, 500);
+    assert.equal(Object.hasOwn(result, "usage_metadata"), false);
   } finally {
     globalThis.fetch = previousFetch;
   }
@@ -219,6 +219,7 @@ test("Anthropic Messages keeps reasoning/cache fields before the append-only mes
         role: "assistant",
         content: [{ type: "text", text: "ok" }],
         usage: { input_tokens: 1, output_tokens: 1 },
+        stop_reason: "end_turn",
       }),
       { status: 200 },
     );
@@ -290,9 +291,12 @@ test("Anthropic multimodal parse maps image attachments to base64 image blocks",
   let request;
   globalThis.fetch = async (url, init) => {
     request = { url, body: JSON.parse(init.body) };
-    return new Response(JSON.stringify({ content: [{ type: "text", text: "parsed" }] }), {
-      status: 200,
-    });
+    return new Response(
+      JSON.stringify({ content: [{ type: "text", text: "parsed" }], stop_reason: "end_turn" }),
+      {
+        status: 200,
+      },
+    );
   };
   try {
     const result = await anthropicMessagesAdapter.executeOperation({

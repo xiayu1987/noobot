@@ -7,7 +7,10 @@ import OpenAI from "openai";
 import { MODEL_OPERATION_KIND, MODEL_WEB_SEARCH_INSTRUCTION } from "@noobot/model-protocol";
 import { text } from "@noobot/shared/value";
 import { createResponseModeFetch, unwrapModelProtocolError } from "./response-mode.js";
-import { collectResponsesStream } from "./openai-responses-stream.js";
+import {
+  collectResponsesStream,
+  requireCompletedResponsesResponse,
+} from "./openai-responses-stream.js";
 
 function resolveResponsesOutputText(result = {}) {
   const sdkOutputText = text(result?.output_text);
@@ -37,12 +40,12 @@ export function resolveOpenAiOperationStreamingModes() {
   return [false, true];
 }
 
-export async function executeOpenAiOperation({ fetchImpl, streaming, ...input }) {
+export async function executeOpenAiOperation({ fetch, streaming, ...input }) {
   try {
     return await runOpenAiOperation({
       ...input,
       streaming,
-      fetchImpl: createResponseModeFetch({ requestedStreaming: streaming, fetch: fetchImpl }),
+      fetch: createResponseModeFetch({ requestedStreaming: streaming, fetch }),
     });
   } catch (error) {
     throw unwrapModelProtocolError(error);
@@ -56,7 +59,7 @@ async function runOpenAiOperation({
   streaming,
   headers = {},
   signal,
-  fetchImpl,
+  fetch,
   mapMultimodalAttachment = mapOpenAiMultimodalAttachment,
   openAiClientFactory = (config) => new OpenAI(config),
 }) {
@@ -64,7 +67,7 @@ async function runOpenAiOperation({
     apiKey: credential,
     ...(modelSpec.base_url ? { baseURL: modelSpec.base_url } : {}),
     defaultHeaders: headers,
-    fetch: fetchImpl,
+    fetch,
     maxRetries: 0,
   });
   const createResponse = async (body) => {
@@ -72,7 +75,7 @@ async function runOpenAiOperation({
       { ...body, stream: streaming },
       { signal: signal || undefined },
     );
-    return streaming ? collectResponsesStream(result) : result;
+    return streaming ? collectResponsesStream(result) : requireCompletedResponsesResponse(result);
   };
   if (operation.kind === MODEL_OPERATION_KIND.WEB_SEARCH) {
     const result = await createResponse({

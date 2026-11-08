@@ -31,6 +31,7 @@
     "test": "node ../scripts/run-with-isolated-tmp.mjs node --test __tests__/*.test.js"
   },
   "dependencies": {
+    "@noobot/model-protocol": "file:../model-protocol",
     "@noble/hashes": "^2.4.0",
     "@noobot/shared": "file:../shared"
   }

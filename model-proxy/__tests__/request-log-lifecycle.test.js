@@ -76,7 +76,6 @@ test("client disconnect closes a recorded proxy request with one terminal", asyn
     targetUrl: `http://127.0.0.1:${upstream.address().port}`,
     proxyHost: "127.0.0.1",
     logger,
-    buildRequestCacheDiagnostics: () => ({}),
     headerExtractors: {
       extractModelNameFromHeaders: () => "test-model",
       extractFlowFromHeaders: () => "agent.main",

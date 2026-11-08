@@ -3,18 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import crypto from "node:crypto";
 import { text, isObjectLike } from "@noobot/shared/value";
 
 function pad(numberValue, lengthValue = 2) {
   return String(numberValue).padStart(lengthValue, "0");
-}
-
-function sha256Text(value = "") {
-  return crypto
-    .createHash("sha256")
-    .update(String(value || ""), "utf8")
-    .digest("hex");
 }
 
 function tryParseJson(inputText = "") {
@@ -48,4 +40,4 @@ function getHeaderValue(headers = {}, candidateKeys = []) {
   return "";
 }
 
-export { getHeaderValue, pad, sha256Text, tryParseJson };
+export { getHeaderValue, pad, tryParseJson };

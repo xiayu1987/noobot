@@ -45,7 +45,7 @@ function setup(alias, outputType = "image", options = {}, responses = []) {
       input: { prompt: "a red bird", outputType },
       options,
     }),
-    fetchImpl: async (url, init) => {
+    fetch: async (url, init) => {
       calls.push({ url: String(url), ...init });
       assert.ok(responses.length, `unexpected request: ${url}`);
       const response = responses.shift();

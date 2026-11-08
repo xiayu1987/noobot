@@ -65,7 +65,6 @@ function createModelPort(outputs = []) {
             }))
           : [],
         finishReason: String(output.finishReason || ""),
-        usage: output.usage || {},
       };
       return createModelResponse({
         invocation: {

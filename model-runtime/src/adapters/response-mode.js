@@ -2,8 +2,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { MODEL_ERROR_CODE, MODEL_ERROR_KIND, ModelProtocolError } from "@noobot/model-protocol";
+import {
+  MODEL_ERROR_CODE,
+  MODEL_ERROR_KIND,
+  ModelProtocolError,
+  resolveModelResponseFormat,
+} from "@noobot/model-protocol";
 import { isFunction, isObjectLike } from "@noobot/shared/value";
+import { guardChatResponseStream } from "./openai-chat-stream.js";
 
 const EVENT_STREAM_MEDIA_TYPE = "text/event-stream";
 
@@ -40,8 +46,15 @@ export function createResponseModeFetch({ requestedStreaming, fetch: transportFe
     throw new TypeError("requestedStreaming must be boolean");
   }
   if (!isFunction(transportFetch)) throw new TypeError("fetch must be a function");
-  return async (url, init) =>
-    assertResponseMode({ requestedStreaming, response: await transportFetch(url, init) });
+  return async (url, init) => {
+    const response = await assertResponseMode({
+      requestedStreaming,
+      response: await transportFetch(url, init),
+    });
+    return requestedStreaming && response.ok && resolveModelResponseFormat(url) === "chat"
+      ? guardChatResponseStream(response)
+      : response;
+  };
 }
 
 export function unwrapModelProtocolError(error) {

@@ -5,6 +5,7 @@
  */
 
 import { SECURITY_RISK_LEVEL, SECURITY_RISK_LEVELS } from "@noobot/security-assessment-protocol";
+import { buildExecutionReportUsageRows } from "./executionReportUsageModel.js";
 
 const STATUS_VIEW = Object.freeze({
   completed: { key: "message.executionReportStatusCompleted", tone: "success" },
@@ -25,8 +26,8 @@ function formatDuration(durationMs) {
   return durationMs < 1000 ? `${Math.round(durationMs)}ms` : `${(durationMs / 1000).toFixed(1)}s`;
 }
 
-function row(label, value) {
-  return { label, value: value ?? "-" };
+function row(key, value, translate) {
+  return { key, label: translate(key), value: value ?? "-" };
 }
 
 function ratioOf(value, max) {
@@ -71,11 +72,11 @@ function buildOverviewCards(report, translate) {
 
 function buildModelRows(model, translate) {
   return [
-    row(translate("message.executionReportLlmCallsWithTools"), model.llmCallsWithTools),
-    row(translate("message.executionReportLoopRounds"), model.maxLoopRound),
-    row(translate("message.executionReportRetries"), model.retries),
-    row(translate("message.executionReportModelSwitches"), model.switches),
-    row(translate("message.executionReportModels"), formatCounter(model.models)),
+    row("message.executionReportLlmCallsWithTools", model.llmCallsWithTools, translate),
+    row("message.executionReportLoopRounds", model.maxLoopRound, translate),
+    row("message.executionReportRetries", model.retries, translate),
+    row("message.executionReportModelSwitches", model.switches, translate),
+    row("message.executionReportModels", formatCounter(model.models), translate),
   ];
 }
 
@@ -87,25 +88,29 @@ function buildPhaseRows(metrics, translate) {
       ["message.executionReportCheckpointDuration", metrics.phases.checkpointDurationMs],
     ]
       .filter(([, value]) => Number.isFinite(value))
-      .map(([key, value]) => row(translate(key), formatDuration(value))),
+      .map(([key, value]) => row(key, formatDuration(value), translate)),
     row(
-      translate("message.executionReportContextBuild"),
+      "message.executionReportContextBuild",
       formatDuration(metrics.phases.contextBuildMs),
+      translate,
     ),
     row(
-      translate("message.executionReportToolDuration"),
+      "message.executionReportToolDuration",
       formatDuration(metrics.tools.totalToolDurationMs),
+      translate,
     ),
     row(
-      translate("message.executionReportPersistDuration"),
+      "message.executionReportPersistDuration",
       formatDuration(metrics.tools.totalPersistDurationMs),
+      translate,
     ),
     row(
-      translate("message.executionReportHookDuration"),
+      "message.executionReportHookDuration",
       formatDuration(metrics.hooks.totalDurationMs),
+      translate,
     ),
-    row(translate("message.executionReportHooks"), metrics.hooks.count),
-    row(translate("message.executionReportHookErrors"), metrics.hooks.errorCount),
+    row("message.executionReportHooks", metrics.hooks.count, translate),
+    row("message.executionReportHookErrors", metrics.hooks.errorCount, translate),
   ];
 }
 
@@ -152,9 +157,10 @@ function buildSlowestCalls(calls) {
 }
 
 function buildMetricsView(metrics, translate) {
-  if (!metrics) return { model: [], phases: [], risks: [], tools: [], slowest: [] };
+  if (!metrics) return { model: [], usage: [], phases: [], risks: [], tools: [], slowest: [] };
   return {
     model: buildModelRows(metrics.model, translate),
+    usage: buildExecutionReportUsageRows(metrics.model.measurements, translate),
     phases: buildPhaseRows(metrics, translate),
     risks: buildRiskChips(metrics.tools.riskLevels),
     tools: buildToolRows(metrics.tools.toolStats),

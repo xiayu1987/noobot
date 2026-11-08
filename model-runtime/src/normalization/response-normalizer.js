@@ -153,7 +153,6 @@ export function normalizeModelResponse(response, source) {
       reasoning: extractReasoningText(response),
       toolCalls,
       finishReason,
-      usage: Object.freeze({ ...response.usage_metadata }),
     }),
     invalidToolCalls: Object.freeze(invalidToolCalls),
   });

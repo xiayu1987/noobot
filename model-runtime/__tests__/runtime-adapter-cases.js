@@ -165,7 +165,7 @@ test("OpenAI Responses requests serialize stable settings and tools before input
     responses: {
       async create(request) {
         transportedRequest = request;
-        return { id: "resp_test", output: [], output_text: "" };
+        return { id: "resp_test", status: "completed", output: [], output_text: "" };
       },
     },
   };
@@ -287,7 +287,7 @@ test("bound OpenAI Responses clients preserve stable fields before input", async
     responses: {
       async create(request) {
         transportedRequest = request;
-        return { id: "resp_bound_test", output: [], output_text: "" };
+        return { id: "resp_bound_test", status: "completed", output: [], output_text: "" };
       },
     },
   };

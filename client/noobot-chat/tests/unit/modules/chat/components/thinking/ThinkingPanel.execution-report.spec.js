@@ -4,8 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { flushPromises } from "@vue/test-utils";
+import { reactive } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { buildExecutionReport } from "@noobot/session-protocol/execution-report";
+import {
+  buildExecutionReport,
+  createExecutionModelMeasurements,
+} from "@noobot/session-protocol/execution-report";
 import { mountThinkingPanel } from "./ThinkingPanel.test-helpers.js";
 
 const getReport = vi.fn();
@@ -77,6 +81,7 @@ const EMPTY_METRICS = Object.freeze({
     retries: 0,
     switches: 0,
     models: {},
+    measurements: createExecutionModelMeasurements(),
   },
   tools: {
     toolStats: {},
@@ -155,6 +160,7 @@ describe("ThinkingPanel execution report", () => {
               retries: 1,
               switches: 0,
               models: { claude: 4 },
+              measurements: createExecutionModelMeasurements(),
             },
             tools: {
               toolStats: {
@@ -310,6 +316,122 @@ describe("ThinkingPanel execution report", () => {
     const dialog = wrapper.find(".execution-report-drawer");
     expect(dialog.find('[data-testid="execution-report-body"]').exists()).toBe(false);
     expect(dialog.find(".empty-hint").text()).toMatch(/本轮暂无执行报告|No execution report/);
+  });
+
+  it("renders usage totals, sample averages and rates in the report drawer", async () => {
+    const measurements = createExecutionModelMeasurements();
+    Object.assign(measurements.requests, { startedCount: 2, completedCount: 2 });
+    Object.assign(measurements.usage.tokens, {
+      sampleCount: 2,
+      inputTokensSum: 400,
+      outputTokensSum: 40,
+    });
+    Object.assign(measurements.usage.cacheRead, {
+      sampleCount: 2,
+      inputTokensSum: 400,
+      cacheReadInputTokensSum: 80,
+      hitRequestCount: 1,
+    });
+    Object.assign(measurements.usage.cacheWrite, {
+      unavailableCount: 2,
+      unavailableReasons: { unsupported: 2 },
+    });
+    Object.assign(measurements.requestPrefix, {
+      sampleCount: 2,
+      requestBodyBytesSum: 300,
+      commonPrefixBytesSum: 90,
+    });
+    getReport.mockResolvedValue(
+      v4Report({
+        durationMs: 1000,
+        executionSummary: summaryOf({
+          metrics: {
+            ...EMPTY_METRICS,
+            model: { ...EMPTY_METRICS.model, measurements },
+          },
+        }),
+      }),
+    );
+    const wrapper = mountThinkingPanel(
+      finishedMessage,
+      { fetchExecutionReport: getReport },
+      { stubs: drawerStub },
+    );
+    await findReportButton(wrapper).trigger("click");
+    await flushPromises();
+    const usage = wrapper.find('[data-testid="execution-report-usage"]');
+    const labels = usage.findAll("dt").map((item) => item.text());
+    const values = usage.findAll("dd").map((item) => item.text());
+    const displayed = Object.fromEntries(labels.map((label, index) => [label, values[index]]));
+    const valueFor = (pattern) => displayed[labels.find((label) => pattern.test(label))];
+    expect(valueFor(/总 token 消耗|Total Token Usage/)).toBe("440");
+    expect(valueFor(/平均每次请求 token 消耗|Average Tokens per Request/)).toBe("220");
+    expect(valueFor(/公共前缀总量|Total Request Body Common Prefix/)).toBe("90");
+    expect(valueFor(/平均每次请求公共前缀|Average Common Prefix per Request/)).toBe("45");
+    expect(valueFor(/平均每次请求实际缓存读取|Average Actual Cache Read per Request/)).toBe("40");
+    expect(valueFor(/缓存命中请求率|Cache Hit Request Rate/)).toBe("50%");
+    expect(valueFor(/实际缓存读取占输入比例|Actual Cache Read Share of Input/)).toBe("20%");
+    expect(valueFor(/用量采集覆盖率|Usage Collection Coverage/)).toBe("100% (2/2)");
+  });
+
+  it("renders and reorders multiple measurement diagnostics without duplicate keys", async () => {
+    const measurements = createExecutionModelMeasurements();
+    Object.assign(measurements.requests, { startedCount: 3, completedCount: 3 });
+    for (const group of Object.values(measurements.usage))
+      Object.assign(group, { unavailableCount: 3, unavailableReasons: { measurement_failed: 3 } });
+    Object.assign(measurements.requestPrefix, {
+      unavailableCount: 3,
+      unavailableReasons: { unsupported: 3 },
+    });
+    measurements.measurementErrors = [
+      { transportRequestId: "request-1", message: "first measurement error" },
+      { transportRequestId: "request-2", message: "second measurement error" },
+      { transportRequestId: "request-3", message: "third measurement error" },
+    ];
+    const report = reactive(
+      v4Report({
+        durationMs: 1000,
+        executionSummary: summaryOf({
+          metrics: { ...EMPTY_METRICS, model: { ...EMPTY_METRICS.model, measurements } },
+        }),
+      }),
+    );
+    getReport.mockResolvedValue(report);
+    const warnings = vi.spyOn(console, "warn");
+    const wrapper = mountThinkingPanel(
+      finishedMessage,
+      { fetchExecutionReport: getReport },
+      { stubs: drawerStub },
+    );
+    try {
+      await findReportButton(wrapper).trigger("click");
+      await flushPromises();
+      const values = () =>
+        wrapper
+          .findAll('[data-testid="execution-report-usage"] dd')
+          .map((node) => node.text())
+          .filter((text) => text.startsWith("request-"));
+      expect(values()).toEqual(
+        measurements.measurementErrors.map(
+          ({ transportRequestId, message }) => `${transportRequestId}: ${message}`,
+        ),
+      );
+      report.summary.metrics.model.measurements.measurementErrors.reverse();
+      await flushPromises();
+      expect(values()).toEqual([
+        "request-3: third measurement error",
+        "request-2: second measurement error",
+        "request-1: first measurement error",
+      ]);
+      expect(
+        warnings.mock.calls.filter((args) =>
+          args.some((arg) => String(arg).includes("Duplicate keys")),
+        ),
+      ).toEqual([]);
+    } finally {
+      wrapper.unmount();
+      warnings.mockRestore();
+    }
   });
 
   it("loads the report only through the injected host capability", async () => {

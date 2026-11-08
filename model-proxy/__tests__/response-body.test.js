@@ -13,7 +13,6 @@ import {
   extractResponsesOutput,
   resolveFinalResponseBodyText,
 } from "../src/response-body.js";
-import { normalizeUsageCacheDiagnostics } from "../src/cache-diagnostics.js";
 
 test("decodes declared content encodings in reverse order and propagates corrupt or unsupported encodings", async () => {
   const raw = Buffer.from('{"ok":true}');
@@ -125,24 +124,4 @@ test("ignores an SSE event without its terminating blank line", () => {
   const chunk = (content) => JSON.stringify({ choices: [{ delta: { content } }] });
   const body = `data: ${chunk("done")}\n\ndata: ${chunk(" partial")}`;
   assert.equal(resolveFinalResponseBodyText(body, "text/event-stream"), "done");
-});
-
-test("cache diagnostics project scalar usage facts without provider envelopes", () => {
-  const diagnostics = normalizeUsageCacheDiagnostics({
-    usage: {
-      input_tokens: 100,
-      output_tokens: 7,
-      input_tokens_details: { cached_tokens: 80 },
-      attribution: { items: { huge: { cached_tokens: 80 } } },
-    },
-  });
-
-  assert.deepEqual(diagnostics, {
-    inputTokens: 100,
-    outputTokens: 7,
-    totalTokens: 0,
-    cachedInputTokens: 80,
-    cacheCreationInputTokens: 0,
-    cacheHit: true,
-  });
 });

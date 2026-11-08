@@ -11,7 +11,7 @@ import {
 } from "./native-generation-http.js";
 
 async function imageContent(context, url) {
-  const response = await context.fetchImpl(url, { signal: context.signal });
+  const response = await context.fetch(url, { signal: context.signal });
   if (!response.ok) throw new Error(`source image download failed: HTTP ${response.status}`);
   const mimeType = response.headers.get("content-type")?.split(";")[0];
   if (!mimeType?.startsWith("image/"))

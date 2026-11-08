@@ -305,7 +305,12 @@ test("model operations are strict discriminated contracts", () => {
 });
 
 test("model operation results are validated by operation kind", () => {
-  const output = { text: "ok", reasoning: "", toolCalls: [], finishReason: "stop", usage: {} };
+  const output = {
+    text: "ok",
+    reasoning: "",
+    toolCalls: [],
+    finishReason: "stop",
+  };
   const response = createModelResponse({
     invocation,
     operationKind: MODEL_OPERATION_KIND.WEB_SEARCH,
@@ -368,7 +373,12 @@ test("model operation results are validated by operation kind", () => {
 });
 
 test("model response accepts only the canonical protocol shape", () => {
-  const output = { text: "ok", reasoning: "", toolCalls: [], finishReason: "stop", usage: {} };
+  const output = {
+    text: "ok",
+    reasoning: "",
+    toolCalls: [],
+    finishReason: "stop",
+  };
   const response = createModelResponse({
     invocation,
     output,
@@ -457,7 +467,6 @@ test("model response accepts only the canonical protocol shape", () => {
     reasoning: "",
     toolCalls: [],
     finishReason: "end_turn",
-    usage: {},
     content: [{ type: "thinking", thinking: "", signature: "signed" }],
   };
   const emptyResponse = createModelResponse({
@@ -519,7 +528,6 @@ test("model response preserves structured provider content blocks", () => {
     reasoning: "thinking",
     toolCalls: [],
     finishReason: "stop",
-    usage: {},
     content: [
       { type: "thinking", thinking: "thinking" },
       { type: "text", text: "answer" },

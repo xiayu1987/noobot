@@ -5,8 +5,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { pad, tryParseJson } from "./common.js";
-import { normalizeUsageCacheDiagnostics } from "./cache-diagnostics.js";
+import { pad } from "./common.js";
 import { sanitizeHeaders, sanitizeUrl } from "@noobot/sanitize";
 import { text } from "@noobot/shared/value";
 
@@ -211,7 +210,6 @@ function createLogger({
     flowName = unknownFlowName,
     sessionId = unknownSessionId,
     parentSessionId = "",
-    cacheDiagnostics = {},
     bodyComplete = true,
   } = {}) {
     const logEntry = `
@@ -224,7 +222,6 @@ ParentSessionId: ${parentSessionId || "[root]"}
 URL: ${sanitizeUrl(req.url)}
 Method: ${req.method}
 Headers: ${JSON.stringify(sanitizeHeaders(req.headers), null, 2)}
-CacheDiagnostics: ${JSON.stringify(cacheDiagnostics, null, 2)}
 BodyComplete: ${bodyComplete === true}
 Body:
 ${bodyText}
@@ -238,15 +235,12 @@ ${bodyText}
     status,
     headers = {},
     bodyText = "",
-    rawBodyText = bodyText,
     error = null,
     modelName = unknownModelName,
     flowName = unknownFlowName,
     sessionId = unknownSessionId,
     parentSessionId = "",
   } = {}) {
-    const responseObject = tryParseJson(rawBodyText);
-    const cacheDiagnostics = normalizeUsageCacheDiagnostics(responseObject);
     const logEntry = `
 --- ${new Date().toLocaleString()} ---
 [Terminal]
@@ -257,7 +251,6 @@ SessionId: ${sessionId}
 ParentSessionId: ${parentSessionId || "[root]"}
 Status: ${Number.isFinite(Number(status)) ? Number(status) : "[none]"}
 Headers: ${JSON.stringify(sanitizeHeaders(headers), null, 2)}
-CacheDiagnostics: ${JSON.stringify(cacheDiagnostics, null, 2)}
 Error: ${error ? JSON.stringify(error, null, 2) : "[none]"}
 Body:
 ${bodyText}

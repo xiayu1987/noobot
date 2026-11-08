@@ -16,7 +16,7 @@ import {
 test("Web Search forces the search tool and returns text with url_citation sources", async () => {
   let request;
   const result = await executeOpenAiOperation({
-    fetchImpl: globalThis.fetch,
+    fetch: globalThis.fetch,
     modelSpec: { model: "gpt-5.5", base_url: "https://example.test/v1" },
     credential: "key",
     streaming: false,
@@ -30,6 +30,7 @@ test("Web Search forces the search tool and returns text with url_citation sourc
         create: async (body) => {
           request = body;
           return {
+            status: "completed",
             output: [
               { type: "web_search_call", status: "completed" },
               {
@@ -64,7 +65,7 @@ test("Web Search forces the search tool and returns text with url_citation sourc
 test("multimodal parse maps multiple image and document attachments to one Responses API input", async () => {
   let request;
   const result = await executeOpenAiOperation({
-    fetchImpl: globalThis.fetch,
+    fetch: globalThis.fetch,
     modelSpec: { model: "gpt-5.4", base_url: "https://example.test/v1" },
     credential: "key",
     streaming: false,
@@ -91,7 +92,7 @@ test("multimodal parse maps multiple image and document attachments to one Respo
       responses: {
         create: async (value) => {
           request = value;
-          return { output_text: "parsed image", output: [] };
+          return { status: "completed", output_text: "parsed image", output: [] };
         },
       },
     }),
@@ -111,7 +112,7 @@ test("multimodal parse maps multiple image and document attachments to one Respo
 test("multimodal parse maps documents to Responses API input_file", async () => {
   let request;
   await executeOpenAiOperation({
-    fetchImpl: globalThis.fetch,
+    fetch: globalThis.fetch,
     modelSpec: { model: "gpt-5.4" },
     credential: "key",
     streaming: false,
@@ -133,7 +134,7 @@ test("multimodal parse maps documents to Responses API input_file", async () => 
       responses: {
         create: async (value) => {
           request = value;
-          return { output_text: "parsed pdf", output: [] };
+          return { status: "completed", output_text: "parsed pdf", output: [] };
         },
       },
     }),
@@ -148,7 +149,7 @@ test("multimodal parse maps documents to Responses API input_file", async () => 
 test("multimodal parse maps normalized audio to Responses API input_audio", async () => {
   let request;
   await executeOpenAiOperation({
-    fetchImpl: globalThis.fetch,
+    fetch: globalThis.fetch,
     modelSpec: { model: "gpt-5.4" },
     credential: "key",
     streaming: false,
@@ -166,7 +167,7 @@ test("multimodal parse maps normalized audio to Responses API input_audio", asyn
       responses: {
         create: async (value) => {
           request = value;
-          return { output_text: "ok", output: [] };
+          return { status: "completed", output_text: "ok", output: [] };
         },
       },
     }),
@@ -180,7 +181,7 @@ test("multimodal parse maps normalized audio to Responses API input_audio", asyn
 test("multimodal parse maps video to an OpenAI Responses API file input", async () => {
   let request;
   await executeOpenAiOperation({
-    fetchImpl: globalThis.fetch,
+    fetch: globalThis.fetch,
     modelSpec: { model: "gpt-5.4" },
     credential: "key",
     streaming: false,
@@ -198,7 +199,7 @@ test("multimodal parse maps video to an OpenAI Responses API file input", async 
       responses: {
         create: async (value) => {
           request = value;
-          return { output_text: "ok", output: [] };
+          return { status: "completed", output_text: "ok", output: [] };
         },
       },
     }),
@@ -248,7 +249,7 @@ test("capability operations reject a streamed answer as a response mode mismatch
         signal: new AbortController().signal,
         credential: "key",
         streaming: false,
-        fetchImpl: async (url) => {
+        fetch: async (url) => {
           calls.push(url);
           return sse();
         },
@@ -272,7 +273,7 @@ async function* responsesEvents(events) {
 
 function webSearchWithStream(events) {
   return executeOpenAiOperation({
-    fetchImpl: globalThis.fetch,
+    fetch: globalThis.fetch,
     modelSpec: { model: "gpt-5.5", base_url: "https://example.test/v1" },
     credential: "key",
     streaming: true,
@@ -291,14 +292,21 @@ function webSearchWithStream(events) {
 test("streamed capability operations accept only response.completed", async () => {
   const result = await webSearchWithStream([
     { type: "response.output_text.delta", delta: "partial" },
-    { type: "response.completed", response: { output_text: "done", output: [] } },
+    {
+      type: "response.completed",
+      response: { status: "completed", output_text: "done", output: [] },
+    },
   ]);
   assert.equal(result.rawText, "done");
   for (const events of [
     [
       {
         type: "response.incomplete",
-        response: { id: "r1", incomplete_details: { reason: "max_output_tokens" } },
+        response: {
+          id: "r1",
+          status: "incomplete",
+          incomplete_details: { reason: "max_output_tokens" },
+        },
       },
     ],
     [{ type: "response.output_text.delta", delta: "partial" }],

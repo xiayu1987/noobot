@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-function createEventStreamParser() {
+export function createEventStreamParser() {
   let line = "";
   let skipLineFeed = false;
   let event = "";

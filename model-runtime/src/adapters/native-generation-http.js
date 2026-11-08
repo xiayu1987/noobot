@@ -27,7 +27,7 @@ export async function generationRequest(context, path, body, extraHeaders = {}) 
   const headers = { ...context.headers, ...extraHeaders };
   if (body !== undefined && !multipart) headers["Content-Type"] = "application/json";
   try {
-    const response = await context.fetchImpl(url, {
+    const response = await context.fetch(url, {
       method,
       headers,
       signal: context.signal,

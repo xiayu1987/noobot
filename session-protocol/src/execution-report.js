@@ -6,9 +6,15 @@
 import { nullishText as clean } from "./normalize.js";
 import { requireDialogProcessKey } from "./identity.js";
 import { isPlainObject, isObjectLike } from "@noobot/shared/value";
+import { defineVersionChain, runVersionChain } from "@noobot/shared/migration";
+import { requireExecutionModelMeasurements } from "./execution-model-measurements.js";
+export {
+  createExecutionModelMeasurements,
+  requireExecutionModelMeasurements,
+} from "./execution-model-measurements.js";
 
 export const EXECUTION_REPORT_PROTOCOL = "noobot.execution-report";
-export const EXECUTION_REPORT_VERSION = 5;
+export const EXECUTION_REPORT_VERSION = 6;
 
 export const EXECUTION_REPORT_STATUS = Object.freeze({
   COMPLETED: "completed",
@@ -56,7 +62,7 @@ const METRICS_SECTION_FIELDS = Object.freeze({
   hooks: ["count", "errorCount", "totalDurationMs"],
 });
 
-function assertMetricsShape(metrics) {
+function assertMetricsShape(metrics, historical) {
   if (!isPlainObject(metrics)) throw invalidReport("summary.metrics must be an object");
   for (const [section, fields] of Object.entries(METRICS_SECTION_FIELDS)) {
     if (!isPlainObject(metrics[section])) {
@@ -71,6 +77,7 @@ function assertMetricsShape(metrics) {
   if (!isPlainObject(metrics.model.models)) {
     throw invalidReport("summary.metrics.model.models must be an object");
   }
+  if (!historical) requireExecutionModelMeasurements(metrics.model.measurements);
   for (const field of ["toolStats", "riskLevels"]) {
     if (!isPlainObject(metrics.tools[field])) {
       throw invalidReport(`summary.metrics.tools.${field} must be an object`);
@@ -87,7 +94,7 @@ function assertMetricsShape(metrics) {
   }
 }
 
-function assertSummaryShape(summary) {
+function assertSummaryShape(summary, historical) {
   if (typeof summary !== "object" || Array.isArray(summary)) {
     throw invalidReport("summary must be an object");
   }
@@ -96,7 +103,7 @@ function assertSummaryShape(summary) {
       throw invalidReport(`summary.${field} must be a non-negative integer`);
     }
   }
-  assertMetricsShape(summary.metrics);
+  assertMetricsShape(summary.metrics, historical);
 }
 
 function resolveDurationMs(startedAt, finishedAt) {
@@ -109,7 +116,7 @@ function resolveDurationMs(startedAt, finishedAt) {
   return endMs - startMs;
 }
 
-function assertReportShape(report) {
+function assertReportShape(report, historical = false) {
   if (!EXECUTION_REPORT_STATUSES.has(report.status)) {
     throw invalidReport(`unknown status "${report.status}"`);
   }
@@ -118,7 +125,7 @@ function assertReportShape(report) {
   if ((report.summary === null) === (report.summaryError === null)) {
     throw invalidReport("exactly one of summary or summaryError is required");
   }
-  if (report.summary !== null) assertSummaryShape(report.summary);
+  if (report.summary !== null) assertSummaryShape(report.summary, historical);
   if (report.status === EXECUTION_REPORT_STATUS.COMPLETED && report.error !== null) {
     throw invalidReport("completed report cannot carry error");
   }
@@ -170,4 +177,45 @@ export function decodeExecutionReport(payload) {
     throw invalidReport(`unsupported version ${payload.version}`);
   }
   return assertReportShape(payload);
+}
+
+export const EXECUTION_REPORT_VERSION_CHAIN = defineVersionChain({
+  kind: "execution-report",
+  currentVersion: EXECUTION_REPORT_VERSION,
+  readVersion: (report) => report?.version,
+  schemas: {
+    5: (report) => {
+      if (report.protocol !== EXECUTION_REPORT_PROTOCOL) throw invalidReport("unknown protocol");
+      assertReportShape(report, true);
+      resolveDurationMs(report.startedAt, report.finishedAt);
+    },
+    [EXECUTION_REPORT_VERSION]: decodeExecutionReport,
+  },
+  steps: [
+    {
+      from: 5,
+      to: 6,
+      migrate: (report) => ({
+        ...report,
+        version: 6,
+        summary:
+          report.summary === null
+            ? null
+            : {
+                ...report.summary,
+                metrics: {
+                  ...report.summary.metrics,
+                  model: {
+                    ...report.summary.metrics.model,
+                    measurements: { state: "legacy_not_collected" },
+                  },
+                },
+              },
+      }),
+    },
+  ],
+});
+
+export function migrateExecutionReport(payload) {
+  return runVersionChain(EXECUTION_REPORT_VERSION_CHAIN, payload);
 }

@@ -272,12 +272,7 @@ test("Anthropic reconstructs text, signed thinking, tool JSON and usage across b
   assert.deepEqual(output.toolCalls, [
     { id: "call_test", name: "read_file", args: { path: "资料.txt" } },
   ]);
-  assert.deepEqual(output.usage, {
-    input_tokens: 9,
-    output_tokens: 7,
-    cache_creation_input_tokens: 10,
-    cache_read_input_tokens: 50,
-  });
+  assert.equal(Object.hasOwn(output, "usage"), false);
 });
 
 for (const [name, events, expected] of [

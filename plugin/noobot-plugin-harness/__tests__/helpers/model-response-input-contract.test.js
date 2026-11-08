@@ -13,7 +13,6 @@ test("model response fixture preserves invalid output for protocol rejection", (
     { reasoning: null },
     { toolCalls: {} },
     { finishReason: 3 },
-    { usage: [] },
     { content: false },
     { responseOutput: {} },
     { responseReasoning: [] },
@@ -37,4 +36,12 @@ test("model response fixture preserves invalid output for protocol rejection", (
 test("model response fixture constructs protocol-valid output when optional fields are omitted", () => {
   const response = createTestModelResponse("done");
   assert.equal(validateModelResponse(response), response);
+  assert.equal(Object.hasOwn(response.output, "usage"), false);
+  assert.equal(Object.hasOwn(response.execution.attempts[0].output, "usage"), false);
+});
+
+test("model response rejects the removed SDK usage fact source", () => {
+  const response = createTestModelResponse("done");
+  response.output.usage = {};
+  assert.throws(() => validateModelResponse(response), /unsupported fields: usage/);
 });

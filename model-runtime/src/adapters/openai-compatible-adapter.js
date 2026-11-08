@@ -6,6 +6,7 @@ import { ChatOpenAI } from "@langchain/openai";
 import {
   MODEL_PROVIDER_ID,
   MODEL_RESPONSE_SOURCE,
+  requireModelResponseTerminal,
   resolveModelUseResponsesApi,
 } from "@noobot/model-protocol";
 import {
@@ -19,7 +20,10 @@ import {
   resolveOpenAiOperationStreamingModes,
 } from "./openai-capability-adapter.js";
 import { classifyOpenAiError } from "./openai-error-classification.js";
-import { guardResponsesStream } from "./openai-responses-stream.js";
+import {
+  guardResponsesStream,
+  requireCompletedResponsesResponse,
+} from "./openai-responses-stream.js";
 import { createResponseModeFetch, unwrapModelProtocolError } from "./response-mode.js";
 import { isObjectLike } from "@noobot/shared/value";
 
@@ -62,11 +66,16 @@ function guardOpenAiClient(client) {
     const result = await surfaceProtocolError(() =>
       responsesCompletion(orderOpenAiResponsesRequestBody(request), requestOptions),
     );
-    return request?.stream === true ? guardResponsesStream(result) : result;
+    return request?.stream === true
+      ? guardResponsesStream(result)
+      : requireCompletedResponsesResponse(result);
   };
   const completionsCompletion = completions.completionWithRetry.bind(completions);
-  completions.completionWithRetry = (request, requestOptions) =>
-    surfaceProtocolError(() => completionsCompletion(request, requestOptions));
+  completions.completionWithRetry = async (request, requestOptions) => {
+    const result = await surfaceProtocolError(() => completionsCompletion(request, requestOptions));
+    if (request?.stream !== true) requireModelResponseTerminal("chat", result);
+    return result;
+  };
   return client;
 }
 

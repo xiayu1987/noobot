@@ -8,7 +8,10 @@ import { mkdir } from "node:fs/promises";
 import { buildSessionArtifactFileMap } from "../session-artifact-files.js";
 import { appendRollingJsonlArtifactLog } from "../session-artifact-execution-logs.js";
 import { requireDialogProcessKey } from "@noobot/session-protocol";
-import { decodeExecutionReport } from "@noobot/session-protocol/execution-report";
+import {
+  decodeExecutionReport,
+  migrateExecutionReport,
+} from "@noobot/session-protocol/execution-report";
 import { readOptionalJsonWithStorage, writeJsonWithStorage } from "./artifact-json-io.js";
 
 function resolveExecutionReportPath(sessionDir, dialogProcessId) {
@@ -39,7 +42,8 @@ export async function readExecutionReportArtifact({ storageService, sessionDir, 
     storageService,
     artifactPath: resolveExecutionReportPath(sessionDir, dialogProcessId),
   });
-  return payload === null ? null : decodeExecutionReport(payload);
+  if (payload === null) return null;
+  return migrateExecutionReport(payload).document;
 }
 
 export async function appendExecutionLogArtifact({

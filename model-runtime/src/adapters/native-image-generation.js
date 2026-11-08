@@ -23,7 +23,7 @@ function imagesResult(payload, mimeType = "image/png") {
 }
 
 async function imageUpload(context, url) {
-  const response = await context.fetchImpl(url, { signal: context.signal });
+  const response = await context.fetch(url, { signal: context.signal });
   if (!response.ok) throw new Error(`source image download failed: HTTP ${response.status}`);
   const blob = await response.blob();
   if (!blob.type.startsWith("image/"))

@@ -13,6 +13,7 @@ import {
   MODEL_RESPONSE_SOURCE,
   MODEL_WEB_SEARCH_INSTRUCTION,
   ModelProtocolError,
+  requireModelResponseTerminal,
 } from "@noobot/model-protocol";
 import { readAnthropicMessageStream } from "./anthropic-message-stream.js";
 import { assertResponseMode, responseMediaType } from "./response-mode.js";
@@ -218,20 +219,13 @@ function responseFromAnthropic(raw = {}) {
   const tool_calls = blocks
     .filter((b) => b?.type === "tool_use")
     .map((b) => ({ id: b.id, name: b.name, args: b.input }));
-  const usage = raw.usage || {};
   return {
     content: blocks.map((block) => ({ ...block })),
     additional_kwargs: { reasoning_content: reasoning },
     tool_calls,
     response_metadata: {
-      finish_reason: raw.stop_reason || "",
+      finish_reason: raw.stop_reason,
       raw,
-    },
-    usage_metadata: {
-      input_tokens: usage.input_tokens || 0,
-      output_tokens: usage.output_tokens || 0,
-      cache_creation_input_tokens: usage.cache_creation_input_tokens || 0,
-      cache_read_input_tokens: usage.cache_read_input_tokens || 0,
     },
   };
 }
@@ -345,7 +339,9 @@ async function requestAnthropicMessages({
   const requestedStreaming = payload.stream === true;
   await assertResponseMode({ requestedStreaming, response });
   if (requestedStreaming) return readAnthropicMessageStream(response, { onText, signal });
-  return response.json();
+  const parsed = await response.json();
+  requireModelResponseTerminal("anthropic", parsed);
+  return parsed;
 }
 
 function textFromAnthropicBlocks(blocks = []) {
@@ -407,6 +403,7 @@ async function executeAnthropicServerToolTurn({
   serverTools,
   system,
   content,
+  fetch,
 }) {
   const messages = [{ role: "user", content }];
   const collected = [];
@@ -420,6 +417,7 @@ async function executeAnthropicServerToolTurn({
       credential,
       headers,
       signal,
+      fetch,
       payload: {
         model: spec.model,
         max_tokens: Number(spec.max_tokens || 10000),
@@ -444,6 +442,7 @@ async function executeAnthropicOperation({
   headers = {},
   signal,
   mapMultimodalAttachment = mapAnthropicMultimodalAttachment,
+  fetch,
 }) {
   if (
     operation.kind !== MODEL_OPERATION_KIND.WEB_SEARCH &&
@@ -463,6 +462,7 @@ async function executeAnthropicOperation({
       serverTools: [ANTHROPIC_SERVER_WEB_SEARCH_TOOL],
       system: MODEL_WEB_SEARCH_INSTRUCTION,
       content: [{ type: "text", text: text(operation.input.query) }],
+      fetch,
     });
     return {
       rawText: textFromAnthropicBlocks(blocks),
@@ -474,6 +474,7 @@ async function executeAnthropicOperation({
     credential,
     headers,
     signal,
+    fetch,
     payload: {
       model: spec.model,
       max_tokens: Number(spec.max_tokens || 10000),

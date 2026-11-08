@@ -40,6 +40,22 @@ const metaSections = computed(() =>
   ].filter((section) => section.rows?.length),
 );
 
+const primaryUsageKeys = new Set([
+  "HttpRequests",
+  "TotalTokens",
+  "TotalCacheReadTokens",
+  "TotalCacheWriteTokens",
+  "CacheReadRatio",
+  "CacheHitRate",
+  "MeasurementState",
+]);
+const usageSummary = computed(() =>
+  (view.value?.usage || []).filter((item) => primaryUsageKeys.has(item.key)),
+);
+const usageDetails = computed(() =>
+  (view.value?.usage || []).filter((item) => !primaryUsageKeys.has(item.key)),
+);
+
 function barStyle(ratio) {
   return { width: `${Math.round(ratio * 100)}%` };
 }
@@ -85,7 +101,10 @@ watch(
     <BaseEmptyHint v-else-if="errorText" :text="errorText" />
     <BaseEmptyHint v-else-if="!view" :text="translate('message.executionReportEmpty')" />
     <div v-else class="execution-report-body" data-testid="execution-report-body">
-      <section class="execution-report-section" data-testid="execution-report-overview">
+      <section
+        class="execution-report-section execution-report-overview"
+        data-testid="execution-report-overview"
+      >
         <div class="execution-report-overview-head">
           <BaseSectionHeader :title="translate('message.executionReportOverview')" />
           <span class="execution-report-status noobot-flat-chip" :data-tone="view.status.tone">
@@ -124,13 +143,49 @@ watch(
         >
           <BaseSectionHeader :title="translate(section.title)" />
           <dl class="execution-report-meta">
-            <template v-for="item in section.rows" :key="item.label">
+            <div
+              v-for="item in section.rows"
+              :key="item.key"
+              :class="{
+                'execution-report-meta-wide': item.key === 'message.executionReportModels',
+              }"
+            >
               <dt>{{ item.label }}</dt>
               <dd>{{ item.value }}</dd>
-            </template>
+            </div>
           </dl>
         </section>
       </div>
+
+      <section
+        v-if="view.usage.length"
+        class="execution-report-section execution-report-panel"
+        data-testid="execution-report-usage"
+      >
+        <BaseSectionHeader :title="translate('message.executionReportUsageSection')" />
+        <dl class="execution-report-usage-summary">
+          <div v-for="item in usageSummary" :key="item.key">
+            <dt>{{ item.label }}</dt>
+            <dd>{{ item.value }}</dd>
+          </div>
+        </dl>
+        <details v-if="usageDetails.length" class="execution-report-usage-details">
+          <summary>{{ translate("message.details") }}</summary>
+          <dl class="execution-report-meta">
+            <div
+              v-for="item in usageDetails"
+              :key="item.key"
+              :class="{
+                'execution-report-usage-note':
+                  item.key === 'UsageSampleNote' || item.key.startsWith('MeasurementError:'),
+              }"
+            >
+              <dt>{{ item.label }}</dt>
+              <dd>{{ item.value }}</dd>
+            </div>
+          </dl>
+        </details>
+      </section>
 
       <section v-if="view.risks.length" class="execution-report-section">
         <BaseSectionHeader :title="translate('message.executionReportRiskSection')" />
@@ -148,11 +203,12 @@ watch(
 
       <section v-if="view.tools.length" class="execution-report-section">
         <BaseSectionHeader :title="translate('message.executionReportToolSection')" />
-        <ul
-          class="execution-report-tools execution-report-panel"
-          data-testid="execution-report-tools"
-        >
-          <li v-for="tool in view.tools" :key="tool.tool" class="execution-report-tool">
+        <ul class="execution-report-tools" data-testid="execution-report-tools">
+          <li
+            v-for="tool in view.tools"
+            :key="tool.tool"
+            class="execution-report-tool execution-report-panel"
+          >
             <span class="execution-report-tool-name">{{ toolDisplayName(tool.tool) }}</span>
             <span class="execution-report-bar" aria-hidden="true">
               <span class="execution-report-bar-fill" :style="barStyle(tool.totalRatio)"></span>
@@ -235,10 +291,14 @@ watch(
 
 <style scoped>
 .execution-report-body {
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   gap: var(--noobot-space-lg);
+  max-width: 1080px;
+  margin-inline: auto;
   padding: var(--noobot-space-md) var(--noobot-space-lg);
+  color: var(--noobot-text-main);
 }
 .execution-report-section {
   display: flex;
@@ -247,7 +307,7 @@ watch(
   min-width: 0;
 }
 .execution-report-panel,
-.execution-report-card {
+.execution-report-overview {
   padding: var(--noobot-space-md);
   border: 1px solid var(--noobot-panel-border);
   border-radius: var(--noobot-radius-md);
@@ -261,14 +321,18 @@ watch(
 }
 .execution-report-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--noobot-space-sm);
 }
 .execution-report-card {
   display: flex;
   flex-direction: column;
-  gap: var(--noobot-space-2xs);
-  border-left: 3px solid var(--execution-report-tone, var(--noobot-accent));
+  gap: var(--noobot-space-xs);
+  min-width: 0;
+  padding: var(--noobot-space-md);
+  border-radius: var(--noobot-radius-sm);
+  background: var(--noobot-panel-muted);
+  overflow-wrap: anywhere;
 }
 .execution-report-card-value {
   font-size: var(--noobot-font-size-lg);
@@ -281,13 +345,12 @@ watch(
   font-size: var(--noobot-font-size-xs);
   color: var(--noobot-thinking-muted);
 }
-.execution-report-card[data-tone="error"],
 .execution-report-error {
   border: 1px solid var(--noobot-preview-danger-border);
   background: var(--noobot-danger-soft);
 }
 .execution-report-card[data-tone="error"] {
-  border-left: 3px solid var(--noobot-status-error);
+  background: var(--noobot-danger-soft);
 }
 .execution-report-card[data-tone="error"] .execution-report-card-value,
 .execution-report-error,
@@ -296,20 +359,103 @@ watch(
 }
 .execution-report-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
   gap: var(--noobot-space-md);
 }
 .execution-report-meta {
   display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: var(--noobot-space-xs) var(--noobot-space-md);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--noobot-space-sm) var(--noobot-space-md);
   margin: 0;
+}
+.execution-report-meta > div {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--noobot-space-2xs);
+  min-width: 0;
+  padding-block: var(--noobot-space-xs);
+  overflow-wrap: anywhere;
+}
+.execution-report-meta-wide {
+  grid-column: span 2;
 }
 .execution-report-meta dd {
   margin: 0;
-  text-align: right;
+  text-align: left;
   font-variant-numeric: tabular-nums;
   word-break: break-word;
+}
+.execution-report-usage-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--noobot-space-sm);
+  margin: 0;
+}
+.execution-report-usage-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--noobot-space-xs);
+  min-width: 0;
+  justify-content: space-between;
+  padding: var(--noobot-space-md);
+  border-radius: var(--noobot-radius-sm);
+  background: var(--noobot-panel-muted);
+  overflow-wrap: anywhere;
+}
+.execution-report-usage-summary dt {
+  line-height: var(--noobot-line-height-comfortable);
+  color: var(--noobot-thinking-muted);
+  font-size: var(--noobot-font-size-xs);
+}
+.execution-report-usage-summary dd {
+  margin: 0;
+  font-size: var(--noobot-font-size-lg);
+  font-weight: var(--noobot-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+.execution-report-usage-details {
+  min-width: 0;
+  border-top: 1px solid var(--noobot-divider);
+}
+.execution-report-usage-summary > div:only-child,
+.execution-report-card:only-child {
+  grid-column: 1 / -1;
+}
+.execution-report-usage-details summary {
+  padding: var(--noobot-space-sm) 0;
+  color: var(--noobot-text-secondary);
+  font-size: var(--noobot-font-size-sm);
+  cursor: pointer;
+}
+.execution-report-usage-details summary:focus-visible {
+  outline: 2px solid var(--noobot-accent);
+  outline-offset: 2px;
+  border-radius: var(--noobot-radius-sm);
+}
+.execution-report-usage-details summary:hover {
+  color: var(--noobot-accent);
+}
+.execution-report-usage-details .execution-report-meta {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--noobot-space-sm) var(--noobot-space-md);
+}
+.execution-report-usage-details .execution-report-meta > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--noobot-space-2xs);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  border-top: 0;
+}
+.execution-report-usage-details .execution-report-meta dd {
+  text-align: left;
+}
+.execution-report-usage-details .execution-report-usage-note {
+  grid-column: 1 / -1;
+  padding-top: var(--noobot-space-sm);
+  border-top: 1px solid var(--noobot-divider);
 }
 .execution-report-error {
   margin: 0;
@@ -342,22 +488,26 @@ watch(
   background: color-mix(in srgb, var(--execution-report-tone) 12%, transparent);
   font-weight: var(--noobot-font-weight-medium);
 }
+.execution-report-status {
+  flex-shrink: 0;
+}
 .execution-report-chips {
   display: flex;
   flex-wrap: wrap;
   gap: var(--noobot-space-xs);
 }
 .execution-report-tools {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--noobot-space-md);
   margin: 0;
+  padding: 0;
   list-style: none;
 }
 .execution-report-tool {
   display: flex;
   flex-direction: column;
-  gap: var(--noobot-space-xs);
+  gap: var(--noobot-space-sm);
   min-width: 0;
 }
 .execution-report-tool .execution-report-tool-name {
@@ -366,7 +516,7 @@ watch(
 }
 .execution-report-tool-stats {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--noobot-space-xs) var(--noobot-space-md);
   margin: 0;
 }
@@ -420,8 +570,7 @@ watch(
   align-items: center;
   gap: var(--noobot-space-2xs) var(--noobot-space-sm);
 }
-.execution-report-slowest li + li,
-.execution-report-tool + .execution-report-tool {
+.execution-report-slowest li + li {
   padding-top: var(--noobot-space-md);
   border-top: 1px solid var(--noobot-divider);
 }
@@ -471,12 +620,32 @@ watch(
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+@container (max-width: 640px) {
+  .execution-report-tools {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .execution-report-usage-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@container (max-width: 480px) {
+  .execution-report-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .execution-report-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .execution-report-usage-summary > div,
+  .execution-report-card {
+    padding: var(--noobot-space-sm);
+  }
+  .execution-report-usage-details .execution-report-meta {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 @media (max-width: 768px) {
   .execution-report-body {
     padding: var(--noobot-space-sm);
-  }
-  .execution-report-tool-stats {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 </style>

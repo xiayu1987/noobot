@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { MODEL_REQUEST_EVENT } from "@noobot/model-protocol";
+import { createModelRequestMetrics } from "./model-request-metrics.js";
 import { projectToolOperationSubject } from "@noobot/event-protocol/tool-presentation";
 import { normalizeSecurityRiskLevel } from "@noobot/security-assessment-protocol";
 import { resolveData, resolveTimestampMs, resolveToolName } from "./execution-log-fields.js";
@@ -73,8 +75,10 @@ const EVENT_HANDLERS = {
     acc.invocations += 1;
     increment(acc.models, text(data?.model?.alias || data?.model?.model));
   },
-  "model.invocation.completed"(acc, { data }) {
-    acc.retries += Math.max(0, (Number(data.attemptCount) || 1) - 1);
+  "model.invocation.attempt_started"(acc, { data }) {
+    if (!Number.isSafeInteger(data.attempt) || data.attempt < 1)
+      throw new TypeError("invalid model attempt number");
+    if (data.attempt > 1) acc.retries += 1;
   },
   model_switched(acc) {
     acc.modelSwitches += 1;
@@ -173,7 +177,10 @@ function summarizeToolCalls(toolCalls) {
 
 export function summarizeExecutionMetrics(scopedLogs = []) {
   const acc = createAccumulator();
+  const requestMetrics = createModelRequestMetrics();
   for (const log of Array.isArray(scopedLogs) ? scopedLogs : []) {
+    if (Object.values(MODEL_REQUEST_EVENT).includes(log.event))
+      requestMetrics.consume(log.event, resolveData(log));
     EVENT_HANDLERS[log.event]?.(acc, { log, data: resolveData(log) });
   }
   return {
@@ -185,6 +192,7 @@ export function summarizeExecutionMetrics(scopedLogs = []) {
       retries: acc.retries,
       switches: acc.modelSwitches,
       models: acc.models,
+      measurements: requestMetrics.summarize(),
     },
     tools: summarizeToolCalls(acc.toolCalls),
     hooks: {

@@ -9,6 +9,8 @@ import assert from "node:assert/strict";
 import {
   buildExecutionReport,
   decodeExecutionReport,
+  migrateExecutionReport,
+  createExecutionModelMeasurements,
   EXECUTION_REPORT_STATUS,
   EXECUTION_REPORT_VERSION,
 } from "../src/execution-report.js";
@@ -23,6 +25,7 @@ const metrics = {
     retries: 0,
     switches: 0,
     models: { m1: 1 },
+    measurements: createExecutionModelMeasurements(),
   },
   tools: {
     toolStats: {},
@@ -149,6 +152,33 @@ test("decodeExecutionReport accepts current reports and rejects other versions",
   assert.throws(() => decodeExecutionReport({ ...report, protocol: "x" }), /unknown protocol/);
   const { summaryError: _omitted, ...missingField } = report;
   assert.throws(() => decodeExecutionReport(missingField), /summary or summaryError/);
+});
+
+test("v5 reports migrate through the version chain without inferring historical measurements", () => {
+  const historical = structuredClone({ ...failedReport(), version: 5 });
+  delete historical.summary.metrics.model.measurements;
+  const original = structuredClone(historical);
+  const result = migrateExecutionReport(historical);
+  assert.equal(result.migrated, true);
+  assert.equal(result.fromVersion, 5);
+  assert.equal(result.toVersion, 6);
+  assert.deepEqual(result.document.summary.metrics.model.measurements, {
+    state: "legacy_not_collected",
+  });
+  assert.deepEqual(historical, original);
+  assert.equal(migrateExecutionReport(result.document).migrated, false);
+  assert.throws(() => decodeExecutionReport(historical), /unsupported version/);
+  const summaryFailure = {
+    ...historical,
+    summary: null,
+    summaryError: { name: "Error", code: "", message: "disk" },
+  };
+  assert.equal(migrateExecutionReport(summaryFailure).document.summary, null);
+  assert.throws(
+    () => migrateExecutionReport({ ...historical, protocol: "wrong" }),
+    /version_schema_rejected/,
+  );
+  assert.throws(() => migrateExecutionReport({ ...historical, version: 7 }), /future_version/);
 });
 
 test("requireDialogProcessKey is the single turn identity assertion", () => {

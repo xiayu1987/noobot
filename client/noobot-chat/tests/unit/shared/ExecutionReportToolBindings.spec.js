@@ -6,6 +6,7 @@
 import { mount, flushPromises } from "@vue/test-utils";
 import { afterEach, expect, it, vi } from "vitest";
 import { nextTick } from "vue";
+import { createExecutionModelMeasurements } from "@noobot/session-protocol/execution-report";
 import ExecutionReportDrawer from "../../../src/modules/chat/components/thinking/ExecutionReportDrawer.vue";
 import {
   setToolNameBindings,
@@ -32,7 +33,7 @@ it("uses current bindings for grouped and slowest tools without changing report 
       toolCallCount: 1,
       errorCount: 0,
       metrics: {
-        model: { models: {} },
+        model: { models: {}, measurements: createExecutionModelMeasurements() },
         phases: {},
         hooks: {},
         tools: {

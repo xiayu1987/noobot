@@ -31,7 +31,6 @@ const OUTPUT_KEYS = Object.freeze([
   "reasoning",
   "toolCalls",
   "finishReason",
-  "usage",
   "content",
   "responseOutput",
   "responseReasoning",
@@ -81,7 +80,6 @@ function validateOutput(value, path = "model response.output") {
   output.toolCalls.forEach((call, index) =>
     validateModelToolCall(call, `${path}.toolCalls[${index}]`),
   );
-  requirePlainObject(output.usage, `${path}.usage`);
   if (output.responseOutput !== undefined && !Array.isArray(output.responseOutput)) {
     throw new TypeError(`${path}.responseOutput must be an array`);
   }

@@ -2,40 +2,51 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { ModelProtocolError } from "@noobot/model-protocol";
+import {
+  ModelProtocolError,
+  requireModelResponseTerminal,
+  resolveModelStreamTerminal,
+} from "@noobot/model-protocol";
 import { createResponsesFailureError } from "./openai-error-classification.js";
 
-function createResponsesStreamFailure(event) {
-  const upstream = event.response?.error;
-  if (!upstream?.code || !upstream?.message) {
-    return new ModelProtocolError(
-      "Responses response.failed event requires error code and message",
-      {
-        details: { responseId: event.response?.id },
+function createResponsesFailure(response, incomplete) {
+  if (incomplete) {
+    return new ModelProtocolError("Responses response ended incomplete", {
+      details: {
+        responseId: response?.id,
+        reason: response?.incomplete_details?.reason ?? null,
       },
-    );
+    });
+  }
+  const upstream = response?.error;
+  if (!upstream?.code || !upstream?.message) {
+    return new ModelProtocolError("Responses failed response requires error code and message", {
+      details: { responseId: response?.id },
+    });
   }
   return createResponsesFailureError(upstream);
 }
 
+export function requireCompletedResponsesResponse(response) {
+  if (requireModelResponseTerminal("responses", response).status === "failed")
+    throw createResponsesFailure(response, response.status === "incomplete");
+  return response;
+}
+
 export async function* guardResponsesStream(stream) {
   for await (const event of stream) {
-    if (event?.type === "response.failed") throw createResponsesStreamFailure(event);
+    const terminal = resolveModelStreamTerminal("responses", event);
+    if (terminal?.status === "failed")
+      throw createResponsesFailure(event.response, event.type === "response.incomplete");
     yield event;
+    if (terminal) return;
   }
 }
 
 export async function collectResponsesStream(stream) {
   for await (const event of guardResponsesStream(stream)) {
-    if (event?.type === "response.completed") return event.response;
-    if (event?.type === "response.incomplete") {
-      throw new ModelProtocolError("Responses stream ended incomplete", {
-        details: {
-          responseId: event.response?.id,
-          reason: event.response?.incomplete_details?.reason ?? null,
-        },
-      });
-    }
+    if (resolveModelStreamTerminal("responses", event)?.status === "completed")
+      return event.response;
   }
   throw new ModelProtocolError("Responses stream ended without a terminal event");
 }

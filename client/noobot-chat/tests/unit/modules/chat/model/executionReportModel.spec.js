@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
+import { createExecutionModelMeasurements } from "@noobot/session-protocol/execution-report";
 import { buildExecutionReportView } from "../../../../../src/modules/chat/model/executionReportModel.js";
 
 const translate = (key) => key;
@@ -26,6 +27,7 @@ function createReport() {
           retries: 0,
           switches: 0,
           models: {},
+          measurements: createExecutionModelMeasurements(),
         },
         tools: {
           toolStats: {},

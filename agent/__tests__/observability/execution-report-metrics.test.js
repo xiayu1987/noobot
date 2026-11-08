@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createExecutionModelMeasurements } from "@noobot/session-protocol/execution-report";
 
 import { summarizeExecutionMetrics } from "../../src/observability/execution-log/execution-report-metrics.js";
 
@@ -42,6 +43,9 @@ test("summarizeExecutionMetrics aggregates model calls, retries and switches", (
   const metrics = summarizeExecutionMetrics([
     log("llm_call_start", 0, { modelLoopRound: 1 }),
     log("model.invocation.started", 0, { model: { alias: "m1", model: "m-1" } }),
+    log("model.invocation.attempt_started", 0, { attempt: 1 }),
+    log("model.invocation.attempt_started", 0, { attempt: 2 }),
+    log("model.invocation.attempt_started", 0, { attempt: 3 }),
     log("model.invocation.completed", 1, { attemptCount: 3 }),
     log("llm_call_end", 1, { mode: "with_tools", toolCallCount: 2 }),
     log("model_switched", 2, { alias: "m2" }),
@@ -58,6 +62,7 @@ test("summarizeExecutionMetrics aggregates model calls, retries and switches", (
     retries: 2,
     switches: 1,
     models: { m1: 1, "m-2": 1 },
+    measurements: createExecutionModelMeasurements(),
   });
 });
 

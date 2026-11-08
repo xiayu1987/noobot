@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { randomUUID } from "node:crypto";
+import { createMeasuredFetch } from "./request-measurement.js";
 import { summarizeDiagnosticMessages } from "@noobot/shared/message-diagnostics";
 import {
   createModelRequest,
@@ -98,8 +99,10 @@ export function createModelRequestExecutor({
 } = {}) {
   requireCredentialPort(credentialPort);
   requireObservationPort(observationPort);
+  const { fetchImpl = globalThis.fetch, ...adapterRuntime } = providerRuntime;
   const modelObservationStates = new Map();
   const streamingModes = new Map();
+  const previousBodies = new Map();
   const resolveModelObservationState = (modelSpec = {}) => {
     const key = JSON.stringify([
       modelSpec.operatorId,
@@ -150,6 +153,15 @@ export function createModelRequestExecutor({
       };
       const observe = (type, payload = {}) =>
         observationPort.emit(type, { invocation, ...payload, model: observableModel });
+      const measuredFetch = createMeasuredFetch({
+        fetchImpl,
+        previousBodies,
+        invocation,
+        model: requestBase.model,
+        operationKind: requestBase.operation.kind,
+        attempt: () => totalAttempts,
+        observe,
+      });
       const isCancelled = (error) =>
         requestBase.options.signal?.aborted || classify(error).kind === MODEL_ERROR_KIND.ABORTED;
       const pushAttempt = ({ status, kind, attemptStreaming = streaming, output, error }) =>
@@ -291,7 +303,8 @@ export function createModelRequestExecutor({
                 signal: requestBase.options.signal,
                 locale: requestBase.options.locale,
                 clock,
-                ...providerRuntime,
+                ...adapterRuntime,
+                fetch: measuredFetch,
               }),
             );
           },
@@ -369,6 +382,7 @@ export function createModelRequestExecutor({
             headers: request.options.headers,
           }),
           flow: invocation.flow,
+          fetch: measuredFetch,
         });
         return typeof clientDecorator === "function"
           ? clientDecorator(baseClient, { request })
