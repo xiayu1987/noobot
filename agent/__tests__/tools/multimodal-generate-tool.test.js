@@ -190,11 +190,24 @@ test("multimodal_generate: model configuration is the only image API type author
   ]) {
     assert.equal(tool.schema.safeParse({ ...video, ...option }).success, false);
   }
+  runtime.globalConfig.multimodal = { generation: { default_models: { image: "gpt_image_2" } } };
+  for (const locale of ["zh-CN", "en-US"]) {
+    runtime.runConfig = { locale };
+    const description = getMultimodalGenerateTool(runtime).schema.options[0].shape.size.description;
+    assert.match(description, /gpt_image_2 \(openai_images\)/);
+    assert.match(description, /openai_images: auto or an explicit pixel size/);
+    assert.equal(description.includes("{{model}}"), false);
+  }
+  await assert.rejects(
+    tool.invoke({ generation_content: "draw a bird", model_name: "gpt_image_2", size: "1:1" }),
+    /explicit pixel size/,
+  );
+  assert.equal(modelRequest, null);
   const result = JSON.parse(
     await tool.invoke({
       generation_content: "draw a bird",
       model_name: "gpt_image_2",
-      size: "1:1",
+      size: "1024x1024",
     }),
   );
   assert.equal(result.ok, true);
@@ -312,8 +325,7 @@ test("multimodal_generate: canonical provider merge preserves Windows default im
       model_name: "",
       n: 1,
       quality: "standard",
-      resolution: "1K",
-      size: "1:1",
+      size: "1024x1024",
     }),
   );
 

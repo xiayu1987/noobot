@@ -18,6 +18,7 @@ import { waitForCommand } from "../helpers/scenario-assertions.js";
 import { reloadAndWaitForReconnect } from "../helpers/reconnect-scenarios.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 import {
+  assertAttachmentHttpAccess,
   readRenderedFileNames,
   writeFileResultsForTurn,
   mutationResultsForTurn,
@@ -25,6 +26,7 @@ import {
 import {
   modelInvocationTraces,
   readFileMutationRecords,
+  readAttachmentIndex,
   readSessionExecutionEventTree,
   readSessionExecutionEvents,
 } from "../helpers/persistence-audit.js";
@@ -426,6 +428,29 @@ test("@full PBE-043 普通用户原生、多模态与外部工具结果闭环", 
   const parseResult = results.find((event) => event.data.toolCallId === parseCall.data.toolCallId);
   expect(parseResult.data.success, parseResult.data.result).toBe(true);
   expect(JSON.parse(parseResult.data.result).text).toContain("CASE036-NATIVE");
+  const generationCall = calls.find((event) => event.data.tool === "multimodal_generate");
+  const generationResult = results.find(
+    (event) => event.data.toolCallId === generationCall.data.toolCallId,
+  );
+  expect(generationResult.data.success, generationResult.data.result).toBe(true);
+  const generated = JSON.parse(generationResult.data.result);
+  expect(generated.ok).toBe(true);
+  expect(generated.summary.generated_image_count).toBe(1);
+  expect(generated.summary.saved_attachment_count).toBe(1);
+  const attachmentIndex = await readAttachmentIndex(noobot.userId, noobot.sessionId, "model");
+  const generatedImages = Object.values(attachmentIndex.attachments).filter(
+    (item) => item.descriptor.mimeType === "image/png" && item.descriptor.generatedByModel === true,
+  );
+  expect(generatedImages).toHaveLength(1);
+  expect(generatedImages[0].descriptor.size).toBeGreaterThan(0);
+  await assertAttachmentHttpAccess(noobot.page, {
+    apiKey: noobot.connectConfig.apiKey,
+    userId: noobot.userId,
+    sessionId: noobot.sessionId,
+    attachmentSource: "model",
+    attachmentId: generatedImages[0].identity.attachmentId,
+    expectedName: generatedImages[0].descriptor.name,
+  });
   const mcpCall = calls.find((event) => event.data.tool === "call_mcp_task");
   expect(mcpCall.data.args.mcpName).toBe(MCP_TEST_SERVICE.name);
   const mcpResult = results.find((event) => event.data.toolCallId === mcpCall.data.toolCallId);

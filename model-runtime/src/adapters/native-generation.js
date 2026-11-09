@@ -6,6 +6,7 @@ import {
   MODEL_GENERATION_API_TYPE,
   MODEL_GENERATION_API_HEADERS,
   resolveModelGenerationApiType,
+  requireModelGenerationSize,
 } from "@noobot/model-protocol";
 import {
   generateOpenAiImages,
@@ -32,6 +33,7 @@ const PROTOCOLS = new Map([
 
 export async function executeNativeGeneration(input) {
   const apiType = resolveModelGenerationApiType(input.modelSpec);
+  requireModelGenerationSize(apiType, input.operation);
   const protocol = PROTOCOLS.get(apiType);
 
   if (!(input.signal instanceof AbortSignal))

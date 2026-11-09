@@ -10,6 +10,8 @@ import {
   normalizeModelOperationResult,
   normalizeGeneratedMediaArtifact,
   resolveModelGenerationApiType,
+  requireModelGenerationSize,
+  describeImageGenerationSizes,
 } from "../src/index.js";
 
 function operation(outputType, options = {}) {
@@ -80,6 +82,42 @@ test("generation API selection has one explicit model declaration without legacy
       /unsupported/,
     );
   }
+});
+
+test("image size validation and tool guidance share the selected API contract", () => {
+  const contracts = [
+    ["openai_images", ["auto", "1024x1024"], ["1:1", "0x1024", "2K"]],
+    ["xai_images", ["1:1", "16:9"], ["auto", "1024x1024", "0:1"]],
+    ["gemini_interactions", ["1:1", "16:9"], ["auto", "1024x1024", "1:0"]],
+    ["gemini_generate_content", ["1:1", "16:9"], ["auto", "1024x1024"]],
+    ["dashscope_multimodal", ["1024x1024", "1024*1024", "2K"], ["auto", "1:1", "0x1"]],
+  ];
+  for (const [apiType, valid, invalid] of contracts) {
+    assert.ok(describeImageGenerationSizes().includes(apiType));
+    for (const size of valid)
+      assert.doesNotThrow(() => requireModelGenerationSize(apiType, operation("image", { size })));
+    for (const size of invalid)
+      assert.throws(
+        () => requireModelGenerationSize(apiType, operation("image", { size })),
+        /size must be/,
+      );
+    assert.doesNotThrow(() => requireModelGenerationSize(apiType, operation("image")));
+  }
+  assert.throws(
+    () =>
+      requireModelGenerationSize(
+        "dashscope_multimodal",
+        operation("image", { size: "2K", resolution: "2K" }),
+      ),
+    /not both/,
+  );
+  assert.throws(
+    () =>
+      requireModelGenerationSize("dashscope_multimodal", operation("image", { resolution: "1:1" })),
+    /size must be/,
+  );
+  assert.throws(() => requireModelGenerationSize("unknown", operation("image")), /unsupported/);
+  assert.doesNotThrow(() => requireModelGenerationSize("xai_video", operation("video")));
 });
 
 test("the protocol forbids retries for billable media submissions", async () => {

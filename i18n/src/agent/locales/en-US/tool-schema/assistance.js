@@ -130,7 +130,8 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       },
       size: {
         key: "tools.multimodal.fieldSize",
-        text: "Image size or aspect ratio (optional, e.g. auto, 1:1, 16:9, 1024x1024).",
+        text: (params = {}) =>
+          `Optional image size; obey the selected API contract. Configured default: ${text(params.model)}.`,
       },
     },
     texts: {

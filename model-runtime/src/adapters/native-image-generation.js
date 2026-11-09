@@ -38,8 +38,6 @@ export async function generateOpenAiImages(context) {
     ["size", "n", "quality", "complexity", "imageUrls"],
     "Images API",
   );
-  if (options.size && !/^(auto|\d+x\d+)$/.test(options.size))
-    throw new TypeError("Images API size must be auto or an explicit pixel size such as 1024x1024");
   const body = {
     model: context.modelSpec.model,
     prompt: input.prompt,
@@ -67,8 +65,6 @@ export async function generateXaiImages(context) {
   );
   if (options.imageUrls.length > 1)
     throw new TypeError("xAI image editing accepts one source image");
-  if (options.size && !/^\d+:\d+$/.test(options.size))
-    throw new TypeError("xAI image size must be an aspect ratio such as 16:9");
   const body = {
     model: context.modelSpec.model,
     prompt: input.prompt,
@@ -86,11 +82,7 @@ export async function generateXaiImages(context) {
 export async function generateDashscopeImages(context) {
   const { options, input } = context.operation;
   requireGenerationOptions(options, ["size", "resolution", "n", "imageUrls"], "DashScope images");
-  if (options.size && options.resolution)
-    throw new TypeError("DashScope images accept size or resolution, not both");
   const size = options.size || options.resolution;
-  if (size && !/^(\d+[x*]\d+|[124]K)$/.test(size))
-    throw new TypeError("DashScope image size must be pixels or a supported resolution such as 2K");
   const body = {
     model: context.modelSpec.model,
     input: {

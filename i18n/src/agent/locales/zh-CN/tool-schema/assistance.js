@@ -112,7 +112,8 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       },
       size: {
         key: "tools.multimodal.fieldSize",
-        text: "图片尺寸或比例（可选，如 auto、1:1、16:9、1024x1024）。",
+        text: (params = {}) =>
+          `图片尺寸可选，须符合所选 API 契约。配置默认模型：${text(params.model)}。`,
       },
     },
     texts: {

@@ -9,6 +9,9 @@ import {
   MODEL_CONTEXT_SEQUENCE_POLICY,
   MODEL_GENERATION_OUTPUT_TYPES,
   MODEL_GENERATION_OPTION_FIELDS,
+  describeImageGenerationSizes,
+  requireModelGenerationSize,
+  resolveModelGenerationApiType,
 } from "@noobot/model-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { diagnoseModelReference } from "@noobot/agent-config-protocol";
@@ -207,15 +210,16 @@ function assertGenerationModelSupported(state, runtime) {
 function buildMediaGenerationRequest({
   modelSpec,
   generationContent,
-  size,
   input,
   runtime,
   abortSignal,
 }) {
+  const operation = buildGenerationOperation({ input, prompt: generationContent });
+  requireModelGenerationSize(resolveModelGenerationApiType(modelSpec), operation);
   return {
     model: modelSpec,
     messages: [],
-    operation: buildGenerationOperation({ input, prompt: generationContent, size }),
+    operation,
     options: {
       signal: abortSignal,
       locale: resolveLocaleFromRuntime(runtime),
@@ -294,7 +298,6 @@ async function generateMedia(input, deps, state) {
     buildMediaGenerationRequest({
       modelSpec: state.resolvedModelSpec,
       generationContent: state.generationContent,
-      size: state.effectiveSize,
       input,
       runtime,
       abortSignal,
@@ -357,7 +360,15 @@ async function runMultimodalGeneration(input, deps) {
   }
 }
 
-function generationSchema(runtime) {
+function generationSchema(runtime, effectiveConfig) {
+  const { resolvedModelName, resolvedModelSpec } = resolveGenerationModelSpec({
+    effectiveConfig,
+    globalConfig: runtime.globalConfig,
+    userConfig: runtime.userConfig,
+  });
+  const defaultSizeModel = resolvedModelSpec
+    ? `${resolvedModelName} (${resolveModelGenerationApiType(resolvedModelSpec)})`
+    : resolvedModelName;
   const fields = {
     duration: z
       .number()
@@ -373,7 +384,12 @@ function generationSchema(runtime) {
       .enum(["low", "medium", "high"])
       .optional()
       .describe(tTool(runtime, "tools.multimodal.fieldComplexity")),
-    size: z.string().optional().describe(tTool(runtime, "tools.multimodal.fieldSize")),
+    size: z
+      .string()
+      .optional()
+      .describe(
+        `${tTool(runtime, "tools.multimodal.fieldSize", { model: defaultSizeModel })} ${describeImageGenerationSizes()}`,
+      ),
     resolution: z.string().optional().describe(tTool(runtime, "tools.multimodal.fieldResolution")),
     n: z
       .number()
@@ -446,7 +462,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
     {
       name: TOOL_NAME.MULTIMODAL_GENERATE,
       description: tTool(runtime, "tools.multimodal.description"),
-      schema: generationSchema(runtime),
+      schema: generationSchema(runtime, effectiveConfig),
     },
     agentContext,
   );
