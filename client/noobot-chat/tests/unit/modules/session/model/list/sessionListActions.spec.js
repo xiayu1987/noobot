@@ -108,6 +108,7 @@ describe("createSessionListActions.fetchSessions identity reconciliation", () =>
         caller: "user",
         aggregateVersion: 0,
         loaded: true,
+        sessionDocs: [],
         messages: [{ role: "assistant", turnScopeId, pending: true }],
       },
     ]);
@@ -131,7 +132,7 @@ describe("createSessionListActions.fetchSessions identity reconciliation", () =>
         }),
       ]),
     );
-    const { actions } = createHarness({
+    const { actions, fetchSessionDetail } = createHarness({
       sessions,
       activeSessionId,
       turnRuntimeRegistry,
@@ -144,6 +145,17 @@ describe("createSessionListActions.fetchSessions identity reconciliation", () =>
     expect(turnRuntimeRegistry.value.sessions["session-1"]?.turns?.[turnScopeId]).toMatchObject({
       sessionId: "session-1",
       turnScopeId,
+    });
+    fetchSessionDetail.mockClear();
+    activeSessionId.value = "another-session";
+
+    await expect(actions.selectSession("session-1")).resolves.toBeUndefined();
+
+    expect(fetchSessionDetail).toHaveBeenCalledWith("session-1", {
+      source: "selectSession",
+      force: false,
+      requireFresh: false,
+      allowLoadedSnapshot: true,
     });
   });
 });

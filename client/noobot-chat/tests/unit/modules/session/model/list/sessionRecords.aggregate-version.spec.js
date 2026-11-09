@@ -5,6 +5,8 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  createLocalSessionItem,
+  isLoadedRemoteSession,
   mapSummaryEntryToSession,
   reconcileSessionObject,
 } from "../../../../../../src/modules/session/model/list/sessionRecords.js";
@@ -28,6 +30,22 @@ function mappedSummary({ aggregateVersion, updatedAt }) {
 }
 
 describe("sessionRecords aggregate version reconciliation", () => {
+  it("requires a remote detail read after a local session appears in the server list", () => {
+    const existing = createLocalSessionItem({ id: "s-refresh", title: "local", ...helpers });
+    const messages = [{ role: "assistant", content: "streaming response" }];
+    existing.messages = messages;
+    const summary = mappedSummary({ aggregateVersion: 1, updatedAt: "2026-07-15T10:01:00.000Z" });
+
+    const reconciled = reconcileSessionObject(summary, existing);
+
+    expect(reconciled).toBe(existing);
+    expect(reconciled.isLocal).toBe(false);
+    expect(reconciled.loaded).toBe(false);
+    expect(isLoadedRemoteSession(reconciled)).toBe(false);
+    expect(reconciled.messages).toBe(messages);
+    expect(reconciled.sessionDocs).toEqual([]);
+  });
+
   it("does not let an earlier list snapshot roll back a realtime aggregate version", () => {
     const existing = mappedSummary({ aggregateVersion: 2, updatedAt: "2026-07-15T10:01:00.000Z" });
     const earlier = mappedSummary({ aggregateVersion: 1, updatedAt: "2026-07-15T10:00:30.000Z" });

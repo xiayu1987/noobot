@@ -97,7 +97,7 @@ function mergeExistingSessionState(mappedSession, existingSession) {
     )
       ? mappedSession.aggregateVersion
       : existingSession.aggregateVersion,
-    loaded: existingSession.loaded,
+    loaded: existingSession.isLocal === true ? false : existingSession.loaded,
     messages: existingSession.messages,
     sessionDocs: existingSession.sessionDocs,
     connectorPanelState: existingSession.connectorPanelState,
