@@ -59,7 +59,7 @@ function createHarness(overrides = {}) {
       sessionId: "s1",
       title: "Old title",
       caller: "user",
-      messages: [{ role: "user", content: "hello" }],
+      messages: [{ role: "user", content: "hello", attachments: [] }],
     },
   ]);
   const notify = vi.fn();
@@ -158,6 +158,144 @@ describe("createSessionListActions.fetchSessions identity reconciliation", () =>
       allowLoadedSnapshot: true,
     });
   });
+});
+
+describe("createSessionListActions.selectSession freshness", () => {
+  it.each(["s1", "another-session"])(
+    "fetches fresh details for a loaded session when active session is %s",
+    async (activeId) => {
+      const detail = detailDocument("s1");
+      const sessions = ref([
+        {
+          sessionId: "s1",
+          isLocal: false,
+          loaded: true,
+          sessionDocs: detail.sessions,
+          messages: [],
+        },
+      ]);
+      const applySessionDetail = vi.fn();
+      const onSessionDetailApplied = vi.fn();
+      const { actions, fetchSessionDetail } = createHarness({
+        sessions,
+        activeSessionId: ref(activeId),
+        applySessionDetail,
+        onSessionDetailApplied,
+      });
+
+      await actions.selectSession("s1", { requireFresh: true });
+
+      expect(fetchSessionDetail).toHaveBeenCalledWith("s1", {
+        source: "selectSession",
+        force: false,
+        requireFresh: true,
+        allowLoadedSnapshot: true,
+      });
+      expect(applySessionDetail).toHaveBeenCalledWith(detail);
+      expect(onSessionDetailApplied).not.toHaveBeenCalled();
+    },
+  );
+
+  it("reuses loaded presentation messages when freshness is not requested", async () => {
+    const detail = detailDocument("s1");
+    const messages = [{ role: "assistant", content: "streaming response" }];
+    const sessionItem = {
+      sessionId: "s1",
+      isLocal: false,
+      loaded: true,
+      sessionDocs: detail.sessions,
+      messages,
+    };
+    const onSessionDetailApplied = vi.fn();
+    const { actions, fetchSessionDetail } = createHarness({
+      sessions: ref([sessionItem]),
+      activeSessionId: ref("another-session"),
+      onSessionDetailApplied,
+    });
+
+    await actions.selectSession("s1");
+
+    expect(fetchSessionDetail).not.toHaveBeenCalled();
+    expect(onSessionDetailApplied).toHaveBeenCalledWith({
+      detail,
+      sessionItem,
+      mainSessionDoc: detail.sessions[0],
+      normalizedDetailMessages: messages,
+    });
+  });
+});
+
+describe("createSessionListActions preview lifecycle", () => {
+  it.each([true, false])(
+    "releases previews when deleting a session with isLocal=%s",
+    async (isLocal) => {
+      const revokeObjectURL = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+      try {
+        const { actions } = createHarness({
+          sessions: ref([
+            {
+              sessionId: "s1",
+              isLocal,
+              messages: [{ attachments: [{ previewUrl: "blob:deleted-preview" }] }],
+            },
+          ]),
+          deleteSessionApi: vi.fn().mockResolvedValue(jsonResponse({ ok: true })),
+          getSessionsApi: vi.fn().mockResolvedValue(listResponse([])),
+        });
+
+        await actions.deleteSession(["s1"]);
+
+        expect(revokeObjectURL).toHaveBeenCalledExactlyOnceWith("blob:deleted-preview");
+      } finally {
+        revokeObjectURL.mockRestore();
+      }
+    },
+  );
+
+  it.each(["removed", "unavailable", "retained"])(
+    "releases only discarded message previews when a session is %s",
+    async (transition) => {
+      const revokeObjectURL = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+      try {
+        const sessionItem = {
+          sessionId: "s1",
+          availability: "available",
+          isLocal: false,
+          loaded: true,
+          aggregateVersion: 1,
+          messages: [{ attachments: [{ previewUrl: "blob:session-preview" }] }],
+        };
+        const summary = listEntry({
+          sessionId: "s1",
+          title: "Session",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        });
+        const unavailable = {
+          sessionId: "s1",
+          parentSessionId: "",
+          caller: "user",
+          availability: "unavailable",
+          unavailableReason: { code: "INVALID_TRANSFER_ENVELOPE", message: "invalid session" },
+        };
+        const entries =
+          transition === "removed" ? [] : [transition === "retained" ? summary : unavailable];
+        const { actions } = createHarness({
+          sessions: ref([sessionItem]),
+          getSessionsApi: vi.fn().mockResolvedValue(listResponse(entries)),
+        });
+
+        await actions.fetchSessions();
+
+        if (transition === "retained") {
+          expect(revokeObjectURL).not.toHaveBeenCalled();
+        } else {
+          expect(revokeObjectURL).toHaveBeenCalledExactlyOnceWith("blob:session-preview");
+        }
+      } finally {
+        revokeObjectURL.mockRestore();
+      }
+    },
+  );
 });
 
 describe("createSessionListActions unavailable sessions", () => {
@@ -312,7 +450,7 @@ describe("createSessionListActions.deleteSession", () => {
     };
     const sessions = ref([
       activeSession,
-      { sessionId: "s-delete", title: "Delete", caller: "user" },
+      { sessionId: "s-delete", title: "Delete", caller: "user", messages: [] },
     ]);
     const activeSessionId = ref("s-active");
     const registry = createTurnRuntimeRegistryState();
@@ -363,9 +501,9 @@ describe("createSessionListActions.deleteSession", () => {
 
   it("deletes mixed local and remote Sessions with one batch request and reselects the active Session", async () => {
     const sessions = ref([
-      { sessionId: "s-keep", title: "Keep", caller: "user" },
+      { sessionId: "s-keep", title: "Keep", caller: "user", messages: [] },
       { sessionId: "local-1", title: "Local", caller: "user", isLocal: true, messages: [] },
-      { sessionId: "s-old", title: "Old", caller: "user" },
+      { sessionId: "s-old", title: "Old", caller: "user", messages: [] },
     ]);
     const activeSessionId = ref("local-1");
     const deleteSessionApi = vi.fn().mockResolvedValue(jsonResponse({ ok: true }));

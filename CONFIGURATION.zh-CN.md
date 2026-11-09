@@ -257,7 +257,7 @@ Session 日志 WebSocket：
 | `providers.<alias>.multimodal_parsing.input_modalities`                    | string[]    | 明确支持的输入：`image`、`document`、`audio`、`video`                                                                                                                                                                          |
 | `providers.<alias>.multimodal_generation.support_generation.enabled`       | boolean     | 是否支持多模态生成                                                                                                                                                                                                             |
 | `providers.<alias>.multimodal_generation.support_generation.support_scope` | string[]    | 生成范围（如 `["image"]`）                                                                                                                                                                                                     |
-| `providers.<alias>.multimodal_generation.support_generation.api_type`      | enum        | 生成启用时必填：`openai_responses` / `images_async`                                                                                                                                                                            |
+| `providers.<alias>.multimodal_generation.support_generation.api_type`      | enum        | 生成启用时必填；原生接口类型以协议 [`MODEL_GENERATION_API_TYPE`](model-protocol/src/model/model-capabilities.js) 为准，参见[原生接口映射](docs/model-catalog-2026-11-07.md#接口边界)                                           |
 
 模型系列默认参数、Prompt Cache 命中优化、`use_responses_api` 策略见：`docs/model-provider-adaptation-cache.md`。
 

@@ -35,6 +35,7 @@ describe("sessionRecords aggregate version reconciliation", () => {
     const messages = [{ role: "assistant", content: "streaming response" }];
     existing.messages = messages;
     const summary = mappedSummary({ aggregateVersion: 1, updatedAt: "2026-07-15T10:01:00.000Z" });
+    summary.messageCount = 2;
 
     const reconciled = reconcileSessionObject(summary, existing);
 
@@ -44,6 +45,22 @@ describe("sessionRecords aggregate version reconciliation", () => {
     expect(isLoadedRemoteSession(reconciled)).toBe(false);
     expect(reconciled.messages).toBe(messages);
     expect(reconciled.sessionDocs).toEqual([]);
+    expect(reconciled.messageCount).toBe(2);
+  });
+
+  it("preserves loaded remote messages and their count across list refreshes", () => {
+    const existing = mappedSummary({ aggregateVersion: 2, updatedAt: "2026-07-15T10:01:00.000Z" });
+    existing.loaded = true;
+    existing.messageCount = 3;
+    const messages = [{ role: "assistant", content: "streaming response" }];
+    existing.messages = messages;
+    const summary = mappedSummary({ aggregateVersion: 1, updatedAt: "2026-07-15T10:00:30.000Z" });
+
+    reconcileSessionObject(summary, existing);
+
+    expect(isLoadedRemoteSession(existing)).toBe(true);
+    expect(existing.messages).toBe(messages);
+    expect(existing.messageCount).toBe(3);
   });
 
   it("does not let an earlier list snapshot roll back a realtime aggregate version", () => {

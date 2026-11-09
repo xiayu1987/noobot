@@ -89,6 +89,7 @@ export function mapDetailEntryToSession(entry, { createConnectorPanelState }) {
 
 function mergeExistingSessionState(mappedSession, existingSession) {
   if (mappedSession.isUnavailable) return mappedSession;
+  const loaded = isLoadedRemoteSession(existingSession);
   return {
     ...mappedSession,
     aggregateVersion: isNewerSessionAggregateVersion(
@@ -97,13 +98,11 @@ function mergeExistingSessionState(mappedSession, existingSession) {
     )
       ? mappedSession.aggregateVersion
       : existingSession.aggregateVersion,
-    loaded: existingSession.isLocal === true ? false : existingSession.loaded,
+    loaded,
     messages: existingSession.messages,
     sessionDocs: existingSession.sessionDocs,
     connectorPanelState: existingSession.connectorPanelState,
-    messageCount: existingSession.loaded
-      ? existingSession.messageCount
-      : mappedSession.messageCount,
+    messageCount: loaded ? existingSession.messageCount : mappedSession.messageCount,
   };
 }
 

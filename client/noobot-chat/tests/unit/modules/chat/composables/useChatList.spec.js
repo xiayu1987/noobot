@@ -301,7 +301,7 @@ describe("useChatList", () => {
   });
 
   it("fetchSessions can force the unchanged active session to reload and rerender messages", async () => {
-    const existingMessages = [{ role: RoleEnum.USER, content: "stale local" }];
+    const existingMessages = [{ role: RoleEnum.USER, content: "stale local", attachments: [] }];
     const fixture = createUseChatListFixture({
       getSessionsApi: vi.fn(async () =>
         listResponse([{ sessionId: "backend-refresh", updatedAt: "2026-05-14T00:03:00.000Z" }]),
@@ -333,9 +333,10 @@ describe("useChatList", () => {
     const { api, refs, mocks } = fixture;
     refs.sessions.value = [
       {
-        id: "backend-refresh",
         sessionId: "backend-refresh",
         title: "loaded",
+        availability: "available",
+        aggregateVersion: 0,
         isLocal: false,
         loaded: true,
         messages: existingMessages,

@@ -319,7 +319,11 @@ describe("useChatEngine.interaction-stop: terminal", () => {
       deps: { authFetch: terminalResolutionFetcher },
     });
     harness.sessions.value[0].isLocal = true;
-    harness.sessions.value[0].messages = [{ role: RoleEnum.ASSISTANT, turnScopeId, pending: true }];
+    harness.sessions.value[0].availability = "available";
+    harness.sessions.value[0].aggregateVersion = 0;
+    harness.sessions.value[0].messages = [
+      { role: RoleEnum.ASSISTANT, turnScopeId, pending: true, attachments: [] },
+    ];
     applyTurnRuntimeEvent(harness.turnRuntimeRegistry.value, {
       timestamp: 1767225600000,
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,

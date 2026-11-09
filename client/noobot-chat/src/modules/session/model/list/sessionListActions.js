@@ -73,7 +73,7 @@ export function createSessionListActions({
     const target = findSessionByAnyIdInList(sessions.value, sessionId);
     if (!target) return;
     const targetPrimaryId = target.sessionId;
-    if (!force && targetPrimaryId === activeSessionId.value) return;
+    if (!force && !requireFresh && targetPrimaryId === activeSessionId.value) return;
     if (target.isUnavailable === true) {
       notify({ type: "warning", message: target.unavailableReason.message });
       return;
@@ -83,7 +83,7 @@ export function createSessionListActions({
       refreshSessionConnectorsAsync(targetPrimaryId);
       return;
     }
-    if (target.loaded && !force) {
+    if (target.loaded && !force && !requireFresh) {
       const detail = requireLoadedSessionDetail(target);
       onSessionDetailApplied({
         detail,
@@ -163,10 +163,11 @@ export function createSessionListActions({
   }
 
   function revokeReplacedSessionPreviews(existingSessionsById) {
-    for (const session of sessions.value) {
-      const existingSession = existingSessionsById.get(session.sessionId);
-      if (existingSession && existingSession.messages === session.messages) continue;
-      revokeMessagePreviewUrls(session.messages);
+    const nextSessionsById = buildSessionIdentityMap(sessions.value);
+    for (const existingSession of existingSessionsById.values()) {
+      const nextSession = nextSessionsById.get(existingSession.sessionId);
+      if (nextSession && nextSession.messages === existingSession.messages) continue;
+      revokeMessagePreviewUrls(existingSession.messages);
     }
   }
 
@@ -333,7 +334,7 @@ export function createSessionListActions({
     }
 
     for (const targetSession of targetSessions) {
-      if (targetSession.isLocal === true) revokeMessagePreviewUrls(targetSession.messages || []);
+      revokeMessagePreviewUrls(targetSession.messages);
       const runtimeSessionId = sessionRuntimeId(targetSession);
       removeSessionRuntime(turnRuntimeRegistry.value, runtimeSessionId);
       clearSessionTurnUiStates(runtimeSessionId);
