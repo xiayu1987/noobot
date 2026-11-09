@@ -21,7 +21,7 @@
     "@noobot/client-shared": "file:../shared"
   },
   "devDependencies": {
-    "electron": "44.7.2"
+    "electron": "45.2.3"
   },
   "build": {
     "appId": "com.noobot.windows-client",

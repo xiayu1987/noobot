@@ -8,14 +8,14 @@ import { resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports"
 import { createSessionChannelWebSocketClient } from "@noobot/runtime-events/session-channel";
 import { SESSION_CHANNELS } from "@noobot/runtime-events/session-log-protocol";
 
-function buildLogWebSocketUrl(apiKey = "") {
+function buildLogWebSocketUrl() {
   try {
     const target = new URL(
       config.upstreamHttpBase || resolveRuntimeTopology({}).agentProxyUpstreamHttpBase,
     );
     target.protocol = target.protocol === "https:" ? "wss:" : "ws:";
     target.pathname = "/logs/ws";
-    target.search = apiKey ? `?apikey=${encodeURIComponent(apiKey)}` : "";
+    target.search = "";
     return target;
   } catch {
     return null;

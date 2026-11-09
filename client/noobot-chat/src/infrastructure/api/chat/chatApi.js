@@ -222,8 +222,7 @@ export async function deleteSessionApi({ userId = "", sessionIds }, { fetcher })
 export function buildChatWebSocketUrl({ apiKey = "" } = {}) {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const host = window.location.host;
-  const query = apiKey ? `?apikey=${encodeURIComponent(apiKey)}` : "";
-  return `${protocol}//${host}/api/agent-proxy/ws${query}`;
+  return apiKey ? `${protocol}//${host}/api/agent-proxy/ws` : "";
 }
 
 export function buildLogWebSocketUrl({ apiKey = "" } = {}) {
@@ -231,8 +230,7 @@ export function buildLogWebSocketUrl({ apiKey = "" } = {}) {
   if (!normalizedApiKey) return "";
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const host = window.location.host;
-  const query = `?apikey=${encodeURIComponent(normalizedApiKey)}`;
-  return `${protocol}//${host}/api/logs/ws${query}`;
+  return `${protocol}//${host}/api/logs/ws`;
 }
 
 export async function postOpenVSCodeServerApi({ userId = "" }, { fetcher }) {

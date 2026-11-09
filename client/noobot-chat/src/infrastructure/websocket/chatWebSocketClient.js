@@ -45,6 +45,7 @@ import { isFunction } from "@noobot/shared/value";
 
 export function createChatWebSocketClient({
   resolveWebSocketUrl = () => "",
+  resolveApiKey = () => "",
   resolveTransportOwner = () => "",
   refreshAuthentication = null,
   sessionLogSink = null,
@@ -53,6 +54,7 @@ export function createChatWebSocketClient({
   const transport = createWebSocketTransportSupervisor({
     channelId: "chat",
     resolveWebSocketUrl,
+    resolveApiKey,
     resolveTransportOwner,
     refreshAuthentication,
   });

@@ -4,15 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { isSuperAdminRole, SUPER_ADMIN_ROLE } from "#agent/utils";
-import { createHash, randomBytes } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
+import { readWebSocketApiKey } from "@noobot/shared/websocket-auth";
 import { createResourceAccessService } from "./resource-access.js";
 import { HTTP_STATUS } from "#agent/constants";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-import {
-  RUNTIME_EVENT_CATEGORIES,
-  RUNTIME_EVENT_CHANNELS,
-  writeRuntimeEvent,
-} from "@noobot/runtime-events";
 import { isCanonicalText, text } from "@noobot/shared/value";
 
 export const USER_SCOPE_POLICY = Object.freeze({
@@ -30,7 +26,8 @@ function assertUserScopePolicy(policy) {
 export function createAuthService({ translateText } = {}) {
   const apiKeyStore = new Map();
   const apiKeyTtlMs = TIME_THRESHOLDS.service.apiKeyTtlMs;
-  const keyId = (key) => createHash("sha256").update(key).digest("hex");
+  const keyIndexSecret = randomBytes(32);
+  const keyId = (key) => createHmac("sha256", keyIndexSecret).update(key).digest("hex");
   function resolveSession(sessionId) {
     const auth = apiKeyStore.get(sessionId);
     if (!auth) return null;
@@ -59,30 +56,7 @@ export function createAuthService({ translateText } = {}) {
     const headerApiKey = text(req?.headers?.["x-api-key"]);
     const bearer = text(req?.headers?.authorization);
     const bearerApiKey = bearer.startsWith("Bearer ") ? bearer.slice(7).trim() : "";
-    let queryApiKey = text(req?.query?.apikey);
-    if (!queryApiKey && req?.url) {
-      try {
-        queryApiKey = text(new URL(req.url, "http://localhost").searchParams.get("apikey"));
-      } catch (error) {
-        void writeRuntimeEvent({
-          scope: "system",
-          source: "service",
-          channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-          category: RUNTIME_EVENT_CATEGORIES.SECURITY,
-          level: "warn",
-          event: "service.auth.extractApiKey.urlParse.failed",
-          data: {
-            urlPathPreview: String(req?.url || "")
-              .split("?")[0]
-              .slice(0, 200),
-            urlLength: String(req?.url || "").length,
-          },
-          error,
-        });
-        queryApiKey = "";
-      }
-    }
-    const apiKey = headerApiKey || bearerApiKey || queryApiKey;
+    const apiKey = headerApiKey || bearerApiKey || readWebSocketApiKey(req);
     if (apiKey) return resolveSession(keyId(apiKey));
     return req.url ? resourceAccess.resolve(req) : null;
   }

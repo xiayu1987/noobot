@@ -289,12 +289,14 @@ export function useChatSession({
 
   const sessionLogWebSocketClient = createSessionLogWebSocketClient({
     resolveWebSocketUrl: () => buildLogWebSocketUrl({ apiKey: apiKey.value || "" }),
+    resolveApiKey: () => text(apiKey.value),
     resolveTransportOwner: () => text(userId.value),
     source: "frontend",
     refreshAuthentication,
   });
   const chatWebSocketClient = createChatWebSocketClient({
     resolveWebSocketUrl: () => buildChatWebSocketUrl({ apiKey: apiKey.value || "" }),
+    resolveApiKey: () => text(apiKey.value),
     resolveTransportOwner: () => text(userId.value),
     translateText: translate,
     refreshAuthentication,

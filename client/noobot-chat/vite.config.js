@@ -5,6 +5,7 @@
  */
 import { defineConfig, loadEnv } from "vite";
 import vue from "@vitejs/plugin-vue";
+import wasm from "vite-plugin-wasm";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { addressPort, resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports";
 import { createChunkBudgetPlugin } from "./build/chunk-budget.js";
@@ -33,7 +34,7 @@ export default defineConfig(({ mode }) => {
   const connectToken = text(env.VITE_PROXY_CONNECT_TOKEN) || "5fd50423-d915-49d7-8e9a-62d93f33777b";
 
   return {
-    plugins: [vue(), createChunkBudgetPlugin()],
+    plugins: [vue(), wasm(), createChunkBudgetPlugin()],
     resolve: {
       dedupe: ["vue"],
     },

@@ -15,7 +15,10 @@ test("request URL readers reject malformed and missing URLs instead of projectin
 });
 
 test("request URL readers preserve valid routing and optional query semantics", () => {
-  const request = Object.freeze({ url: "/chat?apikey=key&locale=en-US" });
+  const request = Object.freeze({
+    url: "/chat?apikey=ignored&locale=en-US",
+    headers: { "sec-websocket-protocol": "noobot-auth.key" },
+  });
   assert.equal(parseRequestPathname(request), "/chat");
   assert.deepEqual(parseRequestQuery(request), {
     pathname: "/chat",

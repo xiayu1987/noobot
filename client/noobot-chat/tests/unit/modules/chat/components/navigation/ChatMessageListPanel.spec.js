@@ -80,8 +80,8 @@ const ScrollbarStub = defineComponent({
     },
   },
   mounted() {
-    Object.defineProperty(this.$el, "offsetHeight", { value: VIEWPORT_HEIGHT_PX });
-    Object.defineProperty(this.$el, "offsetWidth", { value: VIEWPORT_HEIGHT_PX });
+    Object.defineProperty(this.$el, "clientHeight", { value: VIEWPORT_HEIGHT_PX });
+    Object.defineProperty(this.$el, "clientWidth", { value: VIEWPORT_HEIGHT_PX });
   },
 });
 

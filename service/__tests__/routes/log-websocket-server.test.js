@@ -20,6 +20,8 @@ import {
   withRuntimeEventsRoot,
 } from "../runtime-events-root.test-helpers.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import { createWebSocketAuthProtocols } from "@noobot/shared/websocket-auth";
+import { createAuthService } from "../../services/auth-service.js";
 
 async function sessionEventFile(workspaceRoot, sessionId, fileName) {
   return path.join(await sessionDirPath(workspaceRoot, "u1", sessionId), "events", fileName);
@@ -68,7 +70,8 @@ function sendLogWs({
   return new Promise((resolve, reject) => {
     const messages = [];
     const ws = new WebSocket(
-      `ws://127.0.0.1:${port}${pathName}?apikey=${encodeURIComponent(apiKey)}`,
+      `ws://127.0.0.1:${port}${pathName}`,
+      createWebSocketAuthProtocols(apiKey),
     );
     ws.on("open", () =>
       ws.send(typeof payload === "string" ? payload : JSON.stringify(payload || {})),
@@ -646,6 +649,29 @@ test("log-websocket-server: rejects unauthorized upgrade", async () => {
   try {
     const { port } = server.address();
     await assert.rejects(() => sendLogWs({ port, payload: { sessionId: "s1" } }));
+  } finally {
+    await closeLogServer(server, registered);
+  }
+});
+
+test("log-websocket-server: authenticates real handshakes without query credentials", async () => {
+  const auth = createAuthService({ translateText: (key) => key });
+  const apiKey = auth.issueApiKey({ userId: "u1", role: "user" });
+  const { server, registered } = await startLogServer(auth);
+  try {
+    const { port } = server.address();
+    const url = `ws://127.0.0.1:${port}/logs/ws`;
+    const handshake = (target, protocols = []) =>
+      new Promise((resolve, reject) => {
+        const socket = new WebSocket(target, protocols);
+        socket.once("error", reject);
+        socket.once("open", () => socket.close());
+        socket.once("close", () => resolve());
+      });
+    await handshake(url, createWebSocketAuthProtocols(apiKey));
+    await assert.rejects(handshake(`${url}?apikey=${apiKey}`), /401/);
+    await assert.rejects(handshake(url, createWebSocketAuthProtocols("invalid-key")), /401/);
+    await handshake(url, createWebSocketAuthProtocols(apiKey));
   } finally {
     await closeLogServer(server, registered);
   }

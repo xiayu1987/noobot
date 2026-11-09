@@ -5,13 +5,14 @@
  */
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { createWebSocketAuthProtocols } from "@noobot/shared/websocket-auth";
 import { config } from "../../shared/config.js";
 import {
   CHANNEL_ACTIVITY_PHASE,
   CHANNEL_RETENTION_PHASE,
   UPSTREAM_CLOSE_REASON,
 } from "../../shared/constants.js";
-import { nowMs, buildUpstreamUrl } from "../../shared/utils.js";
+import { nowMs } from "../../shared/utils.js";
 import { writeAgentProxyRouteLifecycleEvent } from "../../runtime-events/ws-runtime-events.js";
 import { writeAgentTransportDebugEvent } from "../../runtime-events/agent-transport-debug-runtime-events.js";
 import {
@@ -97,7 +98,7 @@ class UpstreamConnectionMethods {
     });
     channel._errorHandled = false;
     channel.locale = text(locale);
-    const upstreamUrl = buildUpstreamUrl(config.upstreamWsUrl, apiKey);
+    const upstreamUrl = config.upstreamWsUrl;
     if (!upstreamUrl) {
       this.logChannelEvent(channel, {
         category: "transport",
@@ -236,7 +237,7 @@ class UpstreamConnectionMethods {
           });
         },
       },
-      { purpose },
+      { purpose, protocols: createWebSocketAuthProtocols(apiKey) },
     );
     return connection;
   }

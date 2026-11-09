@@ -8,6 +8,7 @@ import { TRANSPORT_TRACE_PROTOCOL_KIND } from "./constants.js";
 import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
 import { text } from "@noobot/shared/value";
+import { readWebSocketApiKey } from "@noobot/shared/websocket-auth";
 
 export function resolveMessageEventTrace(eventName = "", data = {}, transportSequence = 0) {
   const normalizedEventName = text(eventName);
@@ -78,7 +79,7 @@ export function parseRequestQuery(request) {
   const requestUrl = parseRequestUrl(request);
   return {
     pathname: requestUrl.pathname,
-    apiKey: text(requestUrl.searchParams.get("apikey")),
+    apiKey: readWebSocketApiKey(request),
     locale: text(requestUrl.searchParams.get("locale")),
   };
 }
@@ -93,14 +94,4 @@ export function nowMs() {
 
 export function buildFingerprint(payload = {}) {
   return JSON.stringify(payload || {});
-}
-
-export function buildUpstreamUrl(baseUrl = "", apiKey = "") {
-  const normalizedBaseUrl = text(baseUrl);
-  const normalizedApiKey = text(apiKey);
-  if (!normalizedBaseUrl) return "";
-  if (!normalizedApiKey) return normalizedBaseUrl;
-  const upstreamUrl = new URL(normalizedBaseUrl);
-  upstreamUrl.searchParams.set("apikey", normalizedApiKey);
-  return upstreamUrl.toString();
 }

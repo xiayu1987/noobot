@@ -14,13 +14,13 @@
     "test": "node ../../scripts/run-with-isolated-tmp.mjs node --test \"__tests__/**/*.test.js\""
   },
   "dependencies": {
-    "@dimforge/rapier3d-compat": "^0.20.0",
-    "@langchain/core": "^1.2.17",
+    "@dimforge/rapier3d": "^0.21.0",
+    "@langchain/core": "^1.3.5",
     "@noobot/context-protocol": "file:../../context-protocol",
     "@noobot/event-protocol": "file:../../event-protocol",
     "@noobot/hook-protocol": "file:../../hook-protocol",
     "@noobot/plugin-protocol": "file:../../plugin-protocol",
-    "three": "^0.186.1",
+    "three": "^0.187.0",
     "zod": "^4.6.7",
     "@noobot/workspace-protocol": "file:../../workspace-protocol",
     "@noobot/shared": "file:../../shared"

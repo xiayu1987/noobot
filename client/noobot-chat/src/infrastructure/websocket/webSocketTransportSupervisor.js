@@ -5,6 +5,7 @@
  */
 import { closeWebSocket } from "./closeWebSocket.js";
 import { text } from "@noobot/shared/value";
+import { createWebSocketAuthProtocols } from "@noobot/shared/websocket-auth";
 
 export const WEB_SOCKET_TRANSPORT_PHASE = Object.freeze({
   IDLE: "idle",
@@ -17,14 +18,16 @@ export const WEB_SOCKET_TRANSPORT_PHASE = Object.freeze({
 export function createWebSocketTransportSupervisor({
   channelId = "websocket",
   resolveWebSocketUrl = () => "",
+  resolveApiKey = () => "",
   resolveTransportOwner = () => "",
-  createWebSocket = (url) => new WebSocket(url),
+  createWebSocket = (url, protocols) => new WebSocket(url, protocols),
   refreshAuthentication = null,
   reconnectBaseDelayMs = 0,
   reconnectMaxDelayMs = reconnectBaseDelayMs,
 } = {}) {
   let socket = null;
   let connectionUrl = "";
+  let connectionApiKey = "";
   let transportOwner = "";
   let generation = 0;
   let phase = WEB_SOCKET_TRANSPORT_PHASE.IDLE;
@@ -76,7 +79,9 @@ export function createWebSocketTransportSupervisor({
     const previousOwner = transportOwner;
     let nextSocket = null;
     try {
-      nextSocket = createWebSocket(url);
+      const apiKey = text(resolveApiKey());
+      nextSocket = createWebSocket(url, apiKey ? createWebSocketAuthProtocols(apiKey) : []);
+      connectionApiKey = apiKey;
     } catch (error) {
       reconnectAttempt += 1;
       lastFailureReason = text(error?.name) || "websocket_constructor_failed";
@@ -108,6 +113,7 @@ export function createWebSocketTransportSupervisor({
     if (
       socket &&
       connectionUrl === resolvedUrl &&
+      connectionApiKey === text(resolveApiKey()) &&
       [WebSocket.OPEN, WebSocket.CONNECTING].includes(socket.readyState)
     ) {
       return { socket, previousSocket: null, generation, reused: true };

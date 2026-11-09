@@ -53,30 +53,31 @@
     "@noobot/shared": "file:../../shared",
     "@noobot/timeline-runtime": "file:../../timeline-runtime",
     "@noobot/workspace-protocol": "file:../../workspace-protocol",
-    "@tanstack/vue-virtual": "^3.13.45",
+    "@tanstack/vue-virtual": "^3.13.52",
     "@vue/devtools-api": "^8.2.1",
     "css-tree": "^3.2.1",
-    "element-plus": "^2.14.7",
+    "element-plus": "^2.14.8",
     "highlight.js": "^11.12.0",
-    "markdown-it": "^15.0.2",
-    "mermaid": "^12.2.0",
+    "markdown-it": "^15.0.3",
+    "mermaid": "^12.3.0",
     "noobot-i18n": "file:../../i18n",
     "pinia": "^4.1.0",
-    "vue": "^3.5.44"
+    "vue": "^3.5.45"
   },
   "devDependencies": {
     "@noobot/sanitize": "file:../../sanitize",
-    "@playwright/test": "^1.64.1",
+    "@playwright/test": "^1.65.0",
     "@vitejs/plugin-vue": "^6.0.10",
     "@vue/test-utils": "^2.5.1",
-    "es-module-lexer": "^3.0.3",
-    "jsdom": "^30.1.2",
+    "es-module-lexer": "^3.0.4",
+    "jsdom": "^31.0.0",
     "noobot-agent": "file:../../agent",
-    "vite": "^8.3.4",
-    "vitest": "^5.0.4"
+    "vite": "^8.3.7",
+    "vite-plugin-wasm": "^3.6.0",
+    "vitest": "^5.1.0"
   },
   "overrides": {
-    "glob": "^13.0.6",
+    "glob": "^14.0.4",
     "uuid": "^14.0.3"
   }
 }

@@ -26,10 +26,10 @@
     "noobot-i18n": "file:../../i18n"
   },
   "peerDependencies": {
-    "electron": "44.7.2"
+    "electron": "45.2.3"
   },
   "devDependencies": {
-    "electron-builder": "^26.15.3",
+    "electron-builder": "^26.18.0",
     "esbuild": "^0.28.2"
   }
 }

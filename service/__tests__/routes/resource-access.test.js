@@ -6,6 +6,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
+import { rateLimit } from "express-rate-limit";
+import { createHttpAdmissionOptions } from "../../security/http-admission.js";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -20,6 +22,7 @@ test("resource tickets preserve Range and authorization without delegating gener
   const auth = createAuthService({ translateText: (key) => key });
   const apiKey = auth.issueApiKey({ userId: "alice", role: "user" });
   const app = express();
+  app.use(rateLimit(createHttpAdmissionOptions({ resolveAuthByApiKey: auth.resolveAuthByApiKey })));
   app.use(express.json());
   registerAuthRoutes(app, { ...auth, translateText: (key) => key });
   app.use(auth.requireApiKey);

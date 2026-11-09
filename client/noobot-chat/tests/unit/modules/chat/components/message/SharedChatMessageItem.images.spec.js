@@ -127,8 +127,8 @@ describe("generated images across session changes", () => {
             BaseFilePreviewDrawer: true,
             "el-scrollbar": defineComponent({
               mounted() {
-                Object.defineProperty(this.$el, "offsetHeight", { value: 2000 });
-                Object.defineProperty(this.$el, "offsetWidth", { value: 2000 });
+                Object.defineProperty(this.$el, "clientHeight", { value: 2000 });
+                Object.defineProperty(this.$el, "clientWidth", { value: 2000 });
               },
               setup(_props, { slots, expose }) {
                 const wrapRef = ref(null);

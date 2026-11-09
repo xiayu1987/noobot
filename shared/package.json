@@ -29,6 +29,7 @@
     "./session-caller": "./session-caller.js",
     "./request-error": "./request-error.js",
     "./resource-access": "./resource-access.js",
+    "./websocket-auth": "./websocket-auth.js",
     "./locator": "./locator.js",
     "./package.json": "./package.json"
   }

@@ -7,6 +7,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { Readable } from "node:stream";
 import express from "express";
+import { rateLimit } from "express-rate-limit";
+import { createHttpAdmissionOptions } from "../../security/http-admission.js";
 import { sendAttachmentContent } from "../../routes/attachment-content.js";
 import { withTestServer } from "./session-routes.helpers.js";
 import { createAuthService } from "../../services/auth-service.js";
@@ -18,6 +20,7 @@ test("browser media requests require existing API authorization and stream byte 
   let closed = 0;
   let streamed = 0;
   const app = express();
+  app.use(rateLimit(createHttpAdmissionOptions({ resolveAuthByApiKey: auth.resolveAuthByApiKey })));
   app.get("/media", auth.requireApiKey, async (req, res) => {
     await sendAttachmentContent(req, res, {
       name: "clip.mp4",
@@ -45,23 +48,23 @@ test("browser media requests require existing API authorization and stream byte 
       ["bytes=-0", 416, "", "bytes */10"],
       ["bytes=0-1,4-5", 416, "", "bytes */10"],
     ]) {
-      const response = await fetch(`${base}/media?apikey=${key}`, {
-        headers: range ? { Range: range } : {},
+      const response = await fetch(`${base}/media`, {
+        headers: { "x-api-key": key, ...(range ? { Range: range } : {}) },
       });
       assert.equal(response.status, status, range);
       assert.equal(response.headers.get("accept-ranges"), "bytes");
       assert.equal(response.headers.get("content-range"), contentRange);
       assert.equal(await response.text(), content);
     }
-    const head = await fetch(`${base}/media?apikey=${key}`, {
+    const head = await fetch(`${base}/media`, {
       method: "HEAD",
-      headers: { Range: "bytes=2-4" },
+      headers: { "x-api-key": key, Range: "bytes=2-4" },
     });
     assert.equal(head.status, 206);
     assert.equal(head.headers.get("content-length"), "3");
     assert.equal(await head.text(), "");
-    const ifRange = await fetch(`${base}/media?apikey=${key}`, {
-      headers: { Range: "bytes=2-4", "If-Range": "unmatched" },
+    const ifRange = await fetch(`${base}/media`, {
+      headers: { "x-api-key": key, Range: "bytes=2-4", "If-Range": "unmatched" },
     });
     assert.equal(ifRange.status, 200);
     assert.equal(await ifRange.text(), "0123456789");

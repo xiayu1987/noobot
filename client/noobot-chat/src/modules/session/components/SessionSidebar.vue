@@ -8,6 +8,7 @@ import { ref, watch } from "vue";
 import {
   CircleCheckFilled,
   CircleCloseFilled,
+  Close,
   Expand,
   Fold,
   Key,
@@ -131,10 +132,12 @@ const { translate } = useLocale();
           <span>{{ translate("common.connectionSettings") }}</span>
           <button
             type="button"
-            class="noobot-action-btn noobot-flat-soft-btn"
+            class="connection-panel-close noobot-action-btn noobot-icon-button noobot-flat-soft-btn"
+            :aria-label="translate('common.collapse')"
+            :title="translate('common.collapse')"
             @click="closeConnectionPanel"
           >
-            {{ translate("common.collapse") }}
+            <el-icon><Close /></el-icon>
           </button>
         </div>
         <el-input
@@ -160,7 +163,7 @@ const { translate } = useLocale();
           </template>
         </el-input>
 
-        <div class="action-row">
+        <div class="action-row connection-panel-actions">
           <el-button
             :type="connected ? 'success' : 'primary'"
             class="connect-btn noobot-action-btn"
@@ -182,6 +185,9 @@ const { translate } = useLocale();
               <CircleCheckFilled v-if="connected" />
               <CircleCloseFilled v-else />
             </el-icon>
+            <span>{{
+              connected ? translate("common.connected") : translate("common.disconnected")
+            }}</span>
           </span>
         </div>
       </section>
@@ -315,8 +321,18 @@ const { translate } = useLocale();
   display: inline-flex;
   align-items: center;
   color: var(--noobot-text-secondary);
-  font-size: var(--noobot-font-size-lg);
+  gap: var(--noobot-space-xs);
+  min-width: 0;
+  font-size: var(--noobot-font-size-sm);
+}
+
+.connection-status .el-icon {
   flex-shrink: 0;
+  font-size: var(--noobot-font-size-lg);
+}
+
+.connection-status > span {
+  overflow-wrap: anywhere;
 }
 
 .connection-status.connected,
@@ -343,20 +359,21 @@ const { translate } = useLocale();
 
 .connection-panel {
   position: absolute;
-  bottom: 100%;
+  bottom: calc(100% + var(--noobot-space-sm));
   left: var(--noobot-space-sm);
   z-index: 1;
   box-sizing: border-box;
-  width: min(var(--noobot-side-panel-width), calc(100vw - 2 * var(--noobot-space-sm)));
-  max-height: calc(100dvh - var(--noobot-control-height-md) - 4 * var(--noobot-space-sm));
+  width: min(300px, calc(100vw - 2 * var(--noobot-space-sm)));
+  max-height: calc(100dvh - var(--noobot-control-height-md) - 5 * var(--noobot-space-sm));
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: var(--noobot-space-md);
-  padding: var(--noobot-space-lg);
+  gap: var(--noobot-space-lg);
+  padding: var(--noobot-space-xl);
   border: 1px solid var(--noobot-panel-border);
-  border-radius: var(--noobot-radius-xs);
+  border-radius: var(--noobot-radius-md);
   background: var(--noobot-panel-bg);
+  box-shadow: var(--noobot-shadow-raised);
   color: var(--noobot-text-strong);
 }
 
@@ -365,7 +382,36 @@ const { translate } = useLocale();
   align-items: center;
   justify-content: space-between;
   gap: var(--noobot-space-sm);
+  margin-bottom: var(--noobot-space-2xs);
+  font-size: var(--noobot-font-size-md);
   font-weight: var(--noobot-font-weight-semibold);
+}
+
+.connection-panel-close {
+  width: var(--noobot-control-icon-size-sm);
+  height: var(--noobot-control-icon-size-sm);
+  flex: 0 0 var(--noobot-control-icon-size-sm);
+  font-size: var(--noobot-font-size-lg);
+}
+
+.connection-panel :deep(.el-input__wrapper) {
+  min-height: var(--noobot-control-height-md);
+  box-sizing: border-box;
+}
+
+.connection-panel-actions {
+  flex-direction: row-reverse;
+  justify-content: space-between;
+  gap: var(--noobot-space-lg);
+  padding-top: var(--noobot-space-lg);
+  margin-top: var(--noobot-space-2xs);
+  border-top: 1px solid var(--noobot-border-weak);
+}
+
+.connection-panel-actions .connect-btn {
+  flex: 0 0 auto;
+  min-width: 88px;
+  margin: 0;
 }
 
 .sidebar.collapsed .sidebar-settings-label {
@@ -399,6 +445,10 @@ const { translate } = useLocale();
 }
 
 @media (max-width: 768px) {
+  .sidebar.mobile .connection-panel {
+    width: calc(100% - 2 * var(--noobot-space-sm));
+  }
+
   .collapse-btn {
     display: none;
   }

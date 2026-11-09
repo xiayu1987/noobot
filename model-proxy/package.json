@@ -20,7 +20,7 @@
   "dependencies": {
     "@noobot/shared": "file:../shared",
     "@noobot/sanitize": "file:../sanitize",
-    "http-proxy-3": "^2.0.1",
+    "http-proxy-3": "^2.0.2",
     "@noobot/runtime-topology-protocol": "file:../runtime-topology-protocol",
     "@noobot/workspace-protocol": "file:../workspace-protocol"
   }

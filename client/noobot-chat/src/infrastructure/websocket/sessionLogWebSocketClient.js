@@ -23,6 +23,7 @@ const SESSION_LOG_WS_DEBUG_TYPE = "session-log-ws";
 
 export function createSessionLogWebSocketClient({
   resolveWebSocketUrl = () => "",
+  resolveApiKey = () => "",
   resolveTransportOwner = () => "",
   source = "frontend",
   refreshAuthentication = null,
@@ -46,6 +47,7 @@ export function createSessionLogWebSocketClient({
   const transport = createWebSocketTransportSupervisor({
     channelId: "session-log",
     resolveWebSocketUrl,
+    resolveApiKey,
     resolveTransportOwner,
     refreshAuthentication,
     reconnectBaseDelayMs: TIME_THRESHOLDS.client.sessionLogReconnectBaseDelayMs,

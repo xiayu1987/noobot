@@ -7,6 +7,7 @@ import { buildSessionLogRecord, SESSION_LOG_DEBUG_CATEGORY } from "./session-log
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { createWebSocketAuthProtocols } from "@noobot/shared/websocket-auth";
 
 export const MAX_SESSION_CHANNEL_MESSAGE_BYTES = LENGTH_THRESHOLDS.sessionLog.maxPayloadBytes;
 export const MAX_SESSION_CHANNEL_BATCH_SIZE = QUANTITY_THRESHOLDS.sessionLog.maxBatchSize;
@@ -71,7 +72,7 @@ export function createSessionChannelWebSocketClient({
       return current;
     const url = resolveWebSocketUrl?.(key);
     if (!url) return null;
-    const socket = new WebSocketImpl(url);
+    const socket = new WebSocketImpl(url, createWebSocketAuthProtocols(key));
     socket.onopen = () => flush(key);
     socket.onmessage = (raw) => handleAck(key, raw);
     socket.onclose = () => {

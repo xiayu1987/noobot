@@ -14,10 +14,10 @@
     "@noobot/connector-protocol": "file:../connector-protocol",
     "@noobot/semantic-transfer-protocol": "file:../semantic-transfer-protocol",
     "better-sqlite3": "^13.0.3",
-    "imapflow": "^2.4.2",
-    "mailparser": "^3.9.39",
+    "imapflow": "^2.11.0",
+    "mailparser": "^3.14.2",
     "mysql2": "^3.24.6",
-    "nodemailer": "^10.1.1",
+    "nodemailer": "^10.4.0",
     "pg": "^8.23.1",
     "ssh2": "^1.17.0",
     "@noobot/shared": "file:../shared"

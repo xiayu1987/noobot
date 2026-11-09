@@ -28,12 +28,12 @@ export class UpstreamTransportSupervisor {
     this.purpose = "";
   }
 
-  connect(url, handlers = {}, { purpose = "run" } = {}) {
+  connect(url, handlers = {}, { purpose = "run", protocols = [] } = {}) {
     if (this.phase === UPSTREAM_TRANSPORT_PHASE.DISPOSED) return null;
     const previousSocket = this.socket;
     let socket = null;
     try {
-      socket = new this.WebSocket(url);
+      socket = new this.WebSocket(url, protocols);
     } catch (error) {
       this.invokeHandler(handlers, "error", { socket: null, generation: this.generation, error });
       return null;

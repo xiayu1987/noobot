@@ -11,11 +11,7 @@ let rapierInitPromise;
 let RAPIER;
 
 async function loadRapier() {
-  rapierInitPromise ||= import("@dimforge/rapier3d-compat").then(async (module) => {
-    const api = module.default || module;
-    await api.init();
-    return api;
-  });
+  rapierInitPromise ||= import("@dimforge/rapier3d");
   RAPIER ||= await rapierInitPromise;
   return RAPIER;
 }
