@@ -11,7 +11,8 @@ import {
 import { projectModelAttemptError, requireInvocationIdentity } from "../protocol/invocation.js";
 import { MODEL_OPERATION_KIND, normalizeModelOperationResult } from "../protocol/operation.js";
 import { hasUsableModelChatOutput } from "../protocol/output.js";
-import { text, isPlainObject } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
+import { requirePlainObject, rejectUnknownKeys } from "./object.js";
 import { requireToolBindingConfig } from "../protocol/tool-binding.js";
 
 const RESPONSE_KEYS = Object.freeze([
@@ -39,20 +40,6 @@ const EXECUTION_KEYS = Object.freeze(["attemptCount", "attempts", "model", "prov
 const TOOL_CALL_KEYS = Object.freeze(["id", "name", "args"]);
 const ATTEMPT_KEYS = Object.freeze(["attempt", "status", "kind", "streaming", "output", "error"]);
 const ATTEMPT_STATUSES = new Set(["completed", "retry", "failed"]);
-
-function requirePlainObject(value, path) {
-  if (!isPlainObject(value)) {
-    throw new TypeError(`${path} must be an object`);
-  }
-  return value;
-}
-
-function rejectUnknownKeys(value, allowedKeys, path) {
-  const allowed = new Set(allowedKeys);
-  const unknown = Object.keys(value).filter((key) => !allowed.has(key));
-  if (unknown.length)
-    throw new TypeError(`${path} contains unsupported fields: ${unknown.join(", ")}`);
-}
 
 export function validateModelToolCall(value, path = "model tool call") {
   const call = requirePlainObject(value, path);

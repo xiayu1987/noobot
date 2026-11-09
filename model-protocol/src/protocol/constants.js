@@ -27,6 +27,7 @@ export const MODEL_CONTEXT_TRACE = Object.freeze({
   PROTOCOL_VERSION: 2,
 });
 export const MODEL_ERROR_KIND = Object.freeze({
+  PROTOCOL: "protocol",
   ABORTED: "aborted",
   AUTHENTICATION: "authentication",
   INVALID_REQUEST: "invalid_request",

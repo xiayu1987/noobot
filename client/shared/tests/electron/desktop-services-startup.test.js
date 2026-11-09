@@ -260,7 +260,8 @@ for (const failure of ["request", "body"]) {
         fetchImpl: async (url, { signal }) => {
           if (!failedUrls.has(url)) {
             failedUrls.add(url);
-            if (failure === "request") throw new Error("connection refused");
+            if (failure === "request")
+              throw new TypeError("fetch failed", { cause: { code: "ECONNREFUSED" } });
             return {
               ok: true,
               json: () =>

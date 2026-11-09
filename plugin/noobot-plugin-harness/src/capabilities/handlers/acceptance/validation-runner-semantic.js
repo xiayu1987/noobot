@@ -50,7 +50,7 @@ import { requireHarnessReportIndex } from "../../../core/bucket-contract.js";
 
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
 
-export function scheduleAcceptanceSemanticValidationByInject(ctx = {}, baseReport = null) {
+function scheduleAcceptanceSemanticValidationByInject(ctx = {}, baseReport = null) {
   if (!baseReport) return false;
   return scheduleInjectTask(ctx, {
     domain: CAPABILITY_DOMAIN.ACCEPTANCE,

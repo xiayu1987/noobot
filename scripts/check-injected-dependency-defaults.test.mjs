@@ -4,8 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import os from "node:os";
 import test from "node:test";
+import { promisify } from "node:util";
 import {
+  CHECK,
   findEmptyDependencyBags,
   findFetcherFallbacks,
   findOptionalDependencyCalls,
@@ -46,4 +50,20 @@ test("scopes the check to client production sources", () => {
   assert.equal(includesFile("client/noobot-chat/src/app/shell/AppShell.vue"), true);
   assert.equal(includesFile("client/noobot-chat/tests/unit/app/AppShell.spec.js"), false);
   assert.equal(includesFile("agent/src/runtime/engine.js"), false);
+});
+
+test("measurements do not depend on the caller working directory", async () => {
+  const measured = await CHECK.measure();
+  assert.ok(measured.emptyDependencyBag.total > 0);
+  const moduleUrl = new URL("./check-injected-dependency-defaults.mjs", import.meta.url).href;
+  const { stdout } = await promisify(execFile)(
+    process.execPath,
+    [
+      "--input-type=module",
+      "-e",
+      `import { CHECK } from ${JSON.stringify(moduleUrl)}; console.log(JSON.stringify(await CHECK.measure()));`,
+    ],
+    { cwd: os.tmpdir() },
+  );
+  assert.deepEqual(JSON.parse(stdout), measured);
 });

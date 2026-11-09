@@ -10,19 +10,13 @@ import { createAnimationInputCompiler } from "./animation-input-compiler.js";
 import { compileCameraPlan } from "./camera-preset-compiler.js";
 import {
   analyzeAnimationSpatial,
-  characterPositionAt,
   characterTransformAt,
   hasSpatiallyReachableEvents,
 } from "./spatial-analysis.js";
 import { compileCharacterRootMotion } from "./root-motion.js";
 import { createSemanticActionCompiler } from "./semantic-action-compiler.js";
 
-export {
-  analyzeAnimationSpatial,
-  characterPositionAt,
-  characterTransformAt,
-  hasSpatiallyReachableEvents,
-};
+export { analyzeAnimationSpatial, characterTransformAt, hasSpatiallyReachableEvents };
 
 const number = z.number();
 const vec3 = z.array(number).length(3);

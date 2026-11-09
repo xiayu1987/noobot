@@ -37,7 +37,7 @@ function requireInterjectionQueue(handle) {
   if (!valid.every(Boolean)) throw new TypeError("invalid_run_interjection_state");
 }
 
-export function normalizeRunIdentityPart(value = "") {
+function normalizeRunIdentityPart(value = "") {
   return text(value);
 }
 

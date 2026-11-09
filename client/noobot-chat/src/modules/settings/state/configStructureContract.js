@@ -15,8 +15,6 @@ import { isPlainObject } from "@noobot/shared/value";
 
 export { isPlainObject };
 
-export { CONFIG_STRUCTURE_KIND };
-
 export const CONFIG_FORM_NODE_KIND = Object.freeze({
   OBJECT: "object",
   COLLECTION: "collection",

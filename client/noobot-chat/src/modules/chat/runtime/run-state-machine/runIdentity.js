@@ -9,7 +9,3 @@ import { trim } from "./normalize.js";
 export function resolveEventScope(value = {}) {
   return trim(value.turnScopeId);
 }
-
-export function resolveRunTurnScopeId(value = {}) {
-  return trim(value.turnScopeId);
-}

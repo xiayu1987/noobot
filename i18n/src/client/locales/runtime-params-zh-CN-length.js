@@ -4,6 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 export default {
+  modelMeasurement: {
+    prefixCompareBlockBytes: {
+      name: "请求前缀比较块",
+      description: "定位首个不同字节前，每次按块比较的字节数。",
+    },
+  },
   runtimeEvents: {
     maxFileBytes: {
       name: "运行事件文件大小上限",

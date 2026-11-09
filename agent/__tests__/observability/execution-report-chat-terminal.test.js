@@ -138,7 +138,7 @@ for (const tools of [false, true]) {
           const starts = logs.filter(({ event }) => event === MODEL_REQUEST_EVENT.STARTED);
           const usages = logs.filter(({ event }) => event === MODEL_REQUEST_EVENT.USAGE);
           const terminals = logs.filter(({ event }) => event === MODEL_REQUEST_EVENT.FINISHED);
-          const count = success ? 1 : 2;
+          const count = 1;
           assert.equal(starts.length, count);
           assert.equal(usages.length, count);
           assert.equal(terminals.length, count);

@@ -9,11 +9,14 @@ import {
   buildChildAttachmentsByParentDialogProcessId,
   mergeChildTurnAttachmentsIntoRootMessages,
 } from "../../../../../src/modules/session/model/list/detailMessages.js";
-import { buildViewMessage } from "../../../../../src/modules/chat/model/messageModel.js";
+import { buildViewMessage as buildMessage } from "../../../../../src/modules/chat/model/messageModel.js";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { selectToolTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
 import { completedToolTimelineItem, toolResultText } from "../../../helpers/toolTimelineFixture.js";
 import { TRANSFER_VERSION, TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
+
+const buildViewMessage = (message, options) =>
+  buildMessage(message, { ...options, userId: "admin" });
 
 describe("detailMessages", () => {
   it("builds one normalized detail message list for replace and preserve inputs", () => {

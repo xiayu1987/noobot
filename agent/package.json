@@ -44,7 +44,6 @@
   },
   "dependencies": {
     "@langchain/core": "^1.2.17",
-    "@langchain/openai": "^1.6.2",
     "@noobot/authoritative-state": "file:../authoritative-state",
     "@noobot/attachment-protocol": "file:../attachment-protocol",
     "@noobot/semantic-transfer-protocol": "file:../semantic-transfer-protocol",
@@ -69,7 +68,6 @@
     "@vscode/ripgrep": "^1.18.0",
     "acorn": "^8.19.0",
     "noobot-i18n": "file:../i18n",
-    "openai": "^7.33.0",
     "pino": "^10.4.0",
     "undici": "8.12.1",
     "uuid": "^14.0.3",

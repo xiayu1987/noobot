@@ -65,6 +65,25 @@ test("real scanner detects orphan modules, dead cycles, unused exports and depen
   assert.match(measured.unusedDependencies.samples[0], /unused/);
 });
 
+test("referenced optional peers are not unused dependencies", (t) => {
+  const root = fixture(t, {
+    "package.json": {
+      name: "optional-peer-fixture",
+      type: "module",
+      peerDependencies: { "public-api": "*" },
+      peerDependenciesMeta: { "public-api": { optional: true } },
+    },
+    "knip.json": {
+      entry: ["src/main.js"],
+      include: ["files", "exports", "nsExports", "dependencies"],
+    },
+    "src/main.js": 'import "public-api";\n',
+  });
+  const report = scanDeadCode(root, "knip.json");
+  assert.ok(report.issues.some((issue) => issue.optionalPeerDependencies.length === 1));
+  assert.equal(measureDeadCodeReport(report).unusedDependencies.total, 0);
+});
+
 test("invalid scanner configuration fails instead of reporting a clean scan", (t) => {
   const root = fixture(t, { "package.json": { name: "invalid-config" }, "knip.json": "{" });
   assert.throws(() => scanDeadCode(root, "knip.json"), /Knip/);
@@ -106,9 +125,15 @@ test("dead-code check rejects increases and requires baseline tightening after c
     evaluateCheck(CHECK, measured, usage).increases.some((line) => line.includes("unusedFiles")),
   );
   measured.unusedFiles.total = CHECK.baseline.unusedFiles;
-  measured.unusedExports.total -= 1;
+  const historicalCheck = {
+    ...CHECK,
+    baseline: { ...CHECK.baseline, unusedExports: 1 },
+  };
+  measured.unusedExports.total = 0;
   assert.ok(
-    evaluateCheck(CHECK, measured, usage).decreases.some((line) => line.includes("unusedExports")),
+    evaluateCheck(historicalCheck, measured, usage).decreases.some((line) =>
+      line.includes("unusedExports"),
+    ),
   );
 });
 

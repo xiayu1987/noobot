@@ -16,7 +16,7 @@ function stableStringify(value) {
   }
 }
 
-export function sha256Text(inputText = "") {
+function sha256Text(inputText = "") {
   return crypto
     .createHash("sha256")
     .update(String(inputText || ""))
@@ -41,7 +41,7 @@ export function safeError(error) {
   };
 }
 
-export function preview(value, maxChars = LENGTH_THRESHOLDS.display.harnessPreviewChars) {
+function preview(value, maxChars = LENGTH_THRESHOLDS.display.harnessPreviewChars) {
   if (value == null) return "";
   const inputText = typeof value === "string" ? value : JSON.stringify(value);
   return String(inputText || "").slice(0, Math.max(0, Number(maxChars) || 0));

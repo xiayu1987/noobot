@@ -17,13 +17,23 @@ export function requireRunLocale(runConfig) {
   return runConfig.locale;
 }
 
+function createScenarioProfile(key, definition) {
+  const tools = new Set(definition.tools);
+  if (definition.services.length) tools.add("call_service");
+  if (definition.mcpServers.length) tools.add("call_mcp_task");
+  return {
+    key,
+    model: text(definition.model),
+    tools: [...tools],
+    context: [...definition.context],
+    services: [...definition.services],
+    mcpServers: [...definition.mcpServers],
+  };
+}
+
 export class RunConfigResolver {
   constructor({ globalConfig = {} } = {}) {
     this.globalConfig = globalConfig;
-  }
-
-  normalizeStringArray(input = []) {
-    return normalizeStringList(input);
   }
 
   mergeScenarioRestrictedList({ scenarioItems = [], currentItems = [], hasWildcard = false }) {
@@ -53,13 +63,7 @@ export class RunConfigResolver {
 
   resolveScenarioRunConfig(runConfig = {}, userConfig = {}) {
     const normalizedRunConfig = isPlainObject(runConfig) ? runConfig : {};
-    const effectiveConfig = mergeConfig(
-      this.globalConfig || {},
-      isPlainObject(userConfig) ? userConfig : {},
-    );
-    const scenarioConfig = isPlainObject(effectiveConfig?.scenarios)
-      ? effectiveConfig.scenarios
-      : {};
+    const { scenarios: scenarioConfig } = mergeConfig(this.globalConfig, userConfig);
     const hasScenarioField = Object.prototype.hasOwnProperty.call(normalizedRunConfig, "scenario");
     const resolvedScenarioKey = String(
       hasScenarioField ? normalizedRunConfig?.scenario || "" : scenarioConfig?.default || "",
@@ -67,56 +71,41 @@ export class RunConfigResolver {
     if (!resolvedScenarioKey) {
       return this.normalizeRunConfigToolPolicyConflicts(normalizedRunConfig);
     }
-    const scenarioDefinitions = isPlainObject(scenarioConfig?.definitions)
-      ? scenarioConfig.definitions
-      : {};
-    const scenarioDefinition = isPlainObject(scenarioDefinitions?.[resolvedScenarioKey])
-      ? scenarioDefinitions[resolvedScenarioKey]
-      : null;
-    if (!scenarioDefinition) {
+    if (!Object.hasOwn(scenarioConfig.definitions, resolvedScenarioKey)) {
       return this.normalizeRunConfigToolPolicyConflicts({
         ...normalizedRunConfig,
         scenario: resolvedScenarioKey,
       });
     }
-    const normalizeStringArray = (value = []) => this.normalizeStringArray(value);
-    const scenarioToolNamesRaw = normalizeStringArray(scenarioDefinition?.tools);
-    const scenarioServiceItems = normalizeStringArray(scenarioDefinition?.services);
-    const scenarioMcpServerItems = normalizeStringArray(scenarioDefinition?.mcpServers);
-    const scenarioToolNameSet = new Set(scenarioToolNamesRaw);
-    if (scenarioServiceItems.length) {
-      scenarioToolNameSet.add("call_service");
-    }
-    if (scenarioMcpServerItems.length) {
-      scenarioToolNameSet.add("call_mcp_task");
-    }
-    const scenarioToolNames = Array.from(scenarioToolNameSet);
-    const scenarioContextKeys = normalizeStringArray(scenarioDefinition?.context);
-    const hasAllTools = scenarioToolNames.includes("*");
-    const hasAllContext = scenarioContextKeys.includes("*");
-    const scenarioModelName = (scenarioDefinition?.model ?? "").trim();
+    const scenarioProfile = createScenarioProfile(
+      resolvedScenarioKey,
+      scenarioConfig.definitions[resolvedScenarioKey],
+    );
     const resolvedRunConfig = {
       ...normalizedRunConfig,
       scenario: resolvedScenarioKey,
-      scenarioProfile: {
-        key: resolvedScenarioKey,
-        model: scenarioModelName,
-        tools: scenarioToolNames,
-        context: scenarioContextKeys,
-        services: scenarioServiceItems,
-        mcpServers: scenarioMcpServerItems,
-      },
+      scenarioProfile,
     };
     const requestedRuntimeModel = text(normalizedRunConfig?.runtimeModel);
     if (requestedRuntimeModel) {
       resolvedRunConfig.runtimeModel = requestedRuntimeModel;
     }
-    const toolPolicyMode = text(normalizedRunConfig?.toolPolicy?.mode).toLowerCase();
-    if (scenarioToolNames.length && !hasAllTools && toolPolicyMode !== "custom_only") {
-      const currentToolPolicy = isPlainObject(normalizedRunConfig?.toolPolicy)
-        ? normalizedRunConfig.toolPolicy
+    this.#applyScenarioToolPolicy(resolvedRunConfig, scenarioProfile.tools);
+    this.#applyScenarioContextPolicy(resolvedRunConfig, scenarioProfile.context);
+    return this.normalizeRunConfigToolPolicyConflicts(resolvedRunConfig);
+  }
+
+  #applyScenarioToolPolicy(resolvedRunConfig, scenarioToolNames) {
+    const toolPolicyMode = text(resolvedRunConfig.toolPolicy?.mode).toLowerCase();
+    if (
+      scenarioToolNames.length &&
+      !scenarioToolNames.includes("*") &&
+      toolPolicyMode !== "custom_only"
+    ) {
+      const currentToolPolicy = isPlainObject(resolvedRunConfig.toolPolicy)
+        ? resolvedRunConfig.toolPolicy
         : {};
-      const currentAllowToolNames = normalizeStringArray(currentToolPolicy?.allowToolNames);
+      const currentAllowToolNames = normalizeStringList(currentToolPolicy?.allowToolNames);
       const mergedAllowToolNames = this.mergeScenarioRestrictedList({
         scenarioItems: scenarioToolNames,
         currentItems: currentAllowToolNames,
@@ -127,21 +116,23 @@ export class RunConfigResolver {
         forceIncludeUserInteraction: false,
       };
     }
+  }
+
+  #applyScenarioContextPolicy(resolvedRunConfig, scenarioContextKeys) {
     if (scenarioContextKeys.length) {
-      const currentContextPolicy = isPlainObject(normalizedRunConfig?.contextPolicy)
-        ? normalizedRunConfig.contextPolicy
+      const currentContextPolicy = isPlainObject(resolvedRunConfig.contextPolicy)
+        ? resolvedRunConfig.contextPolicy
         : {};
-      const currentContextKeys = normalizeStringArray(currentContextPolicy?.promptSections);
+      const currentContextKeys = normalizeStringList(currentContextPolicy?.promptSections);
       const mergedContextKeys = this.mergeScenarioRestrictedList({
         scenarioItems: scenarioContextKeys,
         currentItems: currentContextKeys,
-        hasWildcard: hasAllContext,
+        hasWildcard: scenarioContextKeys.includes("*"),
       });
       resolvedRunConfig.contextPolicy = {
         ...currentContextPolicy,
         promptSections: mergedContextKeys,
       };
     }
-    return this.normalizeRunConfigToolPolicyConflicts(resolvedRunConfig);
   }
 }

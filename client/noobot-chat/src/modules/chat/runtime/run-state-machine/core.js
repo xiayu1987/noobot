@@ -4,9 +4,4 @@
  * SPDX-License-Identifier: MIT
  */
 export { createInitialSessionRunState } from "./stateSnapshot.js";
-export {
-  evaluateSessionRunState,
-  isInFlightSessionRunState,
-  isStopLockedSessionRunState,
-  isTerminalSessionRunState,
-} from "./evaluation.js";
+export { evaluateSessionRunState, isInFlightSessionRunState } from "./evaluation.js";

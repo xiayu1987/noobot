@@ -637,24 +637,27 @@ export async function createNativeScriptRuntime({
       };
     },
   });
+  const resolveMediaArgs = (commandArgs, command) => {
+    assertFixedArgs(commandArgs, command);
+    return Promise.all(
+      commandArgs.map(async (value) => {
+        if (isTaskPath(value, { kind: TASK_PATH_KINDS.INPUT }))
+          return resolveInput(parseTaskPath(value, { kind: TASK_PATH_KINDS.INPUT }).relative);
+        if (isTaskPath(value, { kind: TASK_PATH_KINDS.OUTPUT })) return resolveOutput(value);
+        if (isTaskPath(value, { kind: TASK_PATH_KINDS.TEMP }))
+          return resolveTaskPath({ token: value, roots: taskRoots, kind: TASK_PATH_KINDS.TEMP })
+            .path;
+        return value;
+      }),
+    );
+  };
   const ffmpeg = opaqueFacade({
     run: async (options) => {
       const { args: commandArgs } = requireOptionsObject(options, "ffmpeg.run({ args })");
       if (!Array.isArray(commandArgs) || commandArgs.length === 0) {
         throw new TypeError("ffmpeg.run({ args }) requires a non-empty args array");
       }
-      assertFixedArgs(commandArgs, "ffmpeg");
-      const resolvedArgs = await Promise.all(
-        commandArgs.map(async (value) => {
-          if (isTaskPath(value, { kind: TASK_PATH_KINDS.INPUT }))
-            return resolveInput(parseTaskPath(value, { kind: TASK_PATH_KINDS.INPUT }).relative);
-          if (isTaskPath(value, { kind: TASK_PATH_KINDS.OUTPUT })) return resolveOutput(value);
-          if (isTaskPath(value, { kind: TASK_PATH_KINDS.TEMP }))
-            return resolveTaskPath({ token: value, roots: taskRoots, kind: TASK_PATH_KINDS.TEMP })
-              .path;
-          return value;
-        }),
-      );
+      const resolvedArgs = await resolveMediaArgs(commandArgs, "ffmpeg");
       return runCapability(
         "ffmpeg",
         ["-nostdin", "-y", ...resolvedArgs],
@@ -671,18 +674,7 @@ export async function createNativeScriptRuntime({
       if (!Array.isArray(commandArgs) || commandArgs.length === 0) {
         throw new TypeError("ffprobe.run({ args }) requires a non-empty args array");
       }
-      assertFixedArgs(commandArgs, "ffprobe");
-      const resolvedArgs = await Promise.all(
-        commandArgs.map(async (value) => {
-          if (isTaskPath(value, { kind: TASK_PATH_KINDS.INPUT }))
-            return resolveInput(parseTaskPath(value, { kind: TASK_PATH_KINDS.INPUT }).relative);
-          if (isTaskPath(value, { kind: TASK_PATH_KINDS.OUTPUT })) return resolveOutput(value);
-          if (isTaskPath(value, { kind: TASK_PATH_KINDS.TEMP }))
-            return resolveTaskPath({ token: value, roots: taskRoots, kind: TASK_PATH_KINDS.TEMP })
-              .path;
-          return value;
-        }),
-      );
+      const resolvedArgs = await resolveMediaArgs(commandArgs, "ffprobe");
       return runCapability(
         "ffprobe",
         resolvedArgs,

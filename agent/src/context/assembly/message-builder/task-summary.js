@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { HumanMessage } from "@langchain/core/messages";
-import { normalizeUnpairedTaskSummaryToolResults } from "@noobot/context-protocol/policy/block";
 import { recoverContextTaskSummaryToolResult } from "@noobot/context-protocol/task/summary-context";
 import {
   projectContextMessageModelMetadata,
@@ -33,5 +32,3 @@ export function shouldSkipSummarizedHistoryMessage(msg = {}) {
   if (!resolveContextMessageSummarized(msg)) return false;
   return !hasCheckpointBoundaryToolCall(msg) && !isCheckpointBoundaryToolResultMessage(msg);
 }
-
-export { normalizeUnpairedTaskSummaryToolResults };

@@ -45,7 +45,7 @@ const HARNESS_FLUSH_POINTS = Object.freeze([
 
 const HARNESS_SESSION_CLEANUP_POINTS = Object.freeze([HOOK_POINT.SERVICE.AFTER_SESSION_DELETE]);
 
-export function shouldInjectPromptAtPoint(point = "", options = {}) {
+function shouldInjectPromptAtPoint(point = "", options = {}) {
   return point === HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT && options.finalResponseGuard !== false;
 }
 
@@ -56,7 +56,7 @@ function requireParentSignal(signal) {
   return signal;
 }
 
-export function createHarnessMeta({ plugin, options, parentSignal, globalBootstrap }) {
+function createHarnessMeta({ plugin, options, parentSignal, globalBootstrap }) {
   const signal = requireParentSignal(parentSignal);
   const capabilityModelInvoker = options.capabilityModelInvoker
     ? (payload = {}) =>

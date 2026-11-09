@@ -4,8 +4,4 @@
  * SPDX-License-Identifier: MIT
  */
 
-export {
-  SYSTEM_RUNTIME_COUNTER_KEYS,
-  normalizeSystemRuntimeCounterValue,
-  normalizeSystemRuntimeCounters,
-} from "@noobot/agent-config-protocol";
+export { normalizeSystemRuntimeCounters } from "@noobot/agent-config-protocol";

@@ -97,7 +97,3 @@ export function compileWorkflowSemantic(semantic = {}) {
   model.setNodeLineRLATs(rlats);
   return model;
 }
-
-export default {
-  compileWorkflowSemantic,
-};

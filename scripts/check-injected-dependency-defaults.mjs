@@ -85,7 +85,7 @@ async function measure() {
   const measurements = Object.fromEntries(
     Object.keys(RULE_FINDERS).map((rule) => [rule, emptyMeasurement()]),
   );
-  for (const file of files.map((item) => path.relative(root, item)).filter(includesFile)) {
+  for (const file of files.filter(includesFile)) {
     const source = await readFile(path.join(root, file), "utf8");
     for (const [rule, find] of Object.entries(RULE_FINDERS)) {
       for (const { line, code } of find(source, file)) {
@@ -115,7 +115,7 @@ export const CHECK = defineCheck({
   },
   exemptions: [],
   baseline: {
-    emptyDependencyBag: 88,
+    emptyDependencyBag: 86,
     optionalDependencyCall: 10,
     fetcherFallback: 0,
     exemptions: 0,

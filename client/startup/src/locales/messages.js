@@ -4,15 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { messages as clientMessages } from "noobot-i18n/client/messages";
+import { composerMessages } from "noobot-i18n/client/composer-messages";
 
 const enUS = {
-  composer: clientMessages["en-US"].composer,
+  composer: composerMessages["en-US"],
   hero: { title: "Starting Noobot", logTitle: "Startup log" },
   status: {
     checkingService: "Checking local Noobot service...",
     startingService: "Starting Noobot service...",
     serviceReady: "Noobot service is ready.",
+    healthProbeFailed: "Health check failed ({url}): {detail}",
     upgradingLayout:
       "Upgrading workspace data: user {userIndex}/{userCount}, step {upgradeIndex}/{upgradeCount}, {processedSessions} sessions processed...",
     upgradingSummaries:
@@ -88,12 +89,13 @@ const enUS = {
 };
 
 const zhCN = {
-  composer: clientMessages["zh-CN"].composer,
+  composer: composerMessages["zh-CN"],
   hero: { title: "正在启动 Noobot", logTitle: "启动日志" },
   status: {
     checkingService: "正在检查本地 Noobot 服务...",
     startingService: "正在启动 Noobot 服务...",
     serviceReady: "Noobot 服务已就绪。",
+    healthProbeFailed: "健康检查失败（{url}）：{detail}",
     upgradingLayout:
       "正在升级工作区数据：用户 {userIndex}/{userCount}，步骤 {upgradeIndex}/{upgradeCount}，已处理 {processedSessions} 个会话...",
     upgradingSummaries:

@@ -7,7 +7,7 @@ import { SESSION_ARTIFACT_TURN_TIMING_LIFECYCLE_START_SCHEMA_VERSION } from "@no
 import { isPlainObject, text } from "@noobot/shared/value";
 import { SESSION_REPAIR_ERROR_CODE } from "./errors.js";
 
-export const SESSION_TURN_TIMING_LIFECYCLE_START_MIGRATION = "turn-timing-lifecycle-start-v16";
+const SESSION_TURN_TIMING_LIFECYCLE_START_MIGRATION = "turn-timing-lifecycle-start-v16";
 
 function assertSameStart(timing, lifecycleTurn) {
   if (!lifecycleTurn) return;

@@ -87,7 +87,7 @@ export function mapDetailEntryToSession(entry, { createConnectorPanelState }) {
   return createAvailableSessionItem(detailEntry, createConnectorPanelState);
 }
 
-export function mergeExistingSessionState(mappedSession, existingSession) {
+function mergeExistingSessionState(mappedSession, existingSession) {
   if (mappedSession.isUnavailable) return mappedSession;
   return {
     ...mappedSession,

@@ -14,10 +14,6 @@ export function resolveTurnRuntimeTerminal(state = "") {
   return FRONTEND_STATE_TURN_TERMINAL[normalizeState(state)] || "";
 }
 
-export function isTurnRuntimeTerminal(value = "") {
-  return Object.values(TURN_RUNTIME_TERMINAL).includes(normalizeState(value));
-}
-
 export function resolveTurnTerminalNoticeLabelKey(value = "") {
   return TURN_TERMINAL_NOTICE_LABEL_KEY[normalizeState(value)] || "";
 }

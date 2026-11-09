@@ -26,7 +26,6 @@ const ISSUE_RULES = Object.freeze({
   nsExports: "unusedExports",
   dependencies: "unusedDependencies",
   devDependencies: "unusedDependencies",
-  optionalPeerDependencies: "unusedDependencies",
 });
 
 function measureIssueGroup(measurement, { file, type, issues }, usage) {
@@ -107,7 +106,7 @@ export const CHECK = defineCheck({
       ],
     },
   ],
-  baseline: { unusedFiles: 0, unusedExports: 76, unusedDependencies: 29, exemptions: 3 },
+  baseline: { unusedFiles: 0, unusedExports: 0, unusedDependencies: 0, exemptions: 3 },
   measure: async (usage) =>
     measureDeadCodeReport(scanDeadCode(repositoryRoot, "knip.config.mjs"), usage),
 });

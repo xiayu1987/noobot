@@ -131,16 +131,16 @@ for (const tools of [false, true]) {
         assert.equal(usage.tokens.sampleCount, 1);
         assert.equal(usage.tokens.outputTokensSum, 0);
       } else {
-        await assert.rejects(call, /Chat stream requires finish_reason/);
+        await assert.rejects(call, /Chat response requires finish_reason/);
         const firstUsage = logs.find(({ event }) => event === MODEL_REQUEST_EVENT.USAGE).data;
         assert.match(firstUsage.measurementError, /Chat response requires finish_reason/);
-        assertFailedReport(logs, 2);
+        assertFailedReport(logs, 1);
       }
     });
   }
 }
 
-test("switching Chat response mode cannot bypass the protocol completion requirement", async () => {
+test("incomplete Chat response fails without switching modes or replaying", async () => {
   const logs = [];
   const modes = [];
   const executor = executorFor(async (_url, init) => {
@@ -153,9 +153,9 @@ test("switching Chat response mode cannot bypass the protocol completion require
         )
       : Response.json(completion(null, false));
   }, logs);
-  await assert.rejects(invoke(executor, true), /Chat response requires finish_reason/);
-  assert.deepEqual(modes, [true, false]);
-  assertFailedReport(logs, 2);
+  await assert.rejects(invoke(executor, true), /Chat stream requires finish_reason/);
+  assert.deepEqual(modes, [true]);
+  assertFailedReport(logs, 1);
 });
 
 for (const invalid of ["{invalid", "null", '{"choices":[{"index":-1}]}']) {

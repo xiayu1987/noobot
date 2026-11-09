@@ -17,7 +17,6 @@ export {
   isTerminalRunState,
   MESSAGE_TERMINAL_OUTCOME,
   normalizeTerminalOutcome,
-  resolveStateTerminalOutcome,
   resolveTerminalOutcome,
 } from "./run-state-machine/terminalOutcome.js";
 export {
@@ -25,7 +24,6 @@ export {
   isStageStatusStepState,
   isTerminalStatusStepState,
   normalizeStatusStepState,
-  resolvePendingCommandStatusStep,
   resolveStatusStepLabelKey,
   resolveStatusStepStageOrdinal,
   resolveTurnTerminalStatusStep,
@@ -39,9 +37,7 @@ export {
   resolveComposerPrimaryActionLabelKey,
 } from "./run-state-machine/composerAction.js";
 export {
-  isTurnRuntimeTerminal,
   isTurnTerminalNotice,
-  resolveTurnRuntimeTerminal,
   resolveTurnTerminalNoticeLabelKey,
   TURN_RUNTIME_TERMINAL,
 } from "./run-state-machine/turnTerminal.js";

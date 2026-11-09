@@ -27,5 +27,9 @@
   },
   "peerDependencies": {
     "electron": "44.7.2"
+  },
+  "devDependencies": {
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2"
   }
 }

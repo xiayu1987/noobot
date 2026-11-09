@@ -208,10 +208,10 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
     destroy-on-close
     :append-to-body="true"
     :title="translate('workflow.nodeSessionTitle', { sessionId: selectedNodeSessionId || '' })"
-    modal-class="workflow-node-session-modal noobot-side-drawer-modal"
-    body-class="workflow-node-session-drawer__body noobot-side-drawer__body"
-    header-class="workflow-node-session-drawer__header noobot-side-drawer__header"
-    class="workflow-node-session-drawer noobot-side-drawer"
+    modal-class="workflow-node-session-modal"
+    body-class="workflow-node-session-drawer__body"
+    header-class="workflow-node-session-drawer__header"
+    class="workflow-node-session-drawer"
   >
     <el-scrollbar
       ref="messageScrollRef"
@@ -404,9 +404,45 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
 </template>
 
 <style>
+.workflow-node-session-modal {
+  background: var(--noobot-mask-bg);
+}
+
+.workflow-node-session-drawer__header {
+  background: var(--noobot-panel-head-bg);
+  border-bottom: 1px solid var(--noobot-divider);
+  margin-bottom: 0;
+  padding: var(--noobot-space-lg) var(--noobot-space-xl);
+  color: var(--noobot-text-strong);
+}
+
 .workflow-node-session-drawer__body {
   display: flex;
   flex-direction: column;
+  background: var(--noobot-panel-bg);
+  padding: var(--noobot-space-xs);
+  box-sizing: border-box;
+  overflow: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 768px) {
+  .workflow-node-session-drawer.el-drawer {
+    height: 100svh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .workflow-node-session-drawer__header {
+    flex: 0 0 auto;
+  }
+
+  .workflow-node-session-drawer__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 0;
+  }
 }
 
 .workflow-node-session-content {

@@ -18,13 +18,10 @@
     "build:mac:zip": "npm run prepare:frontend && npm run prepare:electron && npm run prepare:backend && node ../shared/scripts/run-electron-builder.js --mac zip"
   },
   "dependencies": {
-    "@noobot/client-shared": "file:../shared",
-    "@noobot/runtime-events": "file:../../runtime-events"
+    "@noobot/client-shared": "file:../shared"
   },
   "devDependencies": {
-    "electron": "44.7.2",
-    "electron-builder": "^26.15.3",
-    "esbuild": "^0.28.2"
+    "electron": "44.7.2"
   },
   "build": {
     "appId": "com.noobot.mac-client",

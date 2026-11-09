@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { HEALTH_PROBE_STATE, probeHealth } from "./health-probe.js";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
@@ -238,22 +239,15 @@ export function createDesktopServiceManager({
     return { startupContextPath, dependencyEnv, dependencySummary };
   }
 
+  const healthStates = new Map();
   async function isHealthy(url) {
-    const controller = new AbortController();
-    const timer = setTimeout(
-      () => controller.abort(),
-      TIME_THRESHOLDS.desktop.healthProbeTimeoutMs,
-    );
-    try {
-      const response = await fetchImpl(url, { signal: controller.signal });
-      if (!response.ok) return false;
-      const data = await response.json();
-      return data?.ok === true;
-    } catch {
-      return false;
-    } finally {
-      clearTimeout(timer);
+    const result = await probeHealth(url, fetchImpl);
+    throwIfStartupInterrupted();
+    if (healthStates.get(url) !== result.state) {
+      healthStates.set(url, result.state);
+      sendStatus({ phase: "service-log", message: JSON.stringify({ url, health: result.state }) });
     }
+    return result.state === HEALTH_PROBE_STATE.READY;
   }
 
   function startNoobotService() {

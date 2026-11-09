@@ -275,9 +275,6 @@ export function installEarlyDiagnostics({ app, moduleUrl, filename, dirname } = 
       `[app:event] child-process-gone type=${details?.type || ""} reason=${details?.reason || ""} exitCode=${details?.exitCode ?? ""}`,
     );
   });
-  app.on("gpu-process-crashed", (_event, killed) =>
-    appendEarlyLog(`[app:event] gpu-process-crashed killed=${killed}`),
-  );
 
   setTimeout(() => {
     appendEarlyLog(

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
-import { I18N_TEXT as HARNESS_I18N_TEXT, LOCALE as HARNESS_LOCALE } from "../../../i18n.js";
+import { LOCALE as HARNESS_LOCALE } from "../../../i18n.js";
 
 export const LLM_SUMMARY_OVERFLOW_POLICY = Object.freeze({
   FORCE_ACCEPTANCE_WHEN_STILL_OVERFLOW:
@@ -43,13 +43,10 @@ export const PROMPT_ENVELOPE = Object.freeze({
 export const HARNESS_INJECTION_MESSAGE_ROLE = "system";
 export const HARNESS_INJECTED_MESSAGE_BY_VALUE = "harness-plugin";
 
-export const I18N_TEXT = HARNESS_I18N_TEXT;
-
 export const BLOCKED_AGENT_TOOL_NAMES = new Set([
   ...WORKFLOW_PARAMS.acceptance.guards.blockedAgentToolNames,
 ]);
 
-export const GUIDANCE_WEB_TOOL_NAMES = [...WORKFLOW_PARAMS.guidance.web.toolNames];
 export const TASK_ACCEPTANCE_TOOL_NAME = WORKFLOW_PARAMS.acceptance.tools.taskAcceptanceToolName;
 export const PLAN_REFINEMENT_TOOL_NAME = WORKFLOW_PARAMS.planning.tools.planRefinementToolName;
 

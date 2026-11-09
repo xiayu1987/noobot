@@ -35,7 +35,7 @@ const MESSAGE_IDENTITY_FIELDS = Object.freeze([
   "parentDialogProcessId",
 ]);
 
-function normalizeAttachment(attachmentItem = {}, { userId = "" } = {}) {
+function normalizeAttachment(attachmentItem, { userId }) {
   const attachmentAccess = resolveAttachmentAccessMeta(attachmentItem, { userId });
   const attachmentId = attachmentAccess.attachmentId;
   const mimeType = String(attachmentItem?.mimeType || "application/octet-stream");
@@ -111,5 +111,4 @@ export {
   getMessageAttachments,
   findVisibleLastMessage,
   isPluginInjectedMessage,
-  isWorkflowMessageLike,
 };

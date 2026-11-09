@@ -6,7 +6,7 @@
 import { FrontendRunState } from "./constants.js";
 import { normalizeState } from "./normalize.js";
 
-export function isTerminalSessionRunState(state = "") {
+function isTerminalSessionRunState(state = "") {
   return normalizeState(state) === FrontendRunState.IDLE;
 }
 
@@ -19,7 +19,7 @@ export function isInFlightSessionRunState(state = "") {
   ].includes(normalizeState(state));
 }
 
-export function isStopLockedSessionRunState(state = "") {
+function isStopLockedSessionRunState(state = "") {
   return normalizeState(state) === FrontendRunState.USER_STOPPING;
 }
 

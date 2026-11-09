@@ -7,7 +7,8 @@ import {
   MODEL_INPUT_PROCESSING_KIND,
   classifyModelInputProcessing,
 } from "../model/model-input-processing.js";
-import { text, isPlainObject } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
+import { requirePlainObject, rejectUnknownKeys } from "../validation/object.js";
 import { normalizeGeneratedMediaArtifact } from "./generated-media.js";
 import {
   normalizeGenerationImageUrls,
@@ -27,20 +28,6 @@ export const MODEL_WEB_SEARCH_INSTRUCTION =
   "Search the web before answering. Answer only from the search results.";
 
 const OPERATION_KINDS = new Set(Object.values(MODEL_OPERATION_KIND));
-
-function requirePlainObject(value, path) {
-  if (!isPlainObject(value)) {
-    throw new TypeError(`${path} must be an object`);
-  }
-  return value;
-}
-
-function rejectUnknownKeys(value, allowedKeys, path) {
-  const allowed = new Set(allowedKeys);
-  const unknown = Object.keys(value).filter((key) => !allowed.has(key));
-  if (unknown.length)
-    throw new TypeError(`${path} contains unsupported fields: ${unknown.join(", ")}`);
-}
 
 function requireText(value, path) {
   const normalizedText = text(value);

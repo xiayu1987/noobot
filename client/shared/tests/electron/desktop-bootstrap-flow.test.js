@@ -217,16 +217,20 @@ test("desktop boot flow reaches system after startup setup, config params, servi
         statuses.map((status) => status.phase),
         [
           "checking",
+          "service-log",
           "super-admin-required",
           "config-optional",
           "starting",
           "dependency",
           "starting",
+          "service-log",
           "ready",
           "starting",
           "config",
           "config",
+          "service-log",
           "starting",
+          "service-log",
           "ready",
           "loading",
         ],
@@ -312,7 +316,7 @@ test("desktop startup offers missing dependencies even when the service is alrea
   assert.equal(dependencyRequestCount, 1);
   assert.deepEqual(
     statuses.map((status) => status.phase),
-    ["checking", "ready"],
+    ["checking", "service-log", "ready"],
   );
 });
 

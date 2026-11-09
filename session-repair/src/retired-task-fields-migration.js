@@ -5,7 +5,7 @@
  */
 import { SESSION_ARTIFACT_RETIRED_TASK_FIELDS_SCHEMA_VERSION } from "@noobot/session-protocol";
 
-export const SESSION_RETIRED_TASK_FIELDS_MIGRATION = "retired-task-fields-v18";
+const SESSION_RETIRED_TASK_FIELDS_MIGRATION = "retired-task-fields-v18";
 
 const RETIRED_SESSION_FIELDS = Object.freeze(["currentTaskId"]);
 const RETIRED_MESSAGE_FIELDS = Object.freeze(["taskId", "taskStatus"]);

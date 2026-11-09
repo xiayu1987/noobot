@@ -17,7 +17,7 @@ function readOverlayDepth(state) {
   return Number.isInteger(depth) && depth > 0 ? depth : 0;
 }
 
-export function handleOverlayPopState(event) {
+function handleOverlayPopState(event) {
   const depth = readOverlayDepth(event?.state);
   while (openOverlays.length && openOverlays[openOverlays.length - 1].depth > depth) {
     openOverlays.pop().close();
@@ -30,7 +30,7 @@ function ensureOverlayPopStateListener() {
   popStateListening = true;
 }
 
-export function openOverlayEntry(close = () => {}, { route = "" } = {}) {
+function openOverlayEntry(close = () => {}, { route = "" } = {}) {
   if (typeof window === "undefined" || typeof history === "undefined") return () => {};
   ensureOverlayPopStateListener();
   const currentState = history.state && typeof history.state === "object" ? history.state : {};

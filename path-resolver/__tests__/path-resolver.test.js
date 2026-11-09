@@ -489,6 +489,48 @@ test("path authorization accepts only resolved policy and enforces read-only acc
   );
 });
 
+test("path authorization rejects inherited capability names as unknown", () => {
+  for (const capability of ["__proto__", "constructor", "toString", "unknown"]) {
+    assert.throws(
+      () =>
+        authorizePathRef({
+          pathRef: resolvePathRef({ input: "report.txt" }),
+          capability,
+        }),
+      { message: `unknown path capability: ${capability}` },
+    );
+  }
+});
+
+test("path authorization keeps view and owner rejections ahead of path scope checks", () => {
+  const pathPolicy = resolvePathPolicy();
+  const cases = [
+    {
+      pathRef: { view: "host", path: "/data/report.txt" },
+      capability: "script.input",
+      executionPath: "relative",
+      code: "path_view_not_accepted",
+    },
+    {
+      pathRef: { view: "workspace", path: "report.txt", owner: "other" },
+      capability: "file.write",
+      executionPath: "/outside/report.txt",
+      workspaceRoot: "/workspace/u1",
+      code: "workspace_owner_not_authorized",
+    },
+  ];
+  for (const { code, ...input } of cases) {
+    const result = authorizePathRef({ ...input, pathPolicy, principal: { userId: "u1" } });
+    assert.deepEqual(result, {
+      allowed: false,
+      code,
+      pathRef: input.pathRef,
+      capability: input.capability,
+    });
+    assert.equal(Object.isFrozen(result), true);
+  }
+});
+
 test("path authorization defaults to the built-in policy when callers omit it", () => {
   const result = authorizePathRef({
     pathRef: resolvePathRef({

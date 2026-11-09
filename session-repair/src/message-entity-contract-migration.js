@@ -12,7 +12,7 @@ import {
 import { text } from "@noobot/shared/value";
 import { SESSION_REPAIR_ERROR_CODE } from "./errors.js";
 
-export const SESSION_MESSAGE_ENTITY_CONTRACT_MIGRATION = "message-entity-contract-v17";
+const SESSION_MESSAGE_ENTITY_CONTRACT_MIGRATION = "message-entity-contract-v17";
 
 function unmigratable(context, message, reason) {
   return Object.assign(

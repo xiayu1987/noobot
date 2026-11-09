@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { randomUUID } from "node:crypto";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { createEventStreamParser } from "@noobot/shared/event-stream";
 import {
   MODEL_REQUEST_EVENT,
@@ -18,6 +19,19 @@ import {
 import { normalizeProviderUsage } from "../normalization/usage-normalizer.js";
 import { responseMediaType } from "../adapters/response-mode.js";
 
+function commonBodyPrefixBytes(current, previous) {
+  const blockBytes = LENGTH_THRESHOLDS.modelMeasurement.prefixCompareBlockBytes;
+  const limit = Math.min(current.length, previous.length);
+  let offset = 0;
+  while (offset + blockBytes <= limit) {
+    const end = offset + blockBytes;
+    if (current.compare(previous, offset, end, offset, end) !== 0) break;
+    offset = end;
+  }
+  while (offset < limit && current[offset] === previous[offset]) offset += 1;
+  return offset;
+}
+
 function measurePrefix(previousBodies, scope, body) {
   if (typeof body !== "string") {
     previousBodies.delete(scope);
@@ -25,12 +39,7 @@ function measurePrefix(previousBodies, scope, body) {
   }
   const current = Buffer.from(body, "utf8");
   const previous = previousBodies.get(scope);
-  let commonPrefixBytes = 0;
-  if (previous) {
-    const limit = Math.min(current.length, previous.length);
-    while (commonPrefixBytes < limit && current[commonPrefixBytes] === previous[commonPrefixBytes])
-      commonPrefixBytes += 1;
-  }
+  const commonPrefixBytes = previous ? commonBodyPrefixBytes(current, previous) : 0;
   previousBodies.set(scope, current);
   return {
     state: "reported",

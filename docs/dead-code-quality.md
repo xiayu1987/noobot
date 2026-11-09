@@ -46,9 +46,9 @@ EN: The check uses the existing `defineCheck`, measurements, exemption usage tra
 | `unusedDependencies`                        |           30 |
 | `exemptions`                                |            3 |
 
-EN: After reviewing imports, dynamic loaders and package exports, 16 unused production files were removed, along with three unused exports. The current baseline is **0 files, 119 exports, 30 dependencies and 3 exemptions**. Remaining findings require consumer verification before removal. As with the existing count baselines, exchanging an old finding for a new one with the same total is not detected by the count alone.
+EN: The authoritative current baseline and scoped exemptions are defined in [`CHECK` in `scripts/check-dead-code.mjs`](../scripts/check-dead-code.mjs). Run `npm run check:dead-code` for current measurements. As with the existing count baselines, exchanging an old finding for a new one with the same total is not detected by the count alone.
 
-中文：核对 import、动态加载与包公开入口后，已删除 16 个未引用生产文件及 3 个闲置导出。当前基线为 **0 文件、119 导出、30 依赖、3 豁免**。剩余告警须核实消费者后清理。与现有计数基线一致，旧问题减少、新问题增加且总量不变的情况，仅靠计数不能识别。
+中文：当前基线及限定范围的豁免以 [`scripts/check-dead-code.mjs` 的 `CHECK`](../scripts/check-dead-code.mjs) 为唯一事实源，实时测量运行 `npm run check:dead-code`。与现有计数基线一致，旧问题减少、新问题增加且总量不变的情况，仅靠计数不能识别。
 
 EN: The three dependency exemptions match only `connector-instances/package.json` entries for `mysql2`, `pg` and `ssh2`. Their channel implementations pass package names to `loadDriverModule`, which dynamically imports a variable. The same names in another package are not exempted.
 

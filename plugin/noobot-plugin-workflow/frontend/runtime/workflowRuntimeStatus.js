@@ -28,10 +28,6 @@ export function resolveWorkflowNodeStatusLabelKey(item = {}) {
   return STATUS_LABEL_KEYS[resolveWorkflowNodeStatus(item)];
 }
 
-export function isWorkflowNodeFinished(item = {}) {
-  return isWorkflowNodeTerminalStatus(resolveWorkflowNodeStatus(item));
-}
-
 export function resolveActionRuntimeStatus(actionNodeStates = []) {
   const statuses = [];
   for (const stateBox of Array.isArray(actionNodeStates) ? actionNodeStates : []) {

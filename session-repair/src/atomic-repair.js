@@ -8,8 +8,8 @@ import { cp, rename, rm } from "node:fs/promises";
 import { isFunction } from "@noobot/shared/value";
 import { SESSION_REPAIR_ERROR_CODE } from "./errors.js";
 
-export const SESSION_REPAIR_STAGING_MARKER = ".repair-staging-";
-export const SESSION_REPAIR_BACKUP_MARKER = ".repair-backup-";
+const SESSION_REPAIR_STAGING_MARKER = ".repair-staging-";
+const SESSION_REPAIR_BACKUP_MARKER = ".repair-backup-";
 
 export function isSessionRepairTempDirectoryName(name) {
   return (

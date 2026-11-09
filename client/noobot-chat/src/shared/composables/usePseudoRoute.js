@@ -7,7 +7,7 @@ import { ref } from "vue";
 import { text, isObjectLike } from "@noobot/shared/value";
 
 const PSEUDO_ROUTE_SESSION_KEY = "session";
-export const PSEUDO_ROUTE_PANEL_KEY = "panel";
+const PSEUDO_ROUTE_PANEL_KEY = "panel";
 const PSEUDO_ROUTE_TURN_KEY = "turn";
 
 export const PSEUDO_PANEL = Object.freeze({

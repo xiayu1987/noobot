@@ -10,7 +10,7 @@ import {
 import { validateProtocolEvent } from "@noobot/event-protocol";
 import { text } from "@noobot/shared/value";
 
-export function validateDataPlaneEvent(eventName, data) {
+function validateDataPlaneEvent(eventName, data) {
   const normalizedEventName = text(eventName);
   if (hasAgentTransportNonEnvelopePayloadContract(normalizedEventName)) {
     return validateAgentTransportNonEnvelopePayload(normalizedEventName, data);

@@ -76,7 +76,7 @@ const formContractFiles = [
   },
 ];
 const iconButtonContract = {
-  filePath: path.join(projectRoot, "src/shared/styles/components/buttons.css"),
+  filePath: path.join(repoRoot, "client/shared/styles/integrations/element-plus-buttons.css"),
   rules: [
     {
       label: "shared icon button shape",
@@ -128,6 +128,31 @@ function getStyleRegions(filePath, source) {
 function inspectEmptyStyleRules(filePath, source) {
   for (const region of getStyleRegions(filePath, source)) {
     inspectEmptyStyleRegion(filePath, source, region);
+  }
+}
+
+function inspectSharedButtonRules(filePath, source) {
+  if (isInside(path.join(repoRoot, "client/shared/styles/integrations"), filePath)) return;
+  for (const region of getStyleRegions(filePath, source)) {
+    inspectSharedButtonRegion(filePath, source, region);
+  }
+}
+
+function inspectSharedButtonRegion(filePath, source, region) {
+  for (const match of region.source.matchAll(/(?:^|})\s*([^{}]+)\{/g)) {
+    const selectors = match[1].replace(/\/\*[\s\S]*?\*\//g, "").split(",");
+    if (
+      !selectors.some((selector) =>
+        /^(?:\.el-button(?:--[\w-]+)?|\.noobot-action-btn|\.noobot-icon-button)(?::[\w-]+(?:\([^)]*\))?)*$/.test(
+          selector.trim(),
+        ),
+      )
+    )
+      continue;
+    const lineNumber = source.slice(0, region.offset + match.index).split(/\r?\n/).length;
+    violations.push(
+      `${path.relative(repoRoot, filePath)}:${lineNumber}: global button rules must be maintained in client/shared/styles/integrations`,
+    );
   }
 }
 
@@ -297,6 +322,7 @@ function inspectFile(filePath) {
     inspectSpacing(filePath, source);
     inspectResponsiveBreakpoints(filePath, source);
     inspectFixedLayers(filePath, source);
+    inspectSharedButtonRules(filePath, source);
   } else if (typographyTemplateFiles.includes(filePath)) {
     inspectTypography(filePath, source);
   }

@@ -4,6 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 export default {
+  modelMeasurement: {
+    prefixCompareBlockBytes: {
+      name: "Request prefix comparison block",
+      description: "Bytes compared per block before locating the first differing byte.",
+    },
+  },
   runtimeEvents: {
     maxFileBytes: {
       name: "Runtime event file size limit",

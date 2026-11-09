@@ -30,6 +30,9 @@ export function createDesktopBootstrap({
         phase: "error",
         retryable: true,
         message: error?.message || String(error),
+        ...(error?.messageKey
+          ? { messageKey: error.messageKey, messageParams: error.messageParams }
+          : {}),
         healthUrl,
         clientUrl: defaultClientUrl,
       });

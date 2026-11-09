@@ -17,9 +17,6 @@
     "pm2:logs": "PM2_HOME=../.pm2 npx pm2 logs noobot-model-proxy",
     "pm2:list": "PM2_HOME=../.pm2 npx pm2 list"
   },
-  "devDependencies": {
-    "nodemon": "^3.1.14"
-  },
   "dependencies": {
     "@noobot/shared": "file:../shared",
     "@noobot/sanitize": "file:../sanitize",

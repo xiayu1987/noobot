@@ -10,11 +10,7 @@ import {
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
 
-export function sendUpgradeError(
-  socket,
-  statusCode = HTTP_STATUS.UNAUTHORIZED,
-  message = "Unauthorized",
-) {
+function sendUpgradeError(socket, statusCode = HTTP_STATUS.UNAUTHORIZED, message = "Unauthorized") {
   if (!socket.writable) return;
   socket.write(
     `HTTP/1.1 ${statusCode} ${message}\r\nConnection: close\r\nContent-Type: text/plain\r\nContent-Length: ${Buffer.byteLength(message)}\r\n\r\n${message}`,

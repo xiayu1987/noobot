@@ -18,7 +18,6 @@
   },
   "dependencies": {
     "@noobot/agent-transport-protocol": "file:../agent-transport-protocol",
-    "@noobot/authoritative-state": "file:../authoritative-state",
     "@noobot/session-protocol": "file:../session-protocol",
     "ws": "^8.22.0",
     "noobot-i18n": "file:../i18n",

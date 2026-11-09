@@ -9,7 +9,7 @@ export class ModelProtocolError extends Error {
     message,
     {
       code = MODEL_ERROR_CODE.PROTOCOL,
-      kind = MODEL_ERROR_KIND.UNKNOWN,
+      kind = MODEL_ERROR_KIND.PROTOCOL,
       retryable = false,
       cause,
       details = {},

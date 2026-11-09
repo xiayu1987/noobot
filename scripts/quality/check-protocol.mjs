@@ -9,8 +9,8 @@ import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { isFunction } from "@noobot/shared/value";
 
-export const EXEMPTION_BASELINE_KEY = "exemptions";
-export const STALE_EXEMPTION_KEY = "staleExemptions";
+const EXEMPTION_BASELINE_KEY = "exemptions";
+const STALE_EXEMPTION_KEY = "staleExemptions";
 const SPEC_KEYS = new Set(["id", "description", "rules", "exemptions", "baseline", "measure"]);
 const RULE_KEYS = new Set(["description", "hint"]);
 const EXEMPTION_KEYS = new Set(["id", "kind", "rules", "reason", "match"]);
@@ -164,7 +164,7 @@ export const NO_EXEMPTIONS = Object.freeze({
   exemptsEvery: () => false,
 });
 
-export function countExemptions(check) {
+function countExemptions(check) {
   return check.exemptions.reduce((total, exemption) => total + exemption.match.length, 0);
 }
 
@@ -206,7 +206,7 @@ function reportedSamples(samples) {
   return hidden > 0 ? [...shown, `  ... and ${hidden} more`] : shown;
 }
 
-export function topFiles(files, limit = TOP_FILE_LIMIT) {
+function topFiles(files, limit = TOP_FILE_LIMIT) {
   return Object.entries(files)
     .sort(
       ([leftFile, left], [rightFile, right]) => right - left || leftFile.localeCompare(rightFile),
@@ -278,7 +278,7 @@ export function formatCheckResult(check, result, scriptPath) {
   };
 }
 
-export async function runCheck(check, moduleUrl) {
+async function runCheck(check, moduleUrl) {
   const scriptPath = path.relative(repositoryRoot, fileURLToPath(moduleUrl));
   const usage = createExemptionUsage(check);
   const result = evaluateCheck(check, await check.measure(usage), usage);

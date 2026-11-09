@@ -11,6 +11,7 @@ const MODE_INDEPENDENT_ERROR_KINDS = new Set([
   MODEL_ERROR_KIND.AUTHENTICATION,
   MODEL_ERROR_KIND.RATE_LIMIT,
   MODEL_ERROR_KIND.CLASSIFICATION,
+  MODEL_ERROR_KIND.PROTOCOL,
 ]);
 
 export function streamingProviderCacheKey({ model = {}, operation = {}, tools = [] } = {}) {

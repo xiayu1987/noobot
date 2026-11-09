@@ -11,7 +11,6 @@ import {
   normalizeGeneratedMediaArtifact,
   resolveModelGenerationApiType,
   requireModelGenerationSize,
-  describeImageGenerationSizes,
 } from "../src/index.js";
 
 function operation(outputType, options = {}) {
@@ -84,7 +83,7 @@ test("generation API selection has one explicit model declaration without legacy
   }
 });
 
-test("image size validation and tool guidance share the selected API contract", () => {
+test("image size validation follows the selected API contract", () => {
   const contracts = [
     ["openai_images", ["auto", "1024x1024"], ["1:1", "0x1024", "2K"]],
     ["xai_images", ["1:1", "16:9"], ["auto", "1024x1024", "0:1"]],
@@ -93,7 +92,6 @@ test("image size validation and tool guidance share the selected API contract", 
     ["dashscope_multimodal", ["1024x1024", "1024*1024", "2K"], ["auto", "1:1", "0x1"]],
   ];
   for (const [apiType, valid, invalid] of contracts) {
-    assert.ok(describeImageGenerationSizes().includes(apiType));
     for (const size of valid)
       assert.doesNotThrow(() => requireModelGenerationSize(apiType, operation("image", { size })));
     for (const size of invalid)

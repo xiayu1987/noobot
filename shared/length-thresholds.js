@@ -59,6 +59,9 @@ const LENGTH_TIERS = deepFreeze({
 });
 
 export const DEFAULT_LENGTH_THRESHOLDS = deepFreeze({
+  modelMeasurement: {
+    prefixCompareBlockBytes: 4 * KiB,
+  },
   runtimeEvents: {
     maxFileBytes: 5 * 1024 * 1024,
   },

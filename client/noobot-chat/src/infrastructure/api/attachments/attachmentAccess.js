@@ -48,7 +48,7 @@ function buildAccessUrl(identity, userId) {
   return buildAttachmentUrl({ userId, ...identity });
 }
 
-export function resolveAttachmentAccessMeta(attachmentItem = {}, { userId = "" } = {}) {
+export function resolveAttachmentAccessMeta(attachmentItem, { userId }) {
   const identity = projectAttachmentIdentity(attachmentItem);
   return {
     ...identity,

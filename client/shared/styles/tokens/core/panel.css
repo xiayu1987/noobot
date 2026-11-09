@@ -25,7 +25,6 @@
   --noobot-panel-muted: var(--noobot-surface-soft);
   --noobot-overlay-border: var(--noobot-panel-border);
   --noobot-overlay-outline: color-mix(in srgb, var(--noobot-base-white) 46%, transparent);
-  --noobot-input-ring: 0 0 0 1px var(--noobot-panel-border);
   --noobot-attachment-hover-bg: var(--noobot-surface-soft-hover);
   --noobot-attachment-hover-border: color-mix(
     in srgb,

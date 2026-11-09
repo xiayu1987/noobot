@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { summarizeDebugMessage, summarizeDebugMessages } from "./resendDebugLogger.js";
 import { acceptsDebugSink, emitLazyDebugSafely } from "./lazyDebugSink.js";
 
 let sessionLogSink = null;
@@ -12,8 +11,6 @@ let sessionLogSink = null;
 export function setStopDebugLogSink(sink = null) {
   sessionLogSink = acceptsDebugSink(sink) ? sink : null;
 }
-
-export { summarizeDebugMessage, summarizeDebugMessages };
 
 export function logStopDebug(phase, payload = {}) {
   return emitLazyDebugSafely(sessionLogSink, "stop", phase, payload);

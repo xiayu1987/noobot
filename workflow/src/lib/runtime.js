@@ -222,12 +222,3 @@ export function advanceWorkflowInstanceById({ instanceId, action }) {
 export function releaseWorkflowInstance({ instanceId }) {
   WORKFLOW_INSTANCE_STORE.delete(requireWorkflowInstanceRecord(instanceId).instanceId);
 }
-
-export default {
-  startWorkflowInstance,
-  startWorkflowInstanceById,
-  getWorkflowInstanceSnapshot,
-  resolveWorkflowUpstreamActionSteps,
-  advanceWorkflowInstanceById,
-  releaseWorkflowInstance,
-};

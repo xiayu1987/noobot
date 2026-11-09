@@ -9,11 +9,7 @@ import { isCanonicalText } from "@noobot/shared/value";
 
 const TURN_KEY_PREFIX = "__turn__";
 
-export function createTurnIdentity({
-  sessionId = "",
-  turnScopeId = "",
-  dialogProcessId = "",
-} = {}) {
+function createTurnIdentity({ sessionId = "", turnScopeId = "", dialogProcessId = "" } = {}) {
   const identity = Object.freeze({
     sessionId,
     turnScopeId,

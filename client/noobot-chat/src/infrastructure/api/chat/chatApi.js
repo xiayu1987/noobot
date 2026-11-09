@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { createSessionCommand, SESSION_COMMAND } from "@noobot/session-protocol";
+import { projectAttachmentAccessRequest } from "@noobot/attachment-protocol";
 import { WORKSPACE_FILE_ROUTE } from "@noobot/shared/resource-access";
 import { FILE_TRACE_ID_HEADER } from "@noobot/shared/runtime-events-config";
 import { text } from "@noobot/shared/value";
@@ -40,23 +41,11 @@ function runFileFetch(fetcher, path, { traceId = "", query = {}, signal } = {}) 
   );
 }
 
-export function buildAttachmentUrl({
-  userId = "",
-  attachmentId = "",
-  sessionId = "",
-  attachmentSource = "",
-}) {
-  const normalizedUserIdValue = text(userId);
-  const normalizedAttachmentIdValue = text(attachmentId);
-  if (!normalizedUserIdValue || !normalizedAttachmentIdValue) return "";
-  const normalizedUserId = encodeURIComponent(normalizedUserIdValue);
-  const normalizedAttachmentId = encodeURIComponent(normalizedAttachmentIdValue);
-  const queryParams = [];
-  if (sessionId) queryParams.push(`sessionId=${encodeURIComponent(text(sessionId))}`);
-  if (attachmentSource)
-    queryParams.push(`attachmentSource=${encodeURIComponent(text(attachmentSource))}`);
-  const query = queryParams.length ? `?${queryParams.join("&")}` : "";
-  return `/api/internal/attachment/${normalizedUserId}/${normalizedAttachmentId}${query}`;
+export function buildAttachmentUrl(request) {
+  const { userId, attachmentId, sessionId, attachmentSource } =
+    projectAttachmentAccessRequest(request);
+  const query = buildQueryString({ sessionId, attachmentSource });
+  return `/api/internal/attachment/${encodeURIComponent(userId)}/${encodeURIComponent(attachmentId)}?${query}`;
 }
 
 export async function connectApi({ userId = "", connectCode = "", locale = "" }) {

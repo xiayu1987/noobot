@@ -6,6 +6,7 @@
 export default {
   installers: "Installers",
   modelProxy: "Model proxy",
+  modelMeasurement: "Model request measurements",
   model: "Model calls",
   hooks: "Hooks",
   fileMutation: "File mutation",

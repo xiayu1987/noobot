@@ -130,8 +130,7 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       },
       size: {
         key: "tools.multimodal.fieldSize",
-        text: (params = {}) =>
-          `Optional image size; obey the selected API contract. Configured default: ${text(params.model)}.`,
+        text: "Image size; must follow the selected model's API contract.",
       },
     },
     texts: {

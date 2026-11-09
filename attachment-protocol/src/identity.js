@@ -36,6 +36,13 @@ export function projectAttachmentIdentity(value) {
     attachmentSource: source.attachmentSource,
   });
 }
+export function projectAttachmentAccessRequest(value) {
+  const source = requirePlainObject(value, "invalid_attachment_access_request");
+  return freezeDefined({
+    userId: requireNonEmptyString(source.userId, "invalid_attachment_access_user_id"),
+    ...projectAttachmentIdentity(source),
+  });
+}
 export function attachmentIdentityKey(value) {
   const i = parseAttachmentIdentity(value);
   return JSON.stringify([i.sessionId, i.attachmentSource, i.attachmentId]);

@@ -112,8 +112,7 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       },
       size: {
         key: "tools.multimodal.fieldSize",
-        text: (params = {}) =>
-          `图片尺寸可选，须符合所选 API 契约。配置默认模型：${text(params.model)}。`,
+        text: "图片尺寸，须符合所选模型的 API 契约。",
       },
     },
     texts: {

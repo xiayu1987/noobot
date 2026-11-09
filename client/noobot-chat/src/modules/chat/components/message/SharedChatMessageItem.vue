@@ -604,7 +604,6 @@ function toggleAssistantContent() {
               v-for="attachmentItem in artifactAttachments"
               :key="`attachment:${getAttachmentRenderKey(attachmentItem)}`"
               :attachment-item="attachmentItem"
-              :user-id="userId"
               :thumbnail-url="attachmentItem.thumbnailUrl || attachmentItem.previewUrl || ''"
               :is-image-mime="isImageMime"
               :can-preview-attachment="canPreviewAttachment"

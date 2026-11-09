@@ -23,7 +23,7 @@ export function nowIso() {
   return new Date(nowMs()).toISOString();
 }
 
-export function parseTimeMs(value) {
+function parseTimeMs(value) {
   if (value === null || value === undefined || value === "") return 0;
   if (typeof value === "number")
     return Number.isFinite(value) && value > 0 ? normalizeEpochMs(value) : 0;

@@ -6,7 +6,7 @@
 import { createFileAccessTraceId } from "./path-utils.js";
 import { saveFileBlob } from "../../../../../infrastructure/downloads/fileDownloadService.js";
 
-export function logFileAccess(event, payload = {}) {
+function logFileAccess(event, payload = {}) {
   try {
     const entry = {
       layer: "client.messagePreview",

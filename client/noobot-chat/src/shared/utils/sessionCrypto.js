@@ -9,10 +9,6 @@ function textToBytes(inputText = "") {
   return new TextEncoder().encode(String(inputText || ""));
 }
 
-function bytesToText(bytes = new Uint8Array()) {
-  return new TextDecoder().decode(bytes);
-}
-
 function xorBytes(data = new Uint8Array(), key = new Uint8Array()) {
   if (!data?.length || !key?.length) return new Uint8Array();
   const out = new Uint8Array(data.length);
@@ -29,14 +25,6 @@ function bytesToBase64(bytes = new Uint8Array()) {
   return btoa(binary);
 }
 
-function base64ToBytes(base64 = "") {
-  const binary = atob(String(base64 || ""));
-  const out = new Uint8Array(binary.length);
-  for (let byteIndex = 0; byteIndex < binary.length; byteIndex += 1)
-    out[byteIndex] = binary.charCodeAt(byteIndex);
-  return out;
-}
-
 export function encryptPayloadBySessionId(payload = {}, sessionId = "") {
   const sid = text(sessionId);
   if (!sid) throw new Error("sessionId required for encryption");
@@ -44,17 +32,4 @@ export function encryptPayloadBySessionId(payload = {}, sessionId = "") {
   const source = textToBytes(plainText);
   const key = textToBytes(sid);
   return bytesToBase64(xorBytes(source, key));
-}
-
-export function decryptPayloadBySessionId(cipherText = "", sessionId = "") {
-  const sid = text(sessionId);
-  if (!sid) throw new Error("sessionId required for decryption");
-  const source = base64ToBytes(String(cipherText || ""));
-  const key = textToBytes(sid);
-  const textValue = bytesToText(xorBytes(source, key));
-  try {
-    return JSON.parse(textValue);
-  } catch {
-    return textValue;
-  }
 }

@@ -1,24 +1,3 @@
-button,
-.el-button {
-  overflow: hidden;
-  isolation: isolate;
-}
-
-.noobot-action-btn {
-  border-radius: var(--noobot-btn-radius);
-  font-weight: var(--noobot-btn-font-weight);
-  transition: var(--noobot-btn-transition);
-}
-
-.noobot-action-btn:disabled {
-  opacity: var(--noobot-btn-disabled-opacity);
-}
-
-.noobot-action-btn:not(:disabled):hover,
-.noobot-action-btn:not(:disabled):active {
-  transform: none;
-}
-
 .noobot-sticky-actions {
   position: sticky;
   bottom: 0;
@@ -113,16 +92,6 @@ button,
   border: 1px solid color-mix(in srgb, var(--noobot-accent) 24%, transparent);
   background: var(--noobot-panel-bg);
   color: var(--noobot-text-accent);
-}
-
-.noobot-icon-button,
-.el-button.noobot-icon-button {
-  border-radius: var(--noobot-radius-circle);
-  aspect-ratio: 1;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .noobot-icon-button.noobot-flat-icon-btn,
@@ -272,24 +241,4 @@ button,
 .noobot-tail-btn:hover:not(:disabled) {
   background: var(--noobot-panel-muted);
   border-color: transparent;
-}
-
-.el-button {
-  border-radius: var(--noobot-btn-radius);
-  min-height: var(--noobot-control-height-sm);
-  transition: var(--noobot-transition-colors);
-}
-
-.el-button:not(:disabled):hover {
-  transform: none;
-  filter: none;
-}
-
-.el-button--primary {
-  border: none;
-  background: var(--noobot-btn-primary-bg);
-}
-
-.el-button--primary:not(:disabled):hover {
-  background: var(--noobot-btn-primary-bg-hover);
 }

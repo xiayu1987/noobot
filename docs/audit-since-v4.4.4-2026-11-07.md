@@ -1,5 +1,82 @@
 # v4.4.4 以来改动审核（2026-11-07）
 
+## 整改复验（2026-11-09，A1–A4 / S1–S3 / V1–V2）
+
+本节承接下方增量审核。用户已授权修复全部问题；下文“尚未修复”“待明确”保留为审核时的历史记录，当前状态以本节为准。本轮修改尚未提交。
+
+| 编号 | 修复结果与权威归属                                                                                                                                                                                                                                                         | 验证依据                                                                                                                                                                                                    |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A1   | 工具 schema 删除默认模型解析，只消费静态结构与本地化说明。默认模型错配在操作执行期通过 `diagnoseModelReference` 返回明确诊断，不阻断工具构造或显式选择合法模型。                                                                                                           | `agent/__tests__/tools/multimodal-generate-tool.test.js` 覆盖错配时双语 schema 构造、默认操作拒绝且不发请求、显式合法模型成功。                                                                             |
+| A2   | 删除工具层尺寸校验及 API 类型解析，尺寸规则唯一归属 model-protocol，由 model-runtime 执行边界校验。                                                                                                                                                                        | 生成工具回归、`model-runtime/__tests__/native-generation.test.js` 和协议尺寸用例通过。                                                                                                                      |
+| A3   | 删除全 API 英文规则拼接与无消费方的 `describeImageGenerationSizes`，字段说明改为简短双语文案，不依赖默认模型。                                                                                                                                                             | 生成工具回归验证两种语言，不再包含默认模型/API 全量规则。                                                                                                                                                   |
+| A4   | 将可接受尺寸字段及互斥约束放入 `IMAGE_SIZE_RULES`，统一消费；图片类型提取为本模块常量。                                                                                                                                                                                    | `model-protocol/__tests__/media-generation.test.js` 验证合法值、非法值及 DashScope 互斥。                                                                                                                   |
+| S1   | 健康探测唯一入口为 `health-probe.js`，明确区分就绪、未就绪、连接拒绝、超时。畸形响应、HTTP 错误和未知异常保留 cause 并拒绝启动，定时器始终清理；协调者只在状态变化时记录日志。异常通过 `messageKey/messageParams` 传至启动页，消息和日志支持切换语言，并显示具体响应错误。 | `health-probe.test.js`、桌面启动测试及 `client/startup/__tests__/health-diagnostics.test.js`；后者实际串起探测 → bootstrap → Vue bridge，覆盖 HTTP 401、字段错误、JSON 错误与未知错误，验证双语消息和日志。 |
+| S2   | `attachment-protocol` 的 `projectAttachmentAccessRequest` 是访问身份契约，必需身份缺失明确拒绝；删除空 userId 默认值和空 URL 降级。卡片展示只读取解析关系，访问动作才构造地址，删除无用 userId 属性及传参。                                                                | `attachmentAccessContract.spec.js` 对每个身份字段的缺失/空白逐一验证，URL 编码及聊天消息链路回归通过；测试明确提供身份。                                                                                    |
+| S3   | workflow 抽屉删除宿主私有类名，由插件自有样式负责遮罩、header、body 和移动端布局，使用公开设计令牌。                                                                                                                                                                       | 源码对照、质量门禁、前端回归与构建；浏览器人工视觉验证未执行。                                                                                                                                              |
+| V1   | 中英文模型协议明确“同 executor、同 scope 的相邻 HTTP 请求体 UTF-8 字节比较”；新 executor 没有基线，不代表完整会话复用率或供应商缓存命中率。分块比较替代长前缀逐字节扫描，比较块阈值统一到 shared 并补齐双语参数目录。                                                      | `model-runtime/__tests__/audit-closure.test.js` 验证分块边界、UTF-8 字节数、scope 与 executor 隔离；每 scope 仍保留最新完整请求体直到 executor 释放，未做性能压测，不宣称实测收益。                         |
+| V2   | `ModelProtocolError` 默认分类收敛为 `protocol` 且不可重试；流模式策略禁止协议错误隐式切换模式重放。明确的上游失败响应仍按其协议分类处理。                                                                                                                                  | 协议分类、Anthropic 重复起始帧、Responses 终止帧及执行报告回归通过，保留失败计量和 usage 不可用断言；协议错误仅一次请求。                                                                                   |
+
+最新业务代码已实际重跑 `test:all` 与构建：43 个 Node 汇总块共 5870 项，5868 通过、0 失败、2 条环境跳过；chat 244 个文件、1773 项全部通过；startup/chat 构建通过，仍有大 chunk 告警。质量复验因兜底链从 242 降到 241 触发“旧基线需收紧”，已同步降低基线；依赖默认值基线同样从 88 收紧到 86，没有放宽规则或新增豁免。收紧后再次执行质量门禁，结果为 **49/49 通过**；`git diff --check` 通过，临时 EOF 复现脚本已确认不存在。A1–A4、S1–S3 已完成代码整改，V1/V2 已通过协议明确及回归验证闭环。
+
+日志位于用户工作区 `runtime/ops_workdir/`：`fix-all-tests-verified.log`、`fix-all-quality-verified.log`、`fix-all-build-verified.log`。自动验证使用模拟接口，未调用真实收费模型；未执行桌面安装包实机测试、浏览器人工视觉验收或性能压测。这些验证边界不作为已验证结论。
+
+## 增量复核（2026-11-09，范围 `73cc65ffd..c87f253fa`）
+
+完整范围为 `v4.4.4..c87f253fa`：15 个提交、546 个文件（+25335/−5492）。本文此前已覆盖到 73cc65ffd，本次复核后续 7 个提交、106 个文件（+5510/−730），并核对旧问题的提交状态。开始时工作区干净。本节只记录审核结果，没有修改业务代码；下文旧节的“当前没有未处理项”仅代表当时状态，以本节为准。
+
+**结论：尚未完全闭环。** 主流程收敛、计量终止处理和附件访问链路已有正向证据，但 c87f253fa 引入 1 项高风险功能缺陷及 2 项中风险职责/文案问题。门禁通过不能替代错误配置路径的验证。
+
+### 本次引入：已确认问题
+
+| 编号 | 级别 | 问题与证据                                                                                                                                                                                                                                                                                                                                                                     | 影响及根因修复方向                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ---- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A1   | 高   | `agent/src/tools/ai-models/multimodal-generate-tool.js:363-370` 在 `generationSchema` 中解析默认图片模型并调用 `resolveModelGenerationApiType`。`audit3-schema-default.log` 记录：默认 image 指向 chat 模型时，协议诊断为 `MODEL_REFERENCE_CAPABILITY_MISMATCH`、`impact=operation`，schema 却抛 `TypeError: unsupported model generation API type:`；合法图片模型可正常构造。 | 为生成说明文案引入了构造期执行依赖，并额外解析一次模型。`agent/src/tools/index.js:92` 在构建整个工具数组时调用它，`context/application/build-agent-execution-context.js:86` 直接等待 `buildTools` 且不捕获，因此默认路径的执行上下文构建会拒绝，超出生成操作的边界；显式指定其他合法模型的机会也被提前阻断。schema 应只消费静态协议与本地化说明，模型引用诊断统一在操作执行期处理，删除构造期解析，不能捕获后静默隐藏工具。最外层如何展示失败尚未做界面验证。 |
+| A2   | 中   | 同文件 `buildMediaGenerationRequest:218` 调用 `requireModelGenerationSize`，`model-runtime/src/adapters/native-generation.js:36` 对同一 operation 再调用一次。两处均来自 c87f253fa 的改动。                                                                                                                                                                                    | 规则定义已统一到 model-protocol，但执行责任重复；工具层提前拒绝还会绕过 runtime 的统一执行观测入口。删除工具层的 API 类型解析及尺寸校验，由 runtime 执行边界消费协议规则；保留工具 schema 的字段结构校验。                                                                                                                                                                                                                                                    |
+| A3   | 中   | 同文件 `generationSchema:391` 将 `describeImageGenerationSizes()` 的英文全量规则拼到中英两种 `fieldSize` 文案后。文案入口为 `i18n/src/agent/locales/zh-CN/tool-schema/assistance.js:114` 和 `en-US/...:132`；`agent/__tests__/tools/multimodal-generate-tool.test.js:196-198` 在两种语言下均断言英文规则。                                                                     | 中文工具说明混入整段英文，且每次 schema 都枚举全部 API，包含当前调用不使用的规则；默认模型说明也不能代表显式 `model_name`。保留简洁双语字段说明和明确的参数契约，精确约束由协议校验反馈；同步更新固化该行为的测试，并检查全量规则描述函数是否还存在消费方。                                                                                                                                                                                                   |
+
+低优先级整理项 A4：`model-protocol/src/protocol/generation-options.js:34-44` 使用 `"image"` 字面量，并在 `requireModelGenerationSize` 内对 DashScope 的 size/resolution 互斥及取值单独分支。它仍位于协议层，不能据此认定存在跨模块第二套契约或功能错误；可将选项来源与互斥约束归入 `IMAGE_SIZE_RULES`，统一消费。现有 `MODEL_GENERATION_OUTPUT_TYPES` 是数组，不是可直接引用 `.IMAGE` 的枚举，不能凭空假定常量接口。
+
+### 存量问题
+
+以下行为与 `v4.4.4` 源码对照后确认早已存在，不归为本次新增缺陷。
+
+| 编号 | 证据                                                                                                                                                                                                     | 未闭环之处及建议                                                                                                                                                    |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| S1   | `client/shared/electron/runtime/services.js:241-257` 的 `isHealthy` 用 `catch { return false }` 合并网络、超时和 JSON 解析异常。v4.4.4 的两个健康探测已有同类吞错。                                      | 取消/超时、暂未就绪与畸形响应缺少可区分的诊断。正常未就绪仍可作为探测状态，但异常应通过明确结果契约传给启动协调者，由它决定等待、停止或报错，避免每次轮询重复日志。 |
+| S2   | `client/noobot-chat/src/infrastructure/api/attachments/attachmentAccess.js:51` 的 `resolveAttachmentAccessMeta` 默认 `userId = ""`；下游 `chatApi.js:43-52` 在缺少 userId 或 attachmentId 时返回空 URL。 | 必需身份缺失被转换为空地址。应统一附件访问输入契约，由调用方提供身份，边界显式拒绝缺失；当前未复现正常生成图片路径丢失 userId，不能宣称该路径已经失败。             |
+| S3   | `plugin/noobot-plugin-workflow/frontend/components/workflow-message-card/WorkflowNodeSessionDrawer.vue:212-213` 使用宿主 `noobot-side-drawer__body/__header`，前次审计已确认 v4.4.4 存在。               | 插件与宿主样式耦合仍未消除。应以明确的前端插件样式协议承接，或由插件独立承担自己的样式，删除隐式宿主依赖。                                                          |
+
+### 待验证与性能边界
+
+- **V1，前缀指标的生命周期语义：** `agent/src/bot/execution/runner/runtime-binding.js:82` 每次 dispatch 初始化模型宿主，`model-port-host.js` 创建 executor，`model-runtime/src/executor/model-request-executor.js:105` 的 `previousBodies` 属于该 executor。`request-measurement.js:21-40` 只与同 scope 的上一请求比较；新 executor 的首次请求为 `no_previous_request`。memory 摘要也创建辅助模型端口。因此当前基线不能覆盖不同 executor 之间的跨轮比较，不能将该指标解释为完整会话前缀复用率。是否符合产品预期、scope 与 executor 生命周期应如何写入协议，仍待明确；未据此认定内存泄漏。每个已观察 scope 保留一份完整 UTF-8 请求体，每次比较最坏线性扫描共同前缀，实际 CPU/内存影响尚未压测，不能报成已测性能退化。
+- **V2，协议错误分类：** Responses 缺终止帧时，日志的失败码为 `MODEL_PROTOCOL_ERROR`，但分类为 `kind=unknown`、`retryable=false`。拒绝不完整输出已验证；这种错误类别和重试策略是否符合协议预期仍待核对，不能把自动重试作为默认修复。
+
+### 已闭环或未发现新增断点
+
+- **抽屉样式归属：** 3a52c5416 的 7 个文件与前次记录的修复一致，已正式提交；旧节“尚未提交”仅是历史状态。浏览器目测边界仍沿用前次记录。
+- **流终止与计量：** 实际重跑 Responses 缺终止帧复现，`invoke` 以 `ModelProtocolError` 拒绝，`model.request.finished` 为 failed，四项 usage 均为 unavailable / `stream_interrupted`，没有把部分输出计为成功。日志见 `audit3-responses-eof-recheck.log`，原复现日志保留；V2 不影响这一结论。
+- **计量数据闭环：** 请求事件经过协议校验；`model-request-metrics.js` 显式拒绝重复、未配对及终止后事件，`execution-model-measurements.js` 校验计数守恒和比例范围，前端缺少样本显示“—”。执行报告 v6 用 `legacy_not_collected` 明确区分历史缺失，未将旧报告推算为新指标。
+- **删除与签名变更：** `buildAttachmentRefIndex` 的消费方已同步，`model-proxy/src` 未发现 cache-diagnostics 残留。生成图片访问 URL 与跨会话切换已有自动测试覆盖，S2 是缺失身份时的存量契约问题。
+- **desktop：** 启动与重启统一检查取消/停止状态，代理就绪统一到 `ensureAgentProxyStarted`；探测定时器在 finally 清理。日志轮转改为 rename + appendFile，避免整文件读取。S1 的异常诊断仍需整改。
+- **尺寸协议：** 各 runtime 适配器内原有尺寸正则已迁至 model-protocol，主方向正确；剩余 A1–A3 应沿这条主流程收敛，不恢复适配器私有规则。
+
+### 验证证据及边界
+
+日志在用户工作区 `/home/xiayu/projects/noobot/workspace/admin/runtime/ops_workdir/`。本节重新读取并核对既有全量验证日志；本次续写期间没有重新执行全量门禁、test:all 或构建。Responses EOF 复现另行实际重跑，避免将历史日志表述为本次新执行。
+
+| 验证                          | 结果                                                   | 日志                                                            |
+| ----------------------------- | ------------------------------------------------------ | --------------------------------------------------------------- |
+| 质量门禁                      | 49/49                                                  | `audit3-quality.log`                                            |
+| test:all 中的 Node 测试       | 43 个测试汇总块，共 5865 项；5863 通过、0 失败、2 跳过 | `audit3-tests.log`                                              |
+| chat 测试（与上一行分开计数） | 243 个文件，1771/1771 通过                             | 同上                                                            |
+| startup / chat 构建           | 通过；有 chunk 体积告警                                | `audit3-build.log`                                              |
+| 默认生成模型错配              | 复现 schema 构造 TypeError；对照的合法图片模型可构造   | `audit3-schema-default.log`                                     |
+| Responses 缺终止帧            | 拒绝输出、请求 failed、usage 标为流中断；分类问题见 V2 | `audit3-responses-eof.log` / `audit3-responses-eof-recheck.log` |
+
+两项跳过分别受 root 用户与 Windows 宿主条件限制，不计作通过。质量实测为 complexity `116/56/48/73/242/37`，duplication `26/313`、fallbackChain `242`、rawTypeof `416`、inlineTrim `48`；这些是存量基线，不代表规则违规已经清零。原生生成与流错误验证使用模拟 HTTP，未调用真实收费接口；未做新一轮浏览器人工验证或性能压测。
+
+建议整改顺序：先 A1，补上“默认模型错配仍可构建工具、执行目标操作时明确诊断”的回归验证；再删除 A2 的重复执行入口并收敛 A3 的双语说明；随后处理 S1–S3 和 A4。V1/V2 先明确协议语义，再按协议验证实现。本次审核和文档记录已完成，上述实现问题尚未修复。
+
 ## 增量复核（2026-11-08，范围 `v4.4.4..73cc65ffd`）
 
 范围：8 个提交，480 个文件（+19865/−4802）。前两次复核截止到 cc71cf878，本次新增审核 73cc65ffd（模型选择器按发布日期排序、共享样式调整），并重新检查 cc71cf878 引入的共享组件边界。复核开始时工作区干净；下表中的“已修复”项是本次改动，尚未提交。

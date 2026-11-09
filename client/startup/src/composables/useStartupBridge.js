@@ -44,7 +44,12 @@ export function useStartupBridge() {
   const messages = computed(() => startupMessages[language.value]);
   const messageState = ref({ key: "checkingService", raw: "" });
   const message = computed(
-    () => messageState.value.raw || messages.value.status[messageState.value.key] || "",
+    () =>
+      messageState.value.raw ||
+      formatStartupMessage(
+        messages.value.status[messageState.value.key],
+        messageState.value.params,
+      ),
   );
   const currentStep = ref("starting");
   const requiredParams = ref([]);
@@ -74,13 +79,13 @@ export function useStartupBridge() {
   ];
   const logText = computed(() => {
     const lines = logEntries.value.map(
-      (entry) => entry.raw || messages.value.status[entry.key] || "",
+      (entry) => entry.raw || formatStartupMessage(messages.value.status[entry.key], entry.params),
     );
     return lines.join("\n") + (lines.length ? "\n" : "");
   });
 
-  function setMessage(key, raw = "") {
-    messageState.value = { key, raw: text(raw) };
+  function setMessage(key, raw = "", params = {}) {
+    messageState.value = { key, raw: text(raw), params };
   }
 
   function updateSuperAdminForm(nextForm) {
@@ -95,11 +100,11 @@ export function useStartupBridge() {
     Object.assign(configValues, nextValues);
   }
 
-  function appendLogLine(line, { key = "" } = {}) {
+  function appendLogLine(line, { key = "", params = {} } = {}) {
     const normalizedText = text(line);
     if (!normalizedText || normalizedText === lastMessage.value) return;
     lastMessage.value = normalizedText;
-    logEntries.value.push({ key, raw: key ? "" : normalizedText });
+    logEntries.value.push({ key, raw: key ? "" : normalizedText, params });
     if (logEntries.value.length > 120) logEntries.value.splice(0, logEntries.value.length - 120);
   }
 
@@ -165,11 +170,20 @@ export function useStartupBridge() {
       return;
     }
     if (status.message) {
-      const localizedKey = localizedStatusKeys[status.phase];
-      setMessage(localizedKey || "", localizedKey ? "" : status.message);
-      appendLogLine(localizedKey ? messages.value.status[localizedKey] : status.message, {
-        key: localizedKey || "",
-      });
+      const localizedKey = status.messageKey || localizedStatusKeys[status.phase];
+      if (localizedKey && !Object.hasOwn(messages.value.status, localizedKey)) {
+        throw new TypeError(`Unknown startup message key: ${localizedKey}`);
+      }
+      setMessage(localizedKey || "", localizedKey ? "" : status.message, status.messageParams);
+      appendLogLine(
+        localizedKey
+          ? formatStartupMessage(messages.value.status[localizedKey], status.messageParams)
+          : status.message,
+        {
+          key: localizedKey || "",
+          params: status.messageParams,
+        },
+      );
     }
     if (dependencyPhases.has(status.phase) && currentStep.value !== "dependencies") {
       superAdminCompleted.value = true;

@@ -7,10 +7,10 @@
 import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessId.js";
 import { text } from "@noobot/shared/value";
 
-export const WORKFLOW_DIALOG_PROCESS_QUERY_KEY = "workflowDialogProcessId";
-export const WORKFLOW_ROOT_SESSION_QUERY_KEY = "workflowRootSessionId";
+const WORKFLOW_DIALOG_PROCESS_QUERY_KEY = "workflowDialogProcessId";
+const WORKFLOW_ROOT_SESSION_QUERY_KEY = "workflowRootSessionId";
 
-export function buildWorkflowDrawerRoute(nodeItem = {}, patch = {}) {
+function buildWorkflowDrawerRoute(nodeItem = {}, patch = {}) {
   const dialogProcessId = String(
     Object.prototype.hasOwnProperty.call(patch, "dialogProcessId")
       ? patch.dialogProcessId

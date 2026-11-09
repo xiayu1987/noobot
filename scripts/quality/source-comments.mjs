@@ -35,7 +35,7 @@ function shellComments(source) {
   return comments;
 }
 
-export function parseSourceComments(source, relativeFile) {
+function parseSourceComments(source, relativeFile) {
   if (/\.(?:css|scss)$/i.test(relativeFile)) {
     return Array.from(source.matchAll(/\/\*[\s\S]*?\*\//g), (match) => ({
       type: "Block",

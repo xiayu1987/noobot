@@ -376,7 +376,7 @@ test("Anthropic obeys the existing alternate-mode retry and successful-mode cach
   assert.deepEqual(modes, [true, false, false]);
 });
 
-test("Anthropic duplicate message_start reports the stream error on the alternate-mode retry", async () => {
+test("Anthropic duplicate message_start fails without replaying the request", async () => {
   const modes = [];
   const events = [];
   const executor = executorWithFetch(
@@ -405,21 +405,26 @@ test("Anthropic duplicate message_start reports the stream error on the alternat
     },
     { emit: (type, data) => events.push({ type, data }) },
   );
-  const result = await executor.invoke({
-    invocation,
-    model: modelSpec,
-    messages,
-    tools,
-    options: { streaming: true },
-  });
-  assert.equal(result.output.text, "done");
-  assert.deepEqual(modes, [true, false]);
-  const retry = events.filter((event) => event.type === "model.invocation.streaming_mode_retry");
-  assert.equal(retry.length, 1);
-  assert.equal(retry[0].data.nextStreaming, false);
-  assert.equal(retry[0].data.error.code, MODEL_ERROR_CODE.PROTOCOL);
-  assert.match(retry[0].data.error.message, /unexpected message_start/);
-  assert.equal(result.execution.attempts[0].error.code, MODEL_ERROR_CODE.PROTOCOL);
+  await assert.rejects(
+    executor.invoke({
+      invocation,
+      model: modelSpec,
+      messages,
+      tools,
+      options: { streaming: true },
+    }),
+    (error) => {
+      assert.equal(error.code, MODEL_ERROR_CODE.PROTOCOL);
+      assert.equal(error.kind, "protocol");
+      assert.match(error.message, /unexpected message_start/);
+      return true;
+    },
+  );
+  assert.deepEqual(modes, [true]);
+  assert.equal(
+    events.filter((event) => event.type === "model.invocation.streaming_mode_retry").length,
+    0,
+  );
 });
 
 test("Anthropic streamed tokens prevent the existing executor from replaying a failed response", async () => {

@@ -8,7 +8,7 @@ import { text } from "@noobot/shared/value";
 
 const clean = (value) => text(value);
 
-export const INTERACTION_UNAVAILABLE = Object.freeze({
+const INTERACTION_UNAVAILABLE = Object.freeze({
   DISABLED: "interaction_disabled",
   ENCRYPTION_REQUIRED: "interaction_encryption_required",
 });

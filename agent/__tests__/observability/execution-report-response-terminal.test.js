@@ -160,7 +160,7 @@ for (const scenario of cases) {
       );
       const measurements = summarizeExecutionMetrics(logs).model.measurements;
       const { requests, usage } = measurements;
-      const count = status === "completed" ? 1 : 2;
+      const count = status === "failed" ? 2 : 1;
       assert.equal(requests.startedCount, count);
       assert.equal(requests.completedCount, status === "completed" ? 1 : 0);
       assert.equal(requests.failedCount, status === "completed" ? 0 : count);
@@ -181,7 +181,7 @@ for (const status of [undefined, "queued", "in_progress", "cancelled", "unknown"
     const logs = await invokeResponse({ status, outputTokens: 7, streaming: false });
     const { requests, measurementErrors } = summarizeExecutionMetrics(logs).model.measurements;
     assert.equal(requests.completedCount, 0);
-    assert.equal(requests.failedCount, 2);
+    assert.equal(requests.failedCount, 1);
     assert.equal(requests.unfinishedCount, 0);
     assert.ok(measurementErrors.some(({ message }) => message.includes("terminal status")));
   });

@@ -128,7 +128,7 @@ function routeAuthoritativeRuntimeEvent({
   return routed;
 }
 
-export const PROTOCOL_ENVELOPE_REJECTED_CODE = "PROTOCOL_ENVELOPE_REJECTED";
+const PROTOCOL_ENVELOPE_REJECTED_CODE = "PROTOCOL_ENVELOPE_REJECTED";
 
 function createProtocolEnvelopeRejectedError(channelEvent, errors) {
   const error = new Error(`protocol envelope rejected: ${channelEvent} (${errors.join(", ")})`);

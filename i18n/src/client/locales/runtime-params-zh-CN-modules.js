@@ -6,6 +6,7 @@
 export default {
   installers: "安装器",
   modelProxy: "模型代理",
+  modelMeasurement: "模型请求计量",
   model: "模型调用",
   hooks: "钩子",
   fileMutation: "文件变更",

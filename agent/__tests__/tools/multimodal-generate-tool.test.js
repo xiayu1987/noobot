@@ -190,21 +190,24 @@ test("multimodal_generate: model configuration is the only image API type author
   ]) {
     assert.equal(tool.schema.safeParse({ ...video, ...option }).success, false);
   }
-  runtime.globalConfig.multimodal = { generation: { default_models: { image: "gpt_image_2" } } };
+  runtime.globalConfig.providers.chat_only = {
+    ...runtime.globalConfig.providers.gpt_image_2,
+    multimodal_generation: { support_generation: { enabled: false, support_scope: [] } },
+  };
+  runtime.globalConfig.multimodal = { generation: { default_models: { image: "chat_only" } } };
   for (const locale of ["zh-CN", "en-US"]) {
     runtime.runConfig = { locale };
     const description = getMultimodalGenerateTool(runtime).schema.options[0].shape.size.description;
-    assert.match(description, /gpt_image_2 \(openai_images\)/);
-    assert.match(description, /openai_images: auto or an explicit pixel size/);
-    assert.equal(description.includes("{{model}}"), false);
+    assert.match(description, locale === "zh-CN" ? /所选模型/ : /selected model/);
+    assert.doesNotMatch(description, /chat_only|openai_images|Configured default/);
   }
   await assert.rejects(
-    tool.invoke({ generation_content: "draw a bird", model_name: "gpt_image_2", size: "1:1" }),
-    /explicit pixel size/,
+    getMultimodalGenerateTool(runtime).invoke({ generation_content: "draw a bird" }),
+    /chat_only/,
   );
   assert.equal(modelRequest, null);
   const result = JSON.parse(
-    await tool.invoke({
+    await getMultimodalGenerateTool(runtime).invoke({
       generation_content: "draw a bird",
       model_name: "gpt_image_2",
       size: "1024x1024",

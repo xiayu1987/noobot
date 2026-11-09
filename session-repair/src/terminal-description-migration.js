@@ -13,7 +13,7 @@ import {
 import { isPlainObject, text } from "@noobot/shared/value";
 import { SESSION_REPAIR_ERROR_CODE } from "./errors.js";
 
-export const SESSION_TURN_TERMINAL_DESCRIPTION_MIGRATION = "turn-terminal-description-v14";
+const SESSION_TURN_TERMINAL_DESCRIPTION_MIGRATION = "turn-terminal-description-v14";
 
 function protocolDescription(status) {
   if (status === TURN_TERMINAL_STATUS.COMPLETED) return "";

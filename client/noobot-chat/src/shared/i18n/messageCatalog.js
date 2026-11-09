@@ -8,7 +8,7 @@ import { text } from "@noobot/shared/value";
 
 const LOCALE_STORAGE_KEY = "noobot_locale";
 export const FALLBACK_LOCALE = "zh-CN";
-export const SUPPORTED_LOCALES = Object.freeze(["zh-CN", "en-US"]);
+const SUPPORTED_LOCALES = Object.freeze(["zh-CN", "en-US"]);
 
 const SUPPORTED_LOCALE_SET = new Set(SUPPORTED_LOCALES);
 
@@ -16,7 +16,7 @@ export function isSupportedLocale(value = "") {
   return SUPPORTED_LOCALE_SET.has(text(value));
 }
 
-export function normalizeLocale(value = "") {
+function normalizeLocale(value = "") {
   const normalized = text(value);
   return isSupportedLocale(normalized) ? normalized : FALLBACK_LOCALE;
 }

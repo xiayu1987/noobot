@@ -10,7 +10,6 @@ export {
   ensurePhaseAcceptanceBeforeFinalAcceptance,
 } from "./validation-runner-phase.js";
 export {
-  scheduleAcceptanceSemanticValidationByInject,
   maybeInjectAcceptanceSemanticValidationPrompt,
   maybeCaptureAcceptanceSemanticValidationByInject,
   runAcceptanceBySeparateModel,

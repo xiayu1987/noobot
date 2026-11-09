@@ -8,7 +8,4 @@ export {
   SENSITIVE_FIELD_PATTERNS,
   normalizeSensitiveFieldText,
   canonicalSensitiveFieldText,
-  matchesSensitiveFieldPattern,
-  REDACTED_SENSITIVE_FIELD_VALUE,
-  sanitizeSensitiveFields,
 } from "@noobot/sanitize";

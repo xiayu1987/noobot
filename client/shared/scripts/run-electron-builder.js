@@ -5,6 +5,7 @@
  */
 import { readFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { clientFilePath as path } from "../path-resolver.js";
 import {
@@ -16,6 +17,7 @@ import { isPlainObject, text } from "@noobot/shared/value";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "../../..");
+const require = createRequire(import.meta.url);
 const STANDARD_PROXY_KEYS = Object.freeze([
   "HTTPS_PROXY",
   "https_proxy",
@@ -79,7 +81,7 @@ async function runElectronBuilder({
   spawnImpl = spawn,
 } = {}) {
   const proxy = await resolveDesktopBuildProxy({ env, root });
-  const builderCli = path.join(root, "node_modules", "electron-builder", "out", "cli", "cli.js");
+  const builderCli = require.resolve("electron-builder/cli.js");
   if (proxy.proxyUrl) {
     console.log(
       `[desktop-build] electron-builder download proxy: ${maskDependencyProxyUrl(proxy.proxyUrl)} (${proxy.source})`,

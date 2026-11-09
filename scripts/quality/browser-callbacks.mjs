@@ -15,7 +15,7 @@ const BROWSER_CALLBACK_METHODS = new Set([
 
 const FUNCTION_EXPRESSION_TYPES = new Set(["ArrowFunctionExpression", "FunctionExpression"]);
 
-export function isBrowserCallbackCall(node) {
+function isBrowserCallbackCall(node) {
   if (node?.type !== "CallExpression") return false;
   const callee = node.callee;
   return (

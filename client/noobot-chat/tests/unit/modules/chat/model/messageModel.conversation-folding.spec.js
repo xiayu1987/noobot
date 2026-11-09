@@ -5,11 +5,14 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  buildViewMessage,
+  buildViewMessage as buildMessage,
   foldConversationMessages,
 } from "../../../../../src/modules/chat/model/messageModel.js";
 import { selectActivityTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/activityTimeline.js";
 import { canonicalActivityFact } from "../helpers/messageEventFixture.js";
+
+const buildViewMessage = (message, options) =>
+  buildMessage(message, { ...options, userId: "admin" });
 
 describe("messageModel conversation folding", () => {
   it("does not merge a new pending assistant placeholder with previous turn state", () => {

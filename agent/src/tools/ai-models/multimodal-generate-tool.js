@@ -9,9 +9,6 @@ import {
   MODEL_CONTEXT_SEQUENCE_POLICY,
   MODEL_GENERATION_OUTPUT_TYPES,
   MODEL_GENERATION_OPTION_FIELDS,
-  describeImageGenerationSizes,
-  requireModelGenerationSize,
-  resolveModelGenerationApiType,
 } from "@noobot/model-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { diagnoseModelReference } from "@noobot/agent-config-protocol";
@@ -215,7 +212,6 @@ function buildMediaGenerationRequest({
   abortSignal,
 }) {
   const operation = buildGenerationOperation({ input, prompt: generationContent });
-  requireModelGenerationSize(resolveModelGenerationApiType(modelSpec), operation);
   return {
     model: modelSpec,
     messages: [],
@@ -360,15 +356,7 @@ async function runMultimodalGeneration(input, deps) {
   }
 }
 
-function generationSchema(runtime, effectiveConfig) {
-  const { resolvedModelName, resolvedModelSpec } = resolveGenerationModelSpec({
-    effectiveConfig,
-    globalConfig: runtime.globalConfig,
-    userConfig: runtime.userConfig,
-  });
-  const defaultSizeModel = resolvedModelSpec
-    ? `${resolvedModelName} (${resolveModelGenerationApiType(resolvedModelSpec)})`
-    : resolvedModelName;
+function generationSchema(runtime) {
   const fields = {
     duration: z
       .number()
@@ -384,12 +372,7 @@ function generationSchema(runtime, effectiveConfig) {
       .enum(["low", "medium", "high"])
       .optional()
       .describe(tTool(runtime, "tools.multimodal.fieldComplexity")),
-    size: z
-      .string()
-      .optional()
-      .describe(
-        `${tTool(runtime, "tools.multimodal.fieldSize", { model: defaultSizeModel })} ${describeImageGenerationSizes()}`,
-      ),
+    size: z.string().optional().describe(tTool(runtime, "tools.multimodal.fieldSize")),
     resolution: z.string().optional().describe(tTool(runtime, "tools.multimodal.fieldResolution")),
     n: z
       .number()
@@ -462,7 +445,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
     {
       name: TOOL_NAME.MULTIMODAL_GENERATE,
       description: tTool(runtime, "tools.multimodal.description"),
-      schema: generationSchema(runtime, effectiveConfig),
+      schema: generationSchema(runtime),
     },
     agentContext,
   );

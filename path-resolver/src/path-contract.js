@@ -401,6 +401,59 @@ export function isTrustedDirectoryPath(candidatePath = "", pathPolicy = undefine
   return trustedDirectories.some((root) => isPathWithinRoot(root, resolvedCandidate));
 }
 
+function authorizeMountPath({ pathRef, executionPath, mounts, writeCapability }) {
+  if (!executionPath || !isAbsolutePathAnyPlatform(executionPath)) {
+    throw new TypeError("mount path authorization requires an absolute execution path");
+  }
+  const mount = mounts.find((item) => item.target === pathRef.mount);
+  if (!mount) return "mount_not_configured";
+  if (!isPathWithinRoot(mount.source, executionPath)) return "mount_path_out_of_scope";
+  if (mount.readOnly === true && writeCapability) return "mount_read_only";
+  return "allowed";
+}
+
+function authorizeWorkspacePath({
+  pathRef,
+  principal,
+  roles,
+  writeCapability,
+  executionPath,
+  workspaceRoot,
+}) {
+  const owner = text(pathRef.owner || principal?.userId);
+  const principalId = text(principal?.userId);
+  const workspaceRule =
+    principal?.role === "super_admin" ? roles.superAdmin.workspace : roles.regularUser.workspace;
+  const access =
+    owner && principalId && owner !== principalId ? workspaceRule.others : workspaceRule.own;
+  if (access === "deny" || (access === "read_only" && writeCapability))
+    return "workspace_owner_not_authorized";
+  if (executionPath && !(workspaceRoot && isPathWithinRoot(workspaceRoot, executionPath)))
+    return "workspace_path_out_of_scope";
+  return "allowed";
+}
+
+function authorizeHostPath({ executionPath, principal, rule, hostRule }) {
+  if (!executionPath || !isAbsolutePathAnyPlatform(executionPath)) {
+    throw new TypeError("host path authorization requires an absolute execution path");
+  }
+  if (
+    rule.hostRequiresRole === "deny" ||
+    (rule.hostRequiresRole === "super_admin" && principal?.role !== "super_admin") ||
+    hostRule.access !== "allow"
+  )
+    return "host_path_not_authorized";
+  if (hostRule.deniedRoots.some((root) => isPathWithinRoot(root, executionPath)))
+    return "host_path_denied";
+  if (
+    !hostRule.allowedRoots.some(
+      (root) => root === HOST_FILESYSTEM_ROOT || isPathWithinRoot(root, executionPath),
+    )
+  )
+    return "host_path_out_of_scope";
+  return "allowed";
+}
+
 export function authorizePathRef({
   pathRef,
   principal = {},
@@ -411,102 +464,41 @@ export function authorizePathRef({
   mounts = [],
 } = {}) {
   const effectivePolicy = requireResolvedPathPolicy(pathPolicy);
+  if (!Object.hasOwn(effectivePolicy.capabilities, capability))
+    throw new Error(`unknown path capability: ${capability}`);
   const rule = effectivePolicy.capabilities[capability];
-  if (!rule) throw new Error(`unknown path capability: ${capability}`);
-  if (!rule.acceptedViews?.includes(pathRef?.view))
+  if (!rule.acceptedViews.includes(pathRef?.view))
     return Object.freeze({ allowed: false, code: "path_view_not_accepted", pathRef, capability });
-  const isSuperAdmin = principal?.role === "super_admin";
   const writeCapability = [
     PATH_CAPABILITIES.FILE_WRITE,
     PATH_CAPABILITIES.FILE_PATCH,
     PATH_CAPABILITIES.SCRIPT_OUTPUT,
   ].includes(capability);
-  const deny = (code) => Object.freeze({ allowed: false, code, pathRef, capability });
+  let code = "allowed";
+  let policy = "workspace_access";
   if (pathRef.view === PATH_REF_VIEWS.MOUNT) {
-    if (!executionPath || !isAbsolutePathAnyPlatform(executionPath)) {
-      throw new TypeError("mount path authorization requires an absolute execution path");
-    }
-    const mount = mounts.find((item) => item.target === pathRef.mount);
-    if (!mount) return deny("mount_not_configured");
-    if (!isPathWithinRoot(mount.source, executionPath)) return deny("mount_path_out_of_scope");
-    if (mount.readOnly === true && writeCapability) return deny("mount_read_only");
-    return Object.freeze({
-      allowed: true,
-      code: "allowed",
+    code = authorizeMountPath({ pathRef, executionPath, mounts, writeCapability });
+    policy = "mount_access";
+  } else if (pathRef.view === PATH_REF_VIEWS.WORKSPACE) {
+    code = authorizeWorkspacePath({
       pathRef,
-      capability,
-      policy: "mount_access",
+      principal,
+      roles: effectivePolicy.roles,
+      writeCapability,
+      executionPath,
+      workspaceRoot,
     });
-  }
-  if (pathRef.view === "workspace") {
-    const owner = text(pathRef.owner || principal?.userId);
-    const principalId = text(principal?.userId);
-    const workspaceRule = isSuperAdmin
-      ? effectivePolicy.roles.superAdmin.workspace
-      : effectivePolicy.roles.regularUser.workspace;
-    const access =
-      owner && principalId && owner !== principalId ? workspaceRule.others : workspaceRule.own;
-    if (access === "deny" || (access === "read_only" && writeCapability))
-      return Object.freeze({
-        allowed: false,
-        code: "workspace_owner_not_authorized",
-        pathRef,
-        capability,
-      });
-  }
-  if (pathRef.view === "host") {
-    if (!executionPath || !isAbsolutePathAnyPlatform(executionPath)) {
-      throw new TypeError("host path authorization requires an absolute execution path");
-    }
-    if (
-      rule.hostRequiresRole === "deny" ||
-      (rule.hostRequiresRole === "super_admin" && !isSuperAdmin)
-    )
-      return Object.freeze({
-        allowed: false,
-        code: "host_path_not_authorized",
-        pathRef,
-        capability,
-      });
-    const hostRule = effectivePolicy.roles.superAdmin.host;
-    if (hostRule.access !== "allow")
-      return Object.freeze({
-        allowed: false,
-        code: "host_path_not_authorized",
-        pathRef,
-        capability,
-      });
-    const candidate = executionPath;
-    const denied = hostRule.deniedRoots.some((root) => isPathWithinRoot(root, candidate));
-    const allowed = hostRule.allowedRoots.some(
-      (root) => root === HOST_FILESYSTEM_ROOT || isPathWithinRoot(root, candidate),
-    );
-    if (denied || !allowed)
-      return Object.freeze({
-        allowed: false,
-        code: denied ? "host_path_denied" : "host_path_out_of_scope",
-        pathRef,
-        capability,
-      });
-  }
-  if (
-    pathRef.view === "workspace" &&
-    executionPath &&
-    !(workspaceRoot && isPathWithinRoot(workspaceRoot, executionPath))
-  )
-    return Object.freeze({
-      allowed: false,
-      code: "workspace_path_out_of_scope",
-      pathRef,
-      capability,
+  } else if (pathRef.view === PATH_REF_VIEWS.HOST) {
+    code = authorizeHostPath({
+      executionPath,
+      principal,
+      rule,
+      hostRule: effectivePolicy.roles.superAdmin.host,
     });
-  return Object.freeze({
-    allowed: true,
-    code: "allowed",
-    pathRef,
-    capability,
-    policy: pathRef.view === "host" ? "super_admin_host_access" : "workspace_access",
-  });
+    policy = "super_admin_host_access";
+  }
+  if (code !== "allowed") return Object.freeze({ allowed: false, code, pathRef, capability });
+  return Object.freeze({ allowed: true, code, pathRef, capability, policy });
 }
 
 export function assertToolPathContract(contract = {}) {

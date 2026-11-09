@@ -54,3 +54,12 @@ custom_tool_call 的 input 投影为 `{ input }`，computer_call 的 action 投�
 `resolveOperationStreamingModes({ modelSpec, operation })`，后者返回非空、不重复的布尔列表
 （`requireOperationStreamingModes`）。执行器优先使用已声明的偏好模式，否则取首个声明模式，
 只切换到已声明的模式。
+
+`ModelProtocolError` 默认分类为 `protocol` 且不可重试；畸形响应或缺失终止帧不得隐式
+重放，也不触发流模式切换。显式声明的其他错误类别继续遵循各自策略。
+
+请求前缀计量按 HTTP 请求体的 UTF-8 字节，与同一 executor、同一 scope 内的上一请求
+精确比较。scope 包括会话、父会话、端点 origin 与路径、模型、flow 和 operation。
+新 executor 没有基线；该指标不代表完整会话的前缀复用率或供应商缓存命中率。
+每个 scope 只保留最新请求体，并随 executor 释放；非字符串请求体清除该 scope 的基线，
+报告 `unsupported`，首次字符串请求体报告 `no_previous_request`。

@@ -5,15 +5,19 @@
 import { text } from "@noobot/shared/value";
 import { MODEL_GENERATION_API_TYPE } from "../model/model-capabilities.js";
 
+const IMAGE_OUTPUT_TYPE = "image";
 const PIXEL_SIZE = Object.freeze({
+  fields: Object.freeze(["size"]),
   pattern: /^(auto|[1-9]\d*x[1-9]\d*)$/,
   description: "auto or an explicit pixel size such as 1024x1024",
 });
 const ASPECT_RATIO_SIZE = Object.freeze({
+  fields: Object.freeze(["size"]),
   pattern: /^[1-9]\d*:[1-9]\d*$/,
   description: "an aspect ratio such as 16:9",
 });
 const DASHSCOPE_SIZE = Object.freeze({
+  fields: Object.freeze(["size", "resolution"]),
   pattern: /^([1-9]\d*[x*][1-9]\d*|[124]K)$/,
   description: "pixels such as 1024x1024 or a resolution such as 2K",
 });
@@ -25,27 +29,20 @@ const IMAGE_SIZE_RULES = Object.freeze({
   [MODEL_GENERATION_API_TYPE.DASHSCOPE_MULTIMODAL]: DASHSCOPE_SIZE,
 });
 
-export function describeImageGenerationSizes() {
-  return Object.entries(IMAGE_SIZE_RULES)
-    .map(([apiType, rule]) => `${apiType}: ${rule.description}`)
-    .join("; ");
-}
-
 export function requireModelGenerationSize(apiType, operation) {
-  if (operation.input.outputType !== "image") return;
+  if (operation.input.outputType !== IMAGE_OUTPUT_TYPE) return;
   const rule = IMAGE_SIZE_RULES[apiType];
   if (!rule) throw new TypeError(`unsupported image generation API type: ${apiType}`);
-  const { size, resolution } = operation.options;
-  if (apiType === MODEL_GENERATION_API_TYPE.DASHSCOPE_MULTIMODAL && size && resolution)
-    throw new TypeError("DashScope images accept size or resolution, not both");
-  const value =
-    apiType === MODEL_GENERATION_API_TYPE.DASHSCOPE_MULTIMODAL ? size || resolution : size;
+  const values = rule.fields.map((field) => operation.options[field]).filter(Boolean);
+  if (values.length > 1)
+    throw new TypeError(`${apiType} accepts ${rule.fields.join(" or ")}, not both`);
+  const [value] = values;
   if (value && !rule.pattern.test(value))
     throw new TypeError(`${apiType} size must be ${rule.description}`);
 }
 
 export const MODEL_GENERATION_OPTION_FIELDS = Object.freeze({
-  image: Object.freeze({
+  [IMAGE_OUTPUT_TYPE]: Object.freeze({
     size: "size",
     resolution: "resolution",
     n: "n",

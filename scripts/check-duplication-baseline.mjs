@@ -5,6 +5,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { defineCheck, emptyMeasurement, runCheckWhenMain } from "./quality/check-protocol.mjs";
@@ -15,6 +16,11 @@ import {
 } from "./quality/source-inventory.mjs";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
+const require = createRequire(import.meta.url);
+const jscpdCli = path.resolve(
+  path.dirname(require.resolve("jscpd/package.json")),
+  require("jscpd/package.json").bin.jscpd,
+);
 
 export function measureReport(report, root = repositoryRoot) {
   const { clones, duplicatedLines } = report.statistics.total;
@@ -48,11 +54,10 @@ async function runJscpd(temporaryRoot) {
   };
   await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
   const sourceRoots = await getFirstPartySourceRoots({ repositoryRoot });
-  execFileSync(
-    process.platform === "win32" ? "npx.cmd" : "npx",
-    ["--yes", "jscpd@5.0.11", ...sourceRoots, "--config", configPath],
-    { cwd: repositoryRoot, stdio: "pipe" },
-  );
+  execFileSync(process.execPath, [jscpdCli, ...sourceRoots, "--config", configPath], {
+    cwd: repositoryRoot,
+    stdio: "pipe",
+  });
   return JSON.parse(await readFile(path.join(reportDirectory, "jscpd-report.json"), "utf8"));
 }
 
@@ -79,7 +84,7 @@ export const CHECK = defineCheck({
     },
   },
   exemptions: [],
-  baseline: { clones: 26, duplicatedLines: 313, exemptions: 0 },
+  baseline: { clones: 24, duplicatedLines: 300, exemptions: 0 },
   measure,
 });
 

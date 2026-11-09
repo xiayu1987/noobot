@@ -8,7 +8,6 @@ export { relaySeparateModelOutputAsUserMessage } from "../shared/relay-model-out
 export {
   CAPABILITY_DOMAIN,
   GUIDANCE_REASON,
-  GUIDANCE_WEB_TOOL_NAMES,
   LOCALE,
   PROMPT_ENVELOPE,
   TOOL_NAME_SET,

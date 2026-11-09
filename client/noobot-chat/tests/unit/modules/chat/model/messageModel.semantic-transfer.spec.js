@@ -5,7 +5,10 @@
  */
 import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import { describe, expect, it } from "vitest";
-import { buildViewMessage } from "../../../../../src/modules/chat/model/messageModel.js";
+import { buildViewMessage as buildMessage } from "../../../../../src/modules/chat/model/messageModel.js";
+
+const buildViewMessage = (message, options) =>
+  buildMessage(message, { ...options, userId: "admin" });
 
 const envelope = {
   protocol: "noobot.semantic-transfer",

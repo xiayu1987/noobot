@@ -48,8 +48,6 @@ export async function ensureRunDir(paths) {
   return true;
 }
 
-export { resolveHookClientEmitter };
-
 export function isPrimaryExecutionScope(ctx = {}) {
   const scope = text(ctx?.executionScope).toLowerCase();
   return !scope || scope === "primary";
@@ -69,7 +67,7 @@ export function emitHarnessHookProgress(ctx = {}, event = "", data = {}) {
   }
 }
 
-export function resolveHookManager(api = {}) {
+function resolveHookManager(api = {}) {
   return api.hookManager || null;
 }
 

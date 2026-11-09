@@ -38,7 +38,6 @@
   --noobot-letter-spacing-subtle: 0.01em;
   --noobot-letter-spacing-wide: 0.04em;
   --noobot-letter-spacing-caps: 0.5px;
-  --noobot-letter-spacing-caps-wide: 0.65px;
 
   --noobot-btn-font-weight: var(--noobot-font-weight-medium);
   --noobot-msg-avatar-font-size: var(--noobot-font-size-sm);
@@ -47,5 +46,4 @@
   --noobot-msg-caption-font-size: var(--noobot-font-size-md);
   --noobot-msg-font-size: var(--noobot-font-size-lg);
   --noobot-msg-line-height: var(--noobot-line-height-body);
-  --noobot-thinking-status-font-size: var(--noobot-font-size-2xs);
 }

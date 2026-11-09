@@ -8,7 +8,6 @@ import { JSDOM } from "jsdom";
 import { normalizeText } from "../shared-utils.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
-import { text } from "@noobot/shared/value";
 
 export function cleanAndDedupTextLines(
   input = "",
@@ -106,18 +105,6 @@ function aggressiveCleanText(input = "", maxLines = QUANTITY_THRESHOLDS.web.text
   return cleanAndDedupTextLines(lines.join("\n"), maxLines);
 }
 
-function filterByExtraNoisePatterns(lines = [], extraNoisePatterns = []) {
-  if (!Array.isArray(lines) || !lines.length) return [];
-  const normalizedPatterns = (Array.isArray(extraNoisePatterns) ? extraNoisePatterns : [])
-    .map((patternItem) => text(patternItem).toLowerCase())
-    .filter(Boolean);
-  if (!normalizedPatterns.length) return lines;
-  return lines.filter((lineText) => {
-    const normalizedLine = String(lineText || "").toLowerCase();
-    return !normalizedPatterns.some((patternText) => normalizedLine.includes(patternText));
-  });
-}
-
 export function extractVisibleTextFromHtml(html = "") {
   try {
     const dom = new JSDOM(String(html || ""));
@@ -143,24 +130,4 @@ export function extractReadableTextFromHtml(html = "", urlValue = "") {
   } catch {
     return "";
   }
-}
-
-export function extractReadableLinesFromHtml(
-  html = "",
-  {
-    urlValue = "",
-    maxLines = QUANTITY_THRESHOLDS.web.readableExtractMaxLines,
-    extraNoisePatterns = [],
-  } = {},
-) {
-  const cleanedText = extractReadableTextFromHtml(html, urlValue);
-  if (!cleanedText) return [];
-  const lines = cleanedText
-    .split(/\r?\n/)
-    .map((lineText) => normalizeText(lineText))
-    .filter(Boolean);
-  return filterByExtraNoisePatterns(lines, extraNoisePatterns).slice(
-    0,
-    Math.max(0, Number(maxLines) || 0),
-  );
 }

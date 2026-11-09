@@ -56,7 +56,7 @@ function isHarnessInjectedSessionRecord(record = {}) {
   return isHarnessInjectedSessionRecordBase(record, { role: "user" });
 }
 
-export function applyTransferPayloadToContextMessage(message = {}, payload = {}) {
+function applyTransferPayloadToContextMessage(message = {}, payload = {}) {
   const transferPayload = normalizeTransferPayload(payload);
   if (!transferPayload.transferEnvelopes.length) return message;
   const current = readContextMessageValue(message, "transferEnvelopes");

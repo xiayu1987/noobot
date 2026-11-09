@@ -57,8 +57,16 @@ transfer mode differs from the requested one (SSE exactly when streaming was req
 is a `ModelProtocolError` with kind `response_mode_mismatch` and code
 `MODEL_RESPONSE_MODE_MISMATCH`, not retryable. The executor switches the streaming mode
 once, before any streamed token, unless the kind is `aborted`, `authentication`,
-`rate_limit` or `classification`. Provider SDK retries are disabled; the executor is
-the only retry authority.
+`rate_limit`, `protocol` or `classification`. Provider SDK retries are disabled; the executor is
+the only retry authority. A `ModelProtocolError` defaults to kind `protocol` and is
+not retryable: malformed or unterminated responses must not be replayed implicitly.
+
+Request prefix measurements compare exact UTF-8 HTTP body bytes against the immediately
+preceding request in the same executor and scope (session, parent session, endpoint origin
+and path, model, flow and operation). A new executor has no baseline; this is not a
+session-wide prefix reuse rate or provider cache-hit metric. Each scope retains only its
+latest body until executor disposal. Non-string bodies clear the scope baseline and
+report `unsupported`; the first string body reports `no_previous_request`.
 The model host alone mints `invocation.requestId` and `invocation.invocationId` per call;
 callers only describe `flow`, `purpose`, `domain` and `contextSequencePolicy`. Session scope is
 validated as canonical text by `requireInvocationScope`; the executor validates and never

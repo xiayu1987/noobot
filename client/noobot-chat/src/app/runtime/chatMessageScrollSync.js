@@ -30,11 +30,11 @@ function shouldKeepNavigatorScrollLock(wrapRef, nextAnchorId) {
   return true;
 }
 
-export function readMountedMessageListPanel(messageListPanelRef) {
+function readMountedMessageListPanel(messageListPanelRef) {
   return messageListPanelRef.value;
 }
 
-export function readMountedMessageListWrap(messageListPanelRef) {
+function readMountedMessageListWrap(messageListPanelRef) {
   const panel = readMountedMessageListPanel(messageListPanelRef);
   return panel === null ? null : panel.getWrapRef();
 }

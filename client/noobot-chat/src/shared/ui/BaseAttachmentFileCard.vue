@@ -6,13 +6,12 @@
 <script setup>
 import { computed } from "vue";
 import { Document, Download } from "@element-plus/icons-vue";
-import { resolveParsedResultAccessMeta } from "../../infrastructure/api/attachments/attachmentAccess.js";
+import { resolveParsedResultRelation } from "../../infrastructure/api/attachments/attachmentAccess.js";
 import { text } from "@noobot/shared/value";
 import "./file-card-common.css";
 
 const props = defineProps({
   attachmentItem: { type: Object, required: true },
-  userId: { type: String, default: "" },
   thumbnailUrl: { type: String, default: "" },
   isImageMime: { type: Function, required: true },
   canPreviewAttachment: { type: Function, required: true },
@@ -60,10 +59,10 @@ const showPluginBadge = computed(
 );
 const showAgentBadge = computed(() => props.badgeMode === "auto" && ownerType.value === "agent");
 const showCustomBadge = computed(() => Boolean(text(props.customBadgeText)));
-const parsedResultAccess = computed(() =>
-  resolveParsedResultAccessMeta(props.attachmentItem, { userId: props.userId }),
+const parsedResultRelation = computed(() => resolveParsedResultRelation(props.attachmentItem));
+const hasParsedResult = computed(
+  () => props.showParsedResult && Boolean(parsedResultRelation.value),
 );
-const hasParsedResult = computed(() => props.showParsedResult && Boolean(parsedResultAccess.value));
 const parsedResultPreviewEnabled = computed(
   () =>
     hasParsedResult.value &&
@@ -158,7 +157,7 @@ function emitPreview() {
           class="parsed-result-action noobot-flat-soft-btn"
           :title="
             translate('message.previewParsedResult', {
-              name: parsedResultAccess?.name || translate('message.parsedResultDefaultName'),
+              name: parsedResultRelation?.name || translate('message.parsedResultDefaultName'),
             })
           "
           @click.stop="emit('preview-parsed-result', attachmentItem)"
@@ -170,7 +169,7 @@ function emitPreview() {
           class="parsed-result-action noobot-flat-soft-btn"
           :title="
             translate('message.downloadParsedResult', {
-              name: parsedResultAccess?.name || translate('message.parsedResultDefaultName'),
+              name: parsedResultRelation?.name || translate('message.parsedResultDefaultName'),
             })
           "
           @click.stop="emit('download-parsed-result', attachmentItem)"

@@ -29,7 +29,7 @@ function normalizeInteractionNotification(input = {}) {
   };
 }
 
-export function normalizeInteractionRequestPayload(payload, { channelSessionId }) {
+function normalizeInteractionRequestPayload(payload, { channelSessionId }) {
   if (!isCanonicalText(channelSessionId)) {
     throw new TypeError("interaction request requires channelSessionId");
   }

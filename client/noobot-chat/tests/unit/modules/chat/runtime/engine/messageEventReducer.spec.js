@@ -37,7 +37,7 @@ function message(overrides = {}) {
       content: "",
       ...overrides,
     },
-    { sessionId: "session-1" },
+    { sessionId: "session-1", userId: "admin" },
   );
 }
 
