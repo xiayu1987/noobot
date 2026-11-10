@@ -20,7 +20,7 @@ function createHarness(invoke, options = {}) {
     registry: {
       resolve: () => ({
         id: "openai-compatible",
-        classifyError: () => ({ kind: "unknown", retryable: true }),
+        classifyError: () => ({ kind: "unknown" }),
         bindTools: ({ client }) => client,
         prepareMessages: ({ messages }) => messages,
         resolveResponseSource: () => "message",

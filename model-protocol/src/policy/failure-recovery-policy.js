@@ -12,24 +12,28 @@ export const MODEL_RECOVERY_ACTION = Object.freeze({
   REVISE_REQUEST: "revise_request",
 });
 
-const REVISIONS = new Map([
-  [K.RESPONSE_MODE_MISMATCH, "set_streaming_mode"],
-  [K.UNKNOWN, "set_streaming_mode"],
-]);
+export const MODEL_REQUEST_REVISION = Object.freeze({
+  SET_STREAMING_MODE: "set_streaming_mode",
+});
 
-export function resolveModelFailureRecovery(classification) {
-  const revision = REVISIONS.get(classification.kind);
+const REVISIONS = new Map([[K.RESPONSE_MODE_MISMATCH, MODEL_REQUEST_REVISION.SET_STREAMING_MODE]]);
+
+const RETRY_SAME_KINDS = new Set([K.RATE_LIMIT, K.TIMEOUT, K.TEMPORARY_UNAVAILABLE, K.UNKNOWN]);
+
+export function resolveModelFailureRecovery({ kind }) {
+  const revision = REVISIONS.get(kind) ?? null;
   let action = MODEL_RECOVERY_ACTION.STOP;
   if (revision) action = MODEL_RECOVERY_ACTION.REVISE_REQUEST;
-  else if (classification.retryable) action = MODEL_RECOVERY_ACTION.RETRY_SAME;
-  return Object.freeze({
-    action,
-    revision: revision || null,
-  });
+  else if (RETRY_SAME_KINDS.has(kind)) action = MODEL_RECOVERY_ACTION.RETRY_SAME;
+  return Object.freeze({ action, revision });
 }
 
-export function mayReplayModelRequest({ streamedTokens, attempts, maxAttempts, signal }) {
-  return !signal?.aborted && streamedTokens === 0 && attempts < maxAttempts;
+export function resolveUntriedStreamingMode({ modes, triedModes }) {
+  return modes.find((mode) => !triedModes.has(mode)) ?? null;
+}
+
+export function mayReplayModelRequest({ outputObserved, attempts, maxAttempts, signal }) {
+  return !signal?.aborted && !outputObserved && attempts < maxAttempts;
 }
 
 export function resolveModelRetryDelay({ attempt, baseDelayMs, retryAfterMs = 0 }) {

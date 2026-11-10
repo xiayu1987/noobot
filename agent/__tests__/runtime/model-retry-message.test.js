@@ -16,7 +16,7 @@ import { initializeCurrentTurnMessageEventProjection } from "../../src/events/cu
 import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import { createCanonicalMessageEventSessionManager } from "../helpers/canonical-message-event-session-manager.js";
 
-test("provider errors change parameters and update one durable retry activity", async () => {
+test("provider errors retry the same request and update one durable retry activity", async () => {
   const modes = [];
   const progress = [];
   const activities = [];
@@ -24,7 +24,7 @@ test("provider errors change parameters and update one durable retry activity", 
     sessionManager: createCanonicalMessageEventSessionManager({ producerId: "model-retry" }),
     eventListener: {
       onEvent({ event, data }) {
-        if (event === "model.invocation.streaming_mode_retry") progress.push(data.retryCount);
+        if (event === "model.invocation.retry_scheduled") progress.push(data.retryCount);
         if (
           event === "authority_event_committed" &&
           data.envelope.payload.activityKind === ACTIVITY_KIND.MODEL_RETRY
@@ -81,7 +81,7 @@ test("provider errors change parameters and update one durable retry activity", 
     },
   });
   assert.equal(response.output.text, "ok");
-  assert.deepEqual(modes, [false, true, false]);
+  assert.deepEqual(modes, [false, false, false]);
   assert.deepEqual(progress, [1, 2]);
   assert.equal(activities.length, 2);
   assert.equal(new Set(activities.map(({ payload }) => payload.activityId)).size, 1);

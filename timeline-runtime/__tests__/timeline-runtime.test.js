@@ -42,6 +42,57 @@ test("array indexes and ordered facts preserve one serializable array", () => {
   assert.equal(JSON.stringify(values).includes("index"), false);
 });
 
+test("ordered insertion rejects a missing index updater before mutating facts", () => {
+  const existing = { id: "b", sequence: 2 };
+  const values = [existing];
+  const index = new Map([["b", 0]]);
+  assert.throws(
+    () =>
+      upsertOrderedFact({
+        values,
+        index,
+        key: "a",
+        fact: { id: "a", sequence: 1 },
+        compare: (left, right) => left.sequence - right.sequence,
+      }),
+    /ordered insertion requires recordInsertion/,
+  );
+  assert.deepEqual(values, [existing]);
+  assert.deepEqual([...index], [["b", 0]]);
+});
+
+test("ordered facts compare falsy values and preserve equal-fact insertion order", () => {
+  const values = [0];
+  const arrayIndex = createWeakArrayIndex({ keyOf: String });
+  const index = arrayIndex.indexFor(values);
+  upsertOrderedFact({
+    values,
+    index,
+    key: "-1",
+    fact: -1,
+    compare: (left, right) => left - right,
+    recordInsertion: arrayIndex.recordInsertion,
+  });
+  assert.deepEqual(values, [-1, 0]);
+  assert.equal(index.get("0"), 1);
+
+  const first = { id: "a", sequence: 1 };
+  const last = { id: "c", sequence: 3 };
+  const facts = [first, last];
+  const factsIndex = createWeakArrayIndex({ keyOf: (item) => item.id });
+  const incoming = { id: "b", sequence: 1 };
+  upsertOrderedFact({
+    values: facts,
+    index: factsIndex.indexFor(facts),
+    key: incoming.id,
+    fact: incoming,
+    compare: (left, right) => left.sequence - right.sequence,
+    recordInsertion: factsIndex.recordInsertion,
+  });
+  assert.deepEqual(facts, [first, incoming, last]);
+  assert.equal(factsIndex.indexFor(facts).get("c"), 2);
+});
+
 test("serialized window index keeps the wire array bounded", () => {
   const owner = { eventIds: ["a"] };
   const index = createSerializedWindowIndex({ field: "eventIds", limit: 2 });

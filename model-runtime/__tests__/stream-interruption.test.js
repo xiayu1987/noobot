@@ -70,9 +70,9 @@ for (const scenario of ["recover", "exhaust", "unknown", "partial"]) {
       });
     if (scenario === "recover") assert.equal((await invoke()).output.text, "ok");
     else await assert.rejects(invoke(), (error) => error.message === failure.message);
-    assert.equal(calls, scenario === "partial" ? 1 : scenario === "unknown" ? 3 : 2);
-    assert.deepEqual(modes, scenario === "unknown" ? [true, false, true] : [true]);
-    assert.equal(events.includes("model.invocation.streaming_mode_retry"), scenario === "unknown");
+    assert.equal(calls, scenario === "partial" ? 1 : 2);
+    assert.deepEqual(modes, [true]);
+    assert.equal(events.includes("model.invocation.streaming_mode_retry"), false);
   });
 }
 
@@ -100,13 +100,12 @@ test("SDK preserves a documented SSE server_error for provider classification", 
       assert.equal(error.code, event.code);
       assert.deepEqual(openAiCompatibleAdapter.classifyError(error, { operatorId: "openai" }), {
         kind: "temporary_unavailable",
-        retryable: true,
       });
       return true;
     },
   );
   assert.deepEqual(
     openAiCompatibleAdapter.classifyError(new APIError(401, event), { operatorId: "openai" }),
-    { kind: "authentication", retryable: false },
+    { kind: "authentication" },
   );
 });

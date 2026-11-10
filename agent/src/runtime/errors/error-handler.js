@@ -4,69 +4,24 @@
  * SPDX-License-Identifier: MIT
  */
 import { emitEvent } from "../../events/index.js";
-import { resolveErrorMessage } from "../../shared/utils/error-utils.js";
+import { resolveErrorDetails, resolveErrorMessage } from "../../shared/utils/error-utils.js";
 import { classifyEngineError } from "./error-classifier.js";
 import {
   resolveExecutionAbortMessage,
   resolveExecutionAbortReason,
 } from "@noobot/session-protocol/execution-abort";
-import { resolveErrorHeaderValue } from "../../shared/utils/error-header.js";
 import { text } from "@noobot/shared/value";
 
-function resolveErrorStatus(error = {}) {
-  const rawStatus =
-    error?.status ??
-    error?.statusCode ??
-    error?.error?.status ??
-    error?.response?.status ??
-    error?.cause?.status ??
-    error?.cause?.statusCode ??
-    error?.cause?.error?.status;
-  const status = Number(rawStatus);
-  return Number.isFinite(status) ? status : undefined;
-}
-
-function resolveRequestId(error = {}) {
-  return (
-    error?.request_id ??
-    error?.requestId ??
-    error?.requestID ??
-    resolveErrorHeaderValue(error?.headers, "x-request-id") ??
-    resolveErrorHeaderValue(error?.response?.headers, "x-request-id") ??
-    resolveErrorHeaderValue(error?.cause?.headers, "x-request-id") ??
-    resolveErrorHeaderValue(error?.cause?.response?.headers, "x-request-id") ??
-    undefined
-  );
-}
-
-export function buildEngineErrorPayload({
-  error,
-  abortSignal = null,
-  classification,
-  metadata = {},
-} = {}) {
-  const normalizedClassification = classification || classifyEngineError(error, abortSignal);
-  const status = resolveErrorStatus(error);
-  const code =
-    error?.code ??
-    error?.error?.code ??
-    error?.cause?.code ??
-    error?.cause?.error?.code ??
-    undefined;
+export function buildEngineErrorPayload({ error, abortSignal = null, metadata = {} } = {}) {
+  const normalizedClassification = classifyEngineError(error, abortSignal);
+  const details = resolveErrorDetails(error);
   const abortReason = resolveExecutionAbortReason({ error, abortSignal });
-  const type =
-    abortReason?.type ??
-    error?.type ??
-    error?.error?.type ??
-    error?.cause?.type ??
-    error?.cause?.error?.type ??
-    undefined;
+  const type = abortReason?.type ?? details.type;
   const name = text(error?.name || error?.cause?.name);
   const message =
     normalizedClassification === "abort"
       ? resolveExecutionAbortMessage({ error, abortSignal })
       : resolveErrorMessage(error);
-  const requestId = resolveRequestId(error);
 
   return {
     classification: normalizedClassification,
@@ -74,15 +29,10 @@ export function buildEngineErrorPayload({
     ...metadata,
     error: {
       classification: normalizedClassification,
-      retryable: normalizedClassification === "retryable",
-      fatal: normalizedClassification === "fatal",
-      abort: normalizedClassification === "abort",
       name: name || undefined,
       message,
-      status,
-      code,
+      ...details,
       type,
-      requestId,
       source: text(metadata?.source) || undefined,
     },
   };
@@ -95,16 +45,10 @@ export function handleEngineError({
   event = "agent_error",
   metadata = {},
 } = {}) {
-  const classification = classifyEngineError(error, abortSignal);
-  const payload = buildEngineErrorPayload({
-    error,
-    abortSignal,
-    classification,
-    metadata,
-  });
+  const payload = buildEngineErrorPayload({ error, abortSignal, metadata });
   emitEvent(eventListener, event, payload);
   return {
-    classification,
+    classification: payload.classification,
     error,
     payload,
   };

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { WORKSPACE_LAYOUT } from "./layout.js";
+import { text } from "@noobot/shared/value";
 
 export const WORKSPACE_OPERATION = Object.freeze({
   CREATE: "create",
@@ -76,17 +77,7 @@ export const WORKSPACE_ASSET_SECTIONS = Object.freeze(
 export function normalizeWorkspaceSections(input = []) {
   const all = Object.keys(WORKSPACE_SECTIONS);
   if (!Array.isArray(input) || !input.length) return all;
-  const normalized = [
-    ...new Set(
-      input
-        .map((item) =>
-          String(item ?? "")
-            .trim()
-            .toLowerCase(),
-        )
-        .filter(Boolean),
-    ),
-  ];
+  const normalized = [...new Set(input.map((item) => text(item).toLowerCase()).filter(Boolean))];
   const invalid = normalized.filter((item) => !all.includes(item));
   if (invalid.length) {
     const error = new TypeError(`invalid workspace sections: ${invalid.join(", ")}`);

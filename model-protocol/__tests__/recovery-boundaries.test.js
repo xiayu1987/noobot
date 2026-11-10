@@ -27,6 +27,32 @@ test("media generation rejects a contradictory total retry budget", () => {
   );
 });
 
+test("retry policy rejects invalid configuration instead of silently correcting it", () => {
+  const defaults = normalizeRetryPolicy({});
+  assert.equal(normalizeRetryPolicy({ transport: { maxAttempts: 2 } }).transport.maxAttempts, 2);
+  assert.equal(
+    normalizeRetryPolicy({ transport: { maxAttempts: 2 } }).transport.baseDelayMs,
+    defaults.transport.baseDelayMs,
+  );
+  for (const input of [
+    null,
+    [],
+    { transport: { maxAttempts: "abc" } },
+    { transport: { maxAttempts: "3" } },
+    { transport: { maxAttempts: -5 } },
+    { transport: { maxAttempts: 1.5 } },
+    { transport: { baseDelayMs: -1 } },
+    { transport: { baseDelayMs: Infinity } },
+    { transport: { unknown: 1 } },
+    { transport: null },
+    { maxTotalAttempts: 0 },
+    { emptyResponse: { maxAttempts: 0 } },
+    { reasoningOnly: { baseDelayMs: 1 } },
+    { unknown: {} },
+  ])
+    assert.throws(() => normalizeRetryPolicy(input), TypeError, JSON.stringify(input));
+});
+
 test("clock cancellation rejects immediately and releases its abort listener", async () => {
   const controller = new AbortController();
   const waiting = SYSTEM_CLOCK_PORT.sleep(TIME_THRESHOLDS.model.maxRetryDelayMs, {

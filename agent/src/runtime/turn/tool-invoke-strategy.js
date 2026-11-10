@@ -69,9 +69,7 @@ export function createBoundLlmToolChoiceInvoker({
         toolBinding: effectiveBindOptions,
       },
       policies: {
-        retry: {
-          ...MAIN_FLOW_NO_FINAL_RESPONSE_RETRY,
-        },
+        retry: MAIN_FLOW_NO_FINAL_RESPONSE_RETRY,
       },
       invocation: {
         flow: "agent.main",

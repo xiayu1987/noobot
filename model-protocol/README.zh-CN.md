@@ -3,7 +3,7 @@
 调用观测事件统一使用 `MODEL_INVOCATION_EVENT`。每次失败的 provider attempt 记录在
 `execution.attempts`；调用最终失败时恰好发出一次 `FAILED` 事件，载荷由协议投影为
 attempt 数、错误消息、错误码和错误类型。每个 attempt 错误只由 `projectModelAttemptError`
-投影为冻结的 `{ message, code, kind, retryable, classificationError }`，`execution.attempts`、
+投影为冻结的 `{ message, code, kind, classificationError }`，`execution.attempts`、
 `STREAMING_MODE_RETRY` 与 `FAILED.failedAttempts` 共用该结构；`message` 为原始错误文本，可为空。
 可重试的中间失败不发终态失败事件。调用取消时发出
 `CANCELLED` 而非 `FAILED`；成功调用发出 `COMPLETED`。
@@ -18,14 +18,15 @@ operation 初始化失败时，若尚未开始 provider attempt，发出 attempt
 `classificationError` 保留分类错误文本，禁止传输及流式模式重试；原调用异常保持原样抛出。
 每次调用内，同一个错误只分类一次。
 失败分类的唯一入口是 `classifyModelFailure`，结果固定为冻结的
-`{ kind, retryable, classificationError }`：仅 `ModelProtocolError` 自带声明分类，其余错误
+`{ kind, classificationError }`：仅 `ModelProtocolError` 自带声明分类，其余错误
 一律交给适配器 `classifyError`；适配器结果的 `kind` 必须是 `MODEL_ERROR_KIND`（不得声明
-`classification`），非法结果归类为 `classification`；`retryable` 仅由协议按 kind 推导。
+`classification`），非法结果归类为 `classification`。不另设可重试标志，恢复动作是重试的唯一依据。
 适配器读取结构化字段（`name`、`code`、`type`、`status`、headers）分类，错误文本不参与重试判定。
 成功响应的传输模式与请求不符（仅在请求流式时应为 SSE）时，抛出 kind 为
 `response_mode_mismatch`、code 为 `MODEL_RESPONSE_MODE_MISMATCH` 的 `ModelProtocolError`，
-由 `resolveModelFailureRecovery` 决策恢复：未知／未登记供应商错误和模式不匹配，变更 streaming
-参数后重试；明确限流、超时、临时不可用保持参数重试；其他失败停止。
+由 `resolveModelFailureRecovery` 决策恢复：模式不匹配时切换到本次调用尚未尝试的声明模式，
+全部尝试后停止；明确限流、超时、临时不可用及未知／未登记供应商错误在传输预算内保持参数重试；
+其他失败停止。
 传输、模式切换和空响应重试统一通过 `resolveModelRetryDelay` 指数退避；有效的
 `Retry-After` 作为最小等待时间，不另设重试预算。
 指数退避上限统一取 `TIME_THRESHOLDS.model.maxRetryDelayMs`（默认 60 秒）；上游最小等待
@@ -33,10 +34,12 @@ operation 初始化失败时，若尚未开始 provider attempt，发出 attempt
 取消立即拒绝等待并释放定时器与监听器，所有恢复等待都消费调用信号。
 执行控制只通过 `options.signal`、`options.callbacks` 和 `options.streaming` 传入；
 `options.invoke` 禁止携带 `signal`、`callbacks`、`stream` 和 `streaming`。
-即使没有业务回调也记录输出进度；响应校验成功后才缓存模式。非流式 Responses 要求 JSON
+输出进度 `outputObserved` 只由 `hasModelStreamOutput` 判定的传输事件产生，即使没有业务回调也记录，
+`mayReplayModelRequest` 是唯一重放门控；响应校验成功后才缓存模式。非流式 Responses 要求 JSON
 媒体类型，SDK 通过 `asResponse()` 提供原始响应，传输层通过 `Response.json()` 将单次解码
 结果共享给计量与适配器校验。协议校验先于 SDK 输出投影和规范化，畸形正文不进入转换重试。
-所有重试共享 `maxTotalAttempts`（包含首次请求），传输重试还受每种模式的预算限制。
+所有重试共享 `maxTotalAttempts`（包含首次请求），传输重试还受每种模式的预算限制。非法重试配置
+（非整数、负数、总次数小于 1）直接报错，不做纠正。
 已有输出或取消后禁止重放；operation 只切换至声明可用的模式，媒体提交禁止自动重放。
 诊断总预算固定为一次。重试事件携带 `retryCount/maxRetries`；宿主用 invocation 范围内固定
 activityId 覆盖同一条 `model_retry` 活动，计数增长不追加展示消息。
@@ -46,7 +49,7 @@ activityId 覆盖同一条 `model_retry` 活动，计数增长不追加展示消
 异常类或模型系列套用；`google` 与 `gemini` 引用同一份 Google 规则。
 适配器提取事实，`resolveModelFailureRecovery` 决策动作，执行器管理尝试。
 
-| 供应商／依据                                                                  | 保持参数重试                 | 停止                                                     | 变更 streaming 后重试                                                  |
+| 供应商／依据                                                                  | 保持参数重试                 | 停止                                                     | 未知错误（保持参数重试）                                               |
 | ----------------------------------------------------------------------------- | ---------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------- |
 | [OpenAI](https://developers.openai.com/api/docs/guides/error-codes)           | 明确限流、超时、临时服务错误 | 认证、额度不足、非法请求、内容策略                       | 无法分类的错误                                                         |
 | [Anthropic](https://platform.claude.com/docs/en/api/errors)                   | 明确 rate_limit_error、过载  | 402 账单错误、enforced_spend_limit_reached               | 含义不明的 429、其他未知错误                                           |
@@ -62,7 +65,7 @@ activityId 覆盖同一条 `model_retry` 活动，计数增长不追加展示消
 结构化错误码覆盖时按非法请求停止。这是本地 HTTP 策略，不宣称是供应商专属错误码契约。
 只有 DeepSeek 和 Anthropic 登记 402 额度／账单语义；其他未登记的 402 保持未知。
 错误码只在所属 operator 内生效，供应商扩展不继承 OpenAI 错误码含义。
-未知错误变参属于有界恢复策略，不声明改参数一定能修复。重试计数按已调度次数与总预算上限展示，
+未知错误原参重试属于有界恢复策略，不声明重试一定能修复。重试计数按已调度次数与总预算上限展示，
 分类子预算可能提前结束；活动更新保留为事件，但投影后只有一条可见活动。
 
 `invocation.requestId` 与 `invocation.invocationId` 由模型宿主每次调用独占生成，调用方只

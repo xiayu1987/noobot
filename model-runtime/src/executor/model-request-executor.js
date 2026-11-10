@@ -20,7 +20,9 @@ import {
   ModelProtocolError,
   normalizeRetryPolicy,
   mayReplayModelRequest,
+  MODEL_REQUEST_REVISION,
   resolveModelFailureRecovery,
+  resolveUntriedStreamingMode,
   resolveModelRetryDelay,
   isModelRetryEvent,
   NOOP_OBSERVATION_PORT,
@@ -45,12 +47,12 @@ import { executeTransportRetry } from "./retry-coordinator.js";
 import { createProviderAdapterRegistry } from "../adapters/registry.js";
 import { executeNativeGeneration } from "../adapters/native-generation.js";
 import {
-  alternateStreamingMode,
-  mayRetryWithAlternateStreaming,
   resolvePreferredStreaming,
   streamingProviderCacheKey,
 } from "../policies/streaming-mode-policy.js";
 import { text, isFunction } from "@noobot/shared/value";
+
+const CHAT_STREAMING_MODES = Object.freeze([true, false]);
 
 function projectObservableModel(model = {}) {
   return Object.freeze({
@@ -164,7 +166,7 @@ export function createModelRequestExecutor({
         attempt: () => totalAttempts,
         observe,
         onOutput: () => {
-          attemptState.streamedTokens += 1;
+          attemptState.outputObserved = true;
         },
       });
       const isCancelled = (error) =>
@@ -291,7 +293,7 @@ export function createModelRequestExecutor({
           signal: requestBase.options.signal,
           run: async () => {
             totalAttempts += 1;
-            attemptState = { streamedTokens: 0 };
+            attemptState = { outputObserved: false };
             await observe(MODEL_INVOCATION_EVENT.ATTEMPT_STARTED, {
               attempt: totalAttempts,
               operationKind: requestBase.operation.kind,
@@ -322,8 +324,7 @@ export function createModelRequestExecutor({
         try {
           return { result: await invokeOperationTransport(credential) };
         } catch (error) {
-          const switchable = modes.includes(alternateStreamingMode(streaming));
-          if (!switchable || !(await switchStreamingMode(error))) throw error;
+          if (!(await switchStreamingMode(error, modes))) throw error;
           return { switched: true };
         }
       };
@@ -362,10 +363,11 @@ export function createModelRequestExecutor({
         });
         return respond(output, result.value);
       };
-      let attemptState = { streamedTokens: 0 };
+      let attemptState = { outputObserved: false };
+      const triedStreamingModes = new Set();
       const canReplay = () =>
         mayReplayModelRequest({
-          streamedTokens: attemptState.streamedTokens,
+          outputObserved: attemptState.outputObserved,
           attempts: totalAttempts,
           maxAttempts: retry.maxTotalAttempts,
           signal: requestBase.options.signal,
@@ -417,10 +419,9 @@ export function createModelRequestExecutor({
           classify,
           observe,
           signal: request.options.signal,
-          streamedTokens: () => attemptState.streamedTokens,
           run: async () => {
             totalAttempts += 1;
-            attemptState = { streamedTokens: 0 };
+            attemptState = { outputObserved: false };
             await emitContextTrace(request);
             await observe(MODEL_INVOCATION_EVENT.ATTEMPT_STARTED, {
               attempt: totalAttempts,
@@ -443,23 +444,29 @@ export function createModelRequestExecutor({
             );
           },
         });
-      const switchStreamingMode = async (error) => {
+      const switchStreamingMode = async (error, modes) => {
         if (!canReplay()) return false;
-        if (!mayRetryWithAlternateStreaming(attemptState.streamedTokens, classify(error))) {
-          return false;
-        }
+        const classification = classify(error);
+        const recovery = resolveModelFailureRecovery(classification);
+        if (recovery.revision !== MODEL_REQUEST_REVISION.SET_STREAMING_MODE) return false;
+        triedStreamingModes.add(streaming);
+        const nextStreaming = resolveUntriedStreamingMode({
+          modes,
+          triedModes: triedStreamingModes,
+        });
+        if (nextStreaming === null) return false;
         const delayMs = resolveModelRetryDelay({
           attempt: totalAttempts,
           baseDelayMs: retry.transport.baseDelayMs,
-          retryAfterMs: classify(error).retryAfterMs,
+          retryAfterMs: classification.retryAfterMs,
         });
-        streaming = alternateStreamingMode(streaming);
+        streaming = nextStreaming;
         await observe(MODEL_INVOCATION_EVENT.STREAMING_MODE_RETRY, {
           attempt: totalAttempts,
           nextStreaming: streaming,
           reason: "request_failed_before_output",
           error: attempts.at(-1)?.error,
-          recovery: resolveModelFailureRecovery(classify(error)),
+          recovery,
         });
         await clock.sleep(delayMs, { signal: requestBase.options.signal });
         requestBase.options.signal?.throwIfAborted();
@@ -469,7 +476,7 @@ export function createModelRequestExecutor({
         try {
           return { result: await invokeChatTransport(request, client) };
         } catch (error) {
-          if (!(await switchStreamingMode(error))) throw error;
+          if (!(await switchStreamingMode(error, CHAT_STREAMING_MODES))) throw error;
           return { switched: true };
         }
       };

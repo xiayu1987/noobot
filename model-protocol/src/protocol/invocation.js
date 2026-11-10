@@ -22,8 +22,8 @@ function requireClassificationError(kind, value) {
   return value;
 }
 
-function freezeClassification(kind, retryable, classificationError = null) {
-  return Object.freeze({ kind, retryable, classificationError });
+function freezeClassification(kind, classificationError = null) {
+  return Object.freeze({ kind, classificationError });
 }
 
 function requireRetryAfterMs(value) {
@@ -34,7 +34,7 @@ function requireRetryAfterMs(value) {
 
 export function classifyModelFailure(error, classify) {
   if (error instanceof ModelProtocolError) {
-    return freezeClassification(error.kind, error.retryable);
+    return freezeClassification(error.kind);
   }
   try {
     const classification = classify(error);
@@ -55,19 +55,12 @@ export function classifyModelFailure(error, classify) {
   } catch (classificationError) {
     return freezeClassification(
       MODEL_ERROR_KIND.CLASSIFICATION,
-      false,
       String(classificationError?.message ?? classificationError),
     );
   }
 }
 
-export function projectModelAttemptError({
-  message,
-  code,
-  kind,
-  retryable,
-  classificationError,
-} = {}) {
+export function projectModelAttemptError({ message, code, kind, classificationError } = {}) {
   if (typeof message !== "string") {
     throw new TypeError("model attempt error message must be text");
   }
@@ -77,11 +70,8 @@ export function projectModelAttemptError({
   if (!MODEL_ERROR_KINDS.has(kind)) {
     throw new TypeError("model attempt error kind must be a MODEL_ERROR_KIND");
   }
-  if (typeof retryable !== "boolean") {
-    throw new TypeError("model attempt error retryable must be boolean");
-  }
   requireClassificationError(kind, classificationError);
-  return Object.freeze({ message, code, kind, retryable, classificationError });
+  return Object.freeze({ message, code, kind, classificationError });
 }
 
 export function projectModelInvocationFailure({

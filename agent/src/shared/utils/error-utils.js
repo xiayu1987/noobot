@@ -9,6 +9,52 @@ import {
   isExecutionAbortError,
   raceExecutionAbort,
 } from "@noobot/session-protocol/execution-abort";
+import { resolveErrorHeaderValue } from "./error-header.js";
+
+function resolveErrorStatus(error) {
+  const rawStatus =
+    error?.status ??
+    error?.statusCode ??
+    error?.error?.status ??
+    error?.response?.status ??
+    error?.cause?.status ??
+    error?.cause?.statusCode ??
+    error?.cause?.error?.status;
+  if (typeof rawStatus !== "number" && typeof rawStatus !== "string") return undefined;
+  const status = Number(rawStatus);
+  return Number.isInteger(status) && status > 0 ? status : undefined;
+}
+
+function resolveErrorField(error, field) {
+  const sources = [error, error?.error, error?.cause, error?.cause?.error];
+  for (const source of sources) {
+    const value = source?.[field];
+    if (value !== undefined && value !== null) return value;
+  }
+  return undefined;
+}
+
+function resolveErrorRequestId(error) {
+  return (
+    error?.request_id ??
+    error?.requestId ??
+    error?.requestID ??
+    resolveErrorHeaderValue(error?.headers, "x-request-id") ??
+    resolveErrorHeaderValue(error?.response?.headers, "x-request-id") ??
+    resolveErrorHeaderValue(error?.cause?.headers, "x-request-id") ??
+    resolveErrorHeaderValue(error?.cause?.response?.headers, "x-request-id") ??
+    undefined
+  );
+}
+
+export function resolveErrorDetails(error) {
+  return {
+    status: resolveErrorStatus(error),
+    code: resolveErrorField(error, "code"),
+    type: resolveErrorField(error, "type"),
+    requestId: resolveErrorRequestId(error),
+  };
+}
 
 export const isAbortError = (error, abortSignal = null) =>
   isExecutionAbortError({ error, abortSignal });

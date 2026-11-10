@@ -134,7 +134,7 @@ export const BACKEND_COMMON_EN_US = {
   "ws.unknownError": "unknown error",
   "ws.userInteractionTimeout": "user interaction timeout",
   "agent.phaseSummaryPrompt":
-    "The phase-summary threshold is reached. This turn must only call task_summary and submit the authoritative phase state exactly as its tool schema requires.",
+    "The phase-summary threshold is reached. This turn must only call task_summary and submit the authoritative phase state exactly as its tool schema requires. After submission, earlier tool calls and results are moved out of context and later work relies mainly on this summary. The originals can still be recovered by re-reading files or checking logs, but at extra cost, so record in DETAILS the facts that later steps will still need.",
   "agent.taskCheckPrompt":
     "The periodic task-check threshold has been reached. For this model call, you may call task_check to leave a task-check slice, but the call is optional; this prompt appears only for this call. If called, checkContent must strictly use the single text protocol: NOOBOT_TASK_CHECK/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\nShort task-check abstract\n[DETAILS]\nCurrent goal, progress, drift risks, and omissions\n[NEXT_ACTION]\nSpecific next action. Every section must be non-empty; do not add, repeat, or reorder sections.",
 };

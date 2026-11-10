@@ -27,7 +27,7 @@ Invocation observation uses `MODEL_INVOCATION_EVENT`. Each failed provider attem
 recorded in `execution.attempts`; a terminal invocation failure emits exactly one
 `FAILED` event with the protocol-projected attempt count, error message, error code and
 error kind. Every attempt error is projected only by `projectModelAttemptError` as a
-frozen `{ message, code, kind, retryable, classificationError }`; `execution.attempts`,
+frozen `{ message, code, kind, classificationError }`; `execution.attempts`,
 `STREAMING_MODE_RETRY` and `FAILED.failedAttempts` share that shape. `message` is the
 original error text and may be empty.
 Retryable attempts do not emit terminal failure. Aborted invocations emit `CANCELLED`
@@ -47,17 +47,18 @@ An error-classifier exception or invalid result is explicitly classified as
 it cannot trigger transport or streaming-mode retries. The original invocation
 exception is rethrown unchanged. Classification is evaluated once per error per invocation.
 `classifyModelFailure` is the only classification entry and always returns a frozen
-`{ kind, retryable, classificationError }`. Only `ModelProtocolError` carries a declared
+`{ kind, classificationError }`. Only `ModelProtocolError` carries a declared
 classification; every other error is classified by the adapter's `classifyError`, whose
-`kind` must be a `MODEL_ERROR_KIND` other than `classification`; the protocol alone derives
-`retryable` from kind. Invalid classifier results become `classification`.
+`kind` must be a `MODEL_ERROR_KIND` other than `classification`. Invalid classifier results become
+`classification`. Retry eligibility has no separate flag: the recovery action is the only authority.
 Adapters classify structured error fields (`name`, `code`, `type`, `status`, headers) along the
 `cause` chain; message text never decides retries. A successful provider response whose
 transfer mode differs from the requested one (SSE exactly when streaming was requested)
 is a `ModelProtocolError` with kind `response_mode_mismatch` and code
 `MODEL_RESPONSE_MODE_MISMATCH`. Recovery actions are defined by `resolveModelFailureRecovery`:
-unknown/unregistered provider errors and mode mismatches change the streaming parameter
-before retrying; rate limits, timeouts and temporary failures retry unchanged. Other kinds stop.
+mode mismatches change the streaming parameter to a declared mode not yet tried in the invocation
+and stop once every declared mode has been tried; rate limits, timeouts, temporary failures and
+unknown/unregistered provider errors retry unchanged within the transport budget. Other kinds stop.
 Transport, mode-change and empty-response retries use `resolveModelRetryDelay` for exponential
 backoff; a valid provider `Retry-After` is a minimum wait, not a separate retry budget.
 Exponential delays are capped by `TIME_THRESHOLDS.model.maxRetryDelayMs` (60 seconds by default).
@@ -66,9 +67,9 @@ The clock port contract is `sleep(ms, { signal })`: cancellation rejects immedia
 the timer and listener. All recovery waits use the invocation signal.
 `options.signal`, `options.callbacks` and `options.streaming` are executor-owned controls;
 `options.invoke` must not contain `signal`, `callbacks`, `stream` or `streaming`.
-Output progress comes only from transport events classified by `hasModelStreamOutput`:
+Output progress (`outputObserved`) comes only from transport events classified by `hasModelStreamOutput`:
 non-empty text, reasoning, refusals and tool calls count; roles, empty deltas and lifecycle
-metadata do not. Caller callbacks only deliver notifications and never decide replay safety.
+metadata do not. Caller callbacks only deliver notifications; `mayReplayModelRequest` is the only replay gate.
 Preferred modes are cached only after response validation succeeds. Non-stream Responses require a JSON media type. The transport
 shares its decoded JSON with measurement and adapter validation through `Response.json()`;
 the SDK supplies the raw response through `asResponse()`. Protocol validation precedes SDK
@@ -83,7 +84,8 @@ Measurement and adapters reuse terminal validation for the same decoded response
 those objects must remain unchanged until SDK projection. Validation entries use weak references.
 The final ordinary or structured result receives the non-enumerable `_request_id` after projection.
 All retries share `maxTotalAttempts` (including the initial request); transport retries also
-respect their per-mode budget. No retries follow output or cancellation. Operations only
+respect their per-mode budget. Invalid retry settings (non-integer, negative, or a total below one)
+are rejected with an error, never normalized. No retries follow output or cancellation. Operations only
 change to declared modes; media submissions are never automatically replayed. Diagnostics
 set the total budget to one. Retry events carry `retryCount` and `maxRetries`; the host
 updates a single `model_retry` activity per invocation using a stable activity ID.
@@ -95,7 +97,7 @@ Provider rules live only in `src/policy/provider-failure-policy.js`, scoped by o
 not SDK class or model family. `google` and `gemini` reference the same Google rules.
 Adapters extract facts; `resolveModelFailureRecovery` owns actions; the executor owns attempts.
 
-| Provider / source                                                                       | Retry unchanged                                          | Stop                                                                   | Change streaming and retry                                                             |
+| Provider / source                                                                       | Retry unchanged                                          | Stop                                                                   | Unknown (retry unchanged)                                                              |
 | --------------------------------------------------------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | [OpenAI](https://developers.openai.com/api/docs/guides/error-codes)                     | Structured rate limit, timeout, temporary server failure | Authentication, insufficient quota, invalid request, content policy    | Unclassified failures                                                                  |
 | [Anthropic](https://platform.claude.com/docs/en/api/errors)                             | Structured rate_limit_error, overload                    | 402 billing error, `enforced_spend_limit_reached`                      | Ambiguous 429 and unclassified failures                                                |
@@ -112,7 +114,7 @@ Shared runtime policy stops HTTP 401/403 for every operator. Registered provider
 this is a local HTTP policy, not a claim about provider-specific error codes. Only DeepSeek
 and Anthropic register 402 as quota/billing failure. Other undocumented 402 errors remain unknown.
 Known code mappings are scoped to their operator; extensions never inherit OpenAI code meanings.
-These are bounded recovery policies, not claims that parameter changes repair unknown errors.
+These are bounded recovery policies, not claims that retries repair unknown errors.
 Retry counters describe retries scheduled against the total ceiling; per-category budgets may
 end earlier. Repeated activity updates are retained as events but reduce to one visible activity.
 

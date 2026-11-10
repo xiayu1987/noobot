@@ -3,19 +3,20 @@
  * SPDX-License-Identifier: MIT
  */
 import { randomUUID } from "node:crypto";
-import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { createEventStreamParser } from "@noobot/shared/event-stream";
 import {
   MODEL_REQUEST_EVENT,
+  accumulateStreamUsage,
   createAnthropicStreamTerminalTracker,
   createChatStreamTerminalTracker,
   createUnavailableModelUsage,
   requireModelRequestMeasurement,
   hasModelStreamOutput,
+  normalizeProviderUsage,
   resolveModelResponseFormat,
   unavailableMeasurement,
 } from "@noobot/model-protocol";
-import { normalizeProviderUsage } from "../normalization/usage-normalizer.js";
+import { measureRequestPrefix } from "@noobot/model-protocol/request-prefix-node";
 import { responseMediaType } from "../adapters/response-mode.js";
 import {
   validatedModelResponseTerminal,
@@ -25,36 +26,6 @@ import {
   createModelResponseDecoder,
   parseModelResponseJson,
 } from "../normalization/response-decoding.js";
-
-function commonBodyPrefixBytes(current, previous) {
-  const blockBytes = LENGTH_THRESHOLDS.modelMeasurement.prefixCompareBlockBytes;
-  const limit = Math.min(current.length, previous.length);
-  let offset = 0;
-  while (offset + blockBytes <= limit) {
-    const end = offset + blockBytes;
-    if (current.compare(previous, offset, end, offset, end) !== 0) break;
-    offset = end;
-  }
-  while (offset < limit && current[offset] === previous[offset]) offset += 1;
-  return offset;
-}
-
-function measurePrefix(previousBodies, scope, body) {
-  if (typeof body !== "string") {
-    previousBodies.delete(scope);
-    return { state: "unavailable", reason: "unsupported" };
-  }
-  const current = Buffer.from(body, "utf8");
-  const previous = previousBodies.get(scope);
-  const commonPrefixBytes = previous ? commonBodyPrefixBytes(current, previous) : 0;
-  previousBodies.set(scope, current);
-  return {
-    state: "reported",
-    requestBodyBytes: current.length,
-    commonPrefixBytes,
-    baseline: previous ? "available" : "no_previous_request",
-  };
-}
 
 function collectedUsage(format, rawUsage, reason) {
   if (format === null) return createUnavailableModelUsage("unsupported");
@@ -84,18 +55,7 @@ function createUsageCollector(format, finish, onOutput) {
       ? streamTerminal.accept(event)
       : validatedModelStreamTerminal(format, event);
     if (hasModelStreamOutput(format, event)) onOutput?.();
-    if (format === "anthropic") {
-      if (event.type === "message_start") rawUsage = { ...event.message?.usage };
-      if (event.type === "message_delta") rawUsage = { ...rawUsage, ...event.usage };
-      return;
-    }
-    if (format === "responses") {
-      if (terminal) {
-        rawUsage = event.response?.usage;
-      }
-      return;
-    }
-    if (event.usage != null) rawUsage = event.usage;
+    rawUsage = accumulateStreamUsage(format, rawUsage, event, terminal);
   };
   const result = (reason) => {
     if (measurementError !== null) return { usage: null, measurementError };
@@ -228,7 +188,7 @@ export function createMeasuredFetch({
       observe(type, payload);
     };
     emit(MODEL_REQUEST_EVENT.STARTED, {
-      prefix: measurePrefix(previousBodies, scope, requestBody),
+      prefix: measureRequestPrefix(previousBodies, scope, requestBody),
     });
     let finished = false;
     const finish = (status, usage) => {

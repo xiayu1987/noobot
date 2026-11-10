@@ -4,8 +4,12 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ModelProtocolError, classifyModelFailure } from "@noobot/model-protocol";
-import { mayRetryWithAlternateStreaming } from "../src/policies/streaming-mode-policy.js";
+import {
+  ModelProtocolError,
+  classifyModelFailure,
+  MODEL_RECOVERY_ACTION,
+  resolveModelFailureRecovery,
+} from "@noobot/model-protocol";
 import { createMeasuredFetch } from "../src/executor/request-measurement.js";
 
 test("protocol failures have an explicit category and cannot replay in another transfer mode", () => {
@@ -14,10 +18,9 @@ test("protocol failures have an explicit category and cannot replay in another t
   });
   assert.deepEqual(classification, {
     kind: "protocol",
-    retryable: false,
     classificationError: null,
   });
-  assert.equal(mayRetryWithAlternateStreaming(0, classification), false);
+  assert.equal(resolveModelFailureRecovery(classification).action, MODEL_RECOVERY_ACTION.STOP);
 });
 
 test("prefix baseline is isolated by executor and scope, with exact block boundary bytes", async () => {

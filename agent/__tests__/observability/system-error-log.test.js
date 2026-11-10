@@ -9,7 +9,35 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { appendSystemErrorLog } from "../../src/observability/error-log/system-error-log.js";
+import { SystemErrorLogger } from "../../src/observability/error-log/system-error-logger.js";
+import { buildEngineErrorPayload } from "../../src/runtime/errors/error-handler.js";
 import { persistChildSessionFixture, useRuntimeEventsEnv } from "../helpers/runtime-events-env.js";
+
+test("system logger and engine payload share upstream details and message", async (t) => {
+  const workspaceRoot = await makeTempDir();
+  t.after(() => fs.rm(workspaceRoot, { recursive: true, force: true }));
+  const logger = new SystemErrorLogger({ globalConfig: { workspaceRoot } });
+  const errors = [
+    {
+      cause: {
+        error: { status: "429", code: "RATE", type: "provider_error", message: "rate limit" },
+        response: { headers: new Headers({ "x-request-id": "req-1" }) },
+      },
+    },
+    { status: -1, message: "invalid status" },
+    false,
+  ];
+  for (const error of errors) await logger.log({ error });
+  const records = await readJsonLines(path.join(workspaceRoot, "system-error.log"));
+  assert.equal(records.length, errors.length);
+  for (const [index, record] of records.entries()) {
+    const payload = buildEngineErrorPayload({ error: errors[index] });
+    assert.equal(record.message, payload.message);
+    for (const field of ["status", "code", "type", "requestId"]) {
+      assert.equal(record.extra[field], payload.error[field]);
+    }
+  }
+});
 
 async function makeTempDir() {
   return fs.mkdtemp(path.join(os.tmpdir(), "noobot-system-error-log-"));

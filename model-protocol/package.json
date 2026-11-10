@@ -11,6 +11,7 @@
     "./ports": "./src/ports/index.js",
     "./validation": "./src/validation/index.js",
     "./tool-identity-node": "./src/protocol/tool-identity-node.js",
+    "./request-prefix-node": "./src/protocol/request-prefix-node.js",
     "./tool-binding-scope-node": "./src/protocol/tool-binding-scope-node.js"
   },
   "scripts": {

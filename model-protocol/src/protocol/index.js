@@ -13,6 +13,7 @@ export * from "./generated-media.js";
 export * from "./generation-options.js";
 export * from "./output.js";
 export * from "./measurement.js";
+export * from "./usage.js";
 export * from "./response-format.js";
 export * from "./stream-output.js";
 export * from "./anthropic-stream.js";

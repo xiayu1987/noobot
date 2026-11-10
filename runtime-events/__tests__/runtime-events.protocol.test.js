@@ -135,6 +135,26 @@ test("session log protocol exports stable categories and helpers from runtime-ev
   );
 });
 
+test("session log text preserves falsy scalar messages and normalizes absent values", () => {
+  for (const [message, expected] of [
+    [0, "0"],
+    [false, "false"],
+    [null, ""],
+    [undefined, ""],
+    [" hello ", "hello"],
+  ]) {
+    const record = buildSessionLogRecord({
+      scope: "system",
+      channel: "ws",
+      source: "test",
+      category: "state",
+      event: "text.normalization",
+      message,
+    });
+    assert.equal(record.message, expected);
+  }
+});
+
 test("session log client policy is derived from the shared debug registry", () => {
   const debugEnvs = RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.debug;
   const policy = resolveSessionLogClientPolicy({

@@ -2,11 +2,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  reportedMeasurement,
-  unavailableMeasurement,
-  requireModelUsage,
-} from "@noobot/model-protocol";
+import { reportedMeasurement, unavailableMeasurement, requireModelUsage } from "./measurement.js";
 
 function measurement(value) {
   return value === undefined || value === null
@@ -55,4 +51,14 @@ export function normalizeProviderUsage(usage, format) {
     cacheWriteInputTokens: unavailableMeasurement("unsupported"),
   });
   return requireProviderTotal(usage, normalized);
+}
+
+export function accumulateStreamUsage(format, rawUsage, event, terminal) {
+  if (format === "anthropic") {
+    if (event?.type === "message_start") return { ...event.message?.usage };
+    if (event?.type === "message_delta") return { ...rawUsage, ...event.usage };
+    return rawUsage;
+  }
+  if (format === "responses") return terminal ? event.response?.usage : rawUsage;
+  return event?.usage != null ? event.usage : rawUsage;
 }

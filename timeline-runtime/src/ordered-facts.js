@@ -5,6 +5,18 @@
  */
 
 import { isFunction } from "@noobot/shared/value";
+
+function orderedInsertionPosition(values, fact, compare) {
+  let low = 0;
+  let high = values.length;
+  while (low < high) {
+    const middle = low + Math.floor((high - low) / 2);
+    if (compare(values[middle], fact) <= 0) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
+
 export function upsertOrderedFact({
   values = [],
   fact,
@@ -24,24 +36,18 @@ export function upsertOrderedFact({
   }
 
   const previous = values.at(-1);
-  if (!previous || compare(previous, fact) <= 0) {
+  if (!values.length || compare(previous, fact) <= 0) {
     values.push(fact);
     index.set(key, values.length - 1);
     return values;
   }
 
-  let low = 0;
-  let high = values.length;
-  while (low < high) {
-    const middle = (low + high) >>> 1;
-    if (compare(values[middle], fact) <= 0) low = middle + 1;
-    else high = middle;
-  }
-  values.splice(low, 0, fact);
   if (!isFunction(recordInsertion)) {
     throw new TypeError("ordered insertion requires recordInsertion");
   }
-  recordInsertion(values, low);
+  const position = orderedInsertionPosition(values, fact, compare);
+  values.splice(position, 0, fact);
+  recordInsertion(values, position);
   return values;
 }
 
@@ -57,14 +63,8 @@ export function selectLatestOrderedFacts(
   const latest = [];
   for (const fact of facts) {
     if (latest.length === maximum && compare(fact, latest[0]) < 0) continue;
-    let low = 0;
-    let high = latest.length;
-    while (low < high) {
-      const middle = (low + high) >>> 1;
-      if (compare(latest[middle], fact) <= 0) low = middle + 1;
-      else high = middle;
-    }
-    latest.splice(low, 0, fact);
+    const position = orderedInsertionPosition(latest, fact, compare);
+    latest.splice(position, 0, fact);
     if (latest.length > maximum) latest.shift();
   }
   return latest.map(project);

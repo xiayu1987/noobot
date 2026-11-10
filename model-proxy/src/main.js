@@ -8,6 +8,7 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig, normalizeHeaderKeyCandidates } from "./config.js";
+import { createRequestPrefixTracker } from "./cache-diagnostics.js";
 import { createLogger } from "./logger.js";
 import { createHeaderExtractors, createProxyServer } from "./server.js";
 
@@ -45,6 +46,7 @@ export function startModelProxy() {
     unknownFlowName,
     unknownSessionId,
   });
+  const measureRequestPrefix = createRequestPrefixTracker();
 
   for (const entry of proxyEntries) {
     createProxyServer({
@@ -52,6 +54,7 @@ export function startModelProxy() {
       targetUrl: entry.targetUrl,
       proxyHost,
       logger,
+      measureRequestPrefix,
       headerExtractors,
       unknownModelName,
       unknownFlowName,

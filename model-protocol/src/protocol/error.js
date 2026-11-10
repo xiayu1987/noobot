@@ -2,11 +2,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  MODEL_ERROR_CODE,
-  MODEL_ERROR_KIND,
-  createModelFailureClassification,
-} from "./constants.js";
+import { MODEL_ERROR_CODE, MODEL_ERROR_KIND } from "./constants.js";
 
 export class ModelProtocolError extends Error {
   constructor(
@@ -22,7 +18,6 @@ export class ModelProtocolError extends Error {
     this.name = "ModelProtocolError";
     this.code = code;
     this.kind = kind;
-    this.retryable = createModelFailureClassification(kind).retryable;
     this.details = Object.freeze({ ...details });
   }
 }

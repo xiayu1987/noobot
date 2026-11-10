@@ -6,61 +6,12 @@
 import { appendSystemErrorLog } from "./system-error-log.js";
 import { filePath as path } from "@noobot/path-resolver";
 import { logError } from "../console/logger.js";
-import { resolveErrorHeaderValue } from "../../shared/utils/error-header.js";
+import { resolveErrorDetails, resolveErrorMessage } from "../../shared/utils/error-utils.js";
 import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
-
-function resolveErrorStatus(error = {}) {
-  const rawStatus =
-    error?.status ??
-    error?.statusCode ??
-    error?.error?.status ??
-    error?.response?.status ??
-    error?.cause?.status ??
-    error?.cause?.statusCode ??
-    error?.cause?.error?.status;
-  const status = Number(rawStatus);
-  return Number.isFinite(status) && status > 0 ? status : undefined;
-}
-
-function resolveErrorRequestId(error = {}) {
-  return (
-    error?.request_id ??
-    error?.requestId ??
-    error?.requestID ??
-    resolveErrorHeaderValue(error?.headers, "x-request-id") ??
-    resolveErrorHeaderValue(error?.response?.headers, "x-request-id") ??
-    resolveErrorHeaderValue(error?.cause?.headers, "x-request-id") ??
-    resolveErrorHeaderValue(error?.cause?.response?.headers, "x-request-id") ??
-    undefined
-  );
-}
-
-function resolveErrorCode(error = {}) {
-  return (
-    error?.code ??
-    error?.error?.code ??
-    error?.cause?.code ??
-    error?.cause?.error?.code ??
-    undefined
-  );
-}
-
-function resolveErrorType(error = {}) {
-  return (
-    error?.type ??
-    error?.error?.type ??
-    error?.cause?.type ??
-    error?.cause?.error?.type ??
-    undefined
-  );
-}
 
 function buildDefaultErrorExtra(error = null) {
   if (!isObjectLike(error)) return {};
-  const status = resolveErrorStatus(error);
-  const code = resolveErrorCode(error);
-  const type = resolveErrorType(error);
-  const requestId = resolveErrorRequestId(error);
+  const { status, code, type, requestId } = resolveErrorDetails(error);
   const extra = {};
   if (status !== undefined) extra.status = status;
   if (code !== undefined && code !== null && `${code}`.trim()) extra.code = code;
@@ -108,7 +59,7 @@ export class SystemErrorLogger {
         parentSessionId,
         source,
         event,
-        message: error?.message || String(error || ""),
+        message: resolveErrorMessage(error),
         stack: error?.stack || "",
         extra: mergedExtra,
       });

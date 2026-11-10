@@ -7,6 +7,7 @@ import http from "node:http";
 import { createProxyServer as createHttpProxyServer } from "http-proxy-3";
 import { getHeaderValue } from "./common.js";
 import { decodeBodyByEncoding, resolveFinalResponseBodyText } from "./response-body.js";
+import { measureResponseUsage } from "./cache-diagnostics.js";
 import { text, isObjectLike } from "@noobot/shared/value";
 
 function normalizeTerminalError(error = null) {
@@ -113,6 +114,7 @@ function createProxyServer({
   targetUrl,
   proxyHost,
   logger,
+  measureRequestPrefix,
   headerExtractors,
   unknownModelName,
   unknownFlowName,
@@ -133,7 +135,11 @@ function createProxyServer({
     };
   }
 
-  function logRequestStream(req, lifecycle) {
+  function upstreamUrl(req) {
+    return new URL(req.url, targetUrl);
+  }
+
+  function logRequestStream(req, lifecycle, context) {
     const chunks = [];
     let bodyComplete = false;
     const recordRequest = () => {
@@ -142,6 +148,10 @@ function createProxyServer({
         req,
         bodyText,
         bodyComplete,
+        cacheDiagnostics:
+          bodyComplete && req.method === "POST"
+            ? measureRequestPrefix({ url: upstreamUrl(req), bodyText, context })
+            : null,
       });
     };
     req.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
@@ -195,6 +205,15 @@ function createProxyServer({
           status: proxyRes.statusCode,
           headers: proxyRes.headers,
           bodyText: finalText,
+          cacheDiagnostics:
+            req.method === "POST"
+              ? measureResponseUsage({
+                  url: upstreamUrl(req),
+                  status: proxyRes.statusCode,
+                  bodyText: inputText,
+                  contentType: proxyRes.headers["content-type"],
+                })
+              : null,
         });
       } catch (error) {
         lifecycle?.settle({
@@ -225,7 +244,7 @@ function createProxyServer({
     const context = createRequestContext(req);
     const lifecycle = createRequestLogLifecycle({ logger, context });
     req.__requestLogLifecycle = lifecycle;
-    logRequestStream(req, lifecycle);
+    logRequestStream(req, lifecycle, context);
     res.on("close", () => {
       if (res.writableEnded) return;
       lifecycle.settle({

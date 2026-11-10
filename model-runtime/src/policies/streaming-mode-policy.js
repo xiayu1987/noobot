@@ -4,7 +4,6 @@
  */
 
 import { text } from "@noobot/shared/value";
-import { resolveModelFailureRecovery } from "@noobot/model-protocol";
 
 export function streamingProviderCacheKey({ model = {}, operation = {}, tools = [] } = {}) {
   return JSON.stringify([
@@ -19,15 +18,4 @@ export function streamingProviderCacheKey({ model = {}, operation = {}, tools = 
 
 export function resolvePreferredStreaming({ requested, cached } = {}) {
   return typeof cached === "boolean" ? cached : requested === true;
-}
-
-export function mayRetryWithAlternateStreaming(streamedTokens, classification) {
-  return (
-    streamedTokens === 0 &&
-    resolveModelFailureRecovery(classification).revision === "set_streaming_mode"
-  );
-}
-
-export function alternateStreamingMode(mode) {
-  return mode !== true;
 }

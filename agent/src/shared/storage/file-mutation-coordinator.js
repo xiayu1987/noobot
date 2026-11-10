@@ -59,25 +59,26 @@ function readFileIfPresent(filePath) {
   });
 }
 
-async function inspectWaiter(waiterPath, staleMs) {
+async function inspectForeignWaiter(waiterPath, staleMs) {
   const waiterStat = await fsStat(waiterPath);
   if (isHeartbeatFresh(waiterStat, staleMs)) return waiterStat;
   await fsRm(waiterPath, { force: true });
   return null;
 }
 
-async function inspectWaiterIfPresent(waiterPath, staleMs) {
+async function inspectForeignWaiterIfPresent(waiterPath, staleMs) {
   try {
-    return await inspectWaiter(waiterPath, staleMs);
+    return await inspectForeignWaiter(waiterPath, staleMs);
   } catch (error) {
     if (error?.code === "ENOENT") return null;
     throw error;
   }
 }
 
-async function listLiveWaiters(lockPath, staleMs) {
+async function listLiveWaiters(lockPath, staleMs, ownerToken) {
   const parent = path.dirname(lockPath);
   const { choosingPrefix, settledPrefix } = waiterNames(lockPath);
+  const ownSuffix = `-${ownerToken}`;
   const names = await fsReaddir(parent).catch((error) => {
     if (error?.code === "ENOENT") return [];
     throw error;
@@ -88,7 +89,7 @@ async function listLiveWaiters(lockPath, staleMs) {
     const choosing = name.startsWith(choosingPrefix);
     if (!choosing && ticket === null) continue;
     const waiterPath = path.join(parent, name);
-    if (await inspectWaiterIfPresent(waiterPath, staleMs))
+    if (name.endsWith(ownSuffix) || (await inspectForeignWaiterIfPresent(waiterPath, staleMs)))
       live.push({ name, path: waiterPath, choosing, ticket });
   }
   return live;
@@ -119,7 +120,7 @@ async function createWaiter(lockPath, staleMs, ownerToken, operationName) {
   };
   try {
     await handle.writeFile(ownerToken, "utf8");
-    const waiters = await listLiveWaiters(lockPath, staleMs);
+    const waiters = await listLiveWaiters(lockPath, staleMs, ownerToken);
     const maxTicket = waiters.reduce(
       (current, waiter) => (waiter.ticket === null ? current : Math.max(current, waiter.ticket)),
       0,
@@ -142,8 +143,8 @@ async function createWaiter(lockPath, staleMs, ownerToken, operationName) {
   }
 }
 
-async function isElectedWaiter(lockPath, staleMs, waiterName) {
-  const waiters = await listLiveWaiters(lockPath, staleMs);
+async function isElectedWaiter(lockPath, staleMs, ownerToken, waiterName) {
+  const waiters = await listLiveWaiters(lockPath, staleMs, ownerToken);
   if (waiters.some((waiter) => waiter.choosing)) return false;
   const settled = waiters
     .filter((waiter) => waiter.ticket !== null)
@@ -290,7 +291,9 @@ export class FileMutationCoordinator {
   }
 
   async tryAcquire(key, waiterName, ownerToken, contention) {
-    if (!(await isElectedWaiter(key, this.staleMs, waiterName))) return { retry: false };
+    if (!(await isElectedWaiter(key, this.staleMs, ownerToken, waiterName))) {
+      return { retry: false };
+    }
     try {
       return { handle: await openLock(key, ownerToken) };
     } catch (error) {

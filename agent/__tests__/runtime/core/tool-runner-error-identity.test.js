@@ -40,7 +40,6 @@ for (const code of [
     );
     assert.equal(errors.length, 1);
     assert.equal(errors[0].classification, "fatal");
-    assert.equal(errors[0].error.retryable, false);
     assert.equal(classifyEngineError(error), "fatal");
   });
 }

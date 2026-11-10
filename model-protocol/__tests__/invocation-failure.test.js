@@ -15,7 +15,6 @@ const attemptError = (code, kind) => ({
   message: `${code} message`,
   code,
   kind,
-  retryable: false,
   classificationError: null,
 });
 const failure = () => ({
@@ -54,7 +53,7 @@ test("zero-attempt setup failure is valid without a fabricated provider attempt"
     [],
   );
 });
-for (const field of ["message", "code", "kind", "retryable", "classificationError"]) {
+for (const field of ["message", "code", "kind", "classificationError"]) {
   test(`failure projection rejects missing attempt error.${field}`, () => {
     const input = failure();
     delete input.failedAttempts[0].error[field];
@@ -69,7 +68,7 @@ test("failure projection rejects a missing terminal message", () => {
 test("attempt error projection keeps an empty upstream message and rejects invalid fields", () => {
   const valid = attemptError("E", MODEL_ERROR_KIND.TIMEOUT);
   assert.equal(projectModelAttemptError({ ...valid, message: "" }).message, "");
-  for (const change of [{ message: 1 }, { retryable: "yes" }, { kind: "invented" }, { code: "" }]) {
+  for (const change of [{ message: 1 }, { kind: "invented" }, { code: "" }]) {
     assert.throws(() => projectModelAttemptError({ ...valid, ...change }), TypeError);
   }
 });
@@ -86,39 +85,35 @@ test("protocol errors preserve declared classification without consulting adapte
     classifyModelFailure(original, () => {
       throw new Error("must not run");
     }),
-    { kind: original.kind, retryable: false, classificationError: null },
+    { kind: original.kind, classificationError: null },
   );
 });
 test("non-protocol errors carrying kind are classified by the adapter, never self-declared", () => {
   const original = Object.assign(new Error("raw"), {
     kind: MODEL_ERROR_KIND.ABORTED,
-    retryable: true,
   });
   const result = classifyModelFailure(original, () => ({
     kind: MODEL_ERROR_KIND.TIMEOUT,
-    retryable: false,
   }));
   assert.deepEqual(result, {
     kind: MODEL_ERROR_KIND.TIMEOUT,
-    retryable: true,
     classificationError: null,
   });
   assert.ok(Object.isFrozen(result));
 });
-test("classifier exceptions and invalid classification are explicit non-retryable classification failures", () => {
+test("classifier exceptions and invalid classification are explicit classification failures", () => {
   const original = new Error("transport");
   for (const classify of [
     () => {
       throw new Error("classifier defect");
     },
-    () => ({ retryable: true }),
-    () => ({ kind: "invented", retryable: false }),
+    () => ({}),
+    () => ({ kind: "invented" }),
     () => ({ kind: MODEL_ERROR_KIND.TIMEOUT, retryAfterMs: -1 }),
-    () => ({ kind: MODEL_ERROR_KIND.CLASSIFICATION, retryable: false }),
+    () => ({ kind: MODEL_ERROR_KIND.CLASSIFICATION }),
   ]) {
     const result = classifyModelFailure(original, classify);
     assert.equal(result.kind, MODEL_ERROR_KIND.CLASSIFICATION);
-    assert.equal(result.retryable, false);
     assert.equal(typeof result.classificationError, "string");
     assert.notEqual(result.classificationError.length, 0);
   }

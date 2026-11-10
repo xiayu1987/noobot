@@ -132,7 +132,7 @@ export const BACKEND_COMMON_ZH_CN = {
   "ws.unknownError": "未知错误",
   "ws.userInteractionTimeout": "用户交互超时",
   "agent.phaseSummaryPrompt":
-    "已达到阶段小结阈值。本轮仅调用 task_summary，严格按工具 schema 提交权威阶段状态。",
+    "已达到阶段小结阈值。本轮仅调用 task_summary，严格按工具 schema 提交权威阶段状态。小结提交后，此前的工具调用与结果会移出上下文，后续主要依据小结继续；原始内容虽可通过重读文件或查看日志找回，但会增加开销，因此请在 DETAILS 中写清后续仍会用到的事实。",
   "agent.taskCheckPrompt":
     "已达到周期任务检查阈值。本次模型调用可按需调用 task_check 留下任务检查切片，但不强制调用；本提示只出现本次。调用时 checkContent 必须严格使用唯一文本协议：NOOBOT_TASK_CHECK/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\n简短任务检查摘要\n[DETAILS]\n当前目标、进展、偏移风险和遗漏\n[NEXT_ACTION]\n明确的下一步动作。所有段落必须非空，不得增加、重复或调整段落。",
 };

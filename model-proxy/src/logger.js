@@ -9,6 +9,10 @@ import { pad } from "./common.js";
 import { sanitizeHeaders, sanitizeUrl } from "@noobot/sanitize";
 import { text } from "@noobot/shared/value";
 
+function formatCacheDiagnostics(cacheDiagnostics) {
+  return cacheDiagnostics ? JSON.stringify(cacheDiagnostics, null, 2) : "[none]";
+}
+
 function createLogger({
   logDir,
   logPrefix,
@@ -211,6 +215,7 @@ function createLogger({
     sessionId = unknownSessionId,
     parentSessionId = "",
     bodyComplete = true,
+    cacheDiagnostics = null,
   } = {}) {
     const logEntry = `
 === ${new Date().toLocaleString()} ===
@@ -222,6 +227,7 @@ ParentSessionId: ${parentSessionId || "[root]"}
 URL: ${sanitizeUrl(req.url)}
 Method: ${req.method}
 Headers: ${JSON.stringify(sanitizeHeaders(req.headers), null, 2)}
+CacheDiagnostics: ${formatCacheDiagnostics(cacheDiagnostics)}
 BodyComplete: ${bodyComplete === true}
 Body:
 ${bodyText}
@@ -240,6 +246,7 @@ ${bodyText}
     flowName = unknownFlowName,
     sessionId = unknownSessionId,
     parentSessionId = "",
+    cacheDiagnostics = null,
   } = {}) {
     const logEntry = `
 --- ${new Date().toLocaleString()} ---
@@ -251,6 +258,7 @@ SessionId: ${sessionId}
 ParentSessionId: ${parentSessionId || "[root]"}
 Status: ${Number.isFinite(Number(status)) ? Number(status) : "[none]"}
 Headers: ${JSON.stringify(sanitizeHeaders(headers), null, 2)}
+CacheDiagnostics: ${formatCacheDiagnostics(cacheDiagnostics)}
 Error: ${error ? JSON.stringify(error, null, 2) : "[none]"}
 Body:
 ${bodyText}

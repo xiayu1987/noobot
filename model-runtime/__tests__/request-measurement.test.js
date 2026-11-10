@@ -4,9 +4,8 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { MODEL_REQUEST_EVENT } from "@noobot/model-protocol";
+import { MODEL_REQUEST_EVENT, normalizeProviderUsage } from "@noobot/model-protocol";
 import { createMeasuredFetch } from "../src/executor/request-measurement.js";
-import { normalizeProviderUsage } from "../src/normalization/usage-normalizer.js";
 
 const chatUsage = {
   prompt_tokens: 100,

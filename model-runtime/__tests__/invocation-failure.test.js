@@ -51,7 +51,7 @@ function harness({
   const adapter = {
     id: "openai-compatible",
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
-    classifyError: () => ({ kind: MODEL_ERROR_KIND.AUTHENTICATION, retryable: false }),
+    classifyError: () => ({ kind: MODEL_ERROR_KIND.AUTHENTICATION }),
     createClient: () => ({ invoke: async () => ({ content: "ok" }) }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
@@ -129,7 +129,7 @@ test("transport exhaustion preserves each attempt error instead of filling from 
   ];
   const h = harness({
     adapter: {
-      classifyError: () => ({ kind: MODEL_ERROR_KIND.RATE_LIMIT, retryable: true }),
+      classifyError: () => ({ kind: MODEL_ERROR_KIND.RATE_LIMIT }),
       createClient: () => ({
         invoke: async () => {
           throw errors[calls++];
@@ -159,14 +159,12 @@ test("transport exhaustion preserves each attempt error instead of filling from 
         message: "first",
         code: "FIRST",
         kind: MODEL_ERROR_KIND.RATE_LIMIT,
-        retryable: true,
         classificationError: null,
       },
       {
         message: "second",
         code: "SECOND",
         kind: MODEL_ERROR_KIND.RATE_LIMIT,
-        retryable: true,
         classificationError: null,
       },
     ],
@@ -202,7 +200,7 @@ test("transport retry followed by success emits only completed and retains the f
   let calls = 0;
   const h = harness({
     adapter: {
-      classifyError: () => ({ kind: MODEL_ERROR_KIND.TIMEOUT, retryable: true }),
+      classifyError: () => ({ kind: MODEL_ERROR_KIND.TIMEOUT }),
       createClient: () => ({
         invoke: async () => {
           if (++calls === 1) throw new Error("timeout");
@@ -256,7 +254,7 @@ test("provider-classified abort emits cancelled without scheduling a retry", asy
   let calls = 0;
   const h = harness({
     adapter: {
-      classifyError: () => ({ kind: MODEL_ERROR_KIND.ABORTED, retryable: false }),
+      classifyError: () => ({ kind: MODEL_ERROR_KIND.ABORTED }),
       createClient: () => ({
         invoke: async () => {
           calls++;

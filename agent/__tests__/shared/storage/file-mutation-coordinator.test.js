@@ -5,10 +5,11 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm, readFile, utimes, writeFile } from "node:fs/promises";
+import { mkdtemp, open, rm, readFile, stat, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { FileMutationCoordinator } from "../../../src/shared/storage/file-mutation-coordinator.js";
+import { resetFsAdapter, setFsAdapter } from "../../../src/shared/storage/fs-adapter.js";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -104,4 +105,32 @@ test("continuations spawned inside a lock must reacquire it after release", asyn
   });
   await spawned;
   assert.equal(peak, 1, "stale async context must not bypass the file lock");
+});
+
+test("own waiter with a delayed heartbeat stays elected instead of being reaped", async (t) => {
+  const lockPath = await lockFixture(t);
+  const coordinator = new FileMutationCoordinator(
+    fixedLockTiming({ timeoutMs: 500, staleMs: 10, pollMs: 2 }),
+  );
+  let lockCreated = false;
+  let waiterRemovalsBeforeLock = 0;
+  setFsAdapter({
+    open: async (target, flags) => {
+      const handle = await open(target, flags);
+      if (target === lockPath) lockCreated = true;
+      return handle;
+    },
+    stat: async (target) => {
+      const result = await stat(target);
+      if (!String(target).includes(".wait-")) return result;
+      return Object.assign(result, { mtimeMs: Date.now() - 1000 });
+    },
+    rm: async (target, options) => {
+      if (!lockCreated && String(target).includes(".wait-")) waiterRemovalsBeforeLock += 1;
+      return rm(target, options);
+    },
+  });
+  t.after(resetFsAdapter);
+  assert.equal(await coordinator.run(lockPath, async () => "entered"), "entered");
+  assert.equal(waiterRemovalsBeforeLock, 0);
 });

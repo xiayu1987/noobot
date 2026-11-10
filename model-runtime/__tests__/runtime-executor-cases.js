@@ -50,31 +50,29 @@ const sdkTool = {
   },
 };
 
-test("transport errors classify nested Undici timeouts as retryable", () => {
+test("transport errors classify nested Undici timeouts as timeout", () => {
   const headersTimeout = new TypeError("fetch failed", {
     cause: { code: "UND_ERR_HEADERS_TIMEOUT" },
   });
   assert.deepEqual(classifyTransportError(headersTimeout), {
     kind: MODEL_ERROR_KIND.TIMEOUT,
-    retryable: true,
   });
   assert.deepEqual(
     anthropicMessagesAdapter.classifyError(headersTimeout, { operatorId: "anthropic" }),
-    { kind: MODEL_ERROR_KIND.TIMEOUT, retryable: true },
+    { kind: MODEL_ERROR_KIND.TIMEOUT },
   );
   assert.deepEqual(
     classifyTransportError({ name: "AbortError", code: "UND_ERR_HEADERS_TIMEOUT" }),
-    { kind: MODEL_ERROR_KIND.ABORTED, retryable: false },
+    { kind: MODEL_ERROR_KIND.ABORTED },
   );
 });
 
-test("transport errors classify temporary socket failures as retryable", () => {
+test("transport errors classify temporary socket failures as temporary unavailable", () => {
   const socketFailure = new TypeError("fetch failed", {
     cause: { code: "ECONNRESET" },
   });
   assert.deepEqual(classifyTransportError(socketFailure), {
     kind: MODEL_ERROR_KIND.TEMPORARY_UNAVAILABLE,
-    retryable: true,
   });
 });
 
@@ -82,7 +80,7 @@ test("response mode mismatch negotiates once and caches the successful mode", as
   const requestedModes = [];
   const adapter = {
     id: "openai-compatible",
-    classifyError: () => ({ retryable: false, kind: MODEL_ERROR_KIND.RESPONSE_MODE_MISMATCH }),
+    classifyError: () => ({ kind: MODEL_ERROR_KIND.RESPONSE_MODE_MISMATCH }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
@@ -121,11 +119,45 @@ test("response mode mismatch negotiates once and caches the successful mode", as
   );
 });
 
+test("response mode mismatch in both modes stops after each mode is tried once", async () => {
+  const requestedModes = [];
+  const adapter = {
+    id: "openai-compatible",
+    classifyError: () => ({ kind: MODEL_ERROR_KIND.RESPONSE_MODE_MISMATCH }),
+    bindTools: ({ client }) => client,
+    prepareMessages: ({ messages }) => messages,
+    resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
+    createClient: ({ streaming }) => {
+      requestedModes.push(streaming);
+      return {
+        invoke: async () => {
+          throw new Error("response mode is unavailable");
+        },
+      };
+    },
+  };
+  const port = createModelRequestExecutor({
+    registry: { resolve: () => adapter },
+    credentialPort: { resolve: () => "secret" },
+  });
+  await assert.rejects(
+    port.invoke({
+      invocation,
+      model,
+      messages: [],
+      options: { streaming: true },
+      policies: { retry: { maxTotalAttempts: 8 } },
+    }),
+    /response mode is unavailable/,
+  );
+  assert.deepEqual(requestedModes, [true, false]);
+});
+
 test("non-streaming response mode mismatch negotiates streaming and caches it", async () => {
   const requestedModes = [];
   const adapter = {
     id: "openai-compatible",
-    classifyError: () => ({ retryable: false, kind: MODEL_ERROR_KIND.RESPONSE_MODE_MISMATCH }),
+    classifyError: () => ({ kind: MODEL_ERROR_KIND.RESPONSE_MODE_MISMATCH }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
@@ -152,7 +184,7 @@ test("explicit model errors do not trigger an opposite streaming mode", async ()
   const requestedModes = [];
   const adapter = {
     id: "openai-compatible",
-    classifyError: () => ({ retryable: false, kind: MODEL_ERROR_KIND.AUTHENTICATION }),
+    classifyError: () => ({ kind: MODEL_ERROR_KIND.AUTHENTICATION }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
@@ -218,7 +250,7 @@ test("caller abort rethrows the frozen abort reason unchanged without any retry"
   const reason = Object.freeze({ kind: "execution_abort", type: "user_stop" });
   const adapter = {
     id: "openai-compatible",
-    classifyError: () => ({ retryable: true, kind: MODEL_ERROR_KIND.UNKNOWN }),
+    classifyError: () => ({ kind: MODEL_ERROR_KIND.UNKNOWN }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
@@ -261,7 +293,7 @@ test("executor is the single attempt and retry authority", async () => {
   let attempts = 0;
   const adapter = {
     id: "openai-compatible",
-    classifyError: () => ({ retryable: true, kind: MODEL_ERROR_KIND.TEMPORARY_UNAVAILABLE }),
+    classifyError: () => ({ kind: MODEL_ERROR_KIND.TEMPORARY_UNAVAILABLE }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
@@ -296,7 +328,7 @@ test("executor observation protocol cannot be overridden with model credentials"
   const events = [];
   const adapter = {
     id: "openai-compatible",
-    classifyError: () => ({ retryable: false }),
+    classifyError: () => ({}),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
@@ -323,7 +355,7 @@ test("tool-call semantic recovery preserves the requested streaming mode", async
   let calls = 0;
   const adapter = {
     id: "openai-compatible",
-    classifyError: () => ({ retryable: false }),
+    classifyError: () => ({}),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
@@ -370,7 +402,7 @@ test("non-streaming invocation never enables streaming during semantic retries",
   let calls = 0;
   const adapter = {
     id: "openai-compatible",
-    classifyError: () => ({ retryable: false }),
+    classifyError: () => ({}),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
@@ -405,7 +437,7 @@ test("tool calls are not discarded when the provider also returns reasoning", as
   let calls = 0;
   const adapter = {
     id: "openai-compatible",
-    classifyError: () => ({ retryable: false }),
+    classifyError: () => ({}),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
@@ -450,7 +482,7 @@ test("Responses continuation metadata remains valid canonical model output", asy
   const responseReasoning = responseOutput[0];
   const adapter = {
     id: "openai-compatible",
-    classifyError: () => ({ retryable: false }),
+    classifyError: () => ({}),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.RESPONSES,
@@ -480,7 +512,7 @@ test("executor is the single model context trace authority at each provider atte
   let attempts = 0;
   const adapter = {
     id: "openai-compatible",
-    classifyError: () => ({ retryable: true, kind: MODEL_ERROR_KIND.TEMPORARY_UNAVAILABLE }),
+    classifyError: () => ({ kind: MODEL_ERROR_KIND.TEMPORARY_UNAVAILABLE }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
@@ -565,7 +597,7 @@ test("non-chat operations execute only through the resolved provider adapter", a
   const calls = [];
   const adapter = {
     id: "openai-compatible",
-    classifyError: () => ({ retryable: false }),
+    classifyError: () => ({}),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
@@ -616,7 +648,7 @@ function createInvalidToolCallAdapter(invalidAttempts) {
   const state = { calls: 0 };
   const adapter = {
     id: "openai-compatible",
-    classifyError: () => ({ retryable: false }),
+    classifyError: () => ({}),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
@@ -704,7 +736,7 @@ function createOperationAdapter({ modes, fail }) {
     calls,
     adapter: {
       id: "openai-compatible",
-      classifyError: () => ({ kind: MODEL_ERROR_KIND.RESPONSE_MODE_MISMATCH, retryable: false }),
+      classifyError: () => ({ kind: MODEL_ERROR_KIND.RESPONSE_MODE_MISMATCH }),
       bindTools: ({ client }) => client,
       prepareMessages: ({ messages }) => messages,
       resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,

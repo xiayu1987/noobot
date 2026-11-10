@@ -18,6 +18,7 @@
     "pm2:list": "PM2_HOME=../.pm2 npx pm2 list"
   },
   "dependencies": {
+    "@noobot/model-protocol": "file:../model-protocol",
     "@noobot/shared": "file:../shared",
     "@noobot/sanitize": "file:../sanitize",
     "http-proxy-3": "^2.0.2",

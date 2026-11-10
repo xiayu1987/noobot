@@ -17,7 +17,6 @@ export async function executeTransportRetry({
   clock,
   observe,
   signal = null,
-  streamedTokens = () => 0,
 }) {
   for (let attempt = 1; ; attempt++) {
     signal?.throwIfAborted();
@@ -31,14 +30,7 @@ export async function executeTransportRetry({
   async function waitForRetry(error, attempt) {
     if (signal?.aborted || !canRetry()) throw error;
     const classification = classify(error);
-    if (
-      !shouldRetryTransport({
-        classification,
-        attempt,
-        maxAttempts: policy.maxAttempts,
-        streamedTokens: Number(streamedTokens()) || 0,
-      })
-    )
+    if (!shouldRetryTransport({ classification, attempt, maxAttempts: policy.maxAttempts }))
       throw error;
     const delayMs = resolveModelRetryDelay({
       attempt,

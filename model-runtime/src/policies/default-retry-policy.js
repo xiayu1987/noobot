@@ -58,10 +58,9 @@ export function classifyTransportError(error) {
   return createModelFailureClassification(MODEL_ERROR_KIND.UNKNOWN);
 }
 
-export function shouldRetryTransport({ classification, attempt, maxAttempts, streamedTokens = 0 }) {
+export function shouldRetryTransport({ classification, attempt, maxAttempts }) {
   return (
     resolveModelFailureRecovery(classification).action === MODEL_RECOVERY_ACTION.RETRY_SAME &&
-    attempt < maxAttempts &&
-    streamedTokens === 0
+    attempt < maxAttempts
   );
 }

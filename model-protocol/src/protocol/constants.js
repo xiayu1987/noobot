@@ -54,15 +54,8 @@ export const MODEL_ERROR_KIND = Object.freeze({
   UNKNOWN: "unknown",
   CLASSIFICATION: "classification",
 });
-const RETRYABLE_ERROR_KINDS = new Set([
-  MODEL_ERROR_KIND.RATE_LIMIT,
-  MODEL_ERROR_KIND.TIMEOUT,
-  MODEL_ERROR_KIND.TEMPORARY_UNAVAILABLE,
-  MODEL_ERROR_KIND.UNKNOWN,
-]);
-
 export function createModelFailureClassification(kind) {
-  return Object.freeze({ kind, retryable: RETRYABLE_ERROR_KINDS.has(kind) });
+  return Object.freeze({ kind });
 }
 
 export const MODEL_ERROR_CODE = Object.freeze({

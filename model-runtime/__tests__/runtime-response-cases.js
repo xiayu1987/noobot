@@ -16,7 +16,7 @@ import { invocation, model } from "./runtime-fixtures.js";
 test("reasoning-only exhaustion is a typed terminal protocol error", async () => {
   const adapter = {
     id: "openai-compatible",
-    classifyError: () => ({ retryable: false }),
+    classifyError: () => ({}),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
@@ -44,7 +44,7 @@ test("reasoning-only retries are exposed through the canonical attempt trace", a
   let calls = 0;
   const adapter = {
     id: "openai-compatible",
-    classifyError: () => ({ retryable: false }),
+    classifyError: () => ({}),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
@@ -81,7 +81,7 @@ test("empty signed thinking responses are retried before completion", async () =
   let calls = 0;
   const adapter = {
     id: "anthropic-messages",
-    classifyError: () => ({ retryable: false }),
+    classifyError: () => ({}),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
@@ -122,7 +122,7 @@ test("empty signed thinking responses are retried before completion", async () =
 test("empty signed thinking response exhaustion is a typed protocol error", async () => {
   const adapter = {
     id: "anthropic-messages",
-    classifyError: () => ({ retryable: false }),
+    classifyError: () => ({}),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
@@ -155,7 +155,7 @@ test("image-only chat output completes without an empty-response retry", async (
   let calls = 0;
   const adapter = {
     id: "openai-compatible",
-    classifyError: () => ({ retryable: false }),
+    classifyError: () => ({}),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
@@ -191,7 +191,7 @@ function createEmptyThenAnswerAdapter(emptyCount) {
   const state = { calls: 0 };
   const adapter = {
     id: "anthropic-messages",
-    classifyError: () => ({ retryable: false }),
+    classifyError: () => ({}),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
@@ -395,7 +395,7 @@ test("Responses source never treats an empty terminal as a streaming mismatch", 
   let calls = 0;
   const adapter = {
     id: "openai-compatible",
-    classifyError: () => ({ retryable: false }),
+    classifyError: () => ({}),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.RESPONSES,
@@ -426,7 +426,7 @@ test("Responses source never treats an empty terminal as a streaming mismatch", 
 test("provider registry rejects adapters without a declared response source", () => {
   const adapter = {
     id: "openai-compatible",
-    classifyError: () => ({ retryable: false }),
+    classifyError: () => ({}),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
     createClient: () => ({}),

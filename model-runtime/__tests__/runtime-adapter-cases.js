@@ -213,10 +213,10 @@ async function drainResponsesStream(client) {
 }
 
 for (const [code, classification] of [
-  ["server_error", { kind: MODEL_ERROR_KIND.TEMPORARY_UNAVAILABLE, retryable: true }],
-  ["unregistered_vendor_code", { kind: MODEL_ERROR_KIND.UNKNOWN, retryable: true }],
-  ["rate_limit_exceeded", { kind: MODEL_ERROR_KIND.RATE_LIMIT, retryable: true }],
-  ["invalid_prompt", { kind: MODEL_ERROR_KIND.INVALID_REQUEST, retryable: false }],
+  ["server_error", { kind: MODEL_ERROR_KIND.TEMPORARY_UNAVAILABLE }],
+  ["unregistered_vendor_code", { kind: MODEL_ERROR_KIND.UNKNOWN }],
+  ["rate_limit_exceeded", { kind: MODEL_ERROR_KIND.RATE_LIMIT }],
+  ["invalid_prompt", { kind: MODEL_ERROR_KIND.INVALID_REQUEST }],
 ]) {
   test(`OpenAI Responses stream classifies response.failed ${code}`, async () => {
     const message = `upstream ${code}`;
@@ -243,7 +243,6 @@ for (const [code, classification] of [
 test("Responses failure codes stay scoped to the OpenAI adapter", () => {
   assert.deepEqual(classifyTransportError({ code: "server_error" }), {
     kind: MODEL_ERROR_KIND.UNKNOWN,
-    retryable: true,
   });
 });
 

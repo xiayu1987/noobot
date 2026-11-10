@@ -78,7 +78,7 @@ test("HTTP attempts including semantic and transport retries reach the persisted
     registry: {
       resolve: () => ({
         id: "openai-compatible",
-        classifyError: () => ({ kind: "temporary_unavailable", retryable: true }),
+        classifyError: () => ({ kind: "temporary_unavailable" }),
         prepareMessages: ({ messages }) => messages,
         bindTools: ({ client }) => client,
         resolveResponseSource: () => "message",
@@ -272,7 +272,7 @@ for (const fault of ["http", "measurement"]) {
       registry: {
         resolve: () => ({
           id: "openai-compatible",
-          classifyError: () => ({ kind: "temporary_unavailable", retryable: true }),
+          classifyError: () => ({ kind: "temporary_unavailable" }),
           prepareMessages: ({ messages }) => messages,
           bindTools: ({ client }) => client,
           resolveResponseSource: () => "message",

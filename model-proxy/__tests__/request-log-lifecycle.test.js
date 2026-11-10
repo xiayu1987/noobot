@@ -9,6 +9,7 @@ import http from "node:http";
 import { once } from "node:events";
 
 import { createProxyServer, createRequestLogLifecycle } from "../src/server.js";
+import { createRequestPrefixTracker } from "../src/cache-diagnostics.js";
 
 function createRecordingLogger() {
   const requests = [];
@@ -76,6 +77,7 @@ test("client disconnect closes a recorded proxy request with one terminal", asyn
     targetUrl: `http://127.0.0.1:${upstream.address().port}`,
     proxyHost: "127.0.0.1",
     logger,
+    measureRequestPrefix: createRequestPrefixTracker(),
     headerExtractors: {
       extractModelNameFromHeaders: () => "test-model",
       extractFlowFromHeaders: () => "agent.main",
@@ -124,4 +126,5 @@ test("client disconnect closes a recorded proxy request with one terminal", asyn
   assert.equal(logger.terminals.length, 1);
   assert.equal(logger.terminals[0].outcome, "client_aborted");
   assert.equal(logger.terminals[0].sessionId, "session-abort");
+  assert.equal(logger.requests[0].cacheDiagnostics.prefix.baseline, "no_previous_request");
 });

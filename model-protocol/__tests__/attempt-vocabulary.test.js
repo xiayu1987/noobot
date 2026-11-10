@@ -60,5 +60,5 @@ test("protocol error defaults come from the protocol vocabularies", () => {
   const error = new ModelProtocolError("boom");
   assert.equal(error.code, MODEL_ERROR_CODE.PROTOCOL);
   assert.equal(error.kind, MODEL_ERROR_KIND.PROTOCOL);
-  assert.equal(error.retryable, false);
+  assert.equal(Object.hasOwn(error, "retryable"), false);
 });

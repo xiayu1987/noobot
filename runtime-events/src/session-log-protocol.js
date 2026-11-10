@@ -19,7 +19,7 @@ import {
   RUNTIME_EVENT_CHANNELS,
   RUNTIME_EVENT_SCOPES,
 } from "./constants.js";
-import { text } from "@noobot/shared/value";
+import { text, isObjectLike } from "@noobot/shared/value";
 
 export const SESSION_CHANNELS = Object.freeze({
   WEB_SOCKET: RUNTIME_EVENT_CHANNELS.WEB_SOCKET,
@@ -66,9 +66,9 @@ const SESSION_LOG_DEBUG_CONTROL_KEYS = Object.freeze(
 
 function normalizeSessionLogText(
   value = "",
-  { fallback = "", maxLength = LENGTH_THRESHOLDS.sessionLog.messageChars } = {},
+  { maxLength = LENGTH_THRESHOLDS.sessionLog.messageChars } = {},
 ) {
-  const normalizedText = text(value || fallback);
+  const normalizedText = text(value);
   return maxLength > 0 ? normalizedText.slice(0, maxLength) : normalizedText;
 }
 
@@ -149,7 +149,7 @@ export function buildSessionLogRecord(event = {}) {
     throw new Error(`Invalid session log scope: ${scope}`);
   }
   const channel = requireSessionLogChannel(event.channel);
-  const data = event.data && typeof event.data === "object" ? { ...event.data } : {};
+  const data = isObjectLike(event.data) ? { ...event.data } : {};
   const source = normalizeSessionLogText(event.source, {
     maxLength: LENGTH_THRESHOLDS.sessionLog.sourceChars,
   });

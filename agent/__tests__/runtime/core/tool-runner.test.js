@@ -724,7 +724,7 @@ test("executeToolCallInTurn rejects unrepairable args before invocation and emit
   );
 });
 
-test("executeToolCall classifies an uncoded invoke error as retryable, matching its result code", async () => {
+test("executeToolCall classifies an uncoded invoke error as recoverable, matching its result code", async () => {
   const events = [];
   const result = await executeToolCall({
     call: { id: "call-uncoded-class", name: "read_file", args: {} },
@@ -743,8 +743,7 @@ test("executeToolCall classifies an uncoded invoke error as retryable, matching 
   const payload = JSON.parse(result.toolResultText);
   assert.equal(payload.code, "RECOVERABLE_TOOL_INVOKE_ERROR");
   const errorEvent = events.find((event) => event.event === "tool_call_error");
-  assert.equal(errorEvent?.data?.classification, "retryable");
-  assert.equal(errorEvent?.data?.error?.fatal, false);
+  assert.equal(errorEvent?.data?.classification, "recoverable");
   assert.equal(errorEvent?.data?.error?.code, "RECOVERABLE_TOOL_INVOKE_ERROR");
 });
 

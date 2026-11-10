@@ -10,35 +10,5 @@ export function classifyEngineError(error = null, abortSignal = null) {
   if (abortSignal?.aborted || isAbortError(error) || isAbortError(error?.cause)) {
     return "abort";
   }
-
-  if (isFatalError(error)) return "fatal";
-  if (error instanceof NoobotError) return "retryable";
-
-  const status = Number(
-    error?.status ??
-      error?.statusCode ??
-      error?.response?.status ??
-      error?.cause?.status ??
-      error?.cause?.statusCode,
-  );
-
-  if ([400, 408, 409, 429, 500, 502, 503, 504].includes(status)) {
-    return "retryable";
-  }
-
-  const message = String(
-    error?.message ?? error?.error?.message ?? error?.cause?.message ?? "",
-  ).toLowerCase();
-  if (
-    message.includes("internal server error") ||
-    message.includes("server error") ||
-    message.includes("temporarily unavailable") ||
-    message.includes("timeout") ||
-    message.includes("timed out") ||
-    message.includes("rate limit")
-  ) {
-    return "retryable";
-  }
-
-  return "fatal";
+  return error instanceof NoobotError && !isFatalError(error) ? "recoverable" : "fatal";
 }

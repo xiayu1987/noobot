@@ -46,7 +46,7 @@ export function readContextMessageValue(message = {}, field = "") {
 }
 
 export function readContextMessageField(message = {}, field = "") {
-  return text(readContextMessageValue(message, field) ?? "");
+  return text(readContextMessageValue(message, field));
 }
 
 export function readContextMessageArray(message, field) {
