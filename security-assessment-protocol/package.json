@@ -1,6 +1,6 @@
 {
   "name": "@noobot/security-assessment-protocol",
-  "version": "4.4.4",
+  "version": "4.4.5",
   "private": true,
   "type": "module",
   "main": "src/index.js",
