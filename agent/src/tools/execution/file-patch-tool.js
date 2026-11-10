@@ -187,6 +187,14 @@ async function buildPatchPlans({ targets, contentEncoding, baseVersions, workspa
         destination: item.resolvedNewPath,
       })),
     );
+  } catch (error) {
+    if (!(error instanceof TypeError)) throw error;
+    throw recoverableToolError(error.message, {
+      code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
+      details: { field: "patch", contract: "operations" },
+    });
+  }
+  try {
     versions = indexPatchBaseVersions(
       baseVersions,
       [...paths].map(([filePath, identity]) => ({ filePath, identity })),
@@ -195,7 +203,7 @@ async function buildPatchPlans({ targets, contentEncoding, baseVersions, workspa
     if (!(error instanceof TypeError)) throw error;
     throw recoverableToolError(error.message, {
       code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
-      details: { field: "patch", contract: "operations/baseVersions" },
+      details: { field: "baseVersions", contract: "baseVersions" },
     });
   }
   for (const [filePath, resolved] of paths) {

@@ -14,6 +14,7 @@ export * from "./generation-options.js";
 export * from "./output.js";
 export * from "./measurement.js";
 export * from "./response-format.js";
+export * from "./stream-output.js";
 export * from "./anthropic-stream.js";
 export * from "./tool-binding.js";
 export * from "./tool-definition-projection.js";

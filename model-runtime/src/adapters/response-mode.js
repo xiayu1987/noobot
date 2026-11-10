@@ -51,6 +51,15 @@ export function createResponseModeFetch({ requestedStreaming, fetch: transportFe
       requestedStreaming,
       response: await transportFetch(url, init),
     });
+    if (!requestedStreaming && response.ok && resolveModelResponseFormat(url) === "responses") {
+      const mediaType = responseMediaType(response);
+      if (mediaType !== "application/json" && !mediaType.endsWith("+json")) {
+        await response.body?.cancel();
+        throw new ModelProtocolError("Responses response requires a JSON media type", {
+          details: { mediaType },
+        });
+      }
+    }
     return requestedStreaming && response.ok && resolveModelResponseFormat(url) === "chat"
       ? guardChatResponseStream(response)
       : response;

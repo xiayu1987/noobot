@@ -4,7 +4,11 @@
  */
 import { requireModelContextSequencePolicy } from "../policy/context-policy.js";
 import { isPlainObject } from "@noobot/shared/value";
-import { MODEL_ERROR_KIND, MODEL_ATTEMPT_KIND } from "./constants.js";
+import {
+  MODEL_ERROR_KIND,
+  MODEL_ATTEMPT_KIND,
+  createModelFailureClassification,
+} from "./constants.js";
 import { ModelProtocolError } from "./error.js";
 
 const MODEL_ERROR_KINDS = new Set(Object.values(MODEL_ERROR_KIND));
@@ -22,6 +26,12 @@ function freezeClassification(kind, retryable, classificationError = null) {
   return Object.freeze({ kind, retryable, classificationError });
 }
 
+function requireRetryAfterMs(value) {
+  if (!Number.isFinite(value) || value < 0)
+    throw new TypeError("model error classification.retryAfterMs must be non-negative");
+  return value;
+}
+
 export function classifyModelFailure(error, classify) {
   if (error instanceof ModelProtocolError) {
     return freezeClassification(error.kind, error.retryable);
@@ -34,10 +44,14 @@ export function classifyModelFailure(error, classify) {
     if (classification.kind === MODEL_ERROR_KIND.CLASSIFICATION) {
       throw new TypeError("adapter classification must not declare classification kind");
     }
-    if (typeof classification.retryable !== "boolean") {
-      throw new TypeError("model error classification.retryable must be boolean");
+    const result = {
+      ...createModelFailureClassification(classification.kind),
+      classificationError: null,
+    };
+    if (classification.retryAfterMs !== undefined) {
+      result.retryAfterMs = requireRetryAfterMs(classification.retryAfterMs);
     }
-    return freezeClassification(classification.kind, classification.retryable);
+    return Object.freeze(result);
   } catch (classificationError) {
     return freezeClassification(
       MODEL_ERROR_KIND.CLASSIFICATION,

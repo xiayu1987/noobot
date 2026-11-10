@@ -160,7 +160,7 @@ for (const scenario of cases) {
       );
       const measurements = summarizeExecutionMetrics(logs).model.measurements;
       const { requests, usage } = measurements;
-      const count = status === "failed" ? 2 : 1;
+      const count = 1;
       assert.equal(requests.startedCount, count);
       assert.equal(requests.completedCount, status === "completed" ? 1 : 0);
       assert.equal(requests.failedCount, status === "completed" ? 0 : count);

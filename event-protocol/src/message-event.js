@@ -37,6 +37,7 @@ export const ACTIVITY_EVENT_TYPES = Object.freeze(
 );
 
 export const ACTIVITY_KIND = Object.freeze({
+  MODEL_RETRY: "model_retry",
   MODEL_ANALYSIS: "model_analysis",
   MAIN_MODEL_ANALYSIS: "main_model_analysis",
   MCP_MODEL_ANALYSIS: "mcp_model_analysis",

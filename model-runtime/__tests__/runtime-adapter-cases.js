@@ -163,9 +163,12 @@ test("OpenAI Responses requests serialize stable settings and tools before input
   });
   client.responses.client = {
     responses: {
-      async create(request) {
+      create(request) {
         transportedRequest = request;
-        return { id: "resp_test", status: "completed", output: [], output_text: "" };
+        return {
+          asResponse: async () =>
+            Response.json({ id: "resp_test", status: "completed", output: [] }),
+        };
       },
     },
   };
@@ -211,8 +214,9 @@ async function drainResponsesStream(client) {
 
 for (const [code, classification] of [
   ["server_error", { kind: MODEL_ERROR_KIND.TEMPORARY_UNAVAILABLE, retryable: true }],
+  ["unregistered_vendor_code", { kind: MODEL_ERROR_KIND.UNKNOWN, retryable: true }],
   ["rate_limit_exceeded", { kind: MODEL_ERROR_KIND.RATE_LIMIT, retryable: true }],
-  ["invalid_prompt", { kind: MODEL_ERROR_KIND.UNKNOWN, retryable: false }],
+  ["invalid_prompt", { kind: MODEL_ERROR_KIND.INVALID_REQUEST, retryable: false }],
 ]) {
   test(`OpenAI Responses stream classifies response.failed ${code}`, async () => {
     const message = `upstream ${code}`;
@@ -229,14 +233,17 @@ for (const [code, classification] of [
     );
     assert.equal(error.code, code);
     assert.equal(error.message, message);
-    assert.deepEqual(openAiCompatibleAdapter.classifyError(error), classification);
+    assert.deepEqual(
+      openAiCompatibleAdapter.classifyError(error, { operatorId: "openai" }),
+      classification,
+    );
   });
 }
 
 test("Responses failure codes stay scoped to the OpenAI adapter", () => {
   assert.deepEqual(classifyTransportError({ code: "server_error" }), {
     kind: MODEL_ERROR_KIND.UNKNOWN,
-    retryable: false,
+    retryable: true,
   });
 });
 
@@ -285,9 +292,12 @@ test("bound OpenAI Responses clients preserve stable fields before input", async
   let transportedRequest = null;
   bound.responses.client = {
     responses: {
-      async create(request) {
+      create(request) {
         transportedRequest = request;
-        return { id: "resp_bound_test", status: "completed", output: [], output_text: "" };
+        return {
+          asResponse: async () =>
+            Response.json({ id: "resp_bound_test", status: "completed", output: [] }),
+        };
       },
     },
   };

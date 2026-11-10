@@ -4,6 +4,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { partialOutputResponse, consumePartialOutput } from "./runtime-fixtures.js";
 import {
   createModelRequestExecutor,
   createProviderAdapterRegistry,
@@ -57,10 +58,10 @@ test("transport errors classify nested Undici timeouts as retryable", () => {
     kind: MODEL_ERROR_KIND.TIMEOUT,
     retryable: true,
   });
-  assert.deepEqual(anthropicMessagesAdapter.classifyError(headersTimeout), {
-    kind: MODEL_ERROR_KIND.TIMEOUT,
-    retryable: true,
-  });
+  assert.deepEqual(
+    anthropicMessagesAdapter.classifyError(headersTimeout, { operatorId: "anthropic" }),
+    { kind: MODEL_ERROR_KIND.TIMEOUT, retryable: true },
+  );
   assert.deepEqual(
     classifyTransportError({ name: "AbortError", code: "UND_ERR_HEADERS_TIMEOUT" }),
     { kind: MODEL_ERROR_KIND.ABORTED, retryable: false },
@@ -77,11 +78,11 @@ test("transport errors classify temporary socket failures as retryable", () => {
   });
 });
 
-test("streaming mode retries once in the opposite direction and caches the successful mode", async () => {
+test("response mode mismatch negotiates once and caches the successful mode", async () => {
   const requestedModes = [];
   const adapter = {
     id: "openai-compatible",
-    classifyError: () => ({ retryable: false, kind: MODEL_ERROR_KIND.UNKNOWN }),
+    classifyError: () => ({ retryable: false, kind: MODEL_ERROR_KIND.RESPONSE_MODE_MISMATCH }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
@@ -120,11 +121,11 @@ test("streaming mode retries once in the opposite direction and caches the succe
   );
 });
 
-test("non-streaming preference also falls back to streaming and caches it", async () => {
+test("non-streaming response mode mismatch negotiates streaming and caches it", async () => {
   const requestedModes = [];
   const adapter = {
     id: "openai-compatible",
-    classifyError: () => ({ retryable: false, kind: MODEL_ERROR_KIND.UNKNOWN }),
+    classifyError: () => ({ retryable: false, kind: MODEL_ERROR_KIND.RESPONSE_MODE_MISMATCH }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
@@ -179,15 +180,15 @@ test("streaming mode is not retried after output has started", async () => {
   const requestedModes = [];
   const adapter = {
     id: "openai-compatible",
-    classifyError: () => ({ retryable: false, kind: MODEL_ERROR_KIND.UNKNOWN }),
+    classifyError: () => ({ kind: MODEL_ERROR_KIND.RESPONSE_MODE_MISMATCH }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
-    createClient: ({ streaming }) => {
+    createClient: ({ streaming, fetch }) => {
       requestedModes.push(streaming);
       return {
-        invoke: async (_messages, options = {}) => {
-          options.callbacks?.[0]?.handleLLMNewToken?.("partial");
+        invoke: async () => {
+          await consumePartialOutput(fetch);
           throw new Error("stream ended unexpectedly");
         },
       };
@@ -196,13 +197,14 @@ test("streaming mode is not retried after output has started", async () => {
   const port = createModelRequestExecutor({
     registry: { resolve: () => adapter },
     credentialPort: { resolve: () => "secret" },
+    providerRuntime: { fetchImpl: async () => partialOutputResponse() },
   });
   await assert.rejects(
     port.invoke({
       invocation,
       model,
       messages: [],
-      options: { streaming: true, callbacks: [{ handleLLMNewToken() {} }] },
+      options: { streaming: true },
     }),
     /stream ended unexpectedly/,
   );
@@ -316,7 +318,7 @@ test("executor observation protocol cannot be overridden with model credentials"
   }
 });
 
-test("tool-call mismatch streaming downgrade is one-way within an invocation", async () => {
+test("tool-call semantic recovery preserves the requested streaming mode", async () => {
   const streamingAttempts = [];
   let calls = 0;
   const adapter = {
@@ -353,13 +355,13 @@ test("tool-call mismatch streaming downgrade is one-way within an invocation", a
     messages: [],
     tools: [sdkTool],
     options: { streaming: true },
-    policies: { retry: { toolCallMismatch: { maxAttempts: 1, downgradeStreaming: true } } },
+    policies: { retry: { toolCallMismatch: { maxAttempts: 1 } } },
   });
 
-  assert.deepEqual(streamingAttempts, [true, false]);
+  assert.deepEqual(streamingAttempts, [true, true]);
   assert.deepEqual(
     response.execution.attempts.map(({ streaming }) => streaming),
-    [true, false],
+    [true, true],
   );
 });
 
@@ -641,7 +643,7 @@ function createInvalidToolCallAdapter(invalidAttempts) {
   return { adapter, state, streamingAttempts };
 }
 
-test("invalid tool calls recover through a streaming downgrade retry", async () => {
+test("invalid tool calls recover without changing transport parameters", async () => {
   const { adapter, state, streamingAttempts } = createInvalidToolCallAdapter(1);
   const port = createModelRequestExecutor({
     registry: { resolve: () => adapter },
@@ -654,11 +656,11 @@ test("invalid tool calls recover through a streaming downgrade retry", async () 
     messages: [],
     tools: [sdkTool],
     options: { streaming: true },
-    policies: { retry: { toolCallMismatch: { maxAttempts: 1, downgradeStreaming: true } } },
+    policies: { retry: { toolCallMismatch: { maxAttempts: 1 } } },
   });
 
   assert.equal(state.calls, 2);
-  assert.deepEqual(streamingAttempts, [true, false]);
+  assert.deepEqual(streamingAttempts, [true, true]);
   assert.deepEqual(
     response.execution.attempts.map(({ status, kind }) => ({ status, kind })),
     [
@@ -683,7 +685,7 @@ test("non-streaming invalid tool calls fail with a typed error instead of being 
       messages: [],
       tools: [sdkTool],
       options: { streaming: false },
-      policies: { retry: { toolCallMismatch: { maxAttempts: 1, downgradeStreaming: true } } },
+      policies: { retry: { toolCallMismatch: { maxAttempts: 1 } } },
     }),
     (error) =>
       error?.code === "MODEL_TOOL_CALL_INVALID" &&
@@ -702,7 +704,7 @@ function createOperationAdapter({ modes, fail }) {
     calls,
     adapter: {
       id: "openai-compatible",
-      classifyError: () => ({ kind: MODEL_ERROR_KIND.UNKNOWN, retryable: false }),
+      classifyError: () => ({ kind: MODEL_ERROR_KIND.RESPONSE_MODE_MISMATCH, retryable: false }),
       bindTools: ({ client }) => client,
       prepareMessages: ({ messages }) => messages,
       resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,

@@ -8,11 +8,7 @@ import {
   countCanonicalThinkingDetailEvents,
   countCanonicalToolTimelineEvents,
 } from "@noobot/event-protocol/tool-timeline";
-import {
-  sendMessage,
-  stopActiveTurn,
-  waitForNaturalCompletion,
-} from "../helpers/browser-actions.js";
+import { sendMessage, waitForNaturalCompletion } from "../helpers/browser-actions.js";
 import {
   beginReload,
   reloadAndWaitForReconnect,
@@ -23,7 +19,7 @@ import {
   waitForSessionExecutionEventTree,
 } from "../helpers/persistence-audit.js";
 import { waitForCommand, waitForLifecycle } from "../helpers/scenario-assertions.js";
-import { uniquePrompt } from "../helpers/turn-scenarios.js";
+import { stopAfterModelInvocation, uniquePrompt } from "../helpers/turn-scenarios.js";
 import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
 
 test("@core PBE-013 运行中刷新后执行记录可展开并收敛到终态", async ({
@@ -163,7 +159,7 @@ test("@core PBE-014 reconnect 与新 Continue 并发", async ({
     0,
     send.identity.turnScopeId,
   );
-  await stopActiveTurn(noobot.page);
+  await stopAfterModelInvocation(noobot.page, noobot.sessionId, send.identity.turnScopeId);
   await waitForLifecycle(
     protocolCapture,
     noobot.sessionId,
@@ -190,7 +186,7 @@ test("@core PBE-014 reconnect 与新 Continue 并发", async ({
     0,
     continued.identity.turnScopeId,
   );
-  await stopActiveTurn(noobot.page);
+  await stopAfterModelInvocation(noobot.page, noobot.sessionId, continued.identity.turnScopeId);
   await waitForLifecycle(
     protocolCapture,
     noobot.sessionId,

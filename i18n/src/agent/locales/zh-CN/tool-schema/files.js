@@ -96,12 +96,12 @@ export const FILE_TOOL_SCHEMA = {
   patch_file: {
     description: {
       key: "tools.patch_file.description",
-      text: "先 {{tool:read_file}} 获取内容和 baseSha256，原样使用返回路径。每个 hunk 独立定位，上下文须连续且唯一；@@ L行号 精确指定原文起始行。hunk 按原文顺序排列，不重叠。失败后重读并重建补丁。",
+      text: "先 {{tool:read_file}} 获取内容和 baseSha256，原样使用返回路径。优先用 @@ L行号 精确定位原文起始行；裸 @@ 须在前一 hunk 之后唯一匹配连续上下文。hunk 按原文顺序排列，不重叠。失败后重读并重建。",
     },
     params: {
       patch: {
         key: "tools.patch_file.fieldPatch",
-        text: "补丁内容；使用 {{tool:read_file}}/{{tool:search}} 返回的完整 path 和精确上下文，不要改写路径。",
+        text: "补丁内容；原样使用读取/搜索返回的 path。apply_patch 每个 @@ 段必须含 + 或 - 行；上下文须与改动连续，纯上下文段不能限定后续段的作用域。例：@@ L12\n-old\n+new。",
       },
       contentEncoding: {
         key: "tools.patch_file.fieldContentEncoding",

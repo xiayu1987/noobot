@@ -100,7 +100,7 @@ test("non-protocol errors carrying kind are classified by the adapter, never sel
   }));
   assert.deepEqual(result, {
     kind: MODEL_ERROR_KIND.TIMEOUT,
-    retryable: false,
+    retryable: true,
     classificationError: null,
   });
   assert.ok(Object.isFrozen(result));
@@ -113,7 +113,7 @@ test("classifier exceptions and invalid classification are explicit non-retryabl
     },
     () => ({ retryable: true }),
     () => ({ kind: "invented", retryable: false }),
-    () => ({ kind: MODEL_ERROR_KIND.TIMEOUT }),
+    () => ({ kind: MODEL_ERROR_KIND.TIMEOUT, retryAfterMs: -1 }),
     () => ({ kind: MODEL_ERROR_KIND.CLASSIFICATION, retryable: false }),
   ]) {
     const result = classifyModelFailure(original, classify);

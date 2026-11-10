@@ -11,13 +11,20 @@ import {
   createChatStreamTerminalTracker,
   createUnavailableModelUsage,
   requireModelRequestMeasurement,
-  requireModelResponseTerminal,
+  hasModelStreamOutput,
   resolveModelResponseFormat,
-  resolveModelStreamTerminal,
   unavailableMeasurement,
 } from "@noobot/model-protocol";
 import { normalizeProviderUsage } from "../normalization/usage-normalizer.js";
 import { responseMediaType } from "../adapters/response-mode.js";
+import {
+  validatedModelResponseTerminal,
+  validatedModelStreamTerminal,
+} from "../normalization/response-terminal.js";
+import {
+  createModelResponseDecoder,
+  parseModelResponseJson,
+} from "../normalization/response-decoding.js";
 
 function commonBodyPrefixBytes(current, previous) {
   const blockBytes = LENGTH_THRESHOLDS.modelMeasurement.prefixCompareBlockBytes;
@@ -61,12 +68,13 @@ function requestUrl(input) {
   return input.url;
 }
 
-function createUsageCollector(format, finish) {
+function createUsageCollector(format, finish, onOutput) {
   let rawUsage;
+  let decodedResponse;
   let measurementError = null;
   let terminal = null;
   let pending = "";
-  const decoder = new TextDecoder("utf-8", { fatal: true });
+  const decode = createModelResponseDecoder();
   const parseFrames = createEventStreamParser();
   const chatTerminal = format === "chat" ? createChatStreamTerminalTracker() : null;
   const anthropicTerminal = format === "anthropic" ? createAnthropicStreamTerminalTracker() : null;
@@ -74,7 +82,8 @@ function createUsageCollector(format, finish) {
   const accept = (event) => {
     terminal = streamTerminal
       ? streamTerminal.accept(event)
-      : resolveModelStreamTerminal(format, event);
+      : validatedModelStreamTerminal(format, event);
+    if (hasModelStreamOutput(format, event)) onOutput?.();
     if (format === "anthropic") {
       if (event.type === "message_start") rawUsage = { ...event.message?.usage };
       if (event.type === "message_delta") rawUsage = { ...rawUsage, ...event.usage };
@@ -104,17 +113,18 @@ function createUsageCollector(format, finish) {
   };
   const reject = (error) => {
     measurementError ??= String(error.message);
+    pending = "";
     finish("failed", result("stream_interrupted"));
+    throw error;
   };
   return {
     chunk(bytes, streaming) {
       if (format === null || measurementError !== null || terminal) return;
       let decoded;
       try {
-        decoded = decoder.decode(bytes, { stream: true });
+        decoded = decode(bytes, { stream: true });
       } catch (error) {
         reject(error);
-        return;
       }
       if (!streaming) {
         pending += decoded;
@@ -122,10 +132,9 @@ function createUsageCollector(format, finish) {
       }
       for (const { data } of parseFrames(decoded)) {
         try {
-          accept(data === "[DONE]" ? { type: data } : JSON.parse(data));
+          accept(data === "[DONE]" ? { type: data } : parseModelResponseJson(data));
         } catch (error) {
           reject(error);
-          return;
         }
         if (!terminal) continue;
         finish(terminal.status, result("provider_not_reported"));
@@ -135,20 +144,17 @@ function createUsageCollector(format, finish) {
     end(streaming, status) {
       if (measurementError !== null || terminal) return;
       try {
-        pending += decoder.decode();
+        pending += decode();
       } catch (error) {
         reject(error);
-        return;
       }
       if (format !== null && !streaming && measurementError === null) {
         try {
-          const response = JSON.parse(pending);
-          rawUsage = response.usage;
-          terminal = requireModelResponseTerminal(format, response);
+          decodedResponse = parseModelResponseJson(pending);
+          rawUsage = decodedResponse?.usage;
+          terminal = validatedModelResponseTerminal(format, decodedResponse);
         } catch (error) {
           reject(error);
-          pending = "";
-          return;
         }
       }
       pending = "";
@@ -161,10 +167,33 @@ function createUsageCollector(format, finish) {
     fail(status) {
       finish(status, result("transport_failed"));
     },
+    decoded() {
+      return decodedResponse;
+    },
     cancel(status) {
       finish(status, result("stream_interrupted"));
     },
   };
+}
+
+class MeasuredJsonResponse extends Response {
+  #collector;
+
+  constructor(body, init, collector) {
+    super(body, init);
+    this.#collector = collector;
+  }
+
+  async json() {
+    if (this.bodyUsed) throw new TypeError("Response body is already consumed");
+    const reader = this.body.getReader();
+    try {
+      while (!(await reader.read()).done) continue;
+      return this.#collector.decoded();
+    } finally {
+      reader.releaseLock();
+    }
+  }
 }
 
 export function createMeasuredFetch({
@@ -175,6 +204,7 @@ export function createMeasuredFetch({
   operationKind,
   attempt,
   observe,
+  onOutput,
 }) {
   return async (input, init = {}) => {
     const method = (init.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
@@ -207,7 +237,8 @@ export function createMeasuredFetch({
       emit(MODEL_REQUEST_EVENT.USAGE, usage);
       emit(MODEL_REQUEST_EVENT.FINISHED, { status });
     };
-    const collector = createUsageCollector(resolveModelResponseFormat(url), finish);
+    const format = resolveModelResponseFormat(url);
+    const collector = createUsageCollector(format, finish, onOutput);
     const cancelled = () => (signal?.aborted ? "cancelled" : "failed");
     let response;
     try {
@@ -244,17 +275,21 @@ export function createMeasuredFetch({
         } catch (error) {
           collector.cancel(cancelled());
           controller.error(error);
+          await reader.cancel(error);
         }
       },
       async cancel(reason) {
-        collector.cancel("cancelled");
+        collector.cancel(cancelled());
         await reader.cancel(reason);
       },
     });
-    return new Response(body, {
+    const responseInit = {
       status: response.status,
       statusText: response.statusText,
       headers: response.headers,
-    });
+    };
+    return !streaming && format !== null
+      ? new MeasuredJsonResponse(body, responseInit, collector)
+      : new Response(body, responseInit);
   };
 }

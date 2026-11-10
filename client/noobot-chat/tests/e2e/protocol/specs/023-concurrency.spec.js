@@ -95,6 +95,9 @@ test("@full PBE-024 停止命令幂等性", async ({ noobot, protocolCapture }, 
     noobot.sessionId,
   );
   await expect(secondPage.locator(".stop-float-btn")).toBeVisible();
+  await waitForModelInvocationTraces(noobot.userId, noobot.sessionId, (records) =>
+    records.some((record) => record.turnScopeId === send.identity.turnScopeId),
+  );
   await Promise.all([
     noobot.page.locator(".stop-float-btn").evaluate((button) => button.click()),
     secondPage.locator(".stop-float-btn").evaluate((button) => button.click()),

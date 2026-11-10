@@ -12,6 +12,7 @@ export { TOOL_SCHEMA_BY_TOOL };
 export default {
   ...TOOL_SCHEMA_FLAT_GENERATED,
   ...BACKEND_COMMON_ZH_CN,
+  "agent.modelRetry": ({ retryCount, maxRetries }) => `正在重试 ${retryCount}/${maxRetries}`,
   "agent.legacyPluginRelayPrefix": "[来自harness外部模型输出/{purpose}]",
   "tools.script.commandTooLong": "脚本内容过长，请分批执行或拆分脚本/文本后重试",
   "tools.file.writeContentTooLong": "文件内容过长，请分批写入",

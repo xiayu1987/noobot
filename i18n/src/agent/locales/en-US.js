@@ -12,6 +12,7 @@ export { TOOL_SCHEMA_BY_TOOL };
 export default {
   ...TOOL_SCHEMA_FLAT_GENERATED,
   ...BACKEND_COMMON_EN_US,
+  "agent.modelRetry": ({ retryCount, maxRetries }) => `Retry ${retryCount}/${maxRetries}`,
   "agent.legacyPluginRelayPrefix": "[Relay from harness external model/{purpose}]",
   "tools.script.commandTooLong":
     "Script content is too long. Please execute in batches or split the script/text and try again.",

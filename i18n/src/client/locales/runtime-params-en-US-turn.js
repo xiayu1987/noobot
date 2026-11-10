@@ -217,6 +217,11 @@ export default {
     },
   },
   model: {
+    maxTotalAttempts: {
+      name: "Model invocation attempt limit",
+      description:
+        "Shared attempt budget for transport, mode negotiation and semantic recovery, including the initial request.",
+    },
     transportMaxAttempts: {
       name: "Model transport attempt limit",
       description:

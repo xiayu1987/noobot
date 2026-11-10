@@ -350,13 +350,11 @@ function executorWithFetch(fetch, observationPort) {
   });
 }
 
-test("Anthropic obeys the existing alternate-mode retry and successful-mode cache", async () => {
+test("Anthropic negotiates a response mode mismatch and caches the successful mode", async () => {
   const modes = [];
   const executor = executorWithFetch(async (_url, init) => {
     const payload = JSON.parse(init.body);
     modes.push(payload.stream);
-    if (payload.stream)
-      return Response.json({ error: { message: "stream unsupported" } }, { status: 400 });
     return Response.json({
       ...start.message,
       content: [{ type: "text", text: "done" }],

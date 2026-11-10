@@ -9,6 +9,7 @@ import {
   MODEL_ERROR_CODE,
   MODEL_CONTEXT_SEQUENCE_POLICY,
   MODEL_ERROR_KIND,
+  isModelRetryEvent,
   ModelProtocolError,
   requireInvocationScope,
   requireModelPort,
@@ -25,7 +26,10 @@ import {
   projectToolDefinitionNames,
   projectToolNamePrompt,
 } from "@noobot/model-protocol";
-import { emitEvent } from "../events/index.js";
+import { emitEvent, hasEventListener } from "../events/index.js";
+import { emitMessageEvent } from "../events/message-event-stream.js";
+import { ACTIVITY_KIND, MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
+import { tEngine } from "./i18n-adapter.js";
 import { resolveEffectiveModelSpec } from "./run-config/index.js";
 import { applyActiveModelSpec } from "../models/runtime/model-manager.js";
 import { projectToolsForModel } from "../models/tool/model-tool-definition.js";
@@ -58,9 +62,24 @@ function createCredentialPort() {
 }
 
 function createObservationPort({ modelState }) {
+  const emitRetry = async (type, payload) => {
+    await emitEvent(modelState.runtime.eventListener, type, payload);
+    if (!hasEventListener(modelState.runtime.eventListener)) return;
+    return emitMessageEvent(
+      modelState.runtime.eventListener,
+      modelState.runtime,
+      MESSAGE_EVENT_TYPE.THINKING,
+      {
+        activityId: `model-retry:${payload.invocation.invocationId}`,
+        activityKind: ACTIVITY_KIND.MODEL_RETRY,
+        text: tEngine(modelState.runtime, "agent.modelRetry", payload),
+      },
+    );
+  };
   return Object.freeze({
     emit(type, payload = {}) {
-      emitEvent(modelState.runtime.eventListener, type, payload);
+      if (isModelRetryEvent(type)) return emitRetry(type, payload);
+      return emitEvent(modelState.runtime.eventListener, type, payload);
     },
   });
 }

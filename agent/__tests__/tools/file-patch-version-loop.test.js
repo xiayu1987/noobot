@@ -44,6 +44,80 @@ async function fixture(t) {
 const edit = (file, before, after) => `*** Update File: ${file}\n@@\n-${before}\n+${after}`;
 const base = (filePath, read) => ({ filePath, sha256: read.baseSha256 });
 
+test("ambiguous later hunk identifies its patch header, writes nothing and recovers by exact anchor", async (t) => {
+  const { root, read, patch } = await fixture(t);
+  await fs.writeFile(path.join(root, "a"), "first\n");
+  const source = "head\nx\ngap\nx\n";
+  await fs.writeFile(path.join(root, "b"), source);
+  const body = `${edit("a", "first", "FIRST")}\n*** Update File: b\n@@\n-head\n+HEAD\n@@\n-x\n+X`;
+  const versions = [base("a", await read("a")), base("b", await read("b"))];
+  for (const dryRun of [true, false]) {
+    const result = await patch(body, versions, { dryRun });
+    assert.equal(result.ok, false);
+    assert.equal(result.path.path, "b");
+    assert.equal(result.details.hunkIndex, 2);
+    assert.equal(result.details.patchLine, 10);
+    assert.deepEqual(result.details.candidateLines, [2, 4]);
+    assert.equal(result.details.line, undefined);
+    assert.equal(await fs.readFile(path.join(root, "a"), "utf8"), "first\n");
+    assert.equal(await fs.readFile(path.join(root, "b"), "utf8"), source);
+  }
+  const freshVersions = [base("a", await read("a")), base("b", await read("b"))];
+  const corrected = body.replace("@@\n-x", "@@ L4\n-x");
+  assert.equal((await patch(corrected, freshVersions)).ok, true);
+  assert.equal(await fs.readFile(path.join(root, "a"), "utf8"), "FIRST\n");
+  assert.equal(await fs.readFile(path.join(root, "b"), "utf8"), "HEAD\nx\ngap\nX\n");
+});
+
+test("context-only scope and consecutive headers reject with a rebuild instruction before any write", async (t) => {
+  const { root, read, patch } = await fixture(t);
+  const source = "function target() {\n}\nfunction other() {\n}\n";
+  await fs.writeFile(path.join(root, "a"), source);
+  const versions = [base("a", await read("a"))];
+  for (const invalidBody of [
+    "*** Update File: a\n@@\n function target() {\n@@\n }\n+insert",
+    "*** Update File: a\n@@\n@@ L2\n }\n+insert",
+  ]) {
+    await assert.rejects(patch(invalidBody, versions), (error) => {
+      assert.equal(error.details.patchLine, 3);
+      assert.match(error.message, /context-only hunks do not define scope/);
+      assert.match(error.message, /keep continuous context with the edit in one hunk/);
+      return true;
+    });
+    assert.equal(await fs.readFile(path.join(root, "a"), "utf8"), source);
+  }
+  const fresh = await read("a");
+  assert.equal(
+    (await patch("*** Update File: a\n@@ L2\n }\n+insert", [base("a", fresh)])).ok,
+    true,
+  );
+  assert.equal(
+    await fs.readFile(path.join(root, "a"), "utf8"),
+    source.replace("}\n", "}\ninsert\n"),
+  );
+});
+
+test("numbered adaptation and unified ranges retain the submitted patch coordinate on mismatch", async (t) => {
+  const { root, read, patch } = await fixture(t);
+  await fs.writeFile(path.join(root, "a"), "first\nsecond\n");
+  const versions = [base("a", await read("a"))];
+  for (const options of [
+    {
+      patch: "*** Begin Patch\n*** Update File: a\n@@\n-     2\tmissing\n+new\n*** End Patch",
+      contentEncoding: "read_file_numbered",
+    },
+    { patch: "--- a\n+++ a\n@@ -2 +2 @@\n-missing\n+new\n" },
+  ]) {
+    const result = await patch("", versions, options);
+    assert.equal(result.ok, false);
+    assert.equal(result.details.hunkIndex, 1);
+    assert.equal(result.details.patchLine, 3);
+    assert.equal(result.details.line, 2);
+    assert.match(result.nearbyContent, /2\tsecond/);
+    assert.equal(await fs.readFile(path.join(root, "a"), "utf8"), "first\nsecond\n");
+  }
+});
+
 test("read bytes -> explicit numbered adaptation -> dryRun -> commit returns verifiable hashes", async (t) => {
   const { root, read, patch } = await fixture(t);
   const source = "head\n5\told\n";
@@ -112,6 +186,12 @@ test("version coverage, duplicate versions and stale move destinations are rejec
 
 test("add and delete use explicit absent/existing baseline versions", async (t) => {
   const { root, read, patch } = await fixture(t);
+  await assert.rejects(patch("*** Add File: a\n+new", []), (error) => {
+    assert.equal(error.details.field, "baseVersions");
+    assert.match(error.message, /sha256: null for absent targets/);
+    return true;
+  });
+  await assert.rejects(fs.access(path.join(root, "a")), { code: "ENOENT" });
   assert.equal((await patch("*** Add File: a\n+new", [{ filePath: "a", sha256: null }])).ok, true);
   const snapshot = await read("a");
   assert.equal((await patch("*** Delete File: a", [base("a", snapshot)])).ok, true);

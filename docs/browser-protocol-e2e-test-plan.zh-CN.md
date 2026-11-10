@@ -535,6 +535,13 @@ workspace/<userId>/runtime/plugin-data/harness/runs/<dialogProcessId>/
 stream callback 或 retry 日志替代这一事实源。输入必须是消息数组；字符串 prompt 属于协议错误，
 不得在端口内转换或 fallback。
 
+停止正在调用模型的场景必须等待当前 Session、Turn 的权威调用记录后再停止，不能以
+`turn.processing_started` 替代模型调用事实。PBE-054 专门覆盖首个事件前停止，调用是否发生取决于
+取消时序，因此其观测策略为 `optional`；若发生调用，仍执行完整身份、模型和上下文审计。
+PBE-026、PBE-030 禁止调用，其余场景要求调用，策略统一由 `model-observation-policy.js` 定义。
+同一策略独立声明摘要持久化要求：PBE-026、PBE-030 禁止摘要，其余场景（包括 PBE-054）必须保存摘要。
+模型观测为 `optional` 不放宽摘要持久化审计。
+
 每条权威记录至少包含：
 
 ```text

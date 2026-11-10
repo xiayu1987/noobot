@@ -34,6 +34,6 @@ test("@smoke PBE-002 连接、创建 Session 并完成无附件普通发送", as
     turnScopeId: command.identity.turnScopeId,
   });
   assertCommandChain(protocolCapture, noobot.sessionId);
-  assertTurnLifecycle(protocolCapture, noobot.sessionId, command.identity.turnScopeId);
+  await assertTurnLifecycle(protocolCapture, noobot.sessionId, command.identity.turnScopeId);
   assertNoForbiddenErrors(protocolCapture.console);
 });

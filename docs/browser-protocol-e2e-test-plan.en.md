@@ -339,6 +339,14 @@ counts, roles, dialogs, missing IDs, previews, and truncation. Audits deduplicat
 `invocationId`, order by `modelInstanceId + invocationSequence`, and never convert string prompts or
 infer calls from hashes.
 
+Scenarios that stop an active model call wait for the authoritative invocation record for the
+current Session and Turn; `turn.processing_started` is not evidence of a model invocation.
+PBE-054 covers stopping before the first event, so its observation policy is `optional`; any call
+that occurs still receives the full identity, model, and context audit. PBE-026 and PBE-030 forbid
+calls; all other scenarios require calls. `model-observation-policy.js` owns these expectations
+and independently declares summary persistence: PBE-026 and PBE-030 forbid summaries; all other
+cases, including PBE-054, require them. Optional model observation does not relax summary auditing.
+
 ## 6. Debug Evidence And Forbidden Errors
 
 Capture Agent Context, context identity, Agent Transport, Workflow diagnostics, state-machine and

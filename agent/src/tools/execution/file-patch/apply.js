@@ -24,12 +24,18 @@ function matchedPrefix(lines, pattern, start) {
   return count;
 }
 
-function locateHunk(lines, hunk, cursor) {
+function locateHunk(lines, hunk, cursor, hunkIndex) {
+  const fail = (message, details = {}) =>
+    invalid(message, {
+      ...details,
+      hunkIndex,
+      ...(hunk.patchLine === undefined ? {} : { patchLine: hunk.patchLine }),
+    });
   const pattern = oldTexts(hunk);
   if (hunk.anchorLine !== undefined) {
     const start = hunk.anchorLine - 1;
     if (!Number.isSafeInteger(start) || start < cursor || start > lines.length) {
-      invalid("patch hunks overlap or are out of order", {
+      fail("patch hunks overlap or are out of order", {
         line: start + 1,
         cursorLine: cursor + 1,
         anchorLine: hunk.anchorLine,
@@ -37,7 +43,7 @@ function locateHunk(lines, hunk, cursor) {
     }
     const matched = matchedPrefix(lines, pattern, start);
     if (matched !== pattern.length) {
-      invalid("patch hunk context does not match target file", {
+      fail("patch hunk context does not match target file", {
         line: start + matched + 1,
         expected: pattern[matched],
         actual: lines[start + matched],
@@ -45,7 +51,7 @@ function locateHunk(lines, hunk, cursor) {
     }
     return start;
   }
-  if (!pattern.length) invalid("insertion without old context requires an exact line anchor");
+  if (!pattern.length) fail("insertion without old context requires an exact line anchor");
   const candidates = [];
   let best = { start: cursor, count: 0 };
   for (let start = cursor; start <= lines.length - pattern.length; start += 1) {
@@ -54,13 +60,13 @@ function locateHunk(lines, hunk, cursor) {
     if (count === pattern.length) candidates.push(start);
   }
   if (candidates.length > 1) {
-    invalid("patch hunk context matches multiple locations", {
+    fail("patch hunk context matches multiple locations", {
       candidateLines: candidates.map((start) => start + 1),
       hint: "Use continuous unique context or @@ L<exact original start line>.",
     });
   }
   if (candidates.length === 1) return candidates[0];
-  invalid(
+  fail(
     "patch hunk context does not match target file",
     best.count
       ? {
@@ -144,8 +150,8 @@ export function applyPatchHunks(originalContent, hunks, contentEncoding = "raw")
   const outputEndings = [];
   const newEofPositions = [];
   let cursor = 0;
-  for (const hunk of adapted.hunks) {
-    const start = locateHunk(lines, hunk, cursor);
+  for (const [index, hunk] of adapted.hunks.entries()) {
+    const start = locateHunk(lines, hunk, cursor, index + 1);
     const oldCount = oldTexts(hunk).length;
     const newLines = hunk.lines.filter((line) => line.type !== "-");
     finalNewline = resolveUnifiedNewlines({

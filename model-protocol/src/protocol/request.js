@@ -50,6 +50,10 @@ export function createModelRequest(input = {}) {
   requireModelOperationCapability(model, operation);
   if (!Array.isArray(input.messages))
     throw new TypeError("model request.messages must be an array");
+  for (const key of ["signal", "callbacks", "stream", "streaming"]) {
+    if (Object.hasOwn(input.options?.invoke || {}, key))
+      throw new TypeError(`model request.options.invoke.${key} is owned by the executor`);
+  }
   return Object.freeze({
     protocol: MODEL_PROTOCOL_NAME,
     protocolVersion: MODEL_PROTOCOL_VERSION,

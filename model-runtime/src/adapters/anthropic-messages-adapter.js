@@ -5,7 +5,7 @@
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 import { normalizeRuntimeModelSpec } from "../normalization/spec-normalizer.js";
-import { classifyTransportError } from "../policies/default-retry-policy.js";
+import { classifyProviderError } from "./provider-error-classification.js";
 import { cacheControlValueForRuntime } from "../policies/cache-policy-engine.js";
 import { convertToOpenAITool } from "@langchain/core/utils/function_calling";
 import {
@@ -72,11 +72,11 @@ function invalidToolUseInput(call, cause) {
   });
 }
 
-async function upstreamErrorMessage(response) {
+async function upstreamErrorDetails(response) {
   const body = await response.text();
-  if (responseMediaType(response) !== JSON_MEDIA_TYPE) return body.trim();
+  if (responseMediaType(response) !== JSON_MEDIA_TYPE) return { message: body.trim() };
   try {
-    return text(JSON.parse(body)?.error?.message);
+    return JSON.parse(body)?.error || {};
   } catch (cause) {
     throw new ModelProtocolError("Anthropic error response declares JSON but is not JSON", {
       cause,
@@ -330,10 +330,12 @@ async function requestAnthropicMessages({
     signal: signal || undefined,
   });
   if (!response.ok) {
-    const error = new Error(
-      (await upstreamErrorMessage(response)) || `Anthropic API returned ${response.status}`,
-    );
+    const upstream = await upstreamErrorDetails(response);
+    const error = new Error(upstream.message || `Anthropic API returned ${response.status}`);
     error.status = response.status;
+    error.type = upstream.type;
+    error.details = upstream.details;
+    error.headers = response.headers;
     throw error;
   }
   const requestedStreaming = payload.stream === true;
@@ -494,7 +496,7 @@ async function executeAnthropicOperation({
 
 export const anthropicMessagesAdapter = Object.freeze({
   id: "anthropic-messages",
-  classifyError: classifyTransportError,
+  classifyError: classifyProviderError,
   createClient(input) {
     return createClient(input);
   },

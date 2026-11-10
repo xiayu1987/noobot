@@ -96,12 +96,12 @@ export const FILE_TOOL_SCHEMA = {
   patch_file: {
     description: {
       key: "tools.patch_file.description",
-      text: "Use {{tool:read_file}} for content and baseSha256; copy its returned path. Each hunk locates independently using continuous unique context; @@ L<line> specifies the exact original start line. Order non-overlapping hunks by source location. Reread and rebuild after failure.",
+      text: "Use {{tool:read_file}} for content and baseSha256; copy its returned path. Prefer @@ L<line> for the exact original start line; bare @@ requires continuous context matching uniquely after the previous hunk. Order non-overlapping hunks by source location. Reread and rebuild after failure.",
     },
     params: {
       patch: {
         key: "tools.patch_file.fieldPatch",
-        text: "Patch content; reuse the complete path and exact context returned by {{tool:read_file}}/{{tool:search}}.",
+        text: "Patch content; copy the path returned by read/search. Every apply_patch @@ section must contain a + or - line. Keep context continuous with the edit; context-only sections do not scope later sections. Example: @@ L12\n-old\n+new.",
       },
       contentEncoding: {
         key: "tools.patch_file.fieldContentEncoding",

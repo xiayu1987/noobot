@@ -31,7 +31,10 @@ function patchLines(patch) {
 
 function requireChange(hunk, index) {
   if (!hunk.lines.some((line) => line.type === "+" || line.type === "-")) {
-    invalid("patch hunk must contain a change", index);
+    invalid(
+      "patch hunk must contain a change (+ or - line); context-only hunks do not define scope; keep continuous context with the edit in one hunk and remove empty hunks",
+      index,
+    );
   }
   return hunk;
 }
@@ -54,7 +57,11 @@ function parseApplyHunk(lines, start) {
   if (header !== "@@" && (!match || !Number.isSafeInteger(Number(match[1])))) {
     invalid(`invalid apply_patch hunk header: ${header}; use @@ or @@ L<line>`, start);
   }
-  const hunk = { ...(match ? { anchorLine: Number(match[1]) } : {}), lines: [] };
+  const hunk = {
+    patchLine: start + 1,
+    ...(match ? { anchorLine: Number(match[1]) } : {}),
+    lines: [],
+  };
   let index = start + 1;
   while (
     index < lines.length &&
@@ -159,7 +166,12 @@ function markNoFinalNewline(hunk, index) {
 function parseUnifiedHunk(lines, start) {
   const range = parseUnifiedRange(lines, start);
   const { oldStart, oldCount, newCount } = range;
-  const hunk = { unified: true, anchorLine: oldCount === 0 ? oldStart + 1 : oldStart, lines: [] };
+  const hunk = {
+    patchLine: start + 1,
+    unified: true,
+    anchorLine: oldCount === 0 ? oldStart + 1 : oldStart,
+    lines: [],
+  };
   let index = start + 1;
   let oldSeen = 0;
   let newSeen = 0;

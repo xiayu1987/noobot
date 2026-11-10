@@ -17,6 +17,10 @@ export default {
     },
   },
   model: {
+    maxRetryDelayMs: {
+      name: "模型重试最大等待时长",
+      description: "限制重试退避时长；上游要求的最小等待超过此预算时结束请求。",
+    },
     emptyResponseRetryBaseDelayMs: {
       name: "模型空响应重试基础延迟",
       description: "模型空响应重试基础延迟使用的等待时长。",

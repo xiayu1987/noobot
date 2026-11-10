@@ -20,6 +20,14 @@ export const MODEL_INVOCATION_EVENT = Object.freeze({
   FAILED: "model.invocation.failed",
   CANCELLED: "model.invocation.cancelled",
 });
+export function isModelRetryEvent(type) {
+  return [
+    MODEL_INVOCATION_EVENT.RETRY_SCHEDULED,
+    MODEL_INVOCATION_EVENT.SEMANTIC_RETRY,
+    MODEL_INVOCATION_EVENT.STREAMING_MODE_RETRY,
+  ].includes(type);
+}
+
 export const MODEL_CONTEXT_TRACE = Object.freeze({
   EVENT: "model_context_trace",
   INVOKE_STAGE: "llm_invoke_messages",
@@ -31,6 +39,10 @@ export const MODEL_ERROR_KIND = Object.freeze({
   ABORTED: "aborted",
   AUTHENTICATION: "authentication",
   INVALID_REQUEST: "invalid_request",
+  QUOTA_EXHAUSTED: "quota_exhausted",
+  CONTEXT_LIMIT: "context_limit",
+  OUTPUT_LIMIT: "output_limit",
+  CONTENT_POLICY: "content_policy",
   RATE_LIMIT: "rate_limit",
   TIMEOUT: "timeout",
   TEMPORARY_UNAVAILABLE: "temporary_unavailable",
@@ -42,6 +54,17 @@ export const MODEL_ERROR_KIND = Object.freeze({
   UNKNOWN: "unknown",
   CLASSIFICATION: "classification",
 });
+const RETRYABLE_ERROR_KINDS = new Set([
+  MODEL_ERROR_KIND.RATE_LIMIT,
+  MODEL_ERROR_KIND.TIMEOUT,
+  MODEL_ERROR_KIND.TEMPORARY_UNAVAILABLE,
+  MODEL_ERROR_KIND.UNKNOWN,
+]);
+
+export function createModelFailureClassification(kind) {
+  return Object.freeze({ kind, retryable: RETRYABLE_ERROR_KINDS.has(kind) });
+}
+
 export const MODEL_ERROR_CODE = Object.freeze({
   PROTOCOL: "MODEL_PROTOCOL_ERROR",
   CREDENTIAL_MISSING: "MODEL_CREDENTIAL_MISSING",

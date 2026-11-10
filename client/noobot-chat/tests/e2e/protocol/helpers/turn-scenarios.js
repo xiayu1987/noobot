@@ -13,7 +13,8 @@ import {
   sendMessage,
   stopActiveTurn,
 } from "./browser-actions.js";
-import { readSnapshots } from "./persistence-audit.js";
+import { readSnapshots, waitForModelInvocationTraces } from "./persistence-audit.js";
+import { readE2eCredentials } from "../fixtures/auth.fixture.js";
 import {
   assertCommandChain,
   assertContinuation,
@@ -25,6 +26,14 @@ import {
 
 export function uniquePrompt(testInfo, purpose = "protocol") {
   return `[PBE:${testInfo.testId}:${Date.now()}] ${purpose}`;
+}
+
+export async function stopAfterModelInvocation(page, sessionId, turnScopeId) {
+  const { userId } = readE2eCredentials();
+  await waitForModelInvocationTraces(userId, sessionId, (records) =>
+    records.some((record) => record.sessionId === sessionId && record.turnScopeId === turnScopeId),
+  );
+  await stopActiveTurn(page);
 }
 
 export async function sendAndStop({ page, capture, sessionId, prompt, attachment = null }) {
@@ -43,11 +52,11 @@ export async function sendAndStop({ page, capture, sessionId, prompt, attachment
     ...send,
     identity: { ...send.identity, dialogProcessId: processing.dialogProcessId },
   };
-  await stopActiveTurn(page);
+  await stopAfterModelInvocation(page, sessionId, send.identity.turnScopeId);
   const stop = await waitForCommand(capture, sessionId, "turn.stop", beforeCommands);
   await waitForLifecycle(capture, sessionId, "turn.stop_completed", 0, send.identity.turnScopeId);
   assertCommandChain(capture, sessionId);
-  assertTurnLifecycle(capture, sessionId, send.identity.turnScopeId);
+  await assertTurnLifecycle(capture, sessionId, send.identity.turnScopeId);
   assertStopCommandIdentity(stop, authoritativeSend.identity);
   return { send: authoritativeSend, stop };
 }
@@ -64,10 +73,10 @@ export async function continueAndStop({ page, capture, sessionId, previous, prom
     0,
     next.identity.turnScopeId,
   );
-  await stopActiveTurn(page);
+  await stopAfterModelInvocation(page, sessionId, next.identity.turnScopeId);
   await waitForCommand(capture, sessionId, "turn.stop", beforeCommands);
   await waitForLifecycle(capture, sessionId, "turn.stop_completed", 0, next.identity.turnScopeId);
-  assertTurnLifecycle(capture, sessionId, next.identity.turnScopeId);
+  await assertTurnLifecycle(capture, sessionId, next.identity.turnScopeId);
   return { ...next, identity: { ...next.identity, dialogProcessId: processing.dialogProcessId } };
 }
 
@@ -102,8 +111,8 @@ export async function resendAndStop({
   );
   expect(resend.identity.dialogProcessId).toBeTruthy();
   expect(processing.dialogProcessId).toBe(resend.identity.dialogProcessId);
-  await stopActiveTurn(page);
+  await stopAfterModelInvocation(page, sessionId, resend.identity.turnScopeId);
   await waitForLifecycle(capture, sessionId, "turn.stop_completed", 0, resend.identity.turnScopeId);
-  assertTurnLifecycle(capture, sessionId, resend.identity.turnScopeId);
+  await assertTurnLifecycle(capture, sessionId, resend.identity.turnScopeId);
   return resend;
 }

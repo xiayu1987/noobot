@@ -4,15 +4,7 @@
  */
 
 import { text } from "@noobot/shared/value";
-import { MODEL_ERROR_KIND } from "@noobot/model-protocol";
-
-const MODE_INDEPENDENT_ERROR_KINDS = new Set([
-  MODEL_ERROR_KIND.ABORTED,
-  MODEL_ERROR_KIND.AUTHENTICATION,
-  MODEL_ERROR_KIND.RATE_LIMIT,
-  MODEL_ERROR_KIND.CLASSIFICATION,
-  MODEL_ERROR_KIND.PROTOCOL,
-]);
+import { resolveModelFailureRecovery } from "@noobot/model-protocol";
 
 export function streamingProviderCacheKey({ model = {}, operation = {}, tools = [] } = {}) {
   return JSON.stringify([
@@ -30,7 +22,10 @@ export function resolvePreferredStreaming({ requested, cached } = {}) {
 }
 
 export function mayRetryWithAlternateStreaming(streamedTokens, classification) {
-  return streamedTokens === 0 && !MODE_INDEPENDENT_ERROR_KINDS.has(classification.kind);
+  return (
+    streamedTokens === 0 &&
+    resolveModelFailureRecovery(classification).revision === "set_streaming_mode"
+  );
 }
 
 export function alternateStreamingMode(mode) {

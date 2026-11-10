@@ -195,14 +195,14 @@ async function auditSessionSummaryPersistence({
   await fs.mkdir(outputDir, { recursive: true });
   let audit;
   try {
-    if (expectation === MODEL_CALL_EXPECTATION.REQUIRED) {
+    if (expectation === "required") {
       expect(detail.exists).toBe(true);
       expect(detail.sessions.length).toBeGreaterThan(0);
       for (const session of detail.sessions) expect(session.availability).toBe("available");
     }
     audit = await auditSessionSummaryArtifacts(userId, sessionId, {
       expectation,
-      requiredTitlePrefix: expectation === MODEL_CALL_EXPECTATION.REQUIRED ? "[PBE:" : "",
+      requiredTitlePrefix: expectation === "required" ? "[PBE:" : "",
     });
   } catch (error) {
     audit = {
@@ -283,7 +283,7 @@ export const test = artifactTest.extend({
           detail,
           userId: credentials.userId,
           sessionId,
-          expectation: policy.expectation,
+          expectation: policy.summaryExpectation,
           testInfo,
         });
       } catch (error) {

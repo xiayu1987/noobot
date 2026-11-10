@@ -7,14 +7,13 @@ import { test, expect } from "../fixtures/noobot.fixture.js";
 import {
   selectPlugins,
   sendMessage,
-  stopActiveTurn,
   waitForNaturalCompletion,
 } from "../helpers/browser-actions.js";
 import { assertHarnessRun } from "../helpers/harness-assertions.js";
 import { assertNoForbiddenErrors } from "../helpers/log-assertions.js";
 import { readHarnessRun } from "../helpers/persistence-audit.js";
 import { waitForCommand, waitForLifecycle } from "../helpers/scenario-assertions.js";
-import { uniquePrompt } from "../helpers/turn-scenarios.js";
+import { stopAfterModelInvocation, uniquePrompt } from "../helpers/turn-scenarios.js";
 
 test("@core PBE-016 Harness 插件连接", async ({ noobot, protocolCapture }, testInfo) => {
   await selectPlugins(noobot.page, ["harness"]);
@@ -54,7 +53,7 @@ test("@core PBE-017 Harness Hook 与 Model Context", async ({
     0,
     send.identity.turnScopeId,
   );
-  await stopActiveTurn(noobot.page);
+  await stopAfterModelInvocation(noobot.page, noobot.sessionId, send.identity.turnScopeId);
   await waitForLifecycle(
     protocolCapture,
     noobot.sessionId,

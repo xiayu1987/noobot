@@ -64,8 +64,11 @@ data.protocolVersion = 2
 
 Business branches must not emit duplicate observation events. Every provider call owns one
 `invocationId`; derived tool-bound instances share `modelInstanceId` and increment
-`invocationSequence`. `helpers/model-observation-policy.js` is the sole required/forbidden policy
-for every PBE. The shared fixture audits the complete root execution-event tree and writes:
+`invocationSequence`. `helpers/model-observation-policy.js` owns each PBE's model-call expectation
+(`required`, `forbidden`, or `optional`) and independent summary persistence expectation.
+PBE-054 allows an optional call before cancellation but requires summary persistence;
+PBE-026 and PBE-030 forbid both. All other cases require both.
+The shared fixture audits the complete root execution-event tree and writes:
 
 - `protocol-evidence/model-invocations.jsonl`
 - `protocol-evidence/model-observation-audit.json`
@@ -149,7 +152,9 @@ messageId 缺失数、hash、preview 与 truncated 闭合。源码边界由
 `agent/__tests__/architecture/model-invocation-observation-boundary.test.js` 强制守卫。
 
 模型观测不是某几条业务用例的局部断言。所有 PBE 用例的调用期望由
-`helpers/model-observation-policy.js` 唯一定义为 `required` 或 `forbidden`；
+`helpers/model-observation-policy.js` 唯一定义为 `required`、`forbidden` 或 `optional`，
+并独立声明摘要持久化要求。PBE-054 允许取消前没有模型调用，但必须保存摘要；
+PBE-026、PBE-030 禁止调用和摘要持久化，其余场景两者都必须存在。
 Playwright 配置加载时校验策略表与全部 spec 的 PBE 编号一一闭合。统一 `noobot` fixture 在每条
 用例结束后读取根 Session 的完整 execution-event tree，审计所有权威模型调用，并输出：
 

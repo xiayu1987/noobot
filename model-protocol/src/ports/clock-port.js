@@ -4,5 +4,17 @@
  */
 export const SYSTEM_CLOCK_PORT = Object.freeze({
   now: () => new Date(),
-  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  sleep: (ms, { signal } = {}) =>
+    new Promise((resolve, reject) => {
+      signal?.throwIfAborted();
+      const onAbort = () => {
+        clearTimeout(timer);
+        reject(signal.reason);
+      };
+      const timer = setTimeout(() => {
+        signal?.removeEventListener("abort", onAbort);
+        resolve();
+      }, ms);
+      signal?.addEventListener("abort", onAbort, { once: true });
+    }),
 });

@@ -17,6 +17,10 @@ export default {
     },
   },
   model: {
+    maxRetryDelayMs: {
+      name: "Maximum model retry delay",
+      description: "Caps retry backoff; provider-required waits above this budget end the request.",
+    },
     emptyResponseRetryBaseDelayMs: {
       name: "Model empty response retry base delay",
       description: "Waiting period used by model empty response retry base delay.",

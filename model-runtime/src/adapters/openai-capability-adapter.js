@@ -7,10 +7,8 @@ import OpenAI from "openai";
 import { MODEL_OPERATION_KIND, MODEL_WEB_SEARCH_INSTRUCTION } from "@noobot/model-protocol";
 import { text } from "@noobot/shared/value";
 import { createResponseModeFetch, unwrapModelProtocolError } from "./response-mode.js";
-import {
-  collectResponsesStream,
-  requireCompletedResponsesResponse,
-} from "./openai-responses-stream.js";
+import { collectResponsesStream } from "./openai-responses-stream.js";
+import { readOpenAiResponsesResponse } from "./openai-json-response.js";
 
 function resolveResponsesOutputText(result = {}) {
   const sdkOutputText = text(result?.output_text);
@@ -71,11 +69,13 @@ async function runOpenAiOperation({
     maxRetries: 0,
   });
   const createResponse = async (body) => {
-    const result = await client.responses.create(
+    const response = client.responses.create(
       { ...body, stream: streaming },
       { signal: signal || undefined },
     );
-    return streaming ? collectResponsesStream(result) : requireCompletedResponsesResponse(result);
+    return streaming
+      ? collectResponsesStream(await response)
+      : readOpenAiResponsesResponse(response, body);
   };
   if (operation.kind === MODEL_OPERATION_KIND.WEB_SEARCH) {
     const result = await createResponse({

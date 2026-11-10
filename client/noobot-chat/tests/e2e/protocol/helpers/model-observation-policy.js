@@ -9,21 +9,44 @@ import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 export const MODEL_CALL_EXPECTATION = Object.freeze({
   REQUIRED: "required",
   FORBIDDEN: "forbidden",
+  OPTIONAL: "optional",
 });
 
 const requiredCases = [
   2, 6, 7, 8, 13, 14, 15, 16, 17, 21, 22, 23, 24, 25, 27, 28, 29, 31, 32, 33, 34, 35, 36, 37, 38,
-  39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57,
+  39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 55, 56, 57,
 ];
 
 export const MODEL_OBSERVATION_POLICY = Object.freeze(
   Object.fromEntries([
     ...requiredCases.map((number) => [
       `PBE-${String(number).padStart(3, "0")}`,
-      MODEL_CALL_EXPECTATION.REQUIRED,
+      Object.freeze({
+        expectation: MODEL_CALL_EXPECTATION.REQUIRED,
+        summaryExpectation: "required",
+      }),
     ]),
-    ["PBE-026", MODEL_CALL_EXPECTATION.FORBIDDEN],
-    ["PBE-030", MODEL_CALL_EXPECTATION.FORBIDDEN],
+    [
+      "PBE-026",
+      Object.freeze({
+        expectation: MODEL_CALL_EXPECTATION.FORBIDDEN,
+        summaryExpectation: "forbidden",
+      }),
+    ],
+    [
+      "PBE-030",
+      Object.freeze({
+        expectation: MODEL_CALL_EXPECTATION.FORBIDDEN,
+        summaryExpectation: "forbidden",
+      }),
+    ],
+    [
+      "PBE-054",
+      Object.freeze({
+        expectation: MODEL_CALL_EXPECTATION.OPTIONAL,
+        summaryExpectation: "required",
+      }),
+    ],
   ]),
 );
 
@@ -37,9 +60,9 @@ export function modelObservationPolicyForTitle(title) {
     throw new Error(`protocol E2E title must contain exactly one PBE id: ${title}`);
   }
   const [caseId] = ids;
-  const expectation = MODEL_OBSERVATION_POLICY[caseId];
-  if (!expectation) throw new Error(`missing model observation policy for ${caseId}`);
-  return Object.freeze({ caseId, expectation });
+  const policy = MODEL_OBSERVATION_POLICY[caseId];
+  if (!policy) throw new Error(`missing model observation policy for ${caseId}`);
+  return Object.freeze({ caseId, ...policy });
 }
 
 export function validateModelObservationPolicyCoverage(specsDirectory) {

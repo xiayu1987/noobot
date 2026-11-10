@@ -169,21 +169,28 @@ test("transport failure and abort have explicit missing usage and terminal statu
   }
 });
 
-test("consumer cancellation records one cancelled terminal with interrupted usage", async () => {
-  const { fetch, events } = harness(
-    async () =>
-      new Response(new ReadableStream({ pull() {} }), {
-        headers: { "content-type": "text/event-stream" },
-      }),
-  );
-  const response = await fetch(url, { method: "POST", body: "{}" });
-  await response.body.cancel();
-  assert.equal(eventData(events, MODEL_REQUEST_EVENT.FINISHED)[0].status, "cancelled");
-  assert.equal(
-    eventData(events, MODEL_REQUEST_EVENT.USAGE)[0].usage.outputTokens.reason,
-    "stream_interrupted",
-  );
-});
+for (const aborted of [false, true]) {
+  test(`consumer cancellation requires an aborted signal for cancelled status: ${aborted}`, async () => {
+    const { fetch, events } = harness(
+      async () =>
+        new Response(new ReadableStream({ pull() {} }), {
+          headers: { "content-type": "text/event-stream" },
+        }),
+    );
+    const controller = new AbortController();
+    const response = await fetch(url, { method: "POST", body: "{}", signal: controller.signal });
+    if (aborted) controller.abort();
+    await response.body.cancel();
+    assert.equal(
+      eventData(events, MODEL_REQUEST_EVENT.FINISHED)[0].status,
+      aborted ? "cancelled" : "failed",
+    );
+    assert.equal(
+      eventData(events, MODEL_REQUEST_EVENT.USAGE)[0].usage.outputTokens.reason,
+      "stream_interrupted",
+    );
+  });
+}
 
 test("missing usage differs from reported zero and invalid values remain explicit errors", async () => {
   const { fetch, events } = harness(async () =>
@@ -226,7 +233,13 @@ test("prefix retains only the preceding body and clears unsupported-body baselin
 
 test("prefix baselines are isolated by endpoint, model, session, parent and flow", async () => {
   const previousBodies = new Map();
-  const original = harness(async () => json(), previousBodies);
+  const original = harness(
+    async (input) =>
+      String(input).endsWith("/responses")
+        ? Response.json({ status: "completed", output: [] })
+        : json(),
+    previousBodies,
+  );
   await (await original.fetch(url, { method: "POST", body: "same-body" })).text();
   for (const identity of [
     { model: "other-model" },
@@ -327,15 +340,16 @@ test("Request inputs preserve their body and use their cancellation signal", asy
   assert.equal(eventData(aborted.events, MODEL_REQUEST_EVENT.FINISHED)[0].status, "cancelled");
 });
 
-test("invalid UTF-8 is an explicit diagnostic without changing response bytes", async () => {
+test("invalid UTF-8 fails body consumption and records one failed terminal", async () => {
   const bytes = Uint8Array.of(0xff);
   const { fetch, events } = harness(async () => new Response(bytes));
-  assert.deepEqual(
-    new Uint8Array(await (await fetch(url, { method: "POST" })).arrayBuffer()),
-    bytes,
+  await assert.rejects(
+    async () => (await fetch(url, { method: "POST" })).arrayBuffer(),
+    (error) => error.kind === "protocol" && error.cause instanceof TypeError,
   );
   const [measurement] = eventData(events, MODEL_REQUEST_EVENT.USAGE);
   assert.equal(measurement.usage, null);
-  assert.match(measurement.measurementError, /encoded data/);
+  assert.match(measurement.measurementError, /UTF-8/);
   assert.equal(eventData(events, MODEL_REQUEST_EVENT.FINISHED).length, 1);
+  assert.equal(eventData(events, MODEL_REQUEST_EVENT.FINISHED)[0].status, "failed");
 });

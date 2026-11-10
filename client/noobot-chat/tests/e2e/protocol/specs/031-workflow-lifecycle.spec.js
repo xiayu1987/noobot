@@ -170,7 +170,7 @@ test("@full PBE-031 Workflow 运行中停止并继续", async ({ noobot, protoco
     send.identity.turnScopeId,
   );
   assertStopCommandIdentity(stop, authoritativeSend.identity);
-  assertTurnLifecycle(protocolCapture, noobot.sessionId, send.identity.turnScopeId);
+  await assertTurnLifecycle(protocolCapture, noobot.sessionId, send.identity.turnScopeId);
   const stoppedExecutionEvents = await waitForSessionExecutionEventTree(
     noobot.userId,
     noobot.sessionId,
@@ -215,7 +215,7 @@ test("@full PBE-031 Workflow 运行中停止并继续", async ({ noobot, protoco
     turnScopeId: continued.identity.turnScopeId,
     timeoutMs: workflowCompletionTimeoutMs,
   });
-  assertTurnLifecycle(protocolCapture, noobot.sessionId, continued.identity.turnScopeId);
+  await assertTurnLifecycle(protocolCapture, noobot.sessionId, continued.identity.turnScopeId);
   const continuedTraces = await waitForModelInvocationTraces(
     noobot.userId,
     noobot.sessionId,
@@ -261,7 +261,7 @@ test("@full PBE-032 Workflow 完成后普通消息再切回 Workflow", async ({
       turnScopeId: command.identity.turnScopeId,
       timeoutMs: 300000,
     });
-    assertTurnLifecycle(protocolCapture, noobot.sessionId, command.identity.turnScopeId);
+    await assertTurnLifecycle(protocolCapture, noobot.sessionId, command.identity.turnScopeId);
     if (pluginKeys.includes("workflow")) {
       const events = lifecycleForSession(protocolCapture, noobot.sessionId).filter(
         (event) => event.turnScopeId === command.identity.turnScopeId,

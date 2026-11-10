@@ -113,7 +113,7 @@ export function indexPatchBaseVersions(baseVersions, targets) {
   for (const [filePath, identity] of paths) {
     if (!versions.has(identity)) {
       throw new TypeError(
-        `baseVersions must cover every patch source and destination: ${filePath}`,
+        `baseVersions must cover every patch source and destination: ${filePath}; use the read result baseSha256 for existing files or sha256: null for absent targets`,
       );
     }
   }

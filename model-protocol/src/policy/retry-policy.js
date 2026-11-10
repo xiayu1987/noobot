@@ -23,9 +23,7 @@ function defaultRetryPolicy(operationKind) {
     }),
     toolCallMismatch: Object.freeze({
       maxAttempts: TURN_THRESHOLDS.model.toolCallMismatchMaxAttempts,
-      downgradeStreaming: true,
     }),
-    providerFallback: Object.freeze({ enabled: false, candidates: Object.freeze([]) }),
   });
 }
 
@@ -69,19 +67,28 @@ export function normalizeRetryPolicy(input = {}, operationKind = MODEL_OPERATION
   const transport = normalizeAttemptPolicy(DEFAULT_RETRY_POLICY.transport, input.transport);
   if (operationKind === MODEL_OPERATION_KIND.MEDIA_GENERATION && transport.maxAttempts !== 1)
     throw new TypeError("media generation submissions cannot be retried automatically");
+  if (
+    operationKind === MODEL_OPERATION_KIND.MEDIA_GENERATION &&
+    input.maxTotalAttempts !== undefined &&
+    input.maxTotalAttempts !== TURN_THRESHOLDS.model.generationMaxAttempts
+  )
+    throw new TypeError("media generation total attempt budget must be one");
   return Object.freeze({
     transport,
+    maxTotalAttempts: normalizeAttemptPolicy(
+      {
+        maxAttempts:
+          operationKind === MODEL_OPERATION_KIND.MEDIA_GENERATION
+            ? TURN_THRESHOLDS.model.generationMaxAttempts
+            : TURN_THRESHOLDS.model.maxTotalAttempts,
+      },
+      { maxAttempts: input.maxTotalAttempts },
+    ).maxAttempts,
     reasoningOnly: normalizeAttemptPolicy(DEFAULT_RETRY_POLICY.reasoningOnly, input.reasoningOnly),
     emptyResponse: normalizeAttemptPolicy(DEFAULT_RETRY_POLICY.emptyResponse, input.emptyResponse),
     toolCallMismatch: normalizeAttemptPolicy(
       DEFAULT_RETRY_POLICY.toolCallMismatch,
       input.toolCallMismatch,
     ),
-    providerFallback: Object.freeze({
-      ...DEFAULT_RETRY_POLICY.providerFallback,
-      ...(input.providerFallback && typeof input.providerFallback === "object"
-        ? input.providerFallback
-        : {}),
-    }),
   });
 }

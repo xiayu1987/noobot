@@ -4,11 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { test, expect } from "../fixtures/noobot.fixture.js";
-import {
-  deleteLatestUserMessage,
-  sendMessage,
-  stopActiveTurn,
-} from "../helpers/browser-actions.js";
+import { deleteLatestUserMessage, sendMessage } from "../helpers/browser-actions.js";
 import { readSessionFact } from "../helpers/persistence-audit.js";
 import {
   commandsForSession,
@@ -16,7 +12,7 @@ import {
   waitForCommand,
   waitForLifecycle,
 } from "../helpers/scenario-assertions.js";
-import { sendAndStop, uniquePrompt } from "../helpers/turn-scenarios.js";
+import { sendAndStop, stopAfterModelInvocation, uniquePrompt } from "../helpers/turn-scenarios.js";
 
 const ORPHANED_TERMINAL_ERROR = "terminal lifecycle is missing canonical messages";
 
@@ -75,7 +71,7 @@ test("@core PBE-049 停止并删除后可再次发送", async ({ noobot, protoco
   );
   expect(JSON.stringify(failures)).not.toContain(ORPHANED_TERMINAL_ERROR);
 
-  await stopActiveTurn(noobot.page);
+  await stopAfterModelInvocation(noobot.page, noobot.sessionId, nextSend.identity.turnScopeId);
   await waitForLifecycle(
     protocolCapture,
     noobot.sessionId,

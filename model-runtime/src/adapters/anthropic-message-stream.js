@@ -15,6 +15,9 @@ export async function readAnthropicMessageStream(response, { onText, signal }) {
     if (terminal?.status === "failed") {
       const error = new Error(event.error?.message || "Anthropic stream failed");
       error.code = event.error?.type;
+      error.type = event.error?.type;
+      error.details = event.error?.details;
+      error.providerFailure = true;
       throw error;
     }
     if (

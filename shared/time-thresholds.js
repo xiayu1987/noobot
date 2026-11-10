@@ -45,6 +45,7 @@ export const DEFAULT_TIME_THRESHOLDS = deepFreeze({
   model: {
     emptyResponseRetryBaseDelayMs: 500,
     transportRetryBaseDelayMs: 250,
+    maxRetryDelayMs: MINUTE_MS,
     generationTimeoutMs: 15 * MINUTE_MS,
     generationPollIntervalMs: TIME_TIERS.fiveSecondsMs,
   },

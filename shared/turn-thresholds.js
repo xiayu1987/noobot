@@ -9,6 +9,7 @@ import { bindRuntimeThresholds } from "./runtime-threshold-state.js";
 
 export const DEFAULT_TURN_THRESHOLDS = deepFreeze({
   model: {
+    maxTotalAttempts: 8,
     transportMaxAttempts: 3,
     generationMaxAttempts: 1,
     reasoningOnlyMaxAttempts: 1,

@@ -13,6 +13,21 @@ import {
   ModelProtocolError,
 } from "@noobot/model-protocol";
 
+function completedResponse(text) {
+  return {
+    asResponse: async () =>
+      Response.json({
+        status: "completed",
+        output: [
+          {
+            type: "message",
+            content: [{ type: "output_text", text, annotations: [] }],
+          },
+        ],
+      }),
+  };
+}
+
 test("Web Search forces the search tool and returns text with url_citation sources", async () => {
   let request;
   const result = await executeOpenAiOperation({
@@ -27,26 +42,29 @@ test("Web Search forces the search tool and returns text with url_citation sourc
     },
     openAiClientFactory: () => ({
       responses: {
-        create: async (body) => {
+        create: (body) => {
           request = body;
           return {
-            status: "completed",
-            output: [
-              { type: "web_search_call", status: "completed" },
-              {
-                type: "message",
-                content: [
+            asResponse: async () =>
+              Response.json({
+                status: "completed",
+                output: [
+                  { type: "web_search_call", status: "completed" },
                   {
-                    type: "output_text",
-                    text: "search result",
-                    annotations: [
-                      { type: "url_citation", title: "A", url: "https://example.test/a" },
-                      { type: "url_citation", title: "A again", url: "https://example.test/a" },
+                    type: "message",
+                    content: [
+                      {
+                        type: "output_text",
+                        text: "search result",
+                        annotations: [
+                          { type: "url_citation", title: "A", url: "https://example.test/a" },
+                          { type: "url_citation", title: "A again", url: "https://example.test/a" },
+                        ],
+                      },
                     ],
                   },
                 ],
-              },
-            ],
+              }),
           };
         },
       },
@@ -90,9 +108,9 @@ test("multimodal parse maps multiple image and document attachments to one Respo
     },
     openAiClientFactory: () => ({
       responses: {
-        create: async (value) => {
+        create: (value) => {
           request = value;
-          return { status: "completed", output_text: "parsed image", output: [] };
+          return completedResponse("parsed image");
         },
       },
     }),
@@ -132,9 +150,9 @@ test("multimodal parse maps documents to Responses API input_file", async () => 
     },
     openAiClientFactory: () => ({
       responses: {
-        create: async (value) => {
+        create: (value) => {
           request = value;
-          return { status: "completed", output_text: "parsed pdf", output: [] };
+          return completedResponse("parsed pdf");
         },
       },
     }),
@@ -165,9 +183,9 @@ test("multimodal parse maps normalized audio to Responses API input_audio", asyn
     },
     openAiClientFactory: () => ({
       responses: {
-        create: async (value) => {
+        create: (value) => {
           request = value;
-          return { status: "completed", output_text: "ok", output: [] };
+          return completedResponse("ok");
         },
       },
     }),
@@ -197,9 +215,9 @@ test("multimodal parse maps video to an OpenAI Responses API file input", async 
     },
     openAiClientFactory: () => ({
       responses: {
-        create: async (value) => {
+        create: (value) => {
           request = value;
-          return { status: "completed", output_text: "ok", output: [] };
+          return completedResponse("ok");
         },
       },
     }),

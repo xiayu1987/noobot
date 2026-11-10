@@ -195,6 +195,10 @@ export default {
     },
   },
   model: {
+    maxTotalAttempts: {
+      name: "模型调用总尝试次数上限",
+      description: "传输重试、模式协商和语义恢复共用的请求预算，包含首次请求。",
+    },
     transportMaxAttempts: {
       name: "模型传输尝试次数上限",
       description: "模型传输失败时允许的总尝试次数，包含首次请求。",

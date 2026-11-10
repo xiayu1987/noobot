@@ -75,18 +75,21 @@ export function assertCommandChain(capture, sessionId) {
   return commands;
 }
 
-export function assertTurnLifecycle(capture, sessionId, turnScopeId) {
+export async function assertTurnLifecycle(capture, sessionId, turnScopeId) {
   const events = lifecycleForSession(capture, sessionId).filter(
     (event) => event.turnScopeId === turnScopeId,
   );
   assertLifecycleSequence(events);
   assertSingleTerminal(events);
-  const receipts = findLifecycleReceipts(capture.websocketSent).filter(
-    (receipt) => receipt.sessionId === sessionId && receipt.turnScopeId === turnScopeId,
-  );
-  expect(new Set(receipts.map((receipt) => receipt.eventId))).toEqual(
-    new Set(events.map((event) => event.eventId)),
-  );
+  let receipts;
+  await expect
+    .poll(() => {
+      receipts = findLifecycleReceipts(capture.websocketSent).filter(
+        (receipt) => receipt.sessionId === sessionId && receipt.turnScopeId === turnScopeId,
+      );
+      return new Set(receipts.map((receipt) => receipt.eventId));
+    })
+    .toEqual(new Set(events.map((event) => event.eventId)));
   expect(receipts.every((receipt) => receipt.protocolVersion === 1)).toBe(true);
   return events;
 }

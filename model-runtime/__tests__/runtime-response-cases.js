@@ -251,7 +251,7 @@ test("default empty-response policy exhausts after three retries with a typed er
       error?.details?.attemptCount === 4,
   );
   assert.equal(state.calls, 4);
-  assert.deepEqual(sleeps, [500, 1000, 1500]);
+  assert.deepEqual(sleeps, [500, 1000, 2000]);
 });
 
 test("tool call classification separates protocol-invalid calls from valid ones", () => {

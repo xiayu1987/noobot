@@ -19,6 +19,10 @@ import {
   MODEL_RESPONSE_SOURCE,
   ModelProtocolError,
   normalizeRetryPolicy,
+  mayReplayModelRequest,
+  resolveModelFailureRecovery,
+  resolveModelRetryDelay,
+  isModelRetryEvent,
   NOOP_OBSERVATION_PORT,
   requireModelResponseSource,
   projectModelAttemptError,
@@ -47,19 +51,6 @@ import {
   streamingProviderCacheKey,
 } from "../policies/streaming-mode-policy.js";
 import { text, isFunction } from "@noobot/shared/value";
-
-function wrapStreamingCallbacks(callbacks, attemptState) {
-  if (!Array.isArray(callbacks) || !callbacks.length) return callbacks;
-  return callbacks.map((callback = {}) => ({
-    ...callback,
-    handleLLMNewToken: (...args) => {
-      const token = String(args[0] || "");
-      attemptState.streamedTokens += token.length;
-      return callback.handleLLMNewToken?.(...args);
-    },
-    handleLLMEnd: (...args) => callback.handleLLMEnd?.(...args),
-  }));
-}
 
 function projectObservableModel(model = {}) {
   return Object.freeze({
@@ -123,7 +114,6 @@ export function createModelRequestExecutor({
       let reasoningOnlyAttempts = 0;
       let emptyResponseAttempts = 0;
       let toolCallRecoveryAttempts = 0;
-      let alternateStreamingAttempted = false;
       let totalAttempts = 0;
       const attempts = [];
       const requestBase = createModelRequest({ ...input, messages });
@@ -146,13 +136,25 @@ export function createModelRequestExecutor({
         if (!classifications.has(error)) {
           classifications.set(
             error,
-            classifyModelFailure(error, (value) => adapter.classifyError(value)),
+            classifyModelFailure(error, (value) =>
+              adapter.classifyError(value, {
+                operatorId: requestBase.model.operatorId,
+                clock,
+              }),
+            ),
           );
         }
         return classifications.get(error);
       };
       const observe = (type, payload = {}) =>
-        observationPort.emit(type, { invocation, ...payload, model: observableModel });
+        observationPort.emit(type, {
+          invocation,
+          ...payload,
+          model: observableModel,
+          ...(isModelRetryEvent(type)
+            ? { retryCount: totalAttempts, maxRetries: retry.maxTotalAttempts - 1 }
+            : {}),
+        });
       const measuredFetch = createMeasuredFetch({
         fetchImpl,
         previousBodies,
@@ -161,6 +163,9 @@ export function createModelRequestExecutor({
         operationKind: requestBase.operation.kind,
         attempt: () => totalAttempts,
         observe,
+        onOutput: () => {
+          attemptState.streamedTokens += 1;
+        },
       });
       const isCancelled = (error) =>
         requestBase.options.signal?.aborted || classify(error).kind === MODEL_ERROR_KIND.ABORTED;
@@ -201,15 +206,15 @@ export function createModelRequestExecutor({
         return error;
       };
       let terminalObservationEmitted = false;
-      const observeTerminalError = (error) => {
+      const observeTerminalError = async (error) => {
         if (terminalObservationEmitted) return;
         terminalObservationEmitted = true;
         if (isCancelled(error)) {
-          observe(MODEL_INVOCATION_EVENT.CANCELLED, { attemptCount: totalAttempts });
+          await observe(MODEL_INVOCATION_EVENT.CANCELLED, { attemptCount: totalAttempts });
           return;
         }
         const classification = classify(error);
-        observe(
+        await observe(
           MODEL_INVOCATION_EVENT.FAILED,
           projectModelInvocationFailure({
             attemptCount: totalAttempts,
@@ -227,13 +232,8 @@ export function createModelRequestExecutor({
           }),
         );
       };
-      const respond = (output, result) => {
-        terminalObservationEmitted = true;
-        observe(MODEL_INVOCATION_EVENT.COMPLETED, {
-          attemptCount: totalAttempts,
-          operationKind: requestBase.operation.kind,
-        });
-        return createModelResponse({
+      const respond = async (output, result) => {
+        const response = createModelResponse({
           invocation,
           operationKind: requestBase.operation.kind,
           output,
@@ -246,14 +246,20 @@ export function createModelRequestExecutor({
             adapterId: adapter.id,
           },
         });
+        terminalObservationEmitted = true;
+        await observe(MODEL_INVOCATION_EVENT.COMPLETED, {
+          attemptCount: totalAttempts,
+          operationKind: requestBase.operation.kind,
+        });
+        streamingModes.set(streamingCacheKey, streaming);
+        return response;
       };
-      const retryToolCallRecovery = (kind, output) => {
-        if (toolCallRecoveryAttempts >= retry.toolCallMismatch.maxAttempts) return false;
+      const retryToolCallRecovery = async (kind, output) => {
+        if (!canReplay() || toolCallRecoveryAttempts >= retry.toolCallMismatch.maxAttempts)
+          return false;
         pushAttempt({ status: MODEL_ATTEMPT_STATUS.RETRY, kind, output });
         toolCallRecoveryAttempts += 1;
-        streaming = retry.toolCallMismatch.downgradeStreaming === true ? false : streaming;
-        streamingModes.set(streamingCacheKey, streaming);
-        observe(MODEL_INVOCATION_EVENT.SEMANTIC_RETRY, {
+        await observe(MODEL_INVOCATION_EVENT.SEMANTIC_RETRY, {
           kind,
           attempt: totalAttempts,
           nextStreaming: streaming,
@@ -262,12 +268,13 @@ export function createModelRequestExecutor({
       };
       const retrySemantic = async (kind, output, delayMs) => {
         pushAttempt({ status: MODEL_ATTEMPT_STATUS.RETRY, kind, output });
-        observe(MODEL_INVOCATION_EVENT.SEMANTIC_RETRY, {
+        await observe(MODEL_INVOCATION_EVENT.SEMANTIC_RETRY, {
           kind,
           attempt: totalAttempts,
           ...(delayMs === undefined ? {} : { delayMs }),
         });
-        if (delayMs > 0) await clock.sleep(delayMs);
+        if (delayMs > 0) await clock.sleep(delayMs, { signal: requestBase.options.signal });
+        requestBase.options.signal?.throwIfAborted();
         return true;
       };
       const nativeGeneration = requestBase.operation.kind === MODEL_OPERATION_KIND.MEDIA_GENERATION;
@@ -277,13 +284,15 @@ export function createModelRequestExecutor({
       const invokeOperationTransport = (credential) =>
         executeTransportRetry({
           policy: retry.transport,
+          canRetry: () => canReplay(),
           clock,
           classify,
           observe,
           signal: requestBase.options.signal,
-          run: () => {
+          run: async () => {
             totalAttempts += 1;
-            observe(MODEL_INVOCATION_EVENT.ATTEMPT_STARTED, {
+            attemptState = { streamedTokens: 0 };
+            await observe(MODEL_INVOCATION_EVENT.ATTEMPT_STARTED, {
               attempt: totalAttempts,
               operationKind: requestBase.operation.kind,
               streaming,
@@ -309,13 +318,19 @@ export function createModelRequestExecutor({
             );
           },
         });
-      const attemptOperationTransport = async (credential, modes) => {
+      const tryOperationTransport = async (credential, modes) => {
         try {
-          return await invokeOperationTransport(credential);
+          return { result: await invokeOperationTransport(credential) };
         } catch (error) {
           const switchable = modes.includes(alternateStreamingMode(streaming));
-          if (!switchable || !switchStreamingMode(error)) throw error;
-          return invokeOperationTransport(credential);
+          if (!switchable || !(await switchStreamingMode(error))) throw error;
+          return { switched: true };
+        }
+      };
+      const attemptOperationTransport = async (credential, modes) => {
+        while (true) {
+          const attempt = await tryOperationTransport(credential, modes);
+          if (!attempt.switched) return attempt.result;
         }
       };
       const executeOperation = async (credential) => {
@@ -334,7 +349,6 @@ export function createModelRequestExecutor({
         );
         if (!modes.includes(streaming)) [streaming] = modes;
         const result = await attemptOperationTransport(credential, modes);
-        streamingModes.set(streamingCacheKey, streaming);
         const output = await recordingAttempt(MODEL_ATTEMPT_KIND.RESPONSE, streaming, () =>
           normalizeModelOutput(
             { content: result.value?.rawText || "" },
@@ -349,9 +363,16 @@ export function createModelRequestExecutor({
         return respond(output, result.value);
       };
       let attemptState = { streamedTokens: 0 };
+      const canReplay = () =>
+        mayReplayModelRequest({
+          streamedTokens: attemptState.streamedTokens,
+          attempts: totalAttempts,
+          maxAttempts: retry.maxTotalAttempts,
+          signal: requestBase.options.signal,
+        });
       const emitContextTrace = (request) => {
         modelObservationState.sequence += 1;
-        observationPort.emit(MODEL_CONTEXT_TRACE.EVENT, {
+        return observationPort.emit(MODEL_CONTEXT_TRACE.EVENT, {
           stage: MODEL_CONTEXT_TRACE.INVOKE_STAGE,
           authority: MODEL_CONTEXT_TRACE.INVOKE_AUTHORITY,
           protocolVersion: MODEL_CONTEXT_TRACE.PROTOCOL_VERSION,
@@ -391,16 +412,20 @@ export function createModelRequestExecutor({
       const invokeChatTransport = (request, client) =>
         executeTransportRetry({
           policy: retry.transport,
+          canRetry: () => canReplay(),
           clock,
           classify,
           observe,
           signal: request.options.signal,
           streamedTokens: () => attemptState.streamedTokens,
-          run: () => {
+          run: async () => {
             totalAttempts += 1;
             attemptState = { streamedTokens: 0 };
-            emitContextTrace(request);
-            observe(MODEL_INVOCATION_EVENT.ATTEMPT_STARTED, { attempt: totalAttempts, streaming });
+            await emitContextTrace(request);
+            await observe(MODEL_INVOCATION_EVENT.ATTEMPT_STARTED, {
+              attempt: totalAttempts,
+              streaming,
+            });
             return recordingAttempt(MODEL_ATTEMPT_KIND.TRANSPORT, streaming, () =>
               runModelAttempt({
                 adapter,
@@ -410,34 +435,41 @@ export function createModelRequestExecutor({
                 tools: request.tools,
                 toolOptions: request.options.toolBinding || {},
                 invokeOptions: {
-                  signal: request.options.signal,
-                  callbacks: wrapStreamingCallbacks(request.options.callbacks, attemptState),
                   ...request.options.invoke,
+                  signal: request.options.signal,
+                  callbacks: request.options.callbacks,
                 },
               }),
             );
           },
         });
-      const switchStreamingMode = (error) => {
-        if (requestBase.options.signal?.aborted || alternateStreamingAttempted) return false;
+      const switchStreamingMode = async (error) => {
+        if (!canReplay()) return false;
         if (!mayRetryWithAlternateStreaming(attemptState.streamedTokens, classify(error))) {
           return false;
         }
-        alternateStreamingAttempted = true;
+        const delayMs = resolveModelRetryDelay({
+          attempt: totalAttempts,
+          baseDelayMs: retry.transport.baseDelayMs,
+          retryAfterMs: classify(error).retryAfterMs,
+        });
         streaming = alternateStreamingMode(streaming);
-        observe(MODEL_INVOCATION_EVENT.STREAMING_MODE_RETRY, {
+        await observe(MODEL_INVOCATION_EVENT.STREAMING_MODE_RETRY, {
           attempt: totalAttempts,
           nextStreaming: streaming,
           reason: "request_failed_before_output",
           error: attempts.at(-1)?.error,
+          recovery: resolveModelFailureRecovery(classify(error)),
         });
+        await clock.sleep(delayMs, { signal: requestBase.options.signal });
+        requestBase.options.signal?.throwIfAborted();
         return true;
       };
       const attemptChatTransport = async (request, client) => {
         try {
           return { result: await invokeChatTransport(request, client) };
         } catch (error) {
-          if (!switchStreamingMode(error)) throw error;
+          if (!(await switchStreamingMode(error))) throw error;
           return { switched: true };
         }
       };
@@ -446,12 +478,15 @@ export function createModelRequestExecutor({
         if (
           streaming &&
           isToolCallStreamingMismatch(responseSource, { ...output, invalidToolCalls }) &&
-          retryToolCallRecovery(MODEL_ATTEMPT_KIND.TOOL_CALL_STREAMING_MISMATCH, output)
+          (await retryToolCallRecovery(MODEL_ATTEMPT_KIND.TOOL_CALL_STREAMING_MISMATCH, output))
         ) {
           return true;
         }
         if (invalidToolCalls.length) {
-          if (streaming && retryToolCallRecovery(MODEL_ATTEMPT_KIND.TOOL_CALL_INVALID, output)) {
+          if (
+            streaming &&
+            (await retryToolCallRecovery(MODEL_ATTEMPT_KIND.TOOL_CALL_INVALID, output))
+          ) {
             return true;
           }
           throw failAttempt(
@@ -465,7 +500,7 @@ export function createModelRequestExecutor({
           );
         }
         if (classifyReasoningOnly(value) && output.toolCalls.length === 0) {
-          if (reasoningOnlyAttempts < retry.reasoningOnly.maxAttempts) {
+          if (canReplay() && reasoningOnlyAttempts < retry.reasoningOnly.maxAttempts) {
             reasoningOnlyAttempts += 1;
             return retrySemantic(MODEL_ATTEMPT_KIND.REASONING_ONLY, output);
           }
@@ -480,12 +515,15 @@ export function createModelRequestExecutor({
           );
         }
         if (!classifyEmptyResponse(output)) return false;
-        if (emptyResponseAttempts < retry.emptyResponse.maxAttempts) {
+        if (canReplay() && emptyResponseAttempts < retry.emptyResponse.maxAttempts) {
           emptyResponseAttempts += 1;
           return retrySemantic(
             MODEL_ATTEMPT_KIND.EMPTY_RESPONSE,
             output,
-            retry.emptyResponse.baseDelayMs * emptyResponseAttempts,
+            resolveModelRetryDelay({
+              attempt: emptyResponseAttempts,
+              baseDelayMs: retry.emptyResponse.baseDelayMs,
+            }),
           );
         }
         throw failAttempt(
@@ -511,7 +549,6 @@ export function createModelRequestExecutor({
           );
           if (transport.switched) continue;
           const { value } = transport.result;
-          streamingModes.set(streamingCacheKey, streaming);
           const normalized = await recordingAttempt(MODEL_ATTEMPT_KIND.RESPONSE, streaming, () =>
             normalizeModelResponse(value, responseSource),
           );
@@ -539,7 +576,7 @@ export function createModelRequestExecutor({
           },
         );
       };
-      observe(MODEL_INVOCATION_EVENT.STARTED);
+      await observe(MODEL_INVOCATION_EVENT.STARTED);
       try {
         const responseSource = requireModelResponseSource(
           adapter.resolveResponseSource({ modelSpec: requestBase.model }),
@@ -550,7 +587,7 @@ export function createModelRequestExecutor({
         }
         return await executeChat(responseSource, credential);
       } catch (error) {
-        observeTerminalError(error);
+        await observeTerminalError(error);
         throw error;
       }
     },

@@ -156,7 +156,10 @@ export async function testModelAccess({
           toolBinding ?? (body?.tool_choice !== undefined ? { tool_choice: body.tool_choice } : {}),
       },
       policies: {
-        retry: { transport: { maxAttempts: TURN_THRESHOLDS.model.diagnosticMaxAttempts } },
+        retry: {
+          maxTotalAttempts: TURN_THRESHOLDS.model.diagnosticMaxAttempts,
+          transport: { maxAttempts: TURN_THRESHOLDS.model.diagnosticMaxAttempts },
+        },
       },
       invocation: {
         requestId: randomUUID(),

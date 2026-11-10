@@ -20,10 +20,8 @@ import {
   resolveOpenAiOperationStreamingModes,
 } from "./openai-capability-adapter.js";
 import { classifyOpenAiError } from "./openai-error-classification.js";
-import {
-  guardResponsesStream,
-  requireCompletedResponsesResponse,
-} from "./openai-responses-stream.js";
+import { guardResponsesStream } from "./openai-responses-stream.js";
+import { readOpenAiResponsesResponse } from "./openai-json-response.js";
 import { createResponseModeFetch, unwrapModelProtocolError } from "./response-mode.js";
 import { isObjectLike } from "@noobot/shared/value";
 
@@ -63,12 +61,16 @@ function guardOpenAiClient(client) {
   const { responses, completions } = client;
   const responsesCompletion = responses.completionWithRetry.bind(responses);
   responses.completionWithRetry = async (request, requestOptions) => {
-    const result = await surfaceProtocolError(() =>
-      responsesCompletion(orderOpenAiResponsesRequestBody(request), requestOptions),
-    );
-    return request?.stream === true
-      ? guardResponsesStream(result)
-      : requireCompletedResponsesResponse(result);
+    const body = orderOpenAiResponsesRequestBody(request);
+    return surfaceProtocolError(async () => {
+      if (request?.stream === true)
+        return guardResponsesStream(await responsesCompletion(body, requestOptions));
+      const options = responses._getClientOptions(requestOptions);
+      return readOpenAiResponsesResponse(
+        responses.client.responses.create(body, { ...options, maxRetries: 0 }),
+        body,
+      );
+    });
   };
   const completionsCompletion = completions.completionWithRetry.bind(completions);
   completions.completionWithRetry = async (request, requestOptions) => {

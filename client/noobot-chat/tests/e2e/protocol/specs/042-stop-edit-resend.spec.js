@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { test, expect } from "../fixtures/noobot.fixture.js";
-import { editLatestUserMessage, stopActiveTurn } from "../helpers/browser-actions.js";
+import { editLatestUserMessage } from "../helpers/browser-actions.js";
 import { findReplaceTurnExchanges } from "../helpers/http-capture.js";
 import { readSessionFact } from "../helpers/persistence-audit.js";
 import { waitForCommand, waitForLifecycle } from "../helpers/scenario-assertions.js";
-import { sendAndStop, uniquePrompt } from "../helpers/turn-scenarios.js";
+import { sendAndStop, stopAfterModelInvocation, uniquePrompt } from "../helpers/turn-scenarios.js";
 
 test("@core PBE-042 停止后不刷新立即编辑重发", async ({ noobot, protocolCapture }, testInfo) => {
   const { send } = await sendAndStop({
@@ -50,7 +50,7 @@ test("@core PBE-042 停止后不刷新立即编辑重发", async ({ noobot, prot
     resend.identity.turnScopeId,
   );
   expect(processing.dialogProcessId).toBe(resend.identity.dialogProcessId);
-  await stopActiveTurn(noobot.page);
+  await stopAfterModelInvocation(noobot.page, noobot.sessionId, resend.identity.turnScopeId);
   await waitForLifecycle(
     protocolCapture,
     noobot.sessionId,
