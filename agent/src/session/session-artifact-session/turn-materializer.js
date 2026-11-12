@@ -7,6 +7,10 @@ import { resolveScopedArtifactPath } from "@noobot/path-resolver";
 import {
   SESSION_ERROR_CODE,
   SESSION_ARTIFACT_SUMMARY_SNAPSHOT_SCHEMA_VERSION,
+  createSessionStorageJournalProjection,
+  applySessionStorageJournalRecords,
+  materializeSessionStorageJournal,
+  assertSessionStorageMessageIndex,
 } from "@noobot/session-protocol";
 import { deepFreeze } from "@noobot/shared/deep-freeze";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
@@ -17,7 +21,7 @@ import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
 import { readJsonWithStorage } from "./artifact-json-io.js";
 import {
   assertIncrementalJournalRecords,
-  journalPath,
+  resolveTurnJournalPath,
   readJournalRecordRange,
   summarySnapshotContentHash,
 } from "./turn-journal-store.js";
@@ -130,27 +134,20 @@ function sameLink(link, index) {
 }
 
 function foldRecordsIntoOrderedMessageMap(state, records) {
+  applySessionStorageJournalRecords(state, records);
   for (const record of records) {
-    if (record.op === "remove") state.delete(record.messageUid);
-    else state.set(record.messageUid, deepFreeze(record.message));
+    if (record.op === "upsert") deepFreeze(record.message);
   }
   return state;
 }
 
-function orderMaterializedMessages(state, order) {
-  const ordered = order.map((uid) => {
-    const message = state.get(uid);
-    if (message) return message;
-    throw snapshotError(
-      `turn journal is missing an ordered message: ${uid}`,
-      SESSION_ERROR_CODE.TURN_JOURNAL_MESSAGE_MISSING,
-    );
-  });
-  const orderedUids = new Set(order);
-  const remaining = [...state.entries()]
-    .filter(([uid]) => !orderedUids.has(uid))
-    .map(([, message]) => message);
-  return [...ordered, ...remaining];
+function cloneProjection(projection) {
+  if (!projection) return createSessionStorageJournalProjection();
+  return {
+    messages: new Map(projection.messages),
+    hashes: new Map(projection.hashes),
+    positions: [...projection.positions],
+  };
 }
 
 export function createTurnMaterializer({ byteBudget }) {
@@ -202,7 +199,7 @@ export function createTurnMaterializer({ byteBudget }) {
     const reusable = await reusableLinks(sessionDir, cached, indexes);
     if (reusable && reusable.links.length === indexes.length) return reusable;
     const links = reusable ? [...reusable.links] : [];
-    const state = new Map(reusable ? reusable.checkpointState : []);
+    const state = cloneProjection(reusable?.checkpointState);
     let bytes = reusable ? reusable.checkpointBytes : 0;
     let previousCheckpointHash = links.at(-1)?.contentHash || "";
     for (const index of indexes.slice(links.length)) {
@@ -227,8 +224,8 @@ export function createTurnMaterializer({ byteBudget }) {
     return { links, checkpointState: state, checkpointBytes: bytes };
   }
 
-  async function materialize({ storageService, sessionDir, item }) {
-    const key = journalPath(sessionDir, item.turnId);
+  async function materializeEntries({ storageService, sessionDir, item }) {
+    const key = resolveTurnJournalPath(sessionDir, item.file);
     const cached = entries.get(key);
     const chain = await verifyCheckpointChain({
       storageService,
@@ -241,23 +238,43 @@ export function createTurnMaterializer({ byteBudget }) {
       ? { identity: cached.journalIdentity, committedBytes: cached.committedBytes }
       : null;
     const journal = await readJournalRecordRange(key, item.committedBytes, resume);
+    if (
+      journal.resumed &&
+      journal.records.length === 0 &&
+      cached.messageRevision === item.messageRevision &&
+      cached.messageCount === item.messageCount &&
+      cached.firstMessageOrdinal === item.firstMessageOrdinal &&
+      cached.lastMessageOrdinal === item.lastMessageOrdinal
+    ) {
+      retain(key, cached);
+      return cached.materializedEntries;
+    }
     const state = foldRecordsIntoOrderedMessageMap(
-      new Map(journal.resumed ? cached.state : chain.checkpointState),
+      cloneProjection(journal.resumed ? cached.state : chain.checkpointState),
       journal.records,
     );
-    const messages = orderMaterializedMessages(state, item.messageOrder);
+    const messages = deepFreeze(
+      assertSessionStorageMessageIndex(materializeSessionStorageJournal(state), item),
+    );
     retain(key, {
       ...chain,
       journalIdentity: journal.identity,
       committedBytes: item.committedBytes,
       state,
+      materializedEntries: messages,
+      messageRevision: item.messageRevision,
+      messageCount: item.messageCount,
+      firstMessageOrdinal: item.firstMessageOrdinal,
+      lastMessageOrdinal: item.lastMessageOrdinal,
       bytes: chain.checkpointBytes + item.committedBytes,
     });
     return messages;
   }
 
   return Object.freeze({
-    materialize,
+    materialize: async (options) =>
+      (await materializeEntries(options)).map(({ message }) => message),
+    materializeEntries,
     cachedBytes: () => cachedBytes,
   });
 }

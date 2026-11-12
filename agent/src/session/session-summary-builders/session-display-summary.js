@@ -86,7 +86,10 @@ export function isSessionDisplaySummaryCurrent(payload = null, sessionManifest =
     payload.aggregateVersion !== requireSessionAggregateVersion(sessionManifest?.aggregateVersion)
   )
     return false;
-  if (Number(payload?.stats?.messageCount || 0) !== sessionManifest?.messageOrder?.length)
+  if (
+    Number(payload?.stats?.messageCount || 0) !==
+    sessionManifest.turnOrder.reduce((count, turn) => count + turn.messageCount, 0)
+  )
     return false;
   if (!validateTurnLifecycleSnapshot(payload.turnLifecycleSnapshot).valid) return false;
   return payload.source.revision === createSessionDisplaySourceRevision(sessionManifest);

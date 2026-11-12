@@ -211,7 +211,13 @@ test("authority outbox tracks each consumer independently so one ack never hides
   assert.equal(byWeb.changed, true);
 
   const projected = projectAuthorityOutboxJournal([
-    { op: AUTHORITY_OUTBOX_JOURNAL_OP.COMMIT, eventId, envelope, committedAt: envelope.occurredAt },
+    {
+      op: AUTHORITY_OUTBOX_JOURNAL_OP.PREPARE,
+      eventId,
+      envelope,
+      committedAt: envelope.occurredAt,
+    },
+    { op: AUTHORITY_OUTBOX_JOURNAL_OP.COMMIT, eventId },
     {
       op: AUTHORITY_OUTBOX_JOURNAL_OP.ATTEMPT,
       eventId,

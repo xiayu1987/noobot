@@ -34,7 +34,6 @@ const TURN_RECEIPT_KEYS = new Set([
   "revision",
   "sequence",
   "eventId",
-  "envelope",
 ]);
 import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
 
@@ -109,29 +108,27 @@ function isCanonicalTurnReceipt(receipt) {
     hasOnlyKeys(receipt, TURN_RECEIPT_KEYS) &&
     isNonNegativeInteger(receipt.revision) &&
     isNonNegativeInteger(receipt.sequence) &&
-    isCanonicalText(receipt.eventId) &&
-    isPlainObject(receipt.envelope) &&
-    receipt.envelope.identity?.eventId === receipt.eventId
+    isCanonicalText(receipt.eventId)
   );
 }
 
-export function normalizeCommandReceipt(receipt) {
-  if (!isPlainObject(receipt)) return null;
+export function isCanonicalCommandReceipt(receipt) {
   if (
+    !isPlainObject(receipt) ||
     !isCanonicalText(receipt.commandId) ||
     !isCanonicalText(receipt.requestHash) ||
     !isCanonicalText(receipt.committedAt) ||
     !isOptionalCanonicalText(receipt, "turnScopeId")
   ) {
-    return null;
+    return false;
   }
-  if (SESSION_COMMAND_TYPES.has(receipt.type)) {
-    return isCanonicalSessionReceipt(receipt) ? structuredClone(receipt) : null;
-  }
-  if (TURN_EVENT_TYPES.has(receipt.type)) {
-    return isCanonicalTurnReceipt(receipt) ? structuredClone(receipt) : null;
-  }
-  return null;
+  if (SESSION_COMMAND_TYPES.has(receipt.type)) return isCanonicalSessionReceipt(receipt);
+  if (TURN_EVENT_TYPES.has(receipt.type)) return isCanonicalTurnReceipt(receipt);
+  return false;
+}
+
+export function normalizeCommandReceipt(receipt) {
+  return isCanonicalCommandReceipt(receipt) ? structuredClone(receipt) : null;
 }
 export function normalizeCommandReceipts(receipts = []) {
   if (!Array.isArray(receipts)) throw new TypeError("command receipts must be an array");

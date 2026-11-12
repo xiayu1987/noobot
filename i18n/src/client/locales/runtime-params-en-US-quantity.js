@@ -56,6 +56,11 @@ export default {
       name: "Event protocol authority outbox pending batch size",
       description: "Count threshold used by event protocol authority outbox pending batch size.",
     },
+    authorityOutboxProjectionCacheSessions: {
+      name: "Event protocol authority outbox projection cache sessions",
+      description:
+        "Maximum number of sessions whose authority outbox projection is kept in memory.",
+    },
   },
   longMemory: {
     workAssistantCollaborationMaxItems: {

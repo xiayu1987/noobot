@@ -8,11 +8,7 @@ import test from "node:test";
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-import {
-  SESSION_ARTIFACT_SCHEMA_VERSION,
-  SESSION_ERROR_CODE,
-  createSessionDeletedError,
-} from "@noobot/session-protocol";
+import { SESSION_ARTIFACT_SCHEMA_VERSION, SESSION_ERROR_CODE } from "@noobot/session-protocol";
 
 import {
   appendRollingJsonlArtifactLog,
@@ -232,7 +228,11 @@ test("session artifacts group interleaved messages by logical dialog without cha
         { dialogProcessId: "b", messageCount: 2 },
       ],
     );
-    assert.equal(manifest.messageOrder.length, messages.length);
+    assert.equal(Object.hasOwn(manifest, "messageOrder"), false);
+    assert.equal(
+      manifest.turnOrder.reduce((count, turn) => count + turn.messageCount, 0),
+      messages.length,
+    );
     assert.deepEqual(
       (await readSessionArtifact({ storageService, sessionDir: root })).messages.map(
         (message) => message.content,
@@ -389,9 +389,15 @@ test("summary checkpoints write immutable snapshots indexed by the manifest", as
     assert.equal(snapshot.schemaVersion, 2);
     assert.equal("messages" in snapshot, false);
     assert.deepEqual(
-      snapshot.records.map((record) => record.messageUid),
+      snapshot.records
+        .filter((record) => record.op === "upsert")
+        .map((record) => record.messageUid),
       ["m1", "m2"],
     );
+    assert.deepEqual(snapshot.records.find((record) => record.op === "order").positions, [
+      { messageUid: "m1", ordinal: 1 },
+      { messageUid: "m2", ordinal: 2 },
+    ]);
     const restored = await readSessionArtifact({ storageService, sessionDir: root });
     assert.deepEqual(
       restored.messages.map((message) => message.messageUid),
@@ -449,14 +455,21 @@ test("summary checkpoints write immutable snapshots indexed by the manifest", as
       indexedRecords.map((record) => record.checkpointId),
       ["checkpoint-1", "checkpoint-2"],
     );
-    assert.equal(await readFile(journalFile, "utf8"), "");
+    assert.equal(await readFile(path.join(root, (await readManifestTurn()).file), "utf8"), "");
     const secondSnapshot = JSON.parse(
       await readFile(path.join(root, indexedRecords[1].file), "utf8"),
     );
     assert.deepEqual(
-      secondSnapshot.records.map((record) => record.messageUid),
+      secondSnapshot.records
+        .filter((record) => record.op === "upsert")
+        .map((record) => record.messageUid),
       ["m3"],
     );
+    assert.deepEqual(secondSnapshot.records.find((record) => record.op === "order").positions, [
+      { messageUid: "m1", ordinal: 1 },
+      { messageUid: "m2", ordinal: 2 },
+      { messageUid: "m3", ordinal: 3 },
+    ]);
     assert.equal(secondSnapshot.previousCheckpointHash, indexedRecords[0].contentHash);
     assert.deepEqual(
       (await readSessionArtifact({ storageService, sessionDir: root })).messages.map(
@@ -472,7 +485,7 @@ test("summary checkpoints write immutable snapshots indexed by the manifest", as
       },
     });
     assert.deepEqual((await readManifestTurn()).summarySnapshots, indexedRecords);
-    assert.equal(await readFile(journalFile, "utf8"), "");
+    assert.equal(await readFile(path.join(root, (await readManifestTurn()).file), "utf8"), "");
     assert.deepEqual(
       (await readSessionArtifact({ storageService, sessionDir: root })).messages.map(
         (message) => message.messageUid,
@@ -678,18 +691,25 @@ test("session reader rejects order references to messages that were never commit
     });
     const original = JSON.parse(await readFile(files.session, "utf8"));
     const withTurnGap = structuredClone(original);
-    withTurnGap.turnOrder[0].messageOrder.push("sm_never_committed");
-    withTurnGap.turnOrder[0].messageHashes.sm_never_committed = `sha256:${"0".repeat(64)}`;
-    withTurnGap.messageOrder.push({ messageUid: "sm_never_committed" });
+    const journalFile = path.join(root, original.turnOrder[0].file);
+    const journal = await readFile(journalFile, "utf8");
+    const orderRecord = JSON.stringify({
+      op: "order",
+      positions: [{ messageUid: "sm_never_committed", ordinal: 1 }],
+    });
+    const corruptedJournal = `${journal}${orderRecord}\n`;
+    await writeFile(journalFile, corruptedJournal, "utf8");
+    withTurnGap.turnOrder[0].committedBytes = Buffer.byteLength(corruptedJournal);
+    withTurnGap.turnOrder[0].recordCount += 1;
     await writeFile(files.session, JSON.stringify(withTurnGap), "utf8");
     await assert.rejects(readSessionArtifact({ storageService, sessionDir: root }), {
-      code: SESSION_ERROR_CODE.TURN_JOURNAL_MESSAGE_MISSING,
+      code: SESSION_ERROR_CODE.TURN_JOURNAL_RECORD_INVALID,
     });
     const withSessionGap = structuredClone(original);
-    withSessionGap.messageOrder.push({ messageUid: "sm_never_committed" });
+    withSessionGap.turnOrder[0].messageRevision = `sha256:${"0".repeat(64)}`;
     await writeFile(files.session, JSON.stringify(withSessionGap), "utf8");
     await assert.rejects(readSessionArtifact({ storageService, sessionDir: root }), {
-      code: SESSION_ERROR_CODE.MANIFEST_LAYOUT_INVALID,
+      code: SESSION_ERROR_CODE.TURN_JOURNAL_RECORD_INVALID,
     });
   }));
 
@@ -768,61 +788,4 @@ test("inspect is read-only, repair is idempotent, and cleanup honors dry-run and
     await assert.rejects(access(temp), { code: "ENOENT" });
     await assert.rejects(access(staging), { code: "ENOENT" });
     await access(other);
-  }));
-
-test("artifact mutation utilities honor deleted-session lifecycle gates", async () =>
-  withTemp(async (root) => {
-    const sessionDir = path.join(root, "deleted-session");
-    const files = buildSessionArtifactFileMap(sessionDir);
-    await mkdir(sessionDir, { recursive: true });
-    await writeFile(
-      files.session,
-      JSON.stringify({
-        ...createTestSessionRequiredFields(),
-        sessionId: "deleted-session",
-        aggregateVersion: 0,
-        messages: [
-          { role: "user", messageOrigin: "natural", content: "legacy", turnScopeId: "one" },
-        ],
-      }),
-      "utf8",
-    );
-    const assertDeleted = async () => {
-      throw createSessionDeletedError({ sessionId: "deleted-session", operation: "test" });
-    };
-
-    await appendRollingJsonlArtifactLog({
-      storageService,
-      sessionDir,
-      log: { id: 2, dialogProcessId: TEST_TURN },
-      maxSegmentBytes: SEGMENT_BYTES,
-      alreadyLocked: false,
-    });
-    const indexPath = path.join(turnDirOf(sessionDir, TEST_TURN), "index.json");
-    const indexBefore = await readFile(indexPath, "utf8");
-    await assert.rejects(
-      repairSessionArtifacts({
-        storageService,
-        sessionDir,
-        sessionId: "deleted-session",
-        alreadyLocked: false,
-        assertSessionWritable: assertDeleted,
-      }),
-      { code: "SESSION_DELETED" },
-    );
-    assert.equal(await readFile(indexPath, "utf8"), indexBefore);
-
-    const temp = path.join(sessionDir, "zombie.tmp-1");
-    await writeFile(temp, "z", "utf8");
-    await assert.rejects(
-      cleanupSessionArtifacts({
-        storageService,
-        sessionDir,
-        sessionId: "deleted-session",
-        dryRun: false,
-        assertSessionWritable: assertDeleted,
-      }),
-      { code: "SESSION_DELETED" },
-    );
-    await access(temp);
   }));

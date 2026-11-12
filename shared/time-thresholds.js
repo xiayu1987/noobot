@@ -60,7 +60,6 @@ export const DEFAULT_TIME_THRESHOLDS = deepFreeze({
   runtimeEvents: {
     retentionDays: 7,
     cleanupIntervalMs: 60 * 1000,
-    batchFlushMs: 50,
   },
   connectorInstances: {
     postgresIdleTimeoutMs: 30000,

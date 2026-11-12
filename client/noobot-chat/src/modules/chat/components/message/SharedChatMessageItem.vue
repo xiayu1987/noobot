@@ -8,17 +8,12 @@ import { computed, ref, useId, watch, onBeforeUnmount } from "vue";
 import { ElMessage } from "element-plus";
 import { Paperclip } from "@element-plus/icons-vue";
 import { useMessagePreview } from "../../composables/message/useMessagePreview.js";
-import {
-  collectSessionAttachments,
-  collectSessionLinkSnapshots,
-  sessionMessageIndex,
-  useMessageFiles,
-} from "../../composables/message/useMessageFiles.js";
+import { useMessageFiles } from "../../composables/message/useMessageFiles.js";
+import { useSessionMessageResources } from "../../composables/message/useSessionMessageResources.js";
 import {
   resolveAttachmentDisplayKey,
   resolveParsedResultRelation,
 } from "../../../../infrastructure/api/attachments/attachmentAccess.js";
-import { buildAttachmentRefIndex } from "../../composables/message/attachmentInlineRefPlugin.js";
 import { outOfSessionRenderContext } from "../../composables/message/useMarkdownRenderer.js";
 import { useMessageMeta } from "../../composables/message/useMessageMeta.js";
 import { resolveMessageViewKey } from "@noobot/event-protocol/message-event";
@@ -128,14 +123,16 @@ const artifactAttachments = computed(() =>
   suppressDefaultAssets.value ? [] : displayedAttachments.value,
 );
 
+const sessionResources = computed(() => useSessionMessageResources(props.allMessages));
 const attachmentRefIndex = computed(() =>
-  buildAttachmentRefIndex(
-    collectSessionAttachments(props.allMessages, props.messageItem, displayedAttachments.value),
-    { userId: props.userId },
+  sessionResources.value.attachmentRefIndex(
+    props.messageItem,
+    displayedAttachments.value,
+    props.userId,
   ),
 );
-const linkSnapshots = computed(() => collectSessionLinkSnapshots(props.allMessages));
-const messageIndex = computed(() => sessionMessageIndex(props.allMessages, props.messageItem));
+const linkSnapshots = computed(() => sessionResources.value.linkSnapshots.value);
+const messageIndex = computed(() => sessionResources.value.messageIndex(props.messageItem));
 
 const workspaceRootDirectory = computed(() => props.messageItem.workspaceRootDirectory ?? null);
 

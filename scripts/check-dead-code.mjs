@@ -38,14 +38,39 @@ function measureIssueGroup(measurement, { file, type, issues }, usage) {
 
 function measureReportRow(measured, row, usage) {
   for (const [type, rule] of Object.entries(ISSUE_RULES)) {
+    if (!Object.hasOwn(row, type)) continue;
     measureIssueGroup(measured[rule], { file: row.file, type, issues: row[type] }, usage);
   }
 }
 
+function validateIssueGroup(file, type, issues) {
+  if (!Array.isArray(issues)) {
+    throw new TypeError(`Knip issue group must be an array: ${file}#${type}`);
+  }
+  for (const issue of issues) {
+    if (!issue || typeof issue.name !== "string" || !issue.name.trim()) {
+      throw new TypeError(`Knip issue must contain a name: ${file}#${type}`);
+    }
+  }
+}
+
+function validateReportRow(row) {
+  if (!row || typeof row.file !== "string" || !row.file.trim()) {
+    throw new TypeError("Knip issue row must contain a file path");
+  }
+  for (const type of Object.keys(ISSUE_RULES)) {
+    if (!Object.hasOwn(row, type)) continue;
+    validateIssueGroup(row.file, type, row[type]);
+  }
+}
+
 export function measureDeadCodeReport(report, usage = NO_EXEMPTIONS) {
-  if (!Array.isArray(report.issues)) throw new TypeError("Knip report must contain issues");
+  if (!report || !Array.isArray(report.issues)) {
+    throw new TypeError("Knip report must contain issues");
+  }
   const measured = emptyRuleMeasurements(CHECK);
   for (const row of report.issues) {
+    validateReportRow(row);
     if (isFirstPartyProductionPath(row.file)) measureReportRow(measured, row, usage);
   }
   return measured;

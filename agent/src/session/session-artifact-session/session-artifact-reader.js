@@ -8,6 +8,7 @@ import { readSessionForProtocolRepair } from "@noobot/session-repair";
 import { buildSessionArtifactFileMap } from "../session-artifact-files.js";
 import { readOptionalJsonWithStorage } from "./artifact-json-io.js";
 import { readCheckpointReceiptProjection } from "./checkpoint-receipts.js";
+import { readSessionArtifactEvents } from "./artifact-event-journal.js";
 import {
   TURN_JOURNAL_SCHEMA_VERSION,
   assertCanonicalSessionManifest,
@@ -23,20 +24,32 @@ async function readCanonicalManifest({ storageService, sessionDir }) {
   });
   if (session === null) return null;
   assertCanonicalSessionManifest(session, "Session artifact");
+  session.sessionArtifactEvents = await readSessionArtifactEvents(sessionDir, session);
   return readCheckpointReceiptProjection({ storageService, sessionDir, session });
 }
 
-async function materializeOrderedMessages({ storageService, sessionDir, turnItems, references }) {
-  const messagesByUid = new Map();
+async function materializeOrderedMessages({ storageService, sessionDir, turnItems }) {
+  const entries = [];
   for (const item of turnItems) {
-    for (const message of await getTurnMaterializer().materialize({
-      storageService,
-      sessionDir,
-      item,
-    }))
-      messagesByUid.set(message.messageUid, message);
+    entries.push(
+      ...(await getTurnMaterializer().materializeEntries({
+        storageService,
+        sessionDir,
+        item,
+      })),
+    );
   }
-  return references.map(({ messageUid }) => messagesByUid.get(messageUid));
+  const identities = new Set();
+  const ordinals = new Set();
+  return entries
+    .sort((left, right) => left.ordinal - right.ordinal)
+    .map(({ message, ordinal }) => {
+      if (identities.has(message.messageUid) || ordinals.has(ordinal))
+        throw new TypeError("Session journals contain duplicate message identities or ordinals");
+      identities.add(message.messageUid);
+      ordinals.add(ordinal);
+      return message;
+    });
 }
 
 export async function readSessionArtifact({ storageService, sessionDir }) {
@@ -48,7 +61,6 @@ export async function readSessionArtifact({ storageService, sessionDir }) {
       storageService,
       sessionDir,
       turnItems: session.turnOrder,
-      references: session.messageOrder,
     }),
   };
 }
@@ -57,14 +69,16 @@ export async function readSessionTurnView({ storageService, sessionDir, turnScop
   const session = await readCanonicalManifest({ storageService, sessionDir });
   if (!session) return null;
   const scopes = new Set(turnScopeIds.map(requireCanonicalTurnScopeId));
-  const lastMessageUid = session.messageOrder.length ? session.messageOrder.at(-1).messageUid : "";
+  const lastMessageOrdinal = Math.max(
+    0,
+    ...session.turnOrder.map((item) => item.lastMessageOrdinal),
+  );
   const turnItems = session.turnOrder.filter(
     (item) =>
       scopes.has(item.turnScopeId) ||
-      (lastMessageUid && item.messageOrder.includes(lastMessageUid)) ||
+      (lastMessageOrdinal > 0 && item.lastMessageOrdinal === lastMessageOrdinal) ||
       turnArtifactRequiresRewrite(session, item),
   );
-  const viewMessageUids = new Set(turnItems.flatMap((item) => item.messageOrder));
   return {
     session: {
       ...session,
@@ -72,9 +86,6 @@ export async function readSessionTurnView({ storageService, sessionDir, turnScop
         storageService,
         sessionDir,
         turnItems,
-        references: session.messageOrder.filter((reference) =>
-          viewMessageUids.has(reference.messageUid),
-        ),
       }),
     },
     turnScopeIds: turnItems.map((item) => item.turnScopeId),

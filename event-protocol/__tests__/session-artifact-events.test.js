@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
+import { deepFreeze } from "@noobot/shared/deep-freeze";
 import test from "node:test";
 import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
 import {
@@ -98,4 +99,14 @@ test("a valid timeline event is rejected from the session artifact collection", 
     (error) =>
       error.code === INVALID.code && error.protocolErrors.includes("event_not_session_artifact:0"),
   );
+});
+
+test("immutable artifact collections are verified once per owning session", () => {
+  const events = deepFreeze([artifact()]);
+  assert.equal(assertSessionArtifactEvents(events, "s-1"), events);
+  assert.equal(assertSessionArtifactEvents(events, "s-1"), events);
+  assert.throws(() => assertSessionArtifactEvents(events, "s-2"), INVALID);
+  const foreign = deepFreeze([artifact()]);
+  assert.throws(() => assertSessionArtifactEvents(foreign, "s-2"), INVALID);
+  assert.throws(() => assertSessionArtifactEvents(foreign, "s-2"), INVALID);
 });

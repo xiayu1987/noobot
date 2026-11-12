@@ -43,7 +43,7 @@ export function mergeAttachmentsByIdentity(
     if (i === undefined) {
       idx.set(k, out.length);
       out.push(x);
-    } else out[i] = onConflict(out[i], x);
+    } else out[i] = onConflict({ existing: out[i], incoming: x });
   }
   return out;
 }

@@ -7,7 +7,6 @@
   "exports": {
     ".": "./src/index.js",
     "./array-index": "./src/array-index.js",
-    "./ordered-facts": "./src/ordered-facts.js",
     "./serialized-window-index": "./src/serialized-window-index.js"
   },
   "scripts": {

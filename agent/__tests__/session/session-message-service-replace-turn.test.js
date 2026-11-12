@@ -147,7 +147,6 @@ test("SessionMessageService.replaceTurn matches turnScopeId and returns snapshot
             revision: 1,
             sequence: 1,
             eventId: "event-keep-receipt",
-            envelope: { identity: { eventId: "event-keep-receipt" } },
           },
           {
             commandId: "old-receipt",
@@ -158,7 +157,6 @@ test("SessionMessageService.replaceTurn matches turnScopeId and returns snapshot
             revision: 4,
             sequence: 8,
             eventId: "event-old-receipt",
-            envelope: { identity: { eventId: "event-old-receipt" } },
           },
         ],
       },

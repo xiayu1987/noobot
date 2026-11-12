@@ -330,6 +330,10 @@ test("replaying a follow-up event without identity fields deduplicates and a con
     parentSessionId: "",
     lifecycle: started.lifecycle,
     event: processing,
+    readPreparedEvent: (eventId) => {
+      assert.equal(eventId, started.committedEvent.eventId);
+      return started.committedEvent;
+    },
     createEventId: () => "must-not-be-used",
   });
   assert.equal(replay.deduplicated, true);

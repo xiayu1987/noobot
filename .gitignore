@@ -9,6 +9,7 @@ client/shared/electron/startup/
 *.log
 logs/
 .pm2/
+/.tmp/
 
 .env
 .env.*

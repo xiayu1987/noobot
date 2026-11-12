@@ -402,6 +402,21 @@ test("mergeTransferEnvelopes is ordered, idempotent, and rejects identity confli
     content: "same",
   });
   assert.deepEqual(mergeTransferEnvelopes([envelope], envelope), [envelope]);
+  const reordered = Object.fromEntries(Object.entries(structuredClone(envelope)).reverse());
+  const second = { ...envelope, transferId: "merge-2" };
+  const merged = mergeTransferEnvelopes([envelope, second], [reordered, envelope]);
+  assert.deepEqual(merged, [envelope, second]);
+  assert.equal(merged[0], envelope);
+  assert.equal(Object.isFrozen(merged), true);
+  assert.throws(
+    () => mergeTransferEnvelopes(envelope, { ...envelope, version: -1 }),
+    /invalid_transfer_envelope/,
+  );
+  const nestedConflict = structuredClone(envelope);
+  nestedConflict.identity.producer.id = "different-producer";
+  assert.throws(() => mergeTransferEnvelopes(envelope, nestedConflict), {
+    code: TRANSFER_ERROR_CODE.IDENTITY_CONFLICT,
+  });
   assert.throws(
     () =>
       mergeTransferEnvelopes(envelope, {

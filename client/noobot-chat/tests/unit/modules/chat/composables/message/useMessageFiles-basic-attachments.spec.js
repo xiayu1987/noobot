@@ -5,7 +5,8 @@
  */
 import { describe, expect, it } from "vitest";
 import { createMessageFiles } from "./helpers/useMessageFiles-helper.js";
-import { collectSessionAttachments } from "../../../../../../src/modules/chat/composables/message/useMessageFiles.js";
+import { useSessionMessageResources } from "../../../../../../src/modules/chat/composables/message/useSessionMessageResources.js";
+import { buildAttachmentRefIndex } from "../../../../../../src/modules/chat/composables/message/attachmentInlineRefPlugin.js";
 
 describe("useMessageFiles basic attachments", () => {
   it("collects a pending upload with preceding canonical assistant attachments", () => {
@@ -29,18 +30,20 @@ describe("useMessageFiles basic attachments", () => {
       attachments: [draft],
     };
     const allMessages = [assistant, user];
-    expect(collectSessionAttachments(allMessages, user, [draft])).toEqual([canonical, draft]);
+    const resources = useSessionMessageResources(allMessages);
+    expect(resources.attachmentRefIndex(user, [draft], "admin")).toEqual(
+      buildAttachmentRefIndex([canonical], { userId: "admin" }),
+    );
     const persisted = {
       ...draft,
       attachmentId: "upload-1",
       sessionId: "session-1",
       attachmentSource: "user",
     };
-    expect(collectSessionAttachments(allMessages, user, [persisted])).toEqual([
-      canonical,
-      persisted,
-    ]);
-    expect(() => collectSessionAttachments(allMessages, user, [{ name: "invalid.txt" }])).toThrow(
+    expect(resources.attachmentRefIndex(user, [persisted], "admin")).toEqual(
+      buildAttachmentRefIndex([canonical, persisted], { userId: "admin" }),
+    );
+    expect(() => resources.attachmentRefIndex(user, [{ name: "invalid.txt" }], "admin")).toThrow(
       "invalid_attachment_id",
     );
   });

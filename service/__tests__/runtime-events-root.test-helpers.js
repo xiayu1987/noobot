@@ -25,7 +25,13 @@ export { withRuntimeEventsEnv };
 export async function withRuntimeEventsRoot(prefix, operation) {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
   try {
-    return await withRuntimeEventsEnv({ workspaceRoot }, () => operation(workspaceRoot));
+    return await withRuntimeEventsEnv({ workspaceRoot }, async () => {
+      try {
+        return await operation(workspaceRoot);
+      } finally {
+        await flushJsonLineBatches();
+      }
+    });
   } finally {
     await fs.rm(workspaceRoot, { recursive: true, force: true });
   }

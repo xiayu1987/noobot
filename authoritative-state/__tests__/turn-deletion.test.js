@@ -20,7 +20,6 @@ test("turn deletion removes lifecycle facts and receipts for the deleted scopes"
     sequence: 1,
     committedAt: "2026-07-18T00:00:00.000Z",
     eventId: `event-${commandId}`,
-    envelope: { identity: { eventId: `event-${commandId}` } },
   });
   const committed = commitTurnDeletion({
     lifecycle: {

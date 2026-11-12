@@ -12,6 +12,11 @@ import {
   SESSION_ARTIFACT_CHECKPOINT_RECORDS_SCHEMA_VERSION,
   SESSION_ARTIFACT_MANIFEST_SNAPSHOT_INDEX_SCHEMA_VERSION,
   SESSION_ARTIFACT_SUMMARY_SNAPSHOT_SCHEMA_VERSION,
+  SESSION_ARTIFACT_STORAGE_JOURNAL_SCHEMA_VERSION,
+  createSessionStorageJournalProjection,
+  applySessionStorageJournalRecords,
+  materializeSessionStorageJournal,
+  createSessionStorageMessageIndex,
   resolveSessionArtifactSchemaVersion,
 } from "@noobot/session-protocol";
 import {
@@ -31,7 +36,7 @@ import { writeFileAtomic } from "../shared/storage/atomic-file-write.js";
 import { SESSION_ARTIFACT_FILE_NAMES } from "../session/session-artifact-files.js";
 import { AUTHORITY_OUTBOX_DIR } from "../session/authority-outbox-store/outbox-journal.js";
 import {
-  journalPath,
+  resolveTurnJournalPath,
   messageHash,
 } from "../session/session-artifact-session/turn-journal-store.js";
 import { ignoreSessionProgress } from "./session-directory-walk.js";
@@ -150,6 +155,7 @@ function upgradeJournalRecords(records, filePath, hashMap) {
     upgraded += result.upgraded;
     return result.record;
   });
+  if (hashMap.projection) applySessionStorageJournalRecords(hashMap.projection, next);
   return { records: next, upgraded };
 }
 
@@ -161,7 +167,7 @@ function parseJournalLines(text, filePath) {
 }
 
 async function readCommittedJournal(sessionDir, turn) {
-  const filePath = journalPath(sessionDir, turn.turnId);
+  const filePath = resolveTurnJournalPath(sessionDir, turn.file);
   let raw;
   try {
     raw = await readFile(filePath);
@@ -420,10 +426,19 @@ async function upgradeManifestTurns({ sessionDir, manifest, stage }) {
   const turnOrder = [];
   const schemaVersion = resolveSessionArtifactSchemaVersion(manifest.schemaVersion);
   for (const turn of Array.isArray(manifest.turnOrder) ? manifest.turnOrder : []) {
+    hashMap.projection =
+      schemaVersion >= SESSION_ARTIFACT_STORAGE_JOURNAL_SCHEMA_VERSION
+        ? createSessionStorageJournalProjection()
+        : null;
     const result = await upgradeTurnArtifacts({ sessionDir, turn, schemaVersion, hashMap, stage });
     report.envelopes += result.upgraded;
     report.droppedTailBytes += result.droppedTailBytes;
-    turnOrder.push({ ...result.turn, messageHashes: syncMessageHashes(turn, hashMap) });
+    turnOrder.push({
+      ...result.turn,
+      ...(hashMap.projection
+        ? createSessionStorageMessageIndex(materializeSessionStorageJournal(hashMap.projection))
+        : { messageHashes: syncMessageHashes(turn, hashMap) }),
+    });
   }
   return { turnOrder, changed: hashMap.size > 0, report };
 }

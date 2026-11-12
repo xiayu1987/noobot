@@ -15,7 +15,7 @@ import {
   reduceAttachmentLifecycle,
 } from "@noobot/event-protocol";
 import { reduceInteractionRequest } from "../interactionPayload.js";
-import { text } from "@noobot/shared/value";
+import { text, requireFunctionDependencies } from "@noobot/shared/value";
 
 function canonicalAttachmentProjectionKey(attachment = {}) {
   const attachmentId = text(attachment?.attachmentId);
@@ -90,6 +90,10 @@ export function handleInteractionRequestStreamEvent({
   setPendingInteractionRequest,
   clearPendingInteraction,
 }) {
+  requireFunctionDependencies("handleInteractionRequestStreamEvent", {
+    clearMissingInteractionPayloadTimer,
+    navigateOnFirstResponseOnce,
+  });
   const request = reduceInteractionRequest(data, {
     channelSessionId,
     setPendingInteractionRequest,
@@ -99,7 +103,7 @@ export function handleInteractionRequestStreamEvent({
     sessionId: request.sessionId,
     turnScopeId: request.turnScopeId,
   });
-  navigateOnFirstResponseOnce?.();
+  navigateOnFirstResponseOnce();
   return true;
 }
 

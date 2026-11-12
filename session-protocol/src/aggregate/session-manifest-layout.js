@@ -27,19 +27,27 @@ function assertSummarySnapshotIndex(snapshot, path) {
 
 const MESSAGE_HASH_PATTERN = /^sha256:[0-9a-f]{64}$/;
 
-function assertTurnMessageHashes(item, index) {
-  if (!isPlainObject(item.messageHashes)) {
-    throw layoutError(`turnOrder[${index}].messageHashes must be an object`);
+function assertTurnMessageIndex(item, index) {
+  for (const field of ["messageOrder", "messageHashes"]) {
+    if (Object.hasOwn(item, field)) throw layoutError(`turnOrder[${index}].${field} is retired`);
   }
-  const keys = Object.keys(item.messageHashes);
-  const order = new Set(item.messageOrder);
-  if (keys.length !== order.size || !keys.every((uid) => order.has(uid))) {
-    throw layoutError(`turnOrder[${index}].messageHashes keys must equal messageOrder`);
-  }
-  for (const uid of keys) {
-    if (!MESSAGE_HASH_PATTERN.test(item.messageHashes[uid])) {
-      throw layoutError(`turnOrder[${index}].messageHashes.${uid} must be a sha256 digest`);
+  for (const field of ["messageCount", "firstMessageOrdinal", "lastMessageOrdinal"]) {
+    if (!Number.isSafeInteger(item[field]) || item[field] < 0) {
+      throw layoutError(`turnOrder[${index}].${field} must be a non-negative integer`);
     }
+  }
+  const empty = item.messageCount === 0;
+  if (
+    empty
+      ? item.firstMessageOrdinal !== 0 || item.lastMessageOrdinal !== 0
+      : item.firstMessageOrdinal < 1 ||
+        item.lastMessageOrdinal < item.firstMessageOrdinal ||
+        item.lastMessageOrdinal - item.firstMessageOrdinal + 1 < item.messageCount
+  ) {
+    throw layoutError(`turnOrder[${index}] has invalid message ordinal bounds`);
+  }
+  if (!MESSAGE_HASH_PATTERN.test(item.messageRevision)) {
+    throw layoutError(`turnOrder[${index}].messageRevision must be a sha256 digest`);
   }
 }
 
@@ -51,9 +59,6 @@ function assertTurnOrderItem(item, index) {
   if (!isCanonicalDialogProcessKey(item.dialogProcessId)) {
     throw layoutError(`turnOrder[${index}].dialogProcessId must be a dialog process key`);
   }
-  if (!Array.isArray(item.messageOrder) || !item.messageOrder.every(isCanonicalText)) {
-    throw layoutError(`turnOrder[${index}].messageOrder must be a messageUid array`);
-  }
   if (!Array.isArray(item.summarySnapshots)) {
     throw layoutError(`turnOrder[${index}].summarySnapshots must be an array`);
   }
@@ -63,7 +68,6 @@ function assertTurnOrderItem(item, index) {
   if (typeof item.compacted !== "boolean") {
     throw layoutError(`turnOrder[${index}].compacted must be a boolean`);
   }
-  assertTurnMessageHashes(item, index);
   for (const key of ["committedBytes", "recordCount"]) {
     if (!Number.isSafeInteger(item[key]) || item[key] < 0) {
       throw layoutError(`turnOrder[${index}].${key} must be a non-negative integer`);
@@ -81,27 +85,7 @@ function assertUniqueTurnOrderIdentities(turnOrder) {
   }
 }
 
-function assertMessageOrderCoverage(manifest) {
-  const owner = new Map();
-  manifest.turnOrder.forEach((item, index) => {
-    for (const uid of item.messageOrder) {
-      if (owner.has(uid))
-        throw layoutError(`turnOrder[${index}].messageOrder.${uid} is duplicated`);
-      owner.set(uid, index);
-    }
-  });
-  const seen = new Set();
-  manifest.messageOrder.forEach(({ messageUid }, index) => {
-    if (seen.has(messageUid)) throw layoutError(`messageOrder[${index}] is duplicated`);
-    if (!owner.has(messageUid)) throw layoutError(`messageOrder[${index}] has no owning turn`);
-    seen.add(messageUid);
-  });
-  if (seen.size !== owner.size) {
-    throw layoutError("messageOrder must cover every turnOrder message");
-  }
-}
-
-export function assertSessionManifestLayout(manifest) {
+function assertManifestStructure(manifest) {
   if (!isPlainObject(manifest)) throw layoutError("manifest must be an object");
   if (!Number.isSafeInteger(manifest.turnArtifactSequence) || manifest.turnArtifactSequence < 0) {
     throw layoutError("turnArtifactSequence must be a non-negative integer");
@@ -112,14 +96,55 @@ export function assertSessionManifestLayout(manifest) {
   if (!isTurnLifecycleShape(manifest.turnLifecycle)) {
     throw layoutError("turnLifecycle must be a turn lifecycle object");
   }
+  return manifest;
+}
+
+export function assertSessionManifestLayout(manifest) {
+  assertManifestStructure(manifest);
+  manifest.turnOrder.forEach(assertTurnMessageIndex);
+  if (Object.hasOwn(manifest, "messageOrder")) throw layoutError("messageOrder is retired");
+  return manifest;
+}
+
+export function assertLegacyCheckpointManifestLayout(manifest) {
+  assertManifestStructure(manifest);
+  if (manifest.schemaVersion !== 19)
+    throw layoutError("checkpoint migration output requires schema 19");
+  const owners = new Set();
+  for (const [index, turn] of manifest.turnOrder.entries()) {
+    if (
+      !Array.isArray(turn.messageOrder) ||
+      !turn.messageOrder.every(isCanonicalText) ||
+      !isPlainObject(turn.messageHashes)
+    )
+      throw layoutError(`turnOrder[${index}] requires legacy message order and hashes`);
+    const hashes = Object.keys(turn.messageHashes);
+    if (
+      hashes.length !== turn.messageOrder.length ||
+      !hashes.every(
+        (uid) =>
+          turn.messageOrder.includes(uid) && MESSAGE_HASH_PATTERN.test(turn.messageHashes[uid]),
+      )
+    )
+      throw layoutError(`turnOrder[${index}] has invalid legacy message hashes`);
+    for (const uid of turn.messageOrder) {
+      if (owners.has(uid)) throw layoutError(`duplicate legacy message identity: ${uid}`);
+      owners.add(uid);
+    }
+  }
   if (
     !Array.isArray(manifest.messageOrder) ||
     !manifest.messageOrder.every(
       (reference) => isPlainObject(reference) && isCanonicalText(reference.messageUid),
     )
-  ) {
-    throw layoutError("messageOrder must be a {messageUid} array");
-  }
-  assertMessageOrderCoverage(manifest);
+  )
+    throw layoutError("legacy messageOrder must be a {messageUid} array");
+  const order = new Set(manifest.messageOrder.map(({ messageUid }) => messageUid));
+  if (
+    order.size !== manifest.messageOrder.length ||
+    order.size !== owners.size ||
+    [...order].some((uid) => !owners.has(uid))
+  )
+    throw layoutError("legacy messageOrder must cover every turn message exactly once");
   return manifest;
 }

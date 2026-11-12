@@ -67,10 +67,6 @@ export default {
       name: "运行时事件清理间隔",
       description: "运行时事件清理间隔使用的执行间隔。",
     },
-    batchFlushMs: {
-      name: "运行时事件批次刷盘",
-      description: "运行时事件批次刷盘使用的持续时长。",
-    },
   },
   connectorInstances: {
     postgresIdleTimeoutMs: {

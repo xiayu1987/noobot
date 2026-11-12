@@ -39,6 +39,7 @@ import {
   SESSION_ID,
   jsonl,
   saveCanonicalSession,
+  downgradeSessionStorage,
   v9Options,
 } from "./helpers/session-identity-upgrade.fixtures.js";
 
@@ -96,10 +97,7 @@ async function saveCheckpointedSession(sessionRepo, sessionId) {
 
 async function downgradeToSchema10JournalSnapshots(sessionDir, tail) {
   const manifestFile = path.join(sessionDir, "session.json");
-  const manifest = await readJson(manifestFile);
-  manifest.turnSummaryCheckpoints = (
-    await readSessionArtifact({ sessionDir, storageService: TEST_STORAGE_SERVICE })
-  ).turnSummaryCheckpoints;
+  const manifest = await downgradeSessionStorage(sessionDir, 10);
   const [turn] = manifest.turnOrder;
   const records = [
     ...turn.summarySnapshots.map((index) => ({
@@ -134,7 +132,7 @@ test("v9 upgrade moves schema 10 journal snapshot indexes into the manifest", as
   try {
     const sessionId = "v10-journal-snapshot-index";
     const { sessionDir, tail } = await saveCheckpointedSession(sessionRepo, sessionId);
-    const { file, summarySnapshots } = await downgradeToSchema10JournalSnapshots(sessionDir, tail);
+    const { summarySnapshots } = await downgradeToSchema10JournalSnapshots(sessionDir, tail);
 
     const result = await upgradeSessionMessageIdentity({
       base: path.join(root, "alice"),
@@ -154,7 +152,9 @@ test("v9 upgrade moves schema 10 journal snapshot indexes into the manifest", as
       migrated.turnOrder[0].summarySnapshots.map(withoutContentHash),
       summarySnapshots.map(withoutContentHash),
     );
-    const journal = readJournalLines(await readFile(path.join(sessionDir, file), "utf8"));
+    const journal = readJournalLines(
+      await readFile(path.join(sessionDir, migrated.turnOrder[0].file), "utf8"),
+    );
     assert.equal(
       journal.some((record) => record.op === "summary_snapshot"),
       false,
@@ -293,7 +293,11 @@ test("v11 upgrade removes rejected-batch tool_calls of completed turns, backs up
     );
     const relativeDir = path.relative(base, sessionDir);
     const backedUp = await readJson(path.join(backupBase, relativeDir, "session.json"));
-    assert.ok(backedUp.messageOrder.some((entry) => entry.messageUid === "m4"));
+    const backedUpTurn = backedUp.turnOrder[0];
+    const backedUpJournal = readJournalLines(
+      await readFile(path.join(backupBase, relativeDir, backedUpTurn.file), "utf8"),
+    );
+    assert.ok(backedUpJournal.some((entry) => entry.op === "upsert" && entry.messageUid === "m4"));
 
     const second = await upgradeSessionMessageIdentity(options);
     assert.deepEqual(second.sessions, []);
@@ -311,8 +315,7 @@ test("v14 upgrade drops schema 15 turn timing starts and timing shells, backs up
     const backupBase = path.join(root, "layout-backup");
     const sessionDir = await saveCanonicalSession(sessionRepo);
     const manifestFile = path.join(sessionDir, "session.json");
-    const manifest = await readJson(manifestFile);
-    manifest.schemaVersion = 15;
+    const manifest = await downgradeSessionStorage(sessionDir, 15);
     manifest.turnTimings = [
       {
         turnScopeId: "t1",
@@ -380,10 +383,7 @@ function withRetiredTaskFields(record) {
 
 async function downgradeToSchema17WithTaskFields(sessionDir) {
   const manifestFile = path.join(sessionDir, "session.json");
-  const manifest = await readJson(manifestFile);
-  manifest.turnSummaryCheckpoints = (
-    await readSessionArtifact({ sessionDir, storageService: TEST_STORAGE_SERVICE })
-  ).turnSummaryCheckpoints;
+  const manifest = await downgradeSessionStorage(sessionDir, 17);
   manifest.currentTaskId = "";
   for (const turn of manifest.turnOrder) {
     const latestHash = new Map();
@@ -442,7 +442,26 @@ test("v16 upgrade drops retired task fields from journals and snapshots so store
       sessionDir,
       storageService: TEST_STORAGE_SERVICE,
     });
-    const storedHashes = Object.assign({}, ...manifest.turnOrder.map((turn) => turn.messageHashes));
+    const storedHashes = Object.fromEntries(
+      (
+        await Promise.all(
+          manifest.turnOrder.map(async (turn) => {
+            const snapshots = await Promise.all(
+              turn.summarySnapshots.map(
+                async (index) => (await readJson(path.join(sessionDir, index.file))).records,
+              ),
+            );
+            const records = [
+              ...snapshots.flat(),
+              ...readJournalLines(await readFile(path.join(sessionDir, turn.file), "utf8")),
+            ];
+            return records
+              .filter((record) => record.op === "upsert")
+              .map((record) => [record.messageUid, record.hash]);
+          }),
+        )
+      ).flat(),
+    );
     for (const message of restored.messages) {
       assert.equal(Object.hasOwn(message, "taskId"), false);
       assert.equal(Object.hasOwn(message, "taskStatus"), false);

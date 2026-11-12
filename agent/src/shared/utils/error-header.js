@@ -8,10 +8,14 @@ import { text } from "@noobot/shared/value";
 
 export function resolveErrorHeaderValue(headers = null, name = "") {
   if (!headers || !name) return undefined;
-  const normalizedName = text(name);
+  const normalizedName = text(name).toLowerCase();
   if (!normalizedName) return undefined;
   if (typeof headers?.get === "function") {
-    return headers.get(normalizedName) || headers.get(normalizedName.toLowerCase()) || undefined;
+    return headers.get(normalizedName) ?? undefined;
   }
-  return headers?.[normalizedName] ?? headers?.[normalizedName.toLowerCase()] ?? undefined;
+  if (Object.hasOwn(headers, normalizedName)) return headers[normalizedName] ?? undefined;
+  for (const key of Object.keys(headers)) {
+    if (key.toLowerCase() === normalizedName) return headers[key] ?? undefined;
+  }
+  return undefined;
 }

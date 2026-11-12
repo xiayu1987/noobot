@@ -8,10 +8,7 @@ import test from "node:test";
 import os from "node:os";
 import path from "node:path";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import {
-  SESSION_ARTIFACT_SCHEMA_VERSION,
-  TOOL_RESULT_MESSAGE_TYPE,
-} from "@noobot/session-protocol";
+import { TOOL_RESULT_MESSAGE_TYPE } from "@noobot/session-protocol";
 import { SCRIPT_FAILURE_CODE } from "@noobot/execution-isolation-protocol/script-outcome";
 import { upgradeSessionScriptExitCodes } from "../src/workspace-lifecycle/session-script-exit-code-upgrade.js";
 import { messageHash } from "../src/session/session-artifact-session/turn-journal-store.js";
@@ -59,10 +56,11 @@ async function withSession(result, run, toolName = "execute_script") {
       manifestPath,
       JSON.stringify({
         sessionId: "s1",
-        schemaVersion: SESSION_ARTIFACT_SCHEMA_VERSION,
+        schemaVersion: 22,
         turnOrder: [
           {
             turnId: "turn-000001",
+            file: "turns/turn-000001.jsonl",
             committedBytes: Buffer.byteLength(journal),
             summarySnapshots: [],
             messageHashes: Object.fromEntries(records.map((r) => [r.messageUid, r.hash])),

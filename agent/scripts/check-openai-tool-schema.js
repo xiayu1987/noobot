@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
@@ -34,6 +35,7 @@ const [
   { createAgentExecutionScope },
   { createMainFlowControlPort, createMainFlowControlState },
   { resolveDefaultModelSpec, resolveModelSpecByName },
+  { resolveRuntimeBasePath, resolveContextIdentityInfo },
 ] = await Promise.all([
   import("@noobot/model-runtime"),
   import("@noobot/model-protocol"),
@@ -46,6 +48,7 @@ const [
   import("../src/context/agent-execution-scope.js"),
   import("../src/runtime/main-flow-control.js"),
   import("noobot-agent/model"),
+  import("../src/context/providers/environment-provider.js"),
 ]);
 
 function parseArgs(argv = []) {
@@ -155,8 +158,11 @@ function createMinimalAgentContext({ userId = "", globalConfig = {}, userConfig 
   const sessionId = "11111111-1111-4111-8111-111111111111";
   const dialogProcessId = "22222222-2222-4222-8222-222222222222";
   const turnScopeId = "schema-check:turn";
+  const basePath = resolveRuntimeBasePath({ userId, globalConfig });
+  const { isSuperUser } = resolveContextIdentityInfo({ userId, globalConfig });
   const runtime = {
     userId,
+    basePath,
     globalConfig,
     userConfig,
     sharedTools: {},
@@ -169,6 +175,7 @@ function createMinimalAgentContext({ userId = "", globalConfig = {}, userConfig 
       caller: "user",
       dialogProcessId,
       persistenceScope: null,
+      isSuperUser,
       config: {
         allowUserInteraction: true,
         selectedConnectorIds: [],
@@ -194,12 +201,12 @@ function createMinimalAgentContext({ userId = "", globalConfig = {}, userConfig 
         nodeVersion: process.version,
       },
       workspace: {
-        cwd: "/tmp/schema-check",
-        basePath: "/tmp/schema-check",
+        cwd: basePath,
+        basePath,
         workspaceDirectories: [],
         globalDefaults: {},
       },
-      permissions: { isSuperUser: false },
+      permissions: { isSuperUser },
     },
     execution: {
       timestamp: "2026-01-01T00:00:00.000Z",
@@ -300,9 +307,10 @@ async function main() {
   const userConfigParams = normalizeConfigParamsDocument(userConfigParamsRaw).values;
   const mergedConfigParams = mergeConfigParamLayers(workspaceConfigParams, userConfigParams);
   const lookup = createConfigValueLookup(mergedConfigParams, process.env);
-  const globalConfig = resolveConfigTemplates(rawGlobalConfig, {
-    lookup,
-  });
+  const globalConfig = {
+    ...resolveConfigTemplates(rawGlobalConfig, { lookup }),
+    workspaceRoot: resolvedWorkspaceRoot,
+  };
   const userConfig = sanitizeUserConfig(resolveConfigTemplates(rawUserConfig, { lookup }));
   const locale = userConfig.preferences?.language || globalConfig.preferences?.language;
   const agentContext = createMinimalAgentContext({
@@ -423,6 +431,8 @@ async function main() {
           toolBinding: { tool_choice: "auto" },
         },
         invocation: {
+          requestId: randomUUID(),
+          invocationId: randomUUID(),
           sessionId: "tool-schema-check",
           parentSessionId: "",
           dialogProcessId: "tool-schema-check",

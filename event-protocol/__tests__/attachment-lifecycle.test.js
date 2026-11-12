@@ -140,7 +140,11 @@ test("explicit v1 migration preserves envelope ID, ordering, causality and all j
   assert.deepEqual(current.causality, commit.envelope.causality);
   assert.equal(current.payload.eventVersion, 2);
   assert.equal(Object.hasOwn(current.payload, "attachmentEventId"), false);
-  const stored = projectAuthorityOutboxJournal(migrated.records);
+  const stored = projectAuthorityOutboxJournal([
+    { ...migrated.records[0], op: "prepare" },
+    { op: "commit", eventId: "e1" },
+    ...migrated.records.slice(1),
+  ]);
   assert.equal(stored[0].deliveries.c1.attempts, 1);
   assert.equal(stored[0].deliveries.c1.deliveredAt, commit.committedAt);
   const state = reduceAttachmentLifecycle(undefined, current);

@@ -53,6 +53,10 @@ export default {
       name: "事件协议权威状态发件箱待处理批次大小",
       description: "事件协议权威状态发件箱待处理批次大小使用的数量阈值。",
     },
+    authorityOutboxProjectionCacheSessions: {
+      name: "事件协议权威状态发件箱投影缓存会话数",
+      description: "内存中保留权威状态发件箱投影的会话数量上限。",
+    },
   },
   longMemory: {
     workAssistantCollaborationMaxItems: {

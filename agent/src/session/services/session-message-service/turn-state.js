@@ -32,7 +32,9 @@ import { registerSessionMessageFacts } from "../../entities/session-message-fact
 import { createSessionTurnLifecycleSnapshot } from "../../session-turn-read-model.js";
 import {
   materializeCommittedTurnEvents,
-  readCommittedAuthorityEventIds,
+  readAuthorityOutboxProjection,
+  appendAuthorityOutboxRecords,
+  authorityOutboxPrepareRecord,
 } from "../../authority-outbox-store/outbox-journal.js";
 import { resolveDeletedSessionAs } from "./session-deleted-result.js";
 import { text } from "@noobot/shared/value";
@@ -95,16 +97,26 @@ async function commitTurnLifecycleWithOutbox({
   materializeTerminal = null,
 }) {
   const outboxSessionDir = scope.sessionDir;
-  const committedEventIds = await readCommittedAuthorityEventIds(outboxSessionDir);
+  const projection = await readAuthorityOutboxProjection(outboxSessionDir);
   const result = commitTurnLifecycle({
     lifecycle: session.turnLifecycle,
     event: { ...lifecycleEvent, userId, sessionId },
     parentSessionId: scope.resolvedParentSessionId,
-    isCommittedEventId: (eventId) => committedEventIds.has(eventId),
+    isCommittedEventId: (eventId) => projection.prepared.has(eventId),
+    readPreparedEvent: (eventId) => {
+      const prepared = projection.prepared.get(eventId);
+      if (!prepared) throw new TypeError(`lifecycle receipt has no prepared event: ${eventId}`);
+      return prepared;
+    },
     ...(materializeTerminal ? { materializeTerminal } : {}),
     createEventId: randomUUID,
     now: service.now,
   });
+  if (result.applied) {
+    await appendAuthorityOutboxRecords(outboxSessionDir, [
+      authorityOutboxPrepareRecord(result.committedEvent),
+    ]);
+  }
   return { outboxSessionDir, result };
 }
 
@@ -256,7 +268,10 @@ export async function applyTurnLifecycleEvent({
     userId,
     sessionId,
     async (scope) => {
-      const session = await this.sessionRepo.requireById(userId, sessionId, { persistenceContext });
+      const { session, turnScopeIds } = await this.sessionRepo.requireTurnView(userId, sessionId, {
+        turnScopeIds: [event.turnScopeId],
+        persistenceContext,
+      });
       const resolvedParentSessionId = scope.resolvedParentSessionId;
       const { lifecycleEvent, acceptedUserMessageInput } = resolveTurnAcceptance(
         this,
@@ -300,10 +315,7 @@ export async function applyTurnLifecycleEvent({
       if (result.terminalMaterialization)
         session.messages = [...result.terminalMaterialization.messages];
       session.updatedAt = nowValue;
-      await this.sessionRepo.save(userId, session, {
-        expectedAggregateVersion: actualVersion,
-        persistenceContext,
-      });
+      await this.sessionRepo.saveTurnView(userId, session, { turnScopeIds, persistenceContext });
       await materializeCommittedTurnEvents(outboxSessionDir, result.lifecycle);
       return {
         ...result,

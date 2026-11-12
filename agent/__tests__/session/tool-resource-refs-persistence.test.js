@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { createResourceRef, projectResourceRef } from "@noobot/path-resolver";
 import { assertMutationRef } from "@noobot/file-mutation-protocol";
 
-import { normalizeMessageEntity } from "../../src/session/entities.js";
+import { normalizeMessageEntity } from "../../src/session/entities/normalizers.js";
 import { buildToolArtifactTimelineProjection } from "../../src/session/session-summary-builders/turn-artifact-projection.js";
 import { attachSessionToolArtifacts } from "../../src/session/session-summary-builders/display-tool-artifacts.js";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";

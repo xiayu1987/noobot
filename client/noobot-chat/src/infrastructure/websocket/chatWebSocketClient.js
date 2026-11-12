@@ -64,10 +64,6 @@ export function createChatWebSocketClient({
   let activeReconnectContext = null;
   let protocolRequestSerial = 0;
 
-  let reconnecting = false;
-  let reconnectResolve = null;
-  let reconnectReject = null;
-  let reconnectTimeout = null;
   let liveEventSubscriber = null;
   const transportClosedSubscribers = new Set();
 
@@ -125,13 +121,6 @@ export function createChatWebSocketClient({
       dialogProcessId: normalizeTrimmedString(identity.dialogProcessId),
       turnScopeId: normalizeTrimmedString(identity.turnScopeId),
     };
-  }
-
-  function clearTimers() {
-    if (reconnectTimeout) {
-      clearTimeout(reconnectTimeout);
-      reconnectTimeout = null;
-    }
   }
 
   function cleanupSocketRef(ws) {
@@ -232,9 +221,9 @@ export function createChatWebSocketClient({
   function resolveEventOwner(event, hasLiveSubscriber) {
     const reconnectControlEvent =
       event === StreamEventEnum.RECONNECT_DATA || event === StreamEventEnum.RECONNECT_COMPLETE;
-    if (reconnecting && activeReconnectContext && reconnectControlEvent) return "reconnect_handler";
+    if (activeReconnectContext && reconnectControlEvent) return "reconnect_handler";
     if (activeStreamContext?.handleProtocolEvent) return "stream_handler";
-    if (reconnecting && activeReconnectContext) return "reconnect_handler";
+    if (activeReconnectContext) return "reconnect_handler";
     if (hasLiveSubscriber) return "transport_live_subscriber";
     return "unowned";
   }
@@ -284,7 +273,7 @@ export function createChatWebSocketClient({
             protocolEvent: event,
             transportSequence: null,
             authoritativeSequence: resolveAuthoritativeSequence(data),
-            reconnecting,
+            reconnecting: Boolean(activeReconnectContext),
             activeStream: Boolean(activeStreamContext),
             hasLiveSubscriber,
           }));
@@ -315,7 +304,7 @@ export function createChatWebSocketClient({
               eventType: normalizeTrimmedString(lifecycleData?.eventType),
               transportSequence: Number(data?.seq || 0) || null,
               authoritativeSequence: Number(lifecycleData?.sequence || 0) || null,
-              reconnecting,
+              reconnecting: Boolean(activeReconnectContext),
               activeStream: Boolean(activeStreamContext),
               hasLiveSubscriber,
               dispatchEligible,
@@ -364,7 +353,7 @@ export function createChatWebSocketClient({
             eventType: normalizeTrimmedString(parsedData?.eventType),
             errorType: normalizeTrimmedString(error?.name || "Error"),
             errorMessage: normalizeTrimmedString(error?.message),
-            reconnecting,
+            reconnecting: Boolean(activeReconnectContext),
             activeStream: Boolean(activeStreamContext),
           }));
         }
@@ -628,7 +617,7 @@ export function createChatWebSocketClient({
 
   async function reconnect({ identity, knownLifecycleSequenceMap, onReconnectData = () => {} }) {
     return new Promise((resolve, reject) => {
-      if (reconnecting) {
+      if (activeReconnectContext) {
         reject(new Error(translateText("infra.reconnectInProgress")));
         return;
       }
@@ -638,9 +627,6 @@ export function createChatWebSocketClient({
         identity,
         knownLifecycleSequenceMap,
       });
-      reconnecting = true;
-      reconnectResolve = resolve;
-      reconnectReject = reject;
       const currentSessionId = reconnectControl.identity.sessionId;
 
       const currentSocket = getActiveSocket();
@@ -652,9 +638,6 @@ export function createChatWebSocketClient({
       const previousSocket = reusableSocket ? null : replacement?.previousSocket;
       const ws = reusableSocket || replacement?.socket;
       if (!ws) {
-        reconnecting = false;
-        reconnectReject = null;
-        reconnectResolve = null;
         reject(new Error(translateText("infra.reconnectConnectFailed")));
         return;
       }
@@ -667,40 +650,44 @@ export function createChatWebSocketClient({
         closeWebSocket(previousSocket, 1000, "replaced_by_reconnect");
       };
       let unregisterReconnectHandlers = () => {};
-      const failReconnect = (error, { closeSocket = false, rejectRequests = true } = {}) => {
-        if (!reconnecting) return;
-        reconnecting = false;
-        clearTimers();
-        cleanupSocketRef(ws);
+      const finishReconnect = () => {
+        if (activeReconnectContext?.requestId !== requestId) return false;
+        activeReconnectContext = null;
+        clearTimeout(reconnectTimeout);
         unregisterReconnectHandlers();
-        if (activeReconnectContext?.requestId === requestId) activeReconnectContext = null;
-        const rejectFn = reconnectReject;
-        reconnectReject = null;
-        reconnectResolve = null;
-        if (rejectRequests) commandRequests.rejectAll(error);
-        if (closeSocket) {
-          closeWebSocket(ws, WEB_SOCKET_CLOSE_CODE.CLIENT_TRANSPORT_FAILURE, "reconnect_failed");
-        }
-        rejectFn?.(error);
+        return true;
+      };
+      const failReconnect = (error) => {
+        if (!finishReconnect()) return false;
+        reject(error);
+        return true;
+      };
+      const failReconnectTransport = (error) => {
+        if (!failReconnect(error)) return;
+        cleanupSocketRef(ws);
+        commandRequests.rejectAll(error);
+        closeWebSocket(ws, WEB_SOCKET_CLOSE_CODE.CLIENT_TRANSPORT_FAILURE, "reconnect_failed");
       };
 
-      reconnectTimeout = setTimeout(() => {
-        failReconnect(new Error(translateText("infra.reconnectTimeout")), { closeSocket: true });
+      const reconnectTimeout = setTimeout(() => {
+        failReconnectTransport(new Error(translateText("infra.reconnectTimeout")));
       }, RECONNECT_TIMEOUT_MS);
 
       const sendReconnectCommand = () => {
+        if (activeReconnectContext?.requestId !== requestId) return;
         try {
           transport.markOpen(ws);
           ws.send(JSON.stringify(reconnectControl));
         } catch (error) {
-          failReconnect(error, { closeSocket: true });
+          failReconnectTransport(error);
         }
       };
       const handleReconnectProtocolEvent = (transportEvent) => {
+        if (activeReconnectContext?.requestId !== requestId) return;
         try {
           dispatchReconnectProtocolEvent(transportEvent);
         } catch (error) {
-          failReconnect(error, { closeSocket: true });
+          failReconnectTransport(error);
         }
       };
       function dispatchReconnectProtocolEvent(transportEvent) {
@@ -713,7 +700,7 @@ export function createChatWebSocketClient({
         ) {
           const error = new Error(data.message);
           error.code = data.code;
-          failReconnect(error, { rejectRequests: false });
+          failReconnect(error);
           return;
         }
 
@@ -741,16 +728,10 @@ export function createChatWebSocketClient({
             }));
             return;
           }
-          reconnecting = false;
-          clearTimers();
-          retirePreviousSocket();
-          const resolveFn = reconnectResolve;
-          reconnectResolve = null;
-          reconnectReject = null;
+          if (!finishReconnect()) return;
           liveEventSubscriber = onReconnectData;
-          unregisterReconnectHandlers();
-          if (activeReconnectContext?.requestId === requestId) activeReconnectContext = null;
-          if (resolveFn) resolveFn(reconnectComplete);
+          resolve(reconnectComplete);
+          retirePreviousSocket();
           return;
         }
 
@@ -758,16 +739,20 @@ export function createChatWebSocketClient({
           onReconnectData(transportEvent);
         }
       }
-      activeReconnectContext = { requestId, handleProtocolEvent: handleReconnectProtocolEvent };
+      activeReconnectContext = {
+        requestId,
+        handleProtocolEvent: handleReconnectProtocolEvent,
+        fail: failReconnect,
+      };
       unregisterReconnectHandlers = registerSocketHandlers(ws, "reconnect", {
         open: sendReconnectCommand,
 
         error: () => {
-          failReconnect(new Error(translateText("infra.reconnectConnectFailed")));
+          failReconnectTransport(new Error(translateText("infra.reconnectConnectFailed")));
         },
 
         close: () => {
-          failReconnect(new Error(translateText("infra.reconnectClosed")));
+          failReconnectTransport(new Error(translateText("infra.reconnectClosed")));
         },
       });
       if (reusableSocket && ws.readyState === WebSocket.OPEN) {
@@ -786,17 +771,14 @@ export function createChatWebSocketClient({
   const requestJson = commandRequests.requestJson;
 
   function dispose() {
-    clearTimers();
     transportClosedSubscribers.clear();
-    commandRequests.rejectAll(new Error("websocket_client_disposed"));
+    const error = new Error("websocket_client_disposed");
+    if (activeReconnectContext) activeReconnectContext.fail(error);
+    commandRequests.rejectAll(error);
     transport.dispose();
     resolveCurrentStream = null;
     activeStreamContext = null;
-    reconnecting = false;
-    reconnectResolve = null;
-    reconnectReject = null;
     liveEventSubscriber = null;
-    activeReconnectContext = null;
   }
 
   return {

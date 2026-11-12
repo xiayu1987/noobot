@@ -3,10 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { deepFreeze } from "@noobot/shared/deep-freeze";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { validateEventEnvelope } from "./envelope.js";
 export { assertAuthorityOutboxRequest } from "./outbox-request.js";
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text, stableValue } from "@noobot/shared/value";
 import {
   createPendingConsumerDelivery,
   readConsumerDelivery,
@@ -108,19 +109,53 @@ export function migrateLegacyUnownedAttemptRecords(records) {
   return { records: kept, changed: kept.length !== records.length };
 }
 
-export function listPendingAuthorityEvents(source, { consumerId }) {
+function selectPendingAuthorityEvents(entries, consumerId) {
   const normalizedConsumerId = requireOutboxText(consumerId, "consumerId");
-  return normalizeAuthorityEventOutbox(source)
-    .filter((item) => !item.deliveries[normalizedConsumerId]?.deliveredAt)
-    .slice(0, AUTHORITY_OUTBOX_PENDING_BATCH_SIZE);
+  const pending = [];
+  for (const item of entries) {
+    if (item.deliveries[normalizedConsumerId]?.deliveredAt) continue;
+    pending.push(item);
+    if (pending.length >= AUTHORITY_OUTBOX_PENDING_BATCH_SIZE) break;
+  }
+  return pending;
+}
+
+export function listPendingAuthorityEvents(source, { consumerId }) {
+  return selectPendingAuthorityEvents(normalizeAuthorityEventOutbox(source), consumerId);
+}
+
+export function listPendingAuthorityOutboxProjection(projection, { consumerId }) {
+  return selectPendingAuthorityEvents(projection.entries.values(), consumerId);
 }
 
 export const AUTHORITY_OUTBOX_JOURNAL_OP = Object.freeze({
+  PREPARE: "prepare",
   COMMIT: "commit",
   ATTEMPT: "attempt",
   ACK: "ack",
   REMOVE: "remove",
 });
+
+export function migrateAuthorityOutboxJournalRecords(records) {
+  requireOutbox(Array.isArray(records), "journal records must be an array");
+  let changed = false;
+  const migrated = records.flatMap((record) => {
+    if (
+      isPlainObject(record) &&
+      record.op === AUTHORITY_OUTBOX_JOURNAL_OP.COMMIT &&
+      Object.hasOwn(record, "envelope")
+    ) {
+      const prepared = { ...record, op: AUTHORITY_OUTBOX_JOURNAL_OP.PREPARE };
+      assertAuthorityOutboxJournalRecord(prepared);
+      changed = true;
+      return [prepared, { op: AUTHORITY_OUTBOX_JOURNAL_OP.COMMIT, eventId: record.eventId }];
+    }
+    assertAuthorityOutboxJournalRecord(record);
+    return [record];
+  });
+  projectAuthorityOutboxJournal(migrated);
+  return { records: migrated, changed };
+}
 
 export function assertAuthorityOutboxJournalRecord(record) {
   requireOutbox(isPlainObject(record), "journal record must be an object");
@@ -129,8 +164,13 @@ export function assertAuthorityOutboxJournalRecord(record) {
     Object.values(AUTHORITY_OUTBOX_JOURNAL_OP).includes(record.op),
     `unknown journal operation: ${record.op}`,
   );
-  if (record.op === AUTHORITY_OUTBOX_JOURNAL_OP.COMMIT) {
+  if (record.op === AUTHORITY_OUTBOX_JOURNAL_OP.PREPARE) {
     normalizeAuthorityEventOutbox([{ ...record, deliveries: {} }]);
+  } else if (record.op === AUTHORITY_OUTBOX_JOURNAL_OP.COMMIT) {
+    requireOutbox(
+      Object.keys(record).every((key) => ["op", "eventId"].includes(key)),
+      "commit must reference a prepared event without copying its envelope",
+    );
   } else if (record.op !== AUTHORITY_OUTBOX_JOURNAL_OP.REMOVE) {
     requireOutboxText(record.consumerId, "consumerId");
     if (record.op === AUTHORITY_OUTBOX_JOURNAL_OP.ATTEMPT) {
@@ -154,39 +194,80 @@ function withConsumerDelivery(item, consumerId, patch) {
   };
 }
 
-export function projectAuthorityOutboxJournal(records) {
-  requireOutbox(Array.isArray(records), "journal records must be an array");
-  const byEventId = new Map();
-  for (const record of records) {
-    applyAuthorityOutboxJournalRecord(byEventId, record);
-  }
-  return normalizeAuthorityEventOutbox([...byEventId.values()]);
+function withFrozenConsumerDelivery(item, consumerId, patch) {
+  return deepFreeze(withConsumerDelivery(item, consumerId, patch));
 }
 
-function applyAuthorityOutboxJournalRecord(byEventId, record) {
+export function createAuthorityOutboxProjection() {
+  return { entries: new Map(), prepared: new Map(), removedEventIds: new Set() };
+}
+
+export function forkAuthorityOutboxProjection(projection) {
+  return {
+    entries: new Map(projection.entries),
+    prepared: new Map(projection.prepared),
+    removedEventIds: new Set(projection.removedEventIds),
+  };
+}
+
+export function applyAuthorityOutboxJournalRecords(projection, records) {
+  requireOutbox(Array.isArray(records), "journal records must be an array");
+  for (const record of records) applyAuthorityOutboxJournalRecord(projection, record);
+  return projection;
+}
+
+export function listAuthorityOutboxProjection(projection) {
+  return [...projection.entries.values()];
+}
+
+export function projectAuthorityOutboxJournal(records) {
+  return listAuthorityOutboxProjection(
+    applyAuthorityOutboxJournalRecords(createAuthorityOutboxProjection(), records),
+  );
+}
+
+function applyAuthorityOutboxPrepare(prepared, record) {
+  requireOutbox(isPlainObject(record), "journal record must be an object");
+  const [committed] = normalizeAuthorityEventOutbox([
+    {
+      eventId: record.eventId,
+      envelope: record.envelope,
+      committedAt: record.committedAt,
+      deliveries: {},
+    },
+  ]);
+  const existing = prepared.get(committed.eventId);
+  if (!existing) {
+    prepared.set(committed.eventId, deepFreeze(committed));
+    return;
+  }
+  requireOutbox(
+    JSON.stringify(stableValue(existing.envelope)) ===
+      JSON.stringify(stableValue(committed.envelope)) &&
+      existing.committedAt === committed.committedAt,
+    `conflicting commit: ${committed.eventId}`,
+  );
+}
+
+function applyAuthorityOutboxJournalRecord(projection, record) {
+  const byEventId = projection.entries;
   assertAuthorityOutboxJournalRecord(record);
   const eventId = record.eventId;
+  if (record.op === AUTHORITY_OUTBOX_JOURNAL_OP.PREPARE) {
+    applyAuthorityOutboxPrepare(projection.prepared, record);
+    return;
+  }
   if (record.op === AUTHORITY_OUTBOX_JOURNAL_OP.COMMIT) {
-    const [committed] = normalizeAuthorityEventOutbox([
-      {
-        eventId,
-        envelope: record.envelope,
-        committedAt: record.committedAt,
-        deliveries: {},
-      },
-    ]);
-    const existing = byEventId.get(eventId);
-    if (existing) {
-      requireOutbox(
-        JSON.stringify(existing.envelope) === JSON.stringify(committed.envelope) &&
-          existing.committedAt === committed.committedAt,
-        `conflicting commit: ${eventId}`,
-      );
-    } else byEventId.set(eventId, committed);
+    const prepared = projection.prepared.get(eventId);
+    requireOutbox(Boolean(prepared), `commit has no prepared event: ${eventId}`);
+    if (!projection.removedEventIds.has(eventId) && !byEventId.has(eventId)) {
+      byEventId.set(eventId, prepared);
+    }
     return;
   }
   if (record.op === AUTHORITY_OUTBOX_JOURNAL_OP.REMOVE) {
     byEventId.delete(eventId);
+    projection.removedEventIds.add(eventId);
     return;
   }
   const entry = byEventId.get(eventId);
@@ -198,7 +279,7 @@ function applyAuthorityOutboxJournalRecord(byEventId, record) {
     if (current.deliveredAt) return;
     byEventId.set(
       eventId,
-      withConsumerDelivery(entry, consumerId, {
+      withFrozenConsumerDelivery(entry, consumerId, {
         attempts: current.attempts + 1,
         lastAttemptAt: record.attemptedAt,
       }),
@@ -216,7 +297,7 @@ function applyAuthorityOutboxJournalRecord(byEventId, record) {
     if (current.deliveredAt) return;
     byEventId.set(
       eventId,
-      withConsumerDelivery(entry, consumerId, {
+      withFrozenConsumerDelivery(entry, consumerId, {
         deliveredAt: record.deliveredAt,
         orderingDomain: record.orderingDomain,
         orderingScopeId: record.orderingScopeId,

@@ -51,7 +51,7 @@ test("invalid command rejection exposes its protocol classification and validati
 });
 
 test("Session artifact and Turn commit metadata have one canonical protocol shape", () => {
-  assert.equal(SESSION_ARTIFACT_SCHEMA_VERSION, 22);
+  assert.equal(SESSION_ARTIFACT_SCHEMA_VERSION, 23);
   assert.deepEqual(
     normalizeTurnCommitMetadata({
       action: " SEND ",
@@ -426,7 +426,6 @@ test("command receipts own aggregate versions only for Session commands", () => 
     revision: 1,
     sequence: 1,
     eventId: "event-1",
-    envelope: { identity: { eventId: "event-1" } },
   };
   assert.deepEqual(normalizeCommandReceipt(sessionReceipt), sessionReceipt);
   assert.deepEqual(normalizeCommandReceipt(turnReceipt), turnReceipt);
@@ -439,7 +438,7 @@ test("command receipts own aggregate versions only for Session commands", () => 
     { ...sessionReceipt, revision: 0, sequence: 0 },
     { ...turnReceipt, aggregateVersion: 0 },
     { ...turnReceipt, result: {} },
-
+    { ...turnReceipt, envelope: { identity: { eventId: "event-1" } } },
     { ...turnReceipt, envelope: null },
     { ...turnReceipt, eventId: "" },
     { ...turnReceipt, envelope: { identity: { eventId: "event-2" } } },

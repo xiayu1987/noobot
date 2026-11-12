@@ -8,10 +8,7 @@ import test from "node:test";
 import os from "node:os";
 import path from "node:path";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import {
-  SESSION_ARTIFACT_SCHEMA_VERSION,
-  SESSION_ARTIFACT_SUMMARY_SNAPSHOT_SCHEMA_VERSION,
-} from "@noobot/session-protocol";
+import { SESSION_ARTIFACT_SUMMARY_SNAPSHOT_SCHEMA_VERSION } from "@noobot/session-protocol";
 import { isCanonicalActivityTimelineFact } from "@noobot/event-protocol/activity-timeline";
 import { upgradeSessionActivityTimeline } from "../src/workspace-lifecycle/session-activity-timeline-upgrade.js";
 import {
@@ -119,7 +116,7 @@ async function writeSession(base, { messages, evidence }) {
   }
   const manifest = {
     sessionId: SESSION_ID,
-    schemaVersion: SESSION_ARTIFACT_SCHEMA_VERSION,
+    schemaVersion: 22,
     turnOrder: [
       {
         turnId: "turn-000001",

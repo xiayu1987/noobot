@@ -12,6 +12,7 @@ import { createPluginArtifactEnvelope } from "@noobot/event-protocol";
 import { buildHarness } from "./session/scoped-session-repositories.fixtures.js";
 import {
   saveCanonicalSession,
+  downgradeSessionStorage,
   v9Options,
   SESSION_ID,
 } from "./helpers/session-identity-upgrade.fixtures.js";
@@ -60,7 +61,9 @@ test("session creation initializes events and runtime reads/writes reject corrup
       INVALID,
     );
     assert.equal(await readFile(file, "utf8"), bytes);
-    await writeFile(file, JSON.stringify(invalidSession), "utf8");
+    const invalidManifest = JSON.parse(bytes);
+    delete invalidManifest.artifactEventJournal;
+    await writeFile(file, JSON.stringify(invalidManifest), "utf8");
     await assert.rejects(readSessionArtifact({ storageService, sessionDir }), INVALID);
   }
 });
@@ -71,8 +74,7 @@ test("v28 migrates schema19 absence, preserves artifact facts and converges on r
   t.after(() => harness.cleanup());
   const sessionDir = await saveCanonicalSession(sessionRepo);
   const file = path.join(sessionDir, "session.json");
-  const manifest = JSON.parse(await readFile(file, "utf8"));
-  manifest.schemaVersion = 19;
+  const manifest = await downgradeSessionStorage(sessionDir, 19);
   delete manifest.sessionArtifactEvents;
   await writeFile(file, JSON.stringify(manifest), "utf8");
   const first = await upgradeSessionMessageIdentity(v9Options(root));
@@ -117,8 +119,7 @@ test("v28 quarantines corrupt schema19 facts without rewriting the original mani
   t.after(() => harness.cleanup());
   const sessionDir = await saveCanonicalSession(sessionRepo);
   const file = path.join(sessionDir, "session.json");
-  const manifest = JSON.parse(await readFile(file, "utf8"));
-  manifest.schemaVersion = 19;
+  const manifest = await downgradeSessionStorage(sessionDir, 19);
   manifest.sessionArtifactEvents = [null];
   const bytes = JSON.stringify(manifest);
   await writeFile(file, bytes, "utf8");

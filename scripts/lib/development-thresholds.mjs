@@ -5,6 +5,16 @@
  */
 
 export const DEVELOPMENT_THRESHOLDS = Object.freeze({
+  performance: Object.freeze({
+    rounds: 6,
+    growthWindowRounds: 2,
+    relativeTolerance: 0.3,
+    absoluteToleranceMs: 100,
+    coldTurnMaxMs: 600000,
+    warmTurnMaxMs: 600000,
+    testTimeoutMs: 4200000,
+    roundGrowthTolerance: 0.3,
+  }),
   time: Object.freeze({
     animationCaptureStepTimeoutMs: 30000,
     animationCaptureRunTimeoutMs: 180000,

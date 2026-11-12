@@ -81,8 +81,9 @@ export class SessionPathResolver {
         error.code = SESSION_ERROR_CODE.SESSION_TREE_NODE_CONFLICT;
         throw error;
       }
-      tree.nodes[node.sessionId] = node;
-      await this.treeRepository.saveTree(userId, tree);
+      await this.treeRepository.saveTree(userId, {
+        nodes: { ...tree.nodes, [node.sessionId]: node },
+      });
     });
   }
 

@@ -67,10 +67,6 @@ export default {
       name: "Runtime events cleanup interval",
       description: "Execution interval for runtime events cleanup interval.",
     },
-    batchFlushMs: {
-      name: "Runtime events batch flush",
-      description: "Duration used by runtime events batch flush.",
-    },
   },
   connectorInstances: {
     postgresIdleTimeoutMs: {

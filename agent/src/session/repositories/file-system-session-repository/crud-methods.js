@@ -168,11 +168,10 @@ class SessionCrudMethods {
           if (actualVersion !== expectedAggregateVersion)
             throw createAggregateVersionConflictError({ currentVersion: actualVersion });
         }
-        const payload = this._buildSavePayload(session);
-        const { listFacts } = await writeSessionArtifact({
+        const { listFacts, session: payload } = await writeSessionArtifact({
           storageService: this.storageService,
           sessionDir: scope.sessionDir,
-          sessionPayload: payload,
+          sessionPayload: this._stampSavePayload(session),
           atomic: true,
           predecessor: SESSION_ARTIFACT_PREDECESSOR.CANONICAL,
         });
@@ -187,11 +186,10 @@ class SessionCrudMethods {
       persistenceContext,
       placement: false,
       write: async ({ scope }) => {
-        const payload = this._buildSavePayload(session);
-        const { listFacts } = await writeSessionTurnArtifacts({
+        const { listFacts, session: payload } = await writeSessionTurnArtifacts({
           storageService: this.storageService,
           sessionDir: scope.sessionDir,
-          sessionPayload: payload,
+          sessionPayload: this._stampSavePayload(session),
           turnScopeIds,
           atomic: true,
         });
@@ -228,8 +226,8 @@ class SessionCrudMethods {
     return this.withSessionMutation(userId, sessionId, operation, { persistenceContext });
   }
 
-  _buildSavePayload(session) {
-    return normalizeSessionEntity({ ...session, updatedAt: this.now() });
+  _stampSavePayload(session) {
+    return { ...session, updatedAt: this.now() };
   }
 
   async delete(userId, sessionId, { persistenceContext } = {}) {

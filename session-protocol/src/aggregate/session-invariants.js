@@ -5,7 +5,7 @@
  */
 import { isPlainObject, text as clean } from "@noobot/shared/value";
 import { isSettledTurn } from "../lifecycle/turn-state.js";
-import { normalizeCommandReceipt } from "../command/command-receipt.js";
+import { isCanonicalCommandReceipt } from "../command/command-receipt.js";
 import { validateTurnCommitMetadata } from "./turn-commit-metadata.js";
 import { validateCanonicalAssistantPresentation } from "../turn-presentation.js";
 import { isSessionCaller } from "@noobot/shared/session-caller";
@@ -105,7 +105,7 @@ export function assertTurnLifecycleRecordIntegrity(lifecycle) {
   }
   const commandIds = new Set();
   for (const receipt of lifecycle.commandReceipts) {
-    if (!normalizeCommandReceipt(receipt)) errors.push("invalid_command_receipt");
+    if (!isCanonicalCommandReceipt(receipt)) errors.push("invalid_command_receipt");
     if (commandIds.has(receipt?.commandId)) errors.push("duplicate_command_receipt");
     commandIds.add(receipt?.commandId);
   }
@@ -184,13 +184,12 @@ export function validateSessionAggregateInvariants(session) {
     errors.push("replaced_turn_materialized");
   const commandIds = new Set();
   for (const receipt of lifecycle.commandReceipts) {
-    const normalized = normalizeCommandReceipt(receipt);
-    if (!normalized) {
+    if (!isCanonicalCommandReceipt(receipt)) {
       errors.push("invalid_command_receipt");
       continue;
     }
-    if (commandIds.has(normalized.commandId)) errors.push("duplicate_command_receipt");
-    commandIds.add(normalized.commandId);
+    if (commandIds.has(receipt.commandId)) errors.push("duplicate_command_receipt");
+    commandIds.add(receipt.commandId);
   }
   if (Object.hasOwn(session, "turnStatuses")) errors.push("duplicate_terminal_fact");
   if (Object.hasOwn(session, "mutationReceipts")) errors.push("duplicate_command_receipts");

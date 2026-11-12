@@ -30,6 +30,7 @@ import {
   assertAuthorityOutboxJournalRecord,
   AUTHORITY_OUTBOX_JOURNAL_OP,
   migrateLegacyAuthorityEventOutbox,
+  migrateAuthorityOutboxJournalRecords,
   migrateLegacyUnownedAttemptRecords,
 } from "@noobot/event-protocol/outbox";
 import {
@@ -62,6 +63,7 @@ import { PERSISTED_JSON_READ_ERROR_CODE } from "../shared/storage/json-file-read
 import { ignoreSessionProgress } from "./session-directory-walk.js";
 import { upgradeSessionDirectories } from "./session-upgrade-driver.js";
 import { migrateSessionCheckpointIdentity } from "./session-checkpoint-identity-upgrade.js";
+import { migrateSessionStorageJournals } from "./session-storage-journal-upgrade.js";
 
 const UPGRADE_INVALID_CODE = "WORKSPACE_SESSION_MESSAGE_IDENTITY_UPGRADE_INVALID";
 const QUARANTINE_KIND = WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MESSAGE_IDENTITY;
@@ -119,7 +121,7 @@ function requireUpgradeOutboxRecord(record, index) {
 }
 
 function migrateOutboxRecord(record, index) {
-  if (!isPlainObject(record) || record.op !== AUTHORITY_OUTBOX_JOURNAL_OP.COMMIT) {
+  if (!isPlainObject(record) || !Object.hasOwn(record, "envelope")) {
     return { record: requireUpgradeOutboxRecord(record, index), changed: false };
   }
   const migrated = migrateSessionDocumentIdentity(record, MESSAGE_IDENTITY_STORE.OUTBOX);
@@ -130,7 +132,10 @@ function migrateOutboxRecord(record, index) {
   if (migrated.document.envelope.identity.eventId !== record.eventId) {
     throw upgradeError("outbox_event_id_mismatch", { index });
   }
-  requireUpgradeOutboxRecord(migrated.document, index);
+  requireUpgradeOutboxRecord(
+    { ...migrated.document, op: AUTHORITY_OUTBOX_JOURNAL_OP.PREPARE },
+    index,
+  );
   return { record: migrated.document, changed: migrated.changed };
 }
 
@@ -147,7 +152,7 @@ function legacyOutboxEventIds(records) {
   );
 }
 
-async function migrateOutboxJournal(stagingDir, legacyOutbox) {
+async function migrateOutboxJournal(stagingDir, legacyOutbox, preparedCommandEvents) {
   let records = await readAuthorityOutboxRecords(stagingDir);
   let changed = false;
   if (legacyOutbox.length) {
@@ -161,8 +166,8 @@ async function migrateOutboxJournal(stagingDir, legacyOutbox) {
   );
   changed ||= retained.length !== records.length;
   const attempts = migrateLegacyUnownedAttemptRecords(retained);
-  const kept = attempts.records;
-  changed ||= attempts.changed;
+  const kept = [...preparedCommandEvents, ...attempts.records];
+  changed ||= attempts.changed || preparedCommandEvents.length > 0;
   let attachments;
   try {
     attachments = migrateAttachmentLifecycleOutboxRecords(kept);
@@ -171,14 +176,18 @@ async function migrateOutboxJournal(stagingDir, legacyOutbox) {
     throw upgradeError(error.code, {}, error);
   }
   const migrated = attachments.records.map(migrateOutboxRecord);
-  changed ||= attachments.changed || migrated.some((item) => item.changed);
+  const journal = migrateAuthorityOutboxJournalRecords(migrated.map((item) => item.record));
+  const journalChanges = [
+    changed,
+    attachments.changed,
+    journal.changed,
+    ...migrated.map((item) => item.changed),
+  ];
+  changed = journalChanges.some(Boolean);
   if (changed) {
-    await replaceAuthorityOutboxRecords(
-      stagingDir,
-      migrated.map((item) => item.record),
-    );
+    await replaceAuthorityOutboxRecords(stagingDir, journal.records);
   }
-  return { records: migrated.length, changed, droppedEventIds: [...droppedEventIds] };
+  return { records: journal.records.length, changed, droppedEventIds: [...droppedEventIds] };
 }
 
 async function repairStagedSession({ storageService, stagingDir, expectScope }) {
@@ -196,13 +205,29 @@ async function repairStagedSession({ storageService, stagingDir, expectScope }) 
   }
   const scope = await expectScope(source);
   const migration = normalizeSessionDocumentForCurrentProtocol(source);
-  const outbox = await migrateOutboxJournal(stagingDir, migration.legacyAuthorityEventOutbox);
+  const outbox = await migrateOutboxJournal(
+    stagingDir,
+    migration.legacyAuthorityEventOutbox,
+    migration.preparedCommandEvents,
+  );
+  const preservesCheckpointChain =
+    source.schemaVersion >= 19 && source.schemaVersion < SESSION_ARTIFACT_SCHEMA_VERSION;
+  if (preservesCheckpointChain) {
+    await migrateSessionStorageJournals({
+      storageService,
+      sessionDir: stagingDir,
+      source,
+      document: migration.document,
+    });
+  }
   await writeSessionArtifact({
     storageService,
     sessionDir: stagingDir,
     sessionPayload: migration.document,
     atomic: true,
-    predecessor: SESSION_ARTIFACT_PREDECESSOR.LEGACY_REWRITE,
+    predecessor: preservesCheckpointChain
+      ? SESSION_ARTIFACT_PREDECESSOR.CANONICAL
+      : SESSION_ARTIFACT_PREDECESSOR.LEGACY_REWRITE,
   });
   await resegmentMigratedCheckpointBaselines({ sessionDir: stagingDir });
   return {

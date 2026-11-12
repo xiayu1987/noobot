@@ -63,6 +63,7 @@ export function commitTurnLifecycle({
   event,
   parentSessionId,
   isCommittedEventId,
+  readPreparedEvent,
   materializeTerminal,
   createEventId,
   now,
@@ -113,7 +114,7 @@ export function commitTurnLifecycle({
     const { receipt, ...rejection } = transition;
     return {
       ...rejection,
-      ...(transition.deduplicated ? { envelope: receipt.envelope } : {}),
+      ...(transition.deduplicated ? { envelope: readPreparedEvent(receipt.eventId).envelope } : {}),
       committedEvent: null,
     };
   }
@@ -163,7 +164,6 @@ export function commitTurnLifecycle({
   applied.lifecycle.commandReceipts = appendCommandReceipt(applied.lifecycle.commandReceipts, {
     ...receiptDraft,
     eventId,
-    envelope,
   });
   return {
     ...applied,

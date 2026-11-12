@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "scenario": "all-tools-v4",
+  "calibration": {
+    "date": "2026-11-11T15:46:25.720Z",
+    "runtime": "linux x64, Node 26.9.0, Chromium in e2e Docker",
+    "sourceReport": "test-results/frontend-performance-final-report.json",
+    "method": "Measured warm median of turns 2-6; 24 tools x 6 calls and 6 phase summaries per turn",
+    "coldTotalMs": 47552.315739,
+    "warmTotalMs": [
+      48980.972154999996, 51322.09210100002, 53072.355293, 56083.801855, 57702.97051700001
+    ]
+  },
+  "metrics": {
+    "acceptedMs": 140.8042790000036,
+    "processingMs": 291.75117400000454,
+    "firstToolMs": 407.52579900001,
+    "totalMs": 53072.355293,
+    "uiReadyMs": 206.9661699999997,
+    "tool.write_file": 131.3731723333282,
+    "tool.read_file": 103.33566599999904,
+    "tool.search": 76.6784241666707,
+    "tool.patch_file": 69.73775866666499,
+    "tool.execute_script": 72.90407366666477,
+    "tool.execute_native_script": 122.88651766666833,
+    "tool.list_skills": 61.80512566667554,
+    "tool.help": 62.3519456666545,
+    "tool.user_interaction": 500.70288799999736,
+    "tool.task_check": 65.05080333334142,
+    "tool.call_mcp_task": 507.8465828333283,
+    "tool.call_service": 71.9206191666696,
+    "tool.switch_model": 100.48353083333252,
+    "tool.do_search_web": 63.57986433333766,
+    "tool.multimodal_generate": 105.21846316666536,
+    "tool.multimodal_parse": 106.95575166666337,
+    "tool.access_connector": 61.457420666668135,
+    "tool.task_summary": 96.29467383333152,
+    "tool.character_animation_generate": 130.21863583332743,
+    "tool.character_animation_get": 105.2156208333278,
+    "tool.character_animation_update": 163.75136783333437,
+    "tool.character_camera_preset_list": 96.96784849999919,
+    "tool.character_animation_camera_apply": 178.36117866666368,
+    "tool.character_animation_script": 172.24093383333334,
+    "checkpointMs": 29.04929535565786
+  }
+}

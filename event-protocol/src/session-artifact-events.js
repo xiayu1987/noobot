@@ -7,9 +7,13 @@ import {
   collectSessionArtifactEventIdentityErrors,
   sessionArtifactEventsError,
 } from "@noobot/session-protocol";
+import { isDeepFrozen } from "@noobot/shared/deep-freeze";
 import { validateProtocolEvent } from "./event-registry.js";
 
+const verifiedImmutableEvents = new WeakMap();
+
 export function assertSessionArtifactEvents(events, sessionId) {
+  if (isDeepFrozen(events) && verifiedImmutableEvents.get(events) === sessionId) return events;
   const errors = collectSessionArtifactEventIdentityErrors(events, sessionId);
   if (errors.length) throw sessionArtifactEventsError(errors);
   for (const [index, event] of events.entries()) {
@@ -21,5 +25,6 @@ export function assertSessionArtifactEvents(events, sessionId) {
     }
   }
   if (errors.length) throw sessionArtifactEventsError(errors);
+  if (isDeepFrozen(events)) verifiedImmutableEvents.set(events, sessionId);
   return events;
 }

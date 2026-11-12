@@ -14,9 +14,10 @@ import {
   isImageMime,
   rawFileKey,
 } from "./attachmentFormat.js";
-import { isObjectLike } from "@noobot/shared/value";
+import { isObjectLike, requireFunctionDependencies } from "@noobot/shared/value";
 
 export function useMonotonicEditAttachments({ getMessageItem, operating }) {
+  requireFunctionDependencies("useMonotonicEditAttachments", { getMessageItem });
   const editAttachments = ref([]);
   const removedHistoryAttachmentKeys = ref([]);
 
@@ -41,7 +42,10 @@ export function useMonotonicEditAttachments({ getMessageItem, operating }) {
   }
 
   function initEditAttachments() {
-    const messageItem = getMessageItem?.() || {};
+    const messageItem = getMessageItem();
+    if (!isObjectLike(messageItem)) {
+      throw new TypeError("useMonotonicEditAttachments requires a message item");
+    }
     const source = Array.isArray(messageItem?.attachments) ? messageItem.attachments : [];
     const seen = new Set();
     const next = [];

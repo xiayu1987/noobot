@@ -4,22 +4,22 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  acknowledgeAuthorityEventDelivery,
   compactAuthorityEventOutbox,
   createEventEnvelope,
   createEventId,
   getEventFamily,
-  listPendingAuthorityEvents,
   pluginArtifactKey,
   projectPluginArtifacts,
-  recordAuthorityEventDeliveryAttempt,
   validateProtocolEvent,
 } from "@noobot/event-protocol";
 import {
   AUTHORITY_OUTBOX_JOURNAL_OP,
+  applyAuthorityOutboxJournalRecords,
   assertAuthorityOutboxRequest,
   advanceAuthorityOutboxCheckpoint,
   allocateAuthorityEventSequence,
+  forkAuthorityOutboxProjection,
+  listPendingAuthorityOutboxProjection,
 } from "@noobot/event-protocol/outbox";
 import {
   createPluginArtifactCommitRejection,
@@ -29,10 +29,11 @@ import {
 import {
   appendAuthorityOutboxRecords,
   authorityOutboxCommitRecord,
+  authorityOutboxPrepareRecord,
   readAuthorityOutbox,
   readAuthorityOutboxCheckpoint,
-  authorityOutboxRecordsFromOutbox,
-  replaceAuthorityOutboxRecords,
+  readAuthorityOutboxProjection,
+  compactAuthorityOutboxRecords,
   withAuthorityOutboxMutation,
   writeAuthorityOutboxCheckpoint,
 } from "../../authority-outbox-store/outbox-journal.js";
@@ -75,31 +76,30 @@ export async function commitAuthorityEvent({
   const mutation = this.sessionRepo.withSessionMutation(
     owner.userId,
     owner.sessionId,
-    async (scope) => {
-      const isSessionArtifactEvent = descriptor.sessionArtifact === true;
-      const session = isSessionArtifactEvent
-        ? await this.sessionRepo.requireById(owner.userId, owner.sessionId, { persistenceContext })
-        : await this.sessionRepo.readSessionEventManifest(scope, owner.sessionId);
-      const eventPayload = { ...payload };
-      const isArtifact = descriptor.sessionArtifact === true && family === PLUGIN_ARTIFACT_FAMILY;
-      if (isArtifact) {
-        const artifactDecision = decidePluginArtifactRevision(session, payload);
-        if (!artifactDecision.allowed) return createPluginArtifactCommitRejection(artifactDecision);
-        eventPayload.revision = artifactDecision.revision;
-      }
-      const concurrency = isSessionArtifactEvent
-        ? decideAggregateConcurrency({
-            expectedAggregateVersion: null,
-            aggregateVersion: session.aggregateVersion,
-          })
-        : null;
-      if (concurrency && !concurrency.allowed) {
-        throw new TypeError(`authority event commit rejected: ${concurrency.reason}`);
-      }
-      const baseAggregateVersion = session.aggregateVersion;
-      const occurredAt = this.now();
-      const outboxSessionDir = scope.sessionDir;
-      const envelope = await withAuthorityOutboxMutation(outboxSessionDir, async () => {
+    (scope) =>
+      withAuthorityOutboxMutation(scope.sessionDir, async () => {
+        const isSessionArtifactEvent = descriptor.sessionArtifact === true;
+        const session = await this.sessionRepo.readSessionEventManifest(scope, owner.sessionId);
+        const eventPayload = { ...payload };
+        const isArtifact = descriptor.sessionArtifact === true && family === PLUGIN_ARTIFACT_FAMILY;
+        if (isArtifact) {
+          const artifactDecision = decidePluginArtifactRevision(session, payload);
+          if (!artifactDecision.allowed)
+            return createPluginArtifactCommitRejection(artifactDecision);
+          eventPayload.revision = artifactDecision.revision;
+        }
+        const concurrency = isSessionArtifactEvent
+          ? decideAggregateConcurrency({
+              expectedAggregateVersion: null,
+              aggregateVersion: session.aggregateVersion,
+            })
+          : null;
+        if (concurrency && !concurrency.allowed) {
+          throw new TypeError(`authority event commit rejected: ${concurrency.reason}`);
+        }
+        const baseAggregateVersion = session.aggregateVersion;
+        const occurredAt = this.now();
+        const outboxSessionDir = scope.sessionDir;
         const persistedOutbox = await readAuthorityOutbox(outboxSessionDir);
         const outboxCheckpoint = await readAuthorityOutboxCheckpoint(outboxSessionDir);
         const sequence = allocateAuthorityEventSequence({
@@ -111,7 +111,7 @@ export async function commitAuthorityEvent({
           orderingDomain,
           orderingScopeId,
         });
-        const committedEnvelope = createEventEnvelope({
+        const envelope = createEventEnvelope({
           family,
           schemaVersion: descriptor.schemaVersion,
           identity: {
@@ -132,37 +132,41 @@ export async function commitAuthorityEvent({
           occurredAt,
           payload: Object.freeze({ ...eventPayload }),
         });
-        const validation = validateProtocolEvent(committedEnvelope);
+        const validation = validateProtocolEvent(envelope);
         if (!validation.valid) {
           throw new TypeError(`invalid committed authority event: ${validation.errors.join(",")}`);
         }
         await appendAuthorityOutboxRecords(outboxSessionDir, [
-          authorityOutboxCommitRecord({
-            eventId: committedEnvelope.identity.eventId,
-            envelope: committedEnvelope,
+          authorityOutboxPrepareRecord({
+            eventId: envelope.identity.eventId,
+            envelope,
             committedAt: occurredAt,
           }),
         ]);
-        return committedEnvelope;
-      });
-      if (isSessionArtifactEvent) {
-        session.aggregateVersion = concurrency.nextAggregateVersion;
-        session.sessionArtifactEvents = [...session.sessionArtifactEvents, envelope];
-        session.updatedAt = occurredAt;
-      }
-      if (!isSessionArtifactEvent) {
-        return { committed: true, envelope };
-      }
-      await this.sessionRepo.save(owner.userId, session, {
-        expectedAggregateVersion: baseAggregateVersion,
-        persistenceContext,
-      });
-      return {
-        committed: true,
-        envelope,
-        aggregateVersion: concurrency.nextAggregateVersion,
-      };
-    },
+        if (isSessionArtifactEvent) {
+          session.aggregateVersion = concurrency.nextAggregateVersion;
+          session.sessionArtifactEvents = [...session.sessionArtifactEvents, envelope];
+          session.updatedAt = occurredAt;
+        }
+        if (!isSessionArtifactEvent) {
+          await appendAuthorityOutboxRecords(outboxSessionDir, [
+            authorityOutboxCommitRecord({ eventId: envelope.identity.eventId }),
+          ]);
+          return { committed: true, envelope };
+        }
+        await this.sessionRepo.saveSessionArtifactEvents(owner.userId, session, {
+          expectedAggregateVersion: baseAggregateVersion,
+          persistenceContext,
+        });
+        await appendAuthorityOutboxRecords(outboxSessionDir, [
+          authorityOutboxCommitRecord({ eventId: envelope.identity.eventId }),
+        ]);
+        return {
+          committed: true,
+          envelope,
+          aggregateVersion: concurrency.nextAggregateVersion,
+        };
+      }),
     { persistenceContext },
   );
   return mutation;
@@ -175,10 +179,11 @@ export async function getPendingAuthorityEvents(request) {
   );
   const sessionDir = await locateOutboxSessionDir(this, userId, sessionId, persistenceContext);
   if (!sessionDir) return { found: false, reason: SESSION_NOT_FOUND_REASON, events: [] };
-  const outbox = await readAuthorityOutbox(sessionDir);
   return {
     found: true,
-    events: listPendingAuthorityEvents(outbox, { consumerId }),
+    events: listPendingAuthorityOutboxProjection(await readAuthorityOutboxProjection(sessionDir), {
+      consumerId,
+    }),
   };
 }
 
@@ -194,26 +199,24 @@ export async function recordAuthorityEventAttempts(request) {
   if (!sessionDir) return { recorded: false, reason: SESSION_NOT_FOUND_REASON, events: [] };
   return withAuthorityOutboxMutation(sessionDir, async () => {
     const attemptedAt = this.now();
-    let outbox = await readAuthorityOutbox(sessionDir);
-    const records = [];
-    for (const eventId of requested) {
-      const result = recordAuthorityEventDeliveryAttempt(outbox, {
-        eventId,
-        consumerId,
-        attemptedAt,
-      });
-      if (!result.found) return { recorded: false, reason: "event_not_found", events: [] };
-      outbox = result.outbox;
-      records.push({
+    const committed = await readAuthorityOutboxProjection(sessionDir);
+    if (requested.some((eventId) => !committed.entries.has(eventId))) {
+      return { recorded: false, reason: "event_not_found", events: [] };
+    }
+    await appendAuthorityOutboxRecords(
+      sessionDir,
+      requested.map((eventId) => ({
         op: AUTHORITY_OUTBOX_JOURNAL_OP.ATTEMPT,
         eventId,
         consumerId,
         attemptedAt,
-      });
-    }
-    await appendAuthorityOutboxRecords(sessionDir, records);
+      })),
+    );
     const attempted = new Set(requested);
-    return { recorded: true, events: outbox.filter((item) => attempted.has(item.eventId)) };
+    return {
+      recorded: true,
+      events: (await readAuthorityOutbox(sessionDir)).filter((item) => attempted.has(item.eventId)),
+    };
   });
 }
 
@@ -231,30 +234,16 @@ export async function acknowledgeAuthorityEvents(request) {
   }
   return withAuthorityOutboxMutation(sessionDir, async () => {
     const deliveredAt = this.now();
-    let outbox = await readAuthorityOutbox(sessionDir);
+    const working = forkAuthorityOutboxProjection(await readAuthorityOutboxProjection(sessionDir));
     const records = [];
     let delivered = 0;
     let deduplicated = 0;
-    for (const entry of requested) {
-      const { eventId, orderingDomain, orderingScopeId, sequence } = entry;
-      const result = acknowledgeAuthorityEventDelivery(outbox, {
-        eventId,
-        consumerId,
-        orderingDomain,
-        orderingScopeId,
-        sequence,
-        deliveredAt,
-      });
-      if (!result.found) {
+    for (const { eventId, orderingDomain, orderingScopeId, sequence } of requested) {
+      const before = working.entries.get(eventId);
+      if (!before) {
         return { acknowledged: false, reason: "event_not_found", delivered, deduplicated };
       }
-      delivered += 1;
-      if (!result.changed) {
-        deduplicated += 1;
-        continue;
-      }
-      outbox = result.outbox;
-      records.push({
+      const record = {
         op: AUTHORITY_OUTBOX_JOURNAL_OP.ACK,
         eventId,
         consumerId,
@@ -262,7 +251,11 @@ export async function acknowledgeAuthorityEvents(request) {
         orderingScopeId,
         sequence,
         deliveredAt,
-      });
+      };
+      applyAuthorityOutboxJournalRecords(working, [record]);
+      delivered += 1;
+      if (working.entries.get(eventId) === before) deduplicated += 1;
+      else records.push(record);
     }
     if (records.length) await appendAuthorityOutboxRecords(sessionDir, records);
     return { acknowledged: true, delivered, deduplicated };
@@ -286,10 +279,7 @@ export async function compactAuthorityEvents(request) {
         outbox.map((item) => item.envelope),
       ),
     );
-    await replaceAuthorityOutboxRecords(
-      sessionDir,
-      authorityOutboxRecordsFromOutbox(result.outbox),
-    );
+    await compactAuthorityOutboxRecords(sessionDir, result.outbox);
     return result;
   });
 }

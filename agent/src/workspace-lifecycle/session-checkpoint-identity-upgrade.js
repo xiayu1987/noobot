@@ -12,6 +12,7 @@ import {
   SESSION_ARTIFACT_CHECKPOINT_IDENTITY_SOURCE_SCHEMA_VERSION,
   SESSION_ARTIFACT_READ_REJECTION_CODES,
   assertSessionManifestLayout,
+  assertLegacyCheckpointManifestLayout,
 } from "@noobot/session-protocol";
 import {
   assertStoredCheckpointReceipts,
@@ -42,7 +43,9 @@ async function planUpgrade({ storageService, sessionDir }) {
     session.schemaVersion === SESSION_ARTIFACT_CHECKPOINT_IDENTITY_SOURCE_SCHEMA_VERSION ||
     session.schemaVersion === SESSION_ARTIFACT_SCHEMA_VERSION
   ) {
-    assertSessionManifestLayout(session);
+    if (session.schemaVersion === SESSION_ARTIFACT_SCHEMA_VERSION)
+      assertSessionManifestLayout(session);
+    else assertLegacyCheckpointManifestLayout(session);
     assertStoredCheckpointReceipts(session);
     await readCheckpointReceiptProjection({ storageService, sessionDir, session });
     return null;
@@ -67,7 +70,7 @@ async function planUpgrade({ storageService, sessionDir }) {
     ...turn,
     summarySnapshots: turn.summarySnapshots.map(({ messageUids: _messageUids, ...index }) => index),
   }));
-  return assertSessionManifestLayout({
+  return assertLegacyCheckpointManifestLayout({
     ...stored,
     schemaVersion: SESSION_ARTIFACT_CHECKPOINT_IDENTITY_SOURCE_SCHEMA_VERSION,
     turnOrder,

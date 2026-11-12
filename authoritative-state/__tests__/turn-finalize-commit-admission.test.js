@@ -137,14 +137,19 @@ test("non-retryable failure does not write completionCommitId", () => {
 });
 
 test("finalize request replay with a different completionCommitId is an idempotency conflict", () => {
-  const commit = (lifecycle, extra) =>
-    commitTurnLifecycle({
+  const prepared = new Map();
+  const commit = (lifecycle, extra) => {
+    const result = commitTurnLifecycle({
       parentSessionId: "",
       lifecycle,
       event: { turnScopeId, userId: "user-1", sessionId: "session-1", ...finalizeRequest(extra) },
       createEventId: () => "finalize-event-1",
+      readPreparedEvent: (eventId) => prepared.get(eventId),
       now: () => "2026-07-18T00:00:01.000Z",
     });
+    if (result.committedEvent) prepared.set(result.committedEvent.eventId, result.committedEvent);
+    return result;
+  };
   const requested = commit(processing(), { completionCommitId: "commit-1" });
   assert.equal(requested.applied, true, requested.reason);
   const replay = commit(requested.lifecycle, { completionCommitId: "commit-1" });

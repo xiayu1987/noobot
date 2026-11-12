@@ -12,23 +12,26 @@ export function normalizeScopedArtifactReference(reference = "") {
   return String(reference || "").replaceAll("\\", "/");
 }
 
+function resolveValidScopedArtifactPath({ baseDir, reference, scopeDir, extensions }) {
+  const normalizedReference = normalizeScopedArtifactReference(reference);
+  if (!normalizedReference) return null;
+  if (filePath.isAbsolute(normalizedReference)) return null;
+  if (normalizedReference.includes("\0")) return null;
+  const normalized = filePath.normalize(normalizedReference);
+  if (normalized === "." || normalized.startsWith(`..${filePath.sep}`)) return null;
+  const resolved = filePath.resolve(baseDir, normalized);
+  if (!isPathWithinRoot(filePath.resolve(baseDir, scopeDir), resolved)) return null;
+  if (extensions.length && !extensions.includes(filePath.extname(resolved))) return null;
+  return resolved;
+}
+
 export function isScopedArtifactReferenceValid({
   baseDir = "",
   reference = "",
   scopeDir = "",
   extensions = [],
 } = {}) {
-  const normalizedReference = normalizeScopedArtifactReference(reference);
-  if (!normalizedReference) return false;
-  if (filePath.isAbsolute(normalizedReference)) return false;
-  if (normalizedReference.includes("\0")) return false;
-  const normalized = filePath.normalize(normalizedReference);
-  if (normalized === "." || normalized.startsWith(`..${filePath.sep}`)) return false;
-  const scopeRoot = filePath.resolve(baseDir, scopeDir);
-  const resolved = filePath.resolve(baseDir, normalized);
-  if (!isPathWithinRoot(scopeRoot, resolved)) return false;
-  if (extensions.length && !extensions.includes(filePath.extname(resolved))) return false;
-  return true;
+  return resolveValidScopedArtifactPath({ baseDir, reference, scopeDir, extensions }) !== null;
 }
 
 export function resolveScopedArtifactPath({
@@ -39,11 +42,13 @@ export function resolveScopedArtifactPath({
   errorCode = SCOPED_ARTIFACT_PATH_ERROR,
   errorLabel = "scoped artifact reference",
 } = {}) {
-  const normalizedReference = normalizeScopedArtifactReference(reference);
-  if (!isScopedArtifactReferenceValid({ baseDir, reference, scopeDir, extensions })) {
-    const error = new Error(`invalid ${errorLabel}: ${normalizedReference}`);
+  const resolved = resolveValidScopedArtifactPath({ baseDir, reference, scopeDir, extensions });
+  if (resolved === null) {
+    const error = new Error(
+      `invalid ${errorLabel}: ${normalizeScopedArtifactReference(reference)}`,
+    );
     error.code = errorCode;
     throw error;
   }
-  return filePath.resolve(baseDir, filePath.normalize(normalizedReference));
+  return resolved;
 }

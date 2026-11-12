@@ -16,6 +16,41 @@ import {
 } from "../../workspace-protocol/src/layout.js";
 import { text } from "@noobot/shared/value";
 import { mcpTestServers } from "../mcp-test-service/config.mjs";
+import { MOCK_MODEL, mockProvider } from "../mock-model-service/scenario.mjs";
+import { BUILTIN_TOOL_IDS } from "../../agent/src/tools/constants/index.js";
+
+function configurePerformance(config) {
+  if (process.env.NOOBOT_E2E_PERF !== "1") return;
+  config.providers = {
+    ...config.providers,
+    [MOCK_MODEL.alias]: mockProvider(),
+    [`${MOCK_MODEL.alias}_alternate`]: mockProvider(),
+  };
+  config.services = {
+    ...config.services,
+    e2e_perf: {
+      enabled: true,
+      handler: "e2e-perf-handler",
+      endpoints: { echo: { url: `http://${MOCK_MODEL.hostname}:${MOCK_MODEL.port}/health` } },
+    },
+  };
+  config.tools = {
+    ...config.tools,
+    do_search_web: {
+      enabled: true,
+      mode: "search_engine",
+      search_engine: {
+        endpoints: {
+          search: {
+            url: `http://${MOCK_MODEL.hostname}:${MOCK_MODEL.port}/search`,
+            query_string_format: "q=",
+          },
+        },
+      },
+    },
+    bindings: Object.fromEntries(BUILTIN_TOOL_IDS.map((name) => [name, { bindingName: name }])),
+  };
+}
 
 function requireAbsoluteDir(value, label) {
   const dir = text(value);
@@ -59,6 +94,16 @@ async function readWorkspaceUserIds(sourceRoot, globalConfigPath) {
   return [...new Set(userIds)];
 }
 
+async function copyUserConfiguration(source, target, userId) {
+  const copied = [];
+  await mkdir(path.join(target, userId), { recursive: true });
+  for (const entry of WORKSPACE_USER_CONFIGURATION_ENTRIES) {
+    const relative = path.join(userId, entry);
+    if (await copyEntry(source, target, relative)) copied.push(relative);
+  }
+  return copied;
+}
+
 async function prepareE2eWorkspace({ sourceRoot, targetRoot, globalConfigPath }) {
   const source = requireAbsoluteDir(sourceRoot, "source workspace");
   const target = requireAbsoluteDir(targetRoot, "e2e workspace");
@@ -68,6 +113,7 @@ async function prepareE2eWorkspace({ sourceRoot, targetRoot, globalConfigPath })
   await mkdir(target, { recursive: true });
   const globalConfig = JSON.parse(await readFile(configPath, "utf8"));
   globalConfig.mcp_servers = mcpTestServers();
+  configurePerformance(globalConfig);
   await writeFile(path.join(target, "global.config.json"), JSON.stringify(globalConfig, null, 2), {
     mode: 0o600,
   });
@@ -76,11 +122,7 @@ async function prepareE2eWorkspace({ sourceRoot, targetRoot, globalConfigPath })
     if (await copyEntry(source, target, file)) copied.push(file);
   }
   for (const userId of userIds) {
-    await mkdir(path.join(target, userId), { recursive: true });
-    for (const entry of WORKSPACE_USER_CONFIGURATION_ENTRIES) {
-      const relative = path.join(userId, entry);
-      if (await copyEntry(source, target, relative)) copied.push(relative);
-    }
+    copied.push(...(await copyUserConfiguration(source, target, userId)));
     const userConfigRelative = path.join(userId, WORKSPACE_LAYOUT.CONFIG_FILE);
     if (!copied.includes(userConfigRelative)) {
       throw new Error(`e2e workspace user ${userId} requires ${userConfigRelative} in source`);
@@ -88,7 +130,25 @@ async function prepareE2eWorkspace({ sourceRoot, targetRoot, globalConfigPath })
     const userConfigPath = path.join(target, userConfigRelative);
     const userConfig = JSON.parse(await readFile(userConfigPath, "utf8"));
     userConfig.mcp_servers = mcpTestServers();
+    configurePerformance(userConfig);
     await writeFile(userConfigPath, JSON.stringify(userConfig, null, 2), { mode: 0o600 });
+    if (process.env.NOOBOT_E2E_PERF === "1") {
+      const inputPath = path.join(target, userId, "runtime/ops_workdir");
+      await mkdir(inputPath, { recursive: true });
+      await writeFile(
+        path.join(inputPath, "perf-input.png"),
+        Buffer.from(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aF9sAAAAASUVORK5CYII=",
+          "base64",
+        ),
+      );
+      const servicesPath = path.join(target, userId, "services");
+      await mkdir(servicesPath, { recursive: true });
+      await cp(
+        new URL("../mock-model-service/service-handler.mjs", import.meta.url),
+        path.join(servicesPath, "e2e-perf-handler.js"),
+      );
+    }
   }
   return { userIds, copied };
 }

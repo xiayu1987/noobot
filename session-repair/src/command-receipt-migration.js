@@ -5,10 +5,12 @@
  */
 import {
   SESSION_ARTIFACT_CANONICAL_COMMAND_RECEIPT_SCHEMA_VERSION,
+  SESSION_ARTIFACT_STORAGE_JOURNAL_SCHEMA_VERSION,
   SESSION_COMMAND,
   TURN_EVENT_VALUES,
 } from "@noobot/session-protocol";
 import { isLegacyEventEnvelope, validateEventEnvelope } from "@noobot/event-protocol/envelope";
+import { assertPreparedTurnReceipt } from "@noobot/event-protocol/turn-outbox";
 import { isPlainObject, text } from "@noobot/shared/value";
 import { SESSION_REPAIR_ERROR_CODE } from "./errors.js";
 
@@ -107,5 +109,40 @@ export function migrateCanonicalCommandReceipts(context) {
   if (changed) {
     context.changed = true;
     context.migrations.push(CANONICAL_COMMAND_RECEIPT_MIGRATION);
+  }
+}
+
+export function migrateCommandReceiptEvents(context) {
+  context.preparedCommandEvents = [];
+  if (context.sourceSchemaVersion >= SESSION_ARTIFACT_STORAGE_JOURNAL_SCHEMA_VERSION) return;
+  for (const receipt of context.lifecycle.commandReceipts) {
+    if (!TURN_EVENT_TYPES.has(receipt.type) || !Object.hasOwn(receipt, "envelope")) continue;
+    const validation = validateEventEnvelope(receipt.envelope);
+    if (!validation.valid) {
+      throw receiptMigrationError(
+        `envelope_invalid:${validation.errors.join(",")}`,
+        receipt.commandId,
+      );
+    }
+    const prepared = {
+      op: "prepare",
+      eventId: receipt.eventId,
+      committedAt: receipt.committedAt,
+      envelope: receipt.envelope,
+    };
+    try {
+      assertPreparedTurnReceipt(prepared, receipt);
+      if (prepared.envelope.identity.sessionId !== context.sessionId) {
+        throw new TypeError("receipt envelope belongs to another session");
+      }
+    } catch (error) {
+      throw receiptMigrationError(`envelope_identity_conflict:${error.message}`, receipt.commandId);
+    }
+    context.preparedCommandEvents.push(prepared);
+    delete receipt.envelope;
+  }
+  if (context.preparedCommandEvents.length) {
+    context.changed = true;
+    context.migrations.push("session-command-receipt-event-journal-v23");
   }
 }

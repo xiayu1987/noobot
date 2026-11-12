@@ -252,13 +252,19 @@ export function createAnimationTools({ commitArtifact, getArtifact, resolveSelec
     },
   );
   const getTool = structuredTool(
-    async ({ animationId }) =>
-      JSON.stringify(
-        await getArtifact({
-          artifactType: CHARACTER_ANIMATION_ARTIFACT_TYPE,
-          artifactId: animationId,
-        }),
-      ),
+    async ({ animationId }) => {
+      const result = await getArtifact({
+        artifactType: CHARACTER_ANIMATION_ARTIFACT_TYPE,
+        artifactId: animationId,
+      });
+      if (result.found) return JSON.stringify({ ...result, ok: true });
+      return JSON.stringify({
+        ...result,
+        ok: false,
+        code: "ANIMATION_NOT_FOUND",
+        error: `Animation not found: ${animationId}`,
+      });
+    },
     {
       name: CHARACTER_ANIMATION_GET_TOOL_ID,
       description: "Read the authoritative current animation by animationId before modifying it.",

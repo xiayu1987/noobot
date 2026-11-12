@@ -10,7 +10,6 @@ import path from "node:path";
 import { reportRuntimeEventFailure } from "../failure-report.js";
 
 const CLEANUP_INTERVAL_MS = TIME_THRESHOLDS.runtimeEvents.cleanupIntervalMs;
-const DEFAULT_BATCH_FLUSH_MS = TIME_THRESHOLDS.runtimeEvents.batchFlushMs;
 const DEFAULT_BATCH_MAX_RECORDS = QUANTITY_THRESHOLDS.runtimeEvents.batchMaxRecords;
 const MAX_CACHED_FILES = QUANTITY_THRESHOLDS.runtimeEvents.maxCachedFiles;
 const appendQueues = new Map();
@@ -181,7 +180,6 @@ function flushPendingBatch(file) {
   if (!batch || batch.flushing) return batch?.flushPromise || Promise.resolve();
   pendingBatches.delete(file);
   batch.flushing = true;
-  if (batch.timer) clearTimeout(batch.timer);
   batch.flushPromise = enqueueAppend(file, () => appendOptionGroups(file, batch.entries));
   return batch.flushPromise;
 }
@@ -267,14 +265,23 @@ async function cleanupArchives(file, options = {}) {
   return { deletedFiles };
 }
 
+function scheduleGroupCommitFlush(file, batch) {
+  const flush = () => {
+    if (pendingBatches.get(file) === batch) void flushPendingBatch(file);
+  };
+  const inFlight = appendQueues.get(file);
+  if (inFlight) void inFlight.then(flush, flush);
+  else setImmediate(flush);
+}
+
 export function appendJsonLine(file, record, options = {}) {
   const line = `${JSON.stringify(record)}\n`;
   return new Promise((resolve, reject) => {
     let batch = pendingBatches.get(file);
     if (!batch) {
-      batch = { entries: [], timer: null, flushing: false, flushPromise: null };
+      batch = { entries: [], flushing: false, flushPromise: null };
       pendingBatches.set(file, batch);
-      batch.timer = setTimeout(() => flushPendingBatch(file), DEFAULT_BATCH_FLUSH_MS);
+      scheduleGroupCommitFlush(file, batch);
     }
     batch.entries.push({ line, options, resolve, reject });
     if (batch.entries.length >= DEFAULT_BATCH_MAX_RECORDS) void flushPendingBatch(file);

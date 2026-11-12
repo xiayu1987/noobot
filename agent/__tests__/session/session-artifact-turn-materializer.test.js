@@ -9,6 +9,7 @@ import { readFile, rename, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { createSessionStorageMessageIndex } from "@noobot/session-protocol";
 
 import {
   buildSessionArtifactFileMap,
@@ -189,7 +190,7 @@ test("checkpoint chain is re-verified when a link changes on disk or in the mani
     const shortened = await materializer.materialize({
       storageService,
       sessionDir: root,
-      item: { ...item, summarySnapshots: [], messageOrder: [] },
+      item: { ...item, summarySnapshots: [], ...createSessionStorageMessageIndex([]) },
     });
     assert.deepEqual(uids(shortened), [], "a shortened chain must not reuse cached state");
   }));
@@ -218,9 +219,16 @@ test("byte budget evicts least recently materialized turns", async () =>
 test("snapshot cache tiers enforce independent byte budgets, LRU order and immutability", () => {
   const cache = createVerifiedSnapshotCache({ payloadByteBudget: 2, identityByteBudget: 1024 });
   const identity = { key: "identity", bytes: 1, reusable: true };
-  const payload = { checkpointId: "c1", records: [{ message: { content: "original" } }] };
+  const payload = {
+    checkpointId: "c1",
+    persistedMessageUids: [],
+    summarizedMessageUids: [],
+    records: [{ message: { content: "original" } }],
+  };
   cache.retain("a", "hash", identity, payload);
-  payload.records[0].message.content = "mutated";
+  assert.throws(() => {
+    payload.records[0].message.content = "mutated";
+  }, TypeError);
   assert.equal(cache.payload("a", "hash", identity).records[0].message.content, "original");
   cache.retain("b", "hash", identity, payload);
   cache.payload("a", "hash", identity);
@@ -290,7 +298,7 @@ test("snapshots verified during the identity guard require stable verification b
   const cache = createVerifiedSnapshotCache({ payloadByteBudget: 100, identityByteBudget: 100 });
   const recent = { key: "same-stat-identity", bytes: 1, reusable: false };
   const stable = { ...recent, reusable: true };
-  const payload = { records: [] };
+  const payload = { persistedMessageUids: [], summarizedMessageUids: [], records: [] };
   cache.retain("snapshot", "hash", recent, payload);
   assert.equal(cache.payload("snapshot", "hash", recent), null);
   assert.equal(cache.checkpoint("snapshot", "hash", stable), null);
@@ -336,7 +344,12 @@ test("payload eviction under sequential scans keeps checkpoint identities reside
   const files = ["a", "b", "c", "d", "e"];
   const identity = { key: "stable", bytes: 1, reusable: true };
   for (const file of files)
-    cache.retain(file, "hash", identity, { checkpointId: file, records: [] });
+    cache.retain(file, "hash", identity, {
+      checkpointId: file,
+      persistedMessageUids: [],
+      summarizedMessageUids: [],
+      records: [],
+    });
   for (let scan = 0; scan < 3; scan += 1) {
     for (const file of files)
       assert.equal(cache.checkpoint(file, "hash", identity).checkpointId, file);

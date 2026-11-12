@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import assert from "node:assert/strict";
 import { expect } from "@playwright/test";
 import { MODEL_CONTEXT_SEQUENCE_POLICY, MODEL_CONTEXT_TRACE } from "@noobot/model-protocol";
 import { text } from "@noobot/shared/value";
@@ -50,7 +51,7 @@ export function assertModelInvocationTrace(record, { rootSessionId } = {}) {
   expect(messages.fingerprints).toHaveLength(messages.count);
   expect(messages.sequenceHash).toMatch(/^[a-f0-9]{64}$/);
   for (const fingerprint of messages.fingerprints) {
-    expect(fingerprint).toMatch(/^[a-f0-9]{64}$/);
+    assert.match(fingerprint, /^[a-f0-9]{64}$/);
   }
   if (
     record.data.invocation.contextSequencePolicy ===
@@ -69,20 +70,20 @@ export function assertModelInvocationTrace(record, { rootSessionId } = {}) {
     previewMissingMessageUids + Number(messages.truncated || 0),
   );
   for (const message of messages.preview) {
-    expect(typeof message.role).toBe("string");
-    expect(message.role.length).toBeGreaterThan(0);
+    assert.equal(typeof message.role, "string");
+    assert.ok(message.role.length > 0);
     if (message.messageUid !== undefined) {
-      expect(typeof message.messageUid).toBe("string");
-      expect(message.messageUid.length).toBeGreaterThan(0);
+      assert.equal(typeof message.messageUid, "string");
+      assert.ok(message.messageUid.length > 0);
     }
-    expect(message.contentHash).toMatch(/^[a-f0-9]{16}$/);
-    expect(typeof message.contentPreview).toBe("string");
+    assert.match(message.contentHash, /^[a-f0-9]{16}$/);
+    assert.equal(typeof message.contentPreview, "string");
   }
   for (const message of messages.evidence) {
-    expect(typeof message.role).toBe("string");
-    expect(message.role.length).toBeGreaterThan(0);
-    expect(message.contentHash).toMatch(/^[a-f0-9]{16}$/);
-    expect(message.contentPreview).toBeUndefined();
+    assert.equal(typeof message.role, "string");
+    assert.ok(message.role.length > 0);
+    assert.match(message.contentHash, /^[a-f0-9]{16}$/);
+    assert.equal(message.contentPreview, undefined);
   }
 }
 

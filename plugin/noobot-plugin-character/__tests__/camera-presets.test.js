@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { z } from "zod";
 import { compileCameraPlan, listCameraPresets } from "../src/camera-preset-compiler.js";
 import { AnimationProtocolSchema } from "../src/animation-protocol.js";
 import { createAnimationTools } from "../src/animation-tools.js";
@@ -200,4 +201,23 @@ test("camera preset tools list IDs and replace the authoritative animation camer
   assert.deepEqual(commits[0].data.assets, [asset]);
   assert.notDeepEqual(commits[0].data.protocol.scene.cameraTrack, protocol.scene.cameraTrack);
   assert.equal(Object.hasOwn(commits[0].data.protocol.scene, "camera"), false);
+});
+
+test("animation tool definitions sent to models are plain root objects", () => {
+  const tools = createAnimationTools({
+    resolveSelectedAssets: async () => [asset],
+    getArtifact: async () => ({ found: false }),
+    commitArtifact: async () => ({ committed: false }),
+  });
+  assert.equal(tools.length, 6);
+  const violations = tools.flatMap((tool) => {
+    const parameters = z.toJSONSchema(tool.schema, { io: "input" });
+    const keywords = ["oneOf", "anyOf", "allOf", "not", "if", "then", "else"].filter(
+      (keyword) => keyword in parameters,
+    );
+    return parameters.type === "object" && keywords.length === 0
+      ? []
+      : [`${tool.name}: type=${parameters.type} ${keywords.join(",")}`];
+  });
+  assert.deepEqual(violations, []);
 });

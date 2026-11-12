@@ -10,7 +10,10 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { projectCheckpointIdentity } from "@noobot/session-protocol/summary-checkpoint-storage";
 
 export async function readFileIdentity(file) {
-  const info = await stat(file, { bigint: true });
+  return fileIdentityOf(await stat(file, { bigint: true }));
+}
+
+export function fileIdentityOf(info) {
   const changedAtMs = Math.max(Number(info.mtimeMs), Number(info.ctimeMs));
   return {
     key: `${info.dev}:${info.ino}:${info.size}:${info.mtimeNs}:${info.ctimeNs}`,
@@ -25,7 +28,7 @@ function requireBudget(value, label) {
   }
 }
 
-function createByteLru(byteBudget) {
+export function createByteLru(byteBudget) {
   const entries = new Map();
   let bytes = 0;
   function remove(file) {
@@ -91,8 +94,8 @@ export function createVerifiedSnapshotCache({ payloadByteBudget, identityByteBud
     forget,
     retain(file, contentHash, identity, payload) {
       forget(file);
-      const checkpoint = deepFreeze(structuredClone(projectCheckpointIdentity(payload)));
-      const frozenPayload = deepFreeze(structuredClone(payload));
+      const checkpoint = projectCheckpointIdentity(payload);
+      const frozenPayload = deepFreeze(payload);
       identities.set(file, {
         contentHash,
         identity,

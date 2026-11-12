@@ -71,17 +71,31 @@ async function downgradeToSchema12(sessionDir, legacyUserId = LEGACY_USER_ID) {
   const manifest = await readJson(manifestFile);
   const [turn] = manifest.turnOrder;
   const journalFile = path.join(sessionDir, turn.file);
-  const records = readJournalLines(await readFile(journalFile, "utf8")).map((record) => {
-    if (record.messageUid !== "m1") return record;
-    const message = { ...record.message, [LEGACY_MESSAGE_ID]: legacyUserId };
-    return { ...record, message, hash: messageHash(message) };
-  });
+  const sourceRecords = readJournalLines(await readFile(journalFile, "utf8"));
+  const positions = sourceRecords.findLast((record) => record.op === "order").positions;
+  const records = sourceRecords
+    .filter((record) => record.op !== "order")
+    .map((record) => {
+      if (record.messageUid !== "m1") return record;
+      const message = { ...record.message, [LEGACY_MESSAGE_ID]: legacyUserId };
+      return { ...record, message, hash: messageHash(message) };
+    });
   const journalText = jsonl(records);
   await writeFile(journalFile, journalText, "utf8");
   turn.committedBytes = Buffer.byteLength(journalText);
   turn.messageHashes = Object.fromEntries(
     records.map((record) => [record.messageUid, record.hash]),
   );
+  turn.messageOrder = positions.map((position) => position.messageUid);
+  turn.recordCount = records.length;
+  manifest.messageOrder = positions.map(({ messageUid }) => ({ messageUid }));
+  for (const field of [
+    "messageCount",
+    "firstMessageOrdinal",
+    "lastMessageOrdinal",
+    "messageRevision",
+  ])
+    delete turn[field];
   manifest.schemaVersion = 12;
   await writeFile(manifestFile, JSON.stringify(manifest, null, 2), "utf8");
   await mkdir(path.join(sessionDir, "authority-outbox"), { recursive: true });
@@ -294,7 +308,10 @@ test("v9 upgrade drops legacy-envelope outbox commits with their deliveries and 
     );
     assert.deepEqual(
       outbox.map((record) => [record.op, record.eventId]),
-      [["commit", "event-1"]],
+      [
+        ["prepare", "event-1"],
+        ["commit", "event-1"],
+      ],
     );
     const second = await upgradeSessionMessageIdentity(options);
     assert.deepEqual(second.sessions, []);

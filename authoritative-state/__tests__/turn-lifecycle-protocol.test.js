@@ -153,7 +153,7 @@ test("durable command receipt returns the original envelope after outbox compact
   });
   assert.equal(committed.applied, true);
   assert.equal(committed.lifecycle.commandReceipts[0].eventId, "durable-event-1");
-  assert.equal(committed.lifecycle.commandReceipts[0].envelope.identity.eventId, "durable-event-1");
+  assert.equal(Object.hasOwn(committed.lifecycle.commandReceipts[0], "envelope"), false);
 
   const outbox = [{ ...committed.committedEvent, deliveries: {} }];
   const delivered = acknowledgeAuthorityEventDelivery(outbox, {
@@ -177,6 +177,10 @@ test("durable command receipt returns the original envelope after outbox compact
     lifecycle: committed.lifecycle,
     event,
     isCommittedEventId: (eventId) => compactedEventIds.has(eventId),
+    readPreparedEvent: (eventId) => {
+      assert.equal(eventId, "durable-event-1");
+      return committed.committedEvent;
+    },
     createEventId: () => "must-not-be-used",
   });
   assert.equal(replay.deduplicated, true);

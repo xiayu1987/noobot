@@ -11,27 +11,23 @@ import {
 } from "@noobot/session-protocol/execution-abort";
 import { resolveErrorHeaderValue } from "./error-header.js";
 
+function readErrorStatus(error) {
+  return error?.status ?? error?.statusCode ?? error?.error?.status;
+}
+
 function resolveErrorStatus(error) {
   const rawStatus =
-    error?.status ??
-    error?.statusCode ??
-    error?.error?.status ??
-    error?.response?.status ??
-    error?.cause?.status ??
-    error?.cause?.statusCode ??
-    error?.cause?.error?.status;
+    readErrorStatus(error) ?? error?.response?.status ?? readErrorStatus(error?.cause);
   if (typeof rawStatus !== "number" && typeof rawStatus !== "string") return undefined;
   const status = Number(rawStatus);
   return Number.isInteger(status) && status > 0 ? status : undefined;
 }
 
 function resolveErrorField(error, field) {
-  const sources = [error, error?.error, error?.cause, error?.cause?.error];
-  for (const source of sources) {
-    const value = source?.[field];
-    if (value !== undefined && value !== null) return value;
-  }
-  return undefined;
+  const value = error?.[field] ?? error?.error?.[field];
+  if (value !== undefined && value !== null) return value;
+  const cause = error?.cause;
+  return cause?.[field] ?? cause?.error?.[field] ?? undefined;
 }
 
 function resolveErrorRequestId(error) {
@@ -67,40 +63,53 @@ function normalizeErrorText(value) {
   return "";
 }
 
-export function resolveErrorMessage(error = null) {
-  const structuredCandidates = [
-    error?.message,
-    error?.error?.message,
-    error?.error,
-    error?.response?.data?.error?.message,
-    error?.response?.data?.error,
-    error?.response?.data?.message,
-    error?.cause?.message,
-    error?.cause?.error?.message,
-    error?.cause?.error,
-    error?.cause,
-  ];
-  for (const candidate of structuredCandidates) {
-    const message = normalizeErrorText(candidate);
-    if (message) return message;
-  }
+function resolveNestedErrorMessage(error) {
+  const message = normalizeErrorText(error?.message);
+  if (message) return message;
+  return normalizeErrorText(error);
+}
 
-  const identityCandidates = [
-    error?.type,
-    error?.stopType,
-    error?.code,
-    error?.name,
-    error?.error?.type,
-    error?.error?.code,
-    error?.cause?.type,
-    error?.cause?.stopType,
-    error?.cause?.code,
-    error?.cause?.name,
-  ];
-  for (const candidate of identityCandidates) {
-    const message = normalizeErrorText(candidate);
+function resolveResponseErrorMessage(response) {
+  const data = response?.data;
+  const message = resolveNestedErrorMessage(data?.error);
+  if (message) return message;
+  return normalizeErrorText(data?.message);
+}
+
+const ERROR_IDENTITY_FIELDS = Object.freeze(["type", "stopType", "code", "name"]);
+const NESTED_ERROR_IDENTITY_FIELDS = Object.freeze(["type", "code"]);
+
+function resolveErrorTextFields(error, fields) {
+  for (const field of fields) {
+    const message = normalizeErrorText(error?.[field]);
     if (message) return message;
   }
+  return "";
+}
+
+export function resolveErrorMessage(error = null) {
+  let message = normalizeErrorText(error?.message);
+  if (message) return message;
+  message = resolveNestedErrorMessage(error?.error);
+  if (message) return message;
+
+  message = resolveResponseErrorMessage(error?.response);
+  if (message) return message;
+
+  const cause = error?.cause;
+  message = normalizeErrorText(cause?.message);
+  if (message) return message;
+  message = resolveNestedErrorMessage(cause?.error);
+  if (message) return message;
+  message = normalizeErrorText(cause);
+  if (message) return message;
+
+  message = resolveErrorTextFields(error, ERROR_IDENTITY_FIELDS);
+  if (message) return message;
+  message = resolveErrorTextFields(error?.error, NESTED_ERROR_IDENTITY_FIELDS);
+  if (message) return message;
+  message = resolveErrorTextFields(cause, ERROR_IDENTITY_FIELDS);
+  if (message) return message;
 
   return normalizeErrorText(error);
 }

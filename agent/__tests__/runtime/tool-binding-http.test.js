@@ -23,7 +23,7 @@ import { createModelContext } from "@noobot/context-protocol/assembly/hook-conte
 import { assignContextMessageIdentity } from "@noobot/context-protocol/message/codec";
 import { appendMessage } from "@noobot/context-protocol/message/store";
 import { buildContextMessageBlocks } from "../../src/context/assembly/message-builder.js";
-import { normalizeMessageEntity } from "../../src/session/entities.js";
+import { normalizeMessageEntity } from "../../src/session/entities/normalizers.js";
 import { createPersistedCurrentUserMessage } from "./core/message-builder-current-user-fixture.js";
 import { formatToolCallsForStorage } from "../../src/runtime/turn/tool-call-message.js";
 import { initializeAgentModelHost } from "../../src/runtime/model-port-host.js";

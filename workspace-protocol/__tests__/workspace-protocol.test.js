@@ -229,6 +229,7 @@ test("layout upgrades run every step above the installed version and end at the 
       "session-turn-lifecycle-record-v29",
       "attachment-lifecycle-event-identity-v30",
       "session-dialog-order-start-v31",
+      "session-storage-journal-v32",
     ],
   );
   assert.deepEqual(
@@ -262,6 +263,7 @@ test("layout upgrades run every step above the installed version and end at the 
       "session-turn-lifecycle-record-v29",
       "attachment-lifecycle-event-identity-v30",
       "session-dialog-order-start-v31",
+      "session-storage-journal-v32",
     ],
   );
   assert.deepEqual(planWorkspaceLayoutUpgrades({ installedVersion: WORKSPACE_LAYOUT_VERSION }), []);

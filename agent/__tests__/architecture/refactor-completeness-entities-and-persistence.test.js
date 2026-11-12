@@ -9,7 +9,7 @@ import {
   normalizeMessageEntity,
   normalizeSessionTreeEntity,
   normalizeSelectedConnectorIds,
-} from "../../src/session/entities.js";
+} from "../../src/session/entities/normalizers.js";
 import {
   FLOW_CONTROL_ROLE,
   createFlowControlContextPolicy,

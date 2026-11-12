@@ -12,24 +12,20 @@ export function checkpointIdentityError(reason) {
   });
 }
 
-export function assertCheckpointIdentity(payload, owner, index) {
+const CHECKPOINT_UID_LIST_FIELDS = Object.freeze(["persistedMessageUids", "summarizedMessageUids"]);
+
+const projectedCheckpointIdentities = new WeakSet();
+
+function assertCheckpointIdentity(identity, owner, index) {
+  if (!projectedCheckpointIdentities.has(identity))
+    throw checkpointIdentityError("identity must come from projectCheckpointIdentity");
   for (const key of ["sessionId", "turnId", "turnScopeId", "dialogProcessId"]) {
-    if (!isCanonicalText(payload[key]) || payload[key] !== owner[key])
+    if (!isCanonicalText(identity[key]) || identity[key] !== owner[key])
       throw checkpointIdentityError(`${key} does not match owner`);
   }
   for (const key of ["checkpointId", "checkpointRevision", "committedAt"]) {
-    if (payload[key] !== index[key]) throw checkpointIdentityError(`${key} does not match index`);
+    if (identity[key] !== index[key]) throw checkpointIdentityError(`${key} does not match index`);
   }
-  for (const key of ["persistedMessageUids", "summarizedMessageUids"]) {
-    const values = payload[key];
-    if (
-      !Array.isArray(values) ||
-      !values.every(isCanonicalText) ||
-      new Set(values).size !== values.length
-    )
-      throw checkpointIdentityError(`${key} must be a unique UID list`);
-  }
-  return payload;
 }
 
 const CHECKPOINT_IDENTITY_FIELDS = Object.freeze([
@@ -46,21 +42,42 @@ const CHECKPOINT_IDENTITY_FIELDS = Object.freeze([
 ]);
 
 export function projectCheckpointIdentity(payload) {
-  return Object.fromEntries(CHECKPOINT_IDENTITY_FIELDS.map((key) => [key, payload[key]]));
+  const identity = Object.fromEntries(CHECKPOINT_IDENTITY_FIELDS.map((key) => [key, payload[key]]));
+  for (const key of CHECKPOINT_UID_LIST_FIELDS) {
+    const values = identity[key];
+    if (
+      !Array.isArray(values) ||
+      !values.every(isCanonicalText) ||
+      new Set(values).size !== values.length
+    )
+      throw checkpointIdentityError(`${key} must be a unique UID list`);
+    identity[key] = Object.freeze([...values]);
+  }
+  projectedCheckpointIdentities.add(identity);
+  return Object.freeze(identity);
+}
+
+function sameUidList(left, right) {
+  return (
+    Array.isArray(left) &&
+    left.length === right.length &&
+    left.every((uid, index) => uid === right[index])
+  );
+}
+
+function assertReceiptMatchesCheckpoint(receipt, payload) {
+  for (const key of ["checkpointId", "checkpointRevision", "committedAt"])
+    if (receipt[key] !== payload[key]) throw checkpointIdentityError(`receipt ${key} mismatch`);
+  for (const key of CHECKPOINT_UID_LIST_FIELDS) {
+    if (Object.hasOwn(receipt, key) && !sameUidList(receipt[key], payload[key]))
+      throw checkpointIdentityError(`receipt ${key} mismatch`);
+  }
 }
 
 export function projectCheckpointReceipt(receipt, payload) {
-  for (const key of ["checkpointId", "checkpointRevision", "committedAt"])
-    if (receipt[key] !== payload[key]) throw checkpointIdentityError(`receipt ${key} mismatch`);
+  assertReceiptMatchesCheckpoint(receipt, payload);
   const projected = { ...receipt };
-  for (const key of ["persistedMessageUids", "summarizedMessageUids"]) {
-    if (
-      Object.hasOwn(receipt, key) &&
-      JSON.stringify(receipt[key]) !== JSON.stringify(payload[key])
-    )
-      throw checkpointIdentityError(`receipt ${key} mismatch`);
-    projected[key] = [...payload[key]];
-  }
+  for (const key of CHECKPOINT_UID_LIST_FIELDS) projected[key] = [...payload[key]];
   return projected;
 }
 
@@ -115,10 +132,10 @@ function mapCheckpointReceipts(session, project) {
 
 export function storeCheckpointReceipts(session, resolvePayload) {
   return mapCheckpointReceipts(session, (scope, receipt) => {
-    const projected = projectCheckpointReceipt(receipt, resolvePayload(scope, receipt));
-    delete projected.persistedMessageUids;
-    delete projected.summarizedMessageUids;
-    return projected;
+    assertReceiptMatchesCheckpoint(receipt, resolvePayload(scope, receipt));
+    const stored = { ...receipt };
+    for (const key of CHECKPOINT_UID_LIST_FIELDS) delete stored[key];
+    return stored;
   });
 }
 
@@ -138,7 +155,7 @@ export function assertStoredCheckpointReceipts(session) {
     for (const receipt of state.receipts) {
       if (
         !isPlainObject(receipt) ||
-        ["persistedMessageUids", "summarizedMessageUids"].some((key) => Object.hasOwn(receipt, key))
+        CHECKPOINT_UID_LIST_FIELDS.some((key) => Object.hasOwn(receipt, key))
       )
         throw checkpointIdentityError("stored receipt must reference checkpoint identity");
     }

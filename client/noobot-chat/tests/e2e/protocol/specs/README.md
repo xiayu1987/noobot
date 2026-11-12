@@ -25,6 +25,7 @@ specs. See the [English plan](../../../../../../docs/browser-protocol-e2e-test-p
 - `049`: stopped-turn deletion followed by a new send on the same page.
 - `050`: first-turn stop plus FIFO user-interjection injection, persistence, and refresh recovery.
 - `055`: refresh, reconnect, and click navigation land precisely on the URL `turn` or the latest turn (PBE-056).
+- `056`: isolated mock-model performance Session, six measured turns with 24 tools repeated six times per turn, phase-summary recovery and late-session latency gates (PBE-058, `run.sh test perf`). See [performance operation](../../../../../../scripts/e2e-docker/PERFORMANCE.md).
 
 PBE-018, PBE-019, and PBE-020 are strict subsets of PBE-033, PBE-032, and PBE-028. PBE-047 covers
 connector creation, persisted-Session selection write ordering, database access, model context, and

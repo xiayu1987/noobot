@@ -138,7 +138,12 @@ class SessionSummaryMethods {
         this.treePersistenceContext(userId, sessionId),
       );
       const session = await this._readNormalizedSession(scope, sessionId);
-      return buildSessionSummary(session, { listFacts: buildSessionListFacts(session) });
+      return buildSessionSummary(session, {
+        listFacts: buildSessionListFacts({
+          messages: session.messages,
+          messageCount: session.messages.length,
+        }),
+      });
     } catch (error) {
       return this.buildUnavailableSessionSummary(node, error);
     }

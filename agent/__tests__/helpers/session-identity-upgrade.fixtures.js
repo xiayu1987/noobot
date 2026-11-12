@@ -4,7 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import path from "node:path";
+import { readFile, writeFile } from "node:fs/promises";
 import { MESSAGE_ORIGIN } from "@noobot/session-protocol";
+import { readSessionArtifact } from "../../src/session/session-artifact-store.js";
+import {
+  messageHash,
+  summarySnapshotContentHash,
+} from "../../src/session/session-artifact-session/turn-journal-store.js";
 import { TEST_SCOPED_SESSION_ROOTS } from "./scoped-session-roots.js";
 import { TEST_STORAGE_SERVICE } from "./storage-service.js";
 import {
@@ -14,6 +20,56 @@ import {
 
 export const SESSION_ID = "s-v9";
 export const jsonl = (records) => records.map((record) => `${JSON.stringify(record)}\n`).join("");
+
+export async function downgradeSessionStorage(sessionDir, schemaVersion) {
+  assertLegacySchema(schemaVersion);
+  const session = await readSessionArtifact({ sessionDir, storageService: TEST_STORAGE_SERVICE });
+  const manifestFile = path.join(sessionDir, "session.json");
+  const manifest = JSON.parse(await readFile(manifestFile, "utf8"));
+  manifest.schemaVersion = schemaVersion;
+  manifest.messageOrder = session.messages.map(({ messageUid }) => ({ messageUid }));
+  manifest.turnSummaryCheckpoints = session.turnSummaryCheckpoints;
+  manifest.sessionArtifactEvents = session.sessionArtifactEvents;
+  delete manifest.artifactEventJournal;
+  for (const turn of manifest.turnOrder) {
+    const messages = session.messages.filter((message) => message.turnScopeId === turn.turnScopeId);
+    turn.messageOrder = messages.map(({ messageUid }) => messageUid);
+    turn.messageHashes = Object.fromEntries(
+      messages.map((message) => [message.messageUid, messageHash(message)]),
+    );
+    for (const field of ["firstMessageOrdinal", "lastMessageOrdinal", "messageRevision"])
+      delete turn[field];
+    let previousHash = "";
+    for (const index of turn.summarySnapshots) {
+      const file = path.join(sessionDir, index.file);
+      const snapshot = JSON.parse(await readFile(file, "utf8"));
+      snapshot.records = snapshot.records.filter((record) => record.op !== "order");
+      snapshot.previousCheckpointHash = previousHash;
+      index.contentHash = summarySnapshotContentHash(snapshot);
+      previousHash = index.contentHash;
+      await writeFile(file, JSON.stringify(snapshot), "utf8");
+    }
+    const file = path.join(sessionDir, turn.file);
+    const records = (await readFile(file))
+      .subarray(0, turn.committedBytes)
+      .toString("utf8")
+      .split("\n")
+      .filter(Boolean)
+      .map(JSON.parse)
+      .filter((record) => record.op !== "order");
+    const journal = jsonl(records);
+    turn.committedBytes = Buffer.byteLength(journal);
+    turn.recordCount = records.length;
+    await writeFile(file, journal, "utf8");
+  }
+  await writeFile(manifestFile, JSON.stringify(manifest), "utf8");
+  return manifest;
+}
+
+function assertLegacySchema(schemaVersion) {
+  if (!Number.isInteger(schemaVersion) || schemaVersion < 6 || schemaVersion > 22)
+    throw new TypeError("Expected a checkpoint journal schema from 6 through 22");
+}
 
 export async function saveCanonicalSession(sessionRepo) {
   const persistenceContext = sessionRepo.treePersistenceContext("alice", SESSION_ID);

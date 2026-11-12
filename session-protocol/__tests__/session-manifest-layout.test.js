@@ -21,8 +21,10 @@ function turnItem(overrides = {}) {
     file: "turns/turn-000001.jsonl",
     committedBytes: 10,
     recordCount: 1,
-    messageOrder: ["m1"],
-    messageHashes: { m1: HASH_M1 },
+    messageCount: 1,
+    firstMessageOrdinal: 1,
+    lastMessageOrdinal: 1,
+    messageRevision: HASH_M1,
     summarySnapshots: [snapshotIndex()],
     compacted: false,
     ...overrides,
@@ -44,7 +46,6 @@ function manifest(overrides = {}) {
   return {
     turnArtifactSequence: 1,
     turnOrder: [turnItem()],
-    messageOrder: [{ messageUid: "m1" }],
     turnLifecycle: createEmptyTurnLifecycle(),
     ...overrides,
   };
@@ -95,12 +96,16 @@ test("turn item layout violations are rejected", () => {
     { summarySnapshots: [snapshotIndex({ file: undefined })] },
     { summarySnapshots: [snapshotIndex({ messageUids: undefined })] },
     { summarySnapshots: [snapshotIndex({ messageUids: [""] })] },
-    { messageHashes: undefined },
     { messageHashes: {} },
-    { messageHashes: { m1: HASH_M1, m2: HASH_M1 } },
-    { messageHashes: { m2: HASH_M1 } },
-    { messageHashes: { m1: "h1" } },
-    { messageHashes: { m1: `sha256:${"A".repeat(64)}` } },
+    { messageCount: undefined },
+    { messageCount: -1 },
+    { messageCount: 2 },
+    { messageCount: 0 },
+    { firstMessageOrdinal: 0 },
+    { lastMessageOrdinal: 0 },
+    { messageRevision: undefined },
+    { messageRevision: "h1" },
+    { messageRevision: `sha256:${"A".repeat(64)}` },
     { committedBytes: undefined },
     { recordCount: -1 },
     { compacted: undefined },
@@ -119,33 +124,23 @@ test("turnOrder identities must be unique", () => {
     turnId: "turn-000002",
     turnScopeId: "scope-2",
     file: "turns/turn-000002.jsonl",
-    messageOrder: ["m2"],
-    messageHashes: { m2: HASH_M1 },
+    firstMessageOrdinal: 2,
+    lastMessageOrdinal: 2,
   };
-  const messageOrder = [{ messageUid: "m1" }, { messageUid: "m2" }];
   assert.doesNotThrow(() =>
-    assertSessionManifestLayout(
-      manifest({ turnOrder: [turnItem(), turnItem(second)], messageOrder }),
-    ),
+    assertSessionManifestLayout(manifest({ turnOrder: [turnItem(), turnItem(second)] })),
   );
   for (const key of ["turnId", "turnScopeId", "file"]) {
     const duplicate = turnItem({ ...second, [key]: turnItem()[key] });
     assert.throws(
-      () =>
-        assertSessionManifestLayout(manifest({ turnOrder: [turnItem(), duplicate], messageOrder })),
+      () => assertSessionManifestLayout(manifest({ turnOrder: [turnItem(), duplicate] })),
       rejected(key),
     );
   }
 });
 
-test("top-level messageOrder must exactly cover turn messages", () => {
-  const second = turnItem({
-    turnId: "turn-000002",
-    turnScopeId: "scope-2",
-    file: "turns/turn-000002.jsonl",
-  });
+test("top-level messageOrder is retired for all reference shapes", () => {
   const cases = [
-    ["message owned by two turns", { turnOrder: [turnItem(), second] }],
     [
       "duplicated top-level reference",
       { messageOrder: [{ messageUid: "m1" }, { messageUid: "m1" }] },

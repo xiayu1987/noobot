@@ -151,6 +151,8 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
       knownLifecycleSequenceMap: {},
     });
     const socket = MockWebSocket.instances[0];
+    const command = streamCommand({ sessionId: "s-failed-reconnect", turnScopeId: "turn-1" });
+    const pendingCommand = client.requestJson(command, { expectedEvents: [] });
 
     socket.emit(
       AGENT_TRANSPORT_EVENT.ERROR,
@@ -167,6 +169,17 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
       code: AGENT_TRANSPORT_ERROR_CODE.RECONNECT_FAILED,
     });
     expect(socket.readyState).toBe(MockWebSocket.OPEN);
+    expect(client.getActiveSocket()).toBe(socket);
+    expect(client.getTransportStatus().hasSocket).toBe(true);
+    client.sendJson(command);
+    expect(JSON.parse(socket.sent.at(-1))).toEqual(command);
+    emitCompletedCommand(socket, command.commandId, "s-failed-reconnect", "turn-1");
+    await expect(pendingCommand).resolves.toMatchObject({
+      event: AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
+    });
+    client.dispose();
+    expect(socket.readyState).toBe(MockWebSocket.CLOSED);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("delivers child canonical live events with a business requestId while reconnect replay is running", async () => {

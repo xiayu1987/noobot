@@ -89,7 +89,7 @@ describe("thinking panel round timeline reactivity", () => {
     const props = reactive({ messageItem: allMessages[2], allMessages, variant: "panel" });
     scope = effectScope();
     const timeline = scope.run(() => useThinkingTimeline(props, () => ({ running: true })));
-    return { allMessages, live: allMessages[2], timeline };
+    return { props, allMessages, live: allMessages[2], timeline };
   }
 
   it("keeps the round projection stable while only answer content streams", async () => {
@@ -121,6 +121,27 @@ describe("thinking panel round timeline reactivity", () => {
       await nextTick();
       expect(timeline.currentExecutionLogs.value).toBe(before);
     }
+  });
+
+  it("keeps completed round projections when another turn replaces the session list", async () => {
+    const { props, allMessages, timeline } = mountRound();
+    const before = timeline.currentExecutionLogs.value;
+    const nextTurn = { ...toolMessage(2), turnScopeId: "turn-b" };
+    props.allMessages = [...allMessages, nextTurn];
+    await nextTick();
+    expect(timeline.currentExecutionLogs.value).toBe(before);
+    allMessages[1].toolTimeline[0].result.fileName = "changed.txt";
+    await nextTick();
+    expect(timeline.currentExecutionLogs.value).not.toBe(before);
+    expect(timeline.currentExecutionLogs.value.at(-1).detailValue.fileName).toBe("changed.txt");
+  });
+
+  it("counts execution events without serializing tool results", () => {
+    const { allMessages, live, timeline } = mountRound();
+    const serialize = vi.fn(() => ({ ok: true }));
+    allMessages[0].toolTimeline[0].result.toJSON = serialize;
+    expect(timeline.getExecutionLogCount(live)).toBe(4);
+    expect(serialize).not.toHaveBeenCalled();
   });
 
   it("reprojects the round when a sibling tool timeline changes", async () => {

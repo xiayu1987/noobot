@@ -17,7 +17,14 @@ import {
 import { buildSessionListFacts } from "../../session-artifact-session/session-list-facts.js";
 import { assertCanonicalSessionManifest } from "../../session-artifact-session/turn-journal-store.js";
 import {
+  readSessionArtifactEvents,
+  writeSessionArtifactEvents,
+} from "../../session-artifact-session/artifact-event-journal.js";
+import { getTurnMaterializer } from "../../session-artifact-session/turn-materializer.js";
+import {
   assertSessionScopeIdentity,
+  createAggregateVersionConflictError,
+  requireSessionAggregateVersion,
   createSessionArtifactNotFoundError,
   createSessionNotFoundError,
 } from "@noobot/session-protocol";
@@ -31,7 +38,64 @@ class SessionArtifactMethods {
       sessionId,
       parentSessionId: scope.resolvedParentSessionId,
     });
-    return manifest;
+    return {
+      ...manifest,
+      sessionArtifactEvents: await readSessionArtifactEvents(scope.sessionDir, manifest),
+    };
+  }
+
+  async saveSessionArtifactEvents(
+    userId,
+    session,
+    { expectedAggregateVersion, persistenceContext },
+  ) {
+    return this.withSessionMutation(
+      userId,
+      session.sessionId,
+      async (scope) => {
+        const previous = await this._readSessionManifest(scope);
+        assertCanonicalSessionManifest(previous, "Session artifact event write");
+        assertSessionScopeIdentity({
+          session,
+          sessionId: previous.sessionId,
+          parentSessionId: scope.resolvedParentSessionId,
+        });
+        const actualVersion = requireSessionAggregateVersion(previous.aggregateVersion);
+        if (actualVersion !== expectedAggregateVersion)
+          throw createAggregateVersionConflictError({ currentVersion: actualVersion });
+        const manifest = {
+          ...previous,
+          aggregateVersion: requireSessionAggregateVersion(session.aggregateVersion),
+          updatedAt: session.updatedAt,
+          artifactEventJournal: await writeSessionArtifactEvents(
+            scope.sessionDir,
+            session,
+            previous,
+          ),
+        };
+        assertCanonicalSessionManifest(manifest, "Session artifact event write");
+        await this.storageService.writeJsonAtomic(scope.sessionFile, manifest);
+        const lastTurn = previous.turnOrder.reduce(
+          (last, turn) =>
+            !last || turn.lastMessageOrdinal > last.lastMessageOrdinal ? turn : last,
+          null,
+        );
+        const entries = lastTurn
+          ? await getTurnMaterializer().materializeEntries({
+              storageService: this.storageService,
+              sessionDir: scope.sessionDir,
+              item: lastTurn,
+            })
+          : [];
+        const listFacts = buildSessionListFacts({
+          messageCount: previous.turnOrder.reduce((count, turn) => count + turn.messageCount, 0),
+          messages: entries.map(({ message }) => message),
+        });
+        await this.upsertSessionSummary(userId, session, { listFacts, scope });
+        return true;
+      },
+      { persistenceContext },
+    );
   }
 
   async readSessionDisplaySummary(userId, sessionId, { persistenceContext }) {
@@ -95,7 +159,10 @@ class SessionArtifactMethods {
           sessionPayload: session,
         });
         await this.upsertSessionSummary(userId, session, {
-          listFacts: buildSessionListFacts(session),
+          listFacts: buildSessionListFacts({
+            messages: session.messages,
+            messageCount: session.messages.length,
+          }),
           scope,
         });
         return { summary: await this._readCurrentDisplaySummary(scope, sessionId), rebuilt: true };

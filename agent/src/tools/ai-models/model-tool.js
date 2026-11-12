@@ -70,6 +70,7 @@ export function createModelTool({ agentContext, sessionId }) {
           userId: text(runtime.systemRuntime.userId),
           sessionId: resolvedSessionId,
           modelAlias: alias,
+          persistenceScope: runtime.systemRuntime.persistenceScope,
         });
       }
       runtime.runtimeModel = alias;

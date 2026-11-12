@@ -26,7 +26,7 @@ test("buildToolCompatibilityLogLine includes model and tools", () => {
         parentSessionId: "p1",
       },
     },
-    event: "tool_binding_adapter_strict_downgraded",
+    event: "tool_binding_adapter_dropped_tools",
     tools: ["call_service"],
   });
   const parsed = JSON.parse(line);

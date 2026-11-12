@@ -6,8 +6,9 @@
 import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
+import { deepFreeze } from "@noobot/shared/deep-freeze";
 
-import { normalizeMessageEntity } from "../../src/session/entities.js";
+import { normalizeMessageEntity } from "../../src/session/entities/normalizers.js";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
 test("message normalization rejects damaged identities instead of trimming or omitting them", () => {
@@ -358,4 +359,31 @@ test("normalizeMessageEntity drops thinking timing fields owned by turn facts", 
 
   assert.equal(Object.hasOwn(normalized, "thinkingStartedAt"), false);
   assert.equal(Object.hasOwn(normalized, "thinkingFinishedAt"), false);
+});
+
+test("immutable messages are normalized once and mutable copies are normalized every time", () => {
+  const source = {
+    attachments: [],
+    sessionId: "s_fixture",
+    role: "user",
+    content: "hello",
+    messageUid: "sm_fixture_memo",
+    userMessageId: "client-id",
+    messageOrigin: "natural",
+    ts: TEST_MESSAGE_TS,
+  };
+  assert.notEqual(normalizeMessageEntity(source), normalizeMessageEntity(source));
+  const frozen = deepFreeze(structuredClone(source));
+  const normalized = normalizeMessageEntity(frozen);
+  assert.equal(normalizeMessageEntity(frozen), normalized);
+  assert.deepEqual(normalized, normalizeMessageEntity(source));
+  assert.throws(() => {
+    normalized.content = "changed";
+  }, TypeError);
+  assert.equal(normalizeMessageEntity(normalized), normalizeMessageEntity(normalized));
+  const damaged = deepFreeze({ ...source, messageUid: " padded " });
+  for (let attempt = 0; attempt < 2; attempt += 1)
+    assert.throws(() => normalizeMessageEntity(damaged), {
+      code: "SESSION_MESSAGE_IDENTITY_INVALID",
+    });
 });

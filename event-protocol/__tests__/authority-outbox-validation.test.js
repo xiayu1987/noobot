@@ -39,10 +39,13 @@ function entry() {
     }),
   };
 }
-function commit() {
+function prepare() {
   const { deliveries, ...value } = entry();
   assert.deepEqual(deliveries, {});
-  return { op: "commit", ...value };
+  return { op: "prepare", ...value };
+}
+function commit() {
+  return { op: "commit", eventId: "event-1" };
 }
 function ack(overrides = {}) {
   return {
@@ -99,10 +102,16 @@ test("outbox journal rejects malformed and orphan delivery records", () => {
     [null],
     [{ op: "unknown", eventId: "event-1" }],
     [ack()],
-    [commit(), ack({ sequence: "1" })],
-    [commit(), ack({ orderingScopeId: "other" })],
-    [commit(), ack({ deliveredAt: "" })],
-    [commit(), { op: "attempt", eventId: "event-1", consumerId: "browser", attemptedAt: "" }],
+    [commit()],
+    [{ ...prepare(), op: "commit" }],
+    [prepare(), commit(), ack({ sequence: "1" })],
+    [prepare(), commit(), ack({ orderingScopeId: "other" })],
+    [prepare(), commit(), ack({ deliveredAt: "" })],
+    [
+      prepare(),
+      commit(),
+      { op: "attempt", eventId: "event-1", consumerId: "browser", attemptedAt: "" },
+    ],
   ]) {
     assert.throws(() => projectAuthorityOutboxJournal(records), /invalid authority outbox/);
   }
@@ -117,6 +126,7 @@ test("outbox journal preserves delivery retries and rejects conflicting duplicat
     attemptedAt: occurredAt,
   };
   const [projected] = projectAuthorityOutboxJournal([
+    prepare(),
     firstCommit,
     firstCommit,
     attempt,
@@ -132,13 +142,19 @@ test("outbox journal preserves delivery retries and rejects conflicting duplicat
   assert.throws(
     () =>
       projectAuthorityOutboxJournal([
+        prepare(),
         firstCommit,
-        { ...firstCommit, committedAt: "2026-10-31T00:00:01.000Z" },
+        { ...prepare(), committedAt: "2026-10-31T00:00:01.000Z" },
       ]),
     /conflicting commit/,
   );
   assert.deepEqual(
-    projectAuthorityOutboxJournal([firstCommit, { op: "remove", eventId: "event-1" }]),
+    projectAuthorityOutboxJournal([
+      prepare(),
+      firstCommit,
+      { op: "remove", eventId: "event-1" },
+      firstCommit,
+    ]),
     [],
   );
 });
@@ -186,9 +202,14 @@ test("outbox acknowledgement rejects mismatched ordering and keeps the event pen
 
 test("legacy unowned attempt covered by a later ack is dropped and projection stays delivered", () => {
   const legacyAttempt = { op: "attempt", eventId: "event-1", attemptedAt: occurredAt };
-  const { records, changed } = migrateLegacyUnownedAttemptRecords([commit(), legacyAttempt, ack()]);
+  const { records, changed } = migrateLegacyUnownedAttemptRecords([
+    prepare(),
+    commit(),
+    legacyAttempt,
+    ack(),
+  ]);
   assert.equal(changed, true);
-  assert.deepEqual(records, [commit(), ack()]);
+  assert.deepEqual(records, [prepare(), commit(), ack()]);
   const [projected] = projectAuthorityOutboxJournal(records);
   assert.equal(authorityEventConsumerDelivery(projected, "browser").status, "delivered");
 });

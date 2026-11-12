@@ -183,6 +183,7 @@ function createToolCallExecutionState({
   agentContext,
   abortSignal,
   toolStartedAtMs,
+  startedAt,
   executionTiming,
 }) {
   if (!Number.isFinite(toolStartedAtMs)) {
@@ -198,7 +199,7 @@ function createToolCallExecutionState({
     runtime,
     agentContext,
     abortSignal,
-    toolStartedAtMs,
+    startedAt,
     executionTiming,
     toolStartedAt: new Date(toolStartedAtMs).toISOString(),
     riskAssessment: createToolRiskAssessment(call),
@@ -238,7 +239,7 @@ function completedToolTiming(state) {
   const endedAtMs = Date.now();
   return {
     endedAt: new Date(endedAtMs).toISOString(),
-    durationMs: endedAtMs - state.toolStartedAtMs,
+    durationMs: performance.now() - state.startedAt,
   };
 }
 
@@ -553,7 +554,12 @@ export async function executeToolCall(options) {
           options.agentContext,
         ),
       };
-  return executeValidatedToolCall({ ...options, call, executionTiming: { executionMs: 0 } });
+  return executeValidatedToolCall({
+    ...options,
+    call,
+    startedAt: performance.now(),
+    executionTiming: { executionMs: 0 },
+  });
 }
 
 async function executeValidatedToolCall(options) {
@@ -689,7 +695,7 @@ function rejectedToolCallResult({ call, error, abortSignal }) {
 export async function settleStartedToolCallInTurn(options) {
   const { call, eventListener, turn, toolCallId, abortSignal } =
     createTurnToolExecutionContext(options);
-  const { toolStartedAtMs, startedAt, executionTiming } = options;
+  const { startedAt, executionTiming } = options;
   let settlement;
   try {
     const result = await runStartedToolCallInTurn(options);
@@ -704,7 +710,7 @@ export async function settleStartedToolCallInTurn(options) {
       error,
       abortSignal,
     });
-    result.durationMs = Date.now() - toolStartedAtMs;
+    result.durationMs = performance.now() - startedAt;
     settlement = {
       status: "rejected",
       result,

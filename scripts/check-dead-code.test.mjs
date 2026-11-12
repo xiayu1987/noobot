@@ -90,6 +90,41 @@ test("invalid scanner configuration fails instead of reporting a clean scan", (t
   assert.throws(() => measureDeadCodeReport({}), /must contain issues/);
 });
 
+test("partial Knip reports measure only the categories requested by the scanner", () => {
+  const measured = measureDeadCodeReport({
+    issues: [
+      { file: "agent/src/library.js", exports: [{ name: "dead", line: 2 }] },
+      { file: "agent/package.json", devDependencies: [{ name: "unused" }] },
+    ],
+  });
+  assert.equal(measured.unusedExports.total, 1);
+  assert.equal(measured.unusedDependencies.total, 1);
+  assert.equal(measured.unusedFiles.total, 0);
+});
+
+test("malformed report rows fail even when they would be excluded from production", () => {
+  for (const report of [null, { issues: null }]) {
+    assert.throws(() => measureDeadCodeReport(report), /must contain issues/);
+  }
+  for (const issue of [null, {}, { file: "" }, { file: 42 }]) {
+    assert.throws(() => measureDeadCodeReport({ issues: [issue] }), /file path/);
+  }
+  for (const file of ["agent/src/library.js", "agent/__tests__/library.js"]) {
+    for (const exports of [null, {}, "invalid", undefined]) {
+      assert.throws(
+        () => measureDeadCodeReport({ issues: [{ file, exports }] }),
+        /must be an array/,
+      );
+    }
+    for (const issue of [null, {}, { name: "" }, { name: 42 }]) {
+      assert.throws(
+        () => measureDeadCodeReport({ issues: [{ file, exports: [issue] }] }),
+        /must contain a name/,
+      );
+    }
+  }
+});
+
 test("production report excludes test and generated files and scopes dynamic driver exemptions", () => {
   const usage = createExemptionUsage(CHECK);
   const measured = measureDeadCodeReport(

@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed } from "vue";
+import { useSessionMessageResources } from "./useSessionMessageResources.js";
 import { mergeAttachments } from "../../model/dialogProcessChain.js";
 import {
-  findMessageIdentityIndex,
   getMessageRole,
   getMessageSessionId,
   getMessageDialogProcessId,
@@ -17,11 +17,7 @@ import { getMessageAttachments as resolveRenderableMessageAttachments } from "..
 import { SESSION_RUN_MESSAGE_RUNTIME_MARK } from "../../runtime/sessionRunStateMachine.js";
 import { logStateMachineDebug } from "../../../debug/loggers/stateMachineLogger.js";
 import { logWorkflowDiagnostics } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
-import {
-  mergeAttachmentDisplayItems,
-  resolveParsedResultRelation,
-} from "../../../../infrastructure/api/attachments/attachmentAccess.js";
-import { selectToolLinkSnapshots } from "../../runtime/engine/toolTimeline.js";
+import { resolveParsedResultRelation } from "../../../../infrastructure/api/attachments/attachmentAccess.js";
 import { isPlainObject, text } from "@noobot/shared/value";
 
 function getMessageAttachments(messageItem = {}) {
@@ -112,48 +108,6 @@ function logDisplayedAttachmentsSummary({
   }));
 }
 
-function precedingAssistantMessages(allMessages, messageItem) {
-  const position = findMessageIdentityIndex(messageItem, allMessages);
-  if (position < 0) {
-    throw new Error("message_not_in_session_messages");
-  }
-  return allMessages
-    .slice(0, position)
-    .filter((candidate) => getMessageRole(candidate) === "assistant");
-}
-
-export function collectSessionAttachments(allMessages, messageItem, displayedAttachments) {
-  return mergeAttachmentDisplayItems(
-    precedingAssistantMessages(allMessages, messageItem).flatMap((candidate) =>
-      getMessageAttachments(candidate),
-    ),
-    displayedAttachments,
-  );
-}
-
-export function sessionMessageIndex(allMessages, messageItem) {
-  const position = findMessageIdentityIndex(messageItem, allMessages);
-  if (position < 0) throw new Error("message_not_in_session_messages");
-  return position;
-}
-
-export function collectSessionLinkSnapshots(allMessages) {
-  return allMessages.flatMap((candidate, messageIndex) =>
-    getMessageRole(candidate) === "assistant"
-      ? selectToolLinkSnapshots(candidate, messageIndex)
-      : [],
-  );
-}
-
-function isSameTurnSiblingAssistant(candidate, messageItem, sessionId, turnScopeId) {
-  return (
-    candidate !== messageItem &&
-    getMessageRole(candidate) === "assistant" &&
-    getMessageSessionId(candidate) === sessionId &&
-    getMessageTurnScopeId(candidate) === turnScopeId
-  );
-}
-
 export function useMessageFiles({ getMessageItem, getAllMessages }) {
   const displayedAttachments = computed(() => {
     const messageItem = getMessageItem();
@@ -161,9 +115,7 @@ export function useMessageFiles({ getMessageItem, getAllMessages }) {
     const turnScopeId = getMessageTurnScopeId(messageItem);
     const sameTurnMessages =
       getMessageRole(messageItem) === "assistant" && sessionId && turnScopeId
-        ? getAllMessages().filter((candidate) =>
-            isSameTurnSiblingAssistant(candidate, messageItem, sessionId, turnScopeId),
-          )
+        ? useSessionMessageResources(getAllMessages()).siblingAssistants(messageItem)
         : [];
     const turnAttachments = sameTurnMessages.reduce(
       (result, candidate) => mergeAttachments(result, getMessageAttachments(candidate)),

@@ -10,6 +10,11 @@ import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 import {
   SESSION_ARTIFACT_SCHEMA_VERSION,
   SESSION_ARTIFACT_SUMMARY_SNAPSHOT_SCHEMA_VERSION,
+  SESSION_ARTIFACT_STORAGE_JOURNAL_SCHEMA_VERSION,
+  createSessionStorageJournalProjection,
+  applySessionStorageJournalRecords,
+  materializeSessionStorageJournal,
+  createSessionStorageMessageIndex,
 } from "@noobot/session-protocol";
 import { isPlainObject } from "@noobot/shared/value";
 import { writeFileAtomic } from "../shared/storage/atomic-file-write.js";
@@ -20,7 +25,7 @@ import {
 } from "../session/authority-outbox-store/outbox-journal.js";
 import {
   assertIncrementalJournalRecords,
-  journalPath,
+  resolveTurnJournalPath,
   messageHash,
   readJournalRecords,
   summarySnapshotContentHash,
@@ -59,7 +64,7 @@ function createSessionRewriteReader(upgradeError) {
   }
 
   async function readVerifiedJournal(sessionDir, turn) {
-    const filePath = journalPath(sessionDir, turn.turnId);
+    const filePath = resolveTurnJournalPath(sessionDir, turn.file);
     try {
       const records = await readJournalRecords(filePath, turn.committedBytes);
       assertIncrementalJournalRecords(records, filePath);
@@ -155,6 +160,7 @@ function createSessionRewritePlanner({ upgradeError, migrateMessage, migrateOutb
       migratedMessages += 1;
       next.push({ ...record, message, hash });
     }
+    if (context.projection) applySessionStorageJournalRecords(context.projection, next);
     return { records: next, migratedMessages };
   }
 
@@ -204,7 +210,11 @@ function createSessionRewritePlanner({ upgradeError, migrateMessage, migrateOutb
   async function planSession(sessionDir) {
     const manifestPath = path.join(sessionDir, SESSION_ARTIFACT_FILE_NAMES.session);
     const manifest = await readJson(manifestPath);
-    if (![18, SESSION_ARTIFACT_SCHEMA_VERSION].includes(manifest?.schemaVersion)) {
+    if (
+      !Number.isSafeInteger(manifest?.schemaVersion) ||
+      manifest.schemaVersion < 18 ||
+      manifest.schemaVersion > SESSION_ARTIFACT_SCHEMA_VERSION
+    ) {
       throw upgradeError("manifest_schema_unsupported", { filePath: manifestPath });
     }
     const shared = {};
@@ -222,6 +232,10 @@ function createSessionRewritePlanner({ upgradeError, migrateMessage, migrateOutb
         shared,
         loadSessionMessages,
         details: { turnId: turn.turnId },
+        projection:
+          manifest.schemaVersion >= SESSION_ARTIFACT_STORAGE_JOURNAL_SCHEMA_VERSION
+            ? createSessionStorageJournalProjection()
+            : null,
       };
       const checkpoints = await planCheckpoints({ sessionDir, turn, context, hashes, writes });
       const journal = await planJournal({ sessionDir, turn, context, hashes, writes });
@@ -231,7 +245,11 @@ function createSessionRewritePlanner({ upgradeError, migrateMessage, migrateOutb
           ? {
               ...turn,
               committedBytes: journal.committedBytes,
-              messageHashes: syncMessageHashes(turn.messageHashes, hashes),
+              ...(context.projection
+                ? createSessionStorageMessageIndex(
+                    materializeSessionStorageJournal(context.projection),
+                  )
+                : { messageHashes: syncMessageHashes(turn.messageHashes, hashes) }),
               summarySnapshots: checkpoints.summarySnapshots,
             }
           : turn,

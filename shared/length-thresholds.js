@@ -189,6 +189,8 @@ export const DEFAULT_LENGTH_THRESHOLDS = deepFreeze({
     turnMaterializerCacheBytes: 128 * MiB,
     verifiedSnapshotCacheBytes: 128 * MiB,
     verifiedCheckpointIdentityCacheBytes: 16 * MiB,
+    artifactEventJournalCacheBytes: 64 * MiB,
+    authorityOutboxJournalTailGuardBytes: 64,
   },
 
   display: {

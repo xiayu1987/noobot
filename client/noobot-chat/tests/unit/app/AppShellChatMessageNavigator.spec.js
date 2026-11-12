@@ -208,7 +208,7 @@ describe("AppShell chat message navigator", () => {
     );
     expect(chatMessageNavigatorPanelSource).toContain("if (session === null) return [];");
     expect(chatMessageNavigatorPanelSource).toContain("buildChatMessageNavItems({");
-    expect(chatMessageNavigatorPanelSource).toContain("selectTurnPresentations({");
+    expect(chatMessageNavigatorPanelSource).toContain("selectSharedTurnPresentations({");
     expect(chatMessageNavigatorPanelSource).not.toContain("getMessageAnchorId");
     expect(chatMessageNavItemsStateSource).toContain("export function buildChatMessageNavItems({");
     expect(chatMessageNavItemsStateSource).toContain("shouldRenderMessageInChat");

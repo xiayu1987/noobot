@@ -38,16 +38,6 @@ export function prepareToolBinding({ tools, modelState, runtime, turn }) {
     );
   }
 
-  if (
-    Array.isArray(adaptedBinding?.strictDowngradedTools) &&
-    adaptedBinding.strictDowngradedTools.length
-  ) {
-    emitEvent(eventListener, "tool_binding_adapter_strict_downgraded", {
-      turn,
-      incompatibleTools: adaptedBinding.strictDowngradedTools,
-    });
-  }
-
   emitEvent(eventListener, "tool_binding_ready", {
     turn,
     toolCount: boundTools.length,

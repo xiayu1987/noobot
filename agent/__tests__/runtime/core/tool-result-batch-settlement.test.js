@@ -160,6 +160,38 @@ test("settled timing separates invocation from event commit and includes the fin
   assert.equal(Object.hasOwn(timing.data, "durationMs"), false);
 });
 
+for (const fatal of [false, true]) {
+  test(`tool duration survives a wall-clock rollback, fatal=${fatal}`, async (t) => {
+    const runtime = createRuntime();
+    const events = [];
+    runtime.eventListener = { onEvent: (event) => events.push(event) };
+    const originalNow = Date.now;
+    const failure = fatalSystemError("clock rollback", { code: "FATAL_TEST" });
+    const settled = await settleToolCallInTurn({
+      call: { id: "clock-rollback", name: "read_file", args: {} },
+      tool: {
+        name: "read_file",
+        async invoke() {
+          t.mock.method(Date, "now", () => originalNow() - 60000);
+          await wait(10);
+          if (fatal) throw failure;
+          return { ok: true };
+        },
+      },
+      runtime,
+      turn: 1,
+      agentContext: createTestAgentExecutionScope(runtime),
+      abortSignal: runtime.abortSignal,
+    });
+    const end = findCommittedMessagePayload(events, "tool_call_end");
+    assert.equal(settled.status, fatal ? "rejected" : "fulfilled");
+    assert.equal(settled.error, fatal ? failure : null);
+    assert.equal(end.success, !fatal);
+    assert.ok(end.durationMs >= 5 && end.durationMs < 60000);
+    assert.equal(end.durationMs, settled.result.durationMs);
+  });
+}
+
 const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-tool-batch-"));
 test.after(() => fs.rmSync(workspaceRoot, { recursive: true, force: true }));
 
@@ -658,9 +690,9 @@ test("settleToolCallInTurn rejected fatal path reports elapsed durationMs on too
     tool: {
       name: "execute_script",
       async invoke() {
-        invokedAt = Date.now();
+        invokedAt = performance.now();
         await wait(20);
-        failedAt = Date.now();
+        failedAt = performance.now();
         throw fatalError;
       },
     },

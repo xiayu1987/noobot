@@ -14,7 +14,7 @@ import { appendJsonLine, flushJsonLineBatches } from "../src/transports/jsonl.js
 
 const execFileAsync = promisify(execFile);
 
-test("flushJsonLineBatches persists a pending batch before its timer fires", async () => {
+test("flushJsonLineBatches persists a pending batch before its scheduled flush", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-jsonl-flush-"));
   const file = path.join(root, "pending.jsonl");
   try {
@@ -26,6 +26,47 @@ test("flushJsonLineBatches persists a pending batch before its timer fires", asy
       .split("\n")
       .map((line) => JSON.parse(line));
     assert.deepEqual(records, [{ sequence: 1 }]);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("sequentially awaited appends do not wait for the batch window", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-jsonl-sequential-"));
+  const file = path.join(root, "sequential.jsonl");
+  const count = 40;
+  try {
+    const startedAt = performance.now();
+    for (let sequence = 0; sequence < count; sequence += 1) {
+      await appendJsonLine(file, { sequence });
+    }
+    const elapsedMs = performance.now() - startedAt;
+    const lines = (await fs.readFile(file, "utf8")).trim().split("\n");
+    assert.deepEqual(
+      lines.map((line) => JSON.parse(line).sequence),
+      Array.from({ length: count }, (_, sequence) => sequence),
+    );
+    assert.ok(elapsedMs < 1000, `sequential appends took ${elapsedMs.toFixed(0)}ms`);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("records appended during an in-flight write are committed as one ordered batch", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-jsonl-group-"));
+  const file = path.join(root, "group.jsonl");
+  try {
+    const first = appendJsonLine(file, { sequence: 0 });
+    await new Promise((resolve) => setImmediate(resolve));
+    const rest = Array.from({ length: 30 }, (_, index) =>
+      appendJsonLine(file, { sequence: index + 1 }),
+    );
+    await Promise.all([first, ...rest]);
+    const lines = (await fs.readFile(file, "utf8")).trim().split("\n");
+    assert.deepEqual(
+      lines.map((line) => JSON.parse(line).sequence),
+      Array.from({ length: 31 }, (_, sequence) => sequence),
+    );
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

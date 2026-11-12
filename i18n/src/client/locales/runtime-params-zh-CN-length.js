@@ -280,6 +280,14 @@ export default {
       name: "产物已验证检查点身份缓存",
       description: "产物已验证检查点身份缓存使用的长度或容量阈值。",
     },
+    artifactEventJournalCacheBytes: {
+      name: "产物事件日志缓存",
+      description: "内存中保留已校验会话产物事件日志的字节上限。",
+    },
+    authorityOutboxJournalTailGuardBytes: {
+      name: "产物权威状态发件箱日志尾部校验",
+      description: "增量读取权威状态发件箱日志时，用于确认已读部分未被改写的尾部字节数。",
+    },
   },
   display: {
     toolOperationSubjectChars: {

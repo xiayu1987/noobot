@@ -63,6 +63,19 @@ export function hasToolPolicyPatchContent({ toolPolicyPatch = {} } = {}) {
   return hasPatchDenyToolNames || hasOtherPatchKeys;
 }
 
+function resolveAllowedToolNames(policy, runConfig) {
+  const allow = new Set(normalizeStringList(policy.allowToolNames));
+  if (text(policy.mode).toLowerCase() !== "custom_only" && runConfig.scenario === "programming") {
+    for (const name of PROGRAMMING_REQUIRED_TOOL_NAMES) allow.add(name);
+  }
+  if (!allow.size) return allow;
+  const pluginTools = Array.isArray(runConfig.pluginTools) ? runConfig.pluginTools : [];
+  for (const name of normalizeStringList(pluginTools.map((contribution) => contribution?.name))) {
+    allow.add(name);
+  }
+  return allow;
+}
+
 export function resolveToolBindings({ sourceTools = [], runConfig = {} } = {}) {
   const source = Array.isArray(sourceTools) ? sourceTools : [];
   const policy = isPlainObject(runConfig?.toolPolicy) ? runConfig.toolPolicy : {};
@@ -78,16 +91,7 @@ export function resolveToolBindings({ sourceTools = [], runConfig = {} } = {}) {
   let tools = source;
   if (mode === "custom_only") tools = [...customTools, ...included];
   else if (mode === "append_custom") tools = [...source, ...customTools];
-  const allow = new Set(normalizeStringList(policy.allowToolNames));
-
-  const pluginTools = Array.isArray(runConfig?.pluginTools) ? runConfig.pluginTools : [];
-  for (const contribution of pluginTools) {
-    const name = text(contribution?.name);
-    if (name) allow.add(name);
-  }
-  if (mode !== "custom_only" && runConfig.scenario === "programming") {
-    for (const name of PROGRAMMING_REQUIRED_TOOL_NAMES) allow.add(name);
-  }
+  const allow = resolveAllowedToolNames(policy, runConfig);
   if (allow.size) tools = tools.filter((item) => allow.has(String(item?.name || "")));
   const deny = new Set(normalizeStringList(policy.denyToolNames));
   if (deny.size) tools = tools.filter((item) => !deny.has(String(item?.name || "")));

@@ -275,9 +275,15 @@ test("identity merge requires an explicit conflict policy", () => {
   );
   assert.deepEqual(
     mergeAttachmentsByIdentity([identity], [{ ...identity, name: "new" }], {
-      onConflict: (_old, incoming) => incoming,
+      onConflict: ({ incoming }) => incoming,
     }),
     [{ ...identity, name: "new" }],
+  );
+  assert.deepEqual(
+    mergeAttachmentsByIdentity([identity], [{ ...identity, name: "new" }], {
+      onConflict: ({ existing, incoming }) => ({ ...existing, previousName: incoming.name }),
+    }),
+    [{ ...identity, previousName: "new" }],
   );
 });
 

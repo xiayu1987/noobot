@@ -18,7 +18,7 @@ import { createRunEventListener } from "../../../../../../../../service/ws/chat-
 import { isWorkflowNodeMessageEvent } from "@noobot/event-protocol/message-event";
 import { toolResultText } from "../../../../../unit/helpers/toolTimelineFixture.js";
 import { useChatStore } from "../../../../../../src/modules/chat/stores/useChatStore.js";
-import { collectSessionLinkSnapshots } from "../../../../../../src/modules/chat/composables/message/useMessageFiles.js";
+import { useSessionMessageResources } from "../../../../../../src/modules/chat/composables/message/useSessionMessageResources.js";
 import { useMarkdownRenderer } from "../../../../../../src/modules/chat/composables/message/useMarkdownRenderer.js";
 import { buildAttachmentRefIndex } from "../../../../../../src/modules/chat/composables/message/attachmentInlineRefPlugin.js";
 import { translateMessageKey } from "../../../../../../src/shared/i18n/messageCatalog.js";
@@ -79,7 +79,7 @@ function reportMutationRef(overrides) {
 
 function linkRenderer(messages, messageIndex) {
   const { renderMarkdown } = useMarkdownRenderer();
-  const linkSnapshots = collectSessionLinkSnapshots(messages);
+  const linkSnapshots = useSessionMessageResources(messages).linkSnapshots.value;
   return (content) =>
     renderMarkdown(content, {
       attachmentRefIndex: buildAttachmentRefIndex([], { userId: "user-1" }),
@@ -355,7 +355,9 @@ describe("authoritative message event end-to-end fidelity", () => {
     const { messages } = store.selectSubSessionMessages("child-session");
     const messageIndex = messages.findIndex((message) => message.role === "assistant");
     expect(
-      collectSessionLinkSnapshots(messages).map(({ ref }) => `${ref.mutationId}@${ref.revision}`),
+      useSessionMessageResources(messages).linkSnapshots.value.map(
+        ({ ref }) => `${ref.mutationId}@${ref.revision}`,
+      ),
     ).toEqual(["m-report@1", "m-report@2", "m-old@1"]);
     const render = linkRenderer(messages, messageIndex);
 
@@ -401,7 +403,7 @@ describe("authoritative message event end-to-end fidelity", () => {
     );
     expect(assistantIndexes).toHaveLength(2);
     expect(
-      collectSessionLinkSnapshots(messages).map(
+      useSessionMessageResources(messages).linkSnapshots.value.map(
         ({ ref, messageIndex }) => `${ref.mutationId}@${ref.revision}#${messageIndex}`,
       ),
     ).toEqual([`m-report@1#${assistantIndexes[0]}`, `m-report-turn-2@1#${assistantIndexes[1]}`]);
@@ -443,7 +445,8 @@ describe("authoritative message event end-to-end fidelity", () => {
     ]);
     const historyIndex = history.findIndex((message) => message.role === "assistant");
 
-    const refsOf = (messages) => collectSessionLinkSnapshots(messages).map(({ ref }) => ref);
+    const refsOf = (messages) =>
+      useSessionMessageResources(messages).linkSnapshots.value.map(({ ref }) => ref);
     expect(refsOf(history)).toEqual(refsOf(live));
     const link = "[报告](<D:/工作/报告.xlsx>)";
     expect(linkRenderer(history, historyIndex)(link)).toBe(linkRenderer(live, liveIndex)(link));

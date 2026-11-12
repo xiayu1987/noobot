@@ -329,6 +329,25 @@ to the second turn and refresh. A refresh without `turn` lands on the latest tur
 `turn`; a click writes the turn's turnScopeId; refresh and reconnect with `turn` land on that turn.
 Each landing places the turn's first message 16px (within 2px) below the message list viewport top.
 
+### PBE-058: Deterministic Session Performance
+
+Run `bash scripts/e2e-docker/run.sh test perf`. After an unmeasured initialization turn, one browser Session sends six measured turns
+through the real service and model proxy to an isolated SSE provider. Each turn executes all 18
+built-in tools and six character plugin tools six times: 144 calls per turn, 864 overall.
+Search, image generation/parsing, MCP and service upstreams are local fixtures; connectors use an
+isolated SQLite instance, interactions are answered in the browser, and switching uses a second mock alias.
+The character plugin uses the sample GLB and real Session artifact revisions. No built-in tools are excluded.
+
+Require ordered, successful tool pairs, exactly 145 main-model requests per turn and no retries.
+Each group of 23 business calls triggers a real phase summary, with six summary requests and commits
+per turn; the replay resumes after compaction. Auxiliary model requests are counted separately.
+Observe acceptance, processing start, first tool, turn completion, UI readiness and each tool's
+reported duration. Compare warm-turn medians with the measured baseline plus 30% and 100ms;
+also compare turns 5-6 with turns 2-3 to detect late-session degradation using the same tolerance.
+Absolute turn limits are defined in `DEVELOPMENT_THRESHOLDS.performance`. Missing measurements fail. Write
+`performance.json` into Playwright results, including partial samples on failure. The ordinary
+full suite excludes `@perf`. See [operation and calibration](../scripts/e2e-docker/PERFORMANCE.md).
+
 ### Single Model Invocation Observation Boundary
 
 All model observations occur at the observed model port adjacent to provider `invoke()`. Main Agent,

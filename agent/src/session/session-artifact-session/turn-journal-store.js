@@ -3,20 +3,21 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filePath as path } from "@noobot/path-resolver";
+import { filePath as path, resolveScopedArtifactPath } from "@noobot/path-resolver";
 import {
   SESSION_ARTIFACT_SCHEMA_VERSION,
   SESSION_ERROR_CODE,
   assertSessionManifestLayout,
+  assertSessionStorageJournalRecord,
+  sessionStorageMessageHash,
+  assertSessionArtifactJournalIndex,
 } from "@noobot/session-protocol";
 import { SESSION_REPAIR_ERROR_CODE, assertTurnJournalBoundary } from "@noobot/session-repair";
 import { readTurnSummaryCheckpointState } from "@noobot/context-protocol/policy/summary";
 import { createHash } from "node:crypto";
 import { mkdir, open, rename, writeFile } from "node:fs/promises";
 import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
-import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
 import { assertStoredCheckpointReceipts } from "@noobot/session-protocol/summary-checkpoint-storage";
-import { assertSessionArtifactEvents } from "@noobot/event-protocol";
 
 export const TURN_JOURNAL_SCHEMA_VERSION = SESSION_ARTIFACT_SCHEMA_VERSION;
 
@@ -31,7 +32,9 @@ export function assertCanonicalSessionManifest(session, operation) {
     throw turnJournalSchemaRequiredError(operation);
   }
   assertStoredCheckpointReceipts(session);
-  assertSessionArtifactEvents(session.sessionArtifactEvents, session.sessionId);
+  if (Object.hasOwn(session, "sessionArtifactEvents"))
+    throw turnJournalSchemaRequiredError(operation);
+  assertSessionArtifactJournalIndex(session.artifactEventJournal);
   return assertSessionManifestLayout(session);
 }
 
@@ -39,27 +42,31 @@ export function journalPath(sessionDir, turnId) {
   return path.join(sessionDir, SESSION_ARTIFACT_FILE_NAMES.turnsDir, `${turnId}.jsonl`);
 }
 
+export function resolveTurnJournalPath(sessionDir, file) {
+  return resolveScopedArtifactPath({
+    baseDir: sessionDir,
+    reference: file,
+    scopeDir: SESSION_ARTIFACT_FILE_NAMES.turnsDir,
+    extensions: [".jsonl"],
+    errorCode: SESSION_ERROR_CODE.MANIFEST_LAYOUT_INVALID,
+    errorLabel: "session turn journal reference",
+  });
+}
+
 export function summarySnapshotContentHash(payload) {
   return `sha256:${createHash("sha256").update(JSON.stringify(payload)).digest("hex")}`;
 }
 
-export function messageHash(message) {
-  return `sha256:${createHash("sha256").update(JSON.stringify(message)).digest("hex")}`;
-}
+export { sessionStorageMessageHash as messageHash } from "@noobot/session-protocol";
 
 export function assertIncrementalJournalRecords(records, file) {
   for (const record of records) {
-    const valid =
-      isPlainObject(record) &&
-      isCanonicalText(record.messageUid) &&
-      (record.op === "remove" ||
-        (record.op === "upsert" &&
-          isPlainObject(record.message) &&
-          record.message.messageUid === record.messageUid &&
-          record.hash === messageHash(record.message)));
-    if (!valid) {
+    try {
+      assertSessionStorageJournalRecord(record);
+    } catch (cause) {
       const error = new Error(`turn journal contains an invalid incremental record: ${file}`);
       error.code = SESSION_ERROR_CODE.TURN_JOURNAL_RECORD_INVALID;
+      error.cause = cause;
       throw error;
     }
   }
@@ -211,14 +218,14 @@ export async function replaceJournalRecords(file, records) {
   return Buffer.byteLength(payload, "utf8");
 }
 
-export async function replaceJournal(file, messages) {
-  return replaceJournalRecords(
-    file,
-    messages.map((message) => ({
+export async function replaceJournal(file, messages, positions) {
+  return replaceJournalRecords(file, [
+    ...messages.map((message) => ({
       op: "upsert",
       messageUid: message.messageUid,
       message,
-      hash: messageHash(message),
+      hash: sessionStorageMessageHash(message),
     })),
-  );
+    { op: "order", positions },
+  ]);
 }

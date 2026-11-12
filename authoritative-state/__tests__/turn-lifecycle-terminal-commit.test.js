@@ -67,6 +67,10 @@ test("terminal replay returns the original receipt without rematerializing at a 
   const replay = commitTurnLifecycle({
     ...input,
     lifecycle: persisted,
+    readPreparedEvent: (eventId) => {
+      assert.equal(eventId, committed.committedEvent.eventId);
+      return committed.committedEvent;
+    },
     materializeTerminal: undefined,
     now: () => "2026-08-01T00:00:00.000Z",
     createEventId: () => assert.fail("replay must not allocate an event"),

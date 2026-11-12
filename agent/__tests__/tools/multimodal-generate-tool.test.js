@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { projectToolsForModel } from "../../src/models/tool/model-tool-definition.js";
 import { createModelRequestExecutor } from "@noobot/model-runtime";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 
@@ -169,10 +170,15 @@ test("multimodal_generate: model configuration is the only image API type author
   };
   const tool = getMultimodalGenerateTool(runtime);
 
-  assert.equal(
-    tool.schema.options.every((option) => !("api_type" in option.shape)),
-    true,
-  );
+  assert.equal("api_type" in tool.schema.shape, false);
+  const parameters = projectToolsForModel([tool])[0].function.parameters;
+  assert.equal(parameters.type, "object");
+  assert.equal(parameters.additionalProperties, false);
+  for (const key of ["oneOf", "anyOf", "allOf", "if", "then", "else"]) {
+    assert.equal(key in parameters, false);
+  }
+  assert.deepEqual(parameters.required, ["generation_content"]);
+  assert.deepEqual(parameters.properties.output_type.enum, ["image", "video"]);
   assert.equal(tool.schema.parse({ generation_content: "draw" }).output_type, "image");
   const video = {
     generation_content: "fly",
@@ -190,6 +196,22 @@ test("multimodal_generate: model configuration is the only image API type author
   ]) {
     assert.equal(tool.schema.safeParse({ ...video, ...option }).success, false);
   }
+  for (const option of [{ duration: 5 }, { aspect_ratio: "16:9" }]) {
+    const result = tool.schema.safeParse({ generation_content: "draw", ...option });
+    assert.equal(result.success, false);
+    assert.equal(result.error.issues.length, 1);
+  }
+  for (const input of [
+    { generation_content: "draw", unknown: true },
+    { generation_content: "draw", output_type: "audio" },
+    { generation_content: "draw", n: 11 },
+    { ...video, duration: 0 },
+    { ...video, aspect_ratio: "invalid" },
+    { generation_content: "draw", image_urls: [""] },
+  ]) {
+    await assert.rejects(tool.invoke(input));
+  }
+  assert.equal(modelRequest, null);
   runtime.globalConfig.providers.chat_only = {
     ...runtime.globalConfig.providers.gpt_image_2,
     multimodal_generation: { support_generation: { enabled: false, support_scope: [] } },
@@ -197,7 +219,7 @@ test("multimodal_generate: model configuration is the only image API type author
   runtime.globalConfig.multimodal = { generation: { default_models: { image: "chat_only" } } };
   for (const locale of ["zh-CN", "en-US"]) {
     runtime.runConfig = { locale };
-    const description = getMultimodalGenerateTool(runtime).schema.options[0].shape.size.description;
+    const description = getMultimodalGenerateTool(runtime).schema.shape.size.description;
     assert.match(description, locale === "zh-CN" ? /所选模型/ : /selected model/);
     assert.doesNotMatch(description, /chat_only|openai_images|Configured default/);
   }

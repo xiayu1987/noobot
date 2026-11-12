@@ -29,7 +29,16 @@ test("switch_model: 应能通过 alias 切换模型", async () => {
       openai: { model: "gpt-4o", used_for_conversation: true },
       anthropic: { model: "claude-3-7-sonnet", used_for_conversation: true },
     },
-    systemRuntime: { userId: "u1", sessionId: "s-1" },
+    systemRuntime: {
+      userId: "u1",
+      sessionId: "s-1",
+      persistenceScope: {
+        scopeId: "test-scope",
+        parentSessionId: "parent-1",
+        relativeDir: "runtime/session/parent-1/children/s-1",
+        allowedRoot: "/test/workspace/u1",
+      },
+    },
     sessionManager: {
       async setSessionModelAlias(payload = {}) {
         persistedPayload = payload;
@@ -49,6 +58,7 @@ test("switch_model: 应能通过 alias 切换模型", async () => {
     userId: "u1",
     sessionId: "s-1",
     modelAlias: "openai",
+    persistenceScope: runtime.systemRuntime.persistenceScope,
   });
 });
 

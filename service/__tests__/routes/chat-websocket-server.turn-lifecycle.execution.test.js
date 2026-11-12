@@ -270,7 +270,7 @@ test("deduplicated lifecycle commands do not bypass the acknowledged authority o
           parentSessionId: "",
           lifecycle,
           event: lifecycleEvent,
-          eventOutbox,
+          readPreparedEvent: (eventId) => eventOutbox.find((item) => item.eventId === eventId),
           createEventId: () => `deduplicated-event-${++eventIdSequence}`,
           now: () => "2026-01-01T00:00:00.000Z",
         });

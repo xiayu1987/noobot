@@ -8,6 +8,7 @@ import {
   assertSessionManifestLayout,
   requireSessionAggregateVersion,
   SESSION_ARTIFACT_SCHEMA_VERSION,
+  sessionArtifactEventRevision,
 } from "@noobot/session-protocol";
 import { text, stableValue } from "@noobot/shared/value";
 
@@ -21,8 +22,7 @@ function hash(value) {
 
 function orderedMessageRevisions(session) {
   assertSessionManifestLayout(session);
-  const hashes = new Map(session.turnOrder.flatMap((turn) => Object.entries(turn.messageHashes)));
-  return session.messageOrder.map(({ messageUid }) => [messageUid, hashes.get(messageUid)]);
+  return session.turnOrder.map((turn) => [turn.turnId, turn.messageCount, turn.messageRevision]);
 }
 
 export function createSessionDisplaySourceRevision(session) {
@@ -38,7 +38,9 @@ export function createSessionDisplaySourceRevision(session) {
     aggregateVersion: requireSessionAggregateVersion(session.aggregateVersion),
     turnTimings: session.turnTimings,
     turnLifecycle: session.turnLifecycle,
-    sessionArtifactEvents: session.sessionArtifactEvents,
+    artifactEventRevision: Object.hasOwn(session, "sessionArtifactEvents")
+      ? sessionArtifactEventRevision(session.sessionArtifactEvents, session.sessionId)
+      : session.artifactEventJournal.eventRevision,
     messages: orderedMessageRevisions(session),
   });
 }

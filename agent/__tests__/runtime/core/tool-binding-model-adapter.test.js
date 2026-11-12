@@ -57,14 +57,14 @@ test("adaptToolsForBinding reads strict only from the declared spec field", () =
   assert.deepEqual(adapted.bindOptions, { tool_choice: "auto", strict: true });
 });
 
-test("adaptToolsForBinding downgrades strict when call_service is present", () => {
+test("adaptToolsForBinding applies strict regardless of which tools are bound", () => {
   const adapted = adaptToolsForBinding([{ name: "call_service" }], {
     model: "gpt-5.5",
     strict_tool_schema: true,
   });
 
-  assert.deepEqual(adapted.bindOptions, { tool_choice: "auto", strict: false });
-  assert.deepEqual(adapted.strictDowngradedTools, ["call_service"]);
+  assert.deepEqual(adapted.bindOptions, { tool_choice: "auto", strict: true });
+  assert.equal(Object.hasOwn(adapted, "strictDowngradedTools"), false);
 });
 
 test("adaptToolsForBinding omits bind options without tools", () => {

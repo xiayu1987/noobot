@@ -13,6 +13,9 @@ import {
   SESSION_ARTIFACT_CHECKPOINT_RECORDS_SCHEMA_VERSION,
   SESSION_ARTIFACT_SCHEMA_VERSION,
   createEmptyTurnLifecycle,
+  createSessionStorageMessageIndex,
+  SESSION_ARTIFACT_EVENT_JOURNAL_FILE,
+  sessionArtifactEventRevision,
 } from "@noobot/session-protocol";
 import {
   readSessionForProtocolRepair,
@@ -182,12 +185,38 @@ test("protocol repair resegments a migrated checkpoint baseline and preserves th
       source.messages.map((message) => message.messageUid),
       ["m1", "m2", "m3"],
     );
+    const positions = records.map(({ messageUid }, index) => ({ messageUid, ordinal: index + 1 }));
+    checkpointPayloads[0].records = [...records, { op: "order", positions }];
+    let migratedPreviousHash = "";
+    for (const [index, checkpoint] of checkpointPayloads.entries()) {
+      const payload = {
+        ...checkpoint,
+        sessionId: "session-1",
+        turnId: "turn-000001",
+        turnScopeId: "scope-1",
+        dialogProcessId: "dialog-1",
+        persistedMessageUids: positions.map(({ messageUid }) => messageUid),
+        summarizedMessageUids: [],
+        previousCheckpointHash: migratedPreviousHash,
+      };
+      const contentHash = `sha256:${createHash("sha256").update(JSON.stringify(payload)).digest("hex")}`;
+      await writeFile(path.join(root, indexes[index].file), JSON.stringify(payload), "utf8");
+      indexes[index].contentHash = contentHash;
+      migratedPreviousHash = contentHash;
+    }
     await Promise.all([
       writeFile(journalFile, "", "utf8"),
       writeFile(
         path.join(root, "session.json"),
         JSON.stringify({
           schemaVersion: SESSION_ARTIFACT_SCHEMA_VERSION,
+          sessionId: "session-1",
+          artifactEventJournal: {
+            file: SESSION_ARTIFACT_EVENT_JOURNAL_FILE,
+            committedBytes: 0,
+            eventCount: 0,
+            eventRevision: sessionArtifactEventRevision([], "session-1"),
+          },
           turnArtifactSequence: 1,
           turnOrder: [
             {
@@ -197,9 +226,8 @@ test("protocol repair resegments a migrated checkpoint baseline and preserves th
               file: "turns/turn-000001.jsonl",
               committedBytes: 0,
               recordCount: 0,
-              messageOrder: ["m1", "m2", "m3"],
-              messageHashes: Object.fromEntries(
-                records.map((item) => [item.messageUid, item.hash]),
+              ...createSessionStorageMessageIndex(
+                records.map(({ message, hash }, index) => ({ message, hash, ordinal: index + 1 })),
               ),
               summarySnapshots: indexes.map(({ op, ...index }, position) => ({
                 ...index,
@@ -209,18 +237,19 @@ test("protocol repair resegments a migrated checkpoint baseline and preserves th
             },
           ],
           turnLifecycle: createEmptyTurnLifecycle(),
-          messageOrder: [{ messageUid: "m1" }, { messageUid: "m2" }, { messageUid: "m3" }],
         }),
         "utf8",
       ),
     ]);
     const repaired = await resegmentMigratedCheckpointBaselines({ sessionDir: root });
     assert.deepEqual(repaired, [
-      { turnId: "turn-000001", checkpointRecordCounts: [1, 1], tailRecordCount: 1 },
+      { turnId: "turn-000001", checkpointRecordCounts: [2, 2], tailRecordCount: 2 },
     ]);
     const nextJournal = (await readFile(journalFile, "utf8")).trim().split("\n").map(JSON.parse);
     assert.deepEqual(
-      nextJournal.map((entry) => [entry.op, entry.messageUid]),
+      nextJournal
+        .filter((entry) => entry.op === "upsert")
+        .map((entry) => [entry.op, entry.messageUid]),
       [["upsert", "m3"]],
     );
     const manifestTurn = JSON.parse(await readFile(path.join(root, "session.json"), "utf8"))
@@ -228,17 +257,34 @@ test("protocol repair resegments a migrated checkpoint baseline and preserves th
     const nextIndexes = manifestTurn.summarySnapshots;
     assert.equal(
       manifestTurn.committedBytes,
-      Buffer.byteLength(`${JSON.stringify(nextJournal[0])}\n`),
+      Buffer.byteLength(nextJournal.map((record) => `${JSON.stringify(record)}\n`).join("")),
     );
     const first = JSON.parse(await readFile(path.join(root, nextIndexes[0].file), "utf8"));
     const second = JSON.parse(await readFile(path.join(root, nextIndexes[1].file), "utf8"));
     assert.deepEqual(
-      first.records.map((entry) => entry.messageUid),
+      first.records.filter((entry) => entry.op === "upsert").map((entry) => entry.messageUid),
       ["m1"],
     );
     assert.deepEqual(
-      second.records.map((entry) => entry.messageUid),
+      second.records.filter((entry) => entry.op === "upsert").map((entry) => entry.messageUid),
       ["m2"],
+    );
+    assert.deepEqual(
+      first.records.find((entry) => entry.op === "order").positions,
+      positions.slice(0, 1),
+    );
+    assert.deepEqual(
+      second.records.find((entry) => entry.op === "order").positions,
+      positions.slice(0, 2),
+    );
+    assert.deepEqual(nextJournal.find((entry) => entry.op === "order").positions, positions);
+    const restored = await readSessionForProtocolRepair({
+      sessionDir: root,
+      session: JSON.parse(await readFile(path.join(root, "session.json"), "utf8")),
+    });
+    assert.deepEqual(
+      restored.messages.map((message) => message.messageUid),
+      ["m1", "m2", "m3"],
     );
     assert.equal(second.previousCheckpointHash, nextIndexes[0].contentHash);
     assert.equal(

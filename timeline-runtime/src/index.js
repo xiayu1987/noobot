@@ -5,5 +5,4 @@
  */
 
 export { createWeakArrayIndex } from "./array-index.js";
-export { selectLatestOrderedFacts, upsertOrderedFact } from "./ordered-facts.js";
 export { createSerializedWindowIndex } from "./serialized-window-index.js";

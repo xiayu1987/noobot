@@ -5,7 +5,7 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { deepFreeze } from "../deep-freeze.js";
+import { deepFreeze, isDeepFrozen } from "../deep-freeze.js";
 
 test("deep freeze returns the same reference and freezes nested objects", () => {
   const source = { outer: { inner: { value: 1 } }, list: [{ item: 2 }] };
@@ -41,4 +41,16 @@ test("deep freeze rejects writes to nested values", () => {
     "use strict";
     frozen.outer.inner = 2;
   }, TypeError);
+});
+
+test("only values passed to deepFreeze are reported as deeply frozen", () => {
+  const source = { outer: { inner: 1 }, list: [{ item: 2 }] };
+  assert.equal(isDeepFrozen(source), false);
+  deepFreeze(source);
+  assert.ok(isDeepFrozen(source));
+  assert.equal(isDeepFrozen(source.outer), false);
+  assert.equal(deepFreeze(source.outer), source.outer);
+  assert.ok(isDeepFrozen(source.outer));
+  assert.equal(isDeepFrozen(Object.freeze({ nested: {} })), false);
+  assert.equal(isDeepFrozen("text"), false);
 });

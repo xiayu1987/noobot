@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
+import { createSessionStorageMessageIndex } from "@noobot/session-protocol";
 import test from "node:test";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -87,13 +88,23 @@ async function readManifest(root) {
 
 function layoutOf(manifest) {
   return {
-    turnOrder: manifest.turnOrder.map(({ turnId, turnScopeId, messageOrder, messageHashes }) => ({
-      turnId,
-      turnScopeId,
-      messageOrder,
-      messageHashes,
-    })),
-    messageOrder: manifest.messageOrder,
+    turnOrder: manifest.turnOrder.map(
+      ({
+        turnId,
+        turnScopeId,
+        messageCount,
+        firstMessageOrdinal,
+        lastMessageOrdinal,
+        messageRevision,
+      }) => ({
+        turnId,
+        turnScopeId,
+        messageCount,
+        firstMessageOrdinal,
+        lastMessageOrdinal,
+        messageRevision,
+      }),
+    ),
     dialogOrder: manifest.dialogOrder,
   };
 }
@@ -207,15 +218,11 @@ test("turn view write rejects an outside turn without ordered messages", async (
     const files = buildSessionArtifactFileMap(root);
     const manifest = await readManifest(root);
     const target = manifest.turnOrder.find((item) => item.turnScopeId === "b");
-    manifest.messageOrder = manifest.messageOrder.filter(
-      (reference) => !target.messageOrder.includes(reference.messageUid),
-    );
-    target.messageOrder = [];
-    target.messageHashes = {};
+    Object.assign(target, createSessionStorageMessageIndex([]));
     await writeFile(files.session, JSON.stringify(manifest));
     const view = await readView(root, ["a"]);
     await assert.rejects(writeTurnView(root, view, view.turnScopeIds), {
-      code: "SESSION_TURN_VIEW_INCOMPLETE",
+      code: "SESSION_TURN_JOURNAL_RECORD_INVALID",
     });
   }));
 

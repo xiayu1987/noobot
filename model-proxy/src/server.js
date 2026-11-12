@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import http from "node:http";
+import https from "node:https";
 import { createProxyServer as createHttpProxyServer } from "http-proxy-3";
 import { getHeaderValue } from "./common.js";
 import { decodeBodyByEncoding, resolveFinalResponseBodyText } from "./response-body.js";
@@ -120,8 +121,11 @@ function createProxyServer({
   unknownFlowName,
   unknownSessionId,
 } = {}) {
+  const transport = new URL(targetUrl).protocol === "https:" ? https : http;
+  const agent = new transport.Agent({ keepAlive: true });
   const proxy = createHttpProxyServer({
     target: targetUrl,
+    agent,
     changeOrigin: true,
     secure: false,
   });
@@ -255,6 +259,7 @@ function createProxyServer({
     proxy.web(req, res);
   });
 
+  server.once("close", () => agent.destroy());
   server.listen(localPort, proxyHost, () => {
     console.log(
       `[model-proxy] Reverse proxy running on http://${proxyHost}:${localPort} -> ${targetUrl}`,

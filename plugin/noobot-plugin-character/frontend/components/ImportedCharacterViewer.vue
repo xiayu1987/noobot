@@ -37,6 +37,8 @@ let scene;
 let camera;
 let controls;
 let resizeObserver;
+let visibilityObserver;
+let visible = false;
 let frame;
 let mountRevision = 0;
 let players = new Map();
@@ -593,6 +595,7 @@ function startAnimationLoop() {
   const animate = () => {
     frame = requestAnimationFrame(animate);
     const delta = clock.getDelta();
+    if ((!visible || document.hidden) && !isRecording.value) return;
     for (const player of players.values()) {
       if (!activeProtocol || !playbackEnded) player.mixer.update(delta);
     }
@@ -711,7 +714,13 @@ watch(
 );
 
 watch(() => props.showColliders, updateColliderHelperVisibility);
-onMounted(() => mount());
+onMounted(() => {
+  visibilityObserver = new IntersectionObserver(([entry]) => {
+    visible = entry.isIntersecting;
+  });
+  visibilityObserver.observe(host.value);
+  mount();
+});
 watch(
   () => props.revision,
   () => {
@@ -722,6 +731,7 @@ watch(
   },
 );
 onBeforeUnmount(() => {
+  visibilityObserver?.disconnect();
   mountRevision += 1;
   dispose();
 });

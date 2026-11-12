@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { closeWebSocket } from "./closeWebSocket.js";
-import { text } from "@noobot/shared/value";
+import { requireFunctionDependencies, text } from "@noobot/shared/value";
 import { createWebSocketAuthProtocols } from "@noobot/shared/websocket-auth";
 
 export const WEB_SOCKET_TRANSPORT_PHASE = Object.freeze({
@@ -187,10 +187,11 @@ export function createWebSocketTransportSupervisor({
   }
 
   function scheduleReconnect(callback, { immediate = false } = {}) {
+    requireFunctionDependencies("scheduleReconnect", { callback });
     if (isTerminal() || phase === WEB_SOCKET_TRANSPORT_PHASE.SUSPENDED || reconnectTimer)
       return false;
     if (immediate) {
-      callback?.();
+      callback();
       return true;
     }
     const baseDelay = Math.max(0, Number(reconnectBaseDelayMs || 0));
@@ -205,12 +206,13 @@ export function createWebSocketTransportSupervisor({
         phase === WEB_SOCKET_TRANSPORT_PHASE.SUSPENDED
       )
         return;
-      callback?.();
+      callback();
     }, delayMs);
     return true;
   }
 
-  function recover({ reconnect = null, suspendOnAuthenticationFailure = false } = {}) {
+  function recover({ reconnect, suspendOnAuthenticationFailure = false }) {
+    requireFunctionDependencies("recover", { reconnect });
     if (isTerminal() || phase === WEB_SOCKET_TRANSPORT_PHASE.SUSPENDED)
       return Promise.resolve(false);
     if (typeof refreshAuthentication !== "function") {

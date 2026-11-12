@@ -5,7 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
@@ -66,16 +66,15 @@ test("appendTurns from continuations spawned inside a session lock keeps every m
     concurrentUids.map((messageUid) => [messageUid]),
   );
 
-  const manifest = JSON.parse(
-    await readFile(
-      path.join(root, USER_ID, "runtime", "session", SESSION_ID, "session.json"),
-      "utf8",
-    ),
-  );
-  const durableUids = new Set(manifest.messageOrder.map((entry) => entry.messageUid));
+  const reloaded = await createTestSessionServices({
+    workspaceRoot: root,
+  }).repositories.sessionRepository.requireById(USER_ID, SESSION_ID, {
+    persistenceContext: repo.treePersistenceContext(USER_ID, SESSION_ID),
+  });
+  const durableUids = new Set(reloaded.messages.map((entry) => entry.messageUid));
   assert.deepEqual(
     concurrentUids.filter((uid) => !durableUids.has(uid)),
     [],
-    "every reported append must be in the committed messageOrder",
+    "every reported append must survive a fresh repository read",
   );
 });

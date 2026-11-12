@@ -34,6 +34,7 @@ export const DEFAULT_QUANTITY_THRESHOLDS = deepFreeze({
   },
   eventProtocol: {
     authorityOutboxPendingBatchSize: 100,
+    authorityOutboxProjectionCacheSessions: 64,
   },
   longMemory: {
     workAssistantCollaborationMaxItems: 5,

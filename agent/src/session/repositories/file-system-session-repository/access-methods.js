@@ -10,6 +10,7 @@ import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { text } from "@noobot/shared/value";
 import { parseWorkspaceSessionTombstones } from "@noobot/workspace-protocol/session-store";
 import { createSessionTreePersistenceContext } from "../../session-location-resolver.js";
+import { createParsedTextMemo } from "../../../shared/storage/parsed-text-memo.js";
 
 function requireIdentity(value, message, code) {
   const normalized = text(value);
@@ -36,11 +37,15 @@ export function sessionTreeNodeMissingError(sessionId) {
   });
 }
 
+const parseSessionTombstones = createParsedTextMemo((raw, file) =>
+  parseWorkspaceSessionTombstones({ raw, file }),
+);
+
 class SessionAccessMethods {
   async _readDeletedSessions(userId) {
     const file = this._sessionTombstoneFile(requireUserId(userId));
     const raw = await this.storageService.readTextOrNull(file);
-    return { sessions: parseWorkspaceSessionTombstones({ raw, file }) };
+    return { sessions: parseSessionTombstones(raw, file) };
   }
 
   async markSessionsDeleted(userId, sessionIds) {

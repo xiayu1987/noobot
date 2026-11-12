@@ -24,10 +24,8 @@ import { getMessageAnchorId, getMessageRenderKey } from "../../model/messageAnch
 import { sharedMessageRenderProps } from "../../model/messageItemProps.js";
 import SessionArtifactPanel from "../artifacts/SessionArtifactPanel.vue";
 import { isCanonicalText } from "@noobot/shared/value";
-import {
-  EMPTY_TURN_PRESENTATIONS,
-  selectTurnPresentations,
-} from "../../runtime/engine/turnPresentation.js";
+import { EMPTY_TURN_PRESENTATIONS } from "../../runtime/engine/turnPresentation.js";
+import { selectSharedTurnPresentations } from "../../runtime/engine/sharedTurnPresentations.js";
 
 defineEmits(["open-thinking-details"]);
 
@@ -45,7 +43,7 @@ const chatStore = useChatStore();
 const presentedMessages = computed(() =>
   props.activeSession === null
     ? EMPTY_TURN_PRESENTATIONS
-    : selectTurnPresentations({
+    : selectSharedTurnPresentations({
         activeSession: props.activeSession,
         workflowRegistry: chatStore.workflowNodeStateRegistry,
         turnRuntimeRegistry: chatStore.turnRuntimeRegistry,

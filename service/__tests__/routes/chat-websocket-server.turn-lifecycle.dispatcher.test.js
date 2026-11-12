@@ -127,7 +127,6 @@ test("authority dispatcher keeps a failed send pending and reconnect retries the
   const committed = commitTurnLifecycle({
     parentSessionId: "",
     lifecycle: createEmptyTurnLifecycle(),
-    eventOutbox,
     createEventId: () => "authority-event-send-retry",
     now: () => "2026-01-01T00:00:00.000Z",
     event: {
@@ -582,7 +581,6 @@ test("authority dispatcher leaves an event pending when acknowledgement persiste
   const committed = commitTurnLifecycle({
     parentSessionId: "",
     lifecycle: createEmptyTurnLifecycle(),
-    eventOutbox,
     createEventId: () => "authority-event-ack-retry",
     now: () => "2026-01-01T00:00:00.000Z",
     event: {

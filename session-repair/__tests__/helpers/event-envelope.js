@@ -6,7 +6,7 @@
 import { EVENT_PROTOCOL_NAME, EVENT_PROTOCOL_VERSION } from "@noobot/event-protocol/envelope";
 
 export function eventEnvelope(
-  { eventId, eventType, sessionId, turnScopeId, sequence },
+  { eventId, eventType, sessionId, turnScopeId, sequence, revision },
   overrides = {},
 ) {
   return {
@@ -16,9 +16,9 @@ export function eventEnvelope(
       family: "turn_lifecycle",
       schemaVersion: 1,
     },
-    identity: { eventId, eventType, sessionId },
+    identity: { eventId, eventType, sessionId, turnScopeId },
     causality: {},
-    ordering: { domain: "turn", scopeId: turnScopeId, sequence },
+    ordering: { domain: "turn", scopeId: turnScopeId, sequence, revision },
     producer: { type: "agent", id: "agent-1" },
     occurredAt: "2026-10-01T00:00:00.000Z",
     payload: {},

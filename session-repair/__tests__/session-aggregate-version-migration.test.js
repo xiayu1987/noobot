@@ -89,6 +89,7 @@ test("aggregate version contract removes versions fabricated on lifecycle receip
             sessionId: "session-1",
             turnScopeId: "turn-1",
             sequence: 1,
+            revision: 1,
           }),
         },
       ],

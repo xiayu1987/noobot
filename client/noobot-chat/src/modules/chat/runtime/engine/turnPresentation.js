@@ -23,6 +23,17 @@ import {
 } from "@noobot/event-protocol/workflow-runtime-event";
 
 export const EMPTY_TURN_PRESENTATIONS = Object.freeze([]);
+const EMPTY_TOOL_TIMELINE = Object.freeze([]);
+const EMPTY_ACTIVITY_TIMELINE = Object.freeze([]);
+const EMPTY_ATTACHMENTS = Object.freeze([]);
+const terminalPresentations = new WeakMap();
+
+function sameFields(left, right) {
+  return (
+    Object.keys(left).length === Object.keys(right).length &&
+    Object.keys(left).every((key) => Object.is(left[key], right[key]))
+  );
+}
 
 function requirePresentationSession(session) {
   if (!isPlainObject(session) || !isCanonicalText(session.sessionId)) {
@@ -184,17 +195,26 @@ function mergeTurnStatusIntoAssistant(shell, terminalPresentation) {
       ? `${shellContent}\n\n${terminalContent}`
       : shellContent || terminalContent;
   const { ts: _terminalTs, ...terminalFields } = terminalPresentation;
-  return {
+  const previous = terminalPresentations.get(shell);
+  const turnStatus =
+    previous && sameFields(previous.turnStatus, terminalFields.turnStatus)
+      ? previous.turnStatus
+      : terminalFields.turnStatus;
+  const merged = {
     ...shell,
     ...terminalFields,
+    turnStatus,
     presentationMessageId: resolveMessageViewKey(shell),
     turnScopeId: shell.turnScopeId,
     dialogProcessId: terminalPresentation.dialogProcessId,
     content,
-    toolTimeline: shell?.toolTimeline || [],
-    activityTimeline: shell?.activityTimeline || [],
-    attachments: shell?.attachments || [],
+    toolTimeline: shell?.toolTimeline || EMPTY_TOOL_TIMELINE,
+    activityTimeline: shell?.activityTimeline || EMPTY_ACTIVITY_TIMELINE,
+    attachments: shell?.attachments || EMPTY_ATTACHMENTS,
   };
+  if (previous && sameFields(previous, merged)) return previous;
+  terminalPresentations.set(shell, merged);
+  return merged;
 }
 
 function coalescePersistedAssistantPresentations(messages = [], activeSessionId = "") {

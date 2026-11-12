@@ -9,7 +9,6 @@ import os from "node:os";
 import path from "node:path";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import {
-  SESSION_ARTIFACT_SCHEMA_VERSION,
   SESSION_ARTIFACT_SUMMARY_SNAPSHOT_SCHEMA_VERSION,
   TOOL_RESULT_MESSAGE_TYPE,
 } from "@noobot/session-protocol";
@@ -92,7 +91,7 @@ async function writeSession(base, messages) {
   }
   const manifest = {
     sessionId: SESSION_ID,
-    schemaVersion: SESSION_ARTIFACT_SCHEMA_VERSION,
+    schemaVersion: 22,
     turnOrder: [
       {
         turnId: "turn-000001",

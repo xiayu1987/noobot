@@ -22,6 +22,7 @@ export const captureTest = base.extend({
       );
       target.on("request", (request) =>
         evidence.httpRequests.push({
+          atMs: performance.now(),
           method: request.method(),
           url: sanitizeUrl(request.url()),
           resourceType: request.resourceType(),
@@ -29,7 +30,11 @@ export const captureTest = base.extend({
         }),
       );
       target.on("response", async (response) => {
-        const record = { status: response.status(), url: sanitizeUrl(response.url()) };
+        const record = {
+          atMs: performance.now(),
+          status: response.status(),
+          url: sanitizeUrl(response.url()),
+        };
         if (/replace-turn/i.test(response.url()) && response.status() >= 400) {
           record.body = await response.text().catch(() => "");
         }
@@ -38,10 +43,18 @@ export const captureTest = base.extend({
       target.on("websocket", (socket) => {
         evidence.websockets.push({ url: sanitizeUrl(socket.url()) });
         socket.on("framesent", ({ payload }) =>
-          evidence.websocketSent.push({ url: sanitizeUrl(socket.url()), payload }),
+          evidence.websocketSent.push({
+            atMs: performance.now(),
+            url: sanitizeUrl(socket.url()),
+            payload,
+          }),
         );
         socket.on("framereceived", ({ payload }) =>
-          evidence.websocketReceived.push({ url: sanitizeUrl(socket.url()), payload }),
+          evidence.websocketReceived.push({
+            atMs: performance.now(),
+            url: sanitizeUrl(socket.url()),
+            payload,
+          }),
         );
       });
     };

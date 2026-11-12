@@ -286,6 +286,19 @@ describe("webSocketTransportSupervisor", () => {
     expect(supervisor.status().phase).toBe(WEB_SOCKET_TRANSPORT_PHASE.SUSPENDED);
   });
 
+  it("rejects missing reconnect callbacks before scheduling or refreshing authentication", () => {
+    vi.useFakeTimers();
+    const refreshAuthentication = vi.fn();
+    const supervisor = createWebSocketTransportSupervisor({ refreshAuthentication });
+    for (const callback of [undefined, null, false, {}]) {
+      expect(() => supervisor.scheduleReconnect(callback)).toThrow(/callback/);
+      expect(() => supervisor.scheduleReconnect(callback, { immediate: true })).toThrow(/callback/);
+      expect(() => supervisor.recover({ reconnect: callback })).toThrow(/reconnect/);
+    }
+    expect(refreshAuthentication).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("owns one bounded reconnect timer and invalidates stale generations", async () => {
     vi.useFakeTimers();
     const callback = vi.fn();

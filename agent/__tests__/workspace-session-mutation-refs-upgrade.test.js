@@ -11,6 +11,7 @@ import { MESSAGE_ORIGIN, SESSION_ERROR_CODE } from "@noobot/session-protocol";
 import { FILE_MUTATION_VERSION, isMutationRef } from "@noobot/file-mutation-protocol";
 import { upgradeSessionMutationRefs } from "../src/workspace-lifecycle/session-mutation-refs-upgrade.js";
 import { readSessionArtifact } from "../src/session/session-artifact-store.js";
+import { messageHash } from "../src/session/session-artifact-session/turn-journal-store.js";
 import { TEST_STORAGE_SERVICE } from "./helpers/storage-service.js";
 import { buildHarness } from "./session/scoped-session-repositories.fixtures.js";
 import {
@@ -422,14 +423,14 @@ test("v20 keeps compacted turn snapshots immutable and overrides them through jo
     const [turn] = (await readManifest(sessionDir)).turnOrder;
     assert.deepEqual(turn.summarySnapshots, seededTurn.summarySnapshots);
     assert.equal(await readFile(path.join(sessionDir, snapshotIndex.file), "utf8"), snapshotText);
-    assert.notEqual(turn.messageHashes.t1, seededTurn.messageHashes.t1);
+    assert.notEqual(turn.messageRevision, seededTurn.messageRevision);
     const journal = (await readFile(path.join(sessionDir, turn.file), "utf8"))
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line));
     const upserted = journal.filter((record) => record.messageUid === "t1");
     assert.equal(upserted.length, 1);
-    assert.equal(upserted[0].hash, turn.messageHashes.t1);
+    assert.equal(upserted[0].hash, messageHash((await toolMessagesOf(sessionDir)).t1));
 
     const tools = await toolMessagesOf(sessionDir);
     assert.equal(tools.t1.mutationRefs[0].mutationId, mutation.id);

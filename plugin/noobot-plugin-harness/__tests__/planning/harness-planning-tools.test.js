@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { z } from "zod";
 import {
   createTestHookContext,
   createTestModelResponse,
@@ -151,6 +152,19 @@ test("harness planning injects refinement tool and tool call runs plugin-side re
     (tool) => tool?.name === "request_plan_refinement",
   );
   assert.ok(refinementTool, "request_plan_refinement 工具应注入");
+  const injectedDefinitions = ["request_plan_refinement", "request_task_acceptance"].map((name) => {
+    const injected = agentContext.bindings.tools.find((tool) => tool?.name === name);
+    assert.ok(injected, `${name} 工具应注入`);
+    const parameters = z.toJSONSchema(injected.schema, { io: "input" });
+    const keywords = ["oneOf", "anyOf", "allOf", "not", "if", "then", "else"].filter(
+      (keyword) => keyword in parameters,
+    );
+    return { name, type: parameters.type, keywords };
+  });
+  assert.deepEqual(injectedDefinitions, [
+    { name: "request_plan_refinement", type: "object", keywords: [] },
+    { name: "request_task_acceptance", type: "object", keywords: [] },
+  ]);
 
   const toolResult = await refinementTool.invoke(
     { summary: "阶段完成，细化下一步" },

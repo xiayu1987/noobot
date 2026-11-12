@@ -169,7 +169,6 @@ test("SessionMessageService.deleteFromMessage removes deleted terminal Turns fro
             revision: 1,
             sequence: 1,
             eventId: "event-keep-completed",
-            envelope: { identity: { eventId: "event-keep-completed" } },
           },
           {
             commandId: "delete-stopped",
@@ -180,7 +179,6 @@ test("SessionMessageService.deleteFromMessage removes deleted terminal Turns fro
             revision: 2,
             sequence: 2,
             eventId: "event-delete-stopped",
-            envelope: { identity: { eventId: "event-delete-stopped" } },
           },
         ],
       },

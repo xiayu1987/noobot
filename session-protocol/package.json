@@ -4,6 +4,12 @@
   "private": true,
   "type": "module",
   "description": "Canonical Noobot session aggregate, command, event and policy protocol",
+  "imports": {
+    "#storage-digest": {
+      "node": "./src/storage-digest.node.js",
+      "default": "./src/storage-digest.js"
+    }
+  },
   "exports": {
     "./runtime-event": "./src/runtime-event.js",
     ".": "./src/index.js",

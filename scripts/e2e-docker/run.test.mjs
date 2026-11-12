@@ -28,7 +28,7 @@ case "$1 $2" in
   'network inspect') exit "$TEST_NETWORK_MISSING" ;;
   'network rm') exit 99 ;;
   'rm -f')
-    case "$3" in noobot-e2e|noobot-mcp-test) ;; *) exit 98 ;; esac ;;
+    case "$3" in noobot-e2e|noobot-mcp-test|noobot-mock-model) ;; *) exit 98 ;; esac ;;
 esac
 `,
       node: `#!/bin/sh

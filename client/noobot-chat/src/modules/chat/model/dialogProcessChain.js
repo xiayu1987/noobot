@@ -11,7 +11,7 @@ export function mergeAttachments(existing = [], incoming = []) {
   const existingList = Array.isArray(existing) ? existing : [];
   const incomingList = Array.isArray(incoming) ? incoming : [];
   return mergeAttachmentsByIdentity(existingList, incomingList, {
-    onConflict: (_current, authoritativeIncoming) => authoritativeIncoming,
+    onConflict: ({ incoming }) => incoming,
   });
 }
 

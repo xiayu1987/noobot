@@ -16,6 +16,11 @@ import {
   parseWorkspaceSessionTree,
 } from "@noobot/workspace-protocol/session-store";
 import { text } from "@noobot/shared/value";
+import { createParsedTextMemo } from "../../shared/storage/parsed-text-memo.js";
+
+const parseSessionTree = createParsedTextMemo((raw, file) =>
+  normalizeSessionTreeEntity(parseWorkspaceSessionTree({ raw, file })),
+);
 
 export class FileSystemSessionTreeRepository {
   constructor({ pathResolver, storageService } = {}) {
@@ -63,7 +68,7 @@ export class FileSystemSessionTreeRepository {
     const file = this._treeFile(userId);
     try {
       const raw = await this.storageService.readTextOrNull(file);
-      return normalizeSessionTreeEntity(parseWorkspaceSessionTree({ raw, file }));
+      return parseSessionTree(raw, file);
     } catch (error) {
       if (error?.code !== SESSION_STORE_ERROR.WORKSPACE_NOT_INITIALIZED) throw error;
       throw this.workspaceNotInitializedError(basePath, {

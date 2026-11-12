@@ -527,6 +527,24 @@ workspace/<userId>/runtime/plugin-data/harness/runs/<dialogProcessId>/
 
 断言：不带 `turn` 刷新落在最后一轮且不写入 URL；点击后 URL `turn` 等于该轮 turnScopeId；带 `turn` 的刷新与重连都落在该轮。每次落位时，该轮首条消息顶部距消息列表视口顶部 16px（误差不超过 2px）。
 
+### PBE-058：确定性会话性能门禁
+
+执行 `bash scripts/e2e-docker/run.sh test perf`。真实浏览器在同一 Session 完成一个不计时的初始化轮，再连续发送六个测量轮次，
+经过真实服务和模型代理，使用隔离的 SSE 模拟模型。每轮将 18 个内置工具和 6 个 character
+插件工具各调用六次，共 144 次，六轮合计 864 次。内置工具无排除项，覆盖清单与注册表核对。
+搜索、图像生成解析、MCP 和服务调用使用本地模拟上游；连接器使用隔离 SQLite 实例；
+前端自动回答交互，模型切换使用第二个模拟别名，角色工具使用样例 GLB 和真实 Session 产物版本链。
+
+断言：工具顺序、调用结果配对及成功状态正确；每轮主模型恰好请求 145 次且不重试，辅助模型请求单列。
+每组 23 次业务工具触发真实阶段小结，每轮必须有六次小结要求和提交，并在压缩后继续执行。
+记录受理、开始处理、首工具、轮次完成、界面就绪和各工具耗时。第 1 轮为冷启动，
+第 2—6 轮中位数不超过实测基线 × 1.3 + 100ms；第 5—6 轮中位数还必须不超过
+第 2—3 轮中位数 × 1.3 + 100ms，比较窗口互不重叠，检查会话累积对单轮耗时的影响。绝对轮次上限统一配置于
+`DEVELOPMENT_THRESHOLDS.performance`。
+缺失指标即失败，结果和失败时的部分样本保存为 Playwright `performance.json`。
+常规 full 套件排除 `@perf`，独立执行性能门禁。
+详见[运行和基线校准说明](../scripts/e2e-docker/PERFORMANCE.md)。
+
 ### 模型调用唯一观测边界
 
 模型输入观测发生在模型 factory 返回的 observed model 端口，并紧邻底层 provider `invoke()`。

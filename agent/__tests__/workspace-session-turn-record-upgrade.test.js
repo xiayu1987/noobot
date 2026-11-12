@@ -12,7 +12,7 @@ import {
   createEmptyTurnLifecycle,
 } from "@noobot/session-protocol";
 import { buildHarness } from "./session/scoped-session-repositories.fixtures.js";
-import { v9Options } from "./helpers/session-identity-upgrade.fixtures.js";
+import { v9Options, downgradeSessionStorage } from "./helpers/session-identity-upgrade.fixtures.js";
 import { turnRecord } from "./helpers/turn-record.js";
 import { upgradeSessionMessageIdentity } from "../src/workspace-lifecycle/session-message-identity-upgrade.js";
 import { readSessionArtifact } from "../src/session/session-artifact-store.js";
@@ -48,8 +48,7 @@ test("v29 isolates a corrupt lifecycle without rewriting it and upgrades the nex
     const scope = await sessionRepo.requireSessionScope("alice", sessionId, persistenceContext);
     directories[sessionId] = scope.sessionDir;
     const file = path.join(scope.sessionDir, "session.json");
-    const manifest = JSON.parse(await readFile(file, "utf8"));
-    manifest.schemaVersion = 20;
+    const manifest = await downgradeSessionStorage(scope.sessionDir, 20);
     const turn = turnRecord();
     delete turn.origin;
     delete turn.summaryVersion;

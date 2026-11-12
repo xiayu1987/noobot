@@ -10,6 +10,8 @@
 - `attachments === undefined` 表示 unchanged；`attachments = []` 表示显式 replace/delete-all。
 - 生命周期事件必须携带版本、稳定 `messageId` 和完整附件身份；传输层只能校验和无损透传。
 
+`mergeAttachmentsByIdentity(existing, incoming, { onConflict })` 必须显式提供冲突策略。相同身份的记录通过 `onConflict({ existing, incoming })` 合并，返回值作为该身份的结果；调用方按需解构字段，不使用位置占位参数。
+
 ## 历史数据迁移
 
 运行时只接受 canonical identity、descriptor 和 persisted record，不从 snake_case 字段、路径或文件特征推断身份。历史 `attachments.json` 必须在启动当前版本前离线转换：

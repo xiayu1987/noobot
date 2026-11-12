@@ -25,6 +25,7 @@ const ENVELOPE_FACTS = Object.freeze({
   sessionId: "s1",
   turnScopeId: "t1",
   sequence: 1,
+  revision: 1,
 });
 
 function eventEnvelope(overrides = {}) {
@@ -85,7 +86,16 @@ test("receipt migration drops placeholders and keeps protocol facts", () => {
     turnReceipt({ result: {} }),
   ]);
   const receipts = result.document.turnLifecycle.commandReceipts;
-  assert.deepEqual(receipts, [sessionReceipt(), turnReceipt()]);
+  const { envelope, ...identityReceipt } = turnReceipt();
+  assert.deepEqual(receipts, [sessionReceipt(), identityReceipt]);
+  assert.deepEqual(result.preparedCommandEvents, [
+    {
+      op: "prepare",
+      eventId: identityReceipt.eventId,
+      committedAt: identityReceipt.committedAt,
+      envelope,
+    },
+  ]);
   assert.deepEqual(normalizeCommandReceipts(receipts), receipts);
   assert.ok(result.migrations.includes(CANONICAL_COMMAND_RECEIPT_MIGRATION));
   assert.deepEqual(result.droppedCommandReceiptIds, []);
@@ -145,7 +155,9 @@ test("receipt migration rejects values that are not placeholders", () => {
 test("receipt migration is gated by the canonical receipt schema version", () => {
   const source = [turnReceipt()];
   const result = migrate(source, SESSION_ARTIFACT_CANONICAL_COMMAND_RECEIPT_SCHEMA_VERSION);
-  assert.deepEqual(result.document.turnLifecycle.commandReceipts, source);
+  const { envelope, ...identityReceipt } = source[0];
+  assert.deepEqual(result.document.turnLifecycle.commandReceipts, [identityReceipt]);
+  assert.deepEqual(result.preparedCommandEvents[0].envelope, envelope);
   assert.equal(result.migrations.includes(CANONICAL_COMMAND_RECEIPT_MIGRATION), false);
   assert.throws(
     () =>

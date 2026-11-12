@@ -18,6 +18,7 @@ import {
   projectSessionMessageRecordIdentity,
   resolveSessionMessageRecordDialogProcessId,
 } from "@noobot/session-protocol";
+import { deepFreeze, isDeepFrozen } from "@noobot/shared/deep-freeze";
 import { isCanonicalText, isPlainObject, text } from "@noobot/shared/value";
 
 function normalizeTransferEnvelopesFromMessage(message) {
@@ -199,7 +200,7 @@ function applyMessageToolFields(target, message) {
   if (Object.hasOwn(message, "tool_calls")) target.tool_calls = message.tool_calls;
 }
 
-export function normalizeMessageEntity(message) {
+function buildMessageEntity(message) {
   const normalizedAttachments = dedupeSessionAttachmentRefs(message.attachments);
   const identity = projectSessionMessageRecordIdentity(message);
   const normalizedMessage = Object.assign(createBaseMessageEntity(message), identity);
@@ -211,6 +212,18 @@ export function normalizeMessageEntity(message) {
   applyMessageRuntimeFields(normalizedMessage, message);
   applyMessageToolFields(normalizedMessage, message);
   return assertSessionMessageEntity(normalizedMessage);
+}
+
+const normalizedImmutableMessages = new WeakMap();
+
+export function normalizeMessageEntity(message) {
+  if (!isDeepFrozen(message)) return buildMessageEntity(message);
+  let normalized = normalizedImmutableMessages.get(message);
+  if (!normalized) {
+    normalized = deepFreeze(buildMessageEntity(message));
+    normalizedImmutableMessages.set(message, normalized);
+  }
+  return normalized;
 }
 
 export function normalizeMessagesEntity(messages) {

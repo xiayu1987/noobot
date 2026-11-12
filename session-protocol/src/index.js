@@ -91,6 +91,8 @@ export * from "./aggregate/turn-commit-metadata.js";
 export * from "./aggregate/session-message-record.js";
 export * from "./aggregate/session-document-identity-migration.js";
 export * from "./aggregate/session-manifest-layout.js";
+export * from "./aggregate/session-storage-journal.js";
+export * from "./aggregate/session-artifact-journal.js";
 export * from "./aggregate/execution-event-index.js";
 export * from "./aggregate/sessions-summary.js";
 export * from "./aggregate/session-detail.js";

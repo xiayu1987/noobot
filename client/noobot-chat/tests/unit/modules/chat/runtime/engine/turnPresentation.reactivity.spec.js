@@ -113,11 +113,15 @@ describe("selectTurnPresentations reactivity", () => {
   for (const scenario of [
     { name: "without envelopes", withEnvelope: false },
     { name: "with transfer envelopes", withEnvelope: true },
-    { name: "with terminal history turn", terminal: "stopped" },
+    { name: "with terminal history turn", terminal: "user_stopped" },
   ]) {
     it(`does not recompute on analysis deltas ${scenario.name}`, () => {
       const { session, presented, runs } = setup(scenario);
       const first = presented.value;
+      if (scenario.terminal) {
+        expect(first[1].turnStatusPlaceholder).toBe(true);
+        expect(first[1].turnStatus.status).toBe(scenario.terminal);
+      }
       expect(runs()).toBe(1);
       for (let index = 0; index < 5; index += 1) {
         streamAnalysisDelta(session, index);
@@ -126,6 +130,26 @@ describe("selectTurnPresentations reactivity", () => {
       expect(runs()).toBe(1);
     });
   }
+
+  it("retains terminal history on new turns and invalidates it when its own content changes", () => {
+    const { session, presented } = setup({ terminal: "user_stopped" });
+    session.messages[1].attachments = [];
+    const history = presented.value[1];
+    session.messages.push({
+      role: "user",
+      sessionId: SESSION_ID,
+      turnScopeId: "turn-2",
+      content: "next",
+    });
+    expect(presented.value[1]).toBe(history);
+    session.messages[1].content = "edited";
+    expect(presented.value[1]).not.toBe(history);
+    expect(presented.value[1].content).toContain("edited");
+    const edited = presented.value[1];
+    session.messages[1].attachments = [{ attachmentId: "new" }];
+    expect(presented.value[1]).not.toBe(edited);
+    expect(presented.value[1].attachments).toBe(session.messages[1].attachments);
+  });
 
   it("keeps the live assistant reference when its own envelopes already cover the turn", () => {
     const { session, presented } = setup({ withEnvelope: true });

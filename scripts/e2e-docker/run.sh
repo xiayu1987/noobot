@@ -18,6 +18,8 @@ E2E_WORKSPACE="$ROOT_DIR/.e2e-workspace"
 MCP_PROJECT="$ROOT_DIR/scripts/mcp-test-service"
 MCP_CONTAINER="$(node --input-type=module -e "import { MCP_TEST_SERVICE } from '$MCP_PROJECT/config.mjs'; console.log(MCP_TEST_SERVICE.hostname)")"
 NETWORK="noobot-e2e-network"
+MOCK_PROJECT="$ROOT_DIR/scripts/mock-model-service"
+MOCK_CONTAINER="noobot-mock-model"
 
 eval "$(env -i PATH="$PATH" node "$ROOT_DIR/scripts/lib/runtime-topology-cli.mjs" --shell)"
 CLIENT_PORT="${NOOBOT_TOPOLOGY_CLIENT_ADDR##*:}"
@@ -89,6 +91,7 @@ stop_container() {
 teardown() {
   stop_container "$CONTAINER"
   stop_container "$MCP_CONTAINER"
+  stop_container "$MOCK_CONTAINER"
 }
 
 start_mcp() {
@@ -106,6 +109,15 @@ start_mcp() {
     fi
     sleep 2
   done
+}
+
+start_mock() {
+  [[ "${NOOBOT_E2E_PERF:-}" == "1" ]] || return 0
+  docker run -d --rm --name "$MOCK_CONTAINER" --network "$NETWORK" \
+    -v "$MOCK_PROJECT:/app:ro" -w /app --entrypoint node \
+    "$IMAGE" server.mjs >/dev/null || return 1
+  docker exec "$MOCK_CONTAINER" node --input-type=module -e \
+    'import { MOCK_MODEL as c } from "./scenario.mjs"; const r = await fetch(`http://127.0.0.1:${c.port}/health`); if (!r.ok) process.exit(1);'
 }
 
 start_service() {
@@ -135,7 +147,7 @@ cmd_up() {
   if ! docker network inspect "$NETWORK" >/dev/null 2>&1; then
     docker network create "$NETWORK" >/dev/null
   fi
-  if ! start_mcp || ! start_service; then
+  if ! start_mcp || ! start_mock || ! start_service; then
     teardown
     return 1
   fi
@@ -167,14 +179,20 @@ cmd_test() {
   local suite="${1:-smoke}"
   shift || true
   case "$suite" in
-    smoke | core | full) ;;
+    smoke | core | full | perf) ;;
     *)
-      log "unknown suite: $suite (smoke|core|full)"
+      log "unknown suite: $suite (smoke|core|full|perf)"
       return 2
       ;;
   esac
   load_connect_code
   load_mysql_password
+  if [[ "$suite" == "perf" ]]; then
+    export NOOBOT_E2E_PERF=1
+    export NOOBOT_E2E_MODEL_ALIAS=e2e_mock
+  else
+    unset NOOBOT_E2E_PERF
+  fi
   cmd_restart
   export NOOBOT_E2E_BASE_URL="http://127.0.0.1:${CLIENT_PORT}"
   export NOOBOT_E2E_USER_ID="${NOOBOT_E2E_USER_ID:-admin}"
@@ -185,6 +203,9 @@ cmd_test() {
     -e NOOBOT_E2E_BASE_URL -e NOOBOT_E2E_USER_ID -e NOOBOT_E2E_MODEL_ALIAS
     -e NOOBOT_E2E_MYSQL_HOST -e NOOBOT_WORKSPACE_ROOT -e NOOBOT_E2E_CONNECT_CODE
   )
+  if [[ "$suite" == "perf" ]]; then
+    env_args+=(-e NOOBOT_E2E_PERF -e NOOBOT_E2E_STREAM_OUTPUT=true)
+  fi
   if [[ -n "${NOOBOT_E2E_MYSQL_PASSWORD:-}" ]]; then
     env_args+=(-e NOOBOT_E2E_MYSQL_PASSWORD)
   fi
@@ -193,7 +214,7 @@ cmd_test() {
 }
 
 usage() {
-  echo "usage: $0 {build|up|down|restart|status|logs [lines]|test [smoke|core|full] [playwright args]}"
+  echo "usage: $0 {build|up|down|restart|status|logs [lines]|test [smoke|core|full|perf] [playwright args]}"
 }
 
 command="${1:-}"

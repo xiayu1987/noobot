@@ -10,6 +10,14 @@ import {
   SESSION_ARTIFACT_LOCATION_MESSAGE_ORDER_SCHEMA_VERSION,
   SESSION_ARTIFACT_MANIFEST_SNAPSHOT_INDEX_SCHEMA_VERSION,
   SESSION_ARTIFACT_SCHEMA_VERSION,
+  SESSION_ARTIFACT_STORAGE_JOURNAL_SCHEMA_VERSION,
+  createSessionStorageJournalProjection,
+  applySessionStorageJournalRecords,
+  materializeSessionStorageJournal,
+  assertSessionStorageMessageIndex,
+  assertSessionMessagePositions,
+  assertSessionArtifactJournalIndex,
+  materializeSessionArtifactJournal,
   SESSION_ARTIFACT_TURN_FILES_SCHEMA_VERSION,
   SESSION_ARTIFACT_TURN_JOURNAL_LAYOUT_SCHEMA_VERSION,
   resolveSessionArtifactSchemaVersion,
@@ -21,6 +29,7 @@ import { SESSION_REPAIR_ERROR_CODE } from "./errors.js";
 import {
   assertStoredCheckpointReceipts,
   createCheckpointIdentitySource,
+  projectCheckpointIdentity,
   hydrateCheckpointReceipts,
 } from "@noobot/session-protocol/summary-checkpoint-storage";
 
@@ -132,7 +141,6 @@ async function readTurnFileMessages(sessionDir, item) {
 
 async function readTurnJournalMessages(sessionDir, schemaVersion, item, collectPayload) {
   const artifact = resolveRepairArtifactPath(sessionDir, item?.file, "turns", [".jsonl"]);
-  const order = requireLayoutArray(item, "messageOrder", "Session turn manifest entry");
   const records = await readRepairJournal(artifact, item?.committedBytes);
   const { indexes, journal } = splitTurnSnapshotIndexes(schemaVersion, item, records);
   if (schemaVersion >= SESSION_ARTIFACT_CHECKPOINT_RECORDS_SCHEMA_VERSION) {
@@ -141,10 +149,24 @@ async function readTurnJournalMessages(sessionDir, schemaVersion, item, collectP
       indexes,
       collectPayload,
     );
-    return materializeRepairRecords([...checkpointRecords, ...journal], order);
+    if (schemaVersion >= SESSION_ARTIFACT_STORAGE_JOURNAL_SCHEMA_VERSION) {
+      const projection = applySessionStorageJournalRecords(
+        createSessionStorageJournalProjection(),
+        [...checkpointRecords, ...journal],
+      );
+      return assertSessionStorageMessageIndex(materializeSessionStorageJournal(projection), item);
+    }
+    return materializeRepairRecords(
+      [...checkpointRecords, ...journal],
+      requireLayoutArray(item, "messageOrder", "Session turn manifest entry"),
+    );
   }
   const baseMessages = await readLegacyCheckpointMessages(sessionDir, indexes);
-  return materializeRepairRecords(journal, order, baseMessages);
+  return materializeRepairRecords(
+    journal,
+    requireLayoutArray(item, "messageOrder", "Session turn manifest entry"),
+    baseMessages,
+  );
 }
 
 function orderByTurnLocation(session, messagesByTurnId) {
@@ -193,7 +215,8 @@ export async function readSessionForProtocolRepair({ sessionDir = "", session = 
   for (const item of requireLayoutArray(session, "turnOrder", "Session manifest")) {
     const turnMessages = journalLayout
       ? await readTurnJournalMessages(sessionDir, schemaVersion, item, (payload, index) => {
-          if (checkpointIdentitySource) checkpointSource.collect(item, index, payload);
+          if (checkpointIdentitySource)
+            checkpointSource.collect(item, index, projectCheckpointIdentity(payload));
         })
       : await readTurnFileMessages(sessionDir, item);
     messagesByTurnId.set(text(item?.turnId), turnMessages);
@@ -203,6 +226,31 @@ export async function readSessionForProtocolRepair({ sessionDir = "", session = 
     const projected = checkpointIdentitySource
       ? hydrateCheckpointReceipts(session, checkpointSource.resolve)
       : session;
+    if (schemaVersion >= SESSION_ARTIFACT_STORAGE_JOURNAL_SCHEMA_VERSION) {
+      const index = assertSessionArtifactJournalIndex(projected.artifactEventJournal);
+      const records =
+        index.committedBytes === 0
+          ? []
+          : await readRepairJournal(
+              resolveRepairArtifactPath(sessionDir, index.file, "artifact-events", [".jsonl"]),
+              index.committedBytes,
+            );
+      const sessionArtifactEvents = materializeSessionArtifactJournal(
+        records,
+        index,
+        session.sessionId,
+      );
+      assertSessionMessagePositions(
+        messages.map(({ message, ordinal }) => ({ messageUid: message.messageUid, ordinal })),
+      );
+      return {
+        ...projected,
+        sessionArtifactEvents,
+        messages: messages
+          .sort((left, right) => left.ordinal - right.ordinal)
+          .map(({ message }) => message),
+      };
+    }
     return { ...projected, messages: orderByMessageUid(session, messages) };
   }
   if (schemaVersion >= SESSION_ARTIFACT_LOCATION_MESSAGE_ORDER_SCHEMA_VERSION) {

@@ -8,7 +8,6 @@ import { z } from "zod";
 import {
   MODEL_CONTEXT_SEQUENCE_POLICY,
   MODEL_GENERATION_OUTPUT_TYPES,
-  MODEL_GENERATION_OPTION_FIELDS,
 } from "@noobot/model-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { diagnoseModelReference } from "@noobot/agent-config-protocol";
@@ -387,38 +386,25 @@ function generationSchema(runtime) {
       .optional()
       .describe(tTool(runtime, "tools.multimodal.fieldImageUrls")),
   };
-  return z.discriminatedUnion(
-    "output_type",
-    MODEL_GENERATION_OUTPUT_TYPES.map((outputType) => {
-      const output = z
-        .literal(outputType)
-        .describe(tTool(runtime, "tools.multimodal.fieldOutputType"));
-      return z
-        .strictObject({
-          output_type: outputType === "image" ? output.default("image") : output,
-          generation_content: z
-            .string()
-            .describe(tTool(runtime, "tools.multimodal.fieldGenerationContent")),
-          model_name: z
-            .string()
-            .optional()
-            .describe(tTool(runtime, "tools.multimodal.fieldModelName")),
-          ...Object.fromEntries(
-            Object.keys(MODEL_GENERATION_OPTION_FIELDS[outputType]).map((key) => [
-              key,
-              fields[key],
-            ]),
-          ),
-        })
-        .superRefine((input, context) => {
-          try {
-            buildGenerationOperation({ input, prompt: input.generation_content });
-          } catch (error) {
-            context.addIssue({ code: "custom", message: error.message });
-          }
-        });
-    }),
-  );
+  return z
+    .strictObject({
+      output_type: z
+        .enum(MODEL_GENERATION_OUTPUT_TYPES)
+        .default("image")
+        .describe(tTool(runtime, "tools.multimodal.fieldOutputType")),
+      generation_content: z
+        .string()
+        .describe(tTool(runtime, "tools.multimodal.fieldGenerationContent")),
+      model_name: z.string().optional().describe(tTool(runtime, "tools.multimodal.fieldModelName")),
+      ...fields,
+    })
+    .superRefine((input, context) => {
+      try {
+        buildGenerationOperation({ input, prompt: input.generation_content });
+      } catch (error) {
+        context.addIssue({ code: "custom", message: error.message });
+      }
+    });
 }
 
 export function createMultimodalGenerateTool({ agentContext }) {

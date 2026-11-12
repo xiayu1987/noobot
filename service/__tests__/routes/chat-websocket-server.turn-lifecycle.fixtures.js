@@ -180,7 +180,7 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
           parentSessionId: "",
           lifecycle,
           event: selectFakeTurnLifecycleRequest(input),
-          eventOutbox,
+          readPreparedEvent: (eventId) => eventOutbox.find((item) => item.eventId === eventId),
           createEventId: () => `authority-event-${++eventIdSequence}`,
           now: () => authorityNow,
           materializeTerminal: input.terminalStatus

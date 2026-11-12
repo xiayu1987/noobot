@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isDeepFrozen } from "@noobot/shared/deep-freeze";
 import { projectTurnCompletionMessages } from "@noobot/context-protocol";
 import { upgradeTransferEnvelopesInValue } from "@noobot/semantic-transfer-protocol";
 import {
@@ -43,7 +44,10 @@ import { isPlainObject, text, isObjectLike } from "@noobot/shared/value";
 import { stableId } from "./repair-primitives.js";
 import { migrateWriteTimeDialogFacts } from "./write-time-dialog-facts.js";
 import { migrateSessionCaller } from "./session-caller-migration.js";
-import { migrateCanonicalCommandReceipts } from "./command-receipt-migration.js";
+import {
+  migrateCanonicalCommandReceipts,
+  migrateCommandReceiptEvents,
+} from "./command-receipt-migration.js";
 import { migrateMessageIdentity } from "./message-identity-migration.js";
 import { migrateTurnTerminalDescription } from "./terminal-description-migration.js";
 import { migrateMessageErrorText } from "./message-error-text-migration.js";
@@ -272,6 +276,17 @@ export function reconcileCompletedTurnOrphanToolCalls(document) {
   return { document: changed ? { ...document, messages: kept } : document, changed, removed };
 }
 
+const settledSummaryMarkTurns = new WeakMap();
+
+function isSettledSummaryMarkTurn(source) {
+  const settled = settledSummaryMarkTurns.get(source[0]);
+  return (
+    settled !== undefined &&
+    settled.length === source.length &&
+    settled.every((message, index) => message === source[index])
+  );
+}
+
 export function reconcileCompletedTurnSummaryMarks(document) {
   const messages = [...requireRepairSource(document).messages];
   const completedTurns = completedTurnKeys(document);
@@ -287,6 +302,7 @@ export function reconcileCompletedTurnSummaryMarks(document) {
     const indexes = turnIndexes.get(key);
     if (!indexes) continue;
     const source = indexes.map((index) => messages[index]);
+    if (isSettledSummaryMarkTurn(source)) continue;
     const projected = projectTurnCompletionMessages(source);
     let turnChanged = false;
     projected.forEach((message, index) => {
@@ -295,6 +311,7 @@ export function reconcileCompletedTurnSummaryMarks(document) {
       turnChanged = true;
     });
     if (turnChanged) repaired.push(key.split("\u0000")[1]);
+    else if (source.every(isDeepFrozen)) settledSummaryMarkTurns.set(source[0], source);
   }
   const changed = repaired.length > 0;
   return { document: changed ? { ...document, messages } : document, changed, repaired };
@@ -453,6 +470,7 @@ function migrateLifecycleCommandReceipts(context) {
   });
   if (commandIdMap.size) remapLifecycleCommandIds(context, commandIdMap);
   migrateCanonicalCommandReceipts(context);
+  migrateCommandReceiptEvents(context);
   if (!context.migrateArtifactProtocol) return;
   let normalizedCommandReceipts = false;
   lifecycle.commandReceipts = lifecycle.commandReceipts.map((receipt) => {
@@ -822,5 +840,6 @@ export function migrateSessionDocument(document) {
     migrations: context.migrations,
     droppedCommandReceiptIds: context.droppedCommandReceiptIds,
     legacyAuthorityEventOutbox,
+    preparedCommandEvents: context.preparedCommandEvents,
   };
 }

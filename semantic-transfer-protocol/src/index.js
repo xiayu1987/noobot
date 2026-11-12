@@ -377,12 +377,11 @@ function dedupeByIdentity(items, identityKeyOf, conflictCode) {
   const identities = new Map();
   for (const item of items) {
     const identityKey = identityKeyOf(item);
-    const contentKey = protocolValueKey(item);
-    const existingContentKey = identities.get(identityKey);
-    if (existingContentKey === undefined) {
-      identities.set(identityKey, contentKey);
+    const existing = identities.get(identityKey);
+    if (existing === undefined) {
+      identities.set(identityKey, item);
       result.push(item);
-    } else if (existingContentKey !== contentKey) {
+    } else if (existing !== item && protocolValueKey(existing) !== protocolValueKey(item)) {
       throw identityConflictError(conflictCode, identityKey);
     }
   }

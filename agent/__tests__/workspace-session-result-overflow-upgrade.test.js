@@ -13,7 +13,6 @@ import {
 import { mkdtemp, mkdir, writeFile, readFile, rm, readdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { SESSION_ARTIFACT_SCHEMA_VERSION } from "@noobot/session-protocol";
 import { messageHash } from "../src/session/session-artifact-session/turn-journal-store.js";
 
 function source(
@@ -59,10 +58,11 @@ test("v25 entry rewrites committed journal hashes without retained backups and i
     const record = { op: "upsert", messageUid: "m1", message, hash: messageHash(message) };
     const journal = `${encode(record)}\n`;
     const manifest = {
-      schemaVersion: SESSION_ARTIFACT_SCHEMA_VERSION,
+      schemaVersion: 22,
       turnOrder: [
         {
           turnId: "turn-000001",
+          file: "turns/turn-000001.jsonl",
           committedBytes: Buffer.byteLength(journal),
           summarySnapshots: [],
           messageHashes: { m1: record.hash },

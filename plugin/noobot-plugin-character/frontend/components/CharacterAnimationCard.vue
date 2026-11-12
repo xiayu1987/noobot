@@ -4,7 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, defineAsyncComponent, ref } from "vue";
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from "vue";
 import { useCharacterLocale } from "../i18n/index.js";
 import { analyzeAnimationSpatial } from "../../src/spatial-analysis.js";
 
@@ -17,6 +17,9 @@ const props = defineProps({
 });
 const { translate } = useCharacterLocale();
 const viewer = ref();
+const host = ref();
+const visible = ref(false);
+let visibilityObserver;
 const exportError = ref("");
 const exporting = ref(false);
 const assetIds = computed(() => [
@@ -53,9 +56,16 @@ async function runExport(kind) {
 function replay() {
   viewer.value?.restartPlayback();
 }
+onMounted(() => {
+  visibilityObserver = new IntersectionObserver(([entry]) => {
+    visible.value = entry.isIntersecting;
+  });
+  visibilityObserver.observe(host.value);
+});
+onBeforeUnmount(() => visibilityObserver?.disconnect());
 </script>
 <template>
-  <article class="character-animation-card" :data-animation-id="card.animationId">
+  <article ref="host" class="character-animation-card" :data-animation-id="card.animationId">
     <header>
       <div class="character-animation-card__title">
         <strong>{{ card.animationId }}</strong>
@@ -120,7 +130,7 @@ function replay() {
     </div>
     <p v-if="exportError" class="character-animation-card__error">{{ exportError }}</p>
     <ImportedCharacterViewer
-      v-if="assets.length === assetIds.length"
+      v-if="assets.length === assetIds.length && (visible || exporting)"
       ref="viewer"
       :assets="assets"
       :protocol="card.protocol"
@@ -129,7 +139,7 @@ function replay() {
       :suspend-resize="props.suspendResize"
       :resize-revision="props.resizeRevision"
     />
-    <p v-else class="character-animation-card__missing">
+    <p v-if="assets.length !== assetIds.length" class="character-animation-card__missing">
       {{ translate("character.missingArtifactAssets") }}
     </p>
   </article>

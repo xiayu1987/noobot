@@ -34,7 +34,10 @@ import {
   createSessionPersistenceScope,
 } from "@noobot/session-protocol";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
-import { requiredSessionReads } from "../helpers/session-repo-required-reads.js";
+import {
+  fullSessionTurnViews,
+  requiredSessionReads,
+} from "../helpers/session-repo-required-reads.js";
 import { createTestAttachmentService } from "../helpers/test-runtime-context.js";
 
 const LEGACY_MESSAGE_ID = MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID;
@@ -396,6 +399,7 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
       return false;
     },
     ...requiredSessionReads,
+    ...fullSessionTurnViews,
     async findById() {
       return persisted ? normalizeSessionEntity(structuredClone(persisted)) : null;
     },

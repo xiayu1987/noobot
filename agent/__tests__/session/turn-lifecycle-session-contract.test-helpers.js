@@ -20,7 +20,11 @@ import {
 import { text } from "@noobot/shared/value";
 import { createAcceptedAgentExecution } from "../helpers/accepted-run-identity.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
-import { requiredSessionReads } from "../helpers/session-repo-required-reads.js";
+import { writeSessionArtifact } from "./session-artifact-store-v2.test-helpers.js";
+import {
+  fullSessionTurnViews,
+  requiredSessionReads,
+} from "../helpers/session-repo-required-reads.js";
 
 const now = () => "2026-07-18T00:00:00.000Z";
 
@@ -45,15 +49,18 @@ function harness(initial = {}) {
     ...createTestSessionRequiredFields(),
     ...initial,
   });
+  const initialized = writeSessionArtifact({ sessionDir, sessionPayload: persisted });
   let saveFailure = null;
   const repo = {
     async withSessionMutation(_u, _s, operation) {
       return operation(await this.locateSessionScope());
     },
     async locateSessionScope() {
+      await initialized;
       return { resolvedParentSessionId: "", sessionDir };
     },
     ...requiredSessionReads,
+    ...fullSessionTurnViews,
     async findById() {
       return normalizeSessionEntity(structuredClone(persisted));
     },
@@ -64,7 +71,9 @@ function harness(initial = {}) {
         saveFailure = null;
         throw error;
       }
-      persisted = structuredClone(normalizeSessionEntity(next));
+      const normalized = normalizeSessionEntity(next);
+      await writeSessionArtifact({ sessionDir, sessionPayload: normalized });
+      persisted = structuredClone(normalized);
     },
   };
   return {
@@ -123,13 +132,16 @@ function newSessionHarness() {
       });
     },
     ...requiredSessionReads,
+    ...fullSessionTurnViews,
     async findById() {
       return persisted ? normalizeSessionEntity(structuredClone(persisted)) : null;
     },
     async save(_u, next, { expectedAggregateVersion, createOnly } = {}) {
       if (createOnly) assert.equal(persisted, null);
       else assert.equal(expectedAggregateVersion, Number(persisted.aggregateVersion ?? 0));
-      persisted = structuredClone(normalizeSessionEntity(next));
+      const normalized = normalizeSessionEntity(next);
+      await writeSessionArtifact({ sessionDir, sessionPayload: normalized });
+      persisted = structuredClone(normalized);
     },
   };
   return {

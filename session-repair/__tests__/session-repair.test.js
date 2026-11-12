@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { deepFreeze } from "@noobot/shared/deep-freeze";
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
@@ -560,6 +561,52 @@ test("repairs eligible messages in completed turns without marking preserved use
     [false, true, true, false],
   );
   assert.deepEqual(result.repaired, ["turn-1"]);
+});
+
+test("settled summary marks are re-evaluated when an immutable turn gains a message", () => {
+  const lifecycle = {
+    ...createEmptyTurnLifecycle(),
+    turns: {
+      "turn-1": {
+        dialogProcessId: "dialog-1",
+        turnScopeId: "turn-1",
+        terminalStatus: { status: "completed", reason: "run_completed" },
+      },
+    },
+  };
+  const identity = { dialogProcessId: "dialog-1", turnScopeId: "turn-1" };
+  const settled = deepFreeze([
+    { ...identity, messageUid: "user-1", role: "user", summarized: false },
+    { ...identity, messageUid: "final-1", role: "assistant", content: "done", summarized: false },
+  ]);
+  const document = { turnLifecycle: lifecycle, messages: settled };
+  assert.equal(reconcileCompletedTurnSummaryMarks(document).changed, false);
+  assert.equal(reconcileCompletedTurnSummaryMarks(document).changed, false);
+  const [user, final] = settled;
+  const extended = reconcileCompletedTurnSummaryMarks({
+    turnLifecycle: lifecycle,
+    messages: [
+      user,
+      deepFreeze({
+        ...identity,
+        messageUid: "tool-call-1",
+        role: "assistant",
+        tool_calls: [{ id: "call-1", name: "read_file" }],
+        summarized: false,
+      }),
+      deepFreeze({
+        ...identity,
+        messageUid: "tool-result-1",
+        role: "tool",
+        tool_call_id: "call-1",
+        toolName: "read_file",
+        summarized: false,
+      }),
+      final,
+    ],
+  });
+  assert.equal(extended.changed, true);
+  assert.deepEqual(extended.repaired, ["turn-1"]);
 });
 
 test("removes an uncommitted aggregate-conflict continuation as one lifecycle repair", () => {

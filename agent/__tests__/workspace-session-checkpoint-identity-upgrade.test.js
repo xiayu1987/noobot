@@ -25,6 +25,7 @@ import {
   createTestSessionRequiredFields,
 } from "./helpers/session-message-facts.js";
 import { TEST_STORAGE_SERVICE as storageService } from "./helpers/storage-service.js";
+import { downgradeSessionStorage } from "./helpers/session-identity-upgrade.fixtures.js";
 
 const readJson = async (file) => JSON.parse(await readFile(file, "utf8"));
 const options = (base, sessionDir) => ({ base, sessionDir, storageService, backupBase: null });
@@ -75,10 +76,7 @@ async function createHistory(sessionDir, count) {
 
 async function downgrade(sessionDir) {
   const manifestFile = path.join(sessionDir, "session.json");
-  const session = await readSessionArtifact({ storageService, sessionDir });
-  const manifest = await readJson(manifestFile);
-  manifest.schemaVersion = 18;
-  manifest.turnSummaryCheckpoints = session.turnSummaryCheckpoints;
+  const manifest = await downgradeSessionStorage(sessionDir, 18);
   for (const turn of manifest.turnOrder)
     for (const index of turn.summarySnapshots)
       index.messageUids = (await readJson(path.join(sessionDir, index.file))).summarizedMessageUids;
@@ -125,7 +123,12 @@ test("v26 preserves all 60 checkpoint identities beyond the receipt window, hash
     assert.deepEqual(reloaded.turnSummaryCheckpoints, original.turnSummaryCheckpoints);
     assert.equal(reloaded.messages.length, 60);
     assert.deepEqual(
-      (await readSessionForProtocolRepair({ sessionDir, session: stored })).turnSummaryCheckpoints,
+      (
+        await readSessionForProtocolRepair({
+          sessionDir,
+          session: await readJson(path.join(sessionDir, "session.json")),
+        })
+      ).turnSummaryCheckpoints,
       original.turnSummaryCheckpoints,
     );
     await writeSessionArtifact({

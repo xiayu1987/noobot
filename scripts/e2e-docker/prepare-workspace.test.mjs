@@ -11,6 +11,8 @@ import path from "node:path";
 import { test } from "node:test";
 import { promisify } from "node:util";
 import { mcpTestServers } from "../mcp-test-service/config.mjs";
+import { MOCK_MODEL } from "../mock-model-service/scenario.mjs";
+import { BUILTIN_TOOL_IDS } from "../../agent/src/tools/constants/index.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -24,6 +26,7 @@ test("Docker workspace refresh isolates MCP configuration and preserves runtime 
   await mkdir(path.join(target, "admin", "runtime"), { recursive: true });
   const sourceConfig = JSON.stringify({
     mcp_servers: { remote: { baseUrl: "https://example.com" } },
+    tools: { bindings: { read_file: { bindingName: "nb_read_file" } } },
   });
   await writeFile(globalPath, JSON.stringify({ super_admin: { user_id: "admin" } }));
   await writeFile(path.join(source, "user.json"), JSON.stringify({ users: [{ userId: "admin" }] }));
@@ -32,10 +35,19 @@ test("Docker workspace refresh isolates MCP configuration and preserves runtime 
   await writeFile(evidencePath, "preserve-session-and-audit");
   const prepareScript = path.join(import.meta.dirname, "prepare-workspace.mjs");
   for (let pass = 0; pass < 2; pass += 1) {
-    await execFileAsync(process.execPath, [prepareScript, source, target, globalPath]);
+    await execFileAsync(process.execPath, [prepareScript, source, target, globalPath], {
+      env: { ...process.env, NOOBOT_E2E_PERF: String(pass) },
+    });
     for (const file of ["global.config.json", "admin/config.json"]) {
       const config = JSON.parse(await readFile(path.join(target, file), "utf8"));
       assert.deepEqual(config.mcp_servers, mcpTestServers());
+      if (pass === 1) {
+        assert.equal(config.providers[MOCK_MODEL.alias].use_responses_api, false);
+        assert.deepEqual(Object.keys(config.tools.bindings).sort(), [...BUILTIN_TOOL_IDS].sort());
+        assert.equal(config.tools.bindings.read_file.bindingName, "read_file");
+      } else {
+        assert.equal(config.providers?.[MOCK_MODEL.alias], undefined);
+      }
     }
     assert.equal(await readFile(evidencePath, "utf8"), "preserve-session-and-audit");
     assert.equal(await readFile(path.join(source, "admin", "config.json"), "utf8"), sourceConfig);

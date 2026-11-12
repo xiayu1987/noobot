@@ -44,7 +44,9 @@ export function migrateAttachmentLifecycleOutboxRecords(records) {
   let changed = false;
   const migrated = records.map((record) => {
     if (
-      record?.op !== AUTHORITY_OUTBOX_JOURNAL_OP.COMMIT ||
+      ![AUTHORITY_OUTBOX_JOURNAL_OP.COMMIT, AUTHORITY_OUTBOX_JOURNAL_OP.PREPARE].includes(
+        record?.op,
+      ) ||
       record.envelope?.protocol?.family !== EVENT_FAMILY.ATTACHMENT_LIFECYCLE
     )
       return record;

@@ -10,7 +10,7 @@
 - `model-runtime/src/policies/cache-policy-engine.js`：供应商缓存参数与采样参数编译。
 - `model-runtime/src/adapters/openai-compatible-adapter.js`：OpenAI-compatible 客户端和 Responses API 选择。
 - `model-runtime/src/adapters/anthropic-messages-adapter.js`：Anthropic 原生 Messages API 客户端。
-- `agent/src/models/tool/binding-adapter.js`：工具名称、排序和 strict schema 策略。
+- `agent/src/models/tool/binding-adapter.js`：工具名称、排序，以及按 provider 的 `strict_tool_schema` 声明传递 strict。
 - `model-proxy/src/cache-diagnostics.js`：代理侧缓存诊断。
 
 Agent、插件和代理不得复制上述规则或自行识别供应商。
@@ -137,7 +137,7 @@ Noobot 不保存或复用 `previous_response_id`。Session、编辑重发、分�
 
 - 校验并去重工具名称；
 - 按工具名称稳定排序；
-- 根据模型与工具能力决定 strict schema；
+- 只按 provider 协议字段 `strict_tool_schema` 传递 strict，不按工具名降级；
 - 对不支持的 Claude tool-search 形态执行明确过滤。
 
 业务调用方不得再次排序、降级或按 alias 推断工具能力。

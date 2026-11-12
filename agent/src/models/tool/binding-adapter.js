@@ -11,8 +11,6 @@ import {
 } from "@noobot/model-protocol";
 import { text, isObjectLike } from "@noobot/shared/value";
 
-const STRICT_INCOMPATIBLE_TOOL_NAMES = new Set(["call_service"]);
-
 function assertModelSpec(modelSpec) {
   if (!isObjectLike(modelSpec) || !text(modelSpec.model)) {
     throw new TypeError("adaptToolsForBinding requires a resolved model spec");
@@ -56,23 +54,16 @@ export function adaptToolsForBinding(tools, modelSpec) {
     String(left?.name || "").localeCompare(String(right?.name || ""), "en"),
   );
 
-  const strictByPolicy = resolveModelStrictToolSchema(modelSpec);
-  const strictIncompatibleTools = validTools
-    .map((t) => text(t?.name))
-    .filter((n) => STRICT_INCOMPATIBLE_TOOL_NAMES.has(n));
-  const strict = strictByPolicy && strictIncompatibleTools.length === 0;
-  const toolChoice = "auto";
   const bindOptions = validTools.length
     ? {
-        tool_choice: toolChoice,
-        strict,
+        tool_choice: "auto",
+        strict: resolveModelStrictToolSchema(modelSpec),
       }
     : {};
 
   return {
     tools: validTools,
     droppedToolNames,
-    strictDowngradedTools: strictByPolicy && !strict ? strictIncompatibleTools : [],
     bindOptions,
   };
 }

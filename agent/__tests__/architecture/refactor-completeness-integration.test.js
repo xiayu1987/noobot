@@ -5,7 +5,7 @@
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeMessageEntity } from "../../src/session/entities.js";
+import { normalizeMessageEntity } from "../../src/session/entities/normalizers.js";
 import { resolveDefaultModelSpec, resolveSkillModelSpec } from "../../src/models/resolver/index.js";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 

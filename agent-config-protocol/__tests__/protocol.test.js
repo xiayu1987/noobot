@@ -236,6 +236,21 @@ test("custom_only is not widened by programming scenario requirements", () => {
   );
 });
 
+test("unrestricted full scenario keeps builtins when plugins are activated", () => {
+  const sourceTools = [{ name: "write_file" }, { name: "character_animation_generate" }];
+  assert.deepEqual(
+    resolveToolBindings({
+      sourceTools,
+      runConfig: {
+        scenario: "full",
+        pluginTools: [{ name: "character_animation_generate" }],
+        toolPolicy: { denyToolNames: [] },
+      },
+    }),
+    sourceTools,
+  );
+});
+
 test("scenario filtering preserves activated plugin tools and keeps deny authoritative", () => {
   const tools = resolveToolBindings({
     sourceTools: [{ name: "read_file" }, { name: "character_animation_generate" }],

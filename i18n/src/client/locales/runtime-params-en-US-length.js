@@ -286,6 +286,15 @@ export default {
       description:
         "Length or capacity threshold used by artifact verified checkpoint identity cache.",
     },
+    artifactEventJournalCacheBytes: {
+      name: "Artifact event journal cache",
+      description: "Maximum bytes of verified session artifact event journals kept in memory.",
+    },
+    authorityOutboxJournalTailGuardBytes: {
+      name: "Artifact authority outbox journal tail guard",
+      description:
+        "Trailing bytes compared to confirm the already-read part of the authority outbox journal was not rewritten.",
+    },
   },
   display: {
     toolOperationSubjectChars: {

@@ -86,12 +86,25 @@ function assertCanonicalBaseline(records, turnId) {
 function bucketRecordsByCheckpoint(records, checkpoints, turnId) {
   const buckets = checkpoints.map(() => []);
   const tail = [];
-  for (const record of records) {
+  const order = records.filter((record) => record.op === "order");
+  const upserts = records.filter((record) => record.op !== "order");
+  assertCanonicalBaseline(upserts, turnId);
+  for (const record of upserts) {
     const createdAt = messageTimestamp(record, turnId);
     const checkpointIndex = checkpoints.findIndex(({ committedAt }) => createdAt <= committedAt);
     if (checkpointIndex < 0) tail.push(record);
     else buckets[checkpointIndex].push(record);
   }
+  const visible = new Set();
+  for (const bucket of buckets) {
+    for (const record of bucket) visible.add(record.messageUid);
+    for (const record of order)
+      bucket.push({
+        ...record,
+        positions: record.positions.filter(({ messageUid }) => visible.has(messageUid)),
+      });
+  }
+  tail.push(...order);
   return { buckets, tail };
 }
 
@@ -121,7 +134,6 @@ async function resegmentTurn(sessionDir, turn) {
   const [baseline, ...following] = checkpoints;
   if (!baseline.payload.records.length || following.some(({ payload }) => payload.records.length))
     return null;
-  assertCanonicalBaseline(baseline.payload.records, turnId);
   const { buckets, tail } = bucketRecordsByCheckpoint(
     baseline.payload.records,
     checkpoints,

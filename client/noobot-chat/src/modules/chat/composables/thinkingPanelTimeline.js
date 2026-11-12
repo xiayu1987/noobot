@@ -41,6 +41,10 @@ import {
   selectMessageActivityTimeline,
 } from "@noobot/event-protocol/activity-timeline";
 import {
+  countCanonicalToolTimelineEvents,
+  selectMessageToolTimeline,
+} from "@noobot/event-protocol/tool-timeline";
+import {
   createThinkingAnalysisProjection,
   sourceToProjectionLatencyMs,
 } from "./thinkingPanelAnalysis.js";
@@ -58,16 +62,20 @@ export function useThinkingTimeline(
   getRuntimeView,
   { shouldLoadThinkingDetail = () => true } = {},
 ) {
-  const roundMessages = computed(() => {
+  const roundMessages = computed((previous) => {
     const messageItem = props.messageItem || {};
     const sessionId = getMessageSessionId(messageItem);
     const turnScopeId = getMessageTurnScopeId(messageItem);
     if (!turnScopeId || !Array.isArray(props.allMessages)) return [];
-    return props.allMessages.filter(
+    const members = props.allMessages.filter(
       (candidate) =>
         getMessageSessionId(candidate) === sessionId &&
         getMessageTurnScopeId(candidate) === turnScopeId,
     );
+    return previous?.length === members.length &&
+      members.every((member, index) => member === previous[index])
+      ? previous
+      : members;
   });
   const roundToolTimeline = computed(() =>
     mergeToolTimelines(
@@ -235,10 +243,13 @@ export function useThinkingTimeline(
   }
 
   function getExecutionLogCount(messageItem = {}) {
-    const currentCount = selectToolTimelineLogs(timelineMessage(messageItem)).length;
+    const currentCount = countCanonicalToolTimelineEvents(
+      selectMessageToolTimeline(timelineMessage(messageItem)),
+    );
     if (currentCount > 0 || messageItem !== props.messageItem) return currentCount;
-    return selectToolTimelineLogs(timelineMessage(loadedThinkingDetail.value?.messageItem || {}))
-      .length;
+    return countCanonicalToolTimelineEvents(
+      selectMessageToolTimeline(timelineMessage(loadedThinkingDetail.value?.messageItem || {})),
+    );
   }
 
   function hasSummaryThinkingDetails(messageItem = {}) {

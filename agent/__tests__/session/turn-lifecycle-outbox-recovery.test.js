@@ -10,8 +10,12 @@ import { spawnSync } from "node:child_process";
 import { mkdir, readFile, readdir, rename, rm, utimes } from "node:fs/promises";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol";
-import { projectCommittedTurnOutbox } from "@noobot/event-protocol/turn-outbox";
-import { createEmptyAuthorityOutboxCheckpoint } from "@noobot/event-protocol/outbox";
+import { collectUnmaterializedTurnCommits } from "@noobot/event-protocol/turn-outbox";
+import {
+  applyAuthorityOutboxJournalRecords,
+  createAuthorityOutboxProjection,
+  createEmptyAuthorityOutboxCheckpoint,
+} from "@noobot/event-protocol/outbox";
 import { createSessionFacade } from "../../src/session/index.js";
 import { createTestSessionServices } from "../helpers/session-services.js";
 import {
@@ -19,6 +23,7 @@ import {
   readAuthorityOutbox,
   readAuthorityOutboxRecords,
   removeAuthorityOutboxTurnScopes,
+  replaceAuthorityOutboxRecords,
 } from "../../src/session/authority-outbox-store/outbox-journal.js";
 import { buildHarness } from "./scoped-session-repositories.fixtures.js";
 import { event, deliveryReceiptOf } from "./turn-lifecycle-session-contract.test-helpers.js";
@@ -32,6 +37,8 @@ const action = () => ({
   }),
   ...owner,
 });
+const projectionOf = (records) =>
+  applyAuthorityOutboxJournalRecords(createAuthorityOutboxProjection(), records);
 const terminal = () => ({
   ...event(TURN_EVENT.COMPLETED, "completed", 3, {
     phase: TURN_PHASE.COMPLETION,
@@ -106,7 +113,7 @@ for (const stage of ["acceptance", "terminal"]) {
     h.storageService.writeJsonAtomic = async (file, payload) => {
       const result = await write(file, payload);
       if (file === h.sessionFile && payload.turnLifecycle.sequence === targetSequence) {
-        if (beforeJournal.length) await rename(journal, `${journal}.saved`);
+        await rename(journal, `${journal}.saved`);
         await mkdir(journal);
         blocked = true;
       }
@@ -116,20 +123,23 @@ for (const stage of ["acceptance", "terminal"]) {
     assert.equal(blocked, true);
     h.storageService.writeJsonAtomic = write;
     await rm(journal, { recursive: true });
-    if (beforeJournal.length) await rename(`${journal}.saved`, journal);
+    await rename(`${journal}.saved`, journal);
     const bytes = await readFile(h.sessionFile, "utf8");
     const manifest = JSON.parse(bytes);
     const receipt = manifest.turnLifecycle.commandReceipts.at(-1);
     assert.equal(manifest.turnLifecycle.sequence, targetSequence);
-    assert.equal((await readAuthorityOutboxRecords(h.sessionDir)).length, beforeJournal.length);
+    const preparedRecords = await readAuthorityOutboxRecords(h.sessionDir);
+    assert.equal(preparedRecords.length, beforeJournal.length + 1);
+    const expectedEnvelope = preparedRecords.at(-1).envelope;
+    assert.equal(Object.hasOwn(receipt, "envelope"), false);
     const restarted = h.restart();
     const pending = await restarted.getPendingAuthorityEvents({ ...owner, consumerId });
     assert.equal(pending.events.length, targetSequence);
-    assert.deepEqual(pending.events.at(-1).envelope, receipt.envelope);
+    assert.deepEqual(pending.events.at(-1).envelope, expectedEnvelope);
     const journalAfterRecovery = await readFile(journal, "utf8");
     const replay = await restarted.applyTurnLifecycleEvent(request);
     assert.equal(replay.deduplicated, true);
-    assert.deepEqual(replay.envelope, receipt.envelope);
+    assert.deepEqual(replay.envelope, expectedEnvelope);
     assert.equal(await readFile(h.sessionFile, "utf8"), bytes);
     assert.equal(await readFile(journal, "utf8"), journalAfterRecovery);
   });
@@ -207,14 +217,17 @@ for (const stage of ["acceptance", "terminal"]) {
       for (const entry of locks) {
         await utimes(path.join(entry.parentPath, entry.name), abandoned, abandoned);
       }
-      assert.deepEqual(await readAuthorityOutboxRecords(h.sessionDir), beforeRecords);
+      const preparedRecords = await readAuthorityOutboxRecords(h.sessionDir);
+      assert.deepEqual(preparedRecords.slice(0, -1), beforeRecords);
+      assert.equal(preparedRecords.at(-1).op, "prepare");
+      const prepared = projectionOf(preparedRecords).prepared;
       const bytes = await readFile(h.sessionFile, "utf8");
       const receipts = JSON.parse(bytes).turnLifecycle.commandReceipts;
       const restarted = h.restart();
       const pending = await restarted.getPendingAuthorityEvents({ ...owner, consumerId });
       assert.deepEqual(
         pending.events.map((entry) => entry.envelope),
-        receipts.map((receipt) => receipt.envelope),
+        receipts.map((receipt) => prepared.get(receipt.eventId).envelope),
       );
       const replay = await restarted.applyTurnLifecycleEvent(request);
       assert.equal(replay.deduplicated, true);
@@ -259,8 +272,12 @@ test("overwriting the receipt ledger first persists its undelivered events", asy
   const session = await h.sessionRepo.findById(owner.userId, owner.sessionId, {
     persistenceContext: h.sessionRepo.treePersistenceContext(owner.userId, owner.sessionId),
   });
-  const expectedEnvelope = session.turnLifecycle.commandReceipts[0].envelope;
-  await rm(authorityOutboxJournalPath(h.sessionDir));
+  const records = await readAuthorityOutboxRecords(h.sessionDir);
+  const expectedEnvelope = records[0].envelope;
+  await replaceAuthorityOutboxRecords(
+    h.sessionDir,
+    records.filter((record) => record.op === "prepare"),
+  );
   session.turnLifecycle.commandReceipts = [];
   await h.sessionRepo.save(owner.userId, session, {
     persistenceContext: h.sessionRepo.treePersistenceContext(owner.userId, owner.sessionId),
@@ -282,19 +299,22 @@ test("outbox projection rejects conflicting receipts without modifying its sourc
       record.committedAt = "2026-07-19T00:00:00.000Z";
     },
     (record) => {
-      record.envelope.producer.id = "conflicting-producer";
+      record.envelope.ordering.sequence += 1;
     },
   ]) {
     const conflicting = structuredClone(records);
     mutate(conflicting[0]);
     const before = structuredClone({ records: conflicting, lifecycle, checkpoint });
     assert.throws(
-      () => projectCommittedTurnOutbox(conflicting, lifecycle, checkpoint),
+      () => collectUnmaterializedTurnCommits(projectionOf(conflicting), lifecycle, checkpoint),
       /conflicting lifecycle receipt/,
     );
     assert.deepEqual({ records: conflicting, lifecycle, checkpoint }, before);
   }
   const before = structuredClone({ records, lifecycle, checkpoint });
-  assert.equal(projectCommittedTurnOutbox(records, lifecycle, checkpoint).added, 0);
+  assert.deepEqual(
+    collectUnmaterializedTurnCommits(projectionOf(records), lifecycle, checkpoint),
+    [],
+  );
   assert.deepEqual({ records, lifecycle, checkpoint }, before);
 });

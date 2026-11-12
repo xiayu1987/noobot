@@ -158,11 +158,10 @@ function deliverBroadcastToSubscriber(manager, channel, subscriberSocket, contex
 
 class SubscriberBroadcastMethods {
   attachSubscriber(channel, socket, { sendStateSnapshot = true } = {}) {
-    if (!channel.subscribers.has(socket)) {
-      channel.subscribers.add(socket);
-      socket.__agentProxyChannelKeys.add(channel.key);
-      socket.__agentProxyLastSequenceByChannel[channel.key] = 0;
-    }
+    if (channel.subscribers.has(socket)) return;
+    channel.subscribers.add(socket);
+    socket.__agentProxyChannelKeys.add(channel.key);
+    socket.__agentProxyLastSequenceByChannel[channel.key] = 0;
     if (sendStateSnapshot) this.sendChannelStateSnapshot(channel, socket);
   }
 

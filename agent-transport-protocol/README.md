@@ -47,6 +47,16 @@ The Service maps these values unchanged to `runConfig.summaryPolicy`; the Agent 
 
 There is no V0 adapter or flat-payload compatibility path. Protocol changes require a new explicit protocol version.
 
+## Channel subscription
+
+A subscription is identified by the downstream socket and channel. Attaching a new
+subscriber sends the current `channel_state` snapshot before subsequent broadcasts.
+Attaching the same subscriber again is idempotent: it sends no snapshot and preserves
+the delivery cursor. New channel states continue to arrive through live broadcasts.
+Detaching and attaching again creates a new subscription and sends a fresh snapshot.
+Reconnect explicitly attaches without sending a snapshot, then publishes its prepared
+state baseline as part of the reconnect transaction, including for existing subscriptions.
+
 ## Reconnect navigation
 
 `reconnect_data.identity.sessionId` identifies the requested browser Session. Entries in

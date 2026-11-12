@@ -12,7 +12,7 @@ import {
 } from "../state/chatMessageNavigatorState.js";
 import { buildChatMessageNavItems } from "../state/chatMessageNavItemsState.js";
 import { createPendingMessageNavigation, EMPTY_ROUTED_TURN } from "./pendingMessageNavigation.js";
-import { selectTurnPresentations } from "../../modules/chat/runtime/engine/turnPresentation.js";
+import { selectSharedTurnPresentations } from "../../modules/chat/runtime/engine/sharedTurnPresentations.js";
 import { requireFunctionDependencies } from "@noobot/shared/value";
 
 export function useChatMessageNavigatorPanel({
@@ -53,7 +53,7 @@ export function useChatMessageNavigatorPanel({
     const session = activeSession.value;
     if (session === null) return [];
     return buildChatMessageNavItems({
-      messages: selectTurnPresentations({
+      messages: selectSharedTurnPresentations({
         activeSession: session,
         workflowRegistry: workflowNodeStateRegistry.value,
         turnRuntimeRegistry: turnRuntimeRegistry.value,

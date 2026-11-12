@@ -6,12 +6,11 @@
 import { filePath as path } from "@noobot/path-resolver";
 import {
   SESSION_ARTIFACT_SUMMARY_SNAPSHOT_SCHEMA_VERSION,
-  SESSION_ARTIFACT_CHECKPOINT_IDENTITY_SOURCE_SCHEMA_VERSION,
-  assertSessionManifestLayout,
+  createSessionStorageMessageIndex,
 } from "@noobot/session-protocol";
-import { assertStoredCheckpointReceipts } from "@noobot/session-protocol/summary-checkpoint-storage";
 import { requireCanonicalTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
 import { mkdir, readdir, rm } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { normalizeSessionEntity } from "../entities/session-entity.js";
 import { materializeCommittedTurnEvents } from "../authority-outbox-store/outbox-journal.js";
 import {
@@ -19,9 +18,10 @@ import {
   SESSION_ARTIFACT_FILE_NAMES,
 } from "../session-artifact-files.js";
 import { readOptionalJsonWithStorage, writeJsonWithStorage } from "./artifact-json-io.js";
+import { writeSessionArtifactEvents } from "./artifact-event-journal.js";
 import { buildStoredCheckpointReceipts } from "./checkpoint-receipts.js";
 import { buildSessionListFacts } from "./session-list-facts.js";
-import { forgetVerifiedSnapshot } from "./turn-materializer.js";
+import { forgetVerifiedSnapshot, getTurnMaterializer } from "./turn-materializer.js";
 import {
   compareTurnPlacement,
   dialogLogicalOrder,
@@ -38,6 +38,7 @@ import {
   receiptCheckpoint,
   replaceJournal,
   replaceJournalRecords,
+  resolveTurnJournalPath,
   resolveTurnSummaryReceipts,
   summarySnapshotContentHash,
   summarySnapshotIndex,
@@ -75,13 +76,6 @@ async function readPreviousTurnManifest({ storageService, files, predecessor }) 
     artifactPath: files.session,
   });
   if (previousManifest === null) return null;
-  if (
-    predecessor === SESSION_ARTIFACT_PREDECESSOR.LEGACY_REWRITE &&
-    previousManifest.schemaVersion === SESSION_ARTIFACT_CHECKPOINT_IDENTITY_SOURCE_SCHEMA_VERSION
-  ) {
-    assertStoredCheckpointReceipts(previousManifest);
-    return assertSessionManifestLayout(previousManifest);
-  }
   if (
     predecessor === SESSION_ARTIFACT_PREDECESSOR.LEGACY_REWRITE &&
     previousManifest.schemaVersion !== TURN_JOURNAL_SCHEMA_VERSION
@@ -217,26 +211,47 @@ async function commitTurnJournal({
   compact,
   snapshotCompactedJournal,
 }) {
-  if (compact) {
+  if (compact || snapshotCompactedJournal) {
+    const nextFile = path.join(path.dirname(file), `${turn.turnId}-${randomUUID()}.jsonl`);
     return {
-      committedBytes: await replaceJournal(file, turn.messages),
-      recordCount: turn.messages.length,
+      file: nextFile,
+      committedBytes: compact
+        ? await replaceJournal(nextFile, turn.messages, turn.positions)
+        : await replaceJournalRecords(nextFile, []),
+      recordCount: compact ? turn.messages.length + 1 : 0,
     };
   }
-  if (snapshotCompactedJournal) {
-    return { committedBytes: await replaceJournalRecords(file, []), recordCount: 0 };
-  }
   return {
+    file,
     committedBytes: await appendJournal(file, records, previous ? previous.committedBytes : 0),
     recordCount: (previous ? previous.recordCount : 0) + records.length,
   };
 }
 
-async function writeTurnArtifact({ sessionDir, sessionPayload, turn, previousManifest }) {
+async function writeTurnArtifact({
+  storageService,
+  sessionDir,
+  sessionPayload,
+  turn,
+  previousManifest,
+}) {
   const previous = previousManifest?.turnOrder.find((item) => item.turnId === turn.turnId);
-  const file = journalPath(sessionDir, turn.turnId);
-  const previousHashes = previous ? previous.messageHashes : {};
+  const file = previous
+    ? resolveTurnJournalPath(sessionDir, previous.file)
+    : journalPath(sessionDir, turn.turnId);
+  const previousEntries = previous
+    ? await getTurnMaterializer().materializeEntries({ storageService, sessionDir, item: previous })
+    : [];
+  const previousHashes = Object.fromEntries(
+    previousEntries.map(({ message, hash }) => [message.messageUid, hash]),
+  );
   const { nextHashes, records } = diffTurnMessages(turn.messages, previousHashes);
+  const previousPositions = previousEntries.map(({ message, ordinal }) => ({
+    messageUid: message.messageUid,
+    ordinal,
+  }));
+  if (JSON.stringify(previousPositions) !== JSON.stringify(turn.positions))
+    records.push({ op: "order", positions: turn.positions });
   const { summarySnapshots, snapshotCompactedJournal } = await writeTurnSummarySnapshots({
     sessionDir,
     sessionPayload,
@@ -249,7 +264,11 @@ async function writeTurnArtifact({ sessionDir, sessionPayload, turn, previousMan
     isTerminalTurn(sessionPayload, turn) &&
     previous?.compacted !== true &&
     summarySnapshots.length === 0;
-  const { committedBytes, recordCount } = await commitTurnJournal({
+  const {
+    file: committedFile,
+    committedBytes,
+    recordCount,
+  } = await commitTurnJournal({
     file,
     turn,
     previous,
@@ -262,12 +281,16 @@ async function writeTurnArtifact({ sessionDir, sessionPayload, turn, previousMan
     artifactOrdinal: turn.artifactOrdinal,
     turnScopeId: turn.turnScopeId,
     dialogProcessId: turn.dialogProcessId,
-    file: `${SESSION_ARTIFACT_FILE_NAMES.turnsDir}/${turn.turnId}.jsonl`,
+    file: path.relative(sessionDir, committedFile).replaceAll("\\", "/"),
     committedBytes,
     recordCount,
-    messageCount: turn.messages.length,
-    messageOrder: turn.messages.map((message) => message.messageUid),
-    messageHashes: nextHashes,
+    ...createSessionStorageMessageIndex(
+      turn.messages.map((message, index) => ({
+        message,
+        ordinal: turn.positions[index].ordinal,
+        hash: nextHashes[message.messageUid],
+      })),
+    ),
     summarySnapshots,
     compacted: compact || previous?.compacted === true,
   };
@@ -278,13 +301,14 @@ function isJournalFileName(name) {
 }
 
 async function pruneUnreferencedJournals(files, artifactTurns) {
-  const referenced = new Set(artifactTurns.map((turn) => `${turn.turnId}.jsonl`));
+  const referenced = new Set(artifactTurns.map((turn) => path.basename(turn.file)));
   try {
-    for (const entry of await readdir(files.turnsDir, { withFileTypes: true })) {
-      if (entry.isFile() && isJournalFileName(entry.name) && !referenced.has(entry.name)) {
-        await rm(path.join(files.turnsDir, entry.name), { force: true });
-      }
-    }
+    const entries = await readdir(files.turnsDir, { withFileTypes: true });
+    const unreferenced = entries.filter(
+      (entry) => entry.isFile() && isJournalFileName(entry.name) && !referenced.has(entry.name),
+    );
+    for (const entry of unreferenced)
+      await rm(path.join(files.turnsDir, entry.name), { force: true });
   } catch (error) {
     ignoreMissingDirectory(error);
   }
@@ -343,36 +367,44 @@ export async function writeSessionArtifact({
   );
   const previousManifest = await readPreviousTurnManifest({ storageService, files, predecessor });
   const { artifactTurns, turnArtifactSequence } = assignArtifactTurnIds(turns, previousManifest);
+  const positions = new Map(
+    normalizedSessionPayload.messages.map((message, index) => [message.messageUid, index + 1]),
+  );
   await mkdir(files.turnsDir, { recursive: true });
   await mkdir(files.turnSnapshotsDir, { recursive: true });
   const turnOrder = [];
   for (const turn of artifactTurns) {
     turnOrder.push(
       await writeTurnArtifact({
+        storageService,
         sessionDir,
         sessionPayload: normalizedSessionPayload,
-        turn,
+        turn: {
+          ...turn,
+          positions: turn.messages.map((message) => ({
+            messageUid: message.messageUid,
+            ordinal: positions.get(message.messageUid),
+          })),
+        },
         previousManifest,
       }),
     );
   }
-  const messageOrder = normalizedSessionPayload.messages.map((message) => ({
-    messageUid: message.messageUid,
-  }));
   await writeSessionManifest({
     storageService,
     files,
     sessionPayload: normalizedSessionPayload,
-    layout: { turnArtifactSequence, turnOrder, messageOrder },
+    layout: { turnArtifactSequence, turnOrder },
+    previousManifest,
     atomic,
   });
-  await pruneUnreferencedJournals(files, artifactTurns);
+  await pruneUnreferencedJournals(files, turnOrder);
   await pruneUnreferencedSnapshots(files, turnOrder);
   return {
     files,
     session: normalizedSessionPayload,
     listFacts: buildSessionListFacts({
-      messageOrder,
+      messageCount: normalizedSessionPayload.messages.length,
       messages: normalizedSessionPayload.messages,
     }),
   };
@@ -384,7 +416,14 @@ function turnViewError(message, code) {
   return error;
 }
 
-function assertTurnViewOwnership({ session, previous, viewScopes, turns }) {
+async function assertTurnViewOwnership({
+  storageService,
+  sessionDir,
+  session,
+  previous,
+  viewScopes,
+  turns,
+}) {
   const outsideItems = previous.turnOrder.filter((item) => !viewScopes.has(item.turnScopeId));
   const outsideOwner = new Map();
   for (const item of outsideItems) {
@@ -393,7 +432,12 @@ function assertTurnViewOwnership({ session, previous, viewScopes, turns }) {
         `turn view omits a turn that requires rewrite: ${item.turnScopeId}`,
         "SESSION_TURN_VIEW_INCOMPLETE",
       );
-    for (const messageUid of item.messageOrder) outsideOwner.set(messageUid, item.turnScopeId);
+    const entries = await getTurnMaterializer().materializeEntries({
+      storageService,
+      sessionDir,
+      item,
+    });
+    for (const { message } of entries) outsideOwner.set(message.messageUid, item.turnScopeId);
   }
   const outsideScopes = new Set(outsideItems.map((item) => item.turnScopeId));
   for (const turn of turns) {
@@ -411,25 +455,30 @@ function assertTurnViewOwnership({ session, previous, viewScopes, turns }) {
   return outsideItems;
 }
 
-function mergeTurnViewMessageOrder({ previous, viewScopes, messages }) {
-  const viewUids = new Set(messages.map((message) => message.messageUid));
-  const viewOwnedUids = new Set(
-    previous.turnOrder
-      .filter((item) => viewScopes.has(item.turnScopeId))
-      .flatMap((item) => item.messageOrder),
-  );
-  const kept = previous.messageOrder.filter(
-    (reference) => !viewOwnedUids.has(reference.messageUid) || viewUids.has(reference.messageUid),
-  );
-  const keptUids = new Set(kept.map((reference) => reference.messageUid));
-  const appended = messages
-    .filter((message) => !keptUids.has(message.messageUid))
-    .map((message) => ({ messageUid: message.messageUid }));
-  return [...kept, ...appended];
+async function mergeTurnViewPositions({
+  storageService,
+  sessionDir,
+  previous,
+  viewScopes,
+  messages,
+}) {
+  const positions = new Map();
+  for (const item of previous.turnOrder.filter((turn) => viewScopes.has(turn.turnScopeId))) {
+    const entries = await getTurnMaterializer().materializeEntries({
+      storageService,
+      sessionDir,
+      item,
+    });
+    for (const { message, ordinal } of entries) positions.set(message.messageUid, ordinal);
+  }
+  let nextOrdinal = Math.max(0, ...previous.turnOrder.map((turn) => turn.lastMessageOrdinal));
+  for (const message of messages) {
+    if (!positions.has(message.messageUid)) positions.set(message.messageUid, ++nextOrdinal);
+  }
+  return positions;
 }
 
-function placeTurnViewTurns({ session, outsideItems, turns, messageOrder }) {
-  const position = new Map(messageOrder.map((reference, index) => [reference.messageUid, index]));
+function placeTurnViewTurns({ session, outsideItems, turns, position }) {
   const firstSourceIndex = (turnScopeId, uids) => {
     const indices = uids.map((uid) => position.get(uid));
     if (!indices.length || indices.some((index) => index === undefined))
@@ -444,11 +493,17 @@ function placeTurnViewTurns({ session, outsideItems, turns, messageOrder }) {
       placement: TURN_PLACEMENT.RETAINED,
       turn: item,
       dialogProcessId: item.dialogProcessId,
-      firstSourceIndex: firstSourceIndex(item.turnScopeId, item.messageOrder),
+      firstSourceIndex: item.firstMessageOrdinal,
     })),
     ...turns.map(({ sourceIndices, ...turn }) => ({
       placement: TURN_PLACEMENT.REWRITTEN,
-      turn,
+      turn: {
+        ...turn,
+        positions: turn.messages.map((message) => ({
+          messageUid: message.messageUid,
+          ordinal: position.get(message.messageUid),
+        })),
+      },
       dialogProcessId: turn.dialogProcessId,
       firstSourceIndex: firstSourceIndex(
         turn.turnScopeId,
@@ -479,13 +534,25 @@ export async function writeSessionTurnArtifacts({
   if (!previous) throw turnJournalSchemaRequiredError("Session turn view write");
   const viewScopes = new Set(turnScopeIds.map(requireCanonicalTurnScopeId));
   const { turns } = splitSessionMessages(session.messages, session.dialogOrder);
-  const outsideItems = assertTurnViewOwnership({ session, previous, viewScopes, turns });
-  const messageOrder = mergeTurnViewMessageOrder({
+  const outsideItems = await assertTurnViewOwnership({
+    storageService,
+    sessionDir,
+    session,
+    previous,
+    viewScopes,
+    turns,
+  });
+  const position = await mergeTurnViewPositions({
+    storageService,
+    sessionDir,
     previous,
     viewScopes,
     messages: session.messages,
   });
-  const placed = placeTurnViewTurns({ session, outsideItems, turns, messageOrder });
+  const placed = placeTurnViewTurns({ session, outsideItems, turns, position });
+  const orderedMessages = [...session.messages].sort(
+    (left, right) => position.get(left.messageUid) - position.get(right.messageUid),
+  );
   const { artifactTurns, turnArtifactSequence } = assignArtifactTurnIds(
     placed.map(({ turn }) => turn),
     previous,
@@ -496,6 +563,7 @@ export async function writeSessionTurnArtifacts({
       placed[index].placement === TURN_PLACEMENT.RETAINED
         ? turn
         : await writeTurnArtifact({
+            storageService,
             sessionDir,
             sessionPayload: session,
             turn,
@@ -507,28 +575,45 @@ export async function writeSessionTurnArtifacts({
     storageService,
     files,
     sessionPayload: session,
-    layout: { turnArtifactSequence, turnOrder, messageOrder },
+    layout: { turnArtifactSequence, turnOrder },
+    previousManifest: previous,
     atomic,
   });
-  await pruneUnreferencedJournals(files, artifactTurns);
+  await pruneUnreferencedJournals(files, turnOrder);
   await pruneUnreferencedSnapshots(files, turnOrder);
   return {
     files,
     session,
-    listFacts: buildSessionListFacts({ messageOrder, messages: session.messages }),
+    listFacts: buildSessionListFacts({
+      messages: orderedMessages,
+      messageCount: turnOrder.reduce((count, turn) => count + turn.messageCount, 0),
+    }),
   };
 }
 
-async function writeSessionManifest({ storageService, files, sessionPayload, layout, atomic }) {
+async function writeSessionManifest({
+  storageService,
+  files,
+  sessionPayload,
+  layout,
+  atomic,
+  previousManifest,
+}) {
   const manifest = {
     ...sessionPayload,
+    artifactEventJournal: await writeSessionArtifactEvents(
+      path.dirname(files.session),
+      sessionPayload,
+      previousManifest,
+    ),
     schemaVersion: TURN_JOURNAL_SCHEMA_VERSION,
     messageIdentityVersion: 1,
     turnArtifactSequence: layout.turnArtifactSequence,
     turnOrder: layout.turnOrder,
-    messageOrder: layout.messageOrder,
   };
   delete manifest.messages;
+  delete manifest.messageOrder;
+  delete manifest.sessionArtifactEvents;
   const storedManifest = await buildStoredCheckpointReceipts({
     storageService,
     sessionDir: path.dirname(files.session),
