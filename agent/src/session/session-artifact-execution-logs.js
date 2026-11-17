@@ -6,6 +6,7 @@
 import { filePath as path } from "@noobot/path-resolver";
 import { createReadStream } from "node:fs";
 import { appendFile, mkdir, open } from "node:fs/promises";
+import { fileSyncOpenFlags } from "@noobot/platform-compatibility/file-system";
 import {
   EXECUTION_EVENT_INDEX_ERROR_CODE,
   EXECUTION_LOG_APPEND_OUTCOME,
@@ -99,7 +100,7 @@ export async function writeExecutionTurnIndex({ storageService, turnDir, index }
 }
 
 async function syncExecutionIndex(directory) {
-  const handle = await open(path.join(directory, EXECUTION_EVENT_INDEX_FILE), "r");
+  const handle = await open(path.join(directory, EXECUTION_EVENT_INDEX_FILE), fileSyncOpenFlags());
   await withStorageCleanup(
     () => handle.sync(),
     () => handle.close(),

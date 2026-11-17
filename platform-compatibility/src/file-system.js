@@ -8,6 +8,10 @@ import { normalizePlatform, PLATFORM } from "./platform.js";
 
 const WINDOWS_TRANSIENT_ATOMIC_RENAME_CODES = new Set(["EPERM", "EACCES", "EBUSY"]);
 
+export function fileSyncOpenFlags(platform = process.platform) {
+  return normalizePlatform(platform) === PLATFORM.WINDOWS ? "r+" : "r";
+}
+
 export async function syncDirectory({ directory, open, platform = process.platform }) {
   if (!isFunction(open)) throw new TypeError("directory sync requires an open operation");
   if (normalizePlatform(platform) === PLATFORM.WINDOWS) return false;
