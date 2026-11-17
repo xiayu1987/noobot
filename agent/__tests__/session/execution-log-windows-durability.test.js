@@ -17,8 +17,7 @@ import { withTemp } from "./session-artifact-store-v2.test-helpers.js";
 test("index sync requests write access only on Windows", () => {
   for (const platform of ["win32", "win", "windows"])
     assert.equal(fileSyncOpenFlags(platform), "r+");
-  for (const platform of ["linux", "darwin"])
-    assert.equal(fileSyncOpenFlags(platform), "r");
+  for (const platform of ["linux", "darwin"]) assert.equal(fileSyncOpenFlags(platform), "r");
 });
 
 test("Windows execution indexes sync during registration, append and rollover", async (context) => {
