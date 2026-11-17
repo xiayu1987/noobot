@@ -152,6 +152,19 @@ test("explicit v1 migration preserves envelope ID, ordering, causality and all j
   assert.equal(migrateAttachmentLifecycleOutboxRecords(migrated.records).changed, false);
 });
 
+test("v1 attachment events without a payload ID preserve their envelope identity", () => {
+  const commit = legacyCommit();
+  delete commit.envelope.payload.attachmentEventId;
+  const before = structuredClone(commit);
+  const migrated = migrateAttachmentLifecycleOutboxRecords([commit]);
+  assert.equal(migrated.changed, true);
+  assert.deepEqual(migrated.records[0].envelope.identity, before.envelope.identity);
+  assert.deepEqual(migrated.records[0].envelope.ordering, before.envelope.ordering);
+  assert.equal(migrated.records[0].envelope.payload.eventVersion, 2);
+  assert.deepEqual(commit, before);
+  assert.equal(migrateAttachmentLifecycleOutboxRecords(migrated.records).changed, false);
+});
+
 test("migration rejects ambiguous legacy IDs and malformed records without mutating the batch", () => {
   const first = legacyCommit();
   const invalidInputs = [

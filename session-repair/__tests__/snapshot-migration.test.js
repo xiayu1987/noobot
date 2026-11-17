@@ -17,6 +17,7 @@ import {
   hydrateModelContextSnapshot,
 } from "@noobot/context-protocol/policy/snapshot";
 import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "@noobot/context-protocol/message/internal-types";
+import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/message/injected-types";
 
 const identity = {
   userId: "user-a",
@@ -280,6 +281,61 @@ test("raw metadata conflicting with additional_kwargs is unmappable", () => {
     rejection("metadata_conflict"),
   );
 });
+
+test("v3 user interjections preserve their internal type and sequence", () => {
+  const metadata = {
+    noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
+    injectedMessage: true,
+    injectedMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
+    chatPresentation: false,
+  };
+  const message = v3Message({
+    type: "human",
+    id: "user-interjection:command:example",
+    metadata,
+    raw: {
+      noobotInternalMessageType: metadata.noobotInternalMessageType,
+      injectedMessage: metadata.injectedMessage,
+      injectedMessageType: metadata.injectedMessageType,
+      interjectionSequence: 1,
+    },
+  });
+  const source = v3Snapshot({ incremental: [message] });
+  const before = structuredClone(source);
+  const migrated = migrateModelContextSnapshot(source);
+  const result = migrated.document.messageBlocks.incremental[0].additional_kwargs;
+  assert.equal(result.noobotInternalMessageType, metadata.noobotInternalMessageType);
+  assert.equal(result.interjectionSequence, 1);
+  assert.equal(result.chatPresentation, false);
+  assert.deepEqual(source, before);
+});
+
+for (const [key, metadataValue, rawValue] of [
+  ["noobotInternalMessageType", CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION, "other"],
+  ["interjectionSequence", 1, 2],
+]) {
+  test(`v3 migration rejects conflicting ${key} without changing the snapshot`, () => {
+    const source = v3Snapshot({
+      incremental: [
+        v3Message({
+          type: "human",
+          id: "user-interjection:command:conflict",
+          metadata: { [key]: metadataValue },
+          raw: { [key]: rawValue },
+        }),
+      ],
+    });
+    const before = structuredClone(source);
+    assert.throws(
+      () => migrateModelContextSnapshot(source),
+      (error) =>
+        rejection("metadata_conflict")(error) &&
+        error.details.key === key &&
+        error.details.at === "incremental[0]",
+    );
+    assert.deepEqual(source, before);
+  });
+}
 
 test("unknown raw, message and lc_kwargs keys are unmappable", () => {
   const unknownRaw = v3Message({ type: "human", id: "sm_a", raw: { surprise: 1 } });

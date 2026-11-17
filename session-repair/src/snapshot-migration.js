@@ -63,6 +63,8 @@ const V3_RAW_METADATA_KEYS = new Set([
   "injectedBy",
   "injectedMessageType",
   "relayCorrelationId",
+  "noobotInternalMessageType",
+  "interjectionSequence",
 ]);
 const V3_RAW_DROPPED_KEYS = new Set([
   "role",
