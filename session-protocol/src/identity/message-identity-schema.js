@@ -294,8 +294,10 @@ export const MESSAGE_RECORD_REMOVED_FIELDS = Object.freeze([
   ),
 ]);
 
-export function messageRecordIdentityFieldsFor(role) {
-  const scoped = Object.entries(MESSAGE_FIELD_SCHEMA).filter(([, spec]) => spec.roles);
+const scopedIdentityFields = Object.entries(MESSAGE_FIELD_SCHEMA).filter(([, spec]) => spec.roles);
+
+function buildRecordIdentityFields(role) {
+  const scoped = scopedIdentityFields;
   return Object.freeze({
     allowed: Object.freeze(scoped.filter(([, spec]) => spec.roles.includes(role)).map(([n]) => n)),
     forbidden: Object.freeze(
@@ -307,12 +309,36 @@ export function messageRecordIdentityFieldsFor(role) {
   });
 }
 
-export function acceptedMessageIdentityFieldsFor(role) {
+function buildAcceptedIdentityFields(role) {
   return Object.freeze(
     Object.entries(MESSAGE_FIELD_SCHEMA)
       .filter(([, spec]) => spec.acceptanceRequiredRoles.includes(role))
       .map(([name]) => name),
   );
+}
+
+const identityRoles = new Set(
+  Object.values(MESSAGE_FIELD_SCHEMA).flatMap((spec) => [
+    ...(spec.roles || []),
+    ...spec.requiredRoles,
+    ...spec.acceptanceRequiredRoles,
+  ]),
+);
+const recordIdentityFields = new Map(
+  [...identityRoles].map((role) => [role, buildRecordIdentityFields(role)]),
+);
+const acceptedIdentityFields = new Map(
+  [...identityRoles].map((role) => [role, buildAcceptedIdentityFields(role)]),
+);
+const unscopedRecordIdentityFields = buildRecordIdentityFields(undefined);
+const unscopedAcceptedIdentityFields = buildAcceptedIdentityFields(undefined);
+
+export function messageRecordIdentityFieldsFor(role) {
+  return recordIdentityFields.get(role) || unscopedRecordIdentityFields;
+}
+
+export function acceptedMessageIdentityFieldsFor(role) {
+  return acceptedIdentityFields.get(role) || unscopedAcceptedIdentityFields;
 }
 
 export function isRegisteredMessageIdentityField(name) {

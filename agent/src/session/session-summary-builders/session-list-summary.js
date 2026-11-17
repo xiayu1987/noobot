@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { buildMessageSummary } from "./message-summary-projection.js";
 import { resolveSessionTitle } from "../entities/session-message-facts.js";
 import { requireSessionAggregateVersion } from "@noobot/session-protocol";
 import {
@@ -22,7 +21,7 @@ export function buildSessionSummary(session, { listFacts }) {
     aggregateVersion: requireSessionAggregateVersion(session.aggregateVersion),
     title: resolveSessionTitle(session),
     messageCount,
-    lastMessage: lastMessage ? buildMessageSummary(lastMessage) : null,
+    lastMessage,
     activeTurnScopeId: session.turnLifecycle.activeTurnScopeId,
     availability: SESSION_SUMMARY_AVAILABILITY.AVAILABLE,
   });

@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mergeConfig } from "../../src/config/index.js";
 
 import { resolveEffectiveModelSpec } from "../../src/runtime/run-config/config-resolver.js";
 import { initializeAgentModelHost } from "../../src/runtime/model-port-host.js";
@@ -43,8 +44,7 @@ const globalConfig = {
 
 test("resolveEffectiveModelSpec uses selectedModel string before scenario default", () => {
   const spec = resolveEffectiveModelSpec({
-    globalConfig,
-    userConfig: {},
+    effectiveConfig: mergeConfig(globalConfig, {}),
     selectedModel: "selected_alias",
     scenario: "programming",
   });
@@ -57,8 +57,7 @@ test("resolveEffectiveModelSpec rejects an invalid explicit selection even when 
   assert.throws(
     () =>
       resolveEffectiveModelSpec({
-        globalConfig,
-        userConfig: {},
+        effectiveConfig: mergeConfig(globalConfig, {}),
         selectedModel: "missing_alias",
         scenario: "programming",
       }),
@@ -68,37 +67,39 @@ test("resolveEffectiveModelSpec rejects an invalid explicit selection even when 
 
 test("resolveEffectiveModelSpec uses scenario model as initial model fallback", () => {
   const spec = resolveEffectiveModelSpec({
-    globalConfig: {
-      providers: {
-        scenario_model_alias: {
-          enabled: true,
-          used_for_conversation: true,
-          model: "scenario-model",
-          reasoning_effort_parameter: "reasoning_effort",
-          reasoning_effort_options: ["none", "low", "medium", "high"],
-          api_key: "test-key",
-          base_url: "http://localhost/scenario-model",
-        },
-        system_default: {
-          enabled: true,
-          used_for_conversation: true,
-          model: "system-default-model",
-          reasoning_effort_parameter: "reasoning_effort",
-          reasoning_effort_options: ["none", "low", "medium", "high"],
-          api_key: "test-key",
-          base_url: "http://localhost/system",
-        },
-      },
-      scenarios: {
-        definitions: {
-          programming: {
-            model: "scenario_model_alias",
+    effectiveConfig: mergeConfig(
+      {
+        providers: {
+          scenario_model_alias: {
+            enabled: true,
+            used_for_conversation: true,
+            model: "scenario-model",
+            reasoning_effort_parameter: "reasoning_effort",
+            reasoning_effort_options: ["none", "low", "medium", "high"],
+            api_key: "test-key",
+            base_url: "http://localhost/scenario-model",
+          },
+          system_default: {
+            enabled: true,
+            used_for_conversation: true,
+            model: "system-default-model",
+            reasoning_effort_parameter: "reasoning_effort",
+            reasoning_effort_options: ["none", "low", "medium", "high"],
+            api_key: "test-key",
+            base_url: "http://localhost/system",
           },
         },
+        scenarios: {
+          definitions: {
+            programming: {
+              model: "scenario_model_alias",
+            },
+          },
+        },
+        defaultProvider: "system_default",
       },
-      defaultProvider: "system_default",
-    },
-    userConfig: {},
+      {},
+    ),
     selectedModel: "",
     scenario: "programming",
   });
@@ -111,15 +112,63 @@ test("model capability failure blocks only that selection and recovers after cor
   const config = structuredClone(globalConfig);
   config.providers.selected_alias.used_for_conversation = false;
   assert.throws(
-    () => resolveEffectiveModelSpec({ globalConfig: config, selectedModel: "selected_alias" }),
+    () =>
+      resolveEffectiveModelSpec({
+        effectiveConfig: mergeConfig(config, {}),
+        selectedModel: "selected_alias",
+      }),
     { code: "MODEL_REFERENCE_CAPABILITY_MISMATCH" },
   );
-  assert.equal(resolveEffectiveModelSpec({ globalConfig: config }).alias, "scenario_default");
+  assert.equal(
+    resolveEffectiveModelSpec({ effectiveConfig: mergeConfig(config, {}) }).alias,
+    "scenario_default",
+  );
   config.providers.selected_alias.used_for_conversation = true;
   assert.equal(
-    resolveEffectiveModelSpec({ globalConfig: config, selectedModel: "selected_alias" }).alias,
+    resolveEffectiveModelSpec({
+      effectiveConfig: mergeConfig(config, {}),
+      selectedModel: "selected_alias",
+    }).alias,
     "selected_alias",
   );
+});
+
+test("effective model resolution honors user overrides without changing configuration", () => {
+  const effectiveConfig = mergeConfig(globalConfig, {
+    providers: { selected_alias: { model: "user-model" } },
+    defaultProvider: "selected_alias",
+  });
+  const before = structuredClone(effectiveConfig);
+  assert.equal(resolveEffectiveModelSpec({ effectiveConfig }).model, "user-model");
+  assert.equal(
+    resolveEffectiveModelSpec({ effectiveConfig, scenario: "programming" }).alias,
+    "scenario_default",
+  );
+  assert.deepEqual(effectiveConfig, before);
+});
+
+test("disabled and missing providers preserve selection error paths without fallback", () => {
+  const effectiveConfig = mergeConfig(globalConfig, {
+    providers: { selected_alias: { enabled: false } },
+  });
+  const selections = [
+    { selectedModel: "selected_alias", path: "selectedModel" },
+    { selectedModel: "toString", path: "selectedModel" },
+    { scenario: "programming", path: "scenarios.definitions.programming.model" },
+    { path: "default_provider" },
+  ];
+  effectiveConfig.providers.scenario_default.enabled = false;
+  for (const { path, ...selection } of selections) {
+    assert.throws(
+      () => resolveEffectiveModelSpec({ effectiveConfig, ...selection }),
+      (error) => {
+        assert.equal(error.code, "MODEL_REFERENCE_NOT_FOUND");
+        assert.equal(error.details.path, path);
+        assert.equal(error.details.requirement, "conversation");
+        return true;
+      },
+    );
+  }
 });
 
 function initializeHostWithRunConfig(runConfig) {

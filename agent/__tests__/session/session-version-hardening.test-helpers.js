@@ -7,17 +7,17 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { after } from "node:test";
-import {
-  TURN_EVENT,
-  TURN_PHASE,
-  createAggregateVersionConflictError,
-} from "@noobot/session-protocol";
+import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
-import { isObjectLike } from "@noobot/shared/value";
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 import { createAcceptedAgentExecution } from "../helpers/accepted-run-identity.js";
 import { createSessionCrudServiceStub } from "../helpers/session-crud-service-stub.js";
-import { requiredSessionReads } from "../helpers/session-repo-required-reads.js";
+import { initializeImmutableSession } from "../../src/session/session-artifact-session/immutable-session-bootstrap.js";
+import {
+  openImmutableSessionReader,
+  withImmutableSessionReader,
+} from "../../src/session/session-artifact-session/immutable-session-reader.js";
+import { commitSessionChanges } from "../../src/session/session-artifact-session/commit-session-changes.js";
 import {
   applySessionMessageFacts,
   createTestSessionRequiredFields,
@@ -26,7 +26,8 @@ import {
 const TEST_SESSION_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-session-dir-"));
 after(() => fs.rmSync(TEST_SESSION_DIR, { recursive: true, force: true }));
 
-export function harness(initial = {}) {
+export async function harness(initial = {}) {
+  const sessionDir = fs.mkdtempSync(path.join(TEST_SESSION_DIR, "session-"));
   let session = applySessionMessageFacts(
     structuredClone({
       sessionId: "s1",
@@ -37,33 +38,41 @@ export function harness(initial = {}) {
     }),
   );
   let lockCalls = 0;
+  await initializeImmutableSession({
+    sessionDir,
+    operationId: "initialize-version-test",
+    session,
+  });
+  const open = () =>
+    openImmutableSessionReader({ sessionDir, sessionId: "s1", parentSessionId: "" });
+  session = await (await open()).exportSession();
   const repo = {
     async withSessionMutation(_u, _s, operation) {
       lockCalls += 1;
       return operation(await this.locateSessionScope());
     },
     async locateSessionScope() {
-      return { resolvedParentSessionId: "", sessionDir: TEST_SESSION_DIR };
+      return { resolvedParentSessionId: "", sessionDir };
     },
     async ensureSession() {},
-    ...requiredSessionReads,
-    async findById(_u, _s, options = {}) {
-      if (!isObjectLike(options)) {
-        throw new TypeError("findById options must be { persistenceContext }");
-      }
-      return structuredClone(session);
+    requireSessionReader: open,
+    async withSessionReader(userId, sessionId, operation) {
+      return this.withSessionMutation(userId, sessionId, (scope) =>
+        withImmutableSessionReader(
+          { sessionDir, sessionId: "s1", parentSessionId: scope.resolvedParentSessionId },
+          async (reader, commitChanges) => {
+            const result = await operation(reader, scope, commitChanges);
+            session = await (await open()).exportSession();
+            return result;
+          },
+        ),
+      );
     },
-    async findTurnView(_u, _s, { turnScopeIds = [] } = {}) {
-      return { session: structuredClone(session), turnScopeIds };
-    },
-    async saveTurnView(_u, next) {
-      session = structuredClone(next);
-    },
-    async save(_u, next, { expectedAggregateVersion } = {}) {
-      const actual = session.aggregateVersion;
-      if (expectedAggregateVersion != null && expectedAggregateVersion !== actual)
-        throw createAggregateVersionConflictError({ currentVersion: actual });
-      session = structuredClone(next);
+    findImmutableSessionReader: open,
+    async commitChanges(_u, _s, request) {
+      const committed = await commitSessionChanges({ ...request, sessionDir, sessionId: "s1" });
+      session = await (await open()).exportSession();
+      return committed;
     },
   };
   return {

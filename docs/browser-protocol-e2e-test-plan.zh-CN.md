@@ -426,9 +426,9 @@ workspace/<userId>/runtime/plugin-data/harness/runs/<dialogProcessId>/
 
 ### PBE-034：主 Agent 低轮次阶段小结
 
-步骤：不选择 Harness，通过核心 Composer 正式参数边界设置仅供 E2E 使用的低轮次主流程小结阈值，发送三步依赖工具链；阈值达到后由主流程注入阶段小结要求，小结后继续完成第三步。生产界面不展示该阈值。
+步骤：不选择 Harness，通过核心 Composer 正式参数边界设置仅供 E2E 使用的低轮次主流程小结阈值，发送三步依赖工具链；阈值达到后由主流程触发独立小结调用，小结后继续完成第三步。生产界面不展示该阈值。
 
-断言：`phase_summary_required`、`summary_checkpoint_committed` 和 `turn.completed` 依次发生；唯一 checkpoint receipt 与 Turn journal 的 `summarized=true` 消息对应且不拆分 tool call/result；checkpoint 后的主模型输入不再含已小结消息，阶段小结 marker 不累积；全程严格产生三次业务工具调用和一次 `task_summary`。
+断言：`phase_summary_required`、`summary_checkpoint_committed` 和 `turn.completed` 依次发生；`phase_summary` 调用为流式、无绑定工具、独立请求，并注入一条 `noobot.phase_summary_result`；唯一 checkpoint receipt 与 Turn journal 的 `summarized=true` 消息对应且不拆分 tool call/result；checkpoint 后的主模型输入不再含已小结消息；全程严格产生三次业务工具调用，不出现 `task_summary` 调用。
 
 ### PBE-035：周期任务检查
 

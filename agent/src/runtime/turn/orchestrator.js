@@ -3,18 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { collectScopedMessagesToSummarize } from "@noobot/context-protocol/policy/summary";
-import { TOOL_NAME } from "../../tools/constants/index.js";
 import { emitEvent } from "../../events/index.js";
 import { tEngine } from "../i18n-adapter.js";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/policy/injected-message";
 import { handleEngineError } from "../errors/index.js";
 import {
-  maybeFinalizeNoToolsAfterPhaseSummaryOverflow,
   maybePromptHelpToolByFailure,
   maybePromptHelpToolByLoop,
-  maybeRequestPhaseSummary,
   maybeRequestTaskCheck,
 } from "../loop-control.js";
 import { resolveLlmForTurn } from "../../models/runtime/model-manager.js";
@@ -23,34 +19,95 @@ import { processToolResults } from "./response-processor.js";
 import { invokeNoToolsTurn, invokeWithToolsTurn } from "./turn-executor.js";
 import { buildLoopResult } from "./turn-result-aggregator.js";
 import { getSessionIdsFromAgentContext } from "../../context/agent-context-accessor.js";
-import { resolveContextSessionMessageUid } from "@noobot/context-protocol/message/codec";
-import {
-  clearMainFlowFinalNoToolsTurnInstruction,
-  consumeMainFlowFinalNoToolsTurnInstruction,
-  markMainFlowFinalNoToolsTurnActive,
-  requestMainFlowSummaryCheckpoint,
-} from "../main-flow-control.js";
+import { markMainFlowFinalNoToolsTurnActive } from "../main-flow-control.js";
 import { consumeSummaryCheckpointCommand } from "../summary-checkpoint-command.js";
-import { appendTurnContextControlMessage } from "./turn-context-message-appender.js";
+import { appendTurnRuntimeInjectedMessage } from "./turn-context-message-appender.js";
 import {
   recoverMainFlowNoFinalResponse,
   resetNoFinalResponseRetryStreak,
 } from "./no-final-response-recovery.js";
-import { text } from "@noobot/shared/value";
 import { requireActiveModelContext } from "../active-model-context.js";
+
+async function attemptTurn(invokeTurn, input) {
+  try {
+    const result = await invokeTurn(input);
+    resetNoFinalResponseRetryStreak(input?.modelState?.runtime);
+    return { result };
+  } catch (error) {
+    if (!recoverMainFlowNoFinalResponse({ error, ...input })) throw error;
+    return null;
+  }
+}
 
 function withNoFinalResponseRecovery(invokeTurn) {
   return async function invokeTurnWithNoFinalResponseRecovery(input = {}) {
     for (;;) {
-      try {
-        const result = await invokeTurn(input);
-        resetNoFinalResponseRetryStreak(input?.modelState?.runtime);
-        return result;
-      } catch (error) {
-        if (!recoverMainFlowNoFinalResponse({ error, ...input })) throw error;
-      }
+      const attempt = await attemptTurn(invokeTurn, input);
+      if (attempt) return attempt.result;
     }
   };
+}
+
+function promptLoopLimitFinalization({
+  runtime,
+  loopState,
+  turn,
+  maxTurns,
+  bufferTurns,
+  overMaxTurnsCount,
+}) {
+  if (overMaxTurnsCount <= 0 || loopState.loopLimitFinalizePrompted === true) return;
+  appendTurnRuntimeInjectedMessage({
+    runtime,
+    content: tEngine(runtime, "toolLoopLimitFinalizePrompt", { maxTurns }),
+    internalType: CONTEXT_INJECTED_MESSAGE_TYPE.TOOL_LOOP_LIMIT_FINALIZE_PROMPT,
+  });
+  loopState.loopLimitFinalizePrompted = true;
+  emitEvent(runtime.eventListener, "tool_loop_limit_finalize_prompted", {
+    turn,
+    maxTurns,
+    bufferTurns,
+    overMaxTurnsCount,
+  });
+}
+
+function promptRejectedTaskCheck(runtime, turn, rejectedControlToolBatch) {
+  appendTurnRuntimeInjectedMessage({
+    runtime,
+    content: tEngine(runtime, "taskCheckSingleToolPrompt"),
+    internalType: CONTEXT_INJECTED_MESSAGE_TYPE.TASK_CHECK_SINGLE_TOOL_RETRY_PROMPT,
+  });
+  emitEvent(runtime.eventListener, "task_check_multi_tool_call_rejected", {
+    turn,
+    ...rejectedControlToolBatch,
+  });
+}
+
+function reportOrchestratorError({
+  error,
+  modelState,
+  turn,
+  maxTurns,
+  tools,
+  handleEngineErrorFn,
+}) {
+  const { abortSignal, eventListener } = modelState.runtime;
+  const executionIdentity = getSessionIdsFromAgentContext(modelState.agentContext);
+  handleEngineErrorFn({
+    error,
+    abortSignal,
+    eventListener,
+    event: "turn_orchestrator_error",
+    metadata: {
+      source: "turn-orchestrator",
+      turn,
+      maxTurns,
+      hasTools: Array.isArray(tools) && tools.length > 0,
+      sessionId: executionIdentity.sessionId,
+      parentSessionId: executionIdentity.parentSessionId,
+      dialogProcessId: executionIdentity.dialogProcessId,
+    },
+  });
 }
 
 export function createTurnOrchestrator({
@@ -60,9 +117,7 @@ export function createTurnOrchestrator({
   invokeWithToolsTurnFn: rawInvokeWithToolsTurnFn = invokeWithToolsTurn,
   processToolResultsFn = processToolResults,
   buildLoopResultFn = buildLoopResult,
-  maybeRequestPhaseSummaryFn = maybeRequestPhaseSummary,
   maybeRequestTaskCheckFn = maybeRequestTaskCheck,
-  maybeFinalizeNoToolsAfterPhaseSummaryOverflowFn = maybeFinalizeNoToolsAfterPhaseSummaryOverflow,
   maybePromptHelpToolByLoopFn = maybePromptHelpToolByLoop,
   maybePromptHelpToolByFailureFn = maybePromptHelpToolByFailure,
   handleEngineErrorFn = handleEngineError,
@@ -106,12 +161,10 @@ export function createTurnOrchestrator({
       };
     }
 
-    async function invokeFinalNoToolsTurn(turn, instruction) {
+    async function invokeFinalNoToolsTurn(turn) {
       markMainFlowFinalNoToolsTurnActive(runtime, true);
       emitEvent(eventListener, "main_flow_final_no_tools_turn_enforced", {
         turn,
-        reason: text(instruction?.reason),
-        source: text(instruction?.source),
       });
       let noToolsResult;
       try {
@@ -123,7 +176,6 @@ export function createTurnOrchestrator({
         });
       } finally {
         markMainFlowFinalNoToolsTurnActive(runtime, false);
-        clearMainFlowFinalNoToolsTurnInstruction(runtime);
       }
       return completeTurn(turn, noToolsResult);
     }
@@ -132,20 +184,14 @@ export function createTurnOrchestrator({
       assertNotAbortedFn(abortSignal);
       const overMaxTurnsCount = Math.max(0, turn - Number(maxTurns || 0));
 
-      if (overMaxTurnsCount > 0 && loopState?.loopLimitFinalizePrompted !== true) {
-        appendTurnContextControlMessage({
-          runtime,
-          content: tEngine(runtime, "toolLoopLimitFinalizePrompt", { maxTurns }),
-          internalType: CONTEXT_INJECTED_MESSAGE_TYPE.TOOL_LOOP_LIMIT_FINALIZE_PROMPT,
-        });
-        loopState.loopLimitFinalizePrompted = true;
-        emitEvent(eventListener, "tool_loop_limit_finalize_prompted", {
-          turn,
-          maxTurns,
-          bufferTurns: loopLimitBufferTurns,
-          overMaxTurnsCount,
-        });
-      }
+      promptLoopLimitFinalization({
+        runtime,
+        loopState,
+        turn,
+        maxTurns,
+        bufferTurns: loopLimitBufferTurns,
+        overMaxTurnsCount,
+      });
 
       if (overMaxTurnsCount > loopLimitBufferTurns) {
         emitEvent(eventListener, "tool_loop_limit_reached", {
@@ -154,22 +200,10 @@ export function createTurnOrchestrator({
           bufferTurns: loopLimitBufferTurns,
           overMaxTurnsCount,
         });
-        const finalResult = await invokeNoToolsTurnFn({
-          modelState,
-          loopState,
-          turn,
-          forceToolChoiceNone: true,
-        });
-        return completeTurn(turn, finalResult);
+        return invokeFinalNoToolsTurn(turn);
       }
 
       resolveLlmForTurnFn(modelState);
-
-      maybeFinalizeNoToolsAfterPhaseSummaryOverflowFn({ modelState, loopState });
-      const mainFlowFinalNoToolsInstruction = consumeMainFlowFinalNoToolsTurnInstruction(runtime);
-      if (mainFlowFinalNoToolsInstruction) {
-        return invokeFinalNoToolsTurn(turn, mainFlowFinalNoToolsInstruction);
-      }
 
       if (!Array.isArray(tools) || tools.length === 0) {
         const noToolsResult = await invokeNoToolsTurnFn({ modelState, loopState, turn });
@@ -178,29 +212,9 @@ export function createTurnOrchestrator({
 
       const withToolsResult = await invokeWithToolsTurnFn({ modelState, loopState, turn });
       await consumeSummaryCheckpointCommand({ runtime, eventListener, turn });
-      if (withToolsResult?.mainFlowFinalNoToolsRequested === true) {
-        return invokeFinalNoToolsTurn(turn, consumeMainFlowFinalNoToolsTurnInstruction(runtime));
-      }
       const { rejectedControlToolBatch } = withToolsResult;
       if (rejectedControlToolBatch) {
-        const isTaskSummary = rejectedControlToolBatch.controlToolName === TOOL_NAME.TASK_SUMMARY;
-        appendTurnContextControlMessage({
-          runtime,
-          content: tEngine(
-            runtime,
-            isTaskSummary ? "taskSummarySingleToolPrompt" : "taskCheckSingleToolPrompt",
-          ),
-          internalType: isTaskSummary
-            ? CONTEXT_INJECTED_MESSAGE_TYPE.TASK_SUMMARY_SINGLE_TOOL_RETRY_PROMPT
-            : CONTEXT_INJECTED_MESSAGE_TYPE.TASK_CHECK_SINGLE_TOOL_RETRY_PROMPT,
-        });
-        emitEvent(
-          eventListener,
-          isTaskSummary
-            ? "task_summary_multi_tool_call_rejected"
-            : "task_check_multi_tool_call_rejected",
-          { turn, ...rejectedControlToolBatch },
-        );
+        promptRejectedTaskCheck(runtime, turn, rejectedControlToolBatch);
         return { nextTurn: turn + 1 };
       }
       const { aiContentText, calls, turnMessageStore, stateCommitter } = withToolsResult;
@@ -214,7 +228,7 @@ export function createTurnOrchestrator({
         });
       }
 
-      const { toolCallResults, taskSummaryOutcome, hasHelpCall } = await processToolResultsFn({
+      const { toolCallResults, hasHelpCall } = await processToolResultsFn({
         modelState,
         loopState,
         turn,
@@ -223,7 +237,6 @@ export function createTurnOrchestrator({
         stateCommitter,
       });
 
-      maybeRequestPhaseSummaryFn({ modelState, loopState, toolCallResults });
       maybeRequestTaskCheckFn({ modelState, loopState, toolCallResults });
       maybePromptHelpToolByLoopFn({ modelState, loopState });
       maybePromptHelpToolByFailureFn({
@@ -231,25 +244,6 @@ export function createTurnOrchestrator({
         loopState,
         hasHelpCall,
       });
-
-      if (taskSummaryOutcome?.accepted === true) {
-        const incrementalMessages = requireActiveModelContext(runtime).messageBlocks.incremental;
-        const summaryTargets = collectScopedMessagesToSummarize(incrementalMessages, {
-          maxMessages: incrementalMessages.length,
-          limitToProvidedMessagesOnly: true,
-          retentionMessages: incrementalMessages,
-        }).messages;
-        const summarizedMessageUids = [
-          ...new Set(summaryTargets.map(resolveContextSessionMessageUid).filter(Boolean)),
-        ];
-        if (summarizedMessageUids.length) {
-          requestMainFlowSummaryCheckpoint(runtime, {
-            source: "task_summary",
-            summarizedMessageUids,
-          });
-          await consumeSummaryCheckpointCommand({ runtime, eventListener, turn });
-        }
-      }
 
       return { nextTurn: turn + Math.max(1, calls.length) };
     }
@@ -260,21 +254,13 @@ export function createTurnOrchestrator({
       while ((step = await executeTurn(turn)).nextTurn !== undefined) turn = step.nextTurn;
       return step.result;
     } catch (error) {
-      const executionIdentity = getSessionIdsFromAgentContext(modelState.agentContext);
-      handleEngineErrorFn({
+      reportOrchestratorError({
         error,
-        abortSignal,
-        eventListener,
-        event: "turn_orchestrator_error",
-        metadata: {
-          source: "turn-orchestrator",
-          turn,
-          maxTurns,
-          hasTools: Array.isArray(tools) && tools.length > 0,
-          sessionId: executionIdentity.sessionId,
-          parentSessionId: executionIdentity.parentSessionId,
-          dialogProcessId: executionIdentity.dialogProcessId,
-        },
+        modelState,
+        turn,
+        maxTurns,
+        tools,
+        handleEngineErrorFn,
       });
       throw error;
     }

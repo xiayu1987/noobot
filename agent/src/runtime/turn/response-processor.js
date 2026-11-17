@@ -6,12 +6,10 @@
 import { emitEvent } from "../../events/index.js";
 import { HELP_TOOL_NAME } from "../../tools/collaboration/help-tool.js";
 import { startToolCallInTurn, settleStartedToolCallInTurn } from "../tool-execution/tool-runner.js";
-import { TOOL_NAME } from "../../tools/constants/index.js";
 import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
 import { HOOK_PHASE_STATUS, HOOK_POINT } from "@noobot/hook-protocol";
 import { buildHookContext } from "../hooks/hook-context-builder.js";
 import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
-import { resolveControlToolOutcome } from "../control-tool-outcome.js";
 import { text } from "@noobot/shared/value";
 
 function updateToolFailureState({ modelState, toolCallResult }) {
@@ -114,12 +112,7 @@ export async function processToolResults({
   if (settlementErrors.length > 1)
     throw new AggregateError(settlementErrors, "tool call settlement failed");
 
-  const taskSummaryOutcome = resolveControlToolOutcome(toolCallResults, TOOL_NAME.TASK_SUMMARY);
   const hasHelpCall = toolCallResults.some((result) => text(result?.call?.name) === HELP_TOOL_NAME);
-
-  if (taskSummaryOutcome.accepted) {
-    loopState.taskSummaryTriggered = true;
-  }
 
   await runtime.consumeUserInterjections();
 
@@ -141,7 +134,6 @@ export async function processToolResults({
       toolCallCount: calls.length,
       calls,
       toolCallResults,
-      taskSummaryOutcome,
       hasHelpCall,
       agentContext: modelState.agentContext,
     }),
@@ -149,7 +141,6 @@ export async function processToolResults({
 
   return {
     toolCallResults,
-    taskSummaryOutcome,
     hasHelpCall,
   };
 }

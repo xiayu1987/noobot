@@ -4,18 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { dedupeAttachmentsByIdentity } from "@noobot/attachment-protocol";
-import {
-  INVALID_CANONICAL_ATTACHMENT_ERROR_CODE,
-  assertCanonicalAttachments,
-} from "../../../artifacts/index.js";
-
-export { INVALID_CANONICAL_ATTACHMENT_ERROR_CODE, assertCanonicalAttachments };
 
 export function dedupeAttachments(attachments = []) {
   if (!Array.isArray(attachments)) throw new TypeError("attachments must be an array");
   return dedupeAttachmentsByIdentity(attachments);
-}
-
-export function normalizeIncomingAttachmentsForSessionMessage(incomingAttachments) {
-  return dedupeAttachments(incomingAttachments);
 }

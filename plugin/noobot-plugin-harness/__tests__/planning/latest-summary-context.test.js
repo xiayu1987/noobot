@@ -5,94 +5,65 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-
-import {
-  resolveLatestCompleteSummaryText,
-  resolveLatestSummaryOutputFullText,
-  resolveLatestSummaryRelayText,
-} from "../../src/capabilities/handlers/shared/plan/latest-summary-context.js";
+import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/message/injected-types";
+import { resolveLatestCompleteSummaryText } from "../../src/capabilities/handlers/shared/plan/latest-summary-context.js";
 import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
 
-test("resolveLatestCompleteSummaryText returns summaryFullText as the latest complete summary first", () => {
-  const bucket = {
-    summaryText: "1. overview fallback",
-    summaryFullText:
-      "[SUMMARY_OVERVIEW]\n1. full text wins\n[SUMMARY_DETAIL]\n- detail\n[SUMMARY_END]",
-    guidanceOutputs: [
-      { purpose: "summary", content: "1. older output" },
-      { purpose: "summary", content: "1. newer output" },
-    ],
-  };
+const summary = (content) => ({
+  role: "user",
+  content,
+  injectedMessage: true,
+  injectedMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_RESULT,
+});
+function context(history, incremental) {
+  return createTestHookContext({}, { messageBlocks: { system: [], history, incremental } });
+}
 
-  assert.equal(
-    resolveLatestCompleteSummaryText({ bucket }),
-    "[SUMMARY_OVERVIEW]\n1. full text wins\n[SUMMARY_DETAIL]\n- detail\n[SUMMARY_END]",
+test("latest summary body comes from classified messages across sources and turns", () => {
+  const content =
+    "[SUMMARY_OVERVIEW]\n1. current\n[SUMMARY_DETAIL]\ncomplete evidence\n[SUMMARY_END]";
+  const ctx = context(
+    [summary("old main summary")],
+    [
+      summary(`[Relay from harness external model/summary]\n${content}`),
+      { role: "user", content: "[来自harness外部模型输出/summary]\nnot a summary category" },
+    ],
   );
+  assert.equal(resolveLatestCompleteSummaryText({ ctx }), content);
+  assert.equal(resolveLatestCompleteSummaryText({ ctx: context([summary(content)], []) }), content);
 });
 
-test("resolveLatestCompleteSummaryText falls back to latest summary guidance output before relay and overview", () => {
-  const bucket = {
-    summaryText: "1. overview fallback",
-    guidanceOutputs: [
-      { purpose: "guidance", content: "not summary" },
-      { purpose: "summary", content: "1. older output" },
-      { purpose: "summary", content: "1. latest output\n2. same complete summary" },
-    ],
-  };
-  const ctx = createTestHookContext(
-    {},
-    {
-      messageBlocks: {
-        system: [],
-        history: [],
-        incremental: [
-          { role: "user", content: "[来自harness外部模型输出/summary]\n1. relay fallback" },
-        ],
-      },
-    },
+test("latest main summary supersedes a harness summary without a plugin bucket copy", () => {
+  const ctx = context(
+    [summary("[来自harness外部模型输出/summary]\nold harness summary")],
+    [summary("current main summary")],
   );
-
-  assert.equal(
-    resolveLatestSummaryOutputFullText(bucket),
-    "1. latest output\n2. same complete summary",
-  );
-  assert.equal(
-    resolveLatestCompleteSummaryText({ bucket, ctx }),
-    "1. latest output\n2. same complete summary",
-  );
+  assert.equal(resolveLatestCompleteSummaryText({ ctx }), "current main summary");
 });
 
-test("resolveLatestCompleteSummaryText falls back to latest summary relay then summaryText", () => {
-  const relayCtx = createTestHookContext(
-    {},
-    {
-      messageBlocks: {
-        system: [],
-        history: [],
-        incremental: [
-          { role: "user", content: "[来自harness外部模型输出/summary]\n1. old relay" },
-          {
-            role: "user",
-            content:
-              "[Relay from harness external model/summary]\n1. latest relay\n2. latest relay item",
-          },
-        ],
-      },
-    },
+test("summary text blocks use the canonical message content reader", () => {
+  const ctx = context(
+    [summary("old summary")],
+    [
+      summary([
+        { type: "text", text: "[Relay from harness external model/summary]" },
+        { type: "text", text: "current evidence" },
+        { type: "text", text: "next action" },
+      ]),
+    ],
   );
-  assert.equal(resolveLatestSummaryRelayText(relayCtx), "1. latest relay\n2. latest relay item");
-  assert.equal(
-    resolveLatestCompleteSummaryText({
-      bucket: { summaryText: "1. overview fallback" },
-      ctx: relayCtx,
-    }),
-    "1. latest relay\n2. latest relay item",
+  assert.equal(resolveLatestCompleteSummaryText({ ctx }), "current evidence\nnext action");
+});
+
+test("summary text is never inferred from prefixes or retired bucket fields", () => {
+  const bucket = {
+    summaryText: "retired overview",
+    summaryFullText: "retired body",
+    guidanceOutputs: [{ purpose: "summary", content: "retired output" }],
+  };
+  const ctx = context(
+    [],
+    [{ role: "user", content: "[来自harness外部模型输出/summary]\nunclassified" }],
   );
-  assert.equal(
-    resolveLatestCompleteSummaryText({
-      bucket: { summaryText: "1. overview fallback" },
-      ctx: createTestHookContext(),
-    }),
-    "1. overview fallback",
-  );
+  assert.equal(resolveLatestCompleteSummaryText({ ctx, bucket }), "");
 });

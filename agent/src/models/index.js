@@ -10,6 +10,7 @@ export {
   getEnabledProviders,
   pickAlias,
   byAliasWithUser,
+  resolveEffectiveProvider,
   firstEnabledAlias,
 } from "./provider/resolver.js";
 

@@ -5,12 +5,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { partialOutputResponse, consumePartialOutput } from "./runtime-fixtures.js";
-import {
-  createModelRequestExecutor,
-  createProviderAdapterRegistry,
-  anthropicMessagesAdapter,
-  classifyTransportError,
-} from "../src/index.js";
+import { createModelRequestExecutor, createProviderAdapterRegistry } from "../src/index.js";
 import {
   MODEL_CONTEXT_SEQUENCE_POLICY,
   MODEL_CONTEXT_TRACE,
@@ -50,32 +45,6 @@ const sdkTool = {
   },
 };
 
-test("transport errors classify nested Undici timeouts as timeout", () => {
-  const headersTimeout = new TypeError("fetch failed", {
-    cause: { code: "UND_ERR_HEADERS_TIMEOUT" },
-  });
-  assert.deepEqual(classifyTransportError(headersTimeout), {
-    kind: MODEL_ERROR_KIND.TIMEOUT,
-  });
-  assert.deepEqual(
-    anthropicMessagesAdapter.classifyError(headersTimeout, { operatorId: "anthropic" }),
-    { kind: MODEL_ERROR_KIND.TIMEOUT },
-  );
-  assert.deepEqual(
-    classifyTransportError({ name: "AbortError", code: "UND_ERR_HEADERS_TIMEOUT" }),
-    { kind: MODEL_ERROR_KIND.ABORTED },
-  );
-});
-
-test("transport errors classify temporary socket failures as temporary unavailable", () => {
-  const socketFailure = new TypeError("fetch failed", {
-    cause: { code: "ECONNRESET" },
-  });
-  assert.deepEqual(classifyTransportError(socketFailure), {
-    kind: MODEL_ERROR_KIND.TEMPORARY_UNAVAILABLE,
-  });
-});
-
 test("response mode mismatch negotiates once and caches the successful mode", async () => {
   const requestedModes = [];
   const adapter = {
@@ -83,6 +52,7 @@ test("response mode mismatch negotiates once and caches the successful mode", as
     classifyError: () => ({ kind: MODEL_ERROR_KIND.RESPONSE_MODE_MISMATCH }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    invokeChat: ({ client, messages, invokeOptions }) => client.invoke(messages, invokeOptions),
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: ({ streaming }) => {
       requestedModes.push(streaming);
@@ -126,6 +96,7 @@ test("response mode mismatch in both modes stops after each mode is tried once",
     classifyError: () => ({ kind: MODEL_ERROR_KIND.RESPONSE_MODE_MISMATCH }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    invokeChat: ({ client, messages, invokeOptions }) => client.invoke(messages, invokeOptions),
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: ({ streaming }) => {
       requestedModes.push(streaming);
@@ -160,6 +131,7 @@ test("non-streaming response mode mismatch negotiates streaming and caches it", 
     classifyError: () => ({ kind: MODEL_ERROR_KIND.RESPONSE_MODE_MISMATCH }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    invokeChat: ({ client, messages, invokeOptions }) => client.invoke(messages, invokeOptions),
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: ({ streaming }) => {
       requestedModes.push(streaming);
@@ -187,6 +159,7 @@ test("explicit model errors do not trigger an opposite streaming mode", async ()
     classifyError: () => ({ kind: MODEL_ERROR_KIND.AUTHENTICATION }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    invokeChat: ({ client, messages, invokeOptions }) => client.invoke(messages, invokeOptions),
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: ({ streaming }) => {
       requestedModes.push(streaming);
@@ -215,6 +188,7 @@ test("streaming mode is not retried after output has started", async () => {
     classifyError: () => ({ kind: MODEL_ERROR_KIND.RESPONSE_MODE_MISMATCH }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    invokeChat: ({ client, messages, invokeOptions }) => client.invoke(messages, invokeOptions),
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: ({ streaming, fetch }) => {
       requestedModes.push(streaming);
@@ -253,6 +227,7 @@ test("caller abort rethrows the frozen abort reason unchanged without any retry"
     classifyError: () => ({ kind: MODEL_ERROR_KIND.UNKNOWN }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    invokeChat: ({ client, messages, invokeOptions }) => client.invoke(messages, invokeOptions),
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: ({ streaming }) => {
       requestedModes.push(streaming);
@@ -296,6 +271,7 @@ test("executor is the single attempt and retry authority", async () => {
     classifyError: () => ({ kind: MODEL_ERROR_KIND.TEMPORARY_UNAVAILABLE }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    invokeChat: ({ client, messages, invokeOptions }) => client.invoke(messages, invokeOptions),
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: () => ({
       invoke: async () => {
@@ -331,6 +307,7 @@ test("executor observation protocol cannot be overridden with model credentials"
     classifyError: () => ({}),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    invokeChat: ({ client, messages, invokeOptions }) => client.invoke(messages, invokeOptions),
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: () => ({ invoke: async () => ({ content: "ok" }) }),
   };
@@ -358,6 +335,7 @@ test("tool-call semantic recovery preserves the requested streaming mode", async
     classifyError: () => ({}),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    invokeChat: ({ client, messages, invokeOptions }) => client.invoke(messages, invokeOptions),
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: ({ streaming }) => {
       streamingAttempts.push(streaming);
@@ -405,6 +383,7 @@ test("non-streaming invocation never enables streaming during semantic retries",
     classifyError: () => ({}),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    invokeChat: ({ client, messages, invokeOptions }) => client.invoke(messages, invokeOptions),
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: ({ streaming }) => {
       streamingAttempts.push(streaming);
@@ -440,6 +419,7 @@ test("tool calls are not discarded when the provider also returns reasoning", as
     classifyError: () => ({}),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    invokeChat: ({ client, messages, invokeOptions }) => client.invoke(messages, invokeOptions),
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: () => ({
       invoke: async () => {
@@ -485,6 +465,7 @@ test("Responses continuation metadata remains valid canonical model output", asy
     classifyError: () => ({}),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    invokeChat: ({ client, messages, invokeOptions }) => client.invoke(messages, invokeOptions),
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.RESPONSES,
     createClient: () => ({
       invoke: async () => ({
@@ -515,6 +496,7 @@ test("executor is the single model context trace authority at each provider atte
     classifyError: () => ({ kind: MODEL_ERROR_KIND.TEMPORARY_UNAVAILABLE }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    invokeChat: ({ client, messages, invokeOptions }) => client.invoke(messages, invokeOptions),
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: () => {
       const client = {
@@ -600,6 +582,7 @@ test("non-chat operations execute only through the resolved provider adapter", a
     classifyError: () => ({}),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    invokeChat: ({ client, messages, invokeOptions }) => client.invoke(messages, invokeOptions),
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: () => ({ invoke: async () => ({ content: "unused" }) }),
     executeOperation: async ({ operation }) => {
@@ -651,6 +634,7 @@ function createInvalidToolCallAdapter(invalidAttempts) {
     classifyError: () => ({}),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    invokeChat: ({ client, messages, invokeOptions }) => client.invoke(messages, invokeOptions),
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: ({ streaming }) => {
       streamingAttempts.push(streaming);
@@ -739,6 +723,7 @@ function createOperationAdapter({ modes, fail }) {
       classifyError: () => ({ kind: MODEL_ERROR_KIND.RESPONSE_MODE_MISMATCH }),
       bindTools: ({ client }) => client,
       prepareMessages: ({ messages }) => messages,
+      invokeChat: ({ client, messages, invokeOptions }) => client.invoke(messages, invokeOptions),
       resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
       createClient: () => ({ invoke: async () => ({ content: "unused" }) }),
       executeOperation: async ({ streaming }) => {

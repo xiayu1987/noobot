@@ -16,10 +16,12 @@ export function createCapabilityModelStep({
   signal,
   activity,
   metadata,
+  streaming,
+  streamingRequired,
 }) {
   const { modelPort } = requireRuntimeModelHost(runtime);
   const presentation = requireCapabilityActivity(activity);
-  const { streaming } = runtime.runConfig;
+  if (typeof streaming !== "boolean") throw new TypeError("capability streaming must be boolean");
   return async function invokeStep(messages, binding = null) {
     const modelActivity =
       presentation &&
@@ -36,6 +38,7 @@ export function createCapabilityModelStep({
       ...(binding ? { tools: binding.tools } : {}),
       options: {
         streaming,
+        ...(streamingRequired !== undefined ? { streamingRequired } : {}),
         signal,
         headers: identity.headers,
         ...(binding ? { toolBinding: binding.options } : {}),

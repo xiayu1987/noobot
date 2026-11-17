@@ -111,6 +111,15 @@ describe("turn runtime interaction lifecycle", () => {
     });
   });
 
+  it("releases a rejected send without inventing an authoritative turn state", () => {
+    const pending = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED });
+    const failed = apply(pending, { type: SESSION_RUN_EVENT.LOCAL_SEND_FAILED });
+    expect(failed.commandPending).toBe(false);
+    expect(failed.pendingCommandType).toBe("");
+    expect(failed.state).toBeUndefined();
+    expect(apply(failed, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED }).commandPending).toBe(true);
+  });
+
   it("enters processing only after an authoritative lifecycle fact", () => {
     const localRequest = apply(null, {
       timestamp: 1767225600000,

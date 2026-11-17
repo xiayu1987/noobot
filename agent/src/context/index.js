@@ -289,9 +289,9 @@ export class ContextBuilder {
   async buildSessionContext() {
     const sessionProjection = await this._resolveSessionRecords();
     const sessionRecords = sessionProjection.messages;
-    emitModelContextTrace(this.eventListener, "context_records_resolved", {
+    emitModelContextTrace(this.eventListener, "context_records_resolved", () => ({
       records: summarizeDiagnosticMessages(sessionRecords),
-    });
+    }));
     const longMemory = await this._resolveLongMemoryForInjection();
     const { systemContext, attachments } = await this._buildSystemContext({ longMemory });
     return this.buildAgentContext(systemContext, sessionRecords, {

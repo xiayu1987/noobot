@@ -13,7 +13,6 @@ const TOOL_SEMANTIC_CLASS = Object.freeze({
 });
 
 export const FLOW_CONTROL_ROLE = Object.freeze({
-  CHECKPOINT_BOUNDARY: "checkpoint_boundary",
   CHECKPOINT_EVIDENCE: "checkpoint_evidence",
 });
 

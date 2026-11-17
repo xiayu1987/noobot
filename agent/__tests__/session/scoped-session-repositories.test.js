@@ -17,10 +17,7 @@ import { resolveSessionArtifactMutationLock } from "../../src/session/session-ar
 import { summarizeExecutionLogs } from "../../src/observability/execution-log/execution-log-summary.js";
 import { createSessionFacade } from "../../src/session/index.js";
 import { SessionTurnPersister } from "../../src/bot/execution/turn-persister.js";
-import {
-  readExecutionLogs,
-  readSessionArtifact,
-} from "../../src/session/session-artifact-store.js";
+import { readExecutionLogs } from "../../src/session/session-artifact-store.js";
 import { provisionTestSession, testWallClock } from "../helpers/session-services.js";
 import { useRuntimeEventsEnv } from "../helpers/runtime-events-env.js";
 import { buildHarness, readJson } from "./scoped-session-repositories.fixtures.js";
@@ -94,25 +91,25 @@ test("scoped repositories keep all artifacts and metadata in their execution dir
     const scope = await access.locate();
     assert.equal(scope.sessionDir, path.join(root, `alice/${SCOPED_ROOT}/run-a/node-a`));
     assert.equal(scope.resolvedParentSessionId, "parent-a");
-    assert.deepEqual(await readJson(scope.metadataFile), {
+    const scopedSnapshot = await createSessionFacade(runtime).readScopedSessionSnapshot({
+      sessionDir: scope.sessionDir,
+    });
+    assert.equal(await sessionRepo.storageService.exists(scope.metadataFile), false);
+    assert.deepEqual(scopedSnapshot.meta, {
       plugin: "workflow-test",
       sessionId: "child-a",
     });
-    assert.equal((await readJson(scope.sessionFile)).parentSessionId, "parent-a");
-    await sessionRepo.ensureSessionDisplaySummary("alice", "child-a", options);
-    assert.equal((await readJson(scope.sessionSummaryFile)).sessionId, "child-a");
-    const manifestBefore = await readFile(scope.sessionFile);
-    const cached = await sessionRepo.ensureSessionDisplaySummary("alice", "child-a", options);
-    assert.equal(cached.rebuilt, false);
+    const reader = await sessionRepo.requireSessionReader("alice", "child-a", options);
+    assert.equal((await reader.readMetadata()).parentSessionId, "parent-a");
+    const headFile = path.join(scope.sessionDir, "head.json");
+    const headBefore = await readFile(headFile);
+    const summary = await sessionRepo.readSessionDisplaySummary("alice", "child-a", options);
     assert.deepEqual(
       await sessionRepo.readSessionDisplaySummary("alice", "child-a", options),
-      cached.summary,
+      summary,
     );
-    await rm(scope.sessionSummaryFile);
-    const recovered = await sessionRepo.ensureSessionDisplaySummary("alice", "child-a", options);
-    assert.equal(recovered.rebuilt, true);
-    assert.deepEqual(recovered.summary, cached.summary);
-    assert.deepEqual(await readFile(scope.sessionFile), manifestBefore);
+    assert.equal(await sessionRepo.storageService.exists(scope.sessionSummaryFile), false);
+    assert.deepEqual(await readFile(headFile), headBefore);
     const facade = createSessionFacade(runtime);
     const snapshotRequest = { sessionDir: scope.sessionDir };
     const snapshot = await facade.readScopedSessionSnapshot(snapshotRequest);
@@ -123,7 +120,8 @@ test("scoped repositories keep all artifacts and metadata in their execution dir
     await rm(scope.sessionSummaryFile);
     assert.deepEqual(await facade.readScopedSessionSnapshot(snapshotRequest), snapshot);
     assert.equal(await sessionRepo.storageService.exists(scope.sessionSummaryFile), false);
-    assert.deepEqual(await readFile(scope.sessionFile), manifestBefore);
+    assert.deepEqual(await readFile(headFile), headBefore);
+    assert.equal(await sessionRepo.storageService.exists(scope.sessionFile), false);
     assert.equal(
       (
         await readExecutionLogs({
@@ -181,6 +179,23 @@ test("session facade execution reads do not create a default shadow session for 
     });
 
     const scope = await access.locate();
+    const projected = (await readFile(path.join(scope.sessionDir, "events/system.jsonl"), "utf8"))
+      .trim()
+      .split("\n")
+      .map(JSON.parse);
+    assert.equal(projected.length, 1);
+    assert.equal(projected[0].event, "workflow_started");
+    assert.equal(typeof projected[0].data.executionLogSourceId, "string");
+    assert.deepEqual(
+      await readJson(path.join(root, "alice/runtime/session/session-tree.json")),
+      createEmptySessionTree(),
+    );
+    assert.equal(
+      await sessionRepo.storageService.exists(
+        path.join(root, "alice/runtime/session/child-facade/events"),
+      ),
+      false,
+    );
     assert.equal(
       (
         await readExecutionLogs({
@@ -204,7 +219,7 @@ test("session facade execution reads do not create a default shadow session for 
 test("scoped Agent persistence keeps assistant and tool turns beside the child user turn", async (t) => {
   useRuntimeEventsEnv(t, { executionLog: { sessionTurnFullDebug: true } });
   const harness = buildHarness();
-  const { root, runtime, sessionRepo } = await harness.setup();
+  const { root, runtime, sessionRepo, executionRepo } = await harness.setup();
   try {
     const access = scopedAccess(runtime, {
       sessionId: "child-agent",
@@ -278,23 +293,31 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
       ],
     });
 
-    const scope = await access.locate();
-    const scopedSession = await readSessionArtifact({
-      sessionDir: scope.sessionDir,
-      storageService: sessionRepo.storageService,
+    const reader = await sessionRepo.requireSessionReader("alice", "child-agent", {
+      persistenceContext: access.persistenceContext,
     });
+    const scopedSession = await reader.exportSession();
     assert.deepEqual(
       scopedSession.messages.map((message) => message.role),
       ["user", "assistant", "tool", "assistant"],
     );
     assert.equal(scopedSession.messages.at(-1).content, "done");
+    const diagnostics = (
+      await executionRepo.getTurnLogs("alice", "child-agent", turnIdentity.dialogProcessId, {
+        persistenceContext: access.persistenceContext,
+      })
+    ).filter(({ event }) => event === "session_turn_full");
+    assert.deepEqual(
+      diagnostics.map(({ data }) => data.artifactRef.messageUid),
+      ["sm_tool_call", "sm_tool_result", "sm_done"],
+    );
     assert.equal(
-      (
-        await readExecutionLogs({
-          storageService: sessionRepo.storageService,
-          sessionDir: scope.sessionDir,
-        })
-      ).some((item) => JSON.stringify(item).includes("session_turn_full")),
+      diagnostics.every(
+        ({ sessionId, parentSessionId, dialogProcessId }) =>
+          sessionId === "child-agent" &&
+          parentSessionId === "root-agent" &&
+          dialogProcessId === turnIdentity.dialogProcessId,
+      ),
       true,
     );
     assert.equal(
@@ -344,8 +367,16 @@ test("scoped repositories isolate concurrent contexts and mutation locks", async
 
     const [firstScope, secondScope] = await Promise.all(nodes.map(({ access }) => access.locate()));
     assert.notEqual(firstScope.sessionDir, secondScope.sessionDir);
-    assert.equal((await readJson(firstScope.metadataFile)).node, "node-1");
-    assert.equal((await readJson(secondScope.metadataFile)).node, "node-2");
+    const facade = createSessionFacade(runtime);
+    const snapshots = await Promise.all(
+      [firstScope, secondScope].map(({ sessionDir }) =>
+        facade.readScopedSessionSnapshot({ sessionDir }),
+      ),
+    );
+    assert.deepEqual(
+      snapshots.map(({ meta }) => meta.node),
+      ["node-1", "node-2"],
+    );
     for (const scope of [firstScope, secondScope]) {
       assert.equal(
         await sessionRepo.storageService.exists(

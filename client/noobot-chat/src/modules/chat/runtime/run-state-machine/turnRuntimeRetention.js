@@ -29,7 +29,8 @@ export function removeTurnRuntime(registry, turnScopeId, { sessionId }) {
     delete registry.routeIndex[turn.dialogProcessId];
   }
   if (bucket.activeTurnScopeId === scope) bucket.activeTurnScopeId = "";
-  if (!Object.keys(bucket.turns).length) delete registry.sessions[turn.sessionId];
+  if (!Object.keys(bucket.turns).length && bucket.authoritativeSnapshotSequence === undefined)
+    delete registry.sessions[turn.sessionId];
   return true;
 }
 

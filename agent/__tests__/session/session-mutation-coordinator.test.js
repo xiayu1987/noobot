@@ -10,7 +10,7 @@ import path from "node:path";
 
 import { SessionMutationCoordinator } from "../../src/session/session-mutation-coordinator.js";
 import { resetFsAdapter, setFsAdapter } from "../../src/shared/storage/fs-adapter.js";
-import { readConfiguredLockTiming } from "../../src/shared/storage/file-mutation-coordinator.js";
+import { readConfiguredLockTiming } from "@noobot/shared/file-mutation-coordinator";
 import { withTemp } from "./session-artifact-store-v2.test-helpers.js";
 
 function fixedLockTiming(timing) {

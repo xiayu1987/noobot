@@ -11,7 +11,7 @@ import { artifactTest } from "./artifacts.fixture.js";
 import { connectThroughUi, readE2eCredentials } from "./auth.fixture.js";
 import { createSessionThroughUi } from "./session.fixture.js";
 import {
-  assertModelInvocationTraceSet,
+  createModelInvocationTraceAudit,
   assertModelSystemMessages,
 } from "../helpers/model-message-assertions.js";
 import {
@@ -21,12 +21,13 @@ import {
 import {
   auditSessionSummaryArtifacts,
   modelInvocationTraces,
-  readSessionExecutionEventTree,
+  iterateSessionExecutionEventTree,
   waitForModelInvocationTraces,
 } from "../helpers/persistence-audit.js";
 import { registerSuiteSession } from "../suite-session-cleanup.js";
 import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
 import { text } from "@noobot/shared/value";
+import { PERF_HARNESS_MODELS } from "../../../../../../scripts/mock-model-service/performance-contract.mjs";
 
 const E2E_MODEL_ALIAS = text(process.env.NOOBOT_E2E_MODEL_ALIAS) || "GLM_5_3";
 const E2E_STREAM_OUTPUT = text(process.env.NOOBOT_E2E_STREAM_OUTPUT).toLowerCase() === "true";
@@ -34,7 +35,7 @@ const E2E_STREAM_OUTPUT = text(process.env.NOOBOT_E2E_STREAM_OUTPUT).toLowerCase
 export async function installE2eModelPreferences(pageOrContext) {
   const e2eUserId = readE2eCredentials().userId;
   await pageOrContext.addInitScript(
-    ({ modelAlias, userId, streamOutput }) => {
+    ({ modelAlias, userId, streamOutput, harnessModels }) => {
       if (location.protocol !== "http:" && location.protocol !== "https:") return;
       const setInitialValue = (key, value, { force = false } = {}) => {
         if (force || localStorage.getItem(key) === null) localStorage.setItem(key, value);
@@ -56,6 +57,7 @@ export async function installE2eModelPreferences(pageOrContext) {
                 guidance: modelAlias,
                 acceptance: modelAlias,
                 default: modelAlias,
+                ...harnessModels,
               },
             },
             workflow: { semanticModel: modelAlias },
@@ -90,51 +92,102 @@ export async function installE2eModelPreferences(pageOrContext) {
         sessionStorage.setItem(pluginBaselineKey, "1");
       }
     },
-    { modelAlias: E2E_MODEL_ALIAS, userId: e2eUserId, streamOutput: E2E_STREAM_OUTPUT },
+    {
+      modelAlias: E2E_MODEL_ALIAS,
+      userId: e2eUserId,
+      streamOutput: E2E_STREAM_OUTPUT,
+      harnessModels: process.env.NOOBOT_E2E_PERF === "1" ? PERF_HARNESS_MODELS : {},
+    },
   );
 }
 
-async function writeJsonLines(filePath, records) {
-  const body = records.map((record) => JSON.stringify(record)).join("\n");
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, body ? `${body}\n` : "", "utf8");
+function expectedModelAlias(invocation) {
+  if (process.env.NOOBOT_E2E_PERF !== "1" || !invocation.flow.startsWith("harness."))
+    return E2E_MODEL_ALIAS;
+  const alias = PERF_HARNESS_MODELS[invocation.purpose];
+  if (!alias) throw new TypeError(`Unknown Harness model purpose: ${invocation.purpose}`);
+  return alias;
 }
 
 async function auditModelObservation({ userId, sessionId, policy, testInfo }) {
   const outputDir = testInfo.outputPath("protocol-evidence");
   await fs.mkdir(outputDir, { recursive: true });
-
-  let traces = modelInvocationTraces(await readSessionExecutionEventTree(userId, sessionId));
-  if (policy.expectation === MODEL_CALL_EXPECTATION.REQUIRED && traces.length === 0) {
-    traces = await waitForModelInvocationTraces(
-      userId,
-      sessionId,
-      (observed) => observed.length > 0,
-      { timeoutMs: PROTOCOL_TIMEOUTS.model },
-    );
-  }
-
   let validationError = null;
   let prefixAudit = null;
-  let systemMessageAudit = null;
+  const traceAudit = createModelInvocationTraceAudit({ rootSessionId: sessionId });
+  const systemMessageAudit = {
+    status: "passed",
+    invocationCount: 0,
+    mainInvocationCount: 0,
+    nonMainInvocationCount: 0,
+    systemMessageCount: 0,
+    violations: [],
+    invocations: [],
+  };
+  const identities = Object.fromEntries(
+    ["invocationId", "modelInstanceId", "sessionId", "purpose", "domain", "alias"].map((key) => [
+      key,
+      new Set(),
+    ]),
+  );
+  let attemptCount = 0;
+  const tracesPath = path.join(outputDir, "model-invocations.jsonl");
+  const file = await fs.open(tracesPath, "w");
   try {
-    if (traces.length > 0) {
-      prefixAudit = assertModelInvocationTraceSet(traces, { rootSessionId: sessionId });
-      systemMessageAudit = assertModelSystemMessages(traces);
+    for await (const record of iterateSessionExecutionEventTree(userId, sessionId)) {
+      if (!modelInvocationTraces([record]).length) continue;
+      await file.write(`${JSON.stringify(record)}\n`);
+      attemptCount += 1;
+      const invocation = record.data.invocation;
+      for (const [key, value] of Object.entries({
+        invocationId: record.data.invocationId,
+        modelInstanceId: record.data.modelInstanceId,
+        sessionId: record.sessionId,
+        purpose: invocation?.purpose,
+        domain: invocation?.domain,
+        alias: record.data.model?.alias,
+      })) {
+        if (value) identities[key].add(value);
+      }
+      try {
+        traceAudit.observe(record);
+        const system = assertModelSystemMessages([record]);
+        for (const key of [
+          "invocationCount",
+          "mainInvocationCount",
+          "nonMainInvocationCount",
+          "systemMessageCount",
+        ])
+          systemMessageAudit[key] += system[key];
+        systemMessageAudit.invocations.push(...system.invocations);
+        expect(record.data.model?.alias, `${policy.caseId} model (${invocation.flow})`).toBe(
+          expectedModelAlias(invocation),
+        );
+      } catch (error) {
+        validationError ||= error;
+      }
     }
+  } finally {
+    await file.close();
+  }
+  if (policy.expectation === MODEL_CALL_EXPECTATION.REQUIRED && attemptCount === 0) {
+    await waitForModelInvocationTraces(userId, sessionId, (observed) => observed.length > 0, {
+      timeoutMs: PROTOCOL_TIMEOUTS.model,
+    });
+    return auditModelObservation({ userId, sessionId, policy, testInfo });
+  }
+  try {
+    if (attemptCount > 0) prefixAudit = traceAudit.finish();
     if (policy.expectation === MODEL_CALL_EXPECTATION.REQUIRED) {
       expect(
-        traces.length,
+        attemptCount,
         `${policy.caseId} requires an observed provider model invocation`,
       ).toBeGreaterThan(0);
     } else if (policy.expectation === MODEL_CALL_EXPECTATION.FORBIDDEN) {
-      expect(traces, `${policy.caseId} forbids provider model invocations`).toEqual([]);
-    }
-    for (const trace of traces) {
-      expect(trace.data?.model?.alias, `${policy.caseId} model`).toBe(E2E_MODEL_ALIAS);
+      expect(attemptCount, `${policy.caseId} forbids provider model invocations`).toBe(0);
     }
   } catch (error) {
-    validationError = error;
+    validationError ||= error;
   }
 
   const audit = Object.freeze({
@@ -145,22 +198,17 @@ async function auditModelObservation({ userId, sessionId, policy, testInfo }) {
     status: validationError ? "failed" : "passed",
     failure: validationError ? String(validationError.message || validationError) : null,
     rootSessionId: sessionId,
-    invocationCount: new Set(traces.map((record) => record.data.invocationId)).size,
-    attemptCount: traces.length,
-    modelInstanceCount: new Set(traces.map((record) => record.data.modelInstanceId)).size,
-    sessionIds: [...new Set(traces.map((record) => record.sessionId))],
-    purposes: [
-      ...new Set(traces.map((record) => record.data?.invocation?.purpose).filter(Boolean)),
-    ],
-    domains: [...new Set(traces.map((record) => record.data?.invocation?.domain).filter(Boolean))],
-    aliases: [...new Set(traces.map((record) => record.data?.model?.alias).filter(Boolean))],
+    invocationCount: identities.invocationId.size,
+    attemptCount,
+    modelInstanceCount: identities.modelInstanceId.size,
+    sessionIds: [...identities.sessionId],
+    purposes: [...identities.purpose],
+    domains: [...identities.domain],
+    aliases: [...identities.alias],
     prefixStability: prefixAudit,
     systemMessages: systemMessageAudit,
   });
-  const tracesPath = path.join(outputDir, "model-invocations.jsonl");
   const auditPath = path.join(outputDir, "model-observation-audit.json");
-  await fs.mkdir(outputDir, { recursive: true });
-  await writeJsonLines(tracesPath, traces);
   await fs.writeFile(auditPath, `${JSON.stringify(audit, null, 2)}\n`, "utf8");
   await testInfo.attach("model-invocations.jsonl", {
     path: tracesPath,
@@ -207,8 +255,8 @@ async function auditSessionSummaryPersistence({
   } catch (error) {
     audit = {
       ...(error?.audit || {}),
-      protocolVersion: Number(error?.audit?.protocolVersion || 1),
-      authority: "session_summary_artifact",
+      protocolVersion: 2,
+      authority: "immutable_session_projection",
       rootSessionId: sessionId,
       status: "failed",
       failure: String(error?.message || error),

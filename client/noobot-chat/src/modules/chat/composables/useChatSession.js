@@ -487,6 +487,7 @@ export function useChatSession({
     makeViewMessage,
     makeViewAttachments,
     applySessionDetail: chatList.applySessionDetail,
+    applySessionMutation: chatList.applySessionMutation,
     deleteSessionMessagesFromApi,
     replaceSessionTurnApi,
     authFetch,

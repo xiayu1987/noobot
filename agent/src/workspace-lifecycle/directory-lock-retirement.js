@@ -10,7 +10,7 @@ import { readDirectoryEntriesIfPresent } from "../shared/storage/dir-entries.js"
 import {
   isHeartbeatFresh,
   readConfiguredLockTiming,
-} from "../shared/storage/file-mutation-coordinator.js";
+} from "@noobot/shared/file-mutation-coordinator";
 
 function retirementError(code, lockPath) {
   const error = new Error(`directory lock retirement cannot proceed: ${lockPath}`);

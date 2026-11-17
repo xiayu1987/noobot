@@ -21,15 +21,17 @@ test("runSession waits for post-run hook events before completing and publishing
   const listener = createExecutionEventListener({
     now: TEST_NOW,
     sessionManager: {
-      async appendExecutionLog(record) {
-        if (
-          record.event === "bot_hook_end" &&
-          record.data.point === HOOK_POINT.BOT.AFTER_SESSION_RUN
-        ) {
-          writeStarted.resolve();
-          await releaseWrite.promise;
+      async appendExecutionLogs({ records: batch }) {
+        for (const record of batch) {
+          if (
+            record.event === "bot_hook_end" &&
+            record.data.point === HOOK_POINT.BOT.AFTER_SESSION_RUN
+          ) {
+            writeStarted.resolve();
+            await releaseWrite.promise;
+          }
+          records.push(record);
         }
-        records.push(record);
       },
     },
     upstream: {
@@ -75,8 +77,8 @@ test("post-run hook failure never publishes completed and drains the failed life
   const listener = createExecutionEventListener({
     now: TEST_NOW,
     sessionManager: {
-      async appendExecutionLog(record) {
-        records.push(record);
+      async appendExecutionLogs({ records: batch }) {
+        records.push(...batch);
       },
     },
     userId: "u1",
@@ -114,11 +116,16 @@ test("completion event persistence failure rejects the run as failed", async () 
   const listener = createExecutionEventListener({
     now: TEST_NOW,
     sessionManager: {
-      async appendExecutionLog(record) {
-        if (record.event === "agent_lifecycle_state_changed" && record.data.state === "completed") {
-          throw new Error("completion write failed");
+      async appendExecutionLogs({ records: batch }) {
+        for (const record of batch) {
+          if (
+            record.event === "agent_lifecycle_state_changed" &&
+            record.data.state === "completed"
+          ) {
+            throw new Error("completion write failed");
+          }
+          records.push(record);
         }
-        records.push(record);
       },
     },
     userId: "u1",
@@ -145,13 +152,15 @@ test("failed runs drain error-hook events before disposing the plugin activation
   const listener = createExecutionEventListener({
     now: TEST_NOW,
     sessionManager: {
-      async appendExecutionLog(record) {
-        if (
-          record.event === "bot_hook_end" &&
-          record.data.point === HOOK_POINT.BOT.SESSION_RUN_ERROR
-        ) {
-          writeStarted.resolve();
-          await releaseWrite.promise;
+      async appendExecutionLogs({ records }) {
+        for (const record of records) {
+          if (
+            record.event === "bot_hook_end" &&
+            record.data.point === HOOK_POINT.BOT.SESSION_RUN_ERROR
+          ) {
+            writeStarted.resolve();
+            await releaseWrite.promise;
+          }
         }
       },
     },

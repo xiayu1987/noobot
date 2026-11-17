@@ -133,9 +133,7 @@ export function createRuntimeContext(input) {
     currentTurnMessages: createCurrentTurnMessagesStore(),
     userMessageAttachments: input.userMessageAttachments,
     summaryCheckpointRevision: 0,
-    summaryCheckpointPersistedMessageUids: [],
     summaryCheckpointPromotionSources: [],
-    timelineCheckpointPersistedMessageUids: [],
     attachments: [],
   };
 }

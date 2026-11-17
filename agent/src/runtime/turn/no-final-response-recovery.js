@@ -13,7 +13,7 @@ import {
 } from "@noobot/context-protocol/policy/no-final-response-retry";
 import { emitEvent } from "../../events/index.js";
 import { tEngine } from "../i18n-adapter.js";
-import { appendTurnContextControlMessage } from "./turn-context-message-appender.js";
+import { appendTurnRuntimeInjectedMessage } from "./turn-context-message-appender.js";
 import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
 import { isObjectLike } from "@noobot/shared/value";
 
@@ -51,7 +51,7 @@ export function recoverMainFlowNoFinalResponse({ error, modelState, turn }) {
     readCounter(runtime, "noFinalResponseRetryPromptCount"),
   );
   const consecutive = readCounter(runtime, "noFinalResponseRetryConsecutiveCount") + 1;
-  appendTurnContextControlMessage({
+  appendTurnRuntimeInjectedMessage({
     runtime,
     content: tEngine(runtime, "noFinalResponseRetryPrompt", { ordinal }),
     internalType: CONTEXT_INJECTED_MESSAGE_TYPE.NO_FINAL_RESPONSE_RETRY_PROMPT,

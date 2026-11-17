@@ -30,11 +30,7 @@ export {
   shouldUseSeparateModel,
 } from "../shared/model/utils.js";
 
-export {
-  extractRawTextContent,
-  readAfterLlmCallText,
-  shouldSkipAnalysisForTrailingToolCallContent,
-} from "../shared/message/utils.js";
+export { shouldSkipAnalysisForTrailingToolCallContent } from "../shared/message/utils.js";
 export {
   buildCapabilityModelMessages,
   buildCapabilityProtocolModelMessages,

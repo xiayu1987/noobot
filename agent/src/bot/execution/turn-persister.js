@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { projectMessagePersistenceChanges } from "@noobot/session-protocol/session-changes";
 import { isFunction, isPlainObject, text } from "@noobot/shared/value";
 import {
   isCanonicalMessageTimestamp,
@@ -15,6 +16,7 @@ import { emitEvent } from "../../events/index.js";
 import { compactTransferEnvelopes } from "../../session/transfer-attachment-refs.js";
 import { EXECUTION_LOG_EVENT, MESSAGE_ROLE } from "../config/constants.js";
 import { summarizeSessionTurnPayload } from "./turn-payload-summary.js";
+import { shouldRecordRuntimeExecutionLog } from "@noobot/shared/runtime-events-config";
 
 function pickSourceTimestampField(source) {
   if (source.ts === undefined) return {};
@@ -160,8 +162,8 @@ function buildFullTurnPayload(input) {
   };
 }
 
-async function appendSessionTurnDiagnostics(session, now, input, fullTurnPayload) {
-  await session.appendExecutionLog({
+function buildSessionTurnDiagnostic(now, input) {
+  return {
     userId: input.userId,
     sessionId: input.sessionId,
     dialogProcessId: input.dialogProcessId,
@@ -169,20 +171,17 @@ async function appendSessionTurnDiagnostics(session, now, input, fullTurnPayload
     event: EXECUTION_LOG_EVENT.SESSION_TURN_FULL,
     category: MESSAGE_ROLE.SYSTEM,
     type: EXECUTION_LOG_EVENT.SESSION_TURN_FULL,
-    data: summarizeSessionTurnPayload(fullTurnPayload),
+    data: summarizeSessionTurnPayload(buildFullTurnPayload(input)),
     ts: now(),
-    persistenceScope: input.persistenceScope,
-  });
+  };
 }
 
-async function tryAppendSessionTurnDiagnostics(session, now, input, fullTurnPayload) {
-  try {
-    await appendSessionTurnDiagnostics(session, now, input, fullTurnPayload);
-  } catch (error) {
-    emitEvent(input.eventListener, "session_turn_diagnostic_persistence_failed", {
-      error: error?.message || String(error || ""),
-    });
-  }
+function prepareSessionTurnDiagnostics(now, prepared) {
+  if (!shouldRecordRuntimeExecutionLog({ event: EXECUTION_LOG_EVENT.SESSION_TURN_FULL })) return [];
+  return prepared.map((message) => ({
+    messageUid: message.messageUid,
+    record: buildSessionTurnDiagnostic(now, message),
+  }));
 }
 
 function buildTurnPayload(input) {
@@ -234,6 +233,8 @@ function normalizeAgentMessagesInput(input = {}) {
     userId: input.userId,
     sessionId: input.sessionId,
     messages: valueOrDefault(input.messages, []),
+    persistedMessages: valueOrDefault(input.persistedMessages, []),
+    submission: input.submission,
     dialogProcessId: valueOrDefault(input.dialogProcessId, ""),
     parentDialogProcessId: valueOrDefault(input.parentDialogProcessId, ""),
     turnScopeId: valueOrDefault(input.turnScopeId, ""),
@@ -298,6 +299,12 @@ function buildAgentMessageTurnInput(messageItem, input) {
   };
 }
 
+function prepareAgentMessageInputs(input) {
+  return input.messages.map((message) =>
+    normalizeSessionTurnInput(buildAgentMessageTurnInput(message, input)),
+  );
+}
+
 export class SessionTurnPersister {
   constructor({ session = null, now }) {
     if (!isFunction(now)) {
@@ -307,36 +314,34 @@ export class SessionTurnPersister {
     this.now = now;
   }
 
-  async _prepareTurnPayload(payload = {}) {
-    const input = normalizeSessionTurnInput(payload);
-    await tryAppendSessionTurnDiagnostics(
-      this.session,
-      this.now,
-      input,
-      buildFullTurnPayload(input),
-    );
-    return buildTurnPayload(input);
+  prepareAgentMessages(payload = {}) {
+    const input = normalizeAgentMessagesInput(payload);
+    return prepareAgentMessageInputs(input).map(buildTurnPayload);
   }
 
   async appendAgentMessages(payload = {}) {
     const input = normalizeAgentMessagesInput(payload);
-    const turnPayloads = [];
-    for (const messageItem of input.messages) {
-      const turnPayload = await this._prepareTurnPayload(
-        buildAgentMessageTurnInput(messageItem, input),
-      );
-      turnPayloads.push(turnPayload);
-    }
-    if (!turnPayloads.length) return [];
+    const changes = projectMessagePersistenceChanges(
+      input.messages,
+      input.persistedMessages,
+      input,
+    );
+    const prepared = prepareAgentMessageInputs({ ...input, messages: changes.messages });
+    const turnPayloads = prepared.map(buildTurnPayload);
+    if (!input.messages.length) return [];
     const appendResult = await this.session.appendTurns({
       userId: input.userId,
       sessionId: input.sessionId,
       turns: turnPayloads,
+      messageDiagnostics: prepareSessionTurnDiagnostics(this.now, prepared),
+      messageContentAppends: changes.messageContentAppends,
+      messageMetadataUpdates: changes.messageMetadataUpdates,
+      submission: input.submission,
       persistenceScope: input.persistenceScope,
     });
-    for (const turnPayload of turnPayloads) {
+    for (const turnPayload of input.messages) {
       emitEvent(input.eventListener, `${turnPayload.role}_message_saved`, {});
     }
-    return appendResult.turns;
+    return appendResult.messageReceipts;
   }
 }

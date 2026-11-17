@@ -6,22 +6,45 @@
 
 export const CONTEXT_INJECTED_MESSAGE_TYPE = Object.freeze({
   USER_INTERJECTION: "noobot.user_interjection",
-  PHASE_SUMMARY_PROMPT: "noobot.phase_summary_prompt",
+  PHASE_SUMMARY_RESULT: "noobot.phase_summary_result",
   TASK_CHECK_PROMPT: "noobot.task_check_prompt",
   HELP_TOOL_LOOP_PROMPT: "noobot.help_tool_loop_prompt",
   HELP_TOOL_FAILURE_PROMPT: "noobot.help_tool_failure_prompt",
   TOOL_LOOP_LIMIT_FINALIZE_PROMPT: "tool_loop_limit_finalize_prompt",
-  TASK_SUMMARY_SINGLE_TOOL_RETRY_PROMPT: "task_summary_single_tool_retry_prompt",
   TASK_CHECK_SINGLE_TOOL_RETRY_PROMPT: "task_check_single_tool_retry_prompt",
   NO_FINAL_RESPONSE_RETRY_PROMPT: "noobot.no_final_response_retry_prompt",
 });
+
+const AUXILIARY_MODEL_RELAY_PREFIX = "separate_model_relay:";
+const RELAY_PURPOSE_PATTERN = /^[a-z][a-z0-9_]*$/;
+
+export function createAuxiliaryModelRelayType(purpose) {
+  if (typeof purpose !== "string" || !RELAY_PURPOSE_PATTERN.test(purpose))
+    throw new TypeError("Auxiliary model relay requires a valid purpose");
+  return purpose === "summary"
+    ? CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_RESULT
+    : `${AUXILIARY_MODEL_RELAY_PREFIX}${purpose}`;
+}
+
+export function readAuxiliaryModelRelayPurpose(type) {
+  if (type === CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_RESULT) return "summary";
+  if (typeof type !== "string" || !type.startsWith(AUXILIARY_MODEL_RELAY_PREFIX)) return "";
+  const purpose = type.slice(AUXILIARY_MODEL_RELAY_PREFIX.length);
+  return RELAY_PURPOSE_PATTERN.test(purpose) && purpose !== "summary" ? purpose : "";
+}
 
 export const SUMMARY_ALWAYS_RETAINED_INJECTED_MESSAGE_TYPES = Object.freeze([
   CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
 ]);
 
-export const CONTEXT_CONTROL_MESSAGE_TYPES = Object.freeze(
+export const CONTEXT_RUNTIME_INJECTED_MESSAGE_TYPES = Object.freeze(
   Object.values(CONTEXT_INJECTED_MESSAGE_TYPE).filter(
     (type) => type !== CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
+  ),
+);
+
+export const CONTEXT_CONTROL_MESSAGE_TYPES = Object.freeze(
+  CONTEXT_RUNTIME_INJECTED_MESSAGE_TYPES.filter(
+    (type) => type !== CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_RESULT,
   ),
 );

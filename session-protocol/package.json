@@ -31,7 +31,14 @@
     "./session-detail": "./src/aggregate/session-detail.js",
     "./server-clock": "./src/aggregate/server-clock.js",
     "./session-mutation-response": "./src/aggregate/session-mutation-response.js",
-    "./execution-event-index": "./src/aggregate/execution-event-index.js"
+    "./execution-event-index": "./src/aggregate/execution-event-index.js",
+    "./immutable-storage": "./src/immutable-storage.js",
+    "./immutable-cleanup-filter": "./src/immutable-cleanup-filter.js",
+    "./immutable-cleanup-capacity": "./src/immutable-cleanup-capacity.js",
+    "./immutable-segment": "./src/immutable-segment.js",
+    "./immutable-record-location": "./src/immutable-record-location.js",
+    "./session-changes": "./src/session-changes.js",
+    "./immutable-storage-graph": "./src/immutable-storage-graph.js"
   },
   "scripts": {
     "test": "node ../scripts/run-with-isolated-tmp.mjs node --test __tests__/*.test.js"

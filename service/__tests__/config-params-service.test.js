@@ -7,16 +7,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import fsPromises, {
-  access,
-  mkdir,
-  mkdtemp,
-  readFile,
-  readdir,
-  rm,
-  writeFile,
-} from "node:fs/promises";
+import fsPromises, { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
+import { flushJsonLineBatches } from "@noobot/runtime-events";
 
 import { createConfigParamsService } from "../services/config-params-service.js";
 
@@ -87,21 +80,6 @@ test("config params atomic writes preserve originals and clean temporary files o
   }
 });
 
-async function waitForFile(file, { timeoutMs = 1000 } = {}) {
-  const deadline = Date.now() + timeoutMs;
-  let lastError;
-  while (Date.now() < deadline) {
-    try {
-      await access(file);
-      return;
-    } catch (error) {
-      lastError = error;
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    }
-  }
-  throw lastError;
-}
-
 async function readJsonl(file) {
   const text = await readFile(file, "utf8");
   return text
@@ -150,6 +128,7 @@ test("collectUserConfigTemplateKeys: 用户 config.json 缺失或 userId 为空�
     await assert.rejects(service.collectUserConfigTemplateKeys(""), TypeError);
     await assert.rejects(service.collectUserConfigTemplateKeys("u1"), { code: "ENOENT" });
   } finally {
+    await flushJsonLineBatches();
     if (previousWorkspaceRoot === undefined) delete process.env.NOOBOT_WORKSPACE_ROOT;
     else process.env.NOOBOT_WORKSPACE_ROOT = previousWorkspaceRoot;
     await rm(tempDir, { recursive: true, force: true });
@@ -208,7 +187,7 @@ test("config-params-service: rejects invalid documents and writes sanitized syst
     );
 
     const eventFile = serviceConfigEventFile(runtimeRoot);
-    await waitForFile(eventFile);
+    await flushJsonLineBatches();
     const records = await readJsonl(eventFile);
     const events = records.map((record) => record.event).sort();
 
@@ -253,6 +232,7 @@ test("config-params-service: rejects invalid documents and writes sanitized syst
       "user-corrected",
     );
   } finally {
+    await flushJsonLineBatches();
     if (previousWorkspaceRoot === undefined) delete process.env.NOOBOT_WORKSPACE_ROOT;
     else process.env.NOOBOT_WORKSPACE_ROOT = previousWorkspaceRoot;
     await rm(tempDir, { recursive: true, force: true });

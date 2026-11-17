@@ -40,7 +40,6 @@
     "./task/check": "./src/task/check.js",
     "./task/check-receipt": "./src/task/check-receipt.js",
     "./task/summary": "./src/task/summary.js",
-    "./task/summary-context": "./src/task/summary-context.js",
     "./tool/context-policy": "./src/tool/context-policy.js"
   },
   "scripts": {

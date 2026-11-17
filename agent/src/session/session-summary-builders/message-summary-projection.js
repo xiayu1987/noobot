@@ -9,12 +9,7 @@ import {
   TOOL_CALL_MESSAGE_TYPE,
   TOOL_RESULT_MESSAGE_TYPE,
 } from "@noobot/session-protocol";
-import { projectToolOperationSummary } from "@noobot/event-protocol/tool-presentation";
 import { selectCanonicalActivityTimeline } from "@noobot/event-protocol/activity-timeline";
-import {
-  projectTaskCheckReceipt,
-  requireCanonicalToolTimelineIdentity,
-} from "@noobot/event-protocol/tool-timeline";
 import {
   pickLightAttachments,
   pickLightPluginMeta,
@@ -23,54 +18,6 @@ import {
 import { text, isPlainObject } from "@noobot/shared/value";
 
 const REQUIRED_MESSAGE_SUMMARY_KEYS = new Set(["turnScopeId", "content"]);
-
-export function compactThinkingTimeline(items) {
-  const compactFact = (fact, summary) => ({
-    eventId: text(fact.eventId),
-    sequence: fact.sequence,
-    ...(text(fact.timestamp) ? { timestamp: String(fact.timestamp).trim() } : {}),
-    ...(text(fact.sequenceScopeId) ? { sequenceScopeId: String(fact.sequenceScopeId).trim() } : {}),
-    ...(text(fact.authority) ? { authority: String(fact.authority).trim() } : {}),
-    ...(text(fact.sequenceDomain) ? { sequenceDomain: String(fact.sequenceDomain).trim() } : {}),
-    ...(text(fact.sessionId) ? { sessionId: String(fact.sessionId).trim() } : {}),
-    ...(text(fact.dialogProcessId) ? { dialogProcessId: String(fact.dialogProcessId).trim() } : {}),
-    ...(text(fact.turnScopeId) ? { turnScopeId: String(fact.turnScopeId).trim() } : {}),
-    ...(Array.isArray(fact.resourceRefs) && fact.resourceRefs.length
-      ? { resourceRefs: fact.resourceRefs }
-      : {}),
-    ...(Array.isArray(fact.mutationRefs) && fact.mutationRefs.length
-      ? { mutationRefs: fact.mutationRefs }
-      : {}),
-    summary,
-  });
-  return items.map((item) => {
-    const taskCheckReceipt = projectTaskCheckReceipt(item);
-    return {
-      ...requireCanonicalToolTimelineIdentity(item),
-      tool: item.tool,
-      status: item.status,
-      ...(item.resultEvent ? { success: item.success } : {}),
-      ...(text(item.riskLevel) ? { riskLevel: String(item.riskLevel).trim() } : {}),
-      ...(item.call
-        ? {
-            call: compactFact(
-              item.call,
-              projectToolOperationSummary(item.tool, item.args, { result: false }),
-            ),
-          }
-        : {}),
-      ...(item.resultEvent
-        ? {
-            resultEvent: compactFact(
-              item.resultEvent,
-              projectToolOperationSummary(item.tool, item.result, { result: true }),
-            ),
-          }
-        : {}),
-      ...(taskCheckReceipt ? { taskCheckReceipt } : {}),
-    };
-  });
-}
 
 function compactMessageSummary(summary = {}) {
   return Object.fromEntries(
@@ -162,6 +109,10 @@ function applyDisplayMetadata(summary, message) {
   if (Array.isArray(message.tool_calls) && message.tool_calls.length) {
     summary.toolCalls = projectDisplayToolCalls(message.tool_calls);
   }
+}
+
+export function requiresDisplayMessageContent(message) {
+  return resolveDisplayPresentation(message) !== null;
 }
 
 export function buildDisplayMessageSummary(message = {}) {

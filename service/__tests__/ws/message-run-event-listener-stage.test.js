@@ -12,7 +12,7 @@ import { createMessageRunEventListener } from "../../ws/chat-websocket/message-r
 import { createTestLifecycleEnvelope } from "../routes/chat-websocket-server.turn-lifecycle.fixtures.js";
 import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
 
-useProvisionedRuntimeEventsWorkspace(["u1"]);
+useProvisionedRuntimeEventsWorkspace(["u1"], { u1: ["root-session"] });
 
 function createListener(dispatchResult, runHandle = {}) {
   const calls = [];

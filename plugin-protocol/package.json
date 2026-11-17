@@ -9,6 +9,7 @@
     "./manifest": "./src/manifest.js",
     "./activation": "./src/activation.js",
     "./frontend": "./src/frontend.js",
+    "./log-artifact": "./src/log-artifact.js",
     "./package.json": "./package.json",
     "./plugin-message-payload": "./src/plugin-message-payload.js"
   },

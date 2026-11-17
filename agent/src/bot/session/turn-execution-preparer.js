@@ -12,6 +12,7 @@ import { loadStoppedModelMessageSnapshot } from "../../runtime/resume/model-mess
 import { resolveAttachments } from "../../context/providers/attachment-resolver.js";
 import {
   projectSnapshotIncrementalToContinuation,
+  projectSnapshotUserSourceSelection,
   restoreSnapshotUserAttachmentFactsFromSessionAuthority,
 } from "@noobot/context-protocol/policy/snapshot";
 import { applySystemRuntimeTurnProgress, resolveToolBindings } from "@noobot/agent-config-protocol";
@@ -60,15 +61,13 @@ function buildStoppedResumeIdentity(payload) {
 }
 
 async function restoreSnapshotUserAttachmentFacts(engine, payload, messageBlocks) {
-  const sessionSource = await engine.session.getSessionContextSource({
+  const messages = await engine.session.getSessionMessageSources({
     userId: payload.runtimeIdentity.userId,
     sessionId: payload.runtimeIdentity.sessionId,
     persistenceScope: payload.persistenceScope,
+    ...projectSnapshotUserSourceSelection(messageBlocks),
   });
-  return restoreSnapshotUserAttachmentFactsFromSessionAuthority(
-    messageBlocks,
-    sessionSource.messages,
-  );
+  return restoreSnapshotUserAttachmentFactsFromSessionAuthority(messageBlocks, messages);
 }
 
 function prepareWithoutStoppedSnapshot(engine, { payload }) {

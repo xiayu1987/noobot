@@ -8,6 +8,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createStateCommitter } from "../../../src/runtime/tool-execution/state-committer.js";
+import { createCurrentTurnMessagesStore } from "../../../src/runtime/turn/current-turn-ledger.js";
 import { ERROR_CODE } from "../../../src/shared/errors/constants.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { bindAssistantMessageEventStream } from "../../../src/events/message-event-stream.js";
@@ -45,22 +46,11 @@ function createInMemoryTurnStore() {
 }
 
 function createUpdatableTurnStore() {
+  const store = createCurrentTurnMessagesStore();
   return {
-    items: [],
-    push(item = {}) {
-      this.items.push(item);
-    },
-    updateWhere(patch = {}, matcher = () => true) {
-      let count = 0;
-      for (const item of this.items) {
-        if (!matcher(item)) continue;
-        Object.assign(item, patch);
-        count += 1;
-      }
-      return count;
-    },
-    toArray() {
-      return this.items.slice();
+    ...store,
+    get items() {
+      return store.toArray();
     },
   };
 }

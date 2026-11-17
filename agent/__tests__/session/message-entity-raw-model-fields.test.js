@@ -380,7 +380,7 @@ test("immutable messages are normalized once and mutable copies are normalized e
   assert.throws(() => {
     normalized.content = "changed";
   }, TypeError);
-  assert.equal(normalizeMessageEntity(normalized), normalizeMessageEntity(normalized));
+  assert.equal(normalizeMessageEntity(normalized), normalized);
   const damaged = deepFreeze({ ...source, messageUid: " padded " });
   for (let attempt = 0; attempt < 2; attempt += 1)
     assert.throws(() => normalizeMessageEntity(damaged), {

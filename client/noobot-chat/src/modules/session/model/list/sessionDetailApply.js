@@ -24,9 +24,9 @@ import {
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
 import { logWorkflowDiagnostics } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
 import { applyLatestSessionAggregateVersion } from "../../../chat/runtime/engine/sessionAggregateVersionManager.js";
-import { isTurnRuntimeDeleted } from "../../../chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import {
   isAvailableSessionDetailEntry,
+  isSessionDetailEntryCurrent,
   requireSessionDetailDocument,
   selectMainSessionDetailEntry,
 } from "@noobot/session-protocol/session-detail";
@@ -34,7 +34,6 @@ import { isPlainObject, requireFunctionDependencies } from "@noobot/shared/value
 
 export function createSessionDetailApplicator({
   sessions,
-  turnRuntimeRegistry,
   chatStore,
   makeViewMessage,
   onSessionDetailApplied,
@@ -47,16 +46,6 @@ export function createSessionDetailApplicator({
     makeViewMessage,
     onSessionDetailApplied,
   });
-
-  function pruneMessagesFromConfirmedDeletes(messages, sessionId) {
-    const index = messages.findIndex((messageItem) =>
-      isTurnRuntimeDeleted(turnRuntimeRegistry.value, {
-        sessionId,
-        turnScopeId: getMessageTurnScopeId(messageItem),
-      }),
-    );
-    return index >= 0 ? messages.slice(0, index) : messages;
-  }
 
   function summarizeToolProjection(messageItem) {
     return {
@@ -83,6 +72,7 @@ export function createSessionDetailApplicator({
     const sessionId = detail.sessionId;
     sessionItem.turnLifecycleSnapshot = mainEntry.turnLifecycleSnapshot;
     applyLatestSessionAggregateVersion(sessionItem, mainEntry);
+    sessionItem.generation = mainEntry.generation;
     sessionItem.createdAt = mainEntry.createdAt;
     sessionItem.updatedAt = mainEntry.updatedAt;
 
@@ -91,8 +81,7 @@ export function createSessionDetailApplicator({
       { sessionId, messages: mainEntry.messages },
       { replaceFields: ["messages"] },
     );
-    const detailMessages = pruneMessagesFromConfirmedDeletes(canonicalDetail.messages, sessionId);
-    canonicalDetail.messages = detailMessages;
+    const detailMessages = canonicalDetail.messages;
     sessionItem.detailMessages = detailMessages.map((item) => ({ ...item }));
     const detailProjection = buildSessionDetailProjection({
       sessionDetail: canonicalDetail,
@@ -143,6 +132,11 @@ export function createSessionDetailApplicator({
     const mainEntry = selectMainSessionDetailEntry(detail);
     const sessionItem = findSessionByAnyIdInList(sessions.value, detail.sessionId);
     if (!sessionItem) return;
+    if (
+      isAvailableSessionDetailEntry(mainEntry) &&
+      !isSessionDetailEntryCurrent(mainEntry, sessionItem)
+    )
+      return;
     logResendDebug("detail.apply.begin", () => ({
       sessionId: detail.sessionId,
       currentMessages: summarizeDebugMessages(sessionItem.messages),

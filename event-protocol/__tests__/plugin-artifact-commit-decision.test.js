@@ -13,9 +13,18 @@ import {
   createPluginArtifactQueryResult,
   decidePluginArtifactCommit,
   reducePluginArtifact,
+  requirePluginArtifactProjection,
 } from "../src/index.js";
 
-const current = Object.freeze({ revision: 2, eventId: "evt_current", operation: "replaced" });
+const current = Object.freeze({
+  pluginId: "example",
+  artifactType: "example.document",
+  artifactId: "document-1",
+  revision: 2,
+  eventId: "evt_current",
+  operation: "replaced",
+  data: { title: "document" },
+});
 
 function envelopeFor(overrides = {}) {
   return createPluginArtifactEnvelope({
@@ -164,4 +173,36 @@ test("plugin artifact reducer shares the commit decision with the authority", ()
   assert.equal(reducePluginArtifact(null, stale).reason, "artifact_not_found");
   const replaced = envelopeFor({ operation: "replaced", baseRevision: 1, revision: 2 });
   assert.equal(reducePluginArtifact(created.artifact, replaced).artifact.revision, 2);
+});
+
+test("plugin artifact projection contract checks identity without rewriting data", () => {
+  assert.equal(requirePluginArtifactProjection(null, current), null);
+  assert.equal(requirePluginArtifactProjection(current, current), current);
+  for (const field of ["pluginId", "artifactType", "artifactId"]) {
+    assert.throws(
+      () => requirePluginArtifactProjection(current, { ...current, [field]: "foreign" }),
+      /projected artifact or null/,
+    );
+  }
+});
+
+test("plugin artifact queries reject incomplete or inconsistent projections", () => {
+  const invalid = [
+    undefined,
+    {},
+    ...["pluginId", "artifactType", "artifactId"].flatMap((field) => [
+      { ...current, [field]: "invalid:token" },
+      { ...current, [field]: undefined },
+    ]),
+    { ...current, eventId: 42 },
+    { ...current, eventId: " " },
+    { ...current, data: null },
+    { ...current, data: undefined },
+    { ...current, operation: "created" },
+    { ...current, operation: "appended" },
+    { ...current, revision: 1 },
+    { ...current, revision: 1.5 },
+  ];
+  for (const value of invalid)
+    assert.throws(() => createPluginArtifactQueryResult(value), /projected artifact or null/);
 });

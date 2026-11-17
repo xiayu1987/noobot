@@ -9,7 +9,6 @@ import {
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
 import { text } from "@noobot/shared/value";
-export { summarizeDebugAttachments } from "@noobot/shared/debug-projection";
 export { recordServiceAgentTransportDebug } from "../../runtime-events/agent-transport-debug.js";
 
 export function recordServiceWebSocketSendFailure({

@@ -5,166 +5,72 @@
  */
 import { emitEvent } from "../events/index.js";
 import { tEngine } from "./i18n-adapter.js";
-import { PHASE_SUMMARY_OVERFLOW_POLICY } from "./constants/index.js";
-import {
-  CONTEXT_INJECTED_MESSAGE_TYPE,
-  resolveContextInternalMessageType,
-} from "@noobot/context-protocol/policy/injected-message";
-import {
-  resolveContextMessageContent,
-  resolveContextMessageSummarized,
-} from "@noobot/context-protocol/message/codec";
+import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/policy/injected-message";
 import { HELP_TOOL_NAME } from "../tools/collaboration/help-tool.js";
 import { TOOL_NAME } from "../tools/constants/index.js";
 import { resolveControlToolOutcome } from "./control-tool-outcome.js";
-import { appendTurnContextControlMessage } from "./turn/turn-context-message-appender.js";
-import { MAIN_FLOW_CONTROL_REASON } from "@noobot/context-protocol/policy/main-flow-control";
-import { requestMainFlowFinalNoToolsTurn } from "./main-flow-control.js";
+import { appendTurnRuntimeInjectedMessage } from "./turn/turn-context-message-appender.js";
+import {
+  hasExternalSummaryScheduler,
+  peekMainFlowPhaseSummary,
+  requestMainFlowPhaseSummary,
+} from "./main-flow-control.js";
 import { text, isObjectLike } from "@noobot/shared/value";
 import { requireActiveModelContext } from "./active-model-context.js";
+import {
+  countSummaryMessageChars,
+  resolveSummaryScope,
+} from "@noobot/context-protocol/policy/summary";
 
 function getSystemRuntime(runtime = {}) {
-  return runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
-    ? runtime.systemRuntime
-    : null;
+  return isObjectLike(runtime?.systemRuntime) ? runtime.systemRuntime : null;
 }
 
 function hasTool(tools = [], toolName) {
   return (Array.isArray(tools) ? tools : []).some((def) => text(def?.name) === toolName);
 }
 
-function hasTaskSummaryTool(tools = []) {
-  return hasTool(tools, TOOL_NAME.TASK_SUMMARY);
+function resolveSummaryTrigger(reachedLoopThreshold, reachedCharsThreshold) {
+  if (reachedLoopThreshold && reachedCharsThreshold) return "both";
+  return reachedCharsThreshold ? "message_chars" : "loop_turns";
 }
 
-function hasInternalMessageMarker(message = {}) {
-  return Boolean(resolveContextInternalMessageType(message));
-}
-
-function resolveUnsummarizedMessageChars(messages = []) {
-  if (!Array.isArray(messages)) return 0;
-  return messages.reduce((total, message) => {
-    if (!isObjectLike(message)) return total;
-    if (resolveContextMessageSummarized(message)) return total;
-    if (hasInternalMessageMarker(message)) return total;
-    const inputText = resolveContextMessageContent(message);
-    return total + String(inputText || "").length;
-  }, 0);
-}
-
-function handlePostSummaryCharsOverflow({
-  modelState,
-  loopState,
-  loopCount = 0,
-  source = "agent_phase_summary",
-} = {}) {
-  const { runtime } = modelState;
-  const systemRuntime = getSystemRuntime(runtime);
-  if (!systemRuntime) return false;
-  if (!hasTaskSummaryTool(loopState?.tools || [])) return false;
-  if (systemRuntime.needsPhaseSummary === true) return false;
-  if (systemRuntime.phaseSummaryByCharsPrompted !== true) return false;
-
-  const charsThreshold = Number(loopState?.phaseSummaryMessageCharsThreshold || 0);
-  if (!Number.isFinite(charsThreshold) || charsThreshold <= 0) return false;
-
-  const messages = requireActiveModelContext(runtime).messages;
-  const unsummarizedChars = resolveUnsummarizedMessageChars(messages);
-  if (unsummarizedChars <= charsThreshold) {
-    systemRuntime.phaseSummaryByCharsPrompted = false;
-    return false;
-  }
-
-  if (PHASE_SUMMARY_OVERFLOW_POLICY.ENFORCE_NO_TOOLS_WHEN_STILL_OVERFLOW === true) {
-    requestMainFlowFinalNoToolsTurn(runtime, {
-      reason: MAIN_FLOW_CONTROL_REASON.CONTEXT_OVERFLOW_AFTER_SUMMARY,
-      source,
-      detail: {
-        loopCount,
-        charsThreshold,
-        unsummarizedChars,
-      },
-    });
-  }
-  emitEvent(runtime.eventListener, "phase_summary_hard_overflow", {
-    loopCount,
-    charsThreshold,
-    unsummarizedChars,
-  });
-  return PHASE_SUMMARY_OVERFLOW_POLICY.ENFORCE_NO_TOOLS_WHEN_STILL_OVERFLOW === true;
-}
-
-export function maybeFinalizeNoToolsAfterPhaseSummaryOverflow({ modelState, loopState } = {}) {
-  const { runtime } = modelState;
-  const systemRuntime = getSystemRuntime(runtime);
-  const loopCount = Number(systemRuntime?.phaseSummaryLoopCount || 0);
-  return handlePostSummaryCharsOverflow({
-    modelState,
-    loopState,
-    loopCount,
-    source: "agent_phase_summary",
-  });
-}
-
-export function maybeRequestPhaseSummary({ modelState, loopState, toolCallResults = [] }) {
+export async function maybeRequestPhaseSummary({ modelState, loopState }) {
   const { runtime } = modelState;
   const systemRuntime = getSystemRuntime(runtime);
   if (!systemRuntime) return false;
 
-  const taskSummaryOutcome = resolveControlToolOutcome(toolCallResults, TOOL_NAME.TASK_SUMMARY);
-  if (taskSummaryOutcome.attempted) return false;
+  if (hasExternalSummaryScheduler(runtime) || peekMainFlowPhaseSummary(runtime)) return false;
 
   const currentCount = Number(systemRuntime.phaseSummaryLoopCount || 0);
   const nextCount = Number.isFinite(currentCount) && currentCount >= 0 ? currentCount + 1 : 1;
   systemRuntime.phaseSummaryLoopCount = nextCount;
 
-  if (!hasTaskSummaryTool(loopState?.tools || [])) return false;
-  if (systemRuntime.needsPhaseSummary === true) return false;
-
   const loopThreshold = Number(loopState?.phaseSummaryLoopTurns || 0);
   const reachedLoopThreshold =
     Number.isFinite(loopThreshold) && loopThreshold > 0 && nextCount >= loopThreshold;
   const charsThreshold = Number(loopState?.phaseSummaryMessageCharsThreshold || 0);
-  const unsummarizedChars = resolveUnsummarizedMessageChars(
-    requireActiveModelContext(runtime).messages,
-  );
-  const reachedCharsThreshold =
-    Number.isFinite(charsThreshold) && charsThreshold > 0 && unsummarizedChars > charsThreshold;
-  if (!reachedLoopThreshold && !reachedCharsThreshold) {
-    systemRuntime.phaseSummaryByCharsPrompted = false;
-    return false;
-  }
+  const charsThresholdEnabled = Number.isFinite(charsThreshold) && charsThreshold > 0;
+  if (!reachedLoopThreshold && !charsThresholdEnabled) return false;
+  const { summaryMessages } = resolveSummaryScope(requireActiveModelContext(runtime).messageBlocks);
+  if (!summaryMessages.length) return false;
+  const unsummarizedChars = countSummaryMessageChars(summaryMessages);
+  const reachedCharsThreshold = charsThresholdEnabled && unsummarizedChars > charsThreshold;
+  if (!reachedLoopThreshold && !reachedCharsThreshold) return false;
 
-  if (reachedCharsThreshold && systemRuntime.phaseSummaryByCharsPrompted === true) {
-    return handlePostSummaryCharsOverflow({
-      modelState,
-      loopState,
-      loopCount: nextCount,
-      source: "agent_phase_summary",
-    });
-  }
-
-  systemRuntime.needsPhaseSummary = true;
-  systemRuntime.phaseSummaryLoopCount = 0;
-  if (reachedCharsThreshold) {
-    systemRuntime.phaseSummaryByCharsPrompted = true;
-  }
-  appendTurnContextControlMessage({
-    runtime,
-    content: tEngine(runtime, "phaseSummaryPrompt"),
-    internalType: CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_PROMPT,
+  requestMainFlowPhaseSummary(runtime, {
+    source: "agent.phase_summary",
+    prompt: tEngine(runtime, "phaseSummaryPrompt"),
+    onCommitted: () => {
+      systemRuntime.phaseSummaryLoopCount = 0;
+    },
   });
-  emitEvent(runtime.eventListener, "phase_summary_required", {
+  await emitEvent(runtime.eventListener, "phase_summary_required", {
     loopCount: nextCount,
     loopThreshold,
     charsThreshold,
     unsummarizedChars,
-    trigger:
-      reachedLoopThreshold && reachedCharsThreshold
-        ? "both"
-        : reachedCharsThreshold
-          ? "message_chars"
-          : "loop_turns",
+    trigger: resolveSummaryTrigger(reachedLoopThreshold, reachedCharsThreshold),
   });
   return true;
 }
@@ -188,7 +94,7 @@ export function maybeRequestTaskCheck({ modelState, loopState, toolCallResults =
   if (!Number.isFinite(threshold) || threshold <= 0 || nextCount < threshold) return false;
 
   systemRuntime.taskCheckLoopCount = 0;
-  appendTurnContextControlMessage({
+  appendTurnRuntimeInjectedMessage({
     runtime,
     content: tEngine(runtime, "taskCheckPrompt"),
     internalType: CONTEXT_INJECTED_MESSAGE_TYPE.TASK_CHECK_PROMPT,
@@ -213,7 +119,7 @@ export function maybePromptHelpToolByLoop({ modelState, loopState }) {
   systemRuntime.helpPromptLoopCount = nextCount;
   if (nextCount < threshold) return false;
   systemRuntime.helpPromptLoopCount = 0;
-  appendTurnContextControlMessage({
+  appendTurnRuntimeInjectedMessage({
     runtime,
     content: tEngine(runtime, "helpToolLoopPrompt", {
       loopCount: nextCount,
@@ -239,7 +145,7 @@ export function maybePromptHelpToolByFailure({ modelState, loopState, hasHelpCal
   if (hasHelpCall) return false;
   const failureCount = systemRuntime.toolConsecutiveFailureCount;
   if (failureCount < threshold) return false;
-  appendTurnContextControlMessage({
+  appendTurnRuntimeInjectedMessage({
     runtime,
     content: tEngine(runtime, "toolConsecutiveFailureHelpPrompt", {
       failureCount,

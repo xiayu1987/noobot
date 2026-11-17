@@ -3,14 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { describe, it, expect, vi } from "vitest";
-import { nextTick, ref } from "vue";
+import { describe, it, expect } from "vitest";
 import {
   applyTurnLifecycleEnvelope,
   applyTurnLifecycleSnapshot,
   applyTurnTimingSnapshot,
   createTurnRuntimeRegistryState,
   isTurnRuntimeDeleted,
+  removeTurnRuntime,
+  confirmTurnRuntimeDeletion,
   resolveLatestContinuableStoppedTurn,
   resolveTurnRuntimeByScope,
   selectCurrentTurnRuntime,
@@ -22,10 +23,9 @@ import {
   backendState,
   lifecycle,
   settleTerminal,
+  sendStart,
   snapshot,
 } from "./turnRuntimeRegistryTestFixtures.js";
-import { createTurnRuntimeStoreActions } from "../../../../../../src/modules/chat/stores/chatStoreTurnRuntime.js";
-import { createComposerRuntimeState } from "../../../../../../src/modules/chat/runtime/session/composerRuntimeState.js";
 import {
   createTurnLifecycleEventEnvelope,
   projectProtocolEventReducerInput,
@@ -353,11 +353,131 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
       reason: "duplicate_snapshot",
     });
     expect(
-      applyTurnLifecycleSnapshot(registry, snapshot({ generatedAt: "2026-01-01T00:00:03.000Z" })),
+      applyTurnLifecycleSnapshot(
+        registry,
+        snapshot({ activeTurn: { ...snapshot().activeTurn, commandId: "conflicting-command" } }),
+      ),
     ).toMatchObject({
       applied: false,
       reason: "snapshot_sequence_conflict",
     });
+  });
+
+  it("replaces the observed window without requiring historical tombstones or reviving evicted turns", () => {
+    const registry = createTurnRuntimeRegistryState();
+    expect(lifecycle(registry).applied).toBe(true);
+    expect(
+      lifecycle(registry, {
+        sessionId: "other",
+        turnScopeId: "other-turn",
+        dialogProcessId: "other-dialog",
+      }).applied,
+    ).toBe(true);
+    const reset = snapshot({
+      sequence: 4,
+      activeTurnScopeId: "",
+      activeTurn: null,
+      recentTerminalTurns: [],
+    });
+    expect(applyTurnLifecycleSnapshot(registry, reset)).toMatchObject({
+      applied: true,
+      evictedTurnScopeIds: ["t1"],
+    });
+    expect(resolveTurnRuntimeByScope(registry, "t1", { sessionId: "s1" })).toBeNull();
+    expect(registry.routeIndex.dp1).toBeUndefined();
+    expect(isTurnRuntimeDeleted(registry, { sessionId: "s1", turnScopeId: "t1" })).toBe(false);
+    expect(lifecycle(registry)).toMatchObject({
+      applied: false,
+      reason: "outside_snapshot_window",
+    });
+    expect(
+      backendState(registry, {
+        sessionId: "s1",
+        turnScopeId: "t1",
+        dialogProcessId: "dp1",
+        state: "sending",
+        seq: 100,
+      }),
+    ).toMatchObject({ applied: false, reason: "outside_snapshot_window" });
+    expect(applyTurnLifecycleSnapshot(registry, snapshot({ sequence: 3 }))).toMatchObject({
+      applied: false,
+      reason: "stale_snapshot",
+    });
+    expect(
+      resolveTurnRuntimeByScope(registry, "other-turn", { sessionId: "other" }),
+    ).not.toBeNull();
+    expect(
+      lifecycle(registry, { turnScopeId: "new-turn", dialogProcessId: "new-dialog", sequence: 5 })
+        .applied,
+    ).toBe(true);
+  });
+
+  it("keeps local pending commands outside an older observed window", () => {
+    const registry = createTurnRuntimeRegistryState();
+    expect(sendStart(registry, { sessionId: "s1", turnScopeId: "pending" }).applied).toBe(true);
+    const pending = resolveTurnRuntimeByScope(registry, "pending", { sessionId: "s1" });
+    expect(
+      applyTurnLifecycleSnapshot(
+        registry,
+        snapshot({ sequence: 0, activeTurnScopeId: "", activeTurn: null, recentTerminalTurns: [] }),
+      ).applied,
+    ).toBe(true);
+    expect(resolveTurnRuntimeByScope(registry, "pending", { sessionId: "s1" })).toBe(pending);
+    expect(lifecycle(registry, { turnScopeId: "pending", sequence: 1 }).applied).toBe(true);
+  });
+
+  it("reads an omitted historical terminal without taking the active dialog route", () => {
+    const registry = createTurnRuntimeRegistryState();
+    expect(applyTurnLifecycleSnapshot(registry, snapshot({ sequence: 10 })).applied).toBe(true);
+    expect(settleTerminal(registry, { turnScopeId: "historical", sequence: 3 })).toMatchObject({
+      applied: true,
+      turn: { terminalResolved: true, terminal: "completed" },
+    });
+    expect(selectCurrentTurnRuntime(registry, "s1")?.turnScopeId).toBe("t1");
+    expect(registry.routeIndex.dp1).toEqual({ sessionId: "s1", turnScopeId: "t1" });
+    expect(registry.sessions.s1.authoritativeSnapshotSequence).toBe(10);
+    confirmTurnRuntimeDeletion(registry, ["historical"], { sessionId: "s1" });
+    expect(settleTerminal(registry, { turnScopeId: "historical", sequence: 3 })).toMatchObject({
+      applied: false,
+      reason: "deleted_turn_tombstoned",
+    });
+  });
+
+  it("retains the replay boundary after removing the last observed turn", () => {
+    const registry = createTurnRuntimeRegistryState();
+    const baseline = snapshot({ sequence: 10 });
+    expect(applyTurnLifecycleSnapshot(registry, baseline).applied).toBe(true);
+    expect(removeTurnRuntime(registry, "t1", { sessionId: "s1" })).toBe(true);
+    expect(registry.sessions.s1.turns).toEqual({});
+    expect(registry.sessions.s1.authoritativeSnapshotSequence).toBe(10);
+    expect(lifecycle(registry)).toMatchObject({
+      applied: false,
+      reason: "outside_snapshot_window",
+    });
+    expect(
+      backendState(registry, {
+        sessionId: "s1",
+        turnScopeId: "t1",
+        dialogProcessId: "dp1",
+        state: "sending",
+        seq: 100,
+      }),
+    ).toMatchObject({ applied: false, reason: "outside_snapshot_window" });
+    expect(applyTurnLifecycleSnapshot(registry, snapshot())).toMatchObject({
+      applied: false,
+      reason: "stale_snapshot",
+    });
+    expect(applyTurnLifecycleSnapshot(registry, baseline)).toMatchObject({
+      applied: false,
+      reason: "duplicate_snapshot",
+    });
+    expect(settleTerminal(registry, { sequence: 3 }).applied).toBe(true);
+    expect(removeTurnRuntime(registry, "t1", { sessionId: "s1" })).toBe(true);
+    expect(lifecycle(registry)).toMatchObject({
+      applied: false,
+      reason: "outside_snapshot_window",
+    });
+    expect(lifecycle(registry, { sequence: 11 }).applied).toBe(true);
   });
 
   it("applies replacement tombstones from the authoritative snapshot", () => {
@@ -661,56 +781,6 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
       state: "frontend_processing",
       canStop: true,
       lifecycleObserved: true,
-    });
-  });
-
-  it("reactively restores the stop action when a snapshot replaces an old stopped Turn", async () => {
-    const registry = createTurnRuntimeRegistryState();
-    applyTurnLifecycleSnapshot(registry, snapshot());
-    settleTerminal(registry, {
-      turnScopeId: "t1",
-      dialogProcessId: "dp1",
-      revision: 3,
-      sequence: 3,
-    });
-    const turnRuntimeRegistry = ref(registry);
-    const store = createTurnRuntimeStoreActions(turnRuntimeRegistry, {
-      onTurnCommitted: vi.fn(() => null),
-      onTurnEvaluated: vi.fn(),
-    });
-    const resolveActiveTurn = () => selectCurrentTurnRuntime(turnRuntimeRegistry.value, "s1");
-    const { composerActionState } = createComposerRuntimeState({
-      resolveActiveSessionIdentity: () => "s1",
-      resolveActiveTurn,
-    });
-    expect(composerActionState.value.canStop).toBe(false);
-
-    store.applyTurnLifecycleSnapshot(
-      snapshot({
-        commandId: "snapshot-current-processing",
-        sequence: 4,
-        activeTurnScopeId: "t2",
-        activeTurn: {
-          turnScopeId: "t2",
-          dialogProcessId: "dp2",
-          commandId: "command-t2",
-          action: "send",
-          state: "processing",
-          phase: "processing",
-          executionState: "sending",
-          revision: 2,
-          sequence: 4,
-          summaryVersion: 0,
-          capabilities: { actionLocked: true, canStop: true },
-        },
-      }),
-    );
-    await nextTick();
-
-    expect(resolveActiveTurn()?.turnScopeId).toBe("t2");
-    expect(composerActionState.value).toMatchObject({
-      displayState: "sending",
-      canStop: true,
     });
   });
 

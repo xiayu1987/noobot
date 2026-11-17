@@ -174,7 +174,7 @@ describe("useChatEngine.resend failure rollback", () => {
     expect(activeSession.value.messages).toEqual([first, target]);
   });
 
-  it("rejects a committed detail that still materializes the replaced scope", async () => {
+  it("rejects a committed detail that still materializes deleted message UIDs", async () => {
     logStateMachineDebug.mockClear();
     const staleFirst = {
       messageUid: "stale-user",
@@ -209,6 +209,9 @@ describe("useChatEngine.resend failure rollback", () => {
         replacementDialogProcessId: `dialog:${turnScopeId}`,
         messages: [staleFirst, staleTarget, replacementUser],
       });
+      body.deletedMessageUids = [staleFirst.messageUid, staleTarget.messageUid];
+      body.projection.deletedMessageUids = body.deletedMessageUids;
+      body.displayMessages.push(staleFirst, staleTarget);
       return jsonResponse({ ok: true, ...body });
     });
     const { engine, activeSession } = createHarness({
@@ -225,7 +228,7 @@ describe("useChatEngine.resend failure rollback", () => {
 
     expect(lastResendFailure()).toMatchObject({
       replacementCommitted: false,
-      errorMessage: "session mutation response is invalid: replaced_scope_still_materialized",
+      errorMessage: "session mutation response is invalid: display_effect_mismatch",
     });
     expect(deleteSessionMessagesFromApi).not.toHaveBeenCalled();
     expect(stream).not.toHaveBeenCalled();
@@ -262,7 +265,7 @@ describe("useChatEngine.resend failure rollback", () => {
     const { engine, activeSession, input } = createHarness({
       sessionId: "local-resend-send-fail",
       stream,
-      deps: { replaceSessionTurnApi, applySessionDetail },
+      deps: { replaceSessionTurnApi, applySessionMutation: applySessionDetail },
     });
     const { first, target } = seedTurn(activeSession, "turn-send-fail");
     input.value = "draft before resend";

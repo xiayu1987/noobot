@@ -63,6 +63,7 @@ export function useChatEngine({
   makeViewMessage,
   makeViewAttachments,
   applySessionDetail,
+  applySessionMutation,
   deleteSessionMessagesFromApi,
   replaceSessionTurnApi,
   authFetch,
@@ -141,7 +142,7 @@ export function useChatEngine({
       responseSequence: turn.sequence,
       startedAt: turn.startedAt,
       finishedAt: turn.finishedAt,
-      projectedState: projected?.displayState || projected?.state || "",
+      projectedState: projected.displayState,
       projectedSending: projected?.sending === true,
       projectedTerminal: projected?.terminal || null,
       activeTurnScopeId:
@@ -216,9 +217,7 @@ export function useChatEngine({
       requestedSessionId: turnResult?.requestedSessionId || "",
       canonicalSessionId: turnResult?.canonicalSessionId || "",
       identityMatched: !String(turnResult?.reason || "").includes("identity_conflict"),
-      stateChanged:
-        String(before?.displayState || before?.state || "") !==
-        String(runtime?.displayState || runtime?.state || ""),
+      stateChanged: before.displayState !== runtime.displayState,
       before: summarizeStateMachineTurn(beforeTurn, before),
       after: summarizeStateMachineTurn(turnResult?.turn, runtime),
     }));
@@ -368,7 +367,7 @@ export function useChatEngine({
     stopSending,
     translate,
     userId,
-    applySessionDetail,
+    applySessionMutation,
     applyRunStateEvent,
     turnRuntimeRegistry,
     messageOperationStore,
@@ -381,7 +380,6 @@ export function useChatEngine({
   const {
     prepareMonotonicMessageAction,
     resolveMonotonicUserTarget,
-    cascadeDeleteMessagesFrom,
     deleteMonotonicMessage,
     resendMonotonicMessage,
   } = monotonicMessageActions;
@@ -400,7 +398,6 @@ export function useChatEngine({
     stopExecution,
     prepareMonotonicMessageAction,
     resolveMonotonicUserTarget,
-    cascadeDeleteMessagesFrom,
     deleteMonotonicMessage,
     resendMonotonicMessage,
     dispatchAuthoritativeRunStateEvent: applyRunStateEvent,

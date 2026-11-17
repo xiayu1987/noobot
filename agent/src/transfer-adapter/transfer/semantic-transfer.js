@@ -3,10 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { firstText, text } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
 import {
   SEMANTIC_TRANSFER_REGISTRATION,
-  TRANSFER_REASON,
   TRANSFER_SOURCE,
   assertSemanticTransferRegistration,
   resolveTransferIntent,
@@ -85,89 +84,14 @@ async function transferBotPluginStrategy({ strategy = "", runtime = {}, ...optio
   throw new Error(`semantic_transfer_strategy_unhandled:workflow:${strategy}`);
 }
 
-async function transferAgentPluginSummaryInjection({
-  strategy = "",
-  runtime = {},
-  ...options
-} = {}) {
-  const injectMode = text(options?.injectMode).toLowerCase() === "summary" ? "summary" : "full";
-  const fullText = firstText(
-    options?.fullText,
-    options?.rawSummaryText,
-    options?.summaryFullText,
-    options?.content,
-    options?.text,
-  );
-  const summaryText = firstText(
-    options?.summary,
-    options?.summaryText,
-    options?.overviewText,
-    fullText,
-  );
-  const detailText = firstText(options?.detail, options?.detailText);
-  const injectionMessage =
-    injectMode === "summary" ? summaryText : firstText(fullText, summaryText);
-  let detailTransfer = null;
-  if (detailText && options?.saveDetailToAttachment === true) {
-    detailTransfer = await transferAgentPluginStageMessage({
-      runtime,
-      summary: summaryText,
-      detail: detailText,
-      name: options?.name || "agent-plugin-summary-detail.md",
-      mimeType: options?.mimeType,
-      attachmentSource: options?.attachmentSource,
-      generationSource: options?.generationSource || "agent_plugin_summary_detail",
-      ...resolveTransferIntent({
-        source: options?.source,
-        reason: options?.reason,
-        fallbackSource: TRANSFER_SOURCE.PLUGIN,
-        fallbackReason: TRANSFER_REASON.HARNESS_SUMMARY,
-      }),
-      meta: options?.meta || {},
-    });
-  }
-  const direct = createDirectTextTransfer({
-    text: injectionMessage,
-    scenario: SEMANTIC_TRANSFER_SCENARIO.HARNESS,
-    strategy,
-    identity: options.identity,
-    meta: {
-      ...(options?.meta || {}),
-      injectMode,
-      summary: summaryText,
-      detail: detailText,
-    },
-  });
-  const detailEnvelopes = Array.isArray(detailTransfer?.transferEnvelopes)
-    ? detailTransfer.transferEnvelopes
-    : [];
-  const transferEnvelopes = [...detailEnvelopes, ...direct.transferEnvelopes];
-  return { transferEnvelopes };
-}
-
 async function transferAgentPluginStrategy({ strategy = "", runtime = {}, ...options } = {}) {
-  if (
-    Object.values(HARNESS_STRATEGY).includes(strategy) &&
-    options.detail !== undefined &&
-    options.fullText === undefined &&
-    options.summaryText === undefined
-  ) {
+  if (Object.values(HARNESS_STRATEGY).includes(strategy) && options.detail !== undefined) {
     return transferAgentPluginStageMessage({
       ...options,
       strategy,
       category: options.category,
       businessPoint: options.businessPoint,
       runtime,
-    });
-  }
-  if (
-    strategy === HARNESS_STRATEGY.SUMMARY &&
-    (options.fullText !== undefined || options.summaryText !== undefined)
-  ) {
-    return transferAgentPluginSummaryInjection({
-      ...options,
-      runtime,
-      strategy,
     });
   }
   if (strategy === HARNESS_STRATEGY.SUMMARY) {

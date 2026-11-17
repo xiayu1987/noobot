@@ -10,7 +10,7 @@ import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
+import { buildSessionDisplayProjection } from "../../src/session/session-summary-builders/session-display-summary.js";
 import {
   canonicalActivity,
   canonicalToolTimelineItem,
@@ -99,12 +99,10 @@ test("session display summary retains a workflow final assistant with stable pre
 test("session display summary rejects an active Turn without canonical presentation identity", () => {
   assert.throws(
     () =>
-      buildSessionDisplaySummary({
+      buildSessionDisplayProjection({
         ...createTestSessionRequiredFields(),
         sessionId: "invalid-active-turn-session",
         aggregateVersion: 0,
-        turnArtifactSequence: 0,
-        turnArtifacts: {},
         messages: [],
         turnLifecycle: {
           ...createEmptyTurnLifecycle(),
@@ -254,7 +252,7 @@ test("session display summary projects one explicit assistant presentation from 
 test("session display summary rejects multiple canonical assistants for one presentation", () => {
   assert.throws(
     () =>
-      buildSessionDisplaySummary({
+      buildSessionDisplayProjection({
         ...createTestSessionRequiredFields(),
         sessionId: "duplicate-presentation-session",
         aggregateVersion: 0,

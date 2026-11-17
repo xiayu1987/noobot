@@ -17,7 +17,7 @@ export function repairMaskedContact(source) {
   const region = source.slice(0, HEADER_REGION_LENGTH);
   const repaired = region.replace(
     MASKED_CONTACT_LINE,
-    (_, linePrefix) => `${linePrefix}${CANONICAL_CONTACT}`,
+    (...[, linePrefix]) => `${linePrefix}${CANONICAL_CONTACT}`,
   );
   return repaired + source.slice(HEADER_REGION_LENGTH);
 }

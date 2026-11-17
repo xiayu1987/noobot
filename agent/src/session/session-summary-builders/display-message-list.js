@@ -3,11 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { projectThinkingTimeline } from "../thinking-timeline-projection.js";
+import { projectThinkingEventTimeline } from "../thinking-timeline-projection.js";
+import { buildDisplayMessageSummary } from "./message-summary-projection.js";
 import {
-  buildDisplayMessageSummary,
   compactThinkingTimeline,
-} from "./message-summary-projection.js";
+  selectMessageToolTimeline,
+} from "@noobot/event-protocol/tool-timeline";
 import { buildLifecycleTurnPresentations } from "./turn-artifact-projection.js";
 import { text } from "@noobot/shared/value";
 
@@ -61,13 +62,16 @@ function dedupeDisplayMessages(messages) {
   return [...byIdentity.values()];
 }
 
-function attachThinkingTimeline(messages, displayMessage) {
+function attachThinkingTimeline(messagesByTurn, displayMessage, selectToolTimeline) {
   if (text(displayMessage?.role) !== "assistant") return;
   const turnScopeId = text(displayMessage?.turnScopeId);
   if (!turnScopeId) return;
-  const thinkingTimeline = projectThinkingTimeline(messages, { turnScopeId });
+  const thinkingTimeline = projectThinkingEventTimeline(
+    messagesByTurn.get(turnScopeId) ?? [],
+    selectToolTimeline,
+  );
   if (!thinkingTimeline.toolTimeline.length && !thinkingTimeline.activityTimeline.length) return;
-  displayMessage.toolTimeline = compactThinkingTimeline(thinkingTimeline.toolTimeline);
+  displayMessage.toolTimeline = thinkingTimeline.toolTimeline;
   if (thinkingTimeline.activityTimeline.length) {
     displayMessage.activityTimeline = thinkingTimeline.activityTimeline;
   } else {
@@ -76,14 +80,28 @@ function attachThinkingTimeline(messages, displayMessage) {
   displayMessage.hasThinkingDetails = true;
 }
 
-export function buildSessionDisplayMessages({ messages, lifecycle }) {
+function selectDisplayToolTimeline(message) {
+  return compactThinkingTimeline(selectMessageToolTimeline(message));
+}
+
+export function buildSessionDisplayMessages({
+  messages,
+  lifecycle,
+  selectToolTimeline = selectDisplayToolTimeline,
+}) {
   const projectedMessages = projectPersistedMessages(messages);
   for (const presentation of buildLifecycleTurnPresentations(lifecycle)) {
     insertLifecyclePresentation(projectedMessages, presentation);
   }
   const displayMessages = dedupeDisplayMessages(projectedMessages);
+  const messagesByTurn = new Map();
+  for (const message of messages) {
+    const scope = message.turnScopeId;
+    if (!messagesByTurn.has(scope)) messagesByTurn.set(scope, []);
+    messagesByTurn.get(scope).push(message);
+  }
   for (const displayMessage of displayMessages) {
-    attachThinkingTimeline(messages, displayMessage);
+    attachThinkingTimeline(messagesByTurn, displayMessage, selectToolTimeline);
   }
   return displayMessages;
 }

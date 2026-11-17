@@ -36,6 +36,12 @@ function resolveBaseUrl(value) {
 
 validateModelObservationPolicyCoverage(path.join(protocolRoot, "specs"));
 
+const performanceSpec = /056-performance-session\.spec\.js$/;
+const chromium = {
+  ...devices["Desktop Chrome"],
+  launchOptions: { chromiumSandbox: false },
+};
+
 export default defineConfig({
   testDir: path.join(protocolRoot, "specs"),
   testMatch: /\.spec\.js$/,
@@ -67,11 +73,24 @@ export default defineConfig({
   projects: [
     {
       name: "chromium-protocol",
-      use: {
-        ...devices["Desktop Chrome"],
-
-        launchOptions: { chromiumSandbox: false },
-      },
+      testIgnore: performanceSpec,
+      use: chromium,
+    },
+    {
+      name: "chromium-perf-single",
+      testMatch: performanceSpec,
+      metadata: { performanceMode: "single" },
+      timeout: PROTOCOL_TIMEOUTS.model,
+      retries: 0,
+      use: chromium,
+    },
+    {
+      name: "chromium-perf-multi",
+      testMatch: performanceSpec,
+      metadata: { performanceMode: "multi" },
+      dependencies: ["chromium-perf-single"],
+      retries: 0,
+      use: chromium,
     },
   ],
 });

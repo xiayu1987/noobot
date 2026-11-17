@@ -11,6 +11,7 @@ import {
   createModelContextSnapshot,
   hydrateModelContextSnapshot,
   projectSnapshotIncrementalToContinuation,
+  projectSnapshotUserSourceSelection,
   restoreSnapshotUserAttachmentFactsFromSessionAuthority,
   serializeContextMessage,
 } from "../src/policy/snapshot.js";
@@ -19,6 +20,52 @@ import {
   readContextMessageValue,
   resolveContextMessageSummarized,
 } from "../src/message/codec.js";
+
+test("snapshot authority selection includes only persisted natural user sources", () => {
+  const user = {
+    type: "human",
+    content: "request",
+    additional_kwargs: {
+      messageUid: "user-source",
+      messageOrigin: "natural",
+      turnScopeId: "source-turn",
+    },
+  };
+  assert.deepEqual(
+    projectSnapshotUserSourceSelection({
+      system: [],
+      history: [user, { type: "ai", content: "answer" }],
+      incremental: [
+        user,
+        {
+          ...user,
+          additional_kwargs: { ...user.additional_kwargs, noobotInternalMessageType: "internal" },
+        },
+      ],
+    }),
+    { messageUids: ["user-source"], turnScopeIds: ["source-turn"] },
+  );
+  assert.deepEqual(
+    projectSnapshotUserSourceSelection({
+      history: [
+        {
+          ...user,
+          additional_kwargs: { messageUid: "unscoped-user", messageOrigin: "natural" },
+        },
+      ],
+      incremental: [user],
+    }),
+    { messageUids: ["unscoped-user", "user-source"], turnScopeIds: ["source-turn"] },
+  );
+  assert.throws(
+    () =>
+      projectSnapshotUserSourceSelection({
+        history: [],
+        incremental: [{ ...user, additional_kwargs: { messageOrigin: "natural" } }],
+      }),
+    /context message identity must be exactly one shape, got: none/,
+  );
+});
 
 function roundOf(message) {
   return {

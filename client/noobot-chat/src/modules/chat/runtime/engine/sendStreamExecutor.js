@@ -27,10 +27,12 @@ export async function executeSendStream({
   const { botMessage } = prepared;
 
   if (request.commandType !== AGENT_COMMAND.RESEND) clearUploads();
-  const attachments =
-    request.commandType === AGENT_COMMAND.RESEND
-      ? request.attachments
-      : await serializeAttachments(request.attachmentFiles);
+  let attachments = request.attachments;
+  if (request.commandType !== AGENT_COMMAND.RESEND) {
+    attachments = request.attachmentFiles.length
+      ? await serializeAttachments(request.attachmentFiles)
+      : [];
+  }
   const requestedTextStreaming = streamOutput.value === true;
 
   const buildPayloadForCurrentVersion = createTurnPayloadBuilder({

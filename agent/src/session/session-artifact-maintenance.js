@@ -3,249 +3,319 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filePath as path } from "@noobot/path-resolver";
-import { readFile, rm } from "node:fs/promises";
-import { EXECUTION_EVENT_TURNS_DIR } from "@noobot/session-protocol/execution-event-index";
+import { EXECUTION_EVENT_INDEX_ERROR_CODE } from "@noobot/session-protocol/execution-event-index";
+import {
+  immutableStorageError,
+  IMMUTABLE_MAINTENANCE_BUDGET,
+  requireImmutableMaintenanceLimit,
+  requireImmutableCleanupRequest,
+  requireImmutableReaderRecoveryRequest,
+} from "@noobot/session-protocol/immutable-storage";
+import {
+  requireImmutableCompactionRequest,
+  requireImmutableCompactionRecords,
+  requireImmutableRelocationConflict,
+  requireImmutableCompactionResult,
+  requireImmutableLocationRetirementRequest,
+} from "@noobot/session-protocol/immutable-record-location";
 import { sessionMutationCoordinator } from "./session-mutation-coordinator.js";
 import {
   assertArtifactSessionWritable,
-  buildSessionArtifactFileMap,
   resolveSessionArtifactMutationLock,
-  SESSION_ARTIFACT_FILE_NAMES,
 } from "./session-artifact-files.js";
 import {
-  listExecutionEventTurns,
-  readExecutionSegmentState,
-  readRegisteredExecutionTurns,
-  resolveExecutionTurnDir,
-  writeExecutionTurnIndex,
-} from "./session-artifact-execution-logs.js";
-import { resolveTurnArtifactPath, readRecentSessionTurns } from "./session-artifact-session.js";
-import { assertCanonicalSessionManifest } from "./session-artifact-session/turn-journal-store.js";
-import {
-  assertTurnJournalBoundary,
-  isOwnedSessionRepairTempDirectoryName,
-  reconcileExecutionSegmentIndex,
-} from "@noobot/session-repair";
+  readExecutionSegmentStates,
+  recoverExecutionLogIndexes,
+} from "./execution-log-recovery.js";
 import { requireBoolean } from "@noobot/shared/value";
 import { requireStorageService } from "./storage-service.js";
-import { readDirectoryEntriesIfPresent } from "../shared/storage/dir-entries.js";
+import {
+  auditImmutableSession,
+  auditLockedImmutableSession,
+} from "./session-artifact-session/immutable-session-audit.js";
+import {
+  buildImmutableCleanupPlan,
+  applyImmutableCleanupPlan,
+  discardImmutableCleanupPlan,
+} from "./session-artifact-session/immutable-cleanup-plan.js";
+import { withImmutableCleanupPlanMutation } from "./session-artifact-session/immutable-cleanup-coordinator.js";
+import {
+  captureImmutableObjectRepairs,
+  restoreImmutableObjects,
+} from "./session-artifact-session/immutable-object-repair.js";
+import { ImmutableSessionStore } from "./session-artifact-session/immutable-session-store.js";
+import { ImmutableLocationRetirement } from "./session-artifact-session/immutable-location-retirement.js";
+import { immutableOfflineBackend } from "./session-artifact-session/immutable-storage-backends.js";
+import {
+  inspectImmutableReaderRetention,
+  recoverImmutableReaderRetention,
+} from "./session-artifact-session/immutable-reader-retention.js";
 
-function diagnostic(code, message, extra = {}) {
-  return { code, message, ...extra };
-}
-
-function isTurnJournalFile(entry) {
-  return entry.isFile() && (entry.name.endsWith(".json") || entry.name.endsWith(".jsonl"));
-}
-
-function isTempFile(entry) {
-  return entry.isFile() && (entry.name.endsWith(".tmp") || entry.name.includes(".tmp-"));
-}
-
-async function listTurnJournalNames(turnsDir) {
-  const entries = await readDirectoryEntriesIfPresent(turnsDir);
-  return entries.filter(isTurnJournalFile).map((entry) => entry.name);
-}
-
-async function listSummarySnapshotFiles(turnSnapshotsDir) {
-  const files = [];
-  for (const turnEntry of await readDirectoryEntriesIfPresent(turnSnapshotsDir)) {
-    if (!turnEntry.isDirectory()) continue;
-    const entries = await readDirectoryEntriesIfPresent(
-      path.join(turnSnapshotsDir, turnEntry.name),
+async function inspectExecutionArtifacts(storageService, sessionDir, signal) {
+  const turns = await readExecutionSegmentStates({ storageService, sessionDir, signal });
+  const issues = [];
+  for (const turn of turns) {
+    if (!turn.registered)
+      issues.push({
+        code: EXECUTION_EVENT_INDEX_ERROR_CODE.TURN_UNREGISTERED,
+        message: "execution turn is not registered in the session index",
+        turn: turn.dialogProcessId,
+      });
+    issues.push(
+      ...turn.segments
+        .filter((segment) => !segment.indexed)
+        .map((segment) => ({
+          code: EXECUTION_EVENT_INDEX_ERROR_CODE.SEGMENT_UNINDEXED,
+          message: "execution segment is not published in the turn index",
+          turn: turn.dialogProcessId,
+          file: segment.file,
+        })),
     );
-    const snapshots = entries.filter((entry) => entry.isFile() && entry.name.endsWith(".json"));
-    files.push(
-      ...snapshots.map((entry) =>
-        path
-          .join(SESSION_ARTIFACT_FILE_NAMES.turnSnapshotsDir, turnEntry.name, entry.name)
-          .replaceAll("\\", "/"),
-      ),
-    );
+    const actualSegments = new Map(turn.segments.map((segment) => [segment.file, segment]));
+    if (turn.index === null) continue;
+    turn.index.segments.forEach((segment) => {
+      const actual = actualSegments.get(segment.file);
+      if (segment.bytes !== actual.bytes || segment.records !== actual.records)
+        issues.push({
+          code: "EXECUTION_INDEX_MISMATCH",
+          message: "execution index does not match segment",
+          turn: turn.dialogProcessId,
+          file: segment.file,
+        });
+    });
   }
-  return files;
+  return {
+    issues,
+    turns: turns.length,
+    segments: turns.reduce((total, turn) => total + turn.segments.length, 0),
+  };
 }
 
-async function listTempFiles(dirs) {
-  const targets = [];
-  for (const dir of dirs) {
-    const entries = await readDirectoryEntriesIfPresent(dir);
-    targets.push(...entries.filter(isTempFile).map((entry) => path.join(dir, entry.name)));
-  }
-  return targets;
-}
-
-async function listOwnedRepairTempDirs(sessionDir) {
-  const parentDir = path.dirname(sessionDir);
-  const baseName = path.basename(sessionDir);
-  const entries = await readDirectoryEntriesIfPresent(parentDir);
-  return entries
-    .filter(
-      (entry) => entry.isDirectory() && isOwnedSessionRepairTempDirectoryName(entry.name, baseName),
-    )
-    .map((entry) => path.join(parentDir, entry.name));
-}
-
-async function readExecutionSegmentStates({ storageService, sessionDir }) {
-  const turns = [];
-  for (const turn of await readRegisteredExecutionTurns({ storageService, sessionDir })) {
-    const segments = [];
-    for (const segment of turn.index.segments) {
-      const actual = await readExecutionSegmentState({ turnDir: turn.turnDir, file: segment.file });
-      segments.push({ file: segment.file, bytes: actual.bytes, records: actual.records.length });
-    }
-    turns.push({ ...turn, segments });
-  }
-  return turns;
-}
-
-export async function inspectSessionArtifacts({ storageService, sessionDir }) {
+export async function inspectSessionArtifacts({
+  storageService,
+  sessionDir,
+  sessionId,
+  signal,
+  retainedObjects,
+  maxObjectReads,
+}) {
   requireStorageService(storageService, "inspectSessionArtifacts");
-  const files = buildSessionArtifactFileMap(sessionDir);
+  const storage = await auditImmutableSession({
+    sessionDir,
+    sessionId,
+    signal,
+    retainedObjects,
+    maxObjectReads,
+  });
+  return inspectAuditedArtifacts({ storageService, sessionDir, signal }, storage);
+}
+
+async function inspectLockedSessionArtifacts(options) {
+  const storage = await auditLockedImmutableSession(options);
+  return inspectAuditedArtifacts(options, storage);
+}
+
+async function inspectAuditedArtifacts({ storageService, sessionDir, signal }, storage) {
   const result = {
     sessionDir,
-    ok: true,
-    issues: [],
-    turns: { referenced: 0, orphaned: [] },
-    summarySnapshots: { orphaned: [] },
+    ok: storage.ok,
+    storage,
+    issues: [...storage.issues],
     execution: null,
   };
-  const manifest = await storageService.readOptionalJson(files.session);
-  if (manifest === null)
-    return {
-      ...result,
-      ok: false,
-      issues: [diagnostic("SESSION_MANIFEST_MISSING", "session manifest is missing")],
-    };
+  if (!storage.ok) return result;
   try {
-    assertCanonicalSessionManifest(manifest, "Session artifact inspect");
+    const execution = await inspectExecutionArtifacts(storageService, sessionDir, signal);
+    result.execution = { turns: execution.turns, segments: execution.segments };
+    result.issues.push(...execution.issues);
+    result.ok = result.ok && execution.issues.length === 0;
   } catch (error) {
-    return { ...result, ok: false, issues: [diagnostic(error.code, error.message)] };
-  }
-  const referenced = new Set();
-  for (const item of manifest.turnOrder) {
-    const { file } = item;
-    try {
-      const resolved = resolveTurnArtifactPath(sessionDir, file);
-      referenced.add(path.basename(resolved));
-      const raw = await readFile(resolved);
-      assertTurnJournalBoundary(file, raw.length, item.committedBytes);
-      result.turns.referenced += 1;
-    } catch (error) {
-      result.ok = false;
-      result.issues.push(diagnostic(error.code || "TURN_INVALID", error.message, { file }));
-    }
-  }
-  try {
-    const names = await listTurnJournalNames(files.turnsDir);
-    result.turns.orphaned = names.filter((name) => !referenced.has(name));
-  } catch (error) {
+    if (signal?.aborted) throw error;
     result.ok = false;
-    result.issues.push(diagnostic("TURNS_READ_FAILED", error.message));
-  }
-  const referencedSnapshots = new Set();
-  try {
-    const turns = await readRecentSessionTurns({
-      storageService,
-      sessionDir,
-      limit: manifest.turnOrder.length,
-    });
-    for (const snapshot of turns.flatMap((entry) => entry.summarySnapshots)) {
-      referencedSnapshots.add(snapshot.file);
-    }
-  } catch (error) {
-    result.ok = false;
-    result.issues.push(diagnostic(error.code || "SUMMARY_SNAPSHOT_INVALID", error.message));
-  }
-  try {
-    const snapshotFiles = await listSummarySnapshotFiles(files.turnSnapshotsDir);
-    result.summarySnapshots.orphaned = snapshotFiles.filter(
-      (file) => !referencedSnapshots.has(file),
-    );
-  } catch (error) {
-    result.ok = false;
-    result.issues.push(diagnostic("SUMMARY_SNAPSHOTS_READ_FAILED", error.message));
-  }
-  try {
-    const turns = await readExecutionSegmentStates({ storageService, sessionDir });
-    result.execution = {
-      turns: turns.length,
-      segments: turns.reduce((total, turn) => total + turn.index.segments.length, 0),
-    };
-    for (const turn of turns) {
-      turn.index.segments.forEach((segment, position) => {
-        const actual = turn.segments[position];
-        if (segment.bytes === actual.bytes && segment.records === actual.records) return;
-        result.ok = false;
-        result.issues.push(
-          diagnostic("EXECUTION_INDEX_MISMATCH", "execution index does not match segment", {
-            turn: turn.dialogProcessId,
-            file: segment.file,
-          }),
-        );
-      });
-    }
-  } catch (error) {
-    result.ok = false;
-    result.issues.push(diagnostic(error.code, error.message));
+    result.issues.push({ code: error.code ?? "EXECUTION_INDEX_INVALID", message: error.message });
   }
   return result;
 }
 
-export async function cleanupSessionArtifacts({
-  storageService,
-  sessionDir,
-  sessionId,
-  dryRun,
-  assertSessionWritable,
-}) {
-  requireStorageService(storageService, "cleanupSessionArtifacts");
-  requireBoolean("cleanupSessionArtifacts", "dryRun", dryRun);
-  const run = async () => {
-    await assertArtifactSessionWritable({
-      assertSessionWritable,
-      sessionId,
-      sessionDir,
-      operation: "cleanup_session_artifacts",
+async function runCleanupMutation(options, operation, run) {
+  const { storageService, sessionDir, sessionId, assertSessionWritable, signal } = options;
+  requireStorageService(storageService, operation);
+  return sessionMutationCoordinator.run(
+    resolveSessionArtifactMutationLock(sessionDir),
+    async () => {
+      await assertArtifactSessionWritable({
+        assertSessionWritable,
+        sessionId,
+        sessionDir,
+        operation,
+      });
+      signal?.throwIfAborted();
+      return run();
+    },
+  );
+}
+
+export async function compactSessionArtifacts(options) {
+  requireImmutableCompactionRequest(options);
+  const records = structuredClone(options.records);
+  return runCleanupMutation(options, "compact_session_artifacts", async () => {
+    const store = await ImmutableSessionStore.open({
+      sessionDir: options.sessionDir,
+      sessionId: options.sessionId,
     });
-    const report = await inspectSessionArtifacts({ storageService, sessionDir });
-    const files = buildSessionArtifactFileMap(sessionDir);
-    const removed = [];
-    const removePath = async (targetPath, options = {}) => {
-      removed.push(targetPath);
-      if (!dryRun) await rm(targetPath, { recursive: true, force: true, ...options });
-    };
-    for (const name of report.turns.orphaned)
-      await removePath(path.join(files.turnsDir, name), { recursive: false });
-    for (const name of report.summarySnapshots.orphaned)
-      await removePath(path.join(sessionDir, name), { recursive: false });
-    const executionTurnDirs = (await listExecutionEventTurns({ storageService, sessionDir })).map(
-      (turn) => resolveExecutionTurnDir(sessionDir, turn.dialogProcessId),
-    );
-    const tempFiles = await listTempFiles([
-      sessionDir,
-      files.turnsDir,
-      files.executionEventsDir,
-      ...executionTurnDirs,
-    ]);
-    for (const target of tempFiles) await removePath(target, { recursive: false });
-    for (const target of await listOwnedRepairTempDirs(sessionDir)) await removePath(target);
-    return { ...report, dryRun, removed };
-  };
-  const lockDir = resolveSessionArtifactMutationLock(sessionDir);
-  return dryRun ? run() : sessionMutationCoordinator.run(lockDir, run);
+
+    return store.transact({
+      expectedGeneration: options.expectedGeneration,
+      operationId: options.operationId,
+      input: { kind: "compact-records", records },
+      prepare: async ({ snapshot, input }) => {
+        requireImmutableCompactionRecords(input.records, snapshot);
+        const conflicts = [];
+        for (const source of input.records) {
+          options.signal?.throwIfAborted();
+          try {
+            await store.objects.relocate(source);
+          } catch (error) {
+            if (error.code !== "SESSION_RELOCATION_SOURCE_CHANGED") throw error;
+            conflicts.push(requireImmutableRelocationConflict(error.conflict));
+          }
+        }
+        options.signal?.throwIfAborted();
+        return {
+          changes: [],
+          result: requireImmutableCompactionResult(
+            { relocatedRecords: input.records.length - conflicts.length, conflicts },
+            input.records,
+          ),
+        };
+      },
+      projectResult: (outcome) => {
+        requireImmutableCompactionResult(outcome.result, records);
+        return outcome;
+      },
+    });
+  });
+}
+
+export async function retireSessionArtifactLocations(options) {
+  requireImmutableLocationRetirementRequest(options);
+  const request = { ...options, records: structuredClone(options.records) };
+  return runCleanupMutation(request, "retire_session_artifact_locations", async () => {
+    const store = await ImmutableSessionStore.open({
+      sessionDir: request.sessionDir,
+      sessionId: request.sessionId,
+    });
+    return new ImmutableLocationRetirement(store, request).run();
+  });
+}
+
+export async function discardSessionArtifactLocationRetirement(options) {
+  requireImmutableLocationRetirementRequest(options);
+  const request = { ...options, records: structuredClone(options.records) };
+  return runCleanupMutation(request, "discard_session_artifact_location_retirement", async () => {
+    const store = await ImmutableSessionStore.open({
+      sessionDir: request.sessionDir,
+      sessionId: request.sessionId,
+    });
+    return new ImmutableLocationRetirement(store, request).discard();
+  });
+}
+
+export async function prepareSessionArtifactCleanup(options) {
+  requireImmutableCleanupRequest("prepare", options);
+  const run = () =>
+    buildImmutableCleanupPlan({
+      sessionDir: options.sessionDir,
+      sessionId: options.sessionId,
+      dryRun: options.dryRun,
+      signal: options.signal,
+      planId: options.planId,
+      maxMarkingPages: options.maxMarkingPages,
+      maxFilterEntries: options.maxFilterEntries,
+      publish: (run) => runCleanupMutation(options, "publish_session_artifact_cleanup", run),
+    });
+  await runCleanupMutation(
+    options,
+    options.planId === undefined
+      ? "prepare_session_artifact_cleanup"
+      : "resume_session_artifact_cleanup",
+    async () => {},
+  );
+  return run();
+}
+
+export async function cleanupSessionArtifacts(options) {
+  requireImmutableCleanupRequest("apply", options);
+  const {
+    maxRemovals = IMMUTABLE_MAINTENANCE_BUDGET.maxRemovals,
+    maxCandidates = IMMUTABLE_MAINTENANCE_BUDGET.maxCandidates,
+  } = options;
+  requireImmutableMaintenanceLimit("maxRemovals", maxRemovals);
+  requireImmutableMaintenanceLimit("maxCandidates", maxCandidates);
+  return withImmutableCleanupPlanMutation(options.sessionDir, options.planId, () =>
+    runCleanupMutation(options, "cleanup_session_artifacts", () =>
+      applyImmutableCleanupPlan({ ...options, maxRemovals, maxCandidates }),
+    ),
+  );
+}
+
+export async function discardSessionArtifactCleanup(options) {
+  requireImmutableCleanupRequest("discard", options);
+  return withImmutableCleanupPlanMutation(options.sessionDir, options.planId, () =>
+    runCleanupMutation(options, "discard_session_artifact_cleanup", () =>
+      discardImmutableCleanupPlan(options),
+    ),
+  );
+}
+
+function openReaderRecoveryStore({ sessionDir, sessionId, format }) {
+  return ImmutableSessionStore.open({
+    sessionDir,
+    sessionId,
+    objectStore: immutableOfflineBackend(format),
+  });
+}
+
+export async function inspectSessionArtifactReader(options) {
+  requireImmutableReaderRecoveryRequest("inspect", options);
+  requireStorageService(options.storageService, "inspectSessionArtifactReader");
+  return sessionMutationCoordinator.run(
+    resolveSessionArtifactMutationLock(options.sessionDir),
+    async () => {
+      options.signal?.throwIfAborted();
+      const store = await openReaderRecoveryStore(options);
+      return inspectImmutableReaderRetention(store, options.readerId);
+    },
+  );
+}
+
+export async function recoverSessionArtifactReader(options) {
+  requireImmutableReaderRecoveryRequest("recover", options);
+  return runCleanupMutation(options, "recover_session_artifact_reader", async () => {
+    await options.assertReadersStopped({
+      sessionDir: options.sessionDir,
+      sessionId: options.sessionId,
+      readerId: options.readerId,
+    });
+    options.signal?.throwIfAborted();
+    const store = await openReaderRecoveryStore(options);
+    return recoverImmutableReaderRetention(store, options);
+  });
 }
 
 export async function repairSessionArtifacts({
   storageService,
   sessionDir,
   sessionId,
+  objectStore,
   alreadyLocked,
   assertSessionWritable,
+  objectReplacements = [],
+  signal,
 }) {
   requireStorageService(storageService, "repairSessionArtifacts");
   requireBoolean("repairSessionArtifacts", "alreadyLocked", alreadyLocked);
+  const replacements = captureImmutableObjectRepairs(objectReplacements);
   const run = async () => {
     await assertArtifactSessionWritable({
       assertSessionWritable,
@@ -253,29 +323,38 @@ export async function repairSessionArtifacts({
       sessionDir,
       operation: "repair_session_artifacts",
     });
-    const before = await inspectSessionArtifacts({ storageService, sessionDir });
-    const repaired = [];
-    for (const turn of await readExecutionSegmentStates({ storageService, sessionDir })) {
-      const reconciled = reconcileExecutionSegmentIndex(turn.index, turn.segments);
-      if (!reconciled.repaired.length) continue;
-      await writeExecutionTurnIndex({
-        storageService,
-        turnDir: turn.turnDir,
-        index: reconciled.index,
-      });
-      repaired.push(
-        ...reconciled.repaired.map(
-          (file) => `${EXECUTION_EVENT_TURNS_DIR}/${turn.dialogProcessId}/${file}`,
-        ),
+    const before = await inspectLockedSessionArtifacts({
+      storageService,
+      sessionDir,
+      sessionId,
+      signal,
+      objectStore,
+    });
+    if (!replacements.size && !before.storage.ok)
+      throw Object.assign(
+        immutableStorageError("Object repair requires original committed bytes"),
+        {
+          report: before.storage,
+        },
       );
-    }
+    const repaired = replacements.size
+      ? await restoreImmutableObjects({ sessionDir, sessionId, replacements, signal, objectStore })
+      : [];
+    const execution = await recoverExecutionLogIndexes({ storageService, sessionDir, signal });
+    repaired.push(...execution.repaired);
     return {
       before,
       repaired,
-      after: await inspectSessionArtifacts({ storageService, sessionDir }),
+      after: await inspectLockedSessionArtifacts({
+        storageService,
+        sessionDir,
+        sessionId,
+        signal,
+        objectStore,
+      }),
     };
   };
-  if (alreadyLocked) return run();
-  const lockDir = resolveSessionArtifactMutationLock(sessionDir);
-  return sessionMutationCoordinator.run(lockDir, run);
+  return alreadyLocked
+    ? run()
+    : sessionMutationCoordinator.run(resolveSessionArtifactMutationLock(sessionDir), run);
 }

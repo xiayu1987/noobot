@@ -17,7 +17,6 @@ import {
   resolveContextToolCalls,
 } from "../message/codec.js";
 import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "../message/internal-types.js";
-import { recoverContextTaskSummaryToolResult } from "../task/summary-context.js";
 import { text } from "@noobot/shared/value";
 
 export function isSystemLikeMessageRole(role = "") {
@@ -76,10 +75,7 @@ function shouldKeepForModelContext(message = {}) {
   return !resolveContextMessageSummarized(message);
 }
 
-export function filterForModelContext(
-  messages = [],
-  { recoverUnpairedToolResult = recoverContextTaskSummaryToolResult } = {},
-) {
+export function filterForModelContext(messages = []) {
   const source = (Array.isArray(messages) ? messages : []).filter(shouldKeepForModelContext);
   const assistantIds = new Set();
   const resultIds = new Set();
@@ -99,8 +95,8 @@ export function filterForModelContext(
   for (const message of source) {
     const role = resolveContextMessageRole(message);
     if (role === "tool") {
-      const paired = pairedToolResult(message, validIds, recoverUnpairedToolResult);
-      if (paired) result.push(paired);
+      const id = resolveContextToolResultCallId(message);
+      if (id && validIds.has(id)) result.push(message);
       continue;
     }
     if (role !== "assistant") {
@@ -116,13 +112,6 @@ export function filterForModelContext(
     if (ids.length && ids.every((id) => validIds.has(id))) result.push(message);
   }
   return result;
-}
-
-function pairedToolResult(message, validIds, recoverUnpairedToolResult) {
-  const id = resolveContextToolResultCallId(message);
-  if (id && validIds.has(id)) return message;
-  if (typeof recoverUnpairedToolResult === "function") return recoverUnpairedToolResult(message);
-  return null;
 }
 
 export function shouldMarkCurrentTurnSummarizedByPolicy(message = {}) {

@@ -30,9 +30,11 @@ function createHarness({ maybeSummarize = async () => {}, captureDialogToShortMe
         turnReads.push(payload);
         return messages;
       },
-      async appendExecutionLog(record) {
-        executionLogs.push(record);
-        if (record.event === "memory_summary_checked") resolveSummarized();
+      async appendExecutionLogs({ records, persistenceScope }) {
+        for (const record of records) {
+          executionLogs.push({ ...record, persistenceScope });
+          if (record.event === "memory_summary_checked") resolveSummarized();
+        }
       },
     },
     memory: {

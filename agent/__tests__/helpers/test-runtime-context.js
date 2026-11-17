@@ -72,7 +72,6 @@ const RUNTIME_POST_MOUNT_FIELDS = Object.freeze([
   "commitSummaryCheckpoint",
   "persistCurrentTurnMessages",
   "withCurrentTurnPersistenceBatch",
-  "timelineCheckpointPersistedMessageUids",
   "projectCurrentTurnMessageEvent",
   "materializePendingCurrentTurnMessageEvents",
   "materializeUnownedCurrentTurnMessageEvents",
@@ -80,7 +79,6 @@ const RUNTIME_POST_MOUNT_FIELDS = Object.freeze([
   "resumedStoppedSnapshotIdentity",
   "resumedStoppedSnapshotTurnProgress",
   "stoppedModelMessageSnapshotCandidate",
-  "summaryCheckpointPersistedMessageUids",
   "summaryCheckpointPromotionSources",
   "summaryCheckpointRevision",
 ]);

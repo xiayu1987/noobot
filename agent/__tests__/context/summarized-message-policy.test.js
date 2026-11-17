@@ -9,7 +9,6 @@ import {
   applyTurnCompletionPolicy,
   projectTurnCompletionMessages,
 } from "@noobot/context-protocol/policy/turn-completion";
-import { shouldMarkCurrentTurnSummarizedMessage as protocolShouldMarkCurrentTurnSummarizedMessage } from "@noobot/context-protocol/policy/summary";
 import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
 import { resolveModelHistoryMessages as protocolResolveModelHistoryMessages } from "@noobot/context-protocol/policy/window";
 import {
@@ -17,7 +16,10 @@ import {
   createFlowControlContextPolicy,
 } from "@noobot/context-protocol/tool/context-policy";
 import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/policy/injected-message";
-import { filterForModelContext as protocolFilterForModelContext } from "@noobot/context-protocol/policy/message";
+import {
+  filterForModelContext as protocolFilterForModelContext,
+  shouldMarkCurrentTurnSummarizedByPolicy,
+} from "@noobot/context-protocol/policy/message";
 import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
 import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import { resolveContextMessageKey } from "@noobot/context-protocol/message/codec";
@@ -45,58 +47,55 @@ const resolveModelHistoryMessages = (options = {}) =>
   protocolResolveModelHistoryMessages(projectWindowOptions(options));
 const filterForModelContext = (messages = []) => protocolFilterForModelContext(toContext(messages));
 const shouldMarkCurrentTurnSummarizedMessage = (record = {}) =>
-  protocolShouldMarkCurrentTurnSummarizedMessage(projectSessionRecordToContextMessage(record));
+  shouldMarkCurrentTurnSummarizedByPolicy(projectSessionRecordToContextMessage(record));
 
-const boundaryPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
+const evidencePolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE);
 
-test("projectTurnCompletionMessages preserves only latest task_summary call and result", () => {
+test("projectTurnCompletionMessages preserves only latest task_check call and result", () => {
   const oldAssistantMessage = sessionRecord({
     role: "assistant",
     content: "",
     tool_calls: [
       {
-        id: "call_task_summary_old",
+        id: "call_task_check_old",
         type: "function",
         function: {
-          name: "task_summary",
+          name: "task_check",
           arguments: "{}",
         },
-        contextPolicy: boundaryPolicy,
+        contextPolicy: evidencePolicy,
       },
     ],
   });
   const oldToolMessage = sessionRecord({
     role: "tool",
-    content: JSON.stringify({ toolName: "task_summary", ok: true }),
-    tool_call_id: "call_task_summary_old",
-    toolName: "task_summary",
-    contextPolicy: boundaryPolicy,
+    content: JSON.stringify({ toolName: "task_check", ok: true }),
+    tool_call_id: "call_task_check_old",
+    toolName: "task_check",
+    contextPolicy: evidencePolicy,
   });
   const latestAssistantMessage = sessionRecord({
     role: "assistant",
     content: "",
     tool_calls: [
       {
-        id: "call_task_summary_latest",
+        id: "call_task_check_latest",
         type: "function",
         function: {
-          name: "task_summary",
+          name: "task_check",
           arguments: "{}",
         },
-        contextPolicy: boundaryPolicy,
+        contextPolicy: evidencePolicy,
       },
     ],
   });
   const latestToolMessage = sessionRecord({
     role: "tool",
-    content: JSON.stringify({ toolName: "task_summary", ok: true }),
-    tool_call_id: "call_task_summary_latest",
-    toolName: "task_summary",
-    contextPolicy: boundaryPolicy,
+    content: JSON.stringify({ toolName: "task_check", ok: true }),
+    tool_call_id: "call_task_check_latest",
+    toolName: "task_check",
+    contextPolicy: evidencePolicy,
   });
-
-  assert.equal(shouldMarkCurrentTurnSummarizedMessage(oldAssistantMessage), false);
-  assert.equal(shouldMarkCurrentTurnSummarizedMessage(oldToolMessage), false);
 
   const result = projectTurnCompletionMessages([
     oldAssistantMessage,
@@ -170,10 +169,10 @@ test("summarization includes every restored incremental tool call and result wit
     tool_calls: [
       {
         id: "call_summary",
-        name: "task_summary",
+        name: "task_check",
         args: {},
         type: "tool_call",
-        contextPolicy: boundaryPolicy,
+        contextPolicy: evidencePolicy,
       },
     ],
   });
@@ -383,10 +382,10 @@ test("projectTurnCompletionMessages includes restored old injections and preserv
       tool_calls: [
         {
           id: "call_summary",
-          name: "task_summary",
+          name: "task_check",
           args: {},
           type: "tool_call",
-          contextPolicy: boundaryPolicy,
+          contextPolicy: evidencePolicy,
         },
       ],
     }),
@@ -437,18 +436,18 @@ test("model and store projections apply one summarization scope policy", () => {
       tool_calls: [
         {
           id: "call_summary",
-          function: { name: "task_summary", arguments: "{}" },
-          contextPolicy: boundaryPolicy,
+          function: { name: "task_check", arguments: "{}" },
+          contextPolicy: evidencePolicy,
         },
       ],
       lc_kwargs: {},
     }),
     sessionRecord({
       role: "tool",
-      content: JSON.stringify({ toolName: "task_summary", ok: true }),
+      content: JSON.stringify({ toolName: "task_check", ok: true }),
       tool_call_id: "call_summary",
-      toolName: "task_summary",
-      contextPolicy: boundaryPolicy,
+      toolName: "task_check",
+      contextPolicy: evidencePolicy,
       lc_kwargs: {},
     }),
   ];

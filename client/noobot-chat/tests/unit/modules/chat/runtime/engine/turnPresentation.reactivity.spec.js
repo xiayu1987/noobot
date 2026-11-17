@@ -159,6 +159,30 @@ describe("selectTurnPresentations reactivity", () => {
     expect(live).toBe(session.messages[3]);
   });
 
+  it("preserves own-first order and deduplicates sibling envelopes", () => {
+    const { session, presented } = setup({ withEnvelope: true });
+    session.messages[2].transferEnvelopes = [envelope("turn-1", "transfer-sibling"), envelope()];
+    expect(presented.value[3].transferEnvelopes.map((item) => item.transferId)).toEqual([
+      "transfer-1",
+      "transfer-sibling",
+    ]);
+  });
+
+  it("rejects conflicting sibling identities even when both sources have the same count", () => {
+    const { session, presented } = setup({ withEnvelope: true });
+    const conflicting = envelope();
+    conflicting.payload.attachments[0].name = "conflicting.md";
+    session.messages[2].transferEnvelopes = [conflicting];
+    expect(() => presented.value).toThrow("transfer_identity_conflict");
+  });
+
+  it("revalidates nested envelope mutations on the next projection", () => {
+    const { session, presented } = setup({ withEnvelope: true });
+    expect(presented.value[3]).toBe(session.messages[3]);
+    session.messages[3].transferEnvelopes[0].payload.attachments[0].path = "/forbidden";
+    expect(() => presented.value).toThrow("forbidden_path_field");
+  });
+
   it("still merges envelopes that only exist on sibling messages of the turn", () => {
     const { session, presented } = setup();
     session.messages[2].transferEnvelopes = [envelope("turn-1", "transfer-sibling")];

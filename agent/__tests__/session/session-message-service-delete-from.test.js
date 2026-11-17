@@ -3,428 +3,251 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { turnRecord } from "../helpers/turn-record.js";
-import { createEmptyTurnLifecycle, TURN_RECOVERY_ACTION } from "@noobot/session-protocol";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import test, { after } from "node:test";
+import test from "node:test";
 import assert from "node:assert/strict";
+import { rename } from "node:fs/promises";
+import { setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";
+import {
+  immutableMutationFixture,
+  mutationMessage as message,
+  mutationTime,
+} from "../helpers/immutable-mutation-integration-fixture.js";
 
-import { SessionMessageService } from "../../src/session/services/session-message-service.js";
-import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
-import { createSessionCrudServiceStub } from "../helpers/session-crud-service-stub.js";
-import { buildPersistedDisplaySummary } from "./session-artifact-store-v2.test-helpers.js";
-import { requiredSessionReads } from "../helpers/session-repo-required-reads.js";
+const deletion = (fixture, scope = "drop", fields = {}) => ({
+  ...fixture.request,
+  anchor: { turnScopeId: scope },
+  commandId: "delete-tail",
+  ...fields,
+});
 
-const TEST_SESSION_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-session-dir-"));
-after(() => fs.rmSync(TEST_SESSION_DIR, { recursive: true, force: true }));
-
-function createService({ initialSession }) {
-  const saved = [];
-  let currentSession = structuredClone({
-    ...createTestSessionRequiredFields(),
-    aggregateVersion: 0,
-    ...initialSession,
+test("interleaved deletion response preserves the partial turn and replays exact original message effects", async (t) => {
+  const f = await immutableMutationFixture(t, {
+    messages: [message("a1", "a"), message("b1", "b"), message("a2", "a")],
   });
-  const sessionRepo = {
-    async locateSessionScope() {
-      return {
-        resolvedParentSessionId: currentSession?.parentSessionId || "",
-        sessionDir: TEST_SESSION_DIR,
-      };
-    },
-    async withSessionMutation(_u, _s, operation) {
-      return operation(await this.locateSessionScope());
-    },
-    ...requiredSessionReads,
-    async findById() {
-      return currentSession;
-    },
-    async save(_userId, session) {
-      currentSession = structuredClone(session);
-      saved.push(structuredClone(session));
-    },
-  };
-  const service = new SessionMessageService({
-    sessionRepo,
-    sessionCrudService: createSessionCrudServiceStub(() => currentSession),
-    now: () => "2026-06-17T00:00:00.000Z",
-  });
-  return { service, saved, getSession: () => currentSession };
-}
+  const request = deletion(f, "b");
+  const first = await f.service.deleteFromMessage(request);
+  assert.deepEqual(first.deletedMessageUids, ["a2", "b1"]);
+  assert.deepEqual(
+    (await (await f.open()).exportSession()).messages.map((entry) => entry.messageUid),
+    ["a1"],
+  );
+  await f.commit({ messages: [message("a1", "a", { content: "later edit" }), message("a3", "a")] });
+  const beforeRetry = await f.open();
+  const retry = await f.service.deleteFromMessage(request);
+  assert.equal(retry.deduplicated, true);
+  assert.deepEqual(retry.deletedMessageUids, first.deletedMessageUids);
+  assert.deepEqual(
+    (await (await f.open()).exportSession()).messages.map((entry) => entry.content),
+    ["later edit", "a3"],
+  );
+  assert.equal((await f.open()).generation, beforeRetry.generation);
+  assert.equal(retry.generation, beforeRetry.generation);
+  assert.deepEqual(retry.projection, first.projection);
+  assert.deepEqual(retry.displayMessages, []);
+});
 
-test("SessionMessageService.deleteFromMessage deletes from anchor message to session tail", async () => {
-  const { service, saved } = createService({
-    initialSession: {
-      ...createTestSessionRequiredFields(),
-      sessionId: "s1",
-      parentSessionId: "",
-      aggregateVersion: 2,
-      messages: [
-        { turnScopeId: "scope-keep", role: "user", content: "keep" },
-        { turnScopeId: "scope-delete", role: "assistant", content: "delete" },
-        { turnScopeId: "scope-tail", role: "user", content: "delete too" },
-      ],
-    },
+test("deleteFromMessage commits only the suffix and passes the persistence context to the response", async (t) => {
+  const f = await immutableMutationFixture(t, {
+    aggregateVersion: 2,
+    messages: [message("keep"), message("drop"), message("tail")],
   });
-
-  const result = await service.deleteFromMessage({
-    userId: "u1",
-    sessionId: "s1",
-    anchor: { turnScopeId: "scope-delete" },
-    expectedAggregateVersion: 2,
-    commandId: "delete-tail",
+  const before = await f.open();
+  t.mock.method(f.runtime.sessionCrudService, "getSessionDisplayData", () => {
+    assert.fail("mutation response must not read the full display document");
   });
-
+  const result = await f.service.deleteFromMessage(
+    deletion(f, "drop", { expectedAggregateVersion: 2 }),
+  );
   assert.equal(result.deletedCount, 2);
   assert.equal(result.anchorIndex, 1);
-  assert.deepEqual(result.deletedTurnScopeIds, ["scope-delete", "scope-tail"]);
+  assert.deepEqual(result.deletedTurnScopeIds, ["drop", "tail"]);
   assert.equal(result.committedAggregateVersion, 3);
   assert.equal(result.deduplicated, false);
-  assert.equal(result.detail.sessions[0].aggregateVersion, 3);
-  assert.equal(saved.length, 1);
+  assert.equal(result.projection.metadata.aggregateVersion, 3);
+  assert.equal(result.generation, before.generation + 1);
+  assert.equal(Object.hasOwn(result, "detail"), false);
+  const after = await f.open();
+  assert.equal(after.generation, before.generation + 1);
   assert.deepEqual(
-    saved[0].messages.map((message) => message.content),
+    (await after.exportSession()).messages.map((item) => item.content),
     ["keep"],
   );
-  assert.equal(saved[0].aggregateVersion, 3);
-  assert.equal(saved[0].updatedAt, "2026-06-17T00:00:00.000Z");
+  assert.equal((await after.readMetadata()).updatedAt, mutationTime);
+  assert.notEqual(await before.readMessage("drop"), null);
+  assert.equal(await after.readMessage("drop"), null);
 });
 
-test("SessionMessageService.deleteFromMessage mutates only the owning Session aggregate", async () => {
-  const parent = createService({
-    initialSession: {
-      sessionId: "parent",
-      messages: [
-        { turnScopeId: "parent-keep", role: "user", content: "keep" },
-        { turnScopeId: "parent-delete", role: "assistant", content: "delete" },
-      ],
-    },
+test("deleteFromMessage leaves another session's committed graph unchanged", async (t) => {
+  const parent = await immutableMutationFixture(t, {
+    messages: [message("keep"), message("drop")],
   });
-  const child = createService({
-    initialSession: {
-      sessionId: "child",
-      parentSessionId: "parent",
-      messages: [{ turnScopeId: "child-turn", role: "user", content: "child" }],
-    },
-  });
-
-  await parent.service.deleteFromMessage({
-    userId: "u1",
-    sessionId: "parent",
-    anchor: { turnScopeId: "parent-delete" },
-    commandId: "delete-parent-tail",
-  });
-
-  assert.deepEqual(
-    parent.getSession().messages.map((item) => item.turnScopeId),
-    ["parent-keep"],
-  );
-  assert.deepEqual(
-    child.getSession().messages.map((item) => item.turnScopeId),
-    ["child-turn"],
-  );
+  const child = await immutableMutationFixture(t, { messages: [message("child")] });
+  const before = await child.open();
+  await parent.service.deleteFromMessage(deletion(parent));
+  const after = await child.open();
+  assert.equal(after.generation, before.generation);
+  assert.deepEqual(await after.exportSession(), await before.exportSession());
 });
 
-test("SessionMessageService.deleteFromMessage removes deleted terminal Turns from refresh projection", async () => {
-  const { service, getSession } = createService({
-    initialSession: {
-      ...createTestSessionRequiredFields(),
-      sessionId: "s1",
-      aggregateVersion: 2,
-      messages: [
-        { turnScopeId: "scope-keep", role: "user", content: "keep" },
-        { turnScopeId: "scope-delete", role: "assistant", content: "delete" },
-      ],
-      turnLifecycle: {
-        ...createEmptyTurnLifecycle(),
-        sequence: 2,
-        activeTurnScopeId: "",
-        turns: {
-          "scope-keep": turnRecord({
-            turnScopeId: "scope-keep",
-            presentationMessageId: "presentation-keep",
-            dialogProcessId: "dialog-keep",
-            state: "completed",
-            revision: 1,
-            sequence: 1,
-          }),
-          "scope-delete": turnRecord({
-            turnScopeId: "scope-delete",
-            presentationMessageId: "presentation-delete",
-            dialogProcessId: "dialog-delete",
-            state: "stop_completed",
-            revision: 2,
-            sequence: 2,
-          }),
-        },
-        commandReceipts: [
-          {
-            commandId: "keep-completed",
-            type: "turn.completed",
-            turnScopeId: "scope-keep",
-            requestHash: "keep",
-            committedAt: "2026-07-18T00:00:00.000Z",
-            revision: 1,
-            sequence: 1,
-            eventId: "event-keep-completed",
-          },
-          {
-            commandId: "delete-stopped",
-            type: "turn.stop_completed",
-            turnScopeId: "scope-delete",
-            requestHash: "delete",
-            committedAt: "2026-07-18T00:00:00.000Z",
-            revision: 2,
-            sequence: 2,
-            eventId: "event-delete-stopped",
-          },
-        ],
-      },
-    },
-  });
-
-  await service.deleteFromMessage({
-    userId: "u1",
-    sessionId: "s1",
-    anchor: { turnScopeId: "scope-delete" },
-    expectedAggregateVersion: 2,
-    commandId: "delete-terminal-tail",
-  });
-
-  const persisted = getSession();
-  const summary = await buildPersistedDisplaySummary(persisted);
-  const lifecycle = await service.getTurnLifecycleSnapshot({
-    userId: "u1",
-    sessionId: "s1",
-    commandId: "snapshot-after-delete",
-    knownSequence: 0,
-    terminalLimit: 10,
-    resolveRecovery: async () => TURN_RECOVERY_ACTION.NONE,
-  });
-  assert.deepEqual(
-    summary.messages.map((message) => message.turnScopeId),
-    ["scope-keep"],
-  );
-  assert.deepEqual(
-    summary.turnLifecycleSnapshot.recentTerminalTurns.map((turn) => turn.turnScopeId),
-    ["scope-keep"],
-  );
-  assert.deepEqual(
-    lifecycle.snapshot.recentTerminalTurns.map((turn) => turn.turnScopeId),
-    ["scope-keep"],
-  );
-  assert.deepEqual(Object.keys(persisted.turnLifecycle.turns), ["scope-keep"]);
-  assert.deepEqual(
-    persisted.turnLifecycle.commandReceipts.map((receipt) => [receipt.type, receipt.turnScopeId]),
-    [
-      ["turn.completed", "scope-keep"],
-      ["session.message.delete_from", undefined],
-    ],
-  );
-});
-
-test("SessionMessageService.deleteFromMessage clears a survivor's reference to the deleted source", async () => {
-  const initialSession = {
-    ...createTestSessionRequiredFields(),
-    sessionId: "s1",
+test("deleteFromMessage replays its command after the anchor is gone and rejects changed requests", async (t) => {
+  const f = await immutableMutationFixture(t, {
     aggregateVersion: 2,
-    messages: [
-      { turnScopeId: "continuation", role: "assistant", content: "continuation" },
-      { turnScopeId: "source", role: "user", content: "source" },
-    ],
-    turnLifecycle: {
-      ...createEmptyTurnLifecycle(),
-      sequence: 2,
-      turns: {
-        source: turnRecord({
-          continuedByTurnScopeId: "continuation",
-          revision: 1,
-          turnScopeId: "source",
-          dialogProcessId: "source-dialog",
-          state: "stop_completed",
-          sequence: 1,
-        }),
-        continuation: turnRecord({
-          revision: 1,
-          turnScopeId: "continuation",
-          dialogProcessId: "continuation-dialog",
-          state: "completed",
-          sequence: 2,
-          continuationSource: {
-            turnScopeId: "source",
-            dialogProcessId: "source-dialog",
-          },
-        }),
-      },
-      commandReceipts: [],
-    },
-  };
-  const { service, saved, getSession } = createService({ initialSession });
-
-  const result = await service.deleteFromMessage({
-    userId: "u1",
-    sessionId: "s1",
-    anchor: { turnScopeId: "source" },
-    expectedAggregateVersion: 2,
-    commandId: "delete-continuation-source",
+    messages: [message("keep"), message("drop")],
   });
-
-  assert.deepEqual(result.deletedTurnScopeIds, ["source"]);
-  assert.equal(saved.length, 1);
-  const after = getSession();
-  assert.deepEqual(Object.keys(after.turnLifecycle.turns), ["continuation"]);
-  assert.equal(after.turnLifecycle.turns.continuation.continuationSource, null);
-});
-
-test("SessionMessageService.deleteFromMessage returns 404 when anchor is missing", async () => {
-  const { service, saved } = createService({
-    initialSession: {
-      sessionId: "s1",
-      parentSessionId: "",
-      version: 1,
-      messages: [{ turnScopeId: "scope-keep", role: "user", content: "keep" }],
-    },
-  });
-
+  const request = deletion(f, "drop", { expectedAggregateVersion: 2 });
+  const first = await f.service.deleteFromMessage(request);
+  const before = await f.open();
+  const replay = await f.service.deleteFromMessage(request);
+  assert.equal(replay.deduplicated, true);
+  assert.equal(replay.committedAggregateVersion, first.committedAggregateVersion);
+  assert.equal((await f.open()).generation, before.generation);
   await assert.rejects(
-    service.deleteFromMessage({
-      userId: "u1",
-      sessionId: "s1",
-      anchor: { turnScopeId: "missing" },
-      commandId: "delete-missing",
-    }),
-    (error) => error?.statusCode === 404 && /anchor not found/.test(error.message),
+    f.service.deleteFromMessage({ ...request, anchor: { turnScopeId: "keep" } }),
+    (error) => error.statusCode === 409,
   );
-  assert.equal(saved.length, 0);
+  assert.equal((await f.open()).generation, before.generation);
 });
 
-test("SessionMessageService.deleteFromMessage rejects dialogProcessId legacy anchors", async () => {
-  const { service, saved } = createService({
-    initialSession: {
-      ...createTestSessionRequiredFields(),
+test("deleteFromMessage rejects missing anchors and stale versions without publishing", async (t) => {
+  const f = await immutableMutationFixture(t, { aggregateVersion: 5, messages: [message("keep")] });
+  const before = await f.open();
+  await assert.rejects(
+    f.service.deleteFromMessage(deletion(f, "missing")),
+    (error) => error.statusCode === 404 && /anchor not found/.test(error.message),
+  );
+  await assert.rejects(
+    f.service.deleteFromMessage(deletion(f, "keep", { expectedAggregateVersion: 4 })),
+    (error) => error.statusCode === 409 && error.currentVersion === 5,
+  );
+  assert.equal((await f.open()).generation, before.generation);
+});
+
+test("deleteFromMessage rejects legacy and ambiguous anchors before accessing storage", async (t) => {
+  const f = await immutableMutationFixture(t);
+  t.mock.method(f.repository, "requireSessionReader", () =>
+    assert.fail("invalid request accessed storage"),
+  );
+  for (const anchor of [
+    { dialogProcessId: "legacy" },
+    { ts: mutationTime },
+    { turnScopeId: "a", messageUid: "b" },
+  ])
+    await assert.rejects(f.service.deleteFromMessage({ ...deletion(f), anchor }));
+});
+
+async function accept(f, scope) {
+  await f.commit({
+    turnTransition: {
+      eventType: "turn.action_accepted",
+      phase: "action",
+      action: "send",
       sessionId: "s1",
-      parentSessionId: "",
-      aggregateVersion: 1,
-      messages: [
-        { turnScopeId: "scope-keep", role: "user", content: "keep" },
-        { dialogId: "dp-legacy", role: "assistant", content: "delete" },
-        { turnScopeId: "scope-tail", role: "user", content: "delete too" },
-      ],
+      turnScopeId: scope,
+      dialogProcessId: `dialog-${scope}`,
+      presentationMessageId: `p:${scope}`,
+      executionId: `agent:${scope}`,
+      executionKind: "agent",
+      rootExecutionId: `agent:${scope}`,
+      commandId: `accept:${scope}`,
+      causationId: `accept:${scope}`,
     },
   });
+}
 
-  await assert.rejects(
-    service.deleteFromMessage({
-      userId: "u1",
-      sessionId: "s1",
-      anchor: { dialogProcessId: "dp-legacy" },
-    }),
-    (error) => error?.statusCode === 400 && /anchor is required/.test(error.message),
-  );
-  assert.equal(saved.length, 0);
-});
-
-test("SessionMessageService.deleteFromMessage returns 409 when expectedAggregateVersion conflicts", async () => {
-  const { service, saved } = createService({
-    initialSession: {
-      ...createTestSessionRequiredFields(),
-      sessionId: "s1",
-      parentSessionId: "",
-      aggregateVersion: 5,
-      messages: [{ turnScopeId: "scope-keep", role: "user", content: "keep" }],
-    },
-  });
-
-  await assert.rejects(
-    service.deleteFromMessage({
-      userId: "u1",
-      sessionId: "s1",
-      anchor: { turnScopeId: "scope-keep" },
-      expectedAggregateVersion: 4,
-      commandId: "delete-conflict",
-    }),
-    (error) => error?.statusCode === 409 && error?.currentVersion === 5,
-  );
-  assert.equal(saved.length, 0);
-});
-
-test("SessionMessageService.deleteFromMessage prunes write-time dialog facts of truncated turns", async () => {
-  const receipt = (checkpointId, uids, checkpointRevision) => ({
-    checkpointId,
-    checkpointRevision,
-    requestHash: `sha256:${checkpointId}`,
-    persistedMessageUids: uids,
-    summarizedMessageUids: uids,
-    retainedMessageUids: [],
-    markedCount: uids.length,
-    committedAt: "2026-01-01T00:00:00.000Z",
-  });
-  const { service, saved } = createService({
-    initialSession: {
-      ...createTestSessionRequiredFields(),
-      sessionId: "s1",
-      parentSessionId: "",
-      aggregateVersion: 1,
-      autoTitle: "stale title",
-      messages: [
+test("deleteFromMessage atomically removes lifecycle, summary, timing, command and pending outbox references", async (t) => {
+  const f = await immutableMutationFixture(t, { messages: [message("keep"), message("drop")] });
+  for (const scope of ["keep", "drop"]) {
+    await accept(f, scope);
+    await f.commit({
+      summaryCheckpoints: [
         {
-          messageUid: "k1",
-          dialogProcessId: "d-keep",
-          turnScopeId: "t-keep",
-          role: "user",
-          content: "kept question",
-        },
-        { messageUid: "x1", dialogProcessId: "d-drop", turnScopeId: "t-drop", role: "user" },
-      ],
-      dialogOrder: [
-        {
-          dialogProcessId: "d-keep",
-          turnScopeId: "t-keep",
-          userMessageUid: "k1",
-          dialogOrdinal: 1,
-        },
-        {
-          dialogProcessId: "d-drop",
-          turnScopeId: "t-drop",
-          userMessageUid: "x1",
-          dialogOrdinal: 2,
+          userId: "u1",
+          sessionId: "s1",
+          dialogProcessId: `dialog-${scope}`,
+          turnScopeId: scope,
+          checkpointId: `cp:${scope}`,
+          expectedCheckpointRevision: 0,
+          messages: [],
+          persistedMessageUids: [],
+          summarizedMessageUids: [scope],
+          retainedMessageUids: [],
         },
       ],
-      turnSummaryCheckpoints: {
-        "t-keep": {
-          dialogProcessId: "d-keep",
-          turnScopeId: "t-keep",
-          checkpointRevision: 2,
-          receipts: [receipt("keep", ["k1"], 1), receipt("cross", ["k1", "x1"], 2)],
+      timings: [{ turnScopeId: scope, dialogProcessId: `dialog-${scope}`, modelLoopRound: 1 }],
+    });
+    for (const [eventType, phase, extra] of [
+      ["turn.processing_started", "processing", {}],
+      ["turn.processing_completed", "completion", { completionCommitId: `completed:${scope}` }],
+      [
+        "turn.completed",
+        "completion",
+        { commandId: `completed:${scope}`, terminalStatus: { command: "completed" } },
+      ],
+    ])
+      await f.commit({
+        turnTransition: {
+          eventType,
+          phase,
+          sessionId: "s1",
+          turnScopeId: scope,
+          commandId: `${eventType}:${scope}`,
+          causationId: `${eventType}:${scope}`,
+          ...extra,
         },
-        "t-drop": {
-          dialogProcessId: "d-drop",
-          turnScopeId: "t-drop",
-          checkpointRevision: 1,
-          receipts: [receipt("drop", ["x1"], 1)],
-        },
-      },
-    },
-  });
-
-  await service.deleteFromMessage({
-    userId: "u1",
-    sessionId: "s1",
-    anchor: { turnScopeId: "t-drop" },
-    expectedAggregateVersion: 1,
-    commandId: "delete-dialog-facts",
-  });
-
+      });
+  }
+  const before = await f.open();
+  const events = (await before.readOutboxPage({ consumerId: "client" })).events;
+  assert.equal(events.length, 8);
+  await f.service.deleteFromMessage(deletion(f));
+  const after = await f.open();
+  assert.equal(after.generation, before.generation + 1);
+  for (const scope of ["keep", "drop"]) {
+    const removed = scope === "drop";
+    assert.equal((await after.readTurnState(scope)) === null, removed);
+    assert.equal((await after.readCheckpoint(scope, `cp:${scope}`)) === null, removed);
+    assert.equal((await after.readTurnTiming(scope)) === null, removed);
+    assert.equal((await after.readCommand(`accept:${scope}`)) === null, removed);
+  }
+  assert.equal((await after.readOutboxPage({ consumerId: "client" })).events.length, 4);
+  assert.equal((await before.readOutboxPage({ consumerId: "client" })).events.length, 8);
   assert.deepEqual(
-    saved[0].dialogOrder.map((entry) => entry.dialogProcessId),
-    ["d-keep"],
-  );
-  assert.equal(saved[0].autoTitle, "kept question");
-  assert.deepEqual(Object.keys(saved[0].turnSummaryCheckpoints), ["t-keep"]);
-  assert.deepEqual(
-    saved[0].turnSummaryCheckpoints["t-keep"].receipts.map((item) => item.checkpointId),
+    (await after.exportSession()).dialogOrder.map((item) => item.turnScopeId),
     ["keep"],
   );
+  assert.equal((await after.readMetadata()).autoTitle, "keep");
+});
+
+test("deleteFromMessage recomputes the title when removing all messages", async (t) => {
+  const f = await immutableMutationFixture(t, { messages: [message("drop")] });
+  await f.service.deleteFromMessage(deletion(f));
+  const after = await f.open();
+  assert.equal((await after.readFacts()).messageCount, 0);
+  assert.equal((await after.readMetadata()).autoTitle, undefined);
+  assert.deepEqual((await after.exportSession()).dialogOrder, []);
+});
+
+test("deleteFromMessage exposes no partial state on head failure and retries the same command", async (t) => {
+  const f = await immutableMutationFixture(t, { messages: [message("keep"), message("drop")] });
+  const before = await f.open();
+  setFsAdapter({
+    rename: async (source, target) => {
+      if (target === `${f.scope.sessionDir}/head.json`)
+        throw Object.assign(new Error("injected"), { code: "EIO" });
+      return rename(source, target);
+    },
+  });
+  try {
+    await assert.rejects(f.service.deleteFromMessage(deletion(f)), {
+      code: "SESSION_COMMIT_UNCERTAIN",
+    });
+  } finally {
+    resetFsAdapter();
+  }
+  const failed = await f.open();
+  assert.equal(failed.generation, before.generation);
+  assert.notEqual(await failed.readMessage("drop"), null);
+  assert.equal(await failed.readCommand("delete-tail"), null);
+  await f.service.deleteFromMessage(deletion(f));
+  assert.equal(await (await f.open()).readMessage("drop"), null);
 });

@@ -49,9 +49,10 @@ import {
   summarizeDiagnosticBlocks,
   summarizeDiagnosticMessages,
 } from "@noobot/context-protocol/assembly/diagnostics";
-import { peekMainFlowFinalNoToolsTurnInstruction } from "../main-flow-control.js";
 import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import { consumeSummaryCheckpointCommand } from "../summary-checkpoint-command.js";
+import { maybeRequestPhaseSummary } from "../loop-control.js";
+import { consumePhaseSummaryCommand } from "../summary/phase-summary.js";
 import { projectToolDefinitionContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import {
   beginAssistantMessageEventStream,
@@ -72,13 +73,13 @@ function assertHookContextRetainsModelContext(runtime, hookContext) {
 
 function traceActiveModelContext(runtime, stage, extra) {
   const modelContext = requireActiveModelContext(runtime);
-  emitModelContextTrace(runtime.eventListener, stage, {
+  emitModelContextTrace(runtime.eventListener, stage, () => ({
     turn: extra.turn,
     mode: extra.mode,
     blocks: summarizeDiagnosticBlocks(modelContext.messageBlocks),
     messages: summarizeDiagnosticMessages(modelContext.messages),
     ...extra,
-  });
+  }));
 }
 
 function syncMessagesFromBlocks(runtime) {
@@ -161,6 +162,33 @@ async function invokeNoToolsModel({
   }
 }
 
+async function prepareTurnModelContext({
+  modelState,
+  loopState,
+  turn,
+  beforeLlmHookContext,
+  mode,
+}) {
+  const { runtime } = modelState;
+  await runAgentRuntimeHook({
+    runtime,
+    point: HOOK_POINT.AGENT.BEFORE_LLM_CALL,
+    context: beforeLlmHookContext,
+  });
+  emitModelContextTrace(runtime.eventListener, "before_llm_hook_context_output", () => ({
+    turn,
+    mode,
+    hookBlocks: summarizeDiagnosticBlocks(beforeLlmHookContext.modelContext?.messageBlocks),
+    hookMessages: summarizeDiagnosticMessages(beforeLlmHookContext.modelContext?.messages),
+  }));
+  assertHookContextRetainsModelContext(runtime, beforeLlmHookContext);
+  await consumeSummaryCheckpointCommand({ runtime, eventListener: runtime.eventListener, turn });
+  await maybeRequestPhaseSummary({ modelState, loopState });
+  await consumePhaseSummaryCommand({ modelState, turn });
+  syncMessagesFromBlocks(runtime);
+  traceActiveModelContext(runtime, "before_llm_final_composed", { turn, mode });
+}
+
 export async function invokeNoToolsTurn({
   modelState,
   loopState,
@@ -189,22 +217,11 @@ export async function invokeNoToolsTurn({
     maxTurns: Number(loopState?.maxTurns || 0),
     agentContext: modelState.agentContext,
   });
-  await runAgentRuntimeHook({
-    runtime,
-    point: HOOK_POINT.AGENT.BEFORE_LLM_CALL,
-    context: beforeLlmHookContext,
-  });
-  emitModelContextTrace(runtime.eventListener, "before_llm_hook_context_output", {
+  await prepareTurnModelContext({
+    modelState,
+    loopState,
     turn,
-    mode: "no_tools",
-    hookBlocks: summarizeDiagnosticBlocks(beforeLlmHookContext.modelContext?.messageBlocks),
-    hookMessages: summarizeDiagnosticMessages(beforeLlmHookContext.modelContext?.messages),
-  });
-  assertHookContextRetainsModelContext(runtime, beforeLlmHookContext);
-  await consumeSummaryCheckpointCommand({ runtime, eventListener, turn });
-  syncMessagesFromBlocks(runtime);
-  traceActiveModelContext(runtime, "before_llm_final_composed", {
-    turn,
+    beforeLlmHookContext,
     mode: "no_tools",
   });
 
@@ -314,39 +331,13 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     maxTurns: Number(loopState?.maxTurns || 0),
     agentContext: modelState.agentContext,
   });
-  await runAgentRuntimeHook({
-    runtime,
-    point: HOOK_POINT.AGENT.BEFORE_LLM_CALL,
-    context: beforeLlmHookContext,
-  });
-  emitModelContextTrace(runtime.eventListener, "before_llm_hook_context_output", {
+  await prepareTurnModelContext({
+    modelState,
+    loopState,
     turn,
-    mode: "with_tools",
-    hookBlocks: summarizeDiagnosticBlocks(beforeLlmHookContext.modelContext?.messageBlocks),
-    hookMessages: summarizeDiagnosticMessages(beforeLlmHookContext.modelContext?.messages),
-  });
-  assertHookContextRetainsModelContext(runtime, beforeLlmHookContext);
-  await consumeSummaryCheckpointCommand({ runtime, eventListener, turn });
-  syncMessagesFromBlocks(runtime);
-  traceActiveModelContext(runtime, "before_llm_final_composed", {
-    turn,
+    beforeLlmHookContext,
     mode: "with_tools",
   });
-
-  const mainFlowFinalNoToolsInstruction = peekMainFlowFinalNoToolsTurnInstruction(runtime);
-  if (mainFlowFinalNoToolsInstruction) {
-    emitEvent(eventListener, "with_tools_llm_call_skipped_for_main_flow_instruction", {
-      turn,
-      action: mainFlowFinalNoToolsInstruction.action,
-      reason: mainFlowFinalNoToolsInstruction.reason,
-      source: mainFlowFinalNoToolsInstruction.source,
-    });
-    return {
-      mainFlowFinalNoToolsRequested: true,
-      traces,
-      toolMap,
-    };
-  }
 
   const currentModelLoopRound = Number(systemRuntime?.modelLoopRound || 0);
   const modelLoopRound =

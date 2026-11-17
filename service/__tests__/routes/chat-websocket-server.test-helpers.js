@@ -347,9 +347,16 @@ export async function startServerWithWs({
       return { acknowledged: true, delivered };
     },
     compactAuthorityEvents: async ({ retainDeliveredAfter }) => {
-      const result = compactAuthorityEventOutbox(authorityEventOutbox, { retainDeliveredAfter });
+      const result = compactAuthorityEventOutbox(
+        normalizeAuthorityEventOutbox(authorityEventOutbox),
+        { retainDeliveredAfter },
+      );
       authorityEventOutbox = result.outbox;
-      return { compacted: result.compacted, removed: result.removed };
+      return {
+        compacted: result.compacted,
+        removed: result.removed,
+        nextRetainedDeliveryAt: result.nextRetainedDeliveryAt,
+      };
     },
   };
   const testBot = {

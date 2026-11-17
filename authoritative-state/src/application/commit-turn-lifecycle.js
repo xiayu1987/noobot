@@ -58,17 +58,19 @@ export function createCommittedTurnLifecycleEnvelope({ event, turn, eventId, par
   });
 }
 
-export function commitTurnLifecycle({
-  lifecycle,
-  event,
-  parentSessionId,
-  isCommittedEventId,
-  readPreparedEvent,
-  materializeTerminal,
-  createEventId,
-  now,
-}) {
-  assertTurnLifecycleRecordIntegrity(lifecycle);
+export function* prepareTurnLifecycleCommit(
+  {
+    lifecycle,
+    event,
+    parentSessionId,
+    isCommittedEventId,
+    readPreparedEvent,
+    materializeTerminal,
+    createEventId,
+    now,
+  },
+  transitionLifecycle,
+) {
   if (!isFunction(now)) throw new TypeError("commitTurnLifecycle requires an Authority clock");
   const requestFailure = validateTurnLifecycleRequest(event);
   if (requestFailure) return { applied: false, reason: requestFailure, lifecycle };
@@ -109,12 +111,15 @@ export function commitTurnLifecycle({
     };
   }
 
-  const transition = transitionTurnLifecycle(lifecycle, lifecycleEvent, commitClock);
+  const transition = transitionLifecycle(lifecycle, lifecycleEvent, commitClock);
   if (!transition.applied) {
     const { receipt, ...rejection } = transition;
+    const prepared = transition.deduplicated
+      ? yield () => readPreparedEvent(receipt.eventId)
+      : null;
     return {
       ...rejection,
-      ...(transition.deduplicated ? { envelope: readPreparedEvent(receipt.eventId).envelope } : {}),
+      ...(transition.deduplicated ? { envelope: prepared.envelope } : {}),
       committedEvent: null,
     };
   }
@@ -128,11 +133,14 @@ export function commitTurnLifecycle({
   const eventId = Object.hasOwn(event, "eventId")
     ? event.eventId
     : typeof createEventId === "function"
-      ? createEventId()
+      ? yield () => createEventId()
       : "";
   if (!isCanonicalText(eventId))
     return { applied: false, reason: "event_id_unavailable", lifecycle };
-  if (typeof isCommittedEventId === "function" && isCommittedEventId(eventId) === true) {
+  if (
+    typeof isCommittedEventId === "function" &&
+    (yield () => isCommittedEventId(eventId)) === true
+  ) {
     return { applied: false, reason: "event_id_conflict", lifecycle };
   }
   const envelope = createCommittedTurnLifecycleEnvelope({
@@ -143,11 +151,12 @@ export function commitTurnLifecycle({
   });
   if (requestedTerminal) {
     const { terminalStatus, summaryVersion } = turn;
-    terminalMaterialization = materializeTerminal({
-      event,
-      terminalStatus,
-      previousSummaryVersion: lifecycle.turns[event.turnScopeId].summaryVersion,
-    });
+    terminalMaterialization = yield () =>
+      materializeTerminal({
+        event,
+        terminalStatus,
+        previousSummaryVersion: lifecycle.turns[event.turnScopeId].summaryVersion,
+      });
     if (
       !terminalMaterialization?.materialized ||
       terminalMaterialization.terminalStatus !== terminalStatus ||
@@ -171,4 +180,12 @@ export function commitTurnLifecycle({
     committedEvent: { eventId, envelope, committedAt: turn.updatedAt },
     terminalMaterialization,
   };
+}
+
+export function commitTurnLifecycle(options) {
+  assertTurnLifecycleRecordIntegrity(options.lifecycle);
+  const flow = prepareTurnLifecycleCommit(options, transitionTurnLifecycle);
+  let step = flow.next();
+  while (!step.done) step = flow.next(step.value());
+  return step.value;
 }

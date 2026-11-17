@@ -19,18 +19,14 @@ export function createLlmDeltaVisibilityFilter() {
     state.carryText = "";
     while (index < sourceText.length) {
       if (sourceText[index] !== "<") {
-        if (!state.inThinkBlock) visibleText += sourceText[index];
+        visibleText += state.inThinkBlock ? "" : sourceText[index];
         index += 1;
         continue;
       }
       const remainingText = sourceText.slice(index);
       const matchedTag = tags.find((tagText) => remainingText.startsWith(tagText));
       if (matchedTag) {
-        if (openTags.includes(matchedTag)) {
-          state.inThinkBlock = true;
-        } else {
-          state.inThinkBlock = false;
-        }
+        state.inThinkBlock = openTags.includes(matchedTag);
         index += matchedTag.length;
         continue;
       }

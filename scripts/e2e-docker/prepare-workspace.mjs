@@ -17,6 +17,7 @@ import {
 import { text } from "@noobot/shared/value";
 import { mcpTestServers } from "../mcp-test-service/config.mjs";
 import { MOCK_MODEL, mockProvider } from "../mock-model-service/scenario.mjs";
+import { PERF_HARNESS_MODELS } from "../mock-model-service/performance-contract.mjs";
 import { BUILTIN_TOOL_IDS } from "../../agent/src/tools/constants/index.js";
 
 function configurePerformance(config) {
@@ -25,6 +26,9 @@ function configurePerformance(config) {
     ...config.providers,
     [MOCK_MODEL.alias]: mockProvider(),
     [`${MOCK_MODEL.alias}_alternate`]: mockProvider(),
+    ...Object.fromEntries(
+      Object.values(PERF_HARNESS_MODELS).map((model) => [model, { ...mockProvider(), model }]),
+    ),
   };
   config.services = {
     ...config.services,

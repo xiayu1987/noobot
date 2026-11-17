@@ -19,6 +19,7 @@ import { commitTurnLifecycle } from "@noobot/authoritative-state/application";
 import {
   acknowledgeAuthorityEventDelivery,
   compactAuthorityEventOutbox,
+  normalizeAuthorityEventOutbox,
   listPendingAuthorityEvents,
   recordAuthorityEventDeliveryAttempt,
 } from "@noobot/event-protocol";
@@ -30,7 +31,9 @@ import {
 import { transitionTurnLifecycle } from "@noobot/authoritative-state/domain";
 import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
 
-useProvisionedRuntimeEventsWorkspace(["primary-user"]);
+useProvisionedRuntimeEventsWorkspace(["primary-user"], {
+  "primary-user": ["s1", "s-backfill", "session-idle-stop", "s-without-turn"],
+});
 
 test("chat-websocket-server: stop persists and emits authoritative stop completion identity", async () => {
   let materializedEvent = null;
@@ -393,11 +396,18 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
           return { recorded: true };
         },
         compactAuthorityEvents: async ({ retainDeliveredAfter }) => {
-          const result = compactAuthorityEventOutbox(authorityEventOutbox, {
-            retainDeliveredAfter,
-          });
+          const result = compactAuthorityEventOutbox(
+            normalizeAuthorityEventOutbox(authorityEventOutbox),
+            {
+              retainDeliveredAfter,
+            },
+          );
           authorityEventOutbox = result.outbox;
-          return { compacted: result.compacted, removed: result.removed };
+          return {
+            compacted: result.compacted,
+            removed: result.removed,
+            nextRetainedDeliveryAt: result.nextRetainedDeliveryAt,
+          };
         },
         acknowledgeAuthorityEvents: async ({ consumerId, acknowledgements = [] } = {}) => {
           for (const receipt of acknowledgements) {

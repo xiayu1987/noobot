@@ -5,9 +5,19 @@
  */
 import { normalizeTurnLifecycleEntity } from "../domain/turn-lifecycle-entity.js";
 import { text as clean } from "@noobot/shared/value";
+import {
+  readIndexedTurnRemoval,
+  projectIndexedLifecycleResult,
+} from "../domain/indexed-turn-lifecycle.js";
 
 export function commitTurnDeletion({ lifecycle, turnScopeIds = [] } = {}) {
-  const normalizedLifecycle = normalizeTurnLifecycleEntity(lifecycle);
+  return commitPreparedTurnDeletion({
+    lifecycle: normalizeTurnLifecycleEntity(lifecycle),
+    turnScopeIds,
+  });
+}
+
+function commitPreparedTurnDeletion({ lifecycle: normalizedLifecycle, turnScopeIds }) {
   const deletedTurnScopeIds = [
     ...new Set((Array.isArray(turnScopeIds) ? turnScopeIds : []).map(clean).filter(Boolean)),
   ];
@@ -47,4 +57,12 @@ export function commitTurnDeletion({ lifecycle, turnScopeIds = [] } = {}) {
     removedTurnScopeIds: deletedTurnScopeIds,
     clearedContinuationSourceTurnScopeIds,
   };
+}
+
+export async function commitIndexedTurnDeletion(options) {
+  const { lifecycle, turnScopeIds } = await readIndexedTurnRemoval(options);
+  return projectIndexedLifecycleResult(
+    lifecycle,
+    commitPreparedTurnDeletion({ lifecycle: structuredClone(lifecycle), turnScopeIds }),
+  );
 }

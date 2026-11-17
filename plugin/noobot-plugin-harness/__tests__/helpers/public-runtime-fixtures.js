@@ -13,6 +13,7 @@ import {
 } from "@noobot/context-protocol";
 import {
   assertMainFlowControlPort,
+  createPhaseSummaryInstruction,
   createSummaryCheckpointInstruction,
 } from "@noobot/context-protocol/policy/main-flow-control";
 import {
@@ -35,6 +36,27 @@ import { text, isObjectLike } from "@noobot/shared/value";
 let testScopeSequence = 0;
 let testTransferSequence = 0;
 let testModelResponseSequence = 0;
+
+export function createTestSummaryMessageBlocks() {
+  return {
+    system: [],
+    history: [],
+    incremental: [
+      { role: "user", content: "继续" },
+      {
+        role: "assistant",
+        content: "",
+        tool_calls: [{ id: "summary-work", function: { name: "execute_script" } }],
+      },
+      {
+        role: "tool",
+        content: '{"ok":true}',
+        tool_call_id: "summary-work",
+        toolName: "execute_script",
+      },
+    ],
+  };
+}
 
 export function createTestModelResponse(
   outputText = "",
@@ -179,8 +201,26 @@ function initializeTestSemanticTransfer(agentContext = {}) {
 const testMainFlowControlRecords = new WeakMap();
 
 export function createTestMainFlowControlPort() {
-  const record = { summaryCheckpoints: [], finalNoToolsTurnEngaged: false };
+  const record = {
+    summaryCheckpoints: [],
+    phaseSummaries: [],
+    summarySchedulingOwner: null,
+    finalNoToolsTurnEngaged: false,
+  };
   const port = assertMainFlowControlPort({
+    claimSummaryScheduling({ source }) {
+      if (record.summarySchedulingOwner && record.summarySchedulingOwner !== source) {
+        throw new Error("summary scheduling already has an owner");
+      }
+      record.summarySchedulingOwner = source;
+    },
+    requestPhaseSummary(input) {
+      const instruction = createPhaseSummaryInstruction(input);
+      record.phaseSummaries.push(instruction);
+      return instruction;
+    },
+    hasPendingSummary: () =>
+      record.phaseSummaries.length > 0 || record.summaryCheckpoints.length > 0,
     requestSummaryCheckpoint(input) {
       const instruction = createSummaryCheckpointInstruction(input);
       record.summaryCheckpoints.push(instruction);

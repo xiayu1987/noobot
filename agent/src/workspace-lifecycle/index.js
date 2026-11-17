@@ -29,6 +29,7 @@ import {
 import { text } from "@noobot/shared/value";
 import { requireStorageService } from "../session/storage-service.js";
 import { retireDirectoryLockIfPresent } from "./directory-lock-retirement.js";
+import { repairSessionContextIndexes } from "./session-immutable-storage-upgrade.js";
 
 const workspaceMutationCoordinator = new FileMutationCoordinator({
   timeoutMessage: "workspace mutation lock timeout",
@@ -117,6 +118,7 @@ async function runWorkspaceOperation({
   scopedSessionRoots,
   storageService,
   reportProgress,
+  readSessionOperationInput,
 }) {
   const backupBase = resolveWorkspaceBackupBase(base);
   const backup = createSectionBackup(backupBase, base);
@@ -133,8 +135,19 @@ async function runWorkspaceOperation({
     scopedSessionRoots,
     storageService,
     reportProgress,
+    readSessionOperationInput,
   });
   await ensureRuntimeDirectories(base);
+  if (
+    operation === WORKSPACE_OPERATION.REPAIR &&
+    !report.layoutUpgrades.some((upgrade) => upgrade.failed)
+  ) {
+    report.sessionContextIndexes = await repairSessionContextIndexes({
+      base,
+      scopedSessionRoots,
+      storageService,
+    });
+  }
   if (operation !== WORKSPACE_OPERATION.RESET || selected.has(WORKSPACE_SECTION.CONFIG)) {
     const { modelLibraryUpgrade, ...config } = await repairConfigSection({
       base,
@@ -176,6 +189,7 @@ async function withWorkspace(options, operation, sections) {
       scopedSessionRoots: options.scopedSessionRoots,
       storageService,
       reportProgress: options.onProgress,
+      readSessionOperationInput: options.readSessionOperationInput,
     });
     return { base, report };
   });

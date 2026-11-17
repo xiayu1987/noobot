@@ -10,6 +10,7 @@ import {
   resolveSessionPrimaryId as resolveSessionPrimaryIdInList,
 } from "../../../chat/model/sessionIdentity.js";
 import {
+  hasCurrentSessionDetail,
   mapDetailEntryToSession,
   mapSummaryEntryToSession,
   reconcileSessionObject,
@@ -83,7 +84,7 @@ export function createSessionListActions({
       refreshSessionConnectorsAsync(targetPrimaryId);
       return;
     }
-    if (target.loaded && !force && !requireFresh) {
+    if (!force && !requireFresh && hasCurrentSessionDetail(target)) {
       const detail = requireLoadedSessionDetail(target);
       onSessionDetailApplied({
         detail,

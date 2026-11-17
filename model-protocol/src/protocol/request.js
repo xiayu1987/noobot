@@ -50,7 +50,13 @@ export function createModelRequest(input = {}) {
   requireModelOperationCapability(model, operation);
   if (!Array.isArray(input.messages))
     throw new TypeError("model request.messages must be an array");
-  for (const key of ["signal", "callbacks", "stream", "streaming"]) {
+  if (input.options?.streamingRequired !== undefined) {
+    if (typeof input.options.streamingRequired !== "boolean")
+      throw new TypeError("model request.options.streamingRequired must be boolean");
+    if (input.options.streamingRequired && input.options.streaming !== true)
+      throw new TypeError("streamingRequired requires streaming=true");
+  }
+  for (const key of ["signal", "callbacks", "stream", "streaming", "streamingRequired"]) {
     if (Object.hasOwn(input.options?.invoke || {}, key))
       throw new TypeError(`model request.options.invoke.${key} is owned by the executor`);
   }

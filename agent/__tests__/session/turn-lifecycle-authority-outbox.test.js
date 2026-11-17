@@ -15,6 +15,54 @@ import {
   now,
 } from "./turn-lifecycle-session-contract.test-helpers.js";
 
+test("attempt responses match committed events without reopening the session, including delivered events", async () => {
+  const h = harness();
+  const accepted = await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.ACTION_ACCEPTED, "attempt-projection", 0, {
+      action: "send",
+      phase: TURN_PHASE.ACTION,
+    }),
+  );
+  const receipt = deliveryReceiptOf(accepted.envelope);
+  const request = {
+    userId: "u1",
+    sessionId: "s1",
+    consumerId: receipt.consumerId,
+    eventIds: [receipt.eventId],
+  };
+  const repo = h.service.sessionRepo;
+  const withReader = repo.withSessionReader.bind(repo);
+  let reads = 0;
+  repo.withSessionReader = (...args) => {
+    reads += 1;
+    return withReader(...args);
+  };
+  for (let attempts = 1; attempts <= 2; attempts += 1) {
+    reads = 0;
+    const result = await h.service.recordAuthorityEventAttempts(request);
+    assert.equal(reads, 1);
+    assert.equal(result.recorded, true);
+    assert.deepEqual(result.events, [await h.outboxEntry(receipt.eventId)]);
+    assert.equal(
+      authorityEventConsumerDelivery(result.events[0], receipt.consumerId).attempts,
+      attempts,
+    );
+  }
+  await h.service.acknowledgeAuthorityEvents({
+    ...request,
+    acknowledgements: [receipt],
+  });
+  reads = 0;
+  const delivered = await h.service.recordAuthorityEventAttempts(request);
+  assert.equal(reads, 1);
+  assert.deepEqual(delivered.events, [await h.outboxEntry(receipt.eventId)]);
+  assert.equal(authorityEventConsumerDelivery(delivered.events[0], receipt.consumerId).attempts, 2);
+  assert.equal(
+    authorityEventConsumerDelivery(delivered.events[0], receipt.consumerId).deliveredAt,
+    now(),
+  );
+});
+
 test("authority outbox delivery is read, attempted, and acknowledged through the session transaction", async () => {
   const h = harness();
   const accepted = await h.service.applyTurnLifecycleEvent(
@@ -126,7 +174,7 @@ test("authority outbox delivery mutations remain atomic when session persistence
   const receipt = deliveryReceiptOf(accepted.envelope);
   const { eventId } = receipt;
 
-  let restore = h.failOutboxJournal();
+  let restore = h.failOutboxCommit();
   await assert.rejects(() =>
     h.service.recordAuthorityEventAttempts({
       userId: "u1",
@@ -141,7 +189,7 @@ test("authority outbox delivery mutations remain atomic when session persistence
     0,
   );
 
-  restore = h.failOutboxJournal();
+  restore = h.failOutboxCommit();
   await assert.rejects(() =>
     h.service.acknowledgeAuthorityEvents({
       userId: "u1",
@@ -185,7 +233,7 @@ test("authority outbox compaction is explicit, receipt-safe, and atomic on persi
   );
   assert.equal((await h.outbox()).length, 1);
 
-  const restore = h.failOutboxJournal();
+  const restore = h.failOutboxCommit();
   await assert.rejects(() =>
     h.service.compactAuthorityEvents({
       userId: "u1",

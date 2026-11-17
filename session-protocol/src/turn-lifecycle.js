@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text as clean, isCanonicalText, isObjectLike } from "@noobot/shared/value";
+import { text as clean, isCanonicalText, isObjectLike, isPlainObject } from "@noobot/shared/value";
 import { normalizeExecutionIdentity } from "./execution-lifecycle.js";
 import { projectTurnLifecycleRuntimeEvent } from "./runtime-event.js";
 import {
@@ -28,6 +28,7 @@ import {
 } from "./lifecycle/turn-commit-action.js";
 import {
   isCompletionCommitTurnEvent,
+  isSettlingTurnEvent,
   isTerminalTurnEvent,
   TURN_COMMAND,
   TURN_EVENT,
@@ -56,6 +57,7 @@ import {
 
 export {
   deriveAuthoritativeTurnCapabilities,
+  isSettlingTurnEvent,
   isTerminalTurnEvent,
   isTerminalTurnState,
   normalizeTurnContinuationSource,
@@ -141,6 +143,10 @@ export function validateTurnLifecycleReceipt(receipt) {
 }
 
 export function validateSessionProvisionIntent(input = {}) {
+  if (input.initialSessionMetadata !== undefined && input.createSessionIfAbsent !== true)
+    return { valid: false, requested: false, errors: ["metadata_requires_session_provision"] };
+  if (input.initialSessionMetadata !== undefined && !isPlainObject(input.initialSessionMetadata))
+    return { valid: false, requested: true, errors: ["invalid_initial_session_metadata"] };
   if (input.createSessionIfAbsent === undefined || input.createSessionIfAbsent === false) {
     return { valid: true, requested: false, errors: [] };
   }
@@ -220,6 +226,21 @@ function collectSnapshotRuntimeErrors(turn) {
   return errors;
 }
 
+function collectMaterializedTurnErrors(turns, snapshot, errors) {
+  for (const turn of turns) {
+    if (!isObjectLike(turn)) {
+      errors.push("invalid_snapshot_turn");
+      continue;
+    }
+    if (!isCanonicalText(turn.sessionId)) errors.push("missing_turn_session_id");
+    errors.push(...collectSnapshotTurnFieldErrors(turn));
+    errors.push(...collectSnapshotRuntimeErrors(turn));
+    if (turn.sessionId !== snapshot.sessionId) errors.push("turn_session_identity_mismatch");
+    if (Number.isInteger(turn.sequence) && turn.sequence >= 1 && turn.sequence > snapshot.sequence)
+      errors.push("turn_sequence_exceeds_snapshot");
+  }
+}
+
 export function validateTurnLifecycleSnapshot(snapshot = {}) {
   if (!isObjectLike(snapshot)) {
     return { valid: false, errors: ["snapshot_not_object"] };
@@ -243,18 +264,7 @@ export function validateTurnLifecycleSnapshot(snapshot = {}) {
     snapshot.activeTurn === null
       ? snapshot.recentTerminalTurns
       : [snapshot.activeTurn, ...snapshot.recentTerminalTurns];
-  for (const turn of turns) {
-    if (!isObjectLike(turn)) {
-      errors.push("invalid_snapshot_turn");
-      continue;
-    }
-    if (!isCanonicalText(turn.sessionId)) errors.push("missing_turn_session_id");
-    errors.push(...collectSnapshotTurnFieldErrors(turn));
-    errors.push(...collectSnapshotRuntimeErrors(turn));
-    if (turn.sessionId !== snapshot.sessionId) errors.push("turn_session_identity_mismatch");
-    if (Number.isInteger(turn.sequence) && turn.sequence >= 1 && turn.sequence > snapshot.sequence)
-      errors.push("turn_sequence_exceeds_snapshot");
-  }
+  collectMaterializedTurnErrors(turns, snapshot, errors);
   if (!Array.isArray(snapshot.replacedTurns)) errors.push("missing_replaced_turns");
   const replacementScopes = collectReplacementErrors(snapshot, errors);
   const materializedTurnScopes = new Set(
@@ -342,9 +352,9 @@ export function createTurnLifecycleEnvelope({
     startedAt,
     finishedAt,
     occurredAt,
-    capabilities: capabilities && typeof capabilities === "object" ? capabilities : undefined,
+    capabilities: isObjectLike(capabilities) ? capabilities : undefined,
     failure: failure === null ? undefined : failure,
-    payload: payload && typeof payload === "object" ? payload : {},
+    payload: isObjectLike(payload) ? payload : {},
     continuationSource: normalizeTurnContinuationSource(continuationSource) || undefined,
     continuedByTurnScopeId: requireOptionalCanonicalTurnScopeId(continuedByTurnScopeId),
     executionId: executionIdentity.executionId,
@@ -357,6 +367,41 @@ export function createTurnLifecycleEnvelope({
   return envelope;
 }
 
+function collectEnvelopeTimeErrors(envelope, errors) {
+  if (!isCanonicalText(envelope.occurredAt)) errors.push("missing_occurred_at");
+  if (!isCanonicalText(envelope.startedAt)) errors.push("missing_started_at");
+  if (envelope.finishedAt !== "" && !isCanonicalText(envelope.finishedAt))
+    errors.push("invalid_finished_at");
+  else if (isTerminalTurnState(envelope.state) && envelope.finishedAt === "")
+    errors.push("missing_finished_at");
+}
+
+function collectEnvelopeTransitionErrors(envelope, errors) {
+  const eventType = clean(envelope.eventType);
+  const phase = clean(envelope.phase);
+  const expectedState =
+    eventType === TURN_EVENT.FAILED ? FAILED_PHASE_STATE[phase] : EVENT_STATE[eventType];
+  const expectedPhase = eventType === TURN_EVENT.FAILED ? phase : EVENT_PHASE[eventType];
+  if (!expectedPhase || phase !== expectedPhase) errors.push("event_phase_mismatch");
+  if (!expectedState || clean(envelope.state) !== expectedState)
+    errors.push("event_state_mismatch");
+  if (envelope.persistenceScope !== undefined) errors.push("unsupported_persistence_scope");
+  if (eventType === TURN_EVENT.ACTION_ACCEPTED && isTurnCommitContinuation(envelope.action)) {
+    if (!normalizeTurnContinuationSource(envelope.continuationSource))
+      errors.push("missing_continuation_source");
+  } else if (
+    eventType === TURN_EVENT.ACTION_ACCEPTED &&
+    envelope.continuationSource !== undefined
+  ) {
+    errors.push("unexpected_continuation_source");
+  }
+  if (isCompletionCommitTurnEvent(envelope.eventType)) {
+    if (!clean(envelope.completionCommitId)) errors.push("missing_completion_commit_id");
+    if (!Number.isSafeInteger(envelope.summaryVersion) || envelope.summaryVersion < 1)
+      errors.push("invalid_completion_summary_version");
+  }
+}
+
 export function validateTurnLifecycleEnvelope(envelope) {
   if (!isObjectLike(envelope)) return { valid: false, errors: ["invalid_turn_lifecycle_envelope"] };
   const errors = [];
@@ -364,12 +409,7 @@ export function validateTurnLifecycleEnvelope(envelope) {
     errors.push("unsupported_protocol_version");
   if (!EVENT_VALUES.has(envelope.eventType)) errors.push("invalid_event_type");
   if (!isCanonicalText(envelope.eventId)) errors.push("missing_event_id");
-  if (!isCanonicalText(envelope.occurredAt)) errors.push("missing_occurred_at");
-  if (!isCanonicalText(envelope.startedAt)) errors.push("missing_started_at");
-  if (envelope.finishedAt !== "" && !isCanonicalText(envelope.finishedAt))
-    errors.push("invalid_finished_at");
-  else if (isTerminalTurnState(envelope.state) && envelope.finishedAt === "")
-    errors.push("missing_finished_at");
+  collectEnvelopeTimeErrors(envelope, errors);
   if (!isCanonicalText(envelope.sessionId)) errors.push("missing_session_id");
   errors.push(...collectTurnScopeIdErrors(envelope.turnScopeId));
   errors.push(
@@ -382,32 +422,7 @@ export function validateTurnLifecycleEnvelope(envelope) {
   errors.push(...collectParentSessionIdErrors(envelope.parentSessionId));
   errors.push(...collectPositiveIntegerErrors(envelope.revision, "invalid_revision"));
   errors.push(...collectPositiveIntegerErrors(envelope.sequence, "invalid_sequence"));
-  const eventType = clean(envelope.eventType);
-  const phase = clean(envelope.phase);
-  const expectedState =
-    eventType === TURN_EVENT.FAILED ? FAILED_PHASE_STATE[phase] : EVENT_STATE[eventType];
-  const expectedPhase = eventType === TURN_EVENT.FAILED ? phase : EVENT_PHASE[eventType];
-  if (!expectedPhase || phase !== expectedPhase) errors.push("event_phase_mismatch");
-  if (!expectedState || clean(envelope.state) !== expectedState)
-    errors.push("event_state_mismatch");
-  if (envelope.persistenceScope !== undefined) errors.push("unsupported_persistence_scope");
-  if (
-    clean(envelope.eventType) === TURN_EVENT.ACTION_ACCEPTED &&
-    isTurnCommitContinuation(envelope.action)
-  ) {
-    if (!normalizeTurnContinuationSource(envelope.continuationSource))
-      errors.push("missing_continuation_source");
-  } else if (
-    clean(envelope.eventType) === TURN_EVENT.ACTION_ACCEPTED &&
-    envelope.continuationSource !== undefined
-  ) {
-    errors.push("unexpected_continuation_source");
-  }
-  if (isCompletionCommitTurnEvent(envelope.eventType)) {
-    if (!clean(envelope.completionCommitId)) errors.push("missing_completion_commit_id");
-    if (!Number.isSafeInteger(envelope.summaryVersion) || envelope.summaryVersion < 1)
-      errors.push("invalid_completion_summary_version");
-  }
+  collectEnvelopeTransitionErrors(envelope, errors);
   if (errors.length === 0) {
     try {
       projectTurnLifecycleRuntimeEvent(envelope);

@@ -97,3 +97,19 @@ test("turn timing projection rejects missing containers, invalid records and for
     { code: "SESSION_TURN_TIMING_CONFLICT" },
   );
 });
+
+test("turn timing projection merges complementary records and rejects conflicting duplicates", () => {
+  const turn = { ...base, state: "completed" };
+  const timings = [
+    { ...base, modelLoopRound: 2 },
+    { ...base, thinkingFinishedAt: FINISHED_AT },
+  ];
+  assert.deepEqual(projectTurnTiming(turn, timings), { ...turn, thinkingFinishedAt: FINISHED_AT });
+  assert.deepEqual(projectTurnTiming(turn, [...timings].reverse()), {
+    ...turn,
+    thinkingFinishedAt: FINISHED_AT,
+  });
+  assert.throws(() => projectTurnTiming(turn, [...timings, { ...base, modelLoopRound: 3 }]), {
+    code: "SESSION_TURN_TIMING_CONFLICT",
+  });
+});

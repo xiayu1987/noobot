@@ -49,7 +49,7 @@ const resolveModelIncrementalMessages = (options = {}) =>
 const resolveModelSystemMessages = (options = {}) =>
   protocolResolveModelSystemMessages(projectWindowOptions(options));
 
-const boundaryPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
+const boundaryPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE);
 
 const MAIN_MODEL_HISTORY_ROUND_LIMIT = TURN_THRESHOLDS.session.mainModelHistoryRoundLimit;
 const resolveMainModelFinalMessages = (options = {}) =>

@@ -11,6 +11,7 @@ import { text } from "@noobot/shared/value";
 export {
   CONTEXT_INJECTED_MESSAGE_TYPE,
   CONTEXT_CONTROL_MESSAGE_TYPES,
+  CONTEXT_RUNTIME_INJECTED_MESSAGE_TYPES,
   SUMMARY_ALWAYS_RETAINED_INJECTED_MESSAGE_TYPES,
 } from "../message/injected-types.js";
 

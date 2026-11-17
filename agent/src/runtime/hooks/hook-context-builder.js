@@ -92,13 +92,13 @@ function emitHookDocumentConsumed(runtime, context) {
 function emitHookContextTrace(point, runtime, context) {
   const normalizedPoint = text(point);
   if (normalizedPoint !== HOOK_POINT.AGENT.BEFORE_LLM_CALL) return;
-  emitModelContextTrace(runtime.eventListener, "hook_context_built", {
+  emitModelContextTrace(runtime.eventListener, "hook_context_built", () => ({
     point: normalizedPoint,
     mode: context.mode,
     turn: context.turn,
     contextBlocks: summarizeDiagnosticBlocks(context.modelContext?.messageBlocks),
     contextMessages: summarizeDiagnosticMessages(context.modelContext?.messages),
-  });
+  }));
 }
 
 export function buildHookContext(point, runtime, raw) {

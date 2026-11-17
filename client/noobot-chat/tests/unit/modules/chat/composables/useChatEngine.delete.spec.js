@@ -27,78 +27,7 @@ import {
 } from "../../../helpers/sessionDetailFixture.js";
 
 describe("useChatEngine.delete", () => {
-  it("cascadeDeleteMessagesFrom resolves assistant target to user message and removes the user turn", () => {
-    const { engine, activeSession } = createHarness({ sessionId: "local-cascade" });
-    const first = {
-      turnScopeId: "scope-old",
-      dialogProcessId: "dp-old",
-      role: RoleEnum.USER,
-      content: "first",
-    };
-    const target = {
-      turnScopeId: "scope-old",
-      dialogProcessId: "dp-old",
-      role: RoleEnum.ASSISTANT,
-      content: "target",
-    };
-    const tail = {
-      messageUid: "m3",
-      turnScopeId: "scope-tail",
-      dialogProcessId: "dp-tail",
-      role: RoleEnum.USER,
-      content: "tail",
-    };
-    activeSession.value.messages = [first, target, tail];
-    activeSession.value.rawMessages = [first, target, tail];
-    activeSession.value.messageCount = 3;
-    activeSession.value.lastMessage = tail;
-    const updatedAtBeforeCascade = activeSession.value.updatedAt;
-
-    expect(engine.cascadeDeleteMessagesFrom(target)).toBe(true);
-
-    expect(activeSession.value.messages).toEqual([]);
-    expect(activeSession.value.messageCount).toBe(0);
-    expect(activeSession.value.lastMessage).toBe(null);
-
-    expect(activeSession.value.updatedAt).toBe(updatedAtBeforeCascade);
-  });
-
-  it("cascadeDeleteMessagesFrom removes matching rawMessages even when they are not the same objects", () => {
-    const { engine, activeSession } = createHarness({ sessionId: "local-cascade-raw-copy" });
-    const first = {
-      messageUid: "m1",
-      role: RoleEnum.USER,
-      content: "first",
-      turnScopeId: "turn-1",
-      dialogProcessId: "dp-1",
-    };
-    const target = {
-      presentationMessageId: "m2",
-      role: RoleEnum.ASSISTANT,
-      content: "target",
-      turnScopeId: "turn-1",
-      dialogProcessId: "dp-1",
-    };
-    const tail = {
-      messageUid: "m3",
-      role: RoleEnum.USER,
-      content: "tail",
-      turnScopeId: "turn-2",
-      dialogProcessId: "dp-2",
-    };
-    activeSession.value.messages = [first, target, tail];
-    activeSession.value.rawMessages = [{ ...first }, { ...target }, { ...tail }];
-    activeSession.value.messageCount = 3;
-    activeSession.value.lastMessage = tail;
-
-    expect(engine.cascadeDeleteMessagesFrom(target)).toBe(true);
-
-    expect(activeSession.value.messages).toEqual([]);
-    expect(activeSession.value.messageCount).toBe(0);
-    expect(activeSession.value.lastMessage).toBe(null);
-  });
-
-  it("deleteMonotonicMessage waits for confirmed stop before cascading deletion from resolved user message", async () => {
+  it("deleteMonotonicMessage waits for confirmed stop before requesting deletion from the resolved user message", async () => {
     let stopConfirmed = false;
     let stopConfirmedBeforeDelete = false;
     const deleteSessionMessagesFromApi = vi.fn(async () => {
@@ -115,7 +44,7 @@ describe("useChatEngine.delete", () => {
     const applySessionDetail = applyMainEntryMessages(() => activeSession);
     const { engine, activeSession, deps, turnRuntimeRegistry } = createHarness({
       sessionId: "local-delete",
-      deps: { deleteSessionMessagesFromApi, applySessionDetail },
+      deps: { deleteSessionMessagesFromApi, applySessionMutation: applySessionDetail },
     });
     const first = {
       messageUid: "m1",
@@ -225,7 +154,7 @@ describe("useChatEngine.delete", () => {
     const applySessionDetail = applyMainEntryMessages(() => activeSession);
     const { engine, activeSession } = createHarness({
       sessionId: "local-delete-api",
-      deps: { deleteSessionMessagesFromApi, applySessionDetail },
+      deps: { deleteSessionMessagesFromApi, applySessionMutation: applySessionDetail },
     });
     const first = { turnScopeId: "client-turn:delete-1", role: RoleEnum.USER, content: "first" };
     const target = {
@@ -233,14 +162,8 @@ describe("useChatEngine.delete", () => {
       role: RoleEnum.ASSISTANT,
       content: "target",
     };
-    const tail = {
-      messageUid: "m3",
-      turnScopeId: "client-turn:delete-tail",
-      role: RoleEnum.USER,
-      content: "tail",
-    };
-    activeSession.value.messages = [first, target, tail];
-    activeSession.value.rawMessages = [first, target, tail];
+    activeSession.value.messages = [...backendMessages, first, target];
+    activeSession.value.rawMessages = [...backendMessages, first, target];
     activeSession.value.aggregateVersion = 2;
 
     await expect(engine.deleteMonotonicMessage(target)).resolves.toBe(true);
@@ -255,12 +178,8 @@ describe("useChatEngine.delete", () => {
     expect(applySessionDetail).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: "local-delete-api",
-        sessions: [
-          expect.objectContaining({
-            sessionId: "local-delete-api",
-            messages: backendMessages,
-          }),
-        ],
+        displayMessages: [],
+        deletedTurnScopeIds: ["client-turn:delete-1"],
       }),
     );
     expect(activeSession.value.messages).toEqual(backendMessages);
@@ -280,7 +199,7 @@ describe("useChatEngine.delete", () => {
     const applySessionDetail = applyMainEntryMessages(() => activeSession);
     const { engine, activeSession } = createHarness({
       sessionId: "local-delete-stopped-tail",
-      deps: { deleteSessionMessagesFromApi, applySessionDetail },
+      deps: { deleteSessionMessagesFromApi, applySessionMutation: applySessionDetail },
     });
     const first = {
       messageUid: "u1",
@@ -306,7 +225,8 @@ describe("useChatEngine.delete", () => {
     expect(applySessionDetail).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: "local-delete-stopped-tail",
-        sessions: [expect.objectContaining({ messages: [] })],
+        displayMessages: [],
+        deletedTurnScopeIds: ["turn-stopped-tail"],
       }),
     );
     expect(activeSession.value.messages).toEqual([]);
@@ -356,7 +276,7 @@ describe("useChatEngine.delete", () => {
     const applySessionDetail = applyMainEntryMessages(() => activeSession);
     const { engine, activeSession, sending, canStop, turnRuntimeRegistry, deps } = createHarness({
       sessionId: "local-delete-stopped-sending",
-      deps: { deleteSessionMessagesFromApi, applySessionDetail },
+      deps: { deleteSessionMessagesFromApi, applySessionMutation: applySessionDetail },
     });
     const first = {
       messageUid: "u1",
@@ -504,7 +424,7 @@ describe("useChatEngine.delete", () => {
     const applySessionDetail = vi.fn();
     const { engine, activeSession, turnRuntimeRegistry } = createHarness({
       sessionId,
-      deps: { deleteSessionMessagesFromApi, applySessionDetail },
+      deps: { deleteSessionMessagesFromApi, applySessionMutation: applySessionDetail },
     });
     const first = { messageUid: "u1", turnScopeId, role: RoleEnum.USER, content: "first" };
     const target = {

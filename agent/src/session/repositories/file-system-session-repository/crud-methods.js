@@ -3,27 +3,25 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { fatalSystemError } from "../../../shared/errors/index.js";
-import { tSystem } from "noobot-i18n/agent/system-text";
-import { ERROR_CODE } from "../../../shared/errors/constants.js";
+import { filePath as path } from "@noobot/path-resolver";
+import {
+  IMMUTABLE_SESSION_FORMAT_FILE,
+  IMMUTABLE_SESSION_HEAD_FILE,
+} from "@noobot/session-protocol/immutable-storage";
+import {
+  initializeImmutableSession,
+  publishImmutableSessionFormat,
+} from "../../session-artifact-session/immutable-session-bootstrap.js";
+import { openImmutableSessionReader } from "../../session-artifact-session/immutable-session-reader.js";
 import { fsMkdir, fsRm } from "../../../shared/storage/fs-adapter.js";
 import { normalizeSessionEntity } from "../../entities/session-entity.js";
 import {
-  SESSION_ARTIFACT_PREDECESSOR,
-  writeSessionArtifact,
-  writeSessionTurnArtifacts,
-} from "../../session-artifact-store.js";
-import {
   assertSessionScopeIdentity,
-  createAggregateVersionConflictError,
   createEmptyTurnLifecycle,
   createSessionDeletedError,
   createSessionNotFoundError,
-  requireSessionAggregateVersion,
 } from "@noobot/session-protocol";
 import { requireSessionCaller } from "@noobot/shared/session-caller";
-import { sessionTreeNodeMissingError } from "./access-methods.js";
-import { text } from "@noobot/shared/value";
 
 class SessionCrudMethods {
   async listSessionIds(userId) {
@@ -39,29 +37,80 @@ class SessionCrudMethods {
       userId,
       { sessionId, parentSessionId },
       async (scope) => {
-        if (await this.storageService.exists(scope.sessionFile)) {
-          if (scope.registered) return true;
-          throw sessionTreeNodeMissingError(sessionId);
-        }
+        await using recovered = await this.recoverImmutableSessionPlacement(userId, sessionId, {
+          scope,
+          persistenceContext,
+        });
+        if (recovered) return true;
         await fsMkdir(scope.sessionDir, { recursive: true });
         const payload = this.createInitialSession({
           sessionId,
           parentSessionId: scope.resolvedParentSessionId,
           caller,
         });
-        const { listFacts } = await writeSessionArtifact({
-          storageService: this.storageService,
-          sessionDir: scope.sessionDir,
-          sessionPayload: payload,
-          atomic: true,
-          predecessor: SESSION_ARTIFACT_PREDECESSOR.CANONICAL,
+        await this.createImmutableSession(userId, payload, {
+          sessionId,
+          scope,
+          persistenceContext,
         });
-        await this.commitSessionPlacement(userId, payload, persistenceContext);
-        await this.upsertSessionSummary(userId, payload, { listFacts, scope });
         return true;
       },
       { persistenceContext },
     );
+  }
+
+  async recoverImmutableSessionPlacement(userId, sessionId, { scope, persistenceContext }) {
+    const marked = await this.storageService.exists(
+      path.join(scope.sessionDir, IMMUTABLE_SESSION_FORMAT_FILE),
+    );
+    if (
+      !marked &&
+      !(await this.storageService.exists(path.join(scope.sessionDir, IMMUTABLE_SESSION_HEAD_FILE)))
+    ) {
+      if (await this.storageService.exists(scope.sessionFile)) {
+        throw Object.assign(new Error("Session storage requires an offline workspace upgrade"), {
+          code: "SESSION_IMMUTABLE_STORAGE_UPGRADE_REQUIRED",
+        });
+      }
+      return null;
+    }
+    const reader = await openImmutableSessionReader({
+      sessionDir: scope.sessionDir,
+      sessionId,
+      parentSessionId: scope.resolvedParentSessionId,
+    });
+    try {
+      if (!marked) await publishImmutableSessionFormat(scope.sessionDir);
+      if (!scope.registered) {
+        const metadata = await reader.readMetadata();
+        await this.commitSessionPlacement(userId, metadata, persistenceContext);
+      }
+      return reader;
+    } catch (error) {
+      await reader.close();
+      throw error;
+    }
+  }
+
+  async createImmutableSession(
+    userId,
+    session,
+    { sessionId, scope, persistenceContext, authorityEvents = [], scopedMetadata = null },
+  ) {
+    assertSessionScopeIdentity({
+      session,
+      sessionId,
+      parentSessionId: scope.resolvedParentSessionId,
+    });
+    await initializeImmutableSession({
+      sessionDir: scope.sessionDir,
+      session,
+      operationId: "create-session-immutable-v1",
+      authorityEvents,
+      outbox: authorityEvents,
+      scopedMetadata,
+    });
+    await this.commitSessionPlacement(userId, session, persistenceContext);
   }
 
   createInitialSession({ sessionId, parentSessionId, caller }) {
@@ -87,7 +136,7 @@ class SessionCrudMethods {
   async findById(userId, sessionId, { persistenceContext } = {}) {
     return this._findCanonicalSession(userId, sessionId, {
       persistenceContext,
-      read: (scope) => this._readNormalizedSession(scope, sessionId),
+      read: (reader) => reader.exportSession(),
     });
   }
 
@@ -97,8 +146,12 @@ class SessionCrudMethods {
     return this._throwSessionUnavailable(userId, sessionId);
   }
 
-  async requireTurnView(userId, sessionId, { turnScopeIds, persistenceContext }) {
-    const view = await this.findTurnView(userId, sessionId, { turnScopeIds, persistenceContext });
+  async requireTurnView(userId, sessionId, { turnScopeIds, messageUids, persistenceContext }) {
+    const view = await this.findTurnView(userId, sessionId, {
+      turnScopeIds,
+      messageUids,
+      persistenceContext,
+    });
     if (view) return view;
     return this._throwSessionUnavailable(userId, sessionId);
   }
@@ -110,131 +163,42 @@ class SessionCrudMethods {
     throw createSessionNotFoundError({ userId, sessionId });
   }
 
-  async findTurnView(userId, sessionId, { turnScopeIds, persistenceContext }) {
+  async findTurnView(userId, sessionId, { turnScopeIds, messageUids, persistenceContext }) {
     return this._findCanonicalSession(userId, sessionId, {
       persistenceContext,
-      read: (scope) => this._readNormalizedTurnView(scope, sessionId, turnScopeIds),
+      read: (reader) => reader.readTurnView({ turnScopeIds, messageUids }),
     });
   }
 
   async _findCanonicalSession(userId, sessionId, { persistenceContext, read }) {
     if (await this.isSessionDeleted(userId, sessionId)) return null;
     const scope = await this.locateSessionScope(userId, sessionId, persistenceContext);
-    if (!scope || !(await this.storageService.exists(scope.sessionFile))) return null;
-    return this._projectUnavailableOnFailure(userId, sessionId, scope, () => read(scope));
+    if (!scope) return null;
+    await using reader = await openImmutableSessionReader({
+      sessionDir: scope.sessionDir,
+      sessionId,
+      parentSessionId: scope.resolvedParentSessionId,
+    });
+    return await read(reader);
   }
 
   async readSelectedConnectorIds(userId, sessionId, { persistenceContext } = {}) {
     if (await this.isSessionDeleted(userId, sessionId)) {
       throw createSessionDeletedError({ userId, sessionId });
     }
-    const scope = await this.locateSessionScope(userId, sessionId, persistenceContext);
-    if (!scope || !(await this.storageService.exists(scope.sessionFile))) {
-      throw createSessionNotFoundError({ userId, sessionId });
-    }
-    const manifest = await this.storageService.readJson(scope.sessionFile);
-    assertSessionScopeIdentity({
-      session: manifest,
-      sessionId,
-      parentSessionId: scope.resolvedParentSessionId,
-    });
-    return this.normalizeSelectedConnectorIds(manifest.selectedConnectorIds);
-  }
-
-  async save(
-    userId,
-    session = {},
-    { expectedAggregateVersion, createOnly = false, persistenceContext } = {},
-  ) {
-    const versionExpected =
-      expectedAggregateVersion !== undefined && expectedAggregateVersion !== null;
-    return this._writeScopedSession(userId, session, {
+    const selected = await this._findCanonicalSession(userId, sessionId, {
       persistenceContext,
-      placement: createOnly,
-      write: async ({ sessionId, scope }) => {
-        const persistedForChecks =
-          createOnly || versionExpected
-            ? await this.findById(userId, sessionId, { persistenceContext })
-            : null;
-        if (createOnly && persistedForChecks) {
-          const error = new Error("session already exists");
-          error.statusCode = 409;
-          error.code = "SESSION_ALREADY_EXISTS";
-          throw error;
-        }
-        if (versionExpected) {
-          if (!persistedForChecks) throw createSessionNotFoundError({ userId, sessionId });
-          const actualVersion = requireSessionAggregateVersion(persistedForChecks.aggregateVersion);
-          if (actualVersion !== expectedAggregateVersion)
-            throw createAggregateVersionConflictError({ currentVersion: actualVersion });
-        }
-        const { listFacts, session: payload } = await writeSessionArtifact({
-          storageService: this.storageService,
-          sessionDir: scope.sessionDir,
-          sessionPayload: this._stampSavePayload(session),
-          atomic: true,
-          predecessor: SESSION_ARTIFACT_PREDECESSOR.CANONICAL,
-        });
-        if (createOnly) await this.commitSessionPlacement(userId, payload, persistenceContext);
-        return { payload, listFacts };
-      },
+      read: async (reader) =>
+        this.normalizeSelectedConnectorIds((await reader.readMetadata()).selectedConnectorIds),
     });
-  }
-
-  async saveTurnView(userId, session, { turnScopeIds, persistenceContext }) {
-    return this._writeScopedSession(userId, session, {
-      persistenceContext,
-      placement: false,
-      write: async ({ scope }) => {
-        const { listFacts, session: payload } = await writeSessionTurnArtifacts({
-          storageService: this.storageService,
-          sessionDir: scope.sessionDir,
-          sessionPayload: this._stampSavePayload(session),
-          turnScopeIds,
-          atomic: true,
-        });
-        return { payload, listFacts };
-      },
-    });
-  }
-
-  async _writeScopedSession(userId, session, { persistenceContext, placement, write }) {
-    const sessionId = text(session?.sessionId);
-    if (!sessionId) {
-      throw fatalSystemError(tSystem("common.sessionIdRequired"), {
-        code: ERROR_CODE.FATAL_SESSION_ID_REQUIRED,
-      });
-    }
-    const operation = async (scope) => {
-      assertSessionScopeIdentity({
-        session,
-        sessionId,
-        parentSessionId: scope.resolvedParentSessionId,
-      });
-      const { payload, listFacts } = await write({ sessionId, scope });
-      await this.upsertSessionSummary(userId, payload, { listFacts, scope });
-      return true;
-    };
-    if (placement) {
-      return this.withSessionPlacementMutation(
-        userId,
-        { sessionId, parentSessionId: session.parentSessionId },
-        operation,
-        { persistenceContext },
-      );
-    }
-    return this.withSessionMutation(userId, sessionId, operation, { persistenceContext });
-  }
-
-  _stampSavePayload(session) {
-    return { ...session, updatedAt: this.now() };
+    if (selected === null) throw createSessionNotFoundError({ userId, sessionId });
+    return selected;
   }
 
   async delete(userId, sessionId, { persistenceContext } = {}) {
     const scope = await this.requireSessionScope(userId, sessionId, persistenceContext);
     await fsRm(scope.sessionDir, { recursive: true, force: true });
     if (scope.indexed) {
-      await this.removeSessionSummaries(userId, [sessionId]);
       await this.removeSessionDisplaySummaries(userId, [sessionId]);
     }
   }

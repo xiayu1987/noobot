@@ -23,7 +23,6 @@ import {
   acceptRunCommand,
   bindExistingRun,
   mapRunCommand,
-  recordReceivedCommand,
   validateRunIdentity,
 } from "./message-run/command-stage.js";
 import { activateRun, reserveRun } from "./message-run/active-run-stage.js";
@@ -144,7 +143,6 @@ async function executeAcceptedRun(context, run, accepted, active) {
 function createRunHandler(context) {
   return async function handleRun(command, { onRunBound = null }) {
     const run = await mapRunCommand(context, command);
-    await recordReceivedCommand(command, run);
     validateRunIdentity(context, run);
     if (await bindExistingRun(context, run, onRunBound)) return { rebound: true };
     reserveRun(context, run, onRunBound);

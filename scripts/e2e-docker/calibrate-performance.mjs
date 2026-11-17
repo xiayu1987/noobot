@@ -6,73 +6,105 @@
 import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
-import { DEVELOPMENT_THRESHOLDS } from "../lib/development-thresholds.mjs";
 import {
-  PERF_ALL_TOOLS,
-  PERF_REPETITIONS,
   PERF_SCENARIO,
-} from "../mock-model-service/scenario.mjs";
-import { evaluatePerformance, median } from "./performance-gate.mjs";
+  PERF_ROUNDS,
+  PERF_PLUGINS,
+  PERF_HARNESS,
+} from "../mock-model-service/performance-contract.mjs";
+import { assertPerformanceCoverage, evaluatePerformance, median } from "./performance-gate.mjs";
 
-export function calibratePerformance(report, metadata) {
-  assert.equal(report.version, 1, "unsupported performance report");
+function validateReport(report) {
+  assert.equal(report.version, 2, "unsupported performance report");
   assert.equal(report.scenario, PERF_SCENARIO, "scenario mismatch");
-  assert.equal(
-    report.samples.length,
-    DEVELOPMENT_THRESHOLDS.performance.rounds,
-    "incomplete replay",
+  assert.deepEqual(report.plan, PERF_ROUNDS, "scenario plan mismatch");
+  assert.deepEqual(report.plugins, PERF_PLUGINS, "plugin configuration mismatch");
+  assert.deepEqual(report.harness, PERF_HARNESS, "Harness configuration mismatch");
+  const continuations = report.stopContinues.map(({ continued }) => continued);
+  assertPerformanceCoverage(report.samples, continuations, report.stopContinues);
+}
+
+export function calibratePerformance(reports, metadata) {
+  assert.ok(
+    Array.isArray(reports) && reports.length >= 3,
+    "Calibration requires at least three complete replays",
   );
-  const toolCount = PERF_ALL_TOOLS.length * PERF_REPETITIONS;
-  for (const sample of report.samples) {
-    assert.equal(sample.toolCount, toolCount, "incomplete tool coverage");
-    assert.equal(sample.modelRequestCount, toolCount + 1, "unexpected main-model count");
-    assert.equal(sample.summaryCount, PERF_REPETITIONS, "missing phase summaries");
-    const results = sample.serverToolEvents.filter((event) => event.event === "tool_call_end");
-    assert.equal(results.length, toolCount, "missing tool results");
-    assert.ok(
-      results.every((event) => event.data.success === true),
-      "tool failure in calibration",
+  for (const report of reports) validateReport(report);
+  const samples = reports.flatMap((report) => report.samples);
+  const stops = reports.flatMap((report) => report.stopContinues);
+  const metricNames = Object.keys(samples[0].metrics).sort();
+  for (const sample of [...samples, ...stops.map(({ continued }) => continued)])
+    assert.deepEqual(
+      Object.keys(sample.metrics).sort(),
+      metricNames,
+      "metric coverage mismatch across replays",
     );
-    for (const name of PERF_ALL_TOOLS) {
-      assert.equal(sample.toolSamples[name]?.length, PERF_REPETITIONS, `${name}: missing samples`);
-      assert.equal(results.filter((event) => event.data.tool === name).length, PERF_REPETITIONS);
-    }
-  }
   const baseline = {
-    version: 1,
+    version: 2,
     scenario: PERF_SCENARIO,
+    plan: PERF_ROUNDS,
+    plugins: PERF_PLUGINS,
+    harness: PERF_HARNESS,
     calibration: {
       ...metadata,
-      method: `Measured warm median of turns 2-${DEVELOPMENT_THRESHOLDS.performance.rounds}; ${PERF_ALL_TOOLS.length} tools x ${PERF_REPETITIONS} calls and ${PERF_REPETITIONS} phase summaries per turn`,
-      coldTotalMs: report.samples[0].metrics.totalMs,
-      warmTotalMs: report.samples.slice(1).map((sample) => sample.metrics.totalMs),
+      method:
+        "Separate ordinary/long medians across complete twenty-turn Harness replays; independent replay required",
+      replayCount: reports.length,
+      coldPipelineLocalMs: reports.map((report) => report.samples[0].metrics.pipelineLocalMs),
+      warmPipelineLocalMs: reports.map((report) =>
+        report.samples.slice(1).map((sample) => sample.metrics.pipelineLocalMs),
+      ),
     },
     metrics: Object.fromEntries(
-      Object.keys(report.samples[0].metrics).map((name) => [
+      ["ordinary", "long"].map((kind) => {
+        const group = samples.filter((sample) => sample.kind === kind && sample.round !== 1);
+        return [
+          kind,
+          Object.fromEntries(
+            Object.keys(group[0].metrics).map((name) => [
+              name,
+              median(group.map((sample) => sample.metrics[name])),
+            ]),
+          ),
+        ];
+      }),
+    ),
+    stopMetrics: Object.fromEntries(
+      ["clickToCommandMs", "clickToCompletedMs", "clickToUiReadyMs"].map((name) => [
         name,
-        median(report.samples.slice(1).map((sample) => sample.metrics[name])),
+        median(stops.map((sample) => sample.stopTiming[name])),
       ]),
     ),
   };
-  const gate = evaluatePerformance(report.samples, baseline);
-  assert.equal(
-    gate.passed,
-    true,
-    `Calibration violates absolute or cross-round limits: ${gate.failures.join("; ")}`,
-  );
+  for (const [index, report] of reports.entries()) {
+    const gate = evaluatePerformance(
+      report.samples,
+      baseline,
+      report.stopContinues.map(({ continued }) => continued),
+      report.stopContinues,
+    );
+    assert.equal(
+      gate.passed,
+      true,
+      `Calibration replay ${index + 1} violates absolute or cross-round limits: ${gate.failures.join("; ")}`,
+    );
+  }
   return baseline;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const [input, output] = process.argv.slice(2);
+  const [output, ...inputs] = process.argv.slice(2);
   assert.ok(
-    input && output,
-    "usage: node scripts/e2e-docker/calibrate-performance.mjs <report.json> <candidate.json>",
+    output && inputs.length >= 3 && new Set(inputs).size === inputs.length,
+    "usage: node scripts/e2e-docker/calibrate-performance.mjs <candidate.json> <report1.json> <report2.json> <report3.json> [...]",
   );
-  const baseline = calibratePerformance(JSON.parse(await readFile(input, "utf8")), {
+  const reports = await Promise.all(
+    inputs.map(async (input) => JSON.parse(await readFile(input, "utf8"))),
+  );
+  const baseline = calibratePerformance(reports, {
     date: new Date().toISOString(),
     runtime: `${process.platform} ${process.arch}, Node ${process.versions.node}, Chromium in e2e Docker`,
-    sourceReport: input,
+    sourceReports: inputs,
   });
   await writeFile(output, `${JSON.stringify(baseline, null, 2)}\n`, { flag: "wx" });
   console.log(

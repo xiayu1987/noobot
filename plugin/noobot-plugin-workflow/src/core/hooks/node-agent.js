@@ -265,7 +265,6 @@ function buildWorkflowNodeSubSessionMetadata(params) {
     }),
     nodeExecutionId: identity.nodeExecutionId,
     commandId: identity.commandId,
-    dialogProcessId: identity.dialogProcessId,
     nodeId: identity.nodeId,
     nodeName: identity.nodeName,
     transition: params.transition,

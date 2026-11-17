@@ -5,7 +5,7 @@
  */
 
 import { createExecutionEventListener, emitEvent } from "../../events/index.js";
-import { assertSessionScopeIdentity, requireAcceptedTurnRecord } from "@noobot/session-protocol";
+import { assertSessionScopeIdentity } from "@noobot/session-protocol";
 import { isFunction, text } from "@noobot/shared/value";
 
 export class SessionExecutionInitializer {
@@ -36,38 +36,26 @@ export class SessionExecutionInitializer {
     if (!resolvedDialogProcessId) {
       throw new TypeError("accepted Turn dialogProcessId is required before Session run");
     }
-    const sessionBundle = await this.session.getSessionBundle({
+    const runContext = await this.session.getSessionRunContext({
       userId,
       sessionId: usedSessionId,
       persistenceScope,
-    });
-    if (!sessionBundle.exists) {
-      throw new TypeError("accepted Turn session is required before Session run");
-    }
-
-    const { startedAt } = requireAcceptedTurnRecord(sessionBundle.session.turnLifecycle, {
       turnScopeId,
       dialogProcessId: resolvedDialogProcessId,
     });
     const userConfig = await this.configService.loadUserConfig(basePath);
 
-    const sessionScope = await this.session.locateSessionScope({
-      userId,
-      sessionId: usedSessionId,
-      persistenceScope,
-    });
-
     assertSessionScopeIdentity({
       session: { sessionId: usedSessionId, parentSessionId },
       sessionId: usedSessionId,
-      parentSessionId: sessionScope.resolvedParentSessionId,
+      parentSessionId: runContext.parentSessionId,
     });
 
     const runtimeEventListener = createExecutionEventListener({
       sessionManager: this.session,
       userId,
       sessionId: usedSessionId,
-      parentSessionId: sessionScope.resolvedParentSessionId,
+      parentSessionId: runContext.parentSessionId,
       turnScopeId,
       persistenceScope,
       dialogProcessId: resolvedDialogProcessId,
@@ -83,12 +71,12 @@ export class SessionExecutionInitializer {
 
     return {
       usedSessionId,
-      startedAt,
-      parentSessionId: sessionScope.resolvedParentSessionId,
+      startedAt: runContext.startedAt,
+      parentSessionId: runContext.parentSessionId,
       dialogProcessId: resolvedDialogProcessId,
       userConfig,
-      currentSessionModelAlias: text(sessionBundle.session.modelAlias),
-      sessionDir: sessionScope.sessionDir,
+      currentSessionModelAlias: runContext.modelAlias,
+      sessionDir: runContext.sessionDir,
       runtimeEventListener,
     };
   }

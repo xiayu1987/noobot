@@ -438,7 +438,6 @@ test("mergeConfig: full/programming/text 为内置情景且用户只能覆盖内
     "multimodal_parse",
     "access_connector",
     "user_interaction",
-    "task_summary",
     "task_check",
     "help",
     "do_search_web",

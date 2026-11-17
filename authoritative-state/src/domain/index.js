@@ -4,3 +4,4 @@
  * SPDX-License-Identifier: MIT
  */
 export { normalizeTurnLifecycleEntity, transitionTurnLifecycle } from "./turn-lifecycle-entity.js";
+export { transitionIndexedTurnLifecycle } from "./indexed-turn-lifecycle.js";

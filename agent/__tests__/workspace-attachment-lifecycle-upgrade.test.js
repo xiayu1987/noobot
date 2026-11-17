@@ -21,6 +21,8 @@ import {
 import { attachmentLifecycleSequenceScopeId } from "@noobot/attachment-protocol";
 import { buildHarness } from "./session/scoped-session-repositories.fixtures.js";
 import { v9Options, jsonl } from "./helpers/session-identity-upgrade.fixtures.js";
+import { writeLegacySessionFixture } from "./helpers/legacy-session-fixture.js";
+import { createTestSessionRequiredFields } from "./helpers/session-message-facts.js";
 import { upgradeSessionMessageIdentity } from "../src/workspace-lifecycle/session-message-identity-upgrade.js";
 import { upgradeWorkspaceLayout } from "../src/workspace-lifecycle/sections.js";
 import { readAuthorityOutbox } from "../src/session/authority-outbox-store/outbox-journal.js";
@@ -76,14 +78,12 @@ test("v30 upgrades attachment journal identity, preserves delivery and isolates 
   const directories = {};
   for (const sessionId of ["a-broken", "z-valid"]) {
     const persistenceContext = sessionRepo.treePersistenceContext("alice", sessionId);
-    await sessionRepo.ensureSession({
-      userId: "alice",
-      sessionId,
-      parentSessionId: "",
-      caller: "user",
-      persistenceContext,
-    });
-    const scope = await sessionRepo.requireSessionScope("alice", sessionId, persistenceContext);
+    const scope = await writeLegacySessionFixture(
+      sessionRepo,
+      "alice",
+      { ...createTestSessionRequiredFields(), sessionId, aggregateVersion: 0 },
+      { persistenceContext },
+    );
     directories[sessionId] = scope.sessionDir;
     const dir = path.join(scope.sessionDir, "authority-outbox");
     await mkdir(dir, { recursive: true });
@@ -145,14 +145,12 @@ test("v29 startup isolates current-schema invalid delivery before writer recover
   const directories = {};
   for (const sessionId of ["a-invalid-delivery", "z-valid-delivery"]) {
     const persistenceContext = sessionRepo.treePersistenceContext("alice", sessionId);
-    await sessionRepo.ensureSession({
-      userId: "alice",
-      sessionId,
-      parentSessionId: "",
-      caller: "user",
-      persistenceContext,
-    });
-    const scope = await sessionRepo.requireSessionScope("alice", sessionId, persistenceContext);
+    const scope = await writeLegacySessionFixture(
+      sessionRepo,
+      "alice",
+      { ...createTestSessionRequiredFields(), sessionId, aggregateVersion: 0 },
+      { persistenceContext },
+    );
     directories[sessionId] = scope.sessionDir;
     const first = commit(sessionId, "e1", "old-1");
     const attempt = { op: "attempt", eventId: "e1", attemptedAt: first.committedAt };

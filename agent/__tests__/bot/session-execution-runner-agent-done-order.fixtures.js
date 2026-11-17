@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createEmptyTurnSummaryCheckpointState } from "@noobot/context-protocol/policy/summary";
 import assert from "node:assert/strict";
+import { createTestMessagePersistenceReceipts } from "../helpers/message-persistence-receipts.js";
 import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -42,9 +42,7 @@ export function createRunner({
   observePreparedTurn,
   runtime,
   getSessionTurns = async () => [],
-  getTurnSummaryCheckpointState = async ({ dialogProcessId, turnScopeId }) =>
-    createEmptyTurnSummaryCheckpointState({ dialogProcessId, turnScopeId }),
-  appendAgentMessages = async ({ messages = [] } = {}) => messages,
+  appendAgentMessages = async (input) => createTestMessagePersistenceReceipts(input),
 }) {
   let authorityEventSequence = 0;
   const sessionManager = {
@@ -154,7 +152,6 @@ export function createRunner({
       return { userMessage: acceptedUserMessages.get(text(payload.turnScopeId)) };
     },
     getSessionTurns,
-    getTurnSummaryCheckpointState,
     appendAgentMessages,
     finalizeRunSession,
     saveExecutionReport: async () => {},

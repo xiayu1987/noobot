@@ -132,6 +132,26 @@ test("record identity fields are derived per role from schema roles", () => {
   });
 });
 
+test("identity rules reuse immutable schema projections without changing unscoped roles", () => {
+  for (const role of ["assistant", "tool", "user", "system", "", undefined, null]) {
+    const fields = messageRecordIdentityFieldsFor(role);
+    assert.equal(messageRecordIdentityFieldsFor(role), fields);
+    assert.ok(Object.isFrozen(fields));
+    for (const values of Object.values(fields)) assert.ok(Object.isFrozen(values));
+    const accepted = acceptedMessageIdentityFieldsFor(role);
+    assert.equal(acceptedMessageIdentityFieldsFor(role), accepted);
+    assert.ok(Object.isFrozen(accepted));
+    const scoped = Object.entries(MESSAGE_FIELD_SCHEMA).filter(([, spec]) => spec.roles);
+    assert.deepEqual(fields, {
+      allowed: scoped.filter(([, spec]) => spec.roles.includes(role)).map(([name]) => name),
+      forbidden: scoped.filter(([, spec]) => !spec.roles.includes(role)).map(([name]) => name),
+      required: scoped
+        .filter(([, spec]) => spec.requiredRoles.includes(role))
+        .map(([name]) => name),
+    });
+  }
+});
+
 test("only newly accepted user messages require the client identity", () => {
   assert.deepEqual(acceptedMessageIdentityFieldsFor("user"), ["userMessageId"]);
   assert.deepEqual(acceptedMessageIdentityFieldsFor("assistant"), []);

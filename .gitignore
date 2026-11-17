@@ -23,6 +23,9 @@ client/noobot-chat/deploy/bin/caddy
 .idea/
 .vscode/
 
+# Process crash dumps
+core.[0-9]*
+
 client/noobot-chat/deploy/bin/*
 
 *.local

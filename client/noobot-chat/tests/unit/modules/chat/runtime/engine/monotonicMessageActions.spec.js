@@ -15,7 +15,6 @@ import {
 import { lifecycle } from "../run-state-machine/turnRuntimeRegistryTestFixtures.js";
 import { createPendingMessageOperationStore } from "../../../../../../src/modules/chat/runtime/engine/messageOperationStore.js";
 import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
-import { selectMainSessionDetailEntry } from "@noobot/session-protocol/session-detail";
 import {
   deleteSuccessResponse,
   mutationFailureResponse,
@@ -58,12 +57,14 @@ function createActions({
       anchorIndex: 0,
     }),
   );
-  const applySessionDetail = vi.fn((detail) => {
-    const mainEntry = selectMainSessionDetailEntry(detail);
+  const applySessionDetail = vi.fn((response) => {
+    const deletedScopes = new Set(response.deletedTurnScopeIds);
     activeSession.value = {
       ...activeSession.value,
-      messages: [...mainEntry.messages],
-      aggregateVersion: mainEntry.aggregateVersion,
+      messages: activeSession.value.messages.filter(
+        (message) => !deletedScopes.has(message.turnScopeId),
+      ),
+      aggregateVersion: response.committedAggregateVersion,
     };
   });
   const actions = createMonotonicMessageActions({
@@ -81,7 +82,7 @@ function createActions({
     stopSending,
     translate: (key) => key,
     userId: ref("user-1"),
-    applySessionDetail,
+    applySessionMutation: applySessionDetail,
     turnRuntimeRegistry,
     messageOperationStore: createPendingMessageOperationStore(),
     chatWebSocketClient: { cancelStreamForTurn: vi.fn() },
@@ -163,6 +164,15 @@ describe("monotonicMessageActions stop-window gates", () => {
 
     expect(result).toBe(true);
     expect(deleteSessionMessagesFromApi).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not report deletion complete when the committed projection could not be synchronized", async () => {
+    const { actions, userMessage, applySessionDetail, activeSession } = createActions();
+    applySessionDetail.mockResolvedValueOnce(false);
+    expect(await actions.deleteMonotonicMessage(userMessage)).toBe(false);
+    expect(activeSession.value.messages).toHaveLength(2);
+    expect(await actions.deleteMonotonicMessage(userMessage)).toBe(true);
+    expect(activeSession.value.messages).toHaveLength(0);
   });
 
   it("applies the conflict version and retries delete-from once", async () => {
@@ -315,6 +325,81 @@ describe("monotonicMessageActions stop-window gates", () => {
     activeSessionId.value = "";
 
     expect(actions.resolveMonotonicUserTarget(assistantMessage)).toBeNull();
+  });
+
+  it("does not infer a local message suffix before applying the authoritative response", async () => {
+    const { actions, activeSession, userMessage, applySessionDetail } = createActions();
+    const before = [...activeSession.value.messages];
+    applySessionDetail.mockImplementation(() => {
+      expect(activeSession.value.messages).toEqual(before);
+    });
+    expect(await actions.deleteMonotonicMessage(userMessage)).toBe(true);
+    expect(applySessionDetail).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not cascade into a different session when the delete response arrives late", async () => {
+    const harness = createActions();
+    const {
+      actions,
+      activeSession,
+      activeSessionId,
+      userMessage,
+      deleteSessionMessagesFromApi,
+      applySessionDetail,
+    } = harness;
+    let finish;
+    deleteSessionMessagesFromApi.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    applySessionDetail.mockImplementation(() => {});
+    const pending = actions.deleteMonotonicMessage(userMessage);
+    await vi.waitFor(() => expect(deleteSessionMessagesFromApi).toHaveBeenCalledTimes(1));
+    const otherMessages = [{ ...userMessage, content: "other session" }];
+    activeSessionId.value = "s2";
+    activeSession.value = { sessionId: "s2", messages: otherMessages, aggregateVersion: 9 };
+    finish(
+      deleteSuccessResponse({
+        sessionId: "s1",
+        turnScopeId: "turn-1",
+        aggregateVersion: 2,
+        messages: [],
+        deletedCount: 2,
+        anchorIndex: 0,
+      }),
+    );
+    expect(await pending).toBe(true);
+    expect(activeSession.value.messages).toEqual(otherMessages);
+    expect(activeSession.value.aggregateVersion).toBe(9);
+    expect(applySessionDetail.mock.calls[0][0].sessionId).toBe("s1");
+  });
+
+  it("rejects a response for another session before applying it", async () => {
+    const {
+      actions,
+      activeSession,
+      userMessage,
+      deleteSessionMessagesFromApi,
+      applySessionDetail,
+    } = createActions();
+    const before = [...activeSession.value.messages];
+    deleteSessionMessagesFromApi.mockResolvedValue(
+      deleteSuccessResponse({
+        sessionId: "s2",
+        turnScopeId: "turn-1",
+        aggregateVersion: 2,
+        messages: [],
+        deletedCount: 2,
+        anchorIndex: 0,
+      }),
+    );
+    await expect(actions.deleteMonotonicMessage(userMessage)).rejects.toThrow(
+      "response identity mismatch",
+    );
+    expect(activeSession.value.messages).toEqual(before);
+    expect(applySessionDetail).not.toHaveBeenCalled();
   });
 
   it("does not call the delete API when the active session is cleared", async () => {

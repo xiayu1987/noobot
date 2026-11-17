@@ -66,6 +66,13 @@ function isOriginalUserMessage(message = {}) {
   );
 }
 
+export function isTerminalHistorySourceCandidate(message) {
+  return (
+    isOriginalUserMessage(message) ||
+    (!isContextControlMessage(message) && Boolean(resolveContextInjectedMessageType(message)))
+  );
+}
+
 function latestInjectedMessages(messages = []) {
   const latestByType = new Map();
   (Array.isArray(messages) ? messages : []).forEach((message, index) => {

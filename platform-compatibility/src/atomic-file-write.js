@@ -11,6 +11,16 @@ import { isFunction } from "@noobot/shared/value";
 export const ATOMIC_RENAME_RETRY_DELAYS_MS = Object.freeze([25, 75, 150, 300, 600]);
 const TEMPORARY_FILE_PREFIX = ".noobot-atomic-";
 
+export function isAtomicWriteTemporaryFile(name) {
+  return (
+    typeof name === "string" &&
+    name.startsWith(TEMPORARY_FILE_PREFIX) &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+      name.slice(TEMPORARY_FILE_PREFIX.length),
+    )
+  );
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }

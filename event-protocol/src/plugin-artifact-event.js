@@ -5,6 +5,9 @@
  */
 import { createEventEnvelope, createEventId } from "./envelope.js";
 import { nullishText as text } from "./normalize.js";
+import { deepFreeze, isDeepFrozen } from "@noobot/shared/deep-freeze";
+
+const immutableProjections = new WeakMap();
 
 export const PLUGIN_ARTIFACT_EVENT = "plugin.artifact.committed";
 export const PLUGIN_ARTIFACT_FAMILY = "plugin.artifact";
@@ -259,12 +262,34 @@ export function createPluginArtifactCommitRejection(decision) {
   });
 }
 
+export function requirePluginArtifactProjection(current, identity = current) {
+  if (current === null) return null;
+  const keys = ["pluginId", "artifactType", "artifactId"];
+  if (
+    !current ||
+    keys.some(
+      (key) =>
+        typeof current[key] !== "string" ||
+        !tokenPattern.test(current[key]) ||
+        current[key] !== identity?.[key],
+    ) ||
+    !isIntegerAtLeast(current.revision, 1) ||
+    !PLUGIN_ARTIFACT_OPERATIONS.includes(current.operation) ||
+    (current.operation === "created" && current.revision !== 1) ||
+    (current.operation === "replaced" && current.revision < 2) ||
+    typeof current.eventId !== "string" ||
+    !text(current.eventId) ||
+    !current.data ||
+    typeof current.data !== "object"
+  )
+    throw new TypeError("plugin artifact requires a projected artifact or null");
+  return current;
+}
+
 export function createPluginArtifactQueryResult(current) {
+  requirePluginArtifactProjection(current);
   if (current === null) {
     return Object.freeze({ found: false, artifact: null, revision: 0 });
-  }
-  if (!isIntegerAtLeast(current?.revision, 1) || !text(current.eventId)) {
-    throw new TypeError("plugin artifact query requires a projected artifact or null");
   }
   return Object.freeze({
     found: true,
@@ -299,6 +324,8 @@ export function projectPluginArtifacts(events) {
   if (!Array.isArray(events)) {
     throw new TypeError("plugin artifact projection requires session artifact events");
   }
+  const cached = immutableProjections.get(events);
+  if (cached) return cached;
   const artifacts = {};
   const orderedEvents = events
     .map((envelope, index) => ({ envelope, index }))
@@ -311,6 +338,10 @@ export function projectPluginArtifacts(events) {
     const key = pluginArtifactKey(envelope.payload);
     const reduced = reducePluginArtifact(artifacts[key] || null, envelope);
     if (reduced.applied) artifacts[key] = reduced.artifact;
+  }
+  if (isDeepFrozen(events)) {
+    deepFreeze(artifacts);
+    immutableProjections.set(events, artifacts);
   }
   return artifacts;
 }

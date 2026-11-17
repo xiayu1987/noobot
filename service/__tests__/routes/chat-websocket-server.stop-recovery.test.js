@@ -27,7 +27,10 @@ import {
 } from "@noobot/event-protocol/message-event";
 import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
 
-useProvisionedRuntimeEventsWorkspace(["primary-user", "u1"]);
+useProvisionedRuntimeEventsWorkspace(["primary-user", "u1"], {
+  "primary-user": ["s1"],
+  u1: ["s-refresh"],
+});
 
 test("chat-websocket-server: stop closes run and next websocket run can start", async () => {
   let runCount = 0;

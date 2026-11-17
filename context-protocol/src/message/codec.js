@@ -131,7 +131,6 @@ export function isContextSystemMessage(message = {}) {
 
 export const CONTEXT_MESSAGE_PROJECTION_TYPE = Object.freeze({
   USER_META: "user_meta",
-  PHASE_SUMMARY: "phase_summary",
   TERMINAL_STATUS: "terminal_status",
 });
 
@@ -144,7 +143,6 @@ export const CONTEXT_MESSAGE_IDENTITY_SHAPE = Object.freeze({
 
 const PROJECTION_SOURCE_FIELD = Object.freeze({
   [CONTEXT_MESSAGE_PROJECTION_TYPE.USER_META]: "sourceMessageUid",
-  [CONTEXT_MESSAGE_PROJECTION_TYPE.PHASE_SUMMARY]: "sourceMessageUid",
   [CONTEXT_MESSAGE_PROJECTION_TYPE.TERMINAL_STATUS]: "sourceTurnScopeId",
 });
 

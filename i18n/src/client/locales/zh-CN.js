@@ -257,7 +257,6 @@ export const zhCNMessages = {
     execute_native_script: "执行原生脚本",
     access_connector: "访问连接器",
     multimodal_generate: "多模态生成",
-    task_summary: "任务小结",
     help: "帮助",
     do_search_web: "网页搜索",
     mode: "模式",

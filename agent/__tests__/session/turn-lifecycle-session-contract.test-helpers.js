@@ -5,22 +5,23 @@
  */
 import { after } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { TURN_EVENT } from "@noobot/session-protocol";
+import { TURN_EVENT, createSessionNotFoundError } from "@noobot/session-protocol";
 import { SESSION_CALLER, requireSessionCaller } from "@noobot/shared/session-caller";
 import { normalizeSessionEntity } from "../../src/session/entities/session-entity.js";
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
-import {
-  authorityOutboxDir,
-  authorityOutboxJournalPath,
-  readAuthorityOutbox,
-} from "../../src/session/authority-outbox-store/outbox-journal.js";
 import { text } from "@noobot/shared/value";
 import { createAcceptedAgentExecution } from "../helpers/accepted-run-identity.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
-import { writeSessionArtifact } from "./session-artifact-store-v2.test-helpers.js";
+import { initializeImmutableSession } from "../../src/session/session-artifact-session/immutable-session-bootstrap.js";
+import {
+  openImmutableSessionReader,
+  withImmutableSessionReader,
+} from "../../src/session/session-artifact-session/immutable-session-reader.js";
+import { commitSessionChanges } from "../../src/session/session-artifact-session/commit-session-changes.js";
+import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
 import {
   fullSessionTurnViews,
   requiredSessionReads,
@@ -49,8 +50,13 @@ function harness(initial = {}) {
     ...createTestSessionRequiredFields(),
     ...initial,
   });
-  const initialized = writeSessionArtifact({ sessionDir, sessionPayload: persisted });
+  const initialized = initializeImmutableSession({
+    sessionDir,
+    session: persisted,
+    operationId: "test-seed-session",
+  });
   let saveFailure = null;
+  let outboxFailure = false;
   const repo = {
     async withSessionMutation(_u, _s, operation) {
       return operation(await this.locateSessionScope());
@@ -61,19 +67,42 @@ function harness(initial = {}) {
     },
     ...requiredSessionReads,
     ...fullSessionTurnViews,
+    async requireSessionReader() {
+      await initialized;
+      return openImmutableSessionReader({ sessionDir, sessionId: "s1", parentSessionId: "" });
+    },
+    async withSessionReader(_u, _s, operation) {
+      await initialized;
+      return withImmutableSessionReader(
+        { sessionDir, sessionId: "s1", parentSessionId: "" },
+        (reader) =>
+          operation(reader, { resolvedParentSessionId: "", sessionDir }, (request) =>
+            this.commitChanges(_u, _s, request),
+          ),
+      );
+    },
+    async findImmutableSessionReader() {
+      return this.requireSessionReader();
+    },
     async findById() {
       return normalizeSessionEntity(structuredClone(persisted));
     },
-    async save(_u, next, { expectedAggregateVersion } = {}) {
-      assert.equal(expectedAggregateVersion, Number(persisted.aggregateVersion ?? 0));
+    async findTurnTerminalSource() {
+      return {
+        ...structuredClone(persisted),
+        messageTurnScopeIds: persisted.messages.map((message) => message.turnScopeId),
+      };
+    },
+    async commitChanges(_u, sessionId, request) {
       if (saveFailure) {
         const error = saveFailure;
         saveFailure = null;
         throw error;
       }
-      const normalized = normalizeSessionEntity(next);
-      await writeSessionArtifact({ sessionDir, sessionPayload: normalized });
-      persisted = structuredClone(normalized);
+      if (outboxFailure) throw new Error("outbox_commit_failed");
+      const result = await commitSessionChanges({ ...request, sessionDir, sessionId });
+      persisted = await (await this.requireSessionReader()).exportSession();
+      return result;
     },
   };
   return {
@@ -83,23 +112,23 @@ function harness(initial = {}) {
       allocateDialogProcessId: () => "dp1",
     }),
     sessionDir,
-    outbox: () => readAuthorityOutbox(sessionDir),
-    outboxEntry: async (eventId) =>
-      (await readAuthorityOutbox(sessionDir)).find((item) => item.eventId === eventId) || null,
+    outbox: async () => {
+      await initialized;
+      const store = new ImmutableSessionStore({ sessionDir, sessionId: "s1" });
+      const snapshot = await store.snapshot();
+      const events = [];
+      for await (const [, value] of store.entries(snapshot, "outbox")) events.push(value);
+      return events.sort((a, b) => a.ordinal - b.ordinal);
+    },
+    outboxEntry: async (eventId) => (await repo.requireSessionReader()).readOutboxEvent(eventId),
     reload: () => normalizeSessionEntity(structuredClone(persisted)),
     failNextSave: (error = new Error("session_save_failed")) => {
       saveFailure = error;
     },
-    failOutboxJournal: () => {
-      const journalDir = authorityOutboxDir(sessionDir);
-      const journalFile = authorityOutboxJournalPath(sessionDir);
-      const snapshot = existsSync(journalFile) ? readFileSync(journalFile) : null;
-      rmSync(journalDir, { recursive: true, force: true });
-      writeFileSync(journalDir, "");
+    failOutboxCommit: () => {
+      outboxFailure = true;
       return () => {
-        rmSync(journalDir, { force: true });
-        mkdirSync(journalDir, { recursive: true });
-        if (snapshot !== null) writeFileSync(journalFile, snapshot);
+        outboxFailure = false;
       };
     },
   };
@@ -133,15 +162,46 @@ function newSessionHarness() {
     },
     ...requiredSessionReads,
     ...fullSessionTurnViews,
+    async requireSessionReader() {
+      if (!persisted) throw createSessionNotFoundError({ userId: "u1", sessionId: "s1" });
+      return openImmutableSessionReader({ sessionDir, sessionId: "s1", parentSessionId: "" });
+    },
+    async withSessionReader(_u, _s, operation) {
+      if (!persisted) throw createSessionNotFoundError({ userId: "u1", sessionId: "s1" });
+      return withImmutableSessionReader(
+        { sessionDir, sessionId: "s1", parentSessionId: "" },
+        (reader) =>
+          operation(reader, { resolvedParentSessionId: "", sessionDir }, (request) =>
+            this.commitChanges(_u, _s, request),
+          ),
+      );
+    },
+    async findImmutableSessionReader() {
+      return persisted ? this.requireSessionReader() : null;
+    },
+    async recoverImmutableSessionPlacement() {
+      return this.findImmutableSessionReader();
+    },
     async findById() {
       return persisted ? normalizeSessionEntity(structuredClone(persisted)) : null;
     },
-    async save(_u, next, { expectedAggregateVersion, createOnly } = {}) {
-      if (createOnly) assert.equal(persisted, null);
-      else assert.equal(expectedAggregateVersion, Number(persisted.aggregateVersion ?? 0));
-      const normalized = normalizeSessionEntity(next);
-      await writeSessionArtifact({ sessionDir, sessionPayload: normalized });
-      persisted = structuredClone(normalized);
+    async createImmutableSession(_u, session, { authorityEvents }) {
+      assert.equal(persisted, null);
+      await initializeImmutableSession({
+        sessionDir,
+        session,
+        operationId: "test-initial-creation",
+        authorityEvents,
+        outbox: authorityEvents,
+      });
+      persisted = await (
+        await openImmutableSessionReader({ sessionDir, sessionId: "s1", parentSessionId: "" })
+      ).exportSession();
+    },
+    async commitChanges(_u, sessionId, request) {
+      const result = await commitSessionChanges({ ...request, sessionDir, sessionId });
+      persisted = await (await this.requireSessionReader()).exportSession();
+      return result;
     },
   };
   return {
@@ -151,7 +211,9 @@ function newSessionHarness() {
       allocateDialogProcessId: () => "dp1",
     }),
     sessionDir,
-    outbox: () => readAuthorityOutbox(sessionDir),
+    outbox: async () =>
+      (await (await repo.requireSessionReader()).readOutboxPage({ consumerId: "test-consumer" }))
+        .events,
     reload: () => persisted && normalizeSessionEntity(structuredClone(persisted)),
   };
 }

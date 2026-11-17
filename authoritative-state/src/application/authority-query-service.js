@@ -14,7 +14,7 @@ import {
   isTurnSnapshotKnownSequence,
   isTurnSnapshotTerminalLimit,
 } from "@noobot/session-protocol/turn-lifecycle";
-import { isTerminalTurnState, projectTurnTiming } from "@noobot/session-protocol";
+import { assertTurnRecord, isTerminalTurnState, projectTurnTiming } from "@noobot/session-protocol";
 import { normalizeTurnLifecycleEntity } from "../domain/turn-lifecycle-entity.js";
 import { text as clean } from "@noobot/shared/value";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
@@ -78,14 +78,40 @@ export function resolveAuthoritativeTurnTerminal({
   aggregateVersion = null,
   generatedAt,
 }) {
+  requireTurnTerminalResolutionIdentity({ commandId, sessionId, turnScopeId });
+  const lifecycle = normalizeTurnLifecycleEntity(lifecycleSource);
+  return resolveIndexedTurnTerminal({
+    turn: lifecycle.turns[turnScopeId] || null,
+    turnTimings,
+    commandId,
+    sessionId,
+    turnScopeId,
+    aggregateVersion,
+    generatedAt,
+  });
+}
+
+export function resolveIndexedTurnTerminal({
+  turn: lifecycleTurn,
+  turnTimings,
+  commandId,
+  sessionId,
+  turnScopeId,
+  aggregateVersion = null,
+  generatedAt,
+}) {
+  const identity = requireTurnTerminalResolutionIdentity({ commandId, sessionId, turnScopeId });
+  if (lifecycleTurn !== null) {
+    assertTurnRecord(lifecycleTurn);
+    if (lifecycleTurn.turnScopeId !== turnScopeId)
+      throw new TypeError("Terminal query turn ownership mismatch");
+  }
   const retryAfterMs = TIME_THRESHOLDS.agent.terminalResolutionRetryDelayMs;
   const base = {
-    ...requireTurnTerminalResolutionIdentity({ commandId, sessionId, turnScopeId }),
+    ...identity,
     aggregateVersion,
     generatedAt,
   };
-  const lifecycle = normalizeTurnLifecycleEntity(lifecycleSource);
-  const lifecycleTurn = lifecycle.turns[turnScopeId] || null;
   const turn = lifecycleTurn
     ? { ...projectTurnTiming(lifecycleTurn, turnTimings), sessionId }
     : null;
@@ -126,6 +152,29 @@ export function projectAuthoritativeExecution(turn, session) {
   });
 }
 
+function indexExecutionIdentity(execution, byId, conflicts) {
+  if (!execution.executionId || conflicts.has(execution.executionId)) return;
+  const current = byId.get(execution.executionId);
+  if (!current) {
+    byId.set(execution.executionId, execution);
+    return;
+  }
+  conflicts.set(execution.executionId, {
+    executionId: execution.executionId,
+    reason: "execution_identity_conflict",
+    identities: [current, execution].map((item) => ({
+      executionKind: item.executionKind,
+      sessionId: item.sessionId,
+      parentSessionId: item.parentSessionId,
+      turnScopeId: item.turnScopeId,
+      parentExecutionId: item.parentExecutionId,
+      rootExecutionId: item.rootExecutionId,
+      origin: item.origin,
+    })),
+  });
+  byId.delete(execution.executionId);
+}
+
 export function buildAuthoritativeExecutionReadModel(sessions = []) {
   const byId = new Map();
   const conflicts = new Map();
@@ -133,27 +182,7 @@ export function buildAuthoritativeExecutionReadModel(sessions = []) {
     const lifecycle = normalizeTurnLifecycleEntity(session.turnLifecycle);
     for (const turn of Object.values(lifecycle.turns)) {
       const execution = projectAuthoritativeExecution(turn, session);
-      if (!execution.executionId) continue;
-      if (conflicts.has(execution.executionId)) continue;
-      const current = byId.get(execution.executionId);
-      if (!current) {
-        byId.set(execution.executionId, execution);
-        continue;
-      }
-      conflicts.set(execution.executionId, {
-        executionId: execution.executionId,
-        reason: "execution_identity_conflict",
-        identities: [current, execution].map((item) => ({
-          executionKind: item.executionKind,
-          sessionId: item.sessionId,
-          parentSessionId: item.parentSessionId,
-          turnScopeId: item.turnScopeId,
-          parentExecutionId: item.parentExecutionId,
-          rootExecutionId: item.rootExecutionId,
-          origin: item.origin,
-        })),
-      });
-      byId.delete(execution.executionId);
+      indexExecutionIdentity(execution, byId, conflicts);
     }
   }
   return { executions: [...byId.values()], conflicts };

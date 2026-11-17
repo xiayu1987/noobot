@@ -11,14 +11,17 @@ import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createTestSessionServices, provisionTestSession } from "../helpers/session-services.js";
+import {
+  createTestSessionServices,
+  provisionTestSession,
+  commitTestSessionChanges,
+} from "../helpers/session-services.js";
 import {
   withTempWorkspace,
   canonicalActivity,
   canonicalMessages,
 } from "./session-repository-boundary.summaries.fixtures.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
-import { applySessionMessageFacts } from "../helpers/session-message-facts.js";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 import { buildPersistedDisplaySummary } from "./session-artifact-store-v2.test-helpers.js";
 
@@ -174,13 +177,7 @@ test("Session Detail exposes canonical active Turn messages", async () => {
       caller: SESSION_CALLER.USER,
     });
 
-    const session = await runtime.repositories.sessionRepository.findById(userId, sessionId, {
-      persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
-        userId,
-        sessionId,
-      ),
-    });
-    session.messages = canonicalMessages(
+    const messages = canonicalMessages(
       [
         {
           attachments: [],
@@ -192,36 +189,40 @@ test("Session Detail exposes canonical active Turn messages", async () => {
           type: "message",
           content: "resend request",
           turnScopeId: "turn-active-full",
+          dialogProcessId: "dialog-active-full",
         },
       ],
       sessionId,
       "active_full",
     );
-    session.turnLifecycle = {
-      ...createEmptyTurnLifecycle(),
-      activeTurnScopeId: "turn-active-full",
-      sequence: 1,
-      turns: {
-        "turn-active-full": turnRecord({
-          revision: 1,
-          turnScopeId: "turn-active-full",
-          presentationMessageId: "presentation-active-full",
-          dialogProcessId: "dialog-active-full",
-          state: "processing",
-          startedAt: "2026-07-31T03:04:00.000Z",
-          sequence: 1,
-          updatedAt: "2026-07-31T03:04:06.000Z",
-        }),
+    await commitTestSessionChanges(runtime, { userId, sessionId, changes: { messages } });
+    for (const event of [
+      {
+        eventType: "turn.action_accepted",
+        phase: "action",
+        action: "send",
+        presentationMessageId: "presentation-active-full",
+        executionId: "agent:turn-active-full",
+        executionKind: "agent",
+        rootExecutionId: "agent:turn-active-full",
       },
-    };
-    await runtime.repositories.sessionRepository.save(userId, applySessionMessageFacts(session), {
-      persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
+      { eventType: "turn.processing_started", phase: "processing" },
+    ]) {
+      await commitTestSessionChanges(runtime, {
         userId,
-        session.sessionId,
-      ),
-    });
-    await runtime.sessionCrudService.maintainSessionDisplaySummaries({ userId });
-
+        sessionId,
+        changes: {
+          turnTransition: {
+            ...event,
+            sessionId,
+            turnScopeId: "turn-active-full",
+            dialogProcessId: "dialog-active-full",
+            commandId: event.eventType,
+            causationId: event.eventType,
+          },
+        },
+      });
+    }
     const summaryDetail = await runtime.sessionCrudService.getSessionDisplayData({
       userId,
       sessionId,

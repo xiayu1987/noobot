@@ -8,8 +8,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { mkdtemp, rm } from "node:fs/promises";
-import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
+import { access, mkdtemp, rm } from "node:fs/promises";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 import { createTestSessionServices, provisionTestSession } from "../helpers/session-services.js";
@@ -29,40 +28,59 @@ async function withProvisionedSession(fn) {
     });
     const repository = runtime.repositories.sessionRepository;
     const persistenceContext = repository.treePersistenceContext(userId, "A");
-    const session = await repository.findById(userId, "A", { persistenceContext });
-    return await fn({ userId, repository, persistenceContext, session });
+    const reader = await repository.requireSessionReader(userId, "A", { persistenceContext });
+    return await fn({ userId, repository, persistenceContext, reader });
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });
   }
 }
 
-test("save rejects a stale expected aggregate version with the protocol conflict error", async () => {
-  await withProvisionedSession(async ({ userId, repository, persistenceContext, session }) => {
-    const staleVersion = session.aggregateVersion + 1;
+test("incremental commit rejects a stale generation without changing committed metadata", async () => {
+  await withProvisionedSession(async ({ userId, repository, persistenceContext, reader }) => {
+    const request = {
+      persistenceContext,
+      expectedGeneration: reader.generation,
+      operationId: "version-first",
+      committedAt: repository.now(),
+      changes: { sessionMetadata: { customTitle: "committed title" } },
+    };
+    await repository.commitChanges(userId, "A", request);
     await assert.rejects(
-      repository.save(userId, session, {
-        expectedAggregateVersion: staleVersion,
-        persistenceContext,
+      repository.commitChanges(userId, "A", {
+        ...request,
+        operationId: "version-stale",
+        changes: { sessionMetadata: { customTitle: "stale title" } },
       }),
       {
-        statusCode: 409,
-        code: SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT,
-        currentVersion: session.aggregateVersion,
+        code: "SESSION_GENERATION_CONFLICT",
       },
     );
+    const current = await repository.requireSessionReader(userId, "A", { persistenceContext });
+    assert.equal(current.generation, reader.generation + 1);
+    assert.equal((await current.readMetadata()).customTitle, "committed title");
+    assert.notEqual((await reader.readMetadata()).customTitle, "committed title");
   });
 });
 
-test("save rejects an expected version for a registered session without an artifact as not found", async () => {
-  await withProvisionedSession(async ({ userId, repository, persistenceContext, session }) => {
+test("a switched session with a missing head rejects reads and commits as corruption", async () => {
+  await withProvisionedSession(async ({ userId, repository, persistenceContext, reader }) => {
     const scope = await repository.requireSessionScope(userId, "A", persistenceContext);
-    await rm(scope.sessionFile);
+    await rm(path.join(scope.sessionDir, "head.json"));
+    await assert.rejects(repository.requireSessionReader(userId, "A", { persistenceContext }), {
+      code: "SESSION_IMMUTABLE_STORAGE_INVALID",
+    });
     await assert.rejects(
-      repository.save(userId, session, {
-        expectedAggregateVersion: session.aggregateVersion,
+      repository.commitChanges(userId, "A", {
+        expectedGeneration: reader.generation,
+        operationId: "missing-head",
+        committedAt: repository.now(),
+        changes: { sessionMetadata: { customTitle: "must not recreate" } },
         persistenceContext,
       }),
-      { statusCode: 404, code: SESSION_ERROR_CODE.SESSION_NOT_FOUND },
+      { code: "SESSION_IMMUTABLE_STORAGE_INVALID" },
     );
+    await assert.rejects(access(path.join(scope.sessionDir, "head.json")), {
+      code: "ENOENT",
+    });
   });
 });

@@ -16,6 +16,7 @@ import { ensureIntervalCleanupTask } from "../utils/cleanup-scheduler.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { randomUUID } from "node:crypto";
 import { isPlainObject, text } from "@noobot/shared/value";
+import { rotatedPluginLogName, isRotatedPluginLogName } from "@noobot/plugin-protocol/log-artifact";
 
 const manifestCache = new Map();
 const manifestWriteTimers = new Map();
@@ -416,17 +417,21 @@ async function verifyJsonWrite(tmpPath, content) {
 
 function buildRotatedJsonlPath(filePath = "") {
   const parsed = path.parse(filePath);
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const suffix = randomUUID();
-  return path.join(parsed.dir, `${parsed.name}.${stamp}.${suffix}${parsed.ext || ".jsonl"}`);
+  return path.join(
+    parsed.dir,
+    rotatedPluginLogName({
+      name: parsed.name,
+      extension: parsed.ext || ".jsonl",
+      timestamp: new Date(),
+      suffix: randomUUID(),
+    }),
+  );
 }
 
 function isRotatedJsonlForFile(entryName = "", filePath = "") {
   const parsed = path.parse(filePath);
   const ext = parsed.ext || ".jsonl";
-  return (
-    String(entryName || "").startsWith(`${parsed.name}.`) && String(entryName || "").endsWith(ext)
-  );
+  return isRotatedPluginLogName(String(entryName || ""), { name: parsed.name, extension: ext });
 }
 
 async function pruneRotatedJsonlFiles(filePath = "", maxFiles = 0) {

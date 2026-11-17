@@ -21,11 +21,3 @@ export function upsertSessionTurnTiming(session, timing) {
   }
   session.turnTimings[index] = mergeTurnTimingRecord(session.turnTimings[index], incoming);
 }
-
-export function pruneSessionTurnTimings(session) {
-  const messages = session.messages;
-  const liveKeys = new Set(messages.map(resolveTurnTimingKey).filter(Boolean));
-  session.turnTimings = session.turnTimings.filter((item) =>
-    liveKeys.has(resolveTurnTimingKey(item)),
-  );
-}

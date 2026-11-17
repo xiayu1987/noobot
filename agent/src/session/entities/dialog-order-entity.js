@@ -80,8 +80,3 @@ export function registerDialogOrderMessage(dialogOrder, message) {
     },
   ];
 }
-
-export function pruneDialogOrder(dialogOrder, messages) {
-  const live = new Set(messages.map(resolveSessionMessageRecordDialogProcessId));
-  return dialogOrder.filter((entry) => live.has(entry.dialogProcessId));
-}

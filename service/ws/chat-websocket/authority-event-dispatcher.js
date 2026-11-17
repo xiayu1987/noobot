@@ -4,10 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import { assertAuthorityOutboxRequest } from "@noobot/event-protocol/outbox";
-import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { validateSessionPersistenceScope } from "@noobot/session-protocol";
 import { isFunction } from "@noobot/shared/value";
-import { readServiceClockMs } from "./service-clock.js";
+import { withAuthorityOutboxDelivery } from "./authority-outbox-maintenance.js";
 
 export const AUTHORITY_EVENT_CONSUMER = Object.freeze({
   WEBSOCKET: "service.websocket",
@@ -54,7 +53,14 @@ async function acknowledgePublishedEvents(session, request, publishFailure) {
   }
 }
 
-async function dispatchAuthorityBatch({ session, identity, consumerId, events, publishEvent }) {
+async function dispatchAuthorityBatch({
+  session,
+  identity,
+  consumerId,
+  events,
+  publishEvent,
+  onAcknowledged,
+}) {
   const attempt = await session.recordAuthorityEventAttempts({
     ...identity,
     consumerId,
@@ -73,6 +79,7 @@ async function dispatchAuthorityBatch({ session, identity, consumerId, events, p
     );
     if (!acknowledged.acknowledged)
       return { dispatched: false, reason: acknowledged.reason, delivered: 0 };
+    onAcknowledged();
   }
   if (publishFailure) throw publishFailure.error;
   const delivered = acknowledgements.length;
@@ -91,27 +98,6 @@ async function drainDirtyScope(entry, drain) {
   return { dispatched: true, delivered };
 }
 
-async function compactAuthorityEventsIfDue(bot, identity, lastCompactAtBySession) {
-  const now = readServiceClockMs(bot);
-  const accountingKey = `${identity.userId}\u0000${identity.sessionId}\u0000${scopeKey(
-    identity.persistenceScope,
-  )}`;
-  const lastCompactAt = lastCompactAtBySession.get(accountingKey);
-  if (
-    lastCompactAt !== undefined &&
-    now - lastCompactAt < TIME_THRESHOLDS.agent.authorityOutboxCompactIntervalMs
-  ) {
-    return;
-  }
-  await bot.session.compactAuthorityEvents({
-    ...identity,
-    retainDeliveredAfter: new Date(
-      now - TIME_THRESHOLDS.agent.authorityOutboxDeliveredRetentionMs,
-    ).toISOString(),
-  });
-  lastCompactAtBySession.set(accountingKey, now);
-}
-
 export function createAuthorityEventDispatcher({ resolveBot, sendEvent, consumerId }) {
   const normalizedConsumerId = consumerId;
   if (!KNOWN_CONSUMERS.has(normalizedConsumerId)) {
@@ -121,9 +107,12 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent, consumer
     throw new TypeError("authority event dispatcher requires resolveBot");
   if (!isFunction(sendEvent)) throw new TypeError("authority event dispatcher requires sendEvent");
   const inFlightByScope = new Map();
-  const lastCompactAtBySession = new Map();
 
-  const drainAuthorityEvents = async ({ userId, sessionId, persistenceScope }, publishEvent) => {
+  const drainAuthorityEvents = async (
+    { userId, sessionId, persistenceScope },
+    publishEvent,
+    onAcknowledged,
+  ) => {
     const identity = {
       userId,
       sessionId,
@@ -145,18 +134,21 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent, consumer
         };
       }
       const { events } = pending;
-      if (!events.length) break;
+      if (!events.length) {
+        if (pending.hasMore === true) continue;
+        break;
+      }
       const result = await dispatchAuthorityBatch({
         session: bot.session,
         identity,
         consumerId,
         events,
         publishEvent,
+        onAcknowledged,
       });
       delivered += result.delivered;
       if (!result.dispatched) return { ...result, delivered };
     }
-    await compactAuthorityEventsIfDue(bot, identity, lastCompactAtBySession);
     return { dispatched: true, delivered };
   };
 
@@ -181,7 +173,9 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent, consumer
     const entry = { dirty: false, promise: null };
     entry.promise = (async () => {
       try {
-        return await drainDirtyScope(entry, () => drainAuthorityEvents(payload, publishEvent));
+        return await withAuthorityOutboxDelivery(resolveBot, payload, (onAcknowledged) =>
+          drainDirtyScope(entry, () => drainAuthorityEvents(payload, publishEvent, onAcknowledged)),
+        );
       } finally {
         if (inFlightByScope.get(key) === entry) inFlightByScope.delete(key);
       }

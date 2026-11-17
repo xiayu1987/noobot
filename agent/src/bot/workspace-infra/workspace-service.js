@@ -48,8 +48,12 @@ export class WorkspaceService {
     return ensureUserWorkspace(this.lifecycleOptions(userId));
   }
 
-  async repairUserWorkspace(userId, { onProgress } = {}) {
-    return repairUserWorkspace({ ...this.lifecycleOptions(userId), onProgress });
+  async repairUserWorkspace(userId, { onProgress, readSessionOperationInput } = {}) {
+    return repairUserWorkspace({
+      ...this.lifecycleOptions(userId),
+      onProgress,
+      readSessionOperationInput,
+    });
   }
 
   async resetUserWorkspace(userId, options = {}) {

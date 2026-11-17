@@ -21,10 +21,11 @@ export async function consumeSummaryCheckpointCommand({ runtime, eventListener, 
     if (result.committed !== true) {
       throw new Error("summary checkpoint was not committed");
     }
+    await instruction.onCommitted?.(result);
     acknowledgeMainFlowSummaryCheckpoint(runtime);
     return result;
   } catch (error) {
-    emitEvent(eventListener, "summary_checkpoint_failed", {
+    await emitEvent(eventListener, "summary_checkpoint_failed", {
       turn,
       source: instruction.source,
       message: error?.message || String(error),

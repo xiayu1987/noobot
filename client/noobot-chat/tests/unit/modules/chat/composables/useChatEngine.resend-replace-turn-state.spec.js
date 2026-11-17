@@ -45,7 +45,7 @@ describe("useChatEngine.resend replacement turn state", () => {
     const { engine, activeSession, sending, canStop, activeTurnRuntime } = createHarness({
       sessionId: "local-resend-fresh-stopped-assistant",
       stream,
-      deps: { replaceSessionTurnApi, applySessionDetail },
+      deps: { replaceSessionTurnApi, applySessionMutation: applySessionDetail },
     });
     const stoppedUser = {
       turnScopeId: "client-turn:first-old",

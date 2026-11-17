@@ -9,6 +9,7 @@ import { commitTurnLifecycle } from "@noobot/authoritative-state/application";
 import {
   acknowledgeAuthorityEventDelivery,
   compactAuthorityEventOutbox,
+  normalizeAuthorityEventOutbox,
   listPendingAuthorityEvents,
   recordAuthorityEventDeliveryAttempt,
 } from "@noobot/event-protocol";
@@ -48,7 +49,10 @@ import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.tes
 
 const LEGACY_MESSAGE_ID = MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID;
 
-useProvisionedRuntimeEventsWorkspace(["primary-user", "u1"]);
+useProvisionedRuntimeEventsWorkspace(["primary-user", "u1"], {
+  "primary-user": ["s-stale-aggregate"],
+  u1: [payload.sessionId, "s-workflow-identity", "s-deduplicated-ack"],
+});
 
 test("run event publishing awaits the actual transport send result", async () => {
   const handle = {};
@@ -298,9 +302,15 @@ test("deduplicated lifecycle commands do not bypass the acknowledged authority o
         return { recorded: true };
       },
       async compactAuthorityEvents({ retainDeliveredAfter }) {
-        const result = compactAuthorityEventOutbox(eventOutbox, { retainDeliveredAfter });
+        const result = compactAuthorityEventOutbox(normalizeAuthorityEventOutbox(eventOutbox), {
+          retainDeliveredAfter,
+        });
         eventOutbox = result.outbox;
-        return { compacted: result.compacted, removed: result.removed };
+        return {
+          compacted: result.compacted,
+          removed: result.removed,
+          nextRetainedDeliveryAt: result.nextRetainedDeliveryAt,
+        };
       },
       async acknowledgeAuthorityEvents({ consumerId, acknowledgements = [] } = {}) {
         let result = { found: true };

@@ -8,13 +8,21 @@ import assert from "node:assert/strict";
 
 import { pruneTurnSummaryCheckpoints } from "@noobot/context-protocol/policy/summary";
 import { acceptTurn, harness } from "./session-version-hardening.test-helpers.js";
+import {
+  immutableMutationFixture,
+  mutationMessage,
+} from "../helpers/immutable-mutation-integration-fixture.js";
 
 test("turn summary checkpoint receipts reject stale revisions and are pruned with removed turns", async () => {
-  const h = harness({
+  const h = await harness({
     messages: [
       {
         attachments: [],
         messageUid: "sm_1",
+        sessionId: "s1",
+        ts: "2026-01-01T00:00:00.000Z",
+        modelMessageId: "model-1",
+        presentationMessageId: "message-t",
         role: "assistant",
         content: "one",
         dialogProcessId: "dp",
@@ -23,6 +31,10 @@ test("turn summary checkpoint receipts reject stale revisions and are pruned wit
       {
         attachments: [],
         messageUid: "sm_2",
+        sessionId: "s1",
+        ts: "2026-01-01T00:00:00.000Z",
+        modelMessageId: "model-2",
+        presentationMessageId: "message-t",
         role: "assistant",
         content: "two",
         dialogProcessId: "dp",
@@ -40,6 +52,7 @@ test("turn summary checkpoint receipts reject stale revisions and are pruned wit
     expectedCheckpointRevision: 0,
     persistedMessageUids: [],
     retainedMessageUids: [],
+    messages: [],
   });
   await assert.rejects(
     h.service.commitTurnSummaryCheckpoint({
@@ -52,6 +65,7 @@ test("turn summary checkpoint receipts reject stale revisions and are pruned wit
       summarizedMessageUids: ["sm_2"],
       persistedMessageUids: [],
       retainedMessageUids: [],
+      messages: [],
     }),
     (error) =>
       error.code === "TURN_SUMMARY_CHECKPOINT_REVISION_CONFLICT" &&
@@ -68,6 +82,7 @@ test("turn summary checkpoint receipts reject stale revisions and are pruned wit
       expectedCheckpointRevision: 1,
       persistedMessageUids: [],
       retainedMessageUids: [],
+      messages: [],
     }),
     (error) => error.code === "TURN_SUMMARY_CHECKPOINT_ID_REUSED",
   );
@@ -83,7 +98,7 @@ test("attachment binding rejects placeholders and cross-session injection after 
   ];
   for (const [index, attachment] of invalid.entries()) {
     await t.test(String(index), async () => {
-      const h = harness();
+      const h = await harness();
       const committed = await acceptTurn(h.service, { turnScopeId: `t${index}` });
       await assert.rejects(
         h.service.bindTurnAttachments({
@@ -103,62 +118,43 @@ test("attachment binding rejects placeholders and cross-session injection after 
   }
 });
 
-test("deleteFromMessage replays a committed receipt without deleting again", async () => {
-  const h = harness({
+test("deleteFromMessage replays a committed receipt without deleting again", async (t) => {
+  const h = await immutableMutationFixture(t, {
     aggregateVersion: 2,
-    messages: [
-      {
-        attachments: [],
-        role: "user",
-        messageOrigin: "natural",
-        content: "keep",
-        turnScopeId: "keep",
-      },
-      {
-        attachments: [],
-        role: "user",
-        messageOrigin: "natural",
-        content: "delete",
-        turnScopeId: "delete",
-      },
-    ],
+    messages: [mutationMessage("keep"), mutationMessage("delete")],
   });
   const input = {
-    userId: "u1",
-    sessionId: "s1",
+    ...h.request,
     anchor: { turnScopeId: "delete" },
     expectedAggregateVersion: 2,
     commandId: "delete-once",
   };
   const committed = await h.service.deleteFromMessage(input);
-  await acceptTurn(h.service, { turnScopeId: "later", expectedAggregateVersion: 3 });
+  await acceptTurn(h.service, { ...h.request, turnScopeId: "later", expectedAggregateVersion: 3 });
+  const beforeReplay = await h.open();
   const replay = await h.service.deleteFromMessage(input);
   assert.equal(committed.committedAggregateVersion, 3);
   assert.equal(committed.deduplicated, false);
   assert.equal(replay.committedAggregateVersion, 3);
-  assert.equal(replay.detail.sessions[0].aggregateVersion, 4);
+  assert.equal(replay.generation, beforeReplay.generation);
+  assert.deepEqual(replay.projection, committed.projection);
+  assert.equal(replay.projection.receipt.aggregateVersion, 3);
+  assert.equal(Object.hasOwn(replay, "detail"), false);
   assert.equal(replay.deduplicated, true);
   assert.deepEqual(replay.deletedCount, committed.deletedCount);
-  assert.equal(h.get().messages.length, 2);
+  const afterReplay = await h.open();
+  assert.equal(afterReplay.generation, beforeReplay.generation);
+  assert.equal((await afterReplay.readMetadata()).aggregateVersion, 4);
+  assert.equal((await afterReplay.readFacts()).messageCount, 2);
 });
 
-test("replaceTurn replays a committed receipt after the original anchor is gone", async () => {
-  const h = harness({
+test("replaceTurn replays a committed receipt after the original anchor is gone", async (t) => {
+  const h = await immutableMutationFixture(t, {
     aggregateVersion: 4,
-    messages: [
-      {
-        attachments: [],
-        sessionId: "s1",
-        role: "user",
-        messageOrigin: "natural",
-        content: "old",
-        turnScopeId: "old",
-      },
-    ],
+    messages: [mutationMessage("old")],
   });
   const input = {
-    userId: "u1",
-    sessionId: "s1",
+    ...h.request,
     anchor: { turnScopeId: "old" },
     newContent: "new",
     attachments: [],
@@ -178,28 +174,18 @@ test("replaceTurn replays a committed receipt after the original anchor is gone"
   );
   assert.equal(replay.turnReplacement.commandId, "replace-once");
   assert.deepEqual(
-    h.get().messages.map((message) => message.content),
+    (await (await h.open()).exportSession()).messages.map((message) => message.content),
     ["new"],
   );
 });
 
-test("replaceTurn idempotency keys reject reuse with a different request", async () => {
-  const replace = harness({
-    messages: [
-      {
-        attachments: [],
-        sessionId: "s1",
-        role: "user",
-        messageOrigin: "natural",
-        content: "old",
-        turnScopeId: "old",
-      },
-    ],
+test("replaceTurn idempotency keys reject reuse with a different request", async (t) => {
+  const replace = await immutableMutationFixture(t, {
+    messages: [mutationMessage("old")],
   });
   await replace.service.replaceTurn({
     attachments: [],
-    userId: "u1",
-    sessionId: "s1",
+    ...replace.request,
     anchor: { turnScopeId: "old" },
     newContent: "new",
     turnScopeId: "new",
@@ -208,8 +194,7 @@ test("replaceTurn idempotency keys reject reuse with a different request", async
   await assert.rejects(
     replace.service.replaceTurn({
       attachments: [],
-      userId: "u1",
-      sessionId: "s1",
+      ...replace.request,
       anchor: { turnScopeId: "other" },
       newContent: "other",
       turnScopeId: "other-new",
@@ -220,11 +205,13 @@ test("replaceTurn idempotency keys reject reuse with a different request", async
 });
 
 test("user_meta parsed results attach only to an existing user source message", async () => {
-  const h = harness({
+  const h = await harness({
     messages: [
       {
         attachments: [],
         messageUid: "sm_u",
+        sessionId: "s1",
+        ts: "2026-01-01T00:00:00.000Z",
         role: "user",
         messageOrigin: "natural",
         content: "q",
@@ -234,6 +221,10 @@ test("user_meta parsed results attach only to an existing user source message", 
       {
         attachments: [],
         messageUid: "sm_a",
+        sessionId: "s1",
+        ts: "2026-01-01T00:00:00.000Z",
+        modelMessageId: "model-a",
+        presentationMessageId: "message-t",
         role: "assistant",
         content: "a",
         turnScopeId: "t",

@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mount } from "@vue/test-utils";
 import { defineComponent, h } from "vue";
 import SessionListPanel from "../../../../src/modules/session/components/SessionListPanel.vue";
+import { mapSummaryEntryToSession } from "../../../../src/modules/session/model/list/sessionRecords.js";
 import { overlayMessageBox } from "../../../../src/shared/composables/overlayMessageBox.js";
 import { createTurnRuntimeRegistryState } from "../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 
@@ -70,6 +71,38 @@ afterEach(() => {
 });
 
 describe("SessionListPanel", () => {
+  it.each([false, true])(
+    "identifies unavailable sessions without title or date on mobile=%s",
+    async (isMobile) => {
+      const sessionId = "session-unavailable";
+      const session = mapSummaryEntryToSession(
+        {
+          sessionId,
+          parentSessionId: "",
+          caller: "user",
+          availability: "unavailable",
+          unavailableReason: { code: "INVALID_TRANSFER_ENVELOPE", message: "invalid session" },
+        },
+        { createConnectorPanelState: () => ({}) },
+      );
+      const wrapper = mountList({ sessions: [session], isMobile });
+      expect(session.title).toBeUndefined();
+      expect(session.updatedAt).toBeUndefined();
+      expect(wrapper.find(".session-date-header").attributes("title")).not.toMatch(/^\d{4}-/);
+      const row = wrapper.find(".session-item");
+      expect(row.find(".title").text()).toBe(sessionId);
+      expect(row.find(".title").classes()).toContain("error");
+      expect(row.attributes("aria-label")).toBe(sessionId);
+      expect(row.find(".title").attributes("aria-label")).toContain(`${sessionId}:`);
+      expect(wrapper.find(".session-popover__title").text()).toBe(sessionId);
+      expect(wrapper.find(".session-popover__reason").text()).toContain("invalid session");
+      expect(row.find(".session-rename-btn").attributes("disabled")).toBeDefined();
+      await row.find(".session-delete-btn").trigger("click");
+      expect(wrapper.emitted("delete-session")).toEqual([[[sessionId]]]);
+      expect(wrapper.emitted("select-session")).toBeUndefined();
+    },
+  );
+
   it("does not render session actions while collapsed and restores them when expanded", async () => {
     const wrapper = mountList({ collapsed: true });
     expect(wrapper.find(".session-actions").exists()).toBe(false);

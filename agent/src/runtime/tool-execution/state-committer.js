@@ -21,7 +21,6 @@ import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import {
   assertCanonicalAssistantPresentation,
-  canonicalAssistantPresentationIdentity,
   MESSAGE_TYPE,
   TOOL_CALL_MESSAGE_TYPE,
   TOOL_RESULT_MESSAGE_TYPE,
@@ -136,16 +135,10 @@ export function createStateCommitter({
       });
       if (assistantMessage.chatPresentation === true) {
         assertCanonicalAssistantPresentation(assistantMessage);
-        if (!isFunction(turnMessageStore.updateWhere)) {
+        if (!isFunction(turnMessageStore.demoteAssistantPresentation)) {
           throw new Error("canonical assistant presentation requires an updatable Turn store");
         }
-        const incomingPresentation = canonicalAssistantPresentationIdentity(assistantMessage);
-        turnMessageStore.updateWhere(
-          { chatPresentation: false, workspaceRootDirectory: undefined },
-          (message) =>
-            canonicalAssistantPresentationIdentity(message)?.turnScopeId ===
-            incomingPresentation.turnScopeId,
-        );
+        turnMessageStore.demoteAssistantPresentation(assistantMessage.turnScopeId);
       }
       turnMessageStore.push(assistantMessage);
       markAssistantDraftCommitted(runtime, assistantMessage.modelMessageId);

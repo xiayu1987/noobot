@@ -16,7 +16,6 @@ export {
 export {
   SESSION_ARTIFACT_PREDECESSOR,
   writeSessionArtifact,
-  writeSessionTurnArtifacts,
 } from "./session-artifact-session/session-artifact-writer.js";
 export {
   readSessionDisplaySummaryArtifact,

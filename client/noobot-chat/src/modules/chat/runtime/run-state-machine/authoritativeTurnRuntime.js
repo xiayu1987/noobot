@@ -11,7 +11,6 @@ import { isFinalTurnState } from "./turnReducer.js";
 import { projectAuthoritativeTurnTerminal } from "./authoritativeTurnProjection.js";
 import {
   validateTurnLifecycleEnvelope,
-  validateTurnLifecycleSnapshot,
   validateTurnTerminalResolution,
 } from "@noobot/session-protocol";
 import { ensureSessionBucket } from "./turnRuntimeRegistryIdentity.js";
@@ -114,13 +113,5 @@ export function applyTurnTerminalResolution(registry, response) {
 }
 
 export function applyTurnLifecycleSnapshot(registry, snapshot) {
-  const validation = validateTurnLifecycleSnapshot(snapshot);
-  if (!validation.valid) {
-    return {
-      applied: false,
-      reason: "invalid_authoritative_snapshot",
-      errors: validation.errors,
-    };
-  }
   return projectTurnLifecycleSnapshot(registry, snapshot);
 }

@@ -175,27 +175,25 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
   engine.globalConfig = { workspaceRoot };
   const sourceCalls = [];
   engine.session = {
-    async getSessionContextSource(input) {
+    async getSessionMessageSources(input) {
       sourceCalls.push(input);
-      return {
-        messages: [
-          {
-            role: "user",
-            messageUid: "source-user",
-            content: "incremental",
-            messageOrigin: "natural",
-            attachments: [
-              {
-                attachmentId: "attachment-source",
-                sessionId: "s1",
-                attachmentSource: "user",
-                name: "source.docx",
-                mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-              },
-            ],
-          },
-        ],
-      };
+      return [
+        {
+          role: "user",
+          messageUid: "source-user",
+          content: "incremental",
+          messageOrigin: "natural",
+          attachments: [
+            {
+              attachmentId: "attachment-source",
+              sessionId: "s1",
+              attachmentSource: "user",
+              name: "source.docx",
+              mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            },
+          ],
+        },
+      ];
     },
   };
   const captured = [];
@@ -247,7 +245,15 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
       captured[0].options.incrementalMessages.map((message) => message.content),
       ["incremental"],
     );
-    assert.deepEqual(sourceCalls, [{ userId: "u1", sessionId: "s1", persistenceScope: null }]);
+    assert.deepEqual(sourceCalls, [
+      {
+        userId: "u1",
+        sessionId: "s1",
+        persistenceScope: null,
+        messageUids: ["source-user"],
+        turnScopeIds: ["turn-stopped"],
+      },
+    ]);
     assert.deepEqual(Object.keys(captured[0].options).sort(), [
       "attachments",
       "incrementalMessages",
@@ -362,8 +368,8 @@ test("stopped snapshot resume restores turn progress onto the live system runtim
   const engine = Object.create(SessionExecutionEngine.prototype);
   engine.globalConfig = { workspaceRoot };
   engine.session = {
-    async getSessionContextSource() {
-      return { messages: [] };
+    async getSessionMessageSources() {
+      return [];
     },
   };
   const contextBuilder = {

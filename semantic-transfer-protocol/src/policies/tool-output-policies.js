@@ -16,7 +16,6 @@ const TEXT_TOOLS = [
   "user_interaction",
   "access_connector",
   "do_search_web",
-  "task_summary",
   "task_check",
   "help",
 ];

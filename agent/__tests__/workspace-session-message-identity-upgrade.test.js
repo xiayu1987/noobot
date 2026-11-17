@@ -11,6 +11,8 @@ import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import {
   MESSAGE_REMOVED_FIELD_NAME,
   SESSION_ARTIFACT_SCHEMA_VERSION,
+  TURN_EVENT,
+  TURN_PHASE,
 } from "@noobot/session-protocol";
 import { SESSION_REPAIR_DATA_REJECTION_CODES } from "@noobot/session-repair";
 import { TRANSFER_ENVELOPE_V2 } from "@noobot/semantic-transfer-protocol";
@@ -19,8 +21,18 @@ import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   MESSAGE_EVENT_WIRE_EVENT,
 } from "@noobot/event-protocol/message-event";
+import { AUTHORITY_OUTBOX_ERROR_CODE } from "@noobot/event-protocol/outbox";
 import { upgradeSessionMessageIdentity } from "../src/workspace-lifecycle/session-message-identity-upgrade.js";
 import { messageHash } from "../src/session/session-artifact-session/turn-journal-store.js";
+import { createSessionFacade } from "../src/session/index.js";
+import {
+  authorityOutboxJournalPath,
+  authorityOutboxPrepareRecord,
+  authorityOutboxCommitRecord,
+} from "../src/session/authority-outbox-store/outbox-journal.js";
+import { ImmutableSessionStore } from "../src/session/session-artifact-session/immutable-session-store.js";
+import { writeLegacySessionFixture } from "./helpers/legacy-session-fixture.js";
+import { event } from "./session/turn-lifecycle-session-contract.test-helpers.js";
 import { TEST_SCOPED_SESSION_ROOTS } from "./helpers/scoped-session-roots.js";
 import { TEST_STORAGE_SERVICE } from "./helpers/storage-service.js";
 import { legacyV2TransferEnvelope } from "./helpers/legacy-transfer-envelope.js";
@@ -31,6 +43,7 @@ import {
 } from "./session/scoped-session-repositories.fixtures.js";
 import {
   SESSION_ID,
+  downgradeSessionStorage,
   jsonl,
   saveCanonicalSession,
   v9Options,
@@ -530,6 +543,102 @@ test("v9 upgrade quarantines a session whose v2 transfer envelope cannot migrate
     );
     assert.match(JSON.stringify(result.quarantined[0].error), /transfer_envelope_unmigratable/i);
     assert.equal((await readJson(path.join(sessionDir, "session.json"))).schemaVersion, 12);
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+async function saveLifecycleSessionWithoutLastPrepare({ sessionRepo: targetRepository }) {
+  const source = buildHarness();
+  const { runtime, sessionRepo } = await source.setup();
+  try {
+    const owner = { userId: "alice", sessionId: "s-outbox-gap" };
+    const persistenceContext = sessionRepo.treePersistenceContext(owner.userId, owner.sessionId);
+    await sessionRepo.ensureSession({
+      ...owner,
+      parentSessionId: "",
+      caller: "user",
+      persistenceContext,
+    });
+    const { sessionDir: sourceDir } = await sessionRepo.requireSessionScope(
+      owner.userId,
+      owner.sessionId,
+      persistenceContext,
+    );
+    const facade = createSessionFacade(runtime);
+    const lifecycleOwner = { ...owner, persistenceScope: null };
+    const accepted = await facade.applyTurnLifecycleEvent({
+      ...event(TURN_EVENT.ACTION_ACCEPTED, "accepted", 0, {
+        action: "send",
+        phase: TURN_PHASE.ACTION,
+      }),
+      ...lifecycleOwner,
+    });
+    await facade.applyTurnLifecycleEvent({
+      ...event(TURN_EVENT.PROCESSING_STARTED, "started", 1, { phase: TURN_PHASE.PROCESSING }),
+      ...lifecycleOwner,
+      dialogProcessId: accepted.dialogProcessId,
+    });
+    const session = await sessionRepo.requireById(owner.userId, owner.sessionId, {
+      persistenceContext,
+    });
+    const store = await ImmutableSessionStore.open({ sessionDir: sourceDir });
+    const snapshot = await store.snapshot();
+    const records = [];
+    for await (const [, item] of store.entries(snapshot, "outbox")) {
+      records.push(authorityOutboxPrepareRecord(item), authorityOutboxCommitRecord(item));
+    }
+    const targetContext = targetRepository.treePersistenceContext(owner.userId, owner.sessionId);
+    const { sessionDir } = await writeLegacySessionFixture(
+      targetRepository,
+      owner.userId,
+      session,
+      { persistenceContext: targetContext },
+    );
+    await downgradeSessionStorage(sessionDir, 22);
+    await mkdir(path.join(sessionDir, "authority-outbox"), { recursive: true });
+    const lostEventId = records.findLast((record) => record.op === "prepare").eventId;
+    await writeOutbox(
+      sessionDir,
+      records.filter((record) => record.eventId !== lostEventId),
+    );
+    return sessionDir;
+  } finally {
+    await source.cleanup();
+  }
+}
+
+test("v9 upgrade quarantines a lifecycle receipt without a prepared outbox event and continues healthy sessions", async () => {
+  const harness = buildHarness();
+  const state = await harness.setup();
+  try {
+    const healthySessionDir = await saveCanonicalSession(state.sessionRepo);
+    await downgradeToSchema12(healthySessionDir);
+    const badSessionDir = await saveLifecycleSessionWithoutLastPrepare(state);
+    const badOutboxPath = authorityOutboxJournalPath(badSessionDir);
+    const originalOutbox = await readFile(badOutboxPath);
+    const options = v9Options(state.root);
+
+    const result = await upgradeSessionMessageIdentity(options);
+
+    assert.deepEqual(
+      result.sessions.map((item) => item.sessionId),
+      [SESSION_ID],
+    );
+    assert.deepEqual(
+      result.quarantined.map((item) => item.path),
+      [path.relative(options.base, badSessionDir)],
+    );
+    assert.equal(
+      result.quarantined[0].error.details.reason,
+      AUTHORITY_OUTBOX_ERROR_CODE.INTEGRITY_INVALID,
+    );
+    assert.deepEqual(await readFile(badOutboxPath), originalOutbox);
+    assert.equal((await readJson(path.join(badSessionDir, "session.json"))).schemaVersion, 22);
+    assert.equal(
+      (await readJson(path.join(healthySessionDir, "session.json"))).schemaVersion,
+      SESSION_ARTIFACT_SCHEMA_VERSION,
+    );
   } finally {
     await harness.cleanup();
   }

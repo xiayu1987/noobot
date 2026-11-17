@@ -609,6 +609,50 @@ test("settled summary marks are re-evaluated when an immutable turn gains a mess
   assert.deepEqual(extended.repaired, ["turn-1"]);
 });
 
+test("summary repair isolates completed dialog ownership and does not mutate its input", () => {
+  const identity = { turnScopeId: "turn-1", dialogProcessId: "dialog-1" };
+  const document = {
+    turnLifecycle: {
+      ...createEmptyTurnLifecycle(),
+      turns: {
+        "turn-1": { ...identity, terminalStatus: { status: "completed" } },
+      },
+    },
+    messages: [
+      {
+        ...identity,
+        role: "assistant",
+        messageUid: "call-1",
+        tool_calls: [{ id: "call-1", name: "read_file" }],
+        summarized: true,
+      },
+      {
+        ...identity,
+        role: "tool",
+        messageUid: "result-1",
+        tool_call_id: "call-1",
+        toolName: "read_file",
+        summarized: true,
+      },
+      { ...identity, role: "assistant", messageUid: "final-1", content: "done", summarized: false },
+    ],
+  };
+  assert.equal(reconcileCompletedTurnSummaryMarks(document).document, document);
+  document.messages[1].summarized = false;
+  const unrelated = {
+    ...document.messages[1],
+    messageUid: "other-result",
+    dialogProcessId: "other-dialog",
+  };
+  document.messages.unshift(unrelated);
+  const result = reconcileCompletedTurnSummaryMarks(document);
+  assert.deepEqual(result.repaired, ["turn-1"]);
+  assert.equal(result.document.messages[0], unrelated);
+  assert.equal(result.document.messages[2].summarized, true);
+  assert.equal(document.messages[2].summarized, false);
+  assert.equal(result.document.messages[3], document.messages[3]);
+});
+
 test("removes an uncommitted aggregate-conflict continuation as one lifecycle repair", () => {
   const source = aggregateConflictContinuationSession();
   const result = reconcileUncommittedAggregateConflictContinuations(source);

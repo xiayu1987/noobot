@@ -24,7 +24,6 @@ export const PROGRAMMING_REQUIRED_TOOL_NAMES = Object.freeze([
 export const PROGRAMMING_AUXILIARY_TOOL_NAMES = Object.freeze([
   "access_connector",
   "user_interaction",
-  "task_summary",
   "task_check",
   "help",
   "do_search_web",

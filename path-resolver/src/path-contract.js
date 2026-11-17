@@ -216,7 +216,7 @@ export function resolvePathRef({ input = "", workspaceRoot = "", owner = "" } = 
 }
 
 export function isPathWithinRoot(root, candidate) {
-  const relative = filePath.relative(filePath.resolve(root), filePath.resolve(candidate));
+  const relative = filePath.relative(root, candidate);
   return (
     relative === "" ||
     (relative !== ".." &&

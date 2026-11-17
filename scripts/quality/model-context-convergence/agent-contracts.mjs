@@ -69,8 +69,8 @@ export const AGENT_CONTRACTS = Object.freeze([
     file: "agent/src/bot/session/summary-checkpoint-committer.js",
     required: [
       [
-        "summary checkpoint matches canonical ids",
-        /summarizedSet\.has\(resolveMessageUid\(message\)\)/,
+        "summary checkpoint marks only unchanged canonical message revisions",
+        /summarizedMessageUids:\s*store\.readUnchangedMessageUids\(summarizedRevisions\)/,
       ],
     ],
     forbidden: [
@@ -101,10 +101,21 @@ export const AGENT_CONTRACTS = Object.freeze([
     ],
   },
   {
-    file: "agent/src/tools/collaboration/task-summary-tool.js",
+    file: "agent/src/runtime/summary/phase-summary.js",
+    required: [
+      ["phase summary requires streaming", /streamingRequired:\s*true/],
+      [
+        "phase summary validates the protocol output",
+        /requirePhaseSummaryText\(response\.output\)/,
+      ],
+      [
+        "phase summary requests checkpoint before acknowledgment",
+        /requestMainFlowSummaryCheckpoint[\s\S]*acknowledgeMainFlowPhaseSummary\(runtime, instruction\)/,
+      ],
+    ],
     forbidden: [
       [
-        "task_summary mutates summarized state before checkpoint commit",
+        "phase summary mutates summarized state before checkpoint commit",
         /markCurrentTurn(?:Store|ModelMessages|Array)Summarized/,
       ],
     ],
@@ -114,14 +125,36 @@ export const AGENT_CONTRACTS = Object.freeze([
     required: [
       ["checkpoint request delegates to protocol", /parseTurnSummaryCheckpointRequest\(payload\)/],
       [
-        "checkpoint transaction delegates to protocol",
-        /applyTurnSummaryCheckpoint\(session, request, this\.now\(\)\)/,
+        "checkpoint service commits messages and checkpoint through one immutable transaction",
+        /this\.sessionRepo\.withSessionReader\([\s\S]*?async \(reader, scope, commitChanges\) =>[\s\S]*?submission\.submit\(\{[\s\S]*?expectedGeneration:\s*reader\.generation,[\s\S]*?changes:\s*\{\s*messages:\s*request\.messages\.map\([\s\S]*?summaryCheckpoints:\s*\[\{\s*\.\.\.request,\s*persistenceContext:\s*undefined\s*\}\][\s\S]*?commit:\s*commitChanges,/,
       ],
     ],
     forbidden: [
       [
         "checkpoint service redefines protocol request rules",
         /function\s+(?:parseCheckpointRequest|assertCheckpointTargetsTurn|assertCheckpointDisposition|checkpointRequestHash|assertCheckpointMessagesResolved|assertSummarizedToolPairClosure|markCheckpointMessages|assertCheckpointRevision|resolveDuplicateCheckpoint)\b/,
+      ],
+    ],
+  },
+  {
+    file: "agent/src/session/session-artifact-session/commit-session-changes.js",
+    required: [
+      [
+        "immutable commit delegates checkpoint preparation to its transaction adapter",
+        /prepareImmutableSummaryCheckpoint\(\{\s*store,\s*get:\s*read,\s*getManyMetadata:\s*\(collection, keys\) => plan\.getManyMetadata\(collection, keys\),\s*checkpoint,\s*committedAt:\s*input\.committedAt,/,
+      ],
+    ],
+  },
+  {
+    file: "agent/src/session/session-artifact-session/immutable-summary-changes.js",
+    required: [
+      [
+        "immutable checkpoint request delegates to protocol",
+        /parseTurnSummaryCheckpointRequest\(checkpoint\)/,
+      ],
+      [
+        "checkpoint transaction delegates to protocol",
+        /applyTurnSummaryCheckpoint\(session, request, committedAt\)/,
       ],
     ],
   },
@@ -334,7 +367,7 @@ export const AGENT_CONTRACTS = Object.freeze([
       ["help tool loop protocol marker", /CONTEXT_INJECTED_MESSAGE_TYPE\.HELP_TOOL_LOOP_PROMPT/],
       [
         "help tool loop uses canonical control-message appender",
-        /appendTurnContextControlMessage\(\{[\s\S]{0,500}CONTEXT_INJECTED_MESSAGE_TYPE\.HELP_TOOL_LOOP_PROMPT/,
+        /appendTurnRuntimeInjectedMessage\(\{[\s\S]{0,500}CONTEXT_INJECTED_MESSAGE_TYPE\.HELP_TOOL_LOOP_PROMPT/,
       ],
     ],
     scoped: [
@@ -353,7 +386,11 @@ export const AGENT_CONTRACTS = Object.freeze([
     file: "agent/src/runtime/turn/turn-context-message-appender.js",
     required: [
       ["control messages persist as user", /role:\s*["']user["']/],
-      ["control messages persist as context_control", /type:\s*["']context_control["']/],
+      ["runtime injections persist as messages", /type:\s*["']message["']/],
+      [
+        "runtime injections persist the canonical category",
+        /injectedMessageType:\s*normalizedInternalType/,
+      ],
       ["control messages project as HumanMessage", /new\s+HumanMessage\s*\(/],
       ["control messages enter incremental block", /block:\s*["']incremental["']/],
     ],

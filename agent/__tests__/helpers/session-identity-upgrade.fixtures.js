@@ -13,6 +13,7 @@ import {
 } from "../../src/session/session-artifact-session/turn-journal-store.js";
 import { TEST_SCOPED_SESSION_ROOTS } from "./scoped-session-roots.js";
 import { TEST_STORAGE_SERVICE } from "./storage-service.js";
+import { writeLegacySessionFixture } from "./legacy-session-fixture.js";
 import {
   applySessionMessageFacts,
   createTestSessionRequiredFields,
@@ -84,7 +85,8 @@ export async function saveCanonicalSession(sessionRepo) {
     ts: `2026-01-01T00:00:0${messageUid.at(-1)}.000Z`,
     ...extra,
   });
-  await sessionRepo.save(
+  await writeLegacySessionFixture(
+    sessionRepo,
     "alice",
     applySessionMessageFacts({
       ...createTestSessionRequiredFields(),
@@ -96,7 +98,7 @@ export async function saveCanonicalSession(sessionRepo) {
         message("m2", "assistant", { modelMessageId: "mm_m2", presentationMessageId: "pm_1" }),
       ],
     }),
-    { createOnly: true, persistenceContext },
+    { persistenceContext },
   );
   const scope = await sessionRepo.requireSessionScope("alice", SESSION_ID, persistenceContext);
   return scope.sessionDir;

@@ -13,11 +13,7 @@ import {
   getPendingAuthorityEvents,
   recordAuthorityEventAttempts,
 } from "./session-message-service/authority-event.js";
-import {
-  createPluginArtifactQueryResult,
-  pluginArtifactKey,
-  projectPluginArtifacts,
-} from "@noobot/event-protocol";
+import { createPluginArtifactQueryResult } from "@noobot/event-protocol";
 import { deleteFromMessage, replaceTurn } from "./session-message-service/turn-mutations.js";
 import {
   applyTurnLifecycleEvent,
@@ -27,6 +23,7 @@ import {
 } from "./session-message-service/turn-state.js";
 import {
   getSessionTurns,
+  getSessionMessageSources,
   getSessionContextSource,
   getTurnSummaryCheckpointState,
 } from "./session-message-service/message-queries.js";
@@ -56,11 +53,12 @@ export class SessionMessageService {
     return commitAuthorityEvent.call(this, payload);
   }
   async getPluginArtifact(payload) {
-    const session = await this.sessionRepo.requireById(payload.userId, payload.sessionId, {
-      persistenceContext: payload.persistenceContext,
-    });
-    const projected = projectPluginArtifacts(session.sessionArtifactEvents);
-    return createPluginArtifactQueryResult(projected[pluginArtifactKey(payload)] || null);
+    await using reader = await this.sessionRepo.requireSessionReader(
+      payload.userId,
+      payload.sessionId,
+      { persistenceContext: payload.persistenceContext },
+    );
+    return createPluginArtifactQueryResult(await reader.readPluginArtifact(payload));
   }
   async deleteFromMessage(payload = {}) {
     return deleteFromMessage.call(this, payload);
@@ -103,6 +101,9 @@ export class SessionMessageService {
   }
   async getSessionContextSource(payload = {}) {
     return getSessionContextSource.call(this, payload);
+  }
+  async getSessionMessageSources(payload) {
+    return getSessionMessageSources.call(this, payload);
   }
   async getTurnSummaryCheckpointState(payload = {}) {
     return getTurnSummaryCheckpointState.call(this, payload);

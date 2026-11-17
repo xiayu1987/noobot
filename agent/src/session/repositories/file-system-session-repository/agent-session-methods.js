@@ -4,6 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path } from "@noobot/path-resolver";
+import {
+  IMMUTABLE_SESSION_FORMAT_FILE,
+  IMMUTABLE_SESSION_HEAD_FILE,
+} from "@noobot/session-protocol/immutable-storage";
 import { AGENT_SCOPED_SESSION_ROOTS } from "@noobot/workspace-protocol";
 import { assertSessionScopeIdentity } from "@noobot/session-protocol";
 import { tSystem } from "noobot-i18n/agent/system-text";
@@ -14,7 +18,8 @@ import {
   createPersistenceContext,
   ScopedSessionLocationResolver,
 } from "../../session-location-resolver.js";
-import { buildSessionArtifactFileMap } from "../../session-artifact-store.js";
+import { ImmutableSessionStore } from "../../session-artifact-session/immutable-session-store.js";
+import { immutableStorageError } from "../../session-artifact-session/immutable-object-store.js";
 import { sessionTreeNodeMissingError } from "./access-methods.js";
 
 function persistenceOwnerConflictError(sessionId, owners) {
@@ -38,9 +43,19 @@ class AgentSessionMethods {
   async _readAgentSessionScope(userId, allowedRoot, sessionId) {
     const basePath = this.pathResolver.resolveBasePath(userId);
     const relativeDir = path.join(allowedRoot, sessionId);
-    const files = buildSessionArtifactFileMap(path.join(basePath, relativeDir));
-    const session = await this.storageService.readOptionalJson(files.session);
-    if (session === null) return null;
+    const sessionDir = path.join(basePath, relativeDir);
+    const hasHead = await this.storageService.exists(
+      path.join(sessionDir, IMMUTABLE_SESSION_HEAD_FILE),
+    );
+    if (
+      !hasHead &&
+      !(await this.storageService.exists(path.join(sessionDir, IMMUTABLE_SESSION_FORMAT_FILE)))
+    )
+      return null;
+    const store = await ImmutableSessionStore.open({ sessionDir, sessionId });
+    const snapshot = await store.snapshot();
+    const session = await store.get(snapshot, "metadata", "session");
+    if (!session) throw immutableStorageError("Immutable session metadata is missing");
     assertSessionScopeIdentity({ session, sessionId, parentSessionId: session.parentSessionId });
     const locationResolver = new ScopedSessionLocationResolver({
       pathResolver: this.pathResolver,

@@ -522,7 +522,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
       throw error;
     });
     const applySessionDetail = vi.fn();
-    const { engine, activeSession, sending, deps } = createHarness({
+    const { engine, activeSession, sending, deps, turnRuntimeRegistry } = createHarness({
       sessionId: "s-error",
       stream,
       deps: { applySessionDetail },
@@ -536,6 +536,12 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     expect(botMessage.error).toBe("invalid tool input");
     expect(applySessionDetail).not.toHaveBeenCalled();
     expect(deps.clearPendingInteraction).toHaveBeenCalled();
-    expect(sending.value).toBe(true);
+    expect(sending.value).toBe(false);
+    const turns = Object.values(turnRuntimeRegistry.value.sessions["s-error"].turns);
+    expect(turns).toHaveLength(1);
+    expect(turns[0].commandPending).toBe(false);
+    expect(turns[0].state).toBeFalsy();
+    expect(turns[0].terminal).toBeFalsy();
+    expect(turns[0].lifecycleObserved).not.toBe(true);
   });
 });

@@ -32,8 +32,6 @@ export function createHarnessBucket() {
     planRefinementRecords: [],
     completedDialogProcessIds: [],
     planAcceptanceStatusByPlanId: {},
-    summaryText: "",
-    summaryFullText: "",
     planText: "",
     globalRevisionCount: 0,
     lastRevisionChangedMainStepIndexes: [],

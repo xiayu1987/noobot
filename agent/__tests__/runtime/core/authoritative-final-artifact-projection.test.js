@@ -137,7 +137,7 @@ test("authoritative final event owns generated attachment envelopes before persi
 
 test("authoritative final completion retains classified checkpoint call-result pairs", async () => {
   const evidencePolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE);
-  const boundaryPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
+  const boundaryPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE);
   const toolCallMessage = (messageUid, callId, name, contextPolicy = null) => ({
     messageUid,
     id: `provider-${messageUid}`,

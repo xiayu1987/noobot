@@ -6,240 +6,144 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  SESSION_ERROR_CODE,
-  TURN_RECOVERY_ACTION,
   createMessageDeleteResponse,
-  createSessionDetailDocument,
-  createTurnLifecycleSnapshot,
   createTurnReplaceResponse,
-  createTurnReplacementCommit,
   requireMessageDeleteResponse,
   requireTurnReplaceResponse,
+  SESSION_COMMAND,
+  SESSION_ERROR_CODE,
 } from "../src/index.js";
 
-const INVALID = { code: SESSION_ERROR_CODE.SESSION_MUTATION_RESPONSE_INVALID };
-
-function snapshot(sessionId) {
-  return createTurnLifecycleSnapshot({
-    commandId: `snapshot-${sessionId}`,
-    sessionId,
-    sequence: 0,
-    activeTurnScopeId: "",
-    activeTurn: null,
-    recentTerminalTurns: [],
-    replacedTurns: [],
-    unchanged: false,
-    recovery: TURN_RECOVERY_ACTION.NONE,
-    generatedAt: "2026-01-02T00:00:00.000Z",
-  });
-}
-
-function detail({ aggregateVersion, messages, sessionId = "s-1" }) {
-  return createSessionDetailDocument({
-    sessionId,
-    sessions: [
-      {
-        sessionId,
-        parentSessionId: "",
-        caller: "user",
-        createdAt: "2026-01-01T00:00:00.000Z",
-        updatedAt: "2026-01-02T00:00:00.000Z",
-        title: sessionId,
-        aggregateVersion,
-        turnTimings: [],
-        turnLifecycleSnapshot: snapshot(sessionId),
-        sessionArtifactEvents: [],
-        messages,
-        availability: "available",
-      },
-    ],
-  });
-}
-
-function unavailableDetail() {
-  return createSessionDetailDocument({
-    sessionId: "s-1",
-    sessions: [
-      {
-        sessionId: "s-1",
-        parentSessionId: "",
-        caller: "user",
-        availability: "unavailable",
-        unavailableReason: { code: "SESSION_ARTIFACT_NOT_FOUND", message: "missing" },
-      },
-    ],
-  });
-}
-
-function deleteInput(overrides = {}) {
-  return {
-    receiptResult: { deletedCount: 2, anchorIndex: 1, deletedTurnScopeIds: ["turn-old"] },
-    commandId: "delete-1",
+function input(replace = false) {
+  const commandId = replace ? "replace-1" : "delete-1";
+  const committedAt = "2026-11-15T00:00:00.000Z";
+  const turnReplacement = {
+    protocolVersion: 1,
+    eventType: "turn.replaced",
+    commandId,
+    sessionId: "s1",
     committedAggregateVersion: 4,
-    deduplicated: false,
-    detail: detail({
-      aggregateVersion: 4,
-      messages: [{ role: "user", messageUid: "user-keep", turnScopeId: "turn-keep" }],
-    }),
-    ...overrides,
-  };
-}
-
-function commit(overrides = {}) {
-  return createTurnReplacementCommit({
-    commandId: "resend-1",
-    sessionId: "s-1",
-    committedAggregateVersion: 4,
-    replacedTurnScopeIds: ["turn-old"],
+    replacedTurnScopeIds: ["old"],
     replacementDialogProcessId: "dialog-new",
-    replacementTurnScopeId: "turn-new",
+    replacementTurnScopeId: "new",
     replacementUserMessageUid: "user-new",
-    requestHash: "request-hash-1",
-    committedAt: "2026-07-31T00:00:00.000Z",
-    ...overrides,
-  });
-}
-
-const REPLACEMENT_USER = {
-  role: "user",
-  messageUid: "user-new",
-  dialogProcessId: "dialog-new",
-  turnScopeId: "turn-new",
-};
-
-const REPLACEMENT_ASSISTANT = {
-  role: "assistant",
-  messageUid: "assistant-new",
-  dialogProcessId: "dialog-new",
-  turnScopeId: "turn-new",
-};
-
-function replaceInput(overrides = {}) {
+    requestHash: "request-hash",
+    committedAt,
+  };
+  const result = replace
+    ? { turnReplacement }
+    : {
+        deletedCount: 1,
+        anchorIndex: 2,
+        deletedTurnScopeIds: [],
+      };
+  const message = {
+    sessionId: "s1",
+    parentSessionId: "",
+    messageUid: "user-new",
+    userMessageId: "um-new",
+    role: "user",
+    content: "edited",
+    turnScopeId: "new",
+    dialogProcessId: "dialog-new",
+  };
+  const projection = {
+    kind: "commit",
+    generation: 9,
+    receipt: {
+      commandId,
+      type: replace ? SESSION_COMMAND.TURN_REPLACE : SESSION_COMMAND.MESSAGE_DELETE_FROM,
+      requestHash: "request-hash",
+      aggregateVersion: 4,
+      committedAt,
+      result,
+    },
+    baseAggregateVersion: 3,
+    metadata: { sessionId: "s1", parentSessionId: "", aggregateVersion: 4 },
+    lifecycleHead: { sequence: 5, activeTurnScopeId: "" },
+    deletedMessageUids: ["removed"],
+    messages: replace ? [{ ordinal: 3, turnOrdinal: 1, message }] : [],
+    turns: [],
+    replacements: [],
+    timings: [],
+  };
   return {
-    receiptResult: { turnReplacement: commit() },
-    commandId: "resend-1",
+    receiptResult: result,
+    commandId,
     committedAggregateVersion: 4,
     deduplicated: false,
-    detail: detail({ aggregateVersion: 4, messages: [REPLACEMENT_USER] }),
-    ...overrides,
+    deletedMessageUids: ["removed"],
+    sessionId: "s1",
+    generation: 9,
+    projection,
+    displayMessages: replace ? [message] : [],
   };
 }
 
-test("message delete response is the command result plus one detail document", () => {
-  const response = createMessageDeleteResponse(deleteInput());
-  assert.deepEqual(Object.keys(response).sort(), [
-    "anchorIndex",
-    "commandId",
-    "committedAggregateVersion",
-    "deduplicated",
-    "deletedCount",
-    "deletedTurnScopeIds",
-    "detail",
-  ]);
-  assert.equal(requireMessageDeleteResponse(response), response);
-});
-
-test("mutation responses reject internal aggregate fields and a missing detail", () => {
-  const response = createMessageDeleteResponse(deleteInput());
-  for (const extra of ["session", "aggregateVersion", "removedAuthorityOutboxEvents"]) {
-    assert.throws(() => requireMessageDeleteResponse({ ...response, [extra]: 1 }), INVALID);
-  }
-  const { detail: _detail, ...withoutDetail } = response;
-  assert.throws(() => requireMessageDeleteResponse(withoutDetail), INVALID);
-});
-
-test("mutation response detail must exist and its main entry must be available", () => {
-  const missing = { exists: false, sessionId: "s-1", sessions: [] };
-  assert.throws(() => createMessageDeleteResponse(deleteInput({ detail: missing })), INVALID);
-  assert.throws(
-    () => createMessageDeleteResponse(deleteInput({ detail: unavailableDetail() })),
-    INVALID,
-  );
-});
-
-test("detail version equals the committed version for a new commit and may exceed it when deduplicated", () => {
-  const ahead = detail({ aggregateVersion: 5, messages: [] });
-  assert.throws(() => createMessageDeleteResponse(deleteInput({ detail: ahead })), INVALID);
-  assert.doesNotThrow(() =>
-    createMessageDeleteResponse(deleteInput({ detail: ahead, deduplicated: true })),
-  );
-  const behind = detail({ aggregateVersion: 3, messages: [] });
-  assert.throws(
-    () => createMessageDeleteResponse(deleteInput({ detail: behind, deduplicated: true })),
-    INVALID,
-  );
-});
-
-test("turn replace response binds the replacement user to the detail main entry", () => {
-  const response = createTurnReplaceResponse(replaceInput());
-  assert.deepEqual(Object.keys(response).sort(), [
-    "commandId",
-    "committedAggregateVersion",
-    "deduplicated",
-    "detail",
-    "turnReplacement",
-  ]);
-  assert.equal(requireTurnReplaceResponse(response), response);
-});
-
-test("turn replace response rejects a detail that does not match the commit", () => {
-  const cases = {
-    replaced_scope_still_present: [
-      REPLACEMENT_USER,
-      { role: "user", messageUid: "user-old", turnScopeId: "turn-old" },
-    ],
-    assistant_in_replacement_scope: [REPLACEMENT_USER, REPLACEMENT_ASSISTANT],
-    wrong_dialog_process: [{ ...REPLACEMENT_USER, dialogProcessId: "dialog-other" }],
-    missing_replacement_user: [],
-  };
-  for (const [name, messages] of Object.entries(cases)) {
-    assert.throws(
-      () =>
-        createTurnReplaceResponse(
-          replaceInput({ detail: detail({ aggregateVersion: 4, messages }) }),
-        ),
-      INVALID,
-      name,
-    );
-  }
-});
-
-test("turn replace response rejects identity drift between envelope, commit and detail", () => {
-  assert.throws(
-    () => createTurnReplaceResponse(replaceInput({ commandId: "resend-other" })),
-    INVALID,
-  );
-  assert.throws(
-    () => createTurnReplaceResponse(replaceInput({ committedAggregateVersion: 5 })),
-    INVALID,
-  );
-  assert.throws(
-    () =>
-      createTurnReplaceResponse(
-        replaceInput({
-          detail: detail({
-            sessionId: "s-other",
-            aggregateVersion: 4,
-            messages: [REPLACEMENT_USER],
-          }),
-        }),
-      ),
-    INVALID,
-  );
-});
-
-test("deduplicated replace response tolerates later messages in the replacement scope", () => {
-  const input = replaceInput({
-    deduplicated: true,
-    detail: detail({ aggregateVersion: 6, messages: [REPLACEMENT_USER, REPLACEMENT_ASSISTANT] }),
+for (const replace of [false, true]) {
+  const create = replace ? createTurnReplaceResponse : createMessageDeleteResponse;
+  const requireResponse = replace ? requireTurnReplaceResponse : requireMessageDeleteResponse;
+  const label = replace ? "replacement" : "deletion";
+  test(`${label} response carries original changes without a complete detail document`, () => {
+    const response = create(input(replace));
+    assert.equal(requireResponse(response), response);
+    assert.equal(Object.hasOwn(response, "detail"), false);
+    assert.deepEqual(response.deletedMessageUids, ["removed"]);
+    assert.equal(response.projection.turns.length, 0);
   });
-  assert.doesNotThrow(() => createTurnReplaceResponse(input));
+  test(`${label} retry preserves original effects while reporting a later generation`, () => {
+    const source = input(replace);
+    const response = create({ ...source, deduplicated: true, generation: 100 });
+    assert.equal(response.projection.generation, 9);
+    assert.equal(response.generation, 100);
+    assert.deepEqual(response.displayMessages, source.displayMessages);
+  });
+  test(`${label} rejects mismatched identity, deletion evidence and generations`, () => {
+    const response = create(input(replace));
+    for (const changes of [
+      { commandId: "other" },
+      { sessionId: "other" },
+      { committedAggregateVersion: 5 },
+      { deletedMessageUids: ["other"] },
+      { generation: 8 },
+      { generation: 10 },
+      { displayMessages: [null] },
+      { detail: {} },
+      { deduplicated: "yes" },
+    ])
+      assert.throws(() => requireResponse({ ...response, ...changes }), {
+        code: SESSION_ERROR_CODE.SESSION_MUTATION_RESPONSE_INVALID,
+      });
+  });
+  test(`${label} imported receipts cannot invent original effects`, () => {
+    const source = input(replace);
+    source.projection = { kind: "baseline", generation: 1, receipt: source.projection.receipt };
+    const baseline = {
+      ...source,
+      deduplicated: true,
+      deletedMessageUids: null,
+      displayMessages: [],
+    };
+    assert.equal(create(baseline).projection.kind, "baseline");
+    for (const changes of [
+      { deduplicated: false },
+      { deletedMessageUids: [] },
+      { displayMessages: [{}] },
+    ])
+      assert.throws(() => create({ ...baseline, ...changes }), {
+        code: SESSION_ERROR_CODE.SESSION_MUTATION_RESPONSE_INVALID,
+      });
+  });
+}
+
+test("replacement display content must match the original committed message", () => {
+  const source = input(true);
   assert.throws(
     () =>
       createTurnReplaceResponse({
-        ...input,
-        detail: detail({ aggregateVersion: 6, messages: [] }),
+        ...source,
+        displayMessages: [{ ...source.displayMessages[0], content: "later edit" }],
       }),
-    INVALID,
+    { code: SESSION_ERROR_CODE.SESSION_MUTATION_RESPONSE_INVALID },
   );
 });

@@ -23,18 +23,22 @@ export class SessionContextService {
     currentTurnScopeId,
     currentDialogProcessId,
   }) {
+    const scope = createContextScope({
+      dialogProcessId: currentDialogProcessId,
+      turnScopeId: currentTurnScopeId,
+    });
+    const historyLimit = TURN_THRESHOLDS.session.mainModelHistoryRoundLimit;
     const source = await this.sessionMessageService.getSessionContextSource({
       userId,
       sessionId,
       persistenceContext,
+      scope,
+      historyLimit,
     });
     return projectContextSource({
       source,
-      scope: createContextScope({
-        dialogProcessId: currentDialogProcessId,
-        turnScopeId: currentTurnScopeId,
-      }),
-      historyLimit: TURN_THRESHOLDS.session.mainModelHistoryRoundLimit,
+      scope,
+      historyLimit,
     });
   }
 }

@@ -44,7 +44,7 @@ describe("useChatEngine.resend scoped pruning", () => {
     const { engine, activeSession } = createHarness({
       sessionId: "local-resend-replace-stale",
       stream,
-      deps: { replaceSessionTurnApi, applySessionDetail },
+      deps: { replaceSessionTurnApi, applySessionMutation: applySessionDetail },
     });
     const first = {
       turnScopeId: "client-turn:old-stale",
@@ -115,7 +115,7 @@ describe("useChatEngine.resend scoped pruning", () => {
     const { engine, activeSession, turnRuntimeRegistry } = createHarness({
       sessionId: "local-resend-replace-mapping",
       stream,
-      deps: { replaceSessionTurnApi, applySessionDetail },
+      deps: { replaceSessionTurnApi, applySessionMutation: applySessionDetail },
     });
     activeSession.value.messages = [oldUser, oldAssistant];
     activeSession.value.rawMessages = [oldUser, oldAssistant];
@@ -185,7 +185,7 @@ describe("useChatEngine.resend scoped pruning", () => {
     const { engine, activeSession } = createHarness({
       sessionId: "local-resend-duplicate-scoped-latest",
       stream,
-      deps: { replaceSessionTurnApi, applySessionDetail },
+      deps: { replaceSessionTurnApi, applySessionMutation: applySessionDetail },
     });
     const latestUser = {
       messageUid: "u-latest",
@@ -254,7 +254,7 @@ describe("useChatEngine.resend scoped pruning", () => {
     const { engine, activeSession, input } = createHarness({
       sessionId: "local-resend-replace-completed",
       stream,
-      deps: { replaceSessionTurnApi, applySessionDetail },
+      deps: { replaceSessionTurnApi, applySessionMutation: applySessionDetail },
     });
     const first = { turnScopeId: "scope-old", role: RoleEnum.USER, content: "first" };
     const target = { turnScopeId: "scope-old", role: RoleEnum.ASSISTANT, content: "target" };

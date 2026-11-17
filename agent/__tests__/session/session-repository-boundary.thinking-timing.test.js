@@ -7,12 +7,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 
-import { createTestSessionServices, provisionTestSession } from "../helpers/session-services.js";
-import { readSessionArtifact } from "../../src/session/session-artifact-store.js";
+import {
+  createTestSessionServices,
+  provisionTestSession,
+  commitTestSessionChanges,
+} from "../helpers/session-services.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
-import { applySessionMessageFacts } from "../helpers/session-message-facts.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
@@ -25,7 +27,7 @@ async function withTempWorkspace(fn) {
   }
 }
 
-test("session save keeps thinking timing out of messages and projects finish from turnTimings", async () => {
+test("message and timing deltas keep thinking timing out of messages and project its finish", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u-thinking";
     await initializeUserWorkspace(workspaceRoot, userId);
@@ -93,30 +95,26 @@ test("session save keeps thinking timing out of messages and projects finish fro
         thinkingFinishedAt: "2026-07-08T10:00:04.000Z",
       },
     ];
-    await runtime.repositories.sessionRepository.save(userId, applySessionMessageFacts(session), {
-      persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
-        userId,
-        session.sessionId,
-      ),
+    await commitTestSessionChanges(runtime, {
+      userId,
+      sessionId: session.sessionId,
+      changes: { messages: session.messages, timings: session.turnTimings },
     });
 
-    const scope = await runtime.repositories.sessionRepository.requireSessionScope(
+    const repository = runtime.repositories.sessionRepository;
+    const context = { persistenceContext: repository.treePersistenceContext(userId, "S") };
+    const full = await repository.requireById(userId, "S", context);
+    const displaySummary = await repository.readSessionDisplaySummary(userId, "S", context);
+    const pinned = await repository.requireSessionReader(userId, "S", context);
+    await commitTestSessionChanges(runtime, {
       userId,
-      "S",
-      runtime.repositories.sessionRepository.treePersistenceContext(userId, "S"),
-    );
-    const full = await readSessionArtifact({
-      sessionDir: scope.sessionDir,
-      storageService: runtime.repositories.sessionRepository.storageService,
+      sessionId: "S",
+      changes: { timings: [{ ...session.turnTimings[0], modelLoopRound: 2 }] },
     });
-    await runtime.repositories.sessionRepository.ensureSessionDisplaySummary(userId, "S", {
-      persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
-        userId,
-        "S",
-      ),
-    });
-    const displaySummary = JSON.parse(
-      await readFile(path.join(scope.sessionDir, "session-summary.json"), "utf8"),
+    assert.deepEqual(await pinned.readTurnTiming("turn-1"), session.turnTimings[0]);
+    assert.equal(
+      (await repository.requireSessionReader(userId, "S", context)).generation,
+      pinned.generation + 1,
     );
 
     for (const message of [...full.messages, ...displaySummary.messages]) {
@@ -135,7 +133,7 @@ test("session save keeps thinking timing out of messages and projects finish fro
   });
 });
 
-test("session save keeps the model loop round on persisted turn timings", async () => {
+test("timing delta preserves the model loop round in storage and display", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u-loop-round";
     await initializeUserWorkspace(workspaceRoot, userId);
@@ -190,31 +188,16 @@ test("session save keeps the model loop round on persisted turn timings", async 
         modelLoopRound: 6,
       },
     ];
-    await runtime.repositories.sessionRepository.save(userId, applySessionMessageFacts(session), {
-      persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
-        userId,
-        session.sessionId,
-      ),
+    await commitTestSessionChanges(runtime, {
+      userId,
+      sessionId: session.sessionId,
+      changes: { messages: session.messages, timings: session.turnTimings },
     });
 
-    const scope = await runtime.repositories.sessionRepository.requireSessionScope(
-      userId,
-      "S",
-      runtime.repositories.sessionRepository.treePersistenceContext(userId, "S"),
-    );
-    const full = await readSessionArtifact({
-      sessionDir: scope.sessionDir,
-      storageService: runtime.repositories.sessionRepository.storageService,
-    });
-    await runtime.repositories.sessionRepository.ensureSessionDisplaySummary(userId, "S", {
-      persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
-        userId,
-        "S",
-      ),
-    });
-    const displaySummary = JSON.parse(
-      await readFile(path.join(scope.sessionDir, "session-summary.json"), "utf8"),
-    );
+    const repository = runtime.repositories.sessionRepository;
+    const context = { persistenceContext: repository.treePersistenceContext(userId, "S") };
+    const full = await repository.requireById(userId, "S", context);
+    const displaySummary = await repository.readSessionDisplaySummary(userId, "S", context);
 
     const fullTiming = (full.turnTimings || []).find((item) => item.turnScopeId === "turn-1");
     assert.equal(fullTiming?.modelLoopRound, 6);

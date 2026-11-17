@@ -24,6 +24,7 @@ export function createSessionCrudServiceStub(readSession) {
         updatedAt: FIXED_AT,
         title: session.sessionId,
         aggregateVersion: session.aggregateVersion,
+        generation: 10,
         turnTimings: [],
         turnLifecycleSnapshot: createTurnLifecycleSnapshot({
           commandId: `snapshot-${session.sessionId}`,

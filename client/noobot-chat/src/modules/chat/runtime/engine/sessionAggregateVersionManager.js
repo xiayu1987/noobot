@@ -61,6 +61,11 @@ export function createSessionAggregateVersionManager({ activeSession, log = null
   }
 
   function applyConflictVersion({ sessionId, previousVersion, conflict, logContext }) {
+    if (activeSession.value?.sessionId !== sessionId) {
+      throw Object.assign(new TypeError("aggregate version conflict belongs to another session"), {
+        code: SESSION_ERROR_CODE.SCOPE_IDENTITY_CONFLICT,
+      });
+    }
     const { currentVersion } = conflict;
     const changed = applyLatestSessionAggregateVersion(activeSession.value, {
       aggregateVersion: currentVersion,
@@ -77,17 +82,24 @@ export function createSessionAggregateVersionManager({ activeSession, log = null
 
   async function runWithConflictRetry({ attemptAt, readConflict, conflictOptions }) {
     let expectedAggregateVersion = getVersion();
+    const requestSession = activeSession.value;
+    if (requestSession.sessionId !== conflictOptions.sessionId) {
+      throw Object.assign(new TypeError("aggregate version request belongs to another session"), {
+        code: SESSION_ERROR_CODE.SCOPE_IDENTITY_CONFLICT,
+      });
+    }
     try {
       return await attemptAt(expectedAggregateVersion, 1);
     } catch (error) {
       const conflict = readConflict(error);
       if (!conflict) throw error;
-      const versionApplied = applyConflictVersion({
+      if (activeSession.value !== requestSession) throw error;
+      applyConflictVersion({
         previousVersion: expectedAggregateVersion,
         conflict,
         ...conflictOptions,
       });
-      if (!versionApplied) throw error;
+      if (!isNewerProtocolAggregateVersion(getVersion(), expectedAggregateVersion)) throw error;
       expectedAggregateVersion = getVersion();
       return attemptAt(expectedAggregateVersion, 2);
     }

@@ -124,7 +124,15 @@ test("phase acceptance separate model receives context, summaries, revised plan,
   const ctx = {
     messageBlocks: {
       system: [],
-      history: [],
+      history: [
+        {
+          role: "user",
+          injectedMessage: true,
+          injectedMessageType: "noobot.phase_summary_result",
+          content:
+            "[SUMMARY_OVERVIEW]\n1. 最新小结概要：阶段验收只应看到这一条\n[SUMMARY_DETAIL]\n## 详细明细\n- 详细内容不应作为小结清单传入阶段验收\n[SUMMARY_END]",
+        },
+      ],
       incremental: [{ role: "user", content: "阶段上下文：继续审查" }],
     },
     agentContext: {
@@ -132,15 +140,6 @@ test("phase acceptance separate model receives context, summaries, revised plan,
         extensions: {
           harness: {
             planText: "1. 核心实现\n1.1 子任务A\n2. 验证交付",
-            summaryText: "1. 旧小结：已完成基础结构审查\n2. 旧小结：正在补齐验收流程",
-            summaryFullText: [
-              "[SUMMARY_OVERVIEW]",
-              "1. 最新小结概要：阶段验收只应看到这一条",
-              "[SUMMARY_DETAIL]",
-              "## 详细明细",
-              "- 详细内容不应作为小结清单传入阶段验收",
-              "[SUMMARY_END]",
-            ].join("\n"),
             phaseAcceptanceReports: [
               { acceptedAt: "2026-05-27T00:00:00.000Z", content: "阶段验收清单一：warn" },
             ],
@@ -227,6 +226,13 @@ test("model-context rules 2: phase acceptance separate model uses six ordered co
         { role: "user", content: "history-user-second", dialogProcessId: "dlg_old" },
         { role: "assistant", content: "history-assistant-old", dialogProcessId: "dlg_old" },
         { role: "assistant", content: "history-assistant-latest", dialogProcessId: "dlg_old" },
+        {
+          role: "user",
+          injectedMessage: true,
+          injectedMessageType: "noobot.phase_summary_result",
+          content:
+            "[SUMMARY_OVERVIEW]\n1. 最后一次完整小结：用于阶段验收\n[SUMMARY_DETAIL]\n- 明细不应被拆成历史多次小结\n[SUMMARY_END]",
+        },
       ],
       incremental: [
         { role: "user", content: "当前阶段继续", dialogProcessId: "dlg_current" },
@@ -251,13 +257,6 @@ test("model-context rules 2: phase acceptance separate model uses six ordered co
         extensions: {
           harness: {
             planText: "1. 核心实现\n2. 验证交付",
-            summaryFullText: [
-              "[SUMMARY_OVERVIEW]",
-              "1. 最后一次完整小结：用于阶段验收",
-              "[SUMMARY_DETAIL]",
-              "- 明细不应被拆成历史多次小结",
-              "[SUMMARY_END]",
-            ].join("\n"),
             phaseAcceptanceReports: [
               { acceptedAt: "2026-06-01T00:00:00.000Z", content: "上一阶段验收：warn" },
             ],
@@ -356,7 +355,7 @@ test("phase acceptance separate model drops historical summary relays and passes
           content: "[harness:summary]\n旧小结完整-1：不应再次传给阶段验收模型",
           injectedMessage: true,
           injectedBy: "harness-plugin",
-          injectedMessageType: "separate_model_relay:summary",
+          injectedMessageType: "noobot.phase_summary_result",
           dialogProcessId: "dlg_old",
         },
         {
@@ -364,13 +363,15 @@ test("phase acceptance separate model drops historical summary relays and passes
           content: "[harness:summary]\n旧小结完整-2：也不应再次传给阶段验收模型",
           injectedMessage: true,
           injectedBy: "harness-plugin",
-          injectedMessageType: "separate_model_relay:summary",
+          injectedMessageType: "noobot.phase_summary_result",
           dialogProcessId: "dlg_old",
         },
         {
           role: "user",
           content:
             "[来自harness外部模型输出/summary]\n旧小结完整-3：历史持久化前缀消息也不应传给阶段验收模型",
+          injectedMessage: true,
+          injectedMessageType: "noobot.phase_summary_result",
           dialogProcessId: "dlg_old",
         },
         { role: "assistant", content: "阶段历史最终回答", dialogProcessId: "dlg_old" },
@@ -378,6 +379,13 @@ test("phase acceptance separate model drops historical summary relays and passes
       incremental: [
         { role: "user", content: "阶段上下文：继续验收当前阶段", dialogProcessId: "dlg_current" },
         { role: "assistant", content: "继续处理当前阶段", dialogProcessId: "dlg_current" },
+        {
+          role: "user",
+          injectedMessage: true,
+          injectedMessageType: "noobot.phase_summary_result",
+          content:
+            "[SUMMARY_OVERVIEW]\n1. 最后一次完整小结 item-1：只应作为同一份小结传入\n2. 最后一次完整小结 item-2：不能拆成第二份 summary report\n3. 最后一次完整小结 item-3：不能拆成第三份 summary report\n[SUMMARY_DETAIL]\n- 最后一次完整小结的明细\n[SUMMARY_END]",
+        },
       ],
     },
     dialogProcessId: "dlg_current",
@@ -386,16 +394,6 @@ test("phase acceptance separate model drops historical summary relays and passes
         extensions: {
           harness: {
             planText: "1. 核心实现\n2. 验证交付",
-            summaryText: "旧合并小结：不应作为阶段验收小结上下文",
-            summaryFullText: [
-              "[SUMMARY_OVERVIEW]",
-              "1. 最后一次完整小结 item-1：只应作为同一份小结传入",
-              "2. 最后一次完整小结 item-2：不能拆成第二份 summary report",
-              "3. 最后一次完整小结 item-3：不能拆成第三份 summary report",
-              "[SUMMARY_DETAIL]",
-              "- 最后一次完整小结的明细",
-              "[SUMMARY_END]",
-            ].join("\n"),
             state: {
               flags: { planningCaptured: true },
               counters: {},

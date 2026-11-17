@@ -10,14 +10,17 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { migrateSessionImmutableStorage } from "../../src/workspace-lifecycle/session-immutable-storage-upgrade.js";
+import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
+import { readImmutableTurn } from "../../src/session/session-artifact-session/immutable-turn-reader.js";
+import { corruptRecord } from "./helpers/immutable-record-reads.js";
 import {
   buildThinkingDetailPayload,
   readSessionThinkingDetail,
 } from "../../src/session/session-thinking-detail.js";
 import {
   SESSION_ARTIFACT_PREDECESSOR,
-  readSessionTurn,
   writeSessionArtifact,
 } from "../../src/session/session-artifact-store.js";
 import {
@@ -495,7 +498,7 @@ async function withSessionDir(fn) {
   }
 }
 
-test("thinking detail storage lookup reads exactly one canonical Turn journal", async () =>
+test("thinking detail reads only the selected immutable turn after migration", async () =>
   withSessionDir(async (sessionDir) => {
     await writeSessionArtifact({
       storageService,
@@ -549,18 +552,22 @@ test("thinking detail storage lookup reads exactly one canonical Turn journal", 
       }),
     });
 
-    const manifest = JSON.parse(await readFile(path.join(sessionDir, "session.json"), "utf8"));
-    const unrelatedTurn = manifest.turnOrder.find((item) => item.turnScopeId === "turn-one");
-    await writeFile(
-      path.join(sessionDir, "turns", `${unrelatedTurn.turnId}.jsonl`),
-      "not-json\n",
-      "utf8",
-    );
+    await migrateSessionImmutableStorage({ storageService, sessionDir });
+    const store = await ImmutableSessionStore.open({ sessionDir });
+    const snapshot = await store.snapshot();
+    const unrelatedReference = await store.objects.withSnapshot(snapshot, async () => {
+      const root = await store.index.get(snapshot.root, "messages");
+      return store.index.get(root, "sm-one");
+    });
+    await corruptRecord(store, unrelatedReference);
+    await writeFile(path.join(sessionDir, "session.json"), "not-json\n", "utf8");
 
     const lookupKey = { turnScopeId: "turn-two", dialogProcessId: "dialog-two" };
-    const turn = await readSessionTurn({ storageService, sessionDir, ...lookupKey });
+    const turn = await store.objects.withSnapshot(snapshot, () =>
+      readImmutableTurn({ store, snapshot, lookupKey }),
+    );
     assert.equal(turn.turnScopeId, "turn-two");
-    assert.ok(turn.committedBytes > 0);
+    assert.ok(turn.contentRevision);
     assert.equal(Object.hasOwn(turn, "aggregateVersion"), false);
     assert.deepEqual(
       turn.messages.map((message) => message.messageUid),
@@ -603,7 +610,7 @@ test("thinking detail lookup requires both Turn identities", async () =>
     }
   }));
 
-test("thinking detail lookup of a missing Session manifest reports the artifact as not found", async () =>
+test("thinking detail lookup reports a missing immutable head without falling back", async () =>
   withSessionDir(async (sessionDir) => {
     await assert.rejects(
       readSessionThinkingDetail({
@@ -612,6 +619,11 @@ test("thinking detail lookup of a missing Session manifest reports the artifact 
         turnScopeId: "turn-two",
         dialogProcessId: "dialog-two",
       }),
-      { code: SESSION_ERROR_CODE.ARTIFACT_NOT_FOUND, statusCode: 404 },
+      (error) => {
+        assert.equal(error.code, "SESSION_IMMUTABLE_STORAGE_INVALID");
+        assert.equal(error.cause.code, "ENOENT");
+        assert.equal(error.cause.path, path.join(sessionDir, "head.json"));
+        return true;
+      },
     );
   }));

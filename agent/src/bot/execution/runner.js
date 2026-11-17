@@ -41,7 +41,6 @@ export class SessionExecutionRunner {
     bindSessionTurnAttachments,
     assertReusedUserTurnIdentity,
     getSessionTurns,
-    getTurnSummaryCheckpointState,
     finalizeRunSession,
     saveExecutionReport,
     getExecutionTurnLogs,
@@ -74,7 +73,6 @@ export class SessionExecutionRunner {
     this.bindSessionTurnAttachments = bindSessionTurnAttachments;
     this.assertReusedUserTurnIdentity = assertReusedUserTurnIdentity;
     this.getSessionTurns = getSessionTurns;
-    this.getTurnSummaryCheckpointState = getTurnSummaryCheckpointState;
     this.finalizeRunSession = finalizeRunSession;
     this.saveExecutionReport = saveExecutionReport;
     this.getExecutionTurnLogs = getExecutionTurnLogs;
@@ -269,7 +267,7 @@ export class SessionExecutionRunner {
         resolvedTurnScopeId,
         dispatchRuntime,
         getSessionTurns: this.getSessionTurns,
-        getTurnSummaryCheckpointState: this.getTurnSummaryCheckpointState,
+        userMessageUid: currentUserMessage.messageUid,
         finalizeRunSession: this.finalizeRunSession,
         userId,
         parentSessionId: resolvedParentSessionId,

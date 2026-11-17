@@ -4,50 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
-import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import test, { after } from "node:test";
+import test from "node:test";
 import assert from "node:assert/strict";
 
-import { SessionMessageService } from "../../src/session/services/session-message-service.js";
-import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
-import { createSessionCrudServiceStub } from "../helpers/session-crud-service-stub.js";
-import { requiredSessionReads } from "../helpers/session-repo-required-reads.js";
+import {
+  immutableMutationFixture,
+  mutationMessage,
+} from "../helpers/immutable-mutation-integration-fixture.js";
 
-const TEST_SESSION_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-session-dir-"));
-after(() => fs.rmSync(TEST_SESSION_DIR, { recursive: true, force: true }));
-
-test("SessionMessageService.appendTurns persists transferEnvelopes", async () => {
-  const saved = [];
-  const sessionRepo = {
-    async locateSessionScope() {
-      return { resolvedParentSessionId: "", sessionDir: TEST_SESSION_DIR };
-    },
-    async withSessionMutation(_u, _s, operation) {
-      return operation(await this.locateSessionScope());
-    },
-    async ensureSession() {},
-    ...requiredSessionReads,
-    async findTurnView() {
-      const session = {
-        ...createTestSessionRequiredFields(),
-        sessionId: "s1",
-        aggregateVersion: 0,
-        parentSessionId: "",
-        messages: [],
-      };
-      return { session, turnScopeIds: [] };
-    },
-    async saveTurnView(_userId, session) {
-      saved.push(session);
-    },
-  };
-  const service = new SessionMessageService({
-    sessionRepo,
-    now: () => "2026-06-07T00:00:00.000Z",
-  });
+test("SessionMessageService.appendTurns persists transferEnvelopes", async (t) => {
+  const f = await immutableMutationFixture(t);
   const envelope = {
     protocol: "noobot.semantic-transfer",
     version: TRANSFER_VERSION,
@@ -79,9 +45,8 @@ test("SessionMessageService.appendTurns persists transferEnvelopes", async () =>
     },
     meta: { persisted: true },
   };
-  await service.appendTurns({
-    userId: "u1",
-    sessionId: "s1",
+  await f.service.appendTurns({
+    ...f.request,
     turns: [
       {
         attachments: [],
@@ -90,13 +55,14 @@ test("SessionMessageService.appendTurns persists transferEnvelopes", async () =>
         presentationMessageId: "pm_fx1",
         modelMessageId: "mm_session_message_service__1",
         content: "done",
+        turnScopeId: "turn-att-1",
+        dialogProcessId: "dialog-att-1",
         transferEnvelopes: [envelope],
       },
     ],
   });
 
-  assert.equal(saved.length, 1);
-  const lastMessage = saved[0]?.messages?.[0];
+  const lastMessage = (await (await f.open()).readMessage("sm_done")).message;
   assert.equal("attachmentMetas" in lastMessage, false);
   assert.equal("transferEnvelopes" in lastMessage, true);
   assert.deepEqual(lastMessage?.transferEnvelopes, [envelope]);
@@ -106,46 +72,11 @@ test("SessionMessageService.appendTurns persists transferEnvelopes", async () =>
   );
 });
 
-test("SessionMessageService.appendTurns leaves turnTimings to the timing fact writer", async () => {
-  const saved = [];
-  const session = {
-    ...createTestSessionRequiredFields(),
-    sessionId: "s1",
-    aggregateVersion: 0,
-    parentSessionId: "",
-    messages: [],
-    turnTimings: [],
-  };
-  const sessionRepo = {
-    async locateSessionScope() {
-      return { resolvedParentSessionId: "", sessionDir: TEST_SESSION_DIR };
-    },
-    async withSessionMutation(_u, _s, operation) {
-      return operation(await this.locateSessionScope());
-    },
-    async ensureSession() {},
-    ...requiredSessionReads,
-    async findTurnView() {
-      return { session, turnScopeIds: [] };
-    },
-    async findById() {
-      return session;
-    },
-    async saveTurnView(_userId, nextSession) {
-      saved.push(JSON.parse(JSON.stringify(nextSession)));
-    },
-    async save(_userId, nextSession) {
-      saved.push(JSON.parse(JSON.stringify(nextSession)));
-    },
-  };
-  const service = new SessionMessageService({
-    sessionRepo,
-    now: () => "2026-06-07T00:00:00.000Z",
-  });
+test("SessionMessageService.appendTurns leaves turnTimings to the timing fact writer", async (t) => {
+  const f = await immutableMutationFixture(t);
 
-  await service.appendTurns({
-    userId: "u1",
-    sessionId: "s1",
+  await f.service.appendTurns({
+    ...f.request,
     turns: [
       {
         attachments: [],
@@ -161,233 +92,91 @@ test("SessionMessageService.appendTurns leaves turnTimings to the timing fact wr
     ],
   });
 
-  assert.equal(saved.length, 1);
-  assert.equal(Object.hasOwn(saved[0].messages[0], "thinkingStartedAt"), false);
-  assert.equal(Object.hasOwn(saved[0].messages[0], "thinkingFinishedAt"), false);
-  assert.deepEqual(saved[0].turnTimings, []);
+  const reader = await f.open();
+  const { message } = await reader.readMessage("sm_done");
+  assert.equal(Object.hasOwn(message, "thinkingStartedAt"), false);
+  assert.equal(Object.hasOwn(message, "thinkingFinishedAt"), false);
+  assert.equal(await reader.readTurnTiming("turn-1"), null);
 });
 
-test("SessionMessageService.upsertTurnTiming is first-write-wins and rejects conflicting facts", async () => {
-  const saved = [];
-  const session = {
-    ...createTestSessionRequiredFields(),
-    sessionId: "s1",
-    aggregateVersion: 0,
-    parentSessionId: "",
-    messages: [],
-    turnTimings: [],
-  };
-  const sessionRepo = {
-    async locateSessionScope() {
-      return { resolvedParentSessionId: "", sessionDir: TEST_SESSION_DIR };
-    },
-    async withSessionMutation(_u, _s, operation) {
-      return operation(await this.locateSessionScope());
-    },
-    async ensureSession() {},
-    ...requiredSessionReads,
-    async findTurnView() {
-      return { session, turnScopeIds: [] };
-    },
-    async findById() {
-      return session;
-    },
-    async saveTurnView(_userId, nextSession) {
-      saved.push(JSON.parse(JSON.stringify(nextSession)));
-    },
-    async save(_userId, nextSession) {
-      saved.push(JSON.parse(JSON.stringify(nextSession)));
-    },
-  };
-  const service = new SessionMessageService({
-    sessionRepo,
-    now: () => "2026-06-07T00:00:00.000Z",
+test("SessionMessageService.upsertTurnTiming is first-write-wins and rejects conflicting facts", async (t) => {
+  const f = await immutableMutationFixture(t, {
+    messages: [mutationMessage("user-1", "turn-1", { dialogProcessId: "dp-1" })],
   });
 
   const timing = {
-    userId: "u1",
-    sessionId: "s1",
+    ...f.request,
     turnScopeId: "turn-1",
     dialogProcessId: "dp-1",
     thinkingFinishedAt: "2026-07-08T16:30:44.744Z",
     modelLoopRound: 4,
   };
 
-  assert.equal((await service.upsertTurnTiming(timing)).upserted, true);
-  assert.equal((await service.upsertTurnTiming(timing)).reason, "unchanged");
+  const before = await f.open();
+  assert.equal((await f.service.upsertTurnTiming(timing)).upserted, true);
+  assert.equal((await f.service.upsertTurnTiming(timing)).reason, "unchanged");
   await assert.rejects(
-    service.upsertTurnTiming({ ...timing, thinkingFinishedAt: "2026-07-08T16:31:00.000Z" }),
+    f.service.upsertTurnTiming({ ...timing, thinkingFinishedAt: "2026-07-08T16:31:00.000Z" }),
     { code: "SESSION_TURN_TIMING_CONFLICT" },
   );
-  assert.equal(saved.length, 1);
-  assert.deepEqual(saved[0].turnTimings, [
-    {
-      turnScopeId: "turn-1",
-      dialogProcessId: "dp-1",
-      thinkingFinishedAt: "2026-07-08T16:30:44.744Z",
-      modelLoopRound: 4,
-    },
-  ]);
+  const reader = await f.open();
+  assert.equal(reader.generation, before.generation + 1);
+  assert.deepEqual(await reader.readTurnTiming("turn-1"), {
+    turnScopeId: "turn-1",
+    dialogProcessId: "dp-1",
+    thinkingFinishedAt: "2026-07-08T16:30:44.744Z",
+    modelLoopRound: 4,
+  });
 });
 
-test("SessionMessageService.deleteFromMessage prunes orphan turnTimings", async () => {
-  const saved = [];
-  let session = {
-    ...createTestSessionRequiredFields(),
-    sessionId: "s1",
-    parentSessionId: "",
+test("SessionMessageService.deleteFromMessage prunes orphan turnTimings", async (t) => {
+  const f = await immutableMutationFixture(t, {
     aggregateVersion: 1,
-    messages: [
+    messages: [mutationMessage("keep"), mutationMessage("delete")],
+  });
+  const keepTiming = {
+    turnScopeId: "keep",
+    dialogProcessId: "dialog-keep",
+    thinkingFinishedAt: "2026-07-08T00:00:01.000Z",
+  };
+  await f.commit({
+    timings: [
+      keepTiming,
       {
-        attachments: [],
-        transferEnvelopes: [],
-        role: "assistant",
-        presentationMessageId: "pm_fx4",
-        modelMessageId: "mm_session_message_service__4",
-        content: "keep",
-        turnScopeId: "turn-keep",
-        dialogProcessId: "dp-keep",
-      },
-      {
-        attachments: [],
-        transferEnvelopes: [],
-        role: "user",
-        messageOrigin: "natural",
-        content: "hi",
-        turnScopeId: "turn-delete",
-        dialogProcessId: "dp-delete",
-      },
-    ],
-    turnTimings: [
-      {
-        turnScopeId: "turn-delete",
-        dialogProcessId: "dp-delete",
+        turnScopeId: "delete",
+        dialogProcessId: "dialog-delete",
         thinkingFinishedAt: "2026-07-08T00:00:00.500Z",
       },
-      {
-        turnScopeId: "turn-keep",
-        dialogProcessId: "dp-keep",
-        thinkingFinishedAt: "2026-07-08T00:00:01.000Z",
-      },
     ],
-    turnLifecycle: createEmptyTurnLifecycle(),
-  };
-  const sessionRepo = {
-    async locateSessionScope() {
-      return { resolvedParentSessionId: "", sessionDir: TEST_SESSION_DIR };
-    },
-    async withSessionMutation(_u, _s, operation) {
-      return operation(await this.locateSessionScope());
-    },
-    ...requiredSessionReads,
-    async findById() {
-      return session;
-    },
-    async save(_userId, nextSession) {
-      session = structuredClone(nextSession);
-      saved.push(JSON.parse(JSON.stringify(nextSession)));
-    },
-  };
-  const service = new SessionMessageService({
-    sessionRepo,
-    sessionCrudService: createSessionCrudServiceStub(() => session),
-    now: () => "2026-06-07T00:00:00.000Z",
   });
-
-  await service.deleteFromMessage({
-    userId: "u1",
-    sessionId: "s1",
-    anchor: { turnScopeId: "turn-delete" },
+  await f.service.deleteFromMessage({
+    ...f.request,
+    anchor: { turnScopeId: "delete" },
     commandId: "delete-turn-timing",
   });
-
-  assert.equal(saved.length, 1);
-  assert.deepEqual(saved[0].turnTimings, [
-    {
-      turnScopeId: "turn-keep",
-      dialogProcessId: "dp-keep",
-      thinkingFinishedAt: "2026-07-08T00:00:01.000Z",
-    },
-  ]);
+  const reader = await f.open();
+  assert.deepEqual(await reader.readTurnTiming("keep"), keepTiming);
+  assert.equal(await reader.readTurnTiming("delete"), null);
 });
 
-test("SessionMessageService.replaceTurn prunes replaced turnTimings", async () => {
-  const saved = [];
-  let session = {
-    ...createTestSessionRequiredFields(),
-    sessionId: "s1",
-    parentSessionId: "",
+test("SessionMessageService.replaceTurn prunes replaced turnTimings", async (t) => {
+  const f = await immutableMutationFixture(t, {
     aggregateVersion: 1,
-    messages: [
-      {
-        attachments: [],
-        transferEnvelopes: [],
-        sessionId: "s1",
-        role: "user",
-        messageOrigin: "natural",
-        content: "keep",
-        turnScopeId: "turn-keep",
-        dialogProcessId: "dp-keep",
-      },
-      {
-        attachments: [],
-        transferEnvelopes: [],
-        sessionId: "s1",
-        role: "assistant",
-        presentationMessageId: "pm_fx5",
-        modelMessageId: "mm_session_message_service__5",
-        content: "old",
-        turnScopeId: "turn-old",
-        dialogProcessId: "dp-old",
-      },
-    ],
-    turnTimings: [
-      {
-        turnScopeId: "turn-old",
-        dialogProcessId: "dp-old",
-        thinkingFinishedAt: "2026-07-08T00:00:00.500Z",
-      },
-      {
-        turnScopeId: "turn-keep",
-        dialogProcessId: "dp-keep",
-        thinkingFinishedAt: "2026-07-08T00:00:01.000Z",
-      },
-    ],
-    turnLifecycle: createEmptyTurnLifecycle(),
-  };
-  const sessionRepo = {
-    async locateSessionScope() {
-      return { resolvedParentSessionId: "", sessionDir: TEST_SESSION_DIR };
-    },
-    async withSessionMutation(_u, _s, operation) {
-      return operation(await this.locateSessionScope());
-    },
-    ...requiredSessionReads,
-    async findById() {
-      return session;
-    },
-    async save(_userId, nextSession) {
-      session = structuredClone(nextSession);
-      saved.push(JSON.parse(JSON.stringify(nextSession)));
-    },
-  };
-  const service = new SessionMessageService({
-    sessionRepo,
-    sessionCrudService: createSessionCrudServiceStub(() => session),
-    now: () => "2026-06-07T00:00:00.000Z",
-    allocateDialogProcessId: () => "dp-new",
+    messages: [mutationMessage("keep"), mutationMessage("old")],
   });
-
-  await service.replaceTurn({
+  const keepTiming = { turnScopeId: "keep", dialogProcessId: "dialog-keep", modelLoopRound: 1 };
+  await f.commit({
+    timings: [keepTiming, { turnScopeId: "old", dialogProcessId: "dialog-old", modelLoopRound: 1 }],
+  });
+  await f.service.replaceTurn({
+    ...f.request,
     attachments: [],
-    userId: "u1",
-    sessionId: "s1",
-    anchor: { turnScopeId: "turn-old" },
+    anchor: { turnScopeId: "old" },
     newContent: "new",
     turnScopeId: "turn-new",
     commandId: "replace-turn-timing",
   });
-
-  assert.equal(saved.length, 1);
-  assert.deepEqual(saved[0].turnTimings, []);
+  const reader = await f.open();
+  assert.deepEqual(await reader.readTurnTiming("keep"), keepTiming);
+  assert.equal(await reader.readTurnTiming("old"), null);
 });

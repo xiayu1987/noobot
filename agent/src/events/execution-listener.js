@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { createExecutionLogQueue } from "./execution-log-queue.js";
 import { classifyExecutionEvent } from "../observability/event-log/log-normalizer.js";
 import {
-  omitExecutionRouteIdentity,
   projectExecutionTransportPayload,
   requireExecutionRouteIdentity,
 } from "./transport-payload.js";
@@ -42,6 +42,64 @@ function projectExecutionLogRecord(event = "", data = {}) {
   };
 }
 
+function summarizeTiming(values = []) {
+  if (!values.length) return { n: 0 };
+  const sorted = [...values].sort((a, b) => a - b);
+  const pick = (ratio) =>
+    Number(sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * ratio))].toFixed(2));
+  return {
+    n: sorted.length,
+    p50: pick(0.5),
+    p90: pick(0.9),
+    max: Number(sorted[sorted.length - 1].toFixed(2)),
+    totalMs: Number(sorted.reduce((sum, value) => sum + value, 0).toFixed(1)),
+  };
+}
+
+function summarizeDelivery(event, data, deliveryRoute) {
+  const { attachments, transferEnvelopes } = data;
+  return {
+    sourceEvent: event,
+    eventId: text(data?.envelope?.identity?.eventId),
+    eventType: text(data?.envelope?.identity?.eventType || event),
+    route: {
+      sessionId: deliveryRoute.sessionId,
+      parentSessionId: deliveryRoute.parentSessionId,
+      dialogProcessId: deliveryRoute.dialogProcessId,
+      turnScopeId: deliveryRoute.turnScopeId,
+    },
+    presentationMessageId: text(data?.presentationMessageId),
+    sequence: Number(data?.envelope?.ordering?.sequence || 0),
+    contentLength: String(data?.text || data?.content || "").length,
+    attachmentCount: Array.isArray(attachments) ? attachments.length : 0,
+    transferEnvelopeCount: Array.isArray(transferEnvelopes) ? transferEnvelopes.length : 0,
+  };
+}
+
+function requireSuccessfulFlush(deliveryFailures, persistenceFailures) {
+  const errors = [];
+  if (deliveryFailures.length > 0) {
+    const error = new Error(`event upstream delivery failed: ${deliveryFailures[0].error}`);
+    error.code = "EVENT_UPSTREAM_DELIVERY_FAILED";
+    error.failures = [...deliveryFailures];
+    errors.push(error);
+  }
+  if (persistenceFailures.length > 0) {
+    const error = new Error(`execution log persistence failed: ${persistenceFailures[0].error}`, {
+      cause: persistenceFailures[0].cause,
+    });
+    error.code = "EXECUTION_LOG_PERSISTENCE_FAILED";
+    error.failures = persistenceFailures.map(({ cause: _cause, ...failure }) => failure);
+    errors.push(error);
+  }
+  if (errors.length === 1) throw errors[0];
+  if (errors.length > 1) {
+    const error = new AggregateError(errors, "execution event delivery and persistence failed");
+    error.code = "EXECUTION_EVENT_FLUSH_FAILED";
+    throw error;
+  }
+}
+
 export function createExecutionEventListener({
   sessionManager,
   userId,
@@ -53,8 +111,8 @@ export function createExecutionEventListener({
   upstream = null,
   now,
 }) {
-  if (!isFunction(sessionManager?.appendExecutionLog)) {
-    throw new TypeError("sessionManager.appendExecutionLog is required");
+  if (!isFunction(sessionManager?.appendExecutionLogs)) {
+    throw new TypeError("sessionManager.appendExecutionLogs is required");
   }
   if (!isFunction(now)) {
     throw new TypeError("execution event listener requires now function");
@@ -73,69 +131,15 @@ export function createExecutionEventListener({
     dialogProcessId,
     turnScopeId,
   });
-  let persistenceTail = Promise.resolve();
+  const persistence = createExecutionLogQueue({ sessionManager, route, persistenceScope });
+  const appendExecutionLog = persistence.append;
+  const recordPersistenceFailure = persistence.recordFailure;
+  const persistenceFailures = persistence.failures;
   let deliveryTail = Promise.resolve();
-  const persistenceFailures = [];
+  let timingTail = Promise.resolve();
   const deliveryFailures = [];
   const deliveryTiming =
     upstream && isFunction(upstream.onDeliveryTiming) ? { queueWaitMs: [], runMs: [] } : null;
-
-  const summarizeTiming = (values = []) => {
-    if (!values.length) return { n: 0 };
-    const sorted = [...values].sort((a, b) => a - b);
-    const pick = (ratio) =>
-      Number(sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * ratio))].toFixed(2));
-    return {
-      n: sorted.length,
-      p50: pick(0.5),
-      p90: pick(0.9),
-      max: Number(sorted[sorted.length - 1].toFixed(2)),
-      totalMs: Number(sorted.reduce((sum, value) => sum + value, 0).toFixed(1)),
-    };
-  };
-
-  const appendExecutionLog = (record) => {
-    const canonicalRecord = {
-      ...record,
-      userId: route.userId,
-      sessionId: route.sessionId,
-      dialogProcessId: route.dialogProcessId,
-      turnScopeId: route.turnScopeId,
-      data: omitExecutionRouteIdentity(record?.data),
-      persistenceScope,
-    };
-    persistenceTail = persistenceTail.then(async () => {
-      try {
-        await sessionManager.appendExecutionLog(canonicalRecord);
-      } catch (error) {
-        persistenceFailures.push({
-          event: canonicalRecord.event,
-          error: error?.message || String(error || ""),
-          cause: error,
-        });
-      }
-    });
-    return persistenceTail;
-  };
-
-  const summarizeDelivery = (event, data, deliveryRoute) => ({
-    sourceEvent: event,
-    eventId: text(data?.envelope?.identity?.eventId),
-    eventType: text(data?.envelope?.identity?.eventType || event),
-    route: {
-      sessionId: deliveryRoute.sessionId,
-      parentSessionId: deliveryRoute.parentSessionId,
-      dialogProcessId: deliveryRoute.dialogProcessId,
-      turnScopeId: deliveryRoute.turnScopeId,
-    },
-    presentationMessageId: text(data?.presentationMessageId),
-    sequence: Number(data?.envelope?.ordering?.sequence || 0),
-    contentLength: String(data?.text || data?.content || "").length,
-    attachmentCount: Array.isArray(data?.attachments) ? data.attachments.length : 0,
-    transferEnvelopeCount: Array.isArray(data?.transferEnvelopes)
-      ? data.transferEnvelopes.length
-      : 0,
-  });
 
   const stampExecutionLogTime = () => now();
 
@@ -160,13 +164,18 @@ export function createExecutionEventListener({
         const failure = { ...diagnostic, error: error?.message || String(error || "") };
         deliveryFailures.push(failure);
         if (shouldDiagnose) {
-          appendExecutionLog({
-            event: "execution_upstream_forward_failed",
-            category: "system",
-            type: "execution_upstream_forward_failed",
-            data: failure,
-            ts: stampExecutionLogTime(),
-          });
+          const event = "execution_upstream_forward_failed";
+          try {
+            appendExecutionLog({
+              event,
+              category: "system",
+              type: event,
+              data: failure,
+              ts: stampExecutionLogTime(),
+            });
+          } catch (cause) {
+            recordPersistenceFailure(event, cause);
+          }
         }
         return false;
       } finally {
@@ -188,49 +197,43 @@ export function createExecutionEventListener({
   return {
     flush: async () => {
       let delivery;
-      let persistence;
+      let persisted;
+      let timing;
       do {
         delivery = deliveryTail;
         await delivery;
-        persistence = persistenceTail;
-        await persistence;
-      } while (delivery !== deliveryTail || persistence !== persistenceTail);
+        persisted = persistence.tail;
+        await persistence.flush();
+        if (deliveryTiming && deliveryTiming.queueWaitMs.length > 0) {
+          const summary = {
+            sessionId: route.sessionId,
+            turnScopeId: route.turnScopeId,
+            dialogProcessId: route.dialogProcessId,
+            queueWaitMs: summarizeTiming(deliveryTiming.queueWaitMs),
+            runMs: summarizeTiming(deliveryTiming.runMs),
+          };
+          deliveryTiming.queueWaitMs = [];
+          deliveryTiming.runMs = [];
+          timingTail = timingTail.then(async () => {
+            try {
+              await upstream.onDeliveryTiming(summary);
+            } catch (cause) {
+              deliveryFailures.push({
+                sourceEvent: "execution_delivery_timing",
+                error: cause?.message || String(cause),
+              });
+            }
+          });
+        }
+        timing = timingTail;
+        await timing;
+      } while (
+        delivery !== deliveryTail ||
+        persisted !== persistence.tail ||
+        timing !== timingTail
+      );
 
-      if (deliveryTiming && deliveryTiming.queueWaitMs.length > 0) {
-        const summary = {
-          sessionId: route.sessionId,
-          turnScopeId: route.turnScopeId,
-          dialogProcessId: route.dialogProcessId,
-          queueWaitMs: summarizeTiming(deliveryTiming.queueWaitMs),
-          runMs: summarizeTiming(deliveryTiming.runMs),
-        };
-        deliveryTiming.queueWaitMs = [];
-        deliveryTiming.runMs = [];
-        upstream.onDeliveryTiming(summary);
-      }
-
-      const errors = [];
-      if (deliveryFailures.length > 0) {
-        const error = new Error(`event upstream delivery failed: ${deliveryFailures[0].error}`);
-        error.code = "EVENT_UPSTREAM_DELIVERY_FAILED";
-        error.failures = [...deliveryFailures];
-        errors.push(error);
-      }
-      if (persistenceFailures.length > 0) {
-        const error = new Error(
-          `execution log persistence failed: ${persistenceFailures[0].error}`,
-          { cause: persistenceFailures[0].cause },
-        );
-        error.code = "EXECUTION_LOG_PERSISTENCE_FAILED";
-        error.failures = persistenceFailures.map(({ cause: _cause, ...failure }) => failure);
-        errors.push(error);
-      }
-      if (errors.length === 1) throw errors[0];
-      if (errors.length > 1) {
-        const error = new AggregateError(errors, "execution event delivery and persistence failed");
-        error.code = "EXECUTION_EVENT_FLUSH_FAILED";
-        throw error;
-      }
+      requireSuccessfulFlush(deliveryFailures, persistenceFailures);
     },
     forwardEvent,
     onEvent: (evt = {}) => {
@@ -249,7 +252,7 @@ export function createExecutionEventListener({
         });
       }
 
-      if (!AGENT_RUN_EVENTS.has(event)) return persistenceTail;
+      if (!AGENT_RUN_EVENTS.has(event)) return undefined;
       return forwardUpstream({ event, data, route });
     },
   };

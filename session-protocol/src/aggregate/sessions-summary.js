@@ -170,33 +170,8 @@ export function requireSessionsSummaryPayload(payload) {
   return payload;
 }
 
-export function isSessionsSummaryMembershipCurrent(payload, sessionIds) {
-  const expected = new Set(sessionIds);
-  return (
-    payload.sessions.length === expected.size &&
-    payload.sessions.every((entry) => expected.has(entry.sessionId))
-  );
-}
-
 export function isSessionsSummarySchemaCurrent(payload) {
   return isPlainObject(payload) && payload.schemaVersion === SESSIONS_SUMMARY_SCHEMA_VERSION;
-}
-
-export function createSessionsSummaryProjectionError({ sessionId, cause, projectionError }) {
-  if (!isCanonicalText(sessionId)) throw new TypeError("projection error requires sessionId");
-  return Object.assign(
-    new AggregateError([projectionError], `session ${sessionId} unavailable projection failed`, {
-      cause,
-    }),
-    { code: SESSION_ERROR_CODE.SESSIONS_SUMMARY_PROJECTION_FAILED, sessionId },
-  );
-}
-
-export function isSessionsSummaryProjectionError(error) {
-  return (
-    error instanceof AggregateError &&
-    error.code === SESSION_ERROR_CODE.SESSIONS_SUMMARY_PROJECTION_FAILED
-  );
 }
 
 export function compareSessionSummaries(left, right) {

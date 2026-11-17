@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import assert from "node:assert/strict";
 import { expect } from "@playwright/test";
 import { text } from "@noobot/shared/value";
 import { waitForSessionExecutionEventTree } from "./persistence-audit.js";
@@ -120,18 +121,24 @@ export function toolEventsForTurn(records = [], turnScopeId = "") {
 export function assertCanonicalToolPairs(events = [], expectedToolNames = []) {
   const calls = events.filter((event) => event.event === "tool_call_start");
   const results = events.filter((event) => event.event === "tool_call_end");
-  expect(calls.map((event) => text(event.data?.tool)).sort()).toEqual(
+  assert.deepEqual(
+    calls.map((event) => text(event.data?.tool)).sort(),
     [...expectedToolNames].sort(),
   );
-  expect(results).toHaveLength(calls.length);
+  assert.equal(results.length, calls.length);
+  const resultsById = new Map(results.map((result) => [text(result.data?.toolCallId), result]));
+  assert.equal(resultsById.size, results.length, "duplicate tool result identity");
+  const callIds = new Set();
   for (const call of calls) {
     const callId = text(call.data?.toolCallId);
-    const result = results.find((candidate) => text(candidate.data?.toolCallId) === callId);
-    expect(callId).toBeTruthy();
-    expect(result, `missing tool result for ${call.data?.tool}:${callId}`).toBeTruthy();
-    expect(result.data?.tool).toBe(call.data?.tool);
-    expect(result.data?.success).toBe(true);
-    expect(text(result.data?.result)).toBeTruthy();
+    const result = resultsById.get(callId);
+    assert.ok(callId);
+    assert.ok(!callIds.has(callId), "duplicate tool call identity");
+    callIds.add(callId);
+    assert.ok(result, `missing tool result for ${call.data?.tool}:${callId}`);
+    assert.equal(result.data?.tool, call.data?.tool);
+    assert.equal(result.data?.success, true);
+    assert.ok(text(result.data?.result));
   }
   return { calls, results };
 }

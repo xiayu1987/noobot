@@ -19,7 +19,10 @@ import {
 } from "@noobot/agent-transport-protocol";
 import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
 
-useProvisionedRuntimeEventsWorkspace(["primary-user", "authenticated-user"]);
+useProvisionedRuntimeEventsWorkspace(["primary-user", "authenticated-user"], {
+  "primary-user": ["s-non-user-abort", "s-client-disconnect"],
+  "authenticated-user": ["s-forbidden"],
+});
 
 test("chat-websocket-server: non-user abort emits only authoritative failure and failed receipt", async () => {
   const server = await startServerWithWs({

@@ -14,6 +14,7 @@ import { parseWorkspaceSessionTree } from "@noobot/workspace-protocol/session-st
 import {
   MESSAGE_IDENTITY_STORE,
   SESSION_ARTIFACT_SCHEMA_VERSION,
+  SESSION_ARTIFACT_STORAGE_JOURNAL_SCHEMA_VERSION,
   SESSION_ARTIFACT_READ_REJECTION_CODES,
   SESSION_ERROR_CODE,
   SESSION_MESSAGE_RECORD_MIGRATION_INVALID,
@@ -27,6 +28,7 @@ import { isLegacyEventEnvelope, validateEventEnvelope } from "@noobot/event-prot
 import { migrateAttachmentLifecycleOutboxRecords } from "@noobot/event-protocol/attachment-lifecycle-migration";
 import { AttachmentProtocolError } from "@noobot/attachment-protocol";
 import {
+  AUTHORITY_OUTBOX_ERROR_CODE,
   assertAuthorityOutboxJournalRecord,
   AUTHORITY_OUTBOX_JOURNAL_OP,
   migrateLegacyAuthorityEventOutbox,
@@ -83,6 +85,7 @@ const DATA_REJECTION_CODES = new Set([
   SESSION_MESSAGE_IDENTITY_INVALID,
   SESSION_ERROR_CODE.COMMAND_RECEIPT_INVALID,
   SESSION_ERROR_CODE.SCOPE_IDENTITY_CONFLICT,
+  AUTHORITY_OUTBOX_ERROR_CODE.INTEGRITY_INVALID,
 ]);
 
 function isProtocolRejection(error) {
@@ -220,16 +223,24 @@ async function repairStagedSession({ storageService, stagingDir, expectScope }) 
       document: migration.document,
     });
   }
-  await writeSessionArtifact({
-    storageService,
-    sessionDir: stagingDir,
-    sessionPayload: migration.document,
-    atomic: true,
-    predecessor: preservesCheckpointChain
-      ? SESSION_ARTIFACT_PREDECESSOR.CANONICAL
-      : SESSION_ARTIFACT_PREDECESSOR.LEGACY_REWRITE,
-  });
-  await resegmentMigratedCheckpointBaselines({ sessionDir: stagingDir });
+  const schemaOnly =
+    preservesCheckpointChain &&
+    fromSchemaVersion >= SESSION_ARTIFACT_STORAGE_JOURNAL_SCHEMA_VERSION &&
+    migration.migrations.length === 1 &&
+    migration.migrations[0] === `session-artifact-schema-v${SESSION_ARTIFACT_SCHEMA_VERSION}`;
+  if (migration.changed && !schemaOnly) {
+    await writeSessionArtifact({
+      storageService,
+      sessionDir: stagingDir,
+      sessionPayload: migration.document,
+      atomic: true,
+      predecessor: preservesCheckpointChain
+        ? SESSION_ARTIFACT_PREDECESSOR.CANONICAL
+        : SESSION_ARTIFACT_PREDECESSOR.LEGACY_REWRITE,
+    });
+  }
+  if (fromSchemaVersion < 23)
+    await resegmentMigratedCheckpointBaselines({ sessionDir: stagingDir });
   return {
     scope,
     fromSchemaVersion,

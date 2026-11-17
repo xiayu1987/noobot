@@ -27,12 +27,11 @@ export const TOOL_NAME = Object.freeze({
   DO_SEARCH_WEB: "do_search_web",
   MULTIMODAL_GENERATE: "multimodal_generate",
   MULTIMODAL_PARSE: "multimodal_parse",
-  TASK_SUMMARY: "task_summary",
   TASK_CHECK: TASK_CHECK_TOOL_NAME,
   HELP: "help",
 });
 
-export const CONTROL_TOOL_NAMES = Object.freeze([TOOL_NAME.TASK_SUMMARY, TOOL_NAME.TASK_CHECK]);
+export const CONTROL_TOOL_NAMES = Object.freeze([TOOL_NAME.TASK_CHECK]);
 export const BUILTIN_TOOL_IDS = Object.freeze(Object.values(TOOL_NAME));
 
 export const ARTIFACT_GENERATION_SOURCE = Object.freeze({

@@ -93,7 +93,7 @@ test("detached sub-session runner inherits userInteractionBridge from parent run
       },
     },
     session: {
-      async appendExecutionLog() {},
+      async appendExecutionLogs() {},
       async writeSessionMetadata() {},
       async applyTurnLifecycleEvent(payload = {}) {
         lifecycleSequence += 1;

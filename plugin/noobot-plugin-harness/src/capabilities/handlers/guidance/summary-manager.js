@@ -4,73 +4,18 @@
  * SPDX-License-Identifier: MIT
  */
 import { ensureHarnessBucket } from "./deps.js";
-import { mergeSummaryText } from "../shared/plan/summary-text-protocol.js";
 import { resolveLatestCompleteSummaryText } from "../shared/plan/latest-summary-context.js";
 import {
   mergeTransferEnvelopes,
   normalizeTransferEnvelopes,
 } from "@noobot/semantic-transfer-protocol";
-import { text, isFunction } from "@noobot/shared/value";
-
-export function applySummaryText(ctx = {}, incomingSummaryText = "") {
-  const holder = ensureHarnessBucket(ctx);
-  if (!holder) return "";
-  const { bucket } = holder;
-  const incoming = text(incomingSummaryText);
-  if (!incoming) return text(bucket?.summaryText);
-  const merged = mergeSummaryText(bucket?.summaryText || "", incoming);
-  bucket.summaryText = text(merged);
-  return bucket.summaryText;
-}
-
-export function recordLatestSummaryFullText(ctx = {}, summaryFullText = "") {
-  const holder = ensureHarnessBucket(ctx);
-  if (!holder) return "";
-  const { bucket } = holder;
-  const normalizedText = text(summaryFullText);
-  if (!normalizedText) return text(bucket?.summaryFullText);
-  bucket.summaryFullText = normalizedText;
-  return bucket.summaryFullText;
-}
 
 export function shouldSaveSummaryToAttachment(meta = {}) {
   return meta?.harness?.summaryDetailSaveToAttachment === true;
 }
 
-export async function transferSummaryInjectionMessage(
-  ctx = {},
-  { fullText = "", summaryText = "", detailText = "", injectMode = "full", meta = {} } = {},
-) {
-  const runtime = ctx?.agentContext?.bindings?.runtime || null;
-  const transferSemanticContent = runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
-  if (!isFunction(transferSemanticContent)) {
-    throw new Error("harness_semantic_transfer_runtime_required");
-  }
-  const transferred = await transferSemanticContent({
-    scenario: "harness",
-    strategy: "harness_summary",
-    producer: { type: "plugin", id: "harness-summary" },
-    direction: "output",
-    injectMode,
-    fullText,
-    summaryText,
-    detailText,
-    meta,
-  });
-  const directEnvelope = normalizeTransferEnvelopes(transferred.transferEnvelopes).find(
-    (envelope) => envelope.payload.mode === "direct",
-  );
-  if (!directEnvelope || typeof directEnvelope?.payload?.content !== "string") {
-    throw new Error("harness_summary_direct_transfer_required");
-  }
-  return directEnvelope.payload.content.trim();
-}
-
 export function resolvePreviousSummaryContextText(ctx = {}) {
-  const holder = ensureHarnessBucket(ctx);
-  const bucket = holder?.bucket || {};
-  const latestCompleteSummaryText = resolveLatestCompleteSummaryText({ bucket, ctx });
-  return latestCompleteSummaryText;
+  return resolveLatestCompleteSummaryText({ ctx });
 }
 
 export function recordSummaryTransferEnvelopes(ctx = {}, transferPayload = {}) {

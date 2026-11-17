@@ -30,11 +30,11 @@ export function selectPresentedSessionLifecycleTurns(lifecycle = null) {
     .sort((left, right) => Number(left?.sequence || 0) - Number(right?.sequence || 0));
 }
 
-function collectSessionPresentationTurnScopeIds(session = {}) {
+function collectSessionPresentationTurnScopeIds(session, messageTurnScopeIds) {
   return [
     ...new Set(
       [
-        ...session.messages.map((message) => text(message?.turnScopeId)),
+        ...messageTurnScopeIds,
         ...selectPresentedSessionLifecycleTurns(session?.turnLifecycle).map((turn) =>
           text(turn?.turnScopeId),
         ),
@@ -45,6 +45,7 @@ function collectSessionPresentationTurnScopeIds(session = {}) {
 
 export function createSessionTurnLifecycleSnapshot({
   session,
+  messageTurnScopeIds,
   commandId,
   knownSequence,
   terminalLimit,
@@ -54,7 +55,7 @@ export function createSessionTurnLifecycleSnapshot({
   return createAuthoritativeTurnSnapshot({
     lifecycle: session.turnLifecycle,
     turnTimings: session.turnTimings,
-    terminalTurnScopeIds: collectSessionPresentationTurnScopeIds(session),
+    terminalTurnScopeIds: collectSessionPresentationTurnScopeIds(session, messageTurnScopeIds),
     commandId,
     sessionId: session.sessionId,
     knownSequence,

@@ -22,11 +22,16 @@ import {
 import { isPlainObject, text } from "@noobot/shared/value";
 import { CONTEXT_MESSAGE_PROJECTION_TYPE } from "@noobot/context-protocol/message/codec";
 import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "@noobot/context-protocol/message/internal-types";
+import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/message/injected-types";
 import {
   SNAPSHOT_VERSION,
   assertModelContextSnapshot,
   composeMessagesFromBlocks,
 } from "@noobot/context-protocol/policy/snapshot";
+import {
+  withoutRetiredFlowControlPolicy,
+  withoutRetiredToolCallPolicies,
+} from "./retired-flow-control-policy.js";
 
 export const MODEL_CONTEXT_SNAPSHOT_MIGRATION_KIND = "model-context-snapshot";
 export const V3_MESSAGE_IDENTITY_KEY = MESSAGE_REMOVED_FIELD_NAME.NOOBOT_MESSAGE_ID;
@@ -221,7 +226,7 @@ function migrateSnapshotV3(snapshot) {
 const V4_JOINED_SEPARATOR = "::";
 const V4_JOINED_SOURCE_FIELD = Object.freeze({
   [CONTEXT_MESSAGE_PROJECTION_TYPE.USER_META]: "sourceMessageUid",
-  [CONTEXT_MESSAGE_PROJECTION_TYPE.PHASE_SUMMARY]: "sourceMessageUid",
+  phase_summary: "sourceMessageUid",
   [CONTEXT_MESSAGE_PROJECTION_TYPE.TERMINAL_STATUS]: "sourceTurnScopeId",
 });
 const V5_BACKWRITE_RENAME = messageFieldRenamesFor(
@@ -335,6 +340,52 @@ function migrateSnapshotV5(snapshot) {
   };
 }
 
+function migrateRetiredFlowControlPolicyV6(message) {
+  const additional = withoutRetiredFlowControlPolicy(message.additional_kwargs);
+  const calls = withoutRetiredToolCallPolicies(message.tool_calls);
+  if (additional === message.additional_kwargs && calls === message.tool_calls) return message;
+  const next = { ...message, additional_kwargs: additional };
+  if (calls !== undefined) next.tool_calls = calls;
+  return next;
+}
+
+function migrateSnapshotV6(snapshot) {
+  const messageBlocks = {};
+  for (const block of SNAPSHOT_BLOCKS) {
+    messageBlocks[block] = snapshot.messageBlocks[block].map((source) => {
+      const message = migrateRetiredFlowControlPolicyV6(source);
+      const metadata = message.additional_kwargs;
+      const projected = metadata.projectionType === "phase_summary";
+      if (
+        !projected &&
+        metadata.noobotInternalMessageType !== "phase_summary_memory" &&
+        metadata.injectedMessageType !== "separate_model_relay:summary"
+      )
+        return message;
+      const next = {
+        ...metadata,
+        injectedMessage: true,
+        injectedMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_RESULT,
+        noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_RESULT,
+      };
+      if (projected) {
+        next.messageUid = metadata.sourceMessageUid;
+        delete next.projectionType;
+        delete next.sourceMessageUid;
+      }
+      delete next.recoveredFromUnpairedTaskSummary;
+      delete next.original_tool_call_id;
+      return { ...message, type: "human", additional_kwargs: next };
+    });
+  }
+  return {
+    ...snapshot,
+    version: 7,
+    messageBlocks,
+    messages: composeMessagesFromBlocks(messageBlocks),
+  };
+}
+
 export const MODEL_CONTEXT_SNAPSHOT_VERSION_CHAIN = defineVersionChain({
   kind: MODEL_CONTEXT_SNAPSHOT_MIGRATION_KIND,
   currentVersion: SNAPSHOT_VERSION,
@@ -343,17 +394,55 @@ export const MODEL_CONTEXT_SNAPSHOT_VERSION_CHAIN = defineVersionChain({
     3: (snapshot) => assertHistoricalSnapshot(snapshot, 3),
     4: (snapshot) => assertHistoricalSnapshot(snapshot, 4),
     5: (snapshot) => assertHistoricalSnapshot(snapshot, 5),
+    6: (snapshot) => assertHistoricalSnapshot(snapshot, 6),
     [SNAPSHOT_VERSION]: assertModelContextSnapshot,
   },
   steps: [
     { from: 3, to: 4, migrate: migrateSnapshotV3 },
     { from: 4, to: 5, migrate: migrateSnapshotV4 },
     { from: 5, to: 6, migrate: migrateSnapshotV5 },
+    { from: 6, to: 7, migrate: migrateSnapshotV6 },
   ],
 });
 
 export function migrateModelContextSnapshot(snapshot) {
   return runVersionChain(MODEL_CONTEXT_SNAPSHOT_VERSION_CHAIN, snapshot);
+}
+
+async function restorePhaseSummaryBody(message, { snapshot, sources, readMessage }) {
+  const metadata = message.additional_kwargs;
+  if (metadata.injectedMessageType !== CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_RESULT) {
+    return message;
+  }
+  const uid = metadata.messageUid;
+  if (!sources.has(uid)) sources.set(uid, await readMessage(uid));
+  const source = sources.get(uid);
+  if (
+    !source ||
+    source.messageUid !== uid ||
+    source.sessionId !== snapshot.sessionId ||
+    source.injectedMessageType !== CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_RESULT ||
+    typeof source.content !== "string" ||
+    !source.content.trim() ||
+    ["dialogProcessId", "turnScopeId"].some(
+      (field) => metadata[field] && metadata[field] !== source[field],
+    )
+  ) {
+    throw unmappable(6, "phase_summary_source_invalid", { messageUid: uid });
+  }
+  return { ...message, content: source.content };
+}
+
+export async function restoreSnapshotPhaseSummaryBodies(snapshot, readMessage) {
+  const messageBlocks = {};
+  const context = { snapshot, sources: new Map(), readMessage };
+  for (const block of SNAPSHOT_BLOCKS) {
+    messageBlocks[block] = [];
+    for (const message of snapshot.messageBlocks[block]) {
+      messageBlocks[block].push(await restorePhaseSummaryBody(message, context));
+    }
+  }
+  return { ...snapshot, messageBlocks, messages: composeMessagesFromBlocks(messageBlocks) };
 }
 
 function assertHistoricalMessage(message, version) {

@@ -14,6 +14,7 @@ import {
 } from "@noobot/context-protocol/message/codec";
 import test from "node:test";
 import assert from "node:assert/strict";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 import { SessionContextService } from "../../src/session/services/session-context-service.js";
 
@@ -692,6 +693,12 @@ test("session context reads messages and terminal statuses from the same parent-
     persistenceContext,
   });
 
-  assert.deepEqual(received, { userId: "u1", sessionId: "child-1", persistenceContext });
+  assert.deepEqual(received, {
+    userId: "u1",
+    sessionId: "child-1",
+    persistenceContext,
+    scope: { dialogProcessId: "", turnScopeId: "" },
+    historyLimit: TURN_THRESHOLDS.session.mainModelHistoryRoundLimit,
+  });
   assert.equal(received.persistenceContext, persistenceContext);
 });

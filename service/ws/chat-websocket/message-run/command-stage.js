@@ -5,11 +5,6 @@
  */
 import { AGENT_COMMAND, ROOT_PARENT_DIALOG_PROCESS_ID } from "@noobot/agent-transport-protocol";
 import {
-  RUNTIME_EVENT_CATEGORIES,
-  RUNTIME_EVENT_CHANNELS,
-  writeRuntimeEvent,
-} from "@noobot/runtime-events";
-import {
   createTurnLifecycleRejectedError,
   TURN_ACTION,
   TURN_EVENT,
@@ -29,7 +24,6 @@ import { attachRunTransport, findActiveRun } from "../run-registry.js";
 import {
   recordServiceAgentTransportDebug,
   recordServiceWebSocketLifecycle,
-  summarizeDebugAttachments,
 } from "../runtime-events.js";
 import { text } from "@noobot/shared/value";
 
@@ -41,25 +35,6 @@ export async function mapRunCommand(context, command) {
   });
   context.state.currentLocale = mapped.runConfig.locale;
   return { ...mapped, normalizedRunConfig: mapped.runConfig };
-}
-
-export function recordReceivedCommand(command, run) {
-  return writeRuntimeEvent({
-    scope: "session",
-    source: "service",
-    channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-    category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
-    event: "debug.resend.websocket.received",
-    userId: text(run.userId),
-    sessionId: text(run.sessionId),
-    parentSessionId: text(run.parentSessionId),
-    turnScopeId: text(run.turnScopeId),
-    data: {
-      commandType: command.commandType,
-      reuseExistingUserTurn: run.normalizedRunConfig.reuseExistingUserTurn === true,
-      attachments: summarizeDebugAttachments(run.attachments),
-    },
-  });
 }
 
 export function validateRunIdentity(context, run) {

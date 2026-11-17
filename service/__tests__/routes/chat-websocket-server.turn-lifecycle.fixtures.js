@@ -12,6 +12,7 @@ import {
 import {
   acknowledgeAuthorityEventDelivery,
   compactAuthorityEventOutbox,
+  normalizeAuthorityEventOutbox,
   createEventEnvelope,
   EVENT_FAMILY,
   listPendingAuthorityEvents,
@@ -247,9 +248,15 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
         return { recorded: true };
       },
       async compactAuthorityEvents({ retainDeliveredAfter }) {
-        const result = compactAuthorityEventOutbox(eventOutbox, { retainDeliveredAfter });
+        const result = compactAuthorityEventOutbox(normalizeAuthorityEventOutbox(eventOutbox), {
+          retainDeliveredAfter,
+        });
         eventOutbox = result.outbox;
-        return { compacted: result.compacted, removed: result.removed };
+        return {
+          compacted: result.compacted,
+          removed: result.removed,
+          nextRetainedDeliveryAt: result.nextRetainedDeliveryAt,
+        };
       },
       async acknowledgeAuthorityEvents({ consumerId, acknowledgements = [] } = {}) {
         let deduplicated = 0;

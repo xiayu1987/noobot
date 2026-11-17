@@ -11,7 +11,7 @@ import {
 } from "../helpers/browser-actions.js";
 import { assertHarnessRun } from "../helpers/harness-assertions.js";
 import { assertNoForbiddenErrors } from "../helpers/log-assertions.js";
-import { readHarnessRun } from "../helpers/persistence-audit.js";
+import { readHarnessRun, readHarnessContext } from "../helpers/persistence-audit.js";
 import { waitForCommand, waitForLifecycle } from "../helpers/scenario-assertions.js";
 import { stopAfterModelInvocation, uniquePrompt } from "../helpers/turn-scenarios.js";
 
@@ -35,7 +35,7 @@ test("@core PBE-016 Harness 插件连接", async ({ noobot, protocolCapture }, t
   });
   const harness = await readHarnessRun(noobot.userId, processing.dialogProcessId);
   assertHarnessRun(harness.run, { dialogProcessId: processing.dialogProcessId, status: "success" });
-  expect(harness.context).toBeTruthy();
+  expect(await readHarnessContext(noobot.userId, processing.dialogProcessId)).toBeTruthy();
   expect(harness.events.length).toBeGreaterThan(0);
 });
 
@@ -63,6 +63,7 @@ test("@core PBE-017 Harness Hook 与 Model Context", async ({
   );
   const harness = await readHarnessRun(noobot.userId, processing.dialogProcessId);
   expect(harness.run.status).toBe("abort");
-  expect(JSON.stringify(harness.context)).not.toMatch(/"bindings"\s*:/);
+  const context = await readHarnessContext(noobot.userId, processing.dialogProcessId);
+  expect(JSON.stringify(context)).not.toMatch(/"bindings"\s*:/);
   assertNoForbiddenErrors(protocolCapture.console);
 });

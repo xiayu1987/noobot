@@ -13,8 +13,12 @@ import {
 } from "../helpers/websocket-capture.js";
 
 async function writeJsonLines(filePath, records) {
-  const body = records.map((record) => JSON.stringify(record)).join("\n");
-  await fs.writeFile(filePath, body ? `${body}\n` : "", "utf8");
+  const file = await fs.open(filePath, "a");
+  try {
+    for (const record of records) await file.write(`${JSON.stringify(record)}\n`);
+  } finally {
+    await file.close();
+  }
 }
 
 export const artifactTest = captureTest.extend({
@@ -22,20 +26,32 @@ export const artifactTest = captureTest.extend({
     async ({ protocolCapture }, use, testInfo) => {
       const outputDir = testInfo.outputPath("protocol-evidence");
       await fs.mkdir(outputDir, { recursive: true });
-      await use({ outputDir });
-      const files = [
-        ["browser-console.jsonl", protocolCapture.console],
-        ["http-requests.jsonl", protocolCapture.httpRequests],
-        ["http-responses.jsonl", protocolCapture.httpResponses],
-        ["websocket-sent.jsonl", protocolCapture.websocketSent],
-        ["websocket-received.jsonl", protocolCapture.websocketReceived],
-        ["agent-commands.jsonl", findAgentCommands(protocolCapture.websocketSent)],
-        ["turn-lifecycle.jsonl", findLifecycleEnvelopes(protocolCapture.websocketReceived)],
-        ["turn-lifecycle-receipts.jsonl", findLifecycleReceipts(protocolCapture.websocketSent)],
-      ];
-      for (const [name, records] of files) {
+      const names = new Set();
+      const flush = async () => {
+        const snapshot = Object.fromEntries(
+          Object.entries(protocolCapture).map(([key, records]) => [key, records.slice()]),
+        );
+        const files = [
+          ["browser-console.jsonl", snapshot.console],
+          ["http-requests.jsonl", snapshot.httpRequests],
+          ["http-responses.jsonl", snapshot.httpResponses],
+          ["websocket-sent.jsonl", snapshot.websocketSent],
+          ["websocket-received.jsonl", snapshot.websocketReceived],
+          ["agent-commands.jsonl", findAgentCommands(snapshot.websocketSent)],
+          ["turn-lifecycle.jsonl", findLifecycleEnvelopes(snapshot.websocketReceived)],
+          ["turn-lifecycle-receipts.jsonl", findLifecycleReceipts(snapshot.websocketSent)],
+        ];
+        for (const [name, records] of files) {
+          await writeJsonLines(path.join(outputDir, name), records);
+          names.add(name);
+        }
+        for (const [key, records] of Object.entries(snapshot))
+          protocolCapture[key].splice(0, records.length);
+      };
+      await use({ outputDir, flush });
+      await flush();
+      for (const name of names) {
         const filePath = path.join(outputDir, name);
-        await writeJsonLines(filePath, records);
         await testInfo.attach(name, { path: filePath, contentType: "application/x-ndjson" });
       }
     },

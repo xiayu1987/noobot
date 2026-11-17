@@ -169,6 +169,20 @@ export const DEFAULT_LENGTH_THRESHOLDS = deepFreeze({
     payloadBytes: LENGTH_TIERS.bytes.pluginMessagePayload,
   },
 
+  immutableStorage: {
+    blockBytes: 32 * KiB,
+    keyBytes: KiB,
+    headBytes: 4 * KiB,
+    readerRetentionRecordBytes: 4 * KiB,
+    cleanupRecordBytes: 32 * KiB,
+    valueInlineBytes: 4 * KiB,
+    indexTargetBytes: 16 * KiB,
+    commitIndexTargetBytes: 4 * KiB,
+    locationIndexTargetBytes: 4 * KiB,
+    locationRetirementMetadataBytes: MiB,
+    executionProjectionOutputRecordBytes: 32 * MiB,
+  },
+
   sessionLog: {
     maxDebugQueueBytes: 1024 * 1024,
     messageChars: 4000,
@@ -186,7 +200,10 @@ export const DEFAULT_LENGTH_THRESHOLDS = deepFreeze({
 
   artifact: {
     executionEventSegmentBytes: LENGTH_TIERS.bytes.jsonlBuffer,
-    turnMaterializerCacheBytes: 128 * MiB,
+    executionLogBatchBytes: 5 * MiB,
+    executionLogPendingBytes: 20 * MiB,
+    turnMaterializerPayloadCacheBytes: 112 * MiB,
+    turnMaterializerIdentityCacheBytes: 16 * MiB,
     verifiedSnapshotCacheBytes: 128 * MiB,
     verifiedCheckpointIdentityCacheBytes: 16 * MiB,
     artifactEventJournalCacheBytes: 64 * MiB,

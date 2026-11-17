@@ -5,31 +5,6 @@
  */
 
 export const TASK_ORCHESTRATION_TOOL_SCHEMA = {
-  task_summary: {
-    description: {
-      key: "tools.task_summary.description",
-      text: "Submit the current task phase summary only when requested by the system. summaryContent must strictly follow the single NOOBOT_TASK_SUMMARY/1 text protocol, with exactly [STATE], [ABSTRACT], [DETAILS], and [NEXT_ACTION] in that order. STATE must be CONTINUE, COMPLETE, or BLOCKED. After submission, earlier tool calls and results leave the context, so the summary should read on its own without pointing to 'above'. The summary is the authoritative phase state for subsequent work: completed work must not be repeated, and CONTINUE resumes only from NEXT_ACTION. The complete content exists only in this input; the tool result returns only a derived receipt and attachment reference.",
-    },
-    params: {
-      summaryContent: {
-        key: "tools.task_summary.fieldSummaryContent",
-        text: "Exact format: NOOBOT_TASK_SUMMARY/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\nShort factual summary of the completed phase\n[DETAILS]\nAuthoritative phase state integrated with prior summaries. Record the facts later steps will still need: the user's goal and constraints; completed work with concrete results (key values, command output highlights, verbatim errors); confirmed conclusions and rationale; verification status; remaining work and blockers; related attachment references and paths. In programming mode include file paths, function names, line numbers, and change highlights\n[NEXT_ACTION]\nThe single specific unfinished action to execute next. CONTINUE resumes only from NEXT_ACTION and must not repeat work recorded as completed in ABSTRACT or DETAILS; COMPLETE enters a no-tools final response; BLOCKED enters a no-tools blocker explanation. Every section must be non-empty; do not add, repeat, or reorder sections.",
-      },
-    },
-    texts: {
-      "tools.task_summary.notRequested":
-        "The system did not request a phase summary. Continue the current task.",
-      "tools.task_summary.summaryContentRequired": "summaryContent is required",
-      "tools.task_summary.summaryProtocolInvalid":
-        "summaryContent does not conform to NOOBOT_TASK_SUMMARY/1",
-      "tools.task_summary.receiptContinue":
-        "This summary receipt is the authoritative phase state. Do not repeat completed work; proceed only from summary.nextAction. When the task is done, reply directly without calling {{tool:task_summary}} again.",
-      "tools.task_summary.receiptComplete":
-        "This summary receipt is the authoritative phase state. The task is complete; the receipt's abstract and nextAction are the verified execution results. Raw tool records were archived by the checkpoint, so do not question or refuse verification because they are absent; reply directly with the final answer based on them.",
-      "tools.task_summary.receiptBlocked":
-        "This summary receipt is the authoritative phase state. The task is blocked; explain the blocker directly.",
-    },
-  },
   task_check: {
     description: {
       key: "tools.task_check.description",

@@ -35,7 +35,7 @@ function acceptDispatchedTurnMessages(runtime, messages) {
   if (
     !store ||
     !isFunction(store.push) ||
-    !isFunction(store.updateWhere) ||
+    !isFunction(store.updateByUid) ||
     !isFunction(store.toArray)
   ) {
     throw new Error("bot dispatch requires the canonical currentTurnMessages store");
@@ -43,15 +43,9 @@ function acceptDispatchedTurnMessages(runtime, messages) {
   const accepted = [];
   for (const message of messages) {
     const identity = messageUidOf(message);
-    const updatedCount = store.updateWhere(
-      message,
-      (current) => messageUidOf(current) === identity,
-    );
-    if (updatedCount > 1) {
-      throw new Error(`canonical turn store contains duplicate messageUid: ${identity}`);
-    }
-    if (updatedCount === 0) store.push(message);
-    accepted.push({ messageUid: identity, action: updatedCount === 0 ? "inserted" : "updated" });
+    const updated = store.updateByUid(identity, message);
+    if (updated === null) store.push(message);
+    accepted.push({ messageUid: identity, action: updated === null ? "inserted" : "updated" });
   }
   return { messages: store.toArray(), accepted };
 }

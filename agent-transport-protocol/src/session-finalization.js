@@ -19,10 +19,12 @@ export function assertSessionFinalizationContext({
   runtimeEventListener,
   parentDialogProcessId,
   userConfig,
+  turnPersistence,
 }) {
   for (const [name, port, methods] of [
     ["lifecycle", lifecycle, ["enterPersisting", "enterMemory"]],
     ["runtimeEventListener", runtimeEventListener, ["onEvent", "flush"]],
+    ["turnPersistence", turnPersistence, ["flush", "readResultMessages"]],
   ]) {
     assertFinalizationPort(name, port, methods);
   }

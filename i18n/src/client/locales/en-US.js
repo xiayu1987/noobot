@@ -259,7 +259,6 @@ export const enUSMessages = {
     execute_native_script: "Execute native script",
     access_connector: "Access connector",
     multimodal_generate: "Multimodal generate",
-    task_summary: "Task summary",
     help: "Help",
     do_search_web: "Web search",
     mode: "Mode",

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { expect } from "@playwright/test";
+import { isSettlingTurnEvent, TURN_COMMAND } from "@noobot/session-protocol/turn-lifecycle";
 import {
   assertAgentTransportCommand,
   assertUniqueCommandIds,
@@ -56,15 +57,27 @@ export async function waitForTurnTerminal(
   turnScopeId = "",
   { timeoutMs = PROTOCOL_TIMEOUTS.model } = {},
 ) {
-  const terminalTypes = new Set(["turn.completed", "turn.stop_completed", "turn.failed"]);
   return waitForCaptured(
     () =>
       lifecycleForSession(capture, sessionId).find(
         (event) =>
-          terminalTypes.has(event.eventType) && (!turnScopeId || event.turnScopeId === turnScopeId),
+          isSettlingTurnEvent(event) && (!turnScopeId || event.turnScopeId === turnScopeId),
       ),
     { timeoutMs },
   );
+}
+
+export async function settleSessionBeforeCleanup(capture, sessionId, stop) {
+  const latestTurn = commandsForSession(capture, sessionId).findLast(({ commandType }) =>
+    [TURN_COMMAND.SEND, TURN_COMMAND.RESEND, TURN_COMMAND.CONTINUE].includes(commandType),
+  );
+  if (!latestTurn) return;
+  const { turnScopeId } = latestTurn.identity;
+  const settled = lifecycleForSession(capture, sessionId).some(
+    (event) => event.turnScopeId === turnScopeId && isSettlingTurnEvent(event),
+  );
+  if (!settled) await stop();
+  return waitForTurnTerminal(capture, sessionId, turnScopeId);
 }
 
 export function assertCommandChain(capture, sessionId) {

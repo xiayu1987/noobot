@@ -5,8 +5,15 @@
  */
 import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
 
+export const AUTHORITY_OUTBOX_ERROR_CODE = Object.freeze({
+  INTEGRITY_INVALID: "AUTHORITY_OUTBOX_INTEGRITY_INVALID",
+});
+
 export function requireOutbox(condition, detail) {
-  if (!condition) throw new TypeError(`invalid authority outbox: ${detail}`);
+  if (condition) return;
+  const error = new TypeError(`invalid authority outbox: ${detail}`);
+  error.code = AUTHORITY_OUTBOX_ERROR_CODE.INTEGRITY_INVALID;
+  throw error;
 }
 
 export function requireOutboxText(value, field) {
@@ -65,12 +72,27 @@ export function readConsumerDelivery(value) {
   };
 }
 
-export function readOutboxDeliveries(source) {
+export function requireAcknowledgementOrdering(delivery, envelope) {
+  requireOutbox(
+    delivery.orderingDomain === envelope.ordering.domain &&
+      delivery.orderingScopeId === envelope.ordering.scopeId &&
+      delivery.sequence === envelope.ordering.sequence,
+    `acknowledgement ordering mismatch: ${envelope.identity.eventId}`,
+  );
+}
+
+export function readEventConsumerDelivery(value, envelope) {
+  const delivery = readConsumerDelivery(value);
+  if (delivery.deliveredAt) requireAcknowledgementOrdering(delivery, envelope);
+  return delivery;
+}
+
+export function readOutboxDeliveries(source, envelope) {
   requireOutbox(isPlainObject(source), "deliveries must be an object");
   return Object.fromEntries(
     Object.entries(source).map(([consumerId, value]) => [
       requireOutboxText(consumerId, "consumerId"),
-      readConsumerDelivery(value),
+      readEventConsumerDelivery(value, envelope),
     ]),
   );
 }

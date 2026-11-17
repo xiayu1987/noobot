@@ -4,6 +4,49 @@
  * SPDX-License-Identifier: MIT
  */
 export default {
+  immutableStorage: {
+    valueInlineBytes: {
+      name: "Inline value limit",
+      description: "Maximum encoded value bytes stored inline before using a content graph.",
+    },
+    indexTargetBytes: {
+      name: "Index page target size",
+      description: "Target encoded bytes per immutable index page.",
+    },
+    commitIndexTargetBytes: {
+      name: "Commit index page target size",
+      description: "Target encoded bytes per commit index page.",
+    },
+    locationIndexTargetBytes: {
+      name: "Location index page target size",
+      description: "Target encoded bytes per record location index page.",
+    },
+    locationRetirementMetadataBytes: {
+      name: "Location retirement metadata limit",
+      description: "Maximum encoded bytes in location retirement metadata.",
+    },
+    executionProjectionOutputRecordBytes: {
+      name: "Execution projection output record limit",
+      description: "Maximum encoded bytes in an execution projection output record.",
+    },
+    readerRetentionRecordBytes: {
+      name: "Reader retention record limit",
+      description: "Maximum encoded bytes in a reader retention record envelope.",
+    },
+    cleanupRecordBytes: {
+      name: "Cleanup record limit",
+      description: "Maximum encoded bytes in a cleanup plan record envelope.",
+    },
+    blockBytes: {
+      name: "Storage block limit",
+      description: "Maximum bytes in an immutable storage block.",
+    },
+    keyBytes: { name: "Index key limit", description: "Maximum bytes in an immutable index key." },
+    headBytes: {
+      name: "Storage head limit",
+      description: "Maximum bytes in an immutable storage head.",
+    },
+  },
   modelMeasurement: {
     prefixCompareBlockBytes: {
       name: "Request prefix comparison block",
@@ -273,9 +316,23 @@ export default {
       name: "Artifact execution event segment",
       description: "Length or capacity threshold used by artifact execution event segment.",
     },
-    turnMaterializerCacheBytes: {
-      name: "Artifact turn materializer cache",
-      description: "Length or capacity threshold used by artifact turn materializer cache.",
+    executionLogBatchBytes: {
+      name: "Execution log batch byte budget",
+      description:
+        "Maximum encoded UTF-8 JSONL bytes per listener batch. A single record exceeding this budget is rejected before admission.",
+    },
+    executionLogPendingBytes: {
+      name: "Execution log pending byte budget",
+      description:
+        "Maximum accepted UTF-8 JSONL bytes including active writes. Must cover a complete batch; producers must drain persistence before retrying rejected admission.",
+    },
+    turnMaterializerPayloadCacheBytes: {
+      name: "Artifact turn message body cache",
+      description: "Maximum retained bytes of verified turn message projections.",
+    },
+    turnMaterializerIdentityCacheBytes: {
+      name: "Artifact turn message identity cache",
+      description: "Independent byte budget for verified message ownership projections.",
     },
     verifiedSnapshotCacheBytes: {
       name: "Artifact verified snapshot cache",

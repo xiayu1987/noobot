@@ -3,7 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
+import { isCanonicalText, isFunction, isPlainObject } from "@noobot/shared/value";
+
+export function requireSessionLocationResolver(resolver) {
+  if (!isFunction(resolver?.locateSessionScope))
+    throw new TypeError("Session location resolver requires locateSessionScope(userId, sessionId)");
+  return resolver;
+}
 
 const SESSION_PERSISTENCE_SCOPE_FIELDS = Object.freeze([
   "scopeId",

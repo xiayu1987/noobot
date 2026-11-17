@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { isDeepStrictEqual } from "node:util";
 import {
   compactTransferEnvelopes,
   dedupeSessionAttachmentRefs,
@@ -14,6 +15,7 @@ import { assertMutationRef } from "@noobot/file-mutation-protocol";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import {
   assertSessionMessageEntity,
+  assertSessionMessageMetadata,
   normalizeTurnCommitMetadata,
   projectSessionMessageRecordIdentity,
   resolveSessionMessageRecordDialogProcessId,
@@ -211,17 +213,32 @@ function buildMessageEntity(message) {
   applyMessagePresentation(normalizedMessage, message);
   applyMessageRuntimeFields(normalizedMessage, message);
   applyMessageToolFields(normalizedMessage, message);
-  return assertSessionMessageEntity(normalizedMessage);
+  return normalizedMessage;
+}
+
+export function normalizeMessageMetadataEntity({ value, parts }) {
+  assertSessionMessageMetadata({ value, parts });
+  const normalized = { ...value, message: buildMessageEntity(value.message) };
+  for (const { path } of parts) normalized.message[path[1]] = value.message[path[1]];
+  assertSessionMessageMetadata({ value: normalized, parts });
+  return normalized;
 }
 
 const normalizedImmutableMessages = new WeakMap();
 
 export function normalizeMessageEntity(message) {
-  if (!isDeepFrozen(message)) return buildMessageEntity(message);
+  if (!isDeepFrozen(message)) return assertSessionMessageEntity(buildMessageEntity(message));
   let normalized = normalizedImmutableMessages.get(message);
   if (!normalized) {
-    normalized = deepFreeze(buildMessageEntity(message));
+    normalized = assertSessionMessageEntity(buildMessageEntity(message));
+    if (
+      isDeepStrictEqual(normalized, message) &&
+      JSON.stringify(normalized) === JSON.stringify(message)
+    )
+      normalized = message;
+    else normalized = deepFreeze(normalized);
     normalizedImmutableMessages.set(message, normalized);
+    normalizedImmutableMessages.set(normalized, normalized);
   }
   return normalized;
 }

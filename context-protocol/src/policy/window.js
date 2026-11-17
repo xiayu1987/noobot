@@ -35,26 +35,28 @@ function identities(messages) {
   return new Set((Array.isArray(messages) ? messages : []).map(messageIdentity).filter(Boolean));
 }
 
-function resolveModelBlockMessages({ sourceMessages = [], policyOptions = {} } = {}) {
-  return filterForModelContext(sourceMessages, policyOptions);
+function resolveModelBlockMessages({ sourceMessages = [] } = {}) {
+  return filterForModelContext(sourceMessages);
 }
 
 export function resolveModelSystemMessages(options = {}) {
   return resolveModelBlockMessages(options);
 }
 
+export function isModelHistorySourceMessage(message) {
+  if (isContextSystemMessage(message)) return false;
+  if (!resolveContextMessageDialogProcessId(message))
+    throw new Error("history context message requires additional_kwargs.dialogProcessId");
+  return !resolveContextMessageSummarized(message);
+}
+
 export function resolveModelHistoryMessages({
   sourceMessages = [],
   historyLimit = Number.POSITIVE_INFINITY,
 } = {}) {
-  const source = (Array.isArray(sourceMessages) ? sourceMessages : []).filter((message) => {
-    if (isContextSystemMessage(message)) return false;
-
-    if (!resolveContextMessageDialogProcessId(message)) {
-      throw new Error("history context message requires additional_kwargs.dialogProcessId");
-    }
-    return !resolveContextMessageSummarized(message);
-  });
+  const source = (Array.isArray(sourceMessages) ? sourceMessages : []).filter(
+    isModelHistorySourceMessage,
+  );
   const groups = new Map();
   source.forEach((message, index) => {
     const key = resolveContextMessageDialogProcessId(message);
@@ -74,12 +76,11 @@ export function resolveModelFinalMessages({
   historyMessages = [],
   incrementalMessages = [],
   historyLimit = Number.POSITIVE_INFINITY,
-  policyOptions = {},
 } = {}) {
-  const system = resolveModelSystemMessages({ sourceMessages: systemMessages, policyOptions });
+  const system = resolveModelSystemMessages({ sourceMessages: systemMessages });
   const systemIdentities = identities(system);
   const incremental = removeBlocked(
-    resolveModelIncrementalMessages({ sourceMessages: incrementalMessages, policyOptions }),
+    resolveModelIncrementalMessages({ sourceMessages: incrementalMessages }),
     systemIdentities,
   );
   const history = removeBlocked(

@@ -44,9 +44,10 @@ relays, checkpoint identities, cache prefixes, and all tool results must close.
 ### PBE-034: Low-turn main-Agent phase summary
 
 Without Harness, set `preferences.summaryPolicy.phaseSummaryLoopTurns=2` through the Composer and
-run a three-step dependent chain. Assert the main flow independently emits the summary requirement
-and checkpoint, preserves tool call/result pairs, removes summarized UIDs from later provider
-input, and performs exactly three `execute_script` calls plus one `task_summary`.
+run a three-step dependent chain. Assert the main flow runs the phase summary as an independent
+streaming request without bound tools, injects one `noobot.phase_summary_result`, commits the
+checkpoint, preserves tool call/result pairs, removes summarized UIDs from later provider input,
+and performs exactly three `execute_script` calls.
 
 ### PBE-035: Periodic task check
 
@@ -73,7 +74,7 @@ the final answer.
 - `016`～`017`：Harness 自然完成、Hook 中断和 Model Context。
 - `021`～`026`：Session 恢复、版本冲突、停止幂等、断网和非法协议拒绝。
 - `027`～`032`：插件协议、Session 协议、本地 Session 刷新和 Workflow 生命周期。
-- `033`～`036`：Harness 全流程注入、主 Agent `task_summary` checkpoint、周期 `task_check` 切片，以及安全工具/实时思考/交互模型输入闭环。
+- `033`～`036`：Harness 全流程注入、主 Agent 独立流式阶段小结 checkpoint、周期 `task_check` 切片，以及安全工具/实时思考/交互模型输入闭环。
 - `044`：自然完成后执行工具链，两次在工具结果后停止并继续，最终自然完成；逐份审计停止快照的序列化结构及 Continue 后真实模型输入的恢复投影。
 - `045`：同一 assistant 响应并行发起四个工具，部分完成后停止；审计整批调用结果配对、停止快照及 Continue 模型输入恢复。
 - `046`：双浏览器用户消息、assistant 消息、Workflow 卡片、DSL 折叠和停止状态实时一致。
@@ -97,9 +98,9 @@ the final answer.
 
 ### PBE-034：主 Agent 低轮次阶段小结
 
-步骤：不选择 Harness，通过核心 Composer 设置 `preferences.summaryPolicy.phaseSummaryLoopTurns=2`，发送不包含小结或 `task_summary` 指令的三步依赖工具链。前两个业务工具完成后由主流程阈值自主注入阶段小结要求，小结后继续完成第三步。
+步骤：不选择 Harness，通过核心 Composer 设置 `preferences.summaryPolicy.phaseSummaryLoopTurns=2`，发送不包含小结指令的三步依赖工具链。前两个业务工具完成后由主流程阈值触发独立小结调用，小结后继续完成第三步。
 
-断言：主流程阈值不从插件配置读取；`phase_summary_required`、`summary_checkpoint_committed` 和 `turn.completed` 依次发生；唯一 checkpoint receipt 的 UID 与 turn journal 中 `summarized=true` 消息完全对应，tool-call/result 不拆对；每个 receipt 提交后的主 Agent provider 输入不再含该 receipt 已小结 UID，阶段小结 marker 不累积；全程严格产生三次 `execute_script` 和一次 `task_summary`，专用模型仍按自己的消息生产协议观测。
+断言：主流程阈值不从插件配置读取；`phase_summary_required`、`summary_checkpoint_committed` 和 `turn.completed` 依次发生；`phase_summary` 调用为流式、无绑定工具、独立请求，并注入一条 `noobot.phase_summary_result`；唯一 checkpoint receipt 的 UID 与 turn journal 中 `summarized=true` 消息完全对应，tool-call/result 不拆对；每个 receipt 提交后的主 Agent provider 输入不再含该 receipt 已小结 UID；全程严格产生三次 `execute_script`，不出现 `task_summary` 调用。
 
 ### PBE-035 周期任务检查
 

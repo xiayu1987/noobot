@@ -36,7 +36,6 @@ function collectLayoutUpgradeFailures(userId, layoutUpgrades = []) {
 }
 
 export async function prepareUserWorkspaces({ userIds, bot, reportProgress }) {
-  const results = [];
   const failures = [];
   let recoveredTurnCount = 0;
   for (const [index, userId] of userIds.entries()) {
@@ -50,26 +49,12 @@ export async function prepareUserWorkspaces({ userIds, bot, reportProgress }) {
             ...upgrade,
           }),
       });
-      failures.push(...collectLayoutUpgradeFailures(userId, report?.layoutUpgrades));
+      const layoutFailures = collectLayoutUpgradeFailures(userId, report?.layoutUpgrades);
+      failures.push(...layoutFailures);
+      if (layoutFailures.length) continue;
     } catch (error) {
       failures.push(describeFailure(userId, "workspace", error));
       continue;
-    }
-    try {
-      const result = await bot.session.maintainSessionDisplaySummaries({
-        userId,
-        onProgress: (summary) =>
-          reportProgress({
-            ...userProgress,
-            stage: SERVICE_STARTUP_PROGRESS_STAGES.DISPLAY_SUMMARY,
-            upgradeId: "",
-            ...summary,
-          }),
-      });
-      results.push(result);
-      failures.push(...(result.failures || []).map((failure) => ({ userId, ...failure })));
-    } catch (error) {
-      failures.push(describeFailure(userId, "sessionDisplaySummary", error));
     }
     try {
       const recovery = await recoverServiceRestartTurns({
@@ -97,10 +82,6 @@ export async function prepareUserWorkspaces({ userIds, bot, reportProgress }) {
   }
   return {
     userCount: userIds.length,
-    rebuiltSessionCount: results.reduce(
-      (count, result) => count + (result.rebuiltSessionIds?.length || 0),
-      0,
-    ),
     recoveredTurnCount,
     failures,
   };

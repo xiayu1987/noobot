@@ -9,3 +9,18 @@ import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 export function storageDigest(serialized) {
   return bytesToHex(sha256(utf8ToBytes(serialized)));
 }
+
+export function createStorageDigest(state = sha256.create()) {
+  return {
+    update(text) {
+      state.update(utf8ToBytes(text));
+      return this;
+    },
+    copy() {
+      return createStorageDigest(state.clone());
+    },
+    digest() {
+      return bytesToHex(state.digest());
+    },
+  };
+}

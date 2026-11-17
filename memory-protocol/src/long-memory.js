@@ -384,7 +384,7 @@ function applyListCommands(next, field, commands) {
   const added = commands
     .filter((c) => c.action === LONG_MEMORY_PATCH_ACTION.ADD)
     .map((c) => c.value);
-  const result = [...items.filter((_, i) => !deleted.has(i + 1)), ...added];
+  const result = [...items.filter((...[, i]) => !deleted.has(i + 1)), ...added];
   if (new Set(result).size !== result.length) throw patchError(`duplicate items in ${field.key}`);
   if (result.length > field.maxItems && result.length >= items.length) {
     throw patchError(`${field.key} allows at most ${field.maxItems} items, got ${result.length}`);

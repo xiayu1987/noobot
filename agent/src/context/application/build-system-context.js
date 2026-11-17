@@ -40,7 +40,6 @@ export function buildSystemRuntime({ identity, runConfig, botManager, isSuperUse
 export async function buildSystemContext({
   identity,
   globalConfig = {},
-  userConfig = {},
   runConfig = {},
   contextPolicy = {},
   effectiveConfig = {},
@@ -85,8 +84,6 @@ export async function buildSystemContext({
     : [];
   const modelSection = enabled("model")
     ? resolveModelSection({
-        globalConfig,
-        userConfig,
         effectiveConfig,
         selectedModel: runConfig?.selectedModel,
         scenario: runConfig?.scenario,

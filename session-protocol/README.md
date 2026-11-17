@@ -41,6 +41,113 @@ canonical definition instead of duplicating it.
 
 `scripts/check-session-protocol-boundary.mjs` enforces these definition sites.
 
+## Session changes submission lifecycle
+
+`createSessionChangesSubmission()` owns one submission attempt and its retries.
+Its first successful preparation snapshots and freezes the complete request,
+including `expectedGeneration`, `operationId`, `changes` and `committedAt`.
+Concurrent callers share the in-flight preparation and commit. A failed commit
+keeps that exact request; retry must not regenerate its identity, timestamp or
+payload from later pending work. Failed preparation leaves no prepared request.
+
+The producer retains the submission until it has validated the authoritative
+receipts and acknowledged only the captured message revisions. Work admitted
+after capture belongs to a subsequent submission. Storage owns the durable
+operation receipt and checks replay before rejecting a stale generation.
+The submission object itself is in memory: this contract does not persist an
+unacknowledged producer request across process termination. Cross-process retry
+requires the original request to be retained by its owning producer.
+
+## Historical operation retry
+
+An operation receipt may carry `retryUnavailable: "original-input-unavailable"`
+when an explicit migration cannot prove the complete current checkpoint result
+from retained original input. Migration retains the original result, digest,
+generation and commit evidence; it never reconstructs request order from mutations.
+The operation ID remains reserved permanently. Both transaction entry points reject
+it with `SESSION_OPERATION_RETRY_UNAVAILABLE` before generation or input-conflict
+handling, without preparing, projecting or executing business changes.
+
+Missing input (no provider or a null/undefined response) produces this explicit
+terminal receipt state. Invalid supplied evidence and provider failures still fail
+migration. Verified input permits normal result migration and replay. An unavailable
+receipt is not later reinterpreted or reconstructed by routine startup migration.
+New operation IDs continue through the single current commit protocol. Producers
+must not automatically replace an unavailable operation ID to retry the same work.
+
+## Located record relocation
+
+Relocation preserves a committed record's content identity and changes only its
+physical location in the newly published snapshot. Every relocation requires
+`{ identity, sourceLocation }`, validated by `requireImmutableRelocationSource`.
+The transaction resolves the identity from its captured location root and compares
+the exact physical reference before reading bytes. A changed source rejects with
+`SESSION_RELOCATION_SOURCE_CHANGED`; staged bytes are not a committed source.
+Each explicitly relocated identity is a publication root alongside the business
+roots. Moving a child must not require rewriting or traversing its unchanged
+parents. Ordinary unreachable staged records are still discarded. A failed
+transaction publishes no new locator, and readers pinned to the old location
+root keep their original physical ranges until their retentions are released.
+
+`compactSessionArtifacts` uses `requireImmutableCompactionRequest` and
+`requireImmutableCompactionRecords`. Each batch supplies `operationId`,
+`expectedGeneration`, and explicit source records. `IMMUTABLE_COMPACTION_BUDGET`
+limits source count to 128 and aggregate source bytes to 1 MiB; copied locator,
+commit and receipt pages also consume the existing transaction budget. Duplicate
+identities, unknown request fields and missing source evidence reject. Sources in
+the captured active append segment reject with `SESSION_COMPACTION_ACTIVE_SEGMENT`.
+Sources are rechecked under the canonical session lock, together with writability,
+generation and publication. No source file is removed by relocation.
+
+Batch results use `requireImmutableCompactionResult`:
+`{ relocatedRecords, conflicts }`, where every conflict is exactly
+`{ identity, sourceLocation, currentLocation }`. A changed source is reported and
+does not prevent unchanged sources in that batch from moving. The result accounts
+for every requested identity exactly once; duplicate, foreign or unchanged
+conflict evidence rejects. Even an all-conflict batch publishes its result in the
+ordinary receipt, so retry cannot silently change its outcome. Missing locations,
+corrupt bytes, cancellation and I/O failures reject the transaction and publish
+neither relocation progress nor a receipt. Active-source rejection remains a
+batch admission check. Conflict evidence is an observation at that commit, not
+authority for a future relocation: callers must inspect the current snapshot
+before submitting a new operation for conflicting identities.
+
+The ordinary operation receipt owns retry progress: replaying the same operation
+after an uncertain head publication returns its original result and does not
+relocate twice. The generation and source checks apply to new operations, after
+receipt replay. Reusing an operation with a different input rejects. This is a
+bounded explicit relocation batch; automatic source discovery and scheduling are
+not provided by this contract. Old segments remain subject to retained-snapshot
+cleanup, including locator pages and the active tail.
+
+## Execution log queue budgets
+
+Listener admission uses `executionLogByteBudget()` and the record limits in
+`execution-event-index.js`. Pending byte and record accounting includes active
+writes. Records are snapshotted at admission. `executionLogBatchWaitBudget()`
+reads `time.agent.executionLogBatchWaitMs` (default 150 ms), strictly below the
+queue wait budget. A partial batch waits only until its oldest record's deadline;
+later admissions do not extend it. Reaching either the record or encoded byte
+limit wakes the writer immediately. Each record still fits the batch byte limit.
+`flush()` cancels this aggregation wait, drains accepted work including records
+admitted during persistence, and waits for source and projection confirmation.
+An isolated record persists automatically without requiring a final flush.
+
+`executionLogQueueWaitBudget()` reads `time.agent.executionLogQueueWaitMs`
+(default 2000 ms). Queue age uses a monotonic clock and excludes active writes.
+At the exact boundary admission remains valid; an overdue queued record causes
+new admission to throw `EXECUTION_LOG_BACKPRESSURE_REQUIRED` with an
+`EXECUTION_LOG_QUEUE_WAIT_EXCEEDED` cause. At dispatch, overdue accepted batches
+still persist once and register the violation at the final `flush()` barrier,
+even if no producer attempted another admission. The barrier waits for accepted
+work and preserves concurrent write and delivery failures. A reported queue
+violation does not mean that the accepted records were rolled back.
+
+This budget bounds admission under backlog; it does not cancel filesystem I/O
+or acknowledge unfinished writes. `flush()` continues to wait for in-flight
+persistence. Wall-clock log timestamps do not define queue age. Runtime parameter
+changes apply to newly constructed listeners.
+
 ## Turn recovery
 
 Reads never settle a Turn; settling is a write.
@@ -68,5 +175,278 @@ Reads never settle a Turn; settling is a write.
   `recovery` is actionable and replaces the snapshot with the settled one. On
   failure it keeps the original snapshot and reconnect still completes.
 
+## Storage checkpoint deltas
+
+`compactSessionStorageJournalRecords` validates every input record, including
+overwritten records, and retains the last operation for each message UID and
+the last explicit order. Replaying this delta on the same checkpoint base
+produces the same messages, hashes and positions. A missing order stays missing;
+the operation never infers positions or removes tombstones needed by the base.
+
+The writer uses this protocol operation when creating a summary snapshot.
+Journal append boundaries, checkpoint receipts, hash-chain verification and
+recovery remain unchanged. Existing snapshots use the same record format and
+reader; no migration or alternate read path is required.
+
+Checkpoint files own persisted and summarized UID lists. Full session reads use
+`hydrateCheckpointReceipts` and return independent mutable list copies. Transaction
+turn views use `hydrateCheckpointReceiptReferences`: only identities produced by
+`projectCheckpointIdentity` may supply borrowed, deeply frozen UID lists. Receipt
+wrappers remain independent; updates replace lists rather than mutate borrowed
+values. Both projections verify receipt metadata and any supplied UID lists.
+Service results use `copyCheckpointReceiptLists` before exposing a transaction
+session: receipt wrappers and authoritative UID lists become caller-owned mutable
+copies, while the transaction retains its borrowed references. This operation
+copies an already hydrated session; it cannot hydrate an unverified manifest.
+Writing validates the receipt against the current verified identity before
+omitting the authoritative lists from the manifest. File identity, hash-chain
+checks and commit boundaries are identical for both ownership contracts.
+
 Runtime readers reject the previous schema. Existing artifacts must be changed
 offline before deploying all components together.
+
+### Applying bounded lifecycle snapshots / 应用有界生命周期快照
+
+`decideTurnLifecycleSnapshotApplication` owns snapshot validation, sequence
+admission and comparison of the latest observed window. Consumers persist the
+returned detached `observation` only after applying the snapshot successfully.
+They replace that observation with the next accepted window; it is not a history
+of observed turns. A failed application must leave both runtime state and the
+observation unchanged.
+
+`decideTurnLifecycleSnapshotApplication` 统一负责快照校验、序号准入和最近观察窗口的比较。
+消费方仅在成功应用快照后保存返回的独立 `observation`，下次接受窗口时替换它，不累积历史轮。
+应用失败时，运行态与观察记录都必须保持原状。
+
+The lifecycle sequence versions committed lifecycle facts. Query `commandId`,
+`generatedAt`, `unchanged` and `recovery` are not lifecycle revision identity.
+A fresh query of the same facts is a duplicate even when those query fields
+change. Different terminal limits may return different windows at one sequence.
+Common turn and replacement records must agree; active ownership cannot change
+without advancing the lifecycle sequence. Thinking completion is an independently
+committed immutable timing fact: later observations may add it, omission cannot
+erase it, and contradictory timestamps are rejected.
+
+生命周期序号标识已提交的生命周期事实。查询的 `commandId`、`generatedAt`、`unchanged`
+和 `recovery` 不属于生命周期版本身份；同样事实的再次查询仍视为重复。不同终态数量限制
+可在同一序号返回不同窗口；共同轮及替换记录必须一致，活动轮归属变化必须推进生命周期序号。
+思考完成时间是独立提交的不可变耗时事实，可以补充，缺省不能抹除，矛盾时间戳必须拒绝。
+
+Window omission evicts runtime state; it is not deletion evidence and must not
+remove persisted messages. Explicit replacement records or mutation projections
+carry deletion evidence. The retained snapshot sequence prevents late lifecycle
+or transport events from reviving an evicted turn. A later valid query may load
+that historical turn again. Query recovery decisions remain the responsibility
+of the caller that requested the snapshot; runtime deduplication does not replace
+that decision.
+
+窗口中缺少某轮只意味着淘汰其运行态，不构成删除证据，不得删除持久化消息。
+明确的替换记录或命令增量投影提供删除证据。保留快照序号以阻止迟到生命周期或传输事件
+重新建立已淘汰运行态；之后有效查询仍可重新加载历史轮。查询的恢复决策仍由发起查询的
+调用方负责，运行态去重不能替代该决策。
+
+## Immutable storage migration / 不可变存储迁移
+
+The current physical format is `noobot.immutable-session/5`: stable identities
+with compact, snapshot-bound locator pages. Version 4 JSON locator pages are
+read-only offline inputs. Workspace layout step
+`session-immutable-compact-locations-v39` owns the upgrade, including already
+installed v38 workspaces; runtime opens never select a backend by reference shape.
+
+Commit index version 4 stores the commit record directly in each generation leaf.
+Version 3 scalar wrappers are decoded only by explicit offline migration. Source
+audit and historical replay use the source contract, and target audit uses the
+direct-index contract before the head is published. Migration preserves generation,
+operation digest and retry results, including after failed publication and retry.
+Physical-format equality does not skip a required logical-index conversion.
+
+当前物理格式为 v5，定位页采用紧凑编码并绑定快照，v4 JSON 定位页只供离线读取。
+工作区 v39 步骤负责升级已安装的 v38 工作区。提交索引 v4 直接保存提交记录，
+v3 标量包装只在离线迁移解码；源审计及历史重放遵循旧契约，目标审计遵循新契约，
+成功后才发布 head。物理格式相同不能跳过必要的逻辑索引转换。
+
+## Immutable cleanup ownership / 不可变清理计划所有权
+
+`IMMUTABLE_CLEANUP_PLAN` in `immutable-storage` defines one plan directory,
+manifest, candidate-page chain and durable execution cursor. The manifest is the
+sole publication point. Version 3 admits only the current located storage format;
+older sessions require explicit migration. It inventories owned names before capturing the
+retained snapshot under the mutation lock. A later located-storage head must
+prove the captured commit through its generation index; ordinary descendant
+writes cannot revive inventoried orphan segments. Earlier plans reject and must be explicitly disposed, never
+upgraded by inference. Retention follows all registered locations, locator pages,
+active tails and pinned reader roots. Locator pages are checksum-verified; content
+records are not read or audited. A corrupt content record remains retained for
+explicit audit and repair. Inventory, candidate and retained-segment index pages
+share the plan lifetime. The retention radix index lives in `retentionDirectory`;
+pending identities are limited to `chunkEntries` and its scratch segments to
+`retentionSegments`. Exceeding this capacity explicitly rejects preparation with
+`SESSION_MAINTENANCE_CAPACITY_EXCEEDED`. `retentionState` durably checkpoints the
+physical index root, committed segment tail and unique segment count using
+`retentionFormat`. Creation explicitly publishes even an empty set; reopening
+requires a valid checkpoint. Index data is synchronized before checkpoint
+publication. An uncertain publication reloads the authoritative checkpoint before
+retrying pending marks; duplicate marks perform no writes. Reopening accounts for
+orphan scratch segments against capacity. The marking cursor binds the captured
+roots and advances under `maxMarkingPages`; recovery seek reads are reported separately.
+`immutable-cleanup-filter` defines the durable input cursor, output chain and pending
+candidate batch. `maxFilterEntries` limits each filtering call. Resume the same
+`planId` until preparation returns `complete: true` before executing deletion.
+Directory inventory capture still has no persistent traversal cursor or per-call bound.
+Inventory and candidate chains jointly allocate at most `chunkPages` pages,
+`immutable-cleanup-capacity` owns the durable `capacity.json` reservation. It is
+created exclusively and cannot be reset by reopening a writer. Capacity is reserved
+before page publication and remains occupied after an uncertain publication or
+filter-checkpoint failure. Content-addressed retries validate and reuse existing
+pages; they do not infer capacity from the committed candidate prefix. Missing or
+corrupt reservation records reject preparation.
+A failed full-batch retention flush blocks new identities until that batch completes.
+Filtering shares index reads for at most `chunkEntries` files per batch.
+Capture format 2 owns the explicit `ready` state. A durable `ready: false` inventory
+can resume initialization: reuse an existing ownership record, or capture retained
+snapshots under the mutation lock if that record has not been published, initialize
+filtering and retention, then publish `ready: true`. Marking cannot begin earlier.
+A ready capture never recreates missing ownership or checkpoints. Open failures alone
+can establish record absence; read and close failures propagate.
+Before the first capture checkpoint is durably published, a first-call failure rolls
+scratch back. After that boundary, a first-call failure preserves the plan and throws
+`SESSION_MAINTENANCE_PREPARATION_INTERRUPTED` with `planId` and the original `cause`
+(including capacity errors). Resume or explicitly dispose that plan. Failed resumption
+also preserves it. Capture format 1 is rejected, requiring explicit disposal of old
+scratch. Rollback attempts removal and parent-directory sync and preserves all failures.
+All preparation, resumption, execution and disposal operations for one `planId`
+serialize, including initial preparation. Acquire the plan lock before nesting the
+session mutation lock. Inventory, marking and filtering do not hold the session
+lock; snapshot capture, publication, ownership release, deletion and disposal do.
+Lock recovery follows the shared heartbeat lease: process exit does not permit
+reclaiming a fresh lease. A wait timeout reports `SESSION_MUTATION_BUSY` and keeps
+the plan; retry the same identity after lease expiry. Published-plan release
+failure also preserves the plan. Preparation retry completes ownership release
+without republishing the manifest or resetting execution progress.
+
+Execution
+deletes candidates, synchronizes their parent
+directories, then durably replaces the cursor. Cursor publication is the final
+storage mutation of that batch. Candidate pages remain owned by the plan through
+partial execution, completion and retries; execution never retires them separately.
+
+Explicit disposal removes the entire plan directory and synchronizes its parent,
+including retries after removal already succeeded. It does not trust a manifest
+or need a readable cursor, so it also disposes corrupt or unpublished scratch.
+Hosts must dispose completed and abandoned plans. Scratch size is bounded by the
+prepared plan, not by a deletion batch; retaining pages until disposal does not
+increase preparation's peak allocation. No additional retirement cursor is needed;
+the inventory and complete candidate set both contribute to scratch capacity.
+
+`immutable-storage` 的 `IMMUTABLE_CLEANUP_PLAN` 统一定义计划目录、发布清单、候选页链及
+持久化执行游标。v3 仅接受当前定位存储格式，旧会话须先显式迁移。先捕获所属文件名清单，
+再在修改锁内固定保留快照；后继 head 必须以代次索引证明原提交为祖先，普通写入不得
+收养清单中的孤立段。旧计划明确拒绝并须显式废弃，不推断升级。定位页校验内容哈希，
+正文仅按登记位置保留，不执行正文审计；正文损坏仍保留，交由显式审计和修复处理。
+保留范围包含全部登记位置、定位页、活动段和读者快照。文件清单页、候选页及保留段索引页共享计划生命周期。
+保留段基数索引放在 `retentionDirectory`，待写身份最多为 `chunkEntries`，暂存段最多为
+`retentionSegments`；超限以 `SESSION_MAINTENANCE_CAPACITY_EXCEEDED` 明确拒绝准备。
+`retentionState` 按 `retentionFormat` 持久化物理索引根、已提交活动尾及去重计数。
+创建时显式发布空集合，重新打开必须有有效检查点；先同步索引数据，再发布检查点。
+发布结果不确定时重读权威检查点后重试待写标记，重复标记不写入；孤立暂存段也计入恢复容量。
+标记游标绑定捕获的保留根，每次最多推进 `maxMarkingPages` 页，恢复定位读取单独计量。
+过滤契约持久化输入游标、输出页链和待处理候选批次，每次最多处理 `maxFilterEntries` 项。
+须以同一 `planId` 恢复，直到返回 `complete: true` 后才可执行删除；目录清单捕获仍无持久化遍历游标或单次预算。
+文件清单和候选页链共用 `chunkPages` 分配上限，发布前预留容量，结果不确定时保留额度。
+满批刷盘失败后须先完成原批次才能接纳新增身份；候选过滤以最多 `chunkEntries` 个文件共用索引读取。
+捕获格式 2 显式记录 `ready` 状态；持久化的 `ready: false` 清单可继续初始化：复用已发布的所有权记录，
+或在记录尚未发布时于修改锁内捕获保留快照，初始化过滤与保留集合后发布 `ready: true`，此前不得开始标记。
+已就绪捕获不得重建缺失的所有权或检查点；仅打开失败可判定记录不存在，读取和关闭失败须传播。
+首次捕获检查点持久化前，首次调用失败须回滚暂存；此后失败保留计划，抛出含 `planId` 和原始 `cause`
+的 `SESSION_MAINTENANCE_PREPARATION_INTERRUPTED`，容量错误也遵循该边界。宿主须恢复或显式废弃计划，
+恢复失败同样保留计划。捕获格式 1 明确拒绝，旧暂存须显式废弃。
+同计划的首次准备、续跑、执行及废弃串行化，嵌套顺序固定为先计划锁、再会话修改锁。
+清单捕获、标记和筛选在会话锁外运行；固定快照、发布、归属释放、删除及废弃持有会话锁。
+进程退出后仅在共享心跳租约过期时回收锁；等待超时返回 `SESSION_MUTATION_BUSY` 并保留计划，
+调用方租约过期后以同一身份重试。清单发布后仍须完成准备保留根释放；释放失败保留计划，
+重试只完成释放，不重发清单、不重置执行游标。回滚逐项尝试删除及父目录同步，并同时保留操作与所有回滚错误。
+删除候选并同步父目录后，持久化游标是批次最后一次存储修改。候选页
+在部分执行、完成及重试期间均归计划所有，不设置独立的页退役流程。宿主必须显式废弃
+完成或放弃的计划：删除整个计划目录并同步父目录；目录已经删除时重试仍须完成同步。
+废弃不依赖清单或游标可读，也能处理损坏和未发布的暂存。暂存容量取决于准备出的完整
+计划，包含文件清单及候选集合；不另建退役游标。
+
+## Execution-log projection output / 执行日志投影输出
+
+Message diagnostics publish in the same immutable transaction as their changed
+messages. Their source identity is `["session.messages", sessionId, sequence]`;
+the source sequence is session-wide and the per-turn index links to that source
+without copying records. Output acknowledgements and the consumption cursor are
+independent: after uncertain cursor publication, replay the same source identities
+through destination receipts. Never repeat the message mutation to repair output.
+
+Turn-log queries return execution records in their source order followed by that
+turn's message diagnostics in diagnostic source order. These streams have no
+shared sequence; optional wall-clock timestamps do not establish cross-stream
+causality and must not be used to invent missing ordering. Execution metrics
+consume the execution stream; diagnostics retain their message identity.
+
+`execution-log-projection` owns both source cursors and destination acknowledgement
+contracts. A source identity is the canonical JSON tuple
+`[dialogProcessId, segmentSequence, byteOffset]`. Positions compare numerically
+within one turn; missing identities and cross-turn comparisons reject. Source
+records remain authoritative. A cursor advances only after explicit `written` or
+`skipped` outcomes for every record in its batch; failure never re-appends the
+authoritative log. Each catch-up call runs under the session mutation lock and
+acknowledges at most one source batch before releasing that lock.
+
+Delivery supplies `{ receiptDirectory }` from the authoritative turn location.
+Runtime-events owns destination routing and uses
+`executionProjectionReceiptName(destination)` to keep one receipt per destination
+inside that turn directory. Receipts survive output rotation and archive removal.
+The receipt `{ version: 1, sourceId }` is a high-water acknowledgement of ordered
+delivery, not another copy of the log. One receipt range must admit strictly
+increasing source identities; gaps belonging to other destination channels are
+allowed. Replays at or before a durable receipt produce no additional output.
+
+The pending intent is `{ version: 1, offset, payload, receipts }`, where `payload`
+is newline-terminated output and `receipts` contains unique `{ file, sourceId }`
+targets. `EXECUTION_PROJECTION_OUTPUT_MAX_RECEIPTS` bounds the target count.
+Intents and receipts use the shared `{ payload, checksum }` envelope, strict UTF-8
+decoding and `EXECUTION_PROJECTION_OUTPUT_RECORD_BYTES` (32 MiB) encoded-byte
+limit. Invalid checksums, unknown fields, duplicate targets, corrupt output and
+cross-turn receipts fail explicitly. `executionProjectionPendingReceipts` owns
+recovery admission and requires one current receipt observation per intent target.
+Missing or older receipts remain unconfirmed. If every receipt covers its target,
+the output is already acknowledged: recovery synchronizes the receipt directories
+and retires the intent without reading or rewriting output or replacing receipts.
+A receipt may be ahead because an intent retired before an uncertain directory
+sync can reappear after subsequent delivery or rotation. Recovery must preserve
+that advanced acknowledgement. An advanced receipt together with any unconfirmed
+target is contradictory and rejects before output mutation.
+
+`executionProjectionOutputEntryBytes` reserves a complete single-entry envelope
+using the maximum safe output offset. Summing these reservations bounds a combined
+intent, including both JSON escaping layers, receipt targets, checksum and framing.
+The transport partitions before this sum or the receipt-count limit is exceeded;
+it does not reject individually valid entries because an opportunistic group grew
+too large. An individually oversized entry rejects before queue admission or
+rotation. Each reservation is computed once; grouping does not repeatedly encode
+growing payload prefixes. Ordinary writes and projection writes have separate
+acknowledgement contracts and therefore do not share one output intent.
+
+The destination queue serializes recovery, appends and rotation. Publication order
+is: persist intent and its directory; verify/complete the output at the intent
+boundary and synchronize it while preparing and synchronizing receipt temporary
+files; publish receipts only after all preparations and output synchronization
+succeed; synchronize their unique directories; retire the intent and synchronize
+its directory; acknowledge delivery. Temporary receipts carry no acknowledgement
+authority. Preparation drains every started operation even when output or a
+temporary receipt fails; failure leaves the durable intent for recovery. Receipt
+publication is parallel within the protocol target bound and drains every started
+operation before failure propagates. Any surviving intent is completed before
+later writes, through the same completion routine as first delivery. Unconfirmed
+targets require output verification/completion before receipt publication; covered
+targets never move backwards. No recovery
+step scans historical output files. The source reader's disposable window is
+reused only when its opened-file identity/revision, segment and cursor permit it;
+it is never an acknowledgement authority.
+
+执行日志是唯一权威数据；目的端回执仅确认按序投递，源游标仅确认消费位置。意图、
+回执、源身份、预算与校验统一由协议定义。恢复失败须阻止后续追加，不得静默跳过损坏
+字节或推断成功。运行事件的普通存储保留策略不改变权威日志和回执的保留语义。

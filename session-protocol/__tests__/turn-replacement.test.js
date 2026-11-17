@@ -6,6 +6,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  parseTurnReplaceRequest,
+  parseTurnReplacementChange,
+  createTurnReplaceFingerprint,
+} from "../src/command/turn-replace-command.js";
+import {
   assertTurnReplacementCommit,
   createTurnReplacementCommit,
   validateTurnReplacementCommit,
@@ -25,6 +30,108 @@ function input(overrides = {}) {
     ...overrides,
   };
 }
+
+test("replacement change accepts only its explicit canonical identity fields", () => {
+  const command = {
+    commandId: "replace-1",
+    anchor: { turnScopeId: "old" },
+    newContent: "edited",
+    turnScopeId: "new",
+    attachments: [],
+  };
+  const identity = { dialogProcessId: "dialog-new", messageUid: "sm_new", userMessageId: "um_new" };
+  const captured = parseTurnReplacementChange({ command, identity });
+  identity.messageUid = "changed";
+  assert.equal(captured.identity.messageUid, "sm_new");
+  assert.equal(Object.isFrozen(captured.identity), true);
+  for (const invalid of [
+    undefined,
+    null,
+    {},
+    { ...identity, messageUid: " " },
+    { ...identity, userMessageId: 42 },
+    { ...identity, sessionId: "other-session" },
+    { ...identity, content: "injected" },
+  ])
+    assert.throws(
+      () => parseTurnReplacementChange({ command, identity: invalid }),
+      /requires canonical/,
+    );
+  assert.throws(
+    () => parseTurnReplacementChange({ command, identity, extra: true }),
+    /requires canonical/,
+  );
+});
+
+test("replacement request captures immutable attachment values before asynchronous submission", () => {
+  const attachment = { attachmentId: "att-1", metadata: { tags: ["original"] } };
+  const source = {
+    commandId: "replace-1",
+    anchor: { turnScopeId: "old" },
+    newContent: "edited",
+    turnScopeId: "new",
+    attachments: [attachment],
+  };
+  const captured = parseTurnReplaceRequest(source);
+  const fingerprint = createTurnReplaceFingerprint(captured);
+  attachment.attachmentId = "changed";
+  attachment.metadata.tags.push("changed");
+  source.attachments.push({ attachmentId: "att-2" });
+  source.anchor.turnScopeId = "changed";
+  assert.deepEqual(captured.attachments, [
+    { attachmentId: "att-1", metadata: { tags: ["original"] } },
+  ]);
+  assert.equal(captured.anchor.turnScopeId, "old");
+  assert.equal(createTurnReplaceFingerprint(captured), fingerprint);
+  assert.throws(() => captured.attachments[0].metadata.tags.push("changed"), TypeError);
+});
+
+test("replacement request validates attachment values after serialization", () => {
+  const request = {
+    commandId: "replace-1",
+    anchor: { turnScopeId: "old" },
+    newContent: "edited",
+    turnScopeId: "new",
+  };
+  for (const value of [null, "attachment", []])
+    assert.throws(
+      () =>
+        parseTurnReplaceRequest({
+          ...request,
+          attachments: [{ toJSON: () => value }],
+        }),
+      /requires canonical/,
+    );
+  const circular = {};
+  circular.self = circular;
+  assert.throws(() => parseTurnReplaceRequest({ ...request, attachments: [circular] }), TypeError);
+});
+
+test("replacement validates the captured values rather than reading dynamic inputs again", () => {
+  let reads = 0;
+  const request = {
+    commandId: "replace-1",
+    anchor: { turnScopeId: "old" },
+    get newContent() {
+      reads += 1;
+      return reads === 1 ? "edited" : " ";
+    },
+    turnScopeId: "new",
+    attachments: [],
+  };
+  assert.equal(parseTurnReplaceRequest(request).newContent, "edited");
+  assert.equal(reads, 1);
+  const command = { ...request, newContent: "edited" };
+  const identity = { dialogProcessId: "dialog-new", messageUid: "sm_new", userMessageId: "um_new" };
+  assert.throws(
+    () =>
+      parseTurnReplacementChange({
+        command,
+        identity: { ...identity, toJSON: () => ({ ...identity, messageUid: " " }) },
+      }),
+    /requires canonical/,
+  );
+});
 
 test("turn replacement commit binds one replacement user to one committed session version", () => {
   const commit = createTurnReplacementCommit(input());

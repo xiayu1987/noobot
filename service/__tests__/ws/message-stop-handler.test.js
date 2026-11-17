@@ -11,8 +11,11 @@ import { createConnectionState } from "../../ws/chat-websocket/connection-state.
 import { createMessageStopHandler } from "../../ws/chat-websocket/message-stop-handler.js";
 import { reserveRun } from "../../ws/chat-websocket/message-run/active-run-stage.js";
 import { unregisterActiveRun } from "../../ws/chat-websocket/run-registry.js";
+import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
 
 const OWNER = "owner-stop";
+
+useProvisionedRuntimeEventsWorkspace([OWNER], { [OWNER]: ["session-stop"] });
 
 function createStopHarness() {
   const state = createConnectionState({ locale: "zh-CN" });

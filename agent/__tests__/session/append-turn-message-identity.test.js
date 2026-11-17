@@ -8,37 +8,29 @@ import assert from "node:assert/strict";
 
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 import { appendTurns } from "../../src/session/services/session-message-service/append-turn.js";
-import { requiredSessionReads } from "../helpers/session-repo-required-reads.js";
+import { harness } from "./session-version-hardening.test-helpers.js";
 import {
   FLOW_CONTROL_ROLE,
   createFlowControlContextPolicy,
 } from "@noobot/context-protocol/tool/context-policy";
 
-const TEST_SCOPE = Object.freeze({
-  sessionDir: "/workspace/runtime/session/s1",
-  resolvedParentSessionId: "",
-  indexed: true,
-  registered: true,
-});
-
-test("appendTurns upserts an ordered message batch with one Session save", async () => {
-  const session = createTestSessionRequiredFields();
-  let findCount = 0;
-  let saveCount = 0;
-  const service = {
-    now: () => "2026-07-25T00:01:00.000Z",
-    sessionRepo: {
-      withSessionMutation: async (_userId, _sessionId, operation) => operation(TEST_SCOPE),
-      ...requiredSessionReads,
-      findTurnView: async () => {
-        findCount += 1;
-        return { session, turnScopeIds: [] };
-      },
-      saveTurnView: async () => {
-        saveCount += 1;
-      },
-    },
+async function identityHarness(session, now = "2026-07-25T00:01:00.000Z") {
+  const fixture = await harness(session);
+  fixture.service.now = () => now;
+  const repo = fixture.service.sessionRepo;
+  const withSessionReader = repo.withSessionReader.bind(repo);
+  repo.withSessionReader = async (...args) => {
+    const result = await withSessionReader(...args);
+    Object.assign(session, fixture.get());
+    return result;
   };
+  return fixture.service;
+}
+
+test("appendTurns upserts an ordered message batch with one immutable commit", async () => {
+  const session = createTestSessionRequiredFields();
+  const service = await identityHarness(session);
+  const generation = (await service.sessionRepo.requireSessionReader()).generation;
 
   const result = await appendTurns.call(service, {
     userId: "u1",
@@ -60,7 +52,7 @@ test("appendTurns upserts an ordered message batch with one Session save", async
         transferEnvelopes: [],
         messageUid: "sm_tool_1",
         role: "tool",
-        presentationMessageId: "pm_fx2",
+        presentationMessageId: "pm_fx1",
         content: "one",
         dialogProcessId: "dp",
         turnScopeId: "t",
@@ -70,7 +62,7 @@ test("appendTurns upserts an ordered message batch with one Session save", async
         transferEnvelopes: [],
         messageUid: "sm_tool_2",
         role: "tool",
-        presentationMessageId: "pm_fx3",
+        presentationMessageId: "pm_fx1",
         content: "two",
         dialogProcessId: "dp",
         turnScopeId: "t",
@@ -78,10 +70,9 @@ test("appendTurns upserts an ordered message batch with one Session save", async
     ],
   });
 
-  assert.equal(findCount, 1);
-  assert.equal(saveCount, 1);
+  assert.equal((await service.sessionRepo.requireSessionReader()).generation, generation + 1);
   assert.deepEqual(
-    result.turns.map((message) => message.messageUid),
+    result.messageReceipts.map((message) => message.messageUid),
     ["sm_assistant", "sm_tool_1", "sm_tool_2"],
   );
   assert.deepEqual(
@@ -92,15 +83,7 @@ test("appendTurns upserts an ordered message batch with one Session save", async
 
 test("appendTurns supersedes the prior canonical assistant presentation in one Turn", async () => {
   const session = createTestSessionRequiredFields();
-  const service = {
-    now: () => "2026-07-25T00:01:00.000Z",
-    sessionRepo: {
-      withSessionMutation: async (_userId, _sessionId, operation) => operation(TEST_SCOPE),
-      ...requiredSessionReads,
-      findTurnView: async () => ({ session, turnScopeIds: [] }),
-      saveTurnView: async () => {},
-    },
-  };
+  const service = await identityHarness(session);
   const canonical = (messageUid, content) => ({
     attachments: [],
     transferEnvelopes: [],
@@ -116,14 +99,14 @@ test("appendTurns supersedes the prior canonical assistant presentation in one T
   });
 
   await appendTurns.call(service, {
-    userId: "user-1",
-    sessionId: "session-1",
+    userId: "u1",
+    sessionId: "s1",
     turns: [canonical("assistant-1", "first")],
   });
   await assert.rejects(
     appendTurns.call(service, {
-      userId: "user-1",
-      sessionId: "session-1",
+      userId: "u1",
+      sessionId: "s1",
       turns: [
         {
           ...canonical("assistant-invalid", "invalid"),
@@ -135,8 +118,8 @@ test("appendTurns supersedes the prior canonical assistant presentation in one T
   );
   assert.equal(session.messages[0].chatPresentation, true);
   await appendTurns.call(service, {
-    userId: "user-1",
-    sessionId: "session-1",
+    userId: "u1",
+    sessionId: "s1",
     turns: [canonical("assistant-2", "second")],
   });
 
@@ -153,8 +136,8 @@ test("appendTurns supersedes the prior canonical assistant presentation in one T
   const refresh = canonical("assistant-2", "refreshed presentation");
   delete refresh.workspaceRootDirectory;
   await appendTurns.call(service, {
-    userId: "user-1",
-    sessionId: "session-1",
+    userId: "u1",
+    sessionId: "s1",
     turns: [refresh],
   });
   assert.equal(session.messages[1].chatPresentation, true);
@@ -164,8 +147,8 @@ test("appendTurns supersedes the prior canonical assistant presentation in one T
   updated.chatPresentation = false;
   delete updated.workspaceRootDirectory;
   await appendTurns.call(service, {
-    userId: "user-1",
-    sessionId: "session-1",
+    userId: "u1",
+    sessionId: "s1",
     turns: [updated],
   });
   assert.equal(session.messages.length, 2);
@@ -175,16 +158,8 @@ test("appendTurns supersedes the prior canonical assistant presentation in one T
 
 test("appendTurns persists the canonical tool policy", async () => {
   const session = createTestSessionRequiredFields();
-  const policy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
-  const service = {
-    now: () => "2026-07-25T00:01:00.000Z",
-    sessionRepo: {
-      withSessionMutation: async (_userId, _sessionId, operation) => operation(TEST_SCOPE),
-      ...requiredSessionReads,
-      findTurnView: async () => ({ session, turnScopeIds: [] }),
-      saveTurnView: async () => {},
-    },
-  };
+  const policy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE);
+  const service = await identityHarness(session);
 
   await appendTurns.call(service, {
     userId: "u1",
@@ -210,15 +185,7 @@ test("appendTurns persists the canonical tool policy", async () => {
 
 test("appendTurns persists the canonical internal control message type", async () => {
   const session = createTestSessionRequiredFields();
-  const service = {
-    now: () => "2026-07-25T00:01:00.000Z",
-    sessionRepo: {
-      withSessionMutation: async (_userId, _sessionId, operation) => operation(TEST_SCOPE),
-      ...requiredSessionReads,
-      findTurnView: async () => ({ session, turnScopeIds: [] }),
-      saveTurnView: async () => {},
-    },
-  };
+  const service = await identityHarness(session);
 
   await appendTurns.call(service, {
     userId: "u1",
@@ -246,15 +213,7 @@ test("appendTurns persists the canonical internal control message type", async (
 
 test("appendTurns preserves canonical user interjection time and sequence", async () => {
   const session = createTestSessionRequiredFields();
-  const service = {
-    now: () => "2026-09-18T01:01:00.000Z",
-    sessionRepo: {
-      withSessionMutation: async (_userId, _sessionId, operation) => operation(TEST_SCOPE),
-      ...requiredSessionReads,
-      findTurnView: async () => ({ session, turnScopeIds: [] }),
-      saveTurnView: async () => {},
-    },
-  };
+  const service = await identityHarness(session, "2026-09-18T01:01:00.000Z");
 
   await appendTurns.call(service, {
     userId: "u1",
@@ -283,15 +242,7 @@ test("appendTurns preserves canonical user interjection time and sequence", asyn
 
 test("appendTurns leaves natural user presentation unspecified and visible", async () => {
   const session = createTestSessionRequiredFields();
-  const service = {
-    now: () => "2026-07-25T00:01:00.000Z",
-    sessionRepo: {
-      withSessionMutation: async (_userId, _sessionId, operation) => operation(TEST_SCOPE),
-      ...requiredSessionReads,
-      findTurnView: async () => ({ session, turnScopeIds: [] }),
-      saveTurnView: async () => {},
-    },
-  };
+  const service = await identityHarness(session);
 
   await appendTurns.call(service, {
     userId: "u1",
@@ -322,6 +273,7 @@ test("appendTurns updates an existing message with the same messageUid", async (
         attachments: [],
         transferEnvelopes: [],
         messageUid: "sm_existing",
+        sessionId: "s1",
         role: "assistant",
         presentationMessageId: "pm_fx5",
         content: "partial",
@@ -333,18 +285,8 @@ test("appendTurns updates an existing message with the same messageUid", async (
       },
     ],
   };
-  let saveCount = 0;
-  const service = {
-    now: () => "2026-07-25T00:01:00.000Z",
-    sessionRepo: {
-      withSessionMutation: async (_userId, _sessionId, operation) => operation(TEST_SCOPE),
-      ...requiredSessionReads,
-      findTurnView: async () => ({ session, turnScopeIds: [] }),
-      saveTurnView: async () => {
-        saveCount += 1;
-      },
-    },
-  };
+  const service = await identityHarness(session);
+  const generation = (await service.sessionRepo.requireSessionReader()).generation;
 
   const result = await appendTurns.call(service, {
     userId: "u1",
@@ -355,7 +297,7 @@ test("appendTurns updates an existing message with the same messageUid", async (
         transferEnvelopes: [],
         messageUid: "sm_existing",
         role: "assistant",
-        presentationMessageId: "pm_fx6",
+        presentationMessageId: "pm_fx5",
         content: "completed",
         type: "message",
         modelMessageId: "message-1",
@@ -370,9 +312,10 @@ test("appendTurns updates an existing message with the same messageUid", async (
   assert.equal(session.messages[0].modelMessageId, "message-1");
   assert.equal(session.messages[0].messageUid, "sm_existing");
   assert.equal(session.messages[0].ts, "2026-07-25T00:00:00.000Z");
-  assert.equal(result.turns[0].modelMessageId, "message-1");
-  assert.equal(result.turns[0].messageUid, "sm_existing");
-  assert.equal(saveCount, 1);
+  assert.equal(Object.hasOwn(result.messageReceipts[0], "modelMessageId"), false);
+  assert.equal(result.messageReceipts[0].messageUid, "sm_existing");
+  assert.equal(result.messageReceipts[0].generation, generation + 1);
+  assert.equal((await service.sessionRepo.requireSessionReader()).generation, generation + 1);
 });
 
 test("appendTurns keeps distinct messageUids separate when runtime message ids collide", async () => {
@@ -383,6 +326,7 @@ test("appendTurns keeps distinct messageUids separate when runtime message ids c
         attachments: [],
         transferEnvelopes: [],
         messageUid: "sm_old_guidance",
+        sessionId: "s1",
         role: "user",
         content: "old guidance",
         userMessageId: "am_1g",
@@ -393,15 +337,7 @@ test("appendTurns keeps distinct messageUids separate when runtime message ids c
       },
     ],
   };
-  const service = {
-    now: () => "2026-07-25T01:00:00.000Z",
-    sessionRepo: {
-      withSessionMutation: async (_userId, _sessionId, operation) => operation(TEST_SCOPE),
-      ...requiredSessionReads,
-      findTurnView: async () => ({ session, turnScopeIds: [] }),
-      saveTurnView: async () => {},
-    },
-  };
+  const service = await identityHarness(session, "2026-07-25T01:00:00.000Z");
 
   await appendTurns.call(service, {
     userId: "u1",
@@ -434,15 +370,7 @@ test("appendTurns keeps distinct messageUids separate when runtime message ids c
 
 test("appendTurns rejects a turn without messageUid", async () => {
   const session = createTestSessionRequiredFields();
-  const service = {
-    now: () => "2026-07-25T00:01:00.000Z",
-    sessionRepo: {
-      withSessionMutation: async (_userId, _sessionId, operation) => operation(TEST_SCOPE),
-      ...requiredSessionReads,
-      findTurnView: async () => ({ session, turnScopeIds: [] }),
-      saveTurnView: async () => {},
-    },
-  };
+  const service = await identityHarness(session);
 
   await assert.rejects(
     appendTurns.call(service, {
@@ -473,6 +401,7 @@ test("appendTurns uses messageUid as the persistence identity and validates its 
         attachments: [],
         transferEnvelopes: [],
         messageUid: "sm_fixed",
+        sessionId: "s1",
         role: "assistant",
         presentationMessageId: "pm_fx7",
         content: "partial",
@@ -483,15 +412,7 @@ test("appendTurns uses messageUid as the persistence identity and validates its 
       },
     ],
   };
-  const service = {
-    now: () => "2026-07-25T00:01:00.000Z",
-    sessionRepo: {
-      withSessionMutation: async (_userId, _sessionId, operation) => operation(TEST_SCOPE),
-      ...requiredSessionReads,
-      findTurnView: async () => ({ session, turnScopeIds: [] }),
-      saveTurnView: async () => {},
-    },
-  };
+  const service = await identityHarness(session);
 
   const updated = await appendTurns.call(service, {
     userId: "u1",
@@ -502,7 +423,7 @@ test("appendTurns uses messageUid as the persistence identity and validates its 
         transferEnvelopes: [],
         messageUid: "sm_fixed",
         role: "assistant",
-        presentationMessageId: "pm_fx8",
+        presentationMessageId: "pm_fx7",
         content: "done",
         modelMessageId: "a-different-runtime-id",
         dialogProcessId: "dialog-1",
@@ -511,8 +432,9 @@ test("appendTurns uses messageUid as the persistence identity and validates its 
     ],
   });
   assert.equal(session.messages.length, 1);
-  assert.equal(updated.turns[0].messageUid, "sm_fixed");
-  assert.equal(updated.turns[0].content, "done");
+  assert.equal(updated.messageReceipts[0].messageUid, "sm_fixed");
+  assert.equal(Object.hasOwn(updated.messageReceipts[0], "content"), false);
+  assert.equal(session.messages[0].content, "done");
 
   await assert.rejects(
     appendTurns.call(service, {
@@ -538,15 +460,7 @@ test("appendTurns uses messageUid as the persistence identity and validates its 
 
 test("appendTurns preserves assistant presentation identity in the authoritative snapshot", async () => {
   const session = createTestSessionRequiredFields();
-  const service = {
-    now: () => "2026-07-25T00:01:00.000Z",
-    sessionRepo: {
-      withSessionMutation: async (_userId, _sessionId, operation) => operation(TEST_SCOPE),
-      ...requiredSessionReads,
-      findTurnView: async () => ({ session, turnScopeIds: [] }),
-      saveTurnView: async () => {},
-    },
-  };
+  const service = await identityHarness(session);
 
   await appendTurns.call(service, {
     userId: "u1",

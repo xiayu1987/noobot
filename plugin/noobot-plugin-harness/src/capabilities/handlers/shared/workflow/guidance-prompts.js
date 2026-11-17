@@ -162,7 +162,7 @@ export function buildGuidanceSummaryPromptText(options = {}) {
     .join("\n");
 }
 
-export function buildPreviousSummaryContextContent({
+function buildPreviousSummaryContextContent({
   locale = LOCALE.ZH_CN,
   previousSummaryContent = "",
 } = {}) {

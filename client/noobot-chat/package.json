@@ -29,6 +29,7 @@
     "test:e2e:protocol:core": "playwright test -c tests/e2e/protocol/playwright.protocol.config.js --grep '@smoke|@core'",
     "test:e2e:protocol:full": "NOOBOT_E2E_FULL_SUITE=1 playwright test -c tests/e2e/protocol/playwright.protocol.config.js --grep-invert @perf",
     "test:e2e:protocol:perf": "playwright test -c tests/e2e/protocol/playwright.protocol.config.js --grep @perf --retries=0",
+    "test:e2e:protocol:perf-single": "playwright test -c tests/e2e/protocol/playwright.protocol.config.js --project chromium-perf-single --grep @perf --retries=0",
     "preview": "vite preview",
     "serve:caddy": "bash ./deploy/run-caddy.sh",
     "serve:caddy:restart": "bash ./deploy/restart-caddy.sh",

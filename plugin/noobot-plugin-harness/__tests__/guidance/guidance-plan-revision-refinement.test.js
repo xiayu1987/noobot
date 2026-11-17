@@ -19,6 +19,7 @@ import {
   createTestHookContext,
   createTestModelResponse,
   createTestResolveModelMessages,
+  createTestSummaryMessageBlocks,
 } from "../helpers/public-runtime-fixtures.js";
 
 const resolveModelMessages = createTestResolveModelMessages();
@@ -232,7 +233,7 @@ test("separate_model skips planning_revision when revision attempts already reac
     capability: "guidance",
     point: "agent.before_llm_call",
     ctx: {
-      messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
+      messageBlocks: createTestSummaryMessageBlocks(),
       agentContext,
     },
     meta,
@@ -268,7 +269,7 @@ test("separate_model summary does not consume refinement attempts", async () => 
     capability: "guidance",
     point: "agent.before_llm_call",
     ctx: {
-      messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
+      messageBlocks: createTestSummaryMessageBlocks(),
       agentContext,
     },
     meta,
@@ -306,7 +307,7 @@ test("separate_model does not auto-run refinement when revision has no main-plan
     capability: "guidance",
     point: "agent.before_llm_call",
     ctx: {
-      messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
+      messageBlocks: createTestSummaryMessageBlocks(),
       agentContext,
     },
     meta,

@@ -21,7 +21,7 @@ export const PROTOCOL_CONTRACTS = Object.freeze([
       ],
       [
         "block resolver applies only the summarized-message filter",
-        /function\s+resolveModelBlockMessages[\s\S]*?return\s+filterForModelContext\(\s*sourceMessages\s*,\s*policyOptions\s*\)\s*;/,
+        /function\s+resolveModelBlockMessages[\s\S]*?return\s+filterForModelContext\(\s*sourceMessages\s*\)\s*;/,
       ],
     ],
     scoped: [
@@ -71,10 +71,6 @@ export const PROTOCOL_CONTRACTS = Object.freeze([
     required: [
       ["owns summary scope marking", /export\s+function\s+markScopedMessagesSummarized\b/],
       [
-        "owns latest checkpoint boundary selection",
-        /export\s+function\s+collectLatestCheckpointBoundaryMessageIndexes\b/,
-      ],
-      [
         "owns latest checkpoint evidence selection",
         /export\s+function\s+collectLatestCheckpointEvidenceMessageIndexes\b/,
       ],
@@ -84,10 +80,7 @@ export const PROTOCOL_CONTRACTS = Object.freeze([
     file: "context-protocol/src/tool/context-policy.js",
     required: [
       ["owns flow-control semantic classification", /FLOW_CONTROL:\s*"flow_control"/],
-      [
-        "owns checkpoint boundary and evidence roles",
-        /CHECKPOINT_BOUNDARY:\s*"checkpoint_boundary"[\s\S]*?CHECKPOINT_EVIDENCE:\s*"checkpoint_evidence"/,
-      ],
+      ["owns checkpoint evidence role", /CHECKPOINT_EVIDENCE:\s*"checkpoint_evidence"/],
     ],
   },
   {

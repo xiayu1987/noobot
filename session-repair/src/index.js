@@ -5,6 +5,7 @@
  */
 
 export { readSessionForProtocolRepair, splitTurnSnapshotIndexes } from "./protocol-read.js";
+export { migrateLegacyPhaseSummaryMessages } from "./phase-summary-migration.js";
 export { SESSION_REPAIR_DATA_REJECTION_CODES, SESSION_REPAIR_ERROR_CODE } from "./errors.js";
 export { assertTurnJournalBoundary } from "./repair-artifact-io.js";
 export { resegmentMigratedCheckpointBaselines } from "./checkpoint-resegment.js";
@@ -34,4 +35,5 @@ export {
   MODEL_CONTEXT_SNAPSHOT_MIGRATION_KIND,
   V3_MESSAGE_IDENTITY_KEY,
   migrateModelContextSnapshot,
+  restoreSnapshotPhaseSummaryBodies,
 } from "./snapshot-migration.js";

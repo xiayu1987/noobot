@@ -23,7 +23,9 @@ import {
 } from "@noobot/agent-transport-protocol";
 import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
 
-useProvisionedRuntimeEventsWorkspace(["primary-user"]);
+useProvisionedRuntimeEventsWorkspace(["primary-user"], {
+  "primary-user": ["s1", "s-continue-stop"],
+});
 
 function stoppedLifecycle({
   sessionId = "s1",

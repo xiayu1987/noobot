@@ -27,6 +27,8 @@ export const WORKSPACE_LAYOUT_UPGRADE_OWNER = Object.freeze({
   SESSION_LEGACY_MCP_RESULT: "session-legacy-mcp-result",
   SESSION_RESULT_OVERFLOW: "session-result-overflow",
   SESSION_CHECKPOINT_IDENTITY: "session-checkpoint-identity",
+  SESSION_PHASE_SUMMARY: "session-phase-summary",
+  SESSION_IMMUTABLE_STORAGE: "session-immutable-storage",
   DIRECTORY_LOCK_RETIREMENT: "directory-lock-retirement",
 });
 
@@ -187,6 +189,61 @@ export const WORKSPACE_LAYOUT_UPGRADES = Object.freeze([
     id: "session-storage-journal-v32",
     toVersion: 32,
     owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MESSAGE_IDENTITY,
+  }),
+  Object.freeze({
+    id: "session-storage-position-delta-v33",
+    toVersion: 33,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_MESSAGE_IDENTITY,
+  }),
+  Object.freeze({
+    id: "session-phase-summary-v34",
+    toVersion: 34,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_PHASE_SUMMARY,
+  }),
+  Object.freeze({
+    id: "session-immutable-storage-v35",
+    toVersion: 35,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_IMMUTABLE_STORAGE,
+  }),
+  Object.freeze({
+    id: "session-immutable-segments-v36",
+    toVersion: 36,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_IMMUTABLE_STORAGE,
+  }),
+  Object.freeze({
+    id: "session-immutable-append-segments-v37",
+    toVersion: 37,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_IMMUTABLE_STORAGE,
+  }),
+  Object.freeze({
+    id: "session-immutable-record-locations-v38",
+    toVersion: 38,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_IMMUTABLE_STORAGE,
+  }),
+  Object.freeze({
+    id: "session-immutable-compact-locations-v39",
+    toVersion: 39,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_IMMUTABLE_STORAGE,
+  }),
+  Object.freeze({
+    id: "session-artifact-event-index-v40",
+    toVersion: 40,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_IMMUTABLE_STORAGE,
+  }),
+  Object.freeze({
+    id: "session-message-fields-v41",
+    toVersion: 41,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_IMMUTABLE_STORAGE,
+  }),
+  Object.freeze({
+    id: "session-message-display-index-v42",
+    toVersion: 42,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_IMMUTABLE_STORAGE,
+  }),
+  Object.freeze({
+    id: "session-message-inline-metadata-v43",
+    toVersion: 43,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_IMMUTABLE_STORAGE,
   }),
 ]);
 

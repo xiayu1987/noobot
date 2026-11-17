@@ -36,6 +36,33 @@ function messageEvent(eventId, eventType, sequence, payload = {}) {
   });
 }
 
+test("message event projection locates its owner without reading the committed message prefix", async () => {
+  const store = createCurrentTurnMessagesStore(
+    Array.from({ length: 1024 }, (_, index) => ({
+      messageUid: `old-${index}`,
+      role: "assistant",
+      modelMessageId: `old-model-${index}`,
+    })),
+  );
+  store.push({ messageUid: "owner", role: "assistant", modelMessageId: "model-message-1" });
+  store.readSnapshot = () => assert.fail("full message snapshot was read");
+  store.updateWhere = () => assert.fail("full message collection was updated");
+  let persisted = 0;
+  const runtime = {
+    currentTurnMessages: store,
+    persistCurrentTurnMessages: async () => {
+      persisted += 1;
+    },
+  };
+  initializeCurrentTurnMessageEventProjection(runtime);
+  await runtime.projectCurrentTurnMessageEvent(
+    messageEvent("activity-1", "model_analysis_delta", 1, { text: "analysis" }),
+  );
+  assert.equal(persisted, 1);
+  assert.equal(store.readByUid("owner").activityTimeline.length, 1);
+  assert.equal(store.readByUid("old-0").activityTimeline, undefined);
+});
+
 test("tool result transfer envelopes project onto the canonical assistant turn", async () => {
   const store = createCurrentTurnMessagesStore([
     {

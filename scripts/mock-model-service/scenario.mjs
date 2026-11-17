@@ -4,15 +4,18 @@
  * SPDX-License-Identifier: MIT
  */
 import { createHash } from "node:crypto";
+import { createNamespacedToolId } from "@noobot/model-protocol/tool-identity-node";
+import { MCP_TEST_SERVICE } from "../mcp-test-service/config.mjs";
 import { characterSteps, PERF_PLUGIN_TOOLS } from "./character-scenario.mjs";
+import { PERF_HARNESS_MODELS } from "./performance-contract.mjs";
+import { readReplayContext } from "./replay-context.mjs";
+import { harnessReply, semanticAcceptanceReply } from "./harness-scenario.mjs";
 
 export const MOCK_MODEL = Object.freeze({
   hostname: "noobot-mock-model",
   port: 8081,
   alias: "e2e_mock",
 });
-export const PERF_SCENARIO = "all-tools-v4";
-export const PERF_REPETITIONS = 6;
 const PERF_CONTENT = "NOOBOT-PERF-BEFORE\n";
 export const PERF_TOOLS = Object.freeze([
   "write_file",
@@ -32,9 +35,7 @@ export const PERF_TOOLS = Object.freeze([
   "multimodal_generate",
   "multimodal_parse",
   "access_connector",
-  "task_summary",
 ]);
-export const PERF_EXCLUSIONS = Object.freeze({});
 export const PERF_ALL_TOOLS = Object.freeze([...PERF_TOOLS, ...PERF_PLUGIN_TOOLS]);
 
 export function mockProvider() {
@@ -143,72 +144,33 @@ export function scenarioSteps(filePath, connectorId = "e2e-perf", repetition = 0
   ];
 }
 
-function replayProgress(messages) {
-  let completed = 0;
-  for (const message of messages) {
-    const content = JSON.stringify(message);
-    for (const match of content.matchAll(/NOOBOT_PERF_PROGRESS:(\d+)/g))
-      completed = Math.max(completed, Number(match[1]));
-    const steps = (message.tool_calls || []).map(
-      (call) => Number(call.id?.match(/^perf_step_(\d+)_[a-f0-9]{8}$/)?.[1]) || 0,
-    );
-    completed = Math.max(completed, ...steps);
-  }
-  return completed;
-}
-
-function summaryRequired(body, offered, messages) {
-  const lastContent = JSON.stringify(messages.at(-1)?.content || "");
-  return (
-    body.tool_choice?.function?.name === "task_summary" ||
-    (offered.length === 1 && offered[0] === "task_summary") ||
-    lastContent.includes("The phase-summary threshold is reached.") ||
-    lastContent.includes("阶段小结阈值")
-  );
-}
-
 export function nextReply(body) {
   const messages = body.messages || [];
+  const purpose = Object.entries(PERF_HARNESS_MODELS).find(
+    ([, model]) => model === body.model,
+  )?.[0];
+  if (purpose === "acceptance_semantic_validation") return semanticAcceptanceReply(messages);
+  if (purpose) return harnessReply(purpose, readReplayContext(messages));
   const offered = (body.tools || []).map((tool) => tool.function?.name);
-  const echo = offered.find((name) => name?.includes("echo"));
-  if (echo) {
+  const echo = createNamespacedToolId("mcp", MCP_TEST_SERVICE.name, "echo");
+  if (offered.includes(echo)) {
     return messages.some((message) => message.role === "tool")
       ? { content: "NOOBOT-PERF-ECHO" }
       : { tool: { name: echo, args: { text: "NOOBOT-PERF-ECHO" } } };
   }
-  const start = messages.findLastIndex(
-    (message) =>
-      message.role === "user" && JSON.stringify(message.content).includes("NOOBOT_PERF_CASE:"),
-  );
-  if (start < 0) return { content: "NOOBOT-PERF-OK" };
-  const serialized =
-    typeof messages[start].content === "string"
-      ? messages[start].content
-      : JSON.stringify(messages[start].content);
-  const marker = serialized.match(/NOOBOT_PERF_CASE:([A-Za-z0-9_./-]+)/);
-  if (!marker || !/^runtime\/ops_workdir\/e2e-[A-Za-z0-9_-]+\/perf-[1-6]\.txt$/.test(marker[1])) {
-    throw new Error("Invalid performance scenario path");
-  }
-  const connectorId = serialized.match(/NOOBOT_PERF_CONNECTOR:([A-Za-z0-9_-]+)/)?.[1];
-  const completed = replayProgress(messages.slice(start));
-  const groupSize = scenarioSteps(marker[1], connectorId).length;
-  const steps = scenarioSteps(marker[1], connectorId, Math.floor(completed / groupSize));
-  if (summaryRequired(body, offered, messages)) {
-    return {
-      tool: {
-        name: "task_summary",
-        args: {
-          summaryContent: `NOOBOT_TASK_SUMMARY/1\n[STATE]\nCONTINUE\n[ABSTRACT]\nPerformance replay\n[DETAILS]\nNOOBOT_PERF_PROGRESS:${completed}\nNOOBOT_PERF_CASE:${marker[1]}\nNOOBOT_PERF_CONNECTOR:${connectorId}\n[NEXT_ACTION]\nContinue deterministic replay`,
-        },
-      },
-    };
-  }
-  const step = completed < steps.length * PERF_REPETITIONS ? steps[completed % steps.length] : null;
-  if (!step) return { content: `NOOBOT-PERF-DONE:${marker[1]}` };
+  if (
+    messages.some((message) => String(message.content).includes("Initialize performance session"))
+  )
+    if (!messages.some((message) => JSON.stringify(message).includes("NOOBOT_PERF_CASE:")))
+      return { content: "NOOBOT-PERF-INITIALIZED" };
+  const { filePath, connectorId, completed, repetitions, turnKey } = readReplayContext(messages);
+  const groupSize = scenarioSteps(filePath, connectorId).length;
+  const steps = scenarioSteps(filePath, connectorId, Math.floor(completed / groupSize));
+  const step = completed < steps.length * repetitions ? steps[completed % steps.length] : null;
+  if (!step) return { content: `NOOBOT-PERF-DONE:${filePath}` };
   if (!offered.includes(step.name))
     throw new Error(
       `Required tool is not offered: ${step.name}; offered=${JSON.stringify(offered)}; choice=${body.tool_choice}`,
     );
-  const turnKey = createHash("sha256").update(marker[1]).digest("hex").slice(0, 8);
   return { tool: step, callId: `perf_step_${completed + 1}_${turnKey}` };
 }

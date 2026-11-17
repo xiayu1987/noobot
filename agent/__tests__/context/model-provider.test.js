@@ -37,8 +37,6 @@ const effectiveConfig = mergeConfig(globalConfig, {});
 
 test("resolveModelSection current uses this turn's selectedModel, not config default", () => {
   const section = resolveModelSection({
-    globalConfig,
-    userConfig: {},
     effectiveConfig,
     selectedModel: "selected_alias",
     scenario: "programming",
@@ -49,8 +47,6 @@ test("resolveModelSection current uses this turn's selectedModel, not config def
 
 test("resolveModelSection current falls back to scenario model when nothing selected", () => {
   const section = resolveModelSection({
-    globalConfig,
-    userConfig: {},
     effectiveConfig,
     scenario: "programming",
   });
@@ -68,4 +64,29 @@ test("help --models section resolves current model from runtime.runConfig", () =
     },
   });
   assert.equal(section.current.alias, "selected_alias");
+});
+
+test("current and available models share the effective user configuration", () => {
+  const userConfig = {
+    providers: { selected_alias: { model: "user-model" }, system_default: { enabled: false } },
+  };
+  const effectiveConfig = mergeConfig(globalConfig, userConfig);
+  const section = resolveModelSection({ effectiveConfig, selectedModel: "selected_alias" });
+  assert.equal(section.current.name, "user-model");
+  assert.equal(
+    section.available.find(({ alias }) => alias === "selected_alias").name,
+    "user-model",
+  );
+  assert.equal(
+    section.available.some(({ alias }) => alias === "system_default"),
+    false,
+  );
+  assert.deepEqual(
+    buildModelsSection({
+      bindings: {
+        runtime: { globalConfig, userConfig, runConfig: { selectedModel: "selected_alias" } },
+      },
+    }),
+    section,
+  );
 });

@@ -5,12 +5,15 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import path from "node:path";
 
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { createAgentTurnResult } from "@noobot/agent-transport-protocol/agent-turn-result";
 import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import { SessionExecutionFinalizer } from "../../src/bot/execution/finalizer.js";
 import { SessionTurnPersister } from "../../src/bot/execution/turn-persister.js";
+import { bindCurrentTurnPersistence } from "../../src/bot/execution/runner/current-turn-persistence.js";
+import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
 import { pathExists as exists, withProvisionedSessions } from "../helpers/provisioned-sessions.js";
 import { testWallClock } from "../helpers/session-services.js";
 
@@ -29,7 +32,6 @@ function createHarness(session) {
   const effects = [];
   const finalizer = new SessionExecutionFinalizer({
     session,
-    turnPersister: new SessionTurnPersister({ session, now: testWallClock }),
     memoryPostProcessService: {
       resolveMemoryPostProcessAsyncEnabled: () => true,
       async runMemoryPostProcessFlow() {
@@ -63,10 +65,6 @@ function createHarness(session) {
         },
       ],
     }),
-    persistedTurnMessageUids: [],
-    persistedTurnMessages: [],
-    durableTurnMessages: [],
-    summaryCheckpointPromotionSources: [],
     runtimeEventListener: { onEvent() {}, async flush() {} },
     userConfig: {},
     lifecycle: {
@@ -74,6 +72,33 @@ function createHarness(session) {
       enterMemory: () => effects.push("memory-stage"),
     },
     persistenceScope: null,
+  };
+  const dispatchRuntime = {
+    currentTurnMessages: createCurrentTurnMessagesStore(payload.agentResult.turnMessages),
+  };
+  const persister = new SessionTurnPersister({ session, now: testWallClock });
+  bindCurrentTurnPersistence({
+    dispatchRuntime,
+    appendAgentMessages: (input) => persister.appendAgentMessages(input),
+    commitSummaryCheckpoint: async () => {},
+    userId: USER_ID,
+    sessionId: TARGET_SESSION_ID,
+    dialogProcessId: payload.dialogProcessId,
+    parentDialogProcessId: "",
+    turnScopeId: payload.turnScopeId,
+    eventListener: payload.runtimeEventListener,
+    persistenceScope: null,
+  });
+  payload.turnPersistence = {
+    flush: () => dispatchRuntime.persistCurrentTurnMessages(),
+    readResultMessages: () =>
+      session.getSessionTurns({
+        userId: USER_ID,
+        sessionId: TARGET_SESSION_ID,
+        dialogProcessId: payload.dialogProcessId,
+        turnScopeId: payload.turnScopeId,
+        persistenceScope: null,
+      }),
   };
   return { finalizer, payload, effects };
 }
@@ -90,7 +115,7 @@ async function assertDeletedWithoutResidue({ session, scopes, effects }) {
     }),
     { code: "SESSION_DELETED" },
   );
-  assert.equal(await exists(scopes[SIBLING_SESSION_ID].sessionFile), true);
+  assert.equal(await exists(path.join(scopes[SIBLING_SESSION_ID].sessionDir, "head.json")), true);
   assert.deepEqual(
     await session.getSessionTurns({
       userId: USER_ID,
@@ -123,7 +148,7 @@ test("a session deleted between message persistence and turn timing rejects the 
       ...session,
       async appendTurns(input) {
         const result = await session.appendTurns(input);
-        appendedTurns.push(...result.turns);
+        appendedTurns.push(...result.messageReceipts);
         await session.deleteSessionBranch({ userId: USER_ID, sessionIds: [TARGET_SESSION_ID] });
         return result;
       },

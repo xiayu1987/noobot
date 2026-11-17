@@ -31,6 +31,95 @@ test("flushJsonLineBatches persists a pending batch before its scheduled flush",
   }
 });
 
+test("concurrent flush calls drain writes admitted by earlier write receipts", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-jsonl-flush-chain-"));
+  const file = path.join(root, "events.jsonl");
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const originalAppend = fs.appendFile.bind(fs);
+  const blocked = Promise.withResolvers();
+  const entered = Promise.withResolvers();
+  let writes = 0;
+  t.mock.method(fs, "appendFile", async (...args) => {
+    writes += 1;
+    if (writes === 3) {
+      entered.resolve();
+      await blocked.promise;
+    }
+    return originalAppend(...args);
+  });
+  const chain = appendJsonLine(file, { n: 1 })
+    .then(() => appendJsonLine(file, { n: 2 }))
+    .then(() => appendJsonLine(file, { n: 3 }));
+  let completed = 0;
+  const flushes = [flushJsonLineBatches(), flushJsonLineBatches()].map((flush) =>
+    flush.then(() => {
+      completed += 1;
+    }),
+  );
+  try {
+    await entered.promise;
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(completed, 0, "flush must not acknowledge an in-flight accepted write");
+  } finally {
+    blocked.resolve();
+    await Promise.all([...flushes, chain]);
+  }
+  assert.equal(completed, 2);
+  assert.deepEqual((await fs.readFile(file, "utf8")).trim().split("\n").map(JSON.parse), [
+    { n: 1 },
+    { n: 2 },
+    { n: 3 },
+  ]);
+});
+
+test("concurrent flush barriers report failed writes after draining healthy writes", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-jsonl-flush-failure-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const failedFile = path.join(root, "failed.jsonl");
+  const healthyFile = path.join(root, "healthy.jsonl");
+  const failure = new Error("injected append failure");
+  const blocked = Promise.withResolvers();
+  const entered = Promise.withResolvers();
+  const originalAppend = fs.appendFile.bind(fs);
+  t.mock.method(fs, "appendFile", async (file, ...args) => {
+    if (file === failedFile) throw failure;
+    entered.resolve();
+    await blocked.promise;
+    return originalAppend(file, ...args);
+  });
+  const failed = assert.rejects(appendJsonLine(failedFile, { n: 1 }), (e) => e === failure);
+  const healthy = appendJsonLine(healthyFile, { n: 2 });
+  let completed = 0;
+  const barriers = Array.from({ length: 2 }, () =>
+    flushJsonLineBatches().then(
+      () => {
+        completed += 1;
+        return null;
+      },
+      (error) => {
+        completed += 1;
+        return error;
+      },
+    ),
+  );
+  try {
+    await Promise.all([failed, entered.promise]);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(completed, 0);
+  } finally {
+    blocked.resolve();
+    await healthy;
+  }
+  for (const result of await Promise.all(barriers)) {
+    assert.ok(result instanceof AggregateError);
+    assert.deepEqual(result.errors, [failure]);
+  }
+  assert.deepEqual(JSON.parse(await fs.readFile(healthyFile, "utf8")), { n: 2 });
+  t.mock.restoreAll();
+  await appendJsonLine(failedFile, { n: 3 });
+  await flushJsonLineBatches();
+});
+
 test("sequentially awaited appends do not wait for the batch window", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-jsonl-sequential-"));
   const file = path.join(root, "sequential.jsonl");

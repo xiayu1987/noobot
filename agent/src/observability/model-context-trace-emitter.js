@@ -4,12 +4,21 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { emitEvent } from "../events/index.js";
+import { emitEvent, hasEventListener } from "../events/index.js";
 import { text } from "@noobot/shared/value";
 import { MODEL_CONTEXT_TRACE } from "@noobot/model-protocol";
+import { resolveRuntimeEventsSessionLogControls } from "@noobot/shared/runtime-events-config";
 
-export function emitModelContextTrace(eventListener, stage, payload) {
+export function emitModelContextTrace(eventListener, stage, buildPayload) {
   const normalizedStage = text(stage);
   if (!normalizedStage) throw new TypeError("model context trace stage is required");
-  emitEvent(eventListener, MODEL_CONTEXT_TRACE.EVENT, { ...payload, stage: normalizedStage });
+  if (typeof buildPayload !== "function") {
+    throw new TypeError("model context trace requires a payload builder");
+  }
+  if (!hasEventListener(eventListener)) return;
+  if (!resolveRuntimeEventsSessionLogControls().debug.modelContextTrace) return;
+  return emitEvent(eventListener, MODEL_CONTEXT_TRACE.EVENT, {
+    ...buildPayload(),
+    stage: normalizedStage,
+  });
 }

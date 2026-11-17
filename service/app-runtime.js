@@ -23,6 +23,7 @@ import {
   RUNTIME_EVENT_SCOPES,
   SERVICE_STARTUP_EVENTS,
   SERVICE_STARTUP_SOURCE,
+  requireServiceWorkspacePreparation,
   flushJsonLineBatches,
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
@@ -62,7 +63,7 @@ registerGlobalMiddlewares(app, {
 
 await registerHttpModules(app, { ...buildHttpModuleDependencies(), connectorRuntime });
 
-app.get("/health", (_, res) => res.json({ ok: true }));
+app.get("/health", (...[, res]) => res.json({ ok: true }));
 
 if (shouldServeDesktopFrontend) {
   app.use(express.static(desktopFrontendRoot));
@@ -107,6 +108,18 @@ try {
     reportProgress,
   });
   reportProgress.flush();
+  await writeRuntimeEvent({
+    scope: RUNTIME_EVENT_SCOPES.STARTUP,
+    source: SERVICE_STARTUP_SOURCE,
+    channel: RUNTIME_EVENT_CHANNELS.STARTUP,
+    category: RUNTIME_EVENT_CATEGORIES.STATE,
+    level: preparation.failures.length ? "error" : "info",
+    event: preparation.failures.length
+      ? SERVICE_STARTUP_EVENTS.WORKSPACE_PREPARATION_FAILED
+      : SERVICE_STARTUP_EVENTS.WORKSPACE_PREPARATION_COMPLETED,
+    data: preparation,
+  });
+  requireServiceWorkspacePreparation(preparation);
   if (!shuttingDown) {
     httpServer = await startHttpServer({
       app,
@@ -121,17 +134,6 @@ try {
       openVSCodeService,
       host: startupContext.service.host,
       port: startupContext.service.port,
-    });
-    await writeRuntimeEvent({
-      scope: RUNTIME_EVENT_SCOPES.STARTUP,
-      source: SERVICE_STARTUP_SOURCE,
-      channel: RUNTIME_EVENT_CHANNELS.STARTUP,
-      category: RUNTIME_EVENT_CATEGORIES.STATE,
-      level: preparation.failures.length ? "error" : "info",
-      event: preparation.failures.length
-        ? SERVICE_STARTUP_EVENTS.WORKSPACE_PREPARATION_FAILED
-        : SERVICE_STARTUP_EVENTS.WORKSPACE_PREPARATION_COMPLETED,
-      data: preparation,
     });
   }
 } catch (error) {

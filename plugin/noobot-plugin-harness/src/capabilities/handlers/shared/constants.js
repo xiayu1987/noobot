@@ -81,7 +81,6 @@ export const DEFAULT_HARNESS_FLAGS = Object.freeze({
   planningForceToolTemporarilyEnabled: false,
   planningForceToolOriginalSet: false,
   planningForceToolOriginal: false,
-  guidanceSummaryMarkPending: false,
   phaseAcceptanceTriggeredThisTurn: false,
   summaryByCharsPrompted: false,
   overflowForceAcceptancePending: false,

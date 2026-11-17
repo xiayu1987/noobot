@@ -50,6 +50,23 @@ export function isMessageIdentity(value) {
   return typeof value === "string" && value.length > 0 && value.trim() === value;
 }
 
+export function assertCommittedMessageIdentity(previous, next) {
+  for (const field of [
+    "messageUid",
+    "sessionId",
+    "parentSessionId",
+    "dialogProcessId",
+    "turnScopeId",
+    "role",
+  ]) {
+    if (previous[field] !== next[field])
+      throw Object.assign(new TypeError(`Committed message ${field} cannot change`), {
+        code: "SESSION_MESSAGE_IDENTITY_CONFLICT",
+      });
+  }
+  return next;
+}
+
 export function assertMessageIdentity(field, value) {
   if (!Object.values(MESSAGE_IDENTITY_FIELD).includes(field)) {
     throw new TypeError(`unknown message identity field: ${field}`);

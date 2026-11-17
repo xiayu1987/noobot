@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
+import { summaryCheckpointResult } from "../helpers/summary-checkpoint-result.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -164,15 +165,21 @@ test("staged checkpoints plus final tail equal the pre-refactor one-shot turn se
   runtime.currentTurnMessages.push(message("m1", { role: "assistant", content: "M1" }));
   runtime.currentTurnMessages.push(message("m2", { role: "assistant", content: "M2" }));
   const persist = {
-    async appendAgentMessages({ messages }) {
-      persistedStages.push(...structuredClone(messages));
+    prepareAgentMessages({ messages }) {
+      return messages;
     },
   };
   let checkpointRevision = 0;
   const session = {
-    async commitTurnSummaryCheckpoint() {
+    async commitTurnSummaryCheckpoint(payload) {
+      const { messages } = payload;
+      persistedStages.push(...structuredClone(messages));
       checkpointRevision += 1;
-      return { committed: true, markedCount: 1, checkpointRevision };
+      return summaryCheckpointResult(payload, {
+        committed: true,
+        markedCount: 1,
+        checkpointRevision,
+      });
     },
   };
 
@@ -205,9 +212,8 @@ test("staged checkpoints plus final tail equal the pre-refactor one-shot turn se
     }),
   });
   runtime.currentTurnMessages.push(message("m5", { role: "assistant", content: "M5" }));
-  const persistedUids = new Set(runtime.summaryCheckpointPersistedMessageUids);
   persistedStages.push(
-    ...runtime.currentTurnMessages.toArray().filter((item) => !persistedUids.has(item.messageUid)),
+    ...runtime.currentTurnMessages.readPendingChanges().entries.map((entry) => entry.message),
   );
 
   assert.deepEqual(
@@ -223,42 +229,37 @@ test("summary notifications use the existing main-flow command channel", () => {
   const runtime = createTestRuntimeContext({ systemRuntime: {} });
 
   mainFlowControl.requestMainFlowSummaryCheckpoint(runtime, {
-    source: "task_summary",
+    source: "agent.phase_summary",
     summarizedMessageUids: ["m1", "m2", "phase-prompt"],
   });
 
   assert.deepEqual(mainFlowControl.peekMainFlowSummaryCheckpoint(runtime), {
     action: "summary_checkpoint",
-    source: "task_summary",
+    source: "agent.phase_summary",
     summarizedMessageUids: ["m1", "m2", "phase-prompt"],
   });
   assert.equal(mainFlowControl.acknowledgeMainFlowSummaryCheckpoint(runtime), true);
   assert.equal(mainFlowControl.peekMainFlowSummaryCheckpoint(runtime), null);
 });
 
-test("summary checkpoint command is not lost when the existing channel also carries final-no-tools", () => {
+test("summary checkpoint and phase-summary requests retain separate acknowledgements", () => {
   const runtime = createTestRuntimeContext({ systemRuntime: {} });
   mainFlowControl.requestMainFlowSummaryCheckpoint(runtime, {
     source: "plugin.summary",
     summarizedMessageUids: ["m1"],
   });
-  mainFlowControl.requestMainFlowFinalNoToolsTurn(runtime, {
-    source: "harness",
-    reason: "context_overflow_after_summary",
+  mainFlowControl.requestMainFlowPhaseSummary(runtime, {
+    source: "plugin.summary",
+    prompt: "summarize",
+    onCommitted: () => {},
   });
 
-  assert.equal(
-    mainFlowControl.peekMainFlowFinalNoToolsTurnInstruction(runtime)?.action,
-    "final_no_tools_turn",
-  );
+  assert.equal(mainFlowControl.peekMainFlowPhaseSummary(runtime)?.action, "phase_summary");
   assert.deepEqual(mainFlowControl.peekMainFlowSummaryCheckpoint(runtime), {
     action: "summary_checkpoint",
     source: "plugin.summary",
     summarizedMessageUids: ["m1"],
   });
   assert.equal(mainFlowControl.acknowledgeMainFlowSummaryCheckpoint(runtime), true);
-  assert.equal(
-    mainFlowControl.peekMainFlowFinalNoToolsTurnInstruction(runtime)?.action,
-    "final_no_tools_turn",
-  );
+  assert.equal(mainFlowControl.peekMainFlowPhaseSummary(runtime)?.action, "phase_summary");
 });

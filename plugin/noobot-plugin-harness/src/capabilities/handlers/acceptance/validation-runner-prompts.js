@@ -12,6 +12,7 @@ import {
 import { appendMessage } from "../../../core/message-store.js";
 import { isSystemLikeMessageRole } from "@noobot/context-protocol/policy/message";
 import { readContextMessageField } from "@noobot/context-protocol/message/codec";
+import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/message/injected-types";
 import {
   buildAllPhaseAcceptanceReportSystemContents,
   buildAllSummaryReportSystemContents,
@@ -47,20 +48,7 @@ export function buildTextAcceptanceValidationResult(sourceText = "") {
 
 function isSummaryRelayMessage(message = {}) {
   const injectedType = readContextMessageField(message, "injectedMessageType");
-  if (injectedType === "separate_model_relay:summary") return true;
-  const content = text(message?.content ?? message?.lc_kwargs?.content);
-  const relayPrefixes = [LOCALE.ZH_CN, LOCALE.EN_US]
-    .map((locale) =>
-      translateI18nText(locale, HARNESS_I18N_KEYSET.RELAY.SEPARATE_MODEL_PREFIX, {
-        purpose: "summary",
-      }),
-    )
-    .filter(Boolean);
-  return (
-    content.startsWith("[harness:summary]") ||
-    relayPrefixes.some((prefix) => content.startsWith(prefix)) ||
-    /^\[from harness external model output\/summary\]/i.test(content)
-  );
+  return injectedType === CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_RESULT;
 }
 
 export function filterHistoricalSummaryRelayMessages(messages = []) {

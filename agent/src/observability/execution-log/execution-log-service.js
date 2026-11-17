@@ -5,11 +5,11 @@
  */
 
 import { shouldRecordRuntimeExecutionLog } from "@noobot/shared/runtime-events-config";
+import { requireExecutionLogBatchSize } from "@noobot/session-protocol";
 
 export class ExecutionLogService {
-  constructor({ executionRepo, sessionRepo } = {}) {
+  constructor({ executionRepo } = {}) {
     this.executionRepo = executionRepo;
-    this.sessionRepo = sessionRepo;
   }
 
   async getTurnLogs({ userId, sessionId, dialogProcessId, persistenceContext }) {
@@ -30,28 +30,35 @@ export class ExecutionLogService {
     ts,
     persistenceContext,
   }) {
-    if (!shouldRecordRuntimeExecutionLog({ event, category, type, data })) {
-      return { appended: false, skipped: true, reason: "runtime_event_policy" };
-    }
-    const scope = await this.sessionRepo.requireSessionScope(userId, sessionId, persistenceContext);
-    await this.executionRepo.appendLog(
+    const [result] = await this.appendExecutionLogs({
       userId,
       sessionId,
-      {
-        userId,
-        sessionId,
-        parentSessionId: scope.resolvedParentSessionId,
-        dialogProcessId,
-        turnScopeId,
-        event,
-        category,
-        type,
-        data,
-        ts,
-      },
-      { persistenceContext },
-    );
-    return { appended: true, skipped: false };
+      persistenceContext,
+      records: [{ dialogProcessId, turnScopeId, event, category, type, data, ts }],
+    });
+    return result;
+  }
+
+  async appendExecutionLogs({ userId, sessionId, records, persistenceContext }) {
+    requireExecutionLogBatchSize(records);
+    const selected = [];
+    const results = records.map((record) => {
+      if (!shouldRecordRuntimeExecutionLog(record)) {
+        return { appended: false, skipped: true, reason: "runtime_event_policy" };
+      }
+      selected.push({ ...record, userId, sessionId });
+      return { appended: true, skipped: false };
+    });
+    if (selected.length > 0) {
+      await this.executionRepo.appendLogs(userId, sessionId, selected, { persistenceContext });
+    }
+    return results;
+  }
+
+  async recoverExecutionLogProjection({ userId, sessionId, persistenceContext }) {
+    return this.executionRepo.recoverSessionLogProjection(userId, sessionId, {
+      persistenceContext,
+    });
   }
 
   async saveExecutionReport({ userId, sessionId, report = {}, persistenceContext }) {

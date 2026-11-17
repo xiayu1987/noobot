@@ -108,6 +108,6 @@ export async function commitResendTurnReplacement(context) {
     outcome: RESEND_COMMIT_OUTCOME.COMMITTED,
     turnReplacement,
     replacedTurnScopeIds,
-    detail: response.detail,
+    mutation: response,
   };
 }

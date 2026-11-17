@@ -5,7 +5,7 @@
  */
 import { GUIDANCE_REASON, TOOL_NAME_SET, ensureHarnessBucket } from "./deps.js";
 import { resolveSummaryScope } from "@noobot/context-protocol/policy/summary";
-import { setPendingStateWithMeta } from "../../pending-cleanup.js";
+import { clearPendingSummaryState, setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { resolveModelMessageBlocks } from "../../../core/message-store.js";
 import { requireHarnessStateField } from "../../../core/bucket-contract.js";
@@ -23,6 +23,13 @@ function resolveSummaryMarkBlocks(ctx) {
   };
 }
 
+export function reconcilePendingSummary(ctx, state) {
+  if (!state.pending.summary) return false;
+  if (ctx.agentContext.bindings.mainFlowControl.hasPendingSummary()) return false;
+  if (resolveSummaryScope(resolveSummaryMarkBlocks(ctx)).summaryMessages.length) return false;
+  return clearPendingSummaryState(state);
+}
+
 export function captureGuidanceSummaryCheckpoint(ctx, state) {
   requireHarnessStateField(
     "pending",
@@ -36,7 +43,7 @@ export function captureGuidanceSummaryCheckpoint(ctx, state) {
   return messageKeys;
 }
 
-export async function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
+export async function markGuidanceSummarizedMessages(ctx = {}, meta = {}, { onCommitted } = {}) {
   void meta;
   const holder = ensureHarnessBucket(ctx);
   const summaryCheckpointMessageKeys = holder.state.pending.summaryCheckpointMessageKeys;
@@ -46,16 +53,15 @@ export async function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
     messageKeys: summaryCheckpointMessageKeys,
   });
   const summaryTargets = summaryScope.summaryMessages;
-  const summarizedMessageUids = [
-    ...new Set(summaryTargets.map(resolveContextSessionMessageUid).filter(Boolean)),
-  ];
-  if (summarizedMessageUids.length) {
-    ctx.agentContext.bindings.mainFlowControl.requestSummaryCheckpoint({
-      source: "plugin.summary",
-      summarizedMessageUids,
-    });
+  const summarizedMessageUids = [...new Set(summaryTargets.map(resolveContextSessionMessageUid))];
+  if (!summarizedMessageUids.length || summarizedMessageUids.some((uid) => !uid)) {
+    throw new Error("phase summary requires canonical checkpoint targets");
   }
-  holder.state.pending.summaryCheckpointMessageKeys = null;
+  ctx.agentContext.bindings.mainFlowControl.requestSummaryCheckpoint({
+    source: "plugin.summary",
+    summarizedMessageUids,
+    onCommitted,
+  });
   return summaryTargets.length;
 }
 

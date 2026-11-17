@@ -616,7 +616,7 @@ test("captureDialogToShortMemory records only the given dialog and skips injecte
     },
     ...[
       CONTEXT_INJECTED_MESSAGE_TYPE.TASK_CHECK_PROMPT,
-      CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_PROMPT,
+      CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_RESULT,
       CONTEXT_INJECTED_MESSAGE_TYPE.HELP_TOOL_LOOP_PROMPT,
     ].map((internalType) => ({
       role: "user",

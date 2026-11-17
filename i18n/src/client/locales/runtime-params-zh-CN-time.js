@@ -177,6 +177,16 @@ export default {
       name: "智能体钩子超时",
       description: "智能体钩子超时的最长等待时间。",
     },
+    executionLogBatchWaitMs: {
+      name: "执行日志批次等待时间",
+      description:
+        "从最早排队记录开始计算的最长聚合等待时间，须小于队列等待预算。批次已满或调用 flush 时立即开始写入。",
+    },
+    executionLogQueueWaitMs: {
+      name: "执行日志队列等待预算",
+      description:
+        "日志批次开始写入前允许的最长排队时间。超时队列拒绝新记录；已接收记录继续排空，并由 flush 报告超时。不取消在途写入。",
+    },
     authorityOutboxDeliveredRetentionMs: {
       name: "智能体权威状态发件箱已送达保留",
       description: "智能体权威状态发件箱已送达保留使用的保留期限。",

@@ -8,26 +8,16 @@ import { emitEvent } from "../../events/index.js";
 import { assertSessionFinalizationContext } from "@noobot/agent-transport-protocol/session-finalization";
 import { assertAgentTurnResult } from "@noobot/agent-transport-protocol/agent-turn-result";
 import { runBestEffort } from "@noobot/shared/best-effort";
-import {
-  isSummarizedSessionMessageRecord,
-  requireDialogProcessKey,
-} from "@noobot/session-protocol";
+import { requireDialogProcessKey } from "@noobot/session-protocol";
 import { summarizeExecutionLogs } from "../../observability/execution-log/execution-log-summary.js";
 import {
   buildExecutionReport,
   EXECUTION_REPORT_STATUS,
 } from "@noobot/session-protocol/execution-report";
-import { emitContextIdentityDebug } from "../../observability/context-identity-debug.js";
-import { projectGeneratedArtifactsToFinalAssistant } from "../../runtime/turn/final-assistant-artifact-projection.js";
-
-function summarizedMessageUids(messages) {
-  return messages.filter(isSummarizedSessionMessageRecord).map((message) => message.messageUid);
-}
 
 export class SessionExecutionFinalizer {
-  constructor({ session, turnPersister, memoryPostProcessService, now }) {
+  constructor({ session, memoryPostProcessService, now }) {
     this.session = session;
-    this.turnPersister = turnPersister;
     this.memoryPostProcessService = memoryPostProcessService;
     this.now = now;
   }
@@ -42,10 +32,7 @@ export class SessionExecutionFinalizer {
     turnScopeId,
     startedAt,
     agentResult,
-    persistedTurnMessageUids,
-    persistedTurnMessages,
-    durableTurnMessages,
-    summaryCheckpointPromotionSources,
+    turnPersistence,
     runtimeEventListener,
     userConfig,
     lifecycle,
@@ -56,57 +43,13 @@ export class SessionExecutionFinalizer {
       runtimeEventListener,
       parentDialogProcessId,
       userConfig,
+      turnPersistence,
     });
     requireDialogProcessKey(dialogProcessId);
     assertAgentTurnResult(agentResult);
-    const activeTurnMessages = agentResult.turnMessages;
-    const persistedUidSet = new Set(persistedTurnMessageUids);
-    const persistedMessagesByUid = new Map(
-      durableTurnMessages.map((message) => [message.messageUid, message]),
-    );
-    for (const messageUid of persistedUidSet) {
-      if (!persistedMessagesByUid.has(messageUid)) {
-        throw new Error(
-          `persisted turn message is missing from the durable journal: ${messageUid}`,
-        );
-      }
-    }
-    const activeMessageUids = new Set(activeTurnMessages.map((message) => message.messageUid));
-    const rawTurnMessages = [
-      ...persistedTurnMessages.filter((message) => !activeMessageUids.has(message.messageUid)),
-      ...activeTurnMessages,
-    ];
-    const promotionSourceCount = summaryCheckpointPromotionSources.length;
-    const turnMessages = projectGeneratedArtifactsToFinalAssistant([
-      ...summaryCheckpointPromotionSources,
-      ...rawTurnMessages,
-    ]).slice(promotionSourceCount);
-    const messagesToPersist = turnMessages.filter((message) => {
-      const messageUid = message.messageUid;
-      if (!persistedUidSet.has(messageUid)) return true;
-      return JSON.stringify(persistedMessagesByUid.get(messageUid)) !== JSON.stringify(message);
-    });
-    emitContextIdentityDebug(runtimeEventListener, "completedTurnSummaryPersistencePlanned", {
-      activeMessageCount: activeTurnMessages.length,
-      durableMessageCount: persistedMessagesByUid.size,
-      persistedUidCount: persistedUidSet.size,
-      messageToPersistCount: messagesToPersist.length,
-      activeSummarizedMessageUids: summarizedMessageUids(activeTurnMessages),
-      durableSummarizedMessageUids: summarizedMessageUids(durableTurnMessages),
-      persistedSummarizedMessageUids: summarizedMessageUids(messagesToPersist),
-    });
     const thinkingFinishedAt = this.now();
     lifecycle.enterPersisting();
-    await this.turnPersister.appendAgentMessages({
-      userId,
-      sessionId,
-      messages: messagesToPersist,
-      dialogProcessId,
-      parentDialogProcessId,
-      turnScopeId,
-      eventListener: runtimeEventListener,
-      persistenceScope,
-    });
+    await turnPersistence.flush();
     await this.session.upsertTurnTiming({
       userId,
       sessionId,
@@ -117,6 +60,7 @@ export class SessionExecutionFinalizer {
       persistenceScope,
     });
 
+    const turnMessages = await turnPersistence.readResultMessages();
     lifecycle.enterMemory();
     const memoryPostProcessAsyncEnabled =
       this.memoryPostProcessService.resolveMemoryPostProcessAsyncEnabled(userConfig);

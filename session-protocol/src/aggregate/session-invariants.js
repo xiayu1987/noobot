@@ -6,8 +6,7 @@
 import { isPlainObject, text as clean } from "@noobot/shared/value";
 import { isSettledTurn } from "../lifecycle/turn-state.js";
 import { isCanonicalCommandReceipt } from "../command/command-receipt.js";
-import { validateTurnCommitMetadata } from "./turn-commit-metadata.js";
-import { validateCanonicalAssistantPresentation } from "../turn-presentation.js";
+import { sessionMessageInvariants } from "./session-message-invariants.js";
 import { isSessionCaller } from "@noobot/shared/session-caller";
 import { isCanonicalTurnScopeId } from "../identity/turn-scope-identity.js";
 import { collectTurnRecordErrors } from "../lifecycle/turn-record.js";
@@ -46,7 +45,8 @@ function collectLifecycleRecordErrors(lifecycle, field, collectRecordErrors, err
   }
 }
 
-function collectTurnContinuationRelationErrors(lifecycle, turn, errors) {
+export function collectTurnContinuationRelationErrors(lifecycle, turn) {
+  const errors = [];
   if (isPlainObject(turn.continuationSource)) {
     const source = lifecycle.turns[turn.continuationSource.turnScopeId];
     if (
@@ -62,11 +62,14 @@ function collectTurnContinuationRelationErrors(lifecycle, turn, errors) {
     const target = lifecycle.turns[turn.continuedByTurnScopeId];
     if (
       !target ||
+      turn.state !== "stop_completed" ||
+      turn.sequence >= target.sequence ||
       target.continuationSource?.turnScopeId !== turn.turnScopeId ||
       target.continuationSource?.dialogProcessId !== turn.dialogProcessId
     )
       errors.push("turn_continuation_target_relation_mismatch");
   }
+  return errors;
 }
 
 export function assertTurnLifecycleRecordIntegrity(lifecycle) {
@@ -90,7 +93,7 @@ export function assertTurnLifecycleRecordIntegrity(lifecycle) {
   const active = lifecycle.activeTurnScopeId;
   for (const turn of Object.values(lifecycle.turns)) {
     if (!isPlainObject(turn)) continue;
-    collectTurnContinuationRelationErrors(lifecycle, turn, errors);
+    errors.push(...collectTurnContinuationRelationErrors(lifecycle, turn));
   }
   if (
     active !== "" &&
@@ -158,15 +161,14 @@ export function validateSessionAggregateInvariants(session) {
   const messageUids = new Set();
   const canonicalAssistantTurns = new Set();
   for (const message of messages) {
-    const messageUid = clean(message?.messageUid);
+    const {
+      messageUid,
+      presentationTurnScopeId,
+      errors: messageErrors,
+    } = sessionMessageInvariants(message);
     if (messageUid && messageUids.has(messageUid)) errors.push("duplicate_message_uid");
     messageUids.add(messageUid);
-    if (message?.turnCommit && !validateTurnCommitMetadata(message.turnCommit).valid) {
-      errors.push("invalid_turn_commit_metadata");
-    }
-    const presentation = validateCanonicalAssistantPresentation(message);
-    errors.push(...presentation.errors);
-    const presentationTurnScopeId = presentation.identity?.turnScopeId || "";
+    errors.push(...messageErrors);
     if (presentationTurnScopeId && canonicalAssistantTurns.has(presentationTurnScopeId)) {
       errors.push("duplicate_canonical_assistant_presentation");
     }

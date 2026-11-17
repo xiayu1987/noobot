@@ -63,7 +63,7 @@ test("plugin artifact outbox commit is sent through the active WebSocket before 
         return { recorded: true };
       },
       async compactAuthorityEvents() {
-        return { compacted: false, removed: 0 };
+        return { compacted: false, removed: 0, nextRetainedDeliveryAt: null };
       },
       async acknowledgeAuthorityEvents({ acknowledgements = [] }) {
         acknowledged += acknowledgements.length;
@@ -167,7 +167,7 @@ test("authority dispatcher keeps a failed send pending and reconnect retries the
         return { recorded: true };
       },
       async compactAuthorityEvents() {
-        return { compacted: false, removed: 0 };
+        return { compacted: false, removed: 0, nextRetainedDeliveryAt: null };
       },
       async acknowledgeAuthorityEvents({ consumerId, acknowledgements = [] } = {}) {
         for (const receipt of acknowledgements) {
@@ -239,7 +239,8 @@ test("authority dispatcher keeps a failed send pending and reconnect retries the
   assert.equal(sent.length, 1);
 });
 
-test("authority dispatcher preserves the child persistence scope across every outbox operation", async () => {
+test("authority dispatcher preserves the child persistence scope through idle maintenance", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   const persistenceScope = Object.freeze({
     scopeId: "agent:child-turn",
     parentSessionId: "root-session",
@@ -276,7 +277,7 @@ test("authority dispatcher preserves the child persistence scope across every ou
       },
       async compactAuthorityEvents(input) {
         calls.push({ method: "compact", input });
-        return { compacted: true };
+        return { compacted: true, nextRetainedDeliveryAt: null };
       },
     },
   };
@@ -293,6 +294,11 @@ test("authority dispatcher preserves the child persistence scope across every ou
   });
 
   assert.deepEqual(result, { dispatched: true, delivered: 1 });
+  assert.deepEqual(
+    calls.map(({ method }) => method),
+    ["get", "attempt", "acknowledge", "get"],
+  );
+  t.mock.timers.tick(TIME_THRESHOLDS.agent.authorityOutboxCompactIntervalMs);
   assert.deepEqual(
     calls.map(({ method }) => method),
     ["get", "attempt", "acknowledge", "get", "compact"],
@@ -359,7 +365,7 @@ test("a detached child lifecycle commit drains its complete scoped outbox to the
         return { recorded: input.eventIds.every((eventId) => pendingIds.has(eventId)) };
       },
       async compactAuthorityEvents() {
-        return { compacted: false, removed: 0 };
+        return { compacted: false, removed: 0, nextRetainedDeliveryAt: null };
       },
       async acknowledgeAuthorityEvents(input) {
         calls.push({ method: "acknowledge", input });
@@ -446,7 +452,7 @@ test("authority dispatcher serializes concurrent scoped drains and performs the 
         return { recorded: true };
       },
       async compactAuthorityEvents() {
-        return { compacted: false, removed: 0 };
+        return { compacted: false, removed: 0, nextRetainedDeliveryAt: null };
       },
       async acknowledgeAuthorityEvents() {
         calls.acknowledge += 1;
@@ -525,7 +531,7 @@ test("authority dispatcher repeats a scoped drain when a lifecycle commit arrive
         return { recorded: eventIds.every((eventId) => pendingIds.has(eventId)) };
       },
       async compactAuthorityEvents() {
-        return { compacted: false, removed: 0 };
+        return { compacted: false, removed: 0, nextRetainedDeliveryAt: null };
       },
       async acknowledgeAuthorityEvents({ acknowledgements = [] }) {
         const ackedIds = new Set(acknowledgements.map((receipt) => receipt.eventId));
@@ -621,7 +627,7 @@ test("authority dispatcher leaves an event pending when acknowledgement persiste
         return { recorded: true };
       },
       async compactAuthorityEvents() {
-        return { compacted: false, removed: 0 };
+        return { compacted: false, removed: 0, nextRetainedDeliveryAt: null };
       },
       async acknowledgeAuthorityEvents({ consumerId, acknowledgements = [] } = {}) {
         if (!acknowledgementAvailable) {
@@ -697,7 +703,8 @@ test("dispatcher requires a known authority event consumer", () => {
   }
 });
 
-test("CLI dispatcher acknowledges and compacts as the CLI consumer", async () => {
+test("CLI dispatcher acknowledges immediately and schedules idle compaction", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   const envelope = createTestLifecycleEnvelope({
     eventId: "authority-event-cli-consumer",
     sequence: 1,
@@ -726,7 +733,7 @@ test("CLI dispatcher acknowledges and compacts as the CLI consumer", async () =>
       },
       async compactAuthorityEvents(input) {
         calls.push({ method: "compact", input });
-        return { compacted: true };
+        return { compacted: true, nextRetainedDeliveryAt: null };
       },
     },
   };
@@ -743,6 +750,11 @@ test("CLI dispatcher acknowledges and compacts as the CLI consumer", async () =>
   });
 
   assert.deepEqual(result, { dispatched: true, delivered: 1 });
+  assert.equal(
+    calls.some(({ method }) => method === "compact"),
+    false,
+  );
+  t.mock.timers.tick(TIME_THRESHOLDS.agent.authorityOutboxCompactIntervalMs);
   const consumerIdsByMethod = Object.fromEntries(
     calls.map(({ method, input }) => [method, input.consumerId]),
   );

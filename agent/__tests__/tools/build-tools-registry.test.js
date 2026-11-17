@@ -94,7 +94,7 @@ test("buildTools: 重组后应注册关键工具", async () => {
     "call_mcp_task",
     "access_connector",
     "switch_model",
-    "task_summary",
+    "task_check",
     "help",
     "user_interaction",
     "do_search_web",
@@ -105,6 +105,7 @@ test("buildTools: 重组后应注册关键工具", async () => {
     assert.ok(names.has(toolName), `应注册工具: ${toolName}`);
   }
   assert.equal(names.has("set_skill_task"), false);
+  assert.equal(names.has("task_summary"), false);
 
   const toolByName = new Map(tools.map((tool) => [tool?.name, tool]));
   assert.deepEqual(Object.keys(toolByName.get("call_mcp_task")?.schema?.shape || {}).sort(), [
@@ -210,7 +211,7 @@ test("buildTools: control tools ignore enabled=false in config", async () => {
     }),
   );
   const names = new Set(tools.map((tool) => tool?.name).filter(Boolean));
-  assert.equal(names.has("task_summary"), true);
+  assert.equal(names.has("task_summary"), false);
   assert.equal(names.has("task_check"), true);
 });
 

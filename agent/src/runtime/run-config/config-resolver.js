@@ -4,14 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
-import { mergeConfig } from "../../config/index.js";
 import {
   isRuntimeThresholdGateEnabled,
   resolveGatedThresholdValue,
   selectModelAlias,
   requireModelReference,
 } from "@noobot/agent-config-protocol";
-import { resolveModelSpecByName } from "../../models/index.js";
+import { resolveEffectiveProvider } from "../../models/index.js";
 export function resolvePhaseSummaryLoopTurns({ runConfig = {} } = {}) {
   return resolveGatedThresholdValue({
     enabled: isRuntimeThresholdGateEnabled(runConfig),
@@ -35,18 +34,12 @@ function modelSelectionPath(selection, scenario) {
 }
 
 export function resolveEffectiveModelSpec({
-  globalConfig = {},
-  userConfig = {},
+  effectiveConfig,
   selectedModel = "",
   scenario = "",
 } = {}) {
-  const effectiveConfig = mergeConfig(globalConfig, userConfig);
   const selection = selectModelAlias({ selectedModel, scenario, effectiveConfig });
-  const provider = resolveModelSpecByName({
-    modelName: selection.alias,
-    globalConfig,
-    userConfig,
-  });
+  const provider = resolveEffectiveProvider(selection.alias, effectiveConfig);
   return requireModelReference({
     provider,
     alias: selection.alias,

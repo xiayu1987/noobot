@@ -25,6 +25,7 @@ import { readSessionArtifact } from "../src/session/session-artifact-store.js";
 import { readSessionArtifactSnapshot } from "../src/session/session-artifact-snapshot.js";
 import { TEST_SCOPED_SESSION_ROOTS } from "./helpers/scoped-session-roots.js";
 import { TEST_STORAGE_SERVICE } from "./helpers/storage-service.js";
+import { writeLegacySessionFixture } from "./helpers/legacy-session-fixture.js";
 import {
   applySessionMessageFacts,
   createTestSessionRequiredFields,
@@ -58,7 +59,8 @@ async function saveCheckpointedSession(sessionRepo, sessionId) {
     turnScopeId: "active",
     ts,
   });
-  await sessionRepo.save(
+  await writeLegacySessionFixture(
+    sessionRepo,
     "alice",
     applySessionMessageFacts({
       ...createTestSessionRequiredFields(),
@@ -89,7 +91,7 @@ async function saveCheckpointedSession(sessionRepo, sessionId) {
         },
       },
     }),
-    { createOnly: true, persistenceContext },
+    { persistenceContext },
   );
   const scope = await sessionRepo.requireSessionScope("alice", sessionId, persistenceContext);
   return { sessionDir: scope.sessionDir, tail: message("m3", "2026-01-01T00:02:00.000Z") };
@@ -224,7 +226,8 @@ async function saveCompletedTurnWithRejectedBatch(sessionRepo, sessionId) {
     ...toolCall("m4", "call-rejected", "task_check"),
     summarized: false,
   };
-  await sessionRepo.save(
+  await writeLegacySessionFixture(
+    sessionRepo,
     "alice",
     applySessionMessageFacts({
       ...createTestSessionRequiredFields(),
@@ -248,7 +251,7 @@ async function saveCompletedTurnWithRejectedBatch(sessionRepo, sessionId) {
       },
       messages: [...canonical.slice(0, 3), rejected, canonical[3]],
     }),
-    { createOnly: true, persistenceContext },
+    { persistenceContext },
   );
   const scope = await sessionRepo.requireSessionScope("alice", sessionId, persistenceContext);
   return scope.sessionDir;

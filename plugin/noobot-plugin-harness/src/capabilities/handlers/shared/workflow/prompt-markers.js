@@ -26,11 +26,6 @@ export function getPlanningRefinementMarker(locale = LOCALE.ZH_CN) {
   return "<!-- harness-planning-refinement -->";
 }
 
-export function getGuidanceSummaryMarker(locale = LOCALE.ZH_CN) {
-  void locale;
-  return "<!-- harness-guidance-summary -->";
-}
-
 export function getGuidanceMarker(locale = LOCALE.ZH_CN) {
   void locale;
   return "<!-- harness-guidance -->";

@@ -24,6 +24,7 @@ const AVAILABLE_DETAIL_ENTRY_FIELDS = Object.freeze([
   "updatedAt",
   "title",
   "aggregateVersion",
+  "generation",
   "turnTimings",
   "turnLifecycleSnapshot",
   "sessionArtifactEvents",
@@ -75,6 +76,8 @@ function collectAvailableDetailEntryErrors(entry) {
   if (!isCanonicalText(entry.updatedAt)) errors.push("invalid_updated_at");
   if (!isCanonicalText(entry.title)) errors.push("invalid_title");
   if (!isSessionAggregateVersion(entry.aggregateVersion)) errors.push("invalid_aggregate_version");
+  if (!Number.isSafeInteger(entry.generation) || entry.generation < 1)
+    errors.push("invalid_generation");
   errors.push(...collectTurnTimingErrors(entry.turnTimings));
   errors.push(...collectTurnLifecycleSnapshotErrors(entry));
   if (
@@ -137,6 +140,7 @@ export function createAvailableSessionDetailEntry(displaySummary) {
     updatedAt: displaySummary.updatedAt,
     title: displaySummary.title,
     aggregateVersion: displaySummary.aggregateVersion,
+    generation: displaySummary.generation,
     turnTimings: displaySummary.turnTimings,
     turnLifecycleSnapshot: displaySummary.turnLifecycleSnapshot,
     sessionArtifactEvents: displaySummary.sessionArtifactEvents,
@@ -147,6 +151,30 @@ export function createAvailableSessionDetailEntry(displaySummary) {
 
 export function isAvailableSessionDetailEntry(entry) {
   return entry.availability === SESSION_SUMMARY_AVAILABILITY.AVAILABLE;
+}
+
+export function isSessionDetailEntryCurrent(entry, { sessionId, aggregateVersion, generation }) {
+  if (
+    !isCanonicalText(sessionId) ||
+    !isSessionAggregateVersion(aggregateVersion) ||
+    (generation !== null && (!Number.isSafeInteger(generation) || generation < 1))
+  ) {
+    throw detailInvalid(
+      "current detail requires a session identity, aggregate version and observed generation",
+    );
+  }
+  if (!isPlainObject(entry) || entry.sessionId !== sessionId) return false;
+  if (!isAvailableSessionDetailEntry(entry)) return false;
+  if (!isSessionAggregateVersion(entry.aggregateVersion)) {
+    throw detailInvalid("detail entry has an invalid aggregate version");
+  }
+  if (!Number.isSafeInteger(entry.generation) || entry.generation < 1) {
+    throw detailInvalid("detail entry has an invalid generation");
+  }
+  return (
+    entry.aggregateVersion >= aggregateVersion &&
+    (generation === null || entry.generation >= generation)
+  );
 }
 
 export function requireSessionDetailDocument(document) {

@@ -8,7 +8,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
-import { writeRuntimeEvent } from "../src/index.js";
+import { writeRuntimeEvent, RUNTIME_EVENT_ERROR_CODE } from "../src/index.js";
 
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { SESSION_STORE_ERROR } from "@noobot/workspace-protocol/session-store";
@@ -124,8 +124,9 @@ test("child events are refused while the child is not registered in the tree", a
     sessionId: "child-session",
     parentSessionId: "parent-session",
   });
-  assert.equal(result.skipped, true);
-  assert.equal(result.missingSession, true);
+  assert.equal(result.ok, false);
+  assert.equal(result.skipped, undefined);
+  assert.equal(result.error.code, RUNTIME_EVENT_ERROR_CODE.SESSION_NOT_REGISTERED);
   const parentDir = path.join(
     workspaceRoot,
     "admin",
@@ -229,9 +230,9 @@ test("placeholder parent session id cannot create an unpersisted session directo
     parentSessionId: "undefined",
   });
 
-  assert.equal(result.ok, true);
-  assert.equal(result.skipped, true);
-  assert.equal(result.missingSession, true);
+  assert.equal(result.ok, false);
+  assert.equal(result.skipped, undefined);
+  assert.equal(result.error.code, RUNTIME_EVENT_ERROR_CODE.SESSION_NOT_REGISTERED);
   assert.equal(
     await pathExists(path.join(workspaceRoot, "admin", WORKSPACE_LAYOUT.SESSION_DIR, "undefined")),
     false,
@@ -265,9 +266,9 @@ test("workspace runtime events do not create an unpersisted session directory", 
     data: {},
   });
 
-  assert.equal(result.ok, true);
-  assert.equal(result.skipped, true);
-  assert.equal(result.missingSession, true);
+  assert.equal(result.ok, false);
+  assert.equal(result.skipped, undefined);
+  assert.equal(result.error.code, RUNTIME_EVENT_ERROR_CODE.SESSION_NOT_REGISTERED);
   assert.equal(await pathExists(sessionDir), false);
 });
 
@@ -290,7 +291,7 @@ test("runtime event writer does not recreate a deleted session directory", async
   assert.equal(await pathExists(sessionDir), false);
 });
 
-test("runtime event writer skips an unregistered child of a deleted parent as missing", async () => {
+test("runtime event writer cannot infer deletion of an unregistered child from caller parent identity", async () => {
   const workspaceRoot = await tempRoot();
   const userId = "admin";
   const parentSessionId = "deleted-parent-session";
@@ -310,9 +311,9 @@ test("runtime event writer skips an unregistered child of a deleted parent as mi
     sessionId: "child-session",
     parentSessionId,
   });
-  assert.equal(result.ok, true);
-  assert.equal(result.skipped, true);
-  assert.equal(result.missingSession, true);
+  assert.equal(result.ok, false);
+  assert.equal(result.skipped, undefined);
+  assert.equal(result.error.code, RUNTIME_EVENT_ERROR_CODE.SESSION_NOT_REGISTERED);
   assert.equal(await pathExists(sessionDir), false);
 });
 

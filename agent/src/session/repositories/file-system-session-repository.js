@@ -11,6 +11,7 @@ import { sessionCrudMethods } from "./file-system-session-repository/crud-method
 import { installRepositoryMethods } from "./file-system-session-repository/install-methods.js";
 import { sessionLifecycleMethods } from "./file-system-session-repository/lifecycle-methods.js";
 import { sessionSummaryMethods } from "./file-system-session-repository/summary-methods.js";
+import { immutableSessionMethods } from "./file-system-session-repository/immutable-methods.js";
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { isFunction } from "@noobot/shared/value";
 
@@ -44,4 +45,5 @@ installRepositoryMethods(
   sessionAccessMethods,
   sessionArtifactMethods,
   sessionCrudMethods,
+  immutableSessionMethods,
 );

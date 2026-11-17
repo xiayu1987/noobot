@@ -34,6 +34,7 @@ import { resolveEffectiveModelSpec } from "./run-config/index.js";
 import { applyActiveModelSpec } from "../models/runtime/model-manager.js";
 import { projectToolsForModel } from "../models/tool/model-tool-definition.js";
 import { mergeConfig } from "../config/index.js";
+import { resolveEffectiveToolBindings } from "@noobot/agent-config-protocol";
 import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
 import { decodeToolResultText } from "@noobot/event-protocol/tool-result";
 import { projectToolResultObjectForModel } from "../tools/core/tool-json-result.js";
@@ -130,14 +131,13 @@ function createModelPort({ resolveTurnModelSpec, modelState }) {
       operation,
     } = {}) {
       const requestModelSpec = requireModelSpec(model || resolveTurnModelSpec());
-      const effectiveConfig = mergeConfig(
-        modelState.runtime.globalConfig || {},
-        modelState.runtime.userConfig || {},
-      );
       const binding = createToolNameBinding({
         tools,
         historyToolIds: collectToolMessageIds(messages),
-        bindings: effectiveConfig.tools?.bindings,
+        bindings: resolveEffectiveToolBindings(
+          modelState.runtime.globalConfig,
+          modelState.runtime.userConfig,
+        ),
       });
       const mapName = (name) => binding.toBindingName(name);
       const resolveResultIdentity = createToolResultIdentityResolver(messages);
@@ -248,8 +248,7 @@ export function initializeAgentModelHost({ runtime, invocationIdentity }) {
   const modelSpec = applyActiveModelSpec(
     modelState,
     resolveEffectiveModelSpec({
-      globalConfig,
-      userConfig,
+      effectiveConfig: mergeConfig(globalConfig, userConfig),
       selectedModel: runConfig.selectedModel,
       scenario: runConfig.scenario,
     }),

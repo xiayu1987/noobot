@@ -39,7 +39,9 @@ test("authority dispatcher confirms the sent prefix before propagating a publish
         pending = pending.filter((item) => !ids.has(item.eventId));
         return { acknowledged: true };
       },
-      async compactAuthorityEvents() {},
+      async compactAuthorityEvents() {
+        return { compacted: false, nextRetainedDeliveryAt: null };
+      },
     },
   };
   const dispatch = createAuthorityEventDispatcher({
@@ -166,7 +168,7 @@ test("authority dispatcher drains again when dispatch is requested while a drain
         return { recorded: true };
       },
       async compactAuthorityEvents() {
-        return { compacted: false, removed: 0 };
+        return { compacted: false, removed: 0, nextRetainedDeliveryAt: null };
       },
       async acknowledgeAuthorityEvents({ acknowledgements = [] }) {
         const ackedIds = new Set(acknowledgements.map((receipt) => receipt.eventId));

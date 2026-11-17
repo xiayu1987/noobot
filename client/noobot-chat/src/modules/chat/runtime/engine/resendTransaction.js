@@ -40,7 +40,7 @@ export function createResendMessageTransaction({
   activeSession,
   activeSessionId,
   applyRunStateEvent,
-  applySessionDetail,
+  applySessionMutation,
   authFetch,
   buildMonotonicMessageAnchor,
   input,
@@ -55,7 +55,7 @@ export function createResendMessageTransaction({
 }) {
   requireFunctionDependencies("createResendMessageTransaction", {
     applyRunStateEvent,
-    applySessionDetail,
+    applySessionMutation,
     authFetch,
     buildMonotonicMessageAnchor,
     prepareMonotonicMessageAction,
@@ -139,7 +139,7 @@ export function createResendMessageTransaction({
     return executeResendReplacement({
       activeSession,
       applyRunStateEvent,
-      applySessionDetail,
+      applySessionMutation,
       anchor,
       input,
       messageOperationStore,

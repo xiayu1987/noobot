@@ -8,17 +8,10 @@ import { resolveModelMessages } from "../../../core/message-store.js";
 import { CAPABILITY_DOMAIN, LOCALE, appendCapabilityLog, ensureHarnessBucket } from "./deps.js";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { injectMessageWithPolicy } from "../shared/message/injection-utils.js";
-import { buildPlanChecklistSystemContent } from "../shared/plan/checklist-context.js";
-import { resolvePreviousSummaryContextText } from "./summary-manager.js";
-import { captureGuidanceSummaryCheckpoint } from "./signal-tracker.js";
 import {
-  buildPreviousSummaryContextContent,
-  buildWorkflowResponsibilityConstraintUserPrompt,
   buildGuidanceFailurePromptText,
-  buildGuidanceSummaryPromptText,
   resolveScenarioPolicyFlagsFromContext,
   getGuidanceMarker,
-  getGuidanceSummaryMarker,
 } from "../shared/workflow/prompts.js";
 import { text } from "@noobot/shared/value";
 
@@ -39,88 +32,16 @@ export function buildGuidancePromptContent(
   });
 }
 
-export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}, { action = "auto" } = {}) {
+export function maybeInjectGuidancePrompt(ctx = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
-  const { bucket, state } = holder;
+  const { state } = holder;
   const locale = state?.locale || LOCALE.ZH_CN;
   const messages = resolveModelMessages(ctx);
   if (!messages) return false;
   const { scenario, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(ctx);
 
-  const requestedAction = (text(action) || "auto").toLowerCase();
-  const allowSummary = requestedAction === "auto" || requestedAction === "summary";
-  const allowGuidance = requestedAction === "auto" || requestedAction === "guidance";
-
-  if (allowSummary && state.pending.summary === true) {
-    captureGuidanceSummaryCheckpoint(ctx, state);
-    const checklistContent = buildPlanChecklistSystemContent({
-      locale,
-      planText: bucket?.planText,
-      bucket,
-    });
-    if (checklistContent) {
-      injectMessageWithPolicy(ctx, {
-        role: "system",
-        content: checklistContent,
-        injectedMessageType: "guidance_summary_checklist",
-        injectAt: "append",
-        dedupe: false,
-        avoidBreakToolCallContinuity: true,
-      });
-    }
-    const previousSummaryContent = buildPreviousSummaryContextContent({
-      locale,
-      previousSummaryContent: resolvePreviousSummaryContextText(ctx),
-    });
-    if (previousSummaryContent) {
-      injectMessageWithPolicy(ctx, {
-        role: "system",
-        content: previousSummaryContent,
-        injectedMessageType: "guidance_summary_previous_summary",
-        injectAt: "append",
-        dedupe: false,
-        avoidBreakToolCallContinuity: true,
-      });
-    }
-    const userInjection = injectMessageWithPolicy(ctx, {
-      role: "user",
-      content: buildGuidanceSummaryPromptText({
-        locale,
-        marker: getGuidanceSummaryMarker(locale),
-        scenario,
-        dynamicPolicyPrompt,
-        includeWorkflowPolicy: false,
-      }),
-      injectedMessageType: "guidance_summary_prompt",
-      injectAt: "append",
-      dedupe: false,
-      avoidBreakToolCallContinuity: true,
-    });
-    if (!userInjection.injected) return false;
-    injectMessageWithPolicy(ctx, {
-      role: "user",
-      content: buildWorkflowResponsibilityConstraintUserPrompt(locale, "summary", {
-        scenario,
-        dynamicPolicyPrompt,
-        includeWorkflowPolicy: false,
-      }),
-      injectedMessageType: "guidance_summary_responsibility_constraint",
-      injectAt: "append",
-      dedupe: false,
-      avoidBreakToolCallContinuity: true,
-    });
-    setPendingStateWithMeta(state, "summary", false);
-    state.counters.summaryTurns = 0;
-    state.flags.guidanceSummaryMarkPending = true;
-    appendCapabilityLog(ctx, {
-      domain: CAPABILITY_DOMAIN.GUIDANCE,
-      event: GUIDANCE_EVENTS.summaryPromptInjected,
-    });
-    return true;
-  }
-
-  if (!allowGuidance || !state.pending.guidance) return false;
+  if (!state.pending.guidance) return false;
   const reason = state.pending.guidance;
   injectMessageWithPolicy(ctx, {
     role: "user",

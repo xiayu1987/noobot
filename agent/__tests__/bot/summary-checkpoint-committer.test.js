@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { commitSummaryCheckpoint } from "../../src/bot/session/summary-checkpoint-committer.js";
 import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
+import { summaryCheckpointResult } from "../helpers/summary-checkpoint-result.js";
 import { createSummaryCheckpointInstruction } from "@noobot/context-protocol/policy/main-flow-control";
 import { createModelContext } from "@noobot/context-protocol/assembly/hook-context";
 import {
@@ -19,7 +20,8 @@ import {
   createFlowControlContextPolicy,
 } from "@noobot/context-protocol/tool/context-policy";
 
-const boundaryPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
+import { registerSummaryCheckpointConcurrencyTests } from "../helpers/summary-checkpoint-concurrency-cases.js";
+
 const evidencePolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE);
 
 function createCommitterRuntime({ turnMessages, ...fields }) {
@@ -44,7 +46,7 @@ const PHASE_PROMPT_RECORD = Object.freeze({
   messageUid: "phase_prompt_1",
   role: "user",
   content: "summarize now",
-  noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_PROMPT,
+  noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_RESULT,
 });
 
 function phasePromptContextMessage() {
@@ -69,16 +71,21 @@ test("summary checkpoint persists unmodified messages before atomically marking 
     session: {
       async commitTurnSummaryCheckpoint(payload) {
         checkpointPayload = payload;
+        persisted.push(...payload.messages);
         assert.equal(
           persisted.every((message) => message.summarized !== true),
           true,
         );
-        return { committed: true, markedCount: 2, checkpointRevision: 1 };
+        return summaryCheckpointResult(payload, {
+          committed: true,
+          markedCount: 2,
+          checkpointRevision: 1,
+        });
       },
     },
     turnPersister: {
-      async appendAgentMessages({ messages: batch }) {
-        persisted.push(...batch);
+      prepareAgentMessages({ messages }) {
+        return messages;
       },
     },
     runtime,
@@ -121,8 +128,8 @@ test("failed summary transaction leaves canonical memory and persisted messages 
         },
       },
       turnPersister: {
-        async appendAgentMessages({ messages: batch }) {
-          persisted.push(...batch);
+        prepareAgentMessages({ messages }) {
+          return messages;
         },
       },
       runtime,
@@ -149,7 +156,6 @@ test("uncommitted summary receipt publishes no checkpoint runtime facts", async 
   const messages = [{ messageUid: "sm_1", role: "assistant", content: "M1" }];
   const runtime = createCommitterRuntime({
     summaryCheckpointRevision: 2,
-    summaryCheckpointPersistedMessageUids: ["prior"],
     turnMessages: messages,
     activeMessageContext: createModelContext({
       checkpointRevision: 2,
@@ -167,7 +173,7 @@ test("uncommitted summary receipt publishes no checkpoint runtime facts", async 
           return { committed: false, checkpointRevision: 3 };
         },
       },
-      turnPersister: { async appendAgentMessages() {} },
+      turnPersister: { prepareAgentMessages: ({ messages }) => messages },
       runtime,
       userId: "u1",
       sessionId: "s1",
@@ -182,7 +188,7 @@ test("uncommitted summary receipt publishes no checkpoint runtime facts", async 
   );
   assert.equal(runtime.summaryCheckpointRevision, 2);
   assert.equal(runtime.activeMessageContext.checkpointRevision, 2);
-  assert.deepEqual(runtime.summaryCheckpointPersistedMessageUids, ["prior"]);
+  assert.equal(runtime.currentTurnMessages.readPendingChanges().entries.length, 1);
   assert.deepEqual(
     runtime.currentTurnMessages.toArray().map((message) => ({
       messageUid: message.messageUid,
@@ -208,12 +214,16 @@ test("summary checkpoint atomically marks persisted scope and context control pr
 
   await commitSummaryCheckpoint({
     session: {
-      async commitTurnSummaryCheckpoint() {
+      async commitTurnSummaryCheckpoint(payload) {
         assert.equal(resolveContextMessageSummarized(phasePrompt), false);
-        return { committed: true, markedCount: 2, checkpointRevision: 1 };
+        return summaryCheckpointResult(payload, {
+          committed: true,
+          markedCount: 2,
+          checkpointRevision: 1,
+        });
       },
     },
-    turnPersister: { async appendAgentMessages() {} },
+    turnPersister: { prepareAgentMessages: ({ messages }) => messages },
     runtime,
     userId: "u1",
     sessionId: "s1",
@@ -249,7 +259,7 @@ test("failed summary checkpoint preserves context control prompts", async () => 
           throw new Error("checkpoint failed");
         },
       },
-      turnPersister: { async appendAgentMessages() {} },
+      turnPersister: { prepareAgentMessages: ({ messages }) => messages },
       runtime,
       userId: "u1",
       sessionId: "s1",
@@ -279,10 +289,14 @@ test("summary completion never falls back to content identity", async () => {
     session: {
       async commitTurnSummaryCheckpoint(payload) {
         assert.deepEqual(payload.summarizedMessageUids, ["marked"]);
-        return { committed: true, markedCount: 1, checkpointRevision: 1 };
+        return summaryCheckpointResult(payload, {
+          committed: true,
+          markedCount: 1,
+          checkpointRevision: 1,
+        });
       },
     },
-    turnPersister: { async appendAgentMessages() {} },
+    turnPersister: { prepareAgentMessages: ({ messages }) => messages },
     runtime,
     userId: "u1",
     sessionId: "s1",
@@ -323,10 +337,14 @@ test("summary checkpoint uses exact persistent UIDs when the scoped checkpoint A
     session: {
       async commitTurnSummaryCheckpoint(payload) {
         checkpointPayload = payload;
-        return { committed: true, markedCount: 1, checkpointRevision: 4 };
+        return summaryCheckpointResult(payload, {
+          committed: true,
+          markedCount: 1,
+          checkpointRevision: 4,
+        });
       },
     },
-    turnPersister: { async appendAgentMessages() {} },
+    turnPersister: { prepareAgentMessages: ({ messages }) => messages },
     runtime,
     userId: "u1",
     sessionId: "s1",
@@ -344,14 +362,14 @@ test("summary checkpoint uses exact persistent UIDs when the scoped checkpoint A
   assert.equal(checkpointPayload.expectedCheckpointRevision, 0);
   assert.equal(runtime.summaryCheckpointRevision, 4);
   assert.equal(runtime.activeMessageContext.checkpointRevision, 4);
-  assert.deepEqual(runtime.summaryCheckpointPersistedMessageUids, ["sm_1", "sm_2"]);
+  assert.deepEqual(runtime.currentTurnMessages.readPendingChanges().entries, []);
   assert.deepEqual(
     runtime.currentTurnMessages.toArray().map((message) => message.messageUid),
     ["sm_2"],
   );
 });
 
-test("successive summary checkpoints preserve the latest task_check before the current summary", async () => {
+test("successive summary checkpoints summarize older task_check evidence and keep the latest pair", async () => {
   const messages = [
     {
       messageUid: "old-check-call",
@@ -367,19 +385,6 @@ test("successive summary checkpoints preserve the latest task_check before the c
       contextPolicy: evidencePolicy,
     },
     {
-      messageUid: "old-summary-call",
-      role: "assistant",
-      tool_calls: [{ id: "old-summary", name: "task_summary", contextPolicy: boundaryPolicy }],
-    },
-    {
-      messageUid: "old-summary-result",
-      role: "tool",
-      toolName: "task_summary",
-      tool_call_id: "old-summary",
-      content: "old summary",
-      contextPolicy: boundaryPolicy,
-    },
-    {
       messageUid: "latest-check-call",
       role: "assistant",
       tool_calls: [{ id: "latest-check", name: "task_check", contextPolicy: evidencePolicy }],
@@ -392,11 +397,6 @@ test("successive summary checkpoints preserve the latest task_check before the c
       content: "latest",
       contextPolicy: evidencePolicy,
     },
-    {
-      messageUid: "current-summary-call",
-      role: "assistant",
-      tool_calls: [{ id: "current-summary", name: "task_summary", contextPolicy: boundaryPolicy }],
-    },
   ];
   const runtime = createCommitterRuntime({
     activeMessageContext: emptyActiveContext(),
@@ -408,28 +408,26 @@ test("successive summary checkpoints preserve the latest task_check before the c
     session: {
       async commitTurnSummaryCheckpoint(payload) {
         checkpointPayload = payload;
-        return { committed: true, markedCount: 5, checkpointRevision: 2 };
+        return summaryCheckpointResult(payload, {
+          committed: true,
+          markedCount: 2,
+          checkpointRevision: 2,
+        });
       },
     },
-    turnPersister: { async appendAgentMessages() {} },
+    turnPersister: { prepareAgentMessages: ({ messages }) => messages },
     runtime,
     userId: "u1",
     sessionId: "s1",
     dialogProcessId: "dp-1",
     turnScopeId: "turn-1",
     summaryCompletion: createSummaryCheckpointInstruction({
-      source: "task_summary",
+      source: "agent.phase_summary",
       summarizedMessageUids: messages.map((message) => message.messageUid),
     }),
   });
 
-  assert.deepEqual(checkpointPayload.summarizedMessageUids, [
-    "old-check-call",
-    "old-check-result",
-    "old-summary-call",
-    "old-summary-result",
-    "current-summary-call",
-  ]);
+  assert.deepEqual(checkpointPayload.summarizedMessageUids, ["old-check-call", "old-check-result"]);
   assert.deepEqual(
     runtime.currentTurnMessages.toArray().map((message) => message.messageUid),
     ["latest-check-call", "latest-check-result"],
@@ -469,10 +467,14 @@ test("summary checkpoint preserves classified control-tool evidence", async () =
     session: {
       async commitTurnSummaryCheckpoint(payload) {
         checkpointPayload = payload;
-        return { committed: true, markedCount: 1, checkpointRevision: 1 };
+        return summaryCheckpointResult(payload, {
+          committed: true,
+          markedCount: 1,
+          checkpointRevision: 1,
+        });
       },
     },
-    turnPersister: { async appendAgentMessages() {} },
+    turnPersister: { prepareAgentMessages: ({ messages }) => messages },
     runtime,
     userId: "u1",
     sessionId: "s1",
@@ -499,8 +501,10 @@ test("summary checkpoint does not replay messages already persisted by the timel
       { messageUid: "sm_1", role: "assistant", content: "M1", summarized: true },
       { messageUid: "sm_2", role: "tool", content: "M2" },
     ],
-    timelineCheckpointPersistedMessageUids: ["sm_1", "sm_2"],
   });
+  runtime.currentTurnMessages.acknowledgeChanges(
+    runtime.currentTurnMessages.readPendingChanges().entries,
+  );
   let appendCount = 0;
   let checkpointPayload = null;
 
@@ -508,12 +512,17 @@ test("summary checkpoint does not replay messages already persisted by the timel
     session: {
       async commitTurnSummaryCheckpoint(payload) {
         checkpointPayload = payload;
-        return { committed: true, markedCount: 1, checkpointRevision: 1 };
+        return summaryCheckpointResult(payload, {
+          committed: true,
+          markedCount: 1,
+          checkpointRevision: 1,
+        });
       },
     },
     turnPersister: {
-      async appendAgentMessages() {
-        appendCount += 1;
+      prepareAgentMessages({ messages }) {
+        appendCount += messages.length;
+        return messages;
       },
     },
     runtime,
@@ -529,7 +538,7 @@ test("summary checkpoint does not replay messages already persisted by the timel
 
   assert.equal(result.committed, true);
   assert.equal(appendCount, 0);
-  assert.deepEqual(checkpointPayload.persistedMessageUids, ["sm_1", "sm_2"]);
+  assert.deepEqual(checkpointPayload.persistedMessageUids, []);
   assert.deepEqual(checkpointPayload.summarizedMessageUids, ["sm_1"]);
   assert.deepEqual(
     runtime.currentTurnMessages.toArray().map((message) => message.messageUid),
@@ -569,12 +578,17 @@ test("summary checkpoint closes assistant tool-call and tool-result identity as 
     session: {
       async commitTurnSummaryCheckpoint(payload) {
         checkpointPayload = payload;
-        return { committed: true, markedCount: ids.length, checkpointRevision: 1 };
+        persisted.push(...payload.messages);
+        return summaryCheckpointResult(payload, {
+          committed: true,
+          markedCount: ids.length,
+          checkpointRevision: 1,
+        });
       },
     },
     turnPersister: {
-      async appendAgentMessages({ messages }) {
-        persisted.push(...messages);
+      prepareAgentMessages({ messages }) {
+        return messages;
       },
     },
     runtime,
@@ -602,6 +616,67 @@ test("summary checkpoint closes assistant tool-call and tool-result identity as 
   assert.deepEqual(runtime.activeMessageContext.messageBlocks.incremental, []);
 });
 
+test("committed summary evicts exact UIDs without rebuilding or dirtying the retained prefix", async () => {
+  const runtime = createCommitterRuntime({
+    activeMessageContext: emptyActiveContext(),
+    turnMessages: [],
+  });
+  const store = runtime.currentTurnMessages;
+  const prefix = [];
+  for (let index = 0; index < 1024; index += 1) {
+    prefix.push(store.push({ messageUid: `retained-${index}`, role: "user" }));
+  }
+  store.push({ messageUid: "first", role: "tool", attachments: [{ id: "first" }] });
+  store.push({ messageUid: "second", role: "tool", attachments: [{ id: "second" }] });
+  store.acknowledgeChanges(store.readPendingChanges().entries);
+  for (const message of prefix) {
+    Object.defineProperty(message, "role", {
+      get() {
+        throw new Error("retained prefix was visited before summary commit");
+      },
+    });
+  }
+  store.toArray = () => assert.fail("summary must not expand the committed prefix");
+  const result = await commitSummaryCheckpoint({
+    session: {
+      async commitTurnSummaryCheckpoint(payload) {
+        for (const method of ["toArray", "replaceAll", "updateWhere"]) {
+          store[method] = () => {
+            throw new Error(`unexpected full store operation: ${method}`);
+          };
+        }
+        return summaryCheckpointResult(payload, {
+          committed: true,
+          markedCount: 2,
+          checkpointRevision: 1,
+        });
+      },
+    },
+    turnPersister: {
+      prepareAgentMessages({ messages }) {
+        assert.deepEqual(messages, []);
+        return messages;
+      },
+    },
+    runtime,
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "dp-1",
+    turnScopeId: "turn-1",
+    summaryCompletion: createSummaryCheckpointInstruction({
+      source: "plugin.summary",
+      summarizedMessageUids: ["second", "first"],
+    }),
+  });
+  assert.equal(result.committed, true);
+  assert.equal(store.readCounts().messageCount, 1024);
+  assert.deepEqual(store.readPendingChanges().entries, []);
+  assert.deepEqual(runtime.summaryCheckpointPromotionSources, [
+    { role: "tool", attachments: [{ id: "first" }] },
+    { role: "tool", attachments: [{ id: "second" }] },
+  ]);
+});
+
 test("summary checkpoint passes restored historical UIDs to the active Turn transaction", async () => {
   const runtime = createCommitterRuntime({
     activeMessageContext: emptyActiveContext(),
@@ -610,7 +685,7 @@ test("summary checkpoint passes restored historical UIDs to the active Turn tran
         messageUid: "sm_current_call",
         role: "assistant",
         content: "",
-        tool_calls: [{ id: "call_current" }],
+        tool_calls: [{ id: "call_current", name: "read_file", args: {} }],
       },
       {
         messageUid: "sm_current_result",
@@ -619,18 +694,24 @@ test("summary checkpoint passes restored historical UIDs to the active Turn tran
         tool_call_id: "call_current",
       },
     ],
-    timelineCheckpointPersistedMessageUids: ["sm_current_call", "sm_current_result"],
   });
+  runtime.currentTurnMessages.acknowledgeChanges(
+    runtime.currentTurnMessages.readPendingChanges().entries,
+  );
   let checkpointPayload = null;
 
   const result = await commitSummaryCheckpoint({
     session: {
       async commitTurnSummaryCheckpoint(payload) {
         checkpointPayload = payload;
-        return { committed: true, markedCount: 3, checkpointRevision: 1 };
+        return summaryCheckpointResult(payload, {
+          committed: true,
+          markedCount: 3,
+          checkpointRevision: 1,
+        });
       },
     },
-    turnPersister: { async appendAgentMessages() {} },
+    turnPersister: { prepareAgentMessages: ({ messages }) => messages },
     runtime,
     userId: "u1",
     sessionId: "s1",
@@ -643,10 +724,7 @@ test("summary checkpoint passes restored historical UIDs to the active Turn tran
   });
 
   assert.equal(result.committed, true);
-  assert.deepEqual(checkpointPayload.persistedMessageUids, [
-    "sm_current_call",
-    "sm_current_result",
-  ]);
+  assert.deepEqual(checkpointPayload.persistedMessageUids, []);
   assert.deepEqual(checkpointPayload.summarizedMessageUids, [
     "sm_history_call",
     "sm_history_result",
@@ -657,3 +735,101 @@ test("summary checkpoint passes restored historical UIDs to the active Turn tran
     ["sm_current_result"],
   );
 });
+
+test("summary checkpoint persists an edit to an acknowledged UID without reading committed peers", async () => {
+  const runtime = createCommitterRuntime({
+    activeMessageContext: emptyActiveContext(),
+    turnMessages: [
+      { messageUid: "summary-4095", role: "assistant", content: "retained" },
+      { messageUid: "timeline-4095", role: "assistant", content: "retained" },
+      { messageUid: "new", role: "assistant", content: "new" },
+    ],
+  });
+  const store = runtime.currentTurnMessages;
+  store.acknowledgeChanges(store.readPendingChanges().entries);
+  store.updateByUid("new", { content: "edited" });
+  store.toArray = () => assert.fail("summary must not enumerate committed messages");
+  const appended = [];
+  const result = await commitSummaryCheckpoint({
+    session: {
+      async commitTurnSummaryCheckpoint(payload) {
+        const { messages } = payload;
+        appended.push(...messages);
+        return summaryCheckpointResult(payload, {
+          committed: true,
+          markedCount: 1,
+          checkpointRevision: 1,
+        });
+      },
+    },
+    turnPersister: {
+      prepareAgentMessages({ messages }) {
+        return messages;
+      },
+    },
+    runtime,
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "dp",
+    turnScopeId: "turn",
+    summaryCompletion: createSummaryCheckpointInstruction({
+      source: "plugin.summary",
+      summarizedMessageUids: ["new"],
+    }),
+  });
+  assert.equal(result.persistedCount, 1);
+  assert.deepEqual(
+    appended.map((message) => message.messageUid),
+    ["new"],
+  );
+  assert.equal(appended[0].content, "edited");
+  assert.deepEqual(store.readPendingChanges().entries, []);
+});
+
+test("checkpoint revision reads and eviction are restricted to this instruction, including summarized peers", async () => {
+  const runtime = createCommitterRuntime({
+    activeMessageContext: emptyActiveContext(),
+    turnMessages: [],
+  });
+  const store = runtime.currentTurnMessages;
+  for (let index = 0; index < 1024; index += 1) {
+    store.push({ messageUid: `old-summary-${index}`, role: "assistant", summarized: true });
+  }
+  store.push({ messageUid: "target", role: "assistant" });
+  store.acknowledgeChanges(store.readPendingChanges().entries);
+  const readRevisions = store.readMessageRevisions.bind(store);
+  store.readMessageRevisions = (uids) => {
+    assert.deepEqual(uids, ["target"]);
+    return readRevisions(uids);
+  };
+  store.toArray = () => assert.fail("checkpoint expanded its committed prefix");
+  await commitSummaryCheckpoint({
+    session: {
+      async commitTurnSummaryCheckpoint(payload) {
+        assert.deepEqual(payload.messages, []);
+        assert.deepEqual(payload.summarizedMessageUids, ["target"]);
+        return summaryCheckpointResult(payload, {
+          committed: true,
+          markedCount: 1,
+          checkpointRevision: 1,
+        });
+      },
+    },
+    turnPersister: { prepareAgentMessages: ({ messages }) => messages },
+    runtime,
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "dp",
+    turnScopeId: "turn",
+    summaryCompletion: createSummaryCheckpointInstruction({
+      source: "plugin.summary",
+      summarizedMessageUids: ["target"],
+    }),
+  });
+  assert.equal(store.readCounts().messageCount, 1024);
+  assert.equal(store.readByUid("target"), null);
+  assert.equal(store.readByUid("old-summary-0").summarized, true);
+  assert.deepEqual(store.readPendingChanges().entries, []);
+});
+
+registerSummaryCheckpointConcurrencyTests({ createCommitterRuntime, toContextMessage });

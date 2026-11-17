@@ -11,10 +11,6 @@ import {
   parseTaskSummaryContent,
   parseTaskSummaryReceipt,
 } from "../src/task/summary.js";
-import { recoverContextTaskSummaryToolResult } from "../src/task/summary-context.js";
-import { FLOW_CONTROL_ROLE, createFlowControlContextPolicy } from "../src/tool/context-policy.js";
-
-const boundaryPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
 
 const valid = [
   "NOOBOT_TASK_SUMMARY/1",
@@ -49,70 +45,6 @@ test("task summary receipt accepts only the four canonical derived fields", () =
   assert.throws(
     () => parseTaskSummaryReceipt({ ...receipt, details: "duplicate full content" }),
     /must contain exactly/,
-  );
-});
-
-test("task summary context recovery accepts only a classified canonical v1 boundary receipt", () => {
-  const receipt = createTaskSummaryReceipt(valid);
-  const content = JSON.stringify({
-    toolName: "task_summary",
-    protocolVersion: 1,
-    summary: receipt,
-    transferEnvelopes: [{ protocol: "noobot.semantic-transfer", version: 1 }],
-  });
-  const recovered = recoverContextTaskSummaryToolResult({
-    role: "tool",
-    content,
-    tool_call_id: "summary-call-1",
-    additional_kwargs: {
-      messageUid: "summary-result-message",
-      dialogProcessId: "dialog-1",
-      turnScopeId: "turn-1",
-      contextPolicy: boundaryPolicy,
-    },
-  });
-
-  assert.deepEqual(recovered, {
-    role: "user",
-    content,
-    additional_kwargs: {
-      projectionType: "phase_summary",
-      sourceMessageUid: "summary-result-message",
-      dialogProcessId: "dialog-1",
-      turnScopeId: "turn-1",
-      noobotInternalMessageType: "phase_summary_memory",
-      recoveredFromUnpairedTaskSummary: true,
-      original_tool_call_id: "summary-call-1",
-    },
-  });
-
-  assert.throws(
-    () =>
-      recoverContextTaskSummaryToolResult({
-        role: "tool",
-        content,
-        tool_call_id: "summary-call-1",
-        additional_kwargs: { contextPolicy: boundaryPolicy },
-      }),
-    /context message identity must be exactly one shape, got: none/,
-  );
-
-  assert.equal(
-    recoverContextTaskSummaryToolResult({
-      role: "tool",
-      content: JSON.stringify({ toolName: "task_summary", summaryContent: valid }),
-      additional_kwargs: { messageUid: "summary-legacy", contextPolicy: boundaryPolicy },
-    }),
-    null,
-  );
-  assert.equal(
-    recoverContextTaskSummaryToolResult({
-      role: "tool",
-      content,
-      tool_call_id: "unclassified-call",
-      additional_kwargs: { messageUid: "unclassified-result" },
-    }),
-    null,
   );
 });
 

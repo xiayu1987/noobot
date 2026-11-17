@@ -8,6 +8,7 @@ import { requireCanonicalTurnScopeId } from "@noobot/session-protocol/turn-scope
 import { SESSION_RUN_EVENT } from "./constants.js";
 import {
   AUTHORITATIVE_EVENT_TYPES,
+  isRuntimeEventOutsideSnapshot,
   projectSessionRunEvent,
 } from "@noobot/session-protocol/runtime-event";
 import { isFinalTurnState, reduceTurnRuntimeEvent } from "./turnReducer.js";
@@ -129,7 +130,11 @@ function commitProjectedTurn(registry, turn) {
   bucket.turns[turn.turnScopeId] = turn;
   if (!turn.terminal) bucket.activeTurnScopeId = turn.turnScopeId;
   else if (bucket.activeTurnScopeId === turn.turnScopeId) bucket.activeTurnScopeId = "";
-  if (turn.dialogProcessId) {
+  const route = resolveRoute(registry, turn.dialogProcessId);
+  if (
+    turn.dialogProcessId &&
+    (!turn.terminal || !route || route.turnScopeId === turn.turnScopeId)
+  ) {
     registry.routeIndex[turn.dialogProcessId] = {
       sessionId: turn.sessionId,
       turnScopeId: turn.turnScopeId,
@@ -179,6 +184,14 @@ export function applyProjectedTurnRuntimeEvent(registry, event) {
   const current = findTurnByScope(next, turnScopeId, { sessionId: requestedSessionId });
   const sessionId = requestedSessionId;
   const result = (values = {}) => observe({ canonicalSessionId: sessionId, ...values });
+  if (
+    isRuntimeEventOutsideSnapshot(
+      event,
+      current,
+      next.sessions[sessionId]?.authoritativeSnapshotSequence,
+    )
+  )
+    return result({ turn: current, applied: false, reason: "outside_snapshot_window" });
   const conflictReason = resolveTurnRuntimeConflict({
     current,
     sessionId,
@@ -189,7 +202,12 @@ export function applyProjectedTurnRuntimeEvent(registry, event) {
   });
   if (conflictReason) return result({ turn: current, applied: false, reason: conflictReason });
   const activeTurn = selectCurrentTurnRuntime(next, sessionId);
-  if (!current && activeTurn && !isFinalTurnState(activeTurn.state, activeTurn)) {
+  if (
+    !current &&
+    activeTurn &&
+    !isFinalTurnState(activeTurn.state, activeTurn) &&
+    event.type !== SESSION_RUN_EVENT.TERMINAL_RESOLVED
+  ) {
     return result({ turn: activeTurn, applied: false, reason: "active_turn_conflict" });
   }
   const transition = reduceTurnRuntimeEvent(current, event);

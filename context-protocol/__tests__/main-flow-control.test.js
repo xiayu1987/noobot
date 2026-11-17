@@ -8,9 +8,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   MAIN_FLOW_CONTROL_ACTION,
-  MAIN_FLOW_CONTROL_REASON,
   assertMainFlowControlPort,
-  createFinalNoToolsTurnInstruction,
+  createPhaseSummaryInstruction,
   createSummaryCheckpointInstruction,
 } from "../src/policy/main-flow-control.js";
 
@@ -40,43 +39,36 @@ test("summary checkpoint instruction rejects malformed input", () => {
   }
 });
 
-test("final no-tools turn instruction requires a known reason and source", () => {
-  const instruction = createFinalNoToolsTurnInstruction({
-    reason: MAIN_FLOW_CONTROL_REASON.TASK_SUMMARY_COMPLETE,
-    source: "task_summary",
-    detail: { state: "COMPLETE" },
+test("phase summary requires a source, a prompt and a valid commit callback", () => {
+  const onCommitted = () => {};
+  const instruction = createPhaseSummaryInstruction({
+    source: "plugin.summary",
+    prompt: "summarize",
+    onCommitted,
   });
-  assert.equal(instruction.action, MAIN_FLOW_CONTROL_ACTION.FINAL_NO_TOOLS_TURN);
-  assert.equal(instruction.reason, MAIN_FLOW_CONTROL_REASON.TASK_SUMMARY_COMPLETE);
-  assert.equal(instruction.source, "task_summary");
-  assert.deepEqual(instruction.detail, { state: "COMPLETE" });
-  assert.ok(instruction.requestedAt);
-
-  assert.throws(() => createFinalNoToolsTurnInstruction({ source: "x" }), TypeError);
+  assert.equal(instruction.action, MAIN_FLOW_CONTROL_ACTION.PHASE_SUMMARY);
+  assert.equal(instruction.prompt, "summarize");
+  assert.equal(instruction.onCommitted, onCommitted);
+  assert.ok(Object.isFrozen(instruction));
+  assert.throws(() => createPhaseSummaryInstruction({}), TypeError);
+  assert.throws(() => createPhaseSummaryInstruction({ source: "x", onCommitted }), TypeError);
   assert.throws(
-    () => createFinalNoToolsTurnInstruction({ reason: "unknown", source: "x" }),
+    () => createPhaseSummaryInstruction({ source: "x", prompt: " ", onCommitted }),
     TypeError,
   );
   assert.throws(
-    () =>
-      createFinalNoToolsTurnInstruction({
-        reason: MAIN_FLOW_CONTROL_REASON.TASK_SUMMARY_BLOCKED,
-      }),
-    TypeError,
-  );
-  assert.throws(
-    () =>
-      createFinalNoToolsTurnInstruction({
-        reason: MAIN_FLOW_CONTROL_REASON.TASK_SUMMARY_BLOCKED,
-        source: "x",
-        detail: null,
-      }),
+    () => createPhaseSummaryInstruction({ source: "x", prompt: "p", onCommitted: true }),
     TypeError,
   );
 });
 
 test("main flow control port must expose every declared method", () => {
   const port = {
+    claimSummaryScheduling() {},
+    requestPhaseSummary() {},
+    hasPendingSummary() {
+      return false;
+    },
     requestSummaryCheckpoint() {},
     isFinalNoToolsTurnEngaged() {
       return false;

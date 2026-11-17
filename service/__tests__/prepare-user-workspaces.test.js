@@ -52,12 +52,14 @@ const summaryOf = (sessionId, activeTurnScopeId, availability) => ({
   availability: availability || SESSION_SUMMARY_AVAILABILITY.AVAILABLE,
 });
 
-function createBot({ brokenWorkspace, partialSummary, layoutUpgrades = [], summaries = [] }) {
+function createBot({ brokenWorkspace, layoutUpgrades = [], summaries = [] }) {
   const prepared = [];
   const committed = [];
+  const projected = [];
   return {
     prepared,
     committed,
+    projected,
     async repairUserWorkspace(userId, { onProgress }) {
       onProgress({ upgradeId: "v13", upgradeIndex: 1, upgradeCount: 1, processedSessions: 0 });
       if (userId === brokenWorkspace) {
@@ -67,19 +69,12 @@ function createBot({ brokenWorkspace, partialSummary, layoutUpgrades = [], summa
     },
     session: {
       readServerNow: () => RECOVERY_OBSERVED_AT,
-      async maintainSessionDisplaySummaries({ userId, onProgress }) {
-        onProgress({ sessionIndex: 1, sessionCount: 1 });
-        prepared.push(userId);
-        if (userId === partialSummary) {
-          return {
-            userId,
-            rebuiltSessionIds: [],
-            failures: [{ sessionId: "s-2", code: "E_SUMMARY", message: "bad" }],
-          };
-        }
-        return { userId, rebuiltSessionIds: ["s-3"], failures: [] };
+      async recoverExecutionLogProjection(identity) {
+        projected.push(identity);
+        return { records: 0 };
       },
-      async getAllSessionSummaries() {
+      async getAllSessionSummaries({ userId }) {
+        prepared.push(userId);
         return { schemaVersion: 1, sessions: summaries, updatedAt: "" };
       },
       async getTurnLifecycleSnapshot({ sessionId, persistenceScope, resolveRecovery }) {
@@ -100,7 +95,7 @@ function createBot({ brokenWorkspace, partialSummary, layoutUpgrades = [], summa
 }
 
 test("a broken user workspace is reported without blocking other users", async () => {
-  const bot = createBot({ brokenWorkspace: "u-broken", partialSummary: "u-partial" });
+  const bot = createBot({ brokenWorkspace: "u-broken" });
   const result = await prepareUserWorkspaces({
     userIds: ["u-broken", "u-partial", "u-ok"],
     bot,
@@ -109,24 +104,11 @@ test("a broken user workspace is reported without blocking other users", async (
   assert.deepEqual(bot.prepared, ["u-partial", "u-ok"]);
   assert.deepEqual(result, {
     userCount: 3,
-    rebuiltSessionCount: 1,
     recoveredTurnCount: 0,
     failures: [
       { userId: "u-broken", stage: "workspace", code: "E_LAYOUT", message: "layout broken" },
-      { userId: "u-partial", sessionId: "s-2", code: "E_SUMMARY", message: "bad" },
     ],
   });
-});
-
-test("a failing summary maintenance call is reported per user", async () => {
-  const bot = createBot({});
-  bot.session.maintainSessionDisplaySummaries = async () => {
-    throw new Error("summary store offline");
-  };
-  const result = await prepareUserWorkspaces({ userIds: ["u-1"], bot, reportProgress: () => {} });
-  assert.deepEqual(result.failures, [
-    { userId: "u-1", stage: "sessionDisplaySummary", code: "", message: "summary store offline" },
-  ]);
 });
 
 test("startup recovery fails every persisted active turn of available sessions", async () => {
@@ -145,6 +127,10 @@ test("startup recovery fails every persisted active turn of available sessions",
   });
   assert.equal(result.recoveredTurnCount, 1);
   assert.deepEqual(result.failures, []);
+  assert.deepEqual(bot.projected, [
+    { userId: "u-1", sessionId: "s-active", persistenceScope: null },
+    { userId: "u-1", sessionId: "s-idle", persistenceScope: null },
+  ]);
   assert.deepEqual(
     bot.committed.map(({ sessionId, eventType, persistenceScope }) => ({
       sessionId,
@@ -178,6 +164,63 @@ test("startup recovery reports sessions whose active turn cannot be recovered", 
   ]);
 });
 
+test("projection recovery failure is reported without skipping the other sessions", async () => {
+  const bot = createBot({ summaries: [summaryOf("s-bad", ""), summaryOf("s-good", "")] });
+  const recovered = [];
+  bot.session.recoverExecutionLogProjection = async ({ sessionId }) => {
+    recovered.push(sessionId);
+    if (sessionId === "s-bad")
+      throw Object.assign(new Error("cursor corrupt"), { code: "E_CURSOR" });
+  };
+  const result = await prepareUserWorkspaces({ userIds: ["u-1"], bot, reportProgress: () => {} });
+  assert.deepEqual(recovered, ["s-bad", "s-good"]);
+  assert.deepEqual(result.failures, [
+    {
+      userId: "u-1",
+      stage: SERVICE_STARTUP_PROGRESS_STAGES.TURN_RECOVERY,
+      sessionId: "s-bad",
+      code: "E_CURSOR",
+      message: "cursor corrupt",
+    },
+  ]);
+});
+
+for (const failedPort of ["getTurnLifecycleSnapshot", "applyTurnLifecycleEvent"]) {
+  test(`startup isolates ${failedPort} failure and retains successful recovery counts`, async () => {
+    const bot = createBot({
+      summaries: [
+        summaryOf("s-before", "turn-orphan"),
+        summaryOf("s-bad", "turn-orphan"),
+        summaryOf("s-after", "turn-orphan"),
+      ],
+    });
+    const original = bot.session[failedPort].bind(bot.session);
+    const attempted = [];
+    const failure = Object.assign(new Error("recovery storage unavailable"), { code: "E_IO" });
+    bot.session[failedPort] = async (request) => {
+      attempted.push(request.sessionId);
+      if (request.sessionId === "s-bad") throw failure;
+      return original(request);
+    };
+    const result = await prepareUserWorkspaces({ userIds: ["u-1"], bot, reportProgress: () => {} });
+    assert.ok(attempted.includes("s-after"));
+    assert.equal(result.recoveredTurnCount, 2);
+    assert.deepEqual(
+      bot.committed.map(({ sessionId }) => sessionId),
+      ["s-before", "s-after"],
+    );
+    assert.deepEqual(result.failures, [
+      {
+        userId: "u-1",
+        stage: SERVICE_STARTUP_PROGRESS_STAGES.TURN_RECOVERY,
+        sessionId: "s-bad",
+        code: "E_IO",
+        message: failure.message,
+      },
+    ]);
+  });
+}
+
 test("a failing startup recovery call is reported per user", async () => {
   const bot = createBot({});
   bot.session.getAllSessionSummaries = async () => {
@@ -194,15 +237,11 @@ test("a failing startup recovery call is reported per user", async () => {
   ]);
 });
 
-test("a failing summary maintenance call is still followed by startup recovery", async () => {
+test("startup recovery uses the list projection without exporting session history", async () => {
   const bot = createBot({ summaries: [summaryOf("s-active", "turn-orphan")] });
-  bot.session.maintainSessionDisplaySummaries = async () => {
-    throw new Error("summary store offline");
-  };
+  bot.session.getSessionDisplayData = () => assert.fail("startup must not export session history");
   const result = await prepareUserWorkspaces({ userIds: ["u-1"], bot, reportProgress: () => {} });
-  assert.deepEqual(result.failures, [
-    { userId: "u-1", stage: "sessionDisplaySummary", code: "", message: "summary store offline" },
-  ]);
+  assert.deepEqual(result.failures, []);
   assert.equal(result.recoveredTurnCount, 1);
   assert.deepEqual(
     bot.committed.map((event) => event.sessionId),
@@ -231,7 +270,9 @@ test("failed layout upgrades and quarantined units surface as startup failures",
     ],
   });
   const result = await prepareUserWorkspaces({ userIds: ["u-1"], bot, reportProgress: () => {} });
-  assert.deepEqual(bot.prepared, ["u-1"]);
+  assert.deepEqual(bot.prepared, []);
+  assert.deepEqual(bot.projected, []);
+  assert.deepEqual(bot.committed, []);
   assert.deepEqual(result.failures, [
     {
       userId: "u-1",
@@ -245,7 +286,7 @@ test("failed layout upgrades and quarantined units surface as startup failures",
   ]);
 });
 
-test("workspace preparation reports per-user layout and summary progress", async () => {
+test("workspace preparation reports per-user layout progress", async () => {
   const progress = [];
   await prepareUserWorkspaces({
     userIds: ["u-1", "u-2"],
@@ -264,15 +305,6 @@ test("workspace preparation reports per-user layout and summary progress", async
       processedSessions: 0,
     },
     {
-      userId: "u-1",
-      userIndex: 1,
-      userCount: 2,
-      stage: SERVICE_STARTUP_PROGRESS_STAGES.DISPLAY_SUMMARY,
-      upgradeId: "",
-      sessionIndex: 1,
-      sessionCount: 1,
-    },
-    {
       userId: "u-2",
       userIndex: 2,
       userCount: 2,
@@ -281,15 +313,6 @@ test("workspace preparation reports per-user layout and summary progress", async
       upgradeIndex: 1,
       upgradeCount: 1,
       processedSessions: 0,
-    },
-    {
-      userId: "u-2",
-      userIndex: 2,
-      userCount: 2,
-      stage: SERVICE_STARTUP_PROGRESS_STAGES.DISPLAY_SUMMARY,
-      upgradeId: "",
-      sessionIndex: 1,
-      sessionCount: 1,
     },
   ]);
 });

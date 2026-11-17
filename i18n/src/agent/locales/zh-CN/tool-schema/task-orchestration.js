@@ -5,30 +5,6 @@
  */
 
 export const TASK_ORCHESTRATION_TOOL_SCHEMA = {
-  task_summary: {
-    description: {
-      key: "tools.task_summary.description",
-      text: "提交当前任务阶段小结。仅在系统要求阶段小结时调用。summaryContent 必须严格遵循 NOOBOT_TASK_SUMMARY/1 唯一文本协议，按顺序且仅包含 [STATE]、[ABSTRACT]、[DETAILS]、[NEXT_ACTION] 四段；STATE 只能为 CONTINUE、COMPLETE 或 BLOCKED。提交后此前的工具调用与结果会移出上下文，小结应能独立读懂，避免用“见上文”指代已移出的内容。小结是后续流程的权威阶段状态：已完成事项不得重新执行，CONTINUE 后只从 NEXT_ACTION 继续。完整内容仅通过该输入提交，工具结果只返回派生回执和附件引用。",
-    },
-    params: {
-      summaryContent: {
-        key: "tools.task_summary.fieldSummaryContent",
-        text: "严格格式：NOOBOT_TASK_SUMMARY/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\n已完成阶段的简短事实摘要\n[DETAILS]\n整合之前小结后的权威阶段状态。须写明后续仍会用到的事实：用户目标与约束；已完成事项及具体结果（关键数值、命令输出要点、报错原文）；已确认的结论与依据；验证状态；剩余事项和阻塞；涉及的附件引用与路径。编程模式须含文件路径、函数名、行号及改动要点\n[NEXT_ACTION]\n尚未完成且紧接着要执行的唯一明确动作。CONTINUE 表示只从 NEXT_ACTION 继续，不得重新执行 ABSTRACT 或 DETAILS 中已完成的事项；COMPLETE 表示任务完成并进入无工具最终回复；BLOCKED 表示无法继续并进入无工具阻塞说明。所有段落非空，不得增加、重复或调整段落。",
-      },
-    },
-    texts: {
-      "tools.task_summary.notRequested": "系统未请求阶段小结，请继续当前任务。",
-      "tools.task_summary.summaryContentRequired": "summaryContent 必填",
-      "tools.task_summary.summaryProtocolInvalid":
-        "summaryContent 不符合 NOOBOT_TASK_SUMMARY/1 协议",
-      "tools.task_summary.receiptContinue":
-        "小结回执是后续流程的权威阶段状态。已完成事项不得重新执行，仅从 summary.nextAction 继续；任务完成后直接给出最终回复，不再调用 {{tool:task_summary}}。",
-      "tools.task_summary.receiptComplete":
-        "小结回执是后续流程的权威阶段状态。任务已完成；回执中的 abstract 与 nextAction 即已核验的执行结果，原始工具记录已按 checkpoint 归档，不得以缺少原始记录为由质疑或拒绝核验，直接据此给出最终回复。",
-      "tools.task_summary.receiptBlocked":
-        "小结回执是后续流程的权威阶段状态。任务受阻，直接说明阻塞原因。",
-    },
-  },
   task_check: {
     description: {
       key: "tools.task_check.description",

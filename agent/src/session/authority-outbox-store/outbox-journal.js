@@ -11,11 +11,10 @@ import {
   assertAuthorityOutboxJournalRecord,
   createAuthorityOutboxProjection,
   createEmptyAuthorityOutboxCheckpoint,
-  forkAuthorityOutboxProjection,
+  planAuthorityOutboxJournalRecords,
   listAuthorityOutboxProjection,
   normalizeAuthorityEventOutbox,
   parseAuthorityOutboxCheckpoint,
-  projectAuthorityOutboxJournal,
   serializeAuthorityOutboxCheckpoint,
 } from "@noobot/event-protocol/outbox";
 import { mkdir, open, readFile, rename } from "node:fs/promises";
@@ -30,9 +29,11 @@ import {
 import {
   collectUnmaterializedTurnCommits,
   collectUnmaterializedArtifactCommits,
+  requirePreparedOutboxEvent,
 } from "@noobot/event-protocol/turn-outbox";
 import { readFileIdentity } from "../session-artifact-session/verified-snapshot-cache.js";
 import { readSessionArtifactEvents } from "../session-artifact-session/artifact-event-journal.js";
+import { recordStorageWork } from "../session-artifact-session/storage-transaction.js";
 
 export const AUTHORITY_OUTBOX_DIR = "authority-outbox";
 const AUTHORITY_OUTBOX_JOURNAL_FILE = "outbox.jsonl";
@@ -55,14 +56,20 @@ function authorityOutboxCheckpointPath(sessionDir = "") {
 }
 
 export async function readAuthorityOutboxCheckpoint(sessionDir) {
+  recordStorageWork("outboxCheckpointReads");
+  const state = journalProjections.get(path.resolve(authorityOutboxJournalPath(sessionDir)));
   let raw;
   try {
     raw = await readFile(authorityOutboxCheckpointPath(sessionDir), "utf8");
   } catch (error) {
-    if (error.code === "ENOENT") return createEmptyAuthorityOutboxCheckpoint();
-    throw error;
+    if (error.code !== "ENOENT") throw error;
+    if (state) state.checkpoint = null;
+    return createEmptyAuthorityOutboxCheckpoint();
   }
-  return parseAuthorityOutboxCheckpoint(JSON.parse(raw));
+  if (state?.checkpoint?.source === raw) return state.checkpoint.value;
+  const value = parseAuthorityOutboxCheckpoint(JSON.parse(raw));
+  if (state) state.checkpoint = { source: raw, value };
+  return value;
 }
 
 export async function writeAuthorityOutboxCheckpoint(sessionDir, checkpoint) {
@@ -125,6 +132,7 @@ function emptyJournalState() {
     offset: 0,
     tail: Buffer.alloc(0),
     materializedManifest: "",
+    checkpoint: null,
   };
 }
 
@@ -158,6 +166,7 @@ async function continuesCachedJournal(handle, info, state) {
 }
 
 async function syncJournalProjection(sessionDir) {
+  recordStorageWork("outboxJournalSynchronizations");
   const file = authorityOutboxJournalPath(sessionDir);
   const key = path.resolve(file);
   let handle;
@@ -182,7 +191,7 @@ async function syncJournalProjection(sessionDir) {
       return base;
     }
     const appended = await readJournalBytes(handle, base.offset, size - base.offset);
-    const projection = continued ? forkAuthorityOutboxProjection(base.projection) : base.projection;
+    const projection = base.projection;
     applyAuthorityOutboxJournalRecords(
       projection,
       parseJournalRecords(file, appended.toString("utf8")),
@@ -196,6 +205,7 @@ async function syncJournalProjection(sessionDir) {
         -LENGTH_THRESHOLDS.artifact.authorityOutboxJournalTailGuardBytes,
       ),
       materializedManifest: base.materializedManifest,
+      checkpoint: base.checkpoint,
     };
     rememberJournalState(key, state);
     return state;
@@ -214,18 +224,15 @@ async function readStableManifestIdentity(file) {
   }
 }
 
-async function materializeTurnCommits(sessionDir, lifecycle) {
-  const state = await syncJournalProjection(sessionDir);
+async function materializeTurnCommits(sessionDir, lifecycle, synchronized) {
+  const state = synchronized?.state || (await syncJournalProjection(sessionDir));
   const additions = collectUnmaterializedTurnCommits(
     state.projection,
     lifecycle,
-    await readAuthorityOutboxCheckpoint(sessionDir),
+    synchronized?.checkpoint || (await readAuthorityOutboxCheckpoint(sessionDir)),
   );
   if (!additions.length) return 0;
-  applyAuthorityOutboxJournalRecords(
-    forkAuthorityOutboxProjection(state.projection),
-    structuredClone(additions),
-  );
+  planAuthorityOutboxJournalRecords(state.projection, structuredClone(additions));
   await appendAuthorityOutboxRecords(sessionDir, additions);
   return additions.length;
 }
@@ -240,15 +247,21 @@ export async function readAuthorityOutboxProjection(sessionDir = "") {
     const sessionManifest = JSON.parse(await readFile(manifestFile, "utf8"));
     const { turnLifecycle } = sessionManifest;
     const sessionArtifactEvents = await readSessionArtifactEvents(sessionDir, sessionManifest);
-    await materializeTurnCommits(sessionDir, turnLifecycle);
-    const artifactState = await syncJournalProjection(sessionDir);
+    const checkpoint = await readAuthorityOutboxCheckpoint(sessionDir);
+    const turnCommits = await materializeTurnCommits(sessionDir, turnLifecycle, {
+      state,
+      checkpoint,
+    });
+    const artifactState = turnCommits ? await syncJournalProjection(sessionDir) : state;
     const artifactCommits = collectUnmaterializedArtifactCommits(
       artifactState.projection,
       sessionArtifactEvents.map((envelope) => envelope.identity.eventId),
-      await readAuthorityOutboxCheckpoint(sessionDir),
+      checkpoint,
     );
     await appendAuthorityOutboxRecords(sessionDir, artifactCommits);
-    const materialized = await syncJournalProjection(sessionDir);
+    const materialized = artifactCommits.length
+      ? await syncJournalProjection(sessionDir)
+      : artifactState;
     materialized.materializedManifest = manifest.key;
     return materialized.projection;
   });
@@ -284,21 +297,36 @@ export async function appendAuthorityOutboxRecords(sessionDir, records) {
 }
 
 export async function replaceAuthorityOutboxRecords(sessionDir, records) {
-  projectAuthorityOutboxJournal(records);
   return withAuthorityOutboxMutation(sessionDir, async () => {
     const file = authorityOutboxJournalPath(sessionDir);
+    const payload = Buffer.from(records.map((record) => `${JSON.stringify(record)}\n`).join(""));
+    const projection = applyAuthorityOutboxJournalRecords(
+      createAuthorityOutboxProjection(),
+      parseJournalRecords(file, payload.toString("utf8")),
+    );
     await mkdir(path.dirname(file), { recursive: true });
-    const payload = records.map((record) => `${JSON.stringify(record)}\n`).join("");
     const temp = `${file}.tmp-${process.pid}-${Date.now()}`;
     const handle = await open(temp, "w");
+    let info;
     try {
-      await handle.writeFile(payload, "utf8");
+      await handle.writeFile(payload);
       await handle.sync();
+      info = await handle.stat({ bigint: true });
     } finally {
       await handle.close();
     }
     await rename(temp, file);
-    journalProjections.delete(path.resolve(file));
+    rememberJournalState(path.resolve(file), {
+      projection,
+      device: info.dev,
+      inode: info.ino,
+      offset: payload.length,
+      tail: Buffer.from(
+        payload.subarray(-LENGTH_THRESHOLDS.artifact.authorityOutboxJournalTailGuardBytes),
+      ),
+      materializedManifest: "",
+      checkpoint: null,
+    });
     return payload.length;
   });
 }
@@ -319,8 +347,7 @@ export async function compactAuthorityOutboxRecords(sessionDir, outbox) {
     const retained = new Set(outbox.map((item) => item.eventId));
     for (const eventId of referenced) {
       if (retained.has(eventId)) continue;
-      const prepared = projection.prepared.get(eventId);
-      if (!prepared) throw new TypeError(`committed event has no prepared event: ${eventId}`);
+      const prepared = requirePreparedOutboxEvent(projection, eventId, "committed event");
       records.push(authorityOutboxPrepareRecord(prepared));
       if (projection.removedEventIds.has(eventId)) {
         records.push({ op: AUTHORITY_OUTBOX_JOURNAL_OP.REMOVE, eventId });

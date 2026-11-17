@@ -8,21 +8,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { runFunctionCallLoop as runFunctionCallLoopProduction } from "../../../src/runtime/turn/orchestrator.js";
-import { createHookManager } from "@noobot/hook-protocol";
-import {
-  resolveContextMessageKey,
-  writeContextMessageMetadata,
-} from "@noobot/context-protocol/message/codec";
-import { createMessageUid } from "@noobot/session-protocol/message-identity";
+import { resolveContextMessageKey } from "@noobot/context-protocol/message/codec";
 import { createTestModelPort, prepareTestTurnExecution } from "./turn-runtime-test-helper.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
-import { MAIN_FLOW_CONTROL_REASON } from "@noobot/context-protocol/policy/main-flow-control";
-import {
-  isMainFlowFinalNoToolsTurnEngaged,
-  peekMainFlowFinalNoToolsTurnInstruction,
-  requestMainFlowFinalNoToolsTurn,
-} from "../../../src/runtime/main-flow-control.js";
 
 function runFunctionCallLoop(args = {}) {
   prepareTestTurnExecution(args.modelState, args.loopState, "presentation-orchestrator-overflow");
@@ -69,7 +58,6 @@ function createLoopState({ maxTurns = 1, tool = null } = {}) {
     phaseSummaryLoopTurns: 0,
     helpPromptLoopTurns: 0,
     toolFailureHelpCount: 0,
-    taskSummaryTriggered: false,
     errorLogger: null,
   };
 }
@@ -186,135 +174,6 @@ test("loop over max turns: inject finalize prompt, allow 5-turn buffer, then no-
   assert.equal(promptInBlocks, finalizePromptMessage);
   assert.ok(resolveContextMessageKey(finalizePromptMessage));
   assert.equal(modelState.runtime.activeMessageContext.messageBlocks.incrementalIds, undefined);
-});
-
-test("canonical main-flow instruction enforces one no-tools round even when tools are available", async () => {
-  let toolInvokeCount = 0;
-  const tool = {
-    name: "execute_script",
-    async invoke() {
-      toolInvokeCount += 1;
-      return '{"ok":true}';
-    },
-  };
-  const { llm, capturedNoToolInvokeOptions } = createToolCallingLlm([
-    {
-      content: "overflow fallback answer",
-      tool_calls: [],
-      additional_kwargs: {},
-      response_metadata: {},
-    },
-  ]);
-
-  const modelState = createModelState(llm);
-  requestMainFlowFinalNoToolsTurn(modelState.runtime, {
-    reason: MAIN_FLOW_CONTROL_REASON.TASK_SUMMARY_COMPLETE,
-    source: "task_summary",
-  });
-  const result = await runFunctionCallLoop({
-    modelState,
-    loopState: createLoopState({ maxTurns: 3, tool }),
-    turn: 1,
-  });
-
-  assert.equal(result.output, "overflow fallback answer");
-  assert.equal(toolInvokeCount, 0);
-  assert.equal(capturedNoToolInvokeOptions[0]?.tool_choice, "none");
-  assert.equal(peekMainFlowFinalNoToolsTurnInstruction(modelState.runtime), null);
-});
-
-test("main flow final-no-tools instruction from before_llm hook skips with-tools model call", async () => {
-  let toolInvokeCount = 0;
-  const tool = {
-    name: "execute_script",
-    async invoke() {
-      toolInvokeCount += 1;
-      return '{"ok":true}';
-    },
-  };
-  const { llm, capturedInvocations, capturedNoToolInvokeOptions } = createToolCallingLlm([
-    {
-      content: "final after harness overflow instruction",
-      tool_calls: [{ id: "ignored", name: "execute_script", args: {} }],
-      additional_kwargs: {},
-      response_metadata: {},
-    },
-  ]);
-
-  const modelState = createModelState(llm);
-  const hookManager = createHookManager();
-  hookManager.on(
-    "agent.before_llm_call",
-    (ctx = {}) => {
-      if (ctx.mode !== "with_tools") return;
-      requestMainFlowFinalNoToolsTurn(modelState.runtime, {
-        reason: MAIN_FLOW_CONTROL_REASON.CONTEXT_OVERFLOW_AFTER_SUMMARY,
-        source: "harness_summary_overflow",
-      });
-    },
-    { id: "test-main-flow-final-instruction" },
-  );
-  modelState.runtime.hookManager = hookManager;
-
-  const result = await runFunctionCallLoop({
-    modelState,
-    loopState: createLoopState({ maxTurns: 3, tool }),
-    turn: 1,
-  });
-
-  assert.equal(result.output, "final after harness overflow instruction");
-  assert.equal(toolInvokeCount, 0);
-  assert.equal(capturedInvocations.length, 1, "with-tools LLM call should be skipped");
-  assert.equal(capturedNoToolInvokeOptions[0]?.tool_choice, "none");
-  assert.equal(peekMainFlowFinalNoToolsTurnInstruction(modelState.runtime), null);
-  assert.equal(isMainFlowFinalNoToolsTurnEngaged(modelState.runtime), false);
-});
-
-test("post-summary char overflow enters final no-tools before the next with-tools model call", async () => {
-  let toolInvokeCount = 0;
-  const taskSummaryTool = {
-    name: "task_summary",
-    async invoke() {
-      toolInvokeCount += 1;
-      return '{"ok":true}';
-    },
-  };
-  const longUserMessage = writeContextMessageMetadata(
-    { role: "user", content: "x".repeat(32) },
-    { messageUid: createMessageUid(), summarized: false },
-  );
-  const { llm, capturedInvocations, capturedNoToolInvokeOptions } = createToolCallingLlm([
-    {
-      content: "final after post-summary overflow",
-      tool_calls: [{ id: "ignored", name: "task_summary", args: { summaryContent: "ignored" } }],
-      additional_kwargs: {},
-      response_metadata: {},
-    },
-  ]);
-
-  const modelState = createModelState(llm);
-  const loopState = createLoopState({ maxTurns: 3, tool: taskSummaryTool });
-  prepareTestTurnExecution(modelState, loopState, "presentation-orchestrator-overflow");
-  loopState.phaseSummaryMessageCharsThreshold = 10;
-  modelState.runtime.activeMessageContext.messages.push(longUserMessage);
-  modelState.runtime.activeMessageContext.messageBlocks.incremental.push(longUserMessage);
-
-  modelState.runtime.systemRuntime.needsPhaseSummary = false;
-  modelState.runtime.systemRuntime.phaseSummaryByCharsPrompted = true;
-  modelState.runtime.systemRuntime.phaseSummaryLoopCount = 0;
-
-  const result = await runFunctionCallLoopProduction({
-    modelState,
-    loopState,
-    turn: 1,
-  });
-
-  assert.equal(result.output, "final after post-summary overflow");
-  assert.equal(toolInvokeCount, 0);
-  assert.equal(capturedInvocations.length, 1, "with-tools LLM call should be skipped");
-  assert.equal(capturedNoToolInvokeOptions[0]?.tool_choice, "none");
-  assert.equal(peekMainFlowFinalNoToolsTurnInstruction(modelState.runtime), null);
-  assert.equal(modelState.runtime.systemRuntime.phaseSummaryByCharsPrompted, true);
 });
 
 test("loop over max turns: next turn no-tool response returns directly", async () => {

@@ -59,6 +59,30 @@ describe("sessionAggregateVersionManager stream protocol", () => {
     expect(result).toMatchObject({ attempt: 2, expectedAggregateVersion: 3 });
   });
 
+  it("retries when a lifecycle event advanced the version while the command was in flight", async () => {
+    const activeSession = ref({ sessionId: "s1", aggregateVersion: 26 });
+    const stream = vi
+      .fn()
+      .mockImplementationOnce(async () => {
+        applyLatestSessionAggregateVersion(activeSession.value, { aggregateVersion: 51 });
+        throw failedReceiptError({
+          code: SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT,
+          currentVersion: 51,
+        });
+      })
+      .mockResolvedValueOnce(undefined);
+    const manager = createSessionAggregateVersionManager({ activeSession });
+    const result = await manager.runAggregateVersionedStream({
+      buildPayload: ({ expectedAggregateVersion }) => ({ expectedAggregateVersion }),
+      stream,
+      conflictOptions: { sessionId: "s1" },
+    });
+    expect(stream.mock.calls.map(([payload]) => payload.expectedAggregateVersion)).toEqual([
+      26, 51,
+    ]);
+    expect(result).toMatchObject({ attempt: 2, expectedAggregateVersion: 51 });
+  });
+
   it("does not retry when the receipt conflict version is not newer", async () => {
     const activeSession = ref({ sessionId: "s1", aggregateVersion: 3, messages: [] });
     const conflict = failedReceiptError({
@@ -181,6 +205,76 @@ describe("sessionAggregateVersionManager mutation protocol", () => {
       }),
     ).rejects.toThrow(/requires an active session/);
     expect(mutate).not.toHaveBeenCalled();
+  });
+});
+
+describe("session aggregate conflict ownership", () => {
+  it.each(["mutation", "stream"])(
+    "does not apply an old %s conflict or retry after a session switch",
+    async (kind) => {
+      const activeSession = ref({ sessionId: "s1", aggregateVersion: 2 });
+      const originalSession = activeSession.value;
+      const conflict =
+        kind === "mutation"
+          ? new ApiRequestError("conflict", {
+              code: API_REQUEST_ERROR_CODE.HTTP,
+              status: 409,
+              serverErrorCode: SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT,
+              currentVersion: 5,
+            })
+          : failedReceiptError({
+              code: SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT,
+              currentVersion: 5,
+            });
+      let rejectRequest;
+      const request = vi.fn(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectRequest = reject;
+          }),
+      );
+      const manager = createSessionAggregateVersionManager({ activeSession });
+      const pending =
+        kind === "mutation"
+          ? manager.runAggregateVersionedMutation({
+              mutate: request,
+              shouldRetry: true,
+              conflictOptions: { sessionId: "s1" },
+            })
+          : manager.runAggregateVersionedStream({
+              buildPayload: ({ expectedAggregateVersion }) => ({ expectedAggregateVersion }),
+              stream: request,
+              conflictOptions: { sessionId: "s1" },
+            });
+      activeSession.value = { sessionId: "s2", aggregateVersion: 1 };
+      rejectRequest(conflict);
+      await expect(pending).rejects.toBe(conflict);
+      expect(request).toHaveBeenCalledTimes(1);
+      expect(originalSession.aggregateVersion).toBe(2);
+      expect(activeSession.value.aggregateVersion).toBe(1);
+    },
+  );
+
+  it("rejects mismatched command ownership before sending or publishing a conflict version", async () => {
+    const activeSession = ref({ sessionId: "s2", aggregateVersion: 1 });
+    const manager = createSessionAggregateVersionManager({ activeSession });
+    const mutate = vi.fn();
+    await expect(
+      manager.runAggregateVersionedMutation({
+        mutate,
+        shouldRetry: true,
+        conflictOptions: { sessionId: "s1" },
+      }),
+    ).rejects.toMatchObject({ code: SESSION_ERROR_CODE.SCOPE_IDENTITY_CONFLICT });
+    expect(mutate).not.toHaveBeenCalled();
+    expect(() =>
+      manager.applyConflictVersion({
+        sessionId: "s1",
+        previousVersion: 2,
+        conflict: { currentVersion: 5 },
+      }),
+    ).toThrow(/another session/);
+    expect(activeSession.value.aggregateVersion).toBe(1);
   });
 });
 

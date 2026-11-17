@@ -7,7 +7,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createSessionFacade } from "../../../src/session/index.js";
-import { createEmptyTurnSummaryCheckpointState } from "@noobot/context-protocol/policy/summary";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { finalizeAgentTurn } from "../../../src/bot/execution/runner/result-finalizer.js";
 
@@ -19,10 +18,6 @@ function createRealFacade(calls) {
       async getSessionTurns(payload) {
         calls.push(["getSessionTurns", payload]);
         return [];
-      },
-      async getTurnSummaryCheckpointState(payload) {
-        calls.push(["getTurnSummaryCheckpointState", payload]);
-        return createEmptyTurnSummaryCheckpointState(payload);
       },
     },
     sessionContextService: {},
@@ -43,11 +38,16 @@ test("finalizeAgentTurn locates existing child sessions through the real facade"
     usedSessionId: "child-1",
     dialogProcessId: "dp-1",
     resolvedTurnScopeId: "turn-1",
-    dispatchRuntime: createTestRuntimeContext({}),
+    dispatchRuntime: createTestRuntimeContext({
+      persistCurrentTurnMessages: async () => calls.push(["flush"]),
+    }),
+    userMessageUid: "sm_user",
     getSessionTurns: (payload) => session.getSessionTurns(payload),
-    getTurnSummaryCheckpointState: (payload) => session.getTurnSummaryCheckpointState(payload),
     finalizeRunSession: async (payload) => {
       finalizePayload = payload;
+      assert.deepEqual(calls, [], "creating the finalization port must not read history");
+      await payload.turnPersistence.flush();
+      await payload.turnPersistence.readResultMessages();
       return { ok: true };
     },
     userId: "u1",
@@ -64,11 +64,14 @@ test("finalizeAgentTurn locates existing child sessions through the real facade"
 
   assert.deepEqual(
     calls.map(([name]) => name),
-    ["getTurnSummaryCheckpointState", "getSessionTurns"],
+    ["flush", "getSessionTurns"],
   );
-  for (const [, payload] of calls) {
+  for (const [, payload] of calls.filter(([name]) => name !== "flush")) {
     assert.equal(Object.hasOwn(payload, "parentSessionId"), false);
     assert.equal(payload.persistenceContext.sessionId, "child-1");
   }
   assert.equal(finalizePayload.parentSessionId, "parent-1");
+  const [, turnQuery] = calls.find(([name]) => name === "getSessionTurns");
+  assert.equal(turnQuery.turnScopeId, "turn-1");
+  assert.equal(turnQuery.dialogProcessId, "dp-1");
 });

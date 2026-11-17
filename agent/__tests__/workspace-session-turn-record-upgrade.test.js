@@ -14,6 +14,8 @@ import {
 import { buildHarness } from "./session/scoped-session-repositories.fixtures.js";
 import { v9Options, downgradeSessionStorage } from "./helpers/session-identity-upgrade.fixtures.js";
 import { turnRecord } from "./helpers/turn-record.js";
+import { writeLegacySessionFixture } from "./helpers/legacy-session-fixture.js";
+import { createTestSessionRequiredFields } from "./helpers/session-message-facts.js";
 import { upgradeSessionMessageIdentity } from "../src/workspace-lifecycle/session-message-identity-upgrade.js";
 import { readSessionArtifact } from "../src/session/session-artifact-store.js";
 
@@ -38,14 +40,12 @@ test("v29 isolates a corrupt lifecycle without rewriting it and upgrades the nex
   const directories = {};
   for (const sessionId of ["a-broken", "z-valid"]) {
     const persistenceContext = sessionRepo.treePersistenceContext("alice", sessionId);
-    await sessionRepo.ensureSession({
-      userId: "alice",
-      sessionId,
-      parentSessionId: "",
-      caller: "user",
-      persistenceContext,
-    });
-    const scope = await sessionRepo.requireSessionScope("alice", sessionId, persistenceContext);
+    const scope = await writeLegacySessionFixture(
+      sessionRepo,
+      "alice",
+      { ...createTestSessionRequiredFields(), sessionId, aggregateVersion: 0 },
+      { persistenceContext },
+    );
     directories[sessionId] = scope.sessionDir;
     const file = path.join(scope.sessionDir, "session.json");
     const manifest = await downgradeSessionStorage(scope.sessionDir, 20);

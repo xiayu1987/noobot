@@ -171,6 +171,12 @@ export function materializeTurnTerminalMessages({
   });
 }
 
+export function projectTurnMessage(message, turn) {
+  return turn && isSettledTurn(turn) && message.role === "assistant"
+    ? { ...message, pending: false }
+    : message;
+}
+
 export function projectTurnTerminalStatuses(lifecycle) {
   return Object.values(lifecycle.turns)
     .filter((turn) => isSettledTurn(turn) && turn.terminalStatus !== undefined)

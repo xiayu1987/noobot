@@ -4,19 +4,17 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { turnRecord } from "../helpers/turn-record.js";
 import { countCanonicalThinkingDetailEvents } from "@noobot/event-protocol/tool-timeline";
-import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
-import { readFile } from "node:fs/promises";
 
 import {
   createTestSessionServices,
   provisionTestSession,
   withTreeContext,
+  commitTestSessionChanges,
 } from "../helpers/session-services.js";
 import {
   withTempWorkspace,
@@ -24,10 +22,9 @@ import {
   canonicalMessages,
 } from "./session-repository-boundary.summaries.fixtures.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
-import { applySessionMessageFacts } from "../helpers/session-message-facts.js";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
-test("session save refreshes the display projection with live activity timeline", async () => {
+test("message delta refreshes the display projection with live activity timeline", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     await initializeUserWorkspace(workspaceRoot, userId);
@@ -39,13 +36,7 @@ test("session save refreshes the display projection with live activity timeline"
       caller: SESSION_CALLER.USER,
     });
 
-    const session = await runtime.repositories.sessionRepository.findById(userId, "live", {
-      persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
-        userId,
-        "live",
-      ),
-    });
-    session.messages = canonicalMessages(
+    const messages = canonicalMessages(
       [
         {
           attachments: [],
@@ -76,11 +67,10 @@ test("session save refreshes the display projection with live activity timeline"
       "live",
       "live",
     );
-    await runtime.repositories.sessionRepository.save(userId, applySessionMessageFacts(session), {
-      persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
-        userId,
-        session.sessionId,
-      ),
+    await commitTestSessionChanges(runtime, {
+      userId,
+      sessionId: "live",
+      changes: { messages },
     });
 
     const display = await runtime.repositories.sessionRepository.readSessionDisplaySummary(
@@ -102,7 +92,7 @@ test("session save refreshes the display projection with live activity timeline"
   });
 });
 
-test("session save leaves the display summary to the revision-checked projection", async () => {
+test("message delta and display reads never write a duplicate display summary", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     await initializeUserWorkspace(workspaceRoot, userId);
@@ -123,31 +113,30 @@ test("session save leaves the display summary to the revision-checked projection
       if (String(filePath).endsWith(`${path.sep}session-summary.json`)) displaySummaryWrites += 1;
       return originalWriteJsonAtomic(filePath, payload);
     };
-    const session = await repository.findById(userId, "single-summary-write", {
-      persistenceContext: repository.treePersistenceContext(userId, "single-summary-write"),
-    });
-    session.messages = canonicalMessages(
+    const messages = canonicalMessages(
       [{ attachments: [], role: "user", messageOrigin: "natural", content: "one durable update" }],
       "single-summary-write",
       "single_write",
     );
 
-    await repository.save(userId, applySessionMessageFacts(session), {
-      persistenceContext: repository.treePersistenceContext(userId, session.sessionId),
+    await commitTestSessionChanges(runtime, {
+      userId,
+      sessionId: "single-summary-write",
+      changes: { messages },
     });
     assert.equal(displaySummaryWrites, 0);
-    await repository.ensureSessionDisplaySummary(userId, "single-summary-write", {
+    await repository.readSessionDisplaySummary(userId, "single-summary-write", {
       persistenceContext: repository.treePersistenceContext(userId, "single-summary-write"),
     });
-    assert.equal(displaySummaryWrites, 1);
-    await repository.ensureSessionDisplaySummary(userId, "single-summary-write", {
+    assert.equal(displaySummaryWrites, 0);
+    await repository.readSessionDisplaySummary(userId, "single-summary-write", {
       persistenceContext: repository.treePersistenceContext(userId, "single-summary-write"),
     });
-    assert.equal(displaySummaryWrites, 1);
+    assert.equal(displaySummaryWrites, 0);
   });
 });
 
-test("summary checkpoint receipts survive turn-journal persistence with historical targets", async () => {
+test("summary checkpoint receipts survive immutable persistence with historical targets", async (t) => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     const sessionId = "checkpoint-receipt";
@@ -161,53 +150,69 @@ test("summary checkpoint receipts survive turn-journal persistence with historic
     });
 
     const repository = runtime.repositories.sessionRepository;
-    const session = await repository.findById(userId, sessionId, {
-      persistenceContext: repository.treePersistenceContext(userId, sessionId),
-    });
-    session.messages = [
-      {
-        attachments: [],
-        messageUid: "sm_historical",
-        ts: TEST_MESSAGE_TS,
-        sessionId,
-        role: "assistant",
-        modelMessageId: "mm_historical",
-        presentationMessageId: "pm_turn-old",
-        content: "historical guidance",
-        dialogProcessId: "dialog-old",
-        turnScopeId: "turn-old",
-      },
-      {
-        attachments: [],
-        messageUid: "sm_current",
-        ts: TEST_MESSAGE_TS,
-        sessionId,
-        role: "user",
-        messageOrigin: "natural",
-        content: "current request",
-        dialogProcessId: "dialog-current",
-        turnScopeId: "turn-current",
-      },
-    ];
-    session.turnLifecycle = {
-      ...createEmptyTurnLifecycle(),
-      activeTurnScopeId: "turn-current",
-      sequence: 1,
-      turns: {
-        "turn-current": turnRecord({
-          revision: 1,
-          sequence: 1,
-          turnScopeId: "turn-current",
+    const messages = canonicalMessages(
+      [
+        {
+          attachments: [],
+          messageUid: "sm_historical",
+          ts: TEST_MESSAGE_TS,
+          sessionId,
+          role: "assistant",
+          modelMessageId: "mm_historical",
+          presentationMessageId: "pm_turn-old",
+          content: "historical guidance",
+          dialogProcessId: "dialog-old",
+          turnScopeId: "turn-old",
+        },
+        {
+          attachments: [],
+          messageUid: "sm_current",
+          ts: TEST_MESSAGE_TS,
+          sessionId,
+          role: "user",
+          messageOrigin: "natural",
+          content: "current request",
           dialogProcessId: "dialog-current",
-          presentationMessageId: "presentation-current",
-          state: "processing",
-        }),
+          turnScopeId: "turn-current",
+        },
+      ],
+      sessionId,
+    );
+    await commitTestSessionChanges(runtime, { userId, sessionId, changes: { messages } });
+    for (const event of [
+      {
+        eventType: "turn.action_accepted",
+        phase: "action",
+        action: "send",
+        presentationMessageId: "presentation-current",
+        executionId: "agent:turn-current",
+        executionKind: "agent",
+        rootExecutionId: "agent:turn-current",
       },
-    };
-    await repository.save(userId, applySessionMessageFacts(session), {
-      persistenceContext: repository.treePersistenceContext(userId, session.sessionId),
-    });
+      { eventType: "turn.processing_started", phase: "processing" },
+    ]) {
+      await commitTestSessionChanges(runtime, {
+        userId,
+        sessionId,
+        changes: {
+          turnTransition: {
+            ...event,
+            sessionId,
+            turnScopeId: "turn-current",
+            dialogProcessId: "dialog-current",
+            commandId: event.eventType,
+            causationId: event.eventType,
+          },
+        },
+      });
+    }
 
+    assert.equal(repository.save, undefined, "full session writes have no runtime entry point");
+    for (const method of ["requireById", "findById"]) {
+      t.mock.method(repository, method, () => {
+        throw new Error(`full session ${method} is forbidden`);
+      });
+    }
     const checkpoint = {
       userId,
       sessionId,
@@ -218,33 +223,59 @@ test("summary checkpoint receipts survive turn-journal persistence with historic
       persistedMessageUids: [],
       summarizedMessageUids: ["sm_historical"],
       retainedMessageUids: [],
+      messages: [],
     };
     const committed = await runtime.sessionMessageService.commitTurnSummaryCheckpoint(
       withTreeContext(runtime, checkpoint),
     );
     assert.equal(committed.committed, true);
-
-    const sessionFile = path.join(
-      workspaceRoot,
-      userId,
-      "runtime",
-      "session",
-      sessionId,
-      "session.json",
+    const selected = await runtime.sessionMessageService.getSessionMessageSources(
+      withTreeContext(runtime, {
+        userId,
+        sessionId,
+        messageUids: ["sm_current", "sm_historical", "sm_current"],
+        turnScopeIds: ["turn-current", "turn-historical"],
+      }),
     );
-    const manifest = JSON.parse(await readFile(sessionFile, "utf8"));
-    assert.equal("messages" in manifest, false);
-    assert.equal(
-      Object.hasOwn(
-        manifest.turnSummaryCheckpoints["turn-current"].receipts[0],
-        "summarizedMessageUids",
+    assert.deepEqual(
+      selected.map((message) => message.messageUid),
+      ["sm_current", "sm_historical"],
+    );
+    await assert.rejects(
+      runtime.sessionMessageService.getSessionMessageSources(
+        withTreeContext(runtime, {
+          userId,
+          sessionId,
+          messageUids: ["missing-source"],
+          turnScopeIds: [],
+        }),
       ),
-      false,
+      /Session message source is missing: missing-source/,
+    );
+    const state = await runtime.sessionMessageService.getTurnSummaryCheckpointState(
+      withTreeContext(runtime, checkpoint),
+    );
+    assert.equal(state.checkpointRevision, 1);
+    const timing = withTreeContext(runtime, {
+      userId,
+      sessionId,
+      dialogProcessId: "dialog-current",
+      turnScopeId: "turn-current",
+      thinkingFinishedAt: "2026-11-12T00:00:00.000Z",
+      modelLoopRound: 1,
+    });
+    assert.equal((await runtime.sessionMessageService.upsertTurnTiming(timing)).upserted, true);
+    assert.equal(
+      (await runtime.sessionMessageService.upsertTurnTiming(timing)).reason,
+      "unchanged",
     );
 
-    const reloaded = await repository.findById(userId, sessionId, {
+    const reader = await repository.requireSessionReader(userId, sessionId, {
       persistenceContext: repository.treePersistenceContext(userId, sessionId),
     });
+    const reloaded = await reader.exportSession();
+    const receipt = await reader.readCheckpoint("turn-current", checkpoint.checkpointId);
+    assert.deepEqual(receipt.summarizedMessageUids, ["sm_historical"]);
     assert.deepEqual(
       reloaded.turnSummaryCheckpoints["turn-current"].receipts[0].summarizedMessageUids,
       ["sm_historical"],
@@ -264,7 +295,7 @@ test("summary checkpoint receipts survive turn-journal persistence with historic
   });
 });
 
-test("concurrent saves for different sessions preserve every sessions summary entry", async () => {
+test("concurrent deltas for different sessions preserve every sessions summary entry", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     await initializeUserWorkspace(workspaceRoot, userId);
@@ -286,43 +317,27 @@ test("concurrent saves for different sessions preserve every sessions summary en
       parentSessionId: "",
       caller: SESSION_CALLER.USER,
     });
-    const [sessionA, sessionB] = await Promise.all([
-      runtime.repositories.sessionRepository.findById(userId, "A", {
-        persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
-          userId,
-          "A",
-        ),
-      }),
-      runtime.repositories.sessionRepository.findById(userId, "B", {
-        persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
-          userId,
-          "B",
-        ),
-      }),
-    ]);
-    sessionA.messages = canonicalMessages(
+    const messagesA = canonicalMessages(
       [{ attachments: [], role: "user", messageOrigin: "natural", content: "updated A" }],
       "A",
       "concurrent_a",
     );
-    sessionB.messages = canonicalMessages(
+    const messagesB = canonicalMessages(
       [{ attachments: [], role: "user", messageOrigin: "natural", content: "updated B" }],
       "B",
       "concurrent_b",
     );
 
     await Promise.all([
-      runtime.repositories.sessionRepository.save(userId, applySessionMessageFacts(sessionA), {
-        persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
-          userId,
-          sessionA.sessionId,
-        ),
+      commitTestSessionChanges(runtime, {
+        userId,
+        sessionId: "A",
+        changes: { messages: messagesA },
       }),
-      runtime.repositories.sessionRepository.save(userId, applySessionMessageFacts(sessionB), {
-        persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
-          userId,
-          sessionB.sessionId,
-        ),
+      commitTestSessionChanges(runtime, {
+        userId,
+        sessionId: "B",
+        changes: { messages: messagesB },
       }),
     ]);
 

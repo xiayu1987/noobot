@@ -20,7 +20,7 @@ import {
   test,
 } from "../helpers/harness-planning-helper.js";
 
-test("harness planning disables blocked tools (except help) and injects request_task_acceptance tool", async () => {
+test("harness planning preserves available tools and injects request_task_acceptance tool", async () => {
   const hookManager = createAgentHookManager();
   registerHarnessCore(
     { hookManager },
@@ -34,7 +34,6 @@ test("harness planning disables blocked tools (except help) and injects request_
     agentContext: {
       bindings: {
         tools: [
-          { name: "task_summary", invoke: async () => ({ ok: true }) },
           { name: "help", invoke: async () => ({ ok: true }) },
           { name: "read_file", invoke: async () => ({ ok: true }) },
         ],

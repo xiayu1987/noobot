@@ -21,7 +21,7 @@ export const DEFAULT_TURN_THRESHOLDS = deepFreeze({
     anthropicPauseTurnMaxContinuations: 3,
   },
   agent: {
-    maxToolLoopTurns: 2000,
+    maxToolLoopTurns: 5000,
 
     toolLoopLimitBufferTurns: 5,
 

@@ -19,7 +19,12 @@ import {
 } from "@noobot/agent-transport-protocol/events";
 import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
 
-useProvisionedRuntimeEventsWorkspace(["primary-user", "owner-a", "owner-b", "canonical-owner"]);
+useProvisionedRuntimeEventsWorkspace(["primary-user", "owner-a", "owner-b", "canonical-owner"], {
+  "primary-user": ["s-cross-stop"],
+  "owner-a": ["s-owner-isolation"],
+  "owner-b": ["s-owner-isolation"],
+  "canonical-owner": ["s-owner-stop"],
+});
 
 test("chat-websocket-server: stop from a new websocket aborts an active run by turnScopeId", async () => {
   const server = await startServerWithWs({

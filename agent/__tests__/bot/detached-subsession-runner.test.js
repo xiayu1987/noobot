@@ -8,7 +8,12 @@ import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
 import { mkdtemp, rm } from "node:fs/promises";
-import { readAuthorityOutbox } from "../../src/session/authority-outbox-store/outbox-journal.js";
+import { initializeImmutableSession } from "../../src/session/session-artifact-session/immutable-session-bootstrap.js";
+import {
+  openImmutableSessionReader,
+  withImmutableSessionReader,
+} from "../../src/session/session-artifact-session/immutable-session-reader.js";
+import { commitSessionChanges } from "../../src/session/session-artifact-session/commit-session-changes.js";
 
 import {
   createDetachedSubSessionRunner,
@@ -34,10 +39,6 @@ import {
   createSessionPersistenceScope,
 } from "@noobot/session-protocol";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
-import {
-  fullSessionTurnViews,
-  requiredSessionReads,
-} from "../helpers/session-repo-required-reads.js";
 import { createTestAttachmentService } from "../helpers/test-runtime-context.js";
 
 const LEGACY_MESSAGE_ID = MESSAGE_REMOVED_FIELD_NAME.MESSAGE_ID;
@@ -117,12 +118,8 @@ test("detached sub-session delegates execution and persistence to the main runne
     allowedRoot: "runtime/plugin-data/workflow/session",
   });
 
-  assert.equal(calls.metadataWrites.length, 1);
-  const [metadataWrite] = calls.metadataWrites;
-  assert.equal(metadataWrite.userId, "u1");
-  assert.equal(metadataWrite.sessionId, "sub1");
-  assert.equal(metadataWrite.persistenceScope, payload.persistenceScope);
-  const { metadata } = metadataWrite;
+  assert.equal(calls.metadataWrites.length, 0);
+  const metadata = calls.lifecyclePayloads[0].initialSessionMetadata;
   assert.equal(metadata.scope, "workflow_node");
   assert.equal(metadata.nodeId, "n1");
   assert.equal(metadata.sessionId, "sub1");
@@ -373,10 +370,17 @@ test("agent detached strategy resolves through the authoritative scoped persiste
   }
 });
 
-test("detached sub-session persists its complete authoritative lifecycle outbox", async () => {
+test("detached sub-session persists its complete authoritative lifecycle outbox", async (t) => {
   let persisted = null;
   const fixedNow = () => "2026-07-30T12:53:35.738Z";
   const sessionDir = await mkdtemp(path.join(os.tmpdir(), "noobot-detached-outbox-"));
+  t.after(() => rm(sessionDir, { recursive: true, force: true }));
+  const open = () =>
+    openImmutableSessionReader({
+      sessionDir,
+      sessionId: "sub-persisted",
+      parentSessionId: "parent1",
+    });
   const repo = {
     scope: { resolvedParentSessionId: "parent1", sessionDir, indexed: false, registered: true },
     async withSessionMutation(_userId, _sessionId, operation) {
@@ -398,16 +402,43 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
     async isSessionDeleted() {
       return false;
     },
-    ...requiredSessionReads,
-    ...fullSessionTurnViews,
+    async recoverImmutableSessionPlacement() {
+      return persisted ? open() : null;
+    },
+    requireSessionReader: open,
+    async withSessionReader(userId, sessionId, operation) {
+      return this.withSessionMutation(userId, sessionId, (scope) =>
+        withImmutableSessionReader(
+          { sessionDir, sessionId, parentSessionId: scope.resolvedParentSessionId },
+          async (reader, commitChanges) => {
+            const result = await operation(reader, scope, commitChanges);
+            persisted = await (await open()).exportSession();
+            return result;
+          },
+        ),
+      );
+    },
+    async findImmutableSessionReader() {
+      return persisted ? open() : null;
+    },
     async findById() {
       return persisted ? normalizeSessionEntity(structuredClone(persisted)) : null;
     },
-    async save(_userId, next, { expectedAggregateVersion, createOnly } = {}) {
-      if (createOnly) assert.equal(persisted, null);
-      else assert.equal(expectedAggregateVersion, Number(persisted?.aggregateVersion ?? 0));
-      next.aggregateVersion = Number(persisted?.aggregateVersion ?? 0) + 1;
-      persisted = structuredClone(normalizeSessionEntity(next));
+    async createImmutableSession(_userId, session, { authorityEvents }) {
+      assert.equal(persisted, null);
+      await initializeImmutableSession({
+        sessionDir,
+        session,
+        operationId: "initialize-detached-test",
+        authorityEvents,
+        outbox: authorityEvents,
+      });
+      persisted = await (await open()).exportSession();
+    },
+    async commitChanges(_userId, sessionId, request) {
+      const result = await commitSessionChanges({ ...request, sessionDir, sessionId });
+      persisted = await (await open()).exportSession();
+      return result;
     },
   };
   const messageService = new SessionMessageService({ sessionRepo: repo, now: fixedNow });
@@ -418,7 +449,7 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
   });
   const { deps } = createDeps({
     session: {
-      async appendExecutionLog() {},
+      async appendExecutionLogs() {},
       applyTurnLifecycleEvent: sessionFacade.applyTurnLifecycleEvent,
       async writeSessionMetadata() {},
     },
@@ -438,7 +469,14 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
     }),
   });
 
-  const outbox = await readAuthorityOutbox(sessionDir);
+  const { events: outbox, hasMore } = await (
+    await open()
+  ).readOutboxPage({
+    consumerId: "detached-test",
+    after: 0,
+    limit: 16,
+  });
+  assert.equal(hasMore, false);
   assert.deepEqual(
     outbox.map((entry) => entry.envelope.payload.eventType),
     [
@@ -747,66 +785,4 @@ test("detached terminal receipt projects the committed turn unchanged", () => {
   };
   assert.deepEqual(createDetachedTerminalReceipt(turn), { ...turn, executionKind: "agent" });
   assert.throws(() => createDetachedTerminalReceipt(undefined), /requires the committed turn/);
-});
-
-test("createDetachedSubSessionRunner requires userId and parentSessionId", async () => {
-  const { deps } = createDeps();
-  const runner = createDetachedSubSessionRunner(deps);
-  await assert.rejects(
-    () =>
-      runner({
-        attachments: [],
-        abortSignal: new AbortController().signal,
-        parentExecutionScope: createParentExecutionScope(),
-        strategy: { userId: "u1" },
-      }),
-    /sub-session runner requires userId and parentSessionId/,
-  );
-});
-
-test("createDetachedSubSessionRunner aborts before execution when signal is already aborted", async () => {
-  let runCalled = false;
-  const controller = new AbortController();
-  controller.abort();
-  const { deps } = createDeps({
-    sessionRunner: {
-      async runSession() {
-        runCalled = true;
-      },
-    },
-  });
-  const runner = createDetachedSubSessionRunner(deps);
-  await assert.rejects(
-    () =>
-      runner({
-        attachments: [],
-        parentExecutionScope: createParentExecutionScope(),
-        abortSignal: controller.signal,
-        strategy: createCompleteStrategy(),
-      }),
-    (error) => error === controller.signal.reason,
-  );
-  assert.equal(runCalled, false);
-});
-
-test("createDetachedSubSessionRunner propagates user config loading failures", async () => {
-  const { deps } = createDeps({
-    configService: {
-      async loadUserConfig() {
-        throw new Error("config unavailable");
-      },
-    },
-  });
-  const runner = createDetachedSubSessionRunner(deps);
-  await assert.rejects(
-    () =>
-      runner({
-        attachments: [],
-        abortSignal: new AbortController().signal,
-        parentExecutionScope: createParentExecutionScope(),
-        metadata: DETACHED_REQUEST_METADATA,
-        strategy: createCompleteStrategy(),
-      }),
-    /config unavailable/,
-  );
 });

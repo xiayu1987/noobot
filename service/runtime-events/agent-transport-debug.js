@@ -17,7 +17,7 @@ import { text } from "@noobot/shared/value";
 export function recordServiceAgentTransportDebug({ event, command, userId = "", data = {} } = {}) {
   const summary = summarizeAgentTransportCommand(command, data);
   return writeRuntimeEvent({
-    scope: summary.sessionId ? "session" : "system",
+    scope: "system",
     source: "service",
     channel: RUNTIME_EVENT_CHANNELS.DIRECT,
     category: RUNTIME_EVENT_CATEGORIES.DEBUG,

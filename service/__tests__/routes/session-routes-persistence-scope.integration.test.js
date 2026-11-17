@@ -13,7 +13,12 @@ import { createSessionFacade, createSessionServices } from "noobot-agent/session
 import { AttachmentService } from "noobot-agent/attach";
 import { resolveScopedSessionRoots } from "@noobot/workspace-protocol";
 import { buildExecutionReport } from "@noobot/session-protocol/execution-report";
-import { createSessionCommand, SESSION_COMMAND } from "@noobot/session-protocol";
+import {
+  createSessionCommand,
+  requireMessageDeleteResponse,
+  requireTurnReplaceResponse,
+  SESSION_COMMAND,
+} from "@noobot/session-protocol";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { initializeUserRuntimeDirectories } from "../runtime-events-root.test-helpers.js";
 import express, { registerSessionRoutes, withTestServer } from "./session-routes.helpers.js";
@@ -130,3 +135,70 @@ test("session-routes: HTTP 调用经真实 facade 绑定根会话 persistence sc
     }
   });
 });
+
+for (const replace of [false, true]) {
+  const route = replace ? "replace-turn" : "delete-from";
+  const type = replace ? SESSION_COMMAND.TURN_REPLACE : SESSION_COMMAND.MESSAGE_DELETE_FROM;
+  const requireResponse = replace ? requireTurnReplaceResponse : requireMessageDeleteResponse;
+
+  test(`session-routes: ${route} 真实存储提交及后续写入后的重放保持增量协议`, async () => {
+    await withRealFacadeServer(async ({ baseUrl, session }) => {
+      const identity = { userId: USER_ID, sessionId: SESSION_ID, persistenceScope: null };
+      const turn = (id) => ({
+        role: "user",
+        messageOrigin: "natural",
+        messageUid: `message-${id}`,
+        userMessageId: `um-${id}`,
+        content: id,
+        dialogProcessId: `dialog-${id}`,
+        turnScopeId: id,
+        attachments: [],
+        transferEnvelopes: [],
+      });
+      await session.appendTurns({ ...identity, turns: [turn("keep"), turn("remove")] });
+      const command = sessionCommandBody(type, {
+        anchor: { turnScopeId: "remove" },
+        ...(replace ? { newContent: "edited", turnScopeId: "replacement", attachments: [] } : {}),
+      });
+      const url = `${baseUrl}/internal/session/${USER_ID}/${SESSION_ID}/messages/${route}`;
+      async function mutate() {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(command),
+        });
+        const { ok, ...body } = await response.json();
+        assert.equal(response.status, 200, JSON.stringify(body));
+        assert.equal(ok, true);
+        return requireResponse(body);
+      }
+      const committed = await mutate();
+      assert.equal(committed.deduplicated, false);
+      assert.equal(committed.sessionId, SESSION_ID);
+      assert.equal(committed.committedAggregateVersion, 1);
+      assert.deepEqual(committed.deletedMessageUids, ["message-remove"]);
+      assert.equal(Object.hasOwn(committed, "detail"), false);
+      assert.equal(committed.projection.messages.length, replace ? 1 : 0);
+
+      await session.appendTurns({ ...identity, turns: [turn("later")] });
+      const before = await session.getSessionDisplayData({
+        userId: USER_ID,
+        sessionId: SESSION_ID,
+      });
+      const replay = await mutate();
+      assert.equal(replay.deduplicated, true);
+      assert.equal(replay.committedAggregateVersion, committed.committedAggregateVersion);
+      assert.ok(replay.generation > committed.generation);
+      assert.deepEqual(replay.projection, committed.projection);
+      assert.deepEqual(replay.displayMessages, committed.displayMessages);
+      const after = await session.getSessionDisplayData({ userId: USER_ID, sessionId: SESSION_ID });
+      assert.deepEqual(after, before);
+      const main = after.sessions.find((entry) => entry.sessionId === SESSION_ID);
+      assert.equal(main.generation, replay.generation);
+      assert.deepEqual(
+        main.messages.map((message) => message.content),
+        replace ? ["keep", "edited", "later"] : ["keep", "later"],
+      );
+    });
+  });
+}

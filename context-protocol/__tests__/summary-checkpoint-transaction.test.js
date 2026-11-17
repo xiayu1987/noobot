@@ -41,6 +41,7 @@ function request(overrides = {}) {
     persistedMessageUids: ["message"],
     summarizedMessageUids: ["message"],
     retainedMessageUids: [],
+    messages: [],
     ...overrides,
   });
 }
@@ -62,6 +63,71 @@ test("checkpoint commit and retry share one receipt without rewriting facts", ()
     },
   );
   assert.deepEqual(target, committed);
+});
+
+test("checkpoint replay rejects a changed predecessor without rewriting the receipt", () => {
+  const target = session();
+  applyTurnSummaryCheckpoint(target, request(), committedAt);
+  const committed = structuredClone(target);
+  assert.throws(
+    () =>
+      applyTurnSummaryCheckpoint(target, request({ expectedCheckpointRevision: 1 }), committedAt),
+    { code: SESSION_ERROR_CODE.TURN_SUMMARY_CHECKPOINT_ID_REUSED },
+  );
+  assert.deepEqual(target, committed);
+});
+
+test("checkpoint replay keeps its original receipt after the head advances", () => {
+  const target = session();
+  const first = applyTurnSummaryCheckpoint(target, request(), committedAt);
+  const next = applyTurnSummaryCheckpoint(
+    target,
+    request({ checkpointId: "next", expectedCheckpointRevision: 1 }),
+    "2026-11-01T00:00:00.000Z",
+  );
+  assert.equal(next.checkpointRevision, 2);
+  const committed = structuredClone(target);
+  const retry = applyTurnSummaryCheckpoint(target, request(), "2026-11-02T00:00:00.000Z");
+  assert.equal(retry.deduplicated, true);
+  assert.equal(retry.checkpointRevision, first.checkpointRevision);
+  assert.deepEqual(retry.receipt, first.receipt);
+  assert.equal(retry.receipt.committedAt, committedAt);
+  assert.deepEqual(target, committed);
+});
+
+test("checkpoint replay survives turn completion and admission of a later turn", () => {
+  const target = session();
+  const first = applyTurnSummaryCheckpoint(target, request(), committedAt);
+  target.turnLifecycle.turns.turn.state = "completed";
+  target.turnLifecycle.activeTurnScopeId = "later";
+  const committed = structuredClone(target);
+  const retry = applyTurnSummaryCheckpoint(target, request(), "2026-11-02T00:00:00.000Z");
+  assert.equal(retry.deduplicated, true);
+  assert.deepEqual(retry.receipt, first.receipt);
+  assert.deepEqual(target, committed);
+  assert.throws(
+    () => applyTurnSummaryCheckpoint(target, request({ checkpointId: "new" }), committedAt),
+    { code: SESSION_ERROR_CODE.TURN_SUMMARY_CHECKPOINT_TERMINAL_PERSISTENCE },
+  );
+  assert.throws(
+    () => applyTurnSummaryCheckpoint(target, request({ summarizedMessageUids: [] }), committedAt),
+    { code: SESSION_ERROR_CODE.TURN_SUMMARY_CHECKPOINT_ID_REUSED },
+  );
+  assert.deepEqual(target, committed);
+});
+
+test("checkpoint replay still validates lifecycle and checkpoint ownership", () => {
+  for (const owner of ["lifecycle", "checkpoint"]) {
+    const target = session();
+    applyTurnSummaryCheckpoint(target, request(), committedAt);
+    if (owner === "lifecycle") target.turnLifecycle.turns.turn.dialogProcessId = "other";
+    else target.turnSummaryCheckpoints.turn.dialogProcessId = "other";
+    const before = structuredClone(target);
+    assert.throws(() => applyTurnSummaryCheckpoint(target, request(), committedAt), {
+      code: SESSION_ERROR_CODE.TURN_SUMMARY_CHECKPOINT_OWNERSHIP_CONFLICT,
+    });
+    assert.deepEqual(target, before);
+  }
 });
 
 test("checkpoint validation rejects unresolved messages and wrong turn without mutation", () => {

@@ -147,8 +147,6 @@ export function buildModelsSection(agentContext) {
   const userConfig = runtime?.userConfig || {};
   const runConfig = runtime?.runConfig || {};
   return resolveModelSection({
-    globalConfig,
-    userConfig,
     effectiveConfig: mergeConfig(globalConfig, userConfig),
     selectedModel: runConfig.selectedModel,
     scenario: runConfig.scenario,

@@ -45,7 +45,6 @@ test("createSessionServices wires repositories/services with expected dependency
       runtime.executionLogService.executionRepo,
       runtime.repositories.executionRepository,
     );
-    assert.equal(runtime.executionLogService.sessionRepo, runtime.repositories.sessionRepository);
     assert.equal(runtime.sessionTreeService.treeRepo, runtime.repositories.sessionTreeRepository);
   });
 });

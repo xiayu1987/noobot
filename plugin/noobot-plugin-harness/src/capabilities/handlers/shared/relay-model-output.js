@@ -18,6 +18,7 @@ import {
   normalizeTransferPayload,
 } from "./attachment-log-utils.js";
 import { text } from "@noobot/shared/value";
+import { createAuxiliaryModelRelayType } from "@noobot/context-protocol/message/injected-types";
 import { readHarnessBucket } from "./bucket-utils.js";
 
 function optionalText(value) {
@@ -104,7 +105,7 @@ export function relaySeparateModelOutputAsUserMessage(
   const relayContent = buildRelayContent(
     locale,
     purposeLabel,
-    limitRelayText(locale, rawText),
+    purpose === "summary" ? rawText : limitRelayText(locale, rawText),
     toolNameBindings,
   );
   const resolvedTransferPayload = normalizeTransferPayload(transferPayload || {});
@@ -112,7 +113,7 @@ export function relaySeparateModelOutputAsUserMessage(
   const injection = injectMessageWithPolicy(ctx, {
     role: "user",
     content: relayContent,
-    injectedMessageType: `separate_model_relay:${text(purpose) || "unknown"}`,
+    injectedMessageType: createAuxiliaryModelRelayType(purposeLabel),
     relayCorrelationId: optionalText(relayCorrelationId),
     ...resolvedTransferPayload,
     injectAt: "append",

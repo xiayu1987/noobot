@@ -72,6 +72,12 @@ The frontend, Agent Proxy, and Service emit `runtime-events` debug records with
 and failure boundaries. Records from each layer can be correlated by
 `commandId`, `sessionId`, `turnScopeId`, `commandType`, and `protocolVersion`.
 
+Service command transport diagnostics use `scope: "system"`: receiving or rejecting a
+command precedes session acceptance and does not establish a persisted session. Requested
+session and turn identifiers remain correlation fields; diagnostics never create session
+storage. Session lifecycle records begin after authoritative acceptance and retain their
+session scope. The service records command receipt once at the transport boundary.
+
 Diagnostics are enabled by default through
 `RUNTIME_EVENTS_CONFIG_DEFAULTS.sessionLogControls.debug.agentTransport` in
 `shared/runtime-events-config.js`. Set
@@ -81,3 +87,61 @@ stored separately as `debug-agent-transport.jsonl`.
 The diagnostic summary contains identifiers, field names, counts, lengths, and
 outcomes only. It never contains message text, attachment content, interaction
 responses, authenticated user ids, API keys, or tokens.
+
+Browser diagnostic construction or sink exceptions are reported by the shared lazy-debug
+entry point as local warnings identifying the debug type and event. They must not be
+silently discarded or replace the command's transport result. Disabled diagnostics do
+not construct summaries; queue capacity and expiry drops remain observable through the
+session-log sink's counters.
+
+## Turn message ownership
+
+`assertAgentTurnMessageAppend` applies the same message identity and uniqueness
+rules as the complete list contract. `captureAgentTurnMessageValue` captures the
+message's JSON value at admission or explicit update and deeply freezes that
+detached value. Dates, getters and custom serializers are evaluated at this boundary;
+later source mutations cannot alter an admitted message. Cycles, BigInt and
+serialization failures reject the operation before publication. Serialization must
+preserve the message identity. Provider metadata and plugin payloads keep their
+native JSON representation without an additional field schema.
+
+`patchAgentTurnMessageValue` requires a protocol-captured base and captures only
+the changed top-level fields. Undefined or JSON-omitted fields remove the stored
+field. Unchanged nested JSON values retain their immutable identity; metadata
+patches do not serialize or traverse the retained body. A value-equivalent patch
+returns the base and does not advance the store revision. Getters, nested
+serializers and identity validation run before any store mutation. A root
+`toJSON` function owns the complete candidate and therefore evaluates a complete
+replacement, with the same identity-preservation requirement as admission.
+Recapturing a value produced by this protocol returns that immutable value;
+freezing an external object alone never permits bypassing JSON capture.
+
+`captureAgentTurnMessages` validates uniqueness on the captured values, after all
+serializers have run. Append admission also checks the captured identity against
+the current UID index. Mutable source getters and serializers cannot bypass the
+identity checks used to build indexes or enqueue changes.
+
+The current-turn store exposes copied records with immutable nested values.
+`readSnapshot` additionally freezes the list. All changes must use store mutation
+methods, which advance the affected message revision and update its indexes.
+Pending changes capture immutable message values; acknowledging an older revision
+cannot discard a newer update. Persistence submits only pending changes and
+acknowledges them after successful commit. Failed writes remain retryable.
+
+Pending changes contain message writes only. Replacing the current-turn selection,
+changing a local UID or evicting a message removes its local pending value and
+revision; it does not enqueue a durable deletion. Previously captured in-flight
+writes retain their snapshot. Reintroducing a UID allocates a new revision, so an
+older acknowledgement cannot consume the new write. Durable deletion and turn
+replacement use the explicit `messageDeletion` and `turnReplacement` operations
+defined by session-protocol, independently of the current-turn selection.
+
+Summary completion captures revisions for its selected UIDs before awaiting the
+durable transaction. `readMessageRevisions` includes acknowledged messages and
+records absence for historical UIDs outside the current-turn store;
+`readUnchangedMessageUids` checks only those captured identities. Acknowledgement
+does not change a message revision. Only unchanged revisions may be evicted from
+memory or marked and pruned from model context after commit. An edit made while
+the transaction or subsequent user metadata backwrite is pending remains in the
+store, pending changes and model context for the next checkpoint, even if a later
+edit restores the original content. Eviction never deletes a durable message.

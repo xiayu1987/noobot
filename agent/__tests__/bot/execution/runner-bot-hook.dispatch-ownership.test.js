@@ -42,6 +42,7 @@ test("before-dispatch capability events use the bound Turn message domain", asyn
   botHookManager.on(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH, async (ctx, invocation) => {
     await capabilityModelInvoker({
       purpose: "workflow_semantic",
+      streaming: false,
       activity: { activityKind: "workflow_semantic" },
       domain: "workflow",
       ctx,

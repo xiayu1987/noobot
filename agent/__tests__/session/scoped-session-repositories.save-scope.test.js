@@ -5,24 +5,14 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import path from "node:path";
-import { readFile } from "node:fs/promises";
-import {
-  buildSessionArtifactFileMap,
-  readSessionArtifact,
-} from "../../src/session/session-artifact-store.js";
-import {
-  applySessionMessageFacts,
-  createTestSessionRequiredFields,
-} from "../helpers/session-message-facts.js";
-import { buildHarness, readJson } from "./scoped-session-repositories.fixtures.js";
+import { buildHarness } from "./scoped-session-repositories.fixtures.js";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
 const treeContext = (sessionRepo, sessionId) => ({
   persistenceContext: sessionRepo.treePersistenceContext("alice", sessionId),
 });
 
-test("concurrent repository saves allocate monotonic Turn journals without cross-Turn records", async () => {
+test("concurrent deltas reject stale generations and preserve unrelated turns on retry", async () => {
   const harness = buildHarness();
   const { sessionRepo } = await harness.setup();
   try {
@@ -50,17 +40,25 @@ test("concurrent repository saves allocate monotonic Turn journals without cross
       dialogProcessId: "dialog-replaced",
       turnScopeId: "turn-replaced",
     };
-    await sessionRepo.save(
-      "alice",
-      applySessionMessageFacts({
-        ...createTestSessionRequiredFields(),
-        parentSessionId: "",
-        sessionId,
-        aggregateVersion: 0,
-        messages: [keep, replaced],
-      }),
-      { createOnly: true, ...treeContext(sessionRepo, sessionId) },
-    );
+    const context = treeContext(sessionRepo, sessionId);
+    await sessionRepo.ensureSession({
+      userId: "alice",
+      sessionId,
+      parentSessionId: "",
+      caller: "user",
+      ...context,
+    });
+    const reader = () => sessionRepo.requireSessionReader("alice", sessionId, context);
+    const commit = (expectedGeneration, operationId, messages) =>
+      sessionRepo.commitChanges("alice", sessionId, {
+        ...context,
+        expectedGeneration,
+        operationId,
+        committedAt: TEST_MESSAGE_TS,
+        changes: { messages },
+      });
+    await commit((await reader()).generation, "seed", [keep, replaced]);
+    const pinned = await reader();
 
     const replacement = (suffix) => ({
       attachments: [],
@@ -74,103 +72,64 @@ test("concurrent repository saves allocate monotonic Turn journals without cross
       dialogProcessId: `dialog-${suffix}`,
       turnScopeId: `turn-${suffix}`,
     });
-    await Promise.all([
-      sessionRepo.save(
-        "alice",
-        applySessionMessageFacts({
-          ...createTestSessionRequiredFields(),
-          parentSessionId: "",
-          sessionId,
-          aggregateVersion: 0,
-          messages: [keep, replacement("a")],
-        }),
-        treeContext(sessionRepo, sessionId),
+    const outcomes = await Promise.allSettled(
+      ["a", "b"].map((suffix) =>
+        commit(pinned.generation, `append-${suffix}`, [replacement(suffix)]),
       ),
-      sessionRepo.save(
-        "alice",
-        applySessionMessageFacts({
-          ...createTestSessionRequiredFields(),
-          parentSessionId: "",
-          sessionId,
-          aggregateVersion: 0,
-          messages: [keep, replacement("b")],
-        }),
-        treeContext(sessionRepo, sessionId),
-      ),
-    ]);
-
-    const scope = await sessionRepo.requireSessionScope(
-      "alice",
-      sessionId,
-      treeContext(sessionRepo, sessionId).persistenceContext,
     );
-    const files = buildSessionArtifactFileMap(scope.sessionDir);
-    const manifest = await readJson(files.session);
+    assert.equal(outcomes.filter((item) => item.status === "fulfilled").length, 1);
+    const loser = outcomes.findIndex((item) => item.status === "rejected");
+    assert.equal(outcomes[loser].reason.code, "SESSION_GENERATION_CONFLICT");
+    const suffix = ["a", "b"][loser];
+    await commit((await reader()).generation, `retry-${suffix}`, [replacement(suffix)]);
+    const restored = await sessionRepo.requireById("alice", sessionId, context);
     assert.deepEqual(
-      manifest.turnOrder.map((turn) => turn.turnId),
-      ["turn-000001", "turn-000004"],
+      new Set(restored.messages.map((item) => item.messageUid)),
+      new Set(["keep-message", "replaced-message", "replacement-a", "replacement-b"]),
     );
-    assert.equal(manifest.turnArtifactSequence, 4);
-    assert.equal(
-      new Set(manifest.turnOrder.map((turn) => turn.turnId)).size,
-      manifest.turnOrder.length,
+    assert.deepEqual(
+      (await pinned.exportSession()).messages.map((item) => item.messageUid),
+      ["keep-message", "replaced-message"],
     );
-
-    const restored = await readSessionArtifact({
-      sessionDir: scope.sessionDir,
-      storageService: sessionRepo.storageService,
-    });
-    assert.equal(restored.messages[0].turnScopeId, "turn-keep");
-    assert.equal(restored.messages.length, 2);
-    assert.equal(["turn-a", "turn-b"].includes(restored.messages[1].turnScopeId), true);
-
-    for (const turn of manifest.turnOrder) {
-      const records = (await readFile(path.join(scope.sessionDir, turn.file), "utf8"))
-        .split("\n")
-        .filter(Boolean)
-        .map((line) => JSON.parse(line));
-      const recordTurnScopes = new Set(
-        records.map((record) => record?.message?.turnScopeId).filter(Boolean),
-      );
-      assert.deepEqual([...recordTurnScopes], [turn.turnScopeId]);
+    const current = await reader();
+    for (const turnScopeId of ["turn-keep", "turn-replaced", "turn-a", "turn-b"]) {
+      const view = await current.readTurnView({ turnScopeIds: [turnScopeId] });
+      assert.equal(view.session.messages.length, 1);
+      assert.equal(view.session.messages[0].turnScopeId, turnScopeId);
     }
   } finally {
     await harness.cleanup();
   }
 });
 
-test("session save rejects entity parentSessionId that conflicts with the located scope", async () => {
+test("session creation rejects parent identity conflicts without changing the committed child", async () => {
   const harness = buildHarness();
   const { sessionRepo } = await harness.setup();
-  const childEntity = (parentSessionId) => ({
-    ...createTestSessionRequiredFields(),
-    sessionId: "child",
-    parentSessionId,
-    aggregateVersion: 0,
-  });
   try {
-    await sessionRepo.save(
-      "alice",
-      {
-        ...createTestSessionRequiredFields(),
-        sessionId: "p1",
-        parentSessionId: "",
-        aggregateVersion: 0,
-      },
-      { createOnly: true, ...treeContext(sessionRepo, "p1") },
-    );
-    await sessionRepo.save("alice", childEntity("p1"), {
-      createOnly: true,
+    await sessionRepo.ensureSession({
+      userId: "alice",
+      sessionId: "p1",
+      parentSessionId: "",
+      caller: "user",
+      ...treeContext(sessionRepo, "p1"),
+    });
+    await sessionRepo.ensureSession({
+      userId: "alice",
+      sessionId: "child",
+      parentSessionId: "p1",
+      caller: "user",
       ...treeContext(sessionRepo, "child"),
     });
     for (const conflictingParent of ["p2", ""]) {
       await assert.rejects(
-        sessionRepo.save(
-          "alice",
-          childEntity(conflictingParent),
-          treeContext(sessionRepo, "child"),
-        ),
-        { code: "SESSION_SCOPE_IDENTITY_CONFLICT", statusCode: 409 },
+        sessionRepo.ensureSession({
+          userId: "alice",
+          sessionId: "child",
+          parentSessionId: conflictingParent,
+          caller: "user",
+          ...treeContext(sessionRepo, "child"),
+        }),
+        { code: "FATAL_PARENT_SESSION_MISSING" },
       );
     }
     const childScope = await sessionRepo.requireSessionScope(
@@ -179,7 +138,14 @@ test("session save rejects entity parentSessionId that conflicts with the locate
       treeContext(sessionRepo, "child").persistenceContext,
     );
     assert.equal(childScope.resolvedParentSessionId, "p1");
-    assert.equal((await readJson(childScope.sessionFile)).parentSessionId, "p1");
+    const child = await sessionRepo.requireSessionReader(
+      "alice",
+      "child",
+      treeContext(sessionRepo, "child"),
+    );
+    assert.equal((await child.readMetadata()).parentSessionId, "p1");
+    assert.equal(sessionRepo.save, undefined);
+    assert.equal(sessionRepo.saveTurnView, undefined);
   } finally {
     await harness.cleanup();
   }

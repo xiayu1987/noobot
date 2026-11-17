@@ -8,36 +8,50 @@ import {
   mergeCanonicalActivityTimelines,
   selectMessageActivityTimeline,
 } from "@noobot/event-protocol/activity-timeline";
-import { requireCanonicalToolTimelineIdentity } from "@noobot/event-protocol/tool-timeline";
+import {
+  requireCanonicalToolTimelineIdentity,
+  selectMessageToolTimeline,
+} from "@noobot/event-protocol/tool-timeline";
 import { projectThinkingDetailContentTimeline } from "@noobot/event-protocol/thinking-detail-content";
 import { requireCanonicalTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
 
-function mergeToolTimeline(messages) {
+function mergeToolTimelineItems(items, timeline, indexByKey) {
+  for (const item of items) {
+    const { key } = requireCanonicalToolTimelineIdentity(item);
+    if (!indexByKey.has(key)) {
+      indexByKey.set(key, timeline.length);
+      timeline.push(item);
+      continue;
+    }
+    const index = indexByKey.get(key);
+    timeline[index] = { ...timeline[index], ...item };
+  }
+}
+
+function mergeToolTimeline(messages, selectToolTimeline) {
   const timeline = [];
   const indexByKey = new Map();
   for (const message of messages) {
-    if (!Object.hasOwn(message, "toolTimeline")) continue;
-    for (const item of message.toolTimeline) {
-      const { key } = requireCanonicalToolTimelineIdentity(item);
-      if (!indexByKey.has(key)) {
-        indexByKey.set(key, timeline.length);
-        timeline.push(item);
-        continue;
-      }
-      const index = indexByKey.get(key);
-      timeline[index] = { ...timeline[index], ...item };
-    }
+    mergeToolTimelineItems(selectToolTimeline(message), timeline, indexByKey);
   }
   return timeline;
+}
+
+export function projectThinkingEventTimeline(
+  roundMessages,
+  selectToolTimeline = selectMessageToolTimeline,
+) {
+  const toolTimeline = mergeToolTimeline(roundMessages, selectToolTimeline);
+  const activityTimeline = mergeCanonicalActivityTimelines(
+    ...roundMessages.map(selectMessageActivityTimeline),
+  );
+  return { toolTimeline, activityTimeline };
 }
 
 export function projectThinkingTimeline(messages, { turnScopeId }) {
   const scope = requireCanonicalTurnScopeId(turnScopeId);
   const roundMessages = messages.filter((message) => message.turnScopeId === scope);
-  const toolTimeline = mergeToolTimeline(roundMessages);
-  const activityTimeline = mergeCanonicalActivityTimelines(
-    ...roundMessages.map(selectMessageActivityTimeline),
-  );
+  const { toolTimeline, activityTimeline } = projectThinkingEventTimeline(roundMessages);
   const thinkingContentTimeline = projectThinkingDetailContentTimeline(
     roundMessages,
     activityTimeline,

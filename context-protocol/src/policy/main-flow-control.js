@@ -7,19 +7,14 @@
 import { isFunction, isPlainObject, text } from "@noobot/shared/value";
 
 export const MAIN_FLOW_CONTROL_ACTION = Object.freeze({
-  FINAL_NO_TOOLS_TURN: "final_no_tools_turn",
   SUMMARY_CHECKPOINT: "summary_checkpoint",
+  PHASE_SUMMARY: "phase_summary",
 });
-
-export const MAIN_FLOW_CONTROL_REASON = Object.freeze({
-  CONTEXT_OVERFLOW_AFTER_SUMMARY: "context_overflow_after_summary",
-  TASK_SUMMARY_COMPLETE: "task_summary_complete",
-  TASK_SUMMARY_BLOCKED: "task_summary_blocked",
-});
-
-const MAIN_FLOW_CONTROL_REASONS = new Set(Object.values(MAIN_FLOW_CONTROL_REASON));
 
 export const MAIN_FLOW_CONTROL_PORT_METHODS = Object.freeze([
+  "claimSummaryScheduling",
+  "requestPhaseSummary",
+  "hasPendingSummary",
   "requestSummaryCheckpoint",
   "isFinalNoToolsTurnEngaged",
 ]);
@@ -30,7 +25,29 @@ function requireSource(source, label) {
   return value;
 }
 
-export function createSummaryCheckpointInstruction({ source, summarizedMessageUids }) {
+export function createSummarySchedulingClaim({ source } = {}) {
+  return Object.freeze({ source: requireSource(source, "summary scheduling claim") });
+}
+
+export function createPhaseSummaryInstruction({ source, prompt, onCommitted } = {}) {
+  if (typeof prompt !== "string" || !prompt.trim()) {
+    throw new TypeError("phase summary prompt must be a non-empty string");
+  }
+  if (!isFunction(onCommitted)) {
+    throw new TypeError("phase summary onCommitted must be a function");
+  }
+  return Object.freeze({
+    action: MAIN_FLOW_CONTROL_ACTION.PHASE_SUMMARY,
+    source: requireSource(source, "phase summary instruction"),
+    prompt,
+    onCommitted,
+  });
+}
+
+export function createSummaryCheckpointInstruction({ source, summarizedMessageUids, onCommitted }) {
+  if (onCommitted !== undefined && !isFunction(onCommitted)) {
+    throw new TypeError("summary checkpoint onCommitted must be a function");
+  }
   const canonicalSource = requireSource(source, "summary checkpoint instruction");
   if (!Array.isArray(summarizedMessageUids) || summarizedMessageUids.length === 0) {
     throw new TypeError("summary checkpoint instruction requires non-empty summarizedMessageUids");
@@ -48,22 +65,7 @@ export function createSummaryCheckpointInstruction({ source, summarizedMessageUi
     action: MAIN_FLOW_CONTROL_ACTION.SUMMARY_CHECKPOINT,
     source: canonicalSource,
     summarizedMessageUids: Object.freeze(uids),
-  });
-}
-
-export function createFinalNoToolsTurnInstruction({ reason, source, detail = {} } = {}) {
-  if (!MAIN_FLOW_CONTROL_REASONS.has(reason)) {
-    throw new TypeError(`final no-tools turn instruction has unknown reason: ${text(reason)}`);
-  }
-  if (!isPlainObject(detail)) {
-    throw new TypeError("final no-tools turn instruction detail must be a plain object");
-  }
-  return Object.freeze({
-    action: MAIN_FLOW_CONTROL_ACTION.FINAL_NO_TOOLS_TURN,
-    reason,
-    source: requireSource(source, "final no-tools turn instruction"),
-    requestedAt: new Date().toISOString(),
-    detail,
+    ...(onCommitted ? { onCommitted } : {}),
   });
 }
 

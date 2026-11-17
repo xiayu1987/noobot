@@ -63,7 +63,6 @@ class SessionAccessMethods {
       sessions,
       updatedAt: this.now(),
     });
-    await this.removeSessionSummaries(normalizedUserId, ids);
     await this.removeSessionDisplaySummaries(normalizedUserId, ids);
     return ids.length;
   }

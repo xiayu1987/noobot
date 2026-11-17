@@ -22,7 +22,9 @@ import {
 } from "./chat-websocket-server.turn-lifecycle.fixtures.js";
 import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
 
-useProvisionedRuntimeEventsWorkspace(["primary-user"]);
+useProvisionedRuntimeEventsWorkspace(["primary-user"], {
+  "primary-user": ["s-completion-failure", "s-stop-authoritative"],
+});
 
 test("summary failure is classified as completion without authoritative completed", async () => {
   const authoritative = createAuthoritativeBot({ persistSummary: false });

@@ -6,62 +6,47 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { calibratePerformance } from "./calibrate-performance.mjs";
-import { DEVELOPMENT_THRESHOLDS } from "../lib/development-thresholds.mjs";
-import {
-  PERF_ALL_TOOLS,
-  PERF_REPETITIONS,
-  PERF_SCENARIO,
-} from "../mock-model-service/scenario.mjs";
+import { performanceReportFixture } from "./__tests__/performance-fixture.mjs";
 
-function report() {
-  return {
-    version: 1,
-    scenario: PERF_SCENARIO,
-    samples: Array.from({ length: DEVELOPMENT_THRESHOLDS.performance.rounds }, (_, index) => ({
-      round: index + 1,
-      toolCount: PERF_ALL_TOOLS.length * PERF_REPETITIONS,
-      modelRequestCount: PERF_ALL_TOOLS.length * PERF_REPETITIONS + 1,
-      summaryCount: PERF_REPETITIONS,
-      metrics: { totalMs: 1000 + index },
-      toolSamples: Object.fromEntries(
-        PERF_ALL_TOOLS.map((name) => [name, Array(PERF_REPETITIONS).fill(10)]),
-      ),
-      serverToolEvents: PERF_ALL_TOOLS.flatMap((tool) =>
-        Array.from({ length: PERF_REPETITIONS }, () => ({
-          event: "tool_call_end",
-          data: { tool, success: true },
-        })),
-      ),
-    })),
-  };
-}
+const reports = () => Array.from({ length: 3 }, () => performanceReportFixture());
 
-test("calibration separates the cold sample and preserves provenance", () => {
-  const measured = report();
-  measured.samples[0].metrics.totalMs = 10000;
-  const candidate = calibratePerformance(measured, { sourceReport: "audit.json" });
-  assert.equal(candidate.metrics.totalMs, 1003);
-  assert.equal(candidate.calibration.coldTotalMs, 10000);
-  assert.equal(candidate.calibration.sourceReport, "audit.json");
+test("calibration separates cold, ordinary and long samples and preserves provenance", () => {
+  const inputs = reports();
+  inputs[0].samples[0].metrics.pipelineLocalMs = 10000;
+  const candidate = calibratePerformance(inputs, { sourceReports: ["a.json", "b.json", "c.json"] });
+  assert.equal(candidate.metrics.ordinary.pipelineLocalMs, 1000);
+  assert.equal(candidate.metrics.long.pipelineLocalMs, 10000);
+  assert.deepEqual(candidate.calibration.coldPipelineLocalMs, [10000, 1000, 1000]);
+  assert.equal(candidate.calibration.replayCount, 3);
+  assert.deepEqual(candidate.calibration.sourceReports, ["a.json", "b.json", "c.json"]);
 });
 
-test("calibration refuses partial, failed, and incomplete-summary replays", () => {
-  const incomplete = report();
-  incomplete.samples.pop();
-  assert.throws(() => calibratePerformance(incomplete), /incomplete replay/);
-  const failed = report();
-  failed.samples[0].serverToolEvents[0].data.success = false;
-  assert.throws(() => calibratePerformance(failed), /tool failure/);
-  const missingSummary = report();
-  missingSummary.samples[3].summaryCount = PERF_REPETITIONS - 1;
-  assert.throws(() => calibratePerformance(missingSummary), /phase summaries/);
+test("calibration rejects partial replay, failed tools and missing Harness summaries", () => {
+  for (const mutate of [
+    (report) => report.samples.pop(),
+    (report) => (report.samples[0].serverToolEvents[0].data.success = false),
+    (report) => (report.samples[3].summaryCount = 0),
+    (report) => (report.harness = {}),
+  ]) {
+    const inputs = reports();
+    mutate(inputs[2]);
+    assert.throws(() => calibratePerformance(inputs));
+  }
 });
 
-test("calibration cannot absorb late-session degradation or absolute timeouts", () => {
-  const growing = report();
-  for (const sample of growing.samples.slice(-2)) sample.metrics.totalMs = 1500;
+test("calibration cannot absorb growth or absolute timeouts", () => {
+  const growing = reports();
+  for (const sample of growing[2].samples.slice(16, 19)) sample.metrics.pipelineLocalMs = 1500;
   assert.throws(() => calibratePerformance(growing), /cross-round limits/);
-  const slow = report();
-  slow.samples[0].metrics.totalMs = 1000000;
+  const slow = reports();
+  slow[2].samples[0].metrics.pipelineLocalMs = 1000000;
   assert.throws(() => calibratePerformance(slow), /round 1/);
+});
+
+test("calibration rejects insufficient replays and inconsistent metric coverage", () => {
+  for (const input of [performanceReportFixture(), reports().slice(0, 2)])
+    assert.throws(() => calibratePerformance(input), /at least three/);
+  const inputs = reports();
+  inputs[2].samples[3].metrics.extraMs = 1;
+  assert.throws(() => calibratePerformance(inputs), /metric coverage mismatch/);
 });

@@ -242,6 +242,7 @@ test("agent lifecycle capability invoker prefixes flow with the plugin id", asyn
   await assert.rejects(
     prepared.plugins.demo.capabilityModelInvoker({
       purpose: "planning",
+      streaming: false,
       domain: "workflow",
       pluginFlow: "plan",
       ctx: { agentContext: createTestAgentExecutionScope(runtime) },

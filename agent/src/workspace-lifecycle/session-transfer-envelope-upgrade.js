@@ -340,20 +340,21 @@ function documentFormat(name) {
 
 const PLAIN_DOCUMENT_DIRECTORIES = Object.freeze([RUNTIME_EVENTS_DIR, AUTHORITY_OUTBOX_DIR]);
 
+async function upgradeDocumentDirectory(directory, stage) {
+  let upgraded = 0;
+  for (const entry of await listEntries(directory)) {
+    const format = entry.isFile() ? documentFormat(entry.name) : null;
+    if (!format) continue;
+    const result = await upgradeDocumentFile(path.join(directory, entry.name), format, stage);
+    upgraded += result?.upgraded || 0;
+  }
+  return upgraded;
+}
+
 async function upgradePlainDocuments(sessionDir, stage) {
   let upgraded = 0;
-  for (const dirName of PLAIN_DOCUMENT_DIRECTORIES) {
-    for (const entry of await listEntries(path.join(sessionDir, dirName))) {
-      const format = entry.isFile() ? documentFormat(entry.name) : null;
-      if (!format) continue;
-      const result = await upgradeDocumentFile(
-        path.join(sessionDir, dirName, entry.name),
-        format,
-        stage,
-      );
-      upgraded += result?.upgraded || 0;
-    }
-  }
+  for (const dirName of PLAIN_DOCUMENT_DIRECTORIES)
+    upgraded += await upgradeDocumentDirectory(path.join(sessionDir, dirName), stage);
   return upgraded;
 }
 
@@ -377,6 +378,44 @@ function decodeUpgradedSegment(text, segmentPath) {
   }
 }
 
+async function upgradeExecutionTurnSegments(turnDir, dialogProcessId, stage) {
+  let upgraded = 0;
+  const indexPath = path.join(turnDir, EXECUTION_EVENT_INDEX_FILE);
+  const indexText = await readTextOrNull(indexPath);
+  if (indexText === null) return 0;
+  const index = requireLegacyV2TurnIndex(
+    parseJson(indexText, indexPath),
+    indexPath,
+    dialogProcessId,
+  );
+  let changed = false;
+  const segments = [];
+  for (const segment of index.segments) {
+    const segmentPath = path.join(turnDir, segment.file);
+    const result = await upgradeDocumentFile(segmentPath, TRANSFER_DOCUMENT_FORMAT.JSONL, stage);
+    if (result === null) throw upgradeError("execution_segment_missing", { segmentPath });
+    if (!result.upgraded) {
+      segments.push(segment);
+      continue;
+    }
+    upgraded += result.upgraded;
+    changed = true;
+    const decoded = decodeUpgradedSegment(result.text, segmentPath);
+    segments.push({
+      ...segment,
+      bytes: decoded.bytes,
+      records: decoded.records.length,
+    });
+  }
+  if (changed) {
+    stage(
+      indexPath,
+      jsonText(requireLegacyV2TurnIndex({ ...index, segments }, indexPath, dialogProcessId)),
+    );
+  }
+  return upgraded;
+}
+
 async function upgradeExecutionEvents(sessionDir, stage) {
   const turnsDir = path.join(
     sessionDir,
@@ -386,36 +425,11 @@ async function upgradeExecutionEvents(sessionDir, stage) {
   let upgraded = 0;
   for (const entry of await listEntries(turnsDir)) {
     if (!entry.isDirectory()) continue;
-    const turnDir = path.join(turnsDir, entry.name);
-    const indexPath = path.join(turnDir, EXECUTION_EVENT_INDEX_FILE);
-    const indexText = await readTextOrNull(indexPath);
-    if (indexText === null) continue;
-    const index = requireLegacyV2TurnIndex(parseJson(indexText, indexPath), indexPath, entry.name);
-    let changed = false;
-    const segments = [];
-    for (const segment of index.segments) {
-      const segmentPath = path.join(turnDir, segment.file);
-      const result = await upgradeDocumentFile(segmentPath, TRANSFER_DOCUMENT_FORMAT.JSONL, stage);
-      if (result === null) throw upgradeError("execution_segment_missing", { segmentPath });
-      if (!result.upgraded) {
-        segments.push(segment);
-        continue;
-      }
-      upgraded += result.upgraded;
-      changed = true;
-      const decoded = decodeUpgradedSegment(result.text, segmentPath);
-      segments.push({
-        ...segment,
-        bytes: decoded.bytes,
-        records: decoded.records.length,
-      });
-    }
-    if (changed) {
-      stage(
-        indexPath,
-        jsonText(requireLegacyV2TurnIndex({ ...index, segments }, indexPath, entry.name)),
-      );
-    }
+    upgraded += await upgradeExecutionTurnSegments(
+      path.join(turnsDir, entry.name),
+      entry.name,
+      stage,
+    );
   }
   return upgraded;
 }

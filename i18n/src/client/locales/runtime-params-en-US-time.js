@@ -178,6 +178,16 @@ export default {
       name: "Agent hook timeout",
       description: "Maximum wait for agent hook timeout.",
     },
+    executionLogBatchWaitMs: {
+      name: "Execution log batch wait",
+      description:
+        "Maximum aggregation wait from the oldest queued record, below the queue wait budget. A full batch or flush starts writing immediately.",
+    },
+    executionLogQueueWaitMs: {
+      name: "Execution log queue wait budget",
+      description:
+        "Maximum wait before a log batch starts writing. An overdue queue rejects new records; accepted records drain and flush reports the budget violation. Active writes are not cancelled.",
+    },
     authorityOutboxDeliveredRetentionMs: {
       name: "Agent authority outbox delivered retention",
       description: "Retention period for agent authority outbox delivered retention.",

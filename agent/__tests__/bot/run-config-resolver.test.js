@@ -133,7 +133,6 @@ test("resolveScenarioRunConfig should use builtin programming shape and only acc
     "multimodal_parse",
     "access_connector",
     "user_interaction",
-    "task_summary",
     "task_check",
     "help",
     "do_search_web",
@@ -290,7 +289,7 @@ test("resolveScenarioRunConfig should remove denied tools from allowToolNames", 
       scenarios: {
         definitions: {
           programming: {
-            tools: ["read_file", "task_summary", "execute_script"],
+            tools: ["read_file", "task_check", "execute_script"],
           },
         },
       },
@@ -301,13 +300,13 @@ test("resolveScenarioRunConfig should remove denied tools from allowToolNames", 
     {
       scenario: "programming",
       toolPolicy: {
-        allowToolNames: ["read_file", "task_summary", "execute_script"],
-        denyToolNames: ["task_summary"],
+        allowToolNames: ["read_file", "task_check", "execute_script"],
+        denyToolNames: ["task_check"],
       },
     },
     {},
   );
 
   assert.deepEqual(resolved.toolPolicy.allowToolNames, ["read_file", "execute_script"]);
-  assert.deepEqual(resolved.toolPolicy.denyToolNames, ["task_summary"]);
+  assert.deepEqual(resolved.toolPolicy.denyToolNames, ["task_check"]);
 });

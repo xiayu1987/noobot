@@ -37,7 +37,11 @@ test("only checkpoint control messages participate in summary checkpoint policy"
   assert.deepEqual(
     [...CONTEXT_CONTROL_MESSAGE_TYPES].sort(),
     Object.values(CONTEXT_INJECTED_MESSAGE_TYPE)
-      .filter((type) => type !== CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION)
+      .filter(
+        (type) =>
+          type !== CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION &&
+          type !== CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_RESULT,
+      )
       .sort(),
   );
   assert.equal(

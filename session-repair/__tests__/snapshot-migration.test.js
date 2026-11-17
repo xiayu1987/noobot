@@ -10,6 +10,7 @@ import {
   V3_MESSAGE_IDENTITY_KEY,
   MODEL_CONTEXT_SNAPSHOT_VERSION_CHAIN,
   migrateModelContextSnapshot,
+  restoreSnapshotPhaseSummaryBodies,
 } from "../src/snapshot-migration.js";
 import {
   SNAPSHOT_VERSION,
@@ -26,8 +27,14 @@ const identity = {
 };
 
 test("every snapshot version has a schema and rejects incomplete blocks before migration", () => {
-  assert.deepEqual(Object.keys(MODEL_CONTEXT_SNAPSHOT_VERSION_CHAIN.schemas), ["3", "4", "5", "6"]);
-  for (const version of [3, 4, 5, 6]) {
+  assert.deepEqual(Object.keys(MODEL_CONTEXT_SNAPSHOT_VERSION_CHAIN.schemas), [
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+  ]);
+  for (const version of [3, 4, 5, 6, 7]) {
     assert.throws(
       () => migrateModelContextSnapshot({ version, ...identity, messageBlocks: {}, messages: [] }),
       (error) =>
@@ -361,4 +368,113 @@ test("v5 userMetaMaterialized on a non user message is unmappable", () => {
     () => migrateModelContextSnapshot(v5Snapshot({ history: [message] })),
     rejection("removal_role_mismatch"),
   );
+});
+
+function legacySummarySnapshot() {
+  const message = {
+    type: "human",
+    content: "tool receipt without summary body",
+    additional_kwargs: {
+      projectionType: "phase_summary",
+      sourceMessageUid: "sm_summary",
+      dialogProcessId: identity.dialogProcessId,
+      turnScopeId: identity.turnScopeId,
+      noobotInternalMessageType: "phase_summary_memory",
+    },
+  };
+  return { ...v4Snapshot({ history: [message], incremental: [message] }), version: 6 };
+}
+
+function summarySource() {
+  return {
+    ...identity,
+    messageUid: "sm_summary",
+    injectedMessageType: "noobot.phase_summary_result",
+    content: "complete original summary\nincluding decisions and next action",
+  };
+}
+
+test("legacy summary projections recover the authoritative body once per UID without mutating input", async () => {
+  const snapshot = legacySummarySnapshot();
+  const original = structuredClone(snapshot);
+  const { document } = migrateModelContextSnapshot(snapshot);
+  let reads = 0;
+  const restored = await restoreSnapshotPhaseSummaryBodies(document, async (uid) => {
+    reads += 1;
+    assert.equal(uid, "sm_summary");
+    return summarySource();
+  });
+  assert.equal(reads, 1);
+  assert.deepEqual(snapshot, original);
+  for (const message of restored.messages) {
+    assert.equal(message.content, summarySource().content);
+    assert.equal(message.additional_kwargs.messageUid, "sm_summary");
+    assert.equal(message.additional_kwargs.injectedMessageType, "noobot.phase_summary_result");
+    assert.equal(message.additional_kwargs.dialogProcessId, identity.dialogProcessId);
+    assert.equal(message.additional_kwargs.turnScopeId, identity.turnScopeId);
+    assert.equal(Object.hasOwn(message.additional_kwargs, "projectionType"), false);
+  }
+  assert.deepEqual(
+    await restoreSnapshotPhaseSummaryBodies(restored, async () => summarySource()),
+    restored,
+  );
+});
+
+test("summary body recovery rejects absent or conflicting authority instead of preserving receipts", async () => {
+  const { document } = migrateModelContextSnapshot(legacySummarySnapshot());
+  const source = summarySource();
+  for (const invalid of [
+    undefined,
+    { ...source, messageUid: "wrong" },
+    { ...source, sessionId: "wrong" },
+    { ...source, dialogProcessId: "wrong" },
+    { ...source, turnScopeId: "wrong" },
+    { ...source, injectedMessageType: "wrong" },
+    { ...source, content: " " },
+  ]) {
+    await assert.rejects(
+      restoreSnapshotPhaseSummaryBodies(document, async () => invalid),
+      rejection("phase_summary_source_invalid"),
+    );
+  }
+});
+
+test("snapshots without summaries do not read session messages", async () => {
+  const { document } = migrateModelContextSnapshot(v4Snapshot({}));
+  assert.deepEqual(
+    await restoreSnapshotPhaseSummaryBodies(document, async () => {
+      assert.fail("unexpected authority read");
+    }),
+    document,
+  );
+});
+
+test("v6 snapshots drop the retired checkpoint boundary policy from calls and results", () => {
+  const retired = { semanticClass: "flow_control", flowControlRole: "checkpoint_boundary" };
+  const evidence = { semanticClass: "flow_control", flowControlRole: "checkpoint_evidence" };
+  const call = {
+    type: "ai",
+    content: "",
+    additional_kwargs: { messageUid: "sm_call", ...identity },
+    tool_calls: [
+      { id: "summary", name: "task_summary", args: {}, contextPolicy: retired },
+      { id: "check", name: "task_check", args: {}, contextPolicy: evidence },
+    ],
+  };
+  const result = {
+    type: "tool",
+    content: '{"ok":false}',
+    tool_call_id: "summary",
+    additional_kwargs: { messageUid: "sm_result", ...identity, contextPolicy: retired },
+  };
+  const snapshot = { ...v4Snapshot({ incremental: [call, result] }), version: 6 };
+  const original = structuredClone(snapshot);
+  const { document } = migrateModelContextSnapshot(snapshot);
+  const [migratedCall, migratedResult] = document.messageBlocks.incremental;
+  assert.equal(Object.hasOwn(migratedCall.tool_calls[0], "contextPolicy"), false);
+  assert.deepEqual(migratedCall.tool_calls[1].contextPolicy, evidence);
+  assert.equal(Object.hasOwn(migratedResult.additional_kwargs, "contextPolicy"), false);
+  assert.equal(migratedResult.content, result.content);
+  assert.deepEqual(snapshot, original);
+  assert.equal(migrateModelContextSnapshot(document).migrated, false);
 });

@@ -16,7 +16,6 @@ test("missing finalization capabilities fail before any persistence or memory ef
       saveExecutionReport: async () => effects.push("report"),
       getExecutionTurnLogs: async () => effects.push("logs"),
     },
-    turnPersister: { appendAgentMessages: async () => effects.push("messages") },
     memoryPostProcessService: {
       resolveMemoryPostProcessAsyncEnabled: () => effects.push("memory"),
     },
@@ -27,6 +26,8 @@ test("missing finalization capabilities fail before any persistence or memory ef
     ["lifecycle", "enterMemory"],
     ["runtimeEventListener", "onEvent"],
     ["runtimeEventListener", "flush"],
+    ["turnPersistence", "flush"],
+    ["turnPersistence", "readResultMessages"],
   ]) {
     const payload = createTestSessionFinalizationContext();
     delete payload[port][method];

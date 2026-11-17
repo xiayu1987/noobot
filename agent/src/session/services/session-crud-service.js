@@ -4,13 +4,17 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
-import { resolveAuthoritativeTurnTerminal } from "@noobot/authoritative-state/application";
+import {
+  resolveAuthoritativeTurnTerminal,
+  resolveIndexedTurnTerminal,
+} from "@noobot/authoritative-state/application";
 import {
   SESSION_NOT_FOUND_REASON,
   createSessionArtifactNotFoundError,
   createSessionUnavailableReason,
   createTurnTerminalResolution,
   requireTurnTerminalResolutionIdentity,
+  requireAcceptedTurnRecord,
 } from "@noobot/session-protocol";
 import { requireTurnLookupKey } from "@noobot/session-protocol/turn-lookup-key";
 import {
@@ -22,8 +26,6 @@ import { buildThinkingDetailPayload } from "../session-thinking-detail.js";
 import { requireSessionTreeNode } from "@noobot/workspace-protocol/session-tree";
 import { projectSessionAttachmentState } from "./session-attachment-projection.js";
 import { isFunction, text } from "@noobot/shared/value";
-
-function ignoreSummaryProgress() {}
 
 export class SessionCrudService {
   constructor({ sessionRepo, sessionTreeService, attachmentService, now } = {}) {
@@ -55,6 +57,27 @@ export class SessionCrudService {
     return { exists: true, session };
   }
 
+  async getSessionRunContext({
+    userId,
+    sessionId,
+    turnScopeId,
+    dialogProcessId,
+    persistenceContext,
+  }) {
+    const lookupKey = requireTurnLookupKey({ turnScopeId, dialogProcessId });
+    const source = await this.sessionRepo.requireRunContextSource(userId, sessionId, {
+      persistenceContext,
+      lookupKey,
+    });
+    const { startedAt } = requireAcceptedTurnRecord(source.turnLifecycle, lookupKey);
+    return {
+      startedAt,
+      modelAlias: text(source.modelAlias),
+      parentSessionId: source.parentSessionId,
+      sessionDir: source.sessionDir,
+    };
+  }
+
   async locateSessionScope({ userId, sessionId, persistenceContext }) {
     return this.sessionRepo.locateSessionScope(userId, sessionId, persistenceContext);
   }
@@ -77,22 +100,29 @@ export class SessionCrudService {
     persistenceContext,
   }) {
     const identity = requireTurnTerminalResolutionIdentity({ commandId, sessionId, turnScopeId });
-    const bundle = await this.getSessionBundle({
-      userId,
-      sessionId,
+    const source = await this.sessionRepo.findTurnTerminalSource(userId, sessionId, {
       persistenceContext,
+      turnScopeId: identity.turnScopeId,
     });
-    if (!bundle.exists || !bundle.session) {
+    if (!source) {
       return createTurnTerminalResolution({
         ...identity,
         reason: SESSION_NOT_FOUND_REASON,
         generatedAt: this.now(),
       });
     }
+    if (Object.hasOwn(source, "turn"))
+      return resolveIndexedTurnTerminal({
+        turn: source.turn,
+        turnTimings: source.turnTimings,
+        aggregateVersion: source.aggregateVersion,
+        generatedAt: this.now(),
+        ...identity,
+      });
     return resolveAuthoritativeTurnTerminal({
-      lifecycle: bundle.session.turnLifecycle,
-      turnTimings: bundle.session.turnTimings,
-      aggregateVersion: bundle.session.aggregateVersion,
+      lifecycle: source.turnLifecycle,
+      turnTimings: source.turnTimings,
+      aggregateVersion: source.aggregateVersion,
       generatedAt: this.now(),
       ...identity,
     });
@@ -137,24 +167,6 @@ export class SessionCrudService {
     );
   }
 
-  async maintainSessionDisplaySummaries({ userId, onProgress = ignoreSummaryProgress }) {
-    const sessionIds = await this.listSessionIds({ userId });
-    const rebuiltSessionIds = [];
-    const failures = [];
-    for (const [index, sessionId] of sessionIds.entries()) {
-      onProgress({ sessionIndex: index + 1, sessionCount: sessionIds.length });
-      try {
-        const result = await this.sessionRepo.ensureSessionDisplaySummary(userId, sessionId, {
-          persistenceContext: this.sessionRepo.treePersistenceContext(userId, sessionId),
-        });
-        if (result.rebuilt) rebuiltSessionIds.push(sessionId);
-      } catch (error) {
-        failures.push({ sessionId, ...createSessionUnavailableReason(error) });
-      }
-    }
-    return { userId, rebuiltSessionIds, failures };
-  }
-
   async getAllSessionsData({ userId, failures }) {
     const sessionTree = await this.sessionTreeService.getSessionTree({ userId });
     const sessionIds = await this.listSessionIds({ userId });
@@ -190,9 +202,9 @@ export class SessionCrudService {
   }
 
   async setSessionModelAlias({ userId, sessionId, modelAlias, persistenceContext }) {
-    return this._mutateSessionDocument(userId, sessionId, persistenceContext, (session) => {
-      session.modelAlias = String(modelAlias || "");
-      return session;
+    return this.sessionRepo.updateSessionSettings(userId, sessionId, {
+      settings: { modelAlias: String(modelAlias || "") },
+      persistenceContext,
     });
   }
 
@@ -203,9 +215,9 @@ export class SessionCrudService {
       error.statusCode = 400;
       throw error;
     }
-    return this._mutateSessionDocument(userId, sessionId, persistenceContext, (session) => {
-      session.customTitle = normalizedTitle;
-      return session;
+    return this.sessionRepo.updateSessionSettings(userId, sessionId, {
+      settings: { customTitle: normalizedTitle },
+      persistenceContext,
     });
   }
 
@@ -218,15 +230,10 @@ export class SessionCrudService {
 
   async setRootSessionSelectedConnectorIds({ userId, sessionId, selectedConnectorIds = [] }) {
     const rootSessionId = await this.sessionTreeService.getRootSessionId({ userId, sessionId });
-    const session = await this._mutateSessionDocument(
-      userId,
-      rootSessionId,
-      this.sessionRepo.treePersistenceContext(userId, rootSessionId),
-      (current) => {
-        current.selectedConnectorIds = normalizeSelectedConnectorIds(selectedConnectorIds);
-        return current;
-      },
-    );
+    const session = await this.sessionRepo.updateSessionSettings(userId, rootSessionId, {
+      persistenceContext: this.sessionRepo.treePersistenceContext(userId, rootSessionId),
+      settings: { selectedConnectorIds: normalizeSelectedConnectorIds(selectedConnectorIds) },
+    });
     return session.selectedConnectorIds;
   }
 
@@ -234,22 +241,5 @@ export class SessionCrudService {
     await this.sessionRepo.writeSessionMetadata(userId, sessionId, metadata, {
       persistenceContext,
     });
-  }
-
-  async _mutateSessionDocument(userId, sessionId, persistenceContext, mutate) {
-    return this.sessionRepo.withSessionMutation(
-      userId,
-      sessionId,
-      async () => {
-        const session = await this.sessionRepo.requireById(userId, sessionId, {
-          persistenceContext,
-        });
-        mutate(session);
-        session.updatedAt = this.now();
-        await this.sessionRepo.save(userId, session, { persistenceContext });
-        return session;
-      },
-      { persistenceContext },
-    );
   }
 }

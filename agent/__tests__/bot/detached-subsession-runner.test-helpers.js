@@ -46,9 +46,9 @@ export function createDeps(overrides = {}) {
       },
     },
     session: {
-      async appendExecutionLog(payload = {}) {
-        calls.executionLogs.push(payload);
-        return { appended: true };
+      async appendExecutionLogs({ records, persistenceScope }) {
+        calls.executionLogs.push(...records.map((record) => ({ ...record, persistenceScope })));
+        return records.map(() => ({ appended: true }));
       },
       async applyTurnLifecycleEvent(payload = {}) {
         calls.lifecyclePayloads.push(payload);

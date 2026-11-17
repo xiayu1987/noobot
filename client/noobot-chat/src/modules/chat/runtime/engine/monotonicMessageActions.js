@@ -6,16 +6,11 @@
 import { normalizeTrimmedString } from "./utils.js";
 import { readApiResponseEnvelope } from "@noobot/shared/request-error";
 import { createResendMessageTransaction } from "./resendTransaction.js";
-import { findVisibleLastMessage } from "../../model/messageModel.js";
 import { createSessionAggregateVersionManager } from "./sessionAggregateVersionManager.js";
-import {
-  requireMessageDeleteResponse,
-  selectMainSessionDetailEntry,
-} from "@noobot/session-protocol";
+import { requireMessageDeleteResponse } from "@noobot/session-protocol";
 import {
   buildMessageAnchor,
   getMessageDialogProcessId,
-  findMessageIdentityIndex,
   getMessageRole,
   getMessageTurnScopeId,
 } from "../../model/messageIdentity.js";
@@ -30,8 +25,6 @@ import {
 import {
   confirmTurnRuntimeDeletion,
   selectCurrentTurnRuntime,
-  removeTurnRuntime,
-  sessionRuntimeId,
   turnRuntimeDisplayState,
 } from "../run-state-machine/turnRuntimeRegistry.js";
 import { clearTurnUiState } from "./turnUiStore.js";
@@ -63,12 +56,6 @@ function summarizeDeleteMessages(messages = []) {
   }));
 }
 
-function syncSessionMessageSummary(session) {
-  const { messages } = session;
-  session.messageCount = messages.length;
-  session.lastMessage = findVisibleLastMessage(messages);
-}
-
 export function createMonotonicMessageActions({
   activeSession,
   activeSessionId,
@@ -83,7 +70,7 @@ export function createMonotonicMessageActions({
   stopSending,
   translate,
   userId,
-  applySessionDetail,
+  applySessionMutation,
   turnRuntimeRegistry,
   messageOperationStore,
   monotonicActionStopTimeoutMs,
@@ -99,7 +86,7 @@ export function createMonotonicMessageActions({
     notify,
     stopSending,
     translate,
-    applySessionDetail,
+    applySessionMutation,
     applyRunStateEvent,
     invalidateTerminalResolution,
     getActiveOperation: messageOperationStore.getActiveOperation,
@@ -164,39 +151,6 @@ export function createMonotonicMessageActions({
     const session = activeSession.value;
     if (!session) return null;
     return resolveUserTargetInMessages(targetMessage, session.messages);
-  }
-
-  function findMessageCascadeStartIndex(targetMessage, messages) {
-    if (!isUserMessage(targetMessage)) return -1;
-    return findMessageIdentityIndex(targetMessage, messages);
-  }
-
-  function cascadeDeleteMessagesFrom(targetMessage) {
-    const session = activeSession.value;
-    const { messages } = session;
-    const userTargetMessage = resolveUserTargetInMessages(targetMessage, messages);
-    if (!userTargetMessage) return false;
-    const startIndex = findMessageCascadeStartIndex(userTargetMessage, messages);
-    if (startIndex < 0) return false;
-    const removedMessages = messages.slice(startIndex);
-    const sessionId = sessionRuntimeId(session);
-    for (const removedMessage of removedMessages) {
-      chatWebSocketClient.cancelStreamForTurn({
-        sessionId,
-        turnScopeId: getMessageTurnScopeId(removedMessage),
-        dialogProcessId: getMessageDialogProcessId(removedMessage),
-      });
-    }
-    session.messages = messages.slice(0, startIndex);
-    const removedTurnScopeIds = new Set(removedMessages.map(getMessageTurnScopeId).filter(Boolean));
-    removedTurnScopeIds.forEach((turnScopeId) => {
-      invalidateTerminalResolution(sessionId, turnScopeId);
-      removeTurnRuntime(turnRuntimeRegistry.value, turnScopeId, { sessionId });
-      clearTurnUiState({ sessionId, turnScopeId });
-    });
-    syncSessionMessageSummary(session);
-    clearPendingInteraction();
-    return true;
   }
 
   async function deleteMonotonicMessage(targetMessage) {
@@ -277,7 +231,9 @@ export function createMonotonicMessageActions({
         },
       });
       const response = requireMessageDeleteResponse(mutationResult.payload);
-      const mainEntry = selectMainSessionDetailEntry(response.detail);
+      if (response.sessionId !== sessionId || response.commandId !== deleteCommandId) {
+        throw new TypeError("message delete response identity mismatch");
+      }
       logMessageMutationDiagnostics("frontend.messageDelete.responseReceived", () => ({
         sessionId,
         dialogProcessId: getMessageDialogProcessId(userTargetMessage),
@@ -285,21 +241,18 @@ export function createMonotonicMessageActions({
         deletedCount: response.deletedCount,
         anchorIndex: response.anchorIndex,
         deletedTurnScopeIds: response.deletedTurnScopeIds,
-        responseMessages: summarizeDeleteMessages(mainEntry.messages),
+        deletedMessageUids: response.deletedMessageUids,
       }));
       const confirmedDeletedTurnScopeIds = response.deletedTurnScopeIds;
       confirmTurnRuntimeDeletion(turnRuntimeRegistry.value, confirmedDeletedTurnScopeIds, {
         sessionId,
       });
-      cascadeDeleteMessagesFrom(userTargetMessage);
-      logMessageMutationDiagnostics("frontend.messageDelete.localCascadeApplied", () => ({
-        sessionId,
-        dialogProcessId: getMessageDialogProcessId(userTargetMessage),
-        turnScopeId: getMessageTurnScopeId(userTargetMessage),
-        stage: "before-detail-apply",
-        messages: summarizeDeleteMessages(session.messages),
-      }));
-      applySessionDetail(response.detail);
+      for (const turnScopeId of confirmedDeletedTurnScopeIds) {
+        chatWebSocketClient.cancelStreamForTurn({ sessionId, turnScopeId });
+        invalidateTerminalResolution(sessionId, turnScopeId);
+        clearTurnUiState({ sessionId, turnScopeId });
+      }
+      if ((await applySessionMutation(response)) === false) return false;
       logMessageMutationDiagnostics("frontend.messageDelete.completed", () => ({
         sessionId,
         dialogProcessId: getMessageDialogProcessId(userTargetMessage),
@@ -307,7 +260,7 @@ export function createMonotonicMessageActions({
         confirmedDeletedTurnScopeIds,
         messagesAfter: summarizeDeleteMessages(session.messages),
       }));
-      clearPendingInteraction();
+      if (normalizeTrimmedString(activeSessionId.value) === sessionId) clearPendingInteraction();
       return true;
     } finally {
       messageOperationStore.completeOperation(deleteOperation.opId);
@@ -318,7 +271,7 @@ export function createMonotonicMessageActions({
     activeSession,
     activeSessionId,
     applyRunStateEvent,
-    applySessionDetail,
+    applySessionMutation,
     authFetch,
     buildMonotonicMessageAnchor: buildMessageAnchor,
     input,
@@ -335,7 +288,6 @@ export function createMonotonicMessageActions({
   return {
     prepareMonotonicMessageAction,
     resolveMonotonicUserTarget,
-    cascadeDeleteMessagesFrom,
     deleteMonotonicMessage,
     resendMonotonicMessage: resendTransaction.resendMonotonicMessage,
   };

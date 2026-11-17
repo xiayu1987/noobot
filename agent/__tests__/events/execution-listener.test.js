@@ -24,7 +24,7 @@ test("execution listener forwards the authoritative persistence scope and its de
   const listener = createExecutionEventListener({
     now: TEST_NOW,
     sessionManager: {
-      appendExecutionLog: async (record) => persisted.push(record),
+      appendExecutionLogs: async ({ records }) => persisted.push(...records),
     },
     userId: "user-a",
     sessionId: "child-session",
@@ -75,11 +75,13 @@ test("execution listener persists events in source order and exposes a durabilit
   const listener = createExecutionEventListener({
     now: TEST_NOW,
     sessionManager: {
-      appendExecutionLog: async (record) => {
-        calls.push(record.data.sequence);
-        if (record.data.sequence === 4) {
-          markFirstStarted();
-          await firstPersisted;
+      appendExecutionLogs: async ({ records }) => {
+        for (const record of records) {
+          calls.push(record.data.sequence);
+          if (record.data.sequence === 4) {
+            markFirstStarted();
+            await firstPersisted;
+          }
         }
       },
     },
@@ -119,7 +121,7 @@ test("execution listener keeps completion behind the persistence durability barr
   const listener = createExecutionEventListener({
     now: TEST_NOW,
     sessionManager: {
-      appendExecutionLog: async () => {
+      appendExecutionLogs: async () => {
         persistenceStarted();
         await persistenceBlocked;
       },
@@ -152,7 +154,7 @@ test("execution listener exposes persistence failures at the durability barrier"
   const listener = createExecutionEventListener({
     now: TEST_NOW,
     sessionManager: {
-      appendExecutionLog: async () => {
+      appendExecutionLogs: async () => {
         throw new Error("storage unavailable");
       },
     },
@@ -181,7 +183,7 @@ test("execution listener forwarding port delivers without taking persistence own
   const listener = createExecutionEventListener({
     now: TEST_NOW,
     sessionManager: {
-      appendExecutionLog: async (record) => persisted.push(record),
+      appendExecutionLogs: async ({ records }) => persisted.push(...records),
     },
     userId: "user-a",
     sessionId: "parent-session",
@@ -222,7 +224,7 @@ test("execution listener forwarding port delivers without taking persistence own
 test("execution listener forwarding port rejects events without a route identity", () => {
   const listener = createExecutionEventListener({
     now: TEST_NOW,
-    sessionManager: { appendExecutionLog: async () => {} },
+    sessionManager: { appendExecutionLogs: async () => {} },
     upstream: { onEvent: async () => true },
     userId: "user-a",
     sessionId: "session-a",
@@ -241,7 +243,7 @@ test("execution listener persists the canonical message fact instead of the priv
   const persisted = [];
   const listener = createExecutionEventListener({
     now: TEST_NOW,
-    sessionManager: { appendExecutionLog: async (record) => persisted.push(record) },
+    sessionManager: { appendExecutionLogs: async ({ records }) => persisted.push(...records) },
     userId: "user-a",
     sessionId: "session-a",
     turnScopeId: "turn-a",
@@ -290,7 +292,7 @@ test("execution listener persists the canonical message fact instead of the priv
 test("execution listener requires persistDurationMs on committed message events", () => {
   const listener = createExecutionEventListener({
     now: TEST_NOW,
-    sessionManager: { appendExecutionLog: async () => {} },
+    sessionManager: { appendExecutionLogs: async () => {} },
     userId: "user-a",
     sessionId: "session-a",
     turnScopeId: "turn-a",
@@ -338,7 +340,7 @@ test("execution listener forwards transient message events without persisting th
   const forwarded = [];
   const listener = createExecutionEventListener({
     now: TEST_NOW,
-    sessionManager: { appendExecutionLog: async (record) => persisted.push(record) },
+    sessionManager: { appendExecutionLogs: async ({ records }) => persisted.push(...records) },
     userId: "user-a",
     sessionId: "session-a",
     turnScopeId: "turn-a",
@@ -408,7 +410,7 @@ test("execution listener classifies context identity diagnostics under one proto
   const listener = createExecutionEventListener({
     now: TEST_NOW,
     sessionManager: {
-      appendExecutionLog: async (record) => persisted.push(record),
+      appendExecutionLogs: async ({ records }) => persisted.push(...records),
     },
     userId: "user-a",
     sessionId: "session-a",
@@ -447,7 +449,7 @@ test("execution listener classifies agent context diagnostics under the dedicate
   const listener = createExecutionEventListener({
     now: TEST_NOW,
     sessionManager: {
-      appendExecutionLog: async (record) => persisted.push(record),
+      appendExecutionLogs: async ({ records }) => persisted.push(...records),
     },
     userId: "user-a",
     sessionId: "session-a",
@@ -476,7 +478,7 @@ test("execution listener classifies agent context diagnostics under the dedicate
 test("execution listener exposes rejected asynchronous upstream delivery at the final barrier", async () => {
   const listener = createExecutionEventListener({
     now: TEST_NOW,
-    sessionManager: { appendExecutionLog: async () => {} },
+    sessionManager: { appendExecutionLogs: async () => {} },
     sessionId: "session-a",
     turnScopeId: "turn-a",
     upstream: {
@@ -530,12 +532,14 @@ test("execution listener drains delivery failure diagnostics before rejecting fl
   const listener = createExecutionEventListener({
     now: TEST_NOW,
     sessionManager: {
-      async appendExecutionLog(record) {
-        if (record.event === "execution_upstream_forward_failed") {
-          writeStarted.resolve();
-          await releaseWrite.promise;
+      async appendExecutionLogs({ records }) {
+        for (const record of records) {
+          if (record.event === "execution_upstream_forward_failed") {
+            writeStarted.resolve();
+            await releaseWrite.promise;
+          }
+          persisted.push(record);
         }
-        persisted.push(record);
       },
     },
     upstream: { onEvent: async () => false },
@@ -581,7 +585,7 @@ test("execution listener reports delivery and persistence failures together", as
   const listener = createExecutionEventListener({
     now: TEST_NOW,
     sessionManager: {
-      async appendExecutionLog() {
+      async appendExecutionLogs() {
         throw new Error("disk unavailable");
       },
     },
@@ -612,12 +616,14 @@ test("execution listener includes events enqueued during a flush", async () => {
   const listener = createExecutionEventListener({
     now: TEST_NOW,
     sessionManager: {
-      async appendExecutionLog(record) {
-        if (record.data.sequence === 1) {
-          writeStarted.resolve();
-          await releaseWrite.promise;
+      async appendExecutionLogs({ records }) {
+        for (const record of records) {
+          if (record.data.sequence === 1) {
+            writeStarted.resolve();
+            await releaseWrite.promise;
+          }
+          persisted.push(record.data.sequence);
         }
-        persisted.push(record.data.sequence);
       },
     },
     upstream: { onEvent: async ({ data }) => forwarded.push(data.sequence) },
@@ -643,7 +649,7 @@ test("execution listener reports delivery timing once at flush without writing e
   const timings = [];
   const listener = createExecutionEventListener({
     now: TEST_NOW,
-    sessionManager: { appendExecutionLog: async (record) => persisted.push(record) },
+    sessionManager: { appendExecutionLogs: async ({ records }) => persisted.push(...records) },
     userId: "user-a",
     sessionId: "session-a",
     turnScopeId: "turn-a",
@@ -691,7 +697,7 @@ test("execution listener does not collect delivery timing without onDeliveryTimi
   const forwarded = [];
   const listener = createExecutionEventListener({
     now: TEST_NOW,
-    sessionManager: { appendExecutionLog: async () => {} },
+    sessionManager: { appendExecutionLogs: async () => {} },
     userId: "user-a",
     sessionId: "session-a",
     turnScopeId: "turn-a",
@@ -726,7 +732,7 @@ test("execution listener does not collect delivery timing without onDeliveryTimi
   assert.equal(nowCalls, 0);
 });
 
-test("execution listener carries the explicit persistence scope on every record", async () => {
+test("execution listener carries the explicit persistence scope on every batch", async () => {
   const persisted = [];
   const persistenceScope = {
     scopeId: "agent:child-turn",
@@ -736,7 +742,7 @@ test("execution listener carries the explicit persistence scope on every record"
   };
   const scoped = createExecutionEventListener({
     now: TEST_NOW,
-    sessionManager: { appendExecutionLog: async (record) => persisted.push(record) },
+    sessionManager: { appendExecutionLogs: async (batch) => persisted.push(batch) },
     userId: "user-a",
     sessionId: "child-session",
     parentSessionId: "parent-session",
@@ -746,7 +752,7 @@ test("execution listener carries the explicit persistence scope on every record"
   });
   const unscoped = createExecutionEventListener({
     now: TEST_NOW,
-    sessionManager: { appendExecutionLog: async (record) => persisted.push(record) },
+    sessionManager: { appendExecutionLogs: async (batch) => persisted.push(batch) },
     userId: "user-a",
     sessionId: "root-session",
     parentSessionId: "",
@@ -771,7 +777,7 @@ test("execution listener rejects construction without an explicit persistence sc
     () =>
       createExecutionEventListener({
         now: TEST_NOW,
-        sessionManager: { appendExecutionLog: async () => {} },
+        sessionManager: { appendExecutionLogs: async () => {} },
         userId: "user-a",
         sessionId: "session-a",
         parentSessionId: "",
@@ -784,7 +790,7 @@ test("execution listener rejects construction without an explicit persistence sc
 
 test("execution listener rejects non-string or missing route identity at construction", () => {
   const base = {
-    sessionManager: { appendExecutionLog: async () => {} },
+    sessionManager: { appendExecutionLogs: async () => {} },
     userId: "user-a",
     sessionId: "session-a",
     parentSessionId: "",
@@ -812,7 +818,7 @@ test("execution listener rejects an upstream without an onEvent port", () => {
     () =>
       createExecutionEventListener({
         now: TEST_NOW,
-        sessionManager: { appendExecutionLog: async () => {} },
+        sessionManager: { appendExecutionLogs: async () => {} },
         dialogProcessId: "dialog-a",
         upstream: {},
       }),

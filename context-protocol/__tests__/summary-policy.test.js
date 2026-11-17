@@ -11,7 +11,9 @@ import {
   collectDialogScopedMessagesToSummarize,
   collectLatestCheckpointEvidenceMessageIndexes,
   collectScopedMessagesToSummarize,
+  countSummaryMessageChars,
   resolveSummaryScope,
+  requirePhaseSummaryText,
   markScopedMessagesSummarized,
 } from "../src/policy/summary.js";
 import { isContextControlMessage } from "../src/policy/injected-message.js";
@@ -20,8 +22,22 @@ import { readContextMessageField, resolveContextMessageSummarized } from "../src
 import { FLOW_CONTROL_ROLE, createFlowControlContextPolicy } from "../src/tool/context-policy.js";
 import { contextMessage } from "./helpers/context-message.js";
 
-const boundaryPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
+const boundaryPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE);
 const evidencePolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE);
+
+test("phase summary accepts only complete canonical text without tool calls", () => {
+  assert.equal(requirePhaseSummaryText({ text: " summary ", toolCalls: [] }), "summary");
+  for (const output of [
+    undefined,
+    { text: "", reasoning: "analysis", toolCalls: [] },
+    { text: " \n ", toolCalls: [] },
+    { text: {}, toolCalls: [] },
+    { text: "summary" },
+    { text: "summary", toolCalls: [{}] },
+  ]) {
+    assert.throws(() => requirePhaseSummaryText(output), /non-empty text without tool calls/);
+  }
+});
 
 function msg(messageUid, fields = {}) {
   return contextMessage({ ...fields, messageUid });
@@ -53,6 +69,47 @@ function injectedMessage(messageUid, injectedMessageType, content, extra = {}) {
     ...extra,
   });
 }
+
+test("summary character budget follows checkpoint eligibility across successive summaries", () => {
+  const large = "retained ".repeat(100);
+  const oldSummary = injectedMessage(
+    "old-summary",
+    CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_RESULT,
+    large,
+  );
+  const blocks = {
+    system: [msg("system", { role: "system", content: large })],
+    history: [oldSummary, msg("user", { role: "user", content: large })],
+    incremental: [
+      injectedMessage("interjection", CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION, large),
+      assistantCalls("call", [{ id: "read", name: "read_file" }]),
+      toolResult("result", "read", "read_file", "fresh evidence"),
+      assistantCalls("incomplete", [{ id: "pending", name: "read_file" }]),
+    ],
+  };
+  for (const message of [...blocks.history, ...blocks.incremental]) {
+    message.additional_kwargs.dialogProcessId = "dialog-1";
+    message.additional_kwargs.turnScopeId = "turn-1";
+  }
+  let scope = resolveSummaryScope(blocks);
+  assert.deepEqual(
+    scope.summaryMessages.map((message) => readContextMessageField(message, "messageUid")),
+    ["call", "result"],
+  );
+  assert.equal(countSummaryMessageChars(scope.summaryMessages), "fresh evidence".length);
+  for (const message of scope.summaryMessages) message.additional_kwargs.summarized = true;
+  blocks.incremental.push(
+    injectedMessage("new-summary", CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_RESULT, large, {
+      dialogProcessId: "dialog-1",
+      turnScopeId: "turn-1",
+    }),
+  );
+  scope = resolveSummaryScope(blocks);
+  assert.deepEqual(scope.summaryMessages, [oldSummary]);
+  assert.equal(countSummaryMessageChars(scope.summaryMessages), large.length);
+  oldSummary.additional_kwargs.summarized = true;
+  assert.equal(countSummaryMessageChars(resolveSummaryScope(blocks).summaryMessages), 0);
+});
 
 function currentTurnSummarizedFlags(messages = []) {
   const indexes = collectCurrentTurnSummarizedMessageIndexes(messages);
@@ -154,10 +211,8 @@ test("checkpoint control prompts are summarized while normal injections retain t
   const messages = [
     injectedMessage("m0", "guidance", "old"),
     injectedMessage("m1", "guidance", "latest"),
-    msg("m2", {
-      role: "user",
-      content: "summary prompt",
-      noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_PROMPT,
+    injectedMessage("m2", CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_RESULT, "previous summary", {
+      noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_RESULT,
     }),
     msg("m3", {
       role: "user",
@@ -166,12 +221,8 @@ test("checkpoint control prompts are summarized while normal injections retain t
     }),
   ];
 
-  assert.deepEqual(currentTurnSummarizedFlags(messages), [true, false, true, true]);
-  assert.deepEqual(collectScopedMessagesToSummarize(messages).messages, [
-    messages[0],
-    messages[2],
-    messages[3],
-  ]);
+  assert.deepEqual(currentTurnSummarizedFlags(messages), [true, false, false, true]);
+  assert.deepEqual(collectScopedMessagesToSummarize(messages).messages, [messages[0], messages[3]]);
 });
 
 test("summary checkpoint preserves only the latest task_check call and result pair", () => {
@@ -249,6 +300,36 @@ test("summary scope is the protocol-owned history plus incremental closed bounda
   assert.deepEqual(scope.summaryMessages, [call, result]);
 });
 
+test("summary checkpoint coverage excludes projections and ephemeral context while preserving model input", () => {
+  const source = msg("source", {
+    role: "assistant",
+    content: "work",
+    dialogProcessId: "d1",
+    turnScopeId: "t1",
+  });
+  const projection = {
+    type: "human",
+    content: "derived metadata",
+    additional_kwargs: {
+      projectionType: "user_meta",
+      sourceMessageUid: "source",
+      dialogProcessId: "d1",
+      turnScopeId: "t1",
+    },
+  };
+  const ephemeral = {
+    type: "human",
+    content: "runtime context",
+    additional_kwargs: {
+      contextMessageId: "cm_runtime",
+    },
+  };
+  const scope = resolveSummaryScope({ history: [projection], incremental: [source, ephemeral] });
+  assert.deepEqual(scope.sourceMessages, [projection, source, ephemeral]);
+  assert.deepEqual(scope.checkpointMessages, [source]);
+  assert.deepEqual(scope.summaryMessages, []);
+});
+
 test("checkpoint targets use the completed authoritative scope to select one injection per type", () => {
   const oldGuidance = injectedMessage("old-guidance", "guidance", "old guidance");
   const latestGuidance = injectedMessage("latest-guidance", "guidance", "latest guidance");
@@ -276,6 +357,37 @@ test("summary policy marks restored guidance when a newer guidance exists", () =
   ];
 
   assert.deepEqual(currentTurnSummarizedFlags(messages), [true, false]);
+});
+
+test("summary replacement crosses owners and rounds in either direction", () => {
+  for (const owners of [
+    ["harness-plugin", "agent"],
+    ["agent", "harness-plugin"],
+  ]) {
+    const oldSummary = injectedMessage(
+      "old",
+      CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_RESULT,
+      "old",
+      {
+        injectedBy: owners[0],
+        dialogProcessId: "old-dialog",
+        turnScopeId: "old-turn",
+      },
+    );
+    const latest = injectedMessage(
+      "new",
+      CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_RESULT,
+      "new",
+      {
+        injectedBy: owners[1],
+        dialogProcessId: "new-dialog",
+        turnScopeId: "new-turn",
+      },
+    );
+    const scope = resolveSummaryScope({ history: [oldSummary], incremental: [latest] });
+    assert.deepEqual(scope.summaryMessages, [oldSummary]);
+    assert.equal(isContextControlMessage(latest), false);
+  }
 });
 
 test("user interjection is a retained injection category, not a checkpoint control", () => {

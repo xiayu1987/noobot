@@ -7,12 +7,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createModelContext } from "@noobot/context-protocol";
-import { MAIN_FLOW_CONTROL_REASON } from "@noobot/context-protocol/policy/main-flow-control";
 import { createTurnOrchestrator } from "../../../src/runtime/turn/orchestrator.js";
-import {
-  isMainFlowFinalNoToolsTurnEngaged,
-  requestMainFlowFinalNoToolsTurn,
-} from "../../../src/runtime/main-flow-control.js";
+import { isMainFlowFinalNoToolsTurnEngaged } from "../../../src/runtime/main-flow-control.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 
@@ -35,7 +31,6 @@ const passiveLoopControls = {
   resolveLlmForTurnFn: () => {},
   assertNotAbortedFn: () => {},
   buildLoopResultFn: ({ output }) => ({ output }),
-  maybeRequestPhaseSummaryFn: () => {},
   maybeRequestTaskCheckFn: () => {},
   maybePromptHelpToolByLoopFn: () => {},
   maybePromptHelpToolByFailureFn: () => {},
@@ -75,12 +70,8 @@ test("an error raised deep in the loop is reported exactly once with its own tur
   assert.equal(reported[0].metadata.turn, failingTurn);
 });
 
-test("turns continued by interjections after a final no-tools turn are not final turns", async () => {
+test("loop-limit final turns reset their active flag before continuing interjections", async () => {
   const runtime = createLoopRuntime({ interjectionBatches: [[{ commandId: "command-1" }]] });
-  requestMainFlowFinalNoToolsTurn(runtime, {
-    reason: MAIN_FLOW_CONTROL_REASON.TASK_SUMMARY_COMPLETE,
-    source: "test",
-  });
   const engagedByTurn = [];
   const run = createTurnOrchestrator({
     ...passiveLoopControls,
@@ -98,12 +89,22 @@ test("turns continued by interjections after a final no-tools turn are not final
     },
   });
 
-  const result = await runLoop(run, runtime);
+  const result = await run({
+    modelState: { runtime, agentContext: createTestAgentExecutionScope(runtime) },
+    loopState: {
+      tools: [{}],
+      traces: [],
+      maxTurns: 1,
+      turnMessages: [],
+      loopLimitFinalizePrompted: true,
+    },
+    turn: 10,
+  });
 
-  assert.equal(result.output, "after interjection");
+  assert.equal(result.output, "final");
   assert.deepEqual(engagedByTurn, [
-    [1, true],
-    [2, false],
+    [10, true],
+    [11, true],
   ]);
   assert.equal(isMainFlowFinalNoToolsTurnEngaged(runtime), false);
 });

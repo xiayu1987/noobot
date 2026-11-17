@@ -9,47 +9,49 @@ import { MODEL_CONTEXT_SEQUENCE_POLICY, MODEL_CONTEXT_TRACE } from "@noobot/mode
 import { text } from "@noobot/shared/value";
 
 export function assertModelInvocationTrace(record, { rootSessionId } = {}) {
-  expect(record.event).toBe(MODEL_CONTEXT_TRACE.EVENT);
-  expect(record.data?.stage).toBe(MODEL_CONTEXT_TRACE.INVOKE_STAGE);
-  expect(record.data?.authority).toBe(MODEL_CONTEXT_TRACE.INVOKE_AUTHORITY);
-  expect(record.data?.protocolVersion).toBe(MODEL_CONTEXT_TRACE.PROTOCOL_VERSION);
-  expect(Object.values(MODEL_CONTEXT_SEQUENCE_POLICY)).toContain(
-    record.data?.invocation?.contextSequencePolicy,
+  assert.equal(record.event, MODEL_CONTEXT_TRACE.EVENT);
+  assert.equal(record.data?.stage, MODEL_CONTEXT_TRACE.INVOKE_STAGE);
+  assert.equal(record.data?.authority, MODEL_CONTEXT_TRACE.INVOKE_AUTHORITY);
+  assert.equal(record.data?.protocolVersion, MODEL_CONTEXT_TRACE.PROTOCOL_VERSION);
+  assert.ok(
+    Object.values(MODEL_CONTEXT_SEQUENCE_POLICY).includes(
+      record.data?.invocation?.contextSequencePolicy,
+    ),
   );
-  expect(record.data?.invocationId).toBeTruthy();
-  expect(record.data?.modelInstanceId).toBeTruthy();
-  expect(Number.isInteger(record.data?.attempt)).toBe(true);
-  expect(record.data.attempt).toBeGreaterThan(0);
-  expect(Number.isInteger(record.data?.invocationSequence)).toBe(true);
-  expect(record.userId).toBeTruthy();
-  expect(record.sessionId).toBeTruthy();
-  expect(record.dialogProcessId).toBeTruthy();
-  expect(record.turnScopeId).toBeTruthy();
+  assert.ok(record.data?.invocationId);
+  assert.ok(record.data?.modelInstanceId);
+  assert.ok(Number.isInteger(record.data?.attempt));
+  assert.ok(record.data.attempt > 0);
+  assert.ok(Number.isInteger(record.data?.invocationSequence));
+  assert.ok(record.userId);
+  assert.ok(record.sessionId);
+  assert.ok(record.dialogProcessId);
+  assert.ok(record.turnScopeId);
   if (rootSessionId) {
-    expect(record.sessionId === rootSessionId || record.parentSessionId === rootSessionId).toBe(
-      true,
-    );
+    assert.ok(record.sessionId === rootSessionId || record.parentSessionId === rootSessionId);
   }
 
   const messages = record.data.messages;
-  expect(Number.isInteger(messages?.count)).toBe(true);
-  expect(messages.count).toBeGreaterThan(0);
-  expect(Object.values(messages.roles || {}).reduce((sum, count) => sum + count, 0)).toBe(
+  assert.ok(Number.isInteger(messages?.count));
+  assert.ok(messages.count > 0);
+  assert.equal(
+    Object.values(messages.roles || {}).reduce((sum, count) => sum + count, 0),
     messages.count,
   );
-  expect(
+  assert.equal(
     (messages.dialogGroups || []).reduce((sum, group) => sum + group.count, 0) +
       messages.missingDialogIdCount,
-  ).toBe(messages.count);
-  expect(Array.isArray(messages.preview)).toBe(true);
-  expect(messages.preview.length + Number(messages.truncated || 0)).toBe(messages.count);
-  expect(Array.isArray(messages.evidence)).toBe(true);
-  expect(messages.evidence).toHaveLength(messages.count);
-  expect(Number.isInteger(messages.missingMessageUidCount)).toBe(true);
-  expect(messages.fingerprintProtocolVersion).toBe(2);
-  expect(Array.isArray(messages.fingerprints)).toBe(true);
-  expect(messages.fingerprints).toHaveLength(messages.count);
-  expect(messages.sequenceHash).toMatch(/^[a-f0-9]{64}$/);
+    messages.count,
+  );
+  assert.ok(Array.isArray(messages.preview));
+  assert.equal(messages.preview.length + Number(messages.truncated || 0), messages.count);
+  assert.ok(Array.isArray(messages.evidence));
+  assert.equal(messages.evidence.length, messages.count);
+  assert.ok(Number.isInteger(messages.missingMessageUidCount));
+  assert.equal(messages.fingerprintProtocolVersion, 2);
+  assert.ok(Array.isArray(messages.fingerprints));
+  assert.equal(messages.fingerprints.length, messages.count);
+  assert.match(messages.sequenceHash, /^[a-f0-9]{64}$/);
   for (const fingerprint of messages.fingerprints) {
     assert.match(fingerprint, /^[a-f0-9]{64}$/);
   }
@@ -57,17 +59,17 @@ export function assertModelInvocationTrace(record, { rootSessionId } = {}) {
     record.data.invocation.contextSequencePolicy ===
     MODEL_CONTEXT_SEQUENCE_POLICY.CHECKPOINT_APPEND_ONLY
   ) {
-    expect(Number.isInteger(record.data.context?.summaryCheckpointRevision)).toBe(true);
-    expect(record.data.context.summaryCheckpointRevision).toBeGreaterThanOrEqual(0);
+    assert.ok(Number.isInteger(record.data.context?.summaryCheckpointRevision));
+    assert.ok(record.data.context.summaryCheckpointRevision >= 0);
   } else {
-    expect(record.data.context).toBeUndefined();
+    assert.equal(record.data.context, undefined);
   }
   const previewMissingMessageUids = messages.preview.filter(
     (message) => !message.messageUid,
   ).length;
-  expect(messages.missingMessageUidCount).toBeGreaterThanOrEqual(previewMissingMessageUids);
-  expect(messages.missingMessageUidCount).toBeLessThanOrEqual(
-    previewMissingMessageUids + Number(messages.truncated || 0),
+  assert.ok(messages.missingMessageUidCount >= previewMissingMessageUids);
+  assert.ok(
+    messages.missingMessageUidCount <= previewMissingMessageUids + Number(messages.truncated || 0),
   );
   for (const message of messages.preview) {
     assert.equal(typeof message.role, "string");
@@ -332,35 +334,42 @@ export function isMainAgentModelInvocation(record) {
   return invocation.flow === "agent.main" && invocation.domain === "primary";
 }
 
-export function assertModelInvocationTraceSet(records, { rootSessionId } = {}) {
-  const traces = Array.isArray(records) ? records : [];
-  expect(traces.length).toBeGreaterThan(0);
-  traces.forEach((record) => assertModelInvocationTrace(record, { rootSessionId }));
-
-  const attempts = traces.map((record) => `${record.data.invocationId}:${record.data.attempt}`);
-  expect(new Set(attempts).size).toBe(attempts.length);
-
+export function createModelInvocationTraceAudit({ rootSessionId } = {}) {
   const attemptsByInvocation = new Map();
-  for (const record of traces) {
-    const attemptsForInvocation = attemptsByInvocation.get(record.data.invocationId) || [];
-    attemptsForInvocation.push(record.data.attempt);
-    attemptsByInvocation.set(record.data.invocationId, attemptsForInvocation);
-  }
-  for (const invocationAttempts of attemptsByInvocation.values()) {
-    expect(invocationAttempts).toEqual(invocationAttempts.map((_, index) => index + 1));
-  }
-
   const sequencesByModel = new Map();
-  for (const record of traces) {
-    const modelInstanceId = record.data.modelInstanceId;
-    const sequences = sequencesByModel.get(modelInstanceId) || [];
-    sequences.push(record.data.invocationSequence);
-    sequencesByModel.set(modelInstanceId, sequences);
-  }
-  for (const sequences of sequencesByModel.values()) {
-    expect(sequences).toEqual(sequences.map((_, index) => index + 1));
-  }
-  const prefixAudit = auditModelPrefixStability(traces);
-  expect(prefixAudit.violations, "provider model input prefix stability violations").toEqual([]);
-  return prefixAudit;
+  const prefixRecords = [];
+  return {
+    observe(record) {
+      assertModelInvocationTrace(record, { rootSessionId });
+      const { invocationId, modelInstanceId, attempt, invocationSequence } = record.data;
+      assert.equal(attempt, (attemptsByInvocation.get(invocationId) || 0) + 1);
+      attemptsByInvocation.set(invocationId, attempt);
+      assert.equal(invocationSequence, (sequencesByModel.get(modelInstanceId) || 0) + 1);
+      sequencesByModel.set(modelInstanceId, invocationSequence);
+      prefixRecords.push({
+        ts: record.ts,
+        sessionId: record.sessionId,
+        parentSessionId: record.parentSessionId,
+        dialogProcessId: record.dialogProcessId,
+        data: {
+          invocationId,
+          invocation: record.data.invocation,
+          context: record.data.context,
+          messages: { fingerprints: record.data.messages.fingerprints },
+        },
+      });
+    },
+    finish() {
+      expect(prefixRecords.length).toBeGreaterThan(0);
+      const audit = auditModelPrefixStability(prefixRecords);
+      expect(audit.violations, "provider model input prefix stability violations").toEqual([]);
+      return audit;
+    },
+  };
+}
+
+export function assertModelInvocationTraceSet(records, options = {}) {
+  const audit = createModelInvocationTraceAudit(options);
+  for (const record of Array.isArray(records) ? records : []) audit.observe(record);
+  return audit.finish();
 }

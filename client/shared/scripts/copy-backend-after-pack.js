@@ -33,7 +33,7 @@ async function assertRequiredBackendRuntimeFiles(rootDir, label) {
     requiredBackendRuntimeFiles.map((relativePath) => stat(path.join(rootDir, relativePath))),
   );
   const missing = requiredBackendRuntimeFiles.filter(
-    (_, index) => results[index].status === "rejected",
+    (...[, index]) => results[index].status === "rejected",
   );
   if (missing.length === 0) return;
   const causes = results.filter((result) => result.status === "rejected").map((r) => r.reason);

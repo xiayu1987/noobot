@@ -15,13 +15,16 @@ import {
 import { SESSION_REPAIR_ERROR_CODE, assertTurnJournalBoundary } from "@noobot/session-repair";
 import { readTurnSummaryCheckpointState } from "@noobot/context-protocol/policy/summary";
 import { createHash } from "node:crypto";
+import { isDeepFrozen } from "@noobot/shared/deep-freeze";
+import { fileIdentityKey } from "@noobot/shared/file-identity";
 import { mkdir, open, rename, writeFile } from "node:fs/promises";
 import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
 import { assertStoredCheckpointReceipts } from "@noobot/session-protocol/summary-checkpoint-storage";
+import { invalidateArtifactRead, recordStorageWork } from "./storage-transaction.js";
 
 export const TURN_JOURNAL_SCHEMA_VERSION = SESSION_ARTIFACT_SCHEMA_VERSION;
 
-export function turnJournalSchemaRequiredError(operation) {
+function turnJournalSchemaRequiredError(operation) {
   const error = new Error(`${operation} requires the canonical turn journal schema`);
   error.code = SESSION_ERROR_CODE.TURN_JOURNAL_SCHEMA_REQUIRED;
   return error;
@@ -53,8 +56,14 @@ export function resolveTurnJournalPath(sessionDir, file) {
   });
 }
 
+const immutableSnapshotHashes = new WeakMap();
+
 export function summarySnapshotContentHash(payload) {
-  return `sha256:${createHash("sha256").update(JSON.stringify(payload)).digest("hex")}`;
+  const cached = immutableSnapshotHashes.get(payload);
+  if (cached) return cached;
+  const hash = `sha256:${createHash("sha256").update(JSON.stringify(payload)).digest("hex")}`;
+  if (isDeepFrozen(payload)) immutableSnapshotHashes.set(payload, hash);
+  return hash;
 }
 
 export { sessionStorageMessageHash as messageHash } from "@noobot/session-protocol";
@@ -122,9 +131,12 @@ export function summarySnapshotIndex(receipt, file, contentHash) {
 }
 
 export async function writeSummarySnapshot(file, payload) {
+  invalidateArtifactRead(file);
   await mkdir(path.dirname(file), { recursive: true });
   const temp = `${file}.tmp-${process.pid}-${Date.now()}`;
-  await writeFile(temp, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+  const content = `${JSON.stringify(payload, null, 2)}\n`;
+  await writeFile(temp, content, "utf8");
+  recordStorageWork("snapshotWriteBytes", Buffer.byteLength(content));
   await rename(temp, file);
 }
 
@@ -164,10 +176,15 @@ export async function readJournalRecordRange(file, committedBytes, resume = null
   if (!handle) return { identity: "", resumed: false, records: [] };
   try {
     const info = await handle.stat({ bigint: true });
+    recordStorageWork("journalIdentityReads");
     const identity = `${info.dev}:${info.ino}`;
+    const sourceKey = fileIdentityKey(info);
     const limit = assertTurnJournalBoundary(file, Number(info.size), committedBytes);
     const resumed =
-      resume !== null && resume.identity === identity && resume.committedBytes <= limit;
+      resume !== null &&
+      resume.identity === identity &&
+      resume.committedBytes <= limit &&
+      (resume.committedBytes < limit || resume.sourceKey === sourceKey);
     const fromBytes = resumed ? resume.committedBytes : 0;
     const raw = Buffer.alloc(limit - fromBytes);
     let offset = 0;
@@ -177,7 +194,8 @@ export async function readJournalRecordRange(file, committedBytes, resume = null
       offset += bytesRead;
     }
     assertTurnJournalBoundary(file, fromBytes + offset, committedBytes);
-    return { identity, resumed, records: parseJournalRecords(file, raw) };
+    recordStorageWork("journalReadBytes", offset);
+    return { identity, sourceKey, resumed, records: parseJournalRecords(file, raw) };
   } finally {
     await handle.close();
   }
@@ -188,16 +206,19 @@ export async function readJournalRecords(file, committedBytes) {
 }
 
 export async function appendJournal(file, records, committedBytes = 0) {
+  invalidateArtifactRead(file);
   await mkdir(path.dirname(file), { recursive: true });
   const handle = await open(file, "a+");
   try {
     const currentSize = (await handle.stat()).size;
+    recordStorageWork("journalIdentityReads");
     const committed = assertTurnJournalBoundary(file, currentSize, committedBytes);
     if (currentSize !== committed) await handle.truncate(committed);
     if (!records.length) return committed;
     const payload = records.map((record) => `${JSON.stringify(record)}\n`).join("");
     await handle.writeFile(payload, "utf8");
     await handle.sync();
+    recordStorageWork("journalWriteBytes", Buffer.byteLength(payload, "utf8"));
     return committed + Buffer.byteLength(payload, "utf8");
   } finally {
     await handle.close();
@@ -205,6 +226,7 @@ export async function appendJournal(file, records, committedBytes = 0) {
 }
 
 export async function replaceJournalRecords(file, records) {
+  invalidateArtifactRead(file);
   const temp = `${file}.tmp-${process.pid}-${Date.now()}`;
   const payload = records.map((record) => `${JSON.stringify(record)}\n`).join("");
   const handle = await open(temp, "w");
@@ -215,6 +237,7 @@ export async function replaceJournalRecords(file, records) {
     await handle.close();
   }
   await rename(temp, file);
+  recordStorageWork("journalWriteBytes", Buffer.byteLength(payload, "utf8"));
   return Buffer.byteLength(payload, "utf8");
 }
 

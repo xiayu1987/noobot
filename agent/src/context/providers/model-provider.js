@@ -27,15 +27,8 @@ function normalizeModelMultimodalParsing(modelSpec = {}) {
   };
 }
 
-export function resolveModelSection({
-  globalConfig = {},
-  userConfig = {},
-  effectiveConfig = {},
-  selectedModel = "",
-  scenario = "",
-} = {}) {
-  const currentModelSpec =
-    resolveEffectiveModelSpec({ globalConfig, userConfig, selectedModel, scenario }) || {};
+export function resolveModelSection({ effectiveConfig, selectedModel = "", scenario = "" } = {}) {
+  const currentModelSpec = resolveEffectiveModelSpec({ effectiveConfig, selectedModel, scenario });
   const providers = effectiveConfig?.providers || {};
   return {
     current: {

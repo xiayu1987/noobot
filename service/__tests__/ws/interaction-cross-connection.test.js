@@ -14,7 +14,9 @@ import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.tes
 
 const OWNER = "user-cross";
 
-useProvisionedRuntimeEventsWorkspace([OWNER]);
+useProvisionedRuntimeEventsWorkspace([OWNER], {
+  [OWNER]: ["session-cross", "session-foreign", "session-abort"],
+});
 
 function responseCommand(sessionId, turnScopeId, requestId, response) {
   return createInteractionResponseCommand({

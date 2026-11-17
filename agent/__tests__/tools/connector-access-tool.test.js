@@ -82,3 +82,25 @@ test("access_connector carries the connector failure contract into the tool resu
   assert.equal(result.error, "ssh command exited with code 2");
   assert.equal(result.output.exitCode, 2);
 });
+
+test("access_connector preserves the original port exception and reports a defined error code", async () => {
+  const cause = new Error("connector backend unavailable");
+  const agentContext = createScope();
+  agentContext.bindings.runtime.sharedTools.connectorAccess = {
+    ...connectorAccess,
+    access: async () => {
+      throw cause;
+    },
+  };
+  const tool = createConnectorAccessTool({ agentContext })[0];
+  await assert.rejects(
+    tool.invoke({ connector_id: "con_selected", operation: "execute", input: {} }),
+    (error) => {
+      assert.equal(error.code, "RECOVERABLE_CONNECTOR_ACCESS_FAILED");
+      assert.equal(error.level, "recoverable");
+      assert.equal(error.message, cause.message);
+      assert.equal(error.cause, cause);
+      return true;
+    },
+  );
+});

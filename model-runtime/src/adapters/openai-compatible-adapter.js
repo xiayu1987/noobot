@@ -6,6 +6,7 @@ import { ChatOpenAI } from "@langchain/openai";
 import {
   MODEL_PROVIDER_ID,
   MODEL_RESPONSE_SOURCE,
+  ModelProtocolError,
   requireModelResponseTerminal,
   resolveModelUseResponsesApi,
 } from "@noobot/model-protocol";
@@ -158,6 +159,16 @@ export const openAiCompatibleAdapter = Object.freeze({
   },
   prepareMessages({ modelSpec, messages }) {
     return applyPromptCacheMessages(normalizeRuntimeModelSpec(modelSpec), messages);
+  },
+  async invokeChat({ client, messages, streaming, invokeOptions }) {
+    if (!streaming) return client.invoke(messages, invokeOptions);
+
+    let result;
+    for await (const chunk of await client.stream(messages, invokeOptions)) {
+      result = result === undefined ? chunk : result.concat(chunk);
+    }
+    if (result === undefined) throw new ModelProtocolError("Model stream returned no messages");
+    return result;
   },
   resolveResponseSource({ modelSpec }) {
     return resolveModelUseResponsesApi(normalizeRuntimeModelSpec(modelSpec))

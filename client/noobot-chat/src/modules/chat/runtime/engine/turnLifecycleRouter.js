@@ -30,6 +30,21 @@ function rejectedByException(error) {
   return { applied: false, reason: "reducer_exception", errors: [error.message] };
 }
 
+function reductionLogPresentation(terminal, rejected, route) {
+  let level = "debug";
+  if (rejected) level = "warn";
+  else if (terminal) level = "info";
+  let outcome = "TurnReduced";
+  if (terminal) outcome = "TerminalReduced";
+  else if (rejected) outcome = "TurnRejected";
+  return {
+    category: terminal || rejected ? "state" : "debug",
+    level,
+    ...(terminal || rejected ? {} : { debugType: "workflow-diagnostics" }),
+    event: `frontend.authoritativeState.${route}${outcome}`,
+  };
+}
+
 export function routeForeignTurnLifecycleEvent(event, data, context) {
   const { applyTurnLifecycleEnvelope, logSessionEvent, sessionId } = context;
   if (event === StreamEventEnum.TURN_LIFECYCLE) {
@@ -66,14 +81,7 @@ export function routeForeignTurnLifecycleEvent(event, data, context) {
       const logReduction = (reduction) => {
         const rejected = reduction.applied !== true;
         return logSessionEvent({
-          category: terminalLifecycle || rejected ? "state" : "debug",
-          level: rejected ? "warn" : terminalLifecycle ? "info" : "debug",
-          ...(terminalLifecycle || rejected ? {} : { debugType: "workflow-diagnostics" }),
-          event: terminalLifecycle
-            ? "frontend.authoritativeState.foreignTerminalReduced"
-            : rejected
-              ? "frontend.authoritativeState.foreignTurnRejected"
-              : "frontend.authoritativeState.foreignTurnReduced",
+          ...reductionLogPresentation(terminalLifecycle, rejected, "foreign"),
           sessionId: mainSessionId,
           dialogProcessId: data.dialogProcessId,
           turnScopeId: data.turnScopeId,
@@ -107,14 +115,7 @@ export function routeCurrentTurnLifecycleEvent(event, data, context) {
     const logReduction = (reduction) => {
       const rejected = reduction.applied !== true;
       logSessionEvent({
-        category: terminalLifecycle || rejected ? "state" : "debug",
-        level: rejected ? "warn" : terminalLifecycle ? "info" : "debug",
-        ...(terminalLifecycle || rejected ? {} : { debugType: "workflow-diagnostics" }),
-        event: terminalLifecycle
-          ? "frontend.authoritativeState.mainTerminalReduced"
-          : rejected
-            ? "frontend.authoritativeState.mainTurnRejected"
-            : "frontend.authoritativeState.mainTurnReduced",
+        ...reductionLogPresentation(terminalLifecycle, rejected, "main"),
         sessionId: data.sessionId,
         dialogProcessId: data.dialogProcessId,
         turnScopeId: data.turnScopeId,

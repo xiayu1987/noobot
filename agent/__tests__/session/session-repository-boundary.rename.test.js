@@ -9,16 +9,15 @@ import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 
 import {
   createTestSessionServices,
   provisionTestSession,
   withTreeContext,
+  commitTestSessionChanges,
 } from "../helpers/session-services.js";
-import { readSessionArtifact } from "../../src/session/session-artifact-store.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
-import { applySessionMessageFacts } from "../helpers/session-message-facts.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
@@ -47,18 +46,15 @@ test("renameSession should persist custom title to full, display summary and ses
       parentSessionId: "",
       caller: SESSION_CALLER.USER,
     });
-    const session = await runtime.repositories.sessionRepository.findById(userId, "A", {
-      persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
-        userId,
-        "A",
-      ),
-    });
-    session.messages = [
+    const messages = [
       {
         attachments: [],
         messageUid: "sm_rename_user",
         ts: TEST_MESSAGE_TS,
         sessionId: "A",
+        parentSessionId: "",
+        parentDialogProcessId: "",
+        userMessageId: "um_rename_user",
         role: "user",
         messageOrigin: "natural",
         content: "old generated title",
@@ -66,11 +62,10 @@ test("renameSession should persist custom title to full, display summary and ses
         turnScopeId: "turn-rename",
       },
     ];
-    await runtime.repositories.sessionRepository.save(userId, applySessionMessageFacts(session), {
-      persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
-        userId,
-        session.sessionId,
-      ),
+    await commitTestSessionChanges(runtime, {
+      userId,
+      sessionId: "A",
+      changes: { messages },
     });
 
     const renamed = await runtime.sessionCrudService.renameSession(
@@ -80,30 +75,25 @@ test("renameSession should persist custom title to full, display summary and ses
     assert.equal(renamed.customTitle, "新会话名称");
     assert.equal(renamed.updatedAt, "2026-05-14T01:02:03.000Z");
 
-    const scope = await runtime.repositories.sessionRepository.requireSessionScope(
-      userId,
-      "A",
-      runtime.repositories.sessionRepository.treePersistenceContext(userId, "A"),
-    );
-    const full = await readSessionArtifact({
-      sessionDir: scope.sessionDir,
-      storageService: runtime.repositories.sessionRepository.storageService,
-    });
-    await runtime.repositories.sessionRepository.ensureSessionDisplaySummary(userId, "A", {
+    const reader = await runtime.repositories.sessionRepository.requireSessionReader(userId, "A", {
       persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
         userId,
         "A",
       ),
     });
-    const displaySummary = JSON.parse(
-      await readFile(path.join(scope.sessionDir, "session-summary.json"), "utf8"),
+    const full = await reader.exportSession();
+    const displaySummary = await runtime.repositories.sessionRepository.readSessionDisplaySummary(
+      userId,
+      "A",
+      {
+        persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
+          userId,
+          "A",
+        ),
+      },
     );
-    const sessionsSummary = JSON.parse(
-      await readFile(
-        path.join(workspaceRoot, userId, "runtime", "session", "sessions.json"),
-        "utf8",
-      ),
-    );
+    const sessionsSummary =
+      await runtime.repositories.sessionRepository.readSessionsSummary(userId);
 
     assert.equal(full.customTitle, "新会话名称");
     assert.equal(displaySummary.title, "新会话名称");

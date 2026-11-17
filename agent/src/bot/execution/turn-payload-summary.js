@@ -92,6 +92,7 @@ export function summarizeSessionTurnPayload(fullTurnPayload = {}) {
     artifactRef: {
       kind: "session_turn",
       source: "session.messages",
+      messageUid: fullTurnPayload.messageUid,
       dialogProcessId: fullTurnPayload.dialogProcessId || "",
       turnScopeId: fullTurnPayload.turnScopeId || "",
     },

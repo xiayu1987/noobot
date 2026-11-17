@@ -37,6 +37,7 @@ export function createSessionFixture(overrides = {}) {
     isLocal: false,
     loaded: true,
     aggregateVersion: 0,
+    generation: null,
     messages: [],
     rawMessages: [],
     sessionDocs: [],

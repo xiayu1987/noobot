@@ -53,13 +53,18 @@ test("guidance summary capture leaves tool-call pair unchanged until checkpoint 
     },
   };
   const messages = [
-    { role: "user", content: "x".repeat(LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD - 5) },
+    { role: "user", content: "inspect files" },
     {
       role: "assistant",
       content: "",
       tool_calls: [{ id: "tc1", function: { name: "read_file", arguments: "{}" } }],
     },
-    { role: "tool", tool_call_id: "tc1", content: "y".repeat(20), toolName: "read_file" },
+    {
+      role: "tool",
+      tool_call_id: "tc1",
+      content: "y".repeat(LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD + 1),
+      toolName: "read_file",
+    },
   ];
 
   await guidanceHandler({
@@ -68,7 +73,7 @@ test("guidance summary capture leaves tool-call pair unchanged until checkpoint 
     ctx: { messageBlocks: { system: [], history: [], incremental: messages }, agentContext },
     meta: {},
   });
-  assert.equal(agentContext.bindings.extensions.harness.state.pending.summary, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.summary, true);
   assert.equal(agentContext.bindings.extensions.harness.state.flags.summaryByCharsPrompted, true);
   assert.equal(messages[1].summarized, undefined);
   assert.equal(messages[2].summarized, undefined);
@@ -96,13 +101,18 @@ test("overflow after harness summary schedules the harness summary flow again wi
     },
   };
   const messages = [
-    { role: "user", content: "x".repeat(LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD + 1) },
+    { role: "user", content: "inspect files" },
     {
       role: "assistant",
       content: "",
       tool_calls: [{ id: "tc2", function: { name: "read_file", arguments: "{}" } }],
     },
-    { role: "tool", tool_call_id: "tc2", content: "y".repeat(20), toolName: "read_file" },
+    {
+      role: "tool",
+      tool_call_id: "tc2",
+      content: "y".repeat(LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD + 1),
+      toolName: "read_file",
+    },
   ];
 
   await runGuidanceSummaryRound(guidanceHandler, { messages, agentContext });
@@ -120,10 +130,9 @@ test("overflow after harness summary schedules the harness summary flow again wi
     agentContext.bindings.extensions.harness.state.flags.overflowForceAcceptancePending,
     false,
   );
-  assert.equal(agentContext.bindings.extensions.harness.state.pending.summary, false);
-  assert.equal(
-    agentContext.bindings.extensions.harness.state.flags.guidanceSummaryMarkPending,
-    true,
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.summary, true);
+  assert.ok(
+    agentContext.bindings.extensions.harness.state.pending.summaryCheckpointMessageKeys.length > 0,
   );
   assert.equal(readTestMainFlowControl(agentContext).finalNoToolsTurnEngaged, false);
   assert.equal(messages[1].summarized, undefined);

@@ -42,9 +42,11 @@ import { upgradeSessionScriptExitCodes } from "./session-script-exit-code-upgrad
 import { upgradeSessionLegacyMcpResults } from "./session-legacy-mcp-result-upgrade.js";
 import { upgradeSessionResultOverflow } from "./session-result-overflow-upgrade.js";
 import { upgradeSessionCheckpointIdentity } from "./session-checkpoint-identity-upgrade.js";
-import { releaseQuarantinedUnits } from "./migration-quarantine.js";
-import { ignoreSessionProgress } from "./session-directory-walk.js";
+import { quarantineMigrationUnit, releaseQuarantinedUnits } from "./migration-quarantine.js";
+import { ignoreSessionProgress, readSessionDirectory } from "./session-directory-walk.js";
 import { retireWorkspaceDirectoryLocks } from "./directory-lock-retirement.js";
+import { upgradeSessionPhaseSummaries } from "./session-phase-summary-upgrade.js";
+import { upgradeSessionImmutableStorage } from "./session-immutable-storage-upgrade.js";
 
 const LAYOUT_UPGRADE_HANDLERS = Object.freeze({
   [WORKSPACE_LAYOUT_UPGRADE_OWNER.DIRECTORY_LOCK_RETIREMENT]: retireWorkspaceDirectoryLocks,
@@ -62,6 +64,8 @@ const LAYOUT_UPGRADE_HANDLERS = Object.freeze({
   [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_LEGACY_MCP_RESULT]: upgradeSessionLegacyMcpResults,
   [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_RESULT_OVERFLOW]: upgradeSessionResultOverflow,
   [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_CHECKPOINT_IDENTITY]: upgradeSessionCheckpointIdentity,
+  [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_PHASE_SUMMARY]: upgradeSessionPhaseSummaries,
+  [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_IMMUTABLE_STORAGE]: upgradeSessionImmutableStorage,
 });
 
 const QUARANTINE_RETRY_OWNERS = Object.freeze([
@@ -76,6 +80,7 @@ const QUARANTINE_RETRY_OWNERS = Object.freeze([
   WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_SCRIPT_EXIT_CODE,
   WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_LEGACY_MCP_RESULT,
   WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_RESULT_OVERFLOW,
+  WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_IMMUTABLE_STORAGE,
 ]);
 
 const retriedQuarantines = new Set();
@@ -146,6 +151,7 @@ export async function upgradeWorkspaceLayout({
   scopedSessionRoots,
   storageService,
   reportProgress = ignoreSessionProgress,
+  readSessionOperationInput,
 }) {
   const installedVersion = await readInstalledLayoutVersion(base, created);
   const applied = [];
@@ -155,6 +161,7 @@ export async function upgradeWorkspaceLayout({
     backupBase,
     scopedSessionRoots,
     storageService,
+    readSessionOperationInput,
   });
   for (const [index, upgrade] of upgrades.entries()) {
     try {
@@ -165,6 +172,7 @@ export async function upgradeWorkspaceLayout({
             backupBase,
             scopedSessionRoots,
             storageService,
+            readSessionOperationInput,
             onSessionProcessed: createUpgradeProgress(reportProgress, {
               upgradeId: upgrade.id,
               upgradeIndex: index + 1,
@@ -193,9 +201,36 @@ export async function upgradeWorkspaceLayout({
       scopedSessionRoots,
       storageService,
       reportProgress,
+      readSessionOperationInput,
     })),
   );
   return applied;
+}
+
+async function hasReleasedLegacySession(base, released) {
+  for (const relativePath of released) {
+    const directory = await readSessionDirectory(path.join(base, relativePath));
+    if (directory.manifest && !directory.immutable) return true;
+  }
+  return false;
+}
+
+async function recordQuarantineRetryFailure({ base, owner, key, id, error }) {
+  const quarantine =
+    owner === WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_IMMUTABLE_STORAGE
+      ? await quarantineMigrationUnit({
+          base,
+          kind: owner,
+          relativePath: WORKSPACE_LAYOUT.SESSION_DIR,
+          error,
+        })
+      : null;
+  if (quarantine) retriedQuarantines.delete(key);
+  return {
+    id,
+    failed: { code: String(error?.code || ""), message: String(error?.message || error) },
+    ...(quarantine ? { quarantine } : {}),
+  };
 }
 
 async function retryQuarantinedUnits({
@@ -204,8 +239,10 @@ async function retryQuarantinedUnits({
   scopedSessionRoots,
   storageService,
   reportProgress,
+  readSessionOperationInput,
 }) {
   const retried = [];
+  let legacySessionsReleased = false;
   for (const owner of QUARANTINE_RETRY_OWNERS) {
     const key = `${base}\u0000${owner}`;
     if (retriedQuarantines.has(key)) continue;
@@ -213,24 +250,27 @@ async function retryQuarantinedUnits({
     const id = `quarantine-retry:${owner}`;
     try {
       const released = await releaseQuarantinedUnits({ base, kind: owner });
-      if (!released.length) continue;
+
+      const immutableRetry = owner === WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_IMMUTABLE_STORAGE;
+      if (!released.length && !(immutableRetry && legacySessionsReleased)) continue;
       const result = await LAYOUT_UPGRADE_HANDLERS[owner]({
         base,
         backupBase,
         scopedSessionRoots,
         storageService,
+        readSessionOperationInput,
         onSessionProcessed: createUpgradeProgress(reportProgress, {
           upgradeId: id,
           upgradeIndex: 1,
           upgradeCount: 1,
         }),
       });
+      if (!immutableRetry && !legacySessionsReleased) {
+        legacySessionsReleased = await hasReleasedLegacySession(base, released);
+      }
       retried.push({ id, released, result });
     } catch (error) {
-      retried.push({
-        id,
-        failed: { code: String(error?.code || ""), message: String(error?.message || error) },
-      });
+      retried.push(await recordQuarantineRetryFailure({ base, owner, key, id, error }));
     }
   }
   return retried;

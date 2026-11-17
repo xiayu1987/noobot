@@ -11,10 +11,7 @@ import {
   collectSessionSummaryEntryErrors,
   compareSessionSummaries,
   createSessionUnavailableReason,
-  createSessionsSummaryProjectionError,
   createUnavailableSessionSummary,
-  isSessionsSummaryMembershipCurrent,
-  isSessionsSummaryProjectionError,
   isSessionsSummarySchemaCurrent,
   requireSessionsSummaryPayload,
 } from "../src/index.js";
@@ -130,15 +127,6 @@ test("requireSessionsSummaryPayload enforces schema, entry shape and unique sess
   });
 });
 
-test("membership is current only when entries equal the live sessionId set", () => {
-  const current = payload([availableEntry(), unavailableEntry()]);
-  assert.equal(isSessionsSummaryMembershipCurrent(current, ["s-2", "s-1"]), true);
-  assert.equal(isSessionsSummaryMembershipCurrent(current, ["s-1"]), false);
-  assert.equal(isSessionsSummaryMembershipCurrent(current, ["s-1", "s-2", "s-3"]), false);
-  assert.equal(isSessionsSummaryMembershipCurrent(current, ["s-1", "s-3"]), false);
-  assert.equal(isSessionsSummaryMembershipCurrent(payload([]), []), true);
-});
-
 test("schema is current only for an object carrying the current schemaVersion", () => {
   assert.equal(isSessionsSummarySchemaCurrent(payload([])), true);
   assert.equal(
@@ -150,26 +138,6 @@ test("schema is current only for an object carrying the current schemaVersion", 
   );
   assert.equal(isSessionsSummarySchemaCurrent(null), false);
   assert.equal(isSessionsSummarySchemaCurrent([]), false);
-});
-
-test("projection failure keeps both the unavailable cause and the projection error", () => {
-  const cause = Object.assign(new Error("manifest broken"), { code: "SESSION_PROTOCOL_INVALID" });
-  const projectionError = new Error("disk full");
-  const error = createSessionsSummaryProjectionError({
-    sessionId: "s-1",
-    cause,
-    projectionError,
-  });
-  assert.equal(error.code, SESSION_ERROR_CODE.SESSIONS_SUMMARY_PROJECTION_FAILED);
-  assert.equal(error.sessionId, "s-1");
-  assert.equal(error.cause, cause);
-  assert.deepEqual(error.errors, [projectionError]);
-  assert.equal(isSessionsSummaryProjectionError(error), true);
-  assert.equal(isSessionsSummaryProjectionError(cause), false);
-  assert.throws(
-    () => createSessionsSummaryProjectionError({ sessionId: "", cause, projectionError }),
-    TypeError,
-  );
 });
 
 test("unavailable reason comes only from a coded error", () => {

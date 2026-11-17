@@ -62,7 +62,7 @@ test("all Harness relay purposes cross the canonical capability-to-main-model bo
     assert.equal(readContextMessageField(relay, "injectedBy"), "harness-plugin", purpose);
     assert.equal(
       resolveContextInjectedMessageType(relay),
-      `separate_model_relay:${purpose}`,
+      purpose === "summary" ? "noobot.phase_summary_result" : `separate_model_relay:${purpose}`,
       purpose,
     );
     assert.match(relay.content, /read-only advice from a Harness auxiliary capability/, purpose);

@@ -17,11 +17,9 @@ import {
   SESSION_SOURCE_SCHEMA_VERSION,
 } from "../session-display-source-revision.js";
 import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
-import { requireSessionAggregateVersion } from "@noobot/session-protocol";
 import {
   TURN_RECOVERY_ACTION,
   TURN_SNAPSHOT_TERMINAL_LIMIT,
-  validateTurnLifecycleSnapshot,
 } from "@noobot/session-protocol/turn-lifecycle";
 
 export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 37;
@@ -79,22 +77,6 @@ export function isSessionDisplaySummaryPayload(payload = null, sessionId = "") {
   );
 }
 
-export function isSessionDisplaySummaryCurrent(payload = null, sessionManifest = null) {
-  if (!isSessionDisplaySummaryPayload(payload, sessionManifest?.sessionId)) return false;
-  if (sessionManifest?.schemaVersion !== SESSION_SOURCE_SCHEMA_VERSION) return false;
-  if (
-    payload.aggregateVersion !== requireSessionAggregateVersion(sessionManifest?.aggregateVersion)
-  )
-    return false;
-  if (
-    Number(payload?.stats?.messageCount || 0) !==
-    sessionManifest.turnOrder.reduce((count, turn) => count + turn.messageCount, 0)
-  )
-    return false;
-  if (!validateTurnLifecycleSnapshot(payload.turnLifecycleSnapshot).valid) return false;
-  return payload.source.revision === createSessionDisplaySourceRevision(sessionManifest);
-}
-
 function createDisplaySummaryContext(session) {
   const { messages } = session;
   return {
@@ -109,6 +91,7 @@ function createDisplaySummaryContext(session) {
 function buildTurnLifecycleSnapshot({ session, sessionId, lifecycle }) {
   return createSessionTurnLifecycleSnapshot({
     session,
+    messageTurnScopeIds: session.messages.map((message) => text(message.turnScopeId)),
     commandId: `session-summary:${sessionId}:${lifecycle.sequence}`,
     knownSequence: 0,
     terminalLimit: TURN_SNAPSHOT_TERMINAL_LIMIT.DEFAULT,
@@ -117,17 +100,12 @@ function buildTurnLifecycleSnapshot({ session, sessionId, lifecycle }) {
   });
 }
 
-export function buildSessionDisplaySummary(session) {
+export function buildSessionDisplayProjection(session, { selectToolTimeline } = {}) {
   const context = createDisplaySummaryContext(session);
   const { messages, turnTimings, sessionId, lifecycle } = context;
-  const displayMessages = buildSessionDisplayMessages({ messages, lifecycle });
+  const displayMessages = buildSessionDisplayMessages({ messages, lifecycle, selectToolTimeline });
   const toolArtifactStats = attachSessionToolArtifacts(session, displayMessages, sessionId);
   const summary = {
-    schemaVersion: SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION,
-    source: {
-      sessionSchemaVersion: SESSION_SOURCE_SCHEMA_VERSION,
-      revision: createSessionDisplaySourceRevision(session),
-    },
     sessionId,
     parentSessionId: session.parentSessionId,
     caller: session.caller,
@@ -143,4 +121,15 @@ export function buildSessionDisplaySummary(session) {
   };
   assertValidTransferEnvelopes(summary);
   return summary;
+}
+
+export function buildSessionDisplaySummary(session) {
+  return {
+    schemaVersion: SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION,
+    source: {
+      sessionSchemaVersion: SESSION_SOURCE_SCHEMA_VERSION,
+      revision: createSessionDisplaySourceRevision(session),
+    },
+    ...buildSessionDisplayProjection(session),
+  };
 }

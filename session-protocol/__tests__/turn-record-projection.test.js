@@ -27,6 +27,16 @@ test("snapshot projects declared facts without exposing storage fields or sharin
   assert.deepEqual(source, before);
 });
 
+test("snapshot projects nested reactive records as detached protocol values", () => {
+  const source = turnRecord({ origin: { type: "test" } });
+  const reactiveOrigin = new Proxy(source.origin, {});
+  const reactiveTurn = new Proxy({ ...source, origin: reactiveOrigin }, {});
+  const result = snapshotTurn(reactiveTurn);
+  assert.deepEqual(result, snapshotTurn(source));
+  result.origin.type = "changed";
+  assert.equal(source.origin.type, "test");
+});
+
 for (const [field, value] of [
   ["origin", []],
   ["finalizeIntent", {}],

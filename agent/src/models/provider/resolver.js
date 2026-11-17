@@ -28,9 +28,15 @@ export function pickAlias({ globalConfig, userConfig, skillConfig }) {
 }
 
 export function byAliasWithUser(alias, globalConfig = {}, userConfig = {}) {
-  const providers = getEnabledProviders(globalConfig, userConfig);
-  if (!alias || !providers[alias]) return null;
-  return normalizeRuntimeModelSpec({ alias, ...providers[alias] });
+  return resolveEffectiveProvider(alias, mergeConfig(globalConfig, userConfig));
+}
+
+export function resolveEffectiveProvider(alias, effectiveConfig) {
+  const providers = effectiveConfig.providers;
+  if (!alias || !providers || !Object.hasOwn(providers, alias)) return null;
+  const provider = providers[alias];
+  if (!provider || !isProviderEnabled(provider)) return null;
+  return normalizeRuntimeModelSpec({ alias, ...provider });
 }
 
 export function firstEnabledAlias(globalConfig = {}, userConfig = {}) {

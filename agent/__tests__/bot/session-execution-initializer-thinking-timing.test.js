@@ -7,6 +7,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { SessionExecutionInitializer } from "../../src/bot/execution/initializer.js";
+import { SessionCrudService } from "../../src/session/services/session-crud-service.js";
+import { createSessionNotFoundError } from "@noobot/session-protocol";
 import { turnRecord } from "../helpers/turn-record.js";
 
 const TEST_NOW = () => "2026-01-01T00:00:00.000Z";
@@ -14,16 +16,25 @@ const TEST_NOW = () => "2026-01-01T00:00:00.000Z";
 const AUTHORITY_STARTED_AT = "2026-07-30T00:00:00.000Z";
 
 function createInitializer(bundle, calls = []) {
+  const service = new SessionCrudService({
+    now: TEST_NOW,
+    sessionRepo: {
+      requireRunContextSource: async () => {
+        if (!bundle.exists) throw createSessionNotFoundError({ userId: "u1", sessionId: "s1" });
+        return {
+          ...bundle.session,
+          sessionDir: "/workspace/u1/runtime/session/s1",
+          parentSessionId: "",
+        };
+      },
+    },
+  });
   return new SessionExecutionInitializer({
     now: TEST_NOW,
     session: {
-      getSessionBundle: async () => bundle,
+      getSessionRunContext: async (payload) => service.getSessionRunContext(payload),
       upsertTurnTiming: async (payload) => calls.push(payload),
-      locateSessionScope: async () => ({
-        sessionDir: "/workspace/u1/runtime/session/s1",
-        resolvedParentSessionId: "",
-      }),
-      appendExecutionLog: async () => {},
+      appendExecutionLogs: async () => {},
     },
     configService: { loadUserConfig: async () => ({}) },
     workspaceService: { ensureUserWorkspace: async () => "/workspace/u1" },
@@ -57,7 +68,7 @@ test("initializeRunSessionRuntime reads startedAt from the accepted Authority Tu
 test("initializeRunSessionRuntime rejects a run without its accepted Turn", async () => {
   await assert.rejects(
     createInitializer({ exists: false, session: null }).initializeRunSessionRuntime(runIdentity),
-    /accepted Turn session is required/,
+    { code: "SESSION_NOT_FOUND" },
   );
   await assert.rejects(
     createInitializer({

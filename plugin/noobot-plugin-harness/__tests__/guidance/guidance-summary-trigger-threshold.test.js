@@ -151,7 +151,19 @@ test("guidance summary threshold by chars is independent from plan update attemp
     messageBlocks: {
       system: [],
       history: [],
-      incremental: [{ role: "user", content: "x".repeat(LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD + 1) }],
+      incremental: [
+        {
+          role: "assistant",
+          content: "",
+          tool_calls: [{ id: "read", name: "read_file", args: {} }],
+        },
+        {
+          role: "tool",
+          tool_call_id: "read",
+          toolName: "read_file",
+          content: "x".repeat(LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD + 1),
+        },
+      ],
     },
     agentContext,
   };
@@ -167,6 +179,43 @@ test("guidance summary threshold by chars is independent from plan update attemp
   assert.equal(agentContext.bindings.extensions.harness.state.pending.summary, false);
   assert.equal(
     Object.hasOwn(agentContext.bindings.extensions.harness.state.counters, "planUpdateAttempts"),
+    false,
+  );
+});
+
+test("large retained summary and system context do not schedule summary for small new evidence", async () => {
+  const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const agentContext = createPlanningAgentContext();
+  const large = "x".repeat(LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD + 1);
+  const ctx = {
+    messageBlocks: {
+      system: [{ role: "system", content: large }],
+      history: [
+        {
+          role: "user",
+          content: large,
+          injectedMessage: true,
+          injectedMessageType: "noobot.phase_summary_result",
+        },
+      ],
+      incremental: [
+        { role: "user", content: large },
+        {
+          role: "assistant",
+          content: "",
+          tool_calls: [{ id: "read", name: "read_file", args: {} }],
+        },
+        { role: "tool", tool_call_id: "read", toolName: "read_file", content: "small evidence" },
+      ],
+    },
+    agentContext,
+  };
+  await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta: {} });
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.summary, false);
+  assert.equal(
+    agentContext.bindings.extensions.harness.logs.guidance.some(
+      (item) => item.event === "summary_scheduled_by_char_threshold",
+    ),
     false,
   );
 });
@@ -246,12 +295,12 @@ test("guidance schedules summary after a single model tool burst reaches summary
     meta: { harness: { planningGuidanceMode: "inject", capabilityModelInvoker: null } },
   });
 
-  assert.equal(agentContext.bindings.extensions.harness.state.pending.summary, false);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.summary, true);
   assert.equal(
     nextCtx.modelContext.messages.some((msg = {}) =>
       String(msg?.content || "").includes("harness-guidance-summary"),
     ),
-    true,
+    false,
   );
 });
 

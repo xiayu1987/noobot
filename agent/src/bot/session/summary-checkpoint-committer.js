@@ -15,18 +15,16 @@ import {
 } from "@noobot/context-protocol/policy/summary-checkpoint-request";
 import { MAIN_FLOW_CONTROL_ACTION } from "@noobot/context-protocol/policy/main-flow-control";
 import { emitEvent } from "../../events/index.js";
-import {
-  collectLatestCheckpointEvidenceMessageIndexes,
-  hasCheckpointBoundaryToolCall,
-} from "@noobot/context-protocol/policy/summary";
 import { applyPendingUserMetaBackwrites } from "../../context/assembly/message-builder/user-meta-backwrite.js";
-import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
-import {
-  isSummarizedSessionMessageRecord,
-  readSessionMessageDraftAttachments,
-} from "@noobot/session-protocol";
+import { readSessionMessageDraftAttachments } from "@noobot/session-protocol";
 import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 import { requireActiveModelContext } from "../../runtime/active-model-context.js";
+import {
+  createSessionChangesSubmission,
+  projectMessagePersistenceChanges,
+} from "@noobot/session-protocol/session-changes";
+
+const checkpointTransactions = new WeakMap();
 
 function assertSummaryCheckpointInstruction(summaryCompletion) {
   if (summaryCompletion?.action !== MAIN_FLOW_CONTROL_ACTION.SUMMARY_CHECKPOINT) {
@@ -51,22 +49,6 @@ function resolveMessageUid(message) {
   return message.messageUid;
 }
 
-function resolveRetainedCheckpointEvidenceIds(turnMessages) {
-  const contextMessages = turnMessages.map(projectSessionRecordToContextMessage);
-  const summaryCallIndex = contextMessages.findLastIndex((message) =>
-    hasCheckpointBoundaryToolCall(message),
-  );
-  const checkpointEvidenceScope =
-    summaryCallIndex >= 0 ? turnMessages.slice(0, summaryCallIndex) : turnMessages;
-  const checkpointEvidenceContext =
-    summaryCallIndex >= 0 ? contextMessages.slice(0, summaryCallIndex) : contextMessages;
-  return new Set(
-    [...collectLatestCheckpointEvidenceMessageIndexes(checkpointEvidenceContext)].map((index) =>
-      resolveMessageUid(checkpointEvidenceScope[index]),
-    ),
-  );
-}
-
 function excludeRetainedSummaryTargets(summaryCompletion, retainedUids) {
   return {
     ...summaryCompletion,
@@ -76,26 +58,14 @@ function excludeRetainedSummaryTargets(summaryCompletion, retainedUids) {
   };
 }
 
-function resolveDurablyPersistedMessageUids(runtime) {
-  return new Set([
-    ...runtime.timelineCheckpointPersistedMessageUids,
-    ...runtime.summaryCheckpointPersistedMessageUids,
-  ]);
-}
-
-function resolvePendingCheckpointMessages({ turnMessages, durableUids }) {
-  return turnMessages.filter((message) => !durableUids.has(resolveMessageUid(message)));
-}
-
-async function persistPendingCheckpointMessages({ pendingMessages, turnPersister, identity }) {
-  if (!pendingMessages.length) return;
-  await turnPersister.appendAgentMessages({ ...identity, messages: pendingMessages });
-}
-
 async function commitCheckpointTransaction({
   session,
-  runtime,
+  expectedCheckpointRevision,
   identity,
+  messages,
+  messageContentAppends,
+  messageMetadataUpdates,
+  submission,
   persistedMessageUids,
   summarizedMessageUids,
   retainedMessageUids,
@@ -107,14 +77,22 @@ async function commitCheckpointTransaction({
     dialogProcessId,
     turnScopeId,
     persistenceScope,
+    messages,
+    messageContentAppends,
+    messageMetadataUpdates,
+    submission,
     checkpointId: createSummaryCheckpointId({
       dialogProcessId,
       turnScopeId,
+      expectedCheckpointRevision,
       persistedMessageUids,
       summarizedMessageUids,
       retainedMessageUids,
+      messages,
+      messageContentAppends,
+      messageMetadataUpdates,
     }),
-    expectedCheckpointRevision: runtime.summaryCheckpointRevision,
+    expectedCheckpointRevision,
     persistedMessageUids,
     summarizedMessageUids,
     retainedMessageUids,
@@ -128,15 +106,10 @@ async function commitCheckpointTransaction({
       "summary checkpoint result requires integer checkpointRevision and markedCount",
     );
   }
-  return { checkpointRevision, markedCount };
+  return { checkpointRevision, markedCount, messageReceipts: checkpointResult.messageReceipts };
 }
 
-function recordCommittedCheckpoint({ runtime, persistedMessageUids, checkpointRevision }) {
-  if (persistedMessageUids.length) {
-    runtime.summaryCheckpointPersistedMessageUids = [
-      ...new Set([...runtime.summaryCheckpointPersistedMessageUids, ...persistedMessageUids]),
-    ];
-  }
+function recordCommittedCheckpoint({ runtime, checkpointRevision }) {
   if (checkpointRevision === runtime.summaryCheckpointRevision) return;
   advanceContextCheckpointRevision(requireActiveModelContext(runtime), checkpointRevision);
   runtime.summaryCheckpointRevision = checkpointRevision;
@@ -144,29 +117,61 @@ function recordCommittedCheckpoint({ runtime, persistedMessageUids, checkpointRe
 
 function applyCheckpointMarks({ runtime, summarizedMessageUids }) {
   const currentTurnMessages = runtime.currentTurnMessages;
-  const summarizedSet = new Set(summarizedMessageUids);
-  currentTurnMessages.updateWhere(
-    { summarized: true },
-    (message) =>
-      !isSummarizedSessionMessageRecord(message) && summarizedSet.has(resolveMessageUid(message)),
-  );
   markMessagesSummarizedByIds(requireActiveModelContext(runtime), summarizedMessageUids);
-  const markedTurnMessages = currentTurnMessages.toArray();
-  const retainedMessages = markedTurnMessages.filter(
-    (message) => !isSummarizedSessionMessageRecord(message),
-  );
-  const promotionSources = markedTurnMessages
-    .filter(isSummarizedSessionMessageRecord)
-    .map(compactPromotionSource)
-    .filter(Boolean);
-  if (promotionSources.length) {
-    runtime.summaryCheckpointPromotionSources = [
-      ...runtime.summaryCheckpointPromotionSources,
-      ...promotionSources,
-    ];
+  for (const message of currentTurnMessages.evictCommittedByUids(summarizedMessageUids)) {
+    const promotionSource = compactPromotionSource(message);
+    if (promotionSource) runtime.summaryCheckpointPromotionSources.push(promotionSource);
   }
-  currentTurnMessages.replaceAll(retainedMessages);
   pruneSummarizedIncrementalMessages(requireActiveModelContext(runtime));
+}
+
+function prepareCheckpointTransaction({ runtime, turnPersister, identity, summaryCompletion }) {
+  const { dialogProcessId, turnScopeId } = identity;
+  const store = runtime.currentTurnMessages;
+  const retainedCheckpointEvidenceIds = new Set(store.readCheckpointEvidenceUids());
+  const completion = excludeRetainedSummaryTargets(
+    summaryCompletion,
+    retainedCheckpointEvidenceIds,
+  );
+  const { entries } = store.readPendingChanges();
+  const pendingMessages = entries.map((entry) => entry.message);
+  const workingSet = new Map(pendingMessages.map((message) => [message.messageUid, message]));
+  for (const uid of retainedCheckpointEvidenceIds) {
+    if (!workingSet.has(uid)) workingSet.set(uid, store.readByUid(uid));
+  }
+  const checkpointMessages = [...workingSet.values()];
+  const persistedMessageUids = checkpointMessages.map(resolveMessageUid);
+  const { summarizedMessageUids } = completion;
+  assertSummaryCheckpointSource({
+    dialogProcessId,
+    turnScopeId,
+    persistedMessageUids,
+    checkpointMessages,
+    summarizedMessageUids,
+  });
+  const changes = projectMessagePersistenceChanges(pendingMessages, entries, identity);
+  const { messages, messageContentAppends, messageMetadataUpdates } = structuredClone({
+    ...changes,
+    messages: turnPersister.prepareAgentMessages({ ...identity, messages: changes.messages }),
+  });
+  const retainedMessageUids = [...retainedCheckpointEvidenceIds];
+  const summarizedRevisions = store.readMessageRevisions(summarizedMessageUids);
+  return {
+    runtime,
+    entries,
+    summarizedRevisions,
+    expectedCheckpointRevision: runtime.summaryCheckpointRevision,
+    identity,
+    messages,
+    messageContentAppends,
+    messageMetadataUpdates,
+    submission: createSessionChangesSubmission(),
+    persistedMessageUids,
+    summarizedMessageUids,
+    retainedMessageUids,
+    result: null,
+    completed: false,
+  };
 }
 
 export async function commitSummaryCheckpoint({
@@ -192,55 +197,55 @@ export async function commitSummaryCheckpoint({
     eventListener,
     persistenceScope,
   };
-  const turnMessages = runtime.currentTurnMessages.toArray();
-  const retainedCheckpointEvidenceIds = resolveRetainedCheckpointEvidenceIds(turnMessages);
-  const completion = excludeRetainedSummaryTargets(
-    summaryCompletion,
-    retainedCheckpointEvidenceIds,
-  );
-  const durableUids = resolveDurablyPersistedMessageUids(runtime);
-  const pendingMessages = resolvePendingCheckpointMessages({ turnMessages, durableUids });
-  const persistedMessageUids = turnMessages.map(resolveMessageUid);
-  const { summarizedMessageUids } = completion;
-  assertSummaryCheckpointSource({
-    dialogProcessId,
-    turnScopeId,
-    persistedMessageUids,
-    turnMessages,
-    summarizedMessageUids,
-  });
-  await persistPendingCheckpointMessages({ pendingMessages, turnPersister, identity });
-  const retainedMessageUids = [...retainedCheckpointEvidenceIds];
-  const { checkpointRevision, markedCount } = await commitCheckpointTransaction({
-    session,
-    runtime,
-    identity,
-    persistedMessageUids,
-    summarizedMessageUids,
-    retainedMessageUids,
-  });
-  recordCommittedCheckpoint({ runtime, persistedMessageUids, checkpointRevision });
-  emitEvent(eventListener, "summary_checkpoint_committed", {
-    source: completion.source,
-    requestedMessageCount: summaryCompletion.summarizedMessageUids.length,
-    turnMessageCount: turnMessages.length,
-    summarizedMessageCount: summarizedMessageUids.length,
-    persistedMessageCount: pendingMessages.length,
-    markedMessageCount: markedCount,
-    preservedCheckpointEvidenceMessageUids: [...retainedCheckpointEvidenceIds].sort(),
-    exactCheckpoint: true,
-  });
-
+  if (!checkpointTransactions.has(summaryCompletion)) {
+    checkpointTransactions.set(
+      summaryCompletion,
+      prepareCheckpointTransaction({
+        runtime,
+        turnPersister,
+        identity,
+        summaryCompletion,
+      }),
+    );
+  }
+  const transaction = checkpointTransactions.get(summaryCompletion);
+  if (transaction.runtime !== runtime)
+    throw new Error("checkpoint instruction belongs to another runtime");
+  if (transaction.result === null) {
+    transaction.result = await commitCheckpointTransaction({ session, ...transaction });
+  }
+  const { checkpointRevision, markedCount, messageReceipts } = transaction.result;
+  const result = { committed: true, persistedCount: transaction.entries.length, markedCount };
+  if (transaction.completed) return result;
+  const { entries, summarizedRevisions, summarizedMessageUids, retainedMessageUids } = transaction;
+  const store = runtime.currentTurnMessages;
+  if (!Array.isArray(messageReceipts))
+    throw new TypeError("Summary checkpoint requires message persistence receipts");
+  if (messageReceipts.some((receipt) => receipt.sessionId !== identity.sessionId))
+    throw new TypeError("Summary checkpoint receipt session ownership mismatch");
+  store.confirmPersistence(entries, messageReceipts);
+  store.acknowledgeChanges(entries);
+  recordCommittedCheckpoint({ runtime, checkpointRevision });
   await applyPendingUserMetaBackwrites(runtime, {
     session,
     userId,
     sessionId,
     persistenceScope,
   });
-  applyCheckpointMarks({ runtime, summarizedMessageUids });
-  return {
-    committed: true,
-    persistedCount: pendingMessages.length,
-    markedCount,
-  };
+  applyCheckpointMarks({
+    runtime,
+    summarizedMessageUids: store.readUnchangedMessageUids(summarizedRevisions),
+  });
+  await emitEvent(eventListener, "summary_checkpoint_committed", {
+    source: summaryCompletion.source,
+    requestedMessageCount: summaryCompletion.summarizedMessageUids.length,
+    turnMessageCount: store.readCounts().messageCount,
+    summarizedMessageCount: summarizedMessageUids.length,
+    persistedMessageCount: transaction.entries.length,
+    markedMessageCount: markedCount,
+    preservedCheckpointEvidenceMessageUids: [...retainedMessageUids].sort(),
+    exactCheckpoint: true,
+  });
+  transaction.completed = true;
+  return result;
 }

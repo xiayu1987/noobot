@@ -9,9 +9,23 @@ import assert from "node:assert/strict";
 import { SESSION_STORE_ERROR } from "@noobot/workspace-protocol/session-store";
 import { createUserInteractionBridge } from "../../ws/chat-websocket/user-interaction-bridge.js";
 import { findPendingInteraction } from "../../ws/chat-websocket/pending-interaction-registry.js";
-import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
+import {
+  persistSession,
+  useProvisionedRuntimeEventsWorkspace,
+} from "../runtime-events-root.test-helpers.js";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
-useProvisionedRuntimeEventsWorkspace(["user-1"]);
+useProvisionedRuntimeEventsWorkspace(
+  ["user-1"],
+  { "user-1": ["session-1", "session-timeout", "session-timeout-short", "root-session"] },
+  async (workspaceRoot) => {
+    await persistSession(workspaceRoot, "user-1", {
+      sessionId: "child-session",
+      parentSessionId: "root-session",
+      caller: SESSION_CALLER.USER,
+    });
+  },
+);
 
 const bridgePorts = { ownerUserId: "user-1" };
 

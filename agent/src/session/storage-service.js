@@ -33,6 +33,15 @@ export function requireStorageService(storageService, owner) {
   return storageService;
 }
 
+function observedJsonReader(onRead) {
+  if (!onRead) return fsReadFile;
+  return async (...args) => {
+    const source = await fsReadFile(...args);
+    onRead(Buffer.byteLength(source), source);
+    return source;
+  };
+}
+
 export class StorageService {
   constructor({ atomicRenameRetryDelaysMs, platform }) {
     this.atomicRenameRetryDelaysMs = atomicRenameRetryDelaysMs;
@@ -58,12 +67,17 @@ export class StorageService {
     }
   }
 
-  async readJson(filePath) {
-    return readPersistedJsonFile({ filePath, readFile: fsReadFile });
+  async readJson(filePath, { immutable = false, previousValue, onRead } = {}) {
+    return readPersistedJsonFile({
+      filePath,
+      readFile: observedJsonReader(onRead),
+      immutable,
+      previousValue,
+    });
   }
 
-  async readOptionalJson(filePath) {
-    return readOptionalPersistedJsonFile({ filePath, readFile: fsReadFile });
+  async readOptionalJson(filePath, { onRead } = {}) {
+    return readOptionalPersistedJsonFile({ filePath, readFile: observedJsonReader(onRead) });
   }
 
   async readTextOrNull(filePath) {
@@ -75,19 +89,23 @@ export class StorageService {
     }
   }
 
-  async writeJson(filePath, data) {
-    await fsWriteFile(filePath, JSON.stringify(data, null, 2));
+  async writeJson(filePath, data, { onWrite } = {}) {
+    const content = JSON.stringify(data, null, 2);
+    await fsWriteFile(filePath, content);
+    onWrite?.(Buffer.byteLength(content));
   }
 
-  async writeJsonAtomic(filePath, data) {
+  async writeJsonAtomic(filePath, data, { onWrite } = {}) {
+    const content = JSON.stringify(data, null, 2);
     await writeFileAtomic({
       filePath,
-      content: JSON.stringify(data, null, 2),
+      content,
       writeFile: fsWriteFile,
       rename: fsRename,
       remove: fsRm,
       retryDelaysMs: this.atomicRenameRetryDelaysMs,
       platform: this.platform,
     });
+    onWrite?.(Buffer.byteLength(content));
   }
 }

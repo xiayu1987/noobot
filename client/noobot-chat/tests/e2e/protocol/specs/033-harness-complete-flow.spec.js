@@ -28,6 +28,7 @@ import {
 import { waitForCommand, waitForLifecycle } from "../helpers/scenario-assertions.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
+import { readAuxiliaryModelRelayPurpose } from "@noobot/context-protocol/message/injected-types";
 import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
 import { runOpsWorkdirPath, runOpsWorkdir } from "../helpers/run-ops-workdir.js";
 import { decodeToolResultText } from "@noobot/event-protocol/tool-result-v24";
@@ -185,14 +186,11 @@ function assertCapabilityPurposesAndMainRelays(modelTraces = []) {
     modelTraces
       .filter(isMainAgentModelInvocation)
       .flatMap((record) => record.data?.messages?.evidence || [])
-      .map((message) => String(message?.injectedMessageType || "").trim())
+      .map((message) => readAuxiliaryModelRelayPurpose(message?.injectedMessageType))
       .filter(Boolean),
   );
   for (const purpose of EXPECTED_MAIN_RELAYS) {
-    expect(
-      mainRelayTypes.has(`separate_model_relay:${purpose}`),
-      `missing main-model relay: ${purpose}`,
-    ).toBe(true);
+    expect(mainRelayTypes.has(purpose), `missing main-model relay: ${purpose}`).toBe(true);
   }
 }
 

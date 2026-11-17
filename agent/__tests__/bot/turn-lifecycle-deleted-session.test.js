@@ -13,7 +13,7 @@ import {
   TURN_PHASE,
   TURN_STATE,
 } from "@noobot/session-protocol";
-import { readAuthorityOutbox } from "../../src/session/authority-outbox-store/outbox-journal.js";
+import { openSessionArtifactReader } from "../../src/session/session-artifact-session/immutable-session-reader.js";
 import { createAcceptedAgentExecution } from "../helpers/accepted-run-identity.js";
 import { pathExists, withProvisionedSessions } from "../helpers/provisioned-sessions.js";
 
@@ -85,14 +85,18 @@ test("a session deleted during a running turn rejects later lifecycle commits wi
       { code: "SESSION_DELETED" },
     );
 
-    const siblingOutboxBefore = await readAuthorityOutbox(scopes[SIBLING_SESSION_ID].sessionDir);
+    const sessionDir = scopes[SIBLING_SESSION_ID].sessionDir;
+    const before = await openSessionArtifactReader({ sessionDir });
+    const siblingOutboxBefore = await before.readOutboxPage({ consumerId: "test" });
     const processed = await session.applyTurnLifecycleEvent(
       processingEvent(SIBLING_SESSION_ID, sibling.dialogProcessId),
     );
     assert.equal(processed.applied, true);
     assert.equal(processed.turn.state, TURN_STATE.PROCESSING);
-    const siblingOutboxAfter = await readAuthorityOutbox(scopes[SIBLING_SESSION_ID].sessionDir);
-    assert.equal(siblingOutboxAfter.length, siblingOutboxBefore.length + 1);
-    assert.equal(siblingOutboxAfter.at(-1).eventId, processed.envelope.identity.eventId);
+    const after = await openSessionArtifactReader({ sessionDir });
+    const siblingOutboxAfter = await after.readOutboxPage({ consumerId: "test" });
+    assert.equal(siblingOutboxAfter.events.length, siblingOutboxBefore.events.length + 1);
+    assert.equal(siblingOutboxAfter.events.at(-1).eventId, processed.envelope.identity.eventId);
+    assert.deepEqual(await before.readOutboxPage({ consumerId: "test" }), siblingOutboxBefore);
   });
 });

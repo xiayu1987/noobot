@@ -9,6 +9,7 @@ import {
   normalizeTransferEnvelopes,
 } from "@noobot/semantic-transfer-protocol";
 import { isPlainObject } from "@noobot/shared/value";
+import { isDeepFrozen } from "@noobot/shared/deep-freeze";
 import { readSessionMessageDraftAttachments } from "@noobot/session-protocol";
 import { assertMessageIdentity } from "@noobot/session-protocol/message-identity";
 import {
@@ -121,37 +122,45 @@ function presentText(value) {
   return typeof value === "string" && value.trim() ? value : undefined;
 }
 
-export function projectSessionRecordToContextMessage(record) {
+function setPresentMetadata(metadata, field, value) {
+  if (value !== undefined && value !== null) metadata[field] = value;
+}
+
+export function projectSessionRecordSelectionMetadata(record) {
   const source = requireRecord(record);
   const messageUid = assertMessageIdentity("messageUid", source.messageUid);
   const role = source.role;
   if (!SESSION_CONTEXT_ROLES.has(role)) {
     throw new TypeError(`Session Context projection rejects role: ${role}`);
   }
+  const metadata = { messageUid };
+  for (const field of PROJECTED_TEXT_FIELDS)
+    setPresentMetadata(metadata, field, presentText(source[field]));
+  for (const field of PROJECTED_FLAG_FIELDS) {
+    if (source[field] === true) metadata[field] = true;
+  }
+  return { role, additional_kwargs: metadata };
+}
+
+function buildSessionRecordContextMessage(record) {
+  const source = requireRecord(record);
+  const { role, additional_kwargs: metadata } = projectSessionRecordSelectionMetadata(source);
   const toolCalls = optionalArray(source.tool_calls, "tool_calls");
   const toolCallId = presentText(source.tool_call_id);
   const attachments = readSessionMessageDraftAttachments(source);
   const transferEnvelopes = normalizeContextTransferEnvelopes(
     optionalArray(source.transferEnvelopes, "transferEnvelopes"),
   );
-  const metadata = { messageUid };
-  for (const field of PROJECTED_TEXT_FIELDS) metadata[field] = presentText(source[field]);
-  for (const field of PROJECTED_FLAG_FIELDS) {
-    metadata[field] = source[field] === true ? true : undefined;
-  }
-  metadata.rawModelContent = normalizeRawModelContent(source.rawModelContent) ?? undefined;
-  metadata.contextPolicy = optionalPlainObject(source.contextPolicy, "contextPolicy") ?? undefined;
-  metadata.modelAdditionalKwargs =
-    optionalPlainObject(source.modelAdditionalKwargs, "modelAdditionalKwargs") ?? undefined;
-  metadata.modelResponseMetadata =
-    optionalPlainObject(source.modelResponseMetadata, "modelResponseMetadata") ?? undefined;
-  metadata.attachments = attachments.length ? attachments : undefined;
-  metadata.transferEnvelopes = transferEnvelopes.length ? transferEnvelopes : undefined;
+  setPresentMetadata(metadata, "rawModelContent", normalizeRawModelContent(source.rawModelContent));
+  for (const field of ["contextPolicy", "modelAdditionalKwargs", "modelResponseMetadata"])
+    setPresentMetadata(metadata, field, optionalPlainObject(source[field], field));
+  if (attachments.length) metadata.attachments = attachments;
+  if (transferEnvelopes.length) metadata.transferEnvelopes = transferEnvelopes;
   const userMetaParsedResults = optionalArray(
     source.userMetaParsedResults,
     "userMetaParsedResults",
   );
-  metadata.userMetaParsedResults = userMetaParsedResults.length ? userMetaParsedResults : undefined;
+  if (userMetaParsedResults.length) metadata.userMetaParsedResults = userMetaParsedResults;
   return writeContextMessageMetadata(
     {
       role,
@@ -161,6 +170,20 @@ export function projectSessionRecordToContextMessage(record) {
     },
     metadata,
   );
+}
+
+const immutableRecordProjections = new WeakMap();
+
+export function projectSessionRecordToContextMessage(record) {
+  if (!isDeepFrozen(record)) return buildSessionRecordContextMessage(record);
+  let projection = immutableRecordProjections.get(record);
+  if (!projection) {
+    projection = buildSessionRecordContextMessage(record);
+    Object.freeze(projection.additional_kwargs);
+    Object.freeze(projection);
+    immutableRecordProjections.set(record, projection);
+  }
+  return { ...projection, additional_kwargs: { ...projection.additional_kwargs } };
 }
 
 export function projectSessionRecordsToContextMessages(records = []) {

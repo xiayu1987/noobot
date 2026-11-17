@@ -5,9 +5,12 @@
  */
 import { LOCALE } from "../constants.js";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
-import { resolveModelMessageBlocks, resolveModelMessages } from "../../../../core/message-store.js";
-import { readContextMessageField } from "@noobot/context-protocol/message/codec";
-import { text } from "@noobot/shared/value";
+import { resolveModelMessageBlocks } from "../../../../core/message-store.js";
+import {
+  readContextMessageField,
+  resolveContextMessageContent,
+} from "@noobot/context-protocol/message/codec";
+import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/message/injected-types";
 
 function escapeRegExp(value = "") {
   return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -33,41 +36,21 @@ function stripSummaryRelayPrefix(content = "") {
 
 function isSummaryRelayMessage(message = {}) {
   const injectedType = readContextMessageField(message, "injectedMessageType");
-  if (injectedType === "separate_model_relay:summary") return true;
-  const content = text(message?.content ?? message?.lc_kwargs?.content);
-  return new RegExp(`^${resolveSummaryRelayPrefixPattern()}`, "i").test(content);
+  return injectedType === CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_RESULT;
 }
 
-export function resolveLatestSummaryRelayText(ctx = {}) {
-  const candidates = [...resolveModelMessages(ctx), ...resolveModelMessageBlocks(ctx).history];
+function resolveLatestSummaryRelayText(ctx = {}) {
+  const { history, incremental } = resolveModelMessageBlocks(ctx);
+  const candidates = [...history, ...incremental];
   for (let index = candidates.length - 1; index >= 0; index -= 1) {
     const message = candidates[index] || {};
     if (!isSummaryRelayMessage(message)) continue;
-    const inputText = stripSummaryRelayPrefix(
-      message?.content ?? message?.lc_kwargs?.content ?? "",
-    );
+    const inputText = stripSummaryRelayPrefix(resolveContextMessageContent(message));
     if (inputText) return inputText;
   }
   return "";
 }
 
-export function resolveLatestSummaryOutputFullText(bucket = {}) {
-  const outputs = Array.isArray(bucket?.guidanceOutputs) ? bucket.guidanceOutputs : [];
-  for (let index = outputs.length - 1; index >= 0; index -= 1) {
-    const item = outputs[index] || {};
-    if (text(item?.purpose) !== "summary") continue;
-    const content = text(item?.content);
-    if (content) return content;
-  }
-  return "";
-}
-
-export function resolveLatestCompleteSummaryText({ bucket = {}, ctx = {} } = {}) {
-  const fullText = text(bucket?.summaryFullText);
-  if (fullText) return fullText;
-  const outputFullText = resolveLatestSummaryOutputFullText(bucket);
-  if (outputFullText) return outputFullText;
-  const relayText = resolveLatestSummaryRelayText(ctx);
-  if (relayText) return relayText;
-  return text(bucket?.summaryText);
+export function resolveLatestCompleteSummaryText({ ctx } = {}) {
+  return resolveLatestSummaryRelayText(ctx);
 }

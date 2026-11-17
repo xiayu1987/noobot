@@ -31,12 +31,12 @@ export class ModelMessageRuntimeHelpers {
       emitModelContextTrace(
         getRuntimeFromAgentContext(ctx.agentContext).eventListener,
         "resolve_model_messages",
-        {
+        () => ({
           purpose: text(purpose),
           blockSource: "ctx.modelContext.messageBlocks",
           blocks: summarizeDiagnosticBlocks(ctx.modelContext.messageBlocks),
           resolvedMessages: summarizeDiagnosticMessages(resolved.messages),
-        },
+        }),
       );
       return resolved.messages;
     };

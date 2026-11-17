@@ -55,6 +55,7 @@ function harness({
     createClient: () => ({ invoke: async () => ({ content: "ok" }) }),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    invokeChat: ({ client, messages, invokeOptions }) => client.invoke(messages, invokeOptions),
     ...overrides,
   };
   const executor = createModelRequestExecutor({

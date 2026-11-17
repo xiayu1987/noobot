@@ -6,10 +6,15 @@
 import { nowMs } from "../../../chat/model/timeFields.js";
 import { findSessionByAnyId as findSessionByAnyIdInList } from "../../../chat/model/sessionIdentity.js";
 import { normalizeSessionId } from "./sessionIdentity.js";
-import { isLoadedRemoteSession, requireLoadedSessionDetail } from "./sessionRecords.js";
+import { hasCurrentSessionDetail, requireLoadedSessionDetail } from "./sessionRecords.js";
 import { thinkingDetailService } from "../../../../infrastructure/api/thinking/thinkingDetailService.js";
 import { logWorkflowDiagnostics } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
-import { requireSessionDetailDocument } from "@noobot/session-protocol/session-detail";
+import {
+  isSessionDetailEntryCurrent,
+  isAvailableSessionDetailEntry,
+  requireSessionDetailDocument,
+  selectMainSessionDetailEntry,
+} from "@noobot/session-protocol/session-detail";
 import { readApiResponseEnvelope } from "@noobot/shared/request-error";
 import { observeServerClock } from "../../../chat/model/serverClock.js";
 
@@ -48,15 +53,28 @@ export function createSessionDetailRequests({
     const recentMatches =
       recentSessionDetail !== null &&
       isSameSessionIdentity(recentSessionDetail.sessionId, sessionId) &&
-      nowMs() - recentSessionDetail.loadedAt <= RECENT_SESSION_DETAIL_REUSE_MS;
+      recentSessionDetail.targetSession === targetSession &&
+      nowMs() - recentSessionDetail.loadedAt <= RECENT_SESSION_DETAIL_REUSE_MS &&
+      (targetSession === null ||
+        isSessionDetailEntryCurrent(
+          selectMainSessionDetailEntry(recentSessionDetail.detail),
+          targetSession,
+        ));
     return {
       sessionId,
       activeSessionId: activeId,
       targetSession,
       targetExists: targetSession !== null,
-      targetLoaded: targetSession !== null && isLoadedRemoteSession(targetSession),
+      targetLoaded: targetSession !== null && hasCurrentSessionDetail(targetSession),
       sameAsActive: isSameSessionIdentity(sessionId, activeId),
-      pendingPromise: pendingEntry === undefined ? null : pendingEntry.promise,
+      pendingPromise:
+        pendingEntry !== undefined &&
+        pendingEntry.targetSession === targetSession &&
+        pendingEntry.aggregateVersion ===
+          (targetSession === null ? null : targetSession.aggregateVersion) &&
+        pendingEntry.generation === (targetSession === null ? null : targetSession.generation)
+          ? pendingEntry.promise
+          : null,
       recentDetail: recentMatches ? recentSessionDetail.detail : null,
     };
   }
@@ -125,14 +143,32 @@ export function createSessionDetailRequests({
           ),
         requestSessionId,
       );
+      const targetSession = findSessionByAnyIdInList(sessions.value, requestSessionId);
+      if (decision.state.targetSession !== targetSession) {
+        throw new TypeError(`session detail request target changed: ${requestSessionId}`);
+      }
       if (!data.exists) return data;
+      const main = selectMainSessionDetailEntry(data);
+      if (
+        targetSession !== null &&
+        isAvailableSessionDetailEntry(main) &&
+        !isSessionDetailEntryCurrent(main, targetSession)
+      ) {
+        throw new TypeError(
+          `session detail version is stale: ${requestSessionId}, received ${main.aggregateVersion}/${main.generation}, required ${targetSession.aggregateVersion}/${targetSession.generation}`,
+        );
+      }
       logWorkflowDiagnostics("frontend.workflowDetail.responseReceived", () => ({
         sessionId: data.sessionId,
         requestSource: decision.source,
         sessionDocCount: data.sessions.length,
       }));
+      if (targetSession !== null && isAvailableSessionDetailEntry(main)) {
+        targetSession.generation = main.generation;
+      }
       recentSessionDetail = {
         sessionId: data.sessionId,
+        targetSession,
         loadedAt: nowMs(),
         detail: data,
       };
@@ -141,13 +177,22 @@ export function createSessionDetailRequests({
 
     pendingSessionDetailRequests.set(requestSessionId, {
       promise: requestPromise,
+      targetSession: decision.state.targetSession,
+      aggregateVersion:
+        decision.state.targetSession === null
+          ? null
+          : decision.state.targetSession.aggregateVersion,
+      generation:
+        decision.state.targetSession === null ? null : decision.state.targetSession.generation,
       source: decision.source,
       startedAt: nowMs(),
     });
     try {
       return await requestPromise;
     } finally {
-      pendingSessionDetailRequests.delete(requestSessionId);
+      if (pendingSessionDetailRequests.get(requestSessionId)?.promise === requestPromise) {
+        pendingSessionDetailRequests.delete(requestSessionId);
+      }
     }
   }
 

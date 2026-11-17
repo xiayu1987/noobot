@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { test, expect } from "../fixtures/noobot.fixture.js";
 import { parseTaskCheckContent } from "@noobot/context-protocol/task/check";
 import { resolveSessionMessageRecordInternalMessageType } from "@noobot/session-protocol";
+import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/policy/injected-message";
 import {
   selectPlugins,
   sendMessage,
@@ -189,15 +190,15 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
     expect(resultMessage.transferEnvelopes || []).toEqual([]);
   }
 
-  const summaryCallIndex = firstMessages.findLastIndex((message) =>
-    (Array.isArray(message.tool_calls) ? message.tool_calls : []).some(
-      (call) => toolCallName(call) === "task_summary",
-    ),
+  const summaryMessageIndex = firstMessages.findLastIndex(
+    (message) =>
+      resolveSessionMessageRecordInternalMessageType(message) ===
+      CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_RESULT,
   );
-  expect(summaryCallIndex).toBeGreaterThan(0);
+  expect(summaryMessageIndex).toBeGreaterThan(0);
   const latestCheckBeforeSummary = [...checks]
     .reverse()
-    .find(({ messageIndex }) => messageIndex < summaryCallIndex);
+    .find(({ messageIndex }) => messageIndex < summaryMessageIndex);
   expect(latestCheckBeforeSummary).toBeTruthy();
   const latestCheckBeforeSummaryCallId = toolCallId(latestCheckBeforeSummary.call);
   const latestCheckBeforeSummaryResult = firstMessages.find(

@@ -17,7 +17,8 @@ import { ensureHarnessBucket } from "../bucket-utils.js";
 import { HARNESS_I18N_KEYSET, resolveLocale, translateI18nText } from "../i18n.js";
 import { isHarnessAgentTurnEnded } from "../runtime/lifecycle-utils.js";
 import { resolveAuxiliarySnapshotMessages } from "./auxiliary-snapshot-store.js";
-import { text } from "@noobot/shared/value";
+import { text, isFunction, isObjectLike } from "@noobot/shared/value";
+import { requirePhaseSummaryText } from "@noobot/context-protocol/policy/summary";
 
 const RESERVED_TOOL_PROTOCOL_PATTERN = /<\s*\/?\s*(?:tool_call|arg_value)\b/i;
 
@@ -71,6 +72,16 @@ function appendReasoningAttemptsToBucket(ctx = {}, { purpose = "", response = nu
   return true;
 }
 
+function assertCapabilityOutput(response, purpose) {
+  requireResponseToolNameBindings(response);
+  if (purpose === "summary") {
+    requirePhaseSummaryText(response.output);
+  } else if (!text(response.output.text)) {
+    throw new TypeError(`harness capability model returned empty output: ${purpose}`);
+  }
+  assertAuxiliaryOutputProtocol(response, purpose);
+}
+
 export async function invokeCapabilityModel({
   invoker = null,
   invokePayload = {},
@@ -79,9 +90,9 @@ export async function invokeCapabilityModel({
   appendModelTrace = null,
   ctx = {},
 } = {}) {
-  if (typeof invoker !== "function") return null;
+  if (!isFunction(invoker)) return null;
   if (isHarnessAgentTurnEnded(ctx)) return null;
-  const payload = invokePayload && typeof invokePayload === "object" ? { ...invokePayload } : {};
+  const payload = isObjectLike(invokePayload) ? { ...invokePayload } : {};
   const runtimeMessages = resolveAuxiliarySnapshotMessages({
     ctx,
     purpose: sequenceKey || purpose || payload.purpose,
@@ -97,16 +108,10 @@ export async function invokeCapabilityModel({
       contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.CHECKPOINT_APPEND_ONLY,
     }),
   );
-  requireResponseToolNameBindings(response);
-  if (!text(response.output.text)) {
-    throw new TypeError(
-      `harness capability model returned empty output: ${purpose || payload.purpose || "unknown"}`,
-    );
-  }
+  assertCapabilityOutput(response, purpose || payload.purpose);
   appendReasoningAttemptsToBucket(ctx, { purpose, response });
-  if (typeof appendModelTrace === "function") {
+  if (isFunction(appendModelTrace)) {
     await appendModelTrace(response);
   }
-  assertAuxiliaryOutputProtocol(response, purpose || payload.purpose);
   return response;
 }

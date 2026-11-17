@@ -8,6 +8,7 @@ import {
   CONFIG_DOCUMENT_SCOPE,
   diagnoseConfigDocument,
   mergeConfig,
+  resolveEffectiveToolBindings,
   repairConfigDocument,
 } from "../src/index.js";
 import { createToolNameBinding } from "@noobot/model-protocol";
@@ -70,5 +71,37 @@ test("effective binding collisions are visible for correction and rejected befor
   assert.deepEqual(diagnoseConfigDocument(mergeConfig(globalConfig, user)), []);
   assert.doesNotThrow(() =>
     createToolNameBinding({ bindings: mergeConfig(globalConfig, user).tools.bindings }),
+  );
+});
+
+test("request binding projection preserves full merge policy and reads current config", () => {
+  const cases = [
+    {},
+    { tools: { bindings: { read_file: { bindingName: "user_read" } } } },
+    { tools: { bindings: { default_provider: { bindingName: "identity_key" } } } },
+    { tools: { bindings: { read_file: { bindingName: "global_search" } } } },
+    ...[null, false, [], "invalid", 42].map((tools) => ({ tools })),
+    ...[null, false, [], "invalid", 42].map((bindings) => ({ tools: { bindings } })),
+    { tools: { bindings: { read_file: { bindingName: null, undeclared: true } } } },
+  ];
+  for (const userConfig of cases) {
+    const before = structuredClone(userConfig);
+    assert.deepEqual(
+      resolveEffectiveToolBindings(globalConfig, userConfig),
+      mergeConfig(globalConfig, userConfig).tools?.bindings,
+    );
+    assert.deepEqual(userConfig, before);
+  }
+  const userConfig = { tools: { bindings: { read_file: { bindingName: "first" } } } };
+  const first = resolveEffectiveToolBindings(globalConfig, userConfig);
+  userConfig.tools.bindings.read_file.bindingName = "second";
+  assert.equal(first.read_file.bindingName, "first");
+  assert.equal(
+    resolveEffectiveToolBindings(globalConfig, userConfig).read_file.bindingName,
+    "second",
+  );
+  assert.throws(
+    () => createToolNameBinding({ bindings: resolveEffectiveToolBindings(globalConfig, cases[3]) }),
+    /duplicate tool bindingName/,
   );
 });

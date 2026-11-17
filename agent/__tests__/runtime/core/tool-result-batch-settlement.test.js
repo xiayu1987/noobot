@@ -19,6 +19,7 @@ import {
 import { bindCurrentTurnPersistence } from "../../../src/bot/execution/runner/current-turn-persistence.js";
 import { bindAssistantMessageEventStream } from "../../../src/events/message-event-stream.js";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
+import { createTestMessagePersistenceReceipts } from "../../helpers/message-persistence-receipts.js";
 import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
 import {
   FLOW_CONTROL_ROLE,
@@ -65,10 +66,13 @@ test("parallel starts persist before invocation and ends/results flush once befo
   const checkpointFile = path.join(workspaceRoot, "start-checkpoint.json");
   bindCurrentTurnPersistence({
     dispatchRuntime: runtime,
-    appendAgentMessages: async ({ messages }) => {
+    sessionId: "s1",
+    dialogProcessId: "dp1",
+    turnScopeId: "turn1",
+    appendAgentMessages: async ({ messages, ...identity }) => {
       persisted.push(messages);
       fs.writeFileSync(checkpointFile, JSON.stringify(messages));
-      return messages;
+      return createTestMessagePersistenceReceipts({ messages, ...identity });
     },
   });
   const fatalError = fatalSystemError("fatal", { code: "FATAL_TEST" });
@@ -524,76 +528,6 @@ test("processToolResults commits result policy from its authoritative batch call
     },
   });
   assert.deepEqual(committed[0].call.contextPolicy, policy);
-});
-
-test("processToolResults accepts only a successful task_summary result", async () => {
-  const runtime = createRuntime();
-  const committed = [];
-  const loopState = { errorLogger: null };
-  const modelState = {
-    runtime,
-    agentContext: createTestAgentExecutionScope(runtime),
-  };
-  const stateCommitter = {
-    async pushToolResult(result) {
-      committed.push(result);
-    },
-  };
-
-  const rejected = await processToolResults({
-    modelState,
-    loopState,
-    turn: 1,
-    calls: [
-      {
-        id: "summary-rejected",
-        name: "task_summary",
-        args: { summaryContent: "invalid summary" },
-      },
-    ],
-    toolMap: new Map([
-      [
-        "task_summary",
-        {
-          name: "task_summary",
-          async invoke() {
-            return { ok: false, code: "RECOVERABLE_INVALID_TOOL_INPUT" };
-          },
-        },
-      ],
-    ]),
-    stateCommitter,
-  });
-  assert.deepEqual(rejected.taskSummaryOutcome, { attempted: true, accepted: false });
-  assert.equal(loopState.taskSummaryTriggered, undefined);
-
-  const accepted = await processToolResults({
-    modelState,
-    loopState,
-    turn: 2,
-    calls: [
-      {
-        id: "summary-accepted",
-        name: "task_summary",
-        args: { summaryContent: "valid summary" },
-      },
-    ],
-    toolMap: new Map([
-      [
-        "task_summary",
-        {
-          name: "task_summary",
-          async invoke() {
-            return { ok: true };
-          },
-        },
-      ],
-    ]),
-    stateCommitter,
-  });
-  assert.deepEqual(accepted.taskSummaryOutcome, { attempted: true, accepted: true });
-  assert.equal(loopState.taskSummaryTriggered, true);
-  assert.equal(committed.length, 2);
 });
 
 test("processToolResults consumes queued user interjections only after the tool batch persists", async () => {

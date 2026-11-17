@@ -54,7 +54,7 @@ export async function executeResendReplacement(context) {
       ...context,
       turnReplacement: commit.turnReplacement,
       replacedTurnScopeIds: commit.replacedTurnScopeIds,
-      detail: commit.detail,
+      mutation: commit.mutation,
     });
     if (projection.outcome === RESEND_PROJECTION_OUTCOME.ABORTED) return false;
     if (projection.outcome === RESEND_PROJECTION_OUTCOME.REJECTED) {

@@ -6,15 +6,17 @@
 
 import {
   assertMainFlowControlPort,
-  createFinalNoToolsTurnInstruction,
+  createPhaseSummaryInstruction,
   createSummaryCheckpointInstruction,
+  createSummarySchedulingClaim,
 } from "@noobot/context-protocol/policy/main-flow-control";
 import { isPlainObject } from "@noobot/shared/value";
 
 export function createMainFlowControlState() {
   return {
     summaryCheckpoints: [],
-    finalNoToolsInstruction: null,
+    summarySchedulingOwner: null,
+    phaseSummaryInstruction: null,
     finalNoToolsTurnActive: false,
   };
 }
@@ -27,6 +29,38 @@ function requireState(runtime) {
     );
   }
   return state;
+}
+
+export function claimMainFlowSummaryScheduling(runtime, input) {
+  const { source } = createSummarySchedulingClaim(input);
+  const state = requireState(runtime);
+  if (state.summarySchedulingOwner !== null && state.summarySchedulingOwner !== source) {
+    throw new Error("summary scheduling already has an owner");
+  }
+  state.summarySchedulingOwner = source;
+}
+
+export function hasExternalSummaryScheduler(runtime) {
+  return requireState(runtime).summarySchedulingOwner !== null;
+}
+
+export function requestMainFlowPhaseSummary(runtime, input) {
+  const state = requireState(runtime);
+  if (state.phaseSummaryInstruction) throw new Error("phase summary is already pending");
+  state.phaseSummaryInstruction = createPhaseSummaryInstruction(input);
+  return state.phaseSummaryInstruction;
+}
+
+export function peekMainFlowPhaseSummary(runtime) {
+  return requireState(runtime).phaseSummaryInstruction;
+}
+
+export function acknowledgeMainFlowPhaseSummary(runtime, instruction) {
+  const state = requireState(runtime);
+  if (state.phaseSummaryInstruction !== instruction) {
+    throw new Error("phase summary acknowledgement does not match pending instruction");
+  }
+  state.phaseSummaryInstruction = null;
 }
 
 export function requestMainFlowSummaryCheckpoint(runtime, input) {
@@ -47,29 +81,6 @@ export function acknowledgeMainFlowSummaryCheckpoint(runtime) {
   return true;
 }
 
-export function requestMainFlowFinalNoToolsTurn(runtime, input) {
-  const state = requireState(runtime);
-  state.finalNoToolsInstruction = createFinalNoToolsTurnInstruction(input);
-  return state.finalNoToolsInstruction;
-}
-
-export function peekMainFlowFinalNoToolsTurnInstruction(runtime) {
-  return requireState(runtime).finalNoToolsInstruction;
-}
-
-export function clearMainFlowFinalNoToolsTurnInstruction(runtime) {
-  const state = requireState(runtime);
-  const cleared = state.finalNoToolsInstruction !== null;
-  state.finalNoToolsInstruction = null;
-  return cleared;
-}
-
-export function consumeMainFlowFinalNoToolsTurnInstruction(runtime) {
-  const instruction = peekMainFlowFinalNoToolsTurnInstruction(runtime);
-  clearMainFlowFinalNoToolsTurnInstruction(runtime);
-  return instruction;
-}
-
 export function markMainFlowFinalNoToolsTurnActive(runtime, active) {
   if (typeof active !== "boolean") {
     throw new TypeError("main flow final no-tools turn active flag must be boolean");
@@ -78,14 +89,19 @@ export function markMainFlowFinalNoToolsTurnActive(runtime, active) {
 }
 
 export function isMainFlowFinalNoToolsTurnEngaged(runtime) {
-  const state = requireState(runtime);
-  return state.finalNoToolsTurnActive || state.finalNoToolsInstruction !== null;
+  return requireState(runtime).finalNoToolsTurnActive;
 }
 
 export function createMainFlowControlPort(runtime) {
   requireState(runtime);
   return assertMainFlowControlPort(
     Object.freeze({
+      claimSummaryScheduling: (input) => claimMainFlowSummaryScheduling(runtime, input),
+      requestPhaseSummary: (input) => requestMainFlowPhaseSummary(runtime, input),
+      hasPendingSummary: () => {
+        const state = requireState(runtime);
+        return state.phaseSummaryInstruction !== null || state.summaryCheckpoints.length > 0;
+      },
       requestSummaryCheckpoint: (input) => requestMainFlowSummaryCheckpoint(runtime, input),
       isFinalNoToolsTurnEngaged: () => isMainFlowFinalNoToolsTurnEngaged(runtime),
     }),

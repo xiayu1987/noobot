@@ -14,6 +14,55 @@ import {
   parseTaskCheckReceipt,
 } from "@noobot/context-protocol/task/check-receipt";
 import { decodeToolResultText } from "./tool-result.js";
+import { projectToolOperationSummary } from "./tool-presentation.js";
+
+export function compactThinkingTimeline(items) {
+  const compactFact = (fact, summary) => ({
+    eventId: text(fact.eventId),
+    sequence: fact.sequence,
+    ...(text(fact.timestamp) ? { timestamp: String(fact.timestamp).trim() } : {}),
+    ...(text(fact.sequenceScopeId) ? { sequenceScopeId: String(fact.sequenceScopeId).trim() } : {}),
+    ...(text(fact.authority) ? { authority: String(fact.authority).trim() } : {}),
+    ...(text(fact.sequenceDomain) ? { sequenceDomain: String(fact.sequenceDomain).trim() } : {}),
+    ...(text(fact.sessionId) ? { sessionId: String(fact.sessionId).trim() } : {}),
+    ...(text(fact.dialogProcessId) ? { dialogProcessId: String(fact.dialogProcessId).trim() } : {}),
+    ...(text(fact.turnScopeId) ? { turnScopeId: String(fact.turnScopeId).trim() } : {}),
+    ...(Array.isArray(fact.resourceRefs) && fact.resourceRefs.length
+      ? { resourceRefs: fact.resourceRefs }
+      : {}),
+    ...(Array.isArray(fact.mutationRefs) && fact.mutationRefs.length
+      ? { mutationRefs: fact.mutationRefs }
+      : {}),
+    summary,
+  });
+  return items.map((item) => {
+    const taskCheckReceipt = projectTaskCheckReceipt(item);
+    return {
+      ...requireCanonicalToolTimelineIdentity(item),
+      tool: item.tool,
+      status: item.status,
+      ...(item.resultEvent ? { success: item.success } : {}),
+      ...(text(item.riskLevel) ? { riskLevel: String(item.riskLevel).trim() } : {}),
+      ...(item.call
+        ? {
+            call: compactFact(
+              item.call,
+              projectToolOperationSummary(item.tool, item.args, { result: false }),
+            ),
+          }
+        : {}),
+      ...(item.resultEvent
+        ? {
+            resultEvent: compactFact(
+              item.resultEvent,
+              projectToolOperationSummary(item.tool, item.result, { result: true }),
+            ),
+          }
+        : {}),
+      ...(taskCheckReceipt ? { taskCheckReceipt } : {}),
+    };
+  });
+}
 
 const TOOL_EVENT_TYPES = Object.freeze(
   new Set([MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END]),

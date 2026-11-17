@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { initializeImmutableSession } from "../../src/session/session-artifact-session/immutable-session-bootstrap.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -13,7 +14,6 @@ import { SESSION_ARTIFACT_SCHEMA_VERSION, SESSION_ERROR_CODE } from "@noobot/ses
 import {
   appendRollingJsonlArtifactLog,
   buildSessionArtifactFileMap,
-  cleanupSessionArtifacts,
   inspectSessionArtifacts,
   readSessionArtifact,
   repairSessionArtifacts,
@@ -29,6 +29,7 @@ import {
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 import { TEST_STORAGE_SERVICE as storageService } from "../helpers/storage-service.js";
+import { prepareAndCleanupSessionArtifacts as cleanupSessionArtifacts } from "../helpers/immutable-cleanup.js";
 
 const allowSessionWrite = async () => {};
 const SEGMENT_BYTES = LENGTH_THRESHOLDS.artifact.executionEventSegmentBytes;
@@ -465,11 +466,10 @@ test("summary checkpoints write immutable snapshots indexed by the manifest", as
         .map((record) => record.messageUid),
       ["m3"],
     );
-    assert.deepEqual(secondSnapshot.records.find((record) => record.op === "order").positions, [
-      { messageUid: "m1", ordinal: 1 },
-      { messageUid: "m2", ordinal: 2 },
-      { messageUid: "m3", ordinal: 3 },
-    ]);
+    assert.deepEqual(
+      secondSnapshot.records.find((record) => record.op === "append_positions").positions,
+      [{ messageUid: "m3", ordinal: 3 }],
+    );
     assert.equal(secondSnapshot.previousCheckpointHash, indexedRecords[0].contentHash);
     assert.deepEqual(
       (await readSessionArtifact({ storageService, sessionDir: root })).messages.map(
@@ -725,6 +725,11 @@ test("inspect is read-only, repair is idempotent, and cleanup honors dry-run and
         messages: [{ role: "user", messageOrigin: "natural", content: "x" }],
       },
     });
+    await initializeImmutableSession({
+      sessionDir,
+      session: await readSessionArtifact({ storageService, sessionDir }),
+      operationId: "maintenance-import",
+    });
     const files = buildSessionArtifactFileMap(sessionDir);
     await appendRollingJsonlArtifactLog({
       storageService,
@@ -739,7 +744,7 @@ test("inspect is read-only, repair is idempotent, and cleanup honors dry-run and
     index.segments[0].records = 0;
     await writeFile(indexPath, JSON.stringify(index), "utf8");
     const orphan = path.join(files.turnsDir, "turn-orphan.json");
-    const temp = path.join(sessionDir, "write.tmp-1");
+    const temp = path.join(sessionDir, "head.json.aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.tmp");
     const staging = `${sessionDir}.repair-staging-dead`;
     const other = path.join(root, "session-b.repair-staging-live");
     await writeFile(orphan, "{}", "utf8");
@@ -783,9 +788,10 @@ test("inspect is read-only, repair is idempotent, and cleanup honors dry-run and
       dryRun: false,
       assertSessionWritable: allowSessionWrite,
     });
-    assert.equal(cleaned.removed.includes(orphan), true);
-    await assert.rejects(access(orphan), { code: "ENOENT" });
+    assert.ok(dry.removed.includes(temp));
+    assert.deepEqual(cleaned.removed, dry.removed);
+    await access(orphan);
     await assert.rejects(access(temp), { code: "ENOENT" });
-    await assert.rejects(access(staging), { code: "ENOENT" });
+    await access(staging);
     await access(other);
   }));

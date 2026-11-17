@@ -19,7 +19,7 @@ import { sessionMutationCoordinator } from "../session/session-mutation-coordina
 import { resolveSessionArtifactMutationLock } from "../session/session-artifact-files.js";
 import { requireStorageService } from "../session/storage-service.js";
 import {
-  readExecutionSegmentState,
+  readExecutionSegmentSummary,
   readRegisteredExecutionTurns,
   resolveExecutionEventsDir,
   resolveExecutionTurnDir,
@@ -64,7 +64,7 @@ async function validateStagedIndexes({ storageService, stagingDir }) {
     sessionDir: stagingDir,
   })) {
     for (const segment of turn.index.segments) {
-      await readExecutionSegmentState({ turnDir: turn.turnDir, file: segment.file });
+      await readExecutionSegmentSummary({ turnDir: turn.turnDir, file: segment.file });
     }
   }
 }
@@ -92,6 +92,28 @@ async function upgradeSessionDirectory({ storageService, base, backupBase, sessi
   return { sessionDir: path.relative(base, sessionDir), turns: sessionIndex.turns.length, files };
 }
 
+async function upgradeOrQuarantineSession(options, sessionDir, results) {
+  const { storageService, base, backupBase, onSessionProcessed } = options;
+  try {
+    const result = await sessionMutationCoordinator.run(
+      resolveSessionArtifactMutationLock(sessionDir),
+      () => upgradeSessionDirectory({ storageService, base, backupBase, sessionDir }),
+    );
+    if (result) results.sessions.push(result);
+  } catch (error) {
+    if (!DATA_REJECTION_CODES.has(error.code)) throw error;
+    results.quarantined.push(
+      await quarantineMigrationUnit({
+        base,
+        kind: QUARANTINE_KIND,
+        relativePath: path.relative(base, sessionDir),
+        error,
+      }),
+    );
+  }
+  onSessionProcessed();
+}
+
 export async function upgradeExecutionEventIndexes({
   base,
   backupBase,
@@ -105,26 +127,10 @@ export async function upgradeExecutionEventIndexes({
   requireStorageService(storageService, "execution event index upgrade");
   const sessions = [];
   const quarantined = [];
+  const options = { storageService, base, backupBase, onSessionProcessed };
   for (const root of [WORKSPACE_LAYOUT.SESSION_DIR, ...scopedSessionRoots]) {
     for await (const sessionDir of walkSessionManifestDirectories(path.join(base, root))) {
-      try {
-        const result = await sessionMutationCoordinator.run(
-          resolveSessionArtifactMutationLock(sessionDir),
-          () => upgradeSessionDirectory({ storageService, base, backupBase, sessionDir }),
-        );
-        if (result) sessions.push(result);
-      } catch (error) {
-        if (!DATA_REJECTION_CODES.has(error.code)) throw error;
-        quarantined.push(
-          await quarantineMigrationUnit({
-            base,
-            kind: QUARANTINE_KIND,
-            relativePath: path.relative(base, sessionDir),
-            error,
-          }),
-        );
-      }
-      onSessionProcessed();
+      await upgradeOrQuarantineSession(options, sessionDir, { sessions, quarantined });
     }
   }
   return { sessions, quarantined };

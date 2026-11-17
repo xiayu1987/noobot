@@ -114,7 +114,7 @@ test("outbox compaction reclaims only events every attempting consumer delivered
         finishedAt: "",
       },
     });
-  const delivered = (eventId, sequence, deliveries, scopeId = "message-1") => {
+  const delivered = (eventId, sequence, deliveries) => {
     const item = envelope(eventId, sequence);
     return {
       eventId,
@@ -127,8 +127,8 @@ test("outbox compaction reclaims only events every attempting consumer delivered
             attempts: 1,
             lastAttemptAt: "2026-07-01T00:00:00.000Z",
             orderingDomain: deliveredAt ? item.ordering.domain : "",
-            orderingScopeId: deliveredAt ? scopeId : "",
-            sequence: deliveredAt ? sequence : 0,
+            orderingScopeId: deliveredAt ? item.ordering.scopeId : "",
+            sequence: deliveredAt ? item.ordering.sequence : 0,
             deliveredAt,
           },
         ]),
@@ -145,10 +145,10 @@ test("outbox compaction reclaims only events every attempting consumer delivered
     },
     delivered("recent", 2, { "service-websocket": "2026-07-20T00:00:00.000Z" }),
     delivered("attempted-not-delivered", 3, { "service-websocket": old, "service-cli": "" }),
-    delivered("old-stream-a", 4, { "service-websocket": old }, "message-a"),
-    delivered("old-both", 5, { "service-websocket": old, "service-cli": old }, "message-b"),
+    delivered("old-stream-a", 4, { "service-websocket": old }),
+    delivered("old-both", 5, { "service-websocket": old, "service-cli": old }),
   ];
-  const result = compactAuthorityEventOutbox(source, {
+  const result = compactAuthorityEventOutbox(normalizeAuthorityEventOutbox(source), {
     retainDeliveredAfter: "2026-07-10T00:00:00.000Z",
   });
   assert.equal(result.removed, 2);

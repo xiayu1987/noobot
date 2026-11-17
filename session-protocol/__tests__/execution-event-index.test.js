@@ -121,9 +121,11 @@ test("turn index is frozen", () => {
   }, TypeError);
 });
 
-test("turn index enforces strictly increasing sequence and canonical segment fields", () => {
+test("turn index enforces contiguous sequence from one and canonical segment fields", () => {
   const invalid = [
     [segment(0)],
+    [segment(2)],
+    [segment(1, { sealed: true }), segment(3)],
     [segment(2, { sealed: true }), segment(2)],
     [segment(2, { sealed: true }), segment(1)],
     [segment(1), segment(2)],
@@ -216,6 +218,8 @@ test("v2 turn index rejects mismatched, invalid and unknown facts", () => {
   for (const [index, key] of [
     [v2Turn(), "dp-2"],
     [v2Turn({ activeSequence: 1 }), "dp-1"],
+    [v2Turn({ segments: [segment(2)] }), "dp-1"],
+    [v2Turn({ activeSequence: 3, segments: [segment(1, { sealed: true }), segment(3)] }), "dp-1"],
     [v2Turn({ maxSegmentBytes: 0 }), "dp-1"],
     [v2Turn({ maxSegmentBytes: "100" }), "dp-1"],
     [v2Turn({ extra: true }), "dp-1"],

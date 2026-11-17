@@ -15,14 +15,12 @@ import { createConnectorAccessTool } from "./connectors/connector-access-tool.js
 import { createWebSearchTool } from "./ai-models/web-search-tool.js";
 import { createMultimodalGenerateTool } from "./ai-models/multimodal-generate-tool.js";
 import { createMultimodalParseTool } from "./ai-models/multimodal-parse-tool.js";
-import { createTaskSummaryTool } from "./collaboration/task-summary-tool.js";
 import { createTaskCheckTool } from "./collaboration/task-check-tool.js";
 import { createHelpTool } from "./collaboration/help-tool.js";
 import { mergeConfig } from "../config/index.js";
 import { CONTROL_TOOL_NAMES } from "./constants/index.js";
 export { BUILTIN_TOOL_IDS } from "./constants/index.js";
 import { runBuildToolsAdapter } from "./adapter.js";
-export { renderTaskSummaryReceiptMessage } from "./collaboration/task-summary-tool.js";
 import { assertToolPathContract } from "@noobot/path-resolver";
 import {
   MODEL_MULTIMODAL_MODALITY,
@@ -93,7 +91,6 @@ async function buildToolsDefault(ctx) {
     ...(enableMultimodalParseTool ? createMultimodalParseTool(ctx) : []),
     ...createConnectorAccessTool(ctx),
     ...createModelTool(ctx),
-    ...createTaskSummaryTool(ctx),
     ...createTaskCheckTool(ctx),
     ...createHelpTool(ctx),
     ...(allowUserInteraction ? createUserInteractionTool(ctx) : []),

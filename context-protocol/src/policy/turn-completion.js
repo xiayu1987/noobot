@@ -14,17 +14,14 @@ import { isFunction } from "@noobot/shared/value";
 export function applyTurnCompletionPolicy({ modelMessages, turnMessageStore }) {
   if (
     !turnMessageStore ||
-    !isFunction(turnMessageStore.updateWhere) ||
-    !isFunction(turnMessageStore.toArray)
+    !isFunction(turnMessageStore.updateByUid) ||
+    !isFunction(turnMessageStore.readCompletionSelection)
   ) {
     throw new Error("turn completion policy requires the canonical turn message store");
   }
   const { markedCount, markedMessageUids } = markCurrentTurnStoreSummarized(turnMessageStore);
   mirrorSummarizedMessagesByUid(modelMessages, markedMessageUids);
-  return {
-    markedCount,
-    messages: turnMessageStore.toArray(),
-  };
+  return { markedCount };
 }
 
 export function projectTurnCompletionMessages(records = []) {

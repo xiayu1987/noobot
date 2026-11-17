@@ -24,7 +24,15 @@ import {
 } from "./chat-websocket-server.turn-lifecycle.fixtures.js";
 import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
 
-useProvisionedRuntimeEventsWorkspace(["primary-user"]);
+useProvisionedRuntimeEventsWorkspace(["primary-user"], {
+  "primary-user": [
+    "s-processing-rejected",
+    "s-terminal-boundary",
+    "s-summary-failure",
+    "s-action-failure",
+    "s-processing-failure",
+  ],
+});
 
 test("processing-start persistence rejection is observed while Agent execution is still active", async () => {
   const authoritative = createAuthoritativeBot();

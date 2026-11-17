@@ -99,27 +99,32 @@ async function retireRecord({ base, backupBase, plan }) {
   return { path: relativePath, backupPath };
 }
 
+async function planOrQuarantineRecord({ base, relativePath, tombstoneSessions }) {
+  try {
+    return { plan: await planRecord({ base, relativePath, tombstoneSessions }) };
+  } catch (error) {
+    if (error?.code !== "WORKSPACE_SESSION_LIFECYCLE_UPGRADE_INVALID") throw error;
+    return {
+      quarantine: await quarantineMigrationUnit({
+        base,
+        kind: QUARANTINE_KIND,
+        relativePath,
+        error,
+        move: true,
+      }),
+    };
+  }
+}
+
 async function planRecords({ base, tombstoneSessions }) {
   const recordsDir = path.join(base, RETIRED_SESSION_LIFECYCLE_RECORDS_DIR);
   const plans = [];
   const quarantined = [];
   for (const name of await listRecordFiles(recordsDir)) {
     const relativePath = path.join(RETIRED_SESSION_LIFECYCLE_RECORDS_DIR, name);
-    try {
-      const plan = await planRecord({ base, relativePath, tombstoneSessions });
-      if (plan) plans.push(plan);
-    } catch (error) {
-      if (error?.code !== "WORKSPACE_SESSION_LIFECYCLE_UPGRADE_INVALID") throw error;
-      quarantined.push(
-        await quarantineMigrationUnit({
-          base,
-          kind: QUARANTINE_KIND,
-          relativePath,
-          error,
-          move: true,
-        }),
-      );
-    }
+    const result = await planOrQuarantineRecord({ base, relativePath, tombstoneSessions });
+    if (Object.hasOwn(result, "plan")) plans.push(result.plan);
+    else quarantined.push(result.quarantine);
   }
   return { plans, quarantined };
 }

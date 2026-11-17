@@ -19,23 +19,15 @@ import { assertAgentTurnResult } from "@noobot/agent-transport-protocol/agent-tu
 import { applyTurnCompletionPolicy } from "@noobot/context-protocol/policy/turn-completion";
 import { text } from "@noobot/shared/value";
 
-function modelMessageIdOf(message) {
-  return text(message.modelMessageId);
-}
-
 function resultModelMessageId(result) {
   return text(result.modelMessageId);
-}
-
-function canonicalTurnMessages(runtime) {
-  return requireCurrentTurnMessagesStore(runtime.currentTurnMessages).toArray();
 }
 
 function authoritativeFinalMessages(result, runtime) {
   const modelMessageId = resultModelMessageId(result);
   if (!modelMessageId) return [];
-  return canonicalTurnMessages(runtime).filter(
-    (message) => modelMessageIdOf(message) === modelMessageId,
+  return requireCurrentTurnMessagesStore(runtime.currentTurnMessages).readMessagesByModelMessageId(
+    modelMessageId,
   );
 }
 
@@ -48,14 +40,13 @@ function finalMessageArtifacts(finalMessage) {
 }
 
 function authoritativeFinalDiagnostics(result, runtime) {
-  const messages = canonicalTurnMessages(runtime);
+  const counts = requireCurrentTurnMessagesStore(runtime.currentTurnMessages).readCounts();
   const matches = authoritativeFinalMessages(result, runtime);
   const artifacts = matches.length === 1 ? finalMessageArtifacts(matches[0]) : {};
   return {
     modelMessageId: resultModelMessageId(result),
     outputChars: result.output.length,
-    storeMessageCount: messages.length,
-    storeModelMessageIds: messages.map(modelMessageIdOf),
+    storeMessageCount: counts.messageCount,
     matchCount: matches.length,
     matchedPresentationMessageIds: matches.map((message) => text(message.presentationMessageId)),
     attachmentCount: artifacts.attachments ? artifacts.attachments.length : 0,
@@ -69,11 +60,11 @@ export function commitAuthoritativeFinalOutput({ result, runtime }) {
   const store = requireCurrentTurnMessagesStore(runtime.currentTurnMessages);
   const matches = authoritativeFinalMessages(result, runtime);
   if (matches.length !== 1) return false;
-  const updatedCount = store.updateWhere(
-    { content: result.output, ...finalMessageArtifacts(matches[0]) },
-    (message) => modelMessageIdOf(message) === modelMessageId,
-  );
-  if (updatedCount !== 1) return false;
+  const updated = store.updateByUid(matches[0].messageUid, {
+    content: result.output,
+    ...finalMessageArtifacts(matches[0]),
+  });
+  if (!updated) return false;
   result.turnMessages = store.toArray();
   return true;
 }
@@ -97,11 +88,20 @@ export async function commitAuthoritativeFinalResult({ result, runtime }) {
   assertAgentTurnResult(result);
   const store = requireCurrentTurnMessagesStore(runtime.currentTurnMessages);
   const { summaryCheckpointPromotionSources: promotionSources, eventListener } = runtime;
-  const projectedMessages = projectGeneratedArtifactsToFinalAssistant([
-    ...promotionSources,
-    ...store.toArray(),
-  ]).slice(promotionSources.length);
-  store.replaceAll(projectedMessages);
+  const finalAssistant = store.readFinalAssistant();
+  if (finalAssistant) {
+    const sources = store.readArtifactProjectionSources();
+    const target = sources.findIndex((message) => message.messageUid === finalAssistant.messageUid);
+    const projected = projectGeneratedArtifactsToFinalAssistant([...promotionSources, ...sources])[
+      promotionSources.length + target
+    ];
+    if (projected !== sources[target]) {
+      store.updateByUid(finalAssistant.messageUid, {
+        attachments: projected.attachments,
+        transferEnvelopes: projected.transferEnvelopes,
+      });
+    }
+  }
   applyTurnCompletionPolicy({
     modelMessages: result.modelMessages,
     turnMessageStore: store,

@@ -6,11 +6,16 @@
 import { describe, expect, it } from "vitest";
 import {
   createLocalSessionItem,
+  hasCurrentSessionDetail,
   isLoadedRemoteSession,
   mapSummaryEntryToSession,
   reconcileSessionObject,
+  requireLoadedSessionDetail,
 } from "../../../../../../src/modules/session/model/list/sessionRecords.js";
-import { availableSummaryEntry } from "../../../../helpers/sessionDetailFixture.js";
+import {
+  availableDetailDocument,
+  availableSummaryEntry,
+} from "../../../../helpers/sessionDetailFixture.js";
 
 const helpers = {
   createConnectorPanelState: () => ({ selectedConnectorIds: [], connectors: [] }),
@@ -30,6 +35,42 @@ function mappedSummary({ aggregateVersion, updatedAt }) {
 }
 
 describe("sessionRecords aggregate version reconciliation", () => {
+  it("rejects a loaded remote session without its document collection", () => {
+    const session = {
+      sessionId: "s-invalid",
+      isLocal: false,
+      loaded: true,
+      aggregateVersion: 1,
+      generation: null,
+    };
+    for (const sessionDocs of [undefined, null, {}]) {
+      expect(() => hasCurrentSessionDetail({ ...session, sessionDocs })).toThrow(
+        /requires sessionDocs/,
+      );
+    }
+    expect(hasCurrentSessionDetail({ ...session, sessionDocs: [] })).toBe(false);
+  });
+
+  it("keeps the applied document version independent of a newer list version", () => {
+    const existing = mappedSummary({ aggregateVersion: 2, updatedAt: "2026-07-15T10:01:00.000Z" });
+    existing.loaded = true;
+    existing.sessionDocs = availableDetailDocument({
+      sessionId: "s-refresh",
+      title: "refresh",
+      aggregateVersion: 2,
+      messages: [],
+      turnTimings: [],
+    }).sessions;
+    expect(hasCurrentSessionDetail(existing)).toBe(true);
+    reconcileSessionObject(
+      mappedSummary({ aggregateVersion: 5, updatedAt: "2026-07-15T10:02:00.000Z" }),
+      existing,
+    );
+    expect(existing.aggregateVersion).toBe(5);
+    expect(existing.sessionDocs[0].aggregateVersion).toBe(2);
+    expect(hasCurrentSessionDetail(existing)).toBe(false);
+    expect(() => requireLoadedSessionDetail(existing)).toThrow(/current remote session detail/);
+  });
   it("requires a remote detail read after a local session appears in the server list", () => {
     const existing = createLocalSessionItem({ id: "s-refresh", title: "local", ...helpers });
     const messages = [{ role: "assistant", content: "streaming response" }];

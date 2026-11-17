@@ -141,7 +141,6 @@ function buildLoopState({ tools, runtime, sys, loopConfig, errorLogger }) {
     phaseSummaryMessageCharsThreshold: loopConfig.phaseSummaryMessageCharsThreshold,
     helpPromptLoopTurns: loopConfig.helpPromptLoopTurns,
     toolFailureHelpCount: loopConfig.toolFailureHelpCount,
-    taskSummaryTriggered: false,
     systemRuntime: sys,
     errorLogger,
   };
@@ -186,14 +185,14 @@ function emitAgentStateDiagnostics({
     messageIds: modelMessageIds.slice(-12),
     truncatedMessageIdCount: Math.max(0, modelMessageIds.length - 12),
   });
-  emitModelContextTrace(runtime.eventListener, "agent_state_built", {
+  emitModelContextTrace(runtime.eventListener, "agent_state_built", () => ({
     payloadMessages: {
       systemCount: context.modelContext.messageBlocks.system.length,
       historyCount: context.modelContext.messageBlocks.history.length,
     },
     blocks: summarizeDiagnosticBlocks(modelContext.messageBlocks),
     messages: summarizeDiagnosticMessages(modelContext.messages),
-  });
+  }));
 }
 
 export function createStateBuilder({

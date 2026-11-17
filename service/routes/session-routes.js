@@ -17,10 +17,7 @@ import {
   SESSION_COMMAND,
   SESSION_ERROR_CODE,
 } from "@noobot/session-protocol";
-import {
-  isAvailableSessionDetailEntry,
-  selectMainSessionDetailEntry,
-} from "@noobot/session-protocol/session-detail";
+import { isAvailableSessionDetailEntry } from "@noobot/session-protocol/session-detail";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
@@ -294,19 +291,13 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
         throw error;
       }
       const response = requireMessageDeleteResponse(result);
-      const mainEntry = selectMainSessionDetailEntry(response.detail);
       await logDeleteMutation("service.messageDelete.committed", {
         deletedCount: response.deletedCount,
         anchorIndex: response.anchorIndex,
         deletedTurnScopeIds: response.deletedTurnScopeIds,
         committedAggregateVersion: response.committedAggregateVersion,
         deduplicated: response.deduplicated,
-        remainingMessages: mainEntry.messages.map((message, index) => ({
-          index,
-          messageUid: message.messageUid,
-          role: message.role,
-          turnScopeId: message.turnScopeId,
-        })),
+        deletedMessageUids: response.deletedMessageUids,
       });
       res.json({ ok: true, ...response });
     }),
@@ -332,7 +323,6 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
     };
     const response = requireTurnReplaceResponse(await bot.replaceSessionTurn(payload));
     const commit = response.turnReplacement;
-    const lifecycleSnapshot = selectMainSessionDetailEntry(response.detail).turnLifecycleSnapshot;
     await writeRuntimeEvent({
       scope: "session",
       source: "service",
@@ -349,8 +339,8 @@ export function registerSessionRoutes(app, { bot, translateText, pluginHost } = 
         commandId: commit.commandId,
         replacementDialogProcessId: commit.replacementDialogProcessId,
         committedAggregateVersion: commit.committedAggregateVersion,
-        lifecycleSequence: lifecycleSnapshot.sequence,
-        activeTurnScopeId: lifecycleSnapshot.activeTurnScopeId,
+        replacementUserMessageUid: commit.replacementUserMessageUid,
+        deletedMessageUids: response.deletedMessageUids,
         replacedTurnScopeIds: commit.replacedTurnScopeIds,
         deduplicated: response.deduplicated,
       },

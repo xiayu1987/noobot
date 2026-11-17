@@ -76,6 +76,24 @@ export function collectSessionMessageEntityErrors(record) {
 
 export function assertSessionMessageEntity(record) {
   const errors = collectSessionMessageEntityErrors(record);
+  return requireValidMessage(record, errors);
+}
+
+export function assertSessionMessageMetadata({ value, parts }) {
+  const record = value.message;
+  const deferred = parts.some(
+    ({ path }) => path.length === 2 && path[0] === "message" && path[1] === "content",
+  );
+  const errors = collectSessionMessageEntityErrors(record).filter(
+    (error) => !(deferred && record.content === null && error === "content_not_string"),
+  );
+  if (deferred && record.content !== null) errors.push("content_slot_not_null");
+  for (const { path } of parts)
+    if (record[path[1]] !== null) errors.push(`${path[1]}_slot_not_null`);
+  return requireValidMessage(record, errors);
+}
+
+function requireValidMessage(record, errors) {
   if (!errors.length) return record;
   const error = new TypeError(`invalid Session message entity: ${errors.join(",")}`);
   error.code = SESSION_MESSAGE_ENTITY_INVALID;

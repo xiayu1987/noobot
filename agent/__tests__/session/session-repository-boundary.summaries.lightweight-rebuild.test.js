@@ -9,11 +9,10 @@ import { TRANSFER_VERSION, TRANSFER_REASON } from "@noobot/semantic-transfer-pro
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile, rm } from "node:fs/promises";
 
 import { createTestSessionServices, provisionTestSession } from "../helpers/session-services.js";
-import { readSessionArtifact } from "../../src/session/session-artifact-store.js";
-import { SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION } from "../../src/session/session-summary-builders.js";
+import { normalizeMessageEntity } from "../../src/session/entities/message-entity.js";
 import {
   withTempWorkspace,
   canonicalActivity,
@@ -22,11 +21,10 @@ import {
   canonicalMessages,
 } from "./session-repository-boundary.summaries.fixtures.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
-import { applySessionMessageFacts } from "../helpers/session-message-facts.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
-test("session display summary should keep chat view lightweight and rebuild stale files", async () => {
+test("immutable display projection preserves chat content without a second persisted summary", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     await initializeUserWorkspace(workspaceRoot, userId);
@@ -321,17 +319,19 @@ test("session display summary should keep chat view lightweight and rebuild stal
       "B",
       "lightweight_b",
     );
-    await runtime.repositories.sessionRepository.save(userId, applySessionMessageFacts(sessionB), {
-      persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
-        userId,
-        sessionB.sessionId,
-      ),
-    });
-    await runtime.repositories.sessionRepository.ensureSessionDisplaySummary(userId, "B", {
-      persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
-        userId,
-        "B",
-      ),
+    const repository = runtime.repositories.sessionRepository;
+    const persistenceContext = repository.treePersistenceContext(userId, "B");
+    const initial = await repository.requireSessionReader(userId, "B", { persistenceContext });
+    await repository.commitChanges(userId, "B", {
+      persistenceContext,
+      expectedGeneration: initial.generation,
+      operationId: "seed-display-messages",
+      committedAt: sessionB.updatedAt,
+      changes: {
+        messages: sessionB.messages.map((message) =>
+          normalizeMessageEntity({ ...message, parentSessionId: sessionB.parentSessionId }),
+        ),
+      },
     });
 
     const scopeB = await runtime.repositories.sessionRepository.requireSessionScope(
@@ -340,16 +340,15 @@ test("session display summary should keep chat view lightweight and rebuild stal
       runtime.repositories.sessionRepository.treePersistenceContext(userId, "B"),
     );
     const summaryFile = path.join(scopeB.sessionDir, "session-summary.json");
-    const persistedSession = await readSessionArtifact({
-      sessionDir: scopeB.sessionDir,
-      storageService: runtime.repositories.sessionRepository.storageService,
-    });
+    const persistedSession = await repository.requireById(userId, "B", { persistenceContext });
     assert.equal(
       persistedSession.messages.every((item) => "turnScopeId" in item),
       true,
     );
-    let summary = JSON.parse(await readFile(summaryFile, "utf8"));
-    assert.equal(summary.schemaVersion, SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION);
+    const summary = await repository.readSessionDisplaySummary(userId, "B", {
+      persistenceContext,
+    });
+    await assert.rejects(readFile(summaryFile), { code: "ENOENT" });
     assert.equal(summary.sessionId, "B");
     assert.equal(summary.messages.length, 6);
     assert.equal(
@@ -370,13 +369,11 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal(summary.stats.hasToolDetails, true);
     assert.equal("toolLogSummaries" in summary, false);
     assert.equal(
-      summary.messages.find((item) => item.presentationMessageId === "a1").toolTimeline,
-      undefined,
-    );
-    assert.equal(
-      typeof summary.messages.find((item) => item.presentationMessageId === "a1").thinkingDetailRef
-        ?.file,
-      "string",
+      Object.hasOwn(
+        summary.messages.find((item) => item.presentationMessageId === "a1"),
+        "thinkingDetailRef",
+      ),
+      false,
     );
     const hydratedSummary = await runtime.repositories.sessionRepository.readSessionDisplaySummary(
       userId,
@@ -449,8 +446,8 @@ test("session display summary should keep chat view lightweight and rebuild stal
     const rawToolOnlyAssistantMessage = summary.messages.find(
       (item) => item.presentationMessageId === "tool-display-assistant",
     );
-    assert.equal(Object.hasOwn(rawToolOnlyAssistantMessage, "toolTimeline"), false);
-    assert.equal(typeof rawToolOnlyAssistantMessage.thinkingDetailRef.file, "string");
+    assert.equal(rawToolOnlyAssistantMessage.toolTimeline.length, 2);
+    assert.equal(Object.hasOwn(rawToolOnlyAssistantMessage, "thinkingDetailRef"), false);
     const toolOnlyAssistantMessage = hydratedSummary.messages.find(
       (item) => item.presentationMessageId === "tool-display-assistant",
     );
@@ -514,21 +511,17 @@ test("session display summary should keep chat view lightweight and rebuild stal
       JSON.stringify({ schemaVersion: 4, sessionId: "B", depth: 2, messages: [] }),
       "utf8",
     );
-    const displayBeforeMaintenance = await runtime.sessionCrudService.getSessionDisplayData({
+    const displayBeforeRead = await runtime.sessionCrudService.getSessionDisplayData({
       userId,
       sessionId: "B",
     });
-    assert.equal(displayBeforeMaintenance.sessions[0].messages.length, 6);
-    await runtime.repositories.sessionRepository.ensureSessionDisplaySummary(userId, "A", {
+    assert.equal(displayBeforeRead.sessions[0].messages.length, 6);
+    await runtime.repositories.sessionRepository.readSessionDisplaySummary(userId, "A", {
       persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
         userId,
         "A",
       ),
     });
-    const maintenance = await runtime.sessionCrudService.maintainSessionDisplaySummaries({
-      userId,
-    });
-    assert.deepEqual(maintenance.rebuiltSessionIds, []);
     const displayData = await runtime.sessionCrudService.getSessionDisplayData({
       userId,
       sessionId: "B",
@@ -538,9 +531,16 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal(displayData.sessions[0].availability, "available");
     assert.equal("depth" in displayData.sessions[0], false);
     assert.equal("toolLogSummaries" in displayData.sessions[0], false);
-    summary = JSON.parse(await readFile(summaryFile, "utf8"));
-    assert.equal(summary.schemaVersion, SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION);
-    assert.equal(summary.sessionId, "B");
-    assert.equal("depth" in summary, false);
+    assert.equal(JSON.parse(await readFile(summaryFile, "utf8")).schemaVersion, 4);
+    await rm(summaryFile);
+    assert.deepEqual(
+      await repository.readSessionDisplaySummary(userId, "B", { persistenceContext }),
+      hydratedSummary,
+    );
+    assert.equal(
+      (await repository.requireSessionReader(userId, "B", { persistenceContext })).generation,
+      initial.generation + 1,
+    );
+    await assert.rejects(readFile(summaryFile), { code: "ENOENT" });
   });
 });

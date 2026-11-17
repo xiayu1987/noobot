@@ -3,48 +3,34 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { access, readdir } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { isMissingPersistencePathError } from "../../shared/storage/json-file-reader.js";
 import { text } from "@noobot/shared/value";
 
+async function readWorkspaceDirectoryEntries(directory) {
+  try {
+    return await readdir(directory, { withFileTypes: true });
+  } catch (error) {
+    if (isMissingPersistencePathError(error)) return [];
+    throw error;
+  }
+}
+
 export async function resolveWorkspaceDirectories(runtimeBasePath = "") {
   const basePath = text(runtimeBasePath);
   if (!basePath) return [];
-  try {
-    await access(basePath);
-  } catch (error) {
-    if (isMissingPersistencePathError(error)) return [];
-    throw error;
-  }
   const directories = new Set();
-  let level1Entries = [];
-  try {
-    level1Entries = await readdir(basePath, { withFileTypes: true });
-  } catch (error) {
-    if (isMissingPersistencePathError(error)) return [];
-    throw error;
-  }
+  const level1Entries = await readWorkspaceDirectoryEntries(basePath);
   for (const entry of level1Entries) {
     if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
     directories.add(entry.name);
   }
   const runtimeDirPath = path.join(basePath, WORKSPACE_LAYOUT.RUNTIME_DIR);
-  try {
-    await access(runtimeDirPath);
-    let runtimeLevel1Entries = [];
-    try {
-      runtimeLevel1Entries = await readdir(runtimeDirPath, { withFileTypes: true });
-    } catch (error) {
-      if (!isMissingPersistencePathError(error)) throw error;
-    }
-    for (const entry of runtimeLevel1Entries) {
-      if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
-      directories.add([WORKSPACE_LAYOUT.RUNTIME_DIR, entry.name].join("/"));
-    }
-  } catch (error) {
-    if (!isMissingPersistencePathError(error)) throw error;
+  for (const entry of await readWorkspaceDirectoryEntries(runtimeDirPath)) {
+    if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
+    directories.add([WORKSPACE_LAYOUT.RUNTIME_DIR, entry.name].join("/"));
   }
   return Array.from(directories).sort((leftDir, rightDir) => leftDir.localeCompare(rightDir));
 }

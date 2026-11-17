@@ -11,9 +11,11 @@ import {
   assertAuthorityOutboxRequest,
   assertAuthorityOutboxJournalRecord,
   authorityEventConsumerDelivery,
+  listPendingAuthorityEvents,
   migrateLegacyUnownedAttemptRecords,
   normalizeAuthorityEventOutbox,
   projectAuthorityOutboxJournal,
+  projectAuthorityEventDeliveryResults,
 } from "../src/authority-event-outbox.js";
 
 const occurredAt = "2026-10-31T00:00:00.000Z";
@@ -39,6 +41,55 @@ function entry() {
     }),
   };
 }
+test("delivery responses use committed facts without recomputing attempts or changing other consumers", () => {
+  const source = entry();
+  source.deliveries.other = authorityEventConsumerDelivery(source, "other");
+  const before = structuredClone(source);
+  const delivery = {
+    ...authorityEventConsumerDelivery(source, "browser"),
+    attempts: 7,
+    lastAttemptAt: occurredAt,
+  };
+  const projected = projectAuthorityEventDeliveryResults([source], "browser", [
+    { eventId: source.eventId, delivery },
+  ]);
+  assert.equal(projected[0].deliveries.browser.attempts, 7);
+  assert.deepEqual(projected[0].deliveries.other, source.deliveries.other);
+  assert.deepEqual(source, before);
+  assert.notEqual(projected[0].deliveries.browser, delivery);
+});
+
+test("delivery response projection rejects missing, foreign, reordered, duplicate or corrupt results", () => {
+  const source = entry();
+  const delivery = authorityEventConsumerDelivery(source, "browser");
+  for (const results of [
+    null,
+    [],
+    [null],
+    [{ eventId: "foreign", delivery }],
+    [{ eventId: source.eventId }],
+    [{ eventId: source.eventId, delivery: { ...delivery, attempts: -1 } }],
+    [
+      { eventId: source.eventId, delivery },
+      { eventId: source.eventId, delivery },
+    ],
+  ]) {
+    assert.throws(() => projectAuthorityEventDeliveryResults([source], "browser", results), {
+      code: "AUTHORITY_OUTBOX_INTEGRITY_INVALID",
+    });
+  }
+  const other = structuredClone(source);
+  other.eventId = other.envelope.identity.eventId = "event-2";
+  assert.throws(
+    () =>
+      projectAuthorityEventDeliveryResults([source, other], "browser", [
+        { eventId: other.eventId, delivery },
+        { eventId: source.eventId, delivery },
+      ]),
+    { code: "AUTHORITY_OUTBOX_INTEGRITY_INVALID" },
+  );
+});
+
 function prepare() {
   const { deliveries, ...value } = entry();
   assert.deepEqual(deliveries, {});
@@ -95,6 +146,27 @@ test("outbox delivery reads reject corrupt numbers and missing delivery facts", 
     /invalid authority outbox/,
   );
 });
+
+for (const patch of [
+  { orderingDomain: "foreign" },
+  { orderingScopeId: "foreign" },
+  { sequence: 2 },
+]) {
+  test(`stored acknowledgement rejects mismatched ${Object.keys(patch)[0]} at protocol reads`, () => {
+    const [source] = acknowledgeAuthorityEventDelivery([entry()], ack()).outbox;
+    assert.deepEqual(normalizeAuthorityEventOutbox([source]), [source]);
+    assert.deepEqual(listPendingAuthorityEvents([source], { consumerId: "browser" }), []);
+    assert.equal(authorityEventConsumerDelivery(source, "other").status, "pending");
+    Object.assign(source.deliveries.browser, patch);
+    const before = structuredClone(source);
+    const invalid = { code: "AUTHORITY_OUTBOX_INTEGRITY_INVALID" };
+    assert.throws(() => normalizeAuthorityEventOutbox([source]), invalid);
+    assert.throws(() => authorityEventConsumerDelivery(source, "browser"), invalid);
+    assert.throws(() => listPendingAuthorityEvents([source], { consumerId: "other" }), invalid);
+    assert.throws(() => acknowledgeAuthorityEventDelivery([source], ack()), invalid);
+    assert.deepEqual(source, before, "invalid stored receipts must not be silently rewritten");
+  });
+}
 
 test("outbox journal rejects malformed and orphan delivery records", () => {
   for (const records of [

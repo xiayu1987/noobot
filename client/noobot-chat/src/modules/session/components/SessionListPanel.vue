@@ -244,6 +244,10 @@ function formatSessionStatus(status = "") {
   return translate(statusKeyMap[normalized] || "common.statusIdle");
 }
 
+function sessionDisplayTitle(sessionItem) {
+  return sessionItem.isUnavailable ? sessionItem.sessionId : sessionItem.title;
+}
+
 function sessionRuntimeStatus(sessionItem = {}) {
   const sessionId = text(sessionItem.sessionId);
   const sessionStatus = selectSessionTurnRuntime(props.turnRuntimeRegistry, sessionId);
@@ -360,7 +364,7 @@ watch(
                     'actions-expanded': expandedActionSessionId === sessionItem.sessionId,
                   }"
                   tabindex="0"
-                  :aria-label="sessionItem.title"
+                  :aria-label="sessionDisplayTitle(sessionItem)"
                   :aria-disabled="sessionItem.isUnavailable === true ? 'true' : undefined"
                   @click="selectSession(sessionItem)"
                   @pointerdown="startLongPress($event, sessionItem)"
@@ -383,11 +387,11 @@ watch(
                       "
                       :aria-label="
                         sessionItem.isUnavailable
-                          ? `${sessionItem.title}: ${translate('common.sessionUnavailableLegacyProtocol')}`
-                          : `${sessionItem.title}: ${formatSessionStatus(sessionRuntimeStatus(sessionItem))}`
+                          ? `${sessionDisplayTitle(sessionItem)}: ${translate('common.sessionUnavailableLegacyProtocol')}`
+                          : `${sessionDisplayTitle(sessionItem)}: ${formatSessionStatus(sessionRuntimeStatus(sessionItem))}`
                       "
                     >
-                      {{ sessionItem.title }}
+                      {{ sessionDisplayTitle(sessionItem) }}
                     </div>
                   </div>
                   <div v-if="!collapsed" class="session-actions">
@@ -414,7 +418,7 @@ watch(
                 </div>
               </template>
               <div class="session-popover noobot-navigation-popover__body">
-                <div class="session-popover__title">{{ sessionItem.title }}</div>
+                <div class="session-popover__title">{{ sessionDisplayTitle(sessionItem) }}</div>
                 <div v-if="sessionItem.isUnavailable" class="session-popover__reason">
                   {{ translate("common.sessionUnavailableLegacyProtocol") }}<br />
                   {{ sessionItem.unavailableReason?.message }}

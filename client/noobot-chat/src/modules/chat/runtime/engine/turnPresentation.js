@@ -256,22 +256,31 @@ export function selectTurnPresentations({ activeSession, workflowRegistry, turnR
       }),
   );
 
-  const envelopesByTurn = new Map();
+  const envelopesByMessage = new Map();
+  const envelopeSourcesByTurn = new Map();
   for (const message of sourceMessages) {
     const key = messageTurnKey(message, activeSessionId);
     if (!key) continue;
     const envelopes = getMessageTransferEnvelopes(message);
+    envelopesByMessage.set(message, envelopes);
     if (!envelopes.length) continue;
-    envelopesByTurn.set(key, mergeTransferEnvelopes(envelopesByTurn.get(key) || [], envelopes));
+    if (!envelopeSourcesByTurn.has(key)) envelopeSourcesByTurn.set(key, []);
+    envelopeSourcesByTurn.get(key).push(envelopes);
   }
+  const envelopesByTurn = new Map(
+    [...envelopeSourcesByTurn].map(([key, sources]) => [
+      key,
+      sources.length === 1 ? sources[0] : mergeTransferEnvelopes(...sources),
+    ]),
+  );
   const projectedSourceMessages = sourceMessages.map((message) => {
     if (getMessageRole(message) !== "assistant") return message;
     const messageKey = messageTurnKey(message, activeSessionId);
     const turnEnvelopes = envelopesByTurn.get(messageKey) || [];
     if (!turnEnvelopes.length) return message;
-    const ownEnvelopes = getMessageTransferEnvelopes(message);
+    const ownEnvelopes = envelopesByMessage.get(message);
+    if (turnEnvelopes.length === ownEnvelopes.length) return message;
     const mergedEnvelopes = mergeTransferEnvelopes(ownEnvelopes, turnEnvelopes);
-    if (mergedEnvelopes.length === ownEnvelopes.length) return message;
     return {
       ...message,
       transferEnvelopes: mergedEnvelopes,

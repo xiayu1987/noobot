@@ -16,10 +16,7 @@ import {
   getPrimaryTransferAttachment,
 } from "./tool-runner.test-helpers.js";
 import { AttachmentService } from "../../../src/artifacts/service/attachment-service.js";
-import {
-  createTestRuntimeContext,
-  createTestAttachmentService,
-} from "../../helpers/test-runtime-context.js";
+import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
 function withAttachmentService(options) {
@@ -188,97 +185,6 @@ test("executeToolCall: overflow keeps original semantic-transfer artifact and co
   assert.equal(overflowEnvelope.version, TRANSFER_VERSION);
   assert.equal(overflowEnvelope.payload.mode, "attachment");
   assert.equal(JSON.stringify(overflowEnvelope).includes("filePath"), false);
-});
-
-test("executeToolCall task_summary returns transfer metadata without phase summary content", async () => {
-  const summaryContent = "阶段小结：敏感小结文本不应出现在工具返回中。";
-  const call = {
-    id: "call_task_summary_transfer",
-    name: "task_summary",
-    args: { summaryContent },
-  };
-  const tool = {
-    name: "task_summary",
-    invoke: async () =>
-      JSON.stringify({
-        toolName: "task_summary",
-        ok: true,
-        status: "completed",
-        protocolVersion: 1,
-        summary: {
-          state: "CONTINUE",
-          abstract: "完成阶段工作。",
-          nextAction: "继续验证。",
-          contentHash: "sha256:0123456789abcdef",
-        },
-        message: "请根据小结后的状态、摘要和下一步处理后续流程。",
-      }),
-  };
-  const runtime = createTestRuntimeContext({
-    identity: {
-      userId: "u1",
-      sessionId: "s1",
-      parentSessionId: "",
-      dialogProcessId: "dialog-call_task_summary_transfer",
-      turnScopeId: "turn-call_task_summary_transfer",
-      caller: SESSION_CALLER.USER,
-    },
-    attachmentService: createTestAttachmentService({
-      async ingestGeneratedArtifacts(payload) {
-        return payload.artifacts.map((artifact, index) => ({
-          attachmentId: `task-summary-runner-${index + 1}`,
-          sessionId: payload.sessionId,
-          attachmentSource: payload.attachmentSource,
-          name: artifact.name,
-          mimeType: artifact.mimeType,
-          size: summaryContent.length,
-          path: `/host/${artifact.name}`,
-          relativePath: `attachments/${artifact.name}`,
-          generatedByModel: true,
-          generationSource: payload.generationSource,
-        }));
-      },
-    }),
-  });
-
-  const result = await executeToolCall({
-    call,
-    tool,
-    runtime,
-    identity: {
-      userId: "u1",
-      sessionId: "s1",
-      rootSessionId: "s1",
-      parentSessionId: "",
-      dialogProcessId: "dialog-call_task_summary_transfer",
-      turnScopeId: "turn-call_task_summary_transfer",
-      runId: "run-call_task_summary_transfer",
-      presentationMessageId: "message-call_task_summary_transfer",
-    },
-    turn: 1,
-  });
-
-  assert.equal(result.success, true);
-  assert.equal(result.toolResultText.includes(summaryContent), false);
-  const payload = JSON.parse(result.toolResultText);
-  assert.equal(payload.toolName, "task_summary");
-  assert.equal(payload.ok, true);
-  assert.equal(payload.status, "completed");
-  assert.equal(payload.protocolVersion, 1);
-  assert.deepEqual(payload.summary, {
-    state: "CONTINUE",
-    abstract: "完成阶段工作。",
-    nextAction: "继续验证。",
-    contentHash: "sha256:0123456789abcdef",
-  });
-  assert.equal(payload.phaseSummary, undefined);
-  assert.equal(payload.toolInputOverflow, undefined);
-  assert.equal(payload.transferFiles, undefined);
-  assert.deepEqual(payload.transferEnvelopes, result.transferEnvelopes);
-  assert.equal(
-    result.transferEnvelopes?.[0]?.payload?.attachments?.[0]?.name,
-    "task-summary-content.tool-input.md",
-  );
 });
 
 test("executeToolCall: overflow result never exposes sandbox or host paths", async () => {

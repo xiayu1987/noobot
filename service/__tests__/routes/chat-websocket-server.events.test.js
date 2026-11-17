@@ -57,7 +57,7 @@ test("authority outbox publishes child lifecycle under the persisted child sessi
         return { recorded: identity.eventIds.includes(envelope.identity.eventId) };
       },
       async compactAuthorityEvents() {
-        return { compacted: false, removed: 0 };
+        return { compacted: false, removed: 0, nextRetainedDeliveryAt: null };
       },
       async acknowledgeAuthorityEvents(identity) {
         identities.push(identity);

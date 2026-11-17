@@ -4,6 +4,39 @@
  * SPDX-License-Identifier: MIT
  */
 export default {
+  immutableStorage: {
+    cleanupFilterMaxEntries: {
+      name: "Cleanup filtering batch limit",
+      description: "Maximum captured inventory entries inspected in one cleanup filtering batch.",
+    },
+    recordIoConcurrency: {
+      name: "Record I/O concurrency",
+      description: "Maximum simultaneous record operations in an immutable storage batch.",
+    },
+    turnAcceptancePageSize: {
+      name: "Turn acceptance page size",
+      description: "Read the first message that establishes turn acceptance.",
+    },
+    messagePageSize: {
+      name: "Maximum message page size",
+      description: "Maximum messages read in one storage page.",
+    },
+    messageReadPageSize: {
+      name: "Default message page size",
+      description: "Default messages read in one storage page.",
+    },
+    receiptPageSize: {
+      name: "Receipt page size",
+      description: "Maximum receipts read in one storage page.",
+    },
+  },
+  artifact: {
+    checkpointVerificationConcurrency: {
+      name: "Checkpoint verification concurrency",
+      description:
+        "Maximum simultaneous checkpoint reads; results and errors retain manifest order.",
+    },
+  },
   clientPreview: {
     resourceConcurrency: {
       name: "Resource concurrency",

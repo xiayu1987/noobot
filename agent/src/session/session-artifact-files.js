@@ -5,6 +5,7 @@
  */
 import { filePath as path } from "@noobot/path-resolver";
 import { text, isFunction } from "@noobot/shared/value";
+import { sessionMutationCoordinator } from "./session-mutation-coordinator.js";
 
 export const SESSION_ARTIFACT_FILE_NAMES = Object.freeze({
   session: "session.json",
@@ -54,4 +55,15 @@ export function resolveSessionArtifactMutationLock(sessionDir = "") {
   const normalized = text(sessionDir);
   if (!normalized) throw new Error("session artifact mutation lock requires sessionDir");
   return `${path.resolve(normalized)}.mutation-lock`;
+}
+
+export async function withSessionArtifactReadFence(sessionDirs, operation) {
+  if (!Array.isArray(sessionDirs) || !isFunction(operation))
+    throw new TypeError("session artifact read fence requires directories and an operation");
+  const locks = [...new Set(sessionDirs.map(resolveSessionArtifactMutationLock))].sort();
+  const acquire = (index) =>
+    index === locks.length
+      ? operation()
+      : sessionMutationCoordinator.run(locks[index], () => acquire(index + 1));
+  return acquire(0);
 }

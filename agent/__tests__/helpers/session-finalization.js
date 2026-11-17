@@ -11,5 +11,11 @@ export function createTestSessionFinalizationContext() {
     userConfig: {},
     lifecycle: { enterPersisting() {}, enterMemory() {} },
     runtimeEventListener: { onEvent() {}, async flush() {} },
+    turnPersistence: {
+      async flush() {},
+      async readResultMessages() {
+        return [];
+      },
+    },
   };
 }

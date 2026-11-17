@@ -14,11 +14,13 @@ import {
   resolveContextMessageRole,
   resolveContextToolResultCallId,
   resolveContextMessageIdentity,
+  resolveContextMessageTurnScopeId,
 } from "../message/codec.js";
+import { requireSessionTurnViewSelection } from "@noobot/session-protocol";
 import { normalizeUserMetaBackwrites } from "./user-meta-backwrite.js";
 import { text, isObjectLike, isPlainObject } from "@noobot/shared/value";
 
-export const SNAPSHOT_VERSION = 6;
+export const SNAPSHOT_VERSION = 7;
 const IDENTITY_FIELDS = Object.freeze([
   "userId",
   "sessionId",
@@ -66,7 +68,7 @@ export function serializeContextMessage(message = {}) {
   }
   const serialized = {
     type: normalizedType,
-    content: message?.content ?? "",
+    content: cloneJson(message?.content ?? ""),
     additional_kwargs: cloneJson(message?.additional_kwargs) || {},
   };
   if (normalizedType === "ai") {
@@ -93,7 +95,7 @@ export function serializeContextMessage(message = {}) {
 function deserializeContextMessageRecord(item = {}) {
   const message = {
     type: item.type,
-    content: item.content ?? "",
+    content: cloneJson(item.content ?? ""),
     additional_kwargs: cloneJson(item.additional_kwargs) || {},
   };
   if (item.type === "ai") {
@@ -187,6 +189,14 @@ export function hydrateModelContextSnapshot(
   };
 }
 
+function assertSnapshotMessage(message) {
+  assertProtocolTopLevelKeys(message);
+  if (!Object.values(SNAPSHOT_TYPE_BY_ROLE).includes(message.type)) {
+    throw new TypeError("Stopped model message snapshot requires a declared message type");
+  }
+  resolveContextMessageIdentity(message);
+}
+
 export function assertModelContextSnapshot(snapshot) {
   if (snapshot?.version !== SNAPSHOT_VERSION) {
     throw new Error(`Stopped model message snapshot version must equal ${SNAPSHOT_VERSION}`);
@@ -200,13 +210,7 @@ export function assertModelContextSnapshot(snapshot) {
     if (!Array.isArray(snapshot.messageBlocks?.[block])) {
       throw new TypeError(`Stopped model message snapshot requires messageBlocks.${block}`);
     }
-    for (const message of snapshot.messageBlocks[block]) {
-      assertProtocolTopLevelKeys(message);
-      if (!Object.values(SNAPSHOT_TYPE_BY_ROLE).includes(message.type)) {
-        throw new TypeError("Stopped model message snapshot requires a declared message type");
-      }
-      resolveContextMessageIdentity(message);
-    }
+    snapshot.messageBlocks[block].forEach(assertSnapshotMessage);
   }
   if (
     JSON.stringify(snapshot.messages) !==
@@ -243,6 +247,24 @@ function isPersistedFrontendUserSource(message = {}) {
   );
 }
 
+function requireSnapshotUserSourceMessageUid(message) {
+  const messageUid = resolveContextSourceMessageUid(message);
+  if (!messageUid) {
+    throw new Error("Persisted snapshot user source requires canonical message identity");
+  }
+  return messageUid;
+}
+
+export function projectSnapshotUserSourceSelection(messageBlocks) {
+  const sources = [...messageBlocks.history, ...messageBlocks.incremental].filter(
+    isPersistedFrontendUserSource,
+  );
+  return requireSessionTurnViewSelection({
+    messageUids: sources.map(requireSnapshotUserSourceMessageUid),
+    turnScopeIds: sources.map(resolveContextMessageTurnScopeId).filter(Boolean),
+  });
+}
+
 export function restoreSnapshotUserAttachmentFactsFromSessionAuthority(
   messageBlocks = {},
   authoritativeMessages,
@@ -251,10 +273,7 @@ export function restoreSnapshotUserAttachmentFactsFromSessionAuthority(
   const restore = (messages) =>
     (Array.isArray(messages) ? messages : []).map((message) => {
       if (!isPersistedFrontendUserSource(message)) return message;
-      const messageUid = resolveContextSourceMessageUid(message);
-      if (!messageUid) {
-        throw new Error("Persisted snapshot user source requires canonical message identity");
-      }
+      const messageUid = requireSnapshotUserSourceMessageUid(message);
       const authoritative = authorityByMessageUid.get(messageUid);
       if (!authoritative) {
         throw new Error(`Snapshot user source is missing from Session authority: ${messageUid}`);

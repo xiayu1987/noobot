@@ -82,7 +82,11 @@ async function handleSendEdited() {
     return;
   }
   await runAction(async () => {
-    await props.onResend(props.messageItem, nextContent, buildEditAttachmentPayload());
+    const sent = await props.onResend(props.messageItem, nextContent, buildEditAttachmentPayload());
+    if (sent === false) {
+      ElMessage.error(t("message.monotonicActionFailed"));
+      return;
+    }
     markEditing(false);
     clearEditAttachments();
   });

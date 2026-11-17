@@ -187,7 +187,6 @@ export const WORKFLOW_PARAMS = deepFreeze({
       rawOutputLimit: 20,
     },
     tools: {
-      summaryToolName: "task_summary",
       planRefinementToolName: "request_plan_refinement",
     },
     decisions: {
@@ -255,7 +254,6 @@ export const WORKFLOW_PARAMS = deepFreeze({
       },
       requestedAction: {
         none: "none",
-        summaryInject: "summary_inject",
         summarySeparateModel: "summary_separate_model",
         guidanceInject: "guidance_inject",
         guidanceSeparateModel: "guidance_separate_model",
@@ -284,7 +282,7 @@ export const WORKFLOW_PARAMS = deepFreeze({
     guards: {
       overflowForcedAcceptanceSystemPrompt:
         "Context overflow remains after summary/pruning. Call {tool} with mode=forced now.",
-      blockedAgentToolNames: ["task_summary"],
+      blockedAgentToolNames: [],
     },
     decisions: {
       category: {

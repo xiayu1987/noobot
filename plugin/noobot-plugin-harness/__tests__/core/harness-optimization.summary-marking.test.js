@@ -157,7 +157,7 @@ test("summary checkpoint requests restored incremental messages missing from the
     readTestMainFlowControl(ctx.agentContext).summaryCheckpoints[0].summarizedMessageUids,
     ids,
   );
-  assert.equal(state.pending.summaryCheckpointMessageKeys, null);
+  assert.deepEqual(state.pending.summaryCheckpointMessageKeys, ids);
 });
 
 test("summary checkpoint covers persisted history and active incremental messages", async () => {
@@ -475,9 +475,9 @@ test("guidance summary checkpoint requests only messages before checkpoint", asy
   assert.equal(resolveContextMessageSummarized(oldToolResult), false);
   assert.equal(resolveContextMessageSummarized(newToolCall), false);
   assert.equal(resolveContextMessageSummarized(newToolResult), false);
-  assert.equal(
+  assert.deepEqual(
     ctx.agentContext.bindings.extensions.harness.state.pending.summaryCheckpointMessageKeys,
-    null,
+    [oldToolCall.additional_kwargs.messageUid, oldToolResult.additional_kwargs.messageUid],
   );
   assert.deepEqual(
     new Set(readTestMainFlowControl(ctx.agentContext).summaryCheckpoints[0].summarizedMessageUids),
@@ -774,9 +774,9 @@ test("guidance summary checkpoint uses canonical message ids only", async () => 
     resolveContextMessageSummarized(ctx.modelContext.messageBlocks.incremental[4]),
     false,
   );
-  assert.equal(
+  assert.deepEqual(
     ctx.agentContext.bindings.extensions.harness.state.pending.summaryCheckpointMessageKeys,
-    null,
+    [oldToolCall.additional_kwargs.messageUid, oldToolResult.additional_kwargs.messageUid],
   );
   assert.equal(directCheckpointCalls, 0);
   assert.deepEqual(

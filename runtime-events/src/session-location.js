@@ -3,7 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import fs from "node:fs/promises";
+import {
+  IMMUTABLE_SESSION_HEAD_FILE,
+  decodeImmutableSessionHead,
+  immutableStorageError,
+} from "@noobot/session-protocol/immutable-storage";
+import { requireSessionLocationResolver } from "@noobot/session-protocol";
 import path from "node:path";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol/layout";
 import {
@@ -16,6 +21,9 @@ import {
   resolveSessionTreeChain,
 } from "@noobot/workspace-protocol/session-tree";
 import { text } from "@noobot/shared/value";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { readFilePrefix } from "@noobot/shared/read-file-prefix";
+import { readSessionStore } from "./session-store-reader.js";
 
 function userRootOf({ workspaceRoot, userId }) {
   const normalizedWorkspaceRoot = text(workspaceRoot);
@@ -26,47 +34,73 @@ function userRootOf({ workspaceRoot, userId }) {
   return path.join(path.resolve(normalizedWorkspaceRoot), normalizedUserId);
 }
 
-async function readTextOrNull(file) {
-  try {
-    return await fs.readFile(file, "utf8");
-  } catch (error) {
-    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return null;
-    throw error;
-  }
-}
-
 export async function readWorkspaceSessionTree(userRoot) {
   const file = path.join(userRoot, WORKSPACE_LAYOUT.SESSION_TREE_FILE);
-  return parseWorkspaceSessionTree({ raw: await readTextOrNull(file), file });
+  return readSessionStore(file, parseWorkspaceSessionTree);
 }
 
 export async function readWorkspaceSessionTombstones(userRoot) {
   const file = path.join(userRoot, WORKSPACE_LAYOUT.SESSION_TOMBSTONE_FILE);
-  return parseWorkspaceSessionTombstones({ raw: await readTextOrNull(file), file });
+  return readSessionStore(file, parseWorkspaceSessionTombstones);
 }
 
-export async function resolveWorkspaceSessionLocation({ workspaceRoot, userId, sessionId }) {
+export async function resolveWorkspaceSessionLocation({
+  workspaceRoot,
+  userId,
+  sessionId,
+  locationResolver,
+}) {
   const normalizedSessionId = text(sessionId);
   if (!normalizedSessionId) throw new TypeError("workspace session location requires sessionId");
   const userRoot = userRootOf({ workspaceRoot, userId });
-  const tree = await readWorkspaceSessionTree(userRoot);
   const tombstones = await readWorkspaceSessionTombstones(userRoot);
   if (Object.hasOwn(tombstones, normalizedSessionId)) return { deleted: true };
+  const location =
+    locationResolver === undefined
+      ? await locateTreeSession(userRoot, normalizedSessionId, tombstones)
+      : await requireSessionLocationResolver(locationResolver).locateSessionScope(
+          userId,
+          normalizedSessionId,
+        );
+  if (location === null || location?.missingSession) return { missingSession: true };
+  if (location?.deleted) return { deleted: true };
+  const sessionDir = location?.sessionDir;
+  if (typeof sessionDir !== "string" || !path.isAbsolute(sessionDir))
+    throw new TypeError("Session location requires an absolute session directory");
+  const relative = path.relative(userRoot, sessionDir);
+  if (
+    !relative ||
+    relative === ".." ||
+    relative.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relative)
+  )
+    throw new TypeError("Session location escapes its user workspace");
+  await requirePersistedSessionDir(sessionDir, normalizedSessionId);
+  return { sessionDir };
+}
+
+async function locateTreeSession(userRoot, normalizedSessionId, tombstones) {
+  const tree = await readWorkspaceSessionTree(userRoot);
   if (!isSessionTreeNodeRegistered(tree, normalizedSessionId)) return { missingSession: true };
   const chain = resolveSessionTreeChain(tree, normalizedSessionId);
   if (chain.some((chainSessionId) => Object.hasOwn(tombstones, chainSessionId))) {
     return { deleted: true };
   }
   const sessionDir = path.join(userRoot, ...resolveSessionDirSegments(tree, normalizedSessionId));
-  if (!(await isPersistedSessionDir(sessionDir))) return { missingSession: true };
   return { sessionDir };
 }
 
-async function isPersistedSessionDir(sessionDir) {
+async function requirePersistedSessionDir(sessionDir, sessionId) {
+  let raw;
   try {
-    return (await fs.stat(path.join(sessionDir, "session.json"))).isFile();
-  } catch (error) {
-    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return false;
-    throw error;
+    raw = (
+      await readFilePrefix(
+        path.join(sessionDir, IMMUTABLE_SESSION_HEAD_FILE),
+        LENGTH_THRESHOLDS.immutableStorage.headBytes + 1,
+      )
+    ).toString("utf8");
+  } catch (cause) {
+    throw immutableStorageError("Registered session head cannot be read", cause);
   }
+  decodeImmutableSessionHead(raw, sessionId);
 }

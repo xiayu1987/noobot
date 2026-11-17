@@ -142,7 +142,6 @@ function createOrchestratorHarness() {
       return { output: "finalized", turnMessageStore: turnStore };
     },
     buildLoopResultFn: ({ output }) => ({ output }),
-    maybeRequestPhaseSummaryFn: () => {},
     maybeRequestTaskCheckFn: () => {},
     maybePromptHelpToolByLoopFn: () => {},
     maybePromptHelpToolByFailureFn: () => {},
@@ -165,7 +164,7 @@ test("a rejected control batch retries with the single tool prompt", async () =>
   assert.deepEqual(calls.withTools, [1, 2]);
   assert.deepEqual(
     runtime.currentTurnMessages.toArray().map((message) => message.injectedMessageType),
-    [CONTEXT_INJECTED_MESSAGE_TYPE.TASK_SUMMARY_SINGLE_TOOL_RETRY_PROMPT],
+    [CONTEXT_INJECTED_MESSAGE_TYPE.TASK_CHECK_SINGLE_TOOL_RETRY_PROMPT],
   );
 });
 

@@ -18,17 +18,7 @@ function cloneMessage(message = {}) {
   if (!isPlainObject(message)) {
     throw new TypeError("auxiliary sequence message must be an object");
   }
-  const cloned = { ...message };
-  if (Array.isArray(message.content)) {
-    cloned.content = message.content.map((item) =>
-      item && typeof item === "object" ? { ...item } : item,
-    );
-  }
-  if (Array.isArray(message.tool_calls)) {
-    cloned.tool_calls = message.tool_calls.map((item) =>
-      item && typeof item === "object" ? { ...item } : item,
-    );
-  }
+  const cloned = structuredClone(message);
   const identity = resolveAuxiliarySequenceIdentity(message);
   if (identity) declareAuxiliarySequenceIdentity(cloned, identity);
   return cloned;

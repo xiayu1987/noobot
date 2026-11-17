@@ -5,19 +5,23 @@
  */
 import { TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
 import assert from "node:assert/strict";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
-import { SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION } from "../../src/session/index.js";
-import { createTestSessionServices, provisionTestSession } from "../helpers/session-services.js";
+import {
+  createTestSessionServices,
+  provisionTestSession,
+  commitTestSessionChanges,
+} from "../helpers/session-services.js";
 import {
   canonicalMessages,
   withTempWorkspace,
 } from "./session-repository-boundary.summaries.fixtures.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
-import { applySessionMessageFacts } from "../helpers/session-message-facts.js";
+import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { ACTIVITY_TIMELINE_ERROR_CODE } from "@noobot/event-protocol/activity-timeline";
+import { IMMUTABLE_READER_RETENTION } from "@noobot/session-protocol/immutable-storage";
 
 function canonicalTransferEnvelope(sessionId) {
   return {
@@ -69,10 +73,7 @@ test("session detail derives transfer envelopes from the canonical Session", asy
       caller: SESSION_CALLER.USER,
     });
 
-    const session = await repository.findById(userId, sessionId, {
-      persistenceContext: repository.treePersistenceContext(userId, sessionId),
-    });
-    session.messages = canonicalMessages(
+    const messages = canonicalMessages(
       [
         {
           attachments: [],
@@ -85,40 +86,27 @@ test("session detail derives transfer envelopes from the canonical Session", asy
       sessionId,
       "canonical_display",
     );
-    await repository.save(userId, applySessionMessageFacts(session), {
-      persistenceContext: repository.treePersistenceContext(userId, session.sessionId),
-    });
-    await repository.ensureSessionDisplaySummary(userId, sessionId, {
-      persistenceContext: repository.treePersistenceContext(userId, sessionId),
-    });
-
+    await commitTestSessionChanges(runtime, { userId, sessionId, changes: { messages } });
     const scope = await repository.requireSessionScope(
       userId,
       sessionId,
       repository.treePersistenceContext(userId, sessionId),
     );
     const summaryFile = path.join(scope.sessionDir, "session-summary.json");
-    const staleSummary = JSON.parse(await readFile(summaryFile, "utf8"));
-    staleSummary.schemaVersion = SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION - 1;
-    staleSummary.messages[0].transferEnvelopes[0].intent.reason = "multimodal_parse_tool";
+    const staleSummary = {
+      messages: [{ transferEnvelopes: [{ intent: { reason: "multimodal_parse_tool" } }] }],
+    };
     await writeFile(summaryFile, JSON.stringify(staleSummary), "utf8");
 
-    const findById = repository.findById.bind(repository);
-    let canonicalReads = 0;
-    repository.findById = async (...args) => {
-      canonicalReads += 1;
-      return findById(...args);
+    repository.findById = async () => {
+      throw new Error("display must read the immutable authority directly");
     };
     const detail = await runtime.sessionCrudService.getSessionDisplayData({ userId, sessionId });
-    assert.equal(canonicalReads, 1);
     assert.equal(
       detail.sessions[0].messages[0].transferEnvelopes[0].intent.reason,
       "multimodal_parse_artifact",
     );
 
-    repository.findById = async () => {
-      throw new Error("canonical Session should not be materialized on a cache hit");
-    };
     const cachedDetail = await runtime.sessionCrudService.getSessionDisplayData({
       userId,
       sessionId,
@@ -127,10 +115,10 @@ test("session detail derives transfer envelopes from the canonical Session", asy
       cachedDetail.sessions[0].messages[0].transferEnvelopes[0].intent.reason,
       "multimodal_parse_artifact",
     );
-    const maintenance = await runtime.sessionCrudService.maintainSessionDisplaySummaries({
-      userId,
-    });
-    assert.deepEqual(maintenance.rebuiltSessionIds, []);
+    assert.deepEqual(
+      await readdir(path.join(scope.sessionDir, IMMUTABLE_READER_RETENTION.directory)),
+      [],
+    );
   });
 });
 
@@ -153,7 +141,7 @@ test("failed Session repair projects an unavailable list item", async () => {
       sessionId,
       repository.treePersistenceContext(userId, sessionId),
     );
-    await writeFile(scope.sessionFile, "{invalid-json", "utf8");
+    await writeFile(path.join(scope.sessionDir, "head.json"), "{invalid-json", "utf8");
     await assert.rejects(
       repository.readSessionDisplaySummary(userId, sessionId, {
         persistenceContext: repository.treePersistenceContext(userId, sessionId),
@@ -169,7 +157,7 @@ test("failed Session repair projects an unavailable list item", async () => {
   });
 });
 
-test("invalid source activity projects one unavailable session and preserves healthy reads", async () => {
+test("list availability covers its local projection while detail and audit reject invalid activity", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     const sessionId = "invalid-activity-source";
@@ -187,46 +175,70 @@ test("invalid source activity projects one unavailable session and preserves hea
     }
     const context = repository.treePersistenceContext(userId, sessionId);
     const scope = await repository.requireSessionScope(userId, sessionId, context);
-    const sourceBytes = await readFile(scope.sessionFile);
-    const source = await repository.requireById(userId, sessionId, {
-      persistenceContext: context,
-    });
-    source.messages = canonicalMessages(
-      [{ role: "assistant", content: "analysis", activityTimeline: [{ eventId: "missing-id" }] }],
+    const [message] = canonicalMessages(
+      [{ role: "assistant", content: "analysis" }],
       sessionId,
       "invalid_activity",
     );
-    const sourceBefore = structuredClone(source);
-    const requireById = repository.requireById.bind(repository);
-    repository.requireById = async (owner, id, options) =>
-      id === sessionId ? source : requireById(owner, id, options);
+    await commitTestSessionChanges(runtime, {
+      userId,
+      sessionId,
+      changes: { messages: [message] },
+    });
+    const store = await ImmutableSessionStore.open({ sessionDir: scope.sessionDir });
+    const snapshot = await store.snapshot();
+
+    await store.transact({
+      expectedGeneration: snapshot.generation,
+      operationId: "invalid-activity",
+      input: { messageUid: message.messageUid, turnScopeId: message.turnScopeId },
+      prepare: async ({ get, input }) => {
+        const record = await get("messages", input.messageUid);
+        record.message.activityTimeline = [{ eventId: "missing-id" }];
+        const reference = await store.putCollectionValue("messages", input.messageUid, record);
+        const turn = await get("turns", input.turnScopeId);
+        turn.messagesRoot = await store.index.set(turn.messagesRoot, input.messageUid, reference);
+        return {
+          changes: [
+            { collection: "messages", key: input.messageUid, reference },
+            { collection: "turns", key: input.turnScopeId, value: turn },
+          ],
+        };
+      },
+    });
+    const headFile = path.join(scope.sessionDir, "head.json");
+    const sourceBytes = await readFile(headFile);
 
     const expectedReason = {
       code: ACTIVITY_TIMELINE_ERROR_CODE.FACT_INVALID,
       message: "activity timeline contains a noncanonical fact",
     };
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      const maintenance = await runtime.sessionCrudService.maintainSessionDisplaySummaries({
-        userId,
-      });
-      assert.deepEqual(maintenance.failures, [{ sessionId, ...expectedReason }]);
+      await assert.rejects(
+        repository.readSessionDisplaySummary(userId, sessionId, { persistenceContext: context }),
+        expectedReason,
+      );
       const { sessions } = await runtime.sessionCrudService.getAllSessionSummaries({ userId });
-      const unavailable = sessions.find((entry) => entry.sessionId === sessionId);
-      assert.equal(unavailable.availability, "unavailable");
-      assert.deepEqual(unavailable.unavailableReason, expectedReason);
+      const listed = sessions.find((entry) => entry.sessionId === sessionId);
+      assert.equal(listed.availability, "available");
+      assert.equal(listed.messageCount, 1);
       assert.equal(
         sessions.find((entry) => entry.sessionId === healthyId).availability,
         "available",
       );
       const detail = await runtime.sessionCrudService.getSessionDisplayData({ userId, sessionId });
-      assert.deepEqual(detail.sessions, [unavailable]);
+      assert.equal(detail.sessions[0].availability, "unavailable");
+      assert.deepEqual(detail.sessions[0].unavailableReason, expectedReason);
       const healthy = await runtime.sessionCrudService.getSessionDisplayData({
         userId,
         sessionId: healthyId,
       });
       assert.equal(healthy.sessions[0].availability, "available");
+      assert.deepEqual(
+        await readdir(path.join(scope.sessionDir, IMMUTABLE_READER_RETENTION.directory)),
+        [],
+      );
     }
-    assert.deepEqual(source, sourceBefore);
-    assert.deepEqual(await readFile(scope.sessionFile), sourceBytes);
+    assert.deepEqual(await readFile(headFile), sourceBytes);
   });
 });

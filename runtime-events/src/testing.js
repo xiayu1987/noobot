@@ -3,6 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import {
+  IMMUTABLE_SESSION_FORMAT,
+  IMMUTABLE_SESSION_HEAD_FILE,
+  encodeImmutableSessionHead,
+} from "@noobot/session-protocol/immutable-storage";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -94,10 +99,24 @@ export async function persistSession(
   const userRoot = userRootOf(workspaceRoot, userId);
   const tree = await readWorkspaceSessionTree(userRoot);
   const node = createSessionTreeNode({ sessionId, parentSessionId, caller });
-  tree.nodes[node.sessionId] = node;
-  await writeJson(sessionTreeFile(workspaceRoot, userId), tree);
-  const sessionDir = path.join(userRoot, ...resolveSessionDirSegments(tree, node.sessionId));
-  await writeJson(path.join(sessionDir, "session.json"), node);
+  const nextTree = {
+    nodes: { ...tree.nodes, [node.sessionId]: node },
+  };
+  const sessionDir = path.join(userRoot, ...resolveSessionDirSegments(nextTree, node.sessionId));
+
+  await fs.mkdir(sessionDir, { recursive: true });
+  await fs.writeFile(
+    path.join(sessionDir, IMMUTABLE_SESSION_HEAD_FILE),
+    encodeImmutableSessionHead({
+      format: IMMUTABLE_SESSION_FORMAT,
+      sessionId: node.sessionId,
+      generation: 1,
+      root: null,
+      operations: "a".repeat(64),
+      commit: "b".repeat(64),
+    }),
+  );
+  await writeJson(sessionTreeFile(workspaceRoot, userId), nextTree);
   return sessionDir;
 }
 

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 export * from "./protocol/index.js";
+export * from "./protocol/timing.js";
 export * from "./policy/index.js";
 export * from "./ports/index.js";
 export * from "./validation/index.js";

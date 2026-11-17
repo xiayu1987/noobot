@@ -13,6 +13,12 @@ function ports() {
     userConfig: {},
     lifecycle: { enterPersisting() {}, enterMemory() {} },
     runtimeEventListener: { onEvent() {}, async flush() {} },
+    turnPersistence: {
+      async flush() {},
+      async readResultMessages() {
+        return [];
+      },
+    },
   };
 }
 
@@ -29,6 +35,10 @@ test("finalization validates ports without invoking transitions or flushing even
       onEvent: () => effects.push("event"),
       flush: async () => effects.push("flush"),
     },
+    turnPersistence: {
+      flush: async () => effects.push("messages"),
+      readResultMessages: async () => effects.push("result"),
+    },
   });
   assert.deepEqual(effects, []);
 });
@@ -37,6 +47,7 @@ test("finalization rejects every missing lifecycle and durability capability", (
   for (const [port, methods] of [
     ["lifecycle", ["enterPersisting", "enterMemory"]],
     ["runtimeEventListener", ["onEvent", "flush"]],
+    ["turnPersistence", ["flush", "readResultMessages"]],
   ]) {
     for (const invalid of [null, undefined, {}]) {
       assert.throws(() => assertSessionFinalizationContext({ ...ports(), [port]: invalid }), {

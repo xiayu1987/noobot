@@ -14,7 +14,7 @@ test("terminal query rejects malformed identity before repository access", async
     now: () => "2026-01-01T00:00:00.000Z",
   });
   let reads = 0;
-  service.getSessionBundle = async () => {
+  service.sessionRepo.findTurnTerminalSource = async () => {
     reads += 1;
     throw new Error("unexpected repository access");
   };

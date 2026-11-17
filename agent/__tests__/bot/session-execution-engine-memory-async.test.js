@@ -4,11 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 import test from "node:test";
+import { createTestMessagePersistenceReceipts } from "../helpers/message-persistence-receipts.js";
 import { createTestSessionFinalizationContext } from "../helpers/session-finalization.js";
 import assert from "node:assert/strict";
 
 import { createTestSessionExecutionEngine } from "../helpers/session-execution-engine.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import { SessionTurnPersister } from "../../src/bot/execution/turn-persister.js";
+import { bindCurrentTurnPersistence } from "../../src/bot/execution/runner/current-turn-persistence.js";
+import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
 
 const TEST_SHORT_DELAY_MS = 5;
 const TEST_MEDIUM_DELAY_MS = 20;
@@ -17,11 +21,14 @@ function createEngine({
   captureDialogToShortMemory = async () => true,
   maybeSummarize = async () => undefined,
   globalConfig = {},
-  appendTurns = async (payload = {}) => ({ turns: payload.turns }),
+  appendTurns = async (payload = {}) => ({
+    messageReceipts: createTestMessagePersistenceReceipts({ ...payload, messages: payload.turns }),
+  }),
   upsertTurnTiming = async () => {},
 } = {}) {
   const session = {
     async appendExecutionLog() {},
+    async appendExecutionLogs() {},
     appendTurns,
     upsertTurnTiming,
     async getExecutionTurnLogs() {
@@ -76,10 +83,6 @@ function buildFinalizeInput(userConfig = {}) {
       modelLoopRound: 0,
       turnMessages: [{ role: "assistant", type: "message", content: "ok", messageUid: "sm_final" }],
     },
-    persistedTurnMessageUids: [],
-    persistedTurnMessages: [],
-    durableTurnMessages: [],
-    summaryCheckpointPromotionSources: [],
     userConfig,
     persistenceScope: null,
   };
@@ -91,12 +94,52 @@ test("_finalizeRunSession persists only thinking finish facts to turn timing", a
   const engine = createEngine({
     appendTurns: async (payload = {}) => {
       appendTurnPayloads.push(...payload.turns);
-      return { turns: payload.turns };
+      return {
+        messageReceipts: createTestMessagePersistenceReceipts({
+          ...payload,
+          messages: payload.turns,
+        }),
+      };
     },
     upsertTurnTiming: async (payload) => timingPayloads.push(payload),
   });
 
-  await engine._finalizeRunSession(buildFinalizeInput({ memory: { postprocess_async: true } }));
+  const input = buildFinalizeInput({ memory: { postprocess_async: true } });
+  const runtime = {
+    currentTurnMessages: createCurrentTurnMessagesStore(input.agentResult.turnMessages),
+  };
+  const persister = new SessionTurnPersister({
+    session: {
+      async appendExecutionLogs() {},
+      async appendTurns(payload) {
+        appendTurnPayloads.push(...payload.turns);
+        return {
+          messageReceipts: createTestMessagePersistenceReceipts({
+            ...payload,
+            messages: payload.turns,
+          }),
+        };
+      },
+    },
+    now: () => "2026-07-08T16:49:45.000Z",
+  });
+  bindCurrentTurnPersistence({
+    dispatchRuntime: runtime,
+    appendAgentMessages: (payload) => persister.appendAgentMessages(payload),
+    commitSummaryCheckpoint: async () => {},
+    userId: input.userId,
+    sessionId: input.sessionId,
+    dialogProcessId: input.dialogProcessId,
+    parentDialogProcessId: input.parentDialogProcessId,
+    turnScopeId: input.turnScopeId,
+    eventListener: input.runtimeEventListener,
+    persistenceScope: input.persistenceScope,
+  });
+  input.turnPersistence = {
+    flush: () => runtime.persistCurrentTurnMessages(),
+    readResultMessages: async () => appendTurnPayloads,
+  };
+  await engine._finalizeRunSession(input);
 
   assert.equal(appendTurnPayloads.length, 1);
   for (const key of [

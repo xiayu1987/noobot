@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { randomUUID } from "node:crypto";
 import { AttachmentService } from "../../src/artifacts/index.js";
 import { createSessionServices } from "../../src/session/index.js";
 import { TEST_SCOPED_SESSION_ROOTS } from "./scoped-session-roots.js";
@@ -28,6 +29,21 @@ export function withTreeContext(runtime, payload) {
       payload.sessionId,
     ),
   };
+}
+
+export async function commitTestSessionChanges(runtime, { userId, sessionId, changes }) {
+  const repository = runtime.repositories.sessionRepository;
+  const persistenceContext = repository.treePersistenceContext(userId, sessionId);
+  await using reader = await repository.requireSessionReader(userId, sessionId, {
+    persistenceContext,
+  });
+  return await repository.commitChanges(userId, sessionId, {
+    persistenceContext,
+    expectedGeneration: reader.generation,
+    operationId: randomUUID(),
+    committedAt: repository.now(),
+    changes,
+  });
 }
 
 export function provisionTestSession(runtime, { userId, sessionId, parentSessionId = "", caller }) {

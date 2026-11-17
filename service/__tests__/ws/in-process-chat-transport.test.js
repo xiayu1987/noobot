@@ -18,7 +18,9 @@ import {
 } from "../routes/chat-websocket-server.turn-lifecycle.fixtures.js";
 import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
 
-useProvisionedRuntimeEventsWorkspace(["primary-user"]);
+useProvisionedRuntimeEventsWorkspace(["primary-user"], {
+  "primary-user": ["s-in-process-abort"],
+});
 
 function createTransport() {
   return createInProcessChatTransport({

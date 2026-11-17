@@ -7,25 +7,25 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 
-import { createTestSessionServices, provisionTestSession } from "../helpers/session-services.js";
+import {
+  createTestSessionServices,
+  provisionTestSession,
+  commitTestSessionChanges,
+} from "../helpers/session-services.js";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { SESSIONS_SUMMARY_SCHEMA_VERSION } from "@noobot/session-protocol/sessions-summary";
-import {
-  SESSION_ARTIFACT_LEGACY_TURN_COMMIT_SCHEMA_VERSION,
-  SESSION_ERROR_CODE,
-} from "@noobot/session-protocol";
+import { contentDigest } from "../../src/session/session-artifact-session/immutable-object-store.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import {
   canonicalMessages,
   withTempWorkspace,
 } from "./session-repository-boundary.summaries.fixtures.js";
 import { initializeUserWorkspace } from "../helpers/user-workspace.js";
-import { applySessionMessageFacts } from "../helpers/session-message-facts.js";
 import { TEST_MESSAGE_TS } from "../helpers/session-run-payload.js";
 
-test("session summaries should be maintained and rebuilt for list API", async () => {
+test("session list projects committed heads without persisting another list document", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     await initializeUserWorkspace(workspaceRoot, userId);
@@ -48,13 +48,7 @@ test("session summaries should be maintained and rebuilt for list API", async ()
       caller: SESSION_CALLER.USER,
     });
 
-    const sessionB = await runtime.repositories.sessionRepository.findById(userId, "B", {
-      persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
-        userId,
-        "B",
-      ),
-    });
-    sessionB.messages = canonicalMessages(
+    const messages = canonicalMessages(
       [
         { attachments: [], role: "system", content: "ignored" },
         {
@@ -67,21 +61,26 @@ test("session summaries should be maintained and rebuilt for list API", async ()
       ],
       "B",
       "list_b",
-    );
-    sessionB.aggregateVersion = 4;
-    await runtime.repositories.sessionRepository.save(userId, applySessionMessageFacts(sessionB), {
+    ).map((message) => ({ ...message, parentSessionId: "A" }));
+    await commitTestSessionChanges(runtime, {
+      userId,
+      sessionId: "B",
+      changes: { messages },
+    });
+    const reader = await runtime.repositories.sessionRepository.requireSessionReader(userId, "B", {
       persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
         userId,
-        sessionB.sessionId,
+        "B",
       ),
     });
+    const { aggregateVersion } = await reader.readMetadata();
 
-    let summary = await runtime.repositories.sessionRepository.readSessionsSummary(userId);
+    const summary = await runtime.repositories.sessionRepository.readSessionsSummary(userId);
     assert.equal(summary.schemaVersion, SESSIONS_SUMMARY_SCHEMA_VERSION);
     const writtenB = summary.sessions.find((item) => item.sessionId === "B");
     assert.equal(writtenB.title, "12345678901234567890");
     assert.equal(writtenB.messageCount, 3);
-    assert.equal(writtenB.aggregateVersion, 4);
+    assert.equal(writtenB.aggregateVersion, aggregateVersion);
     assert.equal("depth" in writtenB, false);
     assert.equal(Array.isArray(writtenB.messages), false);
     assert.equal(writtenB.lastMessage.role, "assistant");
@@ -90,21 +89,18 @@ test("session summaries should be maintained and rebuilt for list API", async ()
     const { sessions: list } = await runtime.sessionCrudService.getAllSessionSummaries({ userId });
     const listedB = list.find((item) => item.sessionId === "B");
     assert.equal(list.length, 2);
-    assert.equal(listedB.aggregateVersion, 4);
+    assert.equal(listedB.aggregateVersion, aggregateVersion);
     assert.equal("depth" in listedB, false);
     assert.equal("messages" in listedB, false);
 
-    summary = JSON.parse(
-      await readFile(
-        path.join(workspaceRoot, userId, "runtime", "session", "sessions.json"),
-        "utf8",
-      ),
+    await assert.rejects(
+      access(path.join(workspaceRoot, userId, "runtime", "session", "sessions.json")),
+      { code: "ENOENT" },
     );
-    assert.equal("depth" in summary.sessions.find((item) => item.sessionId === "B"), false);
   });
 });
 
-test("list index under another schema is rebuilt from the Session source on read", async () => {
+test("obsolete list schema is ignored without reading or rewriting the document", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     await initializeUserWorkspace(workspaceRoot, userId);
@@ -135,11 +131,11 @@ test("list index under another schema is rebuilt from the Session source on read
       ["A"],
     );
     const repaired = JSON.parse(await readFile(summaryFile, "utf8"));
-    assert.equal(repaired.schemaVersion, SESSIONS_SUMMARY_SCHEMA_VERSION);
+    assert.equal(repaired.schemaVersion, SESSIONS_SUMMARY_SCHEMA_VERSION - 1);
   });
 });
 
-test("startup display-summary maintenance rebuilds a list index under another schema first", async () => {
+test("display-summary maintenance does not republish the obsolete list index", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     await initializeUserWorkspace(workspaceRoot, userId);
@@ -158,12 +154,16 @@ test("startup display-summary maintenance rebuilds a list index under another sc
       JSON.stringify({ schemaVersion: SESSIONS_SUMMARY_SCHEMA_VERSION - 1, sessions: [] }),
     );
 
-    const result = await runtime.sessionCrudService.maintainSessionDisplaySummaries({ userId });
-
-    assert.deepEqual(result.failures, []);
+    await runtime.sessionCrudService.getAllSessionSummaries({ userId });
     const rebuilt = JSON.parse(await readFile(summaryFile, "utf8"));
-    assert.equal(rebuilt.schemaVersion, SESSIONS_SUMMARY_SCHEMA_VERSION);
-    assert.deepEqual(rebuilt.sessions.map((item) => item.sessionId).sort(), ["A", "B"]);
+    assert.equal(rebuilt.schemaVersion, SESSIONS_SUMMARY_SCHEMA_VERSION - 1);
+    assert.deepEqual(rebuilt.sessions, []);
+    assert.deepEqual(
+      (await runtime.repositories.sessionRepository.readSessionsSummary(userId)).sessions
+        .map((item) => item.sessionId)
+        .sort(),
+      ["A", "B"],
+    );
   });
 });
 
@@ -190,7 +190,7 @@ test("session list projects session-tree nodes without Session artifacts as unav
     assert.deepEqual(summaries.map((item) => item.sessionId).sort(), ["materialized", "orphan"]);
     const orphan = summaries.find((item) => item.sessionId === "orphan");
     assert.equal(orphan.availability, "unavailable");
-    assert.equal(orphan.unavailableReason.code, "SESSION_ARTIFACT_NOT_FOUND");
+    assert.equal(orphan.unavailableReason.code, "SESSION_IMMUTABLE_STORAGE_INVALID");
     assert.equal(orphan.caller, SESSION_CALLER.BOT);
   });
 });
@@ -222,13 +222,13 @@ test("session detail projects a tree child without artifact as unavailable", asy
     );
     const child = detail.sessions.find((item) => item.sessionId === "child");
     assert.equal(child.availability, "unavailable");
-    assert.equal(child.unavailableReason.code, "SESSION_ARTIFACT_NOT_FOUND");
+    assert.equal(child.unavailableReason.code, "SESSION_IMMUTABLE_STORAGE_INVALID");
     assert.equal(child.parentSessionId, "root");
     assert.equal(child.caller, SESSION_CALLER.BOT);
   });
 });
 
-test("ensureSession rejects an artifact absent from the session tree without registering it", async () => {
+test("ensureSession recovers registration of a committed session without repeating its commit", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u-artifact-without-tree-node";
     await initializeUserWorkspace(workspaceRoot, userId);
@@ -239,20 +239,24 @@ test("ensureSession rejects an artifact absent from the session tree without reg
       parentSessionId: "",
       caller: SESSION_CALLER.USER,
     });
+    const headFile = path.join(workspaceRoot, userId, "runtime", "session", "S", "head.json");
+    const committedHead = await readFile(headFile, "utf8");
     const treeFile = path.join(workspaceRoot, userId, WORKSPACE_LAYOUT.SESSION_TREE_FILE);
     await writeFile(treeFile, JSON.stringify({ nodes: {} }));
 
-    await assert.rejects(
-      provisionTestSession(runtime, {
-        userId,
-        sessionId: "S",
-        parentSessionId: "",
-        caller: SESSION_CALLER.USER,
-      }),
-      (error) => error?.code === "FATAL_SESSION_TREE_NODE_MISSING",
-    );
+    await provisionTestSession(runtime, {
+      userId,
+      sessionId: "S",
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
     const tree = JSON.parse(await readFile(treeFile, "utf8"));
-    assert.deepEqual(tree.nodes, {});
+    assert.deepEqual(tree.nodes.S, {
+      sessionId: "S",
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    });
+    assert.equal(await readFile(headFile, "utf8"), committedHead);
   });
 });
 
@@ -310,7 +314,7 @@ test("session summary rebuild isolates an unreadable session as an unavailable p
 
     const repository = runtime.repositories.sessionRepository;
     const legacyDir = path.join(workspaceRoot, userId, "runtime", "session", "legacy");
-    await writeFile(path.join(legacyDir, "session.json"), "{invalid-json", "utf8");
+    await writeFile(path.join(legacyDir, "head.json"), "{invalid-json", "utf8");
     let readError = null;
     await assert.rejects(
       repository.findById(userId, "legacy", {
@@ -322,7 +326,7 @@ test("session summary rebuild isolates an unreadable session as an unavailable p
       },
     );
 
-    const payload = await repository.rebuildSessionsSummary(userId);
+    const payload = await repository.readSessionsSummary(userId);
     const available = payload.sessions.find((item) => item.sessionId === "available");
     const unavailable = payload.sessions.find((item) => item.sessionId === "legacy");
     assert.equal(available.availability, "available");
@@ -360,7 +364,7 @@ test("unreadable Session is rejected with its read error and projected unavailab
       caller: SESSION_CALLER.USER,
     });
     const sessionDir = path.join(workspaceRoot, userId, "runtime", "session", sessionId);
-    await writeFile(path.join(sessionDir, "session.json"), "{invalid-json", "utf8");
+    await writeFile(path.join(sessionDir, "head.json"), "{invalid-json", "utf8");
 
     const repository = runtime.repositories.sessionRepository;
     const read = () =>
@@ -379,7 +383,7 @@ test("unreadable Session is rejected with its read error and projected unavailab
   });
 });
 
-test("Session reads reject a previous artifact schema instead of migrating it", async () => {
+test("Session reads reject an unsupported immutable format without rewriting it", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u-previous-artifact";
     const sessionId = "previous-artifact";
@@ -392,32 +396,35 @@ test("Session reads reject a previous artifact schema instead of migrating it", 
       caller: SESSION_CALLER.USER,
     });
     const sessionDir = path.join(workspaceRoot, userId, "runtime", "session", sessionId);
-    const manifestFile = path.join(sessionDir, "session.json");
+    const manifestFile = path.join(sessionDir, "head.json");
     const repository = runtime.repositories.sessionRepository;
     const persistenceContext = repository.treePersistenceContext(userId, sessionId);
-    const canonicalSession = await repository.findById(userId, sessionId, { persistenceContext });
     const manifest = JSON.parse(await readFile(manifestFile, "utf8"));
-    const legacyManifest = JSON.stringify({
-      ...manifest,
-      schemaVersion: SESSION_ARTIFACT_LEGACY_TURN_COMMIT_SCHEMA_VERSION,
+    const payload = JSON.stringify({
+      ...JSON.parse(manifest.payload),
+      format: "noobot.immutable-session/0",
     });
+    const legacyManifest = JSON.stringify({ payload, checksum: contentDigest(payload) });
     await writeFile(manifestFile, legacyManifest, "utf8");
 
     await assert.rejects(repository.findById(userId, sessionId, { persistenceContext }), {
-      code: SESSION_ERROR_CODE.TURN_JOURNAL_SCHEMA_REQUIRED,
+      code: "SESSION_IMMUTABLE_STORAGE_INVALID",
     });
-    await assert.rejects(repository.save(userId, canonicalSession, { persistenceContext }), {
-      code: SESSION_ERROR_CODE.TURN_JOURNAL_SCHEMA_REQUIRED,
-    });
-    assert.equal(await readFile(manifestFile, "utf8"), legacyManifest);
-    const maintenance = await runtime.sessionCrudService.maintainSessionDisplaySummaries({
-      userId,
-    });
-    assert.deepEqual(
-      maintenance.failures.map(({ sessionId: id, code }) => ({ sessionId: id, code })),
-      [{ sessionId, code: SESSION_ERROR_CODE.TURN_JOURNAL_SCHEMA_REQUIRED }],
+    await assert.rejects(
+      repository.commitChanges(userId, sessionId, {
+        persistenceContext,
+        expectedGeneration: 1,
+        operationId: "unsupported-format",
+        committedAt: repository.now(),
+        changes: { sessionMetadata: { customTitle: "must not write" } },
+      }),
+      { code: "SESSION_IMMUTABLE_STORAGE_INVALID" },
     );
-    assert.deepEqual(maintenance.rebuiltSessionIds, []);
+    assert.equal(await readFile(manifestFile, "utf8"), legacyManifest);
+    await assert.rejects(
+      repository.readSessionDisplaySummary(userId, sessionId, { persistenceContext }),
+      { code: "SESSION_IMMUTABLE_STORAGE_INVALID" },
+    );
     assert.equal(await readFile(manifestFile, "utf8"), legacyManifest);
   });
 });
@@ -436,13 +443,7 @@ test("deleting one session does not invalidate another session display summary",
       });
     }
 
-    const kept = await runtime.repositories.sessionRepository.findById(userId, "kept", {
-      persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
-        userId,
-        "kept",
-      ),
-    });
-    kept.messages = [
+    const messages = [
       {
         attachments: [],
         messageUid: "sm-kept-user",
@@ -455,13 +456,12 @@ test("deleting one session does not invalidate another session display summary",
         dialogProcessId: "dialog-kept",
       },
     ];
-    await runtime.repositories.sessionRepository.save(userId, applySessionMessageFacts(kept), {
-      persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
-        userId,
-        kept.sessionId,
-      ),
+    await commitTestSessionChanges(runtime, {
+      userId,
+      sessionId: "kept",
+      changes: { messages },
     });
-    await runtime.repositories.sessionRepository.ensureSessionDisplaySummary(userId, "kept", {
+    await runtime.repositories.sessionRepository.readSessionDisplaySummary(userId, "kept", {
       persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
         userId,
         "kept",
@@ -473,10 +473,9 @@ test("deleting one session does not invalidate another session display summary",
       "runtime",
       "session",
       "kept",
-      "session-summary.json",
+      "head.json",
     );
-    const persistedSummary = JSON.parse(await readFile(keptSummaryFile, "utf8"));
-    assert.equal("depth" in persistedSummary, false);
+    const persistedHead = await readFile(keptSummaryFile, "utf8");
 
     await runtime.sessionTreeService.deleteSessionBranch({ userId, sessionIds: ["deleted"] });
     const display = await runtime.sessionCrudService.getSessionDisplayData({
@@ -486,10 +485,11 @@ test("deleting one session does not invalidate another session display summary",
     assert.equal(display.exists, true);
     assert.equal(display.sessions[0].availability, "available");
     assert.equal(display.sessions[0].messages[0].content, "keep me");
+    assert.equal(await readFile(keptSummaryFile, "utf8"), persistedHead);
   });
 });
 
-test("cached display summary with an invalid turn lifecycle snapshot is rebuilt on detail read", async () => {
+test("obsolete display cache is ignored and not rewritten on detail read", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u-summary-invalid-snapshot";
     await initializeUserWorkspace(workspaceRoot, userId);
@@ -501,7 +501,7 @@ test("cached display summary with an invalid turn lifecycle snapshot is rebuilt 
       caller: SESSION_CALLER.USER,
     });
     const { sessionRepository } = runtime.repositories;
-    await sessionRepository.ensureSessionDisplaySummary(userId, "stale", {
+    await sessionRepository.readSessionDisplaySummary(userId, "stale", {
       persistenceContext: sessionRepository.treePersistenceContext(userId, "stale"),
     });
     const summaryFile = path.join(
@@ -512,17 +512,19 @@ test("cached display summary with an invalid turn lifecycle snapshot is rebuilt 
       "stale",
       "session-summary.json",
     );
-    const cached = JSON.parse(await readFile(summaryFile, "utf8"));
-    cached.turnLifecycleSnapshot.recentTerminalTurns = [{ parentSessionId: "residual" }];
-    await writeFile(summaryFile, JSON.stringify(cached), "utf8");
+    await assert.rejects(access(summaryFile), { code: "ENOENT" });
+    const obsoleteCache = JSON.stringify({
+      turnLifecycleSnapshot: { recentTerminalTurns: [{ parentSessionId: "residual" }] },
+    });
+    await writeFile(summaryFile, obsoleteCache, "utf8");
 
     const detail = await runtime.sessionCrudService.getSessionDisplayData({
       userId,
       sessionId: "stale",
     });
     assert.equal(detail.sessions[0].availability, "available");
-    const rebuilt = JSON.parse(await readFile(summaryFile, "utf8"));
-    assert.deepEqual(rebuilt.turnLifecycleSnapshot.recentTerminalTurns, []);
+    assert.deepEqual(detail.sessions[0].turnLifecycleSnapshot.recentTerminalTurns, []);
+    assert.equal(await readFile(summaryFile, "utf8"), obsoleteCache);
   });
 });
 
@@ -544,7 +546,7 @@ test("summary session detail projects an unreadable tree child as unavailable wi
       caller: SESSION_CALLER.BOT,
     });
     const childDir = path.join(workspaceRoot, userId, "runtime", "session", "root", "child");
-    await writeFile(path.join(childDir, "session.json"), "{invalid-json", "utf8");
+    await writeFile(path.join(childDir, "head.json"), "{invalid-json", "utf8");
 
     const detail = await runtime.sessionCrudService.getSessionDisplayData({
       userId,

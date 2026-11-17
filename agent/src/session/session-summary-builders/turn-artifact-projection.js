@@ -74,6 +74,15 @@ function collectToolCalls(message, context) {
   context.totalCount += message.tool_calls.length;
 }
 
+export function hasToolResultArtifacts(message) {
+  return (
+    message.type === TOOL_RESULT_MESSAGE_TYPE &&
+    ["transferEnvelopes", "resourceRefs", "mutationRefs"].some(
+      (field) => toolResultFacts(message, field).length > 0,
+    )
+  );
+}
+
 function collectToolResult(message, context) {
   if (message.type !== TOOL_RESULT_MESSAGE_TYPE) return;
   context.totalCount += 1;
@@ -82,7 +91,7 @@ function collectToolResult(message, context) {
   const transferEnvelopes = compactTransferEnvelopes(toolResultFacts(message, "transferEnvelopes"));
   const resourceRefs = toolResultFacts(message, "resourceRefs");
   const mutationRefs = toolResultFacts(message, "mutationRefs");
-  if (!callKey || (!transferEnvelopes.length && !resourceRefs.length && !mutationRefs.length)) {
+  if (!callKey || !hasToolResultArtifacts(message)) {
     return;
   }
   context.artifactByCallId.set(callKey, {

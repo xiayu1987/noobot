@@ -201,6 +201,8 @@ describe("createSessionListActions.selectSession freshness", () => {
     const messages = [{ role: "assistant", content: "streaming response" }];
     const sessionItem = {
       sessionId: "s1",
+      aggregateVersion: 1,
+      generation: 10,
       isLocal: false,
       loaded: true,
       sessionDocs: detail.sessions,
@@ -222,6 +224,29 @@ describe("createSessionListActions.selectSession freshness", () => {
       mainSessionDoc: detail.sessions[0],
       normalizedDetailMessages: messages,
     });
+  });
+});
+
+describe("createSessionListActions stale projection", () => {
+  it("fetches current facts when switching back after the list version advanced", async () => {
+    const sessionItem = {
+      sessionId: "s1",
+      aggregateVersion: 2,
+      generation: 10,
+      isLocal: false,
+      loaded: true,
+      sessionDocs: detailDocument("s1").sessions,
+      messages: [],
+    };
+    const onSessionDetailApplied = vi.fn();
+    const { actions, fetchSessionDetail } = createHarness({
+      sessions: ref([sessionItem]),
+      activeSessionId: ref("another-session"),
+      onSessionDetailApplied,
+    });
+    await actions.selectSession("s1");
+    expect(fetchSessionDetail).toHaveBeenCalledTimes(1);
+    expect(onSessionDetailApplied).not.toHaveBeenCalled();
   });
 });
 

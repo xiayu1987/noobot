@@ -32,6 +32,11 @@ export function matchesTurnLookupKey(turn, key) {
   return turn.turnScopeId === key.turnScopeId && turn.dialogProcessId === key.dialogProcessId;
 }
 
-export function createTurnArtifactRevision({ turnId, committedBytes }) {
+export function createTurnArtifactRevision({ turnId, committedBytes, contentRevision }) {
+  if (contentRevision !== undefined) {
+    if (typeof contentRevision !== "string" || !contentRevision)
+      throw new TypeError("turn content revision must be a non-empty string");
+    return `turn-objects:${contentRevision}`;
+  }
   return `turn-journal:${turnId}:${committedBytes}`;
 }

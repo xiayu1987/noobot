@@ -5,6 +5,7 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
+import { deepFreeze } from "@noobot/shared/deep-freeze";
 import {
   SESSION_ERROR_CODE,
   requireTurnPartitionIdentity,
@@ -14,6 +15,35 @@ import {
 const user = { role: "user", turnScopeId: "scope-1", dialogProcessId: "dp-1" };
 const assistant = { ...user, role: "assistant", presentationMessageId: "pm_1" };
 const tool = { ...user, role: "tool", presentationMessageId: "pm_1" };
+
+test("immutable partition identity reuse keeps returned values independently owned", () => {
+  const message = deepFreeze({ ...assistant });
+  const first = requireTurnPartitionMessageIdentity(message, 0);
+  first.dialogProcessId = "dp-other";
+  assert.equal(requireTurnPartitionMessageIdentity(message, 1).dialogProcessId, "dp-1");
+  assert.throws(
+    () =>
+      requireTurnPartitionIdentity([
+        message,
+        deepFreeze({ ...tool, presentationMessageId: "pm_2" }),
+      ]),
+    { code: SESSION_ERROR_CODE.TURN_IDENTITY_CONFLICT },
+  );
+});
+
+test("mutable partition messages and invalid frozen messages are always revalidated", () => {
+  const message = { ...assistant };
+  requireTurnPartitionMessageIdentity(message, 0);
+  message.presentationMessageId = "";
+  assert.throws(() => requireTurnPartitionMessageIdentity(message, 7), /at index 7/);
+  const invalid = deepFreeze({ ...message });
+  for (const index of [2, 8]) {
+    assert.throws(
+      () => requireTurnPartitionMessageIdentity(invalid, index),
+      new RegExp(`at index ${index}`),
+    );
+  }
+});
 
 test("turn partition identity resolves the single presentation identity of a Turn", () => {
   assert.deepEqual(requireTurnPartitionIdentity([user, assistant, tool]), {

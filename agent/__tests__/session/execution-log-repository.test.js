@@ -10,12 +10,15 @@ import os from "node:os";
 import path from "node:path";
 
 import { ExecutionLogRepository } from "../../src/observability/execution-log/execution-log-repository.js";
+import { withExecutionLogProjection } from "../helpers/execution-log-projection-port.js";
 import {
+  persistSession,
   persistChildSessionFixture,
   useRuntimeEventsEnv,
   useRuntimeEventsUserWorkspace,
 } from "../helpers/runtime-events-env.js";
 
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 const LOG_TS = "2026-05-13T00:00:00.000Z";
 
 async function makeTempDir() {
@@ -35,19 +38,22 @@ function createInMemoryExecutionRepository() {
   const turns = new Map();
   const keyOf = (userId = "", sessionId = "", parentSessionId = "") =>
     `${userId}::${parentSessionId}::${sessionId}`;
-  return {
-    async appendLog(userId, sessionId, log, parentSessionId = "") {
-      const turnKey = `${keyOf(userId, sessionId, parentSessionId)}::${log.dialogProcessId}`;
-      turns.set(turnKey, [...(turns.get(turnKey) || []), log]);
+  return withExecutionLogProjection({
+    async appendLogs(userId, sessionId, logs, parentSessionId = "") {
+      for (const log of logs) {
+        const turnKey = `${keyOf(userId, sessionId, parentSessionId)}::${log.dialogProcessId}`;
+        turns.set(turnKey, [...(turns.get(turnKey) || []), log]);
+      }
+      return logs;
     },
     async getTurnLogs(userId, sessionId, dialogProcessId, parentSessionId = "") {
       return turns.get(`${keyOf(userId, sessionId, parentSessionId)}::${dialogProcessId}`) || [];
     },
-  };
+  });
 }
 
 test("appendLog keeps each dialog's logs in its own turn", async (t) => {
-  await useRuntimeEventsUserWorkspace(t, "u1");
+  await persistChildSessionFixture(await useRuntimeEventsUserWorkspace(t, "u1"));
   const repo = new ExecutionLogRepository({
     executionRepository: createInMemoryExecutionRepository(),
   });
@@ -69,19 +75,36 @@ test("appendLog keeps each dialog's logs in its own turn", async (t) => {
 });
 
 test("getTurnLogs and appendLog preserve scoped persistence context", async (t) => {
-  await useRuntimeEventsUserWorkspace(t, "u1");
+  const workspaceRoot = await useRuntimeEventsUserWorkspace(t, "u1");
+  await persistChildSessionFixture(workspaceRoot);
+  const sessionDir = await persistSession(workspaceRoot, "u1", {
+    sessionId: "child-1",
+    parentSessionId: "p1",
+    caller: SESSION_CALLER.USER,
+  });
   const calls = [];
-  const persistenceContext = { locationResolver: { scopeId: "workflow-node" } };
+  const persistenceContext = {
+    locationResolver: {
+      async locateSessionScope(userId, sessionId) {
+        assert.equal(userId, "u1");
+        assert.equal(sessionId, "child-1");
+        return { sessionDir };
+      },
+    },
+  };
   const executionRepository = {
     async getTurnLogs(...args) {
       calls.push(["getTurnLogs", args]);
       return [];
     },
-    async appendLog(...args) {
-      calls.push(["appendLog", args]);
+    async appendLogs(...args) {
+      calls.push(["appendLogs", args]);
+      return args[2];
     },
   };
-  const repo = new ExecutionLogRepository({ executionRepository });
+  const repo = new ExecutionLogRepository({
+    executionRepository: withExecutionLogProjection(executionRepository),
+  });
 
   await repo.getTurnLogs("u1", "child-1", "d1", { persistenceContext });
   await repo.appendLog(
@@ -94,37 +117,44 @@ test("getTurnLogs and appendLog preserve scoped persistence context", async (t) 
   assert.equal(calls[0][0], "getTurnLogs");
   assert.equal(calls[0][1][2], "d1");
   assert.equal(calls[0][1][3].persistenceContext, persistenceContext);
-  assert.equal(calls[1][0], "appendLog");
+  assert.equal(calls[1][0], "appendLogs");
   assert.equal(calls[1][1][3].persistenceContext, persistenceContext);
 });
 
-test("appendLog forwards logs without deriving a dialogProcessId", async (t) => {
-  await useRuntimeEventsUserWorkspace(t, "u1");
+test("appendLog rejects a missing dialogProcessId without deriving one", async (t) => {
+  await persistChildSessionFixture(await useRuntimeEventsUserWorkspace(t, "u1"));
   const appended = [];
   const repo = new ExecutionLogRepository({
-    executionRepository: {
+    executionRepository: withExecutionLogProjection({
       async getTurnLogs() {
         throw new Error("append path must not load execution history");
       },
-      async appendLog(_userId, _sessionId, log) {
-        appended.push(log);
+      async appendLogs(_userId, _sessionId, logs) {
+        appended.push(...logs);
+        return logs;
       },
-    },
+    }),
   });
 
   await repo.appendLog("u1", "s1", { dialogProcessId: "d1", event: "start", ts: LOG_TS });
-  await repo.appendLog("u1", "s1", { event: "heartbeat", ts: LOG_TS });
+  await assert.rejects(repo.appendLog("u1", "s1", { event: "heartbeat", ts: LOG_TS }), {
+    code: "DIALOG_PROCESS_ID_INVALID",
+  });
 
   assert.equal(appended[0].dialogProcessId, "d1");
-  assert.equal(appended[1].dialogProcessId, "");
+  assert.equal(appended.length, 1);
 });
 
-test("appendLog mirrors session execution logs to runtime-events session events", async (t) => {
+test("appendLog projects the persisted identity rather than caller identity", async (t) => {
   const workspaceRoot = await makeTempDir();
   useRuntimeEventsEnv(t, { workspaceRoot });
   const eventsDir = await persistChildSessionFixture(workspaceRoot);
   const repo = new ExecutionLogRepository({
-    executionRepository: createInMemoryExecutionRepository(),
+    executionRepository: withExecutionLogProjection({
+      async appendLogs(userId, sessionId, logs) {
+        return logs.map((log) => ({ ...log, userId, sessionId, parentSessionId: "p1" }));
+      },
+    }),
   });
 
   await repo.appendLog(
@@ -135,6 +165,7 @@ test("appendLog mirrors session execution logs to runtime-events session events"
       event: "tool_call_start",
       category: "tool",
       type: "tool_call",
+      parentSessionId: "incorrect-caller-parent",
       data: { tool: "read_file" },
       ts: "2026-05-13T00:00:01.000Z",
     },
@@ -150,6 +181,7 @@ test("appendLog mirrors session execution logs to runtime-events session events"
   assert.equal(records[0].event, "tool_call_start");
   assert.equal(records[0].sessionId, "s1");
   assert.equal(records[0].userId, "u1");
+  assert.equal(records[0].parentSessionId, "p1");
   assert.equal(records[0].dialogProcessId, "d1");
   assert.equal(records[0].data.executionCategory, "tool");
   assert.equal(records[0].data.type, "tool_call");

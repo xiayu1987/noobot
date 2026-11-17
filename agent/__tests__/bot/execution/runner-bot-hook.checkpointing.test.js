@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import test from "node:test";
+import { createTestMessagePersistenceReceipts } from "../../helpers/message-persistence-receipts.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 import assert from "node:assert/strict";
 import { createModelMessageId } from "@noobot/session-protocol/message-identity";
@@ -40,7 +41,7 @@ test("SessionExecutionRunner checkpoints current turn messages with scoped persi
   const runner = createRunner({
     appendAgentMessages: async (payload = {}) => {
       checkpointPayloads.push(payload);
-      return payload.messages;
+      return createTestMessagePersistenceReceipts(payload);
     },
     getSessionTurns: async () => checkpointPayloads.at(-1)?.messages || [],
     prepareAgentTurnExecution: async () => ({
@@ -130,7 +131,7 @@ test("SessionExecutionRunner checkpoints only new or changed current-turn messag
   const runner = createRunner({
     appendAgentMessages: async (payload = {}) => {
       checkpointPayloads.push(payload);
-      return payload.messages;
+      return createTestMessagePersistenceReceipts(payload);
     },
     prepareAgentTurnExecution: async () => ({
       agentContext: runtimeAgentContext,
@@ -153,6 +154,7 @@ test("SessionExecutionRunner checkpoints only new or changed current-turn messag
         (message) => message.messageUid === "sm_assistant",
       );
       await currentRuntime.persistCurrentTurnMessages();
+      assert.deepEqual(currentRuntime.currentTurnMessages.readPendingChanges().entries, []);
       return {
         output: "ok",
         modelMessageId: createModelMessageId(),
@@ -176,11 +178,6 @@ test("SessionExecutionRunner checkpoints only new or changed current-turn messag
     checkpointPayloads.map((payload) => payload.messages.map((message) => message.messageUid)),
     [["sm_assistant", "sm_tool_1"], ["sm_tool_2"], ["sm_assistant"]],
   );
-  assert.deepEqual(runtime.timelineCheckpointPersistedMessageUids, [
-    "sm_assistant",
-    "sm_tool_1",
-    "sm_tool_2",
-  ]);
   const checkpointEvents = events.filter(
     (event) => event?.event === "timeline_checkpoint_persisted",
   );
@@ -200,7 +197,7 @@ test("SessionExecutionRunner coalesces persistence requests inside one tool-resu
   const runner = createRunner({
     appendAgentMessages: async (payload = {}) => {
       checkpointPayloads.push(payload);
-      return payload.messages;
+      return createTestMessagePersistenceReceipts(payload);
     },
     prepareAgentTurnExecution: async () => ({
       agentContext: runtimeAgentContext,
@@ -257,10 +254,10 @@ test("SessionExecutionRunner retries an incremental checkpoint after persistence
   ]);
   const runtimeAgentContext = createTestAgentExecutionScope(runtime);
   const runner = createRunner({
-    appendAgentMessages: async ({ messages = [] } = {}) => {
+    appendAgentMessages: async ({ messages = [], ...identity } = {}) => {
       attempts.push(messages.map((message) => message.messageUid));
       if (attempts.length === 1) throw new Error("checkpoint unavailable");
-      return messages;
+      return createTestMessagePersistenceReceipts({ messages, ...identity });
     },
     prepareAgentTurnExecution: async () => ({
       agentContext: runtimeAgentContext,
@@ -270,6 +267,7 @@ test("SessionExecutionRunner retries an incremental checkpoint after persistence
       const currentRuntime = agentContext.bindings.runtime;
       await assert.rejects(currentRuntime.persistCurrentTurnMessages(), /checkpoint unavailable/);
       await currentRuntime.persistCurrentTurnMessages();
+      assert.deepEqual(currentRuntime.currentTurnMessages.readPendingChanges().entries, []);
       return {
         output: "ok",
         modelMessageId: createModelMessageId(),
@@ -289,7 +287,6 @@ test("SessionExecutionRunner retries an incremental checkpoint after persistence
   });
 
   assert.deepEqual(attempts, [["sm_retry"], ["sm_retry"]]);
-  assert.deepEqual(runtime.timelineCheckpointPersistedMessageUids, ["sm_retry"]);
 });
 
 test("SessionExecutionRunner rejects invalid persistence scopes before execution", async () => {
@@ -362,8 +359,11 @@ test("SessionExecutionRunner rejects a checkpoint whose messages are missing fro
   ]);
   const runtimeAgentContext = createTestAgentExecutionScope(runtime);
   const runner = createRunner({
-    appendAgentMessages: async ({ messages = [] } = {}) =>
-      messages.filter((message) => message.messageUid !== "sm_lost"),
+    appendAgentMessages: async ({ messages = [], ...identity } = {}) =>
+      createTestMessagePersistenceReceipts({
+        ...identity,
+        messages: messages.filter((message) => message.messageUid !== "sm_lost"),
+      }),
     prepareAgentTurnExecution: async () => ({
       agentContext: runtimeAgentContext,
       userMessageAttachments: [],
@@ -373,6 +373,10 @@ test("SessionExecutionRunner rejects a checkpoint whose messages are missing fro
         code: SESSION_ERROR_CODE.TURN_MESSAGE_NOT_PERSISTED,
         missingMessageUids: ["sm_lost"],
       });
+      assert.deepEqual(
+        runtime.currentTurnMessages.readPendingChanges().entries.map((entry) => entry.messageUid),
+        ["sm_durable", "sm_lost"],
+      );
       return {
         output: "ok",
         modelMessageId: createModelMessageId(),
@@ -390,5 +394,4 @@ test("SessionExecutionRunner rejects a checkpoint whose messages are missing fro
     message: "task",
     turnScopeId: "turn-checkpoint-lost",
   });
-  assert.deepEqual(runtime.timelineCheckpointPersistedMessageUids, []);
 });

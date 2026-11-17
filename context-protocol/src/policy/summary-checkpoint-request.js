@@ -12,6 +12,7 @@ import {
   requireDialogProcessKey,
 } from "@noobot/session-protocol";
 import { requireCanonicalTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
+import { requireSessionChanges } from "@noobot/session-protocol/session-changes";
 
 function invalidRequest(detail) {
   const error = new TypeError(`invalid turn summary checkpoint request: ${detail}`);
@@ -42,6 +43,9 @@ function checkpointDigest({
   persistedMessageUids,
   summarizedMessageUids,
   retainedMessageUids,
+  messages,
+  messageContentAppends = [],
+  messageMetadataUpdates = [],
 }) {
   return createHash("sha256")
     .update(
@@ -51,20 +55,30 @@ function checkpointDigest({
         persistedMessageUids,
         summarizedMessageUids,
         retainedMessageUids,
+        messages,
+        ...(messageContentAppends.length ? { messageContentAppends } : {}),
+        ...(messageMetadataUpdates.length ? { messageMetadataUpdates } : {}),
       }),
     )
     .digest("hex");
 }
 
+function requireCheckpointRevision(value) {
+  if (!Number.isSafeInteger(value) || value < 0)
+    throw invalidRequest("expectedCheckpointRevision must be a non-negative safe integer");
+  return value;
+}
+
 export function createSummaryCheckpointId(request) {
-  return `summary_checkpoint_${checkpointDigest(request).slice(0, 32)}`;
+  const predecessor = requireCheckpointRevision(request.expectedCheckpointRevision);
+  return `summary_checkpoint_${checkpointDigest(request).slice(0, 32)}_${predecessor}`;
 }
 
 export function assertSummaryCheckpointSource({
   dialogProcessId,
   turnScopeId,
   persistedMessageUids,
-  turnMessages,
+  checkpointMessages,
   summarizedMessageUids,
 }) {
   requireDialogProcessKey(dialogProcessId);
@@ -75,22 +89,17 @@ export function assertSummaryCheckpointSource({
     throw invalidRequest("summary checkpoint source requires summarized messages");
   }
   if (
-    persistedMessageUids.length !== turnMessages.length ||
-    turnMessages.some((message, index) => message.messageUid !== persistedMessageUids[index])
+    !Array.isArray(checkpointMessages) ||
+    persistedMessageUids.length !== checkpointMessages.length ||
+    checkpointMessages.some((message, index) => message.messageUid !== persistedMessageUids[index])
   ) {
-    throw invalidRequest("persisted UIDs must match the complete ordered turn source");
+    throw invalidRequest("persisted UIDs must match the ordered checkpoint working set");
   }
 }
 
 export function parseTurnSummaryCheckpointRequest(payload) {
   if (!isPlainObject(payload)) {
     throw invalidRequest("payload must be an object");
-  }
-  if (
-    !Number.isInteger(payload.expectedCheckpointRevision) ||
-    payload.expectedCheckpointRevision < 0
-  ) {
-    throw invalidRequest("expectedCheckpointRevision must be a non-negative integer");
   }
   const request = {
     userId: requireRequestText(payload.userId, "userId"),
@@ -99,14 +108,46 @@ export function parseTurnSummaryCheckpointRequest(payload) {
     dialogProcessId: requireDialogProcessKey(payload.dialogProcessId),
     turnScopeId: requireCanonicalTurnScopeId(payload.turnScopeId),
     checkpointId: requireRequestText(payload.checkpointId, "checkpointId"),
-    expectedCheckpointRevision: payload.expectedCheckpointRevision,
+    expectedCheckpointRevision: requireCheckpointRevision(payload.expectedCheckpointRevision),
     persistedMessageUids: requireMessageUids(payload.persistedMessageUids, "persistedMessageUids"),
     summarizedMessageUids: requireMessageUids(
       payload.summarizedMessageUids,
       "summarizedMessageUids",
     ),
     retainedMessageUids: requireMessageUids(payload.retainedMessageUids, "retainedMessageUids"),
+    messages: payload.messages,
+    messageContentAppends: payload.messageContentAppends ?? [],
+    messageMetadataUpdates: payload.messageMetadataUpdates ?? [],
   };
+  if (!Array.isArray(request.messages)) throw invalidRequest("messages must be an array");
+  const persisted = new Set(request.persistedMessageUids);
+  const completeMessageUids = new Set();
+  for (const message of request.messages) {
+    if (!isPlainObject(message)) throw invalidRequest("messages[] must be an object");
+    const uid = requireRequestText(message.messageUid, "messages[].messageUid");
+    if (completeMessageUids.has(uid)) throw invalidRequest("complete message UIDs must be unique");
+    completeMessageUids.add(uid);
+  }
+  requireSessionChanges({
+    messages: request.messages,
+    messageContentAppends: request.messageContentAppends,
+    messageMetadataUpdates: request.messageMetadataUpdates,
+  });
+  for (const message of [
+    ...request.messages,
+    ...request.messageContentAppends,
+    ...request.messageMetadataUpdates,
+  ]) {
+    if (!isPlainObject(message)) throw invalidRequest("messages[] must be an object");
+    const uid = requireRequestText(message.messageUid, "messages[].messageUid");
+    if (!persisted.has(uid))
+      throw invalidRequest("changed message UIDs must be members of persistedMessageUids");
+    if (
+      message.dialogProcessId !== request.dialogProcessId ||
+      message.turnScopeId !== request.turnScopeId
+    )
+      throw invalidRequest("changed messages must belong to the checkpoint dialog and turn");
+  }
   request.requestHash = `sha256:${checkpointDigest(request)}`;
   return request;
 }
@@ -118,16 +159,21 @@ function checkpointConflict(message, code) {
   return error;
 }
 
+export function assertSummaryCheckpointTurnOwnership(session, request) {
+  const lifecycleTurn = session.turnLifecycle.turns[request.turnScopeId];
+  if (lifecycleTurn && lifecycleTurn.dialogProcessId !== request.dialogProcessId) {
+    throw checkpointConflict(
+      "checkpoint does not own the lifecycle turn",
+      SESSION_ERROR_CODE.TURN_SUMMARY_CHECKPOINT_OWNERSHIP_CONFLICT,
+    );
+  }
+}
+
 export function assertSummaryCheckpointTargetsTurn(session, request) {
+  assertSummaryCheckpointTurnOwnership(session, request);
   const lifecycle = session.turnLifecycle;
   const lifecycleTurn = lifecycle.turns[request.turnScopeId];
   if (lifecycleTurn) {
-    if (lifecycleTurn.dialogProcessId !== request.dialogProcessId) {
-      throw checkpointConflict(
-        "checkpoint does not own the lifecycle turn",
-        SESSION_ERROR_CODE.TURN_SUMMARY_CHECKPOINT_OWNERSHIP_CONFLICT,
-      );
-    }
     if (isTerminalTurnState(lifecycleTurn.state) && request.persistedMessageUids.length) {
       throw checkpointConflict(
         "terminal checkpoint cannot persist additional messages",

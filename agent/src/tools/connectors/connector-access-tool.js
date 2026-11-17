@@ -97,7 +97,7 @@ export function createConnectorAccessTool({ agentContext }) {
       } catch (error) {
         if (!(error instanceof Error)) throw error;
         throw recoverableToolError(error.message, {
-          code: ERROR_CODE.RECOVERABLE_PROCESS_CONNECTOR_FAILED,
+          code: ERROR_CODE.RECOVERABLE_CONNECTOR_ACCESS_FAILED,
           cause: error,
         });
       }

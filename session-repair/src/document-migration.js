@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { isDeepFrozen } from "@noobot/shared/deep-freeze";
+import { migrateLegacyPhaseSummaryMessages } from "./phase-summary-migration.js";
+import { repairCanonicalAssistantPresentations } from "./canonical-presentation-repair.js";
 import { projectTurnCompletionMessages } from "@noobot/context-protocol";
 import { upgradeTransferEnvelopesInValue } from "@noobot/semantic-transfer-protocol";
 import {
@@ -192,44 +194,7 @@ function requireRepairSource(document) {
 }
 
 export function reconcileDuplicateCanonicalAssistantPresentations(document) {
-  const next = structuredClone(requireRepairSource(document));
-  const { messages } = next;
-  const canonicalIndexes = new Map();
-  for (let index = 0; index < messages.length; index += 1) {
-    const message = messages[index];
-    if (
-      text(message.role) !== "assistant" ||
-      message.chatPresentation !== true ||
-      !text(message.turnScopeId)
-    )
-      continue;
-    const turnScopeId = text(message.turnScopeId);
-    const indexes = canonicalIndexes.get(turnScopeId) || [];
-    indexes.push(index);
-    canonicalIndexes.set(turnScopeId, indexes);
-  }
-  const repaired = [];
-  for (const [turnScopeId, indexes] of canonicalIndexes) {
-    if (indexes.length < 2) continue;
-    const authoritativePresentationMessageId = text(
-      next.turnLifecycle.turns[turnScopeId]?.presentationMessageId,
-    );
-    const authoritativeIndex = indexes.find(
-      (index) => text(messages[index].presentationMessageId) === authoritativePresentationMessageId,
-    );
-    if (!authoritativePresentationMessageId || authoritativeIndex === undefined) {
-      throw Object.assign(
-        new Error(`canonical assistant presentation repair is ambiguous for Turn ${turnScopeId}`),
-        { code: SESSION_REPAIR_ERROR_CODE.CANONICAL_PRESENTATION_REPAIR_AMBIGUOUS },
-      );
-    }
-    for (const index of indexes) {
-      if (index === authoritativeIndex) continue;
-      messages[index] = { ...messages[index], chatPresentation: false };
-    }
-    repaired.push(turnScopeId);
-  }
-  return { document: next, changed: repaired.length > 0, repaired };
+  return repairCanonicalAssistantPresentations(requireRepairSource(document));
 }
 
 function completedTurnKeys(document) {
@@ -288,29 +253,38 @@ function isSettledSummaryMarkTurn(source) {
 }
 
 export function reconcileCompletedTurnSummaryMarks(document) {
-  const messages = [...requireRepairSource(document).messages];
+  const { messages: originalMessages } = requireRepairSource(document);
   const completedTurns = completedTurnKeys(document);
-  const turnIndexes = new Map();
-  messages.forEach((message, index) => {
-    const key = messageTurnKey(message);
-    if (!completedTurns.has(key)) return;
-    if (!turnIndexes.has(key)) turnIndexes.set(key, []);
-    turnIndexes.get(key).push(index);
+  const turns = new Map();
+  for (const key of completedTurns) {
+    const [dialogProcessId, turnScopeId] = key.split("\u0000");
+    const dialogs = turns.get(turnScopeId) || new Map();
+    dialogs.set(dialogProcessId, { key, indexes: [], source: [] });
+    turns.set(turnScopeId, dialogs);
+  }
+  if (!turns.size) return { document, changed: false, repaired: [] };
+  originalMessages.forEach((message, index) => {
+    const turn = turns.get(text(message.turnScopeId))?.get(text(message.dialogProcessId));
+    if (!turn) return;
+    turn.indexes.push(index);
+    turn.source.push(message);
   });
+  let messages = originalMessages;
   const repaired = [];
   for (const key of completedTurns) {
-    const indexes = turnIndexes.get(key);
-    if (!indexes) continue;
-    const source = indexes.map((index) => messages[index]);
+    const [dialogProcessId, turnScopeId] = key.split("\u0000");
+    const { indexes, source } = turns.get(turnScopeId).get(dialogProcessId);
+    if (!source.length) continue;
     if (isSettledSummaryMarkTurn(source)) continue;
     const projected = projectTurnCompletionMessages(source);
     let turnChanged = false;
     projected.forEach((message, index) => {
       if (message === source[index] || source[index].summarized === true) return;
+      if (messages === originalMessages) messages = [...originalMessages];
       messages[indexes[index]] = message;
       turnChanged = true;
     });
-    if (turnChanged) repaired.push(key.split("\u0000")[1]);
+    if (turnChanged) repaired.push(turnScopeId);
     else if (source.every(isDeepFrozen)) settledSummaryMarkTurns.set(source[0], source);
   }
   const changed = repaired.length > 0;
@@ -725,6 +699,13 @@ function migrateDocumentMessages(context) {
   next.messages = next.messages.map((message, index) =>
     migrateDocumentMessage(context, message, index),
   );
+  if (context.sourceSchemaVersion < 25) {
+    const summaryMigration = migrateLegacyPhaseSummaryMessages(next.messages);
+    if (summaryMigration.changed) {
+      next.messages = summaryMigration.messages;
+      markMigrated(context, "phase-summary-messages-v25");
+    }
+  }
   applyMessageRepair(
     context,
     reconcileDuplicateCanonicalAssistantPresentations(next),

@@ -6,6 +6,7 @@
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 import { createSessionDetailApplicator } from "../../session/model/list/sessionDetailApply.js";
 import { createSessionDetailRequests } from "../../session/model/list/sessionDetailRequests.js";
+import { createSessionMutationApplicator } from "../../session/model/list/sessionMutationApply.js";
 import { createSessionListActions } from "../../session/model/list/sessionListActions.js";
 import { createSessionIdentityHelpers } from "../../session/model/list/sessionIdentity.js";
 import {
@@ -57,7 +58,6 @@ export function useChatList({
 
   const { applySessionDetail } = createSessionDetailApplicator({
     sessions,
-    turnRuntimeRegistry,
     chatStore,
     makeViewMessage,
     onSessionDetailApplied,
@@ -107,6 +107,12 @@ export function useChatList({
     return Promise.resolve(true);
   }
 
+  const applySessionMutation = createSessionMutationApplicator({
+    sessions,
+    applySessionDetail,
+    fetchSessionDetail,
+  });
+
   return {
     createLocalSession,
     newSession,
@@ -118,6 +124,7 @@ export function useChatList({
     fetchThinkingDetail,
     applySessionDetail,
     releaseAllPreviewUrls,
+    applySessionMutation,
     initSessionsAfterMount,
   };
 }

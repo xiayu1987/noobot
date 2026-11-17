@@ -3,37 +3,59 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { upsertTurnInSession } from "./turn-upsert.js";
-import { text } from "@noobot/shared/value";
+import { randomUUID } from "node:crypto";
+import { buildTurnEntity } from "./turn-upsert.js";
+import {
+  createSessionChangesSubmission,
+  requireSessionChanges,
+} from "@noobot/session-protocol/session-changes";
 
-export async function appendTurns({ userId, sessionId, turns, persistenceContext } = {}) {
-  if (!Array.isArray(turns) || !turns.length) {
-    throw new TypeError("appendTurns requires a non-empty turns array");
+export async function appendTurns({
+  userId,
+  sessionId,
+  turns,
+  messageDiagnostics = [],
+  messageContentAppends = [],
+  messageMetadataUpdates = [],
+  persistenceContext,
+  submission = createSessionChangesSubmission(),
+} = {}) {
+  requireSessionChanges({
+    messages: turns.map((turn) => ({ ...turn, sessionId })),
+    messageContentAppends,
+    messageMetadataUpdates,
+    messageDiagnostics,
+  });
+  if (!turns.length && !messageContentAppends.length && !messageMetadataUpdates.length) {
+    throw new TypeError("appendTurns requires non-empty message changes");
   }
-  const requestedTurnScopeIds = [...new Set(turns.map((turn) => text(turn?.turnScopeId)))];
-  return this.sessionRepo.withSessionMutation(
+  return this.sessionRepo.withSessionReader(
     userId,
     sessionId,
-    async (scope) => {
-      const resolvedParentSessionId = scope.resolvedParentSessionId;
-      const view = await this.sessionRepo.requireTurnView(userId, sessionId, {
-        turnScopeIds: requestedTurnScopeIds,
-        persistenceContext,
-      });
-      const { session, turnScopeIds } = view;
-
-      const persistedTurns = turns.map((turn = {}) =>
-        upsertTurnInSession(this, session, resolvedParentSessionId, {
-          ...turn,
-          userId,
-          sessionId,
+    async (reader, scope, commitChanges) => {
+      const committed = await submission.submit({
+        userId,
+        sessionId,
+        prepare: () => ({
+          expectedGeneration: reader.generation,
+          operationId: randomUUID(),
+          changes: {
+            messages: turns.map((turn) =>
+              buildTurnEntity(this, scope.resolvedParentSessionId, {
+                ...turn,
+                userId,
+                sessionId,
+              }),
+            ),
+            messageContentAppends,
+            messageMetadataUpdates,
+            ...(messageDiagnostics.length ? { messageDiagnostics } : {}),
+          },
+          committedAt: this.now(),
         }),
-      );
-      await this.sessionRepo.saveTurnView(userId, session, {
-        turnScopeIds,
-        persistenceContext,
+        commit: commitChanges,
       });
-      return { turns: persistedTurns };
+      return { messageReceipts: committed.result.messageReceipts };
     },
     { persistenceContext },
   );

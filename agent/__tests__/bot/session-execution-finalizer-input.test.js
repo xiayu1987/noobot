@@ -25,11 +25,6 @@ function setup() {
         return [];
       },
     },
-    turnPersister: {
-      async appendAgentMessages({ messages }) {
-        effects.push(messages);
-      },
-    },
     memoryPostProcessService: createNoopMemoryPostProcessService(),
     now: () => {
       effects.push("clock");
@@ -49,10 +44,15 @@ function setup() {
       modelLoopRound: 0,
       turnMessages: [],
     }),
-    persistedTurnMessageUids: [],
-    persistedTurnMessages: [],
-    durableTurnMessages: [],
-    summaryCheckpointPromotionSources: [],
+    turnPersistence: {
+      async flush() {
+        effects.push("messages");
+      },
+      async readResultMessages() {
+        effects.push("result");
+        return [];
+      },
+    },
   };
   return { finalizer, payload, effects };
 }
@@ -62,7 +62,7 @@ test("an explicit empty agent result completes without inventing a message", asy
   const result = await finalizer.finalizeRunSession(payload);
   assert.deepEqual(result.messages, []);
   assert.equal(result.answer, "");
-  assert.deepEqual(effects.find(Array.isArray), []);
+  assert.ok(effects.indexOf("messages") < effects.indexOf("result"));
   assert.ok(effects.includes("report"));
 });
 

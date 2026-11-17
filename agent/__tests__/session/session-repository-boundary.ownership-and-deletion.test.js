@@ -58,7 +58,8 @@ test("session/execution repositories should keep file ownership boundaries", asy
       runtime.repositories.sessionRepository.treePersistenceContext(userId, sessionId),
     );
 
-    assert.equal(await exists(sessionScope.sessionFile), true);
+    assert.equal(await exists(path.join(sessionScope.sessionDir, "head.json")), true);
+    assert.equal(await exists(sessionScope.sessionFile), false);
 
     const treeContext = runtime.repositories.sessionRepository.treePersistenceContext(
       userId,
@@ -158,9 +159,9 @@ test("deleteSessionBranch should remove descendant directories and tree nodes", 
 
     assert.equal(result.ok, true);
     assert.deepEqual(result.deletedSessionIds.sort(), ["B", "C"]);
-    assert.equal(await exists(scopeA.sessionFile), true);
-    assert.equal(await exists(scopeB.sessionFile), false);
-    assert.equal(await exists(scopeC.sessionFile), false);
+    assert.equal(await exists(path.join(scopeA.sessionDir, "head.json")), true);
+    assert.equal(await exists(scopeB.sessionDir), false);
+    assert.equal(await exists(scopeC.sessionDir), false);
 
     const tree = await runtime.sessionTreeService.getSessionTree({ userId });
     assert.equal(Boolean(tree.nodes.A), true);
@@ -357,10 +358,10 @@ test("appendTurns should not recreate session after deletion marker is set", asy
       sessionId,
       runtime.repositories.sessionRepository.treePersistenceContext(userId, sessionId),
     );
-    assert.equal(await exists(scope.sessionFile), true);
+    assert.equal(await exists(path.join(scope.sessionDir, "head.json")), true);
 
     await runtime.sessionTreeService.deleteSessionBranch({ userId, sessionIds: [sessionId] });
-    assert.equal(await exists(scope.sessionFile), false);
+    assert.equal(await exists(scope.sessionDir), false);
 
     await assert.rejects(
       runtime.sessionMessageService.appendTurns({
@@ -371,7 +372,7 @@ test("appendTurns should not recreate session after deletion marker is set", asy
       { code: "SESSION_DELETED", statusCode: 410 },
     );
 
-    assert.equal(await exists(scope.sessionFile), false);
+    assert.equal(await exists(scope.sessionDir), false);
   });
 });
 
@@ -495,11 +496,13 @@ test("persistenceContext writes should respect deleted-session tombstones", asyn
       null,
     );
     await assert.rejects(
-      runtime.repositories.sessionRepository.save(
-        userId,
-        { sessionId, messages: [{ role: "user", content: "late" }] },
-        { persistenceContext },
-      ),
+      runtime.repositories.sessionRepository.commitChanges(userId, sessionId, {
+        persistenceContext,
+        expectedGeneration: 1,
+        operationId: "late-message",
+        committedAt: "2026-11-15T00:00:00.000Z",
+        changes: { messages: [{ role: "user", content: "late" }] },
+      }),
       { code: "SESSION_DELETED" },
     );
     await assert.rejects(

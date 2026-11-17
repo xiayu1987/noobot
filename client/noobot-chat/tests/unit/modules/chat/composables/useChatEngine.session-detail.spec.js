@@ -59,6 +59,7 @@ function createApplySessionDetailHarness({ sessionId, messages }) {
     sessionId,
     title: "current",
     aggregateVersion: 0,
+    generation: null,
     messages: messages.map((message) => viewMessage(message, sessionId)),
   };
   const sessions = ref([activeSession]);
@@ -223,6 +224,7 @@ describe("useChatEngine.session-detail", () => {
       sessionId,
       title: "current",
       aggregateVersion: 0,
+      generation: null,
       messages: [
         {
           messageUid: "msg-user-same-scope-stopped",

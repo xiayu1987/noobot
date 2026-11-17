@@ -159,7 +159,6 @@ export function createSessionServices(
 
   const executionLogService = new ExecutionLogService({
     executionRepo: executionRepository,
-    sessionRepo: sessionRepository,
   });
 
   const scopedArtifactReader = createScopedSessionArtifactReader({ storageService });
@@ -203,7 +202,7 @@ export function createSessionFacade(runtime) {
     executionLogService,
     scopedArtifactReader,
   } = runtime;
-  const { connectorInstanceRepository } = runtime.repositories;
+  const { connectorInstanceRepository, executionRepository } = runtime.repositories;
 
   const bindPlacementScope = ({ persistenceScope, ...payload }) => {
     if (Object.hasOwn(payload, "persistenceContext")) {
@@ -263,10 +262,6 @@ export function createSessionFacade(runtime) {
       return sessionCrudService.getAllSessionSummaries({ userId });
     },
 
-    async maintainSessionDisplaySummaries({ userId, onProgress }) {
-      return sessionCrudService.maintainSessionDisplaySummaries({ userId, onProgress });
-    },
-
     async listSessionIds({ userId }) {
       return sessionCrudService.listSessionIds({ userId });
     },
@@ -277,6 +272,10 @@ export function createSessionFacade(runtime) {
 
     async getSessionBundle(payload = {}) {
       return sessionCrudService.getSessionBundle(bindPersistenceScope(payload));
+    },
+
+    async getSessionRunContext(payload = {}) {
+      return sessionCrudService.getSessionRunContext(bindPersistenceScope(payload));
     },
 
     async writeSessionMetadata(payload = {}) {
@@ -292,7 +291,13 @@ export function createSessionFacade(runtime) {
     },
 
     async appendTurns(payload = {}) {
-      return sessionMessageService.appendTurns(bindPersistenceScope(payload));
+      const bound = bindPersistenceScope(payload);
+      const result = await sessionMessageService.appendTurns(bound);
+      if (payload.messageDiagnostics?.length)
+        await executionRepository.projectMessageDiagnostics(bound.userId, bound.sessionId, {
+          persistenceContext: bound.persistenceContext,
+        });
+      return result;
     },
 
     async commitMessageEvent(payload) {
@@ -381,6 +386,10 @@ export function createSessionFacade(runtime) {
       return sessionMessageService.getSessionContextSource(bindPersistenceScope(payload));
     },
 
+    async getSessionMessageSources(payload) {
+      return sessionMessageService.getSessionMessageSources(bindPersistenceScope(payload));
+    },
+
     async getTurnSummaryCheckpointState(payload = {}) {
       return sessionMessageService.getTurnSummaryCheckpointState(bindPersistenceScope(payload));
     },
@@ -391,6 +400,14 @@ export function createSessionFacade(runtime) {
 
     async appendExecutionLog(payload = {}) {
       return executionLogService.appendExecutionLog(bindPersistenceScope(payload));
+    },
+
+    async appendExecutionLogs(payload = {}) {
+      return executionLogService.appendExecutionLogs(bindPersistenceScope(payload));
+    },
+
+    async recoverExecutionLogProjection(payload = {}) {
+      return executionLogService.recoverExecutionLogProjection(bindPersistenceScope(payload));
     },
 
     async saveExecutionReport(payload = {}) {
@@ -499,8 +516,15 @@ export {
   appendExecutionLogArtifact,
   buildSessionArtifactFileMap,
   inspectSessionArtifacts,
+  inspectSessionArtifactReader,
+  recoverSessionArtifactReader,
   repairSessionArtifacts,
+  prepareSessionArtifactCleanup,
   cleanupSessionArtifacts,
+  compactSessionArtifacts,
+  retireSessionArtifactLocations,
+  discardSessionArtifactLocationRetirement,
+  discardSessionArtifactCleanup,
   readExecutionLogs,
   readTurnExecutionLogs,
   readRecentSessionTurns,
@@ -520,3 +544,5 @@ export {
 
 export { readSessionThinkingDetail } from "./session-thinking-detail.js";
 export { createScopedSessionArtifactReader } from "./session-scoped-artifact-reader.js";
+export { openSessionArtifactReader } from "./session-artifact-session/immutable-session-reader.js";
+export { withSessionArtifactReadFence } from "./session-artifact-files.js";

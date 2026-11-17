@@ -44,15 +44,6 @@ const VALID_SHAPES = [
   },
   {
     metadata: {
-      projectionType: CONTEXT_MESSAGE_PROJECTION_TYPE.PHASE_SUMMARY,
-      sourceMessageUid: "sm_2",
-    },
-    shape: CONTEXT_MESSAGE_IDENTITY_SHAPE.MESSAGE_PROJECTION,
-    key: composeContextProjectionKey(CONTEXT_MESSAGE_PROJECTION_TYPE.PHASE_SUMMARY, "sm_2"),
-    source: "sm_2",
-  },
-  {
-    metadata: {
       projectionType: CONTEXT_MESSAGE_PROJECTION_TYPE.TERMINAL_STATUS,
       sourceTurnScopeId: "t_1",
     },
@@ -86,6 +77,7 @@ test("identity rejects missing, mixed and mismatched shapes", () => {
     { projectionType: "user_meta", sourceTurnScopeId: "t_1" },
     { projectionType: "terminal_status", sourceMessageUid: "sm_1" },
     { projectionType: "unknown", sourceMessageUid: "sm_1" },
+    { projectionType: "phase_summary", sourceMessageUid: "sm_1" },
   ];
   for (const metadata of invalid) {
     assert.throws(

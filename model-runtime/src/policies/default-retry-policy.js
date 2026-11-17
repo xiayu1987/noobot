@@ -14,6 +14,7 @@ const TIMEOUT_ERROR_CODES = new Set([
   "etimedout",
   "und_err_connect_timeout",
   "und_err_headers_timeout",
+  "und_err_body_timeout",
 ]);
 
 const TEMPORARY_NETWORK_ERROR_CODES = new Set([

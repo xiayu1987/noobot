@@ -9,6 +9,9 @@ import { LENGTH_THRESHOLDS } from "./length-thresholds.js";
 import { QUANTITY_THRESHOLDS } from "./quantity-thresholds.js";
 import { isPlainObject, text, isObjectLike, stableValue } from "./value.js";
 
+const providerEvidence = new WeakMap();
+const contentEvidence = new WeakMap();
+
 function readMetadata(message = {}) {
   const metadata = isObjectLike(message) ? message.additional_kwargs : null;
   return isObjectLike(metadata) ? metadata : {};
@@ -84,9 +87,42 @@ function sha256(value) {
     .digest("hex");
 }
 
+function fingerprintMessage(message) {
+  const value = providerMessageValue(message);
+  const { content, ...fields } = value;
+  const contentValue = typeof content === "string" ? content : JSON.stringify(stableValue(content));
+  const fieldsValue = JSON.stringify(stableValue(fields));
+  const previous = providerEvidence.get(message);
+  if (
+    previous?.contentType === typeof content &&
+    previous.contentValue === contentValue &&
+    previous.fieldsValue === fieldsValue
+  )
+    return previous.fingerprint;
+  const fingerprint = sha256(value);
+  if (isObjectLike(message)) {
+    providerEvidence.set(message, {
+      contentType: typeof content,
+      contentValue,
+      fieldsValue,
+      fingerprint,
+    });
+  }
+  return fingerprint;
+}
+
+function resolveContentEvidence(message) {
+  const content = resolveContent(message);
+  const previous = contentEvidence.get(message);
+  if (previous?.content === content) return previous;
+  const evidence = { content, hash: textHash(content), preview: null };
+  if (isObjectLike(message)) contentEvidence.set(message, evidence);
+  return evidence;
+}
+
 export function fingerprintDiagnosticMessages(messages = []) {
   const source = Array.isArray(messages) ? messages : [];
-  const fingerprints = source.map((message) => sha256(providerMessageValue(message)));
+  const fingerprints = source.map(fingerprintMessage);
   return {
     fingerprintProtocolVersion: 2,
     fingerprints,
@@ -146,7 +182,7 @@ export function resolveDiagnosticRole(message = {}) {
 }
 
 function messageEvidenceItem(message = {}, index = 0, block = "") {
-  const content = resolveContent(message);
+  const evidence = resolveContentEvidence(message);
   return {
     index,
     ...(block ? { block } : {}),
@@ -158,18 +194,20 @@ function messageEvidenceItem(message = {}, index = 0, block = "") {
     injectedMessageType: readField(message, "injectedMessageType") || undefined,
     internalType: readField(message, "noobotInternalMessageType") || undefined,
     summarized: isSummarized(message) || undefined,
-    contentLength: content.length,
-    contentHash: textHash(content),
+    contentLength: evidence.content.length,
+    contentHash: evidence.hash,
   };
 }
 
 function messageTraceItem(message = {}, index = 0, block = "") {
-  const content = resolveContent(message);
+  const evidence = resolveContentEvidence(message);
+  const limit = LENGTH_THRESHOLDS.display.modelContextContentChars;
+  if (evidence.preview?.limit !== limit) {
+    evidence.preview = { limit, value: evidence.content.replace(/\s+/g, " ").slice(0, limit) };
+  }
   return {
     ...messageEvidenceItem(message, index, block),
-    contentPreview: content
-      .replace(/\s+/g, " ")
-      .slice(0, LENGTH_THRESHOLDS.display.modelContextContentChars),
+    contentPreview: evidence.preview.value,
   };
 }
 

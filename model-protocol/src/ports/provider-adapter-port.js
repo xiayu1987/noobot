@@ -11,6 +11,7 @@ export function requireProviderAdapter(adapter) {
     "classifyError",
     "bindTools",
     "prepareMessages",
+    "invokeChat",
     "resolveResponseSource",
   ])
     if (!isFunction(adapter?.[key])) throw new TypeError(`provider adapter.${key} is required`);

@@ -4,6 +4,43 @@
  * SPDX-License-Identifier: MIT
  */
 export default {
+  immutableStorage: {
+    valueInlineBytes: {
+      name: "值内联上限",
+      description: "使用内容图之前允许内联存储的值编码最大字节数。",
+    },
+    indexTargetBytes: {
+      name: "索引页目标大小",
+      description: "不可变索引页编码后的目标字节数。",
+    },
+    commitIndexTargetBytes: {
+      name: "提交索引页目标大小",
+      description: "提交索引页编码后的目标字节数。",
+    },
+    locationIndexTargetBytes: {
+      name: "位置索引页目标大小",
+      description: "记录位置索引页编码后的目标字节数。",
+    },
+    locationRetirementMetadataBytes: {
+      name: "位置退役元数据上限",
+      description: "位置退役元数据编码后的最大字节数。",
+    },
+    executionProjectionOutputRecordBytes: {
+      name: "执行投影输出记录上限",
+      description: "执行投影输出记录编码后的最大字节数。",
+    },
+    readerRetentionRecordBytes: {
+      name: "读者保留记录上限",
+      description: "读者保留记录完整信封编码后的最大字节数。",
+    },
+    cleanupRecordBytes: {
+      name: "清理记录上限",
+      description: "清理计划记录完整信封编码后的最大字节数。",
+    },
+    blockBytes: { name: "存储块上限", description: "不可变存储块的最大字节数。" },
+    keyBytes: { name: "索引键上限", description: "不可变索引键的最大字节数。" },
+    headBytes: { name: "存储头上限", description: "不可变存储头的最大字节数。" },
+  },
   modelMeasurement: {
     prefixCompareBlockBytes: {
       name: "请求前缀比较块",
@@ -268,9 +305,23 @@ export default {
       name: "产物执行事件分段",
       description: "产物执行事件分段使用的长度或容量阈值。",
     },
-    turnMaterializerCacheBytes: {
-      name: "产物轮次物化缓存",
-      description: "产物轮次物化缓存使用的长度或容量阈值。",
+    executionLogBatchBytes: {
+      name: "执行日志单批字节预算",
+      description:
+        "监听器单批日志编码后的 UTF-8 JSONL 字节上限。单条记录超过预算时，在接收前明确拒绝。",
+    },
+    executionLogPendingBytes: {
+      name: "执行日志待完成字节预算",
+      description:
+        "已接收日志的 UTF-8 JSONL 字节上限，包含在途写入。必须容纳完整批次；接收被拒绝后，生产者须先等待持久化排空。",
+    },
+    turnMaterializerPayloadCacheBytes: {
+      name: "产物轮次消息正文缓存",
+      description: "已验证轮次消息投影的驻留字节上限。",
+    },
+    turnMaterializerIdentityCacheBytes: {
+      name: "产物轮次消息身份缓存",
+      description: "已验证消息归属投影的独立字节预算。",
     },
     verifiedSnapshotCacheBytes: {
       name: "产物已验证快照缓存",

@@ -19,6 +19,7 @@ test("reasoning-only exhaustion is a typed terminal protocol error", async () =>
     classifyError: () => ({}),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    invokeChat: ({ client, messages, invokeOptions }) => client.invoke(messages, invokeOptions),
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: () => ({
       invoke: async () => ({ content: "", additional_kwargs: { reasoning_content: "thinking" } }),
@@ -47,6 +48,7 @@ test("reasoning-only retries are exposed through the canonical attempt trace", a
     classifyError: () => ({}),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    invokeChat: ({ client, messages, invokeOptions }) => client.invoke(messages, invokeOptions),
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: () => ({
       invoke: async () =>
@@ -84,6 +86,7 @@ test("empty signed thinking responses are retried before completion", async () =
     classifyError: () => ({}),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    invokeChat: ({ client, messages, invokeOptions }) => client.invoke(messages, invokeOptions),
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: () => ({
       invoke: async () =>
@@ -125,6 +128,7 @@ test("empty signed thinking response exhaustion is a typed protocol error", asyn
     classifyError: () => ({}),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    invokeChat: ({ client, messages, invokeOptions }) => client.invoke(messages, invokeOptions),
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: () => ({
       invoke: async () => ({
@@ -158,6 +162,7 @@ test("image-only chat output completes without an empty-response retry", async (
     classifyError: () => ({}),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    invokeChat: ({ client, messages, invokeOptions }) => client.invoke(messages, invokeOptions),
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: () => ({
       invoke: async () => {
@@ -194,6 +199,7 @@ function createEmptyThenAnswerAdapter(emptyCount) {
     classifyError: () => ({}),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    invokeChat: ({ client, messages, invokeOptions }) => client.invoke(messages, invokeOptions),
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
     createClient: () => ({
       invoke: async () =>
@@ -398,6 +404,7 @@ test("Responses source never treats an empty terminal as a streaming mismatch", 
     classifyError: () => ({}),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    invokeChat: ({ client, messages, invokeOptions }) => client.invoke(messages, invokeOptions),
     resolveResponseSource: () => MODEL_RESPONSE_SOURCE.RESPONSES,
     createClient: () => ({
       invoke: async () => {
@@ -429,6 +436,7 @@ test("provider registry rejects adapters without a declared response source", ()
     classifyError: () => ({}),
     bindTools: ({ client }) => client,
     prepareMessages: ({ messages }) => messages,
+    invokeChat: ({ client, messages, invokeOptions }) => client.invoke(messages, invokeOptions),
     createClient: () => ({}),
   };
   assert.throws(

@@ -9,7 +9,7 @@ import { appendContextMessage } from "@noobot/context-protocol/mutation/context"
 import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import { writeContextMessageMetadata } from "@noobot/context-protocol/message/codec";
 import {
-  CONTEXT_CONTROL_MESSAGE_TYPES,
+  CONTEXT_RUNTIME_INJECTED_MESSAGE_TYPES,
   CONTEXT_INJECTED_MESSAGE_TYPE,
 } from "@noobot/context-protocol/policy/injected-message";
 import { isCanonicalText, text } from "@noobot/shared/value";
@@ -23,16 +23,14 @@ function requireTurnContextStores({
   internalType,
 }) {
   if (!turnMessageStore?.push || !modelContext || !dialogProcessId || !turnScopeId) {
-    throw new Error(
-      "Turn context control message requires canonical Turn identity and message stores",
-    );
+    throw new Error("Turn context message requires canonical Turn identity and message stores");
   }
   if (!internalType) {
     throw new TypeError("Turn context message internalType is required");
   }
 }
 
-export function appendTurnContextControlMessage({
+export function appendTurnRuntimeInjectedMessage({
   runtime = null,
   content = "",
   internalType = "",
@@ -41,9 +39,9 @@ export function appendTurnContextControlMessage({
   const modelContext = requireActiveModelContext(runtime);
   const { dialogProcessId, turnScopeId } = modelContext.activeTurnIdentity;
   const normalizedInternalType = text(internalType);
-  if (!CONTEXT_CONTROL_MESSAGE_TYPES.includes(normalizedInternalType)) {
+  if (!CONTEXT_RUNTIME_INJECTED_MESSAGE_TYPES.includes(normalizedInternalType)) {
     throw new TypeError(
-      `Turn context control message internalType must be a context control type: ${normalizedInternalType}`,
+      `Turn runtime injection requires a protocol-defined runtime type: ${normalizedInternalType}`,
     );
   }
   requireTurnContextStores({
@@ -57,7 +55,7 @@ export function appendTurnContextControlMessage({
   const persistedMessage = turnMessageStore.push({
     messageUid,
     role: "user",
-    type: "context_control",
+    type: "message",
     chatPresentation: false,
     injectedMessage: true,
     injectedMessageType: normalizedInternalType,
@@ -100,9 +98,7 @@ export function appendUserInterjectionMessage({ runtime = null, interjection = {
   if (!Number.isInteger(interjectionSequence) || interjectionSequence <= 0)
     throw new TypeError("User interjection sequence must be a positive integer");
   if (!isCanonicalText(receivedAt)) throw new TypeError("User interjection receivedAt is required");
-  const existing = turnMessageStore
-    .toArray()
-    .find((message = {}) => text(message.messageUid) === messageUid);
+  const existing = turnMessageStore.readByUid(messageUid);
   if (existing) return existing;
   const persistedMessage = turnMessageStore.push({
     messageUid,

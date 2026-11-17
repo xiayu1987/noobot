@@ -21,6 +21,7 @@ import {
 import {
   assertSummaryCheckpointDisposition,
   assertSummaryCheckpointTargetsTurn,
+  assertSummaryCheckpointTurnOwnership,
 } from "./summary-checkpoint-request.js";
 
 function checkpointConflict(message, code) {
@@ -69,9 +70,12 @@ function resolveDuplicateCheckpoint(currentState, request) {
     (receipt) => receipt.checkpointId === request.checkpointId,
   );
   if (!existingReceipt) return null;
-  if (existingReceipt.requestHash !== request.requestHash) {
+  if (
+    existingReceipt.requestHash !== request.requestHash ||
+    existingReceipt.checkpointRevision - 1 !== request.expectedCheckpointRevision
+  ) {
     throw checkpointConflict(
-      "checkpointId was reused with a different payload",
+      "checkpointId was reused with a different payload or predecessor",
       SESSION_ERROR_CODE.TURN_SUMMARY_CHECKPOINT_ID_REUSED,
     );
   }
@@ -153,10 +157,11 @@ function markCheckpointMessages(messages, request) {
 }
 
 export function applyTurnSummaryCheckpoint(session, request, committedAt) {
-  assertSummaryCheckpointTargetsTurn(session, request);
+  assertSummaryCheckpointTurnOwnership(session, request);
   const currentState = readTurnSummaryCheckpointState(session, request);
   const duplicate = resolveDuplicateCheckpoint(currentState, request);
   if (duplicate) return duplicate;
+  assertSummaryCheckpointTargetsTurn(session, request);
   assertCheckpointRevision(currentState.checkpointRevision, request);
   assertSummaryCheckpointDisposition(request);
   assertCheckpointMessagesResolved(session.messages, request);

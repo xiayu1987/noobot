@@ -12,6 +12,7 @@ import path from "node:path";
 import {
   createTestHookManager as createAgentHookManager,
   createTestModelResponse,
+  createTestSummaryMessageBlocks,
   TestModelMessageRuntimeHelpers as ModelMessageRuntimeHelpers,
 } from "../helpers/public-runtime-fixtures.js";
 import { registerHarnessCore } from "../../src/index.js";
@@ -79,7 +80,7 @@ test("harness summary relay without captured plan keeps final acceptance on defa
   };
 
   const messagesCtx = {
-    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
+    messageBlocks: createTestSummaryMessageBlocks(),
     agentContext,
   };
   await hookManager.emit("agent.before_llm_call", messagesCtx);
@@ -151,6 +152,7 @@ test("summary separate_model invocation uses flat structured_v1 messages", async
     { role: "user", content: "history-user" },
     { role: "assistant", content: "history-assistant" },
     { role: "user", content: "non-history" },
+    ...createTestSummaryMessageBlocks().incremental.slice(1),
   ];
   const agentContext = {
     bindings: {
@@ -217,6 +219,7 @@ test("planning_refinement is scheduled independently after revision main-plan ch
   const messages = [
     { role: "user", content: "history-user" },
     { role: "assistant", content: "history-assistant" },
+    ...createTestSummaryMessageBlocks().incremental.slice(1),
   ];
   const agentContext = {
     bindings: {
@@ -273,7 +276,7 @@ test("harness summary without completion marker still triggers planning revision
     },
   );
 
-  const messages = [{ role: "user", content: "继续" }];
+  const messages = createTestSummaryMessageBlocks().incremental;
   const agentContext = {
     bindings: {
       extensions: {
@@ -341,7 +344,7 @@ test("guidance handler inject mode does not schedule planning revision without c
     firstCtx.modelContext.messages.some((msg) =>
       String(msg.content || "").includes("harness-guidance-summary"),
     ),
-    true,
+    false,
   );
 
   const summaryCtx = {

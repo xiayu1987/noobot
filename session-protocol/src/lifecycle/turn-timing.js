@@ -94,13 +94,26 @@ export function assertTurnTimingOwnership(timing, ownerDialogProcessId) {
   );
 }
 
-export function projectTurnTiming(turn, timings) {
+export function normalizeTurnTimingRecords(timings) {
   if (!Array.isArray(timings)) {
     throw timingError(SESSION_ERROR_CODE.TURN_TIMING_INVALID, "turn timings must be an array");
   }
-  const timing = timings
-    .map((item) => normalizeTurnTimingRecord(item))
-    .find((item) => item.turnScopeId === turn.turnScopeId);
+  const byScope = new Map();
+  for (const item of timings) {
+    const normalized = normalizeTurnTimingRecord(item);
+    const existing = byScope.get(normalized.turnScopeId);
+    byScope.set(
+      normalized.turnScopeId,
+      existing ? mergeTurnTimingRecord(existing, normalized) : normalized,
+    );
+  }
+  return [...byScope.values()];
+}
+
+export function projectTurnTiming(turn, timings) {
+  const timing = normalizeTurnTimingRecords(timings).find(
+    (item) => item.turnScopeId === turn.turnScopeId,
+  );
   if (!timing) return turn;
   assertTurnTimingOwnership(timing, turn.dialogProcessId);
   if (!timing.thinkingFinishedAt) return turn;

@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { stableValue } from "@noobot/shared/value";
 import { deriveAuthoritativeTurnCapabilities } from "./turn-capability.js";
 import { assertTurnRecord } from "./turn-record.js";
 import { collectTurnReplacementTombstoneErrors } from "./turn-replacement.js";
@@ -50,7 +51,7 @@ export function collectSnapshotTurnFieldErrors(turn) {
 export function snapshotTurn(turn) {
   assertTurnRecord(turn);
   return {
-    ...structuredClone(
+    ...stableValue(
       Object.fromEntries(
         SNAPSHOT_TURN_RECORD_FIELDS.filter((field) => Object.hasOwn(turn, field)).map((field) => [
           field,

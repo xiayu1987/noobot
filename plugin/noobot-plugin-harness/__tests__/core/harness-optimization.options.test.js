@@ -7,11 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { HARNESS_PLANNING_GUIDANCE_MODE } from "../../src/core/constants.js";
-import {
-  assertHarnessAgentHostCapabilities,
-  DEFAULT_HARNESS_DENY_TOOL_NAMES,
-  normalizeOptions,
-} from "../../src/core/options.js";
+import { assertHarnessAgentHostCapabilities, normalizeOptions } from "../../src/core/options.js";
 
 const INJECT_MODE = { planningGuidanceMode: HARNESS_PLANNING_GUIDANCE_MODE.INJECT };
 
@@ -35,7 +31,7 @@ test("normalizeOptions applies schema defaults and coercion", () => {
   assert.equal(Object.hasOwn(options, "nonProgramming" + "Execution" + "First"), false);
   assert.equal(options.summaryOnToolBurstThreshold, false);
   assert.equal(options.capabilityModelTimeoutMs, 180000);
-  assert.deepEqual(options.denyToolNames, [...DEFAULT_HARNESS_DENY_TOOL_NAMES]);
+  assert.deepEqual(options.denyToolNames, []);
   assert.equal(options.jsonlFlushStrategy.maxFileBytes, 5 * 1024 * 1024);
   assert.equal(options.jsonlFlushStrategy.maxFiles, 20);
 });
@@ -74,9 +70,9 @@ test("normalizeOptions enables optional tool-burst summary trigger", () => {
 test("normalizeOptions keeps custom harness denyToolNames", () => {
   const options = normalizeOptions({
     ...INJECT_MODE,
-    denyToolNames: ["task_summary", "", "task_summary"],
+    denyToolNames: ["read_file", "", "read_file"],
   });
-  assert.deepEqual(options.denyToolNames, ["task_summary"]);
+  assert.deepEqual(options.denyToolNames, ["read_file"]);
 });
 
 test("agent host capabilities reject separate_model without capabilityModelInvoker", () => {

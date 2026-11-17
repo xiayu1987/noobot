@@ -22,8 +22,6 @@ export const BACKEND_COMMON_ZH_CN = {
     `工具调用已连续失败 ${Number(params.failureCount || 0)} 次。若不确定该工具的用法或参数语义，可调用 ${String(params.helpToolName || "help")} 工具查看该工具的详细使用说明。`,
   "agent.helpToolLoopPrompt": (params = {}) =>
     `工具循环已执行 ${Number(params.loopCount || 0)} 轮。如果遇到问题可以调用 ${String(params.helpToolName || "help")}，如果没有请继续。`,
-  "agent.taskSummarySingleToolPrompt":
-    "task_summary 必须单独调用，不能和其它工具出现在同一轮工具调用中。",
   "agent.taskCheckSingleToolPrompt":
     "task_check 必须单独调用，不能和其它工具出现在同一轮工具调用中。",
   "agent.noFinalResponseRetryPrompt": (params = {}) =>
@@ -132,7 +130,7 @@ export const BACKEND_COMMON_ZH_CN = {
   "ws.unknownError": "未知错误",
   "ws.userInteractionTimeout": "用户交互超时",
   "agent.phaseSummaryPrompt":
-    "已达到阶段小结阈值。本轮仅调用 task_summary，严格按工具 schema 提交权威阶段状态。小结提交后，此前的工具调用与结果会移出上下文，后续主要依据小结继续；原始内容虽可通过重读文件或查看日志找回，但会增加开销，因此请在 DETAILS 中写清后续仍会用到的事实。",
+    "请仅输出用于继续当前任务的阶段小结：目标与用户约束、已完成事项及证据、变更文件与关键定位、验证结果、未完成事项与下一步。合并已有小结，保留后续必需的事实和标识；区分已验证事实与待验证内容。不要调用工具或继续执行任务。",
   "agent.taskCheckPrompt":
     "已达到周期任务检查阈值。本次模型调用可按需调用 task_check 留下任务检查切片，但不强制调用；本提示只出现本次。调用时 checkContent 必须严格使用唯一文本协议：NOOBOT_TASK_CHECK/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\n简短任务检查摘要\n[DETAILS]\n当前目标、进展、偏移风险和遗漏\n[NEXT_ACTION]\n明确的下一步动作。所有段落必须非空，不得增加、重复或调整段落。",
 };

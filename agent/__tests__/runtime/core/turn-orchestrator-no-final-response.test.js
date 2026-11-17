@@ -96,7 +96,6 @@ function createHarness({ emptyResponses = 0, failWith = null, script = null } = 
     },
     processToolResultsFn: async () => ({ toolCallResults: [], taskSummaryOutcome: null }),
     buildLoopResultFn: ({ output }) => ({ output }),
-    maybeRequestPhaseSummaryFn: () => {},
     maybeRequestTaskCheckFn: () => {},
     maybePromptHelpToolByLoopFn: () => {},
     maybePromptHelpToolByFailureFn: () => {},
@@ -144,7 +143,7 @@ test("empty responses inject persisted control prompts with turn-cumulative ordi
   assert.match(prompts[0].content, /#1\b/);
   assert.match(prompts[1].content, /#2\b/);
   for (const prompt of prompts) {
-    assert.equal(prompt.type, "context_control");
+    assert.equal(prompt.type, "message");
     assert.equal(prompt.role, "user");
     assert.equal(prompt.chatPresentation, false);
   }

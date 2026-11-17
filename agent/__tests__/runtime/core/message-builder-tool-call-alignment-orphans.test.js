@@ -11,15 +11,7 @@ import { buildContextMessageBlocks } from "../../../src/context/assembly/message
 
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
-import {
-  TASK_SUMMARY_PROTOCOL_VERSION,
-  createTaskSummaryReceipt,
-  parseTaskSummaryContent,
-} from "@noobot/context-protocol/task/summary";
-import {
-  FLOW_CONTROL_ROLE,
-  createFlowControlContextPolicy,
-} from "@noobot/context-protocol/tool/context-policy";
+import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/message/injected-types";
 import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
 import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
@@ -49,7 +41,7 @@ test("buildContextMessageBlocks drops orphan tool results without matching assis
               {
                 id: "call_ok_1",
                 function: {
-                  name: "task_summary",
+                  name: "read_file",
                   arguments: "{}",
                 },
               },
@@ -84,20 +76,8 @@ test("buildContextMessageBlocks drops orphan tool results without matching assis
   assert.equal(toolMessages[0].tool_call_id, "call_ok_1");
 });
 
-test("buildContextMessageBlocks converts orphan task_summary tool result to user summary message", () => {
-  const summaryContent = [
-    "NOOBOT_TASK_SUMMARY/1",
-    "[STATE]",
-    "CONTINUE",
-    "[ABSTRACT]",
-    "孤立小结内容",
-    "[DETAILS]",
-    "孤立工具结果中的权威阶段小结",
-    "[NEXT_ACTION]",
-    "继续执行",
-  ].join("\n");
-  const summary = createTaskSummaryReceipt(parseTaskSummaryContent(summaryContent));
-  const contextPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
+test("buildContextMessageBlocks preserves migrated summary messages without a tool recovery path", () => {
+  const summaryContent = "完整阶段小结正文";
   const messages = buildContextMessageBlocks(
     createTestAgentExecutionScope(createTestRuntimeContext(), {
       messageBlocks: {
@@ -109,15 +89,11 @@ test("buildContextMessageBlocks converts orphan task_summary tool result to user
             dialogProcessId: "dlg-summary",
           },
           {
-            role: "tool",
-            content: JSON.stringify({
-              toolName: "task_summary",
-              ok: true,
-              protocolVersion: TASK_SUMMARY_PROTOCOL_VERSION,
-              summary,
-            }),
-            tool_call_id: "call_orphan_summary",
-            contextPolicy,
+            role: "user",
+            type: "message",
+            content: summaryContent,
+            injectedMessage: true,
+            injectedMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_RESULT,
             dialogProcessId: "dlg-summary",
             turnScopeId: "turn-summary",
           },
@@ -140,8 +116,9 @@ test("buildContextMessageBlocks converts orphan task_summary tool result to user
   const humanMessage = messages.find(
     (item) =>
       item instanceof HumanMessage &&
-      item.additional_kwargs?.noobotInternalMessageType === "phase_summary_memory",
+      item.additional_kwargs?.injectedMessageType ===
+        CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_RESULT,
   );
   assert.ok(humanMessage);
-  assert.equal(String(humanMessage.content || "").includes("孤立小结内容"), true);
+  assert.equal(humanMessage.content, summaryContent);
 });

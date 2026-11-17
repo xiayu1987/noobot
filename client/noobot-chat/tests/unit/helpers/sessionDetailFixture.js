@@ -3,7 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TURN_RECOVERY_ACTION, createTurnLifecycleSnapshot } from "@noobot/session-protocol";
+import {
+  SESSION_COMMAND,
+  TURN_RECOVERY_ACTION,
+  createTurnLifecycleSnapshot,
+} from "@noobot/session-protocol";
 import {
   createAvailableSessionDetailEntry,
   createMissingSessionDetailDocument,
@@ -44,6 +48,7 @@ export function detailEntryWithLifecycle({
   sessionId,
   title,
   aggregateVersion,
+  generation = 10,
   messages,
   turnTimings,
   turnLifecycleSnapshot,
@@ -56,6 +61,7 @@ export function detailEntryWithLifecycle({
     updatedAt: FIXTURE_UPDATED_AT,
     title,
     aggregateVersion,
+    generation,
     turnTimings,
     turnLifecycleSnapshot,
     sessionArtifactEvents: [],
@@ -67,6 +73,7 @@ export function availableDetailEntry({
   sessionId,
   title,
   aggregateVersion,
+  generation = 10,
   messages,
   turnTimings,
 }) {
@@ -74,6 +81,7 @@ export function availableDetailEntry({
     sessionId,
     title,
     aggregateVersion,
+    generation,
     messages,
     turnTimings,
     turnLifecycleSnapshot: idleTurnLifecycleSnapshot(sessionId),
@@ -154,26 +162,46 @@ export function sessionsSummaryResponse({ userId, updatedAt, sessions }) {
 export function messageDeleteResponse({
   commandId,
   sessionId,
-  title,
   aggregateVersion,
-  messages,
   deletedCount,
   anchorIndex,
   deletedTurnScopeIds,
   deduplicated,
 }) {
+  const result = { deletedCount, anchorIndex, deletedTurnScopeIds };
+  const deletedMessageUids = Array.from(
+    { length: deletedCount },
+    (_, index) => `deleted-fixture:${index}`,
+  );
   return createMessageDeleteResponse({
-    receiptResult: { deletedCount, anchorIndex, deletedTurnScopeIds },
+    receiptResult: result,
     commandId,
     committedAggregateVersion: aggregateVersion,
     deduplicated,
-    detail: availableDetailDocument({
-      sessionId,
-      title,
-      aggregateVersion,
-      messages,
-      turnTimings: [],
-    }),
+    deletedMessageUids,
+    sessionId,
+    generation: 10,
+    displayMessages: [],
+    projection: {
+      kind: "commit",
+      generation: 10,
+      receipt: {
+        commandId,
+        type: SESSION_COMMAND.MESSAGE_DELETE_FROM,
+        requestHash: `request:${commandId}`,
+        aggregateVersion,
+        committedAt: FIXTURE_UPDATED_AT,
+        result,
+      },
+      baseAggregateVersion: aggregateVersion - 1,
+      metadata: { sessionId, parentSessionId: "", aggregateVersion, updatedAt: FIXTURE_UPDATED_AT },
+      lifecycleHead: { sequence: 0, activeTurnScopeId: "" },
+      deletedMessageUids,
+      messages: [],
+      turns: deletedTurnScopeIds.map((key) => ({ key, value: null })),
+      replacements: [],
+      timings: [],
+    },
   });
 }
 

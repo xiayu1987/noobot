@@ -9,12 +9,17 @@ import {
   projectAuthoritativeTurnState,
   projectAuthoritativeTurnTerminal,
 } from "./authoritativeTurnProjection.js";
-import { deriveTurnEventType, isTerminalTurnState, isSettledTurn } from "@noobot/session-protocol";
+import {
+  decideTurnLifecycleSnapshotApplication,
+  deriveTurnEventType,
+  isTerminalTurnState,
+  isSettledTurn,
+} from "@noobot/session-protocol";
 import { ensureSessionBucket, isTurnRuntimeDeleted } from "./turnRuntimeRegistryIdentity.js";
-import { confirmTurnRuntimeDeletion } from "./turnRuntimeRetention.js";
+import { confirmTurnRuntimeDeletion, removeTurnRuntime } from "./turnRuntimeRetention.js";
 import { mergeAuthoritativeTurnTiming } from "./turnRuntimeTiming.js";
 
-function snapshotTurnDecision(registry, bucket, source, sessionId, sequence) {
+function snapshotTurnDecision(registry, bucket, source, { sessionId, sequence }) {
   const { turnScopeId } = source;
   const revision = source.revision;
   if (source.sequence > sequence) return { reason: "invalid_snapshot_turn" };
@@ -116,13 +121,13 @@ function projectSnapshotControl() {
   };
 }
 
-function prepareSnapshotTurn(registry, bucket, source, sessionId, sequence) {
-  const decision = snapshotTurnDecision(registry, bucket, source, sessionId, sequence);
+function prepareSnapshotTurn(registry, bucket, source, snapshot) {
+  const decision = snapshotTurnDecision(registry, bucket, source, snapshot);
   if (decision.reason || decision.skipped) return decision;
   const current = decision.current;
   const turn = {
     ...current,
-    ...projectSnapshotIdentity(source, sessionId, decision.turnScopeId),
+    ...projectSnapshotIdentity(source, snapshot.sessionId, decision.turnScopeId),
     ...projectSnapshotLifecycle(source, decision),
     ...projectSnapshotCompletion(source, current, decision.revision, decision.sourceIsTerminal),
     ...projectSnapshotTiming(source, current, decision.sourceIsTerminal),
@@ -131,11 +136,11 @@ function prepareSnapshotTurn(registry, bucket, source, sessionId, sequence) {
   return { turn };
 }
 
-function prepareSnapshotTurns(registry, bucket, snapshot, sessionId, sequence) {
+function prepareSnapshotTurns(registry, bucket, snapshot) {
   const turns = [snapshot.activeTurn, ...snapshot.recentTerminalTurns].filter(Boolean);
   const prepared = [];
   for (const source of turns) {
-    const result = prepareSnapshotTurn(registry, bucket, source, sessionId, sequence);
+    const result = prepareSnapshotTurn(registry, bucket, source, snapshot);
     if (result.reason) return result;
     if (result.turn) prepared.push(result.turn);
   }
@@ -150,7 +155,8 @@ function commitSnapshotReplacements(registry, snapshot, sessionId) {
   return { replacedTurnScopeIds, replacementDeletion };
 }
 
-function commitSnapshotMetadata(registry, bucket, snapshot, sessionId, sequence, fingerprint) {
+function commitSnapshotMetadata(registry, bucket, snapshot, observation) {
+  const { sessionId, sequence } = snapshot;
   const previousActiveTurnScopeId = text(bucket.activeTurnScopeId);
   const candidateActiveScope = snapshot.activeTurnScopeId;
   const activeScope = isTurnRuntimeDeleted(registry, {
@@ -165,28 +171,21 @@ function commitSnapshotMetadata(registry, bucket, snapshot, sessionId, sequence,
     if (previous?.dialogProcessId) delete registry.routeIndex[previous.dialogProcessId];
   }
   bucket.authoritativeSequence = sequence;
+  bucket.authoritativeSnapshotSequence = sequence;
   bucket.protocolVersion = snapshot.protocolVersion;
-  bucket.authoritativeSnapshotFingerprint = fingerprint;
+  bucket.authoritativeSnapshotObservation = observation;
 }
 
 export function projectTurnLifecycleSnapshot(registry, snapshot) {
-  const sessionId = snapshot.sessionId;
-  const sequence = snapshot.sequence;
+  const sessionId = snapshot?.sessionId;
   let bucket = registry.sessions[sessionId] || { turns: {} };
-  if (Number(bucket.authoritativeSequence || 0) > sequence) {
-    return { applied: false, reason: "stale_snapshot" };
-  }
-  const fingerprint = JSON.stringify(snapshot);
-  if (
-    Number(bucket.authoritativeSequence || 0) === sequence &&
-    bucket.authoritativeSnapshotFingerprint
-  ) {
-    if (bucket.authoritativeSnapshotFingerprint === fingerprint) {
-      return { applied: false, deduplicated: true, reason: "duplicate_snapshot" };
-    }
-    return { applied: false, reason: "snapshot_sequence_conflict" };
-  }
-  const hydration = prepareSnapshotTurns(registry, bucket, snapshot, sessionId, sequence);
+  const decision = decideTurnLifecycleSnapshotApplication({
+    snapshot,
+    currentSequence: bucket.authoritativeSequence ?? 0,
+    previousObservation: bucket.authoritativeSnapshotObservation,
+  });
+  if (!decision.applied) return decision;
+  const hydration = prepareSnapshotTurns(registry, bucket, snapshot);
   if (hydration.reason) return { applied: false, reason: hydration.reason };
   bucket = ensureSessionBucket(registry, sessionId);
   for (const turn of hydration.prepared) {
@@ -194,7 +193,18 @@ export function projectTurnLifecycleSnapshot(registry, snapshot) {
     registry.routeIndex[turn.dialogProcessId] = { sessionId, turnScopeId: turn.turnScopeId };
   }
   const replacement = commitSnapshotReplacements(registry, snapshot, sessionId);
+  const retained = new Set(
+    [snapshot.activeTurn, ...snapshot.recentTerminalTurns]
+      .filter(Boolean)
+      .map((turn) => turn.turnScopeId),
+  );
+  const evictedTurnScopeIds = [];
+  for (const turn of Object.values(registry.sessions[sessionId]?.turns || {})) {
+    if (turn.lifecycleObserved !== true || retained.has(turn.turnScopeId)) continue;
+    if (removeTurnRuntime(registry, turn.turnScopeId, { sessionId }))
+      evictedTurnScopeIds.push(turn.turnScopeId);
+  }
   bucket = ensureSessionBucket(registry, sessionId);
-  commitSnapshotMetadata(registry, bucket, snapshot, sessionId, sequence, fingerprint);
-  return { applied: true, bucket, ...replacement };
+  commitSnapshotMetadata(registry, bucket, snapshot, decision.observation);
+  return { applied: true, bucket, evictedTurnScopeIds, ...replacement };
 }

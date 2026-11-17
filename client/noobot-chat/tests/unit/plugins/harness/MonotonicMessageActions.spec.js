@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { mount } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick } from "vue";
 import MonotonicMessageActions from "../../../../src/modules/chat/components/message/actions/MonotonicMessageActions.vue";
@@ -17,7 +17,7 @@ vi.mock("element-plus", () => ({
   },
 }));
 
-import { ElMessageBox } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 
 function mountActions(overrides = {}) {
   return mount(MonotonicMessageActions, {
@@ -117,6 +117,29 @@ describe("MonotonicMessageActions", () => {
       attachmentFiles: [],
       removedAttachmentKeys: [],
     });
+    expect(messageItem.__monotonicEditing).toBe(false);
+  });
+
+  it("keeps the edited draft available when resend is rejected and allows retry", async () => {
+    const messageItem = { id: "m1", content: "old content" };
+    const onResend = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    const wrapper = mountActions({ messageItem, onResend });
+    await wrapper.find("button.is-primary").trigger("click");
+    wrapper.vm.$.setupState.draftContent = "edited content";
+    await nextTick();
+    await wrapper.findAll(".monotonic-footer-btn").at(1).trigger("click");
+    await flushPromises();
+
+    expect(ElMessage.error).toHaveBeenCalledWith(
+      translateMessageKey("zh-CN", "message.monotonicActionFailed"),
+    );
+    expect(messageItem.__monotonicEditing).toBe(true);
+    expect(wrapper.vm.$.setupState.draftContent).toBe("edited content");
+    expect(wrapper.find(".monotonic-edit-textarea").exists()).toBe(true);
+
+    await wrapper.findAll(".monotonic-footer-btn").at(1).trigger("click");
+    await flushPromises();
+    expect(onResend).toHaveBeenCalledTimes(2);
     expect(messageItem.__monotonicEditing).toBe(false);
   });
 

@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { compactThinkingTimeline } from "./message-summary-projection.js";
+import { compactThinkingTimeline } from "@noobot/event-protocol/tool-timeline";
 import { buildToolArtifactTimelineProjection } from "./turn-artifact-projection.js";
 import {
   isTransferIdentityConflict,

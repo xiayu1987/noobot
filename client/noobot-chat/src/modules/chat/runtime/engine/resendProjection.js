@@ -34,11 +34,11 @@ function findReplacementUserMessageByUid({ session, messageUid }) {
   );
 }
 
-function applyReplacementProjection({
+async function applyReplacementProjection({
   sessionId,
   resendTurnScopeId,
-  detail,
-  applySessionDetail,
+  mutation,
+  applySessionMutation,
   activeSession,
 }) {
   logResendDebug("resend.detail.apply.before", () => ({
@@ -46,7 +46,7 @@ function applyReplacementProjection({
     turnScopeId: resendTurnScopeId,
     messages: summarizeDebugMessages(activeSession.value.messages),
   }));
-  applySessionDetail(detail);
+  return applySessionMutation(mutation);
 }
 
 function logMaterializationCommitted({
@@ -79,23 +79,29 @@ export async function projectResendReplacement(context) {
     text,
     turnReplacement,
     replacedTurnScopeIds,
-    detail,
+    mutation,
     pendingDisplayAttachments,
     activeSession,
-    applySessionDetail,
+    applySessionMutation,
     applyRunStateEvent,
     operation,
     messageOperationStore,
     ownsMessageOperation,
     send,
   } = context;
-  applyReplacementProjection({
+  const applied = await applyReplacementProjection({
     sessionId,
     resendTurnScopeId,
-    detail,
-    applySessionDetail,
+    mutation,
+    applySessionMutation,
     activeSession,
   });
+  if (
+    applied === false ||
+    !ownsMessageOperation(messageOperationStore, operation) ||
+    activeSession.value.sessionId !== sessionId
+  )
+    return { outcome: RESEND_PROJECTION_OUTCOME.ABORTED };
   const replacementUserMessage = findReplacementUserMessageByUid({
     session: activeSession.value,
     messageUid: turnReplacement.replacementUserMessageUid,

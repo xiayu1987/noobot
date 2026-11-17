@@ -4,6 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { defineCapabilityActivity } from "@noobot/plugin-protocol";
+import {
+  capturePhaseSummarySnapshot,
+  assertPhaseSummaryTargetsUnchanged,
+} from "@noobot/context-protocol/policy/summary";
+import { resolveModelMessageBlocks } from "../../../core/message-store.js";
+import { isExecutionAbortError } from "@noobot/session-protocol/execution-abort";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { randomUUID } from "node:crypto";
 import {
@@ -40,17 +46,15 @@ import { resolvePendingPlanUpdate } from "../planning/plan-update-scheduler.js";
 import {
   captureGuidanceSummaryCheckpoint,
   markGuidanceSummarizedMessages,
+  reconcilePendingSummary,
 } from "./signal-tracker.js";
 import {
-  applySummaryText,
-  recordLatestSummaryFullText,
   recordSummaryTransferEnvelopes,
   resolvePreviousSummaryContextText,
   shouldSaveSummaryToAttachment,
-  transferSummaryInjectionMessage,
 } from "./summary-manager.js";
-import { parseSummaryOverviewAndDetailFromText } from "../shared/plan/summary-text-protocol.js";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
+import { deferCapabilityLogs } from "../shared/attachment-log-utils.js";
 import {
   buildGuidanceSummaryPromptText,
   buildGuidanceAnalysisPromptText,
@@ -68,6 +72,7 @@ import {
 } from "../shared/operation-directory.js";
 import { applyDynamicPolicyPromptFromText } from "../shared/workflow/dynamic-policy-prompt.js";
 import { text } from "@noobot/shared/value";
+import { isHarnessAgentTurnEnded } from "../shared/runtime/lifecycle-utils.js";
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 const GUIDANCE_DECISION = WORKFLOW_PARAMS.guidance.decisions;
@@ -286,7 +291,7 @@ function isActionAllowed(requestedAction, decisionAction) {
 }
 
 function selectSummaryRequest(ctx, state, policy) {
-  captureGuidanceSummaryCheckpoint(ctx, state);
+  if (!captureGuidanceSummaryCheckpoint(ctx, state).length) return null;
   return {
     purpose: "summary",
     workflowPurpose: "summary",
@@ -374,22 +379,34 @@ function buildGuidanceInvokerMessages({ ctx, meta, bucket, policy, request }) {
         })
       : "";
   if (workflowPurpose === "guidance" || workflowPurpose === "analysis") {
-    return buildCapabilityModelMessages({
-      agentMessages: modelMessages,
-      task: prompt,
-      taskRole: "user",
-      postTaskSystemMessages: [workflowPolicyPrompt],
-      postTaskMessages: [...workflowContextContents, responsibilityPrompt],
-      postTaskRole: "user",
-    });
+    return {
+      messages: buildCapabilityModelMessages({
+        agentMessages: modelMessages,
+        task: prompt,
+        taskRole: "user",
+        postTaskSystemMessages: [workflowPolicyPrompt],
+        postTaskMessages: [...workflowContextContents, responsibilityPrompt],
+        postTaskRole: "user",
+      }),
+    };
   }
-  return buildCapabilityProtocolModelMessages({
-    agentMessages: modelMessages,
-    contextMessages: workflowContextContents,
-    protocolPrompt: prompt,
-    workflowPolicyPrompt,
-    responsibilityPrompt,
-  });
+  return {
+    messages: buildCapabilityProtocolModelMessages({
+      agentMessages: modelMessages,
+      contextMessages: workflowContextContents,
+      protocolPrompt: prompt,
+      workflowPolicyPrompt,
+      responsibilityPrompt,
+    }),
+    phaseSummaryPrompt: [
+      prompt,
+      workflowPolicyPrompt,
+      ...workflowContextContents,
+      responsibilityPrompt,
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
+  };
 }
 
 function logGuidanceModelFailure(ctx, { purpose, summaryStartedAt, error }) {
@@ -418,6 +435,7 @@ async function invokeGuidanceModel({
   locale,
   request,
   messages,
+  phaseSummaryPrompt,
   relayCorrelationId,
 }) {
   const { purpose, workflowPurpose } = request;
@@ -435,6 +453,9 @@ async function invokeGuidanceModel({
       invoker,
       invokePayload: {
         purpose,
+        ...(purpose === "summary"
+          ? { streaming: true, streamingRequired: true, bindTools: false }
+          : {}),
         activity:
           workflowPurpose === "analysis" ? defineCapabilityActivity("guidance_analysis") : null,
         ...flowTags,
@@ -464,17 +485,30 @@ async function invokeGuidanceModel({
       ctx,
       meta,
     });
-    if (response === null) return { ok: false, summaryStartedAt };
+    if (response === null && purpose === "summary" && !isHarnessAgentTurnEnded(ctx)) {
+      throw new Error("summary model invocation is unavailable");
+    }
+    if (response === null || isHarnessAgentTurnEnded(ctx)) return { ok: false, summaryStartedAt };
     return { ok: true, response, summaryStartedAt };
   } catch (error) {
     logGuidanceModelFailure(ctx, { purpose, summaryStartedAt, error });
-    return { ok: false, summaryStartedAt };
+    if (purpose !== "summary") return { ok: false, summaryStartedAt };
+    if (isHarnessAgentTurnEnded(ctx) || isExecutionAbortError({ error })) throw error;
+    ctx.agentContext.bindings.mainFlowControl.requestPhaseSummary({
+      source: "plugin.summary",
+      prompt: phaseSummaryPrompt,
+      onCommitted: () => commitGuidanceSummary(ctx, state),
+    });
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.GUIDANCE,
+      event: "summary_transferred_to_main_flow",
+      detail: { error: String(error.message) },
+    });
+    return { ok: false, transferred: true, summaryStartedAt };
   }
 }
 
 async function prepareSummaryRelay(ctx, meta, responseText) {
-  const parsedSummary = parseSummaryOverviewAndDetailFromText(responseText);
-  const summaryMergeText = text(parsedSummary?.overviewText) || responseText;
   const summaryTransferPayload =
     shouldSaveSummaryToAttachment(meta) && responseText
       ? await saveCapabilityOutputAsTransferArtifacts(ctx, {
@@ -485,20 +519,13 @@ async function prepareSummaryRelay(ctx, meta, responseText) {
         })
       : { transferEnvelopes: [] };
   recordSummaryTransferEnvelopes(ctx, summaryTransferPayload);
-  const injectedText = await transferSummaryInjectionMessage(ctx, {
-    fullText: responseText,
-    summaryText: responseText,
-    detailText: responseText,
-    injectMode: "full",
-    meta,
-  });
   const relayText = [
-    injectedText || responseText,
+    responseText,
     formatOperationDirectoryForRelay(resolveOperationDirectoryContext(ctx)),
   ]
     .filter(Boolean)
     .join("\n\n");
-  return { relayText, relayAttachments: summaryTransferPayload, summaryMergeText };
+  return { relayText, relayAttachments: summaryTransferPayload };
 }
 
 async function prepareGuidanceRelay(ctx, meta, request, responseText) {
@@ -513,24 +540,28 @@ async function prepareGuidanceRelay(ctx, meta, request, responseText) {
           domain: CAPABILITY_DOMAIN.GUIDANCE,
         })
       : [];
-  return { relayText: responseText, relayAttachments, summaryMergeText: responseText };
+  return { relayText: responseText, relayAttachments };
 }
 
-async function finalizeSummaryGuidance({
-  ctx,
-  meta,
-  state,
-  responseText,
-  summaryMergeText,
-  summaryStartedAt,
-}) {
-  recordLatestSummaryFullText(ctx, responseText);
-  applySummaryText(ctx, summaryMergeText);
+function commitGuidanceSummary(ctx, state) {
+  setPendingStateWithMeta(state, "summary", false);
+  state.pending.summaryCheckpointMessageKeys = null;
+  state.counters.summaryTurns = 0;
+  state.flags.summaryByCharsPrompted = false;
+  const committedContext = { ...ctx, harnessCapabilityLogs: [] };
+  appendCapabilityLog(committedContext, {
+    domain: CAPABILITY_DOMAIN.GUIDANCE,
+    event: GUIDANCE_EVENTS.summaryMessagesMarked,
+  });
+  deferCapabilityLogs(committedContext, committedContext.harnessCapabilityLogs);
+}
+
+async function finalizeSummaryGuidance({ ctx, meta, state, summaryStartedAt }) {
   const checkpointRequestedMessageCount = summaryCheckpointMessageCount(state);
   const checkpointStartedAt = Date.now();
-  const markedCount = await markGuidanceSummarizedMessages(ctx, meta);
-  setPendingStateWithMeta(state, "summary", false);
-  state.counters.summaryTurns = 0;
+  const markedCount = await markGuidanceSummarizedMessages(ctx, meta, {
+    onCommitted: () => commitGuidanceSummary(ctx, state),
+  });
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.GUIDANCE,
     event: "summary_checkpoint_ready",
@@ -541,11 +572,6 @@ async function finalizeSummaryGuidance({
       markedCount,
     },
   });
-  appendCapabilityLog(ctx, {
-    domain: CAPABILITY_DOMAIN.GUIDANCE,
-    event: GUIDANCE_EVENTS.summaryMessagesMarked,
-    detail: { markedCount },
-  });
 }
 
 function guidanceGeneratedEvent(workflowPurpose) {
@@ -554,23 +580,14 @@ function guidanceGeneratedEvent(workflowPurpose) {
   return GUIDANCE_EVENTS.guidanceGeneratedBySeparateModel;
 }
 
-function recordGuidanceOutput(bucket, request, flowTags, responseText) {
-  if (!Array.isArray(bucket.guidanceOutputs)) {
-    bucket.guidanceOutputs = [];
-  }
-  bucket.guidanceOutputs.push({
-    purpose: request.purpose,
-    ...flowTags,
-    reason: request.reason || undefined,
-    content: responseText,
-    timestamp: new Date().toISOString(),
-  });
-}
-
 export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action = "auto" } = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
+  reconcilePendingSummary(ctx, state);
+  if (state.pending.summary && ctx.agentContext.bindings.mainFlowControl.hasPendingSummary()) {
+    return false;
+  }
   const invoker = readCapabilityModelInvoker(meta);
   const locale = state?.locale || LOCALE.ZH_CN;
   const { scenario, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(ctx);
@@ -578,9 +595,16 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
   const request = selectGuidanceRequest({ ctx, state, action, policy });
   if (!request) return false;
   const { purpose, workflowPurpose, reason } = request;
-  const flowTags = resolveAnalysisFlowTags(workflowPurpose);
-  const messages = buildGuidanceInvokerMessages({ ctx, meta, bucket, policy, request });
+  const { messages, phaseSummaryPrompt } = buildGuidanceInvokerMessages({
+    ctx,
+    meta,
+    bucket,
+    policy,
+    request,
+  });
   const relayCorrelationId = `rc_${randomUUID()}`;
+  const summarySnapshot =
+    purpose === "summary" ? capturePhaseSummarySnapshot(resolveModelMessageBlocks(ctx)) : null;
   const invocation = await invokeGuidanceModel({
     ctx,
     meta,
@@ -589,17 +613,20 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     locale,
     request,
     messages,
+    phaseSummaryPrompt,
     relayCorrelationId,
   });
-  if (!invocation.ok) return false;
+  if (!invocation.ok) return invocation.transferred === true;
   const responseText = text(invocation.response?.output?.text);
-  const { relayText, relayAttachments, summaryMergeText } = await prepareGuidanceRelay(
+  const { relayText, relayAttachments } = await prepareGuidanceRelay(
     ctx,
     meta,
     request,
     responseText,
   );
-  recordGuidanceOutput(bucket, request, flowTags, responseText);
+  if (summarySnapshot) {
+    assertPhaseSummaryTargetsUnchanged(summarySnapshot, resolveModelMessageBlocks(ctx));
+  }
   const relayInjected = relaySeparateModelOutputAsUserMessage(ctx, {
     locale,
     purpose,
@@ -609,6 +636,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     transferPayload: normalizeTransferPayload(relayAttachments),
   });
   if (!relayInjected) {
+    if (purpose === "summary") throw new Error("summary relay injection failed");
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.GUIDANCE,
       event: GUIDANCE_EVENTS.separateModelRelayFailed,
@@ -621,8 +649,6 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
       ctx,
       meta,
       state,
-      responseText,
-      summaryMergeText,
       summaryStartedAt: invocation.summaryStartedAt,
     });
   }

@@ -18,8 +18,6 @@ export function resolveHarnessDenyToolNames(input = null) {
   return Array.from(new Set(input.map((item) => text(item)).filter(Boolean)));
 }
 
-export const DEFAULT_HARNESS_DENY_TOOL_NAMES = Object.freeze(["task_summary"]);
-
 function createDefaultOptions() {
   return {
     enabled: true,
@@ -60,7 +58,7 @@ function createDefaultOptions() {
     maxRunAgeDays: TIME_THRESHOLDS.harness.maxRunAgeDays,
     cleanupGraceMs: TIME_THRESHOLDS.harness.cleanupGraceMs,
     fsmEnabled: true,
-    denyToolNames: DEFAULT_HARNESS_DENY_TOOL_NAMES,
+    denyToolNames: [],
     promptText: "",
     finalResponseText: "",
   };

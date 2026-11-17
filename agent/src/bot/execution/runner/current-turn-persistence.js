@@ -6,49 +6,23 @@
 import { emitEvent } from "../../../events/index.js";
 import { text } from "@noobot/shared/value";
 import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
-
-function checkpointKey(message = {}, index = 0) {
-  const messageUid = text(message?.messageUid);
-  if (messageUid) return `uid:${messageUid}`;
-  return `index:${index}:${String(message?.role || "")}:${String(message?.tool_call_id || "")}`;
-}
-
-function checkpointFingerprint(message = {}) {
-  try {
-    return JSON.stringify(message);
-  } catch {
-    return null;
-  }
-}
-
-function buildCheckpointEntries(messages = []) {
-  return messages.map((message, index) => ({
-    key: checkpointKey(message, index),
-    fingerprint: checkpointFingerprint(message),
-    message,
-  }));
-}
+import { observeSessionStorageWork } from "../../../session/session-artifact-session/storage-transaction.js";
+import {
+  createSessionChangesSubmission,
+  requireMessagePersistenceReceipt,
+} from "@noobot/session-protocol/session-changes";
 
 function projectActivityDurability(activityMessages, durableMessages) {
-  const durableByUid = new Map(
-    (Array.isArray(durableMessages) ? durableMessages : [])
-      .map((item = {}) => [text(item.messageUid), item])
-      .filter(([messageUid]) => messageUid),
-  );
+  const durableByUid = new Map(durableMessages.map((item) => [item.messageUid, item]));
   return activityMessages.map((item = {}) => {
     const messageUid = text(item.messageUid);
     const expectedEventIds = item.activityTimeline
       .map((activity = {}) => text(activity.eventId))
       .filter(Boolean);
     const durable = durableByUid.get(messageUid);
-    const durableEventIds = (
-      Array.isArray(durable?.activityTimeline) ? durable.activityTimeline : []
-    )
-      .map((activity = {}) => text(activity.eventId))
-      .filter(Boolean);
-    const missingEventIds = expectedEventIds.filter(
-      (eventId) => !durableEventIds.includes(eventId),
-    );
+    const durableEventIds = durable.activityEventIds;
+    const durableEventSet = new Set(durableEventIds);
+    const missingEventIds = expectedEventIds.filter((eventId) => !durableEventSet.has(eventId));
     return { messageUid, expectedEventIds, durableEventIds, missingEventIds };
   });
 }
@@ -94,6 +68,55 @@ function projectPersistedMessage(message = {}) {
   };
 }
 
+function verifyPersistenceReceipts(
+  messages,
+  receipts,
+  { sessionId, dialogProcessId, turnScopeId },
+) {
+  const submittedByUid = new Map(messages.map((item) => [item.messageUid, item]));
+  const durableUids = new Set();
+  for (const receipt of receipts) {
+    requireMessagePersistenceReceipt(receipt);
+    const source = submittedByUid.get(receipt.messageUid);
+    if (
+      !source ||
+      durableUids.has(receipt.messageUid) ||
+      receipt.sessionId !== sessionId ||
+      receipt.dialogProcessId !== (source.dialogProcessId || dialogProcessId) ||
+      receipt.turnScopeId !== (source.turnScopeId || turnScopeId)
+    )
+      throw new TypeError("Message persistence receipt ownership mismatch");
+    durableUids.add(receipt.messageUid);
+  }
+  assertMessagesDurable(messages, durableUids);
+}
+
+function verifyActivityDurability(
+  messages,
+  receipts,
+  { eventListener, sessionId, dialogProcessId, turnScopeId },
+) {
+  const activityMessages = messages.filter(
+    (item = {}) =>
+      text(item.messageUid) &&
+      Array.isArray(item.activityTimeline) &&
+      item.activityTimeline.length > 0,
+  );
+  const durableActivityMessages = projectActivityDurability(activityMessages, receipts);
+  if (durableActivityMessages.some((item) => item.missingEventIds.length > 0)) {
+    emitEvent(eventListener, "timeline_checkpoint_durability_mismatch", {
+      sessionId,
+      dialogProcessId,
+      turnScopeId,
+      messages: durableActivityMessages,
+    });
+    const error = new Error("canonical activity timeline was not durably persisted");
+    error.code = "TIMELINE_CHECKPOINT_DURABILITY_MISMATCH";
+    throw error;
+  }
+  return { activityMessages, durableActivityMessages };
+}
+
 export function bindCurrentTurnPersistence({
   dispatchRuntime,
   appendAgentMessages,
@@ -109,96 +132,93 @@ export function bindCurrentTurnPersistence({
   let persistenceTail = Promise.resolve();
   let batchDepth = 0;
   let persistenceRequested = false;
-  const persistedFingerprints = new Map();
-  const durableMessageUids = new Set();
+  let pendingSubmission = null;
 
-  const enqueuePersistence = () => {
-    const persist = async () => {
-      const startedAt = performance.now();
-      const messages = dispatchRuntime.currentTurnMessages.toArray();
-      if (!messages.length) return;
-      const checkpointEntries = buildCheckpointEntries(messages);
-      const changedEntries = checkpointEntries.filter(
-        ({ key, fingerprint }) =>
-          fingerprint === null || persistedFingerprints.get(key) !== fingerprint,
-      );
-      const messagesToPersist = changedEntries.map(({ message }) => message);
-      if (!messagesToPersist.length) {
-        assertMessagesDurable(messages, durableMessageUids);
-        dispatchRuntime.timelineCheckpointPersistedMessageUids = messages.map((item = {}) =>
-          text(item.messageUid),
-        );
-        return;
-      }
-      const persistedMessages = await appendAgentMessages({
-        userId,
-        sessionId,
-        messages: messagesToPersist,
-        dialogProcessId,
-        parentDialogProcessId,
-        turnScopeId,
-        eventListener,
-        persistenceScope,
-      });
-      for (const message of persistedMessages) durableMessageUids.add(text(message.messageUid));
-      assertMessagesDurable(messages, durableMessageUids);
-      const activityMessages = messagesToPersist.filter(
-        (item = {}) =>
-          text(item.messageUid) &&
-          Array.isArray(item.activityTimeline) &&
-          item.activityTimeline.length > 0,
-      );
-      let durableActivityMessages = [];
-      if (activityMessages.length > 0) {
-        durableActivityMessages = projectActivityDurability(activityMessages, persistedMessages);
-        if (durableActivityMessages.some((item) => item.missingEventIds.length > 0)) {
-          emitEvent(eventListener, "timeline_checkpoint_durability_mismatch", {
-            sessionId,
-            dialogProcessId,
-            turnScopeId,
-            messages: durableActivityMessages,
-          });
-          const error = new Error("canonical activity timeline was not durably persisted");
-          error.code = "TIMELINE_CHECKPOINT_DURABILITY_MISMATCH";
-          throw error;
-        }
-      }
-      const currentKeys = new Set(checkpointEntries.map(({ key }) => key));
-      for (const key of persistedFingerprints.keys()) {
-        if (!currentKeys.has(key)) persistedFingerprints.delete(key);
-      }
-      for (const { key, fingerprint } of changedEntries) {
-        if (fingerprint !== null) persistedFingerprints.set(key, fingerprint);
-      }
-      dispatchRuntime.timelineCheckpointPersistedMessageUids = messages.map((item = {}) =>
-        text(item.messageUid),
-      );
-      emitEvent(eventListener, "timeline_checkpoint_verified", {
-        sessionId,
-        dialogProcessId,
-        turnScopeId,
-        activityMessageCount: activityMessages.length,
-        messages: durableActivityMessages,
-      });
-      emitEvent(eventListener, "timeline_checkpoint_persisted", {
-        durationMs: performance.now() - startedAt,
-        sessionId,
-        dialogProcessId,
-        parentDialogProcessId,
-        turnScopeId,
-        messageCount: messages.length,
-        persistedMessageCount: messagesToPersist.length,
-        assistantCount: messages.filter((item = {}) => item.role === "assistant").length,
-        toolCount: messages.filter((item = {}) => item.role === "tool").length,
-        messages: messagesToPersist.map(projectPersistedMessage),
-      });
-    };
-    const next = persistenceTail.then(persist, persist);
+  const enqueue = (operation) => {
+    const next = persistenceTail.then(operation);
     persistenceTail = next.then(
       () => undefined,
       () => undefined,
     );
     return next;
+  };
+
+  const persist = async (queuedAt) => {
+    const startedAt = performance.now();
+    const store = dispatchRuntime.currentTurnMessages;
+    if (!pendingSubmission) {
+      const changes = store.readPendingChanges();
+      if (!changes.entries.length) return;
+      pendingSubmission = { ...changes, submission: createSessionChangesSubmission() };
+    }
+    const { entries, counts, submission } = pendingSubmission;
+    const messagesToPersist = entries.map((entry) => entry.message);
+    const preparedAt = performance.now();
+    const { result: persistedMessages, work: storageWork } = await observeSessionStorageWork(() =>
+      appendAgentMessages({
+        userId,
+        sessionId,
+        messages: messagesToPersist,
+        persistedMessages: entries.map((entry) => ({
+          messageUid: entry.messageUid,
+          persisted: entry.persisted,
+          contentAppend: entry.contentAppend,
+        })),
+        submission,
+        dialogProcessId,
+        parentDialogProcessId,
+        turnScopeId,
+        eventListener,
+        persistenceScope,
+      }),
+    );
+    const appendedAt = performance.now();
+    verifyPersistenceReceipts(messagesToPersist, persistedMessages, {
+      sessionId,
+      dialogProcessId,
+      turnScopeId,
+    });
+    const { activityMessages, durableActivityMessages } = verifyActivityDurability(
+      messagesToPersist,
+      persistedMessages,
+      {
+        eventListener,
+        sessionId,
+        dialogProcessId,
+        turnScopeId,
+      },
+    );
+    store.confirmPersistence(entries, persistedMessages);
+    store.acknowledgeChanges(entries);
+    pendingSubmission = null;
+    emitEvent(eventListener, "timeline_checkpoint_verified", {
+      sessionId,
+      dialogProcessId,
+      turnScopeId,
+      activityMessageCount: activityMessages.length,
+      messages: durableActivityMessages,
+    });
+    emitEvent(eventListener, "timeline_checkpoint_persisted", {
+      storageWork,
+      durationMs: performance.now() - startedAt,
+      queueWaitMs: startedAt - queuedAt,
+      preparationMs: preparedAt - startedAt,
+      appendMs: appendedAt - preparedAt,
+      verificationMs: performance.now() - appendedAt,
+      sessionId,
+      dialogProcessId,
+      parentDialogProcessId,
+      turnScopeId,
+      messageCount: counts.messageCount,
+      persistedMessageCount: messagesToPersist.length,
+      assistantCount: counts.assistantCount,
+      toolCount: counts.toolCount,
+      messages: messagesToPersist.map(projectPersistedMessage),
+    });
+  };
+  const enqueuePersistence = () => {
+    const queuedAt = performance.now();
+    return enqueue(() => persist(queuedAt));
   };
 
   dispatchRuntime.persistCurrentTurnMessages = () => {
@@ -210,26 +230,42 @@ export function bindCurrentTurnPersistence({
   };
   dispatchRuntime.withCurrentTurnPersistenceBatch = async (operation) => {
     batchDepth += 1;
+    const failures = [];
+    let result;
     try {
-      return await operation();
-    } finally {
-      batchDepth -= 1;
-      if (batchDepth === 0 && persistenceRequested) {
-        persistenceRequested = false;
+      result = await operation();
+    } catch (error) {
+      failures.push(error);
+    }
+    batchDepth -= 1;
+    if (batchDepth === 0 && persistenceRequested) {
+      persistenceRequested = false;
+      try {
         await enqueuePersistence();
+      } catch (error) {
+        if (!failures.includes(error)) failures.push(error);
       }
     }
+    if (failures.length === 1) throw failures[0];
+    if (failures.length > 1)
+      throw new AggregateError(failures, "Turn batch operation and persistence failed", {
+        cause: failures[0],
+      });
+    return result;
   };
   dispatchRuntime.commitSummaryCheckpoint = (payload = {}) =>
-    commitSummaryCheckpoint({
-      runtime: dispatchRuntime,
-      userId,
-      sessionId,
-      dialogProcessId,
-      parentDialogProcessId,
-      turnScopeId,
-      eventListener,
-      persistenceScope,
-      ...payload,
+    enqueue(async () => {
+      if (pendingSubmission) await persist(performance.now());
+      return commitSummaryCheckpoint({
+        runtime: dispatchRuntime,
+        userId,
+        sessionId,
+        dialogProcessId,
+        parentDialogProcessId,
+        turnScopeId,
+        eventListener,
+        persistenceScope,
+        ...payload,
+      });
     });
 }

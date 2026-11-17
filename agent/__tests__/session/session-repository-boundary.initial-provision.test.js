@@ -7,7 +7,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, rm } from "node:fs/promises";
+import { corruptRecord } from "./helpers/immutable-record-reads.js";
+import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
 
 import {
   TURN_EVENT,
@@ -87,10 +89,26 @@ test("file repository provisions Session and initial Turn in one persisted artif
     assert.equal(result.applied, true);
     assert.equal(result.sessionCreated, true);
 
-    const persisted = JSON.parse(await readFile(scope.sessionFile, "utf8"));
-    assert.equal(persisted.turnLifecycle.activeTurnScopeId, "turn-1");
-    assert.equal(persisted.turnLifecycle.turns["turn-1"].state, TURN_STATE.ACTION_REQUESTING);
-    assert.equal(persisted.turnLifecycle.sequence, 1);
+    assert.equal(await exists(scope.sessionFile), false);
+    const reader = await runtime.repositories.sessionRepository.requireSessionReader(
+      "u1",
+      "session-1",
+      {
+        persistenceContext: runtime.repositories.sessionRepository.treePersistenceContext(
+          "u1",
+          "session-1",
+        ),
+      },
+    );
+    assert.equal(reader.generation, 1);
+    assert.equal((await reader.readLifecycleHead()).activeTurnScopeId, "turn-1");
+    assert.equal((await reader.readTurnState("turn-1")).state, TURN_STATE.ACTION_REQUESTING);
+    assert.equal((await reader.readLifecycleHead()).sequence, 1);
+    const pending = await reader.readOutboxPage({ consumerId: "test-consumer", limit: 10 });
+    assert.equal(pending.events.length, 1);
+    assert.equal(pending.events[0].eventId, result.committedEvent.eventId);
+    const receipt = await reader.readCommand("command-1");
+    assert.equal(receipt.eventId, pending.events[0].eventId);
     const persistedSession = await runtime.repositories.sessionRepository.findById(
       "u1",
       "session-1",
@@ -112,16 +130,13 @@ test("file repository provisions Session and initial Turn in one persisted artif
   });
 });
 
-test("connector selection reads only the Session manifest fact", async () => {
+test("connector selection does not read unrelated immutable message objects", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const runtime = createTestSessionServices({ workspaceRoot });
     const repository = runtime.repositories.sessionRepository;
-    await provisionTestSession(runtime, {
-      userId: "u1",
-      sessionId: "session-1",
-      parentSessionId: "",
-      caller: SESSION_CALLER.USER,
-    });
+    const accepted = await runtime.sessionMessageService.applyTurnLifecycleEvent(
+      withTreeContext(runtime, firstSend("connector-message")),
+    );
     await runtime.sessionCrudService.setRootSessionSelectedConnectorIds({
       userId: "u1",
       sessionId: "session-1",
@@ -133,18 +148,16 @@ test("connector selection reads only the Session manifest fact", async () => {
       "session-1",
       repository.treePersistenceContext("u1", "session-1"),
     );
-    const manifest = JSON.parse(await readFile(scope.sessionFile, "utf8"));
-    manifest.turnOrder = [
-      {
-        turnId: "turn-000001",
-        file: "turns/turn-000001.jsonl",
-        committedBytes: 10,
-        messageOrder: [],
-      },
-    ];
-    await mkdir(path.join(scope.sessionDir, "turns"), { recursive: true });
-    await writeFile(path.join(scope.sessionDir, "turns/turn-000001.jsonl"), "invalid\n", "utf8");
-    await writeFile(scope.sessionFile, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+    const store = new ImmutableSessionStore({
+      sessionDir: scope.sessionDir,
+      sessionId: "session-1",
+    });
+    const snapshot = await store.snapshot();
+    const reference = await store.objects.withSnapshot(snapshot, async () => {
+      const root = await store.index.get(snapshot.root, "messages");
+      return store.index.get(root, accepted.userMessage.messageUid);
+    });
+    await corruptRecord(store, reference);
 
     assert.deepEqual(
       await runtime.sessionCrudService.getRootSessionSelectedConnectorIds({
@@ -250,9 +263,9 @@ test("failed initial provision save leaves no empty Session artifact or summary"
       { sessionId: "session-1", parentSessionId: "" },
       repository.treePersistenceContext("u1", "session-1"),
     );
-    const originalSave = repository.save.bind(repository);
-    repository.save = async (...args) => {
-      assert.equal(args[2]?.createOnly, true);
+    const originalCreate = repository.createImmutableSession.bind(repository);
+    repository.createImmutableSession = async (...args) => {
+      assert.equal(args[2]?.authorityEvents.length, 1);
       throw new Error("injected provision save failure");
     };
 
@@ -262,9 +275,10 @@ test("failed initial provision save leaves no empty Session artifact or summary"
       ),
       /injected provision save failure/,
     );
-    repository.save = originalSave;
+    repository.createImmutableSession = originalCreate;
 
     assert.equal(await exists(scope.sessionFile), false);
+    assert.equal(await exists(path.join(scope.sessionDir, "head.json")), false);
     const summary = await repository.readSessionsSummary("u1");
     assert.equal(
       summary.sessions.some((item) => item.sessionId === "session-1"),
@@ -273,22 +287,13 @@ test("failed initial provision save leaves no empty Session artifact or summary"
   });
 });
 
-test("summary write failure surfaces and the next index read rebuilds membership from the source", async () => {
+test("initial provision publishes list membership without a separate summary transaction", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const runtime = createTestSessionServices({ workspaceRoot });
     const repository = runtime.repositories.sessionRepository;
-    const originalUpsert = repository.upsertSessionSummary.bind(repository);
-    repository.upsertSessionSummary = async () => {
-      throw new Error("injected summary failure");
-    };
-
-    await assert.rejects(
-      runtime.sessionMessageService.applyTurnLifecycleEvent(
-        withTreeContext(runtime, firstSend("summary-repair")),
-      ),
-      /injected summary failure/,
+    await runtime.sessionMessageService.applyTurnLifecycleEvent(
+      withTreeContext(runtime, firstSend("summary-repair")),
     );
-    repository.upsertSessionSummary = originalUpsert;
     const persisted = await repository.findById("u1", "session-1", {
       persistenceContext: repository.treePersistenceContext("u1", "session-1"),
     });
@@ -308,6 +313,89 @@ test("summary write failure surfaces and the next index read rebuilds membership
       ).turnLifecycle.sequence,
       1,
     );
+  });
+});
+
+test("initial provision retry registers an already committed head without repeating its effects", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const runtime = createTestSessionServices({ workspaceRoot });
+    const repository = runtime.repositories.sessionRepository;
+    const persistenceContext = repository.treePersistenceContext("u1", "session-1");
+    const scope = await repository.placeSessionScope(
+      "u1",
+      { sessionId: "session-1", parentSessionId: "" },
+      persistenceContext,
+    );
+    repository.commitSessionPlacement = async () => {
+      throw new Error("injected placement failure after head publication");
+    };
+    await assert.rejects(
+      runtime.sessionMessageService.applyTurnLifecycleEvent(
+        withTreeContext(runtime, firstSend("placement-retry")),
+      ),
+      /injected placement failure/,
+    );
+    const store = new ImmutableSessionStore({
+      sessionDir: scope.sessionDir,
+      sessionId: "session-1",
+    });
+    const committed = await store.snapshot();
+    assert.equal(committed.generation, 1);
+    const original = await store.get(committed, "metadata", "facts");
+    const restarted = createTestSessionServices({ workspaceRoot });
+    const replay = await restarted.sessionMessageService.applyTurnLifecycleEvent(
+      withTreeContext(restarted, firstSend("placement-retry")),
+    );
+    assert.equal(replay.deduplicated, true);
+    assert.equal(replay.userMessage.messageUid, original.lastMessageUid);
+    const reader = await restarted.repositories.sessionRepository.requireSessionReader(
+      "u1",
+      "session-1",
+      {
+        persistenceContext: restarted.repositories.sessionRepository.treePersistenceContext(
+          "u1",
+          "session-1",
+        ),
+      },
+    );
+    assert.equal(reader.generation, 1);
+    assert.equal((await reader.readFacts()).messageCount, 1);
+    assert.equal((await reader.readOutboxPage({ consumerId: "test-consumer" })).events.length, 1);
+    const summary = await restarted.repositories.sessionRepository.readSessionsSummary("u1");
+    assert.equal(summary.sessions.filter((item) => item.sessionId === "session-1").length, 1);
+  });
+});
+
+test("explicit creation retry registers the committed empty session after placement failure", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const runtime = createTestSessionServices({ workspaceRoot });
+    runtime.repositories.sessionRepository.commitSessionPlacement = async () => {
+      throw new Error("injected empty placement failure");
+    };
+    const request = {
+      userId: "u1",
+      sessionId: "session-1",
+      parentSessionId: "",
+      caller: SESSION_CALLER.USER,
+    };
+    await assert.rejects(
+      provisionTestSession(runtime, request),
+      /injected empty placement failure/,
+    );
+    const restarted = createTestSessionServices({ workspaceRoot });
+    await provisionTestSession(restarted, request);
+    const reader = await restarted.repositories.sessionRepository.requireSessionReader(
+      "u1",
+      "session-1",
+      {
+        persistenceContext: restarted.repositories.sessionRepository.treePersistenceContext(
+          "u1",
+          "session-1",
+        ),
+      },
+    );
+    assert.equal(reader.generation, 1);
+    assert.equal((await reader.readFacts()).messageCount, 0);
   });
 });
 

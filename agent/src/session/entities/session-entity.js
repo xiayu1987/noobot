@@ -12,8 +12,7 @@ import {
   assertSessionAggregateShape,
   isCanonicalMessageTimestamp,
   requireSessionAggregateVersion,
-  mergeTurnTimingRecord,
-  normalizeTurnTimingRecord,
+  normalizeTurnTimingRecords,
 } from "@noobot/session-protocol";
 import {
   assertDialogOrderCoversMessages,
@@ -24,19 +23,6 @@ import { normalizeSessionTree } from "@noobot/workspace-protocol/session-tree";
 import { objectRecord } from "./entity-primitives.js";
 import { normalizeMessagesEntity } from "./message-entity.js";
 import { text } from "@noobot/shared/value";
-
-function normalizeTurnTimingsEntity(turnTimings) {
-  const byKey = new Map();
-  for (const item of turnTimings) {
-    const normalized = normalizeTurnTimingRecord(item);
-    const existing = byKey.get(normalized.turnScopeId);
-    byKey.set(
-      normalized.turnScopeId,
-      existing ? mergeTurnTimingRecord(existing, normalized) : normalized,
-    );
-  }
-  return [...byKey.values()];
-}
 
 function requireSessionTimestamp(session, field) {
   const value = session?.[field];
@@ -69,7 +55,7 @@ function createNormalizedSessionEntity(session, context, messages) {
     shortMemoryCheckpoint: context.shortMemoryCheckpoint,
     messages,
     dialogOrder: normalizeDialogOrderEntity(session.dialogOrder),
-    turnTimings: normalizeTurnTimingsEntity(session.turnTimings),
+    turnTimings: normalizeTurnTimingRecords(session.turnTimings),
     turnLifecycle: normalizeTurnLifecycleEntity(session.turnLifecycle),
     sessionArtifactEvents: assertSessionArtifactEvents(
       session.sessionArtifactEvents,
@@ -82,6 +68,14 @@ function createNormalizedSessionEntity(session, context, messages) {
 }
 
 export function normalizeSessionEntity(session) {
+  assertSessionAggregateShape(session);
+  return normalizeSessionAggregateEntity({
+    ...session,
+    messages: normalizeMessagesEntity(session.messages),
+  });
+}
+
+export function normalizeSessionAggregateEntity(session) {
   if ("version" in session || "revision" in session) {
     throw new TypeError(
       "legacy session version fields are not supported; run the session protocol migration",
@@ -89,7 +83,7 @@ export function normalizeSessionEntity(session) {
   }
   assertSessionAggregateShape(session);
   const context = resolveSessionNormalizationContext(session);
-  const normalizedMessages = normalizeMessagesEntity(session.messages);
+  const normalizedMessages = session.messages;
   if ("turnSummaryCheckpoints" in session) {
     assertTurnSummaryCheckpoints(session.turnSummaryCheckpoints);
   }

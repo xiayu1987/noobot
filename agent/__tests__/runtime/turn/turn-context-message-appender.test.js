@@ -10,7 +10,10 @@ import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/message/
 import { isInjectedMessage } from "@noobot/context-protocol/policy/message";
 import { isInjectedSessionMessageRecord } from "@noobot/session-protocol";
 
-import { appendTurnContextControlMessage } from "../../../src/runtime/turn/turn-context-message-appender.js";
+import {
+  appendTurnRuntimeInjectedMessage,
+  appendUserInterjectionMessage,
+} from "../../../src/runtime/turn/turn-context-message-appender.js";
 import { createTestRuntimeContext } from "../../helpers/test-runtime-context.js";
 
 function createTurnScope() {
@@ -24,12 +27,12 @@ function createTurnScope() {
 
 for (const internalType of [
   CONTEXT_INJECTED_MESSAGE_TYPE.TASK_CHECK_PROMPT,
-  CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_PROMPT,
+  CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_RESULT,
   CONTEXT_INJECTED_MESSAGE_TYPE.HELP_TOOL_LOOP_PROMPT,
 ]) {
-  test(`context control message ${internalType} is marked injected in turn and model context`, () => {
+  test(`runtime injected message ${internalType} is marked injected in turn and model context`, () => {
     const { runtime } = createTurnScope();
-    const persisted = appendTurnContextControlMessage({
+    const persisted = appendTurnRuntimeInjectedMessage({
       runtime,
       content: "control prompt",
       internalType,
@@ -42,11 +45,11 @@ for (const internalType of [
   });
 }
 
-test("context control message rejects non-control internal types", () => {
+test("runtime injection rejects the separately accepted user interjection category", () => {
   const { runtime } = createTurnScope();
   assert.throws(
     () =>
-      appendTurnContextControlMessage({
+      appendTurnRuntimeInjectedMessage({
         runtime,
         content: "user words",
         internalType: CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
@@ -54,4 +57,28 @@ test("context control message rejects non-control internal types", () => {
     TypeError,
   );
   assert.equal(runtime.currentTurnMessages.toArray().length, 0);
+});
+
+test("interjection admission and duplicate lookup never expand the current turn", () => {
+  const { runtime } = createTurnScope();
+  for (let index = 0; index < 1024; index += 1)
+    runtime.currentTurnMessages.push({ messageUid: `prefix-${index}`, role: "tool" });
+  runtime.currentTurnMessages.acknowledgeChanges(
+    runtime.currentTurnMessages.readPendingChanges().entries,
+  );
+  runtime.currentTurnMessages.toArray = () => {
+    throw new Error("full turn read");
+  };
+  const interjection = {
+    messageUid: "interjection",
+    message: "continue here",
+    interjectionSequence: 1,
+    receivedAt: "2026-11-14T00:00:00.000Z",
+  };
+  const first = appendUserInterjectionMessage({ runtime, interjection });
+  const pending = runtime.currentTurnMessages.readPendingChanges();
+  assert.deepEqual(appendUserInterjectionMessage({ runtime, interjection }), first);
+  assert.deepEqual(runtime.currentTurnMessages.readPendingChanges(), pending);
+  assert.equal(pending.entries.length, 1);
+  assert.equal(runtime.activeMessageContext.messageBlocks.incremental.length, 1);
 });

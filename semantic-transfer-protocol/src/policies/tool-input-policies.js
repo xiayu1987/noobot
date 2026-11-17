@@ -34,12 +34,4 @@ export function registerToolInputPolicies(register) {
     messageKey: "tools.patch.patchContentTooLong",
     name: "patch-file-patch.tool-input.diff",
   });
-  register({
-    toolName: "task_summary",
-    field: "summaryContent",
-    maxChars: MAX_CHARS,
-    forceAttachment: true,
-    reason: "semantic_transfer_tool_input",
-    name: "task-summary-content.tool-input.md",
-  });
 }

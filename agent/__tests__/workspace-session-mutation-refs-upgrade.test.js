@@ -19,6 +19,8 @@ import {
   createTestSessionRequiredFields,
 } from "./helpers/session-message-facts.js";
 import { SESSION_ID, v9Options } from "./helpers/session-identity-upgrade.fixtures.js";
+import { writeLegacySessionFixture } from "./helpers/legacy-session-fixture.js";
+import { migrateSessionImmutableStorage } from "../src/workspace-lifecycle/session-immutable-storage-upgrade.js";
 
 const HOST_PATH = "/repo/src/a.js";
 const WORKSPACE_PATH = "notes/b.md";
@@ -157,7 +159,8 @@ async function seed({ sessionRepo, toolMessages, records, compacted = false, fin
       ? [message("m3", "assistant", { modelMessageId: "mm_m3", presentationMessageId: "pm_1" })]
       : []),
   ];
-  await sessionRepo.save(
+  await writeLegacySessionFixture(
+    sessionRepo,
     "alice",
     applySessionMessageFacts({
       ...createTestSessionRequiredFields(),
@@ -170,7 +173,7 @@ async function seed({ sessionRepo, toolMessages, records, compacted = false, fin
           }
         : {}),
     }),
-    { createOnly: true, persistenceContext },
+    { persistenceContext },
   );
   const { sessionDir } = await sessionRepo.requireSessionScope(
     "alice",
@@ -377,24 +380,26 @@ async function readManifest(sessionDir) {
 test("v20 invalidates the display summary revision so the read side rebuilds it with mutationRefs", async () => {
   await withHarness(async ({ sessionRepo, root }) => {
     const mutation = v2Mutation("77777777-7777-4777-8777-777777777777", HOST_PATH);
-    await seed({
+    const sessionDir = await seed({
       sessionRepo,
       finalReply: true,
       records: [v2Record(mutation)],
       toolMessages: [toolMessage("t1", "write_file", toolResult("write_file", [mutation]))],
     });
+    const before = await readManifest(sessionDir);
+    assert.deepEqual(collectMutationRefs(await toolMessagesOf(sessionDir)), []);
+
+    const result = await upgradeSessionMutationRefs(v9Options(root));
+    assert.deepEqual(result.quarantined, []);
+    const upgraded = await readManifest(sessionDir);
+    assert.notEqual(upgraded.turnOrder[0].messageRevision, before.turnOrder[0].messageRevision);
+    assert.equal((await toolMessagesOf(sessionDir)).t1.mutationRefs[0].mutationId, mutation.id);
+
+    await migrateSessionImmutableStorage({ storageService: TEST_STORAGE_SERVICE, sessionDir });
     const persistenceContext = sessionRepo.treePersistenceContext("alice", SESSION_ID);
-    const before = await sessionRepo.readSessionDisplaySummary("alice", SESSION_ID, {
-      persistenceContext,
-    });
-    assert.deepEqual(collectMutationRefs(before), []);
-
-    await upgradeSessionMutationRefs(v9Options(root));
-
     const after = await sessionRepo.readSessionDisplaySummary("alice", SESSION_ID, {
       persistenceContext,
     });
-    assert.notEqual(after.source.revision, before.source.revision);
     assert.equal(after.stats.unassignedToolArtifactCount, 0);
     const refs = collectMutationRefs(after);
     assert.ok(refs.length > 0);

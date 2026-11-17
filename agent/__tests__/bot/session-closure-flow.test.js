@@ -5,6 +5,7 @@
  */
 import { createEmptyTurnSummaryCheckpointState } from "@noobot/context-protocol/policy/summary";
 import test from "node:test";
+import { createTestMessagePersistenceReceipts } from "../helpers/message-persistence-receipts.js";
 import { projectAgentContextIdentity } from "../../src/context/agent-context-envelope-input.js";
 import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import assert from "node:assert/strict";
@@ -25,12 +26,13 @@ import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import { writeContextMessageMetadata } from "@noobot/context-protocol/message/codec";
 import { createMessageUid } from "@noobot/session-protocol/message-identity";
 import { TEST_MESSAGE_TS, createTestSessionRunPayload } from "../helpers/session-run-payload.js";
-import { turnRecord } from "../helpers/turn-record.js";
+import { useRuntimeEventsEnv } from "../helpers/runtime-events-env.js";
 
 const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-closure-flow-"));
 test.after(() => fs.rmSync(workspaceRoot, { recursive: true, force: true }));
 
-test("service -> bot -> agent -> toolchain -> return -> persist: should form full closed loop", async () => {
+test("service -> bot -> agent -> toolchain -> return -> persist: should form full closed loop", async (t) => {
+  useRuntimeEventsEnv(t, { executionLog: { sessionTurnFullDebug: true } });
   const acceptedTurn = {
     sessionId: randomUUID(),
     turnScopeId: "turn-closure",
@@ -39,47 +41,41 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
     content: "请切换模型并输出附件",
   };
   const persistedTurns = [];
+  const persistedDiagnostics = [];
   const appendedExecutionLogs = [];
   const upstreamEvents = [];
   let capturedBuildContextInput = null;
   let capturedAgentContext = null;
 
   const session = {
-    async getSessionBundle() {
+    async getSessionRunContext({ userId, sessionId }) {
       return {
-        exists: true,
-        session: {
-          messages: [],
-          turnLifecycle: {
-            turns: {
-              [acceptedTurn.turnScopeId]: turnRecord({
-                turnScopeId: acceptedTurn.turnScopeId,
-                dialogProcessId: acceptedTurn.dialogProcessId,
-              }),
-            },
-          },
-        },
+        startedAt: TEST_MESSAGE_TS,
+        modelAlias: "",
+        parentSessionId: "",
+        sessionDir: path.join(workspaceRoot, userId, "runtime", "session", sessionId),
       };
     },
     async createSession() {},
     async getExecutionTurnLogs() {
       return [...appendedExecutionLogs];
     },
-    async locateSessionScope({ userId, sessionId }) {
-      return {
-        sessionDir: path.join(workspaceRoot, userId, "runtime", "session", sessionId),
-        resolvedParentSessionId: "",
-        indexed: true,
-        registered: true,
-      };
-    },
     async saveExecutionReport() {},
     async appendExecutionLog(payload = {}) {
       appendedExecutionLogs.push(payload);
     },
+    async appendExecutionLogs({ records }) {
+      appendedExecutionLogs.push(...records);
+    },
     async appendTurns(payload = {}) {
       persistedTurns.push(...payload.turns);
-      return { turns: payload.turns };
+      persistedDiagnostics.push(...payload.messageDiagnostics);
+      return {
+        messageReceipts: createTestMessagePersistenceReceipts({
+          ...payload,
+          messages: payload.turns,
+        }),
+      };
     },
     async upsertTurnTiming() {},
     async getTurnSummaryCheckpointState({ dialogProcessId, turnScopeId }) {
@@ -162,7 +158,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
             definitions: {
               programming: {
                 model: "gpt-4.1-mini",
-                tools: ["switch_model", "task_summary"],
+                tools: ["switch_model", "task_check"],
                 context: ["base_prompt", "attachments"],
               },
             },
@@ -202,7 +198,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
       );
       assert.deepEqual(
         toolNames,
-        ["task_summary", "user_interaction"],
+        ["task_check", "user_interaction"],
         "工具链应按内置编程场景策略收敛",
       );
       return {
@@ -300,11 +296,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
               ],
               incremental: [],
             },
-            tools: [
-              { name: "switch_model" },
-              { name: "task_summary" },
-              { name: "user_interaction" },
-            ],
+            tools: [{ name: "switch_model" }, { name: "task_check" }, { name: "user_interaction" }],
           },
         );
       },
@@ -389,10 +381,10 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
   assert.equal(result.messages.length, 3);
   assert.equal("executionLogs" in result, false);
   assert.equal("executionSummary" in result, false);
-  const fullTurnLog = appendedExecutionLogs.find(
-    (logItem) => String(logItem?.event || "") === "session_turn_full",
-  );
-  assert.ok(fullTurnLog, "完整 turn 记录应写入 execution 日志");
+  const fullTurnLog = persistedDiagnostics.find(
+    ({ record }) => record.event === "session_turn_full",
+  )?.record;
+  assert.ok(fullTurnLog, "完整 turn 诊断应随消息原子提交");
   assert.equal(typeof fullTurnLog?.data?.role, "string");
   assert.equal(typeof fullTurnLog?.data?.content?.length, "number");
   assert.equal(typeof fullTurnLog?.data?.content?.preview, "string");
@@ -428,41 +420,30 @@ test("continue mode closed-loop: should build continue context and persist paren
   let capturedRunConfig = null;
 
   const session = {
-    async getSessionBundle() {
+    async getSessionRunContext({ userId, sessionId }) {
       return {
-        exists: true,
-        session: {
-          modelAlias: "anthropic",
-          messages: [{ role: "user", content: "history" }],
-          turnLifecycle: {
-            turns: {
-              [acceptedTurn.turnScopeId]: turnRecord({
-                turnScopeId: acceptedTurn.turnScopeId,
-                dialogProcessId: acceptedTurn.dialogProcessId,
-              }),
-            },
-          },
-        },
+        startedAt: TEST_MESSAGE_TS,
+        modelAlias: "anthropic",
+        parentSessionId: parentRootSessionId,
+        sessionDir: path.join(workspaceRoot, userId, "runtime", "session", sessionId),
       };
     },
     async createSession() {},
     async getExecutionTurnLogs() {
       return [];
     },
-    async locateSessionScope({ userId, sessionId }) {
-      return {
-        sessionDir: path.join(workspaceRoot, userId, "runtime", "session", sessionId),
-        resolvedParentSessionId: parentRootSessionId,
-        indexed: true,
-        registered: true,
-      };
-    },
     async saveExecutionReport() {},
     async appendExecutionLog() {},
+    async appendExecutionLogs() {},
     async appendTurns(payload = {}) {
       persistedBatches.push(payload);
       persistedTurns.push(...payload.turns);
-      return { turns: payload.turns };
+      return {
+        messageReceipts: createTestMessagePersistenceReceipts({
+          ...payload,
+          messages: payload.turns,
+        }),
+      };
     },
     async upsertTurnTiming() {},
     async getTurnSummaryCheckpointState({ dialogProcessId, turnScopeId }) {
@@ -573,7 +554,7 @@ test("continue mode closed-loop: should build continue context and persist paren
             ],
             incremental: [],
           },
-          tools: [{ name: "task_summary" }],
+          tools: [{ name: "task_check" }],
         },
       );
     },

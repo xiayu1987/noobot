@@ -14,6 +14,7 @@ import {
 
 export const SESSION_RUN_EVENT = Object.freeze({
   LOCAL_SEND_STARTED: "local_send_started",
+  LOCAL_SEND_FAILED: "local_send_failed",
   LOCAL_SEND_REQUEST_STARTED: "local_send_request_started",
   LOCAL_SEND_REQUEST_SETTLED: "local_send_request_settled",
   LOCAL_CONTINUE_REQUEST_STARTED: "local_continue_request_started",
@@ -51,6 +52,15 @@ export const TURN_RUNTIME_AUTHORITY = Object.freeze({
 });
 const eventTypes = new Set(Object.values(SESSION_RUN_EVENT));
 const turnStates = new Set(Object.values(TURN_STATE));
+
+export function isRuntimeEventOutsideSnapshot(event, current, snapshotSequence) {
+  if (snapshotSequence === undefined) return false;
+
+  if (event.type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE) {
+    return current?.lifecycleObserved !== true && event.lifecycleSeq <= snapshotSequence;
+  }
+  return TRANSPORT_EVENT_TYPES.has(event.type) && !current?.state;
+}
 
 export function requireRuntimeIsoTime(value, field) {
   const timestamp = typeof value === "string" ? Date.parse(value) : NaN;
@@ -157,6 +167,8 @@ export function projectSessionRunEvent(event) {
   const transport = TRANSPORT_EVENT_TYPES.has(event.type);
   const state = optionalText(event, "state");
   if (authoritative && !turnStates.has(state)) throw new TypeError("invalid_runtime_turn_state");
+  if (event.type === SESSION_RUN_EVENT.TERMINAL_RESOLVED && !isTerminalTurnState(state))
+    throw new TypeError("invalid_runtime_terminal_state");
   requireRuntimeNestedFields(event);
   if (transport && !Object.hasOwn(event, "seq")) throw new TypeError("invalid_runtime_seq");
   const seq = integer(event, "seq", authoritative);

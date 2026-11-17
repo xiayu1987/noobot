@@ -5,6 +5,7 @@
  */
 import { createEmptyTurnSummaryCheckpointState } from "@noobot/context-protocol/policy/summary";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
+import { createTestMessagePersistenceReceipts } from "../helpers/message-persistence-receipts.js";
 import {
   createTestAttachmentService,
   createTestRuntimeContext,
@@ -39,7 +40,6 @@ import { createAcceptedRunIdentity } from "../helpers/accepted-run-identity.js";
 import { createCanonicalMessageEventSessionManager } from "../helpers/canonical-message-event-session-manager.js";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 import { TEST_MESSAGE_TS, createTestSessionRunPayload } from "../helpers/session-run-payload.js";
-import { turnRecord } from "../helpers/turn-record.js";
 
 function createWorkspaceService(baseDir) {
   return {
@@ -94,7 +94,7 @@ test("_finalizeRunSession preserves the child lifecycle terminal receipt", async
   assert.equal(result.lifecycle, lifecycle);
 });
 
-test("_finalizeRunSession forwards staged persistence state unchanged", async () => {
+test("_finalizeRunSession forwards the incremental persistence port unchanged", async () => {
   const engine = createTestSessionExecutionEngine({
     workspaceService: createWorkspaceService("/tmp/noobot-test"),
   });
@@ -103,20 +103,20 @@ test("_finalizeRunSession forwards staged persistence state unchanged", async ()
     forwarded = payload;
     return {};
   };
-  const persistedTurnMessages = [{ role: "assistant", content: "persisted" }];
-  const summaryCheckpointPromotionSources = [{ role: "tool", attachments: [{ id: "a1" }] }];
+  const turnPersistence = {
+    async flush() {},
+    async readResultMessages() {
+      return [];
+    },
+  };
 
   await engine._finalizeRunSession({
     userId: "u1",
     sessionId: "s1",
-    alreadyPersistedTurnMessageCount: 1,
-    persistedTurnMessages,
-    summaryCheckpointPromotionSources,
+    turnPersistence,
   });
 
-  assert.equal(forwarded.alreadyPersistedTurnMessageCount, 1);
-  assert.equal(forwarded.persistedTurnMessages, persistedTurnMessages);
-  assert.equal(forwarded.summaryCheckpointPromotionSources, summaryCheckpointPromotionSources);
+  assert.equal(forwarded.turnPersistence, turnPersistence);
 });
 
 test("RunConfigPluginPreparer.prepareRunConfig activates harness by Manifest id and resolves basePath", async () => {
@@ -345,40 +345,33 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
     async getContextProjection() {
       return { scope: {}, messages: [] };
     },
-    async getSessionBundle() {
+    async getSessionRunContext({ userId, sessionId }) {
       return {
-        exists: true,
-        session: {
-          turnLifecycle: {
-            turns: {
-              "turn-scope-smoke": turnRecord({
-                turnScopeId: "turn-scope-smoke",
-                dialogProcessId: "dp-scope-smoke",
-              }),
-            },
-          },
-        },
+        startedAt: TEST_MESSAGE_TS,
+        modelAlias: "",
+        parentSessionId: "",
+        sessionDir: path.join(tempRoot, userId, "runtime", "session", sessionId),
       };
     },
     async createSession() {},
     async getExecutionTurnLogs() {
       return executionLogs;
     },
-    async locateSessionScope({ userId, sessionId }) {
-      return {
-        sessionDir: path.join(tempRoot, userId, "runtime", "session", sessionId),
-        resolvedParentSessionId: "",
-        indexed: true,
-        registered: true,
-      };
-    },
     async saveExecutionReport() {},
     async appendExecutionLog(payload = {}) {
       executionLogs.push(payload);
     },
+    async appendExecutionLogs({ records }) {
+      executionLogs.push(...records);
+    },
     async appendTurns(payload = {}) {
       persistedTurns.push(...payload.turns);
-      return { turns: payload.turns };
+      return {
+        messageReceipts: createTestMessagePersistenceReceipts({
+          ...payload,
+          messages: payload.turns,
+        }),
+      };
     },
     async upsertTurnTiming() {},
     async getTurnSummaryCheckpointState({ dialogProcessId, turnScopeId }) {

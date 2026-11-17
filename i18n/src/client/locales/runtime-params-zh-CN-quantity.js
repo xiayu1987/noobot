@@ -4,6 +4,32 @@
  * SPDX-License-Identifier: MIT
  */
 export default {
+  immutableStorage: {
+    cleanupFilterMaxEntries: {
+      name: "清理过滤批次上限",
+      description: "单次清理过滤批次最多检查的已捕获清单条目数。",
+    },
+    recordIoConcurrency: {
+      name: "记录读写并发数",
+      description: "单次不可变存储批次中同时执行记录操作的最大数量。",
+    },
+    turnAcceptancePageSize: {
+      name: "轮接收消息分页大小",
+      description: "读取确立轮接收事实的首条消息。",
+    },
+    messagePageSize: { name: "消息分页上限", description: "单次存储分页最多读取的消息数。" },
+    messageReadPageSize: {
+      name: "消息默认分页大小",
+      description: "单次存储分页默认读取的消息数。",
+    },
+    receiptPageSize: { name: "回执分页大小", description: "单次存储分页最多读取的回执数。" },
+  },
+  artifact: {
+    checkpointVerificationConcurrency: {
+      name: "检查点校验并发数",
+      description: "同时读取检查点的最大数量；结果和错误保持清单顺序。",
+    },
+  },
   clientPreview: {
     resourceConcurrency: {
       name: "资源读取并发数",

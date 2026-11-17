@@ -23,6 +23,7 @@ function createHarness(invoke, options = {}) {
         classifyError: () => ({ kind: "unknown" }),
         bindTools: ({ client }) => client,
         prepareMessages: ({ messages }) => messages,
+        invokeChat: ({ client, messages, invokeOptions }) => client.invoke(messages, invokeOptions),
         resolveResponseSource: () => "message",
         createClient: ({ streaming, fetch }) => {
           modes.push(streaming);
@@ -57,7 +58,59 @@ test("failed semantic validation cannot publish a preferred streaming mode", asy
   assert.deepEqual(ctx.modes, [true, false]);
 });
 
-for (const key of ["callbacks", "signal", "stream", "streaming"]) {
+test("required streaming ignores and does not replace the cached provider preference", async () => {
+  const ctx = createHarness(async () => ({ content: "ok" }));
+  await ctx.invoke({ options: { streaming: false } });
+  await ctx.invoke({ options: { streaming: true, streamingRequired: true } });
+  await ctx.invoke({ options: { streaming: true } });
+  assert.deepEqual(ctx.modes, [false, true, false]);
+});
+
+test("required streaming exhausts transport retries without changing response mode", async () => {
+  let calls = 0;
+  const ctx = createHarness(async () => {
+    calls += 1;
+    throw new ModelProtocolError("unavailable", { kind: "temporary_unavailable" });
+  });
+  await assert.rejects(
+    ctx.invoke({ options: { streaming: true, streamingRequired: true } }),
+    /unavailable/,
+  );
+  assert.equal(calls, 3);
+  assert.ok(ctx.modes.every((mode) => mode === true));
+  assert.equal(
+    ctx.events.filter(({ type }) => type === "model.invocation.retry_scheduled").length,
+    2,
+  );
+});
+
+test("required streaming forbids response-mode recovery", async () => {
+  let calls = 0;
+  const ctx = createHarness(async () => {
+    calls += 1;
+    throw new ModelProtocolError("stream unsupported", { kind: "response_mode_mismatch" });
+  });
+  await assert.rejects(
+    ctx.invoke({ options: { streaming: true, streamingRequired: true } }),
+    /stream unsupported/,
+  );
+  assert.equal(calls, 1);
+  assert.deepEqual(ctx.modes, [true]);
+});
+
+for (const options of [
+  { streamingRequired: true },
+  { streaming: false, streamingRequired: true },
+  { streaming: true, streamingRequired: "true" },
+]) {
+  test(`required streaming validates request constraints ${JSON.stringify(options)}`, async () => {
+    const ctx = createHarness(async () => ({ content: "ok" }));
+    await assert.rejects(ctx.invoke({ options }), /streamingRequired/);
+    assert.deepEqual(ctx.modes, []);
+  });
+}
+
+for (const key of ["callbacks", "signal", "stream", "streaming", "streamingRequired"]) {
   test(`invoke options cannot override executor-owned ${key}`, async () => {
     let calls = 0;
     const ctx = createHarness(async () => {

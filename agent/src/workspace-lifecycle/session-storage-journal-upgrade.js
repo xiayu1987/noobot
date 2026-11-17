@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { filePath as path } from "@noobot/path-resolver";
 import {
   SESSION_ARTIFACT_SCHEMA_VERSION,
+  SESSION_ARTIFACT_STORAGE_JOURNAL_SCHEMA_VERSION,
   createSessionStorageMessageIndex,
   sessionStorageMessageHash,
 } from "@noobot/session-protocol";
@@ -26,14 +27,20 @@ export async function migrateSessionStorageJournals({
   source,
   document,
 }) {
+  const hasStoragePositions =
+    source.schemaVersion >= SESSION_ARTIFACT_STORAGE_JOURNAL_SCHEMA_VERSION;
   const positions = new Map(
-    source.messages.map((message, index) => [
+    (hasStoragePositions ? [] : source.messages).map((message, index) => [
       message.messageUid,
       { message, ordinal: index + 1, hash: sessionStorageMessageHash(message) },
     ]),
   );
   const turnOrder = [];
   for (const turn of source.turnOrder) {
+    if (hasStoragePositions) {
+      turnOrder.push(turn);
+      continue;
+    }
     const entries = turn.messageOrder.map((uid) => {
       const entry = positions.get(uid);
       if (!entry) throw new TypeError(`Migration turn message is missing: ${uid}`);
@@ -66,7 +73,11 @@ export async function migrateSessionStorageJournals({
     ...document,
     schemaVersion: SESSION_ARTIFACT_SCHEMA_VERSION,
     turnOrder,
-    artifactEventJournal: await writeSessionArtifactEvents(sessionDir, document, null),
+    artifactEventJournal: await writeSessionArtifactEvents(
+      sessionDir,
+      document,
+      hasStoragePositions ? source : null,
+    ),
   };
   delete manifest.messages;
   delete manifest.messageOrder;

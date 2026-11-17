@@ -79,6 +79,12 @@ export function mergeConfig(globalConfig = {}, userConfig = {}) {
   return out;
 }
 
+export function resolveEffectiveToolBindings(globalConfig = {}, userConfig = {}) {
+  const selectTools = (config) =>
+    isPlainObject(config) && Object.hasOwn(config, "tools") ? { tools: config.tools } : {};
+  return mergeConfig(selectTools(globalConfig), selectTools(userConfig)).tools?.bindings;
+}
+
 export function applySessionModelOverride(userConfig = {}, modelAlias = "") {
   const safeUser = sanitizeUserConfig(userConfig);
   const alias = text(modelAlias);

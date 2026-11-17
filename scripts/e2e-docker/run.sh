@@ -114,7 +114,7 @@ start_mcp() {
 start_mock() {
   [[ "${NOOBOT_E2E_PERF:-}" == "1" ]] || return 0
   docker run -d --rm --name "$MOCK_CONTAINER" --network "$NETWORK" \
-    -v "$MOCK_PROJECT:/app:ro" -w /app --entrypoint node \
+    -v "$ROOT_DIR:$ROOT_DIR:ro" -w "$MOCK_PROJECT" --entrypoint node \
     "$IMAGE" server.mjs >/dev/null || return 1
   docker exec "$MOCK_CONTAINER" node --input-type=module -e \
     'import { MOCK_MODEL as c } from "./scenario.mjs"; const r = await fetch(`http://127.0.0.1:${c.port}/health`); if (!r.ok) process.exit(1);'
@@ -122,10 +122,12 @@ start_mock() {
 
 start_service() {
   node "$SCRIPT_DIR/prepare-workspace.mjs" "$SOURCE_WORKSPACE" "$E2E_WORKSPACE" "$ROOT_DIR/service/config/global.config.json" || return 1
+  mkdir -p "${E2E_WORKSPACE}.mutation-locks" || return 1
   docker run -d --rm --name "$CONTAINER" --network "$NETWORK" \
     -e NOOBOT_ROOT="$ROOT_DIR" \
     -v "$ROOT_DIR:$ROOT_DIR" \
     -v "$E2E_WORKSPACE:$SOURCE_WORKSPACE" \
+    -v "${E2E_WORKSPACE}.mutation-locks:${SOURCE_WORKSPACE}.mutation-locks" \
     -v "$E2E_WORKSPACE/global.config.json:$ROOT_DIR/service/config/global.config.json:ro" \
     --mount "type=volume,dst=$ROOT_DIR/client/noobot-chat/dist" \
     --mount "type=volume,dst=$ROOT_DIR/client/noobot-chat/node_modules/.vite" \
@@ -179,15 +181,15 @@ cmd_test() {
   local suite="${1:-smoke}"
   shift || true
   case "$suite" in
-    smoke | core | full | perf) ;;
+    smoke | core | full | perf | perf-single) ;;
     *)
-      log "unknown suite: $suite (smoke|core|full|perf)"
+      log "unknown suite: $suite (smoke|core|full|perf|perf-single)"
       return 2
       ;;
   esac
   load_connect_code
   load_mysql_password
-  if [[ "$suite" == "perf" ]]; then
+  if [[ "$suite" == perf* ]]; then
     export NOOBOT_E2E_PERF=1
     export NOOBOT_E2E_MODEL_ALIAS=e2e_mock
   else
@@ -203,8 +205,8 @@ cmd_test() {
     -e NOOBOT_E2E_BASE_URL -e NOOBOT_E2E_USER_ID -e NOOBOT_E2E_MODEL_ALIAS
     -e NOOBOT_E2E_MYSQL_HOST -e NOOBOT_WORKSPACE_ROOT -e NOOBOT_E2E_CONNECT_CODE
   )
-  if [[ "$suite" == "perf" ]]; then
-    env_args+=(-e NOOBOT_E2E_PERF -e NOOBOT_E2E_STREAM_OUTPUT=true)
+  if [[ "$suite" == perf* ]]; then
+    env_args+=(-e NOOBOT_E2E_PERF -e NOOBOT_E2E_PERF_MODE -e NOOBOT_E2E_STREAM_OUTPUT=true)
   fi
   if [[ -n "${NOOBOT_E2E_MYSQL_PASSWORD:-}" ]]; then
     env_args+=(-e NOOBOT_E2E_MYSQL_PASSWORD)
@@ -214,7 +216,7 @@ cmd_test() {
 }
 
 usage() {
-  echo "usage: $0 {build|up|down|restart|status|logs [lines]|test [smoke|core|full|perf] [playwright args]}"
+  echo "usage: $0 {build|up|down|restart|status|logs [lines]|test [smoke|core|full|perf|perf-single] [playwright args]}"
 }
 
 command="${1:-}"

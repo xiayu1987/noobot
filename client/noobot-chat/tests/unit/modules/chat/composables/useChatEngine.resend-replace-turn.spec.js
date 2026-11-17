@@ -45,7 +45,11 @@ describe("useChatEngine.resend replace turn", () => {
     const { engine, activeSession } = createHarness({
       sessionId: "resend-delete-race",
       stream,
-      deps: { replaceSessionTurnApi, deleteSessionMessagesFromApi, applySessionDetail },
+      deps: {
+        replaceSessionTurnApi,
+        deleteSessionMessagesFromApi,
+        applySessionMutation: applySessionDetail,
+      },
     });
     const user = {
       messageUid: "old-user",
@@ -132,7 +136,7 @@ describe("useChatEngine.resend replace turn", () => {
         stream,
         deps: {
           replaceSessionTurnApi,
-          applySessionDetail,
+          applySessionMutation: applySessionDetail,
           removeWorkflowOwnersForReplacedTurns,
         },
       });
@@ -272,7 +276,7 @@ describe("useChatEngine.resend replace turn", () => {
     const { engine, activeSession } = createHarness({
       sessionId: "local-resend-attachments",
       stream,
-      deps: { replaceSessionTurnApi, applySessionDetail },
+      deps: { replaceSessionTurnApi, applySessionMutation: applySessionDetail },
     });
     const stoppedUser = {
       turnScopeId: "client-turn:attachments-old",
@@ -376,7 +380,7 @@ describe("useChatEngine.resend replace turn", () => {
     const { engine, activeSession } = createHarness({
       sessionId: "local-resend-preserve-baseline",
       stream,
-      deps: { replaceSessionTurnApi, applySessionDetail },
+      deps: { replaceSessionTurnApi, applySessionMutation: applySessionDetail },
     });
     const stoppedUser = {
       turnScopeId: "client-turn:preserve-old",
@@ -450,7 +454,7 @@ describe("useChatEngine.resend replace turn", () => {
     const { engine, activeSession } = createHarness({
       sessionId: "local-resend-unchanged-attachment",
       stream,
-      deps: { replaceSessionTurnApi, applySessionDetail },
+      deps: { replaceSessionTurnApi, applySessionMutation: applySessionDetail },
     });
     const stoppedUser = {
       turnScopeId: "client-turn:unchanged-attachment-old",
@@ -555,7 +559,7 @@ describe("useChatEngine.resend replace turn", () => {
     const { engine, activeSession } = createHarness({
       sessionId: "local-resend-rich-raw",
       stream,
-      deps: { replaceSessionTurnApi, applySessionDetail },
+      deps: { replaceSessionTurnApi, applySessionMutation: applySessionDetail },
     });
     const stoppedUser = {
       turnScopeId: "client-turn:rich-raw-old",
@@ -643,7 +647,7 @@ describe("useChatEngine.resend replace turn", () => {
     const { engine, activeSession } = createHarness({
       sessionId: "local-resend-delete-attachments",
       stream,
-      deps: { replaceSessionTurnApi, applySessionDetail },
+      deps: { replaceSessionTurnApi, applySessionMutation: applySessionDetail },
     });
     const stoppedUser = {
       turnScopeId: "client-turn:delete-attachments-old",

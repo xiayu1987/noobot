@@ -7,6 +7,7 @@ export async function runModelAttempt({
   client,
   modelSpec,
   messages,
+  streaming,
   tools = [],
   toolOptions = {},
   invokeOptions = {},
@@ -15,5 +16,5 @@ export async function runModelAttempt({
     ? adapter.bindTools({ client, tools, toolOptions, invokeOptions })
     : client;
   const payload = adapter.prepareMessages({ modelSpec, messages });
-  return target.invoke(payload, invokeOptions);
+  return adapter.invokeChat({ client: target, messages: payload, streaming, invokeOptions });
 }

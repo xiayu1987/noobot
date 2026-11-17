@@ -12,6 +12,7 @@ import fs from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 
 import { createTestSessionExecutionEngine } from "../helpers/session-execution-engine.js";
+import { createTestMessagePersistenceReceipts } from "../helpers/message-persistence-receipts.js";
 import { appendUserInterjectionMessage } from "../../src/runtime/turn/turn-context-message-appender.js";
 import { createModelContext } from "@noobot/context-protocol/assembly/hook-context";
 import { resolveModelHistoryMessages } from "@noobot/context-protocol/policy/window";
@@ -25,6 +26,8 @@ import { TEST_MODEL_GLOBAL_CONFIG } from "../helpers/test-model-config.js";
 import { createSummaryCheckpointInstruction } from "@noobot/context-protocol/policy/main-flow-control";
 import { projectSessionRecordToContextMessage } from "@noobot/context-protocol/message/session-projection";
 import { turnRecord } from "../helpers/turn-record.js";
+import { parseTurnSummaryCheckpointRequest } from "@noobot/context-protocol/policy/summary-checkpoint-request";
+import { applyTurnSummaryCheckpoint } from "@noobot/context-protocol/policy/summary-checkpoint-transaction";
 
 test("session execution preserves every user interjection into the next model history", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-user-interjection-e2e-"));
@@ -32,6 +35,11 @@ test("session execution preserves every user interjection into the next model hi
   const persistedTurns = [];
   const dialogProcessId = "dialog-user-interjection-e2e";
   const turnScopeId = "turn-user-interjection-e2e";
+  const checkpointSession = {
+    messages: persistedTurns,
+    turnLifecycle: { turns: { [turnScopeId]: turnRecord({ turnScopeId, dialogProcessId }) } },
+  };
+  const appendedMessageUids = [];
   const interjections = [
     {
       messageUid: "interjection-uid-e2e:first",
@@ -49,6 +57,14 @@ test("session execution preserves every user interjection into the next model hi
   });
 
   const session = {
+    async getSessionRunContext({ userId, sessionId: resolvedSessionId }) {
+      return {
+        startedAt: turnRecord({ turnScopeId, dialogProcessId }).startedAt,
+        modelAlias: "",
+        parentSessionId: "",
+        sessionDir: path.join(root, userId, "runtime", "session", resolvedSessionId),
+      };
+    },
     async getSessionBundle() {
       return {
         exists: true,
@@ -73,6 +89,7 @@ test("session execution preserves every user interjection into the next model hi
       };
     },
     async appendExecutionLog() {},
+    async appendExecutionLogs() {},
     async upsertTurnTiming() {},
     async saveExecutionReport() {},
     async getTurnSummaryCheckpointState({ dialogProcessId, turnScopeId }) {
@@ -84,9 +101,12 @@ test("session execution preserves every user interjection into the next model hi
     async getContextProjection() {
       return { scope: {}, messages: [] };
     },
-    async appendTurns({ turns = [] } = {}) {
+    async appendTurns({ turns = [], ...identity } = {}) {
+      appendedMessageUids.push(...turns.map((message) => message.messageUid));
       persistedTurns.push(...turns);
-      return { turns };
+      return {
+        messageReceipts: createTestMessagePersistenceReceipts({ messages: turns, ...identity }),
+      };
     },
     async getSessionTurns() {
       return persistedTurns;
@@ -113,8 +133,25 @@ test("session execution preserves every user interjection into the next model hi
       persistedTurns.push(userMessage);
       return { userMessage };
     },
-    async commitTurnSummaryCheckpoint() {
-      return { committed: true, markedCount: 1, checkpointRevision: 1 };
+    async commitTurnSummaryCheckpoint(payload) {
+      const request = parseTurnSummaryCheckpointRequest(payload);
+      const next = { ...checkpointSession, messages: persistedTurns.slice() };
+      for (const message of request.messages) {
+        const index = next.messages.findIndex((item) => item.messageUid === message.messageUid);
+        if (index === -1) next.messages.push(message);
+        else next.messages[index] = message;
+      }
+      const result = applyTurnSummaryCheckpoint(next, request, "2026-09-18T00:00:03.000Z");
+      Object.assign(checkpointSession, next);
+      persistedTurns.splice(0, persistedTurns.length, ...next.messages);
+      checkpointSession.messages = persistedTurns;
+      return {
+        ...result,
+        messageReceipts: createTestMessagePersistenceReceipts({
+          ...payload,
+          messages: request.messages,
+        }),
+      };
     },
   };
 
@@ -172,6 +209,10 @@ test("session execution preserves every user interjection into the next model hi
           summarizedMessageUids: [currentUserMessage.messageUid],
         }),
       });
+      for (const { messageUid } of interjections) {
+        assert.ok(persistedTurns.some((message) => message.messageUid === messageUid));
+      }
+      assert.equal(runtime.currentTurnMessages.readPendingChanges().entries.length, 0);
       runtime.currentTurnMessages.push({
         messageUid: "assistant:e2e:final",
         modelMessageId: "assistant:e2e:final",
@@ -233,6 +274,11 @@ test("session execution preserves every user interjection into the next model hi
     );
 
     for (const expected of interjections) {
+      assert.equal(
+        appendedMessageUids.includes(expected.messageUid),
+        false,
+        "acknowledged checkpoint messages must not be rewritten by the final flush",
+      );
       const interjection = persistedTurns.find(
         (message) => message.messageUid === expected.messageUid,
       );

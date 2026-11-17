@@ -75,7 +75,6 @@ test("an interjection accepted during the final model call is consumed before co
       };
     },
     buildLoopResultFn: ({ output }) => ({ output }),
-    maybeRequestPhaseSummaryFn: () => {},
     maybeRequestTaskCheckFn: () => {},
     maybePromptHelpToolByLoopFn: () => {},
     maybePromptHelpToolByFailureFn: () => {},

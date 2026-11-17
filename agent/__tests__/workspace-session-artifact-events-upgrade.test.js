@@ -96,7 +96,7 @@ test("v28 migrates schema19 absence, preserves artifact facts and converges on r
     sequence: 1,
     occurredAt: "2026-10-31T18:00:00.000Z",
   });
-  session.sessionArtifactEvents.push(artifact);
+  session.sessionArtifactEvents = [...session.sessionArtifactEvents, artifact];
   await writeSessionArtifact({
     storageService,
     sessionDir,

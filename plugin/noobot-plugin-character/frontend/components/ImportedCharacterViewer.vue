@@ -12,6 +12,7 @@ import { CCDIKSolver } from "three/addons/animation/CCDIKSolver.js";
 import { loadImportedAsset } from "../runtime/importedAssetStore.js";
 import { makeNativeClipInPlace } from "../runtime/nativeClipNormalization.js";
 import { createCharacterPhysicsRuntime } from "../runtime/characterPhysicsRuntime.js";
+import { createViewerRenderLoop } from "../runtime/viewerRenderLoop.js";
 import { useCharacterLocale } from "../i18n/index.js";
 
 const props = defineProps({
@@ -39,7 +40,6 @@ let controls;
 let resizeObserver;
 let visibilityObserver;
 let visible = false;
-let frame;
 let mountRevision = 0;
 let players = new Map();
 let queuedProtocolCount = 0;
@@ -56,6 +56,14 @@ const physics = createCharacterPhysicsRuntime({
   getScene: () => scene,
   getRevision: () => mountRevision,
 });
+const renderLoop = createViewerRenderLoop({
+  canRender: () => Boolean(renderer && ((visible && !document.hidden) || isRecording.value)),
+  render: renderAnimationFrame,
+});
+
+function invalidateViewer() {
+  renderLoop.invalidate();
+}
 
 function downloadBlob(blob, fileName) {
   const url = URL.createObjectURL(blob);
@@ -126,7 +134,7 @@ function disposeModel(root) {
 }
 
 function dispose() {
-  cancelAnimationFrame(frame);
+  renderLoop.pause();
   resizeObserver?.disconnect();
   controls?.dispose();
   for (const player of players.values()) {
@@ -163,6 +171,7 @@ function resizeRenderer() {
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
   renderer.setSize(width, height, false);
+  invalidateViewer();
 }
 
 function createKeyframeClip(segment, animationId, characterIndex, segmentIndex) {
@@ -366,6 +375,7 @@ function setupColliderHelpers(protocol) {
 
 function updateColliderHelperVisibility() {
   for (const { helper } of colliderHelpers) helper.visible = props.showColliders;
+  invalidateViewer();
 }
 
 function updateColliderHelpers(protocol) {
@@ -513,6 +523,7 @@ function restartPlayback() {
   queuedProtocolCount = 0;
   nextPlaybackAt = 0;
   queueProtocol();
+  invalidateViewer();
 }
 
 async function loadPlayer(asset, revision) {
@@ -590,42 +601,32 @@ function setupCamera(loaded) {
   return center;
 }
 
-function startAnimationLoop() {
-  const clock = new THREE.Clock();
-  const animate = () => {
-    frame = requestAnimationFrame(animate);
-    const delta = clock.getDelta();
-    if ((!visible || document.hidden) && !isRecording.value) return;
-    for (const player of players.values()) {
-      if (!activeProtocol || !playbackEnded) player.mixer.update(delta);
-    }
-    if (activeProtocol) {
-      const duration = Math.max(0, Number(activeProtocol.duration || 0));
-      if (!playbackEnded) {
-        protocolElapsed = activeProtocol.loop
-          ? protocolElapsed + delta
-          : Math.min(duration, protocolElapsed + delta);
-        const time = activeProtocol.loop
-          ? protocolElapsed % Math.max(duration, 0.000001)
-          : protocolElapsed;
-        updateCharacterActions(activeProtocol, time);
-        updateRootMotion(activeProtocol, time);
-        updateContactConstraints(activeProtocol, time);
-        physics.step(activeProtocol, delta);
-        updateColliderHelpers(activeProtocol);
-        const cameraTime = activeProtocol.loop
-          ? time % Math.max(activeProtocol.duration, 0.000001)
-          : Math.min(time, activeProtocol.duration);
-        updateCamera(activeProtocol, cameraTime);
+function renderAnimationFrame(delta) {
+  if (activeProtocol && !playbackEnded) {
+    const duration = Math.max(0, Number(activeProtocol.duration || 0));
+    for (const player of players.values()) player.mixer.update(delta);
+    protocolElapsed = activeProtocol.loop
+      ? protocolElapsed + delta
+      : Math.min(duration, protocolElapsed + delta);
+    const time = activeProtocol.loop
+      ? protocolElapsed % Math.max(duration, 0.000001)
+      : protocolElapsed;
+    updateCharacterActions(activeProtocol, time);
+    updateRootMotion(activeProtocol, time);
+    updateContactConstraints(activeProtocol, time);
+    physics.step(activeProtocol, delta);
+    updateColliderHelpers(activeProtocol);
+    const cameraTime = activeProtocol.loop
+      ? time % Math.max(activeProtocol.duration, 0.000001)
+      : Math.min(time, activeProtocol.duration);
+    updateCamera(activeProtocol, cameraTime);
 
-        if (!activeProtocol.loop && protocolElapsed >= duration) playbackEnded = true;
-        updatePlaybackTelemetry(time);
-      }
-    }
-    controls.update();
-    renderer.render(scene, camera);
-  };
-  animate();
+    if (!activeProtocol.loop && protocolElapsed >= duration) playbackEnded = true;
+    updatePlaybackTelemetry(time);
+  }
+  controls.update();
+  renderer.render(scene, camera);
+  return isRecording.value || Boolean(activeProtocol && !playbackEnded);
 }
 
 async function mount() {
@@ -681,14 +682,9 @@ async function mount() {
   requestAnimationFrame(resizeRenderer);
   controls = new OrbitControls(camera, renderer.domElement);
   controls.target.copy(center);
-  startAnimationLoop();
-  if (!props.protocol) {
-    loaded.forEach((player) => {
-      const idle = player.animations[0];
-      if (idle) player.mixer.clipAction(idle).play();
-    });
-  }
+  controls.addEventListener("change", invalidateViewer);
   queueProtocol();
+  invalidateViewer();
 }
 
 watch(() => props.assets.map((asset) => asset.assetId).join("|"), mount);
@@ -714,9 +710,12 @@ watch(
 );
 
 watch(() => props.showColliders, updateColliderHelperVisibility);
+watch(isRecording, invalidateViewer);
 onMounted(() => {
+  document.addEventListener("visibilitychange", invalidateViewer);
   visibilityObserver = new IntersectionObserver(([entry]) => {
     visible = entry.isIntersecting;
+    invalidateViewer();
   });
   visibilityObserver.observe(host.value);
   mount();
@@ -731,6 +730,7 @@ watch(
   },
 );
 onBeforeUnmount(() => {
+  document.removeEventListener("visibilitychange", invalidateViewer);
   visibilityObserver?.disconnect();
   mountRevision += 1;
   dispose();

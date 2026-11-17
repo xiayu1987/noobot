@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { projectCanonicalAttachmentIdentities } from "../../../artifacts/index.js";
 import { dedupeAttachments } from "./attachment-helpers.js";
 import { upsertSessionTurnTiming } from "./turn-timing.js";
@@ -15,7 +16,6 @@ import {
   SESSION_ERROR_CODE,
   assertTurnAcceptanceUserMessage,
   decideAggregateConcurrency,
-  materializeTurnTerminalMessages,
   normalizeDialogProcessId,
   requireTurnCommitAction,
   validateSessionProvisionIntent,
@@ -27,18 +27,14 @@ import {
   resolveSessionMessageRecordDialogProcessId,
 } from "@noobot/session-protocol";
 import { createMessageUid } from "@noobot/session-protocol/message-identity";
+import { copyCheckpointReceiptLists } from "@noobot/session-protocol/summary-checkpoint-storage";
 import { normalizeMessageEntity } from "../../entities/message-entity.js";
 import { registerSessionMessageFacts } from "../../entities/session-message-facts.js";
 import { createSessionTurnLifecycleSnapshot } from "../../session-turn-read-model.js";
-import {
-  materializeCommittedTurnEvents,
-  readAuthorityOutboxProjection,
-  appendAuthorityOutboxRecords,
-  authorityOutboxPrepareRecord,
-} from "../../authority-outbox-store/outbox-journal.js";
 import { resolveDeletedSessionAs } from "./session-deleted-result.js";
 import { text } from "@noobot/shared/value";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
+import { readImmutableTurnMutationSource } from "./immutable-turn-source.js";
 
 function validateAcceptedUserMessage(event) {
   const validation = assertTurnAcceptanceUserMessage(event);
@@ -85,39 +81,6 @@ function resolveTurnAggregateConcurrency(session, expectedAggregateVersion) {
           currentVersion: actualVersion,
         },
   };
-}
-
-async function commitTurnLifecycleWithOutbox({
-  service,
-  userId,
-  sessionId,
-  scope,
-  session,
-  lifecycleEvent,
-  materializeTerminal = null,
-}) {
-  const outboxSessionDir = scope.sessionDir;
-  const projection = await readAuthorityOutboxProjection(outboxSessionDir);
-  const result = commitTurnLifecycle({
-    lifecycle: session.turnLifecycle,
-    event: { ...lifecycleEvent, userId, sessionId },
-    parentSessionId: scope.resolvedParentSessionId,
-    isCommittedEventId: (eventId) => projection.prepared.has(eventId),
-    readPreparedEvent: (eventId) => {
-      const prepared = projection.prepared.get(eventId);
-      if (!prepared) throw new TypeError(`lifecycle receipt has no prepared event: ${eventId}`);
-      return prepared;
-    },
-    ...(materializeTerminal ? { materializeTerminal } : {}),
-    createEventId: randomUUID,
-    now: service.now,
-  });
-  if (result.applied) {
-    await appendAuthorityOutboxRecords(outboxSessionDir, [
-      authorityOutboxPrepareRecord(result.committedEvent),
-    ]);
-  }
-  return { outboxSessionDir, result };
 }
 
 function materializeAcceptedUserMessage({
@@ -184,7 +147,7 @@ function acceptCommittedTurn({
     return {
       rejected: {
         ...result,
-        session: rejectedSession,
+        session: rejectedSession === null ? null : copyCheckpointReceiptLists(rejectedSession),
         userMessage,
         dialogProcessId: text(result.turn?.dialogProcessId),
         aggregateVersion: actualVersion,
@@ -207,6 +170,78 @@ function acceptCommittedTurn({
   return { userMessage, nowValue };
 }
 
+async function commitImmutableTurnState(
+  service,
+  reader,
+  scope,
+  { userId, sessionId, expectedAggregateVersion, sessionCaller, event },
+  commitChanges,
+) {
+  const session = await readImmutableTurnMutationSource(reader, event);
+  const { lifecycleEvent, acceptedUserMessageInput } = resolveTurnAcceptance(
+    service,
+    session,
+    event,
+    sessionCaller,
+  );
+  const { actualVersion, nextAggregateVersion, conflict } = resolveTurnAggregateConcurrency(
+    session,
+    expectedAggregateVersion,
+  );
+  if (conflict) return conflict;
+  const existing = findTurnScopeUserMessage(session, event.turnScopeId);
+  const userMessage = materializeAcceptedUserMessage({
+    session,
+    event: lifecycleEvent,
+    turn: { dialogProcessId: lifecycleEvent.dialogProcessId },
+    input: acceptedUserMessageInput,
+    userId,
+    sessionId,
+    parentSessionId: scope.resolvedParentSessionId,
+    nowValue: service.now(),
+  });
+  const committed = await commitChanges({
+    expectedGeneration: reader.generation,
+    operationId: randomUUID(),
+    changes: {
+      turnTransition: { ...lifecycleEvent, userId, sessionId },
+      messages: userMessage && !existing ? [userMessage] : [],
+    },
+    committedAt: service.now(),
+  });
+  const transition = committed.aborted ? committed.result : committed.result.turnTransition;
+  if (!transition.applied) {
+    if (!existing) session.messages = [];
+    return {
+      ...transition,
+      session,
+      userMessage: existing,
+      dialogProcessId: text(transition.turn?.dialogProcessId),
+      aggregateVersion: actualVersion,
+    };
+  }
+  session.turnLifecycle = {
+    ...session.turnLifecycle,
+    ...transition.header,
+    turns: {
+      ...session.turnLifecycle.turns,
+      ...Object.fromEntries(transition.changedTurns.map((turn) => [turn.turnScopeId, turn])),
+    },
+    commandReceipts: [transition.commandReceipt],
+  };
+  session.updatedAt = transition.turn.updatedAt;
+  if (userMessage && !existing) session.aggregateVersion = nextAggregateVersion;
+  return {
+    ...transition,
+    lifecycle: session.turnLifecycle,
+    session,
+    userMessage,
+    dialogProcessId: text(transition.turn?.dialogProcessId),
+    turnStatus: transition.turn?.terminalStatus || null,
+    aggregateVersion: session.aggregateVersion,
+  };
+}
+
 export async function getTurnLifecycleSnapshot({
   userId,
   sessionId,
@@ -217,13 +252,17 @@ export async function getTurnLifecycleSnapshot({
   resolveRecovery,
 }) {
   if (!userId || !sessionId) return { found: false, reason: "missing_session" };
-  const session = await this.sessionRepo.findById(userId, sessionId, { persistenceContext });
+  const session = await this.sessionRepo.findTurnTerminalSource(userId, sessionId, {
+    persistenceContext,
+    terminalLimit,
+  });
   if (!session) return { found: false, reason: SESSION_NOT_FOUND_REASON };
   const recovery = await resolveRecovery(selectAuthoritativeActiveTurn(session.turnLifecycle));
   return {
     found: true,
     snapshot: createSessionTurnLifecycleSnapshot({
       session,
+      messageTurnScopeIds: session.messageTurnScopeIds,
       commandId,
       knownSequence,
       terminalLimit,
@@ -241,6 +280,7 @@ export async function applyTurnLifecycleEvent({
   sessionCaller,
   createSessionIfAbsent,
   parentSessionId,
+  initialSessionMetadata,
   ...event
 }) {
   if (!userId || !sessionId) return { applied: false, reason: "missing_session" };
@@ -248,6 +288,7 @@ export async function applyTurnLifecycleEvent({
     ...event,
     createSessionIfAbsent,
     sessionCaller,
+    initialSessionMetadata,
   });
   if (!provisionIntent.valid) return { applied: false, reason: "invalid_session_provision_intent" };
   const requestFailure = validateTurnLifecycleRequest(event);
@@ -261,70 +302,21 @@ export async function applyTurnLifecycleEvent({
       sessionCaller,
       createSessionIfAbsent,
       parentSessionId,
+      initialSessionMetadata,
       ...event,
     });
   }
-  const mutation = this.sessionRepo.withSessionMutation(
+  const mutation = this.sessionRepo.withSessionReader(
     userId,
     sessionId,
-    async (scope) => {
-      const { session, turnScopeIds } = await this.sessionRepo.requireTurnView(userId, sessionId, {
-        turnScopeIds: [event.turnScopeId],
-        persistenceContext,
-      });
-      const resolvedParentSessionId = scope.resolvedParentSessionId;
-      const { lifecycleEvent, acceptedUserMessageInput } = resolveTurnAcceptance(
+    async (reader, scope, commitChanges) => {
+      return await commitImmutableTurnState(
         this,
-        session,
-        event,
-        sessionCaller,
-      );
-      const { actualVersion, nextAggregateVersion, conflict } = resolveTurnAggregateConcurrency(
-        session,
-        expectedAggregateVersion,
-      );
-      if (conflict) return conflict;
-      const { outboxSessionDir, result } = await commitTurnLifecycleWithOutbox({
-        service: this,
-        userId,
-        sessionId,
+        reader,
         scope,
-        session,
-        lifecycleEvent,
-        materializeTerminal: ({ terminalStatus, previousSummaryVersion }) =>
-          materializeTurnTerminalMessages({
-            messages: session.messages,
-            terminalStatus,
-            previousSummaryVersion,
-          }),
-      });
-      const { rejected, userMessage, nowValue } = acceptCommittedTurn({
-        service: this,
-        result,
-        session,
-        rejectedSession: session,
-        lifecycleEvent,
-        acceptedUserMessageInput,
-        actualVersion,
-        nextAggregateVersion,
-        userId,
-        sessionId,
-        resolvedParentSessionId,
-      });
-      if (rejected) return rejected;
-      if (result.terminalMaterialization)
-        session.messages = [...result.terminalMaterialization.messages];
-      session.updatedAt = nowValue;
-      await this.sessionRepo.saveTurnView(userId, session, { turnScopeIds, persistenceContext });
-      await materializeCommittedTurnEvents(outboxSessionDir, result.lifecycle);
-      return {
-        ...result,
-        session,
-        userMessage,
-        dialogProcessId: text(result.turn?.dialogProcessId),
-        turnStatus: result.turn?.terminalStatus || null,
-        aggregateVersion: requireSessionAggregateVersion(session?.aggregateVersion),
-      };
+        { userId, sessionId, expectedAggregateVersion, sessionCaller, event },
+        commitChanges,
+      );
     },
     { persistenceContext },
   );
@@ -339,25 +331,51 @@ async function provisionSessionWithInitialTurn({
   expectedAggregateVersion,
   createSessionIfAbsent,
   sessionCaller,
+  initialSessionMetadata = null,
   ...event
 }) {
   const mutation = this.sessionRepo.withSessionPlacementMutation(
     userId,
     { sessionId, parentSessionId },
     async (scope) => {
-      const found = await this.sessionRepo.findById(userId, sessionId, { persistenceContext });
+      await using reader = await this.sessionRepo.recoverImmutableSessionPlacement(
+        userId,
+        sessionId,
+        {
+          scope,
+          persistenceContext,
+        },
+      );
+      if (reader) {
+        if (!isDeepStrictEqual(await reader.readScopedMetadata(), initialSessionMetadata)) {
+          return {
+            applied: false,
+            reason: "initial_session_metadata_conflict",
+            sessionCreated: false,
+          };
+        }
+        const result = await commitImmutableTurnState(
+          this,
+          reader,
+          scope,
+          { userId, sessionId, expectedAggregateVersion, sessionCaller, event },
+          (request) =>
+            this.sessionRepo.commitChanges(userId, sessionId, {
+              ...request,
+              persistenceContext,
+            }),
+        );
+        return { ...result, sessionCreated: false };
+      }
       const resolvedParentSessionId = scope.resolvedParentSessionId;
-      const isNew = !found;
-      if (isNew && (await this.sessionRepo.isSessionDeleted(userId, sessionId))) {
+      if (await this.sessionRepo.isSessionDeleted(userId, sessionId)) {
         return { applied: false, reason: SESSION_DELETED_REASON };
       }
-      const session =
-        found ||
-        this.sessionRepo.createInitialSession({
-          sessionId,
-          parentSessionId: resolvedParentSessionId,
-          caller: sessionCaller,
-        });
+      const session = this.sessionRepo.createInitialSession({
+        sessionId,
+        parentSessionId: resolvedParentSessionId,
+        caller: sessionCaller,
+      });
       const { lifecycleEvent, acceptedUserMessageInput } = resolveTurnAcceptance(
         this,
         session,
@@ -369,19 +387,22 @@ async function provisionSessionWithInitialTurn({
         expectedAggregateVersion,
       );
       if (conflict) return conflict;
-      const { outboxSessionDir, result } = await commitTurnLifecycleWithOutbox({
-        service: this,
-        userId,
-        sessionId,
-        scope,
-        session,
-        lifecycleEvent,
+      const result = commitTurnLifecycle({
+        lifecycle: session.turnLifecycle,
+        event: { ...lifecycleEvent, userId, sessionId },
+        parentSessionId: resolvedParentSessionId,
+        isCommittedEventId: () => false,
+        readPreparedEvent: () => {
+          throw new Error("A new session cannot reference a prepared lifecycle event");
+        },
+        createEventId: randomUUID,
+        now: this.now,
       });
       const { rejected, userMessage, nowValue } = acceptCommittedTurn({
         service: this,
         result,
         session,
-        rejectedSession: isNew ? null : session,
+        rejectedSession: null,
         lifecycleEvent,
         acceptedUserMessageInput,
         actualVersion,
@@ -392,19 +413,20 @@ async function provisionSessionWithInitialTurn({
       });
       if (rejected) return rejected;
       session.updatedAt = nowValue;
-      await this.sessionRepo.save(userId, session, {
-        expectedAggregateVersion: isNew ? undefined : actualVersion,
-        createOnly: isNew,
+      await this.sessionRepo.createImmutableSession(userId, session, {
+        sessionId,
+        scope,
         persistenceContext,
+        authorityEvents: [{ ...result.committedEvent, deliveries: {} }],
+        scopedMetadata: initialSessionMetadata,
       });
-      await materializeCommittedTurnEvents(outboxSessionDir, result.lifecycle);
       return {
         ...result,
-        session,
+        session: copyCheckpointReceiptLists(session),
         userMessage,
         dialogProcessId: text(result.turn?.dialogProcessId),
         aggregateVersion: requireSessionAggregateVersion(session?.aggregateVersion),
-        sessionCreated: isNew,
+        sessionCreated: true,
       };
     },
     { persistenceContext },
@@ -421,11 +443,11 @@ export async function upsertTurnTiming({
   thinkingFinishedAt,
   modelLoopRound,
 }) {
-  return this.sessionRepo.withSessionMutation(
+  return this.sessionRepo.withSessionReader(
     userId,
     sessionId,
-    async () => {
-      const session = await this.sessionRepo.requireById(userId, sessionId, { persistenceContext });
+    async (reader, _scope, commitChanges) => {
+      const session = await readImmutableTurnMutationSource(reader, { turnScopeId });
       const before = JSON.stringify(session.turnTimings);
       upsertSessionTurnTiming(session, {
         turnScopeId,
@@ -433,11 +455,16 @@ export async function upsertTurnTiming({
         thinkingFinishedAt,
         modelLoopRound,
       });
-      if (JSON.stringify(session.turnTimings) === before) {
+      if (JSON.stringify(session.turnTimings) === before)
         return { upserted: false, reason: "unchanged", session };
-      }
-      session.updatedAt = this.now();
-      await this.sessionRepo.save(userId, session, { persistenceContext });
+      const committedAt = this.now();
+      await commitChanges({
+        expectedGeneration: reader.generation,
+        operationId: randomUUID(),
+        changes: { timings: session.turnTimings },
+        committedAt,
+      });
+      session.updatedAt = committedAt;
       return { upserted: true, session };
     },
     { persistenceContext },
@@ -482,7 +509,12 @@ export async function assertReusedUserTurnIdentity({
   if (!normalizedTurnScopeId) throw new TypeError("reused Turn turnScopeId is required");
   const normalizedDialogProcessId = normalizeDialogProcessId(dialogProcessId);
   if (!normalizedDialogProcessId) throw new TypeError("reused Turn dialogProcessId is required");
-  const session = await this.sessionRepo.requireById(userId, sessionId, { persistenceContext });
+  await using reader = await this.sessionRepo.requireSessionReader(userId, sessionId, {
+    persistenceContext,
+  });
+  const session = await readImmutableTurnMutationSource(reader, {
+    turnScopeId: normalizedTurnScopeId,
+  });
   const messages = session.messages;
   const targetIndex = (() => {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -509,7 +541,7 @@ export async function assertReusedUserTurnIdentity({
   }
   return {
     asserted: true,
-    session,
+    session: copyCheckpointReceiptLists(session),
     userMessage: targetMessage,
     messageIndex: targetIndex,
     aggregateVersion: requireSessionAggregateVersion(session?.aggregateVersion),

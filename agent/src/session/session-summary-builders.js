@@ -8,7 +8,6 @@ export {
   SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION,
   buildSessionDisplaySummary,
   isSessionDisplaySummaryPayload,
-  isSessionDisplaySummaryCurrent,
 } from "./session-summary-builders/session-display-summary.js";
 
 export { buildSessionSummary } from "./session-summary-builders/session-list-summary.js";

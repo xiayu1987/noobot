@@ -11,7 +11,7 @@ export function resolveToolLocale(runtime = {}) {
   return resolveLocaleFromRuntime(runtime);
 }
 
-export function tToolForLocale(locale = "", key = "", params = {}, transformText) {
+function tToolForLocale(locale = "", key = "", params = {}, transformText) {
   return pickLocaleText({
     locale,
     dict: BACKEND_I18N,

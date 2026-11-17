@@ -8,10 +8,12 @@ import os from "node:os";
 import path from "node:path";
 import { after, before } from "node:test";
 import { WORKSPACE_RUNTIME_DIRECTORIES } from "@noobot/workspace-protocol/layout";
-import { flushJsonLineBatches } from "@noobot/runtime-events";
+import { flushRuntimeEvents } from "@noobot/runtime-events";
+import { SESSION_CALLER } from "@noobot/shared/session-caller";
 import {
   applyRuntimeEventsEnv,
   initializeSessionTree,
+  persistSession,
   withRuntimeEventsEnv,
 } from "@noobot/runtime-events/testing";
 
@@ -29,7 +31,7 @@ export async function withRuntimeEventsRoot(prefix, operation) {
       try {
         return await operation(workspaceRoot);
       } finally {
-        await flushJsonLineBatches();
+        await flushRuntimeEvents();
       }
     });
   } finally {
@@ -44,7 +46,11 @@ export async function initializeUserRuntimeDirectories(workspaceRoot, userId) {
   await initializeSessionTree(workspaceRoot, userId);
 }
 
-export function useProvisionedRuntimeEventsWorkspace(userIds) {
+export function useProvisionedRuntimeEventsWorkspace(
+  userIds,
+  rootSessionIdsByUser = {},
+  prepareWorkspace,
+) {
   let workspaceRoot;
   let restoreRuntimeEventsEnv;
   before(async () => {
@@ -53,10 +59,24 @@ export function useProvisionedRuntimeEventsWorkspace(userIds) {
     for (const userId of userIds) {
       await initializeUserRuntimeDirectories(workspaceRoot, userId);
     }
+    for (const [userId, sessionIds] of Object.entries(rootSessionIdsByUser)) {
+      if (!userIds.includes(userId)) throw new Error(`Unprovisioned fixture user: ${userId}`);
+      for (const sessionId of sessionIds) {
+        await persistSession(workspaceRoot, userId, {
+          sessionId,
+          parentSessionId: "",
+          caller: SESSION_CALLER.USER,
+        });
+      }
+    }
+    if (prepareWorkspace) await prepareWorkspace(workspaceRoot);
   });
   after(async () => {
-    await flushJsonLineBatches();
-    restoreRuntimeEventsEnv();
-    await fs.rm(workspaceRoot, { recursive: true, force: true });
+    try {
+      await flushRuntimeEvents();
+    } finally {
+      restoreRuntimeEventsEnv();
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
   });
 }

@@ -65,7 +65,8 @@ import { projectMutationRefs } from "@noobot/file-mutation-protocol";
 import { repairToolCallArgs } from "./tool-args-repair.js";
 import { assertToolInputMatchesSchema } from "./tool-input-validation.js";
 import { validateRuntimeToolCall } from "@noobot/context-protocol/tool/context-policy";
-import { assertToolCallTiming } from "@noobot/event-protocol/tool-timing";
+import { assertToolCallTimingInterval } from "@noobot/event-protocol/tool-timing";
+import { MONOTONIC_CLOCK_ID } from "@noobot/shared/monotonic-clock-node";
 
 function shouldTransferToolInput(call) {
   const toolName = text(call.name);
@@ -469,6 +470,7 @@ async function invokeConfiguredTool(state) {
   try {
     assertToolInputMatchesSchema(state.tool, state.call.args, state.runtime);
     const startedAt = performance.now();
+    state.executionTiming.startMs = startedAt;
     try {
       state.rawResult = await raceWithAbort(
         runWithToolRiskAssessment(state.riskAssessment, () =>
@@ -477,7 +479,8 @@ async function invokeConfiguredTool(state) {
         state.abortSignal,
       );
     } finally {
-      state.executionTiming.executionMs = performance.now() - startedAt;
+      state.executionTiming.endMs = performance.now();
+      state.executionTiming.executionMs = state.executionTiming.endMs - startedAt;
     }
     await raceWithAbort(materializeToolInvocationResult(state), state.abortSignal);
   } catch (error) {
@@ -719,11 +722,21 @@ export async function settleStartedToolCallInTurn(options) {
   }
   try {
     await emitToolCallEnd(options, settlement.result);
-    const elapsedMs = performance.now() - startedAt;
-    const timing = assertToolCallTiming({
+    const endedAt = performance.now();
+    const elapsedMs = endedAt - startedAt;
+    const timing = assertToolCallTimingInterval({
       turn,
       tool: call.name,
       toolCallId,
+      interval: {
+        clockId: MONOTONIC_CLOCK_ID,
+        startMs: startedAt,
+        endMs: endedAt,
+        execution:
+          executionTiming.startMs === undefined
+            ? null
+            : { startMs: executionTiming.startMs, endMs: executionTiming.endMs },
+      },
       executionMs: executionTiming.executionMs,
       frameworkMs: elapsedMs - executionTiming.executionMs,
     });

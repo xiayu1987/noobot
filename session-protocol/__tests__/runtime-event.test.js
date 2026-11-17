@@ -10,6 +10,7 @@ import {
   createLocalSessionRunEvent,
   projectSessionRunEvent,
   projectTurnLifecycleRuntimeEvent,
+  isRuntimeEventOutsideSnapshot,
 } from "@noobot/session-protocol/runtime-event";
 import { TURN_TERMINAL_STATES } from "@noobot/session-protocol";
 
@@ -22,6 +23,24 @@ const authoritative = () => ({
   seq: 2,
   revision: 2,
   updatedAt: "2026-01-01T00:00:00.000Z",
+});
+
+test("terminal point queries accept only terminal facts and are independent of the replay window", () => {
+  assert.throws(
+    () => projectSessionRunEvent({ ...authoritative(), type: SESSION_RUN_EVENT.TERMINAL_RESOLVED }),
+    /invalid_runtime_terminal_state/,
+  );
+  const event = projectSessionRunEvent({
+    ...authoritative(),
+    type: SESSION_RUN_EVENT.TERMINAL_RESOLVED,
+    state: "completed",
+    finishedAt: "2026-01-01T00:00:00.000Z",
+  });
+  assert.equal(isRuntimeEventOutsideSnapshot(event, null, 10), false);
+  const replay = projectSessionRunEvent(authoritative());
+  assert.equal(isRuntimeEventOutsideSnapshot(replay, null, 10), true);
+  assert.equal(isRuntimeEventOutsideSnapshot(replay, { lifecycleObserved: true }, 10), false);
+  assert.equal(isRuntimeEventOutsideSnapshot(replay, null, undefined), false);
 });
 
 test("authoritative projection is deterministic, pure and ignores unrelated clock aliases", () => {

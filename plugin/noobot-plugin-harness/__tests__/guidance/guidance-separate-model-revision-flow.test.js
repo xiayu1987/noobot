@@ -3,7 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createTestModelResponse } from "../helpers/public-runtime-fixtures.js";
+import {
+  createTestModelResponse,
+  readTestMainFlowControl,
+} from "../helpers/public-runtime-fixtures.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -34,7 +37,15 @@ test("separate_model mode: when turn-summary and revision are both pending, plan
   };
 
   const ctx = {
-    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [
+        { role: "user", content: "继续" },
+        { role: "assistant", content: "", tool_calls: [{ id: "c1", name: "read_file", args: {} }] },
+        { role: "tool", content: "source", tool_call_id: "c1" },
+      ],
+    },
     agentContext,
   };
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
@@ -48,6 +59,10 @@ test("separate_model mode: when turn-summary and revision are both pending, plan
     invocations.some((item = {}) => item.purpose === "summary"),
     true,
   );
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.summary, true);
+  await readTestMainFlowControl(agentContext).summaryCheckpoints[0].onCommitted({
+    committed: true,
+  });
   assert.equal(agentContext.bindings.extensions.harness.state.pending.summary, false);
   assert.equal(agentContext.bindings.extensions.harness.state.pending.planRevision, false);
   assert.equal(agentContext.bindings.extensions.harness.state.pending.planRefinement, false);
@@ -127,7 +142,15 @@ test("separate_model simultaneous plan update follows up with summary before ana
   };
 
   const ctx = {
-    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [
+        { role: "user", content: "继续" },
+        { role: "assistant", content: "", tool_calls: [{ id: "c1", name: "read_file", args: {} }] },
+        { role: "tool", content: "source", tool_call_id: "c1" },
+      ],
+    },
     agentContext,
   };
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
@@ -138,6 +161,10 @@ test("separate_model simultaneous plan update follows up with summary before ana
   );
   assert.equal(agentContext.bindings.extensions.harness.state.pending.planRevision, false);
   assert.equal(agentContext.bindings.extensions.harness.state.pending.analysis, true);
+  assert.equal(agentContext.bindings.extensions.harness.state.pending.summary, true);
+  await readTestMainFlowControl(agentContext).summaryCheckpoints[0].onCommitted({
+    committed: true,
+  });
   assert.equal(agentContext.bindings.extensions.harness.state.pending.summary, false);
   assert.equal(
     ctx.modelContext.messages.some(
@@ -150,7 +177,7 @@ test("separate_model simultaneous plan update follows up with summary before ana
   assert.equal(
     ctx.modelContext.messages.some(
       (item = {}) =>
-        resolveContextInjectedMessageType(item) === "separate_model_relay:summary" &&
+        resolveContextInjectedMessageType(item) === "noobot.phase_summary_result" &&
         String(item?.content || "").includes("小结完成"),
     ),
     true,

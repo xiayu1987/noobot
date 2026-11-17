@@ -4,8 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import fs from "node:fs/promises";
+import { createReadStream } from "node:fs";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
-import { createHash } from "node:crypto";
+import {
+  IMMUTABLE_SESSION_HEAD_FILE,
+  IMMUTABLE_SESSION_DIRECTORIES,
+} from "@noobot/session-protocol/immutable-storage";
 import { requireWorkspaceRootEnv } from "@noobot/runtime-topology-protocol/workspace-root";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol/layout";
 import {
@@ -13,11 +17,20 @@ import {
   normalizeSessionTree,
   resolveSessionDirSegments,
 } from "@noobot/workspace-protocol/session-tree";
-import { readSessionArtifact, StorageService } from "noobot-agent/session";
+import {
+  openSessionArtifactReader,
+  withSessionArtifactReadFence,
+  StorageService,
+  PathResolver,
+  SessionPathResolver,
+  FileSystemSessionRepository,
+  FileSystemSessionTreeRepository,
+} from "noobot-agent/session";
 import { PROTOCOL_TIMEOUTS } from "./protocol-timeouts.js";
 
 import { text } from "@noobot/shared/value";
 import { MODEL_CONTEXT_TRACE } from "@noobot/model-protocol";
+import { isRotatedPluginLogName } from "@noobot/plugin-protocol/log-artifact";
 export function workspaceRoot() {
   return requireWorkspaceRootEnv();
 }
@@ -40,32 +53,33 @@ async function persistedSessionRoot(userId, sessionId) {
 }
 
 async function readParentSessionId(sessionDir) {
-  try {
-    const fact = await readJson(path.join(sessionDir, "session.json"));
-    return text(fact?.parentSessionId);
-  } catch (error) {
-    if (error?.code === "ENOENT") return "";
-    throw error;
-  }
+  await using reader = await openSessionArtifactReader({ sessionDir });
+  return (await reader.readMetadata()).parentSessionId;
 }
 
 async function detachedDescendantRoots(userId, rootSessionId) {
   const agentSessionDir = path.join(workspaceRoot(), userId, WORKSPACE_LAYOUT.AGENT_SESSION_DIR);
   let names = [];
   try {
-    names = await fs.readdir(agentSessionDir);
+    names = (await fs.readdir(agentSessionDir, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
   } catch (error) {
     if (error?.code === "ENOENT") return [];
     throw error;
   }
-  const parentById = new Map(
-    await Promise.all(
+  const tree = normalizeSessionTree(
+    await readJson(path.join(workspaceRoot(), userId, WORKSPACE_LAYOUT.SESSION_TREE_FILE)),
+  );
+  const parentById = new Map([
+    ...Object.values(tree.nodes).map((node) => [node.sessionId, node.parentSessionId]),
+    ...(await Promise.all(
       names.map(async (name) => [
         name,
         await readParentSessionId(path.join(agentSessionDir, name)),
       ]),
-    ),
-  );
+    )),
+  ]);
   const belongsToRoot = (sessionId) => {
     const visited = new Set();
     let current = parentById.get(sessionId);
@@ -92,12 +106,32 @@ export async function readJson(filePath) {
 }
 
 export async function readSessionFact(userId, sessionId) {
-  return readSessionArtifact({
-    storageService: new StorageService({
-      atomicRenameRetryDelaysMs: [],
-      platform: process.platform,
+  const repository = auditRepository();
+  await using reader = await repository.requireSessionReader(userId, sessionId, {
+    persistenceContext: repository.treePersistenceContext(userId, sessionId),
+  });
+  return await reader.exportSession();
+}
+
+function auditRepository() {
+  const pathResolver = new PathResolver({ workspaceRoot: workspaceRoot() });
+  const storageService = new StorageService({
+    atomicRenameRetryDelaysMs: [],
+    platform: process.platform,
+  });
+  const sessionTreeRepository = new FileSystemSessionTreeRepository({
+    pathResolver,
+    storageService,
+  });
+  return new FileSystemSessionRepository({
+    pathResolver,
+    storageService,
+    sessionTreeRepository,
+    sessionPathResolver: new SessionPathResolver({
+      pathResolver,
+      treeRepository: sessionTreeRepository,
     }),
-    sessionDir: await sessionRoot(userId, sessionId),
+    now: () => new Date().toISOString(),
   });
 }
 
@@ -112,13 +146,15 @@ async function findFilesNamed(directory, filename) {
   const matches = [];
   for (const entry of entries) {
     const child = path.join(directory, entry.name);
-    if (entry.isDirectory()) matches.push(...(await findFilesNamed(child, filename)));
+    if (entry.isDirectory() && !Object.values(IMMUTABLE_SESSION_DIRECTORIES).includes(entry.name))
+      matches.push(...(await findFilesNamed(child, filename)));
     else if (entry.isFile() && entry.name === filename) matches.push(child);
   }
   return matches;
 }
 
 function failSummaryAudit(message, report) {
+  report.status = "failed";
   const error = new Error(message);
   error.code = "E2E_SESSION_SUMMARY_ARTIFACT_INVALID";
   error.audit = report;
@@ -131,39 +167,55 @@ export async function auditSessionSummaryArtifacts(
   { expectation = "required", requiredTitlePrefix = "" } = {},
 ) {
   const root = await persistedSessionRoot(userId, sessionId);
-  const summaryFiles = root ? (await findFilesNamed(root, "session-summary.json")).sort() : [];
-  const sessionsIndexFile = path.join(
-    workspaceRoot(),
-    userId,
-    WORKSPACE_LAYOUT.SESSION_SUMMARY_FILE,
+  const auditRoots =
+    expectation === "required" ? await sessionTreeRoots(userId, sessionId) : [root].filter(Boolean);
+  const discoveredHeads = await Promise.all(
+    auditRoots.map((directory) => findFilesNamed(directory, IMMUTABLE_SESSION_HEAD_FILE)),
   );
-  let sessionsIndex = null;
-  try {
-    sessionsIndex = await readJson(sessionsIndexFile);
-  } catch (error) {
-    if (error?.code !== "ENOENT") throw error;
-  }
-  const indexedSession =
-    (Array.isArray(sessionsIndex?.sessions) ? sessionsIndex.sessions : []).find(
-      (item) => text(item?.sessionId) === sessionId,
-    ) || null;
+  const heads = [...new Set(discoveredHeads.flat())].sort();
+  return withSessionArtifactReadFence(
+    heads.map((file) => path.dirname(file)),
+    () =>
+      auditSessionSummaryHeads({
+        root,
+        heads,
+        userId,
+        sessionId,
+        expectation,
+        requiredTitlePrefix,
+      }),
+  );
+}
+
+async function auditSessionSummaryHeads({
+  root,
+  heads,
+  userId,
+  sessionId,
+  expectation,
+  requiredTitlePrefix,
+}) {
+  const headVersions = await Promise.all(heads.map((file) => fs.readFile(file)));
+  const repository = auditRepository();
+  const list = await repository.readSessionsSummary(userId);
+  const indexedSession = list.sessions.find((item) => item.sessionId === sessionId) || null;
   const report = {
-    protocolVersion: 1,
-    authority: "session_summary_artifact",
+    protocolVersion: 2,
+    authority: "immutable_session_projection",
     rootSessionId: sessionId,
     expectation,
     status: "passed",
-    summaryCount: summaryFiles.length,
-    referencedDetailCount: 0,
-    summaryBytes: 0,
+    projectionCount: heads.length,
+    thinkingDetailCount: 0,
+    projectionBytes: 0,
     detailBytes: 0,
     listAvailability: String(indexedSession?.availability || ""),
     listTitle: String(indexedSession?.title || ""),
     sessions: [],
   };
   if (expectation === "forbidden") {
-    if (summaryFiles.length)
-      failSummaryAudit(`unprovisioned session created summary artifacts: ${sessionId}`, report);
+    if (heads.length)
+      failSummaryAudit(`unprovisioned session published an immutable head: ${sessionId}`, report);
     if (indexedSession)
       failSummaryAudit(
         `unprovisioned session created a sessions index entry: ${sessionId}`,
@@ -172,25 +224,15 @@ export async function auditSessionSummaryArtifacts(
     return report;
   }
   if (expectation === "unavailable") {
-    const reason = indexedSession?.unavailableReason;
-    if (
-      indexedSession?.availability !== "unavailable" ||
-      !Array.isArray(indexedSession?.messages) ||
-      indexedSession.messages.length ||
-      Number(indexedSession?.messageCount) !== 0 ||
-      indexedSession?.lastMessage !== null ||
-      !text(reason?.code) ||
-      !text(reason?.message)
-    ) {
-      failSummaryAudit(`invalid unavailable sessions index projection: ${sessionId}`, report);
-    }
+    if (indexedSession?.availability !== "unavailable")
+      failSummaryAudit(`expected an unavailable list projection: ${sessionId}`, report);
     return report;
   }
   if (expectation !== "required")
     failSummaryAudit(`invalid summary audit expectation: ${expectation}`, report);
   if (indexedSession?.availability !== "available") {
     failSummaryAudit(
-      `available session is missing its canonical sessions index projection: ${sessionId}`,
+      `available session is missing its canonical list projection: ${sessionId}`,
       report,
     );
   }
@@ -200,80 +242,74 @@ export async function auditSessionSummaryArtifacts(
       report,
     );
   }
-  if (!summaryFiles.length)
-    failSummaryAudit(`session summary artifact is missing: ${sessionId}`, report);
+  if (!heads.includes(path.join(root, IMMUTABLE_SESSION_HEAD_FILE)))
+    failSummaryAudit(`committed session head is missing: ${sessionId}`, report);
 
-  for (const summaryFile of summaryFiles) {
-    const sessionDir = path.dirname(summaryFile);
-    const summary = await readJson(summaryFile);
-    const messages = Array.isArray(summary?.messages) ? summary.messages : [];
-    const summaryStat = await fs.stat(summaryFile);
-    const detailsRoot = path.resolve(sessionDir, "session-summary-details");
-    const referencedFiles = new Set();
+  for (const [index, headFile] of heads.entries()) {
+    await using reader = await openSessionArtifactReader({ sessionDir: path.dirname(headFile) });
+    if (!(await fs.readFile(headFile)).equals(headVersions[index]))
+      failSummaryAudit(`session changed during persistence audit: ${headFile}`, report);
+    const [summary, facts, metadata, listProjection] = await Promise.all([
+      reader.readDisplayProjection(),
+      reader.readFacts(),
+      reader.readMetadata(),
+      reader.readListProjection(),
+    ]);
+    if (
+      summary.sessionId !== metadata.sessionId ||
+      facts.messageCount !== listProjection.messageCount
+    )
+      failSummaryAudit(`session projection identity or count mismatch: ${headFile}`, report);
+    if (
+      metadata.sessionId === sessionId &&
+      (summary.title !== indexedSession.title || facts.messageCount !== indexedSession.messageCount)
+    )
+      failSummaryAudit(`session list and detail projections disagree: ${sessionId}`, report);
+    const presentations = new Set();
     let detailBytes = 0;
-    let referencedDetailCount = 0;
-
-    for (const message of messages) {
-      if (Object.hasOwn(message, "toolTimeline") || Object.hasOwn(message, "activityTimeline")) {
-        failSummaryAudit(`session summary embeds thinking timeline: ${summaryFile}`, report);
-      }
-      const ref = message?.thinkingDetailRef;
-      if (ref === undefined) continue;
-      const reference = String(ref?.file || "").replaceAll("\\", "/");
-      const normalizedReference = path.normalize(reference);
-      const detailFile = path.resolve(sessionDir, normalizedReference);
+    let thinkingDetailCount = 0;
+    for (const message of summary.messages) {
+      if (Object.hasOwn(message, "thinkingDetailRef"))
+        failSummaryAudit(
+          `immutable projection contains a legacy file reference: ${headFile}`,
+          report,
+        );
+      if (message.role !== "assistant") continue;
+      if (!message.presentationMessageId || presentations.has(message.presentationMessageId))
+        failSummaryAudit(`invalid or duplicate presentation identity: ${headFile}`, report);
+      presentations.add(message.presentationMessageId);
+      if (!message.hasThinkingDetails) continue;
+      const detail = await reader.readThinkingDetail({
+        turnScopeId: message.turnScopeId,
+        dialogProcessId: message.dialogProcessId,
+      });
       if (
-        !reference ||
-        path.isAbsolute(reference) ||
-        reference.includes("\0") ||
-        !reference.startsWith("session-summary-details/") ||
-        detailFile === detailsRoot ||
-        !detailFile.startsWith(`${detailsRoot}${path.sep}`)
-      ) {
-        failSummaryAudit(`invalid session summary detail reference: ${reference}`, report);
-      }
-      if (referencedFiles.has(detailFile)) {
-        failSummaryAudit(`duplicate session summary detail reference: ${reference}`, report);
-      }
-      referencedFiles.add(detailFile);
-      const detail = await readJson(detailFile);
-      const detailHash = `sha256:${createHash("sha256").update(JSON.stringify(detail)).digest("hex")}`;
-      const presentationMessageId = text(message?.presentationMessageId);
-      if (
-        detailHash !== ref?.contentHash ||
-        detail?.presentationMessageId !== presentationMessageId
-      ) {
-        failSummaryAudit(`session summary detail identity or hash mismatch: ${reference}`, report);
-      }
-      detailBytes += (await fs.stat(detailFile)).size;
-      referencedDetailCount += 1;
+        !detail.exists ||
+        detail.sessionId !== summary.sessionId ||
+        detail.messageItem.presentationMessageId !== message.presentationMessageId ||
+        !detail.messageItem.hasThinkingDetails
+      )
+        failSummaryAudit(`thinking detail identity or content mismatch: ${headFile}`, report);
+      detailBytes += Buffer.byteLength(JSON.stringify(detail));
+      thinkingDetailCount += 1;
     }
-
-    let detailNames = [];
-    try {
-      detailNames = (await fs.readdir(detailsRoot, { withFileTypes: true }))
-        .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
-        .map((entry) => path.join(detailsRoot, entry.name));
-    } catch (error) {
-      if (error?.code !== "ENOENT") throw error;
-    }
-    const orphanFiles = detailNames.filter((detailFile) => !referencedFiles.has(detailFile));
-    if (orphanFiles.length) {
-      failSummaryAudit(`orphan session summary details: ${orphanFiles.join(", ")}`, report);
-    }
-    report.summaryBytes += summaryStat.size;
+    const projectionBytes = Buffer.byteLength(JSON.stringify(summary));
+    report.projectionBytes += projectionBytes;
     report.detailBytes += detailBytes;
-    report.referencedDetailCount += referencedDetailCount;
+    report.thinkingDetailCount += thinkingDetailCount;
     report.sessions.push({
-      sessionId: String(summary?.sessionId || ""),
-      summaryFile: path.relative(root, summaryFile).replaceAll("\\", "/"),
-      summaryBytes: summaryStat.size,
+      sessionId: summary.sessionId,
+      generation: reader.generation,
+      headFile: path.relative(root, headFile).replaceAll("\\", "/"),
+      projectionBytes,
       detailBytes,
-      messageCount: messages.length,
-      referencedDetailCount,
-      embeddedTimelineCount: 0,
-      orphanDetailCount: 0,
+      messageCount: summary.messages.length,
+      thinkingDetailCount,
     });
+  }
+  for (let index = 0; index < heads.length; index += 1) {
+    if (!(await fs.readFile(heads[index])).equals(headVersions[index]))
+      failSummaryAudit(`session changed during persistence audit: ${heads[index]}`, report);
   }
   return report;
 }
@@ -328,7 +364,7 @@ export async function readSessionRuntimeEvents(userId, sessionId) {
   ).flat();
 }
 
-async function listExecutionEventSegmentFiles(executionDir) {
+async function listExecutionEventSegmentFiles(executionDir, { dialogProcessId = "" } = {}) {
   let index = null;
   try {
     index = JSON.parse(await fs.readFile(path.join(executionDir, "index.json"), "utf8"));
@@ -338,6 +374,7 @@ async function listExecutionEventSegmentFiles(executionDir) {
   }
   const files = [];
   for (const turn of Array.isArray(index?.turns) ? index.turns : []) {
+    if (dialogProcessId && turn.dialogProcessId !== dialogProcessId) continue;
     const turnDir = path.join(executionDir, "turns", String(turn?.dialogProcessId || ""));
     const names = (await fs.readdir(turnDir))
       .filter((name) => /^segment-\d+\.jsonl$/.test(name))
@@ -347,17 +384,31 @@ async function listExecutionEventSegmentFiles(executionDir) {
   return files;
 }
 
-async function readExecutionEventSegmentFiles(files) {
-  return (
-    await Promise.all(
-      files.map((file) => readJsonLinesIfPresent(file, { committedFramesOnly: true })),
-    )
-  ).flat();
+export async function* iterateCommittedJsonLines(file) {
+  let pending = "";
+  for await (const chunk of createReadStream(file, { encoding: "utf8" })) {
+    const lines = (pending + chunk).split("\n");
+    pending = lines.pop();
+    for (const line of lines) if (line.trim()) yield JSON.parse(line);
+  }
 }
 
-export async function readSessionExecutionEvents(userId, sessionId) {
+async function* iterateExecutionEventSegmentFiles(files) {
+  for (const file of files) yield* iterateCommittedJsonLines(file);
+}
+
+export async function* iterateSessionExecutionEvents(userId, sessionId, options = {}) {
   const executionDir = path.join(await sessionRoot(userId, sessionId), "execution-events");
-  return readExecutionEventSegmentFiles(await listExecutionEventSegmentFiles(executionDir));
+  yield* iterateExecutionEventSegmentFiles(
+    await listExecutionEventSegmentFiles(executionDir, options),
+  );
+}
+
+export async function readSessionExecutionEvents(userId, sessionId, options = {}) {
+  const records = [];
+  for await (const record of iterateSessionExecutionEvents(userId, sessionId, options))
+    records.push(record);
+  return records;
 }
 
 async function findExecutionEventSegments(directory) {
@@ -386,10 +437,21 @@ export async function readSessionExecutionEventTree(
   sessionId,
   { rootSessionId = "" } = {},
 ) {
+  const records = [];
+  for await (const record of iterateSessionExecutionEventTree(userId, sessionId, { rootSessionId }))
+    records.push(record);
+  return records;
+}
+
+export async function* iterateSessionExecutionEventTree(
+  userId,
+  sessionId,
+  { rootSessionId = "" } = {},
+) {
   const normalizedSessionId = text(sessionId);
   const hasExplicitRoot = Boolean(text(rootSessionId));
   const normalizedRootSessionId = String(rootSessionId || normalizedSessionId).trim();
-  if (!normalizedSessionId || !normalizedRootSessionId) return [];
+  if (!normalizedSessionId || !normalizedRootSessionId) return;
 
   const segments = (
     await Promise.all(
@@ -398,10 +460,9 @@ export async function readSessionExecutionEventTree(
       ),
     )
   ).flat();
-  const records = await readExecutionEventSegmentFiles(segments);
-  return hasExplicitRoot
-    ? records.filter((record) => text(record?.sessionId) === normalizedSessionId)
-    : records;
+  for await (const record of iterateExecutionEventSegmentFiles(segments)) {
+    if (!hasExplicitRoot || text(record?.sessionId) === normalizedSessionId) yield record;
+  }
 }
 
 export function modelInvocationTraces(records) {
@@ -539,17 +600,40 @@ export async function waitForPluginExecutionEvents(
   );
 }
 
+export async function readPluginLogArtifacts(root, filename) {
+  const parsed = path.parse(filename);
+  const archives = (await fs.readdir(root, { withFileTypes: true }))
+    .filter(
+      (entry) =>
+        entry.isFile() &&
+        isRotatedPluginLogName(entry.name, {
+          name: parsed.name,
+          extension: parsed.ext,
+        }),
+    )
+    .map((entry) => entry.name)
+    .sort();
+  const records = [];
+  for (const name of [...archives, filename]) {
+    for await (const record of iterateCommittedJsonLines(path.join(root, name)))
+      records.push(record);
+  }
+  return records;
+}
+
+function harnessRunRoot(userId, dialogProcessId) {
+  return path.join(workspaceRoot(), userId, "runtime/plugin-data/harness/runs", dialogProcessId);
+}
+
+export async function readHarnessContext(userId, dialogProcessId) {
+  return readJson(path.join(harnessRunRoot(userId, dialogProcessId), "context-snapshot.json"));
+}
+
 export async function readHarnessRun(userId, dialogProcessId) {
-  const root = path.join(
-    workspaceRoot(),
-    userId,
-    "runtime/plugin-data/harness/runs",
-    dialogProcessId,
-  );
+  const root = harnessRunRoot(userId, dialogProcessId);
   return {
     run: await readJson(path.join(root, "harness-run.json")),
-    context: await readJson(path.join(root, "context-snapshot.json")),
-    events: await readJsonLines(path.join(root, "events.jsonl")),
+    events: await readPluginLogArtifacts(root, "events.jsonl"),
     capabilityTraces: await readJsonLinesIfPresent(path.join(root, "capability-traces.jsonl")),
   };
 }

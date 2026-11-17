@@ -524,8 +524,8 @@ test("help resolves binding names across listing, manuals, capabilities and isol
 
 test("tools listing applies the same runtime tool policy that narrows the model bindings", async () => {
   const scopeOptions = {
-    toolNames: [...FIXTURE_TOOL_NAMES, TOOL_NAME.TASK_SUMMARY],
-    runConfig: { hookManager: null, toolPolicy: { denyToolNames: [TOOL_NAME.TASK_SUMMARY] } },
+    toolNames: [...FIXTURE_TOOL_NAMES, TOOL_NAME.EXECUTE_SCRIPT],
+    runConfig: { hookManager: null, toolPolicy: { denyToolNames: [TOOL_NAME.EXECUTE_SCRIPT] } },
   };
   const available = resolveAvailableTools(createScope(scopeOptions));
   assert.equal(available.source, TOOL_SOURCE.RUNTIME_BINDINGS);
@@ -538,7 +538,7 @@ test("tools listing applies the same runtime tool policy that narrows the model 
   const [tool] = createHelpTool({ agentContext: createScope(scopeOptions) });
   const listed = JSON.parse(await tool.func({ command: "--tools" }));
   assert.equal(
-    listed.toolNames.includes(TOOL_NAME.TASK_SUMMARY),
+    listed.toolNames.includes(TOOL_NAME.EXECUTE_SCRIPT),
     false,
     "help must not advertise a tool the runtime policy denied",
   );

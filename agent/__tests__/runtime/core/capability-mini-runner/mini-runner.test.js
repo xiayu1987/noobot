@@ -149,8 +149,7 @@ function createInvoker(options = {}) {
   return createAgentCapabilityModelInvoker({
     pluginId: "noobot-plugin-test",
     configSnapshot: createConfigSnapshot(),
-    resolveDefaultModelSpecFn: () => modelSpec,
-    resolveModelSpecByNameFn: () => modelSpec,
+    resolveEffectiveProviderFn: () => modelSpec,
     ...options,
   });
 }
@@ -172,6 +171,38 @@ test("mini-runner sends canonical requests through the host ModelPort", async ()
   assert.equal(modelPort.requests[0].invocation.purpose, "planning");
   assert.equal(modelPort.requests[0].invocation.domain, "workflow");
   assert.equal(modelPort.requests[0].options.streaming, false);
+});
+
+test("mini-runner resolves default, explicit, missing and disabled providers from its snapshot", async () => {
+  const configSnapshot = createConfigSnapshot({
+    config: {
+      defaultProvider: "primary",
+      providers: {
+        primary: { ...modelSpec, alias: "primary", model: "primary-model" },
+        review: { ...modelSpec, alias: "review", model: "review-model" },
+        disabled: { ...modelSpec, alias: "disabled", model: "disabled-model", enabled: false },
+      },
+    },
+  });
+  const originalSnapshot = structuredClone(configSnapshot);
+  const modelPort = createModelPort([{ text: "done" }]);
+  const { ctx, runtime } = createContext({ modelPort });
+  runtime.globalConfig = { defaultProvider: "disabled" };
+  runtime.userConfig = { defaultProvider: "disabled" };
+  const invoke = createAgentCapabilityModelInvoker({
+    pluginId: "noobot-plugin-test",
+    configSnapshot,
+  });
+  for (const model of [undefined, "  ", " review ", "missing", "disabled"]) {
+    await invoke({ model, ctx, signal: new AbortController().signal });
+  }
+  assert.deepEqual(
+    modelPort.requests.map((request) => request.model?.alias ?? null),
+    ["primary", "primary", "review", null, null],
+  );
+  assert.equal(modelPort.requests[0].model.model, "primary-model");
+  assert.equal(modelPort.requests[2].model.model, "review-model");
+  assert.deepEqual(configSnapshot, originalSnapshot);
 });
 
 test("guidance analysis publishes only the canonical Message Event content field", async () => {
@@ -282,10 +313,7 @@ test("mini-runner isolates explicit model selection and plugin headers", async (
     enableToolBinding: false,
     pluginId: "noobot-plugin-test",
     configSnapshot: createConfigSnapshot(),
-    resolveDefaultModelSpecFn: () => {
-      throw new Error("default model must not be selected");
-    },
-    resolveModelSpecByNameFn: ({ modelName }) => {
+    resolveEffectiveProviderFn: (modelName) => {
       resolvedName = modelName;
       return modelSpec;
     },

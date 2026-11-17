@@ -8,6 +8,7 @@ import {
   getMessageRuntimeChannelState,
   SESSION_RUN_MESSAGE_RUNTIME_MARK,
 } from "../../chat/runtime/sessionRunStateMachine.js";
+import { projectTurnRuntimeView } from "../../chat/runtime/run-state-machine/turnRuntimeSelectors.js";
 import { acceptsDebugSink, emitLazyDebugSafely, isDebugTypeEnabled } from "./lazyDebugSink.js";
 import { text as clean, isObjectLike } from "@noobot/shared/value";
 
@@ -27,7 +28,7 @@ export function summarizeStateMachineMessage(message = {}) {
   return {
     messageUid: message.messageUid || "",
     presentationMessageId: message.presentationMessageId || "",
-    role: message.role || message.type || "",
+    role: clean(message.role),
     sessionId: message.sessionId,
     dialogProcessId: message.dialogProcessId,
     turnScopeId: message.turnScopeId,
@@ -35,7 +36,7 @@ export function summarizeStateMachineMessage(message = {}) {
     channelState: channelState?.state || "",
     terminalOutcome: message.terminalOutcome || "",
     hasRuntimeMark: Boolean(message[SESSION_RUN_MESSAGE_RUNTIME_MARK]),
-    contentLength: String(message.content || message.text || message.message || "").length,
+    contentLength: String(message.content ?? "").length,
   };
 }
 
@@ -58,13 +59,13 @@ export function summarizeStateMachineEvent(event = {}) {
 
 export function summarizeStateMachineTurn(turn = {}, projection = null) {
   if (!isObjectLike(turn)) return null;
-  const view = projection && typeof projection === "object" ? projection : turn;
+  const view = isObjectLike(projection) ? projection : projectTurnRuntimeView(turn.sessionId, turn);
   return {
     sessionId: clean(turn.sessionId),
     dialogProcessId: clean(turn.dialogProcessId),
     turnScopeId: clean(turn.turnScopeId),
-    state: clean(view.displayState || turn.displayState || turn.state),
-    backendState: clean(turn.backendState || turn.transportState),
+    state: clean(view.displayState),
+    backendState: clean(turn.backendState),
     action: clean(turn.action),
     sending: view.sending === true,
     canStop: view.canStop === true,
@@ -79,8 +80,7 @@ export function summarizeStateMachineTurn(turn = {}, projection = null) {
 
 export function summarizeTurnLifecycleSnapshot(snapshot = {}) {
   if (!isObjectLike(snapshot)) return null;
-  const activeTurn =
-    snapshot.activeTurn && typeof snapshot.activeTurn === "object" ? snapshot.activeTurn : null;
+  const activeTurn = isObjectLike(snapshot.activeTurn) ? snapshot.activeTurn : null;
   return {
     sessionId: clean(snapshot.sessionId),
     activeTurnScopeId: clean(snapshot.activeTurnScopeId),

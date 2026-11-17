@@ -7,8 +7,9 @@ export {
   commitTurnLifecycle,
   createCommittedTurnLifecycleEnvelope,
 } from "./commit-turn-lifecycle.js";
-export { commitTurnReplacement } from "./commit-turn-replacement.js";
-export { commitTurnDeletion } from "./commit-turn-deletion.js";
+export { commitIndexedTurnLifecycle } from "./commit-indexed-turn-lifecycle.js";
+export { commitTurnReplacement, commitIndexedTurnReplacement } from "./commit-turn-replacement.js";
+export { commitTurnDeletion, commitIndexedTurnDeletion } from "./commit-turn-deletion.js";
 export { repairOrphanedTerminalTurns } from "./repair-orphaned-terminal-turns.js";
 export {
   assessTurnRecovery,
@@ -25,4 +26,5 @@ export {
   queryAuthoritativeExecutionChildren,
   queryAuthoritativeExecutionTree,
   resolveAuthoritativeTurnTerminal,
+  resolveIndexedTurnTerminal,
 } from "./authority-query-service.js";

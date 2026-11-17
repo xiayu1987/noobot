@@ -16,7 +16,7 @@ import {
   rebuildSessionTree,
 } from "@noobot/session-repair";
 import { writeFileAtomic } from "../shared/storage/atomic-file-write.js";
-import { ignoreSessionProgress } from "./session-directory-walk.js";
+import { ignoreSessionProgress, readSessionDirectory } from "./session-directory-walk.js";
 import { sessionMutationCoordinator } from "../session/session-mutation-coordinator.js";
 import {
   SESSION_ARTIFACT_FILE_NAMES,
@@ -27,9 +27,6 @@ import {
   LEGACY_V2_EXECUTION_EVENT_INDEX_SCHEMA_VERSION,
 } from "@noobot/session-protocol/execution-event-index";
 import { isPlainObject } from "@noobot/shared/value";
-
-const SESSION_ARTIFACT_DIRECTORIES = new Set(Object.values(SESSION_ARTIFACT_FILE_NAMES));
-const MUTATION_LOCK_SUFFIX = ".mutation-lock";
 
 const JSON_DOCUMENT_STATE = Object.freeze({
   MISSING: "missing",
@@ -57,17 +54,6 @@ async function readJsonDocument(filePath) {
   return { state: JSON_DOCUMENT_STATE.PARSED, document };
 }
 
-async function listDirectories(directory) {
-  try {
-    return (await readdir(directory, { withFileTypes: true })).filter((entry) =>
-      entry.isDirectory(),
-    );
-  } catch (error) {
-    if (error.code === "ENOENT" || error.code === "ENOTDIR") return [];
-    throw error;
-  }
-}
-
 function createRetirement(base, backupBase) {
   return async function retire(relativePath) {
     const target = path.join(backupBase, relativePath);
@@ -87,9 +73,8 @@ async function readSessionDocuments(sessionRoot, segments = []) {
       documents.push({ segments, document: session.document });
     }
   }
-  for (const entry of await listDirectories(path.join(sessionRoot, ...segments))) {
-    if (SESSION_ARTIFACT_DIRECTORIES.has(entry.name)) continue;
-    if (entry.name.endsWith(MUTATION_LOCK_SUFFIX)) continue;
+  const { children } = await readSessionDirectory(path.join(sessionRoot, ...segments));
+  for (const entry of children) {
     documents.push(...(await readSessionDocuments(sessionRoot, [...segments, entry.name])));
   }
   return documents;
@@ -243,17 +228,15 @@ async function retireSessionArtifacts({ base, sessionDir, retire }) {
 }
 
 async function* walkSessionDirectories(directory) {
-  const entries = await listDirectories(directory);
-  const names = new Set(entries.map((entry) => entry.name));
+  const { entries, children } = await readSessionDirectory(directory);
+  const names = new Set(entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name));
   if (
     names.has(SESSION_ARTIFACT_FILE_NAMES.executionEventsDir) ||
     names.has(SESSION_ARTIFACT_FILE_NAMES.executionReportsDir)
   ) {
     yield directory;
   }
-  for (const entry of entries) {
-    if (SESSION_ARTIFACT_DIRECTORIES.has(entry.name)) continue;
-    if (entry.name.endsWith(MUTATION_LOCK_SUFFIX)) continue;
+  for (const entry of children) {
     yield* walkSessionDirectories(path.join(directory, entry.name));
   }
 }

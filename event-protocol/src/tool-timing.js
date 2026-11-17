@@ -19,3 +19,33 @@ export function assertToolCallTiming(value) {
   }
   return value;
 }
+
+export function assertToolCallTimingInterval(value) {
+  assertToolCallTiming(value);
+  const interval = value.interval;
+  if (
+    !isCanonicalText(interval?.clockId) ||
+    !Number.isFinite(interval.startMs) ||
+    interval.startMs < 0 ||
+    !Number.isFinite(interval.endMs) ||
+    interval.endMs < interval.startMs
+  )
+    throw new TypeError("tool timing requires a monotonic lifecycle interval");
+  const execution = interval.execution;
+  if (
+    execution !== null &&
+    (!Number.isFinite(execution?.startMs) ||
+      !Number.isFinite(execution?.endMs) ||
+      execution.startMs < interval.startMs ||
+      execution.endMs < execution.startMs ||
+      execution.endMs > interval.endMs)
+  )
+    throw new TypeError("tool execution interval must be inside its lifecycle");
+  const executionMs = execution === null ? 0 : execution.endMs - execution.startMs;
+  if (
+    value.executionMs !== executionMs ||
+    Math.abs(value.frameworkMs - (interval.endMs - interval.startMs - executionMs)) > 1e-9
+  )
+    throw new TypeError("tool timing durations do not match their intervals");
+  return value;
+}

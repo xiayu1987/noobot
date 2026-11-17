@@ -5,7 +5,7 @@
  */
 
 import { filePath as path } from "@noobot/path-resolver";
-import { readdir } from "node:fs/promises";
+import { readdir, rmdir } from "node:fs/promises";
 
 import { fsRm } from "../../shared/storage/fs-adapter.js";
 import { safeStr } from "../../shared/utils/shared-utils.js";
@@ -31,6 +31,34 @@ export async function deleteScopedAttachmentsBySessionIds(
     deleted.push(sid);
   }
   return { deletedSessionIds: deleted, deletedCount: deleted.length };
+}
+
+async function removeEmptySessionDirectory(directory) {
+  try {
+    await rmdir(directory);
+  } catch (error) {
+    if (!["ENOENT", "ENOTEMPTY", "EEXIST"].includes(error.code)) throw error;
+  }
+}
+
+async function pruneSessionSources(sessionPath, sourceSet) {
+  let sourceEntries;
+  try {
+    sourceEntries = await readdir(sessionPath, { withFileTypes: true });
+  } catch (error) {
+    if (error.code === "ENOENT" || error.code === "ENOTDIR") return false;
+    throw error;
+  }
+  let deletedAnySource = false;
+  for (const sourceEntry of sourceEntries) {
+    if (!sourceEntry.isDirectory()) continue;
+    const sourceName = safeStr(sourceEntry.name).toLowerCase();
+    if (!sourceSet.has(sourceName)) continue;
+    await fsRm(path.join(sessionPath, sourceEntry.name), { recursive: true, force: true });
+    deletedAnySource = true;
+  }
+  if (deletedAnySource) await removeEmptySessionDirectory(sessionPath);
+  return deletedAnySource;
 }
 
 export async function pruneOrphanScopedAttachments(
@@ -72,27 +100,7 @@ export async function pruneOrphanScopedAttachments(
       continue;
     }
 
-    let sourceEntries = [];
-    try {
-      sourceEntries = await readdir(sessionPath, { withFileTypes: true });
-    } catch (error) {
-      if (error?.code === "ENOENT" || error?.code === "ENOTDIR") {
-        continue;
-      }
-      throw error;
-    }
-    let deletedAnySource = false;
-    for (const sourceEntry of sourceEntries) {
-      if (!sourceEntry?.isDirectory?.()) continue;
-      const sourceName = safeStr(sourceEntry?.name).toLowerCase();
-      if (!sourceName || !sourceSet.has(sourceName)) continue;
-      await fsRm(path.join(sessionPath, sourceEntry.name), { recursive: true, force: true });
-      deletedAnySource = true;
-    }
-    if (deletedAnySource) {
-      await fsRm(sessionPath, { recursive: false, force: true });
-      deletedSessionIds.push(sessionId);
-    }
+    if (await pruneSessionSources(sessionPath, sourceSet)) deletedSessionIds.push(sessionId);
   }
 
   return { deletedSessionIds, deletedCount: deletedSessionIds.length };

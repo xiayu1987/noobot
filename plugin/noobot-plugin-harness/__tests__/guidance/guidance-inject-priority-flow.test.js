@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createTestSummaryMessageBlocks } from "../helpers/public-runtime-fixtures.js";
 
 import {
   createGuidanceHandler,
@@ -23,7 +24,7 @@ test("inject mode: when turn-summary and revision are both pending, revision pro
   const meta = { harness: { planningGuidanceMode: "inject", capabilityModelInvoker: null } };
 
   const firstCtx = {
-    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "继续" }] },
+    messageBlocks: createTestSummaryMessageBlocks(),
     agentContext,
   };
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx: firstCtx, meta });
@@ -67,7 +68,7 @@ test("inject mode: when turn-summary and revision are both pending, revision pro
     secondCtx.modelContext.messages.some((msg = {}) =>
       String(msg?.content || "").includes("harness-guidance-summary"),
     ),
-    true,
+    false,
   );
 });
 

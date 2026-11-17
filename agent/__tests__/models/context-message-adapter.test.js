@@ -74,7 +74,7 @@ test("restored task_check history remains checkpoint evidence after LangChain pr
 });
 
 test("restored checkpoint tool results retain policy in history and close summary batches", () => {
-  const boundaryPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
+  const boundaryPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE);
   const evidencePolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE);
   const dialogProcessId = "dialog-1";
   const source = [

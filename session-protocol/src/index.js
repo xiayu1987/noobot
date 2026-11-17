@@ -4,8 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 export * from "./version.js";
+export { decideTurnLifecycleSnapshotApplication } from "./lifecycle/turn-snapshot-application.js";
+export * from "./aggregate/session-settings.js";
+export * from "./aggregate/turn-view.js";
 export * from "./identity.js";
 export * from "./persistence-scope.js";
+export * from "./detached-session-metadata.js";
+export * from "./aggregate/scoped-session-metadata.js";
 export * from "./policies.js";
 export {
   TURN_LIFECYCLE_PROTOCOL_VERSION,
@@ -56,6 +61,7 @@ export {
 export * from "./command/command-fingerprint.js";
 export {
   appendCommandReceipt,
+  isCanonicalCommandReceipt,
   normalizeCommandReceipt,
   normalizeCommandReceipts,
   validateCommandReceiptResult,
@@ -98,3 +104,4 @@ export * from "./aggregate/sessions-summary.js";
 export * from "./aggregate/session-detail.js";
 export * from "./aggregate/server-clock.js";
 export * from "./aggregate/session-mutation-response.js";
+export * from "./aggregate/session-mutation-projection.js";

@@ -4,45 +4,36 @@
  * SPDX-License-Identifier: MIT
  */
 import { HOOK_POINT, requireHookTurn } from "@noobot/hook-protocol";
-import { requireResponseToolNameBindings } from "@noobot/model-protocol";
 import { resolveToolCallName } from "@noobot/shared/tool-name";
-import { resolveContextMessageSummarized } from "@noobot/context-protocol/message/codec";
-import { relaySeparateModelOutputAsUserMessage } from "../shared/relay-model-output.js";
+import {
+  countSummaryMessageChars,
+  resolveSummaryScope,
+} from "@noobot/context-protocol/policy/summary";
+import { resolveModelMessageBlocks } from "../../../core/message-store.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import {
   CAPABILITY_DOMAIN,
-  saveCapabilityOutputAsTransferArtifacts,
   ensureHarnessBucket,
-  extractRawTextContent,
-  readAfterLlmCallText,
   shouldSkipAnalysisForTrailingToolCallContent,
 } from "./deps.js";
-import { parseSummaryOverviewAndDetailFromText } from "../shared/plan/summary-text-protocol.js";
 import {
   maybeInjectPlanUpdatePrompt,
   maybeCapturePlanUpdateByInject,
 } from "./revision-injector.js";
-import { maybeInjectGuidanceOrSummaryPrompt } from "./prompt-injector.js";
+import { maybeInjectGuidancePrompt } from "./prompt-injector.js";
 import { runPendingPlanUpdateBySeparateModel, runGuidanceBySeparateModel } from "./model-runner.js";
 import {
   resolveGuidancePriorityDecision,
   resolveNextGuidanceAction,
 } from "../planning/plan-update-scheduler.js";
 import {
-  markGuidanceSummarizedMessages,
   markToolSignals,
   updateFailureCounters,
+  reconcilePendingSummary,
 } from "./signal-tracker.js";
-import {
-  applySummaryText,
-  recordLatestSummaryFullText,
-  recordSummaryTransferEnvelopes,
-  shouldSaveSummaryToAttachment,
-  transferSummaryInjectionMessage,
-} from "./summary-manager.js";
 import { appendCapabilityLog } from "../shared/attachment-log-utils.js";
 import { runWorkflowLifecycle } from "../shared/workflow/pattern.js";
 import { resolvePlanningGuidanceMode } from "../shared/model/utils.js";
@@ -53,21 +44,10 @@ import {
   resolveAnalysisThresholdWithSource,
   resolveGatedThresholdWithSource,
 } from "../shared/threshold-utils.js";
-import { text, isObjectLike } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 const GUIDANCE_DECISION = WORKFLOW_PARAMS.guidance.decisions;
-const TASK_SUMMARY_TOOL_NAME = WORKFLOW_PARAMS.planning.tools.summaryToolName;
-
-function resolveUnsummarizedMessageChars(messages = []) {
-  if (!Array.isArray(messages)) return 0;
-  return messages.reduce((total, message) => {
-    if (!isObjectLike(message)) return total;
-    if (resolveContextMessageSummarized(message)) return total;
-    const content = extractRawTextContent(message?.content ?? message);
-    return total + String(content || "").length;
-  }, 0);
-}
 
 function resolveGuidanceAnalysisTurnsThreshold(ctx = {}, meta = {}) {
   const thresholdMode = resolveWorkflowThresholdModeFromContext(ctx);
@@ -108,7 +88,8 @@ function maybeScheduleGuidanceSummary(ctx = {}, meta = {}) {
   const threshold = resolveGuidanceSummaryThresholds(ctx, meta);
   state.counters.lastGuidanceSummaryCounterTurn = currentTurn;
   state.counters.summaryTurns += turnIncrement;
-  const currentChars = resolveUnsummarizedMessageChars(ctx?.modelContext?.messages);
+  const { summaryMessages } = resolveSummaryScope(resolveModelMessageBlocks(ctx));
+  const currentChars = countSummaryMessageChars(summaryMessages);
   const charsThreshold = LENGTH_THRESHOLDS.context.harnessSummaryMessageChars;
   const reachedTurnsSummary = state.counters.summaryTurns > threshold.turnsThreshold;
   const reachedCharsSummary = currentChars > charsThreshold;
@@ -118,7 +99,6 @@ function maybeScheduleGuidanceSummary(ctx = {}, meta = {}) {
     return false;
   }
   setPendingStateWithMeta(state, "summary", true);
-  state.counters.summaryTurns = 0;
   state.flags.summaryByCharsPrompted = reachedCharsSummary === true;
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.GUIDANCE,
@@ -148,7 +128,6 @@ function maybeScheduleSummaryByToolBurst(ctx = {}, meta = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder || holder.state?.pending?.summary === true) return false;
   const toolNames = calls.map((call) => resolveToolCallName(call)).filter(Boolean);
-  if (toolNames.includes(TASK_SUMMARY_TOOL_NAME)) return false;
   setPendingStateWithMeta(holder.state, "summary", true);
   holder.state.flags.summaryByCharsPrompted = false;
   appendCapabilityLog(ctx, {
@@ -214,9 +193,7 @@ function resolveWorkflowActionName(action = "", stage = "", mode = "") {
       : GUIDANCE_DECISION.requestedAction.planUpdateRefinementInject;
   }
   if (action === GUIDANCE_DECISION.action.summary) {
-    return mode === HARNESS_PLANNING_GUIDANCE_MODE.SEPARATE_MODEL
-      ? GUIDANCE_DECISION.requestedAction.summarySeparateModel
-      : GUIDANCE_DECISION.requestedAction.summaryInject;
+    return GUIDANCE_DECISION.requestedAction.summarySeparateModel;
   }
   if (action === GUIDANCE_DECISION.action.guidance) {
     return mode === HARNESS_PLANNING_GUIDANCE_MODE.SEPARATE_MODEL
@@ -241,7 +218,10 @@ async function executeGuidanceWorkflowAction({
   let executedPrimary = false;
   let executedFollowup = false;
 
-  if (mode === HARNESS_PLANNING_GUIDANCE_MODE.SEPARATE_MODEL) {
+  if (
+    nextAction.action === GUIDANCE_DECISION.action.summary ||
+    mode === HARNESS_PLANNING_GUIDANCE_MODE.SEPARATE_MODEL
+  ) {
     if (nextAction.action === GUIDANCE_DECISION.action.summary) {
       const result = await runGuidanceBySeparateModel(ctx, meta, { action: nextAction.action });
       changed = result || changed;
@@ -272,8 +252,8 @@ async function executeGuidanceWorkflowAction({
         executedFollowup = followupChanged === true;
       }
     }
-  } else if (nextAction.action === "summary" || nextAction.action === "guidance") {
-    const result = maybeInjectGuidanceOrSummaryPrompt(ctx, { action: nextAction.action });
+  } else if (nextAction.action === "guidance") {
+    const result = maybeInjectGuidancePrompt(ctx);
     changed = result || changed;
     executedPrimary = result === true;
   } else if (nextAction.action === "plan_update") {
@@ -291,74 +271,8 @@ async function executeGuidanceWorkflowAction({
   };
 }
 
-async function relayGuidanceSummary(ctx, { meta, locale, rawSummaryText }) {
-  const toolNameBindings = requireResponseToolNameBindings(ctx.modelResponse);
-  const persistSummaryAttachment = shouldSaveSummaryToAttachment(meta);
-  if (persistSummaryAttachment && rawSummaryText) {
-    const transferPayload = await saveCapabilityOutputAsTransferArtifacts(ctx, {
-      purpose: "summary",
-      content: rawSummaryText,
-      generationSource: "harness_summary",
-      domain: CAPABILITY_DOMAIN.GUIDANCE,
-    });
-    recordSummaryTransferEnvelopes(ctx, transferPayload);
-    if (transferPayload.transferEnvelopes.length) {
-      relaySeparateModelOutputAsUserMessage(ctx, {
-        locale,
-        purpose: "summary",
-        content: rawSummaryText,
-        toolNameBindings,
-        dedupe: true,
-        transferPayload,
-      });
-    }
-    return;
-  }
-  recordSummaryTransferEnvelopes(ctx, { transferEnvelopes: [] });
-  if (!rawSummaryText) return;
-  const summaryInjectionContent = await transferSummaryInjectionMessage(ctx, {
-    fullText: rawSummaryText,
-    summaryText: rawSummaryText,
-    detailText: rawSummaryText,
-    injectMode: "full",
-    meta,
-  });
-  relaySeparateModelOutputAsUserMessage(ctx, {
-    locale,
-    purpose: "summary",
-    content: summaryInjectionContent || rawSummaryText,
-    toolNameBindings,
-    dedupe: true,
-  });
-}
-
-async function applyPendingGuidanceSummary(ctx, meta, holder) {
-  holder.state.flags.guidanceSummaryMarkPending = false;
-  const markedCount = await markGuidanceSummarizedMessages(ctx, meta);
-  appendCapabilityLog(ctx, {
-    domain: CAPABILITY_DOMAIN.GUIDANCE,
-    event: GUIDANCE_EVENTS.summaryMessagesMarked,
-    detail: { markedCount },
-  });
-  const rawSummaryText = readAfterLlmCallText(ctx);
-  const { locale } = holder.state;
-  await relayGuidanceSummary(ctx, { meta, locale, rawSummaryText });
-  recordLatestSummaryFullText(ctx, rawSummaryText);
-  const { overviewText } = parseSummaryOverviewAndDetailFromText(rawSummaryText);
-  applySummaryText(ctx, overviewText || rawSummaryText);
-  return markedCount > 0;
-}
-
-async function handleAfterLlmCall(ctx, meta) {
-  const holder = ensureHarnessBucket(ctx);
-  let changed = false;
-  if (holder?.state?.flags?.guidanceSummaryMarkPending === true) {
-    changed = await applyPendingGuidanceSummary(ctx, meta, holder);
-  }
-  return (await maybeCapturePlanUpdateByInject(ctx)) || changed;
-}
-
 async function handleBeforeLlmCall(ctx, meta) {
+  ctx.agentContext.bindings.mainFlowControl.claimSummaryScheduling({ source: "plugin.summary" });
   resolveGuidanceSummaryThresholds(ctx, meta);
   resolveGuidanceAnalysisTurnsThreshold(ctx, meta);
   const holder = ensureHarnessBucket(ctx);
@@ -366,6 +280,7 @@ async function handleBeforeLlmCall(ctx, meta) {
   const invariantChanged =
     enforceWorkflowInvariants(ctx, { domain: CAPABILITY_DOMAIN.GUIDANCE }) === true;
   const summaryScheduleChanged = maybeScheduleGuidanceSummary(ctx, meta) === true;
+  const summaryScopeChanged = reconcilePendingSummary(ctx, holder.state);
   const scheduleChanged = maybeScheduleGuidanceAnalysis(ctx, meta) === true;
   const state = holder.state;
   const nextAction = resolveNextGuidanceAction(state);
@@ -392,7 +307,12 @@ async function handleBeforeLlmCall(ctx, meta) {
         requestedAction: execution.actionName,
         executedPrimary: execution.executedPrimary,
         executedFollowup: execution.executedFollowup,
-        changed: execution.changed || invariantChanged || summaryScheduleChanged || scheduleChanged,
+        changed:
+          execution.changed ||
+          invariantChanged ||
+          summaryScheduleChanged ||
+          summaryScopeChanged ||
+          scheduleChanged,
       };
     },
   });
@@ -410,7 +330,7 @@ function createGuidancePointHandlers(shouldProcessPrimaryToolHooks) {
     }),
     [HOOK_POINT.AGENT.TOOL_CALL_ERROR]: primaryToolHook((ctx) => updateFailureCounters(ctx, true)),
     [HOOK_POINT.AGENT.AFTER_TOOL_CALLS]: primaryToolHook(maybeScheduleSummaryByToolBurst),
-    [HOOK_POINT.AGENT.AFTER_LLM_CALL]: handleAfterLlmCall,
+    [HOOK_POINT.AGENT.AFTER_LLM_CALL]: (ctx) => maybeCapturePlanUpdateByInject(ctx),
   };
 }
 

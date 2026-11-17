@@ -3,6 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { buildMessageSummary } from "../session-summary-builders/message-summary-projection.js";
+
 export function buildSessionListFacts({ messageCount, messages }) {
   if (!Number.isSafeInteger(messageCount) || messageCount < 0 || !Array.isArray(messages))
     throw new TypeError("Session list facts require a message count and ordered messages");
@@ -12,5 +14,8 @@ export function buildSessionListFacts({ messageCount, messages }) {
     error.code = "SESSION_LIST_FACTS_LAST_MESSAGE_MISSING";
     throw error;
   }
-  return { messageCount, lastMessage: messageCount === 0 ? null : lastMessage };
+  return {
+    messageCount,
+    lastMessage: messageCount === 0 ? null : buildMessageSummary(lastMessage),
+  };
 }

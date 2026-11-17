@@ -130,7 +130,6 @@ export class SessionExecutionEngine {
     });
     this.finalizer = new SessionExecutionFinalizer({
       session: this.session,
-      turnPersister: this.turnPersister,
       memoryPostProcessService: this.memoryPostProcessService,
       now: this.now,
     });
@@ -182,12 +181,10 @@ export class SessionExecutionEngine {
         }),
     };
     const runnerPersistenceDeps = {
-      appendAgentMessages: (payload = {}) => this._appendAgentMessages(payload),
+      appendAgentMessages: (payload = {}) => this.turnPersister.appendAgentMessages(payload),
       bindSessionTurnAttachments: (payload = {}) => this.session.bindTurnAttachments(payload),
       assertReusedUserTurnIdentity: (payload = {}) => this._assertReusedUserTurnIdentity(payload),
       getSessionTurns: (payload = {}) => this.session.getSessionTurns(payload),
-      getTurnSummaryCheckpointState: (payload = {}) =>
-        this.session.getTurnSummaryCheckpointState(payload),
       finalizeRunSession: (payload) => this._finalizeRunSession(payload),
       saveExecutionReport: (payload = {}) => this.session.saveExecutionReport(payload),
       getExecutionTurnLogs: (payload = {}) => this.session.getExecutionTurnLogs(payload),
@@ -294,28 +291,6 @@ export class SessionExecutionEngine {
 
   async _prepareAgentTurnExecution({ buildContextPayload }) {
     return prepareAgentTurnExecution(this, { buildContextPayload });
-  }
-
-  async _appendAgentMessages({
-    userId,
-    sessionId,
-    messages = [],
-    dialogProcessId = "",
-    parentDialogProcessId = "",
-    turnScopeId = "",
-    eventListener,
-    persistenceScope,
-  }) {
-    return this.turnPersister.appendAgentMessages({
-      userId,
-      sessionId,
-      messages,
-      dialogProcessId,
-      parentDialogProcessId,
-      turnScopeId,
-      eventListener,
-      persistenceScope,
-    });
   }
 
   async _assertReusedUserTurnIdentity(payload = {}) {

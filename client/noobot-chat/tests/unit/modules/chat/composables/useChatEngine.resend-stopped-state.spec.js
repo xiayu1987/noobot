@@ -103,7 +103,11 @@ describe("useChatEngine.resend stopped state", () => {
     const { engine, activeSession, turnRuntimeRegistry, deps } = createHarness({
       sessionId,
       stream,
-      deps: { replaceSessionTurnApi, applySessionDetail, authFetch: terminalResolutionFetcher },
+      deps: {
+        replaceSessionTurnApi,
+        applySessionMutation: applySessionDetail,
+        authFetch: terminalResolutionFetcher,
+      },
     });
     activeSession.value.aggregateVersion = 11;
     const stoppedUser = {
@@ -189,23 +193,22 @@ describe("useChatEngine.resend stopped state", () => {
         role: RoleEnum.USER,
         content: "edited again",
       };
-      return mutationSuccessResponse(
-        makeTurnReplacementBody({
-          commandId,
-          sessionId: "local-resend-stale-stopped",
-          aggregateVersion: 1,
-          replacedTurnScopeIds: [anchor.turnScopeId],
-          replacementUser,
-          replacementDialogProcessId: `dialog:${turnScopeId}`,
-          messages: [],
-        }),
-      );
+      const body = makeTurnReplacementBody({
+        commandId,
+        sessionId: "local-resend-stale-stopped",
+        aggregateVersion: 1,
+        replacedTurnScopeIds: [anchor.turnScopeId],
+        replacementUser,
+        replacementDialogProcessId: `dialog:${turnScopeId}`,
+      });
+      body.displayMessages = [];
+      return mutationSuccessResponse(body);
     });
     const applySessionDetail = applyMainEntryMessages(() => activeSession);
     const { engine, activeSession } = createHarness({
       sessionId: "local-resend-stale-stopped",
       stream,
-      deps: { replaceSessionTurnApi, applySessionDetail },
+      deps: { replaceSessionTurnApi, applySessionMutation: applySessionDetail },
     });
     activeSession.value.messages = [staleStoppedUser, staleStoppedAssistant];
     activeSession.value.rawMessages = [staleStoppedUser, staleStoppedAssistant];
@@ -217,8 +220,7 @@ describe("useChatEngine.resend stopped state", () => {
 
     expect(lastResendFailure()).toMatchObject({
       replacementCommitted: false,
-      errorMessage:
-        "session mutation response is invalid: replacement_user_missing,replacement_scope_not_user_only",
+      errorMessage: "session mutation response is invalid: display_effect_mismatch",
     });
     expect(stream).not.toHaveBeenCalled();
     expect(activeSession.value.messages).toEqual([staleStoppedUser, staleStoppedAssistant]);
@@ -251,7 +253,7 @@ describe("useChatEngine.resend stopped state", () => {
     const { engine, activeSession } = createHarness({
       sessionId: "local-resend-repeat-stopped",
       stream,
-      deps: { replaceSessionTurnApi, applySessionDetail },
+      deps: { replaceSessionTurnApi, applySessionMutation: applySessionDetail },
     });
     const stoppedUser = {
       turnScopeId: "client-turn:repeat-old",
@@ -386,7 +388,7 @@ describe("useChatEngine.resend stopped state", () => {
       stream,
       deps: {
         replaceSessionTurnApi,
-        applySessionDetail,
+        applySessionMutation: applySessionDetail,
         authFetch: terminalResolutionFetcher,
       },
     });
@@ -475,7 +477,7 @@ describe("useChatEngine.resend stopped state", () => {
       createHarness({
         sessionId: "local-resend-second-stopped",
         stream,
-        deps: { replaceSessionTurnApi, applySessionDetail },
+        deps: { replaceSessionTurnApi, applySessionMutation: applySessionDetail },
       });
     activeSession.value.messages = [
       {
@@ -613,7 +615,7 @@ describe("useChatEngine.resend stopped state", () => {
       createHarness({
         sessionId: "local-resend-stale-stop-replay",
         stream,
-        deps: { replaceSessionTurnApi, applySessionDetail },
+        deps: { replaceSessionTurnApi, applySessionMutation: applySessionDetail },
       });
     activeSession.value.messages = [
       {
@@ -705,7 +707,7 @@ describe("useChatEngine.resend stopped state", () => {
     const { engine, activeSession, deps } = createHarness({
       sessionId: "local-resend-state-mismatch",
       stream,
-      deps: { replaceSessionTurnApi, applySessionDetail },
+      deps: { replaceSessionTurnApi, applySessionMutation: applySessionDetail },
     });
     const stoppedUser = {
       turnScopeId: "client-turn:old-stopped",
@@ -769,7 +771,7 @@ describe("useChatEngine.resend stopped state", () => {
     const { engine, activeSession } = createHarness({
       sessionId: "local-resend-ignore-stale-assistant",
       stream,
-      deps: { replaceSessionTurnApi, applySessionDetail },
+      deps: { replaceSessionTurnApi, applySessionMutation: applySessionDetail },
     });
     const oldUser = {
       turnScopeId: "client-turn:old-stopped",

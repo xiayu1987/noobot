@@ -48,7 +48,7 @@ async function assertFailedCommitPreservesPrevious(root, next) {
   );
   assert.deepEqual(await manifestOf(root), previous);
   assert.deepEqual(await readFile(previousFile), previousBytes);
-  const fresh = createTurnMaterializer({ byteBudget: 0 });
+  const fresh = createTurnMaterializer({ payloadByteBudget: 0, identityByteBudget: 0 });
   assert.deepEqual(
     await fresh.materialize({ storageService, sessionDir: root, item: previous.turnOrder[0] }),
     before.messages,

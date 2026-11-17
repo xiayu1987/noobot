@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { randomUUID } from "node:crypto";
+import { monotonicTiming } from "@noobot/shared/monotonic-clock-node";
 import { createMeasuredFetch } from "./request-measurement.js";
 import { summarizeDiagnosticMessages } from "@noobot/shared/message-diagnostics";
 import {
@@ -127,9 +128,10 @@ export function createModelRequestExecutor({
         operation: requestBase.operation,
         tools: requestBase.tools,
       });
+      const streamingRequired = requestBase.options.streamingRequired === true;
       let streaming = resolvePreferredStreaming({
         requested: input.options?.streaming === true,
-        cached: streamingModes.get(streamingCacheKey),
+        cached: streamingRequired ? undefined : streamingModes.get(streamingCacheKey),
       });
       const modelObservationState = resolveModelObservationState(requestBase.model);
       const observableModel = projectObservableModel(requestBase.model);
@@ -152,6 +154,7 @@ export function createModelRequestExecutor({
         observationPort.emit(type, {
           invocation,
           ...payload,
+          timing: monotonicTiming(),
           model: observableModel,
           ...(isModelRetryEvent(type)
             ? { retryCount: totalAttempts, maxRetries: retry.maxTotalAttempts - 1 }
@@ -253,7 +256,7 @@ export function createModelRequestExecutor({
           attemptCount: totalAttempts,
           operationKind: requestBase.operation.kind,
         });
-        streamingModes.set(streamingCacheKey, streaming);
+        if (!streamingRequired) streamingModes.set(streamingCacheKey, streaming);
         return response;
       };
       const retryToolCallRecovery = async (kind, output) => {
@@ -431,6 +434,7 @@ export function createModelRequestExecutor({
               runModelAttempt({
                 adapter,
                 client,
+                streaming,
                 modelSpec: request.model,
                 messages: request.messages,
                 tools: request.tools,
@@ -445,7 +449,7 @@ export function createModelRequestExecutor({
           },
         });
       const switchStreamingMode = async (error, modes) => {
-        if (!canReplay()) return false;
+        if (streamingRequired || !canReplay()) return false;
         const classification = classify(error);
         const recovery = resolveModelFailureRecovery(classification);
         if (recovery.revision !== MODEL_REQUEST_REVISION.SET_STREAMING_MODE) return false;

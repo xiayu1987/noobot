@@ -6,13 +6,13 @@
 
 export const DEVELOPMENT_THRESHOLDS = Object.freeze({
   performance: Object.freeze({
-    rounds: 6,
     growthWindowRounds: 2,
     relativeTolerance: 0.3,
     absoluteToleranceMs: 100,
     coldTurnMaxMs: 600000,
     warmTurnMaxMs: 600000,
     testTimeoutMs: 4200000,
+    singleRoundMaxMs: 60000,
     roundGrowthTolerance: 0.3,
   }),
   time: Object.freeze({
@@ -37,6 +37,7 @@ export const DEVELOPMENT_THRESHOLDS = Object.freeze({
     maxEffectiveLines: 800,
   }),
   length: Object.freeze({
+    performanceHistoryMinimumContentBytes: 128 * 1024 * 1024,
     deadCodeOutputBytes: 16 * 1024 * 1024,
     sourceInventoryOutputBytes: 64 * 1024 * 1024,
     releaseOutputBytes: 1024 * 1024,

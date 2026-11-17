@@ -92,7 +92,6 @@ test("resolveScenarioProfile supports builtin text scenario without a hard-coded
     "multimodal_parse",
     "access_connector",
     "user_interaction",
-    "task_summary",
     "task_check",
     "help",
     "do_search_web",

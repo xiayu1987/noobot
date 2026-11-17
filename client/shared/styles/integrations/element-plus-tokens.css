@@ -48,3 +48,8 @@
   --el-border-radius-round: var(--noobot-radius-pill);
   --el-border-radius-circle: var(--noobot-radius-circle);
 }
+
+.el-skeleton {
+  --el-skeleton-color: color-mix(in srgb, var(--noobot-text-main) 14%, var(--noobot-panel-bg));
+  --el-skeleton-to-color: color-mix(in srgb, var(--noobot-text-main) 26%, var(--noobot-panel-bg));
+}

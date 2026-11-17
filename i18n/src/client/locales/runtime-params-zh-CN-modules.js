@@ -35,6 +35,7 @@ export default {
   eventProtocol: "事件协议",
   longMemory: "长期记忆",
   contextProtocol: "上下文协议",
+  immutableStorage: "不可变存储",
   attachments: "附件",
   toolIO: "工具输入输出",
   sessionLog: "会话日志",

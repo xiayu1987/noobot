@@ -75,7 +75,7 @@ test("history rounds group by each message's own dialog identity", () => {
   );
 });
 
-test("canonical blocks pass the optional unpaired tool recovery policy to the model window", () => {
+test("canonical blocks exclude unpaired tool results from the model window", () => {
   const orphan = {
     ...ctx("tool", "unpaired result", {
       messageUid: "sm_orphan",
@@ -84,30 +84,16 @@ test("canonical blocks pass the optional unpaired tool recovery policy to the mo
     }),
     tool_call_id: "missing-call",
   };
-  const recovered = ctx("user", "recovered result", {
-    messageUid: "sm_recovered",
-    dialogProcessId: "current-dialog",
-    turnScopeId: "current-turn",
-  });
-  const seen = [];
   const result = buildCanonicalMessageBlocks({
     ...EMPTY_BLOCKS,
     incrementalMessages: [orphan],
     currentUserMessage: currentRecord(),
     historyLimit: HISTORY_LIMIT,
-    policyOptions: {
-      recoverUnpairedToolResult(message) {
-        seen.push(message);
-        return recovered;
-      },
-    },
   });
 
-  assert.deepEqual(seen, [orphan]);
-  assert.equal(result.incremental[0], recovered);
   assert.deepEqual(
     result.incremental.map((message) => message.content),
-    ["recovered result", "current"],
+    ["current"],
   );
 });
 

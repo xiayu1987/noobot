@@ -257,9 +257,10 @@ exactly five business tool calls close without recomputation.
 ### PBE-034: Low-Turn Main-Agent Phase Summary
 
 Without Harness, lower the main summary threshold through the Composer and execute three dependent
-steps. Assert summary requirement, checkpoint, and completion order; exact summarized UIDs without
-split call/result pairs; no summarized content in later provider input; and exactly one
-`task_summary`.
+steps. Assert summary requirement, checkpoint, and completion order; a streaming, tool-free,
+independent `phase_summary` request that injects one `noobot.phase_summary_result`; exact
+summarized UIDs without split call/result pairs; no summarized content in later provider input;
+and no `task_summary` call.
 
 ### PBE-035: Periodic Task Check
 

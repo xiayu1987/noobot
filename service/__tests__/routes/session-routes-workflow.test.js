@@ -11,11 +11,11 @@ import path from "node:path";
 import { createPluginServicePorts } from "../../services/plugin-service-ports.js";
 import { createServicePluginHost } from "../../services/service-plugin-host.js";
 import {
-  SESSION_ARTIFACT_PREDECESSOR,
   appendExecutionLogArtifact,
   createScopedSessionArtifactReader,
-  writeSessionArtifact,
 } from "noobot-agent/session";
+import { initializeImmutableSession } from "../../../agent/src/session/session-artifact-session/immutable-session-bootstrap.js";
+import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { TEST_STORAGE_SERVICE } from "../storage-service.test-helpers.js";
 
@@ -34,15 +34,15 @@ import express, {
 
 const WORKFLOW_SESSION_TS = "2026-08-19T00:00:00.000Z";
 
+useProvisionedRuntimeEventsWorkspace(["u1"]);
+
 async function writeScopedSessionDir({ sessionDir, sessionPayload, metadata = null }) {
-  await writeSessionArtifact({
-    storageService: TEST_STORAGE_SERVICE,
+  await initializeImmutableSession({
     sessionDir,
-    sessionPayload,
-    atomic: true,
-    predecessor: SESSION_ARTIFACT_PREDECESSOR.CANONICAL,
+    session: sessionPayload,
+    operationId: "initialize-workflow-route-test",
+    scopedMetadata: metadata,
   });
-  if (metadata) await TEST_STORAGE_SERVICE.writeJson(path.join(sessionDir, "meta.json"), metadata);
 }
 
 function appendTestExecutionLog({ sessionDir, executionLog }) {
@@ -65,8 +65,9 @@ async function registerWorkflowPluginRoutes(app, { bot, translateText }) {
   return pluginHost;
 }
 
-test("workflow service reads child execution events only from the workflow scope", async () => {
+test("workflow service reads child execution events only from the workflow scope", async (t) => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workflow-child-events-"));
+  t.after(() => fs.rm(workspaceRoot, { recursive: true, force: true }));
   await appendTestExecutionLog({
     sessionDir: path.join(workspaceRoot, "runtime/session/root-s/child-s"),
     executionLog: { event: "host_tree_event", dialogProcessId: "host-turn", data: {} },
@@ -103,8 +104,9 @@ test("workflow service reads child execution events only from the workflow scope
   assert.deepEqual(logs, []);
 });
 
-test("session-routes: workflow session returns the canonical snapshot and execution jsonl from scoped path", async () => {
+test("session-routes: workflow session returns the canonical snapshot and execution jsonl from scoped path", async (t) => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workflow-session-route-"));
+  t.after(() => fs.rm(workspaceRoot, { recursive: true, force: true }));
   const workflowDir = path.join(
     workspaceRoot,
     "runtime/plugin-data/workflow/session/root-s/wf_node_1",
@@ -127,6 +129,7 @@ test("session-routes: workflow session returns the canonical snapshot and execut
       messages: [
         {
           sessionId: "node-s",
+          parentSessionId: "root-s",
           messageUid: "workflow-message-1",
           ts: TEST_MESSAGE_TS,
           modelMessageId: "workflow-model-message-1",
@@ -201,8 +204,9 @@ test("session-routes: workflow session returns the canonical snapshot and execut
   });
 });
 
-test("session-routes: workflow session rejects a node snapshot without session metadata", async () => {
+test("session-routes: workflow session rejects a node snapshot without session metadata", async (t) => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workflow-session-meta-"));
+  t.after(() => fs.rm(workspaceRoot, { recursive: true, force: true }));
   await writeScopedSessionDir({
     sessionDir: path.join(workspaceRoot, "runtime/plugin-data/workflow/session/root-s/wf_node_1"),
     sessionPayload: {
@@ -230,8 +234,9 @@ test("session-routes: workflow session rejects a node snapshot without session m
     assert.notEqual((await response.json()).ok, true);
   });
 });
-test("session-routes: workflow thinking-detail reads scoped session artifact by turnScopeId", async () => {
+test("session-routes: workflow thinking-detail reads scoped session artifact by turnScopeId", async (t) => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workflow-thinking-route-"));
+  t.after(() => fs.rm(workspaceRoot, { recursive: true, force: true }));
   const workflowDir = path.join(
     workspaceRoot,
     "runtime/plugin-data/workflow/session/root-s/wf_node_1",
@@ -262,6 +267,7 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
           role: "assistant",
           type: "message",
           sessionId: "node-s",
+          parentSessionId: "root-s",
           dialogProcessId: "dp-1",
           turnScopeId,
           content: "answer",
@@ -270,12 +276,18 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
             {
               key: "call:call-1",
               toolCallId: "call-1",
+              tool: "read_file",
+              args: { filePath: "pending.txt", riskLevel: "low" },
               status: "running",
               call: { eventId: "call-1-start" },
             },
             {
               key: "call:call-2",
               toolCallId: "call-2",
+              tool: "read_file",
+              args: { filePath: "example.txt", riskLevel: "low" },
+              result: { ok: true, path: { view: "workspace", path: "example.txt" } },
+              success: true,
               status: "completed",
               call: { eventId: "call-2-start" },
               resultEvent: { eventId: "call-2-end" },
@@ -287,6 +299,7 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
           ts: TEST_MESSAGE_TS,
           role: "system",
           sessionId: "node-s",
+          parentSessionId: "root-s",
           dialogProcessId: "dp-1",
           turnScopeId,
           injectedMessage: true,
@@ -302,6 +315,7 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
           role: "assistant",
           type: "tool_call",
           sessionId: "node-s",
+          parentSessionId: "root-s",
           dialogProcessId: "dp-1",
           turnScopeId,
           content: "tool call",
@@ -321,6 +335,7 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
           presentationMessageId: "pm_node_turn",
           type: "tool_result",
           sessionId: "node-s",
+          parentSessionId: "root-s",
           dialogProcessId: "dp-1",
           turnScopeId,
           content: "tool result",
@@ -334,6 +349,7 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
           role: "assistant",
           type: "tool_call",
           sessionId: "node-s",
+          parentSessionId: "root-s",
           dialogProcessId: "dp-2",
           turnScopeId: "workflow-node:other",
           content: "other",
@@ -398,8 +414,9 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
   });
 });
 
-test("session-routes: workflow execution-report reads the scoped node report", async () => {
+test("session-routes: workflow execution-report reads the scoped node report", async (t) => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workflow-report-route-"));
+  t.after(() => fs.rm(workspaceRoot, { recursive: true, force: true }));
   const reportDir = path.join(
     workspaceRoot,
     "runtime/plugin-data/workflow/session/root-s/wf_node_1/execution-reports",

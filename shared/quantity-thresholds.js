@@ -55,6 +55,9 @@ export const DEFAULT_QUANTITY_THRESHOLDS = deepFreeze({
   contextProtocol: {
     turnSummaryCheckpointReceiptLimit: 50,
   },
+  artifact: {
+    checkpointVerificationConcurrency: 4,
+  },
   memory: {
     maxItems: 30,
   },
@@ -144,6 +147,15 @@ export const DEFAULT_QUANTITY_THRESHOLDS = deepFreeze({
     frameHealthTopScriptLimit: 3,
 
     sessionListRecentDayGroupCount: 7,
+  },
+
+  immutableStorage: {
+    cleanupFilterMaxEntries: 256,
+    recordIoConcurrency: 8,
+    messagePageSize: 256,
+    messageReadPageSize: 64,
+    turnAcceptancePageSize: 1,
+    receiptPageSize: 64,
   },
 
   sessionLog: {

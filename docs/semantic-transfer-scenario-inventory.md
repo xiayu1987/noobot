@@ -39,12 +39,11 @@
 
 入口：`agent/src/runtime/tool-execution/tool-runner.js` 调用 `transferSemanticContent({ scenario: "tool", strategy: "tool_input" })`。
 
-| 工具             | 输入字段         | 触发条件                 | direction | 结果                                                              |
-| ---------------- | ---------------- | ------------------------ | --------- | ----------------------------------------------------------------- |
-| `write_file`     | `content`        | 超过 write-file 输入阈值 | `input`   | 保存完整输入并返回 attachment envelope；具体工具不执行            |
-| `execute_script` | `command`        | 超过脚本输入阈值         | `input`   | 保存完整命令并返回 attachment envelope；具体工具不执行            |
-| `patch_file`     | `patch`          | 超过 patch 阈值          | `input`   | 保存完整 patch 并返回 attachment envelope；具体工具不执行         |
-| `task_summary`   | `summaryContent` | 强制附件策略             | `input`   | 保存小结内容，将 envelope 合并进工具结果后继续执行 `task_summary` |
+| 工具             | 输入字段  | 触发条件                 | direction | 结果                                                      |
+| ---------------- | --------- | ------------------------ | --------- | --------------------------------------------------------- |
+| `write_file`     | `content` | 超过 write-file 输入阈值 | `input`   | 保存完整输入并返回 attachment envelope；具体工具不执行    |
+| `execute_script` | `command` | 超过脚本输入阈值         | `input`   | 保存完整命令并返回 attachment envelope；具体工具不执行    |
+| `patch_file`     | `patch`   | 超过 patch 阈值          | `input`   | 保存完整 patch 并返回 attachment envelope；具体工具不执行 |
 
 工具名单、字段、阈值、强制附件条件、MIME、文件名和提示均由 protocol registry 持有。runner 只通过 `hasToolInputPolicy` 判断是否启用，再通过 `getToolInputPolicy` 获取策略；agent 内没有第二份工具输入名单或策略表。
 

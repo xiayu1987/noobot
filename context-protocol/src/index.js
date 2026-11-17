@@ -33,5 +33,4 @@ export * from "./policy/turn-completion.js";
 export * from "./policy/window.js";
 export * from "./task/check.js";
 export * from "./task/summary.js";
-export * from "./task/summary-context.js";
 export * from "./tool/context-policy.js";

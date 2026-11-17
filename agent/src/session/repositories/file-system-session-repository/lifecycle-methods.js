@@ -9,6 +9,7 @@ import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { createSessionDeletedError, createSessionNotFoundError } from "@noobot/session-protocol";
 import { isPlainObject, text } from "@noobot/shared/value";
+import { withSessionStorageTransaction } from "../../session-artifact-session/storage-transaction.js";
 
 function requireLifecycleSessionKey(sessionId = "") {
   const normalizedSessionId = text(sessionId);
@@ -75,7 +76,7 @@ class SessionLifecycleMethods {
       await this.assertSessionWritable(userId, sessionId);
       const scope = await resolveScope();
       await this._assertParentSessionWritable(userId, scope.resolvedParentSessionId);
-      return operation(scope);
+      return withSessionStorageTransaction(scope.sessionDir, () => operation(scope));
     });
   }
 
@@ -87,20 +88,24 @@ class SessionLifecycleMethods {
 
   async writeSessionMetadata(userId, sessionId, metadata, { persistenceContext } = {}) {
     if (!isPlainObject(metadata)) throw new TypeError("session metadata must be a plain object");
-    return this.withSessionMutation(
+    return this.withSessionReader(
       userId,
       sessionId,
-      (scope) => this.storageService.writeJsonAtomic(scope.metadataFile, metadata),
+      async (reader) => {
+        return await this.commitChanges(userId, sessionId, {
+          persistenceContext,
+          expectedGeneration: reader.generation,
+          operationId: `scoped-metadata:${reader.generation}`,
+          changes: { scopedMetadata: metadata },
+          committedAt: this.now(),
+        });
+      },
       { persistenceContext },
     );
   }
 
   _withMutationLock(lockPath, operation) {
     return this.mutationCoordinator.run(lockPath, operation);
-  }
-
-  async _withSessionSummaryMutation(userId, operation) {
-    return this._withMutationLock(`${this._sessionsSummaryFile(userId)}.mutation-lock`, operation);
   }
 }
 

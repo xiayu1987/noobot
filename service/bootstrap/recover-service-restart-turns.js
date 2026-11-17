@@ -39,11 +39,32 @@ export async function recoverServiceRestartTurns({ bot, userId, onProgress }) {
   const active = sessions.filter(isActiveAvailableSummary);
   const recoveredSessionIds = [];
   const failures = [];
+
+  for (const { sessionId, availability } of sessions) {
+    if (availability !== SESSION_SUMMARY_AVAILABILITY.AVAILABLE) continue;
+    try {
+      await bot.session.recoverExecutionLogProjection({
+        userId,
+        sessionId,
+        persistenceScope: TREE_SESSION_PERSISTENCE_SCOPE,
+      });
+    } catch (error) {
+      failures.push({
+        sessionId,
+        code: error.code || "EXECUTION_LOG_PROJECTION_FAILED",
+        message: error.message,
+      });
+    }
+  }
   for (const [index, { sessionId }] of active.entries()) {
     onProgress({ sessionIndex: index + 1, sessionCount: active.length });
-    const outcome = await recoverSessionTurn(bot, { userId, sessionId }, readServiceClockMs(bot));
-    if (outcome.recovered) recoveredSessionIds.push(sessionId);
-    else failures.push({ sessionId, code: outcome.reason });
+    try {
+      const outcome = await recoverSessionTurn(bot, { userId, sessionId }, readServiceClockMs(bot));
+      if (outcome.recovered) recoveredSessionIds.push(sessionId);
+      else failures.push({ sessionId, code: outcome.reason });
+    } catch (error) {
+      failures.push({ sessionId, code: error.code || "", message: error.message });
+    }
   }
   return { recoveredSessionIds, failures };
 }

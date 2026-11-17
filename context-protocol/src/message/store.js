@@ -102,7 +102,10 @@ function canonicalizeMessage(store = null, message = null) {
   const existingId = resolveContextMessageKey(message);
   if (store.byId.has(existingId)) {
     const existingById = store.byId.get(existingId);
-    if (canonicalEntityShape(existingById) !== canonicalEntityShape(message)) {
+    if (
+      existingById !== message &&
+      canonicalEntityShape(existingById) !== canonicalEntityShape(message)
+    ) {
       throw new Error(`canonical message id collision: ${existingId}`);
     }
     mergeMessageState(existingById, message);

@@ -14,6 +14,7 @@ import {
   createSessionPersistenceScope,
 } from "@noobot/session-protocol";
 import { SessionTurnPersister } from "../../src/bot/execution/turn-persister.js";
+import { useRuntimeEventsEnv } from "../helpers/runtime-events-env.js";
 import {
   FLOW_CONTROL_ROLE,
   createFlowControlContextPolicy,
@@ -21,12 +22,71 @@ import {
 
 const PERSISTER_NOW = () => "2026-01-01T00:00:00.000Z";
 
+test("preparing checkpoint messages performs no persistence, diagnostics or event publication", () => {
+  const persister = new SessionTurnPersister({
+    now: () => assert.fail("preparation must not allocate a persistence timestamp"),
+    session: new Proxy({}, { get: () => assert.fail("preparation must not access session ports") }),
+  });
+  const messages = [{ messageUid: "sm_1", role: "assistant", content: "checkpoint" }];
+  const prepared = persister.prepareAgentMessages({
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "dp",
+    turnScopeId: "turn",
+    messages,
+    eventListener: () => assert.fail("preparation must not emit events"),
+  });
+  assert.equal(prepared[0].messageUid, "sm_1");
+  assert.equal(prepared[0].dialogProcessId, "dp");
+  assert.equal(prepared[0].turnScopeId, "turn");
+  assert.equal(messages[0].dialogProcessId, undefined);
+});
+
+test("message diagnostics and persistence use the same captured input", async (t) => {
+  useRuntimeEventsEnv(t, { executionLog: { sessionTurnFullDebug: true } });
+  let reads = 0;
+  const logs = [];
+  let captured;
+  const receipts = [{ messageUid: "sm_1" }];
+  const persister = new SessionTurnPersister({
+    now: PERSISTER_NOW,
+    session: {
+      appendExecutionLogs: async () =>
+        assert.fail("diagnostics must share the message transaction"),
+      appendTurns: async ({ turns, messageDiagnostics }) => {
+        logs.push(...messageDiagnostics.map(({ record }) => record));
+        captured = turns;
+        return { messageReceipts: receipts };
+      },
+    },
+  });
+  const saved = await persister.appendAgentMessages({
+    userId: "u1",
+    sessionId: "s1",
+    messages: [
+      {
+        messageUid: "sm_1",
+        role: "assistant",
+        get content() {
+          reads += 1;
+          return reads === 1 ? "captured" : "changed";
+        },
+      },
+    ],
+  });
+  assert.equal(reads, 1);
+  assert.equal(saved, receipts);
+  assert.equal(captured[0].content, "captured");
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0].data.content.preview, captured[0].content);
+});
+
 test("appendAgentMessages persists all messages through one appendTurns batch", async () => {
   const batches = [];
   const persister = new SessionTurnPersister({
     now: PERSISTER_NOW,
     session: {
-      appendExecutionLog: async () => {},
+      appendExecutionLogs: async () => {},
       appendTurns: async (payload = {}) => {
         batches.push(payload);
         return { turns: payload.turns };
@@ -56,7 +116,7 @@ test("appendAgentMessages preserves the canonical tool policy at the Session bou
   const persister = new SessionTurnPersister({
     now: PERSISTER_NOW,
     session: {
-      appendExecutionLog: async () => {},
+      appendExecutionLogs: async () => {},
       appendTurns: async (payload = {}) => {
         batches.push(payload);
         return { turns: payload.turns };
@@ -81,8 +141,8 @@ test("appendAgentMessages preserves the canonical tool policy at the Session bou
   assert.deepEqual(batches[0].turns[0].contextPolicy, policy);
 });
 
-test("appendAgentMessages keeps scoped persistence identity for logs and messages", async () => {
-  const executionPayloads = [];
+test("appendAgentMessages keeps scoped persistence identity for logs and messages", async (t) => {
+  useRuntimeEventsEnv(t, { executionLog: { sessionTurnFullDebug: true } });
   const batches = [];
   const persistenceScope = createSessionPersistenceScope({
     scopeId: "agent:child-1",
@@ -93,7 +153,8 @@ test("appendAgentMessages keeps scoped persistence identity for logs and message
   const persister = new SessionTurnPersister({
     now: PERSISTER_NOW,
     session: {
-      appendExecutionLog: async (payload = {}) => executionPayloads.push(payload),
+      appendExecutionLogs: async () =>
+        assert.fail("diagnostics must share the message transaction"),
       appendTurns: async (payload = {}) => {
         batches.push(payload);
         return { turns: payload.turns };
@@ -110,11 +171,8 @@ test("appendAgentMessages keeps scoped persistence identity for logs and message
     persistenceScope,
   });
 
-  assert.ok(executionPayloads.length >= 1);
-  assert.equal(
-    executionPayloads.every((payload) => payload.persistenceScope === persistenceScope),
-    true,
-  );
+  assert.equal(batches[0].messageDiagnostics.length, 1);
+  assert.equal(batches[0].messageDiagnostics[0].messageUid, batches[0].turns[0].messageUid);
   assert.equal(batches.length, 1);
   assert.equal(batches[0].turns.length, 1);
   assert.equal(batches[0].persistenceScope, persistenceScope);
@@ -126,7 +184,7 @@ test("appendAgentMessages forwards the authoritative realtime message identity",
   const persister = new SessionTurnPersister({
     now: PERSISTER_NOW,
     session: {
-      appendExecutionLog: async () => {},
+      appendExecutionLogs: async () => {},
       appendTurns: async (payload = {}) => {
         turns.push(...payload.turns);
         return { turns: payload.turns };
@@ -154,7 +212,7 @@ test("appendAgentMessages forwards the canonical internal control message type",
   const persister = new SessionTurnPersister({
     now: PERSISTER_NOW,
     session: {
-      appendExecutionLog: async () => {},
+      appendExecutionLogs: async () => {},
       appendTurns: async (payload = {}) => {
         turns.push(...payload.turns);
         return { turns: payload.turns };
@@ -191,7 +249,7 @@ test("appendAgentMessages forwards presentation identity and checkpoint context"
   const persister = new SessionTurnPersister({
     now: PERSISTER_NOW,
     session: {
-      appendExecutionLog: async () => {},
+      appendExecutionLogs: async () => {},
       appendTurns: async (payload = {}) => {
         batches.push(payload);
         return { turns: payload.turns };
@@ -232,13 +290,15 @@ test("appendAgentMessages forwards presentation identity and checkpoint context"
   assert.equal(batches[0].persistenceScope, persistenceScope);
 });
 
-test("SessionTurnPersister never forwards a caller parentSessionId to persistence outlets", async () => {
+test("SessionTurnPersister never forwards a caller parentSessionId to persistence outlets", async (t) => {
+  useRuntimeEventsEnv(t, { executionLog: { sessionTurnFullDebug: true } });
   const batches = [];
   const executionLogs = [];
   const session = {
-    appendExecutionLog: async (payload = {}) => executionLogs.push(payload),
+    appendExecutionLogs: async () => assert.fail("diagnostics must share the message transaction"),
     appendTurns: async (payload = {}) => {
       batches.push(payload);
+      executionLogs.push(...payload.messageDiagnostics.map(({ record }) => record));
       return { turns: payload.turns };
     },
   };
@@ -264,7 +324,7 @@ test("SessionTurnPersister never forwards a caller parentSessionId to persistenc
 test("SessionTurnPersister persists tool transfer envelopes into session turns", async () => {
   const appendedTurns = [];
   const session = {
-    appendExecutionLog: async () => {},
+    appendExecutionLogs: async () => {},
     appendTurns: async (payload = {}) => {
       appendedTurns.push(...payload.turns);
       return { turns: payload.turns };
@@ -318,7 +378,7 @@ test("SessionTurnPersister persists tool transfer envelopes into session turns",
 test("SessionTurnPersister persists final assistant transfer envelopes with attachment mirror", async () => {
   const appendedTurns = [];
   const session = {
-    appendExecutionLog: async () => {},
+    appendExecutionLogs: async () => {},
     appendTurns: async (payload = {}) => {
       appendedTurns.push(...payload.turns);
       return { turns: payload.turns };
@@ -382,15 +442,15 @@ test("SessionTurnPersister persists final assistant transfer envelopes with atta
   assert.equal(appendedTurns[0].transferEnvelopes?.length, 1);
 });
 
-test("SessionTurnPersister persists canonical plugin metadata without old concrete-plugin fields", async () => {
+test("SessionTurnPersister persists canonical plugin metadata without old concrete-plugin fields", async (t) => {
+  useRuntimeEventsEnv(t, { executionLog: { sessionTurnFullDebug: true } });
   const appendedTurns = [];
   const executionLogs = [];
   const session = {
-    appendExecutionLog: async (payload = {}) => {
-      executionLogs.push(payload);
-    },
+    appendExecutionLogs: async () => assert.fail("diagnostics must share the message transaction"),
     appendTurns: async (payload = {}) => {
       appendedTurns.push(...payload.turns);
+      executionLogs.push(...payload.messageDiagnostics.map(({ record }) => record));
       return { turns: payload.turns };
     },
   };
@@ -437,7 +497,7 @@ test("SessionTurnPersister persists canonical plugin metadata without old concre
 test("SessionTurnPersister does not carry thinking timing on persisted turns", async () => {
   const appendedTurns = [];
   const session = {
-    appendExecutionLog: async () => {},
+    appendExecutionLogs: async () => {},
     appendTurns: async (payload = {}) => {
       appendedTurns.push(...payload.turns);
       return { turns: payload.turns };
@@ -485,7 +545,7 @@ test("appendAgentMessages keeps relayCorrelationId on persisted injected turns",
   const persister = new SessionTurnPersister({
     now: PERSISTER_NOW,
     session: {
-      appendExecutionLog: async () => {},
+      appendExecutionLogs: async () => {},
       appendTurns: async (payload = {}) => {
         appendedTurns.push(...payload.turns);
         return { turns: payload.turns };
@@ -526,7 +586,7 @@ test("appendAgentMessages keeps canonical user interjection time and sequence", 
   const persister = new SessionTurnPersister({
     now: PERSISTER_NOW,
     session: {
-      appendExecutionLog: async () => {},
+      appendExecutionLogs: async () => {},
       appendTurns: async (payload = {}) => {
         appendedTurns.push(...payload.turns);
         return { turns: payload.turns };
@@ -562,7 +622,7 @@ test("appendAgentMessages propagates Session deletion and absence errors unchang
     new SessionTurnPersister({
       now: PERSISTER_NOW,
       session: {
-        appendExecutionLog: async () => {},
+        appendExecutionLogs: async () => {},
         appendTurns: async () => {
           throw error;
         },

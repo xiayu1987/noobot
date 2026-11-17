@@ -15,6 +15,7 @@ import {
   readContextMessageField,
   resolveContextMessageDialogProcessId,
   resolveContextMessageKey,
+  resolveContextMessageContent,
   resolveContextMessageRole,
   resolveContextToolCallDeclarationId,
   resolveContextToolResultCallId,
@@ -22,7 +23,10 @@ import {
   resolveContextMessageSummarized,
   resolveContextSessionMessageUid,
 } from "../message/codec.js";
-import { SUMMARY_ALWAYS_RETAINED_INJECTED_MESSAGE_TYPES } from "../message/injected-types.js";
+import {
+  CONTEXT_INJECTED_MESSAGE_TYPE,
+  SUMMARY_ALWAYS_RETAINED_INJECTED_MESSAGE_TYPES,
+} from "../message/injected-types.js";
 import { projectSessionRecordToContextMessage } from "../message/session-projection.js";
 import { isContextControlMessage } from "./injected-message.js";
 import {
@@ -37,8 +41,64 @@ import {
   resolveSessionMessageRecordDialogProcessId,
 } from "@noobot/session-protocol";
 import { requireCanonicalTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
+import { requireCheckpointMessageUids } from "@noobot/session-protocol/summary-checkpoint-storage";
+import { serializeContextMessage } from "./snapshot.js";
 
 const summaryAlwaysRetainedInjectedTypes = new Set(SUMMARY_ALWAYS_RETAINED_INJECTED_MESSAGE_TYPES);
+
+export function capturePhaseSummarySnapshot(blocks) {
+  return Object.fromEntries(
+    ["system", "history", "incremental"].map((key) => [
+      key,
+      blocks[key].map(serializeContextMessage),
+    ]),
+  );
+}
+
+export function assertPhaseSummaryTargetsUnchanged(snapshot, blocks) {
+  const candidates = resolveSummaryScope(snapshot).checkpointMessages;
+  const current = new Map(
+    resolveSummaryScope(blocks).checkpointMessages.map((message) => [
+      resolveContextMessageKey(message),
+      message,
+    ]),
+  );
+  for (const candidate of candidates) {
+    const key = resolveContextMessageKey(candidate);
+    const target = current.get(key);
+    if (!target || JSON.stringify(serializeContextMessage(target)) !== JSON.stringify(candidate)) {
+      throw new Error(`phase summary target changed during generation: ${key}`);
+    }
+  }
+}
+
+export function requirePhaseSummaryText(output) {
+  const content = typeof output?.text === "string" ? output.text.trim() : "";
+  if (!content || !Array.isArray(output.toolCalls) || output.toolCalls.length) {
+    throw new TypeError("phase summary requires non-empty text without tool calls");
+  }
+  return content;
+}
+
+export function countSummaryMessageChars(summaryMessages) {
+  return summaryMessages.reduce(
+    (total, message) => total + resolveContextMessageContent(message).length,
+    0,
+  );
+}
+
+export function resolveSummaryInjectedRetentionKey(message) {
+  const type = resolveInjectedMessageType(message);
+  if (!isInjectedMessage(message) || !type || summaryAlwaysRetainedInjectedTypes.has(type))
+    return null;
+  if (type === CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_RESULT)
+    return JSON.stringify(["injected", type]);
+  return JSON.stringify([
+    "injected",
+    readContextMessageField(message, "injectedBy") || "injected",
+    type,
+  ]);
+}
 
 function collectRetainedInjectedMessageIndexes(messages = []) {
   const latest = new Map();
@@ -51,8 +111,7 @@ function collectRetainedInjectedMessageIndexes(messages = []) {
       retained.add(index);
       return;
     }
-    const owner = readContextMessageField(message, "injectedBy") || "injected";
-    latest.set(`${owner}:${type}`, index);
+    latest.set(resolveSummaryInjectedRetentionKey(message), index);
   });
   for (const index of latest.values()) retained.add(index);
   return retained;
@@ -70,14 +129,6 @@ function isToolResultWithFlowControlRole(message = {}, role = "") {
   return (
     resolveContextMessageRole(message) === "tool" && hasContextMessageFlowControlRole(message, role)
   );
-}
-
-export function hasCheckpointBoundaryToolCall(message = {}) {
-  return hasToolCallWithFlowControlRole(message, FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
-}
-
-export function isCheckpointBoundaryToolMessage(message = {}) {
-  return isToolResultWithFlowControlRole(message, FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
 }
 
 function isFlowControlRoleMessage(message = {}, role = "") {
@@ -146,23 +197,11 @@ function indexFlowControlBatchByTool(batch, role, latestBatchByTool) {
   }
 }
 
-export function collectLatestCheckpointBoundaryMessageIndexes(messages = []) {
-  return collectLatestFlowControlMessageIndexesByToolIdentity(
-    messages,
-    FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY,
-  );
-}
-
 export function collectLatestCheckpointEvidenceMessageIndexes(messages = []) {
   return collectLatestFlowControlMessageIndexesByToolIdentity(
     messages,
     FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE,
   );
-}
-
-export function shouldMarkCurrentTurnSummarizedMessage(message = {}) {
-  if (isFlowControlRoleMessage(message, FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY)) return false;
-  return shouldMarkCurrentTurnSummarizedByPolicy(message);
 }
 
 export function shouldMarkCurrentTurnSummarizedMessageInScope(
@@ -171,7 +210,6 @@ export function shouldMarkCurrentTurnSummarizedMessageInScope(
     messages = [],
     index = -1,
     retainedInjectedIndexes = null,
-    latestCheckpointBoundaryIndexes = null,
     latestCheckpointEvidenceIndexes = null,
   } = {},
 ) {
@@ -184,37 +222,12 @@ export function shouldMarkCurrentTurnSummarizedMessageInScope(
       : collectRetainedInjectedMessageIndexes(source);
   if (injected && retainedInjected.has(index)) return false;
   if (injected) return true;
-  if (
-    isLatestCheckpointMessageIndex(source, index, {
-      latestCheckpointBoundaryIndexes,
-      latestCheckpointEvidenceIndexes,
-    })
-  )
-    return false;
-  if (
-    isFlowControlRoleMessage(message, FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY) ||
-    isFlowControlRoleMessage(message, FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE)
-  ) {
-    return shouldMarkCurrentTurnSummarizedByPolicy(message);
-  }
-  return shouldMarkCurrentTurnSummarizedMessage(message);
-}
-
-function isLatestCheckpointMessageIndex(
-  source,
-  index,
-  { latestCheckpointBoundaryIndexes, latestCheckpointEvidenceIndexes },
-) {
-  const latestBoundary =
-    latestCheckpointBoundaryIndexes instanceof Set
-      ? latestCheckpointBoundaryIndexes
-      : collectLatestCheckpointBoundaryMessageIndexes(source);
-  if (latestBoundary.has(index)) return true;
   const latestEvidence =
     latestCheckpointEvidenceIndexes instanceof Set
       ? latestCheckpointEvidenceIndexes
       : collectLatestCheckpointEvidenceMessageIndexes(source);
-  return latestEvidence.has(index);
+  if (latestEvidence.has(index)) return false;
+  return shouldMarkCurrentTurnSummarizedByPolicy(message);
 }
 
 function summaryScope(messages) {
@@ -223,11 +236,6 @@ function summaryScope(messages) {
   return {
     source,
     retainedInjectedIndexes: collectRetainedInjectedMessageIndexes(source),
-    latestCheckpointBoundaryIndexes: collectLatestFlowControlMessageIndexesByToolIdentity(
-      source,
-      FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY,
-      toolBatchIndex,
-    ),
     latestCheckpointEvidenceIndexes: collectLatestFlowControlMessageIndexesByToolIdentity(
       source,
       FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE,
@@ -324,7 +332,11 @@ export function resolveSummaryScope(messageBlocks = {}, { messageKeys = null } =
   const history = Array.isArray(blocks.history) ? blocks.history : [];
   const incremental = Array.isArray(blocks.incremental) ? blocks.incremental : [];
   const sourceMessages = [...history, ...incremental];
-  const checkpointMessages = collectClosedToolCallBatchMessages(sourceMessages, {
+
+  const sessionMessages = sourceMessages.filter((message) =>
+    resolveContextSessionMessageUid(message),
+  );
+  const checkpointMessages = collectClosedToolCallBatchMessages(sessionMessages, {
     retentionMessages: sourceMessages,
   });
   const wantedKeys = messageKeys === null ? null : new Set(messageKeys);
@@ -334,7 +346,7 @@ export function resolveSummaryScope(messageBlocks = {}, { messageKeys = null } =
   const summaryMessages = collectDialogScopedMessagesToSummarize(selectedCheckpointMessages, {
     maxMessages: selectedCheckpointMessages.length,
     limitToProvidedMessagesOnly: true,
-    retentionMessages: sourceMessages,
+    retentionMessages: sessionMessages,
   });
   return Object.freeze({
     history,
@@ -369,13 +381,9 @@ function collectRecordSummarizedIndexes(records = []) {
 }
 
 export function markCurrentTurnStoreSummarized(turnMessageStore) {
-  const indexes = collectRecordSummarizedIndexes(turnMessageStore.toArray());
-  const markedMessageUids = new Set();
-  const markedCount = turnMessageStore.updateWhere({ summarized: true }, (record, index) => {
-    if (!indexes.has(index)) return false;
-    markedMessageUids.add(text(record.messageUid));
-    return true;
-  });
+  const { markedCount, markedMessageUids, pendingMessageUids } =
+    turnMessageStore.readCompletionSelection();
+  for (const uid of pendingMessageUids) turnMessageStore.updateByUid(uid, { summarized: true });
   return { markedCount, markedMessageUids };
 }
 
@@ -395,17 +403,11 @@ export function mirrorSummarizedMessagesByUid(messages, messageUids) {
 
 function shouldSelectScopedMessage(
   message,
-  { preservedInjected, preservedCheckpointBoundaries, preservedCheckpointEvidence, ...scope },
+  { preservedInjected, preservedCheckpointEvidence, ...scope },
 ) {
   if (isContextControlMessage(message)) return true;
   if (isInjectedMessage(message)) {
     return !isPreservedMessage(message, preservedInjected);
-  }
-  if (isFlowControlRoleMessage(message, FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY)) {
-    return (
-      !isPreservedMessage(message, preservedCheckpointBoundaries) &&
-      shouldMarkCurrentTurnSummarizedByPolicy(message)
-    );
   }
   if (isFlowControlRoleMessage(message, FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE)) {
     return (
@@ -422,6 +424,7 @@ export function collectScopedMessagesToSummarize(
     maxMessages = Number.POSITIVE_INFINITY,
     limitToProvidedMessagesOnly = false,
     retentionMessages = messages,
+    injectedRetentionMessages = retentionMessages,
   } = {},
 ) {
   const source = Array.isArray(messages) ? messages : [];
@@ -434,12 +437,8 @@ export function collectScopedMessagesToSummarize(
   const dimensions = summaryScope(source);
   const retentionDimensions = summaryScope(retentionSource);
   const preservedInjected = collectPreservedMessages(
-    retentionSource,
-    retentionDimensions.retainedInjectedIndexes,
-  );
-  const preservedCheckpointBoundaries = collectPreservedMessages(
-    retentionSource,
-    retentionDimensions.latestCheckpointBoundaryIndexes,
+    injectedRetentionMessages,
+    collectRetainedInjectedMessageIndexes(injectedRetentionMessages),
   );
   const preservedCheckpointEvidence = collectPreservedMessages(
     retentionSource,
@@ -454,7 +453,6 @@ export function collectScopedMessagesToSummarize(
         messages: source,
         index,
         preservedInjected,
-        preservedCheckpointBoundaries,
         preservedCheckpointEvidence,
       }) &&
       !resolveContextMessageSummarized(message)
@@ -499,6 +497,7 @@ export function collectDialogScopedMessagesToSummarize(
     sourceGroups.set(dialogProcessId, group);
   }
   const retentionGroups = new Map();
+  let latestSummary = null;
   for (const message of Array.isArray(retentionMessages) ? retentionMessages : []) {
     const dialogProcessId = resolveContextMessageDialogProcessId(message);
     if (!dialogProcessId) {
@@ -507,12 +506,25 @@ export function collectDialogScopedMessagesToSummarize(
     const group = retentionGroups.get(dialogProcessId) || [];
     group.push(message);
     retentionGroups.set(dialogProcessId, group);
+    if (
+      resolveInjectedMessageType(message) === CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_RESULT
+    ) {
+      latestSummary = message;
+    }
   }
   return [...sourceGroups.entries()].flatMap(
     ([dialogProcessId, group]) =>
       collectScopedMessagesToSummarize(group, {
         ...options,
         retentionMessages: retentionGroups.get(dialogProcessId) || group,
+        injectedRetentionMessages: [
+          ...(retentionGroups.get(dialogProcessId) || group).filter(
+            (message) =>
+              resolveInjectedMessageType(message) !==
+              CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_RESULT,
+          ),
+          ...(latestSummary ? [latestSummary] : []),
+        ],
       }).messages,
   );
 }
@@ -540,12 +552,7 @@ function requireCheckpointInteger(value, field, minimum) {
 }
 
 function requireCheckpointUidList(values, field) {
-  if (!Array.isArray(values)) throw invalidCheckpointState(`${field} must be an array`);
-  values.forEach((uid) => requireCheckpointText(uid, `${field}[]`));
-  if (new Set(values).size !== values.length) {
-    throw invalidCheckpointState(`${field} must not contain duplicates`);
-  }
-  return values;
+  return requireCheckpointMessageUids(values, field, invalidCheckpointState);
 }
 
 function assertSummaryReceipt(receipt) {

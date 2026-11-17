@@ -167,6 +167,12 @@ export function createChatEngineSender({
         streamOutput,
       });
     } catch (error) {
+      applyRunStateEvent({
+        type: SESSION_RUN_EVENT.LOCAL_SEND_FAILED,
+        sessionId,
+        turnScopeId,
+        source: "send_flow",
+      });
       applySendErrorState({
         error,
         botMessage: botMsg,

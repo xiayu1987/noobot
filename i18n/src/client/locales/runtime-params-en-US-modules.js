@@ -35,6 +35,7 @@ export default {
   eventProtocol: "Event protocol",
   longMemory: "Long-term memory",
   contextProtocol: "Context protocol",
+  immutableStorage: "Immutable storage",
   attachments: "Attachments",
   toolIO: "Tool I/O",
   sessionLog: "Session log",

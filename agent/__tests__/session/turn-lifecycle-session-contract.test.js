@@ -255,7 +255,7 @@ test("terminal resolution reads status from the Turn without returning messages"
   );
   const crud = new SessionCrudService({
     sessionRepo: {
-      async findById() {
+      async findTurnTerminalSource() {
         return h.reload();
       },
     },

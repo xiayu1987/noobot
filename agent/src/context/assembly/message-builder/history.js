@@ -4,24 +4,17 @@
  * SPDX-License-Identifier: MIT
  */
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
-import { resolveLocaleFromRuntime } from "noobot-i18n/shared";
 import {
   projectContextMessageModelMetadata,
-  readContextMessageField,
   readContextMessageValue,
   resolveContextMessageRole,
+  resolveContextMessageSummarized,
   resolveContextToolResultCallId,
   resolveContextToolCalls,
 } from "@noobot/context-protocol/message/codec";
 import { MESSAGE_ROLE } from "../../../bot/config/constants.js";
 import { toLangChainToolCalls } from "../../../models/adapters/langchain/context-message-adapter.js";
-import {
-  isCheckpointBoundaryToolResultMessage,
-  buildTaskSummaryFallbackHumanMessage,
-  shouldSkipSummarizedHistoryMessage,
-} from "./task-summary.js";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
-import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "@noobot/context-protocol/message/internal-types";
 import {
   buildHumanMessageContent,
   buildHumanMessagesForUser,
@@ -43,17 +36,10 @@ function resolveAssistantModelContent(msg = {}) {
     : msg.content || "";
 }
 
-function isPhaseSummaryMemoryMessage(msg = {}) {
-  return (
-    readContextMessageField(msg, "noobotInternalMessageType") ===
-    CONTEXT_INTERNAL_MESSAGE_TYPE.PHASE_SUMMARY_MEMORY
-  );
-}
-
 function collectHistoryToolCalls(messages) {
   const historyToolCallsById = new Map();
   for (const msg of messages) {
-    if (shouldSkipSummarizedHistoryMessage(msg)) continue;
+    if (resolveContextMessageSummarized(msg)) continue;
     if (resolveContextMessageRole(msg) !== MESSAGE_ROLE.ASSISTANT) continue;
     const normalizedToolCalls = toLangChainToolCalls(resolveContextToolCalls(msg));
     for (const toolCall of normalizedToolCalls) {
@@ -65,15 +51,9 @@ function collectHistoryToolCalls(messages) {
   return historyToolCallsById;
 }
 
-function buildHistoryToolMessages(msg, historyToolCallsById, runtime) {
+function buildHistoryToolMessages(msg, historyToolCallsById) {
   const toolCallId = resolveContextToolResultCallId(msg);
-  if (toolCallId && !historyToolCallsById.has(toolCallId)) {
-    if (!isCheckpointBoundaryToolResultMessage(msg)) return [];
-    const summary = buildTaskSummaryFallbackHumanMessage(msg, {
-      locale: resolveLocaleFromRuntime(runtime),
-    });
-    return summary ? [summary] : [];
-  }
+  if (!toolCallId || !historyToolCallsById.has(toolCallId)) return [];
   const declaredContextPolicy = resolveToolContextPolicy(historyToolCallsById.get(toolCallId));
   return [
     new ToolMessage({
@@ -91,7 +71,7 @@ export function buildHistoryMessages({ effectiveHistoryMessages = [], runtime = 
   const history = [];
   const historyToolCallsById = collectHistoryToolCalls(effectiveHistoryMessages);
   for (const msg of effectiveHistoryMessages) {
-    if (shouldSkipSummarizedHistoryMessage(msg)) continue;
+    if (resolveContextMessageSummarized(msg)) continue;
     if (isDerivedUserMetaMessage(msg)) continue;
     const role = resolveContextMessageRole(msg);
     if (role === MESSAGE_ROLE.SYSTEM) {
@@ -120,16 +100,7 @@ export function buildHistoryMessages({ effectiveHistoryMessages = [], runtime = 
       continue;
     }
     if (role === MESSAGE_ROLE.TOOL) {
-      history.push(...buildHistoryToolMessages(msg, historyToolCallsById, runtime));
-      continue;
-    }
-    if (isPhaseSummaryMemoryMessage(msg)) {
-      history.push(
-        new HumanMessage({
-          content: String(msg?.content || ""),
-          additional_kwargs: projectContextMessageModelMetadata(msg),
-        }),
-      );
+      history.push(...buildHistoryToolMessages(msg, historyToolCallsById));
       continue;
     }
     if (shouldBuildUserMetaForHistoryMessage(msg)) {

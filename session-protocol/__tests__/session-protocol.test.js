@@ -51,7 +51,7 @@ test("invalid command rejection exposes its protocol classification and validati
 });
 
 test("Session artifact and Turn commit metadata have one canonical protocol shape", () => {
-  assert.equal(SESSION_ARTIFACT_SCHEMA_VERSION, 23);
+  assert.equal(SESSION_ARTIFACT_SCHEMA_VERSION, 25);
   assert.deepEqual(
     normalizeTurnCommitMetadata({
       action: " SEND ",

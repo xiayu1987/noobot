@@ -11,6 +11,12 @@ import {
 } from "./authority-event-outbox.js";
 import { requireOutbox } from "./outbox-delivery.js";
 
+export function requirePreparedOutboxEvent(projection, eventId, subject) {
+  const prepared = projection.prepared.get(eventId);
+  requireOutbox(Boolean(prepared), `${subject} has no prepared event: ${eventId}`);
+  return prepared;
+}
+
 export function assertPreparedTurnReceipt(prepared, receipt) {
   const { eventId, committedAt } = receipt;
   requireOutbox(Boolean(prepared), `lifecycle receipt has no prepared event: ${eventId}`);
@@ -49,8 +55,7 @@ export function collectUnmaterializedTurnCommits(projection, lifecycle, checkpoi
 
 export function collectUnmaterializedArtifactCommits(projection, eventIds, checkpoint) {
   return eventIds.flatMap((eventId) => {
-    const prepared = projection.prepared.get(eventId);
-    requireOutbox(Boolean(prepared), `artifact commit has no prepared event: ${eventId}`);
+    const prepared = requirePreparedOutboxEvent(projection, eventId, "artifact commit");
     const { domain, scopeId, sequence } = prepared.envelope.ordering;
     const floor = readAuthorityOutboxSequenceFloor(
       checkpoint,

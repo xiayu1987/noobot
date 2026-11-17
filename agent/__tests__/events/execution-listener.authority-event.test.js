@@ -23,7 +23,7 @@ test("execution listener keeps strict attachment lifecycle payloads unchanged up
   let forwarded;
   const listener = createExecutionEventListener({
     now: TEST_NOW,
-    sessionManager: { appendExecutionLog: async () => {} },
+    sessionManager: { appendExecutionLogs: async () => {} },
     sessionId: "session-a",
     turnScopeId: "turn-a",
     dialogProcessId: "dialog-a",
@@ -91,7 +91,7 @@ test("execution listener rejects committed authority events that violate the pro
   const persisted = [];
   const listener = createExecutionEventListener({
     now: TEST_NOW,
-    sessionManager: { appendExecutionLog: async (record) => persisted.push(record) },
+    sessionManager: { appendExecutionLogs: async ({ records }) => persisted.push(...records) },
     sessionId: "session-a",
     turnScopeId: "turn-a",
     upstream: { onEvent: async () => true },

@@ -3,819 +3,602 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { turnRecord } from "../helpers/turn-record.js";
-import { createEmptyTurnLifecycle } from "@noobot/session-protocol";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import test, { after } from "node:test";
+import test from "node:test";
 import assert from "node:assert/strict";
+import { rename } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { parseTurnReplaceRequest } from "@noobot/session-protocol";
+import { setFsAdapter, resetFsAdapter } from "../../src/shared/storage/fs-adapter.js";
+import {
+  immutableMutationFixture,
+  mutationMessage as message,
+  mutationTime,
+} from "../helpers/immutable-mutation-integration-fixture.js";
 
-import { SessionMessageService } from "../../src/session/services/session-message-service.js";
-import { dedupeSessionAttachmentRefs } from "../../src/session/transfer-attachment-refs.js";
-import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
-import { createSessionCrudServiceStub } from "../helpers/session-crud-service-stub.js";
-import { requiredSessionReads } from "../helpers/session-repo-required-reads.js";
+const replacement = (f, fields = {}) => ({
+  ...f.request,
+  anchor: { turnScopeId: "drop" },
+  commandId: "replace-tail",
+  turnScopeId: "replacement",
+  newContent: "edited",
+  attachments: [],
+  ...fields,
+});
 
-const TEST_SESSION_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-session-dir-"));
-after(() => fs.rmSync(TEST_SESSION_DIR, { recursive: true, force: true }));
-
-function createService({ initialSession }) {
-  const saved = [];
-  let currentSession = structuredClone({
-    aggregateVersion: 0,
-    turnLifecycle: { ...createEmptyTurnLifecycle(), turns: {}, commandReceipts: [] },
-    ...initialSession,
+function assistantMessage(uid, scope, fields = {}) {
+  const result = message(uid, scope, {
+    ...fields,
+    role: "assistant",
+    modelMessageId: `model-${uid}`,
+    presentationMessageId: `presentation-${scope}`,
   });
-  const sessionRepo = {
-    async locateSessionScope() {
-      return {
-        resolvedParentSessionId: currentSession?.parentSessionId || "",
-        sessionDir: TEST_SESSION_DIR,
-      };
-    },
-    async withSessionMutation(_u, _s, operation) {
-      return operation(await this.locateSessionScope());
-    },
-    ...requiredSessionReads,
-    async findById() {
-      return currentSession;
-    },
-    async save(_userId, session) {
-      currentSession = structuredClone(session);
-      saved.push(structuredClone(session));
-    },
-  };
-  const service = new SessionMessageService({
-    sessionRepo,
-    sessionCrudService: createSessionCrudServiceStub(() => currentSession),
-    now: () => "2026-06-22T00:00:00.000Z",
-    allocateDialogProcessId: () => "dialog-replacement",
-  });
-  return { service, saved, getSession: () => currentSession };
+  delete result.userMessageId;
+  delete result.messageOrigin;
+  return result;
 }
 
-function baseSession(overrides = {}) {
-  return {
-    ...createTestSessionRequiredFields(),
-    sessionId: "s1",
-    parentSessionId: "",
-    aggregateVersion: 2,
-    turnLifecycle: { ...createEmptyTurnLifecycle(), turns: {}, commandReceipts: [] },
-    messages: [
-      {
-        attachments: [],
-        sessionId: "s1",
-        turnScopeId: "scope-keep",
-        role: "user",
-        messageOrigin: "natural",
-        content: "keep",
-        dialogProcessId: "dp-keep",
-      },
-      {
-        attachments: [],
-        sessionId: "s1",
-        role: "user",
-        messageOrigin: "natural",
-        content: "old",
-        error: "old failure",
-        dialogProcessId: "dp-old",
-        turnScopeId: "scope-old",
-      },
-      {
-        attachments: [],
-        sessionId: "s1",
-        role: "assistant",
-        modelMessageId: "mm_session_message_service__1",
-        content: "old answer",
-        dialogProcessId: "dp-old",
-        turnScopeId: "scope-old",
-      },
-      {
-        attachments: [],
-        sessionId: "s1",
-        role: "user",
-        messageOrigin: "natural",
-        content: "tail",
-        turnScopeId: "scope-tail",
-      },
-    ],
-    ...overrides,
-  };
-}
+test("replacement rejects invalid internal identities without publishing a head", async (t) => {
+  const f = await immutableMutationFixture(t, { messages: [message("drop")] });
+  const before = await f.open();
+  const command = parseTurnReplaceRequest({
+    commandId: "invalid-identity",
+    anchor: { turnScopeId: "drop" },
+    newContent: "edited",
+    turnScopeId: "replacement",
+    attachments: [],
+  });
+  const identity = { dialogProcessId: "new-dialog", messageUid: "sm_new", userMessageId: "um_new" };
+  for (const invalid of [
+    undefined,
+    {},
+    { ...identity, userMessageId: " " },
+    { ...identity, sessionId: "other" },
+  ]) {
+    await assert.rejects(
+      f.commit({ turnReplacement: { command, identity: invalid } }),
+      /requires canonical/,
+    );
+    assert.equal((await f.open()).generation, before.generation);
+    assert.equal(await (await f.open()).readCommand(command.commandId), null);
+  }
+});
 
-test("SessionMessageService.replaceTurn matches turnScopeId and returns snapshot without old tail", async () => {
-  const { service, saved } = createService({
-    initialSession: baseSession({
-      turnLifecycle: {
-        ...createEmptyTurnLifecycle(),
-        activeTurnScopeId: "",
-        sequence: 8,
-        turns: {
-          "scope-keep": turnRecord({
-            turnScopeId: "scope-keep",
-            presentationMessageId: "presentation-keep",
-            state: "completed",
-            phase: "completion",
-            revision: 4,
-            sequence: 4,
-          }),
-          "scope-old": turnRecord({
-            turnScopeId: "scope-old",
-            presentationMessageId: "presentation-old",
-            state: "stop_completed",
-            phase: "stop",
-            revision: 4,
-            sequence: 6,
-          }),
-          "scope-tail": turnRecord({
-            turnScopeId: "scope-tail",
-            presentationMessageId: "presentation-tail",
-            state: "stop_completed",
-            phase: "stop",
-            revision: 4,
-            sequence: 8,
-          }),
+test("replacement command replays in a fresh process without publishing another head", async (t) => {
+  const f = await immutableMutationFixture(t, { messages: [message("drop")] });
+  const first = await f.service.replaceTurn(replacement(f));
+  const before = await f.open();
+  const command = parseTurnReplaceRequest({
+    commandId: "replace-tail",
+    anchor: { turnScopeId: "drop" },
+    newContent: "edited",
+    turnScopeId: "replacement",
+    attachments: [],
+  });
+  const moduleUrl = new URL(
+    "../../src/session/session-artifact-session/commit-session-changes.js",
+    import.meta.url,
+  ).href;
+  const code = `import { commitSessionChanges } from ${JSON.stringify(moduleUrl)};
+    const result = await commitSessionChanges(JSON.parse(process.argv[1]));
+    process.stdout.write(JSON.stringify(result.result.turnReplacement));`;
+  const { stdout } = await promisify(execFile)(process.execPath, [
+    "--import",
+    new URL("../../../shared/testing/runtime-params.js", import.meta.url).href,
+    "--input-type=module",
+    "--eval",
+    code,
+    JSON.stringify({
+      sessionDir: f.scope.sessionDir,
+      sessionId: "s1",
+      expectedGeneration: before.generation,
+      operationId: "fresh-process-retry",
+      committedAt: mutationTime,
+      changes: {
+        turnReplacement: {
+          command,
+          identity: {
+            dialogProcessId: "retry-dialog",
+            messageUid: "sm_retry",
+            userMessageId: "um_retry",
+          },
         },
-        commandReceipts: [
-          {
-            commandId: "keep-receipt",
-            type: "turn.completed",
-            turnScopeId: "scope-keep",
-            requestHash: "keep",
-            committedAt: "2026-07-18T00:00:00.000Z",
-            revision: 1,
-            sequence: 1,
-            eventId: "event-keep-receipt",
-          },
-          {
-            commandId: "old-receipt",
-            type: "turn.stop_completed",
-            turnScopeId: "scope-old",
-            requestHash: "old",
-            committedAt: "2026-07-18T00:00:00.000Z",
-            revision: 4,
-            sequence: 8,
-            eventId: "event-old-receipt",
-          },
-        ],
       },
     }),
-  });
+  ]);
+  const result = JSON.parse(stdout);
+  assert.equal(result.deduplicated, true);
+  assert.deepEqual(result.receipt.result.turnReplacement, first.turnReplacement);
+  assert.equal((await f.open()).generation, before.generation);
+});
 
-  const result = await service.replaceTurn({
-    attachments: [],
-    userId: "u1",
-    sessionId: "s1",
-    anchor: { turnScopeId: "scope-old" },
+test("replacement command changes retain the exact suffix and original user across later edits and retries", async (t) => {
+  const f = await immutableMutationFixture(t, {
+    messages: [
+      message("keep", "keep", { dialogProcessId: "d" }),
+      message("drop", "drop", { dialogProcessId: "d" }),
+      message("keep-tail", "keep", { dialogProcessId: "d" }),
+    ],
+  });
+  const command = parseTurnReplaceRequest({
+    commandId: "replace-tail",
+    anchor: { turnScopeId: "drop" },
     newContent: "edited",
-    turnScopeId: "turn-scope-new",
-    expectedAggregateVersion: 2,
-    commandId: "idem-1",
+    turnScopeId: "replacement",
+    attachments: [],
   });
+  const change = {
+    turnReplacement: {
+      command,
+      identity: { dialogProcessId: "new-dialog", messageUid: "sm_new", userMessageId: "um_new" },
+    },
+  };
+  const result = await f.commit(change);
+  const before = await f.open();
+  const delta = await before.readCommandChanges(command.commandId);
+  const projection = await before.readMutationProjection(command.commandId);
+  assert.equal(projection.baseAggregateVersion, 0);
+  assert.deepEqual(projection.deletedMessageUids, ["keep-tail", "drop"]);
+  assert.equal(projection.messages.length, 1);
+  assert.equal(projection.messages[0].message.content, "edited");
+  assert.equal(projection.messages[0].message.messageUid, "sm_new");
+  assert.equal(projection.messages[0].ordinal, 2);
+  assert.equal(delta.generation, result.generation);
+  assert.equal(delta.kind, "commit");
+  assert.deepEqual(delta.receipt, result.result.turnReplacement.receipt);
+  assert.deepEqual(
+    delta.changes
+      .filter((entry) => entry.collection === "messages" && entry.remove)
+      .map((entry) => entry.key),
+    ["keep-tail", "drop"],
+  );
+  assert.equal(
+    delta.changes.some(
+      (entry) => entry.collection === "turns" && entry.key === "keep" && entry.remove,
+    ),
+    false,
+  );
+  const original = delta.changes.find(
+    (entry) => entry.collection === "messages" && entry.key === "sm_new",
+  ).value.message;
+  assert.equal(original.content, "edited");
+  await f.commit({ messages: [{ ...original, content: "later edit" }, message("later")] });
+  const retried = await f.commit(change);
+  assert.equal(retried.result.turnReplacement.deduplicated, true);
+  const after = await f.open();
+  assert.deepEqual(await after.readCommandChanges(command.commandId), delta);
+  assert.deepEqual(await after.readMutationProjection(command.commandId), projection);
+  assert.deepEqual(await before.readMutationProjection(command.commandId), projection);
+  assert.deepEqual(await before.readCommandChanges(command.commandId), delta);
+  assert.equal((await after.readMessage("sm_new")).message.content, "later edit");
+  assert.notEqual(await after.readMessage("later"), null);
+  assert.notEqual(await after.readMessage("keep"), null);
+});
 
-  assert.deepEqual(Object.keys(result).sort(), [
+test("replaceTurn publishes fresh identities, suffix indexes and tombstones in one generation", async (t) => {
+  const f = await immutableMutationFixture(t, {
+    aggregateVersion: 2,
+    messages: [message("keep"), message("drop", "drop", { error: "old failure" }), message("tail")],
+  });
+  const before = await f.open();
+  t.mock.method(f.runtime.sessionCrudService, "getSessionDisplayData", () => {
+    assert.fail("replacement response must not read the full display document");
+  });
+  const response = await f.service.replaceTurn(replacement(f, { expectedAggregateVersion: 2 }));
+  assert.deepEqual(Object.keys(response).sort(), [
     "commandId",
     "committedAggregateVersion",
     "deduplicated",
-    "detail",
+    "deletedMessageUids",
+    "displayMessages",
+    "generation",
+    "projection",
+    "sessionId",
     "turnReplacement",
   ]);
-  assert.equal(result.commandId, "idem-1");
-  assert.equal(result.committedAggregateVersion, 3);
-  assert.deepEqual(result.turnReplacement, {
-    protocolVersion: 1,
-    eventType: "turn.replaced",
-    commandId: "idem-1",
-    sessionId: "s1",
-    committedAggregateVersion: 3,
-    replacedTurnScopeIds: ["scope-old", "scope-tail"],
-    replacementDialogProcessId: saved[0].messages[1].dialogProcessId,
-    replacementTurnScopeId: "turn-scope-new",
-    replacementUserMessageUid: saved[0].messages[1].messageUid,
-    requestHash: result.turnReplacement.requestHash,
-    committedAt: "2026-06-22T00:00:00.000Z",
-  });
-  assert.equal(saved.length, 1);
+  assert.equal(response.committedAggregateVersion, 3);
+  assert.equal(response.projection.metadata.aggregateVersion, 3);
+  assert.equal(response.displayMessages.length, 1);
+  assert.equal(
+    response.displayMessages[0].messageUid,
+    response.turnReplacement.replacementUserMessageUid,
+  );
+  assert.equal(response.deduplicated, false);
+  assert.deepEqual(response.deletedMessageUids, ["tail", "drop"]);
+  const after = await f.open();
+  assert.equal(after.generation, before.generation + 1);
+  const session = await after.exportSession();
   assert.deepEqual(
-    saved[0].messages.map((message) => message.content),
+    session.messages.map((item) => item.content),
     ["keep", "edited"],
   );
-  assert.equal(saved[0].messages[1].role, "user");
-  assert.equal(saved[0].messages[1].turnId, undefined);
-  assert.match(saved[0].messages[1].messageUid, /^sm_/);
-  assert.equal(Object.hasOwn(saved[0].messages[1], "messageId"), false);
-  assert.equal(Object.hasOwn(saved[0].messages[1], "error"), false);
-  assert.match(saved[0].messages[1].userMessageId, /^um_/);
-  assert.equal("id" in saved[0].messages[1], false);
-  assert.equal(saved[0].messages[1].turnScopeId, "turn-scope-new");
-  assert.equal(saved[0].messages[1].dialogProcessId, "dialog-replacement");
-  assert.equal(
-    saved[0].messages[1].dialogProcessId,
-    result.turnReplacement.replacementDialogProcessId,
+  const edited = session.messages[1];
+  assert.match(edited.messageUid, /^sm_/);
+  assert.match(edited.userMessageId, /^um_/);
+  assert.equal(edited.error, undefined);
+  assert.equal(edited.turnId, undefined);
+  assert.equal(edited.turnScopeId, "replacement");
+  assert.equal(edited.ts, mutationTime);
+  assert.equal(edited.dialogProcessId, response.turnReplacement.replacementDialogProcessId);
+  assert.equal(edited.messageUid, response.turnReplacement.replacementUserMessageUid);
+  assert.deepEqual(response.turnReplacement.replacedTurnScopeIds, ["drop", "tail"]);
+  assert.equal(session.turnLifecycle.sequence, 1);
+  assert.deepEqual(Object.keys(session.turnLifecycle.replacedTurns).sort(), ["drop", "tail"]);
+  assert.equal(await after.readMessage("drop"), null);
+  assert.notEqual(await before.readMessage("drop"), null);
+});
+
+test("replaceTurn resolves a continued assistant turn to its committed dialog user anchor", async (t) => {
+  const answer = message("answer", "continued", {
+    role: "assistant",
+    modelMessageId: "mm_continued",
+    presentationMessageId: "p:continued",
+    dialogProcessId: "dialog-source",
+  });
+  delete answer.userMessageId;
+  delete answer.messageOrigin;
+  const f = await immutableMutationFixture(t, {
+    messages: [message("keep"), message("user", "source"), answer, message("tail")],
+  });
+  const result = await f.service.replaceTurn(
+    replacement(f, { anchor: { turnScopeId: "continued" } }),
   );
-  assert.equal(saved[0].aggregateVersion, 3);
-  assert.equal(saved[0].updatedAt, "2026-06-22T00:00:00.000Z");
-  assert.deepEqual(Object.keys(saved[0].turnLifecycle.turns), ["scope-keep"]);
+  assert.deepEqual(result.turnReplacement.replacedTurnScopeIds, ["source", "continued", "tail"]);
   assert.deepEqual(
-    saved[0].turnLifecycle.commandReceipts.map((item) => [item.type, item.turnScopeId]),
-    [
-      ["turn.completed", "scope-keep"],
-      ["session.turn.replace", undefined],
-    ],
-  );
-  assert.equal(saved[0].turnLifecycle.sequence, 9);
-  assert.equal(
-    saved[0].turnLifecycle.replacedTurns["scope-old"].replacementTurnScopeId,
-    "turn-scope-new",
-  );
-  assert.equal(
-    saved[0].turnLifecycle.replacedTurns["scope-tail"].replacementTurnScopeId,
-    "turn-scope-new",
+    (await (await f.open()).exportSession()).messages.map((item) => item.content),
+    ["keep", "edited"],
   );
 });
 
-test("SessionMessageService.replaceTurn mutates only the owning lifecycle aggregate", async () => {
-  const parent = createService({
-    initialSession: baseSession({
-      turnLifecycle: {
-        ...createEmptyTurnLifecycle(),
-        sequence: 3,
-        turns: {
-          "scope-keep": turnRecord({
-            revision: 1,
-            sequence: 1,
-            turnScopeId: "scope-keep",
-            dialogProcessId: "dp-keep",
-            state: "completed",
-          }),
-          "scope-old": turnRecord({
-            revision: 1,
-            sequence: 2,
-            turnScopeId: "scope-old",
-            dialogProcessId: "dp-old",
-            state: "action_failed",
-          }),
-          "scope-tail": turnRecord({
-            revision: 1,
-            sequence: 3,
-            turnScopeId: "scope-tail",
-            dialogProcessId: "dp-tail",
-            state: "stop_completed",
-          }),
-        },
-        commandReceipts: [],
-      },
-    }),
+test("replaceTurn replays after anchor removal without advancing generation", async (t) => {
+  const f = await immutableMutationFixture(t, {
+    aggregateVersion: 2,
+    messages: [message("keep"), message("drop")],
   });
-  const child = createService({
-    initialSession: {
-      sessionId: "child",
-      parentSessionId: "s1",
-      messages: [
-        {
-          attachments: [],
-          sessionId: "child",
-          turnScopeId: "child-turn",
-          role: "user",
-          messageOrigin: "internal",
-          content: "child",
-        },
-      ],
-      turnLifecycle: {
-        ...createEmptyTurnLifecycle(),
-        sequence: 1,
-        turns: {
-          "child-turn": turnRecord({
-            revision: 1,
-            sequence: 1,
-            turnScopeId: "child-turn",
-            dialogProcessId: "child-dialog",
-            state: "stop_completed",
-          }),
-        },
-        commandReceipts: [],
-      },
-    },
-  });
-
-  await parent.service.replaceTurn({
-    attachments: [],
-    userId: "u1",
-    sessionId: "s1",
-    anchor: { turnScopeId: "scope-old" },
-    newContent: "edited",
-    turnScopeId: "scope-new",
-    commandId: "replace-statuses",
-  });
-
-  assert.deepEqual(Object.keys(parent.getSession().turnLifecycle.turns), ["scope-keep"]);
-  assert.deepEqual(Object.keys(child.getSession().turnLifecycle.turns), ["child-turn"]);
+  const request = replacement(f, { expectedAggregateVersion: 2 });
+  const first = await f.service.replaceTurn(request);
+  const committed = await f.open();
+  const replay = await f.service.replaceTurn(request);
+  assert.equal(replay.deduplicated, true);
+  assert.deepEqual(replay.turnReplacement, first.turnReplacement);
+  assert.equal((await f.open()).generation, committed.generation);
+  for (const fields of [
+    { newContent: "changed" },
+    { anchor: { turnScopeId: "keep" } },
+    { turnScopeId: "other" },
+  ])
+    await assert.rejects(f.service.replaceTurn({ ...request, ...fields }), {
+      code: "SESSION_IDEMPOTENCY_KEY_REUSED",
+    });
+  assert.equal((await f.open()).generation, committed.generation);
 });
 
-test("SessionMessageService.replaceTurn persists only the incoming canonical attachment projection", async () => {
-  const richAttachment = {
-    attachmentId: "att-rich",
-    name: "report.docx",
-    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    size: 123,
-    sessionId: "s1",
-    attachmentSource: "user",
-    path: "/workspace/att-rich.docx",
-    relativePath: "runtime/attach/s1/user/att-rich.docx",
-    sandboxPath: "/workspace/att-rich.docx",
-  };
-  const { service, saved } = createService({
-    initialSession: baseSession({
-      messages: [
-        {
-          sessionId: "s1",
-          role: "user",
-          messageOrigin: "natural",
-          content: "old",
-          dialogProcessId: "dp-old",
-          turnScopeId: "scope-old",
-          attachments: [richAttachment],
-        },
-        {
-          attachments: [],
-          sessionId: "s1",
-          role: "assistant",
-          modelMessageId: "mm_session_message_service__2",
-          content: "old answer",
-          dialogProcessId: "dp-old",
-          turnScopeId: "scope-old",
-        },
-      ],
-    }),
+test("replaceTurn rejects stale versions, missing anchors and reused identities without publication", async (t) => {
+  const f = await immutableMutationFixture(t, {
+    aggregateVersion: 5,
+    messages: [message("keep"), message("drop")],
   });
-
-  await service.replaceTurn({
-    userId: "u1",
-    sessionId: "s1",
-    anchor: { turnScopeId: "scope-old" },
-    newContent: "edited",
-    turnScopeId: "scope-new",
-    commandId: "replace-rich-attachment",
-    attachments: [
-      {
-        attachmentId: richAttachment.attachmentId,
-        sessionId: richAttachment.sessionId,
-        attachmentSource: richAttachment.attachmentSource,
-        name: "report.docx",
-        mimeType: richAttachment.mimeType,
-        size: 123,
-      },
-    ],
-  });
-
-  assert.equal(saved.length, 1);
-  assert.deepEqual(saved[0].messages[0].attachments[0], {
-    attachmentId: "att-rich",
-    sessionId: "s1",
-    attachmentSource: "user",
-    name: "report.docx",
-    mimeType: richAttachment.mimeType,
-    size: 123,
-  });
-});
-
-test("SessionMessageService.replaceTurn rejects attachments without stable identity", async () => {
-  const richAttachment = {
-    attachmentId: "att-rich",
-    sessionId: "s1",
-    attachmentSource: "user",
-    name: "report.docx",
-    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    size: 123,
-    path: "/workspace/att-rich.docx",
-  };
-  const incomingAttachment = {
-    name: "report.docx",
-    mimeType: "application/pdf",
-    size: 456,
-  };
-  const { service, saved } = createService({
-    initialSession: baseSession({
-      messages: [
-        {
-          role: "user",
-          messageOrigin: "natural",
-          content: "old",
-          dialogProcessId: "dp-old",
-          turnScopeId: "scope-old",
-          attachments: [richAttachment],
-        },
-        {
-          attachments: [],
-          role: "assistant",
-          modelMessageId: "mm_session_message_service__3",
-          content: "old answer",
-          dialogProcessId: "dp-old",
-          turnScopeId: "scope-old",
-        },
-      ],
-    }),
-  });
-
+  const before = await f.open();
   await assert.rejects(
-    service.replaceTurn({
-      userId: "u1",
-      sessionId: "s1",
-      anchor: { turnScopeId: "scope-old" },
-      newContent: "edited",
-      turnScopeId: "scope-new",
-      commandId: "replace-attachment-identity",
-      attachments: [incomingAttachment],
-    }),
+    f.service.replaceTurn(replacement(f, { expectedAggregateVersion: 4 })),
+    (error) => error.statusCode === 409 && error.currentVersion === 5,
+  );
+  await assert.rejects(
+    f.service.replaceTurn(replacement(f, { anchor: { turnScopeId: "missing" } })),
+    (error) => error.statusCode === 404,
+  );
+  await assert.rejects(f.service.replaceTurn(replacement(f, { turnScopeId: "keep" })), /fresh/);
+  assert.equal((await f.open()).generation, before.generation);
+});
+
+test("replaceTurn validates required payload and rejects compatibility or ambiguous anchors", async (t) => {
+  const f = await immutableMutationFixture(t);
+  t.mock.method(f.repository, "requireSessionReader", () =>
+    assert.fail("invalid request accessed storage"),
+  );
+  for (const fields of [
+    { newContent: " " },
+    { turnScopeId: "" },
+    { commandId: "" },
+    { attachments: undefined },
+    { anchor: {} },
+    { anchor: { ts: mutationTime } },
+    { anchor: { dialogId: "legacy" } },
+    { anchor: { turnScopeId: "drop", messageUid: "ambiguous" } },
+  ])
+    await assert.rejects(f.service.replaceTurn(replacement(f, fields)));
+});
+
+test("replacement protocol rejects unknown fields and noncanonical values", () => {
+  const request = {
+    commandId: "c",
+    anchor: { turnScopeId: "t" },
+    newContent: "edited",
+    turnScopeId: "new",
+    attachments: [],
+  };
+  assert.equal(parseTurnReplaceRequest(request).turnScopeId, "new");
+  for (const fields of [
+    { extra: true },
+    { newContent: " edited" },
+    { attachments: [null] },
+    { expectedAggregateVersion: -1 },
+  ])
+    assert.throws(() => parseTurnReplaceRequest({ ...request, ...fields }));
+});
+
+test("replaceTurn persists incoming canonical attachments and rejects missing stable identity", async (t) => {
+  const attachment = {
+    attachmentId: "att-1",
+    sessionId: "s1",
+    attachmentSource: "user",
+    name: "report.txt",
+    mimeType: "text/plain",
+    size: 123,
+  };
+  const f = await immutableMutationFixture(t, {
+    messages: [
+      message("drop", "drop", { attachments: [{ ...attachment, path: "/old/report.txt" }] }),
+    ],
+  });
+  const before = await f.open();
+  await assert.rejects(
+    f.service.replaceTurn(replacement(f, { attachments: [{ name: "no identity" }] })),
     /invalid_attachment_id/,
   );
-
-  assert.equal(saved.length, 0);
+  assert.equal((await f.open()).generation, before.generation);
+  const result = await f.service.replaceTurn(replacement(f, { attachments: [attachment] }));
+  assert.deepEqual(
+    (await (await f.open()).readMessage(result.turnReplacement.replacementUserMessageUid)).message
+      .attachments,
+    [attachment],
+  );
 });
 
-test("SessionMessageService.assertReusedUserTurnIdentity rejects attachment divergence", async () => {
-  const committedAttachment = {
-    attachmentId: "att-rich",
-    sessionId: "s1",
-    attachmentSource: "user",
-    path: "/runtime/att-rich.docx",
-    name: "report.docx",
-  };
-  const { service, saved } = createService({
-    initialSession: baseSession({
-      messages: [
-        {
-          role: "user",
-          messageOrigin: "natural",
-          content: "edited",
-          dialogProcessId: "dp-new",
-          turnScopeId: "scope-edited",
-          attachments: [committedAttachment],
-        },
-      ],
-    }),
-  });
-
-  await assert.rejects(
-    service.assertReusedUserTurnIdentity({
-      userId: "u1",
-      sessionId: "s1",
-      turnScopeId: "scope-edited",
-      dialogProcessId: "dp-new",
-      attachments: [{ ...committedAttachment, attachmentId: "att-other" }],
-    }),
-    /attachments do not match Session authority/,
-  );
-
-  assert.equal(saved.length, 0);
+test("replaceTurn leaves another session graph unchanged", async (t) => {
+  const f = await immutableMutationFixture(t, { messages: [message("drop")] });
+  const other = await immutableMutationFixture(t, { messages: [message("other")] });
+  const before = await other.open();
+  await f.service.replaceTurn(replacement(f));
+  assert.deepEqual(await (await other.open()).exportSession(), await before.exportSession());
 });
 
-test("SessionMessageService.replaceTurn rejects ts anchors", async () => {
-  const { service: tsService, saved: tsSaved } = createService({
-    initialSession: baseSession({
-      messages: [
-        { attachments: [], role: "user", messageOrigin: "natural", content: "old", ts: "ts-user" },
-        {
-          attachments: [],
-          role: "assistant",
-          modelMessageId: "mm_session_message_service__4",
-          content: "old answer",
-          ts: "ts-assistant",
-        },
-      ],
-    }),
-  });
-  await assert.rejects(
-    tsService.replaceTurn({
-      attachments: [],
-      userId: "u1",
-      sessionId: "s1",
-      anchor: { ts: "ts-assistant" },
-      newContent: "by ts",
-      turnScopeId: "scope-new",
-      commandId: "replace-ts",
-    }),
-    (error) => error?.statusCode === 400 && /anchor is required/.test(error.message),
-  );
-  assert.equal(tsSaved.length, 0);
-});
-
-test("SessionMessageService.replaceTurn rejects dialogId compatibility anchors", async () => {
-  const { service, saved } = createService({
-    initialSession: baseSession({
-      messages: [
-        {
-          attachments: [],
-          role: "user",
-          messageOrigin: "natural",
-          content: "first",
-          dialogId: "dp-compat",
-        },
-        {
-          attachments: [],
-          role: "assistant",
-          modelMessageId: "mm_session_message_service__5",
-          content: "answer",
-          dialogId: "dp-compat",
-        },
-        {
-          attachments: [],
-          role: "user",
-          messageOrigin: "natural",
-          content: "tail",
-          dialogId: "dp-tail",
-        },
-      ],
-    }),
-  });
-
-  await assert.rejects(
-    service.replaceTurn({
-      attachments: [],
-      userId: "u1",
-      sessionId: "s1",
-      anchor: { dialogId: "dp-compat" },
-      newContent: "edited compat",
-      turnScopeId: "scope-new",
-      commandId: "replace-dialog-id",
-    }),
-    (error) => error?.statusCode === 400 && /anchor is required/.test(error.message),
-  );
-  assert.equal(saved.length, 0);
-});
-
-test("SessionMessageService.replaceTurn rejects conflicts and missing anchors without saving", async () => {
-  const { service, saved } = createService({
-    initialSession: baseSession({ aggregateVersion: 5 }),
-  });
-
-  await assert.rejects(
-    service.replaceTurn({
-      attachments: [],
-      userId: "u1",
-      sessionId: "s1",
-      anchor: { turnScopeId: "scope-old" },
-      newContent: "edit",
-      turnScopeId: "scope-new",
-      commandId: "replace-conflict",
-      expectedAggregateVersion: 4,
-    }),
-    (error) => error?.statusCode === 409 && error?.currentVersion === 5,
-  );
-  await assert.rejects(
-    service.replaceTurn({
-      attachments: [],
-      userId: "u1",
-      sessionId: "s1",
-      anchor: { turnScopeId: "missing" },
-      newContent: "edit",
-      turnScopeId: "scope-new",
-      commandId: "replace-missing",
-    }),
-    (error) => error?.statusCode === 404 && /anchor not found/.test(error.message),
-  );
-  assert.equal(saved.length, 0);
-});
-
-test("SessionMessageService.replaceTurn validates required payload", async () => {
-  const { service, saved } = createService({ initialSession: baseSession() });
-
-  await assert.rejects(
-    service.replaceTurn({
-      attachments: [],
-      userId: "u1",
-      sessionId: "s1",
-      anchor: { turnScopeId: "scope-old" },
-      newContent: " ",
-    }),
-    (error) => error?.statusCode === 400 && /newContent is required/.test(error.message),
-  );
-  await assert.rejects(
-    service.replaceTurn({
-      attachments: [],
-      userId: "u1",
-      sessionId: "s1",
-      newContent: "edit",
-      turnScopeId: "scope-new",
-      commandId: "replace-no-anchor",
-    }),
-    (error) => error?.statusCode === 400 && /anchor is required/.test(error.message),
-  );
-  await assert.rejects(
-    service.replaceTurn({
-      attachments: [],
-      userId: "u1",
-      sessionId: "s1",
-      anchor: { turnScopeId: "scope-old" },
-      newContent: "edit",
-      commandId: "replace-no-scope",
-    }),
-    (error) => error?.statusCode === 400 && /turnScopeId is required/.test(error.message),
-  );
-  await assert.rejects(
-    service.replaceTurn({
-      attachments: [],
-      userId: "u1",
-      sessionId: "s1",
-      anchor: { turnScopeId: "scope-old" },
-      newContent: "edit",
-      turnScopeId: "scope-new",
-    }),
-    (error) => error?.statusCode === 400 && /commandId is required/.test(error.message),
-  );
-  assert.equal(saved.length, 0);
-});
-
-test("SessionMessageService.assertReusedUserTurnIdentity accepts persisted attachment integrity without saving", async () => {
-  const attachments = [
+async function complete(f, scope) {
+  for (const event of [
     {
-      attachmentId: "att-1",
-      sessionId: "s1",
-      attachmentSource: "user",
-      path: "/runtime/att-1.txt",
-      contentSha256: "sha-1",
-      name: "report.txt",
-      mimeType: "text/plain",
-      clientAttachmentId: "client-att-1",
+      eventType: "turn.action_accepted",
+      phase: "action",
+      action: "send",
+      dialogProcessId: `dialog-${scope}`,
+      presentationMessageId: `p:${scope}`,
+      executionId: `agent:${scope}`,
+      executionKind: "agent",
+      rootExecutionId: `agent:${scope}`,
     },
-  ];
-  const { service, saved } = createService({
-    initialSession: baseSession({
-      messages: [
+    { eventType: "turn.processing_started", phase: "processing" },
+    {
+      eventType: "turn.processing_completed",
+      phase: "completion",
+      completionCommitId: `completed:${scope}`,
+    },
+    {
+      eventType: "turn.completed",
+      phase: "completion",
+      terminalStatus: { command: "completed" },
+      commandId: `completed:${scope}`,
+    },
+  ])
+    await f.commit({
+      turnTransition: {
+        sessionId: "s1",
+        turnScopeId: scope,
+        commandId: `${event.eventType}:${scope}`,
+        causationId: `${event.eventType}:${scope}`,
+        ...event,
+      },
+    });
+}
+
+test("replaceTurn atomically removes related lifecycle, summaries, timings, commands and outbox", async (t) => {
+  const f = await immutableMutationFixture(t, { messages: [message("keep"), message("drop")] });
+  for (const scope of ["keep", "drop"]) {
+    await complete(f, scope);
+    await f.commit({
+      timings: [{ turnScopeId: scope, dialogProcessId: `dialog-${scope}`, modelLoopRound: 1 }],
+      summaryCheckpoints: [
         {
-          role: "user",
-          content: "edited",
-          dialogProcessId: "dp-new",
-          turnScopeId: "scope-edited",
-          messageOrigin: "natural",
-          attachments: dedupeSessionAttachmentRefs(attachments),
+          userId: "u1",
+          sessionId: "s1",
+          dialogProcessId: `dialog-${scope}`,
+          turnScopeId: scope,
+          checkpointId: `cp:${scope}`,
+          expectedCheckpointRevision: 0,
+          persistedMessageUids: [],
+          summarizedMessageUids: [scope],
+          retainedMessageUids: [],
+          messages: [],
         },
       ],
-    }),
-  });
-
-  const result = await service.assertReusedUserTurnIdentity({
-    userId: "u1",
-    sessionId: "s1",
-    turnScopeId: "scope-edited",
-    dialogProcessId: "dp-new",
-    attachments,
-  });
-
-  assert.equal(result.asserted, true);
-  assert.equal(result.messageIndex, 0);
-  assert.equal(result.userMessage.dialogProcessId, "dp-new");
-  assert.deepEqual(result.userMessage.attachments, attachments);
-  assert.equal(saved.length, 0);
+    });
+  }
+  const before = await f.open();
+  assert.notEqual(await before.readCheckpoint("drop", "cp:drop"), null);
+  const result = await f.service.replaceTurn(replacement(f));
+  const after = await f.open();
+  assert.equal(after.generation, before.generation + 1);
+  assert.notEqual(await after.readTurnState("keep"), null);
+  assert.equal(await after.readTurnState("drop"), null);
+  assert.equal(await after.readTurnTiming("drop"), null);
+  assert.equal(await after.readCommand("turn.action_accepted:drop"), null);
+  assert.equal(await after.readCheckpoint("drop", "cp:drop"), null);
+  assert.equal(await after.readCheckpointState("drop"), null);
+  assert.notEqual(await after.readCheckpoint("keep", "cp:keep"), null);
+  assert.notEqual(await before.readCheckpoint("drop", "cp:drop"), null);
+  assert.equal((await after.readOutboxPage({ consumerId: "client" })).events.length, 4);
+  assert.equal((await before.readOutboxPage({ consumerId: "client" })).events.length, 8);
+  const session = await after.exportSession();
+  assert.equal(session.turnLifecycle.replacedTurns.drop.replacementTurnScopeId, "replacement");
+  assert.deepEqual(
+    (await after.readCommand("replace-tail")).result.turnReplacement,
+    result.turnReplacement,
+  );
 });
 
-test("SessionMessageService.assertReusedUserTurnIdentity ignores derived attachment presentation fields", async () => {
-  const committedAttachment = {
-    attachmentId: "att-1",
-    sessionId: "s1",
-    attachmentSource: "user",
-    path: "/runtime/att-1.txt",
-    contentSha256: "sha-1",
-    name: "report.txt",
-  };
-  const { service, saved } = createService({
-    initialSession: baseSession({
-      messages: [
-        {
-          role: "user",
-          messageOrigin: "natural",
-          content: "edited",
-          dialogProcessId: "dp-new",
-          turnScopeId: "scope-edited",
-          attachments: [committedAttachment],
-        },
-      ],
-    }),
+test("replaceTurn head publication failure retains the old graph and retries the command", async (t) => {
+  const f = await immutableMutationFixture(t, { messages: [message("keep"), message("drop")] });
+  await complete(f, "drop");
+  const before = await f.open();
+  setFsAdapter({
+    rename: async (source, target) => {
+      if (target === `${f.scope.sessionDir}/head.json`)
+        throw Object.assign(new Error("injected"), { code: "EIO" });
+      return rename(source, target);
+    },
   });
+  try {
+    await assert.rejects(f.service.replaceTurn(replacement(f)), {
+      code: "SESSION_COMMIT_UNCERTAIN",
+    });
+  } finally {
+    resetFsAdapter();
+  }
+  const failed = await f.open();
+  assert.equal(failed.generation, before.generation);
+  assert.deepEqual(await failed.exportSession(), await before.exportSession());
+  assert.equal(await failed.readCommand("replace-tail"), null);
+  assert.equal((await failed.readOutboxPage({ consumerId: "client" })).events.length, 4);
+  await f.service.replaceTurn(replacement(f));
+  assert.equal(await (await f.open()).readMessage("drop"), null);
+});
 
-  const result = await service.assertReusedUserTurnIdentity({
-    userId: "u1",
-    sessionId: "s1",
-    turnScopeId: "scope-edited",
-    dialogProcessId: "dp-new",
-    attachments: [
-      {
-        ...committedAttachment,
-        name: "derived-display-name.txt",
-        downloadUrl: "/api/attachments/att-1",
-        previewUrl: "",
-        generatedByModel: false,
-        relations: [
-          {
-            relationType: "parsed_result",
-            sourceIdentity: {
-              attachmentId: "att-1",
-              sessionId: "s1",
-              attachmentSource: "user",
-            },
-            targetIdentity: {
-              attachmentId: "parsed-att-1",
-              sessionId: "s1",
-              attachmentSource: "tool",
-            },
-            createdAt: "2026-06-22T00:00:00.000Z",
-          },
-        ],
-      },
+test("replacement of a later user in one dialog preserves the earlier user and response", async (t) => {
+  const dialogProcessId = "shared-dialog";
+  const f = await immutableMutationFixture(t, {
+    messages: [
+      message("first", "first", { dialogProcessId }),
+      assistantMessage("answer", "first", { dialogProcessId }),
+      message("drop", "drop", { dialogProcessId }),
+      assistantMessage("tail", "drop", { dialogProcessId }),
     ],
   });
-
-  assert.equal(result.asserted, true);
-  assert.equal(saved.length, 0);
+  await f.service.replaceTurn(replacement(f));
+  assert.deepEqual(
+    (await (await f.open()).exportSession()).messages.map((item) => item.content),
+    ["first", "answer", "edited"],
+  );
 });
 
-test("SessionMessageService.assertReusedUserTurnIdentity rejects immutable attachment identity divergence", async () => {
-  const committedAttachment = {
+test("replacement of a continuation uses its nearest user interjection", async (t) => {
+  const dialogProcessId = "shared-dialog";
+  const f = await immutableMutationFixture(t, {
+    messages: [
+      message("first", "first", { dialogProcessId }),
+      assistantMessage("answer", "first", { dialogProcessId }),
+      message("interjection", "interjection", { dialogProcessId }),
+      assistantMessage("drop", "drop", { dialogProcessId }),
+    ],
+  });
+  await f.service.replaceTurn(replacement(f));
+  assert.deepEqual(
+    (await (await f.open()).exportSession()).messages.map((item) => item.content),
+    ["first", "answer", "edited"],
+  );
+});
+
+test("committed message role changes reject before publishing a head", async (t) => {
+  const f = await immutableMutationFixture(t, { messages: [message("drop")] });
+  const before = await f.open();
+  await assert.rejects(f.commit({ messages: [assistantMessage("drop", "drop")] }), {
+    code: "SESSION_MESSAGE_IDENTITY_CONFLICT",
+  });
+  assert.equal((await f.open()).generation, before.generation);
+  assert.equal((await (await f.open()).readMessage("drop")).message.role, "user");
+});
+
+test("replacement of the first turn updates the title and permits a subsequent append", async (t) => {
+  const f = await immutableMutationFixture(t, { messages: [message("drop")] });
+  await f.service.replaceTurn(replacement(f));
+  assert.equal((await (await f.open()).readMetadata()).autoTitle, "edited");
+  await f.commit({ messages: [message("next")] });
+  assert.deepEqual(
+    (await (await f.open()).exportSession()).messages.map((item) => item.content),
+    ["edited", "next"],
+  );
+});
+
+test("reused user identity accepts integrity fields and ignores derived presentation without writing", async (t) => {
+  const attachment = {
     attachmentId: "att-1",
     sessionId: "s1",
     attachmentSource: "user",
-    path: "/runtime/att-1.txt",
+    path: "/runtime/a.txt",
     contentSha256: "sha-1",
+    name: "original.txt",
+    mimeType: "text/plain",
   };
-  const { service, saved } = createService({
-    initialSession: baseSession({
-      messages: [
-        {
-          role: "user",
-          messageOrigin: "natural",
-          content: "edited",
-          dialogProcessId: "dp-new",
-          turnScopeId: "scope-edited",
-          attachments: [committedAttachment],
-        },
-      ],
-    }),
+  const f = await immutableMutationFixture(t, {
+    messages: [message("user", "edited", { attachments: [attachment] })],
   });
-
-  for (const divergentAttachment of [
-    { ...committedAttachment, attachmentId: "att-2" },
-    { ...committedAttachment, sessionId: "s2" },
-    { ...committedAttachment, attachmentSource: "model" },
-    { ...committedAttachment, path: "/runtime/other.txt" },
-    { ...committedAttachment, contentSha256: "sha-2" },
+  const before = await f.open();
+  for (const attachments of [
+    [attachment],
+    [{ ...attachment, name: "derived.txt", downloadUrl: "/download" }],
   ]) {
+    const result = await f.service.assertReusedUserTurnIdentity({
+      ...f.request,
+      turnScopeId: "edited",
+      dialogProcessId: "dialog-edited",
+      attachments,
+    });
+    assert.equal(result.asserted, true);
+    assert.deepEqual(result.userMessage.attachments, [attachment]);
+  }
+  assert.equal((await f.open()).generation, before.generation);
+});
+
+test("reused user identity rejects immutable attachment and dialog divergence", async (t) => {
+  const attachment = {
+    attachmentId: "att-1",
+    sessionId: "s1",
+    attachmentSource: "user",
+    path: "/runtime/a.txt",
+    contentSha256: "sha-1",
+    name: "original.txt",
+    mimeType: "text/plain",
+  };
+  const f = await immutableMutationFixture(t, {
+    messages: [message("user", "edited", { attachments: [attachment] })],
+  });
+  const request = {
+    ...f.request,
+    turnScopeId: "edited",
+    dialogProcessId: "dialog-edited",
+    attachments: [attachment],
+  };
+  const before = await f.open();
+  for (const fields of [
+    { attachmentId: "att-2" },
+    { sessionId: "s2" },
+    { attachmentSource: "model" },
+    { path: "/other" },
+    { contentSha256: "sha-2" },
+  ])
     await assert.rejects(
-      service.assertReusedUserTurnIdentity({
-        userId: "u1",
-        sessionId: "s1",
-        turnScopeId: "scope-edited",
-        dialogProcessId: "dp-new",
-        attachments: [divergentAttachment],
+      f.service.assertReusedUserTurnIdentity({
+        ...request,
+        attachments: [{ ...attachment, ...fields }],
       }),
       (error) =>
-        error?.code === "INVALID_CANONICAL_ATTACHMENT" ||
-        /attachments do not match Session authority/.test(error?.message || ""),
+        error.code === "INVALID_CANONICAL_ATTACHMENT" ||
+        /attachments do not match Session authority/.test(error.message),
     );
-  }
-  assert.equal(saved.length, 0);
-});
-
-test("SessionMessageService.assertReusedUserTurnIdentity rejects dialog identity divergence", async () => {
-  const { service, saved } = createService({
-    initialSession: baseSession({
-      messages: [
-        {
-          attachments: [],
-          role: "user",
-          messageOrigin: "natural",
-          content: "edited",
-          dialogProcessId: "dp-committed",
-          turnScopeId: "scope-edited",
-        },
-      ],
-    }),
-  });
-
   await assert.rejects(
-    service.assertReusedUserTurnIdentity({
-      userId: "u1",
-      sessionId: "s1",
-      turnScopeId: "scope-edited",
-      dialogProcessId: "dp-other",
-    }),
-    /dialogProcessId does not match Session authority/,
+    f.service.assertReusedUserTurnIdentity({ ...request, dialogProcessId: "other" }),
+    /dialogProcessId does not match/,
   );
-
-  assert.equal(saved.length, 0);
-});
-
-test("SessionMessageService.assertReusedUserTurnIdentity requires complete identity", async () => {
-  const { service, saved } = createService({ initialSession: baseSession() });
-
   await assert.rejects(
-    service.assertReusedUserTurnIdentity({
-      userId: "u1",
-      sessionId: "s1",
-      dialogProcessId: "dp-new",
-    }),
+    f.service.assertReusedUserTurnIdentity({ ...request, turnScopeId: "" }),
     /turnScopeId is required/,
   );
-
-  assert.equal(saved.length, 0);
+  assert.equal((await f.open()).generation, before.generation);
 });

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
+import { isDeepFrozen } from "@noobot/shared/deep-freeze";
 import { SESSION_ERROR_CODE } from "../errors.js";
 import { isCanonicalDialogProcessKey } from "../identity.js";
 import { isCanonicalTurnScopeId } from "../identity/turn-scope-identity.js";
@@ -26,7 +27,7 @@ function bearsPresentation(message) {
   return messageRecordIdentityFieldsFor(message.role).required.includes(PRESENTATION_FIELD);
 }
 
-export function requireTurnPartitionMessageIdentity(message, position) {
+function readTurnPartitionMessageIdentity(message, position) {
   if (
     !isPlainObject(message) ||
     !isCanonicalTurnScopeId(message.turnScopeId) ||
@@ -53,6 +54,57 @@ export function requireTurnPartitionMessageIdentity(message, position) {
   };
 }
 
+const immutableMessageIdentities = new WeakMap();
+
+export function requireTurnPartitionMessageIdentity(message, position) {
+  if (!isDeepFrozen(message)) return readTurnPartitionMessageIdentity(message, position);
+  let identity = immutableMessageIdentities.get(message);
+  if (!identity) {
+    identity = Object.freeze(readTurnPartitionMessageIdentity(message, position));
+    immutableMessageIdentities.set(message, identity);
+  }
+  return { ...identity };
+}
+
+function mergePartitionIdentity(identity, next) {
+  if (next.turnScopeId !== identity.turnScopeId)
+    return `Turn partition mixes turnScopeId ${identity.turnScopeId} and ${next.turnScopeId}`;
+  if (next.dialogProcessId !== identity.dialogProcessId)
+    return `turnScopeId ${identity.turnScopeId} maps to multiple dialogProcessId values`;
+  if (!next.presentationMessageId) return "";
+  if (identity.presentationMessageId === null)
+    identity.presentationMessageId = next.presentationMessageId;
+  return identity.presentationMessageId === next.presentationMessageId
+    ? ""
+    : `turnScopeId ${identity.turnScopeId} maps to multiple presentationMessageId values`;
+}
+
+function assertPartitionConflict(conflict) {
+  if (conflict) throw partitionError(SESSION_ERROR_CODE.TURN_IDENTITY_CONFLICT, conflict);
+}
+
+export function partitionTurnMessages(messages) {
+  const buckets = new Map();
+  messages.forEach((message, sourceIndex) => {
+    const next = requireTurnPartitionMessageIdentity(message, sourceIndex);
+    let bucket = buckets.get(next.turnScopeId);
+    if (!bucket) {
+      bucket = {
+        turnScopeId: next.turnScopeId,
+        dialogProcessId: next.dialogProcessId,
+        firstSourceIndex: sourceIndex,
+        messages: [],
+        identity: { presentationMessageId: null, ...next },
+        conflict: "",
+      };
+      buckets.set(next.turnScopeId, bucket);
+    } else bucket.conflict ||= mergePartitionIdentity(bucket.identity, next);
+    bucket.messages.push(message);
+  });
+  for (const bucket of buckets.values()) assertPartitionConflict(bucket.conflict);
+  return [...buckets.values()].map(({ identity, conflict, ...bucket }) => bucket);
+}
+
 export function requireTurnPartitionIdentity(messages) {
   if (!Array.isArray(messages) || !messages.length) {
     throw partitionError(
@@ -60,32 +112,13 @@ export function requireTurnPartitionIdentity(messages) {
       "Turn partition requires at least one message",
     );
   }
-  const [first, ...rest] = messages.map(requireTurnPartitionMessageIdentity);
-  const identity = { presentationMessageId: null, ...first };
-  rest.forEach((next) => {
-    if (next.turnScopeId !== identity.turnScopeId) {
-      throw partitionError(
-        SESSION_ERROR_CODE.TURN_IDENTITY_CONFLICT,
-        `Turn partition mixes turnScopeId ${identity.turnScopeId} and ${next.turnScopeId}`,
-      );
-    }
-    if (next.dialogProcessId !== identity.dialogProcessId) {
-      throw partitionError(
-        SESSION_ERROR_CODE.TURN_IDENTITY_CONFLICT,
-        `turnScopeId ${identity.turnScopeId} maps to multiple dialogProcessId values`,
-      );
-    }
-    if (!next.presentationMessageId) return;
-    if (identity.presentationMessageId === null) {
-      identity.presentationMessageId = next.presentationMessageId;
-      return;
-    }
-    if (identity.presentationMessageId !== next.presentationMessageId) {
-      throw partitionError(
-        SESSION_ERROR_CODE.TURN_IDENTITY_CONFLICT,
-        `turnScopeId ${identity.turnScopeId} maps to multiple presentationMessageId values`,
-      );
-    }
+  let identity;
+  let conflict = "";
+  messages.forEach((message, index) => {
+    const next = requireTurnPartitionMessageIdentity(message, index);
+    if (!identity) identity = { presentationMessageId: null, ...next };
+    else conflict ||= mergePartitionIdentity(identity, next);
   });
+  assertPartitionConflict(conflict);
   return Object.freeze(identity);
 }

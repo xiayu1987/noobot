@@ -48,6 +48,10 @@ function rejectionResult(request, decision) {
 export function transitionTurnLifecycle(source, input, now) {
   if (!isFunction(now)) throw new TypeError("transitionTurnLifecycle requires an Authority clock");
   const lifecycle = normalizeTurnLifecycleEntity(source);
+  return transitionPreparedTurnLifecycle(lifecycle, input, now);
+}
+
+export function transitionPreparedTurnLifecycle(lifecycle, input, now) {
   const reason = validateTurnLifecycleRequest(input);
   if (reason) return { applied: false, reason, lifecycle };
   const turnScopeId = input.turnScopeId;

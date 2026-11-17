@@ -18,6 +18,8 @@ const RUNTIME_PARAM_FIXED_GROUPS = Object.freeze({
   "length.sessionLog": "crossProcess",
   "quantity.sessionLog": "crossProcess",
   "length.connectorSecrets": "cryptography",
+  "length.immutableStorage": "protocol",
+  "quantity.immutableStorage": "protocol",
 });
 
 const RUNTIME_PARAM_FIXED_KEYS = Object.freeze({

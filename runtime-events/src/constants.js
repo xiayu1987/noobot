@@ -39,5 +39,8 @@ export const RUNTIME_EVENT_CHANNELS = Object.freeze({
   WEB_SOCKET: "ws",
   AGENT_PROXY_WEB_SOCKET: "agent-proxy-ws",
 });
+export const RUNTIME_EVENT_ERROR_CODE = Object.freeze({
+  SESSION_NOT_REGISTERED: "RUNTIME_EVENT_SESSION_NOT_REGISTERED",
+});
 export const RUNTIME_EVENTS_DIR = "events";
 export const STARTUP_LAUNCH_ID_ENV = "NOOBOT_STARTUP_LAUNCH_ID";

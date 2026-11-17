@@ -34,6 +34,7 @@ export function availableDetailEntry({ sessionId, aggregateVersion, messages }) 
     updatedAt: "2026-05-14T00:01:00.000Z",
     title: sessionId,
     aggregateVersion,
+    generation: 10,
     turnTimings: [],
     turnLifecycleSnapshot: emptyTurnLifecycleSnapshot(sessionId),
     sessionArtifactEvents: [],

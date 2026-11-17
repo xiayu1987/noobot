@@ -9,13 +9,22 @@ import OpenAI, { APIError } from "openai";
 import { MODEL_CONTEXT_SEQUENCE_POLICY, MODEL_RESPONSE_SOURCE } from "@noobot/model-protocol";
 import { partialOutputResponse, consumePartialOutput } from "./runtime-fixtures.js";
 
-for (const scenario of ["recover", "exhaust", "unknown", "partial"]) {
+for (const scenario of [
+  "recover",
+  "exhaust",
+  "unknown",
+  "partial",
+  "body-timeout-recover",
+  "body-timeout-exhaust",
+  "body-timeout-partial",
+]) {
   test(`stream interruption ${scenario} preserves request mode and failure facts`, async () => {
     const modes = [];
     const events = [];
     let calls = 0;
-    const failure =
-      scenario === "unknown"
+    const failure = scenario.startsWith("body-timeout-")
+      ? new TypeError("terminated", { cause: { code: "UND_ERR_BODY_TIMEOUT" } })
+      : scenario === "unknown"
         ? new Error("unclassified provider failure")
         : new APIError(undefined, {
             code: "server_error",
@@ -26,16 +35,17 @@ for (const scenario of ["recover", "exhaust", "unknown", "partial"]) {
       classifyError: openAiCompatibleAdapter.classifyError,
       bindTools: ({ client }) => client,
       prepareMessages: ({ messages }) => messages,
+      invokeChat: ({ client, messages, invokeOptions }) => client.invoke(messages, invokeOptions),
       resolveResponseSource: () => MODEL_RESPONSE_SOURCE.MESSAGE,
       createClient: ({ streaming, fetch }) => {
         modes.push(streaming);
         return {
           invoke: async () => {
             calls += 1;
-            if (scenario === "partial") {
+            if (scenario.endsWith("partial")) {
               await consumePartialOutput(fetch);
             }
-            if (scenario === "recover" && calls > 1) return { content: "ok" };
+            if (scenario.endsWith("recover") && calls > 1) return { content: "ok" };
             throw failure;
           },
         };
@@ -68,9 +78,9 @@ for (const scenario of ["recover", "exhaust", "unknown", "partial"]) {
         options: { streaming: true },
         policies: { retry: { maxTotalAttempts: 3, transport: { maxAttempts: 2, baseDelayMs: 0 } } },
       });
-    if (scenario === "recover") assert.equal((await invoke()).output.text, "ok");
+    if (scenario.endsWith("recover")) assert.equal((await invoke()).output.text, "ok");
     else await assert.rejects(invoke(), (error) => error.message === failure.message);
-    assert.equal(calls, scenario === "partial" ? 1 : 2);
+    assert.equal(calls, scenario.endsWith("partial") ? 1 : 2);
     assert.deepEqual(modes, [true]);
     assert.equal(events.includes("model.invocation.streaming_mode_retry"), false);
   });

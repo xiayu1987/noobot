@@ -3,11 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  resolveDefaultModelSpec,
-  resolveModelSpecByName,
-  adaptToolsForBinding,
-} from "../../models/index.js";
+import { resolveEffectiveProvider, adaptToolsForBinding } from "../../models/index.js";
 import { executeToolCallInTurn } from "../tool-execution/tool-runner.js";
 import { getSessionIdsFromAgentContext } from "../../context/agent-context-accessor.js";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
@@ -31,8 +27,7 @@ export function createAgentCapabilityModelInvoker({
   enableToolBinding = false,
   pluginId,
   configSnapshot,
-  resolveDefaultModelSpecFn = resolveDefaultModelSpec,
-  resolveModelSpecByNameFn = resolveModelSpecByName,
+  resolveEffectiveProviderFn = resolveEffectiveProvider,
   adaptToolsForBindingFn = adaptToolsForBinding,
   executeToolCallFn = executeToolCallInTurn,
 } = {}) {
@@ -59,6 +54,9 @@ export function createAgentCapabilityModelInvoker({
     toolAllowlist: toolAllowlistOverride,
     signal,
     activity = null,
+    streaming,
+    streamingRequired,
+    bindTools = enableToolBinding,
     contextSequencePolicy = MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
   } = {}) {
     const execution = resolveCapabilityExecution(ctx, signal);
@@ -71,23 +69,21 @@ export function createAgentCapabilityModelInvoker({
       flowPrefix,
       sessionId: getSessionIdsFromAgentContext(ctx.agentContext).sessionId,
     });
-    const normalizedModelName = text(modelName);
-    const modelSpec = normalizedModelName
-      ? resolveModelSpecByNameFn({
-          modelName: normalizedModelName,
-          globalConfig: effectiveConfig,
-          userConfig: {},
-        })
-      : resolveDefaultModelSpecFn({ globalConfig: effectiveConfig, userConfig: {} });
+    const modelSpec = resolveEffectiveProviderFn(
+      text(modelName) || effectiveConfig.defaultProvider,
+      effectiveConfig,
+    );
     const invokeStep = createCapabilityModelStep({
       runtime: execution.runtime,
       model: modelSpec,
       identity,
       signal: execution.abortSignal,
+      streaming: streaming === undefined ? execution.runtime.runConfig.streaming : streaming,
+      streamingRequired,
       activity,
       metadata: { purpose: identity.invocation.purpose, pluginFlow, chain, relayCorrelationId },
     });
-    if (enableToolBinding !== true) {
+    if (bindTools !== true) {
       const step = await invokeStep(runMessages);
       return step.complete();
     }

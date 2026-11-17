@@ -23,7 +23,21 @@ debug type's switch, so disabling the `system` log does not affect them.
 
 ## API
 
-`writeRuntimeEvent` is the single write entry.
+`writeRuntimeEvent` writes one event through `writeRuntimeEvents`, the bounded batch entry.
+Batch results are positional; each accepted write completes before the batch returns.
+
+`flushRuntimeEvents` drains admitted event batches from location preparation through durable output,
+including batches admitted during the drain. Concurrent barriers collect both rejected preparation
+and per-record `ok: false` results and reject with `AggregateError` after admitted writes settle.
+Completed failures remain owned by their individual receipts and are not replayed by later barriers.
+Producers must stop admitting new events before flushing for shutdown or workspace removal.
+
+`flushJsonLineBatches` drains pending and active transport writes, including writes admitted
+by their receipts during the drain. Every concurrent barrier rejects with `AggregateError`
+if a write fails while it is draining, after all accepted writes have settled. Individual
+write receipts still report their own result. Failures settled before a barrier starts belong
+to those receipts and are not replayed by later barriers. Producers must stop admitting new
+work before using this barrier for shutdown.
 
 ```js
 import { writeRuntimeEvent } from "@noobot/runtime-events";
@@ -38,11 +52,22 @@ await writeRuntimeEvent({
 });
 ```
 
-Session events are placed by the session tree (`workspace-protocol/session-tree`). Events targeting a session
-whose tree chain contains a tombstone return `{ ok: true, skipped: true, deleted: true }`; events for a session
-that is not registered in the tree, or whose nested directory has no persisted `session.json` yet, return
-`{ ok: true, skipped: true, missingSession: true }`. Neither creates a session directory. An explicit
-`parentSessionId` that contradicts the registered tree parent is rejected.
+Session events use the host-owned `locationResolver.locateSessionScope(userId, sessionId)` port
+from `session-protocol` when supplied in writer options. Execution-log projection passes the same
+bound resolver used by the authoritative repository, including recovery. The port returns a scope
+with an absolute `sessionDir`, or `null` for absence; identity errors propagate without switching
+location authorities. It is never read from an event payload. Scoped sessions therefore write to
+their own `events` directory without creating a shadow registration in the default tree.
+Without an injected port, placement is owned by the session tree (`workspace-protocol/session-tree`).
+Both paths enforce user workspace containment, session tombstones and persisted head identity.
+Events targeting a session
+whose tree chain contains a tombstone return `{ ok: true, skipped: true, deleted: true }`.
+An unregistered session returns `{ ok: false, error }`, with
+`error.code === RUNTIME_EVENT_ERROR_CODE.SESSION_NOT_REGISTERED`. Missing registration is not a
+delivery acknowledgement: source projection cursors must remain pending until registration is restored.
+Neither outcome creates a session directory. Registered sessions must have a valid immutable head;
+an unreadable or invalid head rejects preparation. Placement uses the location authority, not caller-supplied
+`parentSessionId`. Disabled log controls and authoritative tombstones intentionally skip delivery.
 
 ## Storage
 
@@ -55,9 +80,30 @@ Electron `userData` events root and cannot write session events.
 
 ## Failures
 
-Failures are reported once, to stderr, by runtime-events itself; callers never report write failures again.
-A failed write (invalid envelope, ownership violation, I/O error) is reported by the writer and returned as
-`{ ok: false, error }`; callers that need delivery guarantees check `ok`, fire-and-forget callers ignore it.
+Execution-log projection uses the output intent, receipt and byte-reservation
+contracts exported by `@noobot/session-protocol`; see its execution-log projection
+section. Source cursors remain owned by the authoritative repository. The JSONL
+destination queue owns recovery and rotation: durable intent, durable output,
+durable receipts, then durable intent retirement precede acknowledgement.
+Receipts are stored in the authoritative turn directory supplied by delivery,
+independently of rotated output files. Healthy publication and restart recovery
+share the same output completion routine. Parallel receipt writes settle before
+errors propagate, and each distinct receipt directory is synchronized once per
+phase. Byte reservations partition opportunistic groups without re-encoding
+growing payload prefixes. A corrupt pending record blocks later writes explicitly.
+
+Every ordinary and projected append acquires the same destination mutation lock
+across processes. Under that lock, it recovers any pending output before checking
+receipts, rereads the destination's current size, and performs rotation and
+publication. File sizes are never reused from a previous batch. Ordinary appends
+sync their bytes on every batch; directory sync knowledge is bounded and tied to
+the observed file identity. Creation, rotation, replacement and failed appends
+require a new directory sync before acknowledgement.
+
+Invalid envelopes, ownership violations and invalid session storage reject batch preparation before any
+writes start. Missing registration and transport I/O errors return `{ ok: false, error }` per record;
+runtime-events reports those failures to stderr. Callers that need delivery guarantees must handle both
+rejected preparation and `ok: false` results, and must not acknowledge either as delivery.
 An archive cleanup failure after a successful append is reported once per JSONL batch by the transport, and
 every write in that batch returns `{ ok: true, cleanupError: true }`.
 

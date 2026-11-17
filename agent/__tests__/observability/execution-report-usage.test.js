@@ -80,6 +80,7 @@ test("HTTP attempts including semantic and transport retries reach the persisted
         id: "openai-compatible",
         classifyError: () => ({ kind: "temporary_unavailable" }),
         prepareMessages: ({ messages }) => messages,
+        invokeChat: ({ client, messages, invokeOptions }) => client.invoke(messages, invokeOptions),
         bindTools: ({ client }) => client,
         resolveResponseSource: () => "message",
         createClient: ({ fetch }) => ({
@@ -274,6 +275,8 @@ for (const fault of ["http", "measurement"]) {
           id: "openai-compatible",
           classifyError: () => ({ kind: "temporary_unavailable" }),
           prepareMessages: ({ messages }) => messages,
+          invokeChat: ({ client, messages, invokeOptions }) =>
+            client.invoke(messages, invokeOptions),
           bindTools: ({ client }) => client,
           resolveResponseSource: () => "message",
           createClient: ({ fetch }) => ({

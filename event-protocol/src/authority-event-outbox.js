@@ -7,11 +7,15 @@ import { deepFreeze } from "@noobot/shared/deep-freeze";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { validateEventEnvelope } from "./envelope.js";
 export { assertAuthorityOutboxRequest } from "./outbox-request.js";
+export { AUTHORITY_OUTBOX_ERROR_CODE } from "./outbox-delivery.js";
+export { parseAuthorityOutboxTurnRemoval } from "./outbox-turn-removal.js";
 import { isPlainObject, text, stableValue } from "@noobot/shared/value";
 import {
   createPendingConsumerDelivery,
   readConsumerDelivery,
+  readEventConsumerDelivery,
   readOutboxDeliveries,
+  requireAcknowledgementOrdering,
   requireOutbox,
   requireOutboxText,
   requireOutboxTime,
@@ -25,7 +29,7 @@ export function authorityEventConsumerDelivery(item, consumerId) {
   requireOutboxText(consumerId, "consumerId");
   requireOutbox(isPlainObject(item.deliveries), "deliveries must be an object");
   return Object.hasOwn(item.deliveries, consumerId)
-    ? readConsumerDelivery(item.deliveries[consumerId])
+    ? readEventConsumerDelivery(item.deliveries[consumerId], item.envelope)
     : createPendingConsumerDelivery();
 }
 
@@ -45,10 +49,28 @@ export function normalizeAuthorityEventOutbox(source) {
       eventId,
       envelope,
       committedAt: requireOutboxTime(item.committedAt, "committedAt"),
-      deliveries: readOutboxDeliveries(item.deliveries),
+      deliveries: readOutboxDeliveries(item.deliveries, envelope),
     });
   }
   return normalized;
+}
+
+export function projectAuthorityEventDeliveryResults(source, consumerId, results) {
+  const normalized = normalizeAuthorityEventOutbox(source);
+  requireOutboxText(consumerId, "consumerId");
+  requireOutbox(
+    Array.isArray(results) && results.length === normalized.length,
+    "delivery result count must match the source batch",
+  );
+  return normalized.map((item, index) => {
+    const result = results[index];
+    requireOutbox(
+      isPlainObject(result) && result.eventId === item.eventId,
+      "delivery result identity must match the source batch",
+    );
+    const delivery = readEventConsumerDelivery(result.delivery, item.envelope);
+    return { ...source[index], deliveries: { ...item.deliveries, [consumerId]: delivery } };
+  });
 }
 
 export function migrateLegacyAuthorityEventOutbox(source = []) {
@@ -202,22 +224,74 @@ export function createAuthorityOutboxProjection() {
   return { entries: new Map(), prepared: new Map(), removedEventIds: new Set() };
 }
 
-export function forkAuthorityOutboxProjection(projection) {
-  return {
-    entries: new Map(projection.entries),
-    prepared: new Map(projection.prepared),
-    removedEventIds: new Set(projection.removedEventIds),
-  };
+function seedAuthorityOutboxEvent(working, projection, eventId) {
+  const entry = projection.entries.get(eventId);
+  const prepared = projection.prepared.get(eventId);
+  if (entry) working.entries.set(eventId, entry);
+  if (prepared) working.prepared.set(eventId, prepared);
+  if (projection.removedEventIds.has(eventId)) working.removedEventIds.add(eventId);
+}
+
+export function planAuthorityOutboxJournalRecords(projection, records) {
+  requireOutbox(Array.isArray(records), "journal records must be an array");
+  const working = createAuthorityOutboxProjection();
+  const touched = new Set();
+  for (const record of records) {
+    const eventId = record?.eventId;
+    if (!touched.has(eventId)) {
+      touched.add(eventId);
+      seedAuthorityOutboxEvent(working, projection, eventId);
+    }
+    applyAuthorityOutboxJournalRecord(working, record);
+  }
+  return working;
 }
 
 export function applyAuthorityOutboxJournalRecords(projection, records) {
-  requireOutbox(Array.isArray(records), "journal records must be an array");
-  for (const record of records) applyAuthorityOutboxJournalRecord(projection, record);
+  const working = planAuthorityOutboxJournalRecords(projection, records);
+  for (const eventId of working.removedEventIds) {
+    projection.entries.delete(eventId);
+    projection.removedEventIds.add(eventId);
+  }
+  for (const [eventId, prepared] of working.prepared) projection.prepared.set(eventId, prepared);
+  for (const [eventId, entry] of working.entries) projection.entries.set(eventId, entry);
   return projection;
+}
+
+export function planAuthorityOutboxAcknowledgements(projection, records) {
+  requireOutbox(Array.isArray(records), "acknowledgements must be an array");
+  const working = createAuthorityOutboxProjection();
+  const changed = [];
+  let delivered = 0;
+  let deduplicated = 0;
+  for (const record of records) {
+    requireOutbox(record.op === AUTHORITY_OUTBOX_JOURNAL_OP.ACK, "expected acknowledgement");
+    const before = working.entries.get(record.eventId) || projection.entries.get(record.eventId);
+    if (!before) {
+      return { acknowledged: false, reason: "event_not_found", delivered, deduplicated };
+    }
+    working.entries.set(record.eventId, before);
+    applyAuthorityOutboxJournalRecords(working, [record]);
+    delivered += 1;
+    if (working.entries.get(record.eventId) === before) deduplicated += 1;
+    else changed.push(record);
+  }
+  return { acknowledged: true, delivered, deduplicated, records: changed };
 }
 
 export function listAuthorityOutboxProjection(projection) {
   return [...projection.entries.values()];
+}
+
+export function selectAuthorityOutboxProjection(projection, eventIds) {
+  requireOutbox(Array.isArray(eventIds), "eventIds must be an array");
+  const remaining = new Set(eventIds.map((eventId) => requireOutboxText(eventId, "eventId")));
+  const selected = [];
+  for (const [eventId, entry] of projection.entries) {
+    if (!remaining.size) break;
+    if (remaining.delete(eventId)) selected.push(entry);
+  }
+  return selected;
 }
 
 export function projectAuthorityOutboxJournal(records) {
@@ -288,12 +362,7 @@ function applyAuthorityOutboxJournalRecord(projection, record) {
   }
   if (record.op === AUTHORITY_OUTBOX_JOURNAL_OP.ACK) {
     requireOutboxTime(record.deliveredAt, "deliveredAt");
-    requireOutbox(
-      record.orderingDomain === entry.envelope.ordering.domain &&
-        record.orderingScopeId === entry.envelope.ordering.scopeId &&
-        record.sequence === entry.envelope.ordering.sequence,
-      `acknowledgement ordering mismatch: ${eventId}`,
-    );
+    requireAcknowledgementOrdering(record, entry.envelope);
     if (current.deliveredAt) return;
     byEventId.set(
       eventId,
@@ -344,11 +413,9 @@ export function acknowledgeAuthorityEventDelivery(
   const outbox = normalizeAuthorityEventOutbox(source).map((item) => {
     if (item.eventId !== normalizedEventId) return item;
     found = true;
-    requireOutbox(
-      item.envelope.ordering.domain === normalizedDomain &&
-        item.envelope.ordering.scopeId === normalizedScopeId &&
-        item.envelope.ordering.sequence === normalizedSequence,
-      `acknowledgement ordering mismatch: ${eventId}`,
+    requireAcknowledgementOrdering(
+      { orderingDomain: normalizedDomain, orderingScopeId: normalizedScopeId, sequence },
+      item.envelope,
     );
     if (authorityEventConsumerDelivery(item, normalizedConsumerId).deliveredAt) return item;
     changed = true;
@@ -362,23 +429,35 @@ export function acknowledgeAuthorityEventDelivery(
   return { found, changed, outbox };
 }
 
-function isReclaimableDelivery(delivery, cutoff) {
-  const deliveredAt = Date.parse(delivery.deliveredAt);
-  return Number.isFinite(deliveredAt) && deliveredAt < cutoff;
-}
-
-export function compactAuthorityEventOutbox(source, { retainDeliveredAfter }) {
+export function compactAuthorityEventOutbox(entries, { retainDeliveredAfter }) {
   const cutoff = Date.parse(requireOutboxTime(retainDeliveredAfter, "retainDeliveredAfter"));
-  const outbox = normalizeAuthorityEventOutbox(source);
-  const retained = outbox.filter((item) => {
+  const retained = [];
+  let removed = 0;
+  let nextRetainedTime = Infinity;
+  for (const item of entries) {
     const deliveries = Object.values(item.deliveries);
-    return (
-      !deliveries.length || !deliveries.every((delivery) => isReclaimableDelivery(delivery, cutoff))
-    );
-  });
+    let latestDelivery = -Infinity;
+    for (const delivery of deliveries) {
+      const deliveredAt = Date.parse(delivery.deliveredAt);
+      if (!Number.isFinite(deliveredAt)) {
+        latestDelivery = Infinity;
+        break;
+      }
+      latestDelivery = Math.max(latestDelivery, deliveredAt);
+    }
+    if (deliveries.length && latestDelivery < cutoff) removed += 1;
+    else {
+      retained.push(item);
+      if (Number.isFinite(latestDelivery))
+        nextRetainedTime = Math.min(nextRetainedTime, latestDelivery);
+    }
+  }
   return {
-    compacted: retained.length !== outbox.length,
-    removed: outbox.length - retained.length,
+    compacted: removed !== 0,
+    removed,
+    nextRetainedDeliveryAt: Number.isFinite(nextRetainedTime)
+      ? new Date(nextRetainedTime).toISOString()
+      : null,
     outbox: retained,
   };
 }

@@ -12,7 +12,7 @@ import { createSessionDeletedError } from "@noobot/session-protocol";
 import {
   appendRollingJsonlArtifactLog,
   buildSessionArtifactFileMap,
-  cleanupSessionArtifacts,
+  prepareSessionArtifactCleanup,
   repairSessionArtifacts,
 } from "../../src/session/session-artifact-store.js";
 import { TEST_TURN, turnDirOf, withTemp } from "./session-artifact-store-v2.test-helpers.js";
@@ -62,7 +62,7 @@ test("artifact mutation utilities honor deleted-session lifecycle gates", async 
     const temp = path.join(sessionDir, "zombie.tmp-1");
     await writeFile(temp, "z", "utf8");
     await assert.rejects(
-      cleanupSessionArtifacts({
+      prepareSessionArtifactCleanup({
         storageService,
         sessionDir,
         sessionId: "deleted-session",

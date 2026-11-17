@@ -21,8 +21,8 @@ test("capability mini-runner requires and uses the host ModelPort", async () => 
     enableToolBinding: false,
     pluginId: "noobot-plugin-test",
     configSnapshot: createConfigSnapshot({ config: { selectedModel: "GLM_5_1" } }),
-    resolveModelSpecByNameFn: ({ modelName, globalConfig, userConfig }) => {
-      resolvedConfig = { globalConfig, userConfig };
+    resolveEffectiveProviderFn: (modelName, effectiveConfig) => {
+      resolvedConfig = effectiveConfig;
       return {
         alias: modelName,
         model: "glm-5.1",
@@ -35,6 +35,7 @@ test("capability mini-runner requires and uses the host ModelPort", async () => 
   });
 
   const runtime = createTestRuntimeContext({
+    runConfig: { streaming: false, hookManager: null },
     globalConfig: {},
     userConfig: {},
     systemRuntime: {},
@@ -111,10 +112,7 @@ test("capability mini-runner requires and uses the host ModelPort", async () => 
   assert.equal(result.output.text, "ok");
   assert.equal(calls.length, 1);
   assert.equal(calls[0]?.model?.alias, "GLM_5_1");
-  assert.deepEqual(resolvedConfig, {
-    globalConfig: { selectedModel: "GLM_5_1" },
-    userConfig: {},
-  });
+  assert.deepEqual(resolvedConfig, { selectedModel: "GLM_5_1" });
   assert.equal(calls[0]?.invocation?.purpose, "workflow_semantic");
   assert.equal(calls[0]?.options?.signal, invocationAbortController.signal);
   assert.equal(calls[0]?.options?.headers?.["X-Plugin-Session-Id"], "session-1");

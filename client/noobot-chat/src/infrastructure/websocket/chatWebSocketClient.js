@@ -8,7 +8,7 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { createWebSocketTransportSupervisor } from "./webSocketTransportSupervisor.js";
 import { closeWebSocket, WEB_SOCKET_CLOSE_CODE } from "./closeWebSocket.js";
 import { logTransportDiagnostics } from "../../modules/debug/loggers/transportDiagnosticsLogger.js";
-import { scopeSessionLogRecord } from "../../modules/debug/loggers/lazyDebugSink.js";
+import { emitLazyDebugSafely } from "../../modules/debug/loggers/lazyDebugSink.js";
 import { isEventProcessingTimingEnabled } from "../../modules/debug/loggers/eventProcessingTimingLogger.js";
 import {
   createEventProcessingTimingRecorder,
@@ -70,24 +70,9 @@ export function createChatWebSocketClient({
   const pendingStreamEvents = [];
   const RECONNECT_TIMEOUT_MS = TIME_THRESHOLDS.client.wsReconnectTimeoutMs;
   function logAgentTransportCommand(event, command, extra = {}) {
-    try {
-      if (!sessionLogSink?.isEnabled?.(AGENT_TRANSPORT_DEBUG_TYPE)) return false;
-      return sessionLogSink.debug?.(AGENT_TRANSPORT_DEBUG_TYPE, () => {
-        const summary = summarizeAgentTransportCommand(command, extra);
-        return scopeSessionLogRecord({
-          category: "debug",
-          level: "debug",
-          debugType: AGENT_TRANSPORT_DEBUG_TYPE,
-          event,
-          sessionId: summary.sessionId,
-          dialogProcessId: summary.dialogProcessId,
-          turnScopeId: summary.turnScopeId,
-          data: { event, ...summary },
-        });
-      });
-    } catch {
-      return false;
-    }
+    return emitLazyDebugSafely(sessionLogSink, AGENT_TRANSPORT_DEBUG_TYPE, event, () =>
+      summarizeAgentTransportCommand(command, extra),
+    );
   }
   const commandRequests = createWebSocketCommandRequests({
     getActiveSocket: () => getActiveSocket(),

@@ -16,7 +16,8 @@
     "@noobot/shared": "file:../shared",
     "@noobot/sanitize": "file:../sanitize",
     "@noobot/runtime-topology-protocol": "file:../runtime-topology-protocol",
-    "@noobot/workspace-protocol": "file:../workspace-protocol"
+    "@noobot/workspace-protocol": "file:../workspace-protocol",
+    "@noobot/session-protocol": "file:../session-protocol"
   },
   "scripts": {
     "test": "node ../scripts/run-with-isolated-tmp.mjs node --test"

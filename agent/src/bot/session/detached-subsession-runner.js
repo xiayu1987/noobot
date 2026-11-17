@@ -18,6 +18,7 @@ import {
   createTurnFailure,
   createTurnLifecycleCommandId,
   deriveTurnCommandId,
+  requireDetachedSessionMetadata,
   EXECUTION_KIND,
   isExecutionAbortError,
 } from "@noobot/session-protocol";
@@ -84,12 +85,6 @@ async function runDetachedSubSession(dependencies, request) {
   const prepared = await prepareDetachedExecution(dependencies, request, runtime, identity);
   const lifecycle = await createDetachedLifecycle(dependencies, request, identity, prepared);
   const accepted = await commitDetachedStart(lifecycle, prepared.message, identity);
-  await dependencies.session.writeSessionMetadata({
-    userId: identity.userId,
-    sessionId: identity.subSessionId,
-    metadata: lifecycle.metadata,
-    persistenceScope: lifecycle.persistenceScope,
-  });
   prepared.turnAcceptance = createTurnAcceptanceReceipt({
     commandId: lifecycle.commandId,
     sessionId: identity.subSessionId,
@@ -116,8 +111,8 @@ function assertDetachedRunnerDependencies({ sessionRunner, session, prepareRunCo
   if (!isFunction(sessionRunner?.runSession)) {
     throw new Error("detached sub-session runner requires the main SessionExecutionRunner");
   }
-  if (!isFunction(session?.writeSessionMetadata)) {
-    throw new Error("detached sub-session runner requires session metadata support");
+  if (!isFunction(session?.applyTurnLifecycleEvent)) {
+    throw new Error("detached sub-session runner requires session lifecycle support");
   }
 }
 
@@ -163,9 +158,9 @@ function resolveDetachedIdentity(request, inheritedRuntime) {
 }
 
 function resolveDetachedStage(request) {
-  const stage = text(request.metadata?.scope);
-  if (!stage) throw new Error("detached sub-session requires metadata.scope");
-  const origin = request.metadata?.origin;
+  const metadata = requireDetachedSessionMetadata(request.metadata);
+  const stage = text(metadata.scope);
+  const origin = metadata.origin;
   return { stage, origin: isPlainObject(origin) ? { ...origin } : {} };
 }
 
@@ -373,6 +368,7 @@ async function commitDetachedStart(lifecycle, message, identity) {
     phase: TURN_PHASE.ACTION,
     action: TURN_ACTION.SEND,
     createSessionIfAbsent: true,
+    initialSessionMetadata: lifecycle.metadata,
     parentSessionId: identity.parentSessionId,
     sessionCaller: SESSION_CALLER.BOT,
     expectedRevision: 0,

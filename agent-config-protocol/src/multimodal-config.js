@@ -48,7 +48,7 @@ export function resolveMultimodalDefaultModelSelection(
     ? operationConfig.defaultModels
     : {};
   const modelAliases = requiredModalities.map((modality) => text(defaultModels?.[modality]));
-  const missingModalities = requiredModalities.filter((_, index) => !modelAliases[index]);
+  const missingModalities = requiredModalities.filter((...[, index]) => !modelAliases[index]);
   const configuredAliases = Array.from(new Set(modelAliases.filter(Boolean)));
   return Object.freeze({
     operation: normalizedOperation,

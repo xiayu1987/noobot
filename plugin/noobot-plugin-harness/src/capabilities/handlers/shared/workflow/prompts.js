@@ -16,7 +16,6 @@ export {
   getPlanningToolContextMarker,
   getPlanningRevisionMarker,
   getPlanningRefinementMarker,
-  getGuidanceSummaryMarker,
   getGuidanceMarker,
   getGuidanceAnalysisMarker,
   getAcceptanceSemanticValidationMarker,
@@ -45,7 +44,6 @@ export {
   buildGuidanceSummaryInstructionPromptText,
   buildGuidanceSummaryProtocolPromptText,
   buildGuidanceSummaryPromptText,
-  buildPreviousSummaryContextContent,
   buildPreviousSummaryContextMessages,
 } from "./guidance-prompts.js";
 export {

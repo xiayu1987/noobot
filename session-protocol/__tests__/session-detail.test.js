@@ -76,6 +76,7 @@ function availableEntry(overrides = {}) {
     updatedAt: "2026-01-02T00:00:00.000Z",
     title: sessionId,
     aggregateVersion: 3,
+    generation: 9,
     turnTimings: [],
     turnLifecycleSnapshot: snapshot(sessionId),
     sessionArtifactEvents: [{ identity: { eventId: "artifact-1", sessionId } }],

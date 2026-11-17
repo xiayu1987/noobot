@@ -341,7 +341,7 @@ describe("useChatEngine.send-stream", () => {
       assistant.content = "final without frontend turn scope";
       assistant.pending = false;
     });
-    const { engine, activeSession, sending } = createHarness({
+    const { engine, activeSession, sending, turnRuntimeRegistry } = createHarness({
       sessionId: "s-missing-turn",
       stream,
       deps: {
@@ -356,7 +356,13 @@ describe("useChatEngine.send-stream", () => {
     expect(assistant.dialogProcessId).toBeUndefined();
     expect(selectToolTimelineLogs(assistant)).toEqual([]);
     expect(applySessionDetail).not.toHaveBeenCalled();
-    expect(sending.value).toBe(true);
+    expect(sending.value).toBe(false);
+    const turns = Object.values(turnRuntimeRegistry.value.sessions["s-missing-turn"].turns);
+    expect(turns).toHaveLength(1);
+    expect(turns[0].commandPending).toBe(false);
+    expect(turns[0].state).toBeFalsy();
+    expect(turns[0].terminal).toBeFalsy();
+    expect(turns[0].lifecycleObserved).not.toBe(true);
   });
 
   it("stream end without an authoritative terminal keeps the Turn locked", async () => {

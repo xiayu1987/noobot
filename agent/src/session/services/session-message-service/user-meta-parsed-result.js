@@ -3,29 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { mergeUserMetaParsedResults } from "@noobot/context-protocol/policy/user-meta-backwrite";
+import { randomUUID } from "node:crypto";
 import { text } from "@noobot/shared/value";
-
-function userMetaSourceError(message, code) {
-  return Object.assign(new Error(message), { code, statusCode: 409 });
-}
-
-function findUserMetaSource(messages = [], sourceMessageUid = "") {
-  const source = messages.find((message) => text(message?.messageUid) === sourceMessageUid);
-  if (!source) {
-    throw userMetaSourceError(
-      `user_meta source message not found: ${sourceMessageUid}`,
-      "USER_META_SOURCE_NOT_FOUND",
-    );
-  }
-  if (source.role !== "user") {
-    throw userMetaSourceError(
-      `user_meta source must be a user message: ${sourceMessageUid}`,
-      "USER_META_SOURCE_ROLE_CONFLICT",
-    );
-  }
-  return source;
-}
 
 export async function recordUserMetaParsedResult(payload = {}) {
   const { userId, sessionId, persistenceContext } = payload;
@@ -33,19 +12,19 @@ export async function recordUserMetaParsedResult(payload = {}) {
   if (!userId || !sessionId || !sourceMessageUid) {
     throw new TypeError("user_meta parsed result requires userId, sessionId and source messageUid");
   }
-  return this.sessionRepo.withSessionMutation(
+  return this.sessionRepo.withSessionReader(
     userId,
     sessionId,
-    async () => {
-      const session = await this.sessionRepo.requireById(userId, sessionId, { persistenceContext });
-      const source = findUserMetaSource(session.messages, sourceMessageUid);
-      source.userMetaParsedResults = mergeUserMetaParsedResults(
-        source.userMetaParsedResults,
-        payload.result,
-      );
-      session.updatedAt = this.now();
-      await this.sessionRepo.save(userId, session, { persistenceContext });
-      return { userMetaParsedResults: source.userMetaParsedResults };
+    async (reader, _scope, commitChanges) => {
+      const committed = await commitChanges({
+        expectedGeneration: reader.generation,
+        operationId: randomUUID(),
+        changes: {
+          userMetaParsedResult: { messageUid: sourceMessageUid, result: payload.result },
+        },
+        committedAt: this.now(),
+      });
+      return committed.result.userMetaParsedResult;
     },
     { persistenceContext },
   );

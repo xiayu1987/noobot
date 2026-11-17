@@ -8,6 +8,7 @@ import { vi } from "vitest";
 import {
   createTurnLifecycleEnvelope,
   createTurnReplacementCommit,
+  SESSION_COMMAND,
   TURN_EVENT,
 } from "@noobot/session-protocol";
 import {
@@ -35,11 +36,7 @@ import { terminalStatusFixture } from "./terminalStatusFixture.js";
 import { turnRecordFixture } from "./turnRecordFixture.js";
 import { jsonResponse, rejectUnexpectedRequest } from "../../../helpers/jsonResponse.js";
 import { createTurnReplaceResponse } from "@noobot/session-protocol/session-mutation-response";
-import { selectMainSessionDetailEntry } from "@noobot/session-protocol/session-detail";
-import {
-  availableDetailDocument,
-  mutationSuccessResponse,
-} from "../../../helpers/sessionDetailFixture.js";
+import { mutationSuccessResponse } from "../../../helpers/sessionDetailFixture.js";
 
 const terminalResolutionFromUrl = (
   url,
@@ -114,35 +111,53 @@ export function makeTurnReplacementBody({
   replacedTurnScopeIds,
   replacementUser,
   replacementDialogProcessId,
-  messages,
 }) {
-  const committedMessages = messages.map((message) =>
-    message === replacementUser
-      ? { ...message, dialogProcessId: replacementDialogProcessId }
-      : message,
-  );
+  const message = {
+    ...replacementUser,
+    sessionId,
+    parentSessionId: "",
+    dialogProcessId: replacementDialogProcessId,
+  };
+  const turnReplacement = createTurnReplacementCommit({
+    commandId,
+    sessionId,
+    committedAggregateVersion: aggregateVersion,
+    replacedTurnScopeIds,
+    replacementDialogProcessId,
+    replacementTurnScopeId: replacementUser.turnScopeId,
+    replacementUserMessageUid: replacementUser.messageUid,
+    requestHash: `test-request:${commandId}`,
+    committedAt: "2026-07-31T00:00:00.000Z",
+  });
   return {
     commandId,
     committedAggregateVersion: aggregateVersion,
     deduplicated: false,
-    detail: availableDetailDocument({
-      sessionId,
-      title: sessionId,
-      aggregateVersion,
-      messages: committedMessages,
-      turnTimings: [],
-    }),
-    turnReplacement: createTurnReplacementCommit({
-      commandId,
-      sessionId,
-      committedAggregateVersion: aggregateVersion,
-      replacedTurnScopeIds,
-      replacementDialogProcessId,
-      replacementTurnScopeId: replacementUser.turnScopeId,
-      replacementUserMessageUid: replacementUser.messageUid,
-      requestHash: `test-request:${commandId}`,
-      committedAt: "2026-07-31T00:00:00.000Z",
-    }),
+    deletedMessageUids: ["deleted-fixture:user"],
+    sessionId,
+    generation: 10,
+    displayMessages: [message],
+    turnReplacement,
+    projection: {
+      kind: "commit",
+      generation: 10,
+      receipt: {
+        commandId,
+        type: SESSION_COMMAND.TURN_REPLACE,
+        requestHash: turnReplacement.requestHash,
+        aggregateVersion,
+        committedAt: turnReplacement.committedAt,
+        result: { turnReplacement },
+      },
+      baseAggregateVersion: aggregateVersion - 1,
+      metadata: { sessionId, parentSessionId: "", aggregateVersion },
+      lifecycleHead: { sequence: 0, activeTurnScopeId: "" },
+      deletedMessageUids: ["deleted-fixture:user"],
+      messages: [{ ordinal: 1, turnOrdinal: 1, message }],
+      turns: replacedTurnScopeIds.map((key) => ({ key, value: null })),
+      replacements: [],
+      timings: [],
+    },
   };
 }
 
@@ -154,8 +169,22 @@ export function makeTurnReplacementResponse(input) {
 }
 
 export function applyMainEntryMessages(readActiveSession) {
-  return vi.fn((detail) => {
-    readActiveSession().value.messages = [...selectMainSessionDetailEntry(detail).messages];
+  return vi.fn((response) => {
+    const session = readActiveSession().value;
+    if (!session || session.sessionId !== response.sessionId) return false;
+    const deletedUids = new Set(response.deletedMessageUids);
+    const deletedScopes = new Set(
+      response.projection.turns.filter(({ value }) => value === null).map(({ key }) => key),
+    );
+    session.messages = [
+      ...session.messages.filter(
+        (message) =>
+          !deletedUids.has(message.messageUid) && !deletedScopes.has(message.turnScopeId),
+      ),
+      ...response.displayMessages,
+    ];
+    session.aggregateVersion = response.committedAggregateVersion;
+    return true;
   });
 }
 
@@ -291,6 +320,7 @@ export const createHarness = ({
     upsertCanonicalAssistantMessage,
     makeViewMessage: messageView.makeViewMessage,
     applySessionDetail: vi.fn(),
+    applySessionMutation: vi.fn(),
     refreshSessionConnectorsAsync: vi.fn(),
     connectorTypeSet: new Set(),
     upsertConnectedConnectorInPanelState: vi.fn(),

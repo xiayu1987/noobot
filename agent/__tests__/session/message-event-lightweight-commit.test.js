@@ -8,10 +8,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 import { createToolRiskAssessment } from "../../src/tools/execution/tool-risk.js";
-import { readAuthorityOutbox } from "../../src/session/authority-outbox-store/outbox-journal.js";
+import { ImmutableSessionStore } from "../../src/session/session-artifact-session/immutable-session-store.js";
 import { buildHarness } from "./scoped-session-repositories.fixtures.js";
-import { writeSessionArtifact } from "./session-artifact-store-v2.test-helpers.js";
-import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
 import { testWallClock } from "../helpers/session-services.js";
 
 const ts = "2026-11-01T00:00:00.000Z";
@@ -48,42 +46,69 @@ test("message event commit has constant snapshot IO and preserves durable starts
     throw new Error("message commit must not hydrate the session");
   };
   for (const count of [1, 8, 32]) {
-    await writeSessionArtifact({
-      sessionDir: scope.sessionDir,
-      sessionPayload: {
-        ...createTestSessionRequiredFields(),
-        sessionId,
-        aggregateVersion: 0,
-        messages: [
-          {
-            role: "user",
-            messageUid: "m1",
-            content: "x".repeat(65536),
-            ts,
-            dialogProcessId: "dialog-active",
-            turnScopeId: "active",
-          },
-        ],
-        turnSummaryCheckpoints: {
-          active: {
-            dialogProcessId: "dialog-active",
-            turnScopeId: "active",
-            checkpointRevision: count,
-            receipts: Array.from({ length: count }, (_, i) => ({
-              checkpointId: `checkpoint-${i + 1}`,
-              checkpointRevision: i + 1,
-              requestHash: "sha256:fixture",
+    const store = new ImmutableSessionStore({ sessionDir: scope.sessionDir, sessionId });
+    let reader = await sessionRepo.requireSessionReader(userId, sessionId, { persistenceContext });
+    let revision = (await reader.readCheckpointState("active"))?.checkpointRevision ?? 0;
+    while (revision < count) {
+      const messages =
+        revision === 0
+          ? [
+              {
+                role: "user",
+                messageOrigin: "natural",
+                messageUid: "m1",
+                sessionId,
+                parentSessionId: "",
+                userMessageId: "m1",
+                type: "message",
+                content: "x".repeat(65536),
+                ts,
+                dialogProcessId: "dialog-active",
+                turnScopeId: "active",
+                attachments: [],
+                transferEnvelopes: [],
+              },
+            ]
+          : [];
+      await sessionRepo.commitChanges(userId, sessionId, {
+        persistenceContext,
+        expectedGeneration: reader.generation,
+        operationId: `checkpoint-${revision + 1}`,
+        committedAt: ts,
+        changes: {
+          messages,
+          summaryCheckpoints: [
+            {
+              userId,
+              sessionId,
+              dialogProcessId: "dialog-active",
+              turnScopeId: "active",
+              checkpointId: `checkpoint-${revision + 1}`,
+              expectedCheckpointRevision: revision,
               persistedMessageUids: ["m1"],
               summarizedMessageUids: ["m1"],
               retainedMessageUids: [],
-              markedCount: 1,
-              committedAt: ts,
-            })),
-          },
+              messages,
+            },
+          ],
         },
+      });
+      reader = await sessionRepo.requireSessionReader(userId, sessionId, { persistenceContext });
+      revision += 1;
+    }
+    const beforeHead = await readFile(`${scope.sessionDir}/head.json`, "utf8");
+    const get = ImmutableSessionStore.prototype.get;
+    const bodyReads = t.mock.method(
+      ImmutableSessionStore.prototype,
+      "get",
+      function (snapshot, collection, key) {
+        assert.ok(
+          !["messages", "checkpoints"].includes(collection),
+          "event commit must not read historical bodies",
+        );
+        return get.call(this, snapshot, collection, key);
       },
-    });
-    const beforeManifest = await readFile(scope.sessionFile, "utf8");
+    );
     jsonReads = [];
     manifestReads = 0;
     const samples = [];
@@ -115,13 +140,12 @@ test("message event commit has constant snapshot IO and preserves durable starts
       samples.push(performance.now() - started);
       assert.equal(result.committed, true);
     }
-    assert.equal(manifestReads, 5, "one raw manifest read per commit");
+    bodyReads.mock.restore();
+    assert.equal(manifestReads, 0, "no legacy manifest reads");
     assert.equal(jsonReads.length, 0, "no snapshot or session hydration reads");
-    assert.equal(
-      await readFile(scope.sessionFile, "utf8"),
-      beforeManifest,
-      "event durability does not require projection writes",
-    );
+    assert.notEqual(await readFile(`${scope.sessionDir}/head.json`, "utf8"), beforeHead);
+    assert.equal((await store.snapshot()).generation, reader.generation + 5);
+    assert.equal((await store.get(await store.snapshot(), "metadata", "facts")).messageCount, 1);
     const restartedService = new SessionMessageService({ sessionRepo, now: testWallClock });
     const pending = await restartedService.getPendingAuthorityEvents({
       userId,
@@ -133,7 +157,7 @@ test("message event commit has constant snapshot IO and preserves durable starts
       pending.events.some((item) => item.envelope.payload.toolCallId === `call-${count}-0`),
     );
     assert.equal(
-      (await readAuthorityOutbox(scope.sessionDir)).length,
+      (await Array.fromAsync(store.entries(await store.snapshot(), "outbox"))).length,
       count === 1 ? 5 : count === 8 ? 10 : 15,
     );
     samples.sort((a, b) => a - b);

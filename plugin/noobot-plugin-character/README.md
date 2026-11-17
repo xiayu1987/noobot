@@ -46,7 +46,12 @@ references, so later catalog changes cannot alter existing animations. Use
 `character_animation_camera_apply` to replace an existing animation's camera
 at an explicit revision.
 
-The right feature panel imports and previews GLB files. The Composer More
+The right feature panel imports and previews GLB files as static models, with
+interactive orbit and zoom. Embedded clips play only through an animation
+protocol; the viewer does not select a clip implicitly. Rendering resumes for
+interaction, resize, playback and recording, and stops when a non-looping
+animation finishes. Hidden viewers pause playback unless recording is active.
+The Composer More
 Actions extension selects assets for the current model request. Only selected
 metadata is sent to the model. GLB bytes are stored by the authenticated
 workspace asset service and cached in browser IndexedDB for playback.

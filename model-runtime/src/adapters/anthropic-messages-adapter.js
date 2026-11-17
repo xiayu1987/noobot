@@ -514,6 +514,9 @@ export const anthropicMessagesAdapter = Object.freeze({
   prepareMessages({ messages }) {
     return messages;
   },
+  invokeChat({ client, messages, invokeOptions }) {
+    return client.invoke(messages, invokeOptions);
+  },
   resolveResponseSource() {
     return MODEL_RESPONSE_SOURCE.MESSAGE;
   },

@@ -7,10 +7,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { mkdtempSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 import { normalizeSessionEntity } from "../../src/session/entities/session-entity.js";
-import { readAuthorityOutbox } from "../../src/session/authority-outbox-store/outbox-journal.js";
 import { EVENT_FAMILY } from "@noobot/event-protocol";
 import {
   PLUGIN_ARTIFACT_SCHEMA_VERSION,
@@ -18,6 +17,28 @@ import {
   PLUGIN_ARTIFACT_EVENT,
 } from "@noobot/event-protocol/plugin-artifact-event";
 import { createTestSessionRequiredFields } from "../helpers/session-message-facts.js";
+import { createTestSessionServices, provisionTestSession } from "../helpers/session-services.js";
+import { initializeUserWorkspace } from "../helpers/user-workspace.js";
+
+async function fixture(t) {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-artifact-outbox-"));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+  await initializeUserWorkspace(workspaceRoot, "admin");
+  const runtime = createTestSessionServices({ workspaceRoot });
+  await provisionTestSession(runtime, {
+    userId: "admin",
+    sessionId: "session-1",
+    parentSessionId: "",
+    caller: "user",
+  });
+  const repo = runtime.repositories.sessionRepository;
+  const persistenceContext = repo.treePersistenceContext("admin", "session-1");
+  return {
+    service: runtime.sessionMessageService,
+    persistenceContext,
+    read: () => repo.requireSessionReader("admin", "session-1", { persistenceContext }),
+  };
+}
 
 const protocol = {
   format: "noobot.animation.protocol",
@@ -85,37 +106,11 @@ const protocol = {
   ],
 };
 
-test("plugin artifact commits persist an independent Session artifact fact", async () => {
-  const sessionDir = mkdtempSync(path.join(os.tmpdir(), "noobot-artifact-outbox-"));
-  let session = {
-    ...createTestSessionRequiredFields(),
-    sessionId: "session-1",
-    parentSessionId: "",
-    aggregateVersion: 0,
-    messages: [],
-    sessionArtifactEvents: [],
-  };
-  const repo = {
-    async withSessionMutation(_u, _s, operation) {
-      return operation(await this.locateSessionScope());
-    },
-    async locateSessionScope() {
-      return { resolvedParentSessionId: "", sessionDir };
-    },
-    async readSessionEventManifest() {
-      return structuredClone(session);
-    },
-    async saveSessionArtifactEvents(_userId, next) {
-      session = structuredClone(next);
-      return true;
-    },
-  };
-  const service = new SessionMessageService({
-    sessionRepo: repo,
-    now: () => "2026-08-29T00:00:00.000Z",
-  });
+test("plugin artifact commits persist an independent Session artifact fact", async (t) => {
+  const { service, read, persistenceContext } = await fixture(t);
 
   const committed = await service.commitAuthorityEvent({
+    persistenceContext,
     userId: "admin",
     sessionId: "session-1",
     family: EVENT_FAMILY.PLUGIN_ARTIFACT,
@@ -163,7 +158,9 @@ test("plugin artifact commits persist an independent Session artifact fact", asy
     },
   });
 
-  assert.equal((await readAuthorityOutbox(sessionDir)).length, 1);
+  const reader = await read();
+  const session = await reader.exportSession();
+  assert.equal((await reader.readOutboxPage({ consumerId: "test-consumer" })).events.length, 1);
   assert.equal(session.sessionArtifactEvents.length, 1);
   assert.equal(session.aggregateVersion, 1);
   assert.equal(committed.aggregateVersion, 1);
@@ -172,6 +169,16 @@ test("plugin artifact commits persist an independent Session artifact fact", asy
     session.sessionArtifactEvents[0].payload.data.protocol.animationId,
     "session-animation",
   );
+  const artifact = await service.getPluginArtifact({
+    persistenceContext,
+    userId: "admin",
+    sessionId: "session-1",
+    pluginId: "character",
+    artifactType: "character.animation",
+    artifactId: "session-animation",
+  });
+  assert.equal(artifact.found, true);
+  assert.equal(artifact.revision, 1);
 });
 
 test("Session normalization never derives artifact history from the delivery outbox", () => {
@@ -225,36 +232,10 @@ test("Session normalization never derives artifact history from the delivery out
   assert.deepEqual(normalized.sessionArtifactEvents, []);
 });
 
-test("plugin artifact replacement increments revision and rejects a stale base revision", async () => {
-  const sessionDir = mkdtempSync(path.join(os.tmpdir(), "noobot-artifact-outbox-"));
-  let session = {
-    ...createTestSessionRequiredFields(),
-    sessionId: "session-1",
-    parentSessionId: "",
-    aggregateVersion: 0,
-    messages: [],
-    sessionArtifactEvents: [],
-  };
-  const repo = {
-    async withSessionMutation(_u, _s, operation) {
-      return operation(await this.locateSessionScope());
-    },
-    async locateSessionScope() {
-      return { resolvedParentSessionId: "", sessionDir };
-    },
-    async readSessionEventManifest() {
-      return structuredClone(session);
-    },
-    async saveSessionArtifactEvents(_userId, next) {
-      session = structuredClone(next);
-      return true;
-    },
-  };
-  const service = new SessionMessageService({
-    sessionRepo: repo,
-    now: () => "2026-08-29T00:00:00.000Z",
-  });
+test("plugin artifact replacement increments revision and rejects a stale base revision", async (t) => {
+  const { service, read, persistenceContext } = await fixture(t);
   const common = {
+    persistenceContext,
     userId: "admin",
     sessionId: "session-1",
     family: EVENT_FAMILY.PLUGIN_ARTIFACT,
@@ -293,6 +274,7 @@ test("plugin artifact replacement increments revision and rejects a stale base r
   });
   assert.equal(replaced.committed, true);
   assert.equal(replaced.envelope.payload.revision, 2);
+  const before = (await read()).generation;
   const stale = await service.commitAuthorityEvent({
     ...common,
     payload: {
@@ -307,6 +289,7 @@ test("plugin artifact replacement increments revision and rejects a stale base r
   });
   assert.equal(stale.committed, false);
   assert.equal(stale.code, "ARTIFACT_REVISION_CONFLICT");
+  assert.equal((await read()).generation, before);
 });
 
 test("authority event commit rejects non-canonical owner, ordering and unknown family before mutation", async () => {
@@ -345,36 +328,11 @@ test("authority event commit rejects non-canonical owner, ordering and unknown f
   assert.equal(mutations, 0);
 });
 
-test("concurrent authority event commits allocate sequences inside one outbox lock", async () => {
-  const sessionDir = mkdtempSync(path.join(os.tmpdir(), "noobot-artifact-outbox-"));
-  const session = {
-    ...createTestSessionRequiredFields(),
-    sessionId: "session-1",
-    parentSessionId: "",
-    aggregateVersion: 0,
-    messages: [],
-    sessionArtifactEvents: [],
-  };
-  const repo = {
-    async withSessionMutation(_u, _s, operation) {
-      return operation(await this.locateSessionScope());
-    },
-    async locateSessionScope() {
-      return { resolvedParentSessionId: "", sessionDir };
-    },
-    async readSessionEventManifest() {
-      return structuredClone(session);
-    },
-    async saveSessionArtifactEvents() {
-      return true;
-    },
-  };
-  const service = new SessionMessageService({
-    sessionRepo: repo,
-    now: () => "2026-08-29T00:00:00.000Z",
-  });
-  const commit = () =>
+test("concurrent authority event commits serialize revision and sequence allocation", async (t) => {
+  const { service, read, persistenceContext } = await fixture(t);
+  const commit = (baseRevision = null) =>
     service.commitAuthorityEvent({
+      persistenceContext,
       userId: "admin",
       sessionId: "session-1",
       family: EVENT_FAMILY.PLUGIN_ARTIFACT,
@@ -390,18 +348,26 @@ test("concurrent authority event commits allocate sequences inside one outbox lo
         pluginId: "character",
         artifactType: "character.animation",
         artifactId: "session-animation",
-        operation: "created",
-        revision: 1,
-        baseRevision: null,
+        operation: baseRevision === null ? "created" : "replaced",
+        revision: baseRevision === null ? 1 : baseRevision + 1,
+        baseRevision,
         data: { protocol, assets: [] },
       },
     });
 
-  const results = await Promise.all([commit(), commit(), commit()]);
-
-  const sequences = results
+  const created = await Promise.all([commit(), commit(), commit()]);
+  const replaced = await Promise.all([commit(1), commit(1), commit(1)]);
+  for (const results of [created, replaced]) {
+    assert.equal(results.filter((result) => result.committed).length, 1);
+    assert.equal(results.filter((result) => !result.committed).length, 2);
+  }
+  const sequences = [...created, ...replaced]
+    .filter((result) => result.committed)
     .map((result) => result.envelope.ordering.sequence)
     .sort((a, b) => a - b);
-  assert.deepEqual(sequences, [1, 2, 3]);
-  assert.equal((await readAuthorityOutbox(sessionDir)).length, 3);
+  assert.deepEqual(sequences, [1, 2]);
+  assert.equal(
+    (await (await read()).readOutboxPage({ consumerId: "test-consumer" })).events.length,
+    2,
+  );
 });

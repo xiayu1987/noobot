@@ -7,17 +7,17 @@ import { isCanonicalText, isPlainObject } from "@noobot/shared/value";
 import { SESSION_ERROR_CODE } from "../errors.js";
 import { SESSION_COMMAND, isSessionAggregateVersion } from "../command/session-command.js";
 import { validateCommandReceiptResult } from "../command/command-receipt.js";
-import {
-  isAvailableSessionDetailEntry,
-  requireSessionDetailDocument,
-  selectMainSessionDetailEntry,
-} from "./session-detail.js";
+import { requireSessionMutationProjection } from "./session-mutation-projection.js";
 
 const ENVELOPE_FIELDS = Object.freeze([
   "commandId",
   "committedAggregateVersion",
   "deduplicated",
-  "detail",
+  "deletedMessageUids",
+  "sessionId",
+  "generation",
+  "projection",
+  "displayMessages",
 ]);
 const MESSAGE_DELETE_RESULT_FIELDS = Object.freeze([
   "deletedCount",
@@ -70,23 +70,76 @@ function collectEnvelopeErrors(response) {
   return errors;
 }
 
-function readDetail(response) {
+function readProjection(response) {
   try {
-    requireSessionDetailDocument(response.detail);
+    requireSessionMutationProjection(response.projection, { sessionId: response.sessionId });
   } catch (error) {
-    if (error?.code !== SESSION_ERROR_CODE.SESSION_DETAIL_PAYLOAD_INVALID) throw error;
-    return { errors: [`invalid_detail:${error.message}`], main: null };
+    if (!(error instanceof TypeError)) throw error;
+    return { errors: ["invalid_projection"], main: null };
   }
-  if (!response.detail.exists) return { errors: ["detail_session_missing"], main: null };
-  const main = selectMainSessionDetailEntry(response.detail);
-  if (!isAvailableSessionDetailEntry(main)) {
-    return { errors: ["detail_main_unavailable"], main: null };
+  const { projection, generation, displayMessages } = response;
+  const errors = [];
+  if (!Number.isSafeInteger(generation) || generation < projection.generation)
+    errors.push("invalid_generation");
+  if (!response.deduplicated && generation !== projection.generation)
+    errors.push("new_commit_generation_mismatch");
+  const receipt = projection.receipt;
+  if (
+    receipt.commandId !== response.commandId ||
+    receipt.aggregateVersion !== response.committedAggregateVersion
+  )
+    errors.push("projection_receipt_mismatch");
+  const result = Object.hasOwn(response, "turnReplacement")
+    ? { turnReplacement: response.turnReplacement }
+    : pickFields(response, MESSAGE_DELETE_RESULT_FIELDS);
+  if (JSON.stringify(result) !== JSON.stringify(receipt.result))
+    errors.push("projection_result_mismatch");
+  if (!Array.isArray(displayMessages))
+    return { errors: [...errors, "invalid_display_messages"], main: null };
+  if (projection.kind === "baseline") {
+    if (!response.deduplicated || response.deletedMessageUids !== null || displayMessages.length)
+      errors.push("invalid_baseline_effect");
+    return { errors, main: null };
   }
-  const versionMismatch =
-    response.deduplicated === true
-      ? main.aggregateVersion < response.committedAggregateVersion
-      : main.aggregateVersion !== response.committedAggregateVersion;
-  return { errors: versionMismatch ? ["detail_aggregate_version_mismatch"] : [], main };
+  if (JSON.stringify(response.deletedMessageUids) !== JSON.stringify(projection.deletedMessageUids))
+    errors.push("projection_deletion_mismatch");
+
+  if (
+    displayMessages.length !== projection.messages.length ||
+    displayMessages.some((message, index) => {
+      const source = projection.messages[index].message;
+      return (
+        !isPlainObject(message) ||
+        message.role !== "user" ||
+        message.messageUid !== source.messageUid ||
+        message.turnScopeId !== source.turnScopeId ||
+        message.dialogProcessId !== source.dialogProcessId ||
+        message.content !== source.content
+      );
+    })
+  )
+    errors.push("display_effect_mismatch");
+  return { errors, main: errors.length ? null : { messages: displayMessages } };
+}
+
+function collectMessageDeletionErrors(response, main) {
+  const uids = response.deletedMessageUids;
+  if (uids === null) return response.deduplicated === true ? [] : ["missing_deletion_evidence"];
+  if (
+    !Array.isArray(uids) ||
+    uids.some((uid) => !isCanonicalText(uid)) ||
+    new Set(uids).size !== uids.length
+  )
+    return ["invalid_deleted_message_uids"];
+  const errors = [];
+  if (Object.hasOwn(response, "deletedCount") && uids.length !== response.deletedCount)
+    errors.push("deleted_message_count_mismatch");
+  if (!response.deduplicated && main) {
+    const removed = new Set(uids);
+    if (main.messages.some((message) => removed.has(message.messageUid)))
+      errors.push("deleted_message_still_materialized");
+  }
+  return errors;
 }
 
 function collectReplacementMaterializationErrors(commit, messages, deduplicated) {
@@ -103,9 +156,6 @@ function collectReplacementMaterializationErrors(commit, messages, deduplicated)
     if (users[0].dialogProcessId !== commit.replacementDialogProcessId) {
       errors.push("replacement_dialog_process_mismatch");
     }
-  }
-  if (messages.some((message) => commit.replacedTurnScopeIds.includes(message.turnScopeId))) {
-    errors.push("replaced_scope_still_materialized");
   }
   if (
     !deduplicated &&
@@ -126,17 +176,9 @@ function collectMessageDeleteErrors(response) {
     ).errors,
     ...collectEnvelopeErrors(response),
   ];
-  const detail = readDetail(response);
+  const detail = readProjection(response);
   errors.push(...detail.errors);
-  if (
-    detail.main &&
-    Array.isArray(response.deletedTurnScopeIds) &&
-    detail.main.messages.some((message) =>
-      response.deletedTurnScopeIds.includes(message.turnScopeId),
-    )
-  ) {
-    errors.push("deleted_scope_still_materialized");
-  }
+  errors.push(...collectMessageDeletionErrors(response, detail.main));
   return errors;
 }
 
@@ -151,15 +193,16 @@ function collectTurnReplaceErrors(response) {
     ...receiptErrors,
     ...collectEnvelopeErrors(response),
   ];
-  const detail = readDetail(response);
+  const detail = readProjection(response);
   errors.push(...detail.errors);
+  errors.push(...collectMessageDeletionErrors(response, detail.main));
   if (receiptErrors.length) return errors;
   const commit = response.turnReplacement;
   if (commit.commandId !== response.commandId) errors.push("command_id_mismatch");
   if (commit.committedAggregateVersion !== response.committedAggregateVersion) {
     errors.push("committed_aggregate_version_mismatch");
   }
-  if (isPlainObject(response.detail) && response.detail.sessionId !== commit.sessionId) {
+  if (response.sessionId !== commit.sessionId) {
     errors.push("session_identity_mismatch");
   }
   if (detail.main) {
@@ -191,10 +234,24 @@ export function createMessageDeleteResponse({
   commandId,
   committedAggregateVersion,
   deduplicated,
-  detail,
+  deletedMessageUids,
+  sessionId,
+  generation,
+  projection,
+  displayMessages,
 }) {
   return requireMessageDeleteResponse(
-    Object.freeze({ ...receiptResult, commandId, committedAggregateVersion, deduplicated, detail }),
+    Object.freeze({
+      ...receiptResult,
+      commandId,
+      committedAggregateVersion,
+      deduplicated,
+      deletedMessageUids,
+      sessionId,
+      generation,
+      projection,
+      displayMessages,
+    }),
   );
 }
 
@@ -203,9 +260,23 @@ export function createTurnReplaceResponse({
   commandId,
   committedAggregateVersion,
   deduplicated,
-  detail,
+  deletedMessageUids,
+  sessionId,
+  generation,
+  projection,
+  displayMessages,
 }) {
   return requireTurnReplaceResponse(
-    Object.freeze({ ...receiptResult, commandId, committedAggregateVersion, deduplicated, detail }),
+    Object.freeze({
+      ...receiptResult,
+      commandId,
+      committedAggregateVersion,
+      deduplicated,
+      deletedMessageUids,
+      sessionId,
+      generation,
+      projection,
+      displayMessages,
+    }),
   );
 }

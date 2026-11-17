@@ -12,8 +12,8 @@ export async function finalizeAgentTurn({
   dialogProcessId,
   resolvedTurnScopeId,
   dispatchRuntime,
+  userMessageUid,
   getSessionTurns,
-  getTurnSummaryCheckpointState,
   finalizeRunSession,
   userId,
   parentSessionId,
@@ -24,34 +24,24 @@ export async function finalizeAgentTurn({
   lifecycle,
   persistenceScope,
 }) {
-  const durableCheckpointState = await getTurnSummaryCheckpointState({
-    userId,
-    sessionId: usedSessionId,
-    dialogProcessId,
-    turnScopeId: resolvedTurnScopeId,
-    persistenceScope,
-  });
-  const checkpointPersistedMessageUids = new Set([
-    ...dispatchRuntime.timelineCheckpointPersistedMessageUids,
-    ...dispatchRuntime.summaryCheckpointPersistedMessageUids,
-    ...durableCheckpointState.receipts.flatMap((receipt) => receipt.persistedMessageUids),
-  ]);
-
-  const persistedSessionMessages = await getSessionTurns({
-    userId,
-    sessionId: usedSessionId,
-    persistenceScope,
-  });
-  const scopedPersistedTurnMessages = persistedSessionMessages.filter(
-    (message) =>
-      message.turnScopeId === resolvedTurnScopeId && message.dialogProcessId === dialogProcessId,
-  );
-  const persistedTurnMessages = scopedPersistedTurnMessages.filter((message) =>
-    checkpointPersistedMessageUids.has(message.messageUid),
-  );
-  const durableTurnMessageUids = new Set(
-    scopedPersistedTurnMessages.map((message) => message.messageUid),
-  );
+  const turnPersistence = {
+    flush: () => dispatchRuntime.persistCurrentTurnMessages(),
+    async readResultMessages() {
+      const messages = await getSessionTurns({
+        userId,
+        sessionId: usedSessionId,
+        turnScopeId: resolvedTurnScopeId,
+        dialogProcessId,
+        persistenceScope,
+      });
+      return messages.filter(
+        (message) =>
+          message.turnScopeId === resolvedTurnScopeId &&
+          message.dialogProcessId === dialogProcessId &&
+          message.messageUid !== userMessageUid,
+      );
+    },
+  };
   return finalizeRunSession({
     userId,
     sessionId: usedSessionId,
@@ -62,12 +52,7 @@ export async function finalizeAgentTurn({
     turnScopeId: resolvedTurnScopeId,
     startedAt,
     agentResult,
-    persistedTurnMessageUids: [
-      ...new Set([...checkpointPersistedMessageUids, ...durableTurnMessageUids]),
-    ],
-    persistedTurnMessages,
-    durableTurnMessages: scopedPersistedTurnMessages,
-    summaryCheckpointPromotionSources: dispatchRuntime.summaryCheckpointPromotionSources,
+    turnPersistence,
     runtimeEventListener,
     userConfig: {
       ...userConfig,

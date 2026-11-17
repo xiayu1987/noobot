@@ -6,16 +6,74 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  createMessageDeleteResponse,
   createSessionCommand,
   createSessionNotFoundError,
+  createTurnReplaceResponse,
   createTurnReplacementCommit,
   SESSION_COMMAND,
+  SESSION_ERROR_CODE,
 } from "@noobot/session-protocol";
-import express, { registerSessionRoutes, withTestServer } from "./session-routes.helpers.js";
-import { availableDetailDocument } from "../session-detail.test-helpers.js";
+import express, {
+  createSessionApp,
+  registerSessionRoutes,
+  withTestServer,
+} from "./session-routes.helpers.js";
 import { useProvisionedRuntimeEventsWorkspace } from "../runtime-events-root.test-helpers.js";
 
-useProvisionedRuntimeEventsWorkspace(["u1"]);
+useProvisionedRuntimeEventsWorkspace(["u1"], { u1: ["s1"] });
+
+const COMMITTED_AT = "2026-07-31T00:00:00.000Z";
+
+function mutationResult(payload, { type, version, receiptResult, deletedMessageUids, messages }) {
+  const generation = 9;
+  const createResponse =
+    type === SESSION_COMMAND.TURN_REPLACE ? createTurnReplaceResponse : createMessageDeleteResponse;
+  return createResponse({
+    commandId: payload.commandId,
+    committedAggregateVersion: version,
+    deduplicated: false,
+    sessionId: payload.sessionId,
+    generation,
+    deletedMessageUids,
+    receiptResult,
+    displayMessages: messages,
+    projection: {
+      kind: "commit",
+      generation,
+      receipt: {
+        commandId: payload.commandId,
+        type,
+        requestHash: "request-hash-replace",
+        aggregateVersion: version,
+        committedAt: COMMITTED_AT,
+        result: receiptResult,
+      },
+      baseAggregateVersion: version - 1,
+      metadata: { sessionId: payload.sessionId, parentSessionId: "", aggregateVersion: version },
+      lifecycleHead: { sequence: 0, activeTurnScopeId: "" },
+      deletedMessageUids,
+      messages: messages.map((message, index) => ({ ordinal: index + 1, turnOrdinal: 1, message })),
+      turns: [],
+      replacements: [],
+      timings: [],
+    },
+  });
+}
+
+function createDeleteResult(payload) {
+  return mutationResult(payload, {
+    type: SESSION_COMMAND.MESSAGE_DELETE_FROM,
+    version: 3,
+    deletedMessageUids: ["deleted-user", "deleted-tail"],
+    messages: [],
+    receiptResult: {
+      deletedCount: 2,
+      anchorIndex: 1,
+      deletedTurnScopeIds: ["turn-delete", "turn-tail"],
+    },
+  });
+}
 
 function createReplaceTurnResult(
   payload,
@@ -23,32 +81,34 @@ function createReplaceTurnResult(
 ) {
   const replacementDialogProcessId = "dialog-replacement";
   const replacementUser = {
+    sessionId: payload.sessionId,
+    parentSessionId: "",
+    userMessageId: "um-replacement",
     role: "user",
+    content: payload.newContent,
     messageUid: replacementUserMessageUid,
     dialogProcessId: replacementDialogProcessId,
     turnScopeId: payload.turnScopeId,
   };
-  return {
-    commandId: payload.commandId,
-    committedAggregateVersion: version,
-    deduplicated: false,
-    detail: availableDetailDocument({
-      sessionId: payload.sessionId,
-      aggregateVersion: version,
-      messages: [replacementUser],
-    }),
-    turnReplacement: createTurnReplacementCommit({
-      commandId: payload.commandId,
-      sessionId: payload.sessionId,
-      committedAggregateVersion: version,
-      replacedTurnScopeIds,
-      replacementDialogProcessId,
-      replacementTurnScopeId: payload.turnScopeId,
-      replacementUserMessageUid,
-      requestHash: "request-hash-replace",
-      committedAt: "2026-07-31T00:00:00.000Z",
-    }),
-  };
+  return mutationResult(payload, {
+    type: SESSION_COMMAND.TURN_REPLACE,
+    version,
+    deletedMessageUids: ["original-user"],
+    messages: [replacementUser],
+    receiptResult: {
+      turnReplacement: createTurnReplacementCommit({
+        commandId: payload.commandId,
+        sessionId: payload.sessionId,
+        committedAggregateVersion: version,
+        replacedTurnScopeIds,
+        replacementDialogProcessId,
+        replacementTurnScopeId: payload.turnScopeId,
+        replacementUserMessageUid,
+        requestHash: "request-hash-replace",
+        committedAt: COMMITTED_AT,
+      }),
+    },
+  });
 }
 
 function mutationCommand(
@@ -71,7 +131,7 @@ function mutationCommand(
   });
 }
 
-test("session-routes: delete-from 路由透传请求体并返回后端快照", async () => {
+test("session-routes: delete-from 路由透传请求体并返回增量投影", async () => {
   const calls = [];
   const app = express();
   app.use(express.json());
@@ -83,19 +143,7 @@ test("session-routes: delete-from 路由透传请求体并返回后端快照", a
         getAllSessionsData: async () => [],
         deleteFromMessage: async (payload) => {
           calls.push(payload);
-          return {
-            commandId: payload.commandId,
-            committedAggregateVersion: 3,
-            deduplicated: false,
-            detail: availableDetailDocument({
-              sessionId: payload.sessionId,
-              aggregateVersion: 3,
-              messages: [],
-            }),
-            deletedCount: 2,
-            anchorIndex: 1,
-            deletedTurnScopeIds: ["turn-delete", "turn-tail"],
-          };
+          return createDeleteResult(payload);
         },
       },
       getAttachmentById: async () => null,
@@ -124,6 +172,9 @@ test("session-routes: delete-from 路由透传请求体并返回后端快照", a
     assert.equal(payload.deletedCount, 2);
     assert.equal(payload.anchorIndex, 1);
     assert.deepEqual(payload.deletedTurnScopeIds, ["turn-delete", "turn-tail"]);
+    assert.deepEqual(payload.deletedMessageUids, ["deleted-user", "deleted-tail"]);
+    assert.deepEqual(payload, { ok: true, ...createDeleteResult(calls[0]) });
+    assert.equal(Object.hasOwn(payload, "detail"), false);
     assert.deepEqual(calls[0], {
       userId: "u1",
       sessionId: "s1",
@@ -259,7 +310,7 @@ test("session-routes: rename 空标题返回 400，session 不存在返回 404",
     assert.equal((await missingResponse.json()).ok, false);
   });
 });
-test("session-routes: replace-turn 路由透传请求体并返回后端快照", async () => {
+test("session-routes: replace-turn 路由透传请求体并返回增量投影", async () => {
   const calls = [];
   const app = express();
   app.use(express.json());
@@ -305,8 +356,18 @@ test("session-routes: replace-turn 路由透传请求体并返回后端快照", 
     assert.equal(payload.commandId, "idem-2");
     assert.equal(payload.committedAggregateVersion, 4);
     assert.equal(payload.turnReplacement.replacementTurnScopeId, "turn-scope-replace");
+    assert.deepEqual(payload.deletedMessageUids, ["original-user"]);
     assert.equal(payload.turnReplacement.replacementDialogProcessId, "dialog-replacement");
     assert.equal(payload.turnReplacement.replacementUserMessageUid, "replacement-user-1");
+    assert.deepEqual(payload, {
+      ok: true,
+      ...createReplaceTurnResult(calls[0], {
+        version: 4,
+        replacedTurnScopeIds: ["scope-old"],
+        replacementUserMessageUid: "replacement-user-1",
+      }),
+    });
+    assert.equal(Object.hasOwn(payload, "detail"), false);
     assert.deepEqual(calls[0], {
       userId: "u1",
       sessionId: "s1",
@@ -413,3 +474,70 @@ test("session-routes: replace-turn 保留服务层 404/409 状态码", async () 
     }
   });
 });
+
+for (const replace of [false, true]) {
+  const route = replace ? "replace-turn" : "delete-from";
+  const type = replace ? SESSION_COMMAND.TURN_REPLACE : SESSION_COMMAND.MESSAGE_DELETE_FROM;
+  const command = mutationCommand(type, {
+    anchor: { turnScopeId: "old" },
+    ...(replace ? { newContent: "edited", turnScopeId: "new", attachments: [] } : {}),
+  });
+  const committed = replace
+    ? createReplaceTurnResult(
+        { sessionId: "s1", commandId: command.commandId, ...command.payload },
+        {
+          version: 4,
+          replacedTurnScopeIds: ["old"],
+          replacementUserMessageUid: "user-new",
+        },
+      )
+    : createDeleteResult({ sessionId: "s1", commandId: command.commandId });
+
+  function appForResult(result) {
+    return createSessionApp({
+      json: true,
+      session: {
+        deleteFromMessage: async () => result,
+        getSessionDisplayData: () => {
+          throw new Error("mutation must not read complete detail");
+        },
+      },
+      bot: { replaceSessionTurn: async () => result },
+    });
+  }
+
+  test(`session-routes: ${route} 重放透传原投影和当前观察代次`, async () => {
+    const replay = { ...committed, deduplicated: true, generation: 100 };
+    await withTestServer(appForResult(replay), async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/internal/session/u1/s1/messages/${route}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(command),
+      });
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), { ok: true, ...replay });
+    });
+  });
+
+  test(`session-routes: ${route} 拒绝旧快照响应和损坏的投影`, async () => {
+    const { projection, sessionId, generation, displayMessages, ...legacy } = committed;
+    const invalidResults = [
+      { ...legacy, detail: { sessionId: "s1", exists: true, sessions: [] } },
+      { ...committed, projection: { ...projection, deletedMessageUids: ["wrong"] } },
+      { ...committed, generation: generation - 1 },
+    ];
+    for (const result of invalidResults) {
+      await withTestServer(appForResult(result), async (baseUrl) => {
+        const response = await fetch(`${baseUrl}/internal/session/u1/s1/messages/${route}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(command),
+        });
+        const body = await response.json();
+        assert.equal(response.status, 500);
+        assert.equal(body.ok, false);
+        assert.equal(body.errorCode, SESSION_ERROR_CODE.SESSION_MUTATION_RESPONSE_INVALID);
+      });
+    }
+  });
+}

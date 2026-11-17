@@ -26,6 +26,7 @@ function request(overrides = {}) {
     persistedMessageUids: ["message"],
     summarizedMessageUids: ["message"],
     retainedMessageUids: [],
+    messages: [],
     ...overrides,
   };
 }
@@ -33,7 +34,7 @@ function request(overrides = {}) {
 const invalidCode = { code: SESSION_ERROR_CODE.TURN_SUMMARY_CHECKPOINT_REQUEST_INVALID };
 
 test("checkpoint source requires exact ordered canonical UIDs before commit", () => {
-  const source = { ...request(), turnMessages: [{ messageUid: "message" }] };
+  const source = { ...request(), checkpointMessages: [{ messageUid: "message" }] };
   assert.doesNotThrow(() => assertSummaryCheckpointSource(source));
   for (const overrides of [
     { persistedMessageUids: ["other"] },
@@ -45,11 +46,28 @@ test("checkpoint source requires exact ordered canonical UIDs before commit", ()
   }
 });
 
-test("checkpoint identity and request hash use the same ordered canonical facts", () => {
+test("checkpoint source accepts changes without expanding committed turn messages", () => {
+  assert.doesNotThrow(() =>
+    assertSummaryCheckpointSource({
+      ...request({ persistedMessageUids: [], summarizedMessageUids: ["committed"] }),
+      checkpointMessages: [],
+    }),
+  );
+});
+
+test("checkpoint identity binds ordered canonical facts to the predecessor revision", () => {
   const parsed = parseTurnSummaryCheckpointRequest(request());
   assert.equal(
     createSummaryCheckpointId(parsed),
-    `summary_checkpoint_${parsed.requestHash.slice(7, 39)}`,
+    createSummaryCheckpointId(
+      parseTurnSummaryCheckpointRequest(request({ checkpointId: "retry" })),
+    ),
+  );
+  assert.notEqual(
+    createSummaryCheckpointId(parsed),
+    createSummaryCheckpointId(
+      parseTurnSummaryCheckpointRequest(request({ expectedCheckpointRevision: 1 })),
+    ),
   );
   assert.equal(
     parseTurnSummaryCheckpointRequest(request({ checkpointId: "retry" })).requestHash,
@@ -65,9 +83,20 @@ test("checkpoint requests reject missing payload, coercion, duplicate and malfor
   for (const payload of [null, undefined, [], 1]) {
     assert.throws(() => parseTurnSummaryCheckpointRequest(payload), invalidCode);
   }
-  for (const expectedCheckpointRevision of [-1, 0.5, "0", NaN]) {
+  for (const expectedCheckpointRevision of [
+    -1,
+    0.5,
+    "0",
+    NaN,
+    Infinity,
+    Number.MAX_SAFE_INTEGER + 1,
+  ]) {
     assert.throws(
       () => parseTurnSummaryCheckpointRequest(request({ expectedCheckpointRevision })),
+      invalidCode,
+    );
+    assert.throws(
+      () => createSummaryCheckpointId(request({ expectedCheckpointRevision })),
       invalidCode,
     );
   }
@@ -78,6 +107,32 @@ test("checkpoint requests reject missing payload, coercion, duplicate and malfor
         invalidCode,
       );
     }
+  }
+});
+
+test("checkpoint message changes require exact ownership and participate in retry identity", () => {
+  const message = {
+    messageUid: "message",
+    dialogProcessId: "dialog",
+    turnScopeId: "turn",
+    content: "first",
+  };
+  const first = parseTurnSummaryCheckpointRequest(request({ messages: [message] }));
+  const second = parseTurnSummaryCheckpointRequest(
+    request({ messages: [{ ...message, content: "edited" }] }),
+  );
+  assert.notEqual(first.requestHash, second.requestHash);
+  for (const messages of [
+    undefined,
+    null,
+    {},
+    [null],
+    [message, message],
+    [{ ...message, messageUid: "outside" }],
+    [{ ...message, dialogProcessId: "other" }],
+    [{ ...message, turnScopeId: "other" }],
+  ]) {
+    assert.throws(() => parseTurnSummaryCheckpointRequest(request({ messages })), invalidCode);
   }
 });
 

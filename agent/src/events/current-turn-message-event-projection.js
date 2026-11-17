@@ -23,13 +23,17 @@ export function initializeCurrentTurnMessageEventProjection(runtime = {}) {
     throw new Error("current Turn message event projection requires runtime");
   }
   const store = runtime.currentTurnMessages;
-  if (!store || !isFunction(store.toArray) || !isFunction(store.updateWhere)) {
+  if (
+    !store ||
+    !isFunction(store.readAssistantByModelMessageId) ||
+    !isFunction(store.updateByUid)
+  ) {
     throw new Error(
       "current Turn message event projection requires the canonical currentTurnMessages store",
     );
   }
 
-  const pendingMessageEvents = [];
+  const pendingMessageEvents = new Map();
   runtime.projectCurrentTurnMessageEvent = async (envelope) => {
     const eventId = envelope.identity.eventId;
     if (!eventId) {
@@ -40,19 +44,13 @@ export function initializeCurrentTurnMessageEventProjection(runtime = {}) {
     }
 
     const modelMessageId = resolveMessageEventModelMessageId(envelope.payload);
-    const messages = store.toArray();
-    const ownerIndex = modelMessageId
-      ? messages.findIndex(
-          (item) => item?.role === "assistant" && text(item?.modelMessageId) === modelMessageId,
-        )
-      : -1;
-    if (ownerIndex < 0) {
-      if (!pendingMessageEvents.some((item) => text(item?.identity?.eventId) === eventId)) {
-        pendingMessageEvents.push(envelope);
+    const owner = modelMessageId ? store.readAssistantByModelMessageId(modelMessageId) : null;
+    if (!owner) {
+      if (!pendingMessageEvents.has(eventId)) {
+        pendingMessageEvents.set(eventId, envelope);
       }
       return envelope;
     }
-    const owner = messages[ownerIndex];
 
     const isToolEvent = isCanonicalToolMessageEvent(envelope);
     const currentTimeline = isToolEvent
@@ -82,7 +80,7 @@ export function initializeCurrentTurnMessageEventProjection(runtime = {}) {
       : {
           activityTimeline: reduceCanonicalActivityTimeline(currentTimeline, envelope),
         };
-    store.updateWhere(patch, (_item, index) => index === ownerIndex);
+    store.updateByUid(owner.messageUid, patch);
 
     if (isToolEvent || isDurableActivityMessageEvent(envelope)) {
       await runtime.persistCurrentTurnMessages();
@@ -92,10 +90,11 @@ export function initializeCurrentTurnMessageEventProjection(runtime = {}) {
 
   const drainPendingMessageEvents = (acceptsOwner) => {
     const facts = [];
-    for (let index = pendingMessageEvents.length - 1; index >= 0; index -= 1) {
-      const pendingOwnerId = resolveMessageEventModelMessageId(pendingMessageEvents[index].payload);
+    for (const [eventId, envelope] of pendingMessageEvents) {
+      const pendingOwnerId = resolveMessageEventModelMessageId(envelope.payload);
       if (!pendingOwnerId || acceptsOwner(pendingOwnerId)) {
-        facts.unshift(...pendingMessageEvents.splice(index, 1));
+        facts.push(envelope);
+        pendingMessageEvents.delete(eventId);
       }
     }
     return facts.reduce(

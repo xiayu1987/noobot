@@ -13,6 +13,17 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { isAbortError } from "../../shared/utils/error-utils.js";
 import { isFunction } from "@noobot/shared/value";
 
+async function flushMemoryFailure(listener, error) {
+  try {
+    await listener.flush();
+  } catch (flushError) {
+    throw new AggregateError([error, flushError], "memory operation and log persistence failed", {
+      cause: error,
+    });
+  }
+  throw error;
+}
+
 export class MemoryPostProcessService {
   constructor({ globalConfig, session, memory, errorLogger, now }) {
     if (!isFunction(now)) {
@@ -138,9 +149,10 @@ export class MemoryPostProcessService {
         });
       }
       emitEvent(memoryEventListener, "memory_summary_checked", { sessionId, mode });
-    } finally {
-      await memoryEventListener.flush();
+    } catch (error) {
+      await flushMemoryFailure(memoryEventListener, error);
     }
+    await memoryEventListener.flush();
   }
 
   scheduleMemorySummarizeFlow(payload) {
@@ -201,15 +213,9 @@ export class MemoryPostProcessService {
           error,
         });
       }
-      try {
-        await memoryEventListener.flush();
-      } catch (flushError) {
-        throw new AggregateError([error, flushError], "memory postprocess failed", {
-          cause: error,
-        });
-      }
-      throw error;
+      await flushMemoryFailure(memoryEventListener, error);
     }
+    await memoryEventListener.flush();
     this.scheduleMemorySummarizeFlow({
       userId,
       sessionId,

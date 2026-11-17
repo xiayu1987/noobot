@@ -41,6 +41,86 @@ module-loading cost over the main entry.
 - `src/authority-event-outbox.js` and `src/replay-batch.js` cover delivery and
   replay ordering.
 
+## Plugin artifact projections
+
+`requirePluginArtifactProjection(current, identity)` validates a stored projection
+against the requested plugin, artifact type and artifact ID. The projection must
+have valid identity tokens, an event ID, object data and a consistent operation
+and revision (`created` at revision 1, `replaced` from revision 2). Only `null`
+means absent. Validation returns the original value and never repairs missing
+fields. Query result construction uses the same contract without an external
+identity. Revision conflict decisions remain separate from projection validation.
+
+Immutable lookup and replacement preparation use this contract on the selected
+value before returning it or computing its successor. Invalid stored projections
+raise a storage integrity error with the protocol error as their cause; a
+replacement cannot silently overwrite corruption. Validation needs no additional
+storage read or historical scan.
+
+## Outbox acknowledgement integrity
+
+Delivered receipts must carry the exact domain, scope and sequence of their event
+envelope. The same protocol rule applies to acknowledgement writes, journal replay,
+stored-entry normalization and individual consumer delivery reads. A stored receipt
+with valid field types but foreign coordinates is corrupt and raises
+`AUTHORITY_OUTBOX_INTEGRITY_INVALID`; it cannot suppress delivery, advance a cursor
+or authorize compaction. Normalization checks every consumer in the selected entry.
+This validation uses the event already being read and requires no historical scan.
+
+## Outbox compaction
+
+`compactAuthorityEventOutbox(entries, { retainDeliveredAfter })` is the single
+compaction entry point. It accepts an iterable of canonical outbox entries,
+including `projection.entries.values()`. Journal ingestion validates and freezes
+entries; external array input must pass `normalizeAuthorityEventOutbox` before
+compaction. Compaction does not normalize entries again or mutate its input.
+It retains pending deliveries and deliveries at or after the cutoff, preserves
+entry order and references, and rejects an invalid cutoff. Persistence and
+sequence checkpoint advancement belong to the outbox store.
+
+The result includes `nextRetainedDeliveryAt`: the earliest last-consumer delivery
+timestamp among fully delivered entries still protected by retention, or `null`.
+An entry with a pending consumer has no retention deadline. Stores propagate this
+fact per maintenance page; schedulers retain the earliest deadline across pages
+and wake after that timestamp plus their retention duration and one millisecond
+(cutoff equality remains protected), even without another delivery. This avoids
+polling throughout the retention period. `hasMore` describes scan pagination only.
+
+## Outbox journal transactions
+
+`planAuthorityOutboxJournalRecords(projection, records)` validates a journal batch
+without changing its source. Its result contains only the event IDs touched by the
+batch and is not a complete outbox. `applyAuthorityOutboxJournalRecords` uses that
+plan to advance the supplied projection only after the entire batch validates.
+A failed batch leaves entries, prepared events and removal tombstones unchanged.
+Commit order, terminal removals and delivery deduplication use the same journal rules.
+Planning memory and lookups scale with the batch rather than historical event count.
+
+The store owns a live projection under its session mutation lock; readers must not
+treat its Map containers as historical snapshots or mutate them. Appends advance
+those containers atomically. Individual canonical entries remain frozen: delivery
+changes replace entries, so previously returned entry objects and arrays retain
+their values. Journal replacement publishes a new projection. Callers needing an
+array use `listAuthorityOutboxProjection`; persistence remains the journal's job.
+This replaces the earlier container snapshot behavior and removes the full-history
+fork API. Pending selection consumes the projection synchronously. Lifecycle
+decisions also read it synchronously under the repository lifecycle lock, before
+awaiting the prepare append. Attempts, acknowledgements and compaction hold the
+outbox mutation lock. Compaction derives its retained array before journal
+replacement. These consumers do not retain containers as asynchronous snapshots.
+
+## Outbox acknowledgement planning
+
+`planAuthorityOutboxAcknowledgements(projection, records)` validates a batch of
+acknowledgements using the journal delivery rules. It returns the changed records
+and delivery/deduplication counts, or rejects the batch when an event is missing.
+It never changes the input projection, including when a later record has invalid
+ordering. Repeated acknowledgements in one batch are deduplicated against earlier
+records in that batch. Only requested event IDs are read: planning uses memory
+proportional to the batch, without copying prepared events or removed-event history.
+The caller persists the returned records under the same mutation lock; planning
+does not acknowledge delivery durably by itself.
+
 ## Guards
 
 `scripts/check-barrel-star-exports.mjs` fails the build when two `export *`

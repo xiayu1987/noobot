@@ -3,11 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  appendTurnSummaryCheckpointReceipt,
-  createEmptyTurnSummaryCheckpointState,
-} from "@noobot/context-protocol/policy/summary";
 import test from "node:test";
+import { createTestMessagePersistenceReceipts } from "../helpers/message-persistence-receipts.js";
 import { createTestRuntimeContext } from "../helpers/test-runtime-context.js";
 import {
   assert,
@@ -16,7 +13,7 @@ import {
 } from "./session-execution-runner-agent-done-order.fixtures.js";
 import { SESSION_CALLER } from "@noobot/shared/session-caller";
 
-test("runSession compares the complete durable turn without treating it as a checkpoint prefix", async () => {
+test("runSession reads the complete durable result only after flushing pending changes", async () => {
   const callOrder = [];
   let capturedFinalizePayload = null;
   const durableMessages = [
@@ -50,9 +47,16 @@ test("runSession compares the complete durable turn without treating it as a che
       modelLoopRound: 0,
       modelMessages: [],
     }),
-    getSessionTurns: async () => durableMessages,
+    getSessionTurns: async () => {
+      callOrder.push("readResult");
+      return durableMessages;
+    },
     finalizeRunSession: async (payload = {}) => {
       capturedFinalizePayload = payload;
+      assert.equal(callOrder.includes("readResult"), false);
+      await payload.turnPersistence.flush();
+      callOrder.push("flushed");
+      payload.resultMessages = await payload.turnPersistence.readResultMessages();
       return { ok: true };
     },
   });
@@ -64,17 +68,15 @@ test("runSession compares the complete durable turn without treating it as a che
     turnScopeId: "turn-a",
   });
 
-  assert.deepEqual(capturedFinalizePayload.persistedTurnMessages, []);
-  assert.deepEqual(capturedFinalizePayload.durableTurnMessages, durableMessages);
-  assert.deepEqual(capturedFinalizePayload.persistedTurnMessageUids.sort(), [
-    "sm_assistant",
-    "sm_tool",
-  ]);
+  assert.deepEqual(capturedFinalizePayload.resultMessages, durableMessages);
+  assert.ok(callOrder.indexOf("flushed") < callOrder.indexOf("readResult"));
 });
 
 test("runSession upserts summarized messages created after a checkpoint", async () => {
   const callOrder = [];
   let capturedFinalizePayload = null;
+  const writes = [];
+  const runtime = createTestRuntimeContext();
   const durableMessages = [
     {
       messageUid: "sm_checkpoint-tool",
@@ -106,20 +108,36 @@ test("runSession upserts summarized messages created after a checkpoint", async 
   ];
   const runner = createRunner({
     callOrder,
-    runtime: createTestRuntimeContext({
-      summaryCheckpointPersistedMessageUids: ["sm_checkpoint-tool"],
-    }),
-    agentRunner: async () => ({
-      output: "done",
-      modelMessageId: "message-final",
-      traces: [],
-      turnMessages: durableMessages.map((message) => ({ ...message, summarized: true })),
-      modelLoopRound: 0,
-      modelMessages: [],
-    }),
+    runtime,
+    agentRunner: async () => {
+      runtime.currentTurnMessages.replaceAll(durableMessages);
+      await runtime.persistCurrentTurnMessages();
+      writes.length = 0;
+      for (const message of durableMessages)
+        runtime.currentTurnMessages.updateByUid(message.messageUid, { summarized: true });
+      return {
+        output: "done",
+        modelMessageId: "message-final",
+        traces: [],
+        turnMessages: durableMessages.map((message) => ({ ...message, summarized: true })),
+        modelLoopRound: 0,
+        modelMessages: [],
+      };
+    },
+    appendAgentMessages: async ({ messages, ...identity }) => {
+      writes.push(...messages);
+      for (const message of messages) {
+        const index = durableMessages.findIndex((item) => item.messageUid === message.messageUid);
+        if (index === -1) durableMessages.push(message);
+        else durableMessages[index] = { ...durableMessages[index], ...message };
+      }
+      return createTestMessagePersistenceReceipts({ messages, ...identity });
+    },
     getSessionTurns: async () => durableMessages,
     finalizeRunSession: async (payload = {}) => {
       capturedFinalizePayload = payload;
+      await payload.turnPersistence.flush();
+      payload.resultMessages = await payload.turnPersistence.readResultMessages();
       return { ok: true };
     },
   });
@@ -132,27 +150,25 @@ test("runSession upserts summarized messages created after a checkpoint", async 
   });
 
   assert.deepEqual(
-    capturedFinalizePayload.persistedTurnMessageUids.sort(),
-    ["sm_checkpoint-tool", "sm_tail-tool", "sm_final-assistant"].sort(),
+    writes.map((message) => message.messageUid).sort(),
+    ["sm_tail-tool", "sm_final-assistant"].sort(),
   );
   assert.deepEqual(
-    capturedFinalizePayload.durableTurnMessages.map((message) => [
+    capturedFinalizePayload.resultMessages.map((message) => [
       message.messageUid,
       message.summarized,
     ]),
     [
       ["sm_checkpoint-tool", true],
-      ["sm_tail-tool", false],
-      ["sm_final-assistant", false],
+      ["sm_tail-tool", true],
+      ["sm_final-assistant", true],
     ],
   );
 });
 
-test("runSession restores checkpoint messages by exact persistent UID when available", async () => {
+test("runSession returns committed scope members independently of checkpoint UID caches", async () => {
   const callOrder = [];
-  const runtime = createTestRuntimeContext({
-    summaryCheckpointPersistedMessageUids: ["sm_first", "sm_retained"],
-  });
+  const runtime = createTestRuntimeContext();
   let capturedFinalizePayload = null;
   const runner = createRunner({
     callOrder,
@@ -202,6 +218,8 @@ test("runSession restores checkpoint messages by exact persistent UID when avail
     ],
     finalizeRunSession: async (payload = {}) => {
       capturedFinalizePayload = payload;
+      await payload.turnPersistence.flush();
+      payload.resultMessages = await payload.turnPersistence.readResultMessages();
       return { ok: true };
     },
   });
@@ -214,12 +232,12 @@ test("runSession restores checkpoint messages by exact persistent UID when avail
   });
 
   assert.deepEqual(
-    capturedFinalizePayload.persistedTurnMessages.map((message) => message.messageUid),
-    ["sm_first", "sm_retained"],
+    capturedFinalizePayload.resultMessages.map((message) => message.messageUid),
+    ["sm_first", "sm_unrelated", "sm_retained"],
   );
 });
 
-test("runSession recovers checkpoint UIDs from the durable receipt", async () => {
+test("runSession recovers committed checkpoint messages without a runtime receipt cache", async () => {
   const callOrder = [];
   const runtime = createTestRuntimeContext();
   let capturedFinalizePayload = null;
@@ -246,20 +264,6 @@ test("runSession recovers checkpoint UIDs from the durable receipt", async () =>
       modelLoopRound: 0,
       modelMessages: [],
     }),
-    getTurnSummaryCheckpointState: async ({ dialogProcessId, turnScopeId }) =>
-      appendTurnSummaryCheckpointReceipt(
-        createEmptyTurnSummaryCheckpointState({ dialogProcessId, turnScopeId }),
-        {
-          checkpointId: "summary_checkpoint_a",
-          checkpointRevision: 1,
-          requestHash: "sha256:a",
-          persistedMessageUids: ["sm_first", "sm_retained"],
-          summarizedMessageUids: ["sm_first"],
-          retainedMessageUids: ["sm_retained"],
-          markedCount: 1,
-          committedAt: "2026-01-01T00:00:00.000Z",
-        },
-      ),
     getSessionTurns: async () => [
       {
         messageUid: "sm_first",
@@ -278,6 +282,8 @@ test("runSession recovers checkpoint UIDs from the durable receipt", async () =>
     ],
     finalizeRunSession: async (payload = {}) => {
       capturedFinalizePayload = payload;
+      await payload.turnPersistence.flush();
+      payload.resultMessages = await payload.turnPersistence.readResultMessages();
       return { ok: true };
     },
   });
@@ -290,7 +296,7 @@ test("runSession recovers checkpoint UIDs from the durable receipt", async () =>
   });
 
   assert.deepEqual(
-    capturedFinalizePayload.persistedTurnMessages.map((message) => message.messageUid),
+    capturedFinalizePayload.resultMessages.map((message) => message.messageUid),
     ["sm_first", "sm_retained"],
   );
 });
@@ -303,9 +309,7 @@ test("finalizer preserves canonical activity from the timeline checkpoint", asyn
     usedSessionId: "s1",
     dialogProcessId: "dialog-1",
     resolvedTurnScopeId: "turn-a",
-    dispatchRuntime: createTestRuntimeContext({
-      timelineCheckpointPersistedMessageUids: ["sm_assistant"],
-    }),
+    dispatchRuntime: { async persistCurrentTurnMessages() {} },
     getSessionTurns: async () => [
       {
         messageUid: "sm_assistant",
@@ -316,10 +320,10 @@ test("finalizer preserves canonical activity from the timeline checkpoint", asyn
         activityTimeline: [{ eventId: "guidance-analysis:1" }],
       },
     ],
-    getTurnSummaryCheckpointState: async ({ dialogProcessId, turnScopeId }) =>
-      createEmptyTurnSummaryCheckpointState({ dialogProcessId, turnScopeId }),
     finalizeRunSession: async (payload = {}) => {
       capturedFinalizePayload = payload;
+      await payload.turnPersistence.flush();
+      payload.resultMessages = await payload.turnPersistence.readResultMessages();
       return { ok: true };
     },
     userId: "u1",
@@ -341,9 +345,9 @@ test("finalizer preserves canonical activity from the timeline checkpoint", asyn
     persistenceContext: null,
   });
 
-  assert.equal(capturedFinalizePayload.persistedTurnMessages.length, 1);
+  assert.equal(capturedFinalizePayload.resultMessages.length, 1);
   assert.equal(
-    capturedFinalizePayload.persistedTurnMessages[0].activityTimeline[0].eventId,
+    capturedFinalizePayload.resultMessages[0].activityTimeline[0].eventId,
     "guidance-analysis:1",
   );
 });

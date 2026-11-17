@@ -11,6 +11,9 @@ function requireFound(value, userId, sessionId) {
 }
 
 export const requiredSessionReads = {
+  async findImmutableSessionReader() {
+    return null;
+  },
   async requireById(userId, sessionId, options) {
     return requireFound(await this.findById(userId, sessionId, options), userId, sessionId);
   },
@@ -23,12 +26,5 @@ export const fullSessionTurnViews = {
   async findTurnView(userId, sessionId, { turnScopeIds, persistenceContext }) {
     const session = await this.findById(userId, sessionId, { persistenceContext });
     return session ? { session, turnScopeIds } : null;
-  },
-  async saveTurnView(userId, session, { persistenceContext }) {
-    const persisted = await this.findById(userId, session.sessionId, { persistenceContext });
-    return this.save(userId, session, {
-      expectedAggregateVersion: Number(persisted?.aggregateVersion ?? 0),
-      persistenceContext,
-    });
   },
 };

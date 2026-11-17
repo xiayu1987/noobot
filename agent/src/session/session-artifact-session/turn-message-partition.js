@@ -3,18 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  requireTurnPartitionIdentity,
-  requireTurnPartitionMessageIdentity,
-} from "@noobot/session-protocol";
+import { partitionTurnMessages } from "@noobot/session-protocol";
 import { resolveScopedArtifactPath } from "@noobot/path-resolver";
 import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
 
-export function dialogLogicalOrder(dialogOrder) {
+function dialogLogicalOrder(dialogOrder) {
   return new Map(dialogOrder.map((entry) => [entry.dialogProcessId, entry.dialogOrdinal]));
 }
 
-export function compareTurnPlacement(logicalOrder) {
+function compareTurnPlacement(logicalOrder) {
   return (left, right) => {
     const leftDialogOrdinal = logicalOrder.get(left.dialogProcessId);
     const rightDialogOrdinal = logicalOrder.get(right.dialogProcessId);
@@ -27,27 +24,8 @@ export function compareTurnPlacement(logicalOrder) {
 }
 
 export function splitSessionMessages(messages, dialogOrder) {
-  const source = messages;
   const logicalOrder = dialogLogicalOrder(dialogOrder);
-  const buckets = new Map();
-  source.forEach((message, sourceIndex) => {
-    const { turnScopeId, dialogProcessId } = requireTurnPartitionMessageIdentity(
-      message,
-      sourceIndex,
-    );
-    const bucket = buckets.get(turnScopeId) || {
-      dialogProcessId,
-      turnScopeId,
-      firstSourceIndex: sourceIndex,
-      messages: [],
-      sourceIndices: [],
-    };
-    bucket.messages.push(message);
-    bucket.sourceIndices.push(sourceIndex);
-    buckets.set(turnScopeId, bucket);
-  });
-  for (const bucket of buckets.values()) requireTurnPartitionIdentity(bucket.messages);
-  const ordered = [...buckets.values()].sort(compareTurnPlacement(logicalOrder));
+  const ordered = partitionTurnMessages(messages).sort(compareTurnPlacement(logicalOrder));
   const turns = ordered.map((bucket, index) => {
     const artifactOrdinal = index + 1;
     return {
@@ -56,20 +34,9 @@ export function splitSessionMessages(messages, dialogOrder) {
       turnScopeId: bucket.turnScopeId,
       dialogProcessId: bucket.dialogProcessId,
       messages: bucket.messages,
-      sourceIndices: bucket.sourceIndices,
     };
   });
-  const locationBySourceIndex = new Map();
-  for (const turn of turns) {
-    turn.sourceIndices.forEach((sourceIndex, messageIndex) => {
-      locationBySourceIndex.set(sourceIndex, { turnId: turn.turnId, messageIndex });
-    });
-  }
-  const messageOrder = Array.from(source.keys(), (sourceIndex) => {
-    const location = locationBySourceIndex.get(sourceIndex);
-    return { turnId: location.turnId, messageIndex: location.messageIndex };
-  });
-  return { turns, messageOrder };
+  return { turns };
 }
 
 export function resolveTurnArtifactPath(sessionDir = "", file = "") {

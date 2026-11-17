@@ -7,10 +7,21 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
-import { attachmentTransfer, TRANSFER_VERSION } from "@noobot/semantic-transfer-protocol";
+import {
+  attachmentTransfer,
+  directTransfer,
+  TRANSFER_VERSION,
+} from "@noobot/semantic-transfer-protocol";
 import { readContextMessageValue } from "@noobot/context-protocol/message/codec";
+import {
+  createTestModelResponse,
+  readTestMainFlowControl,
+} from "../helpers/public-runtime-fixtures.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { consumeDeferredCapabilityLogs } from "../../src/capabilities/handlers/shared/attachment-log-utils.js";
+import { resolveLatestCompleteSummaryText } from "../../src/capabilities/handlers/shared/plan/latest-summary-context.js";
 
-test("inject-mode summary defaults to injecting full summary to main agent without attachment", async () => {
+test("independent summary injects full text and clears pending only after checkpoint commit", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   let ingestCalled = 0;
   const fullSummary = [
@@ -20,6 +31,7 @@ test("inject-mode summary defaults to injecting full summary to main agent witho
     "[SUMMARY_DETAIL]",
     "## 详细明细",
     "- 执行了命令A",
+    "evidence\n".repeat(LENGTH_THRESHOLDS.harness.relayInjectionMaxChars),
     "- 发现风险B",
     "[SUMMARY_END]",
   ].join("\n");
@@ -31,7 +43,8 @@ test("inject-mode summary defaults to injecting full summary to main agent witho
       history: [],
       incremental: [
         { role: "user", content: "继续任务" },
-        { role: "assistant", content: "收到" },
+        { role: "assistant", content: "", tool_calls: [{ id: "c1", name: "read_file", args: {} }] },
+        { role: "tool", content: "source", tool_call_id: "c1" },
       ],
     },
     modelResponse: { text: fullSummary },
@@ -49,10 +62,10 @@ test("inject-mode summary defaults to injecting full summary to main agent witho
         extensions: {
           harness: {
             state: {
-              flags: { guidanceSummaryMarkPending: true },
+              flags: { planningCaptured: true },
               counters: {},
               signals: {},
-              pending: {},
+              pending: { summary: true },
             },
             logs: { planning: [], guidance: [], acceptance: [], review: [] },
           },
@@ -61,15 +74,40 @@ test("inject-mode summary defaults to injecting full summary to main agent witho
     },
   };
 
-  await handler({ capability: "guidance", point: "agent.after_llm_call", ctx, meta: {} });
+  await handler({
+    capability: "guidance",
+    point: "agent.before_llm_call",
+    ctx,
+    meta: {
+      harness: {
+        capabilityModelInvoker: async (request) => {
+          assert.equal(request.streaming, true);
+          assert.equal(request.bindTools, false);
+          return createTestModelResponse(fullSummary);
+        },
+      },
+    },
+  });
+  assert.equal(ctx.agentContext.bindings.extensions.harness.state.pending.summary, true);
+  const tracedLogs = JSON.stringify(ctx.harnessCapabilityLogs);
+  assert.doesNotMatch(tracedLogs, /summary_messages_marked/);
+  await readTestMainFlowControl(ctx.agentContext).summaryCheckpoints[0].onCommitted({
+    committed: true,
+  });
+
+  const nextHook = { agentContext: ctx.agentContext };
+  assert.equal(consumeDeferredCapabilityLogs(nextHook), 1);
+  assert.equal(nextHook.harnessCapabilityLogs[0].event, "summary_messages_marked");
+  assert.equal(JSON.stringify(ctx.harnessCapabilityLogs), tracedLogs);
+  assert.equal(consumeDeferredCapabilityLogs({ agentContext: ctx.agentContext }), 0);
 
   const harnessBucket = ctx?.agentContext?.bindings?.extensions?.harness || {};
-  assert.match(
-    String(harnessBucket.summaryText || ""),
-    /^1\. \[plan=2\]\[status=done\] 完成模块分析/m,
-  );
-  assert.match(String(harnessBucket.summaryFullText || ""), /\[SUMMARY_DETAIL\]/);
+  assert.equal(harnessBucket.state.pending.summary, false);
+  for (const field of ["summaryText", "summaryFullText", "guidanceOutputs"]) {
+    assert.equal(Object.hasOwn(harnessBucket, field), false);
+  }
   assert.equal(ingestCalled, 0);
+  assert.equal(resolveLatestCompleteSummaryText({ ctx }).includes(fullSummary), true);
   assert.equal(harnessBucket.summaryDetailAttachments, undefined);
   assert.equal(
     ctx.modelContext.messages.some(
@@ -88,7 +126,7 @@ test("inject-mode summary defaults to injecting full summary to main agent witho
   );
 });
 
-test("inject-mode summary persists and injects the same complete Harness summary", async () => {
+test("independent summary persists and injects the same complete Harness summary", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   let persistedSummaryPayload = null;
   const ctx = {
@@ -99,7 +137,8 @@ test("inject-mode summary persists and injects the same complete Harness summary
       history: [],
       incremental: [
         { role: "user", content: "继续任务" },
-        { role: "assistant", content: "收到" },
+        { role: "assistant", content: "", tool_calls: [{ id: "c1", name: "read_file", args: {} }] },
+        { role: "tool", content: "source", tool_call_id: "c1" },
       ],
     },
     modelResponse: {
@@ -127,6 +166,30 @@ test("inject-mode summary persists and injects the same complete Harness summary
           sharedTools: {
             semanticTransfer: {
               async transferSemanticContent(payload = {}) {
+                if (payload.fullText !== undefined) {
+                  return {
+                    transferEnvelopes: [
+                      directTransfer({
+                        transferId: "transfer-summary-text",
+                        presentationMessageId: "message-summary-text",
+                        identity: {
+                          sessionId: "s1",
+                          turnScopeId: "turn-summary-1",
+                          runId: "run-summary-1",
+                          producer: payload.producer,
+                        },
+                        direction: "output",
+                        content: payload.fullText,
+                        intent: {
+                          source: "plugin",
+                          reason: "harness_summary",
+                          scenario: "harness",
+                          strategy: "harness_summary",
+                        },
+                      }),
+                    ],
+                  };
+                }
                 persistedSummaryPayload = payload;
                 return {
                   transferEnvelopes: [
@@ -170,10 +233,10 @@ test("inject-mode summary persists and injects the same complete Harness summary
         extensions: {
           harness: {
             state: {
-              flags: { guidanceSummaryMarkPending: true },
+              flags: { planningCaptured: true },
               counters: {},
               signals: {},
-              pending: {},
+              pending: { summary: true },
             },
             logs: { planning: [], guidance: [], acceptance: [], review: [] },
           },
@@ -181,16 +244,20 @@ test("inject-mode summary persists and injects the same complete Harness summary
       },
     },
   };
-  const meta = { harness: { summaryDetailSaveToAttachment: true } };
+  const meta = {
+    harness: {
+      summaryDetailSaveToAttachment: true,
+      capabilityModelInvoker: async () => createTestModelResponse(ctx.modelResponse.text),
+    },
+  };
 
-  await handler({ capability: "guidance", point: "agent.after_llm_call", ctx, meta });
+  await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
+  await readTestMainFlowControl(ctx.agentContext).summaryCheckpoints[0].onCommitted({
+    committed: true,
+  });
 
   const harnessBucket = ctx?.agentContext?.bindings?.extensions?.harness || {};
-  assert.match(
-    String(harnessBucket.summaryText || ""),
-    /^1\. \[plan=2\]\[status=done\] 完成模块分析/m,
-  );
-  assert.doesNotMatch(String(harnessBucket.summaryText || ""), /SUMMARY_DETAIL/);
+  assert.equal(harnessBucket.state.pending.summary, false);
 
   const injectedSummaryMessage = [...ctx.modelContext.messages]
     .reverse()

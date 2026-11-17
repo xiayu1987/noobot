@@ -14,7 +14,7 @@ function createService() {
   let resolvedScopeCount = 0;
   const service = new ExecutionLogService({
     executionRepo: {
-      async appendLog(...args) {
+      async appendLogs(...args) {
         appendedLogs.push(args);
       },
     },
@@ -82,9 +82,9 @@ test("ExecutionLogService preserves ordinary and failure execution logs", async 
   });
 
   assert.deepEqual(result, { appended: true, skipped: false });
-  assert.equal(harness.resolvedScopeCount, 1);
+  assert.equal(harness.resolvedScopeCount, 0);
   assert.equal(harness.appendedLogs.length, 1);
-  assert.equal(harness.appendedLogs[0][2].event, "message_persistence_failed");
+  assert.equal(harness.appendedLogs[0][2][0].event, "message_persistence_failed");
 });
 
 test("ExecutionLogService can enable full turn diagnostics through the environment", async (t) => {
@@ -97,7 +97,7 @@ test("ExecutionLogService can enable full turn diagnostics through the environme
   });
 
   assert.deepEqual(result, { appended: true, skipped: false });
-  assert.equal(harness.resolvedScopeCount, 1);
+  assert.equal(harness.resolvedScopeCount, 0);
   assert.equal(harness.appendedLogs.length, 1);
 });
 
