@@ -22,6 +22,7 @@ import {
   resolveHostShell,
   resolveLibreOfficeExecutable,
   supportsHeadedBrowser,
+  syncDirectory,
   terminateProcessTree,
   usesDetachedProcessGroup,
   writeFileAtomic,
@@ -32,6 +33,75 @@ test("platform aliases normalize to one canonical identity", () => {
   assert.equal(normalizePlatform("win32"), PLATFORM.WINDOWS);
   assert.equal(normalizePlatform("darwin"), PLATFORM.MACOS);
   assert.equal(normalizePlatform("linux"), PLATFORM.LINUX);
+});
+
+test("directory synchronization owns Windows capability differences", async () => {
+  for (const platform of ["win32", "win", "windows"]) {
+    assert.equal(
+      await syncDirectory({
+        directory: "directory",
+        platform,
+        open: () => {
+          assert.fail("Windows must not open directory handles");
+        },
+      }),
+      false,
+    );
+  }
+});
+
+for (const platform of ["linux", "darwin"]) {
+  test(`${platform} directory synchronization closes handles and preserves failures`, async () => {
+    const syncError = new Error("sync failed");
+    const closeError = new Error("close failed");
+    const openError = new Error("open failed");
+    await assert.rejects(
+      syncDirectory({
+        directory: "directory",
+        platform,
+        open: async () => {
+          throw openError;
+        },
+      }),
+      (error) => error === openError,
+    );
+    for (const failures of [[], [syncError], [closeError], [syncError, closeError]]) {
+      const calls = [];
+      const operation = syncDirectory({
+        directory: "directory",
+        platform,
+        open: async (file, flags) => {
+          assert.equal(file, "directory");
+          assert.equal(flags, "r");
+          return {
+            async sync() {
+              calls.push("sync");
+              if (failures.includes(syncError)) throw syncError;
+            },
+            async close() {
+              calls.push("close");
+              if (failures.includes(closeError)) throw closeError;
+            },
+          };
+        },
+      });
+      if (!failures.length) assert.equal(await operation, true);
+      else
+        await assert.rejects(operation, (error) => {
+          if (failures.length === 1) return error === failures[0];
+          assert.ok(error instanceof AggregateError);
+          assert.deepEqual(error.errors, failures);
+          assert.equal(error.cause, syncError);
+          return true;
+        });
+      assert.deepEqual(calls, ["sync", "close"]);
+    }
+  });
+}
+
+test("directory synchronization requires an injected open operation on every platform", async () => {
+  for (const platform of ["win32", "linux", "darwin"])
+    await assert.rejects(syncDirectory({ directory: "directory", platform }), TypeError);
 });
 
 test("host shell selection is owned by canonical platform identity", () => {

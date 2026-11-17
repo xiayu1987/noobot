@@ -5,6 +5,7 @@
  */
 import fs from "node:fs/promises";
 import path from "node:path";
+import { syncDirectory } from "@noobot/platform-compatibility/file-system";
 import {
   EXECUTION_PROJECTION_PENDING_SUFFIX,
   executionProjectionOutputRecordBytes,
@@ -47,9 +48,7 @@ export function syncOutputDirectory(directory) {
   pendingDirectorySyncs.set(directory, promise);
   setImmediate(() => {
     pendingDirectorySyncs.delete(directory);
-    fs.open(directory, "r")
-      .then((handle) => withOutputHandle(handle, (opened) => opened.sync()))
-      .then(resolve, reject);
+    syncDirectory({ directory, open: fs.open }).then(resolve, reject);
   });
   return promise;
 }

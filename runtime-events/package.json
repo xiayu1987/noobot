@@ -13,6 +13,7 @@
     "./testing": "./src/testing.js"
   },
   "dependencies": {
+    "@noobot/platform-compatibility": "file:../platform-compatibility",
     "@noobot/shared": "file:../shared",
     "@noobot/sanitize": "file:../sanitize",
     "@noobot/runtime-topology-protocol": "file:../runtime-topology-protocol",

@@ -12,3 +12,5 @@ Domain packages retain their own semantics:
 - Desktop dependency management owns installation and discovery; it publishes resolved executable paths through the declared environment contract.
 
 Callers must pass explicit platform context in tests. They must not reproduce platform aliases, error-code tables, executable defaults, or process termination branches.
+
+`syncDirectory({ directory, open, platform })` owns directory durability barriers and handle cleanup. Callers use the same operation on every platform and inject their file-open primitive. It returns `true` after synchronizing and closing a directory, or `false` on Windows where Node.js directory fsync is unavailable. Open, sync, and close failures propagate; simultaneous sync and close failures are aggregated. File contents must still be flushed by callers on every platform. Linux and macOS retain directory synchronization; Windows does not provide the same directory-entry durability guarantee across power loss.

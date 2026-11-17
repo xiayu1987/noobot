@@ -100,6 +100,11 @@ sync their bytes on every batch; directory sync knowledge is bounded and tied to
 the observed file identity. Creation, rotation, replacement and failed appends
 require a new directory sync before acknowledgement.
 
+Directory barriers apply on Linux and macOS. On Windows, Node.js cannot fsync
+directory handles, so runtime output skips that barrier while retaining file
+content flushes and file I/O errors. Directory-entry durability across power loss
+therefore differs from the Linux and macOS guarantee.
+
 Invalid envelopes, ownership violations and invalid session storage reject batch preparation before any
 writes start. Missing registration and transport I/O errors return `{ ok: false, error }` per record;
 runtime-events reports those failures to stderr. Callers that need delivery guarantees must handle both

@@ -149,8 +149,18 @@ try {
       message: String(error?.message || error || ""),
     },
   });
-  await flushJsonLineBatches();
-  await eventWrite;
+  const reporting = await Promise.allSettled([flushJsonLineBatches(), eventWrite]);
+  const reportingErrors = reporting
+    .filter((result) => result.status === "rejected")
+    .map((result) => result.reason);
+  if (reportingErrors.length)
+    throw new AggregateError(
+      [error, ...reportingErrors],
+      "Service startup and failure logging failed",
+      {
+        cause: error,
+      },
+    );
   throw error;
 } finally {
   stopStartupHeartbeat();

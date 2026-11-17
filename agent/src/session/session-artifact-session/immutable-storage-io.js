@@ -6,6 +6,7 @@
 import { hash, randomUUID } from "node:crypto";
 import { filePath as path } from "@noobot/path-resolver";
 import { renameFileAtomic } from "@noobot/platform-compatibility/atomic-file-write";
+import { syncDirectory } from "@noobot/platform-compatibility/file-system";
 import { immutablePublicationTemporaryFile } from "@noobot/session-protocol/immutable-storage";
 import { fsOpen, fsRename, fsRm } from "../../shared/storage/fs-adapter.js";
 import { recordStorageWork } from "./storage-transaction.js";
@@ -38,14 +39,8 @@ export async function withStorageCleanup(operation, cleanup) {
 }
 
 export async function syncStorageDirectory(directory) {
-  const handle = await fsOpen(directory, "r");
-  await withStorageCleanup(
-    async () => {
-      await handle.sync();
-      recordStorageWork("immutableDirectorySyncs");
-    },
-    () => handle.close(),
-  );
+  if (await syncDirectory({ directory, open: fsOpen }))
+    recordStorageWork("immutableDirectorySyncs");
 }
 
 export async function publishSyncedFile(file, write, syncWork) {
