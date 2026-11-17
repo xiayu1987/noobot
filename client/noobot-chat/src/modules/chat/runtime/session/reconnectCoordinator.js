@@ -158,10 +158,11 @@ export function createReconnectCoordinator({
         requestSessionNavigation(reconnectSessionId);
         const sessionId = text(activeSession.value.sessionId);
         const currentTurn = resolveActiveTurn();
+        if (currentTurn === null) return;
         const execution = selectTurnExecution(
           turnRuntimeRegistry.value,
           sessionId,
-          currentTurn?.turnScopeId,
+          currentTurn.turnScopeId,
         );
         if (!execution) return;
         const { executionId, rootExecutionId } = execution;

@@ -27,6 +27,18 @@ export const SESSION_CHANNELS = Object.freeze({
 });
 const SESSION_CHANNEL_SET = new Set(Object.values(SESSION_CHANNELS));
 
+export function requireSessionLogReceipt(receipt) {
+  if (
+    !["ack", "error"].includes(receipt.event) ||
+    !Number.isSafeInteger(receipt.count) ||
+    receipt.count < 0 ||
+    (receipt.event === "error" && !text(receipt.error))
+  ) {
+    throw new TypeError("Invalid session log receipt");
+  }
+  return receipt;
+}
+
 export function requireSessionLogChannel(channel) {
   if (!SESSION_CHANNEL_SET.has(channel)) {
     throw new Error(`Invalid session log channel: ${channel}`);

@@ -7,6 +7,7 @@
 import {
   buildSessionLogRecord,
   isSessionLogDebugEvent,
+  requireSessionLogReceipt,
   SESSION_CHANNELS,
 } from "@noobot/runtime-events/session-log-protocol";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
@@ -120,11 +121,18 @@ export function createSessionLogWebSocketClient({
       updatePolicy(parsed.policy);
       return;
     }
-    if (parsed?.event !== "ack") return;
-    const ackCount = Math.max(0, Math.min(Number(parsed.count || 1), inFlight.length));
-    inFlight.splice(0, ackCount);
+    if (!["ack", "error"].includes(parsed?.event)) return;
+    const receipt = requireSessionLogReceipt(parsed);
+    if (receipt.count > inFlight.length)
+      throw new Error("Session log receipt exceeds in-flight records");
+    const settled = inFlight.splice(0, receipt.count);
+    if (receipt.event === "error") {
+      rejectedReliableCount += settled.filter((entry) => entry.reliable).length;
+      droppedDebugCount += settled.filter((entry) => !entry.reliable).length;
+      console.error("[noobot:session-log] server rejected records", receipt.error);
+    }
     logDiagnostic("ack", {
-      count: ackCount,
+      count: receipt.count,
       queueLength: reliableQueue.length + debugQueue.length,
       inFlightLength: inFlight.length,
     });

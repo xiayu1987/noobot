@@ -108,6 +108,46 @@ describe("sessionLogWebSocketClient", () => {
     expect(client.status()).toEqual(expect.objectContaining({ queueLength: 0, inFlightLength: 0 }));
   });
 
+  it("settles rejected records and sends later records without treating rejection as success", async () => {
+    const { createSessionLogWebSocketClient } = await importClient();
+    const client = createSessionLogWebSocketClient({ resolveWebSocketUrl: () => "ws://test/logs" });
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      client.log({ scope: "session", sessionId: "missing", category: "transport", event: "first" });
+      const socket = MockWebSocket.instances[0];
+      socket.readyState = MockWebSocket.OPEN;
+      socket.onopen();
+      client.log({
+        scope: "session",
+        sessionId: "registered",
+        category: "transport",
+        event: "later",
+      });
+      expect(socket.sent).toHaveLength(1);
+      socket.onmessage({
+        data: JSON.stringify({ event: "error", count: 1, error: "Session is not registered" }),
+      });
+      expect(error).toHaveBeenCalledWith(
+        "[noobot:session-log] server rejected records",
+        "Session is not registered",
+      );
+      expect(sentBusinessRecords(socket).map((record) => record.event)).toEqual(["first", "later"]);
+      expect(client.status()).toMatchObject({
+        rejectedReliableCount: 1,
+        inFlightLength: 1,
+        queueLength: 0,
+      });
+      socket.onmessage({ data: JSON.stringify({ event: "ack", count: 1 }) });
+      expect(client.status()).toMatchObject({ rejectedReliableCount: 1, inFlightLength: 0 });
+      expect(() => socket.onmessage({ data: JSON.stringify({ event: "ack", count: 1 }) })).toThrow(
+        "exceeds in-flight",
+      );
+    } finally {
+      client.dispose();
+      error.mockRestore();
+    }
+  });
+
   it("rejects protocol-invalid records without scope and counts them", async () => {
     const { createSessionLogWebSocketClient } = await importClient();
     const client = createSessionLogWebSocketClient({ resolveWebSocketUrl: () => "ws://test/logs" });
@@ -156,7 +196,7 @@ describe("sessionLogWebSocketClient", () => {
     for (let batch = 0; batch < 5; batch += 1) {
       socket.onmessage?.({ data: JSON.stringify({ event: "ack", count: 100 }) });
     }
-    socket.onmessage?.({ data: JSON.stringify({ event: "ack", count: 100 }) });
+    expect(client.status()).toMatchObject({ inFlightLength: 0, queueLength: 0 });
     const records = sentRecords(socket);
     expect(
       records.filter((record) => record.event === "frontend.sessionLogWs.queueCapacityExceeded"),

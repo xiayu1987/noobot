@@ -130,8 +130,8 @@ chmod +x stop-services.sh
 
 ## Requirements
 
-- Node.js 24.21.0 (recommended; Node.js 26.9.x is also supported)
-- npm 12.0.2 (npm 12.x)
+- Node.js `^24.21.0 || ^26.9.0` (Node.js 24 recommended; see root `package.json`)
+- npm `>=12.0.2 <13` (the repository pins npm 12.0.2)
 - Linux/macOS
 
 ## Workspace Dependency Management
@@ -140,12 +140,16 @@ This repository uses npm workspaces from the root `package.json`.
 
 ```bash
 cd noobot
-npm install --workspaces
+npm ci
+npm run install:mcp-test-service
 ```
 
 Useful commands:
 
 ```bash
+# run repository quality checks
+npm run check:quality
+
 # run all test scripts that exist
 npm run test
 
@@ -235,6 +239,7 @@ desktop client's `dist/` directory.
 - Contributing guide: [`CONTRIBUTING.md`](./CONTRIBUTING.md)
 - Coding standard: [`CODING-STANDARD.md`](./CODING-STANDARD.md)
 - Backend docs: [English](./service/README.md) | [中文](./service/README.zh-CN.md)
+- Architecture, protocols, runtime parameters, and testing: [documentation index](./docs/README.md)
 
 Environment variables for `start.sh`:
 

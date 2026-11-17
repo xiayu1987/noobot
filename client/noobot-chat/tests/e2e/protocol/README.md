@@ -5,10 +5,8 @@
 ## English
 
 This directory is the single implementation entry point for Noobot browser protocol E2E tests.
-See the complete acceptance plan in
-[`../../../../../docs/browser-protocol-e2e-test-plan.en.md`](../../../../../docs/browser-protocol-e2e-test-plan.en.md),
-with the corresponding Chinese view in
-[`../../../../../docs/browser-protocol-e2e-test-plan.zh-CN.md`](../../../../../docs/browser-protocol-e2e-test-plan.zh-CN.md).
+Acceptance conditions live in the executable [specs](./specs/README.md), protocol packages,
+and `helpers/model-observation-policy.js`. Run the commands below from the repository root.
 
 Directory responsibilities:
 
@@ -41,10 +39,10 @@ facts through files or internal APIs. Protocol scenarios run serially with one w
 required by PBE-014, PBE-015, PBE-023, PBE-024, and PBE-045 is created inside each scenario.
 
 ```bash
-npx playwright install chromium
-npm run test:e2e:protocol:smoke
-npm run test:e2e:protocol:core
-npm run test:e2e:protocol:full
+npm exec -w client/noobot-chat -- playwright install chromium
+npm run -w client/noobot-chat test:e2e:protocol:smoke
+npm run -w client/noobot-chat test:e2e:protocol:core
+npm run -w client/noobot-chat test:e2e:protocol:full
 ```
 
 Evidence is written to `test-results/protocol/`. Credentials must never enter logs, traces,
@@ -81,19 +79,20 @@ counts, orphan detail files, and the `sessions.json` availability contract. A mi
 invocation, a forbidden invocation, an unregistered/duplicate PBE, or an obsolete policy entry is
 a hard failure.
 
-### Implementation status
+### Scenario maintenance
 
-All registered scenarios in PBE-002-003, PBE-006-017, and PBE-021-050 are implemented. PBE-001,
-PBE-004, and PBE-018 are covered by strict supersets PBE-002, PBE-006, and PBE-016/017. Every spec
-must import `test` and `expect` from `fixtures/noobot.fixture.js`. Permanent `test.skip` entries and
-placeholder scenarios without business assertions are forbidden.
+The current scenario set is defined by `specs/*.spec.js` and checked against the observation
+policy when Playwright loads its configuration. Every spec must import `test` and `expect`
+from `fixtures/noobot.fixture.js`. Permanent `test.skip` entries and placeholder scenarios
+without business assertions are forbidden. PBE-058 uses the versioned mixed-session workload;
+see the [performance guide](../../../../../scripts/e2e-docker/PERFORMANCE.md) for its isolated runner,
+reports, and gates.
 
 ## 中文
 
-本目录是 Noobot 浏览器协议闭环测试的唯一实现入口。完整验收定义见
-[`../../../../../docs/browser-protocol-e2e-test-plan.zh-CN.md`](../../../../../docs/browser-protocol-e2e-test-plan.zh-CN.md)。
-英文版见
-[`../../../../../docs/browser-protocol-e2e-test-plan.en.md`](../../../../../docs/browser-protocol-e2e-test-plan.en.md)。
+本目录是 Noobot 浏览器协议闭环测试的唯一实现入口。验收条件以可执行的
+[spec](./specs/README.md)、协议包和 `helpers/model-observation-policy.js` 为准。
+以下命令均从仓库根目录执行。
 
 目录职责：
 
@@ -124,10 +123,10 @@ export NOOBOT_RUNTIME_EVENT_MODEL_CONTEXT_TRACE_DEBUG='true'
 构造协议要求的并发，PBE-045 在单 Turn 内构造并行工具停止。禁止用场景间并行给共享用户连接和真实模型调用引入非业务资源竞争。
 
 ```bash
-npx playwright install chromium
-npm run test:e2e:protocol:smoke
-npm run test:e2e:protocol:core
-npm run test:e2e:protocol:full
+npm exec -w client/noobot-chat -- playwright install chromium
+npm run -w client/noobot-chat test:e2e:protocol:smoke
+npm run -w client/noobot-chat test:e2e:protocol:core
+npm run -w client/noobot-chat test:e2e:protocol:full
 ```
 
 证据默认写入仓库根目录的 `test-results/protocol/`。凭证禁止进入日志、trace、截图或报告。
@@ -180,10 +179,9 @@ Playwright 配置加载时校验策略表与全部 spec 的 PBE 编号一一闭�
 小结与增量 Context 生产消息；capability、工具、MCP、memory 等专用模型仍由各自领域生产者组装
 消息，E2E 不把这些专用调用错误套用成主 Agent 的 Context 策略。
 
-## 实现状态
+## 场景维护
 
-基础配置、证据捕获、认证和 Session fixture、协议断言入口已经建立。新增用例必须从
-`fixtures/noobot.fixture.js` 导入 `test` 和 `expect`，从而保证所有用例使用同一套捕获和审计链。
-PBE-002～003、PBE-006～017、PBE-021～048 中已登记场景均已落地；PBE-001、PBE-004 和 PBE-018
-分别按严格包含关系合并到 PBE-002、PBE-006 和 PBE-016/017。所有场景从统一 fixture 运行，
-禁止用 `test.skip` 或无业务断言的占位测试伪装覆盖率。
+当前场景集合由 `specs/*.spec.js` 定义，Playwright 加载配置时校验它与观测策略表一致。
+新增用例必须从 `fixtures/noobot.fixture.js` 导入 `test` 和 `expect`，共用同一捕获和审计链。
+禁止提交永久 `test.skip` 或无业务断言的占位测试。PBE-058 使用版本化混合会话负载；
+隔离运行入口、报告和门禁见[性能运行说明](../../../../../scripts/e2e-docker/PERFORMANCE.md)。

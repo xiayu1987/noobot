@@ -22,7 +22,9 @@ import { StreamEventEnum } from "../../../../../../src/modules/chat/model/chatCo
 
 describe("createReconnectCoordinator", () => {
   it("declares the active child session parent identity on reconnect", async () => {
-    const chatWebSocketClient = { reconnect: vi.fn(async () => {}) };
+    const chatWebSocketClient = { reconnect: vi.fn(async () => {}), requestJson: vi.fn() };
+    const logSessionSystemEvent = vi.fn();
+    const notify = vi.fn();
     const requestSessionNavigation = vi.fn();
     const coordinator = createReconnectCoordinator({
       requestSessionNavigation,
@@ -35,8 +37,8 @@ describe("createReconnectCoordinator", () => {
       chatWebSocketClient,
       reconnectReplay: {},
       resolveActiveTurn: () => null,
-      logSessionSystemEvent: vi.fn(),
-      notify: vi.fn(),
+      logSessionSystemEvent,
+      notify,
       translate: (key) => key,
     });
 
@@ -50,6 +52,9 @@ describe("createReconnectCoordinator", () => {
       },
     });
     expect("userId" in request).toBe(false);
+    expect(chatWebSocketClient.requestJson).not.toHaveBeenCalled();
+    expect(logSessionSystemEvent).not.toHaveBeenCalled();
+    expect(notify).not.toHaveBeenCalled();
   });
 
   it("finishes the ordered replay queue after a packet rejection", async () => {

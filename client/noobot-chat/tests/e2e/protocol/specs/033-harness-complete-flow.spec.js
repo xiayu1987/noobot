@@ -323,11 +323,6 @@ test("@full PBE-033 Harness 低轮次完整流程与模型注入闭环", async (
     expect(event.detail.triggerTurns, eventName).toBe(triggerTurns);
     expect(event.detail.thresholdSource, eventName).toBe("runtime");
   }
-  const summaryMark = events.find((event) => event.event === "summary_messages_marked");
-  expect(
-    Number(summaryMark.detail?.markedCount || summaryMark.detail?.messageCount || 0),
-  ).toBeGreaterThan(0);
-
   const modelTraces = modelInvocationTraces(
     await readSessionExecutionEventTree(noobot.userId, noobot.sessionId),
   ).filter((record) => record.turnScopeId === send.identity.turnScopeId);
@@ -379,6 +374,9 @@ test("@full PBE-033 Harness 低轮次完整流程与模型注入闭环", async (
   }
 
   const session = await readSessionFact(noobot.userId, noobot.sessionId);
+  expect(events.filter((event) => event.event === "summary_messages_marked")).toHaveLength(
+    session.turnSummaryCheckpoints[send.identity.turnScopeId].checkpointRevision,
+  );
   assertCheckpointMessages(
     session,
     messages,

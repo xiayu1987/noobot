@@ -3,7 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { buildSessionLogRecord, SESSION_LOG_DEBUG_CATEGORY } from "./session-log-protocol.js";
+import {
+  buildSessionLogRecord,
+  requireSessionLogReceipt,
+  SESSION_LOG_DEBUG_CATEGORY,
+} from "./session-log-protocol.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
@@ -48,10 +52,14 @@ export function createSessionChannelWebSocketClient({
     } catch {
       return;
     }
-    if (parsed?.event !== "ack") return;
+    if (!["ack", "error"].includes(parsed?.event)) return;
+    const receipt = requireSessionLogReceipt(parsed);
     const inFlight = getInFlight(key);
-    const ackCount = Math.max(0, Math.min(Number(parsed.count || 1), inFlight.length));
-    inFlight.splice(0, ackCount);
+    if (receipt.count > inFlight.length)
+      throw new Error("Session log receipt exceeds in-flight records");
+    inFlight.splice(0, receipt.count);
+    if (receipt.event === "error")
+      console.error("[noobot:session-log] server rejected records", receipt.error);
   }
 
   function scheduleReconnect(key = "") {

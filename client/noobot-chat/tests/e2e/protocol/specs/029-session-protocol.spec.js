@@ -4,13 +4,17 @@
  * SPDX-License-Identifier: MIT
  */
 import { test, expect } from "../fixtures/noobot.fixture.js";
-import { SESSION_ARTIFACT_SCHEMA_VERSION } from "@noobot/session-protocol";
+import fs from "node:fs/promises";
+import {
+  decodeImmutableSessionHead,
+  IMMUTABLE_CURRENT_SESSION_FORMAT,
+  IMMUTABLE_SESSION_HEAD_FILE,
+} from "@noobot/session-protocol/immutable-storage";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { fixedAttachment, selectPlugins } from "../helpers/browser-actions.js";
 import { assertNoForbiddenErrors } from "../helpers/log-assertions.js";
 import {
   readSessionExecutionEvents,
-  readJson,
   readSessionFact,
   readSessionRuntimeEvents,
   sessionRoot,
@@ -102,21 +106,26 @@ test("@core PBE-029 统一 Session 协议闭环审计", async ({ noobot, protoco
     .poll(() => readSessionFact(noobot.userId, noobot.sessionId), { timeout: 15000 })
     .toMatchObject({
       sessionId: noobot.sessionId,
-      schemaVersion: SESSION_ARTIFACT_SCHEMA_VERSION,
     });
 
   const persisted = await readSessionFact(noobot.userId, noobot.sessionId);
   expect(Number.isSafeInteger(persisted.aggregateVersion)).toBe(true);
   expect(persisted.aggregateVersion).toBeGreaterThanOrEqual(5);
-  const storedSession = await readJson(
-    path.join(await sessionRoot(noobot.userId, noobot.sessionId), "session.json"),
+  const root = await sessionRoot(noobot.userId, noobot.sessionId);
+  const head = decodeImmutableSessionHead(
+    await fs.readFile(path.join(root, IMMUTABLE_SESSION_HEAD_FILE), "utf8"),
+    noobot.sessionId,
+    IMMUTABLE_CURRENT_SESSION_FORMAT,
   );
-  expect("messages" in storedSession).toBe(false);
-  expect(new Set(persisted.turnOrder.map((turn) => turn.turnScopeId)).size).toBe(
-    persisted.turnOrder.length,
+  expect(head.generation).toBeGreaterThan(0);
+  await expect(fs.access(path.join(root, "session.json"))).rejects.toMatchObject({
+    code: "ENOENT",
+  });
+  expect(new Set(persisted.dialogOrder.map((turn) => turn.turnScopeId)).size).toBe(
+    persisted.dialogOrder.length,
   );
-  expect(new Set(persisted.messageOrder.map((message) => message.messageUid)).size).toBe(
-    persisted.messageOrder.length,
+  expect(new Set(persisted.messages.map((message) => message.messageUid)).size).toBe(
+    persisted.messages.length,
   );
   assertResendReplacementIdentityChain(commands, persisted);
   assertNoLegacySessionProtocolKeys(persisted);

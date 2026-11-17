@@ -1,17 +1,18 @@
-# Plugin Policy Contract (Agent-owned, Plugin-declared)
-
-Last updated: **August 5, 2026**
+# Plugin Policy Contract
 
 This document defines the unified runtime policy contract between Agent and plugins (for example harness/workflow).
+
+Policy merge and tool selection are defined by
+[`agent-config-protocol/src/policy/tool-policy.js`](../agent-config-protocol/src/policy/tool-policy.js).
+The [plugin activation protocol](../plugin-protocol/src/activation.js) declares `policy.patch`;
+the Agent supplies that port through its plugin host facade.
 
 ---
 
 ## 1) Ownership boundary
 
-- **Agent owns**
-  - policy field schema and normalization
-  - merge precedence
-  - actual tool filtering execution
+- **Configuration protocol owns** policy merging and tool selection rules.
+- **Agent owns** activation, host port injection, and application of the resolved policy.
 - **Plugin owns**
   - policy intent declaration (what to deny/allow for its own scenario)
   - calling the exposed policy API during plugin registration
@@ -60,11 +61,12 @@ For one run:
 
 At tool registry/policy phase:
 
-1. `allowToolNames` filter (if configured)
-2. `denyToolNames` filter (deny has final veto)
-3. dedupe by tool name
+1. Apply `mode` (`custom_only` / `append_custom`) and explicit tool inclusion.
+2. Resolve `allowToolNames`, including programming-required and declared plugin tools where applicable.
+3. Apply `denyToolNames` (deny has final veto).
+4. Remove repeated object references and require unique tool identities; conflicting names fail validation.
 
-At runtime tool build phase, deny is enforced again for safety.
+Tool identities here are internal names, not model-facing `bindingName` aliases.
 
 ---
 
@@ -83,6 +85,6 @@ export function activate(host = {}, config = {}) {
 
 ## 6) Practical guidance
 
-- New plugin: only call `api.policy.*`, do not assume engine internals.
+- New plugin: call the exposed `host.policy.patch` port, do not assume engine internals.
 - Existing plugin: migrate old fields to `denyToolNames`.
 - If multiple plugins declare deny lists in one run, Agent merges and de-duplicates.

@@ -43,16 +43,17 @@ export function assertNoLegacySessionProtocolKeys(value) {
   expect(violations).toEqual([]);
 }
 
-export function assertResendReplacementIdentityChain(commands = [], session = {}) {
+export function assertResendReplacementIdentityChain(commands, session) {
   const resendCommands = commands.filter((command = {}) => command.commandType === "turn.resend");
-  const turnOrder = Array.isArray(session?.turnOrder) ? session.turnOrder : [];
-  const replacements = Object.values(session?.turnLifecycle?.replacedTurns || {});
+  const { dialogOrder, turnLifecycle } = session;
+  expect(Array.isArray(dialogOrder)).toBe(true);
+  const replacements = Object.values(turnLifecycle.replacedTurns);
   for (const command of resendCommands) {
     const dialogProcessId = text(command?.identity?.dialogProcessId);
     const turnScopeId = text(command?.identity?.turnScopeId);
     expect(dialogProcessId).toBeTruthy();
     expect(turnScopeId).toBeTruthy();
-    const materializedTurn = turnOrder.find((turn = {}) => turn.turnScopeId === turnScopeId);
+    const materializedTurn = dialogOrder.find((turn) => turn.turnScopeId === turnScopeId);
     const replacementTombstones = replacements.filter(
       (replacement = {}) => replacement.replacementTurnScopeId === turnScopeId,
     );

@@ -8,6 +8,8 @@ import { test, expect } from "../fixtures/noobot.fixture.js";
 import { parseTaskCheckContent } from "@noobot/context-protocol/task/check";
 import { resolveSessionMessageRecordInternalMessageType } from "@noobot/session-protocol";
 import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/policy/injected-message";
+import { decodeToolResultText } from "@noobot/event-protocol/tool-result-v24";
+import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import {
   selectPlugins,
   sendMessage,
@@ -38,8 +40,7 @@ const toolCallArgs = (call = {}) => JSON.parse(String(call.function?.arguments |
 
 function toolResultPayload(message = {}) {
   if (message.role !== "tool") return null;
-  const payload = JSON.parse(String(message.content || "{}"));
-  return payload && typeof payload === "object" ? payload : null;
+  return decodeToolResultText(message.content);
 }
 
 function taskCheckCalls(messages = []) {
@@ -85,7 +86,7 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
   test.setTimeout(900000);
   await selectPlugins(noobot.page, []);
   await setRunSummaryPolicy(noobot.page, {
-    phaseSummaryLoopTurns: 3,
+    phaseSummaryLoopTurns: 4,
     taskCheckLoopTurns: 2,
   });
   await sendMessage(
@@ -103,7 +104,7 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
 
   const firstSend = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
   expect(firstSend.preferences.summaryPolicy).toEqual({
-    phaseSummaryLoopTurns: 3,
+    phaseSummaryLoopTurns: 4,
     taskCheckLoopTurns: 2,
   });
   expect(firstSend.preferences.frontendThresholdsEnabled).toBe(true);
@@ -141,7 +142,7 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
   const markerCounts = firstInvocations.map(
     (invocation) =>
       invocation.data.messages.preview.filter(
-        (message) => message.internalType === "noobot.task_check_prompt",
+        (message) => message.internalType === CONTEXT_INJECTED_MESSAGE_TYPE.TASK_CHECK_PROMPT,
       ).length,
   );
   expect(markerCounts.some((count) => count > 0)).toBe(true);
@@ -149,14 +150,18 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
   const firstMessages = await readSessionTurnMessages(noobot.userId, noobot.sessionId);
   const taskCheckPrompts = firstMessages.filter(
     (message) =>
-      resolveSessionMessageRecordInternalMessageType(message) === "noobot.task_check_prompt",
+      resolveSessionMessageRecordInternalMessageType(message) ===
+      CONTEXT_INJECTED_MESSAGE_TYPE.TASK_CHECK_PROMPT,
   );
   expect(taskCheckPrompts).toHaveLength(taskCheckRequired.length);
-  expect(
-    taskCheckPrompts.every(
-      (message) => message.role === "user" && message.type === "context_control",
-    ),
-  ).toBe(true);
+  for (const message of taskCheckPrompts) {
+    expect(message).toMatchObject({
+      role: "user",
+      type: "message",
+      injectedMessage: true,
+      injectedMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.TASK_CHECK_PROMPT,
+    });
+  }
   const checks = taskCheckCalls(firstMessages);
   expect(checks.length).toBeGreaterThan(0);
   expect(checks.length).toBeLessThanOrEqual(taskCheckRequired.length);
@@ -234,7 +239,10 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
   );
   expect(preservedCheckResult).toBeTruthy();
   const postCheckpointInvocations = firstInvocations.filter(
-    (invocation) => invocation.data.context.summaryCheckpointRevision >= 1,
+    (invocation) =>
+      invocation.data.invocation.contextSequencePolicy ===
+        MODEL_CONTEXT_SEQUENCE_POLICY.CHECKPOINT_APPEND_ONLY &&
+      invocation.data.context.summaryCheckpointRevision >= 1,
   );
   expect(postCheckpointInvocations.length).toBeGreaterThan(0);
   for (const messageUid of preservedCheckpointEvidenceMessageUids) {
@@ -382,7 +390,7 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
   expect(
     secondInvocations.every((invocation) =>
       invocation.data.messages.preview.every(
-        (message) => message.internalType !== "noobot.task_check_prompt",
+        (message) => message.internalType !== CONTEXT_INJECTED_MESSAGE_TYPE.TASK_CHECK_PROMPT,
       ),
     ),
   ).toBe(true);

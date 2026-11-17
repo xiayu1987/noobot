@@ -243,7 +243,75 @@ test("log-websocket-server: reliable write failures return error and never ACK",
       false,
     );
     assert.equal(messages.at(-1).error, "simulated reliable failure");
+    assert.equal(messages.at(-1).count, 1);
   } finally {
+    await closeLogServer(server, registered);
+  }
+});
+
+test("log-websocket-server: a partially failed batch settles before later messages", async () => {
+  let releasePending;
+  let markPendingStarted;
+  const pending = new Promise((resolve) => {
+    releasePending = resolve;
+  });
+  const pendingStarted = new Promise((resolve) => {
+    markPendingStarted = resolve;
+  });
+  const writes = [];
+  const server = createServer((_req, res) => res.end("not-found"));
+  const registered = registerLogWebSocketServer(server, {
+    resolveAuthByApiKey: () => ({ userId: "u1" }),
+    writeLogEvent: async (record) => {
+      writes.push(record.event);
+      if (record.event === "failed") return { ok: false, error: new Error("write rejected") };
+      if (record.event === "pending") {
+        markPendingStarted();
+        return pending;
+      }
+      return { ok: true };
+    },
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const socket = new WebSocket(
+    `ws://127.0.0.1:${server.address().port}/logs/ws`,
+    createWebSocketAuthProtocols("test-key"),
+  );
+  const receipts = [];
+  const finished = new Promise((resolve, reject) => {
+    socket.on("error", reject);
+    socket.on("message", (raw) => {
+      const message = JSON.parse(String(raw));
+      if (message.event === "session_log_policy") return;
+      receipts.push(message);
+      if (receipts.length === 2) resolve();
+    });
+  });
+  try {
+    await new Promise((resolve) => socket.once("open", resolve));
+    const record = (event) => ({
+      source: "client",
+      channel: "ws",
+      scope: "session",
+      sessionId: "s-1",
+      category: "state",
+      event,
+    });
+    socket.send(JSON.stringify({ events: [record("failed"), record("pending")] }));
+    socket.send(JSON.stringify(record("later")));
+    await pendingStarted;
+    assert.deepEqual(writes, ["failed", "pending"]);
+    assert.deepEqual(receipts, []);
+    releasePending({ ok: true });
+    await finished;
+    assert.deepEqual(receipts, [
+      { event: "error", count: 2, error: "write rejected" },
+      { event: "ack", count: 1 },
+    ]);
+    assert.deepEqual(writes, ["failed", "pending", "later"]);
+  } finally {
+    releasePending({ ok: true });
+    socket.close();
     await closeLogServer(server, registered);
   }
 });

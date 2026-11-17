@@ -8,7 +8,13 @@ import os from "node:os";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { afterEach, expect, it, vi } from "vitest";
 
-const { newContext } = vi.hoisted(() => ({ newContext: vi.fn() }));
+const { newContext, validateRequestLogOrder } = vi.hoisted(() => ({
+  newContext: vi.fn(),
+  validateRequestLogOrder: vi.fn(),
+}));
+vi.mock("../../../../../scripts/quality/model-context-convergence/request-log-audit.mjs", () => ({
+  validateRequestLogOrder,
+}));
 vi.mock("@playwright/test", () => ({ request: { newContext }, expect: vi.fn() }));
 let directory;
 afterEach(async () => {
@@ -25,6 +31,10 @@ async function setupSuite() {
   const evidenceRoot = path.join(directory, "evidence");
   const outputDir = path.join(directory, "raw");
   const testDir = path.join(directory, "specs");
+  const requestLogsRoot = path.join(directory, "model-logs");
+  await fs.mkdir(requestLogsRoot);
+  await fs.writeFile(path.join(requestLogsRoot, "requests.log"), "test");
+  validateRequestLogOrder.mockImplementation((_file, { pass }) => pass("validated"));
   const specFile = path.join(testDir, "001-a.spec.js");
   await fs.mkdir(testDir, { recursive: true });
   await fs.writeFile(specFile, "");
@@ -45,7 +55,7 @@ async function setupSuite() {
     await import("../../e2e/protocol/suite-session-cleanup.js");
   const project = { outputDir, testDir, testMatch: /\.spec\.js$/, grep: /.*/, grepInvert: null };
   const createReporter = (overrides = {}) => {
-    const reporter = new Reporter({ failureEvidenceRoot: evidenceRoot });
+    const reporter = new Reporter({ failureEvidenceRoot: evidenceRoot, requestLogsRoot });
     const config = { grep: /.*/, grepInvert: null, shard: null, projects: [project], ...overrides };
     const suite = { allTests: () => (overrides.selectedFiles ?? [specFile]).map(fileTest) };
     reporter.onBegin(config, suite);
@@ -83,6 +93,32 @@ it("rejects filtered full suite runs before touching evidence or sessions", asyn
   expect(context.post).not.toHaveBeenCalled();
 });
 
+it("uses the project's declared scope while still requiring every included spec", async () => {
+  const { context, createReporter, registerSuiteSession } = await setupSuite();
+  await registerSuiteSession({ userId: "owner", sessionId: "session-1" });
+  const testDir = path.join(directory, "specs");
+  const specFile = path.join(testDir, "001-a.spec.js");
+  await fs.writeFile(path.join(testDir, "056-performance-session.spec.js"), "");
+  const project = {
+    outputDir: path.join(directory, "raw"),
+    testDir,
+    testMatch: /\.spec\.js$/,
+    testIgnore: /056-performance-session\.spec\.js$/,
+    grep: /.*/,
+    grepInvert: null,
+  };
+  await fs.writeFile(path.join(testDir, "002-b.spec.js"), "");
+  await expect(
+    createReporter({ projects: [project], selectedFiles: [specFile] }).onEnd({ status: "passed" }),
+  ).rejects.toThrow(/every spec file/);
+  expect(context.delete).not.toHaveBeenCalled();
+  await createReporter({
+    projects: [project],
+    selectedFiles: [specFile, path.join(testDir, "002-b.spec.js")],
+  }).onEnd({ status: "passed" });
+  expect(context.delete).toHaveBeenCalledOnce();
+});
+
 it("preserves failure evidence and deletes it once the full suite passes", async () => {
   const { runRegistry, evidenceRoot, context, createReporter, registerSuiteSession } =
     await setupSuite();
@@ -114,6 +150,19 @@ it("preserves failure evidence and deletes it once the full suite passes", async
   expect(context.dispose).toHaveBeenCalledOnce();
   await expect(fs.access(runRegistry("current-run"))).rejects.toMatchObject({ code: "ENOENT" });
   await expect(fs.access(evidenceRoot)).rejects.toMatchObject({ code: "ENOENT" });
+});
+
+it("preserves sessions and evidence when the pre-cleanup request audit fails", async () => {
+  const { runRegistry, evidenceRoot, context, createReporter, registerSuiteSession } =
+    await setupSuite();
+  await registerSuiteSession({ userId: "owner", sessionId: "session-1" });
+  validateRequestLogOrder.mockImplementation((_file, { fail }) => fail("invalid request order"));
+  await expect(createReporter().onEnd({ status: "passed" })).rejects.toThrow(
+    /Pre-cleanup model request audit failed/,
+  );
+  expect(context.delete).not.toHaveBeenCalled();
+  await expect(fs.readFile(runRegistry("current-run"), "utf8")).resolves.toContain("session-1");
+  await expect(fs.access(evidenceRoot)).resolves.toBeUndefined();
 });
 
 it("scopes the registry to its run so a later run never reclaims earlier records", async () => {

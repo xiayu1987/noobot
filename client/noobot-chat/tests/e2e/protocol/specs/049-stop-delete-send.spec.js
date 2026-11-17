@@ -29,19 +29,17 @@ test("@core PBE-049 停止并删除后可再次发送", async ({ noobot, protoco
   await expect
     .poll(async () => {
       const fact = await readSessionFact(noobot.userId, noobot.sessionId);
-      return Object.keys(fact?.turnLifecycle?.turns || {});
+      return Object.keys(fact.turnLifecycle.turns);
     })
     .not.toContain(deletedTurn.identity.turnScopeId);
 
   const deletedFact = await readSessionFact(noobot.userId, noobot.sessionId);
-  const orphanedTerminalScopes = Object.values(deletedFact?.turnLifecycle?.turns || {})
+  const orphanedTerminalScopes = Object.values(deletedFact.turnLifecycle.turns)
     .filter((turn) => turn?.terminalStatus)
     .map((turn) => String(turn.turnScopeId || ""))
     .filter(
       (turnScopeId) =>
-        !(deletedFact?.turnOrder || []).some(
-          (entry) => String(entry?.turnScopeId || "") === turnScopeId,
-        ),
+        !deletedFact.dialogOrder.some((entry) => String(entry?.turnScopeId || "") === turnScopeId),
     );
   expect(orphanedTerminalScopes).toEqual([]);
 

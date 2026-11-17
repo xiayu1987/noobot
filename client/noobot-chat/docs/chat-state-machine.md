@@ -9,4 +9,4 @@
 - 聚合并发：`aggregateVersion`
 - 命令幂等：`commandId`
 
-`channel_state` 是 Agent Proxy 的传输通知，不是业务状态事实，不能完成、停止或恢复 Turn。完整协议与浏览器验收以 [Session Protocol](../../../session-protocol/README.md) 和 [浏览器协议 E2E 方案](../../../docs/browser-protocol-e2e-test-plan.zh-CN.md) 为准。
+`channel_state` 是 Agent Proxy 的传输通知，不是业务状态事实，不能完成、停止或恢复 Turn。完整协议与浏览器验收以 [Session Protocol](../../../session-protocol/README.md) 和 [浏览器协议 E2E 运行说明](../tests/e2e/protocol/README.md)及其可执行 spec 为准。

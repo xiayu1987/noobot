@@ -17,6 +17,7 @@ import {
 import {
   isSessionLogDebugEvent,
   requireSessionLogChannel,
+  requireSessionLogReceipt,
   resolveSessionLogClientPolicy,
 } from "@noobot/runtime-events/session-log-protocol";
 import { HTTP_STATUS } from "#agent/constants";
@@ -86,7 +87,7 @@ export function registerLogWebSocketServer(
     wss.handleUpgrade(request, socket, head, (ws) => wss.emit("connection", ws, request));
   });
   wss.on("connection", (ws, request) => {
-    const reportWriteFailure = (error) => {
+    const reportWriteFailure = (error, count = 0) => {
       void writeRuntimeEvent({
         scope: "system",
         source: "service",
@@ -98,7 +99,9 @@ export function registerLogWebSocketServer(
         error,
       });
       if (ws.readyState === ws.OPEN)
-        ws.send(JSON.stringify({ event: "error", error: error?.message || "log write failed" }));
+        ws.send(
+          JSON.stringify(requireSessionLogReceipt({ event: "error", count, error: error.message })),
+        );
     };
     logDiagnostic("connected", { userId: request.auth?.userId || "" });
     if (ws.readyState === ws.OPEN) {
@@ -109,13 +112,15 @@ export function registerLogWebSocketServer(
         }),
       );
     }
-    ws.on("message", async (raw) => {
+    async function processLogMessage(raw) {
+      let receiptCount = 1;
       try {
         if (Buffer.byteLength(raw || "") > MAX_LOG_MESSAGE_BYTES) {
           throw new Error("log payload too large");
         }
         const parsed = JSON.parse(String(raw || "{}"));
         const events = Array.isArray(parsed?.events) ? parsed.events : [parsed];
+        receiptCount = events.length;
         if (events.length > MAX_LOG_BATCH_SIZE) {
           throw new Error("log batch too large");
         }
@@ -132,9 +137,12 @@ export function registerLogWebSocketServer(
         const reliableWrites = [];
         for (const record of records) {
           if (isSessionLogDebugEvent(record)) {
-            void Promise.resolve(writeLogEvent(record)).then((result) => {
-              if (result.ok === false) reportWriteFailure(result.error);
-            }, reportWriteFailure);
+            void Promise.resolve(writeLogEvent(record)).then(
+              (result) => {
+                if (result.ok === false) reportWriteFailure(result.error);
+              },
+              (error) => reportWriteFailure(error),
+            );
           } else {
             reliableWrites.push(
               Promise.resolve(writeLogEvent(record)).then((result) => {
@@ -144,12 +152,18 @@ export function registerLogWebSocketServer(
             );
           }
         }
-        await Promise.all(reliableWrites);
+        const results = await Promise.allSettled(reliableWrites);
+        const failure = results.find((result) => result.status === "rejected");
+        if (failure) throw failure.reason;
         if (ws.readyState === ws.OPEN)
-          ws.send(JSON.stringify({ event: "ack", count: events.length }));
+          ws.send(JSON.stringify(requireSessionLogReceipt({ event: "ack", count: events.length })));
       } catch (error) {
-        reportWriteFailure(error);
+        reportWriteFailure(error, receiptCount);
       }
+    }
+    let messageQueue = Promise.resolve();
+    ws.on("message", (raw) => {
+      messageQueue = messageQueue.then(() => processLogMessage(raw));
     });
   });
   return { webSocketServer: wss };

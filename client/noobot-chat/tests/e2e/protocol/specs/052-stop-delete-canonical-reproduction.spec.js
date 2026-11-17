@@ -14,7 +14,11 @@ import {
   stopActiveTurn,
   waitForNaturalCompletion,
 } from "../helpers/browser-actions.js";
-import { waitForSessionExecutionEventTree, workspaceRoot } from "../helpers/persistence-audit.js";
+import {
+  readSessionTurnMessages,
+  waitForSessionExecutionEventTree,
+  workspaceRoot,
+} from "../helpers/persistence-audit.js";
 import { reloadAndWaitForReconnect } from "../helpers/reconnect-scenarios.js";
 import {
   commandsForSession,
@@ -25,16 +29,6 @@ import { uniquePrompt } from "../helpers/turn-scenarios.js";
 import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
 import { toolEventsForTurn } from "../helpers/thinking-tool-assertions.js";
 
-async function readTurnRecords(turnDirectory) {
-  const files = (await fs.readdir(turnDirectory)).filter((file) => file.endsWith(".jsonl"));
-  const records = [];
-  for (const file of files) {
-    const lines = await fs.readFile(path.join(turnDirectory, file), "utf8");
-    for (const line of lines.split("\n").filter(Boolean)) records.push(JSON.parse(line));
-  }
-  return records;
-}
-
 test("@core PBE-052 回答显示后发送、锁失败、停止并删除的 canonical 复现", async ({
   noobot,
   protocolCapture,
@@ -44,13 +38,6 @@ test("@core PBE-052 回答显示后发送、锁失败、停止并删除的 canon
   noobot.page.on("pageerror", (error) => pageErrors.push(String(error?.message || error)));
   await selectPlugins(noobot.page, []);
 
-  const turnDirectory = path.join(
-    workspaceRoot(),
-    noobot.userId,
-    WORKSPACE_LAYOUT.SESSION_DIR,
-    noobot.sessionId,
-    "turns",
-  );
   const firstOffset = commandsForSession(protocolCapture, noobot.sessionId).length;
   const firstDelayedCommand = `node -e "setTimeout(()=>console.log('PBE052-FIRST'),1000)"`;
   await sendMessage(
@@ -107,12 +94,12 @@ test("@core PBE-052 回答显示后发送、锁失败、停止并删除的 canon
     timeoutMs: PROTOCOL_TIMEOUTS.model,
   });
 
-  const firstTurnAssistants = (await readTurnRecords(turnDirectory))
-    .map((record) => record.message)
-    .filter(
-      (message) =>
-        message?.role === "assistant" && message.turnScopeId === firstSend.identity.turnScopeId,
-    );
+  const firstTurnAssistants = (
+    await readSessionTurnMessages(noobot.userId, noobot.sessionId)
+  ).filter(
+    (message) =>
+      message?.role === "assistant" && message.turnScopeId === firstSend.identity.turnScopeId,
+  );
   expect(firstTurnAssistants.length).toBeGreaterThan(0);
   expect(firstTurnAssistants.filter((message) => message.chatPresentation === true)).toHaveLength(
     1,
@@ -173,10 +160,9 @@ test("@core PBE-052 回答显示后发送、锁失败、停止并删除的 canon
 
   await expect
     .poll(async () => {
-      const records = await readTurnRecords(turnDirectory);
-      const messages = records
-        .map((record) => record?.message)
-        .filter((message) => message?.turnScopeId === secondSend.identity.turnScopeId);
+      const messages = (await readSessionTurnMessages(noobot.userId, noobot.sessionId)).filter(
+        (message) => message?.turnScopeId === secondSend.identity.turnScopeId,
+      );
       return {
         assistant: messages.some((message) => message.role === "assistant"),
         user: messages.some((message) => message.role === "user"),
@@ -262,10 +248,9 @@ test("@core PBE-052 回答显示后发送、锁失败、停止并删除的 canon
 
   await expect
     .poll(async () => {
-      const records = await readTurnRecords(turnDirectory);
-      const messages = records
-        .map((record) => record?.message)
-        .filter((message) => message?.turnScopeId === secondSend.identity.turnScopeId);
+      const messages = (await readSessionTurnMessages(noobot.userId, noobot.sessionId)).filter(
+        (message) => message?.turnScopeId === secondSend.identity.turnScopeId,
+      );
       return {
         assistant: messages.some((message) => message.role === "assistant"),
         user: messages.some((message) => message.role === "user"),
@@ -301,10 +286,8 @@ test("@core PBE-052 回答显示后发送、锁失败、停止并删除的 canon
 
   await expect
     .poll(async () => {
-      const records = await readTurnRecords(turnDirectory);
-      return records.some(
-        (record) => record?.message?.turnScopeId === thirdSend.identity.turnScopeId,
-      );
+      const messages = await readSessionTurnMessages(noobot.userId, noobot.sessionId);
+      return messages.some((message) => message.turnScopeId === thirdSend.identity.turnScopeId);
     })
     .toBe(true);
 
@@ -313,22 +296,17 @@ test("@core PBE-052 回答显示后发送、锁失败、停止并删除的 canon
 
   await expect
     .poll(async () => {
-      const records = await readTurnRecords(turnDirectory);
-      return records.some(
-        (record) => record?.message?.turnScopeId === thirdSend.identity.turnScopeId,
-      );
+      const messages = await readSessionTurnMessages(noobot.userId, noobot.sessionId);
+      return messages.some((message) => message.turnScopeId === thirdSend.identity.turnScopeId);
     })
     .toBe(false);
 
   await expect
     .poll(async () => {
-      const records = await readTurnRecords(turnDirectory);
-      return records
-        .map((record) => record.message)
-        .filter(
-          (message) =>
-            message?.role === "assistant" && message.turnScopeId === firstSend.identity.turnScopeId,
-        );
+      return (await readSessionTurnMessages(noobot.userId, noobot.sessionId)).filter(
+        (message) =>
+          message?.role === "assistant" && message.turnScopeId === firstSend.identity.turnScopeId,
+      );
     })
     .toEqual(firstTurnAssistants);
 });

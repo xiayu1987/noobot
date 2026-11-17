@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import fs from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { addressPort, resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports";
 import { request as playwrightRequest } from "@playwright/test";
@@ -13,6 +14,7 @@ import { admissionRetryDelayMs } from "./helpers/http-admission.js";
 import { workspaceRoot } from "./helpers/persistence-audit.js";
 import { e2eRunId, runOpsWorkdir, runOpsWorkdirPath } from "./helpers/run-ops-workdir.js";
 import { text } from "@noobot/shared/value";
+import { validateRequestLogOrder } from "../../../../../scripts/quality/model-context-convergence/request-log-audit.mjs";
 
 const REGISTRY_FILE = "suite-sessions.json";
 
@@ -97,11 +99,12 @@ function isMatchAll(grep) {
   return patterns.length === 1 && patterns[0] instanceof RegExp && patterns[0].source === ".*";
 }
 
-async function listSpecFiles(dir, pattern) {
+async function listSpecFiles(dir, pattern, ignored) {
   const files = [];
   for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
     const target = path.join(dir, entry.name);
-    if (entry.isDirectory()) files.push(...(await listSpecFiles(target, pattern)));
+    if (ignored.some((ignore) => ignore.test(target))) continue;
+    if (entry.isDirectory()) files.push(...(await listSpecFiles(target, pattern, ignored)));
     else if (pattern.test(target)) files.push(target);
   }
   return files;
@@ -118,7 +121,11 @@ async function assertUnfilteredFullSuite(config, suite) {
     if (!(project.testMatch instanceof RegExp)) {
       throw new Error("NOOBOT_E2E_FULL_SUITE requires a RegExp testMatch");
     }
-    const specFiles = await listSpecFiles(project.testDir, project.testMatch);
+    const ignored = [project.testIgnore].flat().filter(Boolean);
+    if (ignored.some((pattern) => !(pattern instanceof RegExp))) {
+      throw new Error("NOOBOT_E2E_FULL_SUITE requires RegExp testIgnore patterns");
+    }
+    const specFiles = await listSpecFiles(project.testDir, project.testMatch, ignored);
     if (specFiles.length === 0 || specFiles.some((file) => !selectedFiles.has(file))) {
       throw new Error("NOOBOT_E2E_FULL_SUITE runs must include every spec file");
     }
@@ -129,11 +136,14 @@ async function assertUnfilteredFullSuite(config, suite) {
 }
 
 export default class SuiteSessionCleanupReporter {
-  constructor({ failureEvidenceRoot } = {}) {
+  constructor({ failureEvidenceRoot, requestLogsRoot } = {}) {
     this.failureEvidenceRoot = text(failureEvidenceRoot);
     if (!path.isAbsolute(this.failureEvidenceRoot)) {
       throw new Error("Suite Session cleanup requires an absolute failureEvidenceRoot");
     }
+    this.requestLogsRoot =
+      requestLogsRoot ||
+      path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../../model-proxy/logs");
     this.outputDirs = [];
   }
 
@@ -176,6 +186,20 @@ export default class SuiteSessionCleanupReporter {
     if (records.some((record) => record.userId !== credentials.userId)) {
       throw new Error("Suite Session cleanup requires credentials for every registered owner");
     }
+    const failures = [];
+    const checked = [];
+    for await (const relative of fs.glob("**/*.log", { cwd: this.requestLogsRoot })) {
+      validateRequestLogOrder(path.join(this.requestLogsRoot, relative), {
+        fail: (title, detail) => failures.push(detail ? `${title}\n${detail}` : title),
+        pass: (title) => checked.push(title),
+      });
+    }
+    if (!checked.length) failures.push("Full suite requires auditable model request logs");
+    if (failures.length) {
+      await this.preserveFailureEvidence(credentials.userId);
+      throw new Error(`Pre-cleanup model request audit failed:\n${failures.join("\n")}`);
+    }
+    console.log(`[model-request-log] pre-cleanup audit passed: ${checked.length} logs`);
     if (records.length > 0) await deleteRegisteredSessions(records, credentials);
     await fs.rm(this.failureEvidenceRoot, { recursive: true, force: true });
     await fs.rm(path.join(workspaceRoot(), credentials.userId, runOpsWorkdir()), {

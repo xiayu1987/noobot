@@ -3,8 +3,9 @@
 PBE-058 runs one real browser session with character and Harness enabled. The
 versioned workload in `scripts/mock-model-service/performance-contract.mjs` is
 shared by the browser, deterministic model provider, coverage audit and calibrator.
-The former six-turn and standalone long-turn performance branches are removed.
-Historical measurements are preserved in [PERFORMANCE-HISTORY.md](./PERFORMANCE-HISTORY.md).
+Acceptance uses the current versioned workload and generated reports. Previous
+measurements and investigations can be retrieved from Git history; rerun the current
+workload when comparing performance across revisions.
 
 ## Workload and Harness coverage
 

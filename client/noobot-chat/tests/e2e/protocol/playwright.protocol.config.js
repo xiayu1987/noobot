@@ -92,5 +92,7 @@ export default defineConfig({
       retries: 0,
       use: chromium,
     },
-  ],
+  ].filter(
+    (project) => process.env.NOOBOT_E2E_FULL_SUITE !== "1" || !project.metadata?.performanceMode,
+  ),
 });

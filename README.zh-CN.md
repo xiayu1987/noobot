@@ -126,8 +126,8 @@ chmod +x stop-services.sh
 
 ## 环境要求
 
-- Node.js 24.21.0（推荐，同时兼容 Node.js 26.9.x）
-- npm 12.0.2（npm 12.x）
+- Node.js `^24.21.0 || ^26.9.0`（推荐 Node.js 24，以根目录 `package.json` 为准）
+- npm `>=12.0.2 <13`（仓库固定使用 npm 12.0.2）
 - Linux/macOS
 
 ## Workspace 依赖管理
@@ -136,12 +136,16 @@ chmod +x stop-services.sh
 
 ```bash
 cd noobot
-npm install --workspaces
+npm ci
+npm run install:mcp-test-service
 ```
 
 常用命令：
 
 ```bash
+# 运行仓库质量检查
+npm run check:quality
+
 # 运行所有存在 test 脚本的子项目
 npm run test
 
@@ -228,6 +232,7 @@ npm run build:mac
 - 贡献指南：[`CONTRIBUTING.zh-CN.md`](./CONTRIBUTING.zh-CN.md)
 - 编码规范：[`CODING-STANDARD.md`](./CODING-STANDARD.md)
 - 后端说明：[中文](./service/README.zh-CN.md) | [English](./service/README.md)
+- 架构、协议、运行参数和测试：[文档索引](./docs/README.md)
 
 `start.sh` 可用环境变量：
 

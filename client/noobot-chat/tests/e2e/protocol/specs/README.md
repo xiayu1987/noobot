@@ -4,9 +4,9 @@
 
 ## English
 
-Scenario IDs and acceptance conditions are defined by the shared protocol plan and the executable
-specs. See the [English plan](../../../../../../docs/browser-protocol-e2e-test-plan.en.md) and the
-[Chinese plan](../../../../../../docs/browser-protocol-e2e-test-plan.zh-CN.md).
+Scenario IDs and acceptance conditions are defined by the executable `*.spec.js` files,
+the protocol packages, and `../helpers/model-observation-policy.js`. File number prefixes
+are navigation aids; the PBE IDs in test titles identify scenarios. See the [running guide](../README.md).
 
 - `002`-`008`: connection, send, attachments, stop, snapshots, and repeated continuation.
 - `009`-`012`: merged into the single-Session resend chain in PBE-029.
@@ -24,8 +24,12 @@ specs. See the [English plan](../../../../../../docs/browser-protocol-e2e-test-p
 - `048`: animated GLB import, model tool call, authoritative Session artifact, and desktop/mobile rendering.
 - `049`: stopped-turn deletion followed by a new send on the same page.
 - `050`: first-turn stop plus FIFO user-interjection injection, persistence, and refresh recovery.
+- `051`: MCP child-Session user interaction authority (PBE-051).
+- `052`: canonical send, lock failure, stop, and delete reproduction (PBE-052).
+- `053`: execution reports (PBE-053/054) and model usage persistence after reload (PBE-057).
+- `054`: recoverable tool errors reach the durable journal (PBE-055).
 - `055`: refresh, reconnect, and click navigation land precisely on the URL `turn` or the latest turn (PBE-056).
-- `056`: isolated mock-model performance Session, six measured turns with 24 tools repeated six times per turn, phase-summary recovery and late-session latency gates (PBE-058, `run.sh test perf`). See [performance operation](../../../../../../scripts/e2e-docker/PERFORMANCE.md).
+- `056`: mixed-session performance with character and Harness, twenty measured turns and two stop/continue cycles (PBE-058). The workload is defined in `scripts/mock-model-service/performance-contract.mjs`; see [performance operation](../../../../../../scripts/e2e-docker/PERFORMANCE.md).
 
 PBE-018, PBE-019, and PBE-020 are strict subsets of PBE-033, PBE-032, and PBE-028. PBE-047 covers
 connector creation, persisted-Session selection write ordering, database access, model context, and
@@ -66,7 +70,8 @@ the final answer.
 
 ## 中文
 
-场景编号和验收条件以项目根目录 `docs/browser-protocol-e2e-test-plan.zh-CN.md` 为唯一事实源。
+场景编号和验收条件以可执行 `*.spec.js`、协议包及 `../helpers/model-observation-policy.js` 为准。
+文件名前缀用于导航，场景身份以测试标题中的 PBE 编号为准。运行方法见[上级说明](../README.md)。
 
 - `002`～`008`：连接、发送、附件、停止、快照和连续继续；PBE-001、004、005 分别合并到 PBE-002、006、007。
 - `009`～`012`：已合并到 PBE-029 的单 Session resend 链路，覆盖保留、移除和新增附件。
@@ -84,9 +89,10 @@ the final answer.
 - `050`：首轮停止及用户插话 FIFO 注入、持久化与刷新恢复。
 - `051`：MCP 子 Session 的 `user_interaction` authority 闭环。
 - `052`：发送、锁失败、停止并删除的 canonical 复现。
-- `053`：执行报告使用权威 `dialogProcessId`（PBE-053、PBE-054）。
+- `053`：执行报告使用权威 `dialogProcessId`（PBE-053、PBE-054），以及模型用量持久化和刷新恢复（PBE-057）。
 - `054`：可恢复工具错误的 tool_result 进入 durable journal（PBE-055）。
 - `055`：刷新、重连与点击导航按 URL `turn`、最新轮次精确落位（PBE-056）。
+- `056`：启用角色与 Harness 的混合会话性能测试，二十个测量轮次及两次停止继续（PBE-058）。负载以 `scripts/mock-model-service/performance-contract.mjs` 为准，见[性能运行说明](../../../../../../scripts/e2e-docker/PERFORMANCE.md)。
 - PBE-018、PBE-019、PBE-020 已分别合并到 PBE-033、PBE-032、PBE-028；PBE-099 的重复组合审计已删除。
 - 当前场景均已落地；禁止提交永久 `skip` 或无业务断言的占位场景。
 
